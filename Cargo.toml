@@ -1,0 +1,6 @@
+[package]
+name = "risp"
+version = "0.1.0"
+authors = ["Ryan Cumming <etaoins@gmail.com>"]
+
+[dependencies]
