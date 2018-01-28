@@ -1,4 +1,5 @@
 mod syntax;
+mod ty;
 
 use syntax::parser;
 
