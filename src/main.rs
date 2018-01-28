@@ -1,5 +1,6 @@
 mod syntax;
 mod ty;
+mod hir;
 
 use syntax::parser;
 
