@@ -1,6 +1,6 @@
 use syntax::error::{Error, Result};
 use syntax::value::{SValue, Value};
-use syntax::span::Span;
+use syntax::span::{Span, t2s};
 use std;
 
 pub fn datum_from_str(s: &str) -> Result<SValue> {
@@ -502,14 +502,6 @@ impl<'de> Parser<'de> {
 }
 
 /////////
-
-#[cfg(test)]
-fn t2s(v: &str) -> Span {
-    let lo = v.find('^').unwrap_or(v.len()) as u32;
-    let hi = v.rfind('^').map(|i| i + 1).unwrap_or(v.len()) as u32;
-
-    Span { lo, hi }
-}
 
 #[cfg(test)]
 fn whole_str_span(v: &str) -> Span {
