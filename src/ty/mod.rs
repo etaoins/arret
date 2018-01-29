@@ -20,6 +20,8 @@ where
     Symbol,
     SVec(Vec<&'tcx S>),
     UVec(&'tcx S),
+    Hash(&'tcx S, &'tcx S),
+    Set(&'tcx S),
 }
 
 #[derive(PartialEq, Debug, Hash)]

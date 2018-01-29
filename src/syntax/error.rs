@@ -16,6 +16,7 @@ pub enum Error {
     IntegerOverflow(Span),
     ExpectedLiteral(Span, &'static str),
     UnexpectedChar(Span, char),
+    UnevenMap(Span),
 }
 
 pub type Result<T> = result::Result<T, Error>;

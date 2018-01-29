@@ -1,6 +1,7 @@
 use syntax::span::Span;
+use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(PartialEq, Debug, Hash, Clone)]
+#[derive(PartialEq, Eq, Debug, Hash, Clone, PartialOrd, Ord)]
 pub enum Value {
     Bool(bool),
     Char(char),
@@ -9,9 +10,11 @@ pub enum Value {
     String(String),
     Symbol(String),
     Vector(Vec<Value>),
+    Map(BTreeMap<Value, Value>),
+    Set(BTreeSet<Value>),
 }
 
-#[derive(PartialEq, Debug, Hash, Clone)]
+#[derive(PartialEq, Eq, Debug, Hash, Clone, PartialOrd, Ord)]
 pub enum SValue {
     Bool(Span, bool),
     Char(Span, char),
@@ -20,21 +23,8 @@ pub enum SValue {
     String(Span, String),
     Symbol(Span, String),
     Vector(Span, Vec<SValue>),
-}
-
-impl Value {
-    pub fn to_spanned(&self, span: Span) -> SValue {
-        match *self {
-            Value::Bool(v) => SValue::Bool(span, v),
-            Value::Char(v) => SValue::Char(span, v),
-            Value::Int(v) => SValue::Int(span, v),
-            Value::String(ref v) => SValue::String(span, v.clone()),
-            Value::Symbol(ref v) => SValue::Symbol(span, v.clone()),
-            _ => {
-                panic!("Cannot span nested values");
-            }
-        }
-    }
+    Map(Span, BTreeMap<SValue, SValue>),
+    Set(Span, BTreeSet<SValue>),
 }
 
 impl SValue {
@@ -51,6 +41,11 @@ impl SValue {
             SValue::String(_, ref v) => Value::String(v.clone()),
             SValue::Symbol(_, ref v) => Value::Symbol(v.clone()),
             SValue::Vector(_, ref vs) => Value::Vector(unspan_vec(vs)),
+            SValue::Map(_, ref vs) => {
+                let uvs = vs.iter().map(|(k, v)| (k.to_unspanned(), v.to_unspanned()));
+                Value::Map(uvs.collect())
+            }
+            SValue::Set(_, ref vs) => Value::Set(vs.iter().map(|v| v.to_unspanned()).collect()),
         }
     }
 }

@@ -2,6 +2,7 @@ use syntax::error::{Error, Result};
 use syntax::value::{SValue, Value};
 use syntax::span::{Span, t2s};
 use std;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub fn datum_from_str(s: &str) -> Result<SValue> {
     let mut parser = Parser::from_str(s);
@@ -75,6 +76,22 @@ fn u64_to_negative_i64(span: Span, i: u64) -> Result<i64> {
         Ok(i64::min_value())
     } else {
         Ok(-(i as i64))
+    }
+}
+
+trait SValueTarget {
+    fn insert(&mut self, SValue);
+}
+
+impl SValueTarget for Vec<SValue> {
+    fn insert(&mut self, value: SValue) {
+        self.push(value);
+    }
+}
+
+impl SValueTarget for BTreeSet<SValue> {
+    fn insert(&mut self, value: SValue) {
+        self.insert(value);
     }
 }
 
@@ -309,65 +326,128 @@ impl<'de> Parser<'de> {
     }
 
     fn parse_octo_datum(&mut self) -> Result<SValue> {
-        let (span, value) = self.capture_span(|s| {
-            // Consume the #
-            s.eat_bytes(1);
-
-            match s.peek_char()? {
-                't' => {
-                    s.consume_literal("true")?;
-                    Ok(Value::Bool(true))
-                }
-                'f' => {
-                    s.consume_literal("false")?;
-                    Ok(Value::Bool(false))
-                }
-                '\\' => Ok(Value::Char(s.parse_char()?)),
-                _ => {
-                    // Cover the #
-                    let invalid_lo = (s.consumed_bytes - 1) as u32;
-                    let _ = s.consume_char();
-                    let invalid_hi = s.consumed_bytes as u32;
-
-                    let span = Span {
-                        lo: invalid_lo,
-                        hi: invalid_hi,
-                    };
-
-                    Err(Error::InvalidOctoDatum(span))
-                }
-            }
-        });
-
-        value.map(|v| v.to_spanned(span))
-    }
-
-    fn parse_seq(&mut self, terminator: char) -> Result<Vec<SValue>> {
-        // Consume the opening bracket
+        // Consume the #
         self.eat_bytes(1);
 
-        let mut datum_vec = Vec::new();
+        match self.peek_char()? {
+            't' => {
+                let (span, result) = self.capture_span(|s| s.consume_literal("true"));
+                let adj_span = span.with_lo(span.lo - 1);
+
+                result.map(|_| SValue::Bool(adj_span, true))
+            }
+            'f' => {
+                let (span, result) = self.capture_span(|s| s.consume_literal("false"));
+                let adj_span = span.with_lo(span.lo - 1);
+
+                result.map(|_| SValue::Bool(adj_span, false))
+            }
+            '\\' => {
+                let (span, c) = self.capture_span(|s| s.parse_char());
+                let adj_span = span.with_lo(span.lo - 1);
+
+                c.map(|c| SValue::Char(adj_span, c))
+            }
+            '{' => self.parse_set(),
+            _ => {
+                let (span, _) = self.capture_span(|s| s.consume_char());
+                let adj_span = span.with_lo(span.lo - 1);
+
+                Err(Error::InvalidOctoDatum(adj_span))
+            }
+        }
+    }
+
+    fn parse_seq<T>(&mut self, terminator: char, target: &mut T) -> Result<()>
+    where
+        T: SValueTarget,
+    {
+        // Consume the opening bracket
+        self.eat_bytes(1);
 
         // Keep eating datums until we hit the terminator
         loop {
             if self.skip_until_non_whitespace()? == terminator {
                 // End of the sequence
                 self.eat_bytes(1);
-                return Ok(datum_vec);
+                return Ok(());
             } else {
-                datum_vec.push(self.parse_datum()?);
+                target.insert(self.parse_datum()?);
             }
         }
     }
 
     fn parse_list(&mut self) -> Result<SValue> {
-        let (outer_span, contents) = self.capture_span(|s| s.parse_seq(')'));
+        let (outer_span, contents) = self.capture_span(|s| {
+            let mut contents = Vec::<SValue>::new();
+            s.parse_seq(')', &mut contents)?;
+            Ok(contents)
+        });
+
         contents.map(|contents| SValue::List(outer_span, contents))
     }
 
     fn parse_vector(&mut self) -> Result<SValue> {
-        let (outer_span, contents) = self.capture_span(|s| s.parse_seq(']'));
+        let (outer_span, contents) = self.capture_span(|s| {
+            let mut contents = Vec::<SValue>::new();
+            s.parse_seq(']', &mut contents)?;
+            Ok(contents)
+        });
+
         contents.map(|contents| SValue::Vector(outer_span, contents))
+    }
+
+    fn parse_map(&mut self) -> Result<SValue> {
+        // First get the contents without splitting pairwise
+        let (span, unpaired_contents) = self.capture_span(|s| {
+            // Consume the opening bracket
+            s.eat_bytes(1);
+
+            let mut datum_vec = Vec::new();
+
+            // Keep eating datums until we hit the terminator
+            loop {
+                match s.skip_until_non_whitespace()? {
+                    '}' => {
+                        // End of the map
+                        s.eat_bytes(1);
+                        return Ok(datum_vec);
+                    }
+                    ',' => {
+                        // This is considered whitespace only within maps
+                        s.eat_bytes(1);
+                    }
+                    _ => {
+                        datum_vec.push(s.parse_datum()?);
+                    }
+                }
+            }
+        });
+
+        let unpaired_contents = unpaired_contents?;
+
+        if unpaired_contents.len() % 2 == 1 {
+            return Err(Error::UnevenMap(span));
+        }
+
+        let contents: BTreeMap<SValue, SValue> = unpaired_contents
+            .chunks(2)
+            .map(|chunk| (chunk[0].clone(), chunk[1].clone()))
+            .collect();
+
+        Ok(SValue::Map(span, contents))
+    }
+
+    fn parse_set(&mut self) -> Result<SValue> {
+        let (outer_span, contents) = self.capture_span(|s| {
+            let mut contents = BTreeSet::<SValue>::new();
+            s.parse_seq('}', &mut contents)?;
+            Ok(contents)
+        });
+
+        // Cover the # in our span
+        let adj_span = outer_span.with_lo(outer_span.lo - 1);
+        contents.map(|contents| SValue::Set(adj_span, contents))
     }
 
     fn parse_quote_escape(&mut self) -> Result<char> {
@@ -473,6 +553,7 @@ impl<'de> Parser<'de> {
             '#' => self.parse_octo_datum(),
             '(' => self.parse_list(),
             '[' => self.parse_vector(),
+            '{' => self.parse_map(),
             '0'...'9' => self.parse_int(),
             '-' => self.parse_negative_or_symbol(),
             '\'' => self.parse_symbol_shorthand("quote"),
@@ -774,6 +855,93 @@ fn int_datum() {
     let err = Error::InvalidInteger(t2s(t));
     // TODO: We can only detect in the range i64::min_value() to -u64::max_value()
     assert_eq!(err, datum_from_str(j).unwrap_err());
+}
+
+#[test]
+fn map_datum() {
+    let j = "{}";
+    let t = "^^";
+    let expected = SValue::Map(t2s(t), BTreeMap::new());
+    assert_eq!(expected, datum_from_str(j).unwrap());
+
+    let j = "{ 1,2 ,, 3  4}";
+    let t = "^^^^^^^^^^^^^^";
+    let u = "  ^           ";
+    let v = "    ^         ";
+    let w = "         ^    ";
+    let x = "            ^ ";
+
+    let mut expected_contents = BTreeMap::<SValue, SValue>::new();
+    expected_contents.insert(SValue::Int(t2s(u), 1), SValue::Int(t2s(v), 2));
+    expected_contents.insert(SValue::Int(t2s(w), 3), SValue::Int(t2s(x), 4));
+    let expected = SValue::Map(t2s(t), expected_contents);
+
+    assert_eq!(expected, datum_from_str(j).unwrap());
+
+    let j = "{1 {2 3}}";
+    let t = "^^^^^^^^^";
+    let u = " ^       ";
+    let v = "   ^^^^^ ";
+    let w = "    ^    ";
+    let x = "      ^  ";
+
+    let mut inner_contents = BTreeMap::<SValue, SValue>::new();
+    inner_contents.insert(SValue::Int(t2s(w), 2), SValue::Int(t2s(x), 3));
+    let inner = SValue::Map(t2s(v), inner_contents);
+
+    let mut outer_contents = BTreeMap::<SValue, SValue>::new();
+    outer_contents.insert(SValue::Int(t2s(u), 1), inner);
+    let expected = SValue::Map(t2s(t), outer_contents);
+
+    assert_eq!(expected, datum_from_str(j).unwrap());
+
+    let j = "{1}";
+    let t = "^^^";
+    let err = Error::UnevenMap(t2s(t));
+    assert_eq!(err, datum_from_str(j).unwrap_err());
+}
+
+#[test]
+fn set_datum() {
+    let j = "#{}";
+    let t = "^^^";
+    let expected = SValue::Set(t2s(t), BTreeSet::new());
+    assert_eq!(expected, datum_from_str(j).unwrap());
+
+    let j = "#{ 1 2  3 4}";
+    let t = "^^^^^^^^^^^^";
+    let u = "   ^        ";
+    let v = "     ^      ";
+    let w = "        ^   ";
+    let x = "          ^ ";
+
+    let mut expected_contents = BTreeSet::<SValue>::new();
+    expected_contents.insert(SValue::Int(t2s(u), 1));
+    expected_contents.insert(SValue::Int(t2s(v), 2));
+    expected_contents.insert(SValue::Int(t2s(w), 3));
+    expected_contents.insert(SValue::Int(t2s(x), 4));
+    let expected = SValue::Set(t2s(t), expected_contents);
+
+    assert_eq!(expected, datum_from_str(j).unwrap());
+
+    let j = "#{1 #{2 3}}";
+    let t = "^^^^^^^^^^^";
+    let u = "  ^        ";
+    let v = "    ^^^^^^ ";
+    let w = "      ^    ";
+    let x = "        ^  ";
+
+    let mut inner_contents = BTreeSet::<SValue>::new();
+    inner_contents.insert(SValue::Int(t2s(w), 2));
+    inner_contents.insert(SValue::Int(t2s(x), 3));
+    let inner = SValue::Set(t2s(v), inner_contents);
+
+    let mut outer_contents = BTreeSet::<SValue>::new();
+    outer_contents.insert(SValue::Int(t2s(u), 1));
+    outer_contents.insert(inner);
+    let expected = SValue::Set(t2s(t), outer_contents);
+
+    assert_eq!(expected, datum_from_str(j).unwrap());
 }
 
 #[test]
