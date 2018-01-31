@@ -62,8 +62,8 @@ impl LoweringContext {
 fn self_quoting_datum() {
     let lcx = LoweringContext::new();
 
-    let j = "#false";
-    let t = "^^^^^^";
+    let j = "false";
+    let t = "^^^^^";
 
     let expected = Expr::Lit(t2s(t), Value::Bool(false));
     let datum = datum_from_str(j).unwrap();

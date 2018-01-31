@@ -8,13 +8,12 @@ use syntax::span::Span;
 pub enum Error {
     Eof,
     TrailingCharacters(Span),
-    InvalidOctoDatum(Span),
+    InvalidDispatch(Span),
     InvalidCharLiteral(Span),
     InvalidCharCodePoint(Span),
     InvalidQuoteEscape(Span),
     InvalidInteger(Span),
     IntegerOverflow(Span),
-    ExpectedLiteral(Span, &'static str),
     UnexpectedChar(Span, char),
     UnevenMap(Span),
 }

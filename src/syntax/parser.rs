@@ -1,8 +1,8 @@
 use syntax::error::{Error, Result};
-use syntax::value::{SValue, Value};
-use syntax::span::{Span, t2s};
+use syntax::value::SValue;
 use std;
 use std::collections::{BTreeMap, BTreeSet};
+use syntax::span::Span;
 
 pub fn datum_from_str(s: &str) -> Result<SValue> {
     let mut parser = Parser::from_str(s);
@@ -37,25 +37,27 @@ pub struct Parser<'de> {
 
 fn is_whitespace(c: char) -> bool {
     match c {
-        ' ' | '\n' | '\t' | '\r' => true,
+        ',' | ' ' | '\n' | '\t' | '\r' => true,
         _ => false,
     }
 }
 
 fn is_identifier_char(c: char) -> bool {
     match c {
-        '\\'  =>
-            // Literal backslash
-            false,
-        _ if is_whitespace(c) =>
-            false,
-        '#' | '(' | ')' | '[' | ']' | '{' | '}' | '\'' | '`' | ',' | '|' =>
-            // Syntax character
-            false,
-        '\u{20}'...'\u{7f}' =>
-            true,
-        _ =>
-            false,
+        'A'...'Z' | 'a'...'z' | '0'...'9' => true,
+        '.' | '*' | '+' | '!' | '-' | '_' | '?' | '$' | '%' | '&' | '=' | '<' | '>' | ':' => {
+            // Punctuation allowed at beginning of an identiifer
+            true
+        }
+        '#' => {
+            // Punctuation allowed anywhere
+            true
+        }
+        '/' => {
+            // We don't support namespacing so we treat this as a normal char
+            true
+        }
+        _ => false,
     }
 }
 
@@ -131,59 +133,29 @@ impl<'de> Parser<'de> {
         }
     }
 
-    fn eat_until_end_of_block_comment(&mut self) -> Result<()> {
-        let mut depth = 1;
-
-        // Disard the #|
-        self.eat_bytes(2);
-
-        loop {
-            match self.consume_char()? {
-                '|' => if self.peek_char()? == '#' {
-                    self.eat_bytes(1);
-
-                    depth = depth - 1;
-                    if depth == 0 {
-                        return Ok(());
-                    }
-                },
-                '#' => if self.peek_char()? == '|' {
-                    // Nested comment
-                    self.eat_bytes(1);
-                    depth = depth + 1;
-                },
-                _ => {}
-            }
-        }
-    }
-
     fn skip_until_non_whitespace(&mut self) -> Result<char> {
         loop {
             match self.peek_char()? {
-                ' ' | '\n' | '\t' | '\r' => {
-                    self.eat_bytes(1);
-                }
                 ';' => {
                     let _ = self.consume_until(|c| c == '\n');
                 }
                 '#' => {
                     match self.peek_nth_char(1) {
-                        Ok(';') => {
-                            // Discard the #; and the following datum
+                        Ok('_') => {
+                            // Discard the #_ and the following datum
                             self.eat_bytes(2);
                             self.parse_datum()?;
-                        }
-                        Ok('|') => {
-                            self.eat_until_end_of_block_comment()?;
                         }
                         _ => {
                             return Ok('#');
                         }
                     }
                 }
-                other => {
+                other => if is_whitespace(other) {
+                    self.eat_bytes(1)
+                } else {
                     return Ok(other);
-                }
+                },
             }
         }
     }
@@ -205,27 +177,6 @@ impl<'de> Parser<'de> {
         };
 
         (span, consumed)
-    }
-
-    fn consume_literal(&mut self, token: &'static str) -> Result<()> {
-        if self.input.starts_with(token) {
-            self.eat_bytes(token.len());
-            Ok(())
-        } else {
-            // Span to the next non-identifier. This assumes the literal should only contain
-            // identifier chars
-            let lo = self.consumed_bytes as u32;
-            let ident_count = self.input
-                .find(|c| !is_identifier_char(c))
-                .unwrap_or(self.input.len());
-
-            let span = Span {
-                lo,
-                hi: lo + (ident_count as u32),
-            };
-
-            Err(Error::ExpectedLiteral(span, token))
-        }
     }
 
     fn capture_span<F, R>(&mut self, block: F) -> (Span, R)
@@ -271,7 +222,7 @@ impl<'de> Parser<'de> {
             }
             Err(Error::InvalidInteger(_)) => {
                 // Treat as a symbol
-                let rest_of_symbol = self.parse_unenclosed_symbol_content();
+                let rest_of_symbol = self.parse_identifier_content();
 
                 let span_with_symbol = Span {
                     lo: span.lo,
@@ -287,73 +238,55 @@ impl<'de> Parser<'de> {
         }
     }
 
-    fn parse_char(&mut self) -> Result<char> {
-        // Consume the \
-        self.eat_bytes(1);
+    fn parse_char(&mut self) -> Result<SValue> {
+        let (span, c) = self.capture_span(|s| {
+            // Consume the \
+            s.eat_bytes(1);
 
-        // Take everything up to the next whitespace
-        let (span, char_name) = self.consume_until(|c| is_whitespace(c));
+            // Take everything up to the next whitespace
+            let (span, char_name) = s.consume_until(|c| is_whitespace(c));
 
-        let mut char_name_chars = char_name.chars();
-        if let Some(first_char) = char_name_chars.next() {
-            if char_name_chars.next().is_none() {
-                // There is only a single character; return it
-                return Ok(first_char);
+            let mut char_name_chars = char_name.chars();
+            if let Some(first_char) = char_name_chars.next() {
+                if char_name_chars.next().is_none() {
+                    // There is only a single character; return it
+                    return Ok(first_char);
+                }
+
+                if first_char == 'u' {
+                    // This is a hex code point
+                    let hex_string = &char_name[1..];
+                    let code_point = u32::from_str_radix(hex_string, 16)
+                        .map_err(|_| Error::InvalidCharLiteral(span.clone()))?;
+
+                    return std::char::from_u32(code_point).ok_or(Error::InvalidCharCodePoint(span));
+                }
             }
 
-            if first_char == 'x' {
-                // This is a hex code point
-                let hex_string = &char_name[1..];
-                let code_point = u32::from_str_radix(hex_string, 16)
-                    .map_err(|_| Error::InvalidCharLiteral(span.clone()))?;
-
-                return std::char::from_u32(code_point).ok_or(Error::InvalidCharCodePoint(span));
+            match char_name {
+                "newline" => Ok('\u{0a}'),
+                "return" => Ok('\u{0d}'),
+                "space" => Ok('\u{20}'),
+                "tab" => Ok('\u{09}'),
+                _ => Err(Error::InvalidCharLiteral(span)),
             }
-        }
+        });
 
-        match char_name {
-            "alarm" => Ok('\u{07}'),
-            "backspace" => Ok('\u{08}'),
-            "delete" => Ok('\u{7f}'),
-            "escape" => Ok('\u{1b}'),
-            "newline" => Ok('\u{0a}'),
-            "null" => Ok('\u{00}'),
-            "return" => Ok('\u{0d}'),
-            "space" => Ok('\u{20}'),
-            "tab" => Ok('\u{09}'),
-            _ => Err(Error::InvalidCharLiteral(span)),
-        }
+        c.map(|c| SValue::Char(span, c))
     }
 
-    fn parse_octo_datum(&mut self) -> Result<SValue> {
+    fn parse_dispatch(&mut self) -> Result<SValue> {
         // Consume the #
+        // This means we need to adjust our spans below to cover it for reporting
         self.eat_bytes(1);
 
         match self.peek_char()? {
-            't' => {
-                let (span, result) = self.capture_span(|s| s.consume_literal("true"));
-                let adj_span = span.with_lo(span.lo - 1);
-
-                result.map(|_| SValue::Bool(adj_span, true))
-            }
-            'f' => {
-                let (span, result) = self.capture_span(|s| s.consume_literal("false"));
-                let adj_span = span.with_lo(span.lo - 1);
-
-                result.map(|_| SValue::Bool(adj_span, false))
-            }
-            '\\' => {
-                let (span, c) = self.capture_span(|s| s.parse_char());
-                let adj_span = span.with_lo(span.lo - 1);
-
-                c.map(|c| SValue::Char(adj_span, c))
-            }
             '{' => self.parse_set(),
             _ => {
                 let (span, _) = self.capture_span(|s| s.consume_char());
                 let adj_span = span.with_lo(span.lo - 1);
 
-                Err(Error::InvalidOctoDatum(adj_span))
+                Err(Error::InvalidDispatch(adj_span))
             }
         }
     }
@@ -400,28 +333,9 @@ impl<'de> Parser<'de> {
     fn parse_map(&mut self) -> Result<SValue> {
         // First get the contents without splitting pairwise
         let (span, unpaired_contents) = self.capture_span(|s| {
-            // Consume the opening bracket
-            s.eat_bytes(1);
-
             let mut datum_vec = Vec::new();
-
-            // Keep eating datums until we hit the terminator
-            loop {
-                match s.skip_until_non_whitespace()? {
-                    '}' => {
-                        // End of the map
-                        s.eat_bytes(1);
-                        return Ok(datum_vec);
-                    }
-                    ',' => {
-                        // This is considered whitespace only within maps
-                        s.eat_bytes(1);
-                    }
-                    _ => {
-                        datum_vec.push(s.parse_datum()?);
-                    }
-                }
-            }
+            s.parse_seq('}', &mut datum_vec)?;
+            Ok(datum_vec)
         });
 
         let unpaired_contents = unpaired_contents?;
@@ -459,7 +373,6 @@ impl<'de> Parser<'de> {
             'n' => Ok('\n'),
             '\\' => Ok('\\'),
             '"' => Ok('"'),
-            '|' => Ok('|'),
             'x' => {
                 let (span, code_point) = {
                     let (span, hex_string) = self.consume_until(|c| c == ';');
@@ -483,47 +396,43 @@ impl<'de> Parser<'de> {
             }
         }
     }
+    fn parse_string(&mut self) -> Result<SValue> {
+        let (span, contents) = self.capture_span(|s| {
+            // Eat the opening quote
+            s.eat_bytes(1);
 
-    fn parse_enclosed_stringlike(&mut self, quote_char: char) -> Result<String> {
-        // Eat the opening quote
-        self.eat_bytes(1);
-
-        let mut contents = String::new();
-        loop {
-            match self.consume_char()? {
-                end_quote if end_quote == quote_char => {
-                    return Ok(contents);
-                }
-                '\\' => contents.push(self.parse_quote_escape()?),
-                other => {
-                    contents.push(other);
+            let mut contents = String::new();
+            loop {
+                match s.consume_char()? {
+                    '"' => {
+                        return Ok(contents);
+                    }
+                    '\\' => contents.push(s.parse_quote_escape()?),
+                    other => {
+                        contents.push(other);
+                    }
                 }
             }
-        }
-    }
-
-    fn parse_string(&mut self) -> Result<SValue> {
-        let (span, contents) = self.capture_span(|s| s.parse_enclosed_stringlike('"'));
+        });
         contents.map(|contents| SValue::String(span, contents))
     }
 
-    fn parse_enclosed_symbol(&mut self) -> Result<SValue> {
-        let (span, contents) = self.capture_span(|s| s.parse_enclosed_stringlike('|'));
-        contents.map(|contents| SValue::Symbol(span, contents))
-    }
-
-    fn parse_unenclosed_symbol_content(&mut self) -> &str {
+    fn parse_identifier_content(&mut self) -> &str {
         self.consume_until(|c| !is_identifier_char(c)).1
     }
 
-    fn parse_unenclosed_symbol(&mut self) -> Result<SValue> {
-        let (span, content) = self.capture_span(|s| s.parse_unenclosed_symbol_content().to_owned());
+    fn parse_identifier(&mut self) -> Result<SValue> {
+        let (span, content) = self.capture_span(|s| s.parse_identifier_content().to_owned());
 
         if content.len() == 0 {
             let (span, next_char) = self.capture_span(|s| s.consume_char());
-            Err(Error::UnexpectedChar(span, next_char?))
-        } else {
-            Ok(SValue::Symbol(span, content))
+            return Err(Error::UnexpectedChar(span, next_char?));
+        }
+
+        match content.as_ref() {
+            "true" => Ok(SValue::Bool(span, true)),
+            "false" => Ok(SValue::Bool(span, false)),
+            _ => Ok(SValue::Symbol(span, content)),
         }
     }
 
@@ -550,7 +459,6 @@ impl<'de> Parser<'de> {
 
     fn parse_datum(&mut self) -> Result<SValue> {
         match self.skip_until_non_whitespace()? {
-            '#' => self.parse_octo_datum(),
             '(' => self.parse_list(),
             '[' => self.parse_vector(),
             '{' => self.parse_map(),
@@ -558,8 +466,9 @@ impl<'de> Parser<'de> {
             '-' => self.parse_negative_or_symbol(),
             '\'' => self.parse_symbol_shorthand("quote"),
             '"' => self.parse_string(),
-            '|' => self.parse_enclosed_symbol(),
-            _ => self.parse_unenclosed_symbol(),
+            '\\' => self.parse_char(),
+            '#' => self.parse_dispatch(),
+            _ => self.parse_identifier(),
         }
     }
 
@@ -585,6 +494,9 @@ impl<'de> Parser<'de> {
 /////////
 
 #[cfg(test)]
+use syntax::span::t2s;
+
+#[cfg(test)]
 fn whole_str_span(v: &str) -> Span {
     Span {
         lo: 0,
@@ -594,48 +506,36 @@ fn whole_str_span(v: &str) -> Span {
 
 #[test]
 fn bool_datum() {
-    let j = "#false";
-    let t = "^^^^^^";
-    let expected = SValue::Bool(t2s(t), false);
-
-    assert_eq!(expected, datum_from_str(j).unwrap());
-
-    let j = "#true";
+    let j = "false";
     let t = "^^^^^";
+    let expected = SValue::Bool(t2s(t), false);
+
+    assert_eq!(expected, datum_from_str(j).unwrap());
+
+    let j = "true";
+    let t = "^^^^";
     let expected = SValue::Bool(t2s(t), true);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
-    let j = "     #false";
-    let t = "     ^^^^^^";
+    let j = "     false";
+    let t = "     ^^^^^";
     let expected = SValue::Bool(t2s(t), false);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
-    let j = "\t#true\t";
-    let t = "\t^^^^^\t";
+    let j = "\ttrue\t";
+    let t = "\t^^^^\t";
     let expected = SValue::Bool(t2s(t), true);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
-    let j = " #true 1";
-    let t = "       ^";
+    let j = " true 1";
+    let t = "      ^";
     let err = Error::TrailingCharacters(t2s(t));
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
-    // This is valid R7RS. We intentionally don't allow it
-    let j = " #t";
-    let t = "  ^";
-    let err = Error::ExpectedLiteral(t2s(t), "true");
-    assert_eq!(err, datum_from_str(j).unwrap_err());
-
-    // This is valid R7RS. We intentionally don't allow it
-    let j = " #f     ";
-    let t = "  ^     ";
-    let err = Error::ExpectedLiteral(t2s(t), "false");
-    assert_eq!(err, datum_from_str(j).unwrap_err());
-
-    let j = " #fumble     ";
-    let t = "  ^^^^^^     ";
-    let err = Error::ExpectedLiteral(t2s(t), "false");
-    assert_eq!(err, datum_from_str(j).unwrap_err());
+    let j = " trueorfalse  ";
+    let t = " ^^^^^^^^^^^  ";
+    let expected = SValue::Symbol(t2s(t), "trueorfalse".to_owned());
+    assert_eq!(expected, datum_from_str(j).unwrap());
 }
 
 #[test]
@@ -645,10 +545,10 @@ fn list_datum() {
     let expected = SValue::List(t2s(t), vec![]);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
-    let j = "( #true   #false )";
-    let t = "^^^^^^^^^^^^^^^^^^";
-    let u = "  ^^^^^           ";
-    let v = "          ^^^^^^  ";
+    let j = "( true   false )";
+    let t = "^^^^^^^^^^^^^^^^";
+    let u = "  ^^^^          ";
+    let v = "         ^^^^^  ";
 
     let expected = SValue::List(
         t2s(t),
@@ -656,12 +556,29 @@ fn list_datum() {
     );
     assert_eq!(expected, datum_from_str(j).unwrap());
 
-    let j = "(#true";
+    let j = "(1, 2, (3))";
+    let t = "^^^^^^^^^^^";
+    let u = " ^         ";
+    let v = "    ^      ";
+    let w = "       ^^^ ";
+    let x = "        ^  ";
+
+    let expected = SValue::List(
+        t2s(t),
+        vec![
+            SValue::Int(t2s(u), 1),
+            SValue::Int(t2s(v), 2),
+            SValue::List(t2s(w), vec![SValue::Int(t2s(x), 3)]),
+        ],
+    );
+    assert_eq!(expected, datum_from_str(j).unwrap());
+
+    let j = "(true";
     let err = Error::Eof;
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
-    let j = "(#true))";
-    let t = "       ^";
+    let j = "(true))";
+    let t = "      ^";
     let err = Error::TrailingCharacters(t2s(t));
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
@@ -678,12 +595,12 @@ fn vector_datum() {
     let expected = SValue::Vector(t2s(t), vec![]);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
-    let j = "[ #true   (#true #false) ]";
-    let t = "^^^^^^^^^^^^^^^^^^^^^^^^^^";
-    let u = "  ^^^^^";
-    let v = "          ^^^^^^^^^^^^^^";
-    let w = "           ^^^^^";
-    let x = "                 ^^^^^^";
+    let j = "[ true   (true false) ]";
+    let t = "^^^^^^^^^^^^^^^^^^^^^^^";
+    let u = "  ^^^^                 ";
+    let v = "         ^^^^^^^^^^^^  ";
+    let w = "          ^^^^         ";
+    let x = "               ^^^^^   ";
 
     let expected = SValue::Vector(
         t2s(t),
@@ -704,14 +621,14 @@ fn vector_datum() {
 }
 
 #[test]
-fn unenclosed_symbol_datum() {
+fn symbol_datum() {
     for test_symbol in vec![
         "HELLO",
         "HELLO123",
         "predicate?",
         "mutate!",
         "from->to",
-        "!$%&*+-./:<=>?@^_",
+        "!$%&*+-./:<=>?",
         "+",
         "-",
     ] {
@@ -723,27 +640,13 @@ fn unenclosed_symbol_datum() {
 }
 
 #[test]
-fn enclosed_symbol_datum() {
-    let test_symbols = vec![
-        (r#"|Hello, world!|"#, "Hello, world!"),
-        (r#"|\"|"#, "\""),
-        (r#"|\||"#, "|"),
-        (r#"|two\x20;words|"#, "two words"),
-        (r#"||"#, ""),
-        (r#"|0|"#, "0"),
-        (r#"|\t\t|"#, "\t\t"),
-    ];
-
-    for (test_symbol, expected_contents) in test_symbols {
+fn keyword_symbol_datum() {
+    for test_symbol in vec![":HELLO", ":HELLO123", ":predicate?", ":mutate!"] {
         let s = whole_str_span(test_symbol);
-        let expected = SValue::Symbol(s, expected_contents.to_owned());
+        let expected = SValue::Symbol(s, test_symbol.to_owned());
 
         assert_eq!(expected, datum_from_str(test_symbol).unwrap());
     }
-
-    let j = "|foo";
-    let err = Error::Eof;
-    assert_eq!(err, datum_from_str(j).unwrap_err());
 }
 
 #[test]
@@ -753,7 +656,6 @@ fn string_datum() {
         (r#""Hello, world!""#, "Hello, world!"),
         (r#""Hello\"World""#, "Hello\"World"),
         (r#""Hello\\World""#, "Hello\\World"),
-        (r#""Hello\|World""#, "Hello|World"),
         (r#""Tab\t""#, "Tab\t"),
         (r#""\nnewline""#, "\nnewline"),
         (r#""carriage: \r""#, "carriage: \r"),
@@ -786,20 +688,15 @@ fn string_datum() {
 #[test]
 fn char_datum() {
     let test_chars = vec![
-        ("#\\alarm", '\u{07}'),
-        ("#\\backspace", '\u{08}'),
-        ("#\\delete", '\u{7f}'),
-        ("#\\escape", '\u{1b}'),
-        ("#\\newline", '\u{0a}'),
-        ("#\\null", '\u{00}'),
-        ("#\\return", '\u{0d}'),
-        ("#\\space", '\u{20}'),
-        ("#\\tab", '\u{09}'),
-        ("#\\a", 'a'),
-        ("#\\A", 'A'),
-        ("#\\(", '('),
-        ("#\\☃", '\u{2603}'),
-        ("#\\x03BB", '\u{03bb}'),
+        ("\\newline", '\u{0a}'),
+        ("\\return", '\u{0d}'),
+        ("\\space", '\u{20}'),
+        ("\\tab", '\u{09}'),
+        ("\\a", 'a'),
+        ("\\A", 'A'),
+        ("\\(", '('),
+        ("\\☃", '\u{2603}'),
+        ("\\u03BB", '\u{03bb}'),
     ];
 
     for (j, expected_char) in test_chars {
@@ -809,13 +706,13 @@ fn char_datum() {
         assert_eq!(expected, datum_from_str(j).unwrap());
     }
 
-    let j = r#"#\SPACE"#;
-    let t = r#"  ^^^^^"#;
+    let j = r#"\SPACE"#;
+    let t = r#" ^^^^^"#;
     let err = Error::InvalidCharLiteral(t2s(t));
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
-    let j = r#"#\x110000"#;
-    let t = r#"  ^^^^^^^"#;
+    let j = r#"\u110000"#;
+    let t = r#" ^^^^^^^"#;
     let err = Error::InvalidCharCodePoint(t2s(t));
     assert_eq!(err, datum_from_str(j).unwrap_err());
 }
@@ -990,10 +887,10 @@ fn quote_shorthand() {
 }
 
 #[test]
-fn invalid_octodatum() {
+fn invalid_dispatch() {
     let j = r#"#loop"#;
     let t = r#"^^   "#;
-    let err = Error::InvalidOctoDatum(t2s(t));
+    let err = Error::InvalidDispatch(t2s(t));
 
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
@@ -1004,36 +901,15 @@ fn invalid_octodatum() {
 }
 
 #[test]
-fn block_comment() {
-    let j = r#"
-        #| This is a block comment
-           This can be as many lines as it wants
-           It can also contain # and |
-           It can even contain a #| nested comment |# |#
-        (display "LOL")
-        #| Make sure we treat this as a separate comment |#"#;
-
-    let expected = Value::List(vec![
-        Value::Symbol("display".to_owned()),
-        Value::String("LOL".to_owned()),
-    ]);
-    assert_eq!(expected, datum_from_str(j).unwrap().to_unspanned());
-
-    let j = "#|";
-    let err = Error::Eof;
-    assert_eq!(err, datum_from_str(j).unwrap_err());
-}
-
-#[test]
 fn datum_comment() {
-    let j = "(Hello #;(you jerk))";
+    let j = "(Hello #_(you jerk))";
     let t = "^^^^^^^^^^^^^^^^^^^^";
     let u = " ^^^^^              ";
 
     let expected = SValue::List(t2s(t), vec![SValue::Symbol(t2s(u), "Hello".to_owned())]);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
-    let j = "(Hello #;  you jerk)";
+    let j = "(Hello #_  you jerk)";
     let t = "^^^^^^^^^^^^^^^^^^^^";
     let u = " ^^^^^              ";
     let v = "               ^^^^ ";
@@ -1050,15 +926,15 @@ fn datum_comment() {
 
 #[test]
 fn multiple_data() {
-    let j = " 1  #|two|# 3  ";
-    let t = " ^             ";
-    let u = "            ^  ";
+    let j = " 1  #_two 3  ";
+    let t = " ^           ";
+    let u = "          ^  ";
 
     let expected = vec![SValue::Int(t2s(t), 1), SValue::Int(t2s(u), 3)];
     assert_eq!(expected, data_from_str(j).unwrap());
 
-    let j = "(#true)))";
-    let t = "       ^ ";
+    let j = "(true)))";
+    let t = "      ^ ";
     let err = Error::UnexpectedChar(t2s(t), ')');
     assert_eq!(err, data_from_str(j).unwrap_err());
 }
