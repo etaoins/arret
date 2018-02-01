@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use hir::{Expr, Var};
-use syntax::value::{SValue, Value};
+use syntax::value::Value;
 use syntax::span::t2s;
 use syntax::parser::datum_from_str;
 
@@ -50,9 +50,9 @@ impl LoweringContext {
         LoweringContext { next_inst_id: 0 }
     }
 
-    fn lower_module<'tcx>(mut self, datum: SValue) -> Expr<'tcx> {
+    fn lower_module<'tcx>(mut self, datum: Value) -> Expr<'tcx> {
         match datum {
-            SValue::Bool(span, value) => Expr::Lit(span, Value::Bool(value)),
+            lit @ Value::Bool(_, _) => Expr::Lit(lit),
             _ => unimplemented!("Unsupported datum"),
         }
     }
@@ -65,7 +65,7 @@ fn self_quoting_datum() {
     let j = "false";
     let t = "^^^^^";
 
-    let expected = Expr::Lit(t2s(t), Value::Bool(false));
+    let expected = Expr::Lit(Value::Bool(t2s(t), false));
     let datum = datum_from_str(j).unwrap();
 
     assert_eq!(expected, lcx.lower_module(datum));

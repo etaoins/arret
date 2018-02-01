@@ -1,10 +1,10 @@
 use syntax::error::{Error, Result};
-use syntax::value::SValue;
+use syntax::value::Value;
 use std;
 use std::collections::{BTreeMap, BTreeSet};
 use syntax::span::Span;
 
-pub fn datum_from_str(s: &str) -> Result<SValue> {
+pub fn datum_from_str(s: &str) -> Result<Value> {
     let mut parser = Parser::from_str(s);
 
     let result = parser.parse_datum()?;
@@ -25,7 +25,7 @@ pub fn datum_from_str(s: &str) -> Result<SValue> {
     }
 }
 
-pub fn data_from_str(s: &str) -> Result<Vec<SValue>> {
+pub fn data_from_str(s: &str) -> Result<Vec<Value>> {
     let mut parser = Parser::from_str(s);
     parser.parse_data()
 }
@@ -81,18 +81,18 @@ fn u64_to_negative_i64(span: Span, i: u64) -> Result<i64> {
     }
 }
 
-trait SValueTarget {
-    fn insert(&mut self, SValue);
+trait ValueTarget {
+    fn insert(&mut self, Value);
 }
 
-impl SValueTarget for Vec<SValue> {
-    fn insert(&mut self, value: SValue) {
+impl ValueTarget for Vec<Value> {
+    fn insert(&mut self, value: Value) {
         self.push(value);
     }
 }
 
-impl SValueTarget for BTreeSet<SValue> {
-    fn insert(&mut self, value: SValue) {
+impl ValueTarget for BTreeSet<Value> {
+    fn insert(&mut self, value: Value) {
         self.insert(value);
     }
 }
@@ -199,15 +199,15 @@ impl<'de> Parser<'de> {
         u64::from_str_radix(digits, 10).map_err(|_| Error::InvalidInteger(span))
     }
 
-    fn parse_int(&mut self) -> Result<SValue> {
+    fn parse_int(&mut self) -> Result<Value> {
         let (span, content) = self.capture_span(|s| s.parse_int_content());
 
         content
             .and_then(|content| u64_to_positive_i64(span.clone(), content))
-            .map(|i| SValue::Int(span, i))
+            .map(|i| Value::Int(span, i))
     }
 
-    fn parse_negative_or_symbol(&mut self) -> Result<SValue> {
+    fn parse_negative_or_symbol(&mut self) -> Result<Value> {
         let (span, content) = self.capture_span(|s| {
             // Consume the -
             s.eat_bytes(1);
@@ -218,7 +218,7 @@ impl<'de> Parser<'de> {
 
         match content {
             Ok(valid_integer) => {
-                u64_to_negative_i64(span.clone(), valid_integer).map(|i| SValue::Int(span, i))
+                u64_to_negative_i64(span.clone(), valid_integer).map(|i| Value::Int(span, i))
             }
             Err(Error::InvalidInteger(_)) => {
                 // Treat as a symbol
@@ -229,7 +229,7 @@ impl<'de> Parser<'de> {
                     hi: span.lo + (rest_of_symbol.len() as u32) + 1,
                 };
 
-                Ok(SValue::Symbol(
+                Ok(Value::Symbol(
                     span_with_symbol,
                     format!("-{}", rest_of_symbol),
                 ))
@@ -238,7 +238,7 @@ impl<'de> Parser<'de> {
         }
     }
 
-    fn parse_char(&mut self) -> Result<SValue> {
+    fn parse_char(&mut self) -> Result<Value> {
         let (span, c) = self.capture_span(|s| {
             // Consume the \
             s.eat_bytes(1);
@@ -272,10 +272,10 @@ impl<'de> Parser<'de> {
             }
         });
 
-        c.map(|c| SValue::Char(span, c))
+        c.map(|c| Value::Char(span, c))
     }
 
-    fn parse_dispatch(&mut self) -> Result<SValue> {
+    fn parse_dispatch(&mut self) -> Result<Value> {
         // Consume the #
         // This means we need to adjust our spans below to cover it for reporting
         self.eat_bytes(1);
@@ -293,7 +293,7 @@ impl<'de> Parser<'de> {
 
     fn parse_seq<T>(&mut self, terminator: char, target: &mut T) -> Result<()>
     where
-        T: SValueTarget,
+        T: ValueTarget,
     {
         // Consume the opening bracket
         self.eat_bytes(1);
@@ -310,27 +310,27 @@ impl<'de> Parser<'de> {
         }
     }
 
-    fn parse_list(&mut self) -> Result<SValue> {
+    fn parse_list(&mut self) -> Result<Value> {
         let (outer_span, contents) = self.capture_span(|s| {
-            let mut contents = Vec::<SValue>::new();
+            let mut contents = Vec::<Value>::new();
             s.parse_seq(')', &mut contents)?;
             Ok(contents)
         });
 
-        contents.map(|contents| SValue::List(outer_span, contents))
+        contents.map(|contents| Value::List(outer_span, contents))
     }
 
-    fn parse_vector(&mut self) -> Result<SValue> {
+    fn parse_vector(&mut self) -> Result<Value> {
         let (outer_span, contents) = self.capture_span(|s| {
-            let mut contents = Vec::<SValue>::new();
+            let mut contents = Vec::<Value>::new();
             s.parse_seq(']', &mut contents)?;
             Ok(contents)
         });
 
-        contents.map(|contents| SValue::Vector(outer_span, contents))
+        contents.map(|contents| Value::Vector(outer_span, contents))
     }
 
-    fn parse_map(&mut self) -> Result<SValue> {
+    fn parse_map(&mut self) -> Result<Value> {
         // First get the contents without splitting pairwise
         let (span, unpaired_contents) = self.capture_span(|s| {
             let mut datum_vec = Vec::new();
@@ -344,24 +344,24 @@ impl<'de> Parser<'de> {
             return Err(Error::UnevenMap(span));
         }
 
-        let contents: BTreeMap<SValue, SValue> = unpaired_contents
+        let contents: BTreeMap<Value, Value> = unpaired_contents
             .chunks(2)
             .map(|chunk| (chunk[0].clone(), chunk[1].clone()))
             .collect();
 
-        Ok(SValue::Map(span, contents))
+        Ok(Value::Map(span, contents))
     }
 
-    fn parse_set(&mut self) -> Result<SValue> {
+    fn parse_set(&mut self) -> Result<Value> {
         let (outer_span, contents) = self.capture_span(|s| {
-            let mut contents = BTreeSet::<SValue>::new();
+            let mut contents = BTreeSet::<Value>::new();
             s.parse_seq('}', &mut contents)?;
             Ok(contents)
         });
 
         // Cover the # in our span
         let adj_span = outer_span.with_lo(outer_span.lo - 1);
-        contents.map(|contents| SValue::Set(adj_span, contents))
+        contents.map(|contents| Value::Set(adj_span, contents))
     }
 
     fn parse_quote_escape(&mut self) -> Result<char> {
@@ -396,7 +396,7 @@ impl<'de> Parser<'de> {
             }
         }
     }
-    fn parse_string(&mut self) -> Result<SValue> {
+    fn parse_string(&mut self) -> Result<Value> {
         let (span, contents) = self.capture_span(|s| {
             // Eat the opening quote
             s.eat_bytes(1);
@@ -414,14 +414,14 @@ impl<'de> Parser<'de> {
                 }
             }
         });
-        contents.map(|contents| SValue::String(span, contents))
+        contents.map(|contents| Value::String(span, contents))
     }
 
     fn parse_identifier_content(&mut self) -> &str {
         self.consume_until(|c| !is_identifier_char(c)).1
     }
 
-    fn parse_identifier(&mut self) -> Result<SValue> {
+    fn parse_identifier(&mut self) -> Result<Value> {
         let (span, content) = self.capture_span(|s| s.parse_identifier_content().to_owned());
 
         if content.len() == 0 {
@@ -430,13 +430,13 @@ impl<'de> Parser<'de> {
         }
 
         match content.as_ref() {
-            "true" => Ok(SValue::Bool(span, true)),
-            "false" => Ok(SValue::Bool(span, false)),
-            _ => Ok(SValue::Symbol(span, content)),
+            "true" => Ok(Value::Bool(span, true)),
+            "false" => Ok(Value::Bool(span, false)),
+            _ => Ok(Value::Symbol(span, content)),
         }
     }
 
-    fn parse_symbol_shorthand(&mut self, expansion: &str) -> Result<SValue> {
+    fn parse_symbol_shorthand(&mut self, expansion: &str) -> Result<Value> {
         let (outer_span, (shorthand_span, quoted_datum)) = self.capture_span(|s| {
             let (shorthand_span, _) = s.capture_span(|s| {
                 // Discard the shorthand. Note this must be ASCII.
@@ -447,17 +447,17 @@ impl<'de> Parser<'de> {
         });
 
         quoted_datum.map(|quoted_datum| {
-            SValue::List(
+            Value::List(
                 outer_span,
                 vec![
-                    SValue::Symbol(shorthand_span, expansion.to_owned()),
+                    Value::Symbol(shorthand_span, expansion.to_owned()),
                     quoted_datum,
                 ],
             )
         })
     }
 
-    fn parse_datum(&mut self) -> Result<SValue> {
+    fn parse_datum(&mut self) -> Result<Value> {
         match self.skip_until_non_whitespace()? {
             '(' => self.parse_list(),
             '[' => self.parse_vector(),
@@ -472,7 +472,7 @@ impl<'de> Parser<'de> {
         }
     }
 
-    fn parse_data(&mut self) -> Result<Vec<SValue>> {
+    fn parse_data(&mut self) -> Result<Vec<Value>> {
         let mut datum_vec = Vec::new();
 
         // Keep eating datums until we hit EOF
@@ -508,23 +508,23 @@ fn whole_str_span(v: &str) -> Span {
 fn bool_datum() {
     let j = "false";
     let t = "^^^^^";
-    let expected = SValue::Bool(t2s(t), false);
+    let expected = Value::Bool(t2s(t), false);
 
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "true";
     let t = "^^^^";
-    let expected = SValue::Bool(t2s(t), true);
+    let expected = Value::Bool(t2s(t), true);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "     false";
     let t = "     ^^^^^";
-    let expected = SValue::Bool(t2s(t), false);
+    let expected = Value::Bool(t2s(t), false);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "\ttrue\t";
     let t = "\t^^^^\t";
-    let expected = SValue::Bool(t2s(t), true);
+    let expected = Value::Bool(t2s(t), true);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = " true 1";
@@ -534,7 +534,7 @@ fn bool_datum() {
 
     let j = " trueorfalse  ";
     let t = " ^^^^^^^^^^^  ";
-    let expected = SValue::Symbol(t2s(t), "trueorfalse".to_owned());
+    let expected = Value::Symbol(t2s(t), "trueorfalse".to_owned());
     assert_eq!(expected, datum_from_str(j).unwrap());
 }
 
@@ -542,7 +542,7 @@ fn bool_datum() {
 fn list_datum() {
     let j = "() ; with a comment";
     let t = "^^                 ";
-    let expected = SValue::List(t2s(t), vec![]);
+    let expected = Value::List(t2s(t), vec![]);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "( true   false )";
@@ -550,9 +550,9 @@ fn list_datum() {
     let u = "  ^^^^          ";
     let v = "         ^^^^^  ";
 
-    let expected = SValue::List(
+    let expected = Value::List(
         t2s(t),
-        vec![SValue::Bool(t2s(u), true), SValue::Bool(t2s(v), false)],
+        vec![Value::Bool(t2s(u), true), Value::Bool(t2s(v), false)],
     );
     assert_eq!(expected, datum_from_str(j).unwrap());
 
@@ -563,12 +563,12 @@ fn list_datum() {
     let w = "       ^^^ ";
     let x = "        ^  ";
 
-    let expected = SValue::List(
+    let expected = Value::List(
         t2s(t),
         vec![
-            SValue::Int(t2s(u), 1),
-            SValue::Int(t2s(v), 2),
-            SValue::List(t2s(w), vec![SValue::Int(t2s(x), 3)]),
+            Value::Int(t2s(u), 1),
+            Value::Int(t2s(v), 2),
+            Value::List(t2s(w), vec![Value::Int(t2s(x), 3)]),
         ],
     );
     assert_eq!(expected, datum_from_str(j).unwrap());
@@ -592,7 +592,7 @@ fn list_datum() {
 fn vector_datum() {
     let j = "  []";
     let t = "  ^^";
-    let expected = SValue::Vector(t2s(t), vec![]);
+    let expected = Value::Vector(t2s(t), vec![]);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "[ true   (true false) ]";
@@ -602,13 +602,13 @@ fn vector_datum() {
     let w = "          ^^^^         ";
     let x = "               ^^^^^   ";
 
-    let expected = SValue::Vector(
+    let expected = Value::Vector(
         t2s(t),
         vec![
-            SValue::Bool(t2s(u), true),
-            SValue::List(
+            Value::Bool(t2s(u), true),
+            Value::List(
                 t2s(v),
-                vec![SValue::Bool(t2s(w), true), SValue::Bool(t2s(x), false)],
+                vec![Value::Bool(t2s(w), true), Value::Bool(t2s(x), false)],
             ),
         ],
     );
@@ -633,7 +633,7 @@ fn symbol_datum() {
         "-",
     ] {
         let s = whole_str_span(test_symbol);
-        let expected = SValue::Symbol(s, test_symbol.to_owned());
+        let expected = Value::Symbol(s, test_symbol.to_owned());
 
         assert_eq!(expected, datum_from_str(test_symbol).unwrap());
     }
@@ -643,7 +643,7 @@ fn symbol_datum() {
 fn keyword_symbol_datum() {
     for test_symbol in vec![":HELLO", ":HELLO123", ":predicate?", ":mutate!"] {
         let s = whole_str_span(test_symbol);
-        let expected = SValue::Symbol(s, test_symbol.to_owned());
+        let expected = Value::Symbol(s, test_symbol.to_owned());
 
         assert_eq!(expected, datum_from_str(test_symbol).unwrap());
     }
@@ -670,7 +670,7 @@ fn string_datum() {
 
     for (test_string, expected_contents) in test_strings {
         let s = whole_str_span(test_string);
-        let expected = SValue::String(s, expected_contents.to_owned());
+        let expected = Value::String(s, expected_contents.to_owned());
 
         assert_eq!(expected, datum_from_str(test_string).unwrap());
     }
@@ -701,7 +701,7 @@ fn char_datum() {
 
     for (j, expected_char) in test_chars {
         let s = whole_str_span(j);
-        let expected = SValue::Char(s, expected_char);
+        let expected = Value::Char(s, expected_char);
 
         assert_eq!(expected, datum_from_str(j).unwrap());
     }
@@ -730,7 +730,7 @@ fn int_datum() {
 
     for (j, expected_int) in test_ints {
         let s = whole_str_span(j);
-        let expected = SValue::Int(s, expected_int);
+        let expected = Value::Int(s, expected_int);
 
         assert_eq!(expected, datum_from_str(j).unwrap());
     }
@@ -758,7 +758,7 @@ fn int_datum() {
 fn map_datum() {
     let j = "{}";
     let t = "^^";
-    let expected = SValue::Map(t2s(t), BTreeMap::new());
+    let expected = Value::Map(t2s(t), BTreeMap::new());
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "{ 1,2 ,, 3  4}";
@@ -768,10 +768,10 @@ fn map_datum() {
     let w = "         ^    ";
     let x = "            ^ ";
 
-    let mut expected_contents = BTreeMap::<SValue, SValue>::new();
-    expected_contents.insert(SValue::Int(t2s(u), 1), SValue::Int(t2s(v), 2));
-    expected_contents.insert(SValue::Int(t2s(w), 3), SValue::Int(t2s(x), 4));
-    let expected = SValue::Map(t2s(t), expected_contents);
+    let mut expected_contents = BTreeMap::<Value, Value>::new();
+    expected_contents.insert(Value::Int(t2s(u), 1), Value::Int(t2s(v), 2));
+    expected_contents.insert(Value::Int(t2s(w), 3), Value::Int(t2s(x), 4));
+    let expected = Value::Map(t2s(t), expected_contents);
 
     assert_eq!(expected, datum_from_str(j).unwrap());
 
@@ -782,13 +782,13 @@ fn map_datum() {
     let w = "    ^    ";
     let x = "      ^  ";
 
-    let mut inner_contents = BTreeMap::<SValue, SValue>::new();
-    inner_contents.insert(SValue::Int(t2s(w), 2), SValue::Int(t2s(x), 3));
-    let inner = SValue::Map(t2s(v), inner_contents);
+    let mut inner_contents = BTreeMap::<Value, Value>::new();
+    inner_contents.insert(Value::Int(t2s(w), 2), Value::Int(t2s(x), 3));
+    let inner = Value::Map(t2s(v), inner_contents);
 
-    let mut outer_contents = BTreeMap::<SValue, SValue>::new();
-    outer_contents.insert(SValue::Int(t2s(u), 1), inner);
-    let expected = SValue::Map(t2s(t), outer_contents);
+    let mut outer_contents = BTreeMap::<Value, Value>::new();
+    outer_contents.insert(Value::Int(t2s(u), 1), inner);
+    let expected = Value::Map(t2s(t), outer_contents);
 
     assert_eq!(expected, datum_from_str(j).unwrap());
 
@@ -802,7 +802,7 @@ fn map_datum() {
 fn set_datum() {
     let j = "#{}";
     let t = "^^^";
-    let expected = SValue::Set(t2s(t), BTreeSet::new());
+    let expected = Value::Set(t2s(t), BTreeSet::new());
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "#{ 1 2  3 4}";
@@ -812,12 +812,12 @@ fn set_datum() {
     let w = "        ^   ";
     let x = "          ^ ";
 
-    let mut expected_contents = BTreeSet::<SValue>::new();
-    expected_contents.insert(SValue::Int(t2s(u), 1));
-    expected_contents.insert(SValue::Int(t2s(v), 2));
-    expected_contents.insert(SValue::Int(t2s(w), 3));
-    expected_contents.insert(SValue::Int(t2s(x), 4));
-    let expected = SValue::Set(t2s(t), expected_contents);
+    let mut expected_contents = BTreeSet::<Value>::new();
+    expected_contents.insert(Value::Int(t2s(u), 1));
+    expected_contents.insert(Value::Int(t2s(v), 2));
+    expected_contents.insert(Value::Int(t2s(w), 3));
+    expected_contents.insert(Value::Int(t2s(x), 4));
+    let expected = Value::Set(t2s(t), expected_contents);
 
     assert_eq!(expected, datum_from_str(j).unwrap());
 
@@ -828,15 +828,15 @@ fn set_datum() {
     let w = "      ^    ";
     let x = "        ^  ";
 
-    let mut inner_contents = BTreeSet::<SValue>::new();
-    inner_contents.insert(SValue::Int(t2s(w), 2));
-    inner_contents.insert(SValue::Int(t2s(x), 3));
-    let inner = SValue::Set(t2s(v), inner_contents);
+    let mut inner_contents = BTreeSet::<Value>::new();
+    inner_contents.insert(Value::Int(t2s(w), 2));
+    inner_contents.insert(Value::Int(t2s(x), 3));
+    let inner = Value::Set(t2s(v), inner_contents);
 
-    let mut outer_contents = BTreeSet::<SValue>::new();
-    outer_contents.insert(SValue::Int(t2s(u), 1));
+    let mut outer_contents = BTreeSet::<Value>::new();
+    outer_contents.insert(Value::Int(t2s(u), 1));
     outer_contents.insert(inner);
-    let expected = SValue::Set(t2s(t), outer_contents);
+    let expected = Value::Set(t2s(t), outer_contents);
 
     assert_eq!(expected, datum_from_str(j).unwrap());
 }
@@ -848,11 +848,11 @@ fn quote_shorthand() {
     let u = "^   ";
     let v = " ^^^";
 
-    let expected = SValue::List(
+    let expected = Value::List(
         t2s(t),
         vec![
-            SValue::Symbol(t2s(u), "quote".to_owned()),
-            SValue::Symbol(t2s(v), "foo".to_owned()),
+            Value::Symbol(t2s(u), "quote".to_owned()),
+            Value::Symbol(t2s(v), "foo".to_owned()),
         ],
     );
     assert_eq!(expected, datum_from_str(j).unwrap());
@@ -865,16 +865,16 @@ fn quote_shorthand() {
     let x = "     ^   ";
     let y = "       ^ ";
 
-    let expected = SValue::List(
+    let expected = Value::List(
         t2s(t),
         vec![
-            SValue::Symbol(t2s(u), "quote".to_owned()),
-            SValue::List(
+            Value::Symbol(t2s(u), "quote".to_owned()),
+            Value::List(
                 t2s(v),
                 vec![
-                    SValue::Int(t2s(w), 1),
-                    SValue::Int(t2s(x), 2),
-                    SValue::Int(t2s(y), 3),
+                    Value::Int(t2s(w), 1),
+                    Value::Int(t2s(x), 2),
+                    Value::Int(t2s(y), 3),
                 ],
             ),
         ],
@@ -906,7 +906,7 @@ fn datum_comment() {
     let t = "^^^^^^^^^^^^^^^^^^^^";
     let u = " ^^^^^              ";
 
-    let expected = SValue::List(t2s(t), vec![SValue::Symbol(t2s(u), "Hello".to_owned())]);
+    let expected = Value::List(t2s(t), vec![Value::Symbol(t2s(u), "Hello".to_owned())]);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "(Hello #_  you jerk)";
@@ -914,11 +914,11 @@ fn datum_comment() {
     let u = " ^^^^^              ";
     let v = "               ^^^^ ";
 
-    let expected = SValue::List(
+    let expected = Value::List(
         t2s(t),
         vec![
-            SValue::Symbol(t2s(u), "Hello".to_owned()),
-            SValue::Symbol(t2s(v), "jerk".to_owned()),
+            Value::Symbol(t2s(u), "Hello".to_owned()),
+            Value::Symbol(t2s(v), "jerk".to_owned()),
         ],
     );
     assert_eq!(expected, datum_from_str(j).unwrap());
@@ -930,7 +930,7 @@ fn multiple_data() {
     let t = " ^           ";
     let u = "          ^  ";
 
-    let expected = vec![SValue::Int(t2s(t), 1), SValue::Int(t2s(u), 3)];
+    let expected = vec![Value::Int(t2s(t), 1), Value::Int(t2s(u), 3)];
     assert_eq!(expected, data_from_str(j).unwrap());
 
     let j = "(true)))";

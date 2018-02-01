@@ -33,7 +33,7 @@ pub struct Cond<'tcx> {
 
 #[derive(PartialEq, Debug)]
 pub enum Expr<'tcx> {
-    Lit(Span, Value),
+    Lit(Value),
     App(Span, &'tcx Expr<'tcx>, Vec<&'tcx Expr<'tcx>>),
     Fun(Span, Fun<'tcx>),
     Def(Span, &'tcx Var<'tcx>, &'tcx Expr<'tcx>),
