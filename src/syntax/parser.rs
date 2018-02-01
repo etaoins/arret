@@ -1,7 +1,6 @@
 use syntax::error::{Error, Result};
 use syntax::value::Value;
 use std;
-use std::collections::{BTreeMap, BTreeSet};
 use syntax::span::Span;
 
 pub fn datum_from_str(s: &str) -> Result<Value> {
@@ -78,22 +77,6 @@ fn u64_to_negative_i64(span: Span, i: u64) -> Result<i64> {
         Ok(i64::min_value())
     } else {
         Ok(-(i as i64))
-    }
-}
-
-trait ValueTarget {
-    fn insert(&mut self, Value);
-}
-
-impl ValueTarget for Vec<Value> {
-    fn insert(&mut self, value: Value) {
-        self.push(value);
-    }
-}
-
-impl ValueTarget for BTreeSet<Value> {
-    fn insert(&mut self, value: Value) {
-        self.insert(value);
     }
 }
 
@@ -291,52 +274,38 @@ impl<'de> Parser<'de> {
         }
     }
 
-    fn parse_seq<T>(&mut self, terminator: char, target: &mut T) -> Result<()>
-    where
-        T: ValueTarget,
-    {
+    fn parse_seq(&mut self, terminator: char) -> Result<Vec<Value>> {
         // Consume the opening bracket
         self.eat_bytes(1);
+        let mut content = Vec::new();
 
         // Keep eating datums until we hit the terminator
         loop {
             if self.skip_until_non_whitespace()? == terminator {
                 // End of the sequence
                 self.eat_bytes(1);
-                return Ok(());
+                return Ok(content);
             } else {
-                target.insert(self.parse_datum()?);
+                content.push(self.parse_datum()?);
             }
         }
     }
 
     fn parse_list(&mut self) -> Result<Value> {
-        let (outer_span, contents) = self.capture_span(|s| {
-            let mut contents = Vec::<Value>::new();
-            s.parse_seq(')', &mut contents)?;
-            Ok(contents)
-        });
+        let (outer_span, contents) = self.capture_span(|s| s.parse_seq(')'));
 
         contents.map(|contents| Value::List(outer_span, contents))
     }
 
     fn parse_vector(&mut self) -> Result<Value> {
-        let (outer_span, contents) = self.capture_span(|s| {
-            let mut contents = Vec::<Value>::new();
-            s.parse_seq(']', &mut contents)?;
-            Ok(contents)
-        });
+        let (outer_span, contents) = self.capture_span(|s| s.parse_seq(']'));
 
         contents.map(|contents| Value::Vector(outer_span, contents))
     }
 
     fn parse_map(&mut self) -> Result<Value> {
         // First get the contents without splitting pairwise
-        let (span, unpaired_contents) = self.capture_span(|s| {
-            let mut datum_vec = Vec::new();
-            s.parse_seq('}', &mut datum_vec)?;
-            Ok(datum_vec)
-        });
+        let (span, unpaired_contents) = self.capture_span(|s| s.parse_seq('}'));
 
         let unpaired_contents = unpaired_contents?;
 
@@ -344,7 +313,7 @@ impl<'de> Parser<'de> {
             return Err(Error::UnevenMap(span));
         }
 
-        let contents: BTreeMap<Value, Value> = unpaired_contents
+        let contents: Vec<(Value, Value)> = unpaired_contents
             .chunks(2)
             .map(|chunk| (chunk[0].clone(), chunk[1].clone()))
             .collect();
@@ -353,11 +322,7 @@ impl<'de> Parser<'de> {
     }
 
     fn parse_set(&mut self) -> Result<Value> {
-        let (outer_span, contents) = self.capture_span(|s| {
-            let mut contents = BTreeSet::<Value>::new();
-            s.parse_seq('}', &mut contents)?;
-            Ok(contents)
-        });
+        let (outer_span, contents) = self.capture_span(|s| s.parse_seq('}'));
 
         // Cover the # in our span
         let adj_span = outer_span.with_lo(outer_span.lo - 1);
@@ -758,7 +723,7 @@ fn int_datum() {
 fn map_datum() {
     let j = "{}";
     let t = "^^";
-    let expected = Value::Map(t2s(t), BTreeMap::new());
+    let expected = Value::Map(t2s(t), vec![]);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "{ 1,2 ,, 3  4}";
@@ -768,9 +733,9 @@ fn map_datum() {
     let w = "         ^    ";
     let x = "            ^ ";
 
-    let mut expected_contents = BTreeMap::<Value, Value>::new();
-    expected_contents.insert(Value::Int(t2s(u), 1), Value::Int(t2s(v), 2));
-    expected_contents.insert(Value::Int(t2s(w), 3), Value::Int(t2s(x), 4));
+    let mut expected_contents = Vec::<(Value, Value)>::new();
+    expected_contents.push((Value::Int(t2s(u), 1), Value::Int(t2s(v), 2)));
+    expected_contents.push((Value::Int(t2s(w), 3), Value::Int(t2s(x), 4)));
     let expected = Value::Map(t2s(t), expected_contents);
 
     assert_eq!(expected, datum_from_str(j).unwrap());
@@ -782,12 +747,12 @@ fn map_datum() {
     let w = "    ^    ";
     let x = "      ^  ";
 
-    let mut inner_contents = BTreeMap::<Value, Value>::new();
-    inner_contents.insert(Value::Int(t2s(w), 2), Value::Int(t2s(x), 3));
+    let mut inner_contents = Vec::<(Value, Value)>::new();
+    inner_contents.push((Value::Int(t2s(w), 2), Value::Int(t2s(x), 3)));
     let inner = Value::Map(t2s(v), inner_contents);
 
-    let mut outer_contents = BTreeMap::<Value, Value>::new();
-    outer_contents.insert(Value::Int(t2s(u), 1), inner);
+    let mut outer_contents = Vec::<(Value, Value)>::new();
+    outer_contents.push((Value::Int(t2s(u), 1), inner));
     let expected = Value::Map(t2s(t), outer_contents);
 
     assert_eq!(expected, datum_from_str(j).unwrap());
@@ -802,7 +767,7 @@ fn map_datum() {
 fn set_datum() {
     let j = "#{}";
     let t = "^^^";
-    let expected = Value::Set(t2s(t), BTreeSet::new());
+    let expected = Value::Set(t2s(t), Vec::new());
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "#{ 1 2  3 4}";
@@ -812,11 +777,11 @@ fn set_datum() {
     let w = "        ^   ";
     let x = "          ^ ";
 
-    let mut expected_contents = BTreeSet::<Value>::new();
-    expected_contents.insert(Value::Int(t2s(u), 1));
-    expected_contents.insert(Value::Int(t2s(v), 2));
-    expected_contents.insert(Value::Int(t2s(w), 3));
-    expected_contents.insert(Value::Int(t2s(x), 4));
+    let mut expected_contents = Vec::<Value>::new();
+    expected_contents.push((Value::Int(t2s(u), 1)));
+    expected_contents.push((Value::Int(t2s(v), 2)));
+    expected_contents.push((Value::Int(t2s(w), 3)));
+    expected_contents.push((Value::Int(t2s(x), 4)));
     let expected = Value::Set(t2s(t), expected_contents);
 
     assert_eq!(expected, datum_from_str(j).unwrap());
@@ -828,14 +793,14 @@ fn set_datum() {
     let w = "      ^    ";
     let x = "        ^  ";
 
-    let mut inner_contents = BTreeSet::<Value>::new();
-    inner_contents.insert(Value::Int(t2s(w), 2));
-    inner_contents.insert(Value::Int(t2s(x), 3));
+    let mut inner_contents = Vec::<Value>::new();
+    inner_contents.push((Value::Int(t2s(w), 2)));
+    inner_contents.push((Value::Int(t2s(x), 3)));
     let inner = Value::Set(t2s(v), inner_contents);
 
-    let mut outer_contents = BTreeSet::<Value>::new();
-    outer_contents.insert(Value::Int(t2s(u), 1));
-    outer_contents.insert(inner);
+    let mut outer_contents = Vec::<Value>::new();
+    outer_contents.push((Value::Int(t2s(u), 1)));
+    outer_contents.push(inner);
     let expected = Value::Set(t2s(t), outer_contents);
 
     assert_eq!(expected, datum_from_str(j).unwrap());

@@ -1,7 +1,6 @@
 use syntax::span::Span;
-use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(PartialEq, Eq, Debug, Hash, Clone, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Value {
     Bool(Span, bool),
     Char(Span, char),
@@ -10,6 +9,6 @@ pub enum Value {
     String(Span, String),
     Symbol(Span, String),
     Vector(Span, Vec<Value>),
-    Map(Span, BTreeMap<Value, Value>),
-    Set(Span, BTreeSet<Value>),
+    Map(Span, Vec<(Value, Value)>),
+    Set(Span, Vec<Value>),
 }
