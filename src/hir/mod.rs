@@ -1,43 +1,64 @@
-mod lowering;
+pub mod lowering;
+mod scope;
+mod error;
 
-use syntax::span::Span;
+use syntax::span::{Span, EMPTY_SPAN};
 use syntax::value::Value;
 use ty;
 
-#[derive(Debug)]
-pub struct Var<'tcx> {
-    inst_id: usize,
-    source_name: &'tcx str,
-    bound: &'tcx ty::Ty<'tcx>,
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct VarId(usize);
+
+impl VarId {
+    fn new(id: usize) -> VarId {
+        VarId(id)
+    }
 }
 
-impl<'tcx> PartialEq for Var<'tcx> {
-    fn eq(&self, other: &Var<'tcx>) -> bool {
-        self.inst_id == other.inst_id
+#[derive(Debug)]
+pub struct Var {
+    id: VarId,
+    source_name: String,
+    bound: Option<ty::Ty>,
+}
+
+impl PartialEq for Var {
+    fn eq(&self, other: &Var) -> bool {
+        self.id.0 == other.id.0
     }
 }
 
 #[derive(PartialEq, Debug)]
-pub struct Fun<'tcx> {
-    source_name: &'tcx str,
-    ty: ty::PFun<'tcx>,
-    args: Vec<&'tcx Var<'tcx>>,
+pub struct Fun {
+    source_name: String,
+    ty: Option<ty::PFun>,
+    args: Vec<Var>,
 }
 
 #[derive(PartialEq, Debug)]
-pub struct Cond<'tcx> {
-    test: &'tcx Expr<'tcx>,
-    true_expr: &'tcx Expr<'tcx>,
-    false_expr: &'tcx Expr<'tcx>,
+pub struct Cond {
+    test: Box<Expr>,
+    true_expr: Box<Expr>,
+    false_expr: Box<Expr>,
 }
 
 #[derive(PartialEq, Debug)]
-pub enum Expr<'tcx> {
+pub enum Expr {
     Lit(Value),
-    App(Span, &'tcx Expr<'tcx>, Vec<&'tcx Expr<'tcx>>),
-    Fun(Span, Fun<'tcx>),
-    Def(Span, &'tcx Var<'tcx>, &'tcx Expr<'tcx>),
-    Cond(Span, Cond<'tcx>),
-    Ref(Span, &'tcx Var<'tcx>),
-    Do(Span, Vec<&'tcx Expr<'tcx>>),
+    App(Span, Box<Expr>, Vec<Expr>),
+    Fun(Span, Fun),
+    Def(Span, Var, Box<Expr>),
+    Cond(Span, Cond),
+    Ref(Span, VarId),
+    Do(Span, Vec<Expr>),
+}
+
+impl Expr {
+    fn from_vec(mut exprs: Vec<Expr>) -> Expr {
+        if exprs.len() == 1 {
+            exprs.pop().unwrap()
+        } else {
+            Expr::Do(EMPTY_SPAN, exprs)
+        }
+    }
 }

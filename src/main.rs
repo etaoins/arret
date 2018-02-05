@@ -3,16 +3,12 @@ mod ty;
 mod hir;
 
 use syntax::parser;
+use hir::lowering::LoweringContext;
 
 fn main() {
-    println!(
-        "{:?}",
-        parser::data_from_str(
-            "(define x 1)
-             (define y 2)
-             (write (+ x y))"
-        )
-    );
+    let data = parser::data_from_str("2").unwrap();
+    let mut lcx = LoweringContext::new();
+    let exprs = lcx.lower_module(data).unwrap();
 
-    println!("{:?}", parser::datum_from_str("2"));
+    println!("{:?}", exprs);
 }
