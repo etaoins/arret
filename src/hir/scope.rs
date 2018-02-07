@@ -3,26 +3,46 @@ use syntax::span::Span;
 use syntax::value::Value;
 use hir::VarId;
 
-macro_rules! primitives {
-    ( $( ($n:expr, $i:ident) ),* ) => {
-        pub enum Primitive {
-            $($i,)*
-        }
-
-        fn primitive_bindings() -> Bindings {
-            let mut bindings: Bindings = HashMap::new();
-            $(bindings.insert($n.to_owned(), Binding::Primitive(Primitive::$i));)*
-            bindings
-        }
-    }
-}
-
+#[derive(Clone, Copy)]
 pub enum Binding {
     Var(VarId),
     Primitive(Primitive),
 }
 
-pub type Bindings = HashMap<String, Binding>;
+pub struct Scope(HashMap<Ident, Binding>);
+
+impl Scope {
+    pub fn new() -> Scope {
+        Scope(HashMap::new())
+    }
+
+    pub fn get(&self, ident: &Ident) -> Option<Binding> {
+        match self.0.get(ident) {
+            Some(b) => Some(b.clone()),
+            None => None,
+        }
+    }
+
+    pub fn insert_var(&mut self, ident: Ident, var_id: VarId) {
+        self.0.insert(ident, Binding::Var(var_id));
+    }
+}
+
+macro_rules! primitives {
+    ( $( ($n:expr, $i:ident) ),* ) => {
+        #[derive(Clone, Copy)]
+        pub enum Primitive {
+            $($i,)*
+        }
+
+        pub fn insert_primitive_bindings(scope: &mut Scope, ns_id: NsId) {
+            $(
+                let ident = Ident(ns_id, $n.to_owned());
+                scope.0.insert(ident, Binding::Primitive(Primitive::$i));
+            )*
+        }
+    }
+}
 
 primitives!(
     ("def", Def),
@@ -32,89 +52,101 @@ primitives!(
     ("do", Do)
 );
 
-pub struct Scope<'a> {
-    pub parent: Option<&'a Scope<'a>>,
-    pub bindings: Bindings,
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct NsId(usize);
+
+impl NsId {
+    pub fn new(id: usize) -> NsId {
+        NsId(id)
+    }
 }
 
-impl<'a> Scope<'a> {
-    pub fn new_primitive_scope() -> Scope<'a> {
-        Scope {
-            parent: None,
-            bindings: primitive_bindings(),
-        }
-    }
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct Ident(NsId, String);
 
-    pub fn resolve(&self, ident: &str) -> Option<&Binding> {
-        match self.bindings.get(ident) {
-            Some(b) => Some(b),
-            None => self.parent.and_then(|p| p.resolve(ident)),
-        }
+impl Ident {
+    pub fn name(&self) -> &String {
+        &self.1
     }
 }
 
 #[derive(Clone)]
-pub enum SValue<'a> {
+pub enum NsValue {
     Bool(Span, bool),
     Char(Span, char),
     Int(Span, i64),
     Float(Span, f64),
-    List(Span, Vec<SValue<'a>>),
+    List(Span, Vec<NsValue>),
     String(Span, String),
-    Symbol(Span, &'a Scope<'a>, String),
-    Vector(Span, Vec<SValue<'a>>),
-    Map(Span, Vec<(SValue<'a>, SValue<'a>)>),
-    Set(Span, Vec<SValue<'a>>),
+    Symbol(Span, Ident),
+    Vector(Span, Vec<NsValue>),
+    Map(Span, Vec<(NsValue, NsValue)>),
+    Set(Span, Vec<NsValue>),
 }
 
-impl<'a> SValue<'a> {
-    fn map_value_vec(vs: Vec<Value>, scope: &'a Scope) -> Vec<SValue<'a>> {
-        vs.into_iter().map(|v| Self::from_value(v, scope)).collect()
+impl NsValue {
+    fn map_value_vec(vs: Vec<Value>, ns_id: NsId) -> Vec<NsValue> {
+        vs.into_iter().map(|v| Self::from_value(v, ns_id)).collect()
     }
 
-    pub fn from_value(value: Value, scope: &'a Scope<'a>) -> SValue<'a> {
+    pub fn from_value(value: Value, ns_id: NsId) -> NsValue {
         match value {
-            Value::Bool(span, v) => SValue::Bool(span, v),
-            Value::Char(span, v) => SValue::Char(span, v),
-            Value::Int(span, v) => SValue::Int(span, v),
-            Value::Float(span, v) => SValue::Float(span, v),
-            Value::String(span, v) => SValue::String(span, v),
-            Value::Symbol(span, v) => SValue::Symbol(span, scope, v),
-            Value::List(span, vs) => SValue::List(span, Self::map_value_vec(vs, scope)),
-            Value::Vector(span, vs) => SValue::Vector(span, Self::map_value_vec(vs, scope)),
-            Value::Set(span, vs) => SValue::Set(span, Self::map_value_vec(vs, scope)),
-            Value::Map(span, vs) => SValue::Map(
+            Value::Bool(span, v) => NsValue::Bool(span, v),
+            Value::Char(span, v) => NsValue::Char(span, v),
+            Value::Int(span, v) => NsValue::Int(span, v),
+            Value::Float(span, v) => NsValue::Float(span, v),
+            Value::String(span, v) => NsValue::String(span, v),
+            Value::Symbol(span, v) => NsValue::Symbol(span, Ident(ns_id, v)),
+            Value::List(span, vs) => NsValue::List(span, Self::map_value_vec(vs, ns_id)),
+            Value::Vector(span, vs) => NsValue::Vector(span, Self::map_value_vec(vs, ns_id)),
+            Value::Set(span, vs) => NsValue::Set(span, Self::map_value_vec(vs, ns_id)),
+            Value::Map(span, vs) => NsValue::Map(
                 span,
                 vs.into_iter()
                     .map(|(k, v)| {
-                        (SValue::from_value(k, scope), SValue::from_value(v, scope))
+                        (NsValue::from_value(k, ns_id), NsValue::from_value(v, ns_id))
                     })
                     .collect(),
             ),
         }
     }
 
-    fn map_svalue_vec(vs: Vec<SValue<'a>>) -> Vec<Value> {
+    fn map_nsvalue_vec(vs: Vec<NsValue>) -> Vec<Value> {
         vs.into_iter().map(|v| v.into_value()).collect()
     }
 
     pub fn into_value(self) -> Value {
         match self {
-            SValue::Bool(span, v) => Value::Bool(span, v),
-            SValue::Char(span, v) => Value::Char(span, v),
-            SValue::Int(span, v) => Value::Int(span, v),
-            SValue::Float(span, v) => Value::Float(span, v),
-            SValue::String(span, v) => Value::String(span, v),
-            SValue::Symbol(span, _, v) => Value::Symbol(span, v),
-            SValue::List(span, vs) => Value::List(span, Self::map_svalue_vec(vs)),
-            SValue::Vector(span, vs) => Value::Vector(span, Self::map_svalue_vec(vs)),
-            SValue::Set(span, vs) => Value::Set(span, Self::map_svalue_vec(vs)),
-            SValue::Map(span, vs) => Value::Map(
+            NsValue::Bool(span, v) => Value::Bool(span, v),
+            NsValue::Char(span, v) => Value::Char(span, v),
+            NsValue::Int(span, v) => Value::Int(span, v),
+            NsValue::Float(span, v) => Value::Float(span, v),
+            NsValue::String(span, v) => Value::String(span, v),
+            NsValue::Symbol(span, v) => Value::Symbol(span, v.1),
+            NsValue::List(span, vs) => Value::List(span, Self::map_nsvalue_vec(vs)),
+            NsValue::Vector(span, vs) => Value::Vector(span, Self::map_nsvalue_vec(vs)),
+            NsValue::Set(span, vs) => Value::Set(span, Self::map_nsvalue_vec(vs)),
+            NsValue::Map(span, vs) => Value::Map(
                 span,
                 vs.into_iter()
                     .map(|(k, v)| (k.into_value(), v.into_value()))
                     .collect(),
             ),
+        }
+    }
+
+    pub fn span(&self) -> &Span {
+        match *self {
+            NsValue::Bool(ref span, _) => span,
+            NsValue::Char(ref span, _) => span,
+            NsValue::Int(ref span, _) => span,
+            NsValue::Float(ref span, _) => span,
+            NsValue::String(ref span, _) => span,
+            NsValue::Symbol(ref span, _) => span,
+            NsValue::List(ref span, _) => span,
+            NsValue::Vector(ref span, _) => span,
+            NsValue::Set(ref span, _) => span,
+            NsValue::Map(ref span, _) => span,
         }
     }
 }
