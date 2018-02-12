@@ -1,4 +1,4 @@
-use hir::{Expr, Var, VarId};
+use hir::{Expr, Fun, Var, VarId};
 use hir::scope::{insert_primitive_bindings, Binding, NsId, NsValue, Primitive, Scope};
 use hir::error::Error;
 use syntax::value::Value;
@@ -26,7 +26,7 @@ impl LoweringContext {
         value_datum: NsValue,
     ) -> Result<Expr, Error> {
         let sym_ident = match sym_datum {
-            NsValue::Symbol(_, ident) => ident.clone(),
+            NsValue::Ident(_, ident) => ident.clone(),
             other => {
                 return Err(Error::ExpectedDefSymbol(*other.span()));
             }
@@ -46,6 +46,76 @@ impl LoweringContext {
                 bound: None,
             },
             Box::new(value_expr),
+        ))
+    }
+
+    fn lower_fun(
+        &mut self,
+        scope: &mut Scope,
+        span: Span,
+        mut arg_data: Vec<NsValue>,
+    ) -> Result<Expr, Error> {
+        if arg_data.len() < 1 {
+            return Err(Error::IllegalArg(
+                span,
+                "Parameter declaration missing".to_owned(),
+            ));
+        }
+
+        // Body starts after the parameter declaration
+        let body_data = arg_data.split_off(1);
+
+        let param_data = match arg_data.pop().unwrap() {
+            NsValue::Vector(_, vs) => vs,
+            other => {
+                return Err(Error::IllegalArg(
+                    other.span().clone(),
+                    "Parameter declaration should be a vector".to_owned(),
+                ));
+            }
+        };
+
+        // Pull our our params
+        let mut body_scope = scope.clone();
+        let mut fixed_params = Vec::<Var>::with_capacity(param_data.len());
+
+        for param_datum in param_data {
+            let ident = match param_datum {
+                NsValue::Ident(_, ident) => ident,
+                other => {
+                    return Err(Error::IllegalArg(
+                        other.span().clone(),
+                        "Unsupported binding type".to_owned(),
+                    ));
+                }
+            };
+
+            let var_id = VarId::new(self.alloc_inst_id());
+            let var = Var {
+                id: var_id,
+                source_name: ident.name().clone(),
+                bound: None,
+            };
+
+            body_scope.insert_var(ident, var_id);
+            fixed_params.push(var);
+        }
+
+        let mut body_exprs = Vec::<Expr>::new();
+
+        for body_datum in body_data {
+            body_exprs.push(self.lower_expr(&mut body_scope, body_datum)?);
+        }
+
+        Ok(Expr::Fun(
+            span,
+            Fun {
+                source_name: None,
+                ty: None,
+                fixed_params,
+                rest_param: None,
+                body_expr: Box::new(Expr::from_vec(body_exprs)),
+            },
         ))
     }
 
@@ -82,6 +152,7 @@ impl LoweringContext {
 
                 self.lower_def(scope, span, sym_datum, value_datum)
             }
+            &Primitive::Fun => self.lower_fun(scope, span, arg_data),
             _ => {
                 unimplemented!("foo");
             }
@@ -112,7 +183,7 @@ impl LoweringContext {
         arg_data: Vec<NsValue>,
     ) -> Result<Expr, Error> {
         match fn_datum {
-            NsValue::Symbol(fn_span, ref ident) => match scope.get(ident) {
+            NsValue::Ident(fn_span, ref ident) => match scope.get(ident) {
                 Some(Binding::Primitive(ref fn_prim)) => {
                     self.lower_primitive_apply(scope, span, fn_prim, arg_data)
                 }
@@ -130,7 +201,7 @@ impl LoweringContext {
 
     fn lower_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr, Error> {
         match datum {
-            NsValue::Symbol(span, ref ident) => match scope.get(ident) {
+            NsValue::Ident(span, ref ident) => match scope.get(ident) {
                 Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
                 Some(Binding::Primitive(_)) => Err(Error::PrimitiveRef(span, ident.name().clone())),
                 None => Err(Error::UnboundSymbol(span, ident.name().clone())),
@@ -317,6 +388,188 @@ fn reference_unbound() {
 
     let mut lcx = LoweringContext::new();
     assert_eq!(err, lcx.lower_module(data).unwrap_err());
+}
+
+#[test]
+fn fn_without_param_decl() {
+    let j = "(fn)";
+    let t = "^^^^";
+
+    let err = Error::IllegalArg(t2s(t), "Parameter declaration missing".to_owned());
+    let data = data_from_str(j).unwrap();
+
+    let mut lcx = LoweringContext::new();
+    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+}
+
+#[test]
+fn fn_with_non_vector_param_decl() {
+    let j = "(fn ())";
+    let t = "    ^^ ";
+
+    let err = Error::IllegalArg(
+        t2s(t),
+        "Parameter declaration should be a vector".to_owned(),
+    );
+    let data = data_from_str(j).unwrap();
+
+    let mut lcx = LoweringContext::new();
+    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+}
+
+#[test]
+fn fn_with_non_symbol_param() {
+    let j = "(fn [()])";
+    let t = "     ^^  ";
+
+    let err = Error::IllegalArg(t2s(t), "Unsupported binding type".to_owned());
+    let data = data_from_str(j).unwrap();
+
+    let mut lcx = LoweringContext::new();
+    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+}
+
+#[test]
+fn empty_fn() {
+    let j = "(fn [])";
+    let t = "^^^^^^^";
+
+    let expected = Expr::Fun(
+        t2s(t),
+        Fun {
+            source_name: None,
+            ty: None,
+            fixed_params: vec![],
+            rest_param: None,
+            body_expr: Box::new(Expr::from_vec(vec![])),
+        },
+    );
+
+    let data = data_from_str(j).unwrap();
+
+    let mut lcx = LoweringContext::new();
+    assert_eq!(expected, lcx.lower_module(data).unwrap());
+}
+
+#[test]
+fn identity_fn() {
+    let j = "(fn [x] x)";
+    let t = "^^^^^^^^^^";
+    let u = "        ^ ";
+
+    let param_var_id = VarId::new(1);
+    let param_var = Var {
+        id: param_var_id,
+        source_name: "x".to_owned(),
+        bound: None,
+    };
+
+    let expected = Expr::Fun(
+        t2s(t),
+        Fun {
+            source_name: None,
+            ty: None,
+            fixed_params: vec![param_var],
+            rest_param: None,
+            body_expr: Box::new(Expr::Ref(t2s(u), param_var_id)),
+        },
+    );
+
+    let data = data_from_str(j).unwrap();
+
+    let mut lcx = LoweringContext::new();
+    assert_eq!(expected, lcx.lower_module(data).unwrap());
+}
+
+#[test]
+fn capturing_fn() {
+    let j = "(def x 1)(fn [] x)";
+    let t = "^^^^^^^^^         ";
+    let u = "       ^          ";
+    let v = "         ^^^^^^^^^";
+    let w = "                ^ ";
+
+    let outer_var_id = VarId::new(1);
+    let outer_var = Var {
+        id: outer_var_id,
+        source_name: "x".to_owned(),
+        bound: None,
+    };
+
+    let expected = Expr::Do(
+        EMPTY_SPAN,
+        vec![
+            Expr::Def(
+                t2s(t),
+                outer_var,
+                Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
+            ),
+            Expr::Fun(
+                t2s(v),
+                Fun {
+                    source_name: None,
+                    ty: None,
+                    fixed_params: vec![],
+                    rest_param: None,
+                    body_expr: Box::new(Expr::Ref(t2s(w), outer_var_id)),
+                },
+            ),
+        ],
+    );
+
+    let data = data_from_str(j).unwrap();
+
+    let mut lcx = LoweringContext::new();
+    assert_eq!(expected, lcx.lower_module(data).unwrap());
+}
+
+#[test]
+fn shadowing_fn() {
+    let j = "(def x 1)(fn [x] x)";
+    let t = "^^^^^^^^^          ";
+    let u = "       ^           ";
+    let v = "         ^^^^^^^^^^";
+    let w = "                 ^ ";
+
+    let outer_var_id = VarId::new(1);
+    let outer_var = Var {
+        id: outer_var_id,
+        source_name: "x".to_owned(),
+        bound: None,
+    };
+
+    let param_var_id = VarId::new(2);
+    let param_var = Var {
+        id: param_var_id,
+        source_name: "x".to_owned(),
+        bound: None,
+    };
+
+    let expected = Expr::Do(
+        EMPTY_SPAN,
+        vec![
+            Expr::Def(
+                t2s(t),
+                outer_var,
+                Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
+            ),
+            Expr::Fun(
+                t2s(v),
+                Fun {
+                    source_name: None,
+                    ty: None,
+                    fixed_params: vec![param_var],
+                    rest_param: None,
+                    body_expr: Box::new(Expr::Ref(t2s(w), param_var_id)),
+                },
+            ),
+        ],
+    );
+
+    let data = data_from_str(j).unwrap();
+
+    let mut lcx = LoweringContext::new();
+    assert_eq!(expected, lcx.lower_module(data).unwrap());
 }
 
 #[test]

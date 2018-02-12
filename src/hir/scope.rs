@@ -9,6 +9,7 @@ pub enum Binding {
     Primitive(Primitive),
 }
 
+#[derive(Clone)]
 pub struct Scope(HashMap<Ident, Binding>);
 
 impl Scope {
@@ -78,7 +79,7 @@ pub enum NsValue {
     Float(Span, f64),
     List(Span, Vec<NsValue>),
     String(Span, String),
-    Symbol(Span, Ident),
+    Ident(Span, Ident),
     Vector(Span, Vec<NsValue>),
     Map(Span, Vec<(NsValue, NsValue)>),
     Set(Span, Vec<NsValue>),
@@ -96,7 +97,7 @@ impl NsValue {
             Value::Int(span, v) => NsValue::Int(span, v),
             Value::Float(span, v) => NsValue::Float(span, v),
             Value::String(span, v) => NsValue::String(span, v),
-            Value::Symbol(span, v) => NsValue::Symbol(span, Ident(ns_id, v)),
+            Value::Symbol(span, v) => NsValue::Ident(span, Ident(ns_id, v)),
             Value::List(span, vs) => NsValue::List(span, Self::map_value_vec(vs, ns_id)),
             Value::Vector(span, vs) => NsValue::Vector(span, Self::map_value_vec(vs, ns_id)),
             Value::Set(span, vs) => NsValue::Set(span, Self::map_value_vec(vs, ns_id)),
@@ -122,7 +123,7 @@ impl NsValue {
             NsValue::Int(span, v) => Value::Int(span, v),
             NsValue::Float(span, v) => Value::Float(span, v),
             NsValue::String(span, v) => Value::String(span, v),
-            NsValue::Symbol(span, v) => Value::Symbol(span, v.1),
+            NsValue::Ident(span, v) => Value::Symbol(span, v.1),
             NsValue::List(span, vs) => Value::List(span, Self::map_nsvalue_vec(vs)),
             NsValue::Vector(span, vs) => Value::Vector(span, Self::map_nsvalue_vec(vs)),
             NsValue::Set(span, vs) => Value::Set(span, Self::map_nsvalue_vec(vs)),
@@ -142,7 +143,7 @@ impl NsValue {
             NsValue::Int(ref span, _) => span,
             NsValue::Float(ref span, _) => span,
             NsValue::String(ref span, _) => span,
-            NsValue::Symbol(ref span, _) => span,
+            NsValue::Ident(ref span, _) => span,
             NsValue::List(ref span, _) => span,
             NsValue::Vector(ref span, _) => span,
             NsValue::Set(ref span, _) => span,

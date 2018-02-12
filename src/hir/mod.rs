@@ -30,9 +30,11 @@ impl PartialEq for Var {
 
 #[derive(PartialEq, Debug)]
 pub struct Fun {
-    source_name: String,
+    source_name: Option<String>,
     ty: Option<ty::PFun>,
-    args: Vec<Var>,
+    fixed_params: Vec<Var>,
+    rest_param: Option<Var>,
+    body_expr: Box<Expr>,
 }
 
 #[derive(PartialEq, Debug)]
