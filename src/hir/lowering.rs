@@ -229,10 +229,7 @@ impl LoweringContext {
                 let arg_data = vs.split_off(1);
                 self.lower_apply(scope, span, vs.pop().unwrap(), arg_data)
             },
-            lit @ NsValue::Bool(_, _) => Ok(Expr::Lit(lit.into_value())),
-            lit @ NsValue::Int(_, _) => Ok(Expr::Lit(lit.into_value())),
-            lit @ NsValue::String(_, _) => Ok(Expr::Lit(lit.into_value())),
-            _ => unimplemented!("Unsupported datum"),
+            other => Ok(Expr::Lit(other.into_value())),
         }
     }
 
