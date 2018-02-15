@@ -39,7 +39,7 @@ pub struct Fun {
 
 #[derive(PartialEq, Debug)]
 pub struct Cond {
-    test: Box<Expr>,
+    test_expr: Box<Expr>,
     true_expr: Box<Expr>,
     false_expr: Box<Expr>,
 }

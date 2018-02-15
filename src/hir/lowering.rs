@@ -1,4 +1,4 @@
-use hir::{Expr, Fun, Var, VarId};
+use hir::{Cond, Expr, Fun, Var, VarId};
 use hir::scope::{insert_primitive_bindings, Binding, NsId, NsValue, Primitive, Scope};
 use hir::error::Error;
 use syntax::value::Value;
@@ -132,7 +132,7 @@ impl LoweringContext {
                 other => Err(Error::WrongArgCount(span, other)),
             },
             &Primitive::Do => {
-                let mut arg_exprs: Vec<Expr> = vec![];
+                let mut arg_exprs = Vec::<Expr>::with_capacity(arg_data.len());
 
                 for arg_datum in arg_data {
                     arg_exprs.push(self.lower_expr(scope, arg_datum)?);
@@ -153,8 +153,25 @@ impl LoweringContext {
                 self.lower_def(scope, span, sym_datum, value_datum)
             }
             &Primitive::Fun => self.lower_fun(scope, span, arg_data),
-            _ => {
-                unimplemented!("foo");
+            &Primitive::If => {
+                let arg_count = arg_data.len();
+
+                if arg_count != 3 {
+                    return Err(Error::WrongArgCount(span, arg_count));
+                }
+
+                macro_rules! pop_as_boxed_expr {
+                    () => {Box::new(self.lower_expr(scope, arg_data.pop().unwrap())?)}
+                };
+
+                Ok(Expr::Cond(
+                    span,
+                    Cond {
+                        false_expr: pop_as_boxed_expr!(),
+                        true_expr: pop_as_boxed_expr!(),
+                        test_expr: pop_as_boxed_expr!(),
+                    },
+                ))
             }
         }
     }
@@ -587,6 +604,66 @@ fn expr_apply() {
             Expr::Lit(Value::Int(t2s(v), 2)),
             Expr::Lit(Value::Int(t2s(w), 3)),
         ],
+    );
+
+    let data = data_from_str(j).unwrap();
+
+    let mut lcx = LoweringContext::new();
+    assert_eq!(expected, lcx.lower_module(data).unwrap());
+}
+
+#[test]
+fn empty_if() {
+    let j = "(if)";
+    let t = "^^^^";
+
+    let err = Error::WrongArgCount(t2s(t), 0);
+    let data = data_from_str(j).unwrap();
+
+    let mut lcx = LoweringContext::new();
+    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+}
+
+#[test]
+fn if_without_test() {
+    let j = "(if true)";
+    let t = "^^^^^^^^^";
+
+    let err = Error::WrongArgCount(t2s(t), 1);
+    let data = data_from_str(j).unwrap();
+
+    let mut lcx = LoweringContext::new();
+    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+}
+
+#[test]
+fn if_without_false_branch() {
+    let j = "(if true 1)";
+    let t = "^^^^^^^^^^^";
+
+    let err = Error::WrongArgCount(t2s(t), 2);
+    let data = data_from_str(j).unwrap();
+
+    let mut lcx = LoweringContext::new();
+    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+}
+
+#[test]
+fn if_expr() {
+    let j = "(if true 1 2)";
+    let t = "^^^^^^^^^^^^^";
+    let u = "    ^^^^     ";
+    let v = "         ^   ";
+    let w = "           ^ ";
+
+
+    let expected = Expr::Cond(
+        t2s(t),
+        Cond {
+            test_expr: Box::new(Expr::Lit(Value::Bool(t2s(u), true))),
+            true_expr: Box::new(Expr::Lit(Value::Int(t2s(v), 1))),
+            false_expr: Box::new(Expr::Lit(Value::Int(t2s(w), 2))),
+        },
     );
 
     let data = data_from_str(j).unwrap();
