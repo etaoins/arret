@@ -222,7 +222,7 @@ impl LoweringContext {
 
                 self.lower_def(scope, span, sym_datum, value_datum)
             }
-            other => self.lower_primitive_apply(scope, span, fn_prim, arg_data),
+            _ => self.lower_primitive_apply(scope, span, fn_prim, arg_data),
         }
     }
 
