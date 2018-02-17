@@ -5,17 +5,54 @@ use syntax::value::Value;
 use syntax::span::Span;
 
 pub struct LoweringContext {
-    curr_inst_id: usize,
+    curr_var_id: usize,
+}
+
+macro_rules! lower_expr_impl {
+    ($self:ident, $scope:ident, $datum:ident, $lower_primitive_apply:ident) => {
+        match $datum {
+            NsValue::Ident(span, ref ident) => match $scope.get(ident) {
+                Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
+                Some(Binding::Primitive(_)) => Err(Error::PrimitiveRef(span, ident.name().clone())),
+                None => Err(Error::UnboundSymbol(span, ident.name().clone())),
+            },
+            NsValue::List(span, mut vs) => {
+                if vs.len() == 0 {
+                    return Ok(Expr::Lit(Value::List(span, vec![])));
+                }
+
+                let arg_data = vs.split_off(1);
+                let fn_datum = vs.pop().unwrap();
+
+                match fn_datum {
+                    NsValue::Ident(fn_span, ref ident) => match $scope.get(ident) {
+                        Some(Binding::Primitive(ref fn_prim)) => {
+                            $self.$lower_primitive_apply($scope, span, fn_prim, arg_data)
+                        }
+                        Some(Binding::Var(id)) => {
+                            $self.lower_expr_apply($scope, span, Expr::Ref(span, id), arg_data)
+                        }
+                        None => Err(Error::UnboundSymbol(fn_span, ident.name().clone())),
+                    },
+                    _ => {
+                        let fn_expr = $self.lower_expr($scope, fn_datum)?;
+                        $self.lower_expr_apply($scope, span, fn_expr, arg_data)
+                    }
+                }
+            },
+            other => Ok(Expr::Lit(other.into_value())),
+        }
+    }
 }
 
 impl LoweringContext {
     pub fn new() -> LoweringContext {
-        LoweringContext { curr_inst_id: 0 }
+        LoweringContext { curr_var_id: 0 }
     }
 
-    fn alloc_inst_id(&mut self) -> usize {
-        self.curr_inst_id = self.curr_inst_id + 1;
-        self.curr_inst_id
+    fn alloc_var_id(&mut self) -> usize {
+        self.curr_var_id = self.curr_var_id + 1;
+        self.curr_var_id
     }
 
     fn lower_def(
@@ -32,7 +69,7 @@ impl LoweringContext {
             }
         };
 
-        let var_id = VarId::new(self.alloc_inst_id());
+        let var_id = VarId::new(self.alloc_var_id());
         let sym_name = sym_ident.name().clone();
         let value_expr = self.lower_expr(scope, value_datum)?;
 
@@ -51,7 +88,7 @@ impl LoweringContext {
 
     fn lower_fun(
         &mut self,
-        scope: &mut Scope,
+        scope: &Scope,
         span: Span,
         mut arg_data: Vec<NsValue>,
     ) -> Result<Expr, Error> {
@@ -90,7 +127,7 @@ impl LoweringContext {
                 }
             };
 
-            let var_id = VarId::new(self.alloc_inst_id());
+            let var_id = VarId::new(self.alloc_var_id());
             let var = Var {
                 id: var_id,
                 source_name: ident.name().clone(),
@@ -104,7 +141,7 @@ impl LoweringContext {
         let mut body_exprs = Vec::<Expr>::new();
 
         for body_datum in body_data {
-            body_exprs.push(self.lower_expr(&mut body_scope, body_datum)?);
+            body_exprs.push(self.lower_body_expr(&mut body_scope, body_datum)?);
         }
 
         Ok(Expr::Fun(
@@ -121,7 +158,7 @@ impl LoweringContext {
 
     fn lower_primitive_apply(
         &mut self,
-        scope: &mut Scope,
+        scope: &Scope,
         span: Span,
         fn_prim: &Primitive,
         mut arg_data: Vec<NsValue>,
@@ -140,18 +177,7 @@ impl LoweringContext {
 
                 Ok(Expr::Do(span, arg_exprs))
             }
-            &Primitive::Def => {
-                let arg_count = arg_data.len();
-
-                if arg_count != 2 {
-                    return Err(Error::WrongArgCount(span, arg_count));
-                }
-
-                let value_datum = arg_data.pop().unwrap();
-                let sym_datum = arg_data.pop().unwrap();
-
-                self.lower_def(scope, span, sym_datum, value_datum)
-            }
+            &Primitive::Def => Err(Error::DefOutsideBody(span)),
             &Primitive::Fun => self.lower_fun(scope, span, arg_data),
             &Primitive::If => {
                 let arg_count = arg_data.len();
@@ -176,9 +202,33 @@ impl LoweringContext {
         }
     }
 
-    fn lower_expr_apply(
+    fn lower_body_primitive_apply(
         &mut self,
         scope: &mut Scope,
+        span: Span,
+        fn_prim: &Primitive,
+        mut arg_data: Vec<NsValue>,
+    ) -> Result<Expr, Error> {
+        match fn_prim {
+            &Primitive::Def => {
+                let arg_count = arg_data.len();
+
+                if arg_count != 2 {
+                    return Err(Error::WrongArgCount(span, arg_count));
+                }
+
+                let value_datum = arg_data.pop().unwrap();
+                let sym_datum = arg_data.pop().unwrap();
+
+                self.lower_def(scope, span, sym_datum, value_datum)
+            }
+            other => self.lower_primitive_apply(scope, span, fn_prim, arg_data),
+        }
+    }
+
+    fn lower_expr_apply(
+        &mut self,
+        scope: &Scope,
         span: Span,
         fn_expr: Expr,
         arg_data: Vec<NsValue>,
@@ -192,45 +242,12 @@ impl LoweringContext {
         Ok(Expr::App(span, Box::new(fn_expr), arg_exprs))
     }
 
-    fn lower_apply(
-        &mut self,
-        scope: &mut Scope,
-        span: Span,
-        fn_datum: NsValue,
-        arg_data: Vec<NsValue>,
-    ) -> Result<Expr, Error> {
-        match fn_datum {
-            NsValue::Ident(fn_span, ref ident) => match scope.get(ident) {
-                Some(Binding::Primitive(ref fn_prim)) => {
-                    self.lower_primitive_apply(scope, span, fn_prim, arg_data)
-                }
-                Some(Binding::Var(id)) => {
-                    self.lower_expr_apply(scope, span, Expr::Ref(span, id), arg_data)
-                }
-                None => Err(Error::UnboundSymbol(fn_span, ident.name().clone())),
-            },
-            _ => {
-                let fn_expr = self.lower_expr(scope, fn_datum)?;
-                self.lower_expr_apply(scope, span, fn_expr, arg_data)
-            }
-        }
+    fn lower_expr(&mut self, scope: &Scope, datum: NsValue) -> Result<Expr, Error> {
+        lower_expr_impl!(self, scope, datum, lower_primitive_apply)
     }
 
-    fn lower_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr, Error> {
-        match datum {
-            NsValue::Ident(span, ref ident) => match scope.get(ident) {
-                Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
-                Some(Binding::Primitive(_)) => Err(Error::PrimitiveRef(span, ident.name().clone())),
-                None => Err(Error::UnboundSymbol(span, ident.name().clone())),
-            },
-            NsValue::List(span, mut vs) => if vs.len() == 0 {
-                Ok(Expr::Lit(Value::List(span, vec![])))
-            } else {
-                let arg_data = vs.split_off(1);
-                self.lower_apply(scope, span, vs.pop().unwrap(), arg_data)
-            },
-            other => Ok(Expr::Lit(other.into_value())),
-        }
+    fn lower_body_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr, Error> {
+        lower_expr_impl!(self, scope, datum, lower_body_primitive_apply)
     }
 
     pub fn lower_module(&mut self, data: Vec<Value>) -> Result<Expr, Error> {
@@ -242,7 +259,7 @@ impl LoweringContext {
 
         for datum in data {
             let ns_datum = NsValue::from_value(datum, ns_id);
-            exprs.push(self.lower_expr(&mut scope, ns_datum)?);
+            exprs.push(self.lower_body_expr(&mut scope, ns_datum)?);
         }
 
         Ok(Expr::from_vec(exprs))
@@ -374,6 +391,18 @@ fn def_of_non_symbol() {
     let t = "     ^   ";
 
     let err = Error::ExpectedDefSymbol(t2s(t));
+    let data = data_from_str(j).unwrap();
+
+    let mut lcx = LoweringContext::new();
+    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+}
+
+#[test]
+fn def_in_non_body() {
+    let j = "(def x (def y 1))";
+    let t = "       ^^^^^^^^^ ";
+
+    let err = Error::DefOutsideBody(t2s(t));
     let data = data_from_str(j).unwrap();
 
     let mut lcx = LoweringContext::new();
@@ -652,7 +681,6 @@ fn if_expr() {
     let u = "    ^^^^     ";
     let v = "         ^   ";
     let w = "           ^ ";
-
 
     let expected = Expr::Cond(
         t2s(t),

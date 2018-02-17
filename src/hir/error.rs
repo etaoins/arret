@@ -7,4 +7,5 @@ pub enum Error {
     WrongArgCount(Span, usize),
     IllegalArg(Span, String),
     ExpectedDefSymbol(Span),
+    DefOutsideBody(Span),
 }
