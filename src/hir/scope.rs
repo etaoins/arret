@@ -104,9 +104,7 @@ impl NsValue {
             Value::Map(span, vs) => NsValue::Map(
                 span,
                 vs.into_iter()
-                    .map(|(k, v)| {
-                        (NsValue::from_value(k, ns_id), NsValue::from_value(v, ns_id))
-                    })
+                    .map(|(k, v)| (NsValue::from_value(k, ns_id), NsValue::from_value(v, ns_id)))
                     .collect(),
             ),
         }
