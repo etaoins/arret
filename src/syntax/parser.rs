@@ -424,8 +424,6 @@ impl<'de> Parser<'de> {
             match self.skip_until_non_whitespace() {
                 Ok(_) => {
                     let datum = self.parse_datum()?;
-                    println!("{:?}", datum);
-
                     datum_vec.push(datum);
                 }
                 Err(Error::Eof) => return Ok(datum_vec),
