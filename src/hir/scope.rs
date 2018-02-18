@@ -70,7 +70,6 @@ primitives!(
     ("fn", Fun),
     ("if", If),
     ("quote", Quote),
-    ("do", Do),
     ("export", Export)
 );
 

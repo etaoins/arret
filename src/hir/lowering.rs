@@ -173,15 +173,6 @@ impl LoweringContext {
                 1 => Ok(Expr::Lit(arg_data[0].clone().into_value())),
                 other => Err(Error::WrongArgCount(span, other)),
             },
-            &Primitive::Do => {
-                let mut arg_exprs = Vec::<Expr>::with_capacity(arg_data.len());
-
-                for arg_datum in arg_data {
-                    arg_exprs.push(self.lower_expr(scope, arg_datum)?);
-                }
-
-                Ok(Expr::Do(arg_exprs))
-            }
             &Primitive::Fun => self.lower_fun(scope, span, arg_data),
             &Primitive::If => {
                 let arg_count = arg_data.len();
@@ -374,22 +365,6 @@ fn quoted_multiple_data() {
 
     let err = Error::WrongArgCount(t2s(t), 3);
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
-}
-
-#[test]
-fn do_expr() {
-    let j = "(do 1 2 3)";
-    let t = "    ^     ";
-    let u = "      ^   ";
-    let v = "        ^ ";
-
-    let expected = Expr::Do(vec![
-        Expr::Lit(Value::Int(t2s(t), 1)),
-        Expr::Lit(Value::Int(t2s(u), 2)),
-        Expr::Lit(Value::Int(t2s(v), 3)),
-    ]);
-
-    assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
 #[test]
