@@ -1,9 +1,34 @@
 use std::collections::HashMap;
 use hir::Expr;
-use hir::scope::Binding;
+use hir::scope::{insert_primitive_exports, Binding};
 
 #[derive(Debug, PartialEq)]
 pub struct Module {
-    pub body_expr: Expr,
-    pub exports: HashMap<String, Binding>,
+    body_expr: Expr,
+    exports: HashMap<String, Binding>,
+}
+
+impl Module {
+    pub fn new(body_expr: Expr, exports: HashMap<String, Binding>) -> Module {
+        Module { body_expr, exports }
+    }
+
+    pub fn primitives_module() -> Module {
+        let mut primitive_exports = HashMap::<String, Binding>::new();
+        insert_primitive_exports(&mut primitive_exports);
+
+        Module::new(Expr::Do(vec![]), primitive_exports)
+    }
+
+    pub fn body_expr(&self) -> &Expr {
+        &self.body_expr
+    }
+
+    pub fn into_body_expr(self) -> Expr {
+        self.body_expr
+    }
+
+    pub fn exports(&self) -> &HashMap<String, Binding> {
+        &self.exports
+    }
 }

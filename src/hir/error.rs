@@ -1,4 +1,5 @@
 use syntax::span::Span;
+use syntax::error::Error as SyntaxError;
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
@@ -9,4 +10,6 @@ pub enum Error {
     ExpectedSymbol(Span),
     DefOutsideBody(Span),
     ExportOutsideModule(Span),
+    LibraryNotFound(Span),
+    SyntaxError(SyntaxError),
 }

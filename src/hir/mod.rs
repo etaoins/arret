@@ -2,6 +2,7 @@ pub mod lowering;
 mod scope;
 mod error;
 mod module;
+mod loader;
 
 use syntax::span::Span;
 use syntax::value::Value;

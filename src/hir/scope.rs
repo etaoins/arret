@@ -40,8 +40,12 @@ impl Scope {
         self.exports.insert(ident, span);
     }
 
+    pub fn insert_binding(&mut self, ident: Ident, binding: Binding) {
+        self.bindings.insert(ident, binding);
+    }
+
     pub fn insert_var(&mut self, ident: Ident, var_id: VarId) {
-        self.bindings.insert(ident, Binding::Var(var_id));
+        self.insert_binding(ident, Binding::Var(var_id));
     }
 
     pub fn exports(&self) -> &HashMap<Ident, Span> {
@@ -56,10 +60,9 @@ macro_rules! primitives {
             $($i,)*
         }
 
-        pub fn insert_primitive_bindings(scope: &mut Scope, ns_id: NsId) {
+        pub fn insert_primitive_exports(exports: &mut HashMap<String, Binding>) {
             $(
-                let ident = Ident(ns_id, $n.to_owned());
-                scope.bindings.insert(ident, Binding::Primitive(Primitive::$i));
+                exports.insert($n.to_owned(), Binding::Primitive(Primitive::$i));
             )*
         }
     }
@@ -70,6 +73,7 @@ primitives!(
     ("fn", Fun),
     ("if", If),
     ("quote", Quote),
+    ("import", Import),
     ("export", Export)
 );
 
@@ -86,6 +90,14 @@ impl NsId {
 pub struct Ident(NsId, String);
 
 impl Ident {
+    pub fn new(ns_id: NsId, name: String) -> Ident {
+        Ident(ns_id, name)
+    }
+
+    pub fn ns_id(&self) -> NsId {
+        self.0
+    }
+
     pub fn name(&self) -> &String {
         &self.1
     }
@@ -154,18 +166,18 @@ impl NsValue {
         }
     }
 
-    pub fn span(&self) -> &Span {
+    pub fn span(&self) -> Span {
         match *self {
-            NsValue::Bool(ref span, _) => span,
-            NsValue::Char(ref span, _) => span,
-            NsValue::Int(ref span, _) => span,
-            NsValue::Float(ref span, _) => span,
-            NsValue::String(ref span, _) => span,
-            NsValue::Ident(ref span, _) => span,
-            NsValue::List(ref span, _) => span,
-            NsValue::Vector(ref span, _) => span,
-            NsValue::Set(ref span, _) => span,
-            NsValue::Map(ref span, _) => span,
+            NsValue::Bool(span, _) => span,
+            NsValue::Char(span, _) => span,
+            NsValue::Int(span, _) => span,
+            NsValue::Float(span, _) => span,
+            NsValue::String(span, _) => span,
+            NsValue::Ident(span, _) => span,
+            NsValue::List(span, _) => span,
+            NsValue::Vector(span, _) => span,
+            NsValue::Set(span, _) => span,
+            NsValue::Map(span, _) => span,
         }
     }
 }

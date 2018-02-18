@@ -1,7 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use hir::{Cond, Expr, Fun, Var, VarId};
-use hir::scope::{insert_primitive_bindings, Binding, NsId, NsValue, Primitive, Scope};
+use hir::loader::{load_library_data, LibraryName};
+use hir::scope::{Binding, Ident, NsId, NsValue, Primitive, Scope};
 use hir::module::Module;
 use hir::error::Error;
 use syntax::value::Value;
@@ -9,6 +10,8 @@ use syntax::span::Span;
 
 pub struct LoweringContext {
     curr_var_id: usize,
+    curr_ns_id: usize,
+    loaded_libraries: BTreeMap<LibraryName, Module>,
 }
 
 macro_rules! lower_expr_impl {
@@ -50,12 +53,32 @@ macro_rules! lower_expr_impl {
 
 impl LoweringContext {
     pub fn new() -> LoweringContext {
-        LoweringContext { curr_var_id: 0 }
+        let mut loaded_libraries = BTreeMap::new();
+
+        // This library is always loaded
+        loaded_libraries.insert(
+            LibraryName::new(
+                vec!["risp".to_owned(), "internal".to_owned()],
+                "primitives".to_owned(),
+            ),
+            Module::primitives_module(),
+        );
+
+        LoweringContext {
+            curr_var_id: 0,
+            curr_ns_id: 0,
+            loaded_libraries,
+        }
     }
 
     fn alloc_var_id(&mut self) -> usize {
         self.curr_var_id = self.curr_var_id + 1;
         self.curr_var_id
+    }
+
+    fn alloc_ns_id(&mut self) -> usize {
+        self.curr_ns_id = self.curr_ns_id + 1;
+        self.curr_ns_id
     }
 
     fn lower_def(
@@ -68,7 +91,7 @@ impl LoweringContext {
         let sym_ident = match sym_datum {
             NsValue::Ident(_, ident) => ident.clone(),
             other => {
-                return Err(Error::ExpectedSymbol(*other.span()));
+                return Err(Error::ExpectedSymbol(other.span()));
             }
         };
 
@@ -168,6 +191,7 @@ impl LoweringContext {
     ) -> Result<Expr, Error> {
         match fn_prim {
             &Primitive::Def => Err(Error::DefOutsideBody(span)),
+            &Primitive::Import => Err(Error::DefOutsideBody(span)),
             &Primitive::Export => Err(Error::ExportOutsideModule(span)),
             &Primitive::Quote => match arg_data.len() {
                 1 => Ok(Expr::Lit(arg_data[0].clone().into_value())),
@@ -197,6 +221,77 @@ impl LoweringContext {
         }
     }
 
+    fn load_library(&mut self, span: Span, library_name: LibraryName) -> Result<&Module, Error> {
+        // TODO: This does a lot of hash lookups
+        if !self.loaded_libraries.contains_key(&library_name) {
+            let library_data = load_library_data(span, &library_name)?;
+            let loaded_library = self.lower_module(library_data)?;
+
+            self.loaded_libraries
+                .insert(library_name.clone(), loaded_library);
+        }
+
+        Ok(self.loaded_libraries.get(&library_name).unwrap())
+    }
+
+    fn lower_import_set(
+        &mut self,
+        scope: &mut Scope,
+        import_set_datum: NsValue,
+    ) -> Result<(), Error> {
+        match import_set_datum {
+            NsValue::Vector(span, vs) => {
+                if vs.len() < 1 {
+                    return Err(Error::IllegalArg(
+                        span,
+                        "Library name requires a least one element".to_owned(),
+                    ));
+                }
+
+                let mut name_components = Vec::<String>::with_capacity(vs.len());
+                let mut import_ns_id = NsId::new(0);
+                for datum in vs {
+                    match datum {
+                        NsValue::Ident(_, ident) => {
+                            // TODO: What happens with mixed namespaces?
+                            import_ns_id = ident.ns_id();
+                            name_components.push(ident.name().clone());
+                        }
+                        other => {
+                            return Err(Error::IllegalArg(
+                                other.span(),
+                                "Library name component must be a symbol".to_owned(),
+                            ));
+                        }
+                    };
+                }
+
+                let terminal_name = name_components.pop().unwrap();
+                let library_name = LibraryName::new(name_components, terminal_name);
+                let loaded_library = self.load_library(span, library_name)?;
+
+                for (name, binding) in loaded_library.exports() {
+                    let imported_ident = Ident::new(import_ns_id, name.clone());
+                    scope.insert_binding(imported_ident, binding.clone());
+                }
+
+                Ok(())
+            }
+            other => Err(Error::IllegalArg(
+                other.span(),
+                "Import set must be a vector".to_owned(),
+            )),
+        }
+    }
+
+    fn lower_import(&mut self, scope: &mut Scope, arg_data: Vec<NsValue>) -> Result<(), Error> {
+        for arg_datum in arg_data {
+            self.lower_import_set(scope, arg_datum)?;
+        }
+
+        Ok(())
+    }
+
     fn lower_body_primitive_apply(
         &mut self,
         scope: &mut Scope,
@@ -217,6 +312,10 @@ impl LoweringContext {
 
                 self.lower_def(scope, span, sym_datum, value_datum)
             }
+            &Primitive::Import => {
+                self.lower_import(scope, arg_data)?;
+                Ok(Expr::Do(vec![]))
+            }
             _ => self.lower_primitive_apply(scope, span, fn_prim, arg_data),
         }
     }
@@ -236,7 +335,7 @@ impl LoweringContext {
                             scope.insert_export(span, ident);
                         }
                         other => {
-                            return Err(Error::ExpectedSymbol(*other.span()));
+                            return Err(Error::ExpectedSymbol(other.span()));
                         }
                     };
                 }
@@ -276,9 +375,14 @@ impl LoweringContext {
     }
 
     pub fn lower_module(&mut self, data: Vec<Value>) -> Result<Module, Error> {
-        let ns_id = NsId::new(0);
+        let ns_id = NsId::new(self.alloc_ns_id());
         let mut scope = Scope::new_empty();
-        insert_primitive_bindings(&mut scope, ns_id);
+
+        // The default scope only consists of (import)
+        scope.insert_binding(
+            Ident::new(ns_id, "import".to_owned()),
+            Binding::Primitive(Primitive::Import),
+        );
 
         let mut exprs = Vec::<Expr>::new();
 
@@ -298,7 +402,7 @@ impl LoweringContext {
             exports.insert(ident.name().clone(), binding);
         }
 
-        Ok(Module { body_expr, exports })
+        Ok(Module::new(body_expr, exports))
     }
 }
 
@@ -308,18 +412,36 @@ impl LoweringContext {
 use syntax::span::t2s;
 #[cfg(test)]
 use syntax::parser::data_from_str;
+#[cfg(test)]
+use syntax::span::EMPTY_SPAN;
 
 #[cfg(test)]
 fn module_for_str(data_str: &str) -> Result<Module, Error> {
-    let data = data_from_str(data_str).unwrap();
+    let import_statement = Value::List(
+        EMPTY_SPAN,
+        vec![
+            Value::Symbol(EMPTY_SPAN, "import".to_owned()),
+            Value::Vector(
+                EMPTY_SPAN,
+                vec![
+                    Value::Symbol(EMPTY_SPAN, "risp".to_owned()),
+                    Value::Symbol(EMPTY_SPAN, "internal".to_owned()),
+                    Value::Symbol(EMPTY_SPAN, "primitives".to_owned()),
+                ],
+            ),
+        ],
+    );
+
+    let mut test_data = data_from_str(data_str).unwrap();
+    test_data.insert(0, import_statement);
 
     let mut lcx = LoweringContext::new();
-    lcx.lower_module(data)
+    lcx.lower_module(test_data)
 }
 
 #[cfg(test)]
 fn body_expr_for_str(data_str: &str) -> Result<Expr, Error> {
-    module_for_str(data_str).map(|module| module.body_expr)
+    module_for_str(data_str).map(|module| module.into_body_expr())
 }
 
 #[test]
@@ -670,11 +792,7 @@ fn simple_export() {
     let mut expected_exports = HashMap::new();
     expected_exports.insert("x".to_owned(), Binding::Var(var_id));
 
-    let expected = Module {
-        body_expr: expected_body_expr,
-        exports: expected_exports,
-    };
-
+    let expected = Module::new(expected_body_expr, expected_exports);
     assert_eq!(expected, module_for_str(j).unwrap());
 }
 

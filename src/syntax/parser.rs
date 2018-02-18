@@ -3,27 +3,6 @@ use syntax::value::Value;
 use std;
 use syntax::span::Span;
 
-pub fn datum_from_str(s: &str) -> Result<Value> {
-    let mut parser = Parser::from_str(s);
-
-    let result = parser.parse_datum()?;
-
-    // Allow for trailing whitespace
-    let _ = parser.skip_until_non_whitespace();
-
-    if parser.input.is_empty() {
-        Ok(result)
-    } else {
-        let consumed = parser.consumed_bytes as u32;
-        let span = Span {
-            lo: consumed,
-            hi: consumed + (parser.input.len() as u32),
-        };
-
-        Err(Error::TrailingCharacters(span))
-    }
-}
-
 pub fn data_from_str(s: &str) -> Result<Vec<Value>> {
     let mut parser = Parser::from_str(s);
     parser.parse_data()
@@ -466,6 +445,28 @@ fn whole_str_span(v: &str) -> Span {
     Span {
         lo: 0,
         hi: v.len() as u32,
+    }
+}
+
+#[cfg(test)]
+fn datum_from_str(s: &str) -> Result<Value> {
+    let mut parser = Parser::from_str(s);
+
+    let result = parser.parse_datum()?;
+
+    // Allow for trailing whitespace
+    let _ = parser.skip_until_non_whitespace();
+
+    if parser.input.is_empty() {
+        Ok(result)
+    } else {
+        let consumed = parser.consumed_bytes as u32;
+        let span = Span {
+            lo: consumed,
+            hi: consumed + (parser.input.len() as u32),
+        };
+
+        Err(Error::TrailingCharacters(span))
     }
 }
 
