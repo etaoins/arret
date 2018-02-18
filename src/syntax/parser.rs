@@ -4,7 +4,11 @@ use std;
 use syntax::span::Span;
 
 pub fn data_from_str(s: &str) -> Result<Vec<Value>> {
-    let mut parser = Parser::from_str(s);
+    data_from_str_with_span_offset(s, 0)
+}
+
+pub fn data_from_str_with_span_offset(s: &str, span_offset: usize) -> Result<Vec<Value>> {
+    let mut parser = Parser::from_str(s, span_offset);
     parser.parse_data()
 }
 
@@ -60,10 +64,10 @@ fn u64_to_negative_i64(span: Span, i: u64) -> Result<i64> {
 }
 
 impl<'de> Parser<'de> {
-    pub fn from_str(input: &'de str) -> Self {
+    fn from_str(input: &'de str, consumed_bytes: usize) -> Self {
         Parser {
             input,
-            consumed_bytes: 0,
+            consumed_bytes,
         }
     }
 
@@ -448,7 +452,7 @@ fn whole_str_span(v: &str) -> Span {
 
 #[cfg(test)]
 fn datum_from_str(s: &str) -> Result<Value> {
-    let mut parser = Parser::from_str(s);
+    let mut parser = Parser::from_str(s, 0);
 
     let result = parser.parse_datum()?;
 

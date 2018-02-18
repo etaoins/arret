@@ -1,7 +1,8 @@
 use std::collections::{BTreeMap, HashMap};
+use std::io::Read;
 
 use hir::{Cond, Expr, Fun, Var, VarId};
-use hir::loader::{load_library_data, LibraryName};
+use hir::loader::{LibraryName, Loader};
 use hir::scope::{Binding, Ident, NsId, NsValue, Primitive, Scope};
 use hir::module::Module;
 use hir::error::Error;
@@ -12,6 +13,7 @@ pub struct LoweringContext {
     curr_var_id: usize,
     curr_ns_id: usize,
     loaded_libraries: BTreeMap<LibraryName, Module>,
+    loader: Loader,
 }
 
 macro_rules! lower_expr_impl {
@@ -68,6 +70,7 @@ impl LoweringContext {
             curr_var_id: 0,
             curr_ns_id: 0,
             loaded_libraries,
+            loader: Loader::new(),
         }
     }
 
@@ -224,7 +227,7 @@ impl LoweringContext {
     fn load_library(&mut self, span: Span, library_name: LibraryName) -> Result<&Module, Error> {
         // TODO: This does a lot of hash lookups
         if !self.loaded_libraries.contains_key(&library_name) {
-            let library_data = load_library_data(span, &library_name)?;
+            let library_data = self.loader.load_library_data(span, &library_name)?;
             let loaded_library = self.lower_module(library_data)?;
 
             self.loaded_libraries
@@ -374,7 +377,7 @@ impl LoweringContext {
         lower_expr_impl!(self, scope, datum, lower_module_primitive_apply)
     }
 
-    pub fn lower_module(&mut self, data: Vec<Value>) -> Result<Module, Error> {
+    fn lower_module(&mut self, data: Vec<Value>) -> Result<Module, Error> {
         let ns_id = NsId::new(self.alloc_ns_id());
         let mut scope = Scope::new_empty();
 
@@ -403,6 +406,15 @@ impl LoweringContext {
         }
 
         Ok(Module::new(body_expr, exports))
+    }
+
+    pub fn lower_program(
+        &mut self,
+        display_name: String,
+        input_reader: &mut Read,
+    ) -> Result<Module, Error> {
+        let data = self.loader.load_module_data(display_name, input_reader)?;
+        self.lower_module(data)
     }
 }
 

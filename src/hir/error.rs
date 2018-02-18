@@ -11,5 +11,6 @@ pub enum Error {
     DefOutsideBody(Span),
     ExportOutsideModule(Span),
     LibraryNotFound(Span),
+    ReadError(String),
     SyntaxError(SyntaxError),
 }
