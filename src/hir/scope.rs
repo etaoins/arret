@@ -3,35 +3,55 @@ use syntax::span::Span;
 use syntax::value::Value;
 use hir::VarId;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Binding {
     Var(VarId),
     Primitive(Primitive),
 }
 
-#[derive(Clone)]
-pub struct Scope(HashMap<Ident, Binding>);
+pub struct Scope {
+    bindings: HashMap<Ident, Binding>,
+    exports: HashMap<Ident, Span>,
+}
 
 impl Scope {
-    pub fn new() -> Scope {
-        Scope(HashMap::new())
+    pub fn new_empty() -> Scope {
+        Scope {
+            bindings: HashMap::new(),
+            exports: HashMap::new(),
+        }
+    }
+
+    pub fn new_child(parent: &Scope) -> Scope {
+        Scope {
+            bindings: parent.bindings.clone(),
+            exports: HashMap::new(),
+        }
     }
 
     pub fn get(&self, ident: &Ident) -> Option<Binding> {
-        match self.0.get(ident) {
+        match self.bindings.get(ident) {
             Some(b) => Some(b.clone()),
             None => None,
         }
     }
 
+    pub fn insert_export(&mut self, span: Span, ident: Ident) {
+        self.exports.insert(ident, span);
+    }
+
     pub fn insert_var(&mut self, ident: Ident, var_id: VarId) {
-        self.0.insert(ident, Binding::Var(var_id));
+        self.bindings.insert(ident, Binding::Var(var_id));
+    }
+
+    pub fn exports(&self) -> &HashMap<Ident, Span> {
+        &self.exports
     }
 }
 
 macro_rules! primitives {
     ( $( ($n:expr, $i:ident) ),* ) => {
-        #[derive(Clone, Copy)]
+        #[derive(Clone, Copy, PartialEq, Eq, Debug)]
         pub enum Primitive {
             $($i,)*
         }
@@ -39,7 +59,7 @@ macro_rules! primitives {
         pub fn insert_primitive_bindings(scope: &mut Scope, ns_id: NsId) {
             $(
                 let ident = Ident(ns_id, $n.to_owned());
-                scope.0.insert(ident, Binding::Primitive(Primitive::$i));
+                scope.bindings.insert(ident, Binding::Primitive(Primitive::$i));
             )*
         }
     }
@@ -50,7 +70,8 @@ primitives!(
     ("fn", Fun),
     ("if", If),
     ("quote", Quote),
-    ("do", Do)
+    ("do", Do),
+    ("export", Export)
 );
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

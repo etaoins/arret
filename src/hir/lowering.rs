@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
 use hir::{Cond, Expr, Fun, Var, VarId};
 use hir::scope::{insert_primitive_bindings, Binding, NsId, NsValue, Primitive, Scope};
+use hir::module::Module;
 use hir::error::Error;
 use syntax::value::Value;
 use syntax::span::Span;
@@ -65,7 +68,7 @@ impl LoweringContext {
         let sym_ident = match sym_datum {
             NsValue::Ident(_, ident) => ident.clone(),
             other => {
-                return Err(Error::ExpectedDefSymbol(*other.span()));
+                return Err(Error::ExpectedSymbol(*other.span()));
             }
         };
 
@@ -113,7 +116,7 @@ impl LoweringContext {
         };
 
         // Pull our our params
-        let mut body_scope = scope.clone();
+        let mut body_scope = Scope::new_child(scope);
         let mut fixed_params = Vec::<Var>::with_capacity(param_data.len());
 
         for param_datum in param_data {
@@ -164,6 +167,8 @@ impl LoweringContext {
         mut arg_data: Vec<NsValue>,
     ) -> Result<Expr, Error> {
         match fn_prim {
+            &Primitive::Def => Err(Error::DefOutsideBody(span)),
+            &Primitive::Export => Err(Error::ExportOutsideModule(span)),
             &Primitive::Quote => match arg_data.len() {
                 1 => Ok(Expr::Lit(arg_data[0].clone().into_value())),
                 other => Err(Error::WrongArgCount(span, other)),
@@ -175,9 +180,8 @@ impl LoweringContext {
                     arg_exprs.push(self.lower_expr(scope, arg_datum)?);
                 }
 
-                Ok(Expr::Do(span, arg_exprs))
+                Ok(Expr::Do(arg_exprs))
             }
-            &Primitive::Def => Err(Error::DefOutsideBody(span)),
             &Primitive::Fun => self.lower_fun(scope, span, arg_data),
             &Primitive::If => {
                 let arg_count = arg_data.len();
@@ -226,6 +230,32 @@ impl LoweringContext {
         }
     }
 
+    fn lower_module_primitive_apply(
+        &mut self,
+        scope: &mut Scope,
+        span: Span,
+        fn_prim: &Primitive,
+        arg_data: Vec<NsValue>,
+    ) -> Result<Expr, Error> {
+        match fn_prim {
+            &Primitive::Export => {
+                for arg_datum in arg_data {
+                    match arg_datum {
+                        NsValue::Ident(span, ident) => {
+                            scope.insert_export(span, ident);
+                        }
+                        other => {
+                            return Err(Error::ExpectedSymbol(*other.span()));
+                        }
+                    };
+                }
+
+                Ok(Expr::from_vec(vec![]))
+            }
+            _ => self.lower_body_primitive_apply(scope, span, fn_prim, arg_data),
+        }
+    }
+
     fn lower_expr_apply(
         &mut self,
         scope: &Scope,
@@ -250,28 +280,56 @@ impl LoweringContext {
         lower_expr_impl!(self, scope, datum, lower_body_primitive_apply)
     }
 
-    pub fn lower_module(&mut self, data: Vec<Value>) -> Result<Expr, Error> {
+    fn lower_module_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr, Error> {
+        lower_expr_impl!(self, scope, datum, lower_module_primitive_apply)
+    }
+
+    pub fn lower_module(&mut self, data: Vec<Value>) -> Result<Module, Error> {
         let ns_id = NsId::new(0);
-        let mut scope = Scope::new();
+        let mut scope = Scope::new_empty();
         insert_primitive_bindings(&mut scope, ns_id);
 
         let mut exprs = Vec::<Expr>::new();
 
         for datum in data {
             let ns_datum = NsValue::from_value(datum, ns_id);
-            exprs.push(self.lower_body_expr(&mut scope, ns_datum)?);
+            exprs.push(self.lower_module_expr(&mut scope, ns_datum)?);
         }
 
-        Ok(Expr::from_vec(exprs))
+        let body_expr = Expr::from_vec(exprs);
+
+        let mut exports = HashMap::new();
+        for (ident, span) in scope.exports() {
+            let binding = scope
+                .get(ident)
+                .ok_or_else(|| Error::UnboundSymbol(*span, ident.name().clone()))?;
+
+            exports.insert(ident.name().clone(), binding);
+        }
+
+        Ok(Module { body_expr, exports })
     }
 }
 
 ////
 
 #[cfg(test)]
-use syntax::span::{t2s, EMPTY_SPAN};
+use syntax::span::t2s;
 #[cfg(test)]
 use syntax::parser::data_from_str;
+
+#[cfg(test)]
+fn module_for_str(data_str: &str) -> Result<Module, Error> {
+    let data = data_from_str(data_str).unwrap();
+
+    let mut lcx = LoweringContext::new();
+    lcx.lower_module(data)
+}
+
+#[cfg(test)]
+fn body_expr_for_str(data_str: &str) -> Result<Expr, Error> {
+    module_for_str(data_str).map(|module| module.body_expr)
+}
 
 #[test]
 fn self_quoting_bool() {
@@ -279,10 +337,7 @@ fn self_quoting_bool() {
     let t = "^^^^^";
 
     let expected = Expr::Lit(Value::Bool(t2s(t), false));
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(expected, lcx.lower_module(data).unwrap());
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
 #[test]
@@ -291,10 +346,7 @@ fn self_quoting_empty_list() {
     let t = "^^";
 
     let expected = Expr::Lit(Value::List(t2s(t), vec![]));
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(expected, lcx.lower_module(data).unwrap());
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
 #[test]
@@ -303,10 +355,7 @@ fn quoted_datum_shorthand() {
     let t = " ^^^";
 
     let expected = Expr::Lit(Value::Symbol(t2s(t), "foo".to_owned()));
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(expected, lcx.lower_module(data).unwrap());
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
 #[test]
@@ -315,10 +364,7 @@ fn quoted_datum_explicit() {
     let t = "       ^^^ ";
 
     let expected = Expr::Lit(Value::Symbol(t2s(t), "foo".to_owned()));
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(expected, lcx.lower_module(data).unwrap());
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
 #[test]
@@ -327,33 +373,23 @@ fn quoted_multiple_data() {
     let t = "^^^^^^^^^^^^^";
 
     let err = Error::WrongArgCount(t2s(t), 3);
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
 #[test]
 fn do_expr() {
     let j = "(do 1 2 3)";
-    let t = "^^^^^^^^^^";
-    let u = "    ^     ";
-    let v = "      ^   ";
-    let w = "        ^ ";
+    let t = "    ^     ";
+    let u = "      ^   ";
+    let v = "        ^ ";
 
-    let expected = Expr::Do(
-        t2s(t),
-        vec![
-            Expr::Lit(Value::Int(t2s(u), 1)),
-            Expr::Lit(Value::Int(t2s(v), 2)),
-            Expr::Lit(Value::Int(t2s(w), 3)),
-        ],
-    );
+    let expected = Expr::Do(vec![
+        Expr::Lit(Value::Int(t2s(t), 1)),
+        Expr::Lit(Value::Int(t2s(u), 2)),
+        Expr::Lit(Value::Int(t2s(v), 3)),
+    ]);
 
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(expected, lcx.lower_module(data).unwrap());
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
 #[test]
@@ -363,26 +399,20 @@ fn basic_untyped_def() {
     let u = "       ^   ";
     let v = "          ^";
 
-    let expected = Expr::Do(
-        EMPTY_SPAN,
-        vec![
-            Expr::Def(
-                t2s(t),
-                Var {
-                    id: VarId(1),
-                    source_name: "x".to_owned(),
-                    bound: None,
-                },
-                Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
-            ),
-            Expr::Ref(t2s(v), VarId(1)),
-        ],
-    );
+    let expected = Expr::Do(vec![
+        Expr::Def(
+            t2s(t),
+            Var {
+                id: VarId(1),
+                source_name: "x".to_owned(),
+                bound: None,
+            },
+            Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
+        ),
+        Expr::Ref(t2s(v), VarId(1)),
+    ]);
 
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(expected, lcx.lower_module(data).unwrap());
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
 #[test]
@@ -390,11 +420,8 @@ fn def_of_non_symbol() {
     let j = "(def 1 1)";
     let t = "     ^   ";
 
-    let err = Error::ExpectedDefSymbol(t2s(t));
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+    let err = Error::ExpectedSymbol(t2s(t));
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
 #[test]
@@ -403,10 +430,7 @@ fn def_in_non_body() {
     let t = "       ^^^^^^^^^ ";
 
     let err = Error::DefOutsideBody(t2s(t));
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
 #[test]
@@ -415,10 +439,7 @@ fn reference_primitive() {
     let t = "^^^";
 
     let err = Error::PrimitiveRef(t2s(t), "def".to_owned());
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
 #[test]
@@ -427,10 +448,7 @@ fn reference_unbound() {
     let t = "^^^^^^^^^^^^";
 
     let err = Error::UnboundSymbol(t2s(t), "nopenopenope".to_owned());
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
 #[test]
@@ -439,10 +457,7 @@ fn fn_without_param_decl() {
     let t = "^^^^";
 
     let err = Error::IllegalArg(t2s(t), "Parameter declaration missing".to_owned());
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
 #[test]
@@ -454,10 +469,8 @@ fn fn_with_non_vector_param_decl() {
         t2s(t),
         "Parameter declaration should be a vector".to_owned(),
     );
-    let data = data_from_str(j).unwrap();
 
-    let mut lcx = LoweringContext::new();
-    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
 #[test]
@@ -466,10 +479,7 @@ fn fn_with_non_symbol_param() {
     let t = "     ^^  ";
 
     let err = Error::IllegalArg(t2s(t), "Unsupported binding type".to_owned());
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
 #[test]
@@ -488,10 +498,7 @@ fn empty_fn() {
         },
     );
 
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(expected, lcx.lower_module(data).unwrap());
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
 #[test]
@@ -518,10 +525,7 @@ fn identity_fn() {
         },
     );
 
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(expected, lcx.lower_module(data).unwrap());
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
 #[test]
@@ -539,31 +543,25 @@ fn capturing_fn() {
         bound: None,
     };
 
-    let expected = Expr::Do(
-        EMPTY_SPAN,
-        vec![
-            Expr::Def(
-                t2s(t),
-                outer_var,
-                Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
-            ),
-            Expr::Fun(
-                t2s(v),
-                Fun {
-                    source_name: None,
-                    ty: None,
-                    fixed_params: vec![],
-                    rest_param: None,
-                    body_expr: Box::new(Expr::Ref(t2s(w), outer_var_id)),
-                },
-            ),
-        ],
-    );
+    let expected = Expr::Do(vec![
+        Expr::Def(
+            t2s(t),
+            outer_var,
+            Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
+        ),
+        Expr::Fun(
+            t2s(v),
+            Fun {
+                source_name: None,
+                ty: None,
+                fixed_params: vec![],
+                rest_param: None,
+                body_expr: Box::new(Expr::Ref(t2s(w), outer_var_id)),
+            },
+        ),
+    ]);
 
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(expected, lcx.lower_module(data).unwrap());
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
 #[test]
@@ -588,31 +586,25 @@ fn shadowing_fn() {
         bound: None,
     };
 
-    let expected = Expr::Do(
-        EMPTY_SPAN,
-        vec![
-            Expr::Def(
-                t2s(t),
-                outer_var,
-                Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
-            ),
-            Expr::Fun(
-                t2s(v),
-                Fun {
-                    source_name: None,
-                    ty: None,
-                    fixed_params: vec![param_var],
-                    rest_param: None,
-                    body_expr: Box::new(Expr::Ref(t2s(w), param_var_id)),
-                },
-            ),
-        ],
-    );
+    let expected = Expr::Do(vec![
+        Expr::Def(
+            t2s(t),
+            outer_var,
+            Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
+        ),
+        Expr::Fun(
+            t2s(v),
+            Fun {
+                source_name: None,
+                ty: None,
+                fixed_params: vec![param_var],
+                rest_param: None,
+                body_expr: Box::new(Expr::Ref(t2s(w), param_var_id)),
+            },
+        ),
+    ]);
 
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(expected, lcx.lower_module(data).unwrap());
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
 #[test]
@@ -632,10 +624,7 @@ fn expr_apply() {
         ],
     );
 
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(expected, lcx.lower_module(data).unwrap());
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
 #[test]
@@ -644,10 +633,7 @@ fn empty_if() {
     let t = "^^^^";
 
     let err = Error::WrongArgCount(t2s(t), 0);
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
 #[test]
@@ -656,10 +642,7 @@ fn if_without_test() {
     let t = "^^^^^^^^^";
 
     let err = Error::WrongArgCount(t2s(t), 1);
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
 #[test]
@@ -668,10 +651,7 @@ fn if_without_false_branch() {
     let t = "^^^^^^^^^^^";
 
     let err = Error::WrongArgCount(t2s(t), 2);
-    let data = data_from_str(j).unwrap();
-
-    let mut lcx = LoweringContext::new();
-    assert_eq!(err, lcx.lower_module(data).unwrap_err());
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
 #[test]
@@ -691,8 +671,43 @@ fn if_expr() {
         },
     );
 
-    let data = data_from_str(j).unwrap();
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
 
-    let mut lcx = LoweringContext::new();
-    assert_eq!(expected, lcx.lower_module(data).unwrap());
+#[test]
+fn simple_export() {
+    let j = "(def x 1)(export x)";
+    let t = "^^^^^^^^^          ";
+    let u = "       ^           ";
+
+    let var_id = VarId(1);
+
+    let expected_body_expr = Expr::Def(
+        t2s(t),
+        Var {
+            id: var_id,
+            source_name: "x".to_owned(),
+            bound: None,
+        },
+        Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
+    );
+
+    let mut expected_exports = HashMap::new();
+    expected_exports.insert("x".to_owned(), Binding::Var(var_id));
+
+    let expected = Module {
+        body_expr: expected_body_expr,
+        exports: expected_exports,
+    };
+
+    assert_eq!(expected, module_for_str(j).unwrap());
+}
+
+#[test]
+fn export_unbound() {
+    let j = "(export x)";
+    let t = "        ^ ";
+
+    let err = Error::UnboundSymbol(t2s(t), "x".to_owned());
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }

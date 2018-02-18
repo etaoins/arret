@@ -1,8 +1,9 @@
 pub mod lowering;
 mod scope;
 mod error;
+mod module;
 
-use syntax::span::{Span, EMPTY_SPAN};
+use syntax::span::Span;
 use syntax::value::Value;
 use ty;
 
@@ -52,15 +53,28 @@ pub enum Expr {
     Def(Span, Var, Box<Expr>),
     Cond(Span, Cond),
     Ref(Span, VarId),
-    Do(Span, Vec<Expr>),
+    Do(Vec<Expr>),
 }
 
 impl Expr {
-    fn from_vec(mut exprs: Vec<Expr>) -> Expr {
-        if exprs.len() == 1 {
-            exprs.pop().unwrap()
+    fn from_vec(exprs: Vec<Expr>) -> Expr {
+        let mut flattened_exprs = vec![];
+
+        for expr in exprs {
+            match expr {
+                Expr::Do(mut exprs) => {
+                    flattened_exprs.append(&mut exprs);
+                }
+                other => {
+                    flattened_exprs.push(other);
+                }
+            }
+        }
+
+        if flattened_exprs.len() == 1 {
+            flattened_exprs.pop().unwrap()
         } else {
-            Expr::Do(EMPTY_SPAN, exprs)
+            Expr::Do(flattened_exprs)
         }
     }
 }

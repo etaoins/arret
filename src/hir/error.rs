@@ -6,6 +6,7 @@ pub enum Error {
     UnboundSymbol(Span, String),
     WrongArgCount(Span, usize),
     IllegalArg(Span, String),
-    ExpectedDefSymbol(Span),
+    ExpectedSymbol(Span),
     DefOutsideBody(Span),
+    ExportOutsideModule(Span),
 }
