@@ -5,7 +5,7 @@ use std::io::prelude::*;
 use syntax::value::Value;
 use syntax::span::Span;
 use syntax::parser::data_from_str_with_span_offset;
-use hir::error::Error;
+use hir::error::{Error, Result};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct LibraryName {
@@ -44,7 +44,7 @@ impl Loader {
         &mut self,
         display_name: String,
         input_reader: &mut Read,
-    ) -> Result<Vec<Value>, Error> {
+    ) -> Result<Vec<Value>> {
         let span_offset = self.next_span_offset;
 
         let mut source = String::new();
@@ -53,8 +53,7 @@ impl Loader {
             .read_to_string(&mut source)
             .map_err(|_| Error::ReadError(display_name.clone()))?;
 
-        let data = data_from_str_with_span_offset(&source, span_offset)
-            .map_err(|pe| Error::SyntaxError(pe))?;
+        let data = data_from_str_with_span_offset(&source, span_offset)?;
 
         // Track this file for diagnostic reporting
         self.next_span_offset = span_offset + source.len();
@@ -70,7 +69,7 @@ impl Loader {
         &mut self,
         span: Span,
         library_name: &LibraryName,
-    ) -> Result<Vec<Value>, Error> {
+    ) -> Result<Vec<Value>> {
         let mut path_buf = PathBuf::new();
 
         path_buf.push("stdlib");

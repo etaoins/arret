@@ -5,7 +5,7 @@ use hir::{Cond, Expr, Fun, Var, VarId};
 use hir::loader::{LibraryName, Loader};
 use hir::scope::{Binding, Ident, NsId, NsValue, Primitive, Scope};
 use hir::module::Module;
-use hir::error::Error;
+use hir::error::{Error, Result};
 use syntax::value::Value;
 use syntax::span::Span;
 
@@ -90,7 +90,7 @@ impl LoweringContext {
         span: Span,
         sym_datum: NsValue,
         value_datum: NsValue,
-    ) -> Result<Expr, Error> {
+    ) -> Result<Expr> {
         let sym_ident = match sym_datum {
             NsValue::Ident(_, ident) => ident.clone(),
             other => {
@@ -115,12 +115,7 @@ impl LoweringContext {
         ))
     }
 
-    fn lower_fun(
-        &mut self,
-        scope: &Scope,
-        span: Span,
-        mut arg_data: Vec<NsValue>,
-    ) -> Result<Expr, Error> {
+    fn lower_fun(&mut self, scope: &Scope, span: Span, mut arg_data: Vec<NsValue>) -> Result<Expr> {
         if arg_data.len() < 1 {
             return Err(Error::IllegalArg(
                 span,
@@ -191,7 +186,7 @@ impl LoweringContext {
         span: Span,
         fn_prim: &Primitive,
         mut arg_data: Vec<NsValue>,
-    ) -> Result<Expr, Error> {
+    ) -> Result<Expr> {
         match fn_prim {
             &Primitive::Def => Err(Error::DefOutsideBody(span)),
             &Primitive::Import => Err(Error::DefOutsideBody(span)),
@@ -224,7 +219,7 @@ impl LoweringContext {
         }
     }
 
-    fn load_library(&mut self, span: Span, library_name: LibraryName) -> Result<&Module, Error> {
+    fn load_library(&mut self, span: Span, library_name: LibraryName) -> Result<&Module> {
         // TODO: This does a lot of hash lookups
         if !self.loaded_libraries.contains_key(&library_name) {
             let library_data = self.loader.load_library_data(span, &library_name)?;
@@ -237,11 +232,7 @@ impl LoweringContext {
         Ok(self.loaded_libraries.get(&library_name).unwrap())
     }
 
-    fn lower_import_set(
-        &mut self,
-        scope: &mut Scope,
-        import_set_datum: NsValue,
-    ) -> Result<(), Error> {
+    fn lower_import_set(&mut self, scope: &mut Scope, import_set_datum: NsValue) -> Result<()> {
         match import_set_datum {
             NsValue::Vector(span, vs) => {
                 if vs.len() < 1 {
@@ -287,7 +278,7 @@ impl LoweringContext {
         }
     }
 
-    fn lower_import(&mut self, scope: &mut Scope, arg_data: Vec<NsValue>) -> Result<(), Error> {
+    fn lower_import(&mut self, scope: &mut Scope, arg_data: Vec<NsValue>) -> Result<()> {
         for arg_datum in arg_data {
             self.lower_import_set(scope, arg_datum)?;
         }
@@ -301,7 +292,7 @@ impl LoweringContext {
         span: Span,
         fn_prim: &Primitive,
         mut arg_data: Vec<NsValue>,
-    ) -> Result<Expr, Error> {
+    ) -> Result<Expr> {
         match fn_prim {
             &Primitive::Def => {
                 let arg_count = arg_data.len();
@@ -329,7 +320,7 @@ impl LoweringContext {
         span: Span,
         fn_prim: &Primitive,
         arg_data: Vec<NsValue>,
-    ) -> Result<Expr, Error> {
+    ) -> Result<Expr> {
         match fn_prim {
             &Primitive::Export => {
                 for arg_datum in arg_data {
@@ -355,7 +346,7 @@ impl LoweringContext {
         span: Span,
         fn_expr: Expr,
         arg_data: Vec<NsValue>,
-    ) -> Result<Expr, Error> {
+    ) -> Result<Expr> {
         let mut arg_exprs: Vec<Expr> = vec![];
 
         for arg_datum in arg_data {
@@ -365,19 +356,19 @@ impl LoweringContext {
         Ok(Expr::App(span, Box::new(fn_expr), arg_exprs))
     }
 
-    fn lower_expr(&mut self, scope: &Scope, datum: NsValue) -> Result<Expr, Error> {
+    fn lower_expr(&mut self, scope: &Scope, datum: NsValue) -> Result<Expr> {
         lower_expr_impl!(self, scope, datum, lower_primitive_apply)
     }
 
-    fn lower_body_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr, Error> {
+    fn lower_body_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr> {
         lower_expr_impl!(self, scope, datum, lower_body_primitive_apply)
     }
 
-    fn lower_module_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr, Error> {
+    fn lower_module_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr> {
         lower_expr_impl!(self, scope, datum, lower_module_primitive_apply)
     }
 
-    fn lower_module(&mut self, data: Vec<Value>) -> Result<Module, Error> {
+    fn lower_module(&mut self, data: Vec<Value>) -> Result<Module> {
         let ns_id = NsId::new(self.alloc_ns_id());
         let mut scope = Scope::new_empty();
 
@@ -412,7 +403,7 @@ impl LoweringContext {
         &mut self,
         display_name: String,
         input_reader: &mut Read,
-    ) -> Result<Module, Error> {
+    ) -> Result<Module> {
         let data = self.loader.load_module_data(display_name, input_reader)?;
         self.lower_module(data)
     }
@@ -428,7 +419,7 @@ use syntax::parser::data_from_str;
 use syntax::span::EMPTY_SPAN;
 
 #[cfg(test)]
-fn module_for_str(data_str: &str) -> Result<Module, Error> {
+fn module_for_str(data_str: &str) -> Result<Module> {
     let import_statement = Value::List(
         EMPTY_SPAN,
         vec![
@@ -452,7 +443,7 @@ fn module_for_str(data_str: &str) -> Result<Module, Error> {
 }
 
 #[cfg(test)]
-fn body_expr_for_str(data_str: &str) -> Result<Expr, Error> {
+fn body_expr_for_str(data_str: &str) -> Result<Expr> {
     module_for_str(data_str).map(|module| module.into_body_expr())
 }
 
