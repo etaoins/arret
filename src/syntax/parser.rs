@@ -3,10 +3,6 @@ use syntax::value::Value;
 use std;
 use syntax::span::Span;
 
-pub fn data_from_str(s: &str) -> Result<Vec<Value>> {
-    data_from_str_with_span_offset(s, 0)
-}
-
 pub fn data_from_str_with_span_offset(s: &str, span_offset: usize) -> Result<Vec<Value>> {
     let mut parser = Parser::from_str(s, span_offset);
     parser.parse_data()
@@ -448,6 +444,11 @@ fn whole_str_span(v: &str) -> Span {
         lo: 0,
         hi: v.len() as u32,
     }
+}
+
+#[cfg(test)]
+pub fn data_from_str(s: &str) -> Result<Vec<Value>> {
+    data_from_str_with_span_offset(s, 0)
 }
 
 #[cfg(test)]
