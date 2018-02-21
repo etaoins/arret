@@ -2,18 +2,19 @@ use std::collections::{BTreeMap, HashMap};
 use std::io::Read;
 
 use hir::{Cond, Expr, Fun, Var, VarId};
-use hir::loader::{LibraryName, Loader};
+use hir::loader::{load_library_data, load_module_data, LibraryName};
 use hir::scope::{Binding, Ident, NsId, NsValue, Primitive, Scope};
 use hir::module::Module;
 use hir::error::{Error, Result};
 use syntax::value::Value;
 use syntax::span::Span;
+use ctx::CompileContext;
 
-pub struct LoweringContext {
+pub struct LoweringContext<'ccx> {
     curr_var_id: usize,
     curr_ns_id: usize,
     loaded_libraries: BTreeMap<LibraryName, Module>,
-    loader: Loader,
+    ccx: &'ccx mut CompileContext,
 }
 
 macro_rules! lower_expr_impl {
@@ -53,8 +54,8 @@ macro_rules! lower_expr_impl {
     }
 }
 
-impl LoweringContext {
-    pub fn new() -> LoweringContext {
+impl<'ccx> LoweringContext<'ccx> {
+    pub fn new(ccx: &'ccx mut CompileContext) -> LoweringContext {
         let mut loaded_libraries = BTreeMap::new();
 
         // This library is always loaded
@@ -70,7 +71,7 @@ impl LoweringContext {
             curr_var_id: 0,
             curr_ns_id: 0,
             loaded_libraries,
-            loader: Loader::new(),
+            ccx,
         }
     }
 
@@ -222,7 +223,7 @@ impl LoweringContext {
     fn load_library(&mut self, span: Span, library_name: LibraryName) -> Result<&Module> {
         // TODO: This does a lot of hash lookups
         if !self.loaded_libraries.contains_key(&library_name) {
-            let library_data = self.loader.load_library_data(span, &library_name)?;
+            let library_data = load_library_data(self.ccx, span, &library_name)?;
             let loaded_library = self.lower_module(library_data)?;
 
             self.loaded_libraries
@@ -404,7 +405,7 @@ impl LoweringContext {
         display_name: String,
         input_reader: &mut Read,
     ) -> Result<Module> {
-        let data = self.loader.load_module_data(display_name, input_reader)?;
+        let data = load_module_data(self.ccx, display_name, input_reader)?;
         self.lower_module(data)
     }
 }
@@ -438,7 +439,8 @@ fn module_for_str(data_str: &str) -> Result<Module> {
     let mut test_data = data_from_str(data_str).unwrap();
     test_data.insert(0, import_statement);
 
-    let mut lcx = LoweringContext::new();
+    let mut ccx = CompileContext::new();
+    let mut lcx = LoweringContext::new(&mut ccx);
     lcx.lower_module(test_data)
 }
 
