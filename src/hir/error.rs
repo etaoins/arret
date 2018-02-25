@@ -4,6 +4,7 @@ use std::fmt::Display;
 
 use syntax::span::Span;
 use syntax::error::Error as SyntaxError;
+use reporting::Reportable;
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
@@ -20,6 +21,28 @@ pub enum Error {
 }
 
 pub type Result<T> = result::Result<T, Error>;
+
+impl Reportable for Error {
+    fn message(&self) -> String {
+        match *self {
+            Error::PrimitiveRef(_, ref sym) => {
+                format!("cannot take the value of a primitive: `{}`", sym)
+            }
+            Error::UnboundSymbol(_, ref sym) => format!("unable to resolve symbol: `{}`", sym),
+            Error::SyntaxError(ref err) => err.message(),
+            _ => "Lowering error".to_owned(),
+        }
+    }
+
+    fn span(&self) -> Option<Span> {
+        match *self {
+            Error::PrimitiveRef(span, _) => Some(span),
+            Error::UnboundSymbol(span, _) => Some(span),
+            Error::SyntaxError(ref err) => err.span(),
+            _ => None,
+        }
+    }
+}
 
 impl error::Error for Error {
     fn description(&self) -> &str {

@@ -67,12 +67,24 @@ impl<'de> Parser<'de> {
         }
     }
 
-    fn peek_char(&mut self) -> Result<char> {
-        self.input.chars().next().ok_or(Error::Eof)
+    fn eof_err(&self, context_desc: &'static str) -> Error {
+        let eof_pos = (self.consumed_bytes + self.input.len()) as u32;
+
+        Error::Eof(
+            Span {
+                lo: eof_pos,
+                hi: eof_pos,
+            },
+            context_desc,
+        )
     }
 
-    fn peek_nth_char(&mut self, i: usize) -> Result<char> {
-        self.input.chars().nth(i).ok_or(Error::Eof)
+    fn peek_char(&mut self, context_desc: &'static str) -> Result<char> {
+        self.input.chars().next().ok_or(self.eof_err(context_desc))
+    }
+
+    fn peek_nth_char(&mut self, i: usize, context_desc: &'static str) -> Result<char> {
+        self.input.chars().nth(i).ok_or(self.eof_err(context_desc))
     }
 
     fn eat_bytes(&mut self, count: usize) {
@@ -80,7 +92,7 @@ impl<'de> Parser<'de> {
         self.consumed_bytes = self.consumed_bytes + count
     }
 
-    fn consume_char(&mut self) -> Result<char> {
+    fn consume_char(&mut self, context_desc: &'static str) -> Result<char> {
         let mut char_indices = self.input.char_indices();
 
         match char_indices.next() {
@@ -91,18 +103,18 @@ impl<'de> Parser<'de> {
                 Ok(c)
             }
 
-            None => Err(Error::Eof),
+            None => Err(self.eof_err(context_desc)),
         }
     }
 
-    fn skip_until_non_whitespace(&mut self) -> Result<char> {
+    fn skip_until_non_whitespace(&mut self, context_desc: &'static str) -> Result<char> {
         loop {
-            match self.peek_char()? {
+            match self.peek_char(context_desc)? {
                 ';' => {
                     let _ = self.consume_until(|c| c == '\n');
                 }
                 '#' => {
-                    match self.peek_nth_char(1) {
+                    match self.peek_nth_char(1, context_desc) {
                         Ok('_') => {
                             // Discard the #_ and the following datum
                             self.eat_bytes(2);
@@ -242,10 +254,10 @@ impl<'de> Parser<'de> {
         // This means we need to adjust our spans below to cover it for reporting
         self.eat_bytes(1);
 
-        match self.peek_char()? {
+        match self.peek_char("dispatch")? {
             '{' => self.parse_set(),
             _ => {
-                let (span, _) = self.capture_span(|s| s.consume_char());
+                let (span, _) = self.capture_span(|s| s.consume_char("dispatch"));
                 let adj_span = span.with_lo(span.lo - 1);
 
                 Err(Error::InvalidDispatch(adj_span))
@@ -253,14 +265,14 @@ impl<'de> Parser<'de> {
         }
     }
 
-    fn parse_seq(&mut self, terminator: char) -> Result<Vec<Value>> {
+    fn parse_seq(&mut self, terminator: char, context_desc: &'static str) -> Result<Vec<Value>> {
         // Consume the opening bracket
         self.eat_bytes(1);
         let mut content = Vec::new();
 
         // Keep eating datums until we hit the terminator
         loop {
-            if self.skip_until_non_whitespace()? == terminator {
+            if self.skip_until_non_whitespace(context_desc)? == terminator {
                 // End of the sequence
                 self.eat_bytes(1);
                 return Ok(content);
@@ -271,20 +283,20 @@ impl<'de> Parser<'de> {
     }
 
     fn parse_list(&mut self) -> Result<Value> {
-        let (outer_span, contents) = self.capture_span(|s| s.parse_seq(')'));
+        let (outer_span, contents) = self.capture_span(|s| s.parse_seq(')', "list"));
 
         contents.map(|contents| Value::List(outer_span, contents))
     }
 
     fn parse_vector(&mut self) -> Result<Value> {
-        let (outer_span, contents) = self.capture_span(|s| s.parse_seq(']'));
+        let (outer_span, contents) = self.capture_span(|s| s.parse_seq(']', "vector"));
 
         contents.map(|contents| Value::Vector(outer_span, contents))
     }
 
     fn parse_map(&mut self) -> Result<Value> {
         // First get the contents without splitting pairwise
-        let (span, unpaired_contents) = self.capture_span(|s| s.parse_seq('}'));
+        let (span, unpaired_contents) = self.capture_span(|s| s.parse_seq('}', "map"));
 
         let unpaired_contents = unpaired_contents?;
 
@@ -301,7 +313,7 @@ impl<'de> Parser<'de> {
     }
 
     fn parse_set(&mut self) -> Result<Value> {
-        let (outer_span, contents) = self.capture_span(|s| s.parse_seq('}'));
+        let (outer_span, contents) = self.capture_span(|s| s.parse_seq('}', "set"));
 
         // Cover the # in our span
         let adj_span = outer_span.with_lo(outer_span.lo - 1);
@@ -311,7 +323,7 @@ impl<'de> Parser<'de> {
     fn parse_quote_escape(&mut self) -> Result<char> {
         let escape_lo = self.consumed_bytes as u32;
 
-        match self.consume_char()? {
+        match self.consume_char("quote escape")? {
             't' => Ok('\t'),
             'r' => Ok('\r'),
             'n' => Ok('\n'),
@@ -325,7 +337,7 @@ impl<'de> Parser<'de> {
 
                 let code_point = code_point.map_err(|_| Error::InvalidCharLiteral(span.clone()))?;
 
-                if self.consume_char()? != ';' {
+                if self.consume_char("code point")? != ';' {
                     return Err(Error::InvalidCharLiteral(span));
                 }
 
@@ -347,7 +359,7 @@ impl<'de> Parser<'de> {
 
             let mut contents = String::new();
             loop {
-                match s.consume_char()? {
+                match s.consume_char("string")? {
                     '"' => {
                         return Ok(contents);
                     }
@@ -369,7 +381,7 @@ impl<'de> Parser<'de> {
         let (span, content) = self.capture_span(|s| s.parse_identifier_content().to_owned());
 
         if content.len() == 0 {
-            let (span, next_char) = self.capture_span(|s| s.consume_char());
+            let (span, next_char) = self.capture_span(|s| s.consume_char("identifier"));
             return Err(Error::UnexpectedChar(span, next_char?));
         }
 
@@ -402,7 +414,7 @@ impl<'de> Parser<'de> {
     }
 
     fn parse_datum(&mut self) -> Result<Value> {
-        match self.skip_until_non_whitespace()? {
+        match self.skip_until_non_whitespace("datum")? {
             '(' => self.parse_list(),
             '[' => self.parse_vector(),
             '{' => self.parse_map(),
@@ -421,12 +433,12 @@ impl<'de> Parser<'de> {
 
         // Keep eating datums until we hit EOF
         loop {
-            match self.skip_until_non_whitespace() {
+            match self.skip_until_non_whitespace("data") {
                 Ok(_) => {
                     let datum = self.parse_datum()?;
                     datum_vec.push(datum);
                 }
-                Err(Error::Eof) => return Ok(datum_vec),
+                Err(Error::Eof(_, _)) => return Ok(datum_vec),
                 Err(e) => return Err(e),
             }
         }
@@ -458,7 +470,7 @@ fn datum_from_str(s: &str) -> Result<Value> {
     let result = parser.parse_datum()?;
 
     // Allow for trailing whitespace
-    let _ = parser.skip_until_non_whitespace();
+    let _ = parser.skip_until_non_whitespace("datum");
 
     if parser.input.is_empty() {
         Ok(result)
@@ -543,7 +555,8 @@ fn list_datum() {
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "(true";
-    let err = Error::Eof;
+    let t = "    >";
+    let err = Error::Eof(t2s(t), "list");
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
     let j = "(true))";
@@ -645,7 +658,8 @@ fn string_datum() {
     }
 
     let j = r#""foo"#;
-    let err = Error::Eof;
+    let t = r#"   >"#;
+    let err = Error::Eof(t2s(t), "string");
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
     let j = r#""\p""#;
@@ -851,7 +865,8 @@ fn quote_shorthand() {
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "'";
-    let err = Error::Eof;
+    let t = ">";
+    let err = Error::Eof(t2s(t), "datum");
     assert_eq!(err, datum_from_str(j).unwrap_err());
 }
 
@@ -864,7 +879,8 @@ fn invalid_dispatch() {
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
     let j = "#";
-    let err = Error::Eof;
+    let t = ">";
+    let err = Error::Eof(t2s(t), "dispatch");
 
     assert_eq!(err, datum_from_str(j).unwrap_err());
 }

@@ -36,12 +36,15 @@ pub fn load_module_data(
         .read_to_string(&mut source)
         .map_err(|_| Error::ReadError(display_name.clone()))?;
 
-    let data = data_from_str_with_span_offset(&source, span_offset)?;
+    let data = data_from_str_with_span_offset(&source, span_offset);
+
+    // Add a space to allow us to position errors at EOF
+    source.push(' ');
 
     // Track this file for diagnostic reporting
-    ccx.add_loaded_file(LoadedFile::new(source, display_name));
+    ccx.add_loaded_file(LoadedFile::new(display_name, source));
 
-    Ok(data)
+    Ok(data?)
 }
 
 pub fn load_library_data(
