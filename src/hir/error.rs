@@ -4,7 +4,7 @@ use std::fmt::Display;
 
 use syntax::span::Span;
 use syntax::error::Error as SyntaxError;
-use reporting::Reportable;
+use reporting::{Level, Reportable};
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
@@ -23,6 +23,10 @@ pub enum Error {
 pub type Result<T> = result::Result<T, Error>;
 
 impl Reportable for Error {
+    fn level(&self) -> Level {
+        Level::Error
+    }
+
     fn message(&self) -> String {
         match *self {
             Error::PrimitiveRef(_, ref sym) => {
@@ -39,6 +43,13 @@ impl Reportable for Error {
             Error::PrimitiveRef(span, _) => Some(span),
             Error::UnboundSymbol(span, _) => Some(span),
             Error::SyntaxError(ref err) => err.span(),
+            _ => None,
+        }
+    }
+
+    fn associated_report(&self) -> Option<Box<Reportable>> {
+        match *self {
+            Error::SyntaxError(ref err) => err.associated_report(),
             _ => None,
         }
     }

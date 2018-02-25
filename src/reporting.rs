@@ -1,7 +1,7 @@
 use std::iter;
 use std::cmp;
 
-use ansi_term::Colour::{Blue, Red};
+use ansi_term::Colour;
 use ansi_term::Style;
 use syntax::span::Span;
 use ctx::CompileContext;
@@ -75,9 +75,9 @@ fn bytepos_to_human_pos(ccx: &CompileContext, bp: u32) -> HumanPos {
     }
 }
 
-fn print_snippet(ccx: &CompileContext, span: Span) {
-    let border_style = Blue.bold();
-    let marker_style = Red.bold();
+fn print_snippet(ccx: &CompileContext, level: Level, span: Span) {
+    let border_style = Colour::Blue.bold();
+    let marker_style = level.colour().bold();
 
     let hp = bytepos_to_human_pos(ccx, span.lo);
 
@@ -105,7 +105,7 @@ fn print_snippet(ccx: &CompileContext, span: Span) {
     };
 
     print_border_line();
-    eprint!("\n");
+    eprintln!("");
 
     eprintln!(
         "{} {} {}",
@@ -130,19 +130,54 @@ fn print_snippet(ccx: &CompileContext, span: Span) {
 }
 
 pub trait Reportable {
+    fn level(&self) -> Level;
     fn message(&self) -> String;
     fn span(&self) -> Option<Span>;
+
     fn report(&self, ccx: &CompileContext) {
         let default_bold = Style::new().bold();
+        let level = self.level();
 
         eprintln!(
             "{}: {}",
-            Red.bold().paint("error"),
+            level.colour().bold().paint(level.name()),
             default_bold.paint(self.message())
         );
 
         if let Some(span) = self.span() {
-            print_snippet(ccx, span);
+            print_snippet(ccx, self.level(), span);
+        }
+
+        if let Some(associated_report) = self.associated_report() {
+            // Skip the newline so the reports are visually grouped
+            associated_report.report(ccx);
+        } else {
+            eprintln!("");
+        }
+    }
+
+    fn associated_report(&self) -> Option<Box<Reportable>> {
+        None
+    }
+}
+
+pub enum Level {
+    Error,
+    Help,
+}
+
+impl Level {
+    fn name(&self) -> &'static str {
+        match *self {
+            Level::Error => "error",
+            Level::Help => "help",
+        }
+    }
+
+    fn colour(&self) -> Colour {
+        match *self {
+            Level::Error => Colour::Red,
+            Level::Help => Colour::Cyan,
         }
     }
 }
