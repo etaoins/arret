@@ -33,8 +33,14 @@ impl Reportable for Error {
                 format!("cannot take the value of a primitive: `{}`", sym)
             }
             Error::UnboundSymbol(_, ref sym) => format!("unable to resolve symbol: `{}`", sym),
+            Error::WrongArgCount(_, expected) => format!("wrong arg count; expected {}", expected),
+            Error::IllegalArg(_, ref description) => format!("illegal argument: {}", description),
+            Error::ExpectedSymbol(_) => "expected symbol".to_owned(),
+            Error::DefOutsideBody(_) => "(def) outside module or function body".to_owned(),
+            Error::ExportOutsideModule(_) => "(export) outside of module body".to_owned(),
+            Error::LibraryNotFound(_) => "library not found".to_owned(),
+            Error::ReadError(ref filename) => format!("error reading `{}`", filename),
             Error::SyntaxError(ref err) => err.message(),
-            _ => "Lowering error".to_owned(),
         }
     }
 
@@ -42,8 +48,14 @@ impl Reportable for Error {
         match *self {
             Error::PrimitiveRef(span, _) => Some(span),
             Error::UnboundSymbol(span, _) => Some(span),
+            Error::WrongArgCount(span, _) => Some(span),
+            Error::IllegalArg(span, _) => Some(span),
+            Error::ExpectedSymbol(span) => Some(span),
+            Error::DefOutsideBody(span) => Some(span),
+            Error::ExportOutsideModule(span) => Some(span),
+            Error::LibraryNotFound(span) => Some(span),
+            Error::ReadError(_) => None,
             Error::SyntaxError(ref err) => err.span(),
-            _ => None,
         }
     }
 

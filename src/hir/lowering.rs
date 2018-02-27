@@ -120,7 +120,7 @@ impl<'ccx> LoweringContext<'ccx> {
         if arg_data.len() < 1 {
             return Err(Error::IllegalArg(
                 span,
-                "Parameter declaration missing".to_owned(),
+                "parameter declaration missing".to_owned(),
             ));
         }
 
@@ -132,7 +132,7 @@ impl<'ccx> LoweringContext<'ccx> {
             other => {
                 return Err(Error::IllegalArg(
                     other.span().clone(),
-                    "Parameter declaration should be a vector".to_owned(),
+                    "parameter declaration should be a vector".to_owned(),
                 ));
             }
         };
@@ -147,7 +147,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 other => {
                     return Err(Error::IllegalArg(
                         other.span().clone(),
-                        "Unsupported binding type".to_owned(),
+                        "unsupported binding type".to_owned(),
                     ));
                 }
             };
@@ -274,7 +274,7 @@ impl<'ccx> LoweringContext<'ccx> {
             }
             other => Err(Error::IllegalArg(
                 other.span(),
-                "Import set must be a vector".to_owned(),
+                "import set must be a vector".to_owned(),
             )),
         }
     }
@@ -558,7 +558,7 @@ fn fn_without_param_decl() {
     let j = "(fn)";
     let t = "^^^^";
 
-    let err = Error::IllegalArg(t2s(t), "Parameter declaration missing".to_owned());
+    let err = Error::IllegalArg(t2s(t), "parameter declaration missing".to_owned());
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -569,7 +569,7 @@ fn fn_with_non_vector_param_decl() {
 
     let err = Error::IllegalArg(
         t2s(t),
-        "Parameter declaration should be a vector".to_owned(),
+        "parameter declaration should be a vector".to_owned(),
     );
 
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
@@ -580,7 +580,7 @@ fn fn_with_non_symbol_param() {
     let j = "(fn [()])";
     let t = "     ^^  ";
 
-    let err = Error::IllegalArg(t2s(t), "Unsupported binding type".to_owned());
+    let err = Error::IllegalArg(t2s(t), "unsupported binding type".to_owned());
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
