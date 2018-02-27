@@ -170,7 +170,8 @@ impl<'de> Parser<'de> {
             _ => true,
         });
 
-        u64::from_str_radix(digits, 10).map_err(|_| Error::InvalidInteger(span))
+        // TODO: Assume any error is due to overflow
+        u64::from_str_radix(digits, 10).map_err(|_| Error::IntegerOverflow(span))
     }
 
     fn parse_int(&mut self) -> Result<Value> {
@@ -194,7 +195,7 @@ impl<'de> Parser<'de> {
             Ok(valid_integer) => {
                 u64_to_negative_i64(span.clone(), valid_integer).map(|i| Value::Int(span, i))
             }
-            Err(Error::InvalidInteger(_)) => {
+            Err(Error::IntegerOverflow(_)) => {
                 // Treat as a symbol
                 let rest_of_symbol = self.parse_identifier_content();
 
@@ -231,9 +232,9 @@ impl<'de> Parser<'de> {
                     // This is a hex code point
                     let hex_string = &char_name[1..];
                     let code_point = u32::from_str_radix(hex_string, 16)
-                        .map_err(|_| Error::InvalidCharLiteral(span.clone()))?;
+                        .map_err(|_| Error::UnsupportedChar(span.clone()))?;
 
-                    return std::char::from_u32(code_point).ok_or(Error::InvalidCharCodePoint(span));
+                    return std::char::from_u32(code_point).ok_or(Error::InvalidCodePoint(span));
                 }
             }
 
@@ -242,7 +243,7 @@ impl<'de> Parser<'de> {
                 "return" => Ok('\u{0d}'),
                 "space" => Ok('\u{20}'),
                 "tab" => Ok('\u{09}'),
-                _ => Err(Error::InvalidCharLiteral(span)),
+                _ => Err(Error::UnsupportedChar(span)),
             }
         });
 
@@ -260,7 +261,7 @@ impl<'de> Parser<'de> {
                 let (span, _) = self.capture_span(|s| s.consume_char(ExpectedContent::Dispatch));
                 let adj_span = span.with_lo(span.lo - 1);
 
-                Err(Error::InvalidDispatch(adj_span))
+                Err(Error::UnsupportedDispatch(adj_span))
             }
         }
     }
@@ -344,20 +345,20 @@ impl<'de> Parser<'de> {
                     (span, u32::from_str_radix(hex_string, 16))
                 };
 
-                let code_point = code_point.map_err(|_| Error::InvalidCharLiteral(span.clone()))?;
+                let code_point = code_point.map_err(|_| Error::UnsupportedChar(span.clone()))?;
 
                 if self.consume_char(ExpectedContent::CodePoint)? != ';' {
-                    return Err(Error::InvalidCharLiteral(span));
+                    return Err(Error::UnsupportedChar(span));
                 }
 
-                return std::char::from_u32(code_point).ok_or(Error::InvalidCharCodePoint(span));
+                return std::char::from_u32(code_point).ok_or(Error::InvalidCodePoint(span));
             }
             _ => {
                 let span = Span {
                     lo: escape_lo,
                     hi: self.consumed_bytes as u32,
                 };
-                Err(Error::InvalidQuoteEscape(span))
+                Err(Error::UnsupportedStringEscape(span))
             }
         }
     }
@@ -684,7 +685,7 @@ fn string_datum() {
 
     let j = r#""\p""#;
     let t = r#"  ^ "#;
-    let err = Error::InvalidQuoteEscape(t2s(t));
+    let err = Error::UnsupportedStringEscape(t2s(t));
     assert_eq!(err, datum_from_str(j).unwrap_err());
 }
 
@@ -711,12 +712,12 @@ fn char_datum() {
 
     let j = r#"\SPACE"#;
     let t = r#" ^^^^^"#;
-    let err = Error::InvalidCharLiteral(t2s(t));
+    let err = Error::UnsupportedChar(t2s(t));
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
     let j = r#"\u110000"#;
     let t = r#" ^^^^^^^"#;
-    let err = Error::InvalidCharCodePoint(t2s(t));
+    let err = Error::InvalidCodePoint(t2s(t));
     assert_eq!(err, datum_from_str(j).unwrap_err());
 }
 
@@ -741,19 +742,16 @@ fn int_datum() {
     let j = "10223372036854775807";
     let t = "^^^^^^^^^^^^^^^^^^^^";
     let err = Error::IntegerOverflow(t2s(t));
-    // TODO: We can only detect in the range i64::max_value() to u64::max_value()
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
     let j = "-10223372036854775807";
     let t = "^^^^^^^^^^^^^^^^^^^^^";
     let err = Error::IntegerOverflow(t2s(t));
-    // TODO: We can only detect in the range i64::min_value() to -u64::max_value()
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
     let j = "4545894549584910223372036854775807";
     let t = "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^";
-    let err = Error::InvalidInteger(t2s(t));
-    // TODO: We can only detect in the range i64::min_value() to -u64::max_value()
+    let err = Error::IntegerOverflow(t2s(t));
     assert_eq!(err, datum_from_str(j).unwrap_err());
 }
 
@@ -891,10 +889,10 @@ fn quote_shorthand() {
 }
 
 #[test]
-fn invalid_dispatch() {
+fn unsupported_dispatch() {
     let j = r#"#loop"#;
     let t = r#"^^   "#;
-    let err = Error::InvalidDispatch(t2s(t));
+    let err = Error::UnsupportedDispatch(t2s(t));
 
     assert_eq!(err, datum_from_str(j).unwrap_err());
 

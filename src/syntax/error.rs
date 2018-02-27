@@ -10,11 +10,10 @@ use reporting::{Level, Reportable};
 pub enum Error {
     Eof(Span, ExpectedContent),
     TrailingCharacters(Span),
-    InvalidDispatch(Span),
-    InvalidCharLiteral(Span),
-    InvalidCharCodePoint(Span),
-    InvalidQuoteEscape(Span),
-    InvalidInteger(Span),
+    UnsupportedDispatch(Span),
+    UnsupportedChar(Span),
+    InvalidCodePoint(Span),
+    UnsupportedStringEscape(Span),
     IntegerOverflow(Span),
     UnexpectedChar(Span, char),
     UnevenMap(Span),
@@ -28,17 +27,29 @@ impl Reportable for Error {
             Error::Eof(_, ref ec) => {
                 format!("unexpected end of file while parsing {}", ec.description())
             }
+            Error::TrailingCharacters(_) => "trailing characters".to_owned(),
+            Error::UnsupportedDispatch(_) => "unsupported dispatch".to_owned(),
+            Error::UnsupportedChar(_) => "unsupported character".to_owned(),
+            Error::InvalidCodePoint(_) => "invalid code point".to_owned(),
+            Error::UnsupportedStringEscape(_) => "unsupported string escape".to_owned(),
+            Error::IntegerOverflow(_) => "integer literal does not fit in i64".to_owned(),
             Error::UnexpectedChar(_, c) => format!("unexpected `{}`", c),
-            _ => "syntax error".to_owned(),
+            Error::UnevenMap(_) => "map literal must have an even number of values".to_owned(),
         }
     }
 
     fn span(&self) -> Option<Span> {
-        match *self {
-            Error::Eof(span, _) => Some(span),
-            Error::UnexpectedChar(span, _) => Some(span),
-            _ => None,
-        }
+        Some(match *self {
+            Error::Eof(span, _) => span,
+            Error::TrailingCharacters(span) => span,
+            Error::UnsupportedDispatch(span) => span,
+            Error::UnsupportedChar(span) => span,
+            Error::InvalidCodePoint(span) => span,
+            Error::UnsupportedStringEscape(span) => span,
+            Error::IntegerOverflow(span) => span,
+            Error::UnexpectedChar(span, _) => span,
+            Error::UnevenMap(span) => span,
+        })
     }
 
     fn level(&self) -> Level {
