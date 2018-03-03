@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use hir::Expr;
 use hir::scope::{insert_primitive_exports, Binding};
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq, Debug)]
 pub struct Module {
     body_expr: Expr,
     exports: HashMap<String, Binding>,

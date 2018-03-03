@@ -3,10 +3,11 @@ use syntax::span::Span;
 use syntax::value::Value;
 use hir::VarId;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Binding {
     Var(VarId),
     Primitive(Primitive),
+    Macro(Box<Macro>),
 }
 
 pub struct Scope {
@@ -74,10 +75,11 @@ primitives!(
     ("if", If),
     ("quote", Quote),
     ("import", Import),
-    ("export", Export)
+    ("export", Export),
+    ("defmacro", DefMacro)
 );
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct NsId(usize);
 
 impl NsId {
@@ -86,7 +88,7 @@ impl NsId {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Ident(NsId, String);
 
 impl Ident {
@@ -103,7 +105,19 @@ impl Ident {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
+pub struct Transformer {
+    pattern: Vec<NsValue>,
+    template: Vec<NsValue>,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct Macro {
+    self_ident: Ident,
+    transformers: Vec<Transformer>,
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub enum NsValue {
     Bool(Span, bool),
     Char(Span, char),

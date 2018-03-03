@@ -3,6 +3,7 @@ mod scope;
 mod error;
 mod module;
 mod loader;
+mod macros;
 
 use syntax::span::Span;
 use syntax::value::Value;

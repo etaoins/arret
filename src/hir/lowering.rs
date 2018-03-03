@@ -3,8 +3,9 @@ use std::io::Read;
 
 use hir::{Cond, Expr, Fun, Var, VarId};
 use hir::loader::{load_library_data, load_module_data, LibraryName};
-use hir::scope::{Binding, Ident, NsId, NsValue, Primitive, Scope};
+use hir::scope::{Binding, Ident, Macro, NsId, NsValue, Primitive, Scope};
 use hir::module::Module;
+use hir::macros::lower_macro_rules;
 use hir::error::{Error, Result};
 use syntax::value::Value;
 use syntax::span::Span;
@@ -18,11 +19,12 @@ pub struct LoweringContext<'ccx> {
 }
 
 macro_rules! lower_expr_impl {
-    ($self:ident, $scope:ident, $datum:ident, $lower_primitive_apply:ident) => {
+    ($self:ident, $scope:ident, $datum:ident, $lower_primitive_apply:ident, $lower_macro_apply:ident) => {
         match $datum {
             NsValue::Ident(span, ref ident) => match $scope.get(ident) {
                 Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
                 Some(Binding::Primitive(_)) => Err(Error::PrimitiveRef(span, ident.name().clone())),
+                Some(Binding::Macro(_)) => Err(Error::MacroRef(span, ident.name().clone())),
                 None => Err(Error::UnboundSymbol(span, ident.name().clone())),
             },
             NsValue::List(span, mut vs) => {
@@ -37,6 +39,9 @@ macro_rules! lower_expr_impl {
                     NsValue::Ident(fn_span, ref ident) => match $scope.get(ident) {
                         Some(Binding::Primitive(ref fn_prim)) => {
                             $self.$lower_primitive_apply($scope, span, fn_prim, arg_data)
+                        }
+                        Some(Binding::Macro(ref mac)) => {
+                            $self.$lower_macro_apply($scope, span, mac, arg_data)
                         }
                         Some(Binding::Var(id)) => {
                             $self.lower_expr_apply($scope, span, Expr::Ref(span, id), arg_data)
@@ -85,7 +90,43 @@ impl<'ccx> LoweringContext<'ccx> {
         self.curr_ns_id
     }
 
-    fn lower_def(
+    fn lower_defmacro(
+        &mut self,
+        scope: &mut Scope,
+        span: Span,
+        sym_datum: NsValue,
+        transformer_spec: NsValue,
+    ) -> Result<()> {
+        let self_ident = match sym_datum {
+            NsValue::Ident(_, ident) => ident.clone(),
+            other => {
+                return Err(Error::ExpectedSymbol(other.span()));
+            }
+        };
+
+        let macro_rules_data = match transformer_spec {
+            NsValue::List(span, ref vs) => match vs.first() {
+                Some(&NsValue::Ident(_, ref ident)) if ident.name() == "macro-rules" => {
+                    let (_, rest) = vs.split_first().unwrap();
+                    rest
+                }
+                _ => return Err(Error::IllegalArg(span, "Unsupported macro type".to_owned())),
+            },
+            other => {
+                return Err(Error::IllegalArg(
+                    other.span(),
+                    "Macro specification must be a list".to_owned(),
+                ))
+            }
+        };
+
+        let mac = lower_macro_rules(span, self_ident.clone(), macro_rules_data)?;
+        scope.insert_binding(self_ident, Binding::Macro(Box::new(mac)));
+
+        Ok(())
+    }
+
+    fn lower_def_var(
         &mut self,
         scope: &mut Scope,
         span: Span,
@@ -189,8 +230,9 @@ impl<'ccx> LoweringContext<'ccx> {
         mut arg_data: Vec<NsValue>,
     ) -> Result<Expr> {
         match fn_prim {
-            &Primitive::Def => Err(Error::DefOutsideBody(span)),
-            &Primitive::Import => Err(Error::DefOutsideBody(span)),
+            &Primitive::Def | &Primitive::DefMacro | &Primitive::Import => {
+                Err(Error::DefOutsideBody(span))
+            }
             &Primitive::Export => Err(Error::ExportOutsideModule(span)),
             &Primitive::Quote => match arg_data.len() {
                 1 => Ok(Expr::Lit(arg_data[0].clone().into_value())),
@@ -305,7 +347,20 @@ impl<'ccx> LoweringContext<'ccx> {
                 let value_datum = arg_data.pop().unwrap();
                 let sym_datum = arg_data.pop().unwrap();
 
-                self.lower_def(scope, span, sym_datum, value_datum)
+                self.lower_def_var(scope, span, sym_datum, value_datum)
+            }
+            &Primitive::DefMacro => {
+                let arg_count = arg_data.len();
+
+                if arg_count != 2 {
+                    return Err(Error::WrongArgCount(span, arg_count));
+                }
+
+                let transformer_spec = arg_data.pop().unwrap();
+                let sym_datum = arg_data.pop().unwrap();
+
+                self.lower_defmacro(scope, span, sym_datum, transformer_spec)
+                    .map(|_| Expr::Do(vec![]))
             }
             &Primitive::Import => {
                 self.lower_import(scope, arg_data)?;
@@ -357,16 +412,38 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(Expr::App(span, Box::new(fn_expr), arg_exprs))
     }
 
+    fn lower_macro_apply(
+        &mut self,
+        scope: &Scope,
+        span: Span,
+        mac: &Macro,
+        arg_data: Vec<NsValue>,
+    ) -> Result<Expr> {
+        unimplemented!("HERE")
+    }
+
     fn lower_expr(&mut self, scope: &Scope, datum: NsValue) -> Result<Expr> {
-        lower_expr_impl!(self, scope, datum, lower_primitive_apply)
+        lower_expr_impl!(self, scope, datum, lower_primitive_apply, lower_macro_apply)
     }
 
     fn lower_body_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr> {
-        lower_expr_impl!(self, scope, datum, lower_body_primitive_apply)
+        lower_expr_impl!(
+            self,
+            scope,
+            datum,
+            lower_body_primitive_apply,
+            lower_macro_apply
+        )
     }
 
     fn lower_module_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr> {
-        lower_expr_impl!(self, scope, datum, lower_module_primitive_apply)
+        lower_expr_impl!(
+            self,
+            scope,
+            datum,
+            lower_module_primitive_apply,
+            lower_macro_apply
+        )
     }
 
     fn lower_module(&mut self, data: Vec<Value>) -> Result<Module> {
@@ -400,13 +477,10 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(Module::new(body_expr, exports))
     }
 
-    pub fn lower_program(
-        &mut self,
-        display_name: String,
-        input_reader: &mut Read,
-    ) -> Result<Module> {
+    pub fn lower_program(&mut self, display_name: String, input_reader: &mut Read) -> Result<Expr> {
         let data = load_module_data(self.ccx, display_name, input_reader)?;
         self.lower_module(data)
+            .map(|module| module.into_body_expr())
     }
 }
 
@@ -807,5 +881,32 @@ fn export_unbound() {
     let t = "        ^ ";
 
     let err = Error::UnboundSymbol(t2s(t), "x".to_owned());
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
+}
+
+#[test]
+fn defmacro_of_non_symbol() {
+    let j = "(defmacro 1 (macro-rules ${}))";
+    let t = "          ^                   ";
+
+    let err = Error::ExpectedSymbol(t2s(t));
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
+}
+
+#[test]
+fn defmacro_of_non_list() {
+    let j = "(defmacro a b)";
+    let t = "            ^ ";
+
+    let err = Error::IllegalArg(t2s(t), "Macro specification must be a list".to_owned());
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
+}
+
+#[test]
+fn defmacro_of_unsupported_type() {
+    let j = "(defmacro a (macro-fn ${}))";
+    let t = "            ^^^^^^^^^^^^^^ ";
+
+    let err = Error::IllegalArg(t2s(t), "Unsupported macro type".to_owned());
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
