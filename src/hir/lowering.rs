@@ -237,14 +237,14 @@ impl<'ccx> LoweringContext<'ccx> {
             &Primitive::Export => Err(Error::ExportOutsideModule(span)),
             &Primitive::Quote => match arg_data.len() {
                 1 => Ok(Expr::Lit(arg_data[0].clone().into_value())),
-                other => Err(Error::WrongArgCount(span, other)),
+                _ => Err(Error::WrongArgCount(span, 1)),
             },
             &Primitive::Fun => self.lower_fun(scope, span, arg_data),
             &Primitive::If => {
                 let arg_count = arg_data.len();
 
                 if arg_count != 3 {
-                    return Err(Error::WrongArgCount(span, arg_count));
+                    return Err(Error::WrongArgCount(span, 3));
                 }
 
                 macro_rules! pop_as_boxed_expr {
@@ -342,7 +342,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 let arg_count = arg_data.len();
 
                 if arg_count != 2 {
-                    return Err(Error::WrongArgCount(span, arg_count));
+                    return Err(Error::WrongArgCount(span, 2));
                 }
 
                 let value_datum = arg_data.pop().unwrap();
@@ -354,7 +354,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 let arg_count = arg_data.len();
 
                 if arg_count != 2 {
-                    return Err(Error::WrongArgCount(span, arg_count));
+                    return Err(Error::WrongArgCount(span, 2));
                 }
 
                 let transformer_spec = arg_data.pop().unwrap();
@@ -564,7 +564,7 @@ fn quoted_multiple_data() {
     let j = "(quote 1 2 3)";
     let t = "^^^^^^^^^^^^^";
 
-    let err = Error::WrongArgCount(t2s(t), 3);
+    let err = Error::WrongArgCount(t2s(t), 1);
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -808,7 +808,7 @@ fn empty_if() {
     let j = "(if)";
     let t = "^^^^";
 
-    let err = Error::WrongArgCount(t2s(t), 0);
+    let err = Error::WrongArgCount(t2s(t), 3);
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -817,7 +817,7 @@ fn if_without_test() {
     let j = "(if true)";
     let t = "^^^^^^^^^";
 
-    let err = Error::WrongArgCount(t2s(t), 1);
+    let err = Error::WrongArgCount(t2s(t), 3);
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -826,7 +826,7 @@ fn if_without_false_branch() {
     let j = "(if true 1)";
     let t = "^^^^^^^^^^^";
 
-    let err = Error::WrongArgCount(t2s(t), 2);
+    let err = Error::WrongArgCount(t2s(t), 3);
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
