@@ -1,7 +1,9 @@
 use std::collections::HashMap;
+
 use syntax::span::Span;
 use syntax::value::Value;
 use hir::VarId;
+use hir::macros::Macro;
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum Binding {
@@ -103,18 +105,6 @@ impl Ident {
     pub fn name(&self) -> &String {
         &self.1
     }
-}
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct Transformer {
-    pattern: Vec<NsValue>,
-    template: Vec<NsValue>,
-}
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct Macro {
-    self_ident: Ident,
-    transformers: Vec<Transformer>,
 }
 
 #[derive(Clone, PartialEq, Debug)]

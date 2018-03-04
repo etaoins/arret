@@ -3,9 +3,9 @@ use std::io::Read;
 
 use hir::{Cond, Expr, Fun, Var, VarId};
 use hir::loader::{load_library_data, load_module_data, LibraryName};
-use hir::scope::{Binding, Ident, Macro, NsId, NsValue, Primitive, Scope};
+use hir::scope::{Binding, Ident, NsId, NsValue, Primitive, Scope};
 use hir::module::Module;
-use hir::macros::lower_macro_rules;
+use hir::macros::{lower_macro_rules, Macro};
 use hir::error::{Error, Result};
 use syntax::value::Value;
 use syntax::span::Span;
