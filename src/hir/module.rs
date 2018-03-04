@@ -20,10 +20,6 @@ impl Module {
         Module::new(Expr::Do(vec![]), primitive_exports)
     }
 
-    pub fn body_expr(&self) -> &Expr {
-        &self.body_expr
-    }
-
     pub fn into_body_expr(self) -> Expr {
         self.body_expr
     }
