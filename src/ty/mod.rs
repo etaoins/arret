@@ -1,3 +1,8 @@
+// Stub out to silence warnings
+pub type Ty = ();
+pub type PFun = ();
+
+/*
 use std::collections::BTreeSet;
 
 #[derive(PartialEq, Debug, Hash)]
@@ -47,3 +52,4 @@ pub enum PTy {
 }
 
 pub type PFun = Fun<PTy>;
+*/
