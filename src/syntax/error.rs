@@ -9,7 +9,6 @@ use reporting::{Level, Reportable};
 #[derive(Debug, PartialEq)]
 pub enum Error {
     Eof(Span, ExpectedContent),
-    TrailingCharacters(Span),
     UnsupportedDispatch(Span),
     UnsupportedChar(Span),
     InvalidCodePoint(Span),
@@ -27,7 +26,6 @@ impl Reportable for Error {
             Error::Eof(_, ref ec) => {
                 format!("unexpected end of file while parsing {}", ec.description())
             }
-            Error::TrailingCharacters(_) => "trailing characters".to_owned(),
             Error::UnsupportedDispatch(_) => "unsupported dispatch".to_owned(),
             Error::UnsupportedChar(_) => "unsupported character".to_owned(),
             Error::InvalidCodePoint(_) => "invalid code point".to_owned(),
@@ -41,7 +39,6 @@ impl Reportable for Error {
     fn span(&self) -> Option<Span> {
         Some(match *self {
             Error::Eof(span, _) => span,
-            Error::TrailingCharacters(span) => span,
             Error::UnsupportedDispatch(span) => span,
             Error::UnsupportedChar(span) => span,
             Error::InvalidCodePoint(span) => span,

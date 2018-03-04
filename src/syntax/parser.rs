@@ -479,23 +479,7 @@ pub fn data_from_str(s: &str) -> Result<Vec<Value>> {
 #[cfg(test)]
 fn datum_from_str(s: &str) -> Result<Value> {
     let mut parser = Parser::from_str(s, 0);
-
-    let result = parser.parse_datum()?;
-
-    // Allow for trailing whitespace
-    let _ = parser.skip_until_non_whitespace(ExpectedContent::Datum);
-
-    if parser.input.is_empty() {
-        Ok(result)
-    } else {
-        let consumed = parser.consumed_bytes as u32;
-        let span = Span {
-            lo: consumed,
-            hi: consumed + (parser.input.len() as u32),
-        };
-
-        Err(Error::TrailingCharacters(span))
-    }
+    parser.parse_datum()
 }
 
 #[test]
@@ -520,11 +504,6 @@ fn bool_datum() {
     let t = "\t^^^^\t";
     let expected = Value::Bool(t2s(t), true);
     assert_eq!(expected, datum_from_str(j).unwrap());
-
-    let j = " true 1";
-    let t = "      ^";
-    let err = Error::TrailingCharacters(t2s(t));
-    assert_eq!(err, datum_from_str(j).unwrap_err());
 
     let j = " trueorfalse  ";
     let t = " ^^^^^^^^^^^  ";
@@ -571,11 +550,6 @@ fn list_datum() {
     let t = "    >";
     let u = "^    ";
     let err = Error::Eof(t2s(t), ExpectedContent::List(t2s(u)));
-    assert_eq!(err, datum_from_str(j).unwrap_err());
-
-    let j = "(true))";
-    let t = "      ^";
-    let err = Error::TrailingCharacters(t2s(t));
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
     let j = ")";
