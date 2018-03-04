@@ -180,35 +180,36 @@ impl<'ccx> LoweringContext<'ccx> {
 
         // Pull our our params
         let mut body_scope = Scope::new_child(scope);
-        let mut fixed_params = Vec::<Var>::with_capacity(param_data.len());
 
-        for param_datum in param_data {
-            let ident = match param_datum {
-                NsValue::Ident(_, ident) => ident,
-                other => {
-                    return Err(Error::IllegalArg(
-                        other.span().clone(),
-                        "unsupported binding type".to_owned(),
-                    ));
-                }
-            };
+        let fixed_params = param_data
+            .into_iter()
+            .map(|param_datum| {
+                let ident = match param_datum {
+                    NsValue::Ident(_, ident) => ident,
+                    other => {
+                        return Err(Error::IllegalArg(
+                            other.span().clone(),
+                            "unsupported binding type".to_owned(),
+                        ));
+                    }
+                };
 
-            let var_id = VarId::new(self.alloc_var_id());
-            let var = Var {
-                id: var_id,
-                source_name: ident.name().clone(),
-                bound: None,
-            };
+                let var_id = VarId::new(self.alloc_var_id());
+                let var = Var {
+                    id: var_id,
+                    source_name: ident.name().clone(),
+                    bound: None,
+                };
 
-            body_scope.insert_var(ident, var_id);
-            fixed_params.push(var);
-        }
+                body_scope.insert_var(ident, var_id);
+                Ok(var)
+            })
+            .collect::<Result<Vec<Var>>>()?;
 
-        let mut body_exprs = Vec::<Expr>::new();
-
-        for body_datum in body_data {
-            body_exprs.push(self.lower_body_expr(&mut body_scope, body_datum)?);
-        }
+        let body_exprs = body_data
+            .into_iter()
+            .map(|body_datum| self.lower_body_expr(&mut body_scope, body_datum))
+            .collect::<Result<Vec<Expr>>>()?;
 
         Ok(Expr::Fun(
             span,
@@ -285,23 +286,23 @@ impl<'ccx> LoweringContext<'ccx> {
                     ));
                 }
 
-                let mut name_components = Vec::<String>::with_capacity(vs.len());
                 let mut import_ns_id = NsId::new(0);
-                for datum in vs {
-                    match datum {
-                        NsValue::Ident(_, ident) => {
-                            // TODO: What happens with mixed namespaces?
-                            import_ns_id = ident.ns_id();
-                            name_components.push(ident.name().clone());
-                        }
-                        other => {
-                            return Err(Error::IllegalArg(
+
+                let mut name_components = vs.into_iter()
+                    .map(|datum| {
+                        match datum {
+                            NsValue::Ident(_, ident) => {
+                                // TODO: What happens with mixed namespaces?
+                                import_ns_id = ident.ns_id();
+                                Ok(ident.name().clone())
+                            }
+                            other => Err(Error::IllegalArg(
                                 other.span(),
                                 "Library name component must be a symbol".to_owned(),
-                            ));
+                            )),
                         }
-                    };
-                }
+                    })
+                    .collect::<Result<Vec<String>>>()?;
 
                 let terminal_name = name_components.pop().unwrap();
                 let library_name = LibraryName::new(name_components, terminal_name);
@@ -403,11 +404,10 @@ impl<'ccx> LoweringContext<'ccx> {
         fn_expr: Expr,
         arg_data: Vec<NsValue>,
     ) -> Result<Expr> {
-        let mut arg_exprs: Vec<Expr> = vec![];
-
-        for arg_datum in arg_data {
-            arg_exprs.push(self.lower_expr(scope, arg_datum)?);
-        }
+        let arg_exprs = arg_data
+            .into_iter()
+            .map(|arg_datum| self.lower_expr(scope, arg_datum))
+            .collect::<Result<Vec<Expr>>>()?;
 
         Ok(Expr::App(span, Box::new(fn_expr), arg_exprs))
     }
@@ -456,12 +456,12 @@ impl<'ccx> LoweringContext<'ccx> {
             Binding::Primitive(Primitive::Import),
         );
 
-        let mut exprs = Vec::<Expr>::new();
-
-        for datum in data {
-            let ns_datum = NsValue::from_value(datum, ns_id);
-            exprs.push(self.lower_module_expr(&mut scope, ns_datum)?);
-        }
+        let exprs = data.into_iter()
+            .map(|datum| {
+                let ns_datum = NsValue::from_value(datum, ns_id);
+                self.lower_module_expr(&mut scope, ns_datum)
+            })
+            .collect::<Result<Vec<Expr>>>()?;
 
         let body_expr = Expr::from_vec(exprs);
 
