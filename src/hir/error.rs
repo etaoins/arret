@@ -17,6 +17,7 @@ pub enum Error {
     DefOutsideBody(Span),
     ExportOutsideModule(Span),
     LibraryNotFound(Span),
+    NoMacroRule(Span),
     ReadError(String),
     SyntaxError(SyntaxError),
 }
@@ -41,6 +42,7 @@ impl Reportable for Error {
             Error::DefOutsideBody(_) => "(def) outside module or function body".to_owned(),
             Error::ExportOutsideModule(_) => "(export) outside of module body".to_owned(),
             Error::LibraryNotFound(_) => "library not found".to_owned(),
+            Error::NoMacroRule(_) => "no matching macro rule".to_owned(),
             Error::ReadError(ref filename) => format!("error reading `{}`", filename),
             Error::SyntaxError(ref err) => err.message(),
         }
@@ -57,6 +59,7 @@ impl Reportable for Error {
             Error::DefOutsideBody(span) => Some(span),
             Error::ExportOutsideModule(span) => Some(span),
             Error::LibraryNotFound(span) => Some(span),
+            Error::NoMacroRule(span) => Some(span),
             Error::ReadError(_) => None,
             Error::SyntaxError(ref err) => err.span(),
         }

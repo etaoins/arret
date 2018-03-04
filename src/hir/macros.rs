@@ -1,7 +1,8 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::result;
 
 use syntax::span::Span;
-use hir::scope::{Ident, NsValue};
+use hir::scope::{Binding, Ident, NsId, NsValue, Scope};
 use hir::error::{Error, Result};
 
 #[derive(Clone, PartialEq, Debug)]
@@ -133,12 +134,115 @@ pub fn lower_macro_rules(
     Ok(Macro::new(self_ident, literals, rules))
 }
 
+#[derive(PartialEq, Eq, Hash)]
+enum MacroVar {
+    Bound(Binding),
+    Unbound(String),
+}
+
+impl MacroVar {
+    fn from_ident(scope: &Scope, ident: &Ident) -> MacroVar {
+        match scope.get(ident) {
+            Some(binding) => MacroVar::Bound(binding),
+            None => MacroVar::Unbound(ident.name().clone()),
+        }
+    }
+}
+
+struct MatchData {
+    vars: HashMap<MacroVar, NsValue>,
+}
+
+type MatchVisitResult = result::Result<(), ()>;
+
+impl MatchData {
+    fn visit_datum(&mut self, scope: &Scope, pattern: &NsValue, arg: &NsValue) -> MatchVisitResult {
+        match (pattern, arg) {
+            (&NsValue::Ident(_, ref pattern_ident), arg) => {
+                let pattern_var = MacroVar::from_ident(scope, pattern_ident);
+                self.vars.insert(pattern_var, arg.clone());
+                Ok(())
+            }
+            _ => Err(()),
+        }
+    }
+
+    fn visit_slice(
+        &mut self,
+        scope: &Scope,
+        mut patterns: &[NsValue],
+        mut args: &[NsValue],
+    ) -> MatchVisitResult {
+        loop {
+            match (patterns.first(), args.first()) {
+                (Some(pattern), Some(arg)) => self.visit_datum(scope, pattern, arg)?,
+                (None, None) => {
+                    return Ok(());
+                }
+                _ => return Err(()),
+            }
+
+            patterns = &patterns[1..];
+            args = &args[1..];
+        }
+    }
+
+    fn from_macro_rule(
+        scope: &Scope,
+        rule: &Rule,
+        arg_data: &[NsValue],
+    ) -> result::Result<MatchData, ()> {
+        let mut match_data = MatchData {
+            vars: HashMap::new(),
+        };
+
+        match_data.visit_slice(scope, rule.pattern.as_slice(), arg_data)?;
+
+        Ok(match_data)
+    }
+}
+
+struct ExpandContext {
+    scope: Scope,
+    match_data: MatchData,
+    ns_mapping: HashMap<NsId, NsId>,
+}
+
+impl ExpandContext {
+    fn new(scope: &Scope, match_data: MatchData) -> ExpandContext {
+        ExpandContext {
+            scope: Scope::new_child(scope),
+            match_data,
+            ns_mapping: HashMap::new(),
+        }
+    }
+
+    fn expand_template(self, template: &NsValue) -> (Scope, NsValue) {
+        (self.scope, template.clone())
+    }
+}
+
+pub fn expand_macro(
+    scope: &Scope,
+    span: Span,
+    mac: &Macro,
+    arg_data: Vec<NsValue>,
+) -> Result<(Scope, NsValue)> {
+    for rule in mac.rules.iter() {
+        if let Ok(match_data) = MatchData::from_macro_rule(scope, rule, arg_data.as_slice()) {
+            let ecx = ExpandContext::new(scope, match_data);
+
+            return Ok(ecx.expand_template(&rule.template));
+        }
+    }
+
+    Err(Error::NoMacroRule(span))
+}
+
 #[cfg(test)]
 use syntax::parser::data_from_str;
 #[cfg(test)]
 use syntax::span::t2s;
-#[cfg(test)]
-use hir::scope::NsId;
 
 #[cfg(test)]
 fn test_ns_id() -> NsId {

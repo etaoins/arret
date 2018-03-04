@@ -3,9 +3,9 @@ use std::io::Read;
 
 use hir::{Cond, Expr, Fun, Var, VarId};
 use hir::loader::{load_library_data, load_module_data, LibraryName};
-use hir::scope::{Binding, Ident, NsId, NsValue, Primitive, Scope};
+use hir::scope::{Binding, Ident, MacroId, NsId, NsValue, Primitive, Scope};
 use hir::module::Module;
-use hir::macros::{lower_macro_rules, Macro};
+use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::error::{Error, Result};
 use syntax::value::Value;
 use syntax::span::Span;
@@ -15,11 +15,13 @@ pub struct LoweringContext<'ccx> {
     curr_var_id: usize,
     curr_ns_id: usize,
     loaded_libraries: BTreeMap<LibraryName, Module>,
+    macros: Vec<Macro>,
     ccx: &'ccx mut CompileContext,
 }
 
+// TODO: Change this to define_lower_expr_impl() and remove $lower_expr?
 macro_rules! lower_expr_impl {
-    ($self:ident, $scope:ident, $datum:ident, $lower_primitive_apply:ident, $lower_macro_apply:ident) => {
+    ($self:ident, $scope:ident, $datum:ident, $lower_primitive_apply:ident, $lower_expr:ident) => {
         match $datum {
             NsValue::Ident(span, ref ident) => match $scope.get(ident) {
                 Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
@@ -40,8 +42,14 @@ macro_rules! lower_expr_impl {
                         Some(Binding::Primitive(ref fn_prim)) => {
                             $self.$lower_primitive_apply($scope, span, fn_prim, arg_data)
                         }
-                        Some(Binding::Macro(ref mac)) => {
-                            $self.$lower_macro_apply($scope, span, mac, arg_data)
+                        Some(Binding::Macro(macro_id)) => {
+                            let (mut expanded_scope, expanded_datum) = {
+                                let mac = &$self.macros[macro_id.to_usize()];
+                                expand_macro($scope, span, mac, arg_data)?
+                            };
+
+                            // This will recurse
+                            $self.$lower_expr(&mut expanded_scope, expanded_datum)
                         }
                         Some(Binding::Var(id)) => {
                             $self.lower_expr_apply($scope, span, Expr::Ref(span, id), arg_data)
@@ -76,18 +84,19 @@ impl<'ccx> LoweringContext<'ccx> {
             curr_var_id: 0,
             curr_ns_id: 0,
             loaded_libraries,
+            macros: vec![],
             ccx,
         }
     }
 
-    fn alloc_var_id(&mut self) -> usize {
+    fn alloc_var_id(&mut self) -> VarId {
         self.curr_var_id = self.curr_var_id + 1;
-        self.curr_var_id
+        VarId::new(self.curr_var_id)
     }
 
-    fn alloc_ns_id(&mut self) -> usize {
+    fn alloc_ns_id(&mut self) -> NsId {
         self.curr_ns_id = self.curr_ns_id + 1;
-        self.curr_ns_id
+        NsId::new(self.curr_ns_id)
     }
 
     fn lower_defmacro(
@@ -121,7 +130,10 @@ impl<'ccx> LoweringContext<'ccx> {
         };
 
         let mac = lower_macro_rules(span, self_ident.clone(), macro_rules_data)?;
-        scope.insert_binding(self_ident, Binding::Macro(Box::new(mac)));
+
+        let macro_id = MacroId::new(self.macros.len());
+        self.macros.push(mac);
+        scope.insert_binding(self_ident, Binding::Macro(macro_id));
 
         Ok(())
     }
@@ -140,7 +152,7 @@ impl<'ccx> LoweringContext<'ccx> {
             }
         };
 
-        let var_id = VarId::new(self.alloc_var_id());
+        let var_id = self.alloc_var_id();
         let sym_name = sym_ident.name().clone();
         let value_expr = self.lower_expr(scope, value_datum)?;
 
@@ -194,7 +206,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     }
                 };
 
-                let var_id = VarId::new(self.alloc_var_id());
+                let var_id = self.alloc_var_id();
                 let var = Var {
                     id: var_id,
                     source_name: ident.name().clone(),
@@ -412,18 +424,8 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(Expr::App(span, Box::new(fn_expr), arg_exprs))
     }
 
-    fn lower_macro_apply(
-        &mut self,
-        scope: &Scope,
-        span: Span,
-        mac: &Macro,
-        arg_data: Vec<NsValue>,
-    ) -> Result<Expr> {
-        unimplemented!("HERE")
-    }
-
     fn lower_expr(&mut self, scope: &Scope, datum: NsValue) -> Result<Expr> {
-        lower_expr_impl!(self, scope, datum, lower_primitive_apply, lower_macro_apply)
+        lower_expr_impl!(self, scope, datum, lower_primitive_apply, lower_expr)
     }
 
     fn lower_body_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr> {
@@ -432,7 +434,7 @@ impl<'ccx> LoweringContext<'ccx> {
             scope,
             datum,
             lower_body_primitive_apply,
-            lower_macro_apply
+            lower_body_expr
         )
     }
 
@@ -442,12 +444,12 @@ impl<'ccx> LoweringContext<'ccx> {
             scope,
             datum,
             lower_module_primitive_apply,
-            lower_macro_apply
+            lower_module_expr
         )
     }
 
     fn lower_module(&mut self, data: Vec<Value>) -> Result<Module> {
-        let ns_id = NsId::new(self.alloc_ns_id());
+        let ns_id = self.alloc_ns_id();
         let mut scope = Scope::new_empty();
 
         // The default scope only consists of (import)
@@ -909,4 +911,22 @@ fn defmacro_of_unsupported_type() {
 
     let err = Error::IllegalArg(t2s(t), "Unsupported macro type".to_owned());
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
+}
+
+#[test]
+fn expand_macro_without_matching_rule() {
+    let j = "(defmacro one (macro-rules #{} [[(one) 1]])) (one extra-arg)";
+    let t = "                                             ^^^^^^^^^^^^^^^";
+
+    let err = Error::NoMacroRule(t2s(t));
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
+}
+
+#[test]
+fn expand_trivial_macro() {
+    let j = "(defmacro one (macro-rules #{} [[(one) 1]])) (one)";
+    let t = "                                       ^          ";
+
+    let expected = Expr::Lit(Value::Int(t2s(t), 1));
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
 }

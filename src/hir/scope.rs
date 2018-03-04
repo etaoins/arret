@@ -3,13 +3,25 @@ use std::collections::HashMap;
 use syntax::span::Span;
 use syntax::value::Value;
 use hir::VarId;
-use hir::macros::Macro;
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub struct MacroId(usize);
+
+impl MacroId {
+    pub fn new(id: usize) -> MacroId {
+        MacroId(id)
+    }
+
+    pub fn to_usize(&self) -> usize {
+        self.0
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub enum Binding {
     Var(VarId),
     Primitive(Primitive),
-    Macro(Box<Macro>),
+    Macro(MacroId),
 }
 
 pub struct Scope {
@@ -26,6 +38,7 @@ impl Scope {
     }
 
     pub fn new_child(parent: &Scope) -> Scope {
+        // TODO: Can we use a pointer to our parent without entering borrow checker hell?
         Scope {
             bindings: parent.bindings.clone(),
             exports: HashMap::new(),
@@ -58,7 +71,7 @@ impl Scope {
 
 macro_rules! primitives {
     ( $( ($n:expr, $i:ident) ),* ) => {
-        #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+        #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
         pub enum Primitive {
             $($i,)*
         }

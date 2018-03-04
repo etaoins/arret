@@ -9,7 +9,7 @@ use syntax::span::Span;
 use syntax::value::Value;
 use ty;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct VarId(usize);
 
 impl VarId {
