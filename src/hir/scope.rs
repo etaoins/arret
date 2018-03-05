@@ -64,6 +64,12 @@ impl Scope {
         self.insert_binding(ident, Binding::Var(var_id));
     }
 
+    // This is used to rebind variables to fresh locations when expanding macros
+    pub fn rebind(&mut self, old_ident: &Ident, new_ident: &Ident) {
+        let old_binding = self.bindings[old_ident].clone();
+        self.bindings.insert(new_ident.clone(), old_binding);
+    }
+
     pub fn exports(&self) -> &HashMap<Ident, Span> {
         &self.exports
     }
@@ -117,6 +123,10 @@ impl Ident {
 
     pub fn name(&self) -> &String {
         &self.1
+    }
+
+    pub fn with_ns_id(&self, new_ns_id: NsId) -> Ident {
+        Ident(new_ns_id, self.1.clone())
     }
 }
 
@@ -196,5 +206,20 @@ impl NsValue {
             NsValue::Set(span, _) => span,
             NsValue::Map(span, _) => span,
         }
+    }
+}
+
+pub struct NsIdAllocator {
+    curr_ns_id: usize,
+}
+
+impl NsIdAllocator {
+    pub fn new() -> NsIdAllocator {
+        NsIdAllocator { curr_ns_id: 0 }
+    }
+
+    pub fn alloc(&mut self) -> NsId {
+        self.curr_ns_id = self.curr_ns_id + 1;
+        NsId::new(self.curr_ns_id)
     }
 }

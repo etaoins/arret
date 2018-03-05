@@ -3,7 +3,7 @@ use std::io::Read;
 
 use hir::{Cond, Expr, Fun, Var, VarId};
 use hir::loader::{load_library_data, load_module_data, LibraryName};
-use hir::scope::{Binding, Ident, MacroId, NsId, NsValue, Primitive, Scope};
+use hir::scope::{Binding, Ident, MacroId, NsId, NsIdAllocator, NsValue, Primitive, Scope};
 use hir::module::Module;
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::error::{Error, Result};
@@ -13,7 +13,7 @@ use ctx::CompileContext;
 
 pub struct LoweringContext<'ccx> {
     curr_var_id: usize,
-    curr_ns_id: usize,
+    ns_id_allocator: NsIdAllocator,
     loaded_libraries: BTreeMap<LibraryName, Module>,
     macros: Vec<Macro>,
     ccx: &'ccx mut CompileContext,
@@ -45,7 +45,7 @@ macro_rules! lower_expr_impl {
                         Some(Binding::Macro(macro_id)) => {
                             let (mut expanded_scope, expanded_datum) = {
                                 let mac = &$self.macros[macro_id.to_usize()];
-                                expand_macro($scope, span, mac, arg_data)?
+                                expand_macro(&mut $self.ns_id_allocator, $scope, span, mac, arg_data)?
                             };
 
                             // This will recurse
@@ -82,7 +82,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
         LoweringContext {
             curr_var_id: 0,
-            curr_ns_id: 0,
+            ns_id_allocator: NsIdAllocator::new(),
             loaded_libraries,
             macros: vec![],
             ccx,
@@ -92,11 +92,6 @@ impl<'ccx> LoweringContext<'ccx> {
     fn alloc_var_id(&mut self) -> VarId {
         self.curr_var_id = self.curr_var_id + 1;
         VarId::new(self.curr_var_id)
-    }
-
-    fn alloc_ns_id(&mut self) -> NsId {
-        self.curr_ns_id = self.curr_ns_id + 1;
-        NsId::new(self.curr_ns_id)
     }
 
     fn lower_defmacro(
@@ -129,7 +124,7 @@ impl<'ccx> LoweringContext<'ccx> {
             }
         };
 
-        let mac = lower_macro_rules(span, self_ident.clone(), macro_rules_data)?;
+        let mac = lower_macro_rules(scope, span, self_ident.clone(), macro_rules_data)?;
 
         let macro_id = MacroId::new(self.macros.len());
         self.macros.push(mac);
@@ -449,7 +444,7 @@ impl<'ccx> LoweringContext<'ccx> {
     }
 
     fn lower_module(&mut self, data: Vec<Value>) -> Result<Module> {
-        let ns_id = self.alloc_ns_id();
+        let ns_id = self.ns_id_allocator.alloc();
         let mut scope = Scope::new_empty();
 
         // The default scope only consists of (import)
@@ -929,4 +924,50 @@ fn expand_trivial_macro() {
 
     let expected = Expr::Lit(Value::Int(t2s(t), 1));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
+
+#[test]
+fn expand_replacing_macro() {
+    let j = "(defmacro identity (macro-rules #{} [[(identity x) x]])) (identity 1)";
+    let t = "                                                                   ^ ";
+
+    let expected = Expr::Lit(Value::Int(t2s(t), 1));
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
+
+#[test]
+fn expand_two_value_replacement() {
+    let j = "(defmacro ret-two (macro-rules #{} [[(ret-two x y) [x y]]])) (ret-two 1 2)";
+    let t = "                                                   ^^^^^                  ";
+    let u = "                                                                      ^   ";
+    let v = "                                                                        ^ ";
+
+    let expected = Expr::Lit(Value::Vector(
+        t2s(t),
+        vec![Value::Int(t2s(u), 1), Value::Int(t2s(v), 2)],
+    ));
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
+
+#[test]
+fn expand_with_matching_literals() {
+    let j = "(defmacro for (macro-rules #{in} [[(for x in y) [x y]]])) (for 1 in 2)";
+    let t = "                                                ^^^^^                 ";
+    let u = "                                                               ^      ";
+    let v = "                                                                    ^ ";
+
+    let expected = Expr::Lit(Value::Vector(
+        t2s(t),
+        vec![Value::Int(t2s(u), 1), Value::Int(t2s(v), 2)],
+    ));
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
+
+#[test]
+fn expand_with_non_matching_literals() {
+    let j = "(defmacro for (macro-rules #{in} [[(for x in y) [x y]]])) (for 1 foo 2)";
+    let t = "                                                          ^^^^^^^^^^^^^";
+
+    let err = Error::NoMacroRule(t2s(t));
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }

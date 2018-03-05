@@ -2,24 +2,39 @@ use std::collections::{HashMap, HashSet};
 use std::result;
 
 use syntax::span::Span;
-use hir::scope::{Binding, Ident, NsId, NsValue, Scope};
+use hir::scope::{Binding, Ident, NsId, NsIdAllocator, NsValue, Scope};
 use hir::error::{Error, Result};
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug, Hash)]
+pub enum MacroVar {
+    Bound(Binding),
+    Unbound(String),
+}
+
+impl MacroVar {
+    fn from_ident(scope: &Scope, ident: &Ident) -> MacroVar {
+        match scope.get(ident) {
+            Some(binding) => MacroVar::Bound(binding),
+            None => MacroVar::Unbound(ident.name().clone()),
+        }
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub struct Rule {
     pattern: Vec<NsValue>,
     template: NsValue,
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(PartialEq, Debug)]
 pub struct Macro {
     self_ident: Ident,
-    literals: HashSet<String>,
+    literals: HashSet<MacroVar>,
     rules: Vec<Rule>,
 }
 
 impl Macro {
-    pub fn new(self_ident: Ident, literals: HashSet<String>, rules: Vec<Rule>) -> Macro {
+    pub fn new(self_ident: Ident, literals: HashSet<MacroVar>, rules: Vec<Rule>) -> Macro {
         Macro {
             self_ident,
             literals,
@@ -29,6 +44,7 @@ impl Macro {
 }
 
 pub fn lower_macro_rules(
+    scope: &Scope,
     span: Span,
     self_ident: Ident,
     macro_rules_data: &[NsValue],
@@ -43,13 +59,13 @@ pub fn lower_macro_rules(
     let literals = match literals_datum {
         &NsValue::Set(_, ref vs) => vs.iter()
             .map(|v| match v {
-                &NsValue::Ident(_, ref ident) => Ok(ident.name().clone()),
+                &NsValue::Ident(_, ref ident) => Ok(MacroVar::from_ident(scope, ident)),
                 other => Err(Error::IllegalArg(
                     other.span(),
                     "Pattern literal must be a symbol".to_owned(),
                 )),
             })
-            .collect::<Result<HashSet<String>>>()?,
+            .collect::<Result<HashSet<MacroVar>>>()?,
         other => {
             return Err(Error::IllegalArg(
                 other.span(),
@@ -134,48 +150,58 @@ pub fn lower_macro_rules(
     Ok(Macro::new(self_ident, literals, rules))
 }
 
-#[derive(PartialEq, Eq, Hash)]
-enum MacroVar {
-    Bound(Binding),
-    Unbound(String),
-}
-
-impl MacroVar {
-    fn from_ident(scope: &Scope, ident: &Ident) -> MacroVar {
-        match scope.get(ident) {
-            Some(binding) => MacroVar::Bound(binding),
-            None => MacroVar::Unbound(ident.name().clone()),
-        }
-    }
-}
-
 struct MatchData {
     vars: HashMap<MacroVar, NsValue>,
 }
 
+struct MatchContext<'a> {
+    scope: &'a Scope,
+    literals: &'a HashSet<MacroVar>,
+    match_data: MatchData,
+}
+
 type MatchVisitResult = result::Result<(), ()>;
 
-impl MatchData {
-    fn visit_datum(&mut self, scope: &Scope, pattern: &NsValue, arg: &NsValue) -> MatchVisitResult {
-        match (pattern, arg) {
-            (&NsValue::Ident(_, ref pattern_ident), arg) => {
-                let pattern_var = MacroVar::from_ident(scope, pattern_ident);
-                self.vars.insert(pattern_var, arg.clone());
-                Ok(())
+impl<'a> MatchContext<'a> {
+    fn new(scope: &'a Scope, literals: &'a HashSet<MacroVar>) -> MatchContext<'a> {
+        MatchContext {
+            scope,
+            literals,
+            match_data: MatchData {
+                vars: HashMap::new(),
+            },
+        }
+    }
+
+    fn visit_ident(&mut self, pattern_ident: &Ident, arg: &NsValue) -> MatchVisitResult {
+        let pattern_var = MacroVar::from_ident(self.scope, pattern_ident);
+
+        if self.literals.contains(&pattern_var) {
+            // The arg must be the exact same pattern variable
+            if let &NsValue::Ident(_, ref arg_ident) = arg {
+                if pattern_var == MacroVar::from_ident(self.scope, arg_ident) {
+                    return Ok(());
+                }
             }
+
+            Err(())
+        } else {
+            self.match_data.vars.insert(pattern_var, arg.clone());
+            Ok(())
+        }
+    }
+
+    fn visit_datum(&mut self, pattern: &NsValue, arg: &NsValue) -> MatchVisitResult {
+        match (pattern, arg) {
+            (&NsValue::Ident(_, ref pattern_ident), arg) => self.visit_ident(pattern_ident, arg),
             _ => Err(()),
         }
     }
 
-    fn visit_slice(
-        &mut self,
-        scope: &Scope,
-        mut patterns: &[NsValue],
-        mut args: &[NsValue],
-    ) -> MatchVisitResult {
+    fn visit_slice(&mut self, mut patterns: &[NsValue], mut args: &[NsValue]) -> MatchVisitResult {
         loop {
             match (patterns.first(), args.first()) {
-                (Some(pattern), Some(arg)) => self.visit_datum(scope, pattern, arg)?,
+                (Some(pattern), Some(arg)) => self.visit_datum(pattern, arg)?,
                 (None, None) => {
                     return Ok(());
                 }
@@ -187,50 +213,83 @@ impl MatchData {
         }
     }
 
-    fn from_macro_rule(
-        scope: &Scope,
-        rule: &Rule,
-        arg_data: &[NsValue],
-    ) -> result::Result<MatchData, ()> {
-        let mut match_data = MatchData {
-            vars: HashMap::new(),
-        };
-
-        match_data.visit_slice(scope, rule.pattern.as_slice(), arg_data)?;
-
-        Ok(match_data)
+    fn visit_rule(mut self, rule: &Rule, arg_data: &[NsValue]) -> result::Result<MatchData, ()> {
+        self.visit_slice(rule.pattern.as_slice(), arg_data)?;
+        Ok(self.match_data)
     }
 }
 
-struct ExpandContext {
+struct ExpandContext<'a> {
+    ns_id_allocator: &'a mut NsIdAllocator,
     scope: Scope,
     match_data: MatchData,
     ns_mapping: HashMap<NsId, NsId>,
 }
 
-impl ExpandContext {
-    fn new(scope: &Scope, match_data: MatchData) -> ExpandContext {
+impl<'a> ExpandContext<'a> {
+    fn new(
+        ns_id_allocator: &'a mut NsIdAllocator,
+        scope: &Scope,
+        match_data: MatchData,
+    ) -> ExpandContext<'a> {
         ExpandContext {
+            ns_id_allocator,
             scope: Scope::new_child(scope),
             match_data,
             ns_mapping: HashMap::new(),
         }
     }
 
-    fn expand_template(self, template: &NsValue) -> (Scope, NsValue) {
-        (self.scope, template.clone())
+    fn expand_ident(&mut self, span: Span, ident: &Ident) -> NsValue {
+        let macro_var = MacroVar::from_ident(&self.scope, ident);
+
+        if let Some(replacement) = self.match_data.vars.get(&macro_var) {
+            return replacement.clone();
+        }
+
+        // TODO: Always allocate an NsId even if we never use it to get around the borrow checker
+        let alloced_ns_id = self.ns_id_allocator.alloc();
+
+        // Rescope this ident
+        let old_ns_id = ident.ns_id();
+        let new_ns_id = self.ns_mapping.entry(old_ns_id).or_insert(alloced_ns_id);
+
+        let new_ident = ident.with_ns_id(*new_ns_id);
+        self.scope.rebind(ident, &new_ident);
+
+        NsValue::Ident(span, new_ident)
+    }
+
+    fn expand_datum(&mut self, template: &NsValue) -> NsValue {
+        match template {
+            &NsValue::Ident(span, ref ident) => self.expand_ident(span, ident),
+            &NsValue::List(span, ref vs) => {
+                NsValue::List(span, vs.iter().map(|v| self.expand_datum(v)).collect())
+            }
+            &NsValue::Vector(span, ref vs) => {
+                NsValue::Vector(span, vs.iter().map(|v| self.expand_datum(v)).collect())
+            }
+            other => other.clone(),
+        }
+    }
+
+    fn expand_template(mut self, template: &NsValue) -> (Scope, NsValue) {
+        let expanded_datum = self.expand_datum(template);
+        (self.scope, expanded_datum)
     }
 }
 
 pub fn expand_macro(
+    ns_id_allocator: &mut NsIdAllocator,
     scope: &Scope,
     span: Span,
     mac: &Macro,
     arg_data: Vec<NsValue>,
 ) -> Result<(Scope, NsValue)> {
     for rule in mac.rules.iter() {
-        if let Ok(match_data) = MatchData::from_macro_rule(scope, rule, arg_data.as_slice()) {
-            let ecx = ExpandContext::new(scope, match_data);
+        let mut mcx = MatchContext::new(scope, &mac.literals);
+        if let Ok(match_data) = mcx.visit_rule(rule, arg_data.as_slice()) {
+            let ecx = ExpandContext::new(ns_id_allocator, scope, match_data);
 
             return Ok(ecx.expand_template(&rule.template));
         }
@@ -268,7 +327,12 @@ fn macro_rules_for_str(data_str: &str) -> Result<Macro> {
         .map(|datum| NsValue::from_value(datum, test_ns_id()))
         .collect::<Vec<NsValue>>();
 
-    lower_macro_rules(full_span, self_ident(), test_ns_data.as_slice())
+    lower_macro_rules(
+        &Scope::new_empty(),
+        full_span,
+        self_ident(),
+        test_ns_data.as_slice(),
+    )
 }
 
 #[test]
@@ -313,8 +377,8 @@ fn trivial_rules() {
     let u = "                  ^  ";
 
     let mut literals = HashSet::new();
-    literals.insert("a".to_owned());
-    literals.insert("b".to_owned());
+    literals.insert(MacroVar::Unbound("a".to_owned()));
+    literals.insert(MacroVar::Unbound("b".to_owned()));
 
     let pattern = vec![
         NsValue::Ident(t2s(t), Ident::new(test_ns_id(), "x".to_owned())),
