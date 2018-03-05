@@ -910,8 +910,13 @@ fn defmacro_of_unsupported_type() {
 
 #[test]
 fn expand_macro_without_matching_rule() {
-    let j = "(defmacro one (macro-rules #{} [[(one) 1]])) (one extra-arg)";
-    let t = "                                             ^^^^^^^^^^^^^^^";
+    let j1 = "(defmacro one (macro-rules #{} [[(one) 1]]))";
+    let t1 = "                                            ";
+    let j2 = "(one extra-arg)";
+    let t2 = "^^^^^^^^^^^^^^^";
+
+    let j = &[j1, j2].join("");
+    let t = &[t1, t2].join("");
 
     let err = Error::NoMacroRule(t2s(t));
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
@@ -919,8 +924,13 @@ fn expand_macro_without_matching_rule() {
 
 #[test]
 fn expand_trivial_macro() {
-    let j = "(defmacro one (macro-rules #{} [[(one) 1]])) (one)";
-    let t = "                                       ^          ";
+    let j1 = "(defmacro one (macro-rules #{} [[(one) 1]]))";
+    let t1 = "                                       ^    ";
+    let j2 = "(one)";
+    let t2 = "     ";
+
+    let j = &[j1, j2].join("");
+    let t = &[t1, t2].join("");
 
     let expected = Expr::Lit(Value::Int(t2s(t), 1));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
@@ -928,8 +938,13 @@ fn expand_trivial_macro() {
 
 #[test]
 fn expand_replacing_macro() {
-    let j = "(defmacro identity (macro-rules #{} [[(identity x) x]])) (identity 1)";
-    let t = "                                                                   ^ ";
+    let j1 = "(defmacro identity (macro-rules #{} [[(identity x) x]]))";
+    let t1 = "                                                        ";
+    let j2 = "(identity 1)";
+    let t2 = "          ^ ";
+
+    let j = &[j1, j2].join("");
+    let t = &[t1, t2].join("");
 
     let expected = Expr::Lit(Value::Int(t2s(t), 1));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
@@ -965,8 +980,13 @@ fn expand_with_matching_literals() {
 
 #[test]
 fn expand_with_non_matching_literals() {
-    let j = "(defmacro for (macro-rules #{in} [[(for x in y) [x y]]])) (for 1 foo 2)";
-    let t = "                                                          ^^^^^^^^^^^^^";
+    let j1 = "(defmacro for (macro-rules #{in} [[(for x in y) [x y]]]))";
+    let t1 = "                                                         ";
+    let j2 = "(for 1 foo 2)";
+    let t2 = "^^^^^^^^^^^^^";
+
+    let j = &[j1, j2].join("");
+    let t = &[t1, t2].join("");
 
     let err = Error::NoMacroRule(t2s(t));
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
@@ -974,8 +994,13 @@ fn expand_with_non_matching_literals() {
 
 #[test]
 fn expand_with_wildcard() {
-    let j = "(defmacro third (macro-rules #{} [[(third _ _ x) x]])) (third 1 2 3)";
-    let t = "                                                                  ^ ";
+    let j1 = "(defmacro third (macro-rules #{} [[(third _ _ x) x]]))";
+    let t1 = "                                                      ";
+    let j2 = "(third 1 2 3)";
+    let t2 = "           ^ ";
+
+    let j = &[j1, j2].join("");
+    let t = &[t1, t2].join("");
 
     let expected = Expr::Lit(Value::Int(t2s(t), 3));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
