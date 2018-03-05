@@ -971,3 +971,12 @@ fn expand_with_non_matching_literals() {
     let err = Error::NoMacroRule(t2s(t));
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
+
+#[test]
+fn expand_with_wildcard() {
+    let j = "(defmacro third (macro-rules #{} [[(third _ _ x) x]])) (third 1 2 3)";
+    let t = "                                                                  ^ ";
+
+    let expected = Expr::Lit(Value::Int(t2s(t), 3));
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}

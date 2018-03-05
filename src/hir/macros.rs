@@ -174,6 +174,11 @@ impl<'a> MatchContext<'a> {
     }
 
     fn visit_ident(&mut self, pattern_ident: &Ident, arg: &NsValue) -> MatchVisitResult {
+        if pattern_ident.name() == "_" {
+            // This is a wildcard
+            return Ok(());
+        }
+
         let pattern_var = MacroVar::from_ident(self.scope, pattern_ident);
 
         if self.literals.contains(&pattern_var) {
