@@ -43,111 +43,103 @@ impl Macro {
     }
 }
 
+pub fn lower_macro_rule(self_ident: &Ident, rule_datum: NsValue) -> Result<Rule> {
+    let (span, mut rule_values) = if let NsValue::Vector(span, vs) = rule_datum {
+        (span, vs)
+    } else {
+        return Err(Error::IllegalArg(
+            rule_datum.span(),
+            "Expected a macro rule vector".to_owned(),
+        ));
+    };
+
+    if rule_values.len() != 2 {
+        return Err(Error::IllegalArg(
+            span,
+            "Expected a macro rule vector with two elements".to_owned(),
+        ));
+    }
+
+    let template = rule_values.pop().unwrap();
+    let pattern_data = rule_values.pop().unwrap();
+
+    let pattern = if let NsValue::List(span, mut vs) = pattern_data {
+        if vs.len() < 1 {
+            return Err(Error::IllegalArg(
+                span,
+                "Macro rule patterns must contain at least the name of the macro".to_owned(),
+            ));
+        }
+
+        match vs.remove(0) {
+            NsValue::Ident(_, ref ident) if ident.name() == self_ident.name() => {}
+            other => {
+                return Err(Error::IllegalArg(
+                    other.span(),
+                    "Macro rule patterns must start with the name of the macro".to_owned(),
+                ));
+            }
+        }
+
+        vs
+    } else {
+        return Err(Error::IllegalArg(
+            pattern_data.span(),
+            "Expected a macro rule pattern list".to_owned(),
+        ));
+    };
+
+    Ok(Rule { pattern, template })
+}
+
 pub fn lower_macro_rules(
     scope: &Scope,
     span: Span,
-    self_ident: Ident,
-    macro_rules_data: &[NsValue],
+    self_ident: &Ident,
+    mut macro_rules_data: Vec<NsValue>,
 ) -> Result<Macro> {
     if macro_rules_data.len() != 2 {
         return Err(Error::WrongArgCount(span, 2));
     }
 
-    let literals_datum = &macro_rules_data[0];
-    let rules_datum = &macro_rules_data[1];
+    let rules_datum = macro_rules_data.pop().unwrap();
+    let literals_datum = macro_rules_data.pop().unwrap();
 
-    let literals = match literals_datum {
-        &NsValue::Set(_, ref vs) => vs.iter()
-            .map(|v| match v {
-                &NsValue::Ident(_, ref ident) => Ok(MacroVar::from_ident(scope, ident)),
-                other => Err(Error::IllegalArg(
-                    other.span(),
-                    "Pattern literal must be a symbol".to_owned(),
-                )),
-            })
-            .collect::<Result<HashSet<MacroVar>>>()?,
-        other => {
-            return Err(Error::IllegalArg(
-                other.span(),
-                "Expected set of pattern literals".to_owned(),
-            ));
-        }
-    };
-
-    let rules_data = match rules_datum {
-        &NsValue::Vector(_, ref vs) => vs,
-        other => {
-            return Err(Error::IllegalArg(
-                other.span(),
-                "Expected a vector of syntax rules".to_owned(),
-            ));
-        }
-    };
-
-    let split_rules_data = rules_data
-        .iter()
-        .map(|rule_datum| match rule_datum {
-            &NsValue::Vector(span, ref vs) => {
-                if vs.len() != 2 {
-                    Err(Error::IllegalArg(
-                        span,
-                        "Expected a macro rule vector with two elements".to_owned(),
-                    ))
+    let literals = if let NsValue::Set(_, vs) = literals_datum {
+        vs.into_iter()
+            .map(|v| {
+                if let NsValue::Ident(_, ref ident) = v {
+                    Ok(MacroVar::from_ident(scope, ident))
                 } else {
-                    Ok((&vs[0], &vs[1]))
+                    Err(Error::IllegalArg(
+                        v.span(),
+                        "Pattern literal must be a symbol".to_owned(),
+                    ))
                 }
-            }
-            other => Err(Error::IllegalArg(
-                other.span(),
-                "Expected a macro rule vector".to_owned(),
-            )),
-        })
-        .collect::<Result<Vec<(&NsValue, &NsValue)>>>()?;
-
-    let rules = split_rules_data
-        .iter()
-        .map(|&(full_pattern_data, template)| {
-            let pattern = match full_pattern_data {
-                &NsValue::List(span, ref vs) => {
-                    if vs.len() < 1 {
-                        return Err(Error::IllegalArg(
-                            span,
-                            "Macro rule patterns must contain at least the name of the macro"
-                                .to_owned(),
-                        ));
-                    }
-
-                    let (first, pattern_params) = vs.split_first().unwrap();
-
-                    match first {
-                        &NsValue::Ident(_, ref ident) if ident.name() == self_ident.name() => {}
-                        other => {
-                            return Err(Error::IllegalArg(
-                                other.span(),
-                                "Macro rule patterns must start with the name of the macro"
-                                    .to_owned(),
-                            ));
-                        }
-                    }
-
-                    pattern_params
-                }
-                other => {
-                    return Err(Error::IllegalArg(
-                        other.span(),
-                        "Expected a macro rule pattern list".to_owned(),
-                    ));
-                }
-            };
-
-            Ok(Rule {
-                pattern: pattern.iter().map(|datum| datum.clone()).collect(),
-                template: template.clone(),
             })
-        })
+            .collect::<Result<HashSet<MacroVar>>>()?
+    } else {
+        return Err(Error::IllegalArg(
+            literals_datum.span(),
+            "Expected set of pattern literals".to_owned(),
+        ));
+    };
+
+    let rules_values = if let NsValue::Vector(_, vs) = rules_datum {
+        vs
+    } else {
+        return Err(Error::IllegalArg(
+            rules_datum.span(),
+            "Expected a vector of syntax rules".to_owned(),
+        ));
+    };
+
+    let rules = rules_values
+        .into_iter()
+        .map(|rule_datum| lower_macro_rule(self_ident, rule_datum))
         .collect::<Result<Vec<Rule>>>()?;
 
-    Ok(Macro::new(self_ident, literals, rules))
+    Ok(Macro::new(self_ident.clone(), literals, rules))
 }
 
 struct MatchData {
@@ -332,12 +324,7 @@ fn macro_rules_for_str(data_str: &str) -> Result<Macro> {
         .map(|datum| NsValue::from_value(datum, test_ns_id()))
         .collect::<Vec<NsValue>>();
 
-    lower_macro_rules(
-        &Scope::new_empty(),
-        full_span,
-        self_ident(),
-        test_ns_data.as_slice(),
-    )
+    lower_macro_rules(&Scope::new_empty(), full_span, &self_ident(), test_ns_data)
 }
 
 #[test]

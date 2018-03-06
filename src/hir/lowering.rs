@@ -101,30 +101,28 @@ impl<'ccx> LoweringContext<'ccx> {
         sym_datum: NsValue,
         transformer_spec: NsValue,
     ) -> Result<()> {
-        let self_ident = match sym_datum {
-            NsValue::Ident(_, ident) => ident.clone(),
-            other => {
-                return Err(Error::ExpectedSymbol(other.span()));
-            }
+        let self_ident = if let NsValue::Ident(_, ident) = sym_datum {
+            ident
+        } else {
+            return Err(Error::ExpectedSymbol(sym_datum.span()));
         };
 
-        let macro_rules_data = match transformer_spec {
-            NsValue::List(span, ref vs) => match vs.first() {
-                Some(&NsValue::Ident(_, ref ident)) if ident.name() == "macro-rules" => {
-                    let (_, rest) = vs.split_first().unwrap();
-                    rest
-                }
+        let macro_rules_data = if let NsValue::List(span, mut vs) = transformer_spec {
+            match vs.first() {
+                Some(&NsValue::Ident(_, ref ident)) if ident.name() == "macro-rules" => {}
                 _ => return Err(Error::IllegalArg(span, "Unsupported macro type".to_owned())),
-            },
-            other => {
-                return Err(Error::IllegalArg(
-                    other.span(),
-                    "Macro specification must be a list".to_owned(),
-                ))
             }
+
+            vs.remove(0);
+            vs
+        } else {
+            return Err(Error::IllegalArg(
+                transformer_spec.span(),
+                "Macro specification must be a list".to_owned(),
+            ));
         };
 
-        let mac = lower_macro_rules(scope, span, self_ident.clone(), macro_rules_data)?;
+        let mac = lower_macro_rules(scope, span, &self_ident, macro_rules_data)?;
 
         let macro_id = MacroId::new(self.macros.len());
         self.macros.push(mac);
