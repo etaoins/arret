@@ -1003,3 +1003,17 @@ fn expand_with_wildcard() {
     let expected = Expr::Lit(Value::Int(t2s(t), 3));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
+
+#[test]
+fn expand_recursive() {
+    let j1 = "(defmacro rec (macro-rules #{} [[(rec) 7] [(rec _) (rec)]]))";
+    let t1 = "                                       ^                    ";
+    let j2 = "(rec)";
+    let t2 = "     ";
+
+    let j = &[j1, j2].join("");
+    let t = &[t1, t2].join("");
+
+    let expected = Expr::Lit(Value::Int(t2s(t), 7));
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
