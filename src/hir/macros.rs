@@ -191,6 +191,10 @@ impl<'a> MatchContext<'a> {
     fn visit_datum(&mut self, pattern: &NsValue, arg: &NsValue) -> MatchVisitResult {
         match (pattern, arg) {
             (&NsValue::Ident(_, ref pattern_ident), arg) => self.visit_ident(pattern_ident, arg),
+            (&NsValue::List(_, ref pvs), &NsValue::List(_, ref avs)) => self.visit_slice(pvs, avs),
+            (&NsValue::Vector(_, ref pvs), &NsValue::Vector(_, ref avs)) => {
+                self.visit_slice(pvs, avs)
+            }
             _ => Err(()),
         }
     }

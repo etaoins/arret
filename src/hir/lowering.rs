@@ -1017,3 +1017,31 @@ fn expand_recursive() {
     let expected = Expr::Lit(Value::Int(t2s(t), 7));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
+
+#[test]
+fn expand_fixed_list_rule() {
+    let j1 = "(defmacro ret-second (macro-rules #{} [[(ret-second (_ second _)) second]]))";
+    let t1 = "                                                                            ";
+    let j2 = "(ret-second (1 2 3))";
+    let t2 = "               ^    ";
+
+    let j = &[j1, j2].join("");
+    let t = &[t1, t2].join("");
+
+    let expected = Expr::Lit(Value::Int(t2s(t), 2));
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
+
+#[test]
+fn expand_fixed_vector_rule() {
+    let j1 = "(defmacro ret-third (macro-rules #{} [[(ret-third [_ _ third]) third]]))";
+    let t1 = "                                                                        ";
+    let j2 = "(ret-third [1 2 3])";
+    let t2 = "                ^  ";
+
+    let j = &[j1, j2].join("");
+    let t = &[t1, t2].join("");
+
+    let expected = Expr::Lit(Value::Int(t2s(t), 3));
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
