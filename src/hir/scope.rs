@@ -66,8 +66,13 @@ impl Scope {
 
     // This is used to rebind variables to fresh locations when expanding macros
     pub fn rebind(&mut self, old_ident: &Ident, new_ident: &Ident) {
-        let old_binding = self.bindings[old_ident].clone();
-        self.bindings.insert(new_ident.clone(), old_binding);
+        let new_binding = if let Some(old_binding) = self.bindings.get(old_ident) {
+            old_binding.clone()
+        } else {
+            return;
+        };
+
+        self.bindings.insert(new_ident.clone(), new_binding);
     }
 
     pub fn exports(&self) -> &HashMap<Ident, Span> {
