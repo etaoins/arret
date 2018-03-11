@@ -1,9 +1,13 @@
+mod matcher;
+mod expander;
+
 use std::collections::{HashMap, HashSet};
-use std::result;
 
 use syntax::span::Span;
-use hir::scope::{Binding, Ident, NsId, NsIdAllocator, NsValue, Primitive, Scope};
+use hir::scope::{Binding, Ident, NsIdAllocator, NsValue, Primitive, Scope};
 use hir::error::{Error, Result};
+use hir::macros::matcher::MatchContext;
+use hir::macros::expander::ExpandContext;
 
 #[derive(PartialEq, Eq, Debug, Hash)]
 pub enum MacroVar {
@@ -50,6 +54,22 @@ pub struct Rule {
 pub struct Macro {
     special_vars: SpecialVars,
     rules: Vec<Rule>,
+}
+
+#[derive(Debug)]
+pub struct MatchData {
+    vars: HashMap<MacroVar, NsValue>,
+    // The outside vector is the subpatterns; the inside vector contains the zero or more matches
+    subpatterns: Vec<Vec<MatchData>>,
+}
+
+impl MatchData {
+    fn new() -> MatchData {
+        MatchData {
+            vars: HashMap::new(),
+            subpatterns: vec![],
+        }
+    }
 }
 
 impl Macro {
@@ -165,226 +185,6 @@ pub fn lower_macro_rules(
     Ok(Macro::new(special_vars, rules))
 }
 
-#[derive(Debug)]
-struct MatchData {
-    vars: HashMap<MacroVar, NsValue>,
-    // The outside vector is the subpatterns; the inside vector contains the zero or more matches
-    subpatterns: Vec<Vec<MatchData>>,
-}
-
-impl MatchData {
-    fn new() -> MatchData {
-        MatchData {
-            vars: HashMap::new(),
-            subpatterns: vec![],
-        }
-    }
-}
-
-struct MatchContext<'a> {
-    scope: &'a Scope,
-    special_vars: &'a SpecialVars,
-    match_data: MatchData,
-}
-
-type MatchVisitResult = result::Result<(), ()>;
-
-impl<'a> MatchContext<'a> {
-    fn new(scope: &'a Scope, special_vars: &'a SpecialVars) -> MatchContext<'a> {
-        MatchContext {
-            scope,
-            special_vars,
-            match_data: MatchData::new(),
-        }
-    }
-
-    fn visit_ident(&mut self, pattern_ident: &Ident, arg: &NsValue) -> MatchVisitResult {
-        if pattern_ident.name() == "_" {
-            // This is a wildcard
-            return Ok(());
-        }
-
-        let pattern_var = MacroVar::from_ident(self.scope, pattern_ident);
-
-        if self.special_vars.is_literal(&pattern_var) {
-            // The arg must be the exact same pattern variable
-            if let &NsValue::Ident(_, ref arg_ident) = arg {
-                if pattern_var == MacroVar::from_ident(self.scope, arg_ident) {
-                    return Ok(());
-                }
-            }
-
-            Err(())
-        } else {
-            self.match_data.vars.insert(pattern_var, arg.clone());
-            Ok(())
-        }
-    }
-
-    // TODO: Floats, sets, maps
-    fn visit_datum(&mut self, pattern: &NsValue, arg: &NsValue) -> MatchVisitResult {
-        match (pattern, arg) {
-            (&NsValue::Ident(_, ref pattern_ident), arg) => self.visit_ident(pattern_ident, arg),
-            (&NsValue::List(_, ref pvs), &NsValue::List(_, ref avs)) => self.visit_slice(pvs, avs),
-            (&NsValue::Vector(_, ref pvs), &NsValue::Vector(_, ref avs)) => {
-                self.visit_slice(pvs, avs)
-            }
-            (&NsValue::Bool(_, pv), &NsValue::Bool(_, av)) if pv == av => Ok(()),
-            (&NsValue::Int(_, pv), &NsValue::Int(_, av)) if pv == av => Ok(()),
-            (&NsValue::Char(_, pv), &NsValue::Char(_, av)) if pv == av => Ok(()),
-            (&NsValue::String(_, ref pv), &NsValue::String(_, ref av)) if pv == av => Ok(()),
-            _ => Err(()),
-        }
-    }
-
-    fn visit_zero_or_more(&mut self, pattern: &NsValue, args: &[NsValue]) -> MatchVisitResult {
-        let submatch_data = args.iter()
-            .map(|arg| {
-                let mut subcontext = MatchContext {
-                    scope: self.scope,
-                    special_vars: self.special_vars,
-                    match_data: MatchData::new(),
-                };
-
-                subcontext.visit_datum(pattern, arg)?;
-                Ok(subcontext.match_data)
-            })
-            .collect::<result::Result<Vec<MatchData>, ()>>()?;
-
-        self.match_data.subpatterns.push(submatch_data);
-        Ok(())
-    }
-
-    fn visit_slice(&mut self, mut patterns: &[NsValue], mut args: &[NsValue]) -> MatchVisitResult {
-        loop {
-            match (patterns.first(), args.first()) {
-                (Some(pattern), Some(arg)) => {
-                    if let Some(&NsValue::Ident(_, ref next_ident)) = patterns.get(1) {
-                        let next_var = MacroVar::from_ident(self.scope, next_ident);
-
-                        if self.special_vars.is_zero_or_more(&next_var) {
-                            return self.visit_zero_or_more(pattern, args);
-                        }
-                    }
-
-                    self.visit_datum(pattern, arg)?
-                }
-                (None, None) => {
-                    return Ok(());
-                }
-                _ => return Err(()),
-            }
-
-            patterns = &patterns[1..];
-            args = &args[1..];
-        }
-    }
-
-    fn visit_rule(mut self, rule: &Rule, arg_data: &[NsValue]) -> result::Result<MatchData, ()> {
-        self.visit_slice(rule.pattern.as_slice(), arg_data)?;
-        Ok(self.match_data)
-    }
-}
-
-struct ExpandContext<'a> {
-    ns_id_allocator: &'a mut NsIdAllocator,
-    scope: Scope,
-    special_vars: &'a SpecialVars,
-    ns_mapping: HashMap<NsId, NsId>,
-}
-
-impl<'a> ExpandContext<'a> {
-    fn new(
-        ns_id_allocator: &'a mut NsIdAllocator,
-        scope: &Scope,
-        special_vars: &'a SpecialVars,
-    ) -> ExpandContext<'a> {
-        ExpandContext {
-            ns_id_allocator,
-            scope: Scope::new_child(scope),
-            special_vars,
-            ns_mapping: HashMap::new(),
-        }
-    }
-
-    fn expand_ident(&mut self, match_data: &MatchData, span: Span, ident: &Ident) -> NsValue {
-        let macro_var = MacroVar::from_ident(&self.scope, ident);
-
-        if let Some(replacement) = match_data.vars.get(&macro_var) {
-            return replacement.clone();
-        }
-
-        // TODO: Always allocate an NsId even if we never use it to get around the borrow checker
-        let alloced_ns_id = self.ns_id_allocator.alloc();
-
-        // Rescope this ident
-        let old_ns_id = ident.ns_id();
-        let new_ns_id = self.ns_mapping.entry(old_ns_id).or_insert(alloced_ns_id);
-
-        let new_ident = ident.with_ns_id(*new_ns_id);
-        self.scope.rebind(ident, &new_ident);
-
-        NsValue::Ident(span, new_ident)
-    }
-
-    fn expand_zero_or_more(&mut self, match_data: &MatchData, template: &NsValue) -> Vec<NsValue> {
-        // TODO: Find correct subpattern
-        let matches = &match_data.subpatterns[0];
-        println!("{:?}", matches);
-
-        matches
-            .iter()
-            .map(|m| self.expand_datum(m, template))
-            .collect()
-    }
-
-    fn expand_slice(&mut self, match_data: &MatchData, mut templates: &[NsValue]) -> Vec<NsValue> {
-        let mut result: Vec<NsValue> = vec![];
-
-        loop {
-            if templates.is_empty() {
-                break;
-            }
-
-            if let Some(&NsValue::Ident(_, ref next_ident)) = templates.get(1) {
-                let next_var = MacroVar::from_ident(&self.scope, next_ident);
-
-                if self.special_vars.is_zero_or_more(&next_var) {
-                    let mut expanded = self.expand_zero_or_more(match_data, &templates[0]);
-                    result.append(&mut expanded);
-
-                    // Skip the ellipsis as well
-                    templates = &templates[2..];
-                    continue;
-                }
-            }
-
-            let expanded = self.expand_datum(match_data, &templates[0]);
-            result.push(expanded);
-
-            templates = &templates[1..];
-        }
-
-        result
-    }
-
-    fn expand_datum(&mut self, match_data: &MatchData, template: &NsValue) -> NsValue {
-        match template {
-            &NsValue::Ident(span, ref ident) => self.expand_ident(match_data, span, ident),
-            &NsValue::List(span, ref vs) => NsValue::List(span, self.expand_slice(match_data, vs)),
-            &NsValue::Vector(span, ref vs) => {
-                NsValue::Vector(span, self.expand_slice(match_data, vs))
-            }
-            other => other.clone(),
-        }
-    }
-
-    fn expand_template(mut self, match_data: &MatchData, template: &NsValue) -> (Scope, NsValue) {
-        let expanded_datum = self.expand_datum(match_data, template);
-        (self.scope, expanded_datum)
-    }
-}
-
 pub fn expand_macro(
     ns_id_allocator: &mut NsIdAllocator,
     scope: &Scope,
@@ -405,6 +205,8 @@ pub fn expand_macro(
     Err(Error::NoMacroRule(span))
 }
 
+#[cfg(test)]
+use hir::scope::NsId;
 #[cfg(test)]
 use syntax::parser::data_from_str;
 #[cfg(test)]
