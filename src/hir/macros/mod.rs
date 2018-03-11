@@ -4,10 +4,10 @@ mod expander;
 use std::collections::{HashMap, HashSet};
 
 use syntax::span::Span;
-use hir::scope::{Binding, Ident, NsIdAllocator, NsValue, Prim, Scope};
+use hir::scope::{Binding, Ident, NsIdAlloc, NsValue, Prim, Scope};
 use hir::error::{Error, Result};
-use hir::macros::matcher::MatchContext;
-use hir::macros::expander::ExpandContext;
+use hir::macros::matcher::match_rule;
+use hir::macros::expander::expand_rule;
 
 #[derive(PartialEq, Eq, Debug, Hash)]
 pub enum MacroVar {
@@ -190,19 +190,23 @@ pub fn lower_macro_rules(
 }
 
 pub fn expand_macro(
-    ns_id_allocator: &mut NsIdAllocator,
+    ns_id_alloc: &mut NsIdAlloc,
     scope: &Scope,
     span: Span,
     mac: &Macro,
     arg_data: Vec<NsValue>,
 ) -> Result<(Scope, NsValue)> {
     for rule in mac.rules.iter() {
-        let mut mcx = MatchContext::new(scope, &mac.special_vars);
+        let match_result = match_rule(scope, &mac.special_vars, rule, arg_data.as_slice());
 
-        if let Ok(match_data) = mcx.visit_rule(rule, arg_data.as_slice()) {
-            let ecx = ExpandContext::new(ns_id_allocator, scope, &mac.special_vars);
-
-            return Ok(ecx.expand_template(&match_data, &rule.template));
+        if let Ok(match_data) = match_result {
+            return Ok(expand_rule(
+                ns_id_alloc,
+                scope,
+                &mac.special_vars,
+                &match_data,
+                &rule.template,
+            ));
         }
     }
 

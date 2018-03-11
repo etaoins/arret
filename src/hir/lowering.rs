@@ -3,7 +3,7 @@ use std::io::Read;
 
 use hir::{Cond, Expr, Fun, Var, VarId};
 use hir::loader::{load_library_data, load_module_data, LibraryName};
-use hir::scope::{Binding, Ident, MacroId, NsId, NsIdAllocator, NsValue, Prim, Scope};
+use hir::scope::{Binding, Ident, MacroId, NsId, NsIdAlloc, NsValue, Prim, Scope};
 use hir::module::Module;
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::error::{Error, Result};
@@ -13,7 +13,7 @@ use ctx::CompileContext;
 
 pub struct LoweringContext<'ccx> {
     curr_var_id: usize,
-    ns_id_allocator: NsIdAllocator,
+    ns_id_alloc: NsIdAlloc,
     loaded_libraries: BTreeMap<LibraryName, Module>,
     macros: Vec<Macro>,
     ccx: &'ccx mut CompileContext,
@@ -45,7 +45,7 @@ macro_rules! lower_expr_impl {
                         Some(Binding::Macro(macro_id)) => {
                             let (mut expanded_scope, expanded_datum) = {
                                 let mac = &$self.macros[macro_id.to_usize()];
-                                expand_macro(&mut $self.ns_id_allocator, $scope, span, mac, arg_data)?
+                                expand_macro(&mut $self.ns_id_alloc, $scope, span, mac, arg_data)?
                             };
 
                             // This will recurse
@@ -82,7 +82,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
         LoweringContext {
             curr_var_id: 0,
-            ns_id_allocator: NsIdAllocator::new(),
+            ns_id_alloc: NsIdAlloc::new(),
             loaded_libraries,
             macros: vec![],
             ccx,
@@ -436,7 +436,7 @@ impl<'ccx> LoweringContext<'ccx> {
     }
 
     fn lower_module(&mut self, data: Vec<Value>) -> Result<Module> {
-        let ns_id = self.ns_id_allocator.alloc();
+        let ns_id = self.ns_id_alloc.alloc();
         let mut scope = Scope::new_empty();
 
         // The default scope only consists of (import)

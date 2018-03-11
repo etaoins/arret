@@ -1,23 +1,23 @@
-use hir::scope::{Ident, NsId, NsIdAllocator, NsValue, Scope};
+use hir::scope::{Ident, NsId, NsIdAlloc, NsValue, Scope};
 use hir::macros::{MacroVar, MatchData, SpecialVars};
 use std::collections::HashMap;
 use syntax::span::Span;
 
-pub struct ExpandContext<'a> {
-    ns_id_allocator: &'a mut NsIdAllocator,
+struct ExpandContext<'a> {
+    ns_id_alloc: &'a mut NsIdAlloc,
     scope: Scope,
     special_vars: &'a SpecialVars,
     ns_mapping: HashMap<NsId, NsId>,
 }
 
 impl<'a> ExpandContext<'a> {
-    pub fn new(
-        ns_id_allocator: &'a mut NsIdAllocator,
+    fn new(
+        ns_id_alloc: &'a mut NsIdAlloc,
         scope: &Scope,
         special_vars: &'a SpecialVars,
     ) -> ExpandContext<'a> {
         ExpandContext {
-            ns_id_allocator,
+            ns_id_alloc,
             scope: Scope::new_child(scope),
             special_vars,
             ns_mapping: HashMap::new(),
@@ -32,7 +32,7 @@ impl<'a> ExpandContext<'a> {
         }
 
         // TODO: Always allocate an NsId even if we never use it to get around the borrow checker
-        let alloced_ns_id = self.ns_id_allocator.alloc();
+        let alloced_ns_id = self.ns_id_alloc.alloc();
 
         // Rescope this ident
         let old_ns_id = ident.ns_id();
@@ -92,12 +92,19 @@ impl<'a> ExpandContext<'a> {
         }
     }
 
-    pub fn expand_template(
-        mut self,
-        match_data: &MatchData,
-        template: &NsValue,
-    ) -> (Scope, NsValue) {
+    fn expand_template(mut self, match_data: &MatchData, template: &NsValue) -> (Scope, NsValue) {
         let expanded_datum = self.expand_datum(match_data, template);
         (self.scope, expanded_datum)
     }
+}
+
+pub fn expand_rule(
+    ns_id_alloc: &mut NsIdAlloc,
+    scope: &Scope,
+    special_vars: &SpecialVars,
+    match_data: &MatchData,
+    template: &NsValue,
+) -> (Scope, NsValue) {
+    let mcx = ExpandContext::new(ns_id_alloc, scope, special_vars);
+    mcx.expand_template(match_data, template)
 }

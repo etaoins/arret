@@ -3,16 +3,17 @@ use std::result;
 use hir::scope::{Ident, NsValue, Scope};
 use hir::macros::{MacroVar, MatchData, Rule, SpecialVars};
 
-pub struct MatchContext<'a> {
+struct MatchContext<'a> {
     scope: &'a Scope,
     special_vars: &'a SpecialVars,
     match_data: MatchData,
 }
 
+type Result<T> = result::Result<T, ()>;
 type MatchVisitResult = result::Result<(), ()>;
 
 impl<'a> MatchContext<'a> {
-    pub fn new(scope: &'a Scope, special_vars: &'a SpecialVars) -> MatchContext<'a> {
+    fn new(scope: &'a Scope, special_vars: &'a SpecialVars) -> MatchContext<'a> {
         MatchContext {
             scope,
             special_vars,
@@ -113,12 +114,18 @@ impl<'a> MatchContext<'a> {
         }
     }
 
-    pub fn visit_rule(
-        mut self,
-        rule: &Rule,
-        arg_data: &[NsValue],
-    ) -> result::Result<MatchData, ()> {
+    fn visit_rule(mut self, rule: &Rule, arg_data: &[NsValue]) -> Result<MatchData> {
         self.visit_slice(rule.pattern.as_slice(), arg_data)?;
         Ok(self.match_data)
     }
+}
+
+pub fn match_rule(
+    scope: &Scope,
+    special_vars: &SpecialVars,
+    rule: &Rule,
+    arg_data: &[NsValue],
+) -> Result<MatchData> {
+    let mcx = MatchContext::new(scope, special_vars);
+    mcx.visit_rule(rule, arg_data)
 }

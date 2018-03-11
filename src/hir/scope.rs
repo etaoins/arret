@@ -217,13 +217,13 @@ impl NsValue {
     }
 }
 
-pub struct NsIdAllocator {
+pub struct NsIdAlloc {
     curr_ns_id: usize,
 }
 
-impl NsIdAllocator {
-    pub fn new() -> NsIdAllocator {
-        NsIdAllocator { curr_ns_id: 0 }
+impl NsIdAlloc {
+    pub fn new() -> NsIdAlloc {
+        NsIdAlloc { curr_ns_id: 0 }
     }
 
     pub fn alloc(&mut self) -> NsId {
