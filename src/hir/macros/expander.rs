@@ -58,11 +58,7 @@ impl<'a> ExpandContext<'a> {
     fn expand_slice(&mut self, match_data: &MatchData, mut templates: &[NsValue]) -> Vec<NsValue> {
         let mut result: Vec<NsValue> = vec![];
 
-        loop {
-            if templates.is_empty() {
-                break;
-            }
-
+        while !templates.is_empty() {
             if let Some(&NsValue::Ident(_, ref next_ident)) = templates.get(1) {
                 let next_var = MacroVar::from_ident(&self.scope, next_ident);
 
