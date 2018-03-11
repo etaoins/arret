@@ -85,7 +85,20 @@ impl<'a> MatchContext<'a> {
                         let next_var = MacroVar::from_ident(self.scope, next_ident);
 
                         if self.special_vars.is_zero_or_more(&next_var) {
-                            return self.visit_zero_or_more(pattern, args);
+                            let rest_patterns_len = patterns.len() - 2;
+
+                            if args.len() < rest_patterns_len {
+                                // Cannot match
+                                return Err(());
+                            }
+
+                            let (zero_or_more_args, rest_args) =
+                                args.split_at(args.len() - rest_patterns_len);
+
+                            self.visit_zero_or_more(pattern, zero_or_more_args)?;
+                            patterns = &patterns[2..];
+                            args = rest_args;
+                            continue;
                         }
                     }
 

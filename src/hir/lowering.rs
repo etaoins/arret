@@ -1085,3 +1085,33 @@ fn expand_terminal_zero_or_more_match() {
     ));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
+
+#[test]
+fn expand_middle_zero_or_more_match() {
+    let j1 = "(defmacro mid (macro-rules #{} [[(mid [_ vals ... _]) [true vals ... false]]]))";
+    let t1 = "                                                      ^^^^^^^^^^^^^^^^^^^^^    ";
+    let u1 = "                                                       ^^^^                    ";
+    let v1 = "                                                                     ^^^^^     ";
+    let sp = "                                                                               ";
+    let j2 = "(mid [1 2 3 4])";
+    let w2 = "        ^      ";
+    let x2 = "          ^    ";
+
+    let j = &[j1, j2].join("");
+    let t = t1;
+    let u = u1;
+    let v = v1;
+    let w = &[sp, w2].join("");
+    let x = &[sp, x2].join("");
+
+    let expected = Expr::Lit(Value::Vector(
+        t2s(t),
+        vec![
+            Value::Bool(t2s(u), true),
+            Value::Int(t2s(w), 2),
+            Value::Int(t2s(x), 3),
+            Value::Bool(t2s(v), false),
+        ],
+    ));
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
