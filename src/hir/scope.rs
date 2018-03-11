@@ -103,7 +103,9 @@ primitives!(
     ("import", Import),
     ("export", Export),
     ("defmacro", DefMacro),
-    ("...", Ellipsis)
+    ("...", Ellipsis),
+    ("_", Wildcard),
+    ("macro-rules", MacroRules)
 );
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]

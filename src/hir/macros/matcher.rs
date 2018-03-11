@@ -1,6 +1,6 @@
 use std::result;
 
-use hir::scope::{Ident, NsValue, Scope};
+use hir::scope::{Binding, Ident, NsValue, Primitive, Scope};
 use hir::macros::{MacroVar, MatchData, Rule, SpecialVars};
 
 pub struct MatchContext<'a> {
@@ -21,12 +21,12 @@ impl<'a> MatchContext<'a> {
     }
 
     fn visit_ident(&mut self, pattern_ident: &Ident, arg: &NsValue) -> MatchVisitResult {
-        if pattern_ident.name() == "_" {
+        let pattern_var = MacroVar::from_ident(self.scope, pattern_ident);
+
+        if pattern_var == MacroVar::Bound(Binding::Primitive(Primitive::Wildcard)) {
             // This is a wildcard
             return Ok(());
         }
-
-        let pattern_var = MacroVar::from_ident(self.scope, pattern_ident);
 
         if self.special_vars.is_literal(&pattern_var) {
             // The arg must be the exact same pattern variable

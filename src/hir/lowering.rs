@@ -109,7 +109,8 @@ impl<'ccx> LoweringContext<'ccx> {
 
         let macro_rules_data = if let NsValue::List(span, mut vs) = transformer_spec {
             match vs.first() {
-                Some(&NsValue::Ident(_, ref ident)) if ident.name() == "macro-rules" => {}
+                Some(&NsValue::Ident(_, ref ident))
+                    if scope.get(ident) == Some(Binding::Primitive(Primitive::MacroRules)) => {}
                 _ => return Err(Error::IllegalArg(span, "Unsupported macro type".to_owned())),
             }
 
@@ -265,7 +266,9 @@ impl<'ccx> LoweringContext<'ccx> {
                     },
                 ))
             }
-            &Primitive::Ellipsis => Err(Error::PrimitiveRef(span)),
+            &Primitive::Ellipsis | &Primitive::Wildcard | &Primitive::MacroRules => {
+                Err(Error::PrimitiveRef(span))
+            }
         }
     }
 
