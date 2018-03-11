@@ -31,6 +31,10 @@ pub struct SpecialVars {
 }
 
 impl SpecialVars {
+    fn is_wildcard(&self, var: &MacroVar) -> bool {
+        *var == MacroVar::Bound(Binding::Prim(Prim::Wildcard))
+    }
+
     fn is_zero_or_more(&self, var: &MacroVar) -> bool {
         if let Some(ref zero_or_more) = self.zero_or_more {
             return (zero_or_more == var) && !self.is_literal(var);
