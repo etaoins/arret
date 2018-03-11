@@ -8,7 +8,7 @@ use reporting::{Level, Reportable};
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
-    PrimitiveRef(Span, String),
+    PrimitiveRef(Span),
     MacroRef(Span, String),
     UnboundSymbol(Span, String),
     WrongArgCount(Span, usize),
@@ -31,9 +31,7 @@ impl Reportable for Error {
 
     fn message(&self) -> String {
         match *self {
-            Error::PrimitiveRef(_, ref sym) => {
-                format!("cannot take the value of a primitive: `{}`", sym)
-            }
+            Error::PrimitiveRef(_) => "cannot take the value of a primitive".to_owned(),
             Error::MacroRef(_, ref sym) => format!("cannot take the value of macro: `{}`", sym),
             Error::UnboundSymbol(_, ref sym) => format!("unable to resolve symbol: `{}`", sym),
             Error::WrongArgCount(_, expected) => format!("wrong arg count; expected {}", expected),
@@ -50,7 +48,7 @@ impl Reportable for Error {
 
     fn span(&self) -> Option<Span> {
         match *self {
-            Error::PrimitiveRef(span, _) => Some(span),
+            Error::PrimitiveRef(span) => Some(span),
             Error::MacroRef(span, _) => Some(span),
             Error::UnboundSymbol(span, _) => Some(span),
             Error::WrongArgCount(span, _) => Some(span),

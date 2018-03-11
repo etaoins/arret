@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::result;
 
 use syntax::span::Span;
-use hir::scope::{Binding, Ident, NsId, NsIdAllocator, NsValue, Scope};
+use hir::scope::{Binding, Ident, NsId, NsIdAllocator, NsValue, Primitive, Scope};
 use hir::error::{Error, Result};
 
 #[derive(PartialEq, Eq, Debug, Hash)]
@@ -21,6 +21,26 @@ impl MacroVar {
 }
 
 #[derive(PartialEq, Debug)]
+pub struct SpecialVars {
+    zero_or_more: Option<MacroVar>,
+    literals: HashSet<MacroVar>,
+}
+
+impl SpecialVars {
+    fn is_zero_or_more(&self, var: &MacroVar) -> bool {
+        if let Some(ref zero_or_more) = self.zero_or_more {
+            return (zero_or_more == var) && !self.is_literal(var);
+        }
+
+        false
+    }
+
+    fn is_literal(&self, var: &MacroVar) -> bool {
+        self.literals.contains(var)
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub struct Rule {
     pattern: Vec<NsValue>,
     template: NsValue,
@@ -28,16 +48,14 @@ pub struct Rule {
 
 #[derive(PartialEq, Debug)]
 pub struct Macro {
-    self_ident: Ident,
-    literals: HashSet<MacroVar>,
+    special_vars: SpecialVars,
     rules: Vec<Rule>,
 }
 
 impl Macro {
-    pub fn new(self_ident: Ident, literals: HashSet<MacroVar>, rules: Vec<Rule>) -> Macro {
+    pub fn new(special_vars: SpecialVars, rules: Vec<Rule>) -> Macro {
         Macro {
-            self_ident,
-            literals,
+            special_vars,
             rules,
         }
     }
@@ -134,34 +152,49 @@ pub fn lower_macro_rules(
         ));
     };
 
+    let special_vars = SpecialVars {
+        zero_or_more: Some(MacroVar::Bound(Binding::Primitive(Primitive::Ellipsis))),
+        literals,
+    };
+
     let rules = rules_values
         .into_iter()
         .map(|rule_datum| lower_macro_rule(self_ident, rule_datum))
         .collect::<Result<Vec<Rule>>>()?;
 
-    Ok(Macro::new(self_ident.clone(), literals, rules))
+    Ok(Macro::new(special_vars, rules))
 }
 
+#[derive(Debug)]
 struct MatchData {
     vars: HashMap<MacroVar, NsValue>,
+    // The outside vector is the subpatterns; the inside vector contains the zero or more matches
+    subpatterns: Vec<Vec<MatchData>>,
+}
+
+impl MatchData {
+    fn new() -> MatchData {
+        MatchData {
+            vars: HashMap::new(),
+            subpatterns: vec![],
+        }
+    }
 }
 
 struct MatchContext<'a> {
     scope: &'a Scope,
-    literals: &'a HashSet<MacroVar>,
+    special_vars: &'a SpecialVars,
     match_data: MatchData,
 }
 
 type MatchVisitResult = result::Result<(), ()>;
 
 impl<'a> MatchContext<'a> {
-    fn new(scope: &'a Scope, literals: &'a HashSet<MacroVar>) -> MatchContext<'a> {
+    fn new(scope: &'a Scope, special_vars: &'a SpecialVars) -> MatchContext<'a> {
         MatchContext {
             scope,
-            literals,
-            match_data: MatchData {
-                vars: HashMap::new(),
-            },
+            special_vars,
+            match_data: MatchData::new(),
         }
     }
 
@@ -173,7 +206,7 @@ impl<'a> MatchContext<'a> {
 
         let pattern_var = MacroVar::from_ident(self.scope, pattern_ident);
 
-        if self.literals.contains(&pattern_var) {
+        if self.special_vars.is_literal(&pattern_var) {
             // The arg must be the exact same pattern variable
             if let &NsValue::Ident(_, ref arg_ident) = arg {
                 if pattern_var == MacroVar::from_ident(self.scope, arg_ident) {
@@ -204,10 +237,38 @@ impl<'a> MatchContext<'a> {
         }
     }
 
+    fn visit_zero_or_more(&mut self, pattern: &NsValue, args: &[NsValue]) -> MatchVisitResult {
+        let submatch_data = args.iter()
+            .map(|arg| {
+                let mut subcontext = MatchContext {
+                    scope: self.scope,
+                    special_vars: self.special_vars,
+                    match_data: MatchData::new(),
+                };
+
+                subcontext.visit_datum(pattern, arg)?;
+                Ok(subcontext.match_data)
+            })
+            .collect::<result::Result<Vec<MatchData>, ()>>()?;
+
+        self.match_data.subpatterns.push(submatch_data);
+        Ok(())
+    }
+
     fn visit_slice(&mut self, mut patterns: &[NsValue], mut args: &[NsValue]) -> MatchVisitResult {
         loop {
             match (patterns.first(), args.first()) {
-                (Some(pattern), Some(arg)) => self.visit_datum(pattern, arg)?,
+                (Some(pattern), Some(arg)) => {
+                    if let Some(&NsValue::Ident(_, ref next_ident)) = patterns.get(1) {
+                        let next_var = MacroVar::from_ident(self.scope, next_ident);
+
+                        if self.special_vars.is_zero_or_more(&next_var) {
+                            return self.visit_zero_or_more(pattern, args);
+                        }
+                    }
+
+                    self.visit_datum(pattern, arg)?
+                }
                 (None, None) => {
                     return Ok(());
                 }
@@ -228,7 +289,7 @@ impl<'a> MatchContext<'a> {
 struct ExpandContext<'a> {
     ns_id_allocator: &'a mut NsIdAllocator,
     scope: Scope,
-    match_data: MatchData,
+    special_vars: &'a SpecialVars,
     ns_mapping: HashMap<NsId, NsId>,
 }
 
@@ -236,20 +297,20 @@ impl<'a> ExpandContext<'a> {
     fn new(
         ns_id_allocator: &'a mut NsIdAllocator,
         scope: &Scope,
-        match_data: MatchData,
+        special_vars: &'a SpecialVars,
     ) -> ExpandContext<'a> {
         ExpandContext {
             ns_id_allocator,
             scope: Scope::new_child(scope),
-            match_data,
+            special_vars,
             ns_mapping: HashMap::new(),
         }
     }
 
-    fn expand_ident(&mut self, span: Span, ident: &Ident) -> NsValue {
+    fn expand_ident(&mut self, match_data: &MatchData, span: Span, ident: &Ident) -> NsValue {
         let macro_var = MacroVar::from_ident(&self.scope, ident);
 
-        if let Some(replacement) = self.match_data.vars.get(&macro_var) {
+        if let Some(replacement) = match_data.vars.get(&macro_var) {
             return replacement.clone();
         }
 
@@ -266,21 +327,60 @@ impl<'a> ExpandContext<'a> {
         NsValue::Ident(span, new_ident)
     }
 
-    fn expand_datum(&mut self, template: &NsValue) -> NsValue {
-        match template {
-            &NsValue::Ident(span, ref ident) => self.expand_ident(span, ident),
-            &NsValue::List(span, ref vs) => {
-                NsValue::List(span, vs.iter().map(|v| self.expand_datum(v)).collect())
+    fn expand_zero_or_more(&mut self, match_data: &MatchData, template: &NsValue) -> Vec<NsValue> {
+        // TODO: Find correct subpattern
+        let matches = &match_data.subpatterns[0];
+        println!("{:?}", matches);
+
+        matches
+            .iter()
+            .map(|m| self.expand_datum(m, template))
+            .collect()
+    }
+
+    fn expand_slice(&mut self, match_data: &MatchData, mut templates: &[NsValue]) -> Vec<NsValue> {
+        let mut result: Vec<NsValue> = vec![];
+
+        loop {
+            if templates.is_empty() {
+                break;
             }
+
+            if let Some(&NsValue::Ident(_, ref next_ident)) = templates.get(1) {
+                let next_var = MacroVar::from_ident(&self.scope, next_ident);
+
+                if self.special_vars.is_zero_or_more(&next_var) {
+                    let mut expanded = self.expand_zero_or_more(match_data, &templates[0]);
+                    result.append(&mut expanded);
+
+                    // Skip the ellipsis as well
+                    templates = &templates[2..];
+                    continue;
+                }
+            }
+
+            let expanded = self.expand_datum(match_data, &templates[0]);
+            result.push(expanded);
+
+            templates = &templates[1..];
+        }
+
+        result
+    }
+
+    fn expand_datum(&mut self, match_data: &MatchData, template: &NsValue) -> NsValue {
+        match template {
+            &NsValue::Ident(span, ref ident) => self.expand_ident(match_data, span, ident),
+            &NsValue::List(span, ref vs) => NsValue::List(span, self.expand_slice(match_data, vs)),
             &NsValue::Vector(span, ref vs) => {
-                NsValue::Vector(span, vs.iter().map(|v| self.expand_datum(v)).collect())
+                NsValue::Vector(span, self.expand_slice(match_data, vs))
             }
             other => other.clone(),
         }
     }
 
-    fn expand_template(mut self, template: &NsValue) -> (Scope, NsValue) {
-        let expanded_datum = self.expand_datum(template);
+    fn expand_template(mut self, match_data: &MatchData, template: &NsValue) -> (Scope, NsValue) {
+        let expanded_datum = self.expand_datum(match_data, template);
         (self.scope, expanded_datum)
     }
 }
@@ -293,11 +393,12 @@ pub fn expand_macro(
     arg_data: Vec<NsValue>,
 ) -> Result<(Scope, NsValue)> {
     for rule in mac.rules.iter() {
-        let mut mcx = MatchContext::new(scope, &mac.literals);
-        if let Ok(match_data) = mcx.visit_rule(rule, arg_data.as_slice()) {
-            let ecx = ExpandContext::new(ns_id_allocator, scope, match_data);
+        let mut mcx = MatchContext::new(scope, &mac.special_vars);
 
-            return Ok(ecx.expand_template(&rule.template));
+        if let Ok(match_data) = mcx.visit_rule(rule, arg_data.as_slice()) {
+            let ecx = ExpandContext::new(ns_id_allocator, scope, &mac.special_vars);
+
+            return Ok(ecx.expand_template(&match_data, &rule.template));
         }
     }
 
@@ -315,11 +416,6 @@ fn test_ns_id() -> NsId {
 }
 
 #[cfg(test)]
-fn self_ident() -> Ident {
-    Ident::new(test_ns_id(), "self".to_owned())
-}
-
-#[cfg(test)]
 fn macro_rules_for_str(data_str: &str) -> Result<Macro> {
     let test_data = data_from_str(data_str).unwrap();
 
@@ -333,7 +429,8 @@ fn macro_rules_for_str(data_str: &str) -> Result<Macro> {
         .map(|datum| NsValue::from_value(datum, test_ns_id()))
         .collect::<Vec<NsValue>>();
 
-    lower_macro_rules(&Scope::new_empty(), full_span, &self_ident(), test_ns_data)
+    let self_ident = Ident::new(test_ns_id(), "self".to_owned());
+    lower_macro_rules(&Scope::new_empty(), full_span, &self_ident, test_ns_data)
 }
 
 #[test]
@@ -367,7 +464,12 @@ fn non_symbol_literal() {
 fn empty_rules() {
     let j = "#{} []";
 
-    let expected = Macro::new(self_ident(), HashSet::new(), vec![]);
+    let special_vars = SpecialVars {
+        zero_or_more: Some(MacroVar::Bound(Binding::Primitive(Primitive::Ellipsis))),
+        literals: HashSet::new(),
+    };
+
+    let expected = Macro::new(special_vars, vec![]);
     assert_eq!(expected, macro_rules_for_str(j).unwrap());
 }
 
@@ -381,13 +483,18 @@ fn trivial_rules() {
     literals.insert(MacroVar::Unbound("a".to_owned()));
     literals.insert(MacroVar::Unbound("b".to_owned()));
 
+    let special_vars = SpecialVars {
+        zero_or_more: Some(MacroVar::Bound(Binding::Primitive(Primitive::Ellipsis))),
+        literals,
+    };
+
     let pattern = vec![
         NsValue::Ident(t2s(t), Ident::new(test_ns_id(), "x".to_owned())),
     ];
     let template = NsValue::Ident(t2s(u), Ident::new(test_ns_id(), "x".to_owned()));
     let rules = vec![Rule { pattern, template }];
 
-    let expected = Macro::new(self_ident(), literals, rules);
+    let expected = Macro::new(special_vars, rules);
     assert_eq!(expected, macro_rules_for_str(j).unwrap());
 }
 

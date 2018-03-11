@@ -25,7 +25,7 @@ macro_rules! lower_expr_impl {
         match $datum {
             NsValue::Ident(span, ref ident) => match $scope.get(ident) {
                 Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
-                Some(Binding::Primitive(_)) => Err(Error::PrimitiveRef(span, ident.name().clone())),
+                Some(Binding::Primitive(_)) => Err(Error::PrimitiveRef(span)),
                 Some(Binding::Macro(_)) => Err(Error::MacroRef(span, ident.name().clone())),
                 None => Err(Error::UnboundSymbol(span, ident.name().clone())),
             },
@@ -265,6 +265,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     },
                 ))
             }
+            &Primitive::Ellipsis => Err(Error::PrimitiveRef(span)),
         }
     }
 
@@ -482,11 +483,9 @@ impl<'ccx> LoweringContext<'ccx> {
 ////
 
 #[cfg(test)]
-use syntax::span::t2s;
+use syntax::span::{t2s, EMPTY_SPAN};
 #[cfg(test)]
 use syntax::parser::data_from_str;
-#[cfg(test)]
-use syntax::span::EMPTY_SPAN;
 
 #[cfg(test)]
 fn module_for_str(data_str: &str) -> Result<Module> {
@@ -609,7 +608,7 @@ fn reference_primitive() {
     let j = "def";
     let t = "^^^";
 
-    let err = Error::PrimitiveRef(t2s(t), "def".to_owned());
+    let err = Error::PrimitiveRef(t2s(t));
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -1057,5 +1056,32 @@ fn expand_constant_match() {
     let t = &[t1, t2].join("");
 
     let expected = Expr::Lit(Value::Symbol(t2s(t), "b".to_owned()));
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
+
+#[test]
+fn expand_terminal_zero_or_more_match() {
+    let j1 = "(defmacro return-all (macro-rules #{} [[(return-all values ...) '(values ...)]]))";
+    let t1 = "                                                                 ^^^^^^^^^^^^    ";
+    let sp = "                                                                                 ";
+    let j2 = "(return-all 1 2 3)";
+    let u2 = "            ^     ";
+    let v2 = "              ^   ";
+    let w2 = "                ^ ";
+
+    let j = &[j1, j2].join("");
+    let t = t1;
+    let u = &[sp, u2].join("");
+    let v = &[sp, v2].join("");
+    let w = &[sp, w2].join("");
+
+    let expected = Expr::Lit(Value::List(
+        t2s(t),
+        vec![
+            Value::Int(t2s(u), 1),
+            Value::Int(t2s(v), 2),
+            Value::Int(t2s(w), 3),
+        ],
+    ));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
