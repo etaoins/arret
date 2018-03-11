@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use hir::Expr;
-use hir::scope::{insert_primitive_exports, Binding};
+use hir::scope::{insert_prim_exports, Binding};
 
 #[derive(PartialEq, Debug)]
 pub struct Module {
@@ -13,11 +13,11 @@ impl Module {
         Module { body_expr, exports }
     }
 
-    pub fn primitives_module() -> Module {
-        let mut primitive_exports = HashMap::<String, Binding>::new();
-        insert_primitive_exports(&mut primitive_exports);
+    pub fn prims_module() -> Module {
+        let mut prim_exports = HashMap::<String, Binding>::new();
+        insert_prim_exports(&mut prim_exports);
 
-        Module::new(Expr::Do(vec![]), primitive_exports)
+        Module::new(Expr::Do(vec![]), prim_exports)
     }
 
     pub fn into_body_expr(self) -> Expr {

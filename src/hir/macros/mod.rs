@@ -4,7 +4,7 @@ mod expander;
 use std::collections::{HashMap, HashSet};
 
 use syntax::span::Span;
-use hir::scope::{Binding, Ident, NsIdAllocator, NsValue, Primitive, Scope};
+use hir::scope::{Binding, Ident, NsIdAllocator, NsValue, Prim, Scope};
 use hir::error::{Error, Result};
 use hir::macros::matcher::MatchContext;
 use hir::macros::expander::ExpandContext;
@@ -173,7 +173,7 @@ pub fn lower_macro_rules(
     };
 
     let special_vars = SpecialVars {
-        zero_or_more: Some(MacroVar::Bound(Binding::Primitive(Primitive::Ellipsis))),
+        zero_or_more: Some(MacroVar::Bound(Binding::Prim(Prim::Ellipsis))),
         literals,
     };
 
@@ -267,7 +267,7 @@ fn empty_rules() {
     let j = "#{} []";
 
     let special_vars = SpecialVars {
-        zero_or_more: Some(MacroVar::Bound(Binding::Primitive(Primitive::Ellipsis))),
+        zero_or_more: Some(MacroVar::Bound(Binding::Prim(Prim::Ellipsis))),
         literals: HashSet::new(),
     };
 
@@ -286,7 +286,7 @@ fn trivial_rules() {
     literals.insert(MacroVar::Unbound("b".to_owned()));
 
     let special_vars = SpecialVars {
-        zero_or_more: Some(MacroVar::Bound(Binding::Primitive(Primitive::Ellipsis))),
+        zero_or_more: Some(MacroVar::Bound(Binding::Prim(Prim::Ellipsis))),
         literals,
     };
 

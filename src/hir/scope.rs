@@ -20,7 +20,7 @@ impl MacroId {
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub enum Binding {
     Var(VarId),
-    Primitive(Primitive),
+    Prim(Prim),
     Macro(MacroId),
 }
 
@@ -80,22 +80,22 @@ impl Scope {
     }
 }
 
-macro_rules! primitives {
+macro_rules! prims {
     ( $( ($n:expr, $i:ident) ),* ) => {
         #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
-        pub enum Primitive {
+        pub enum Prim {
             $($i,)*
         }
 
-        pub fn insert_primitive_exports(exports: &mut HashMap<String, Binding>) {
+        pub fn insert_prim_exports(exports: &mut HashMap<String, Binding>) {
             $(
-                exports.insert($n.to_owned(), Binding::Primitive(Primitive::$i));
+                exports.insert($n.to_owned(), Binding::Prim(Prim::$i));
             )*
         }
     }
 }
 
-primitives!(
+prims!(
     ("def", Def),
     ("fn", Fun),
     ("if", If),

@@ -3,7 +3,7 @@ use std::io::Read;
 
 use hir::{Cond, Expr, Fun, Var, VarId};
 use hir::loader::{load_library_data, load_module_data, LibraryName};
-use hir::scope::{Binding, Ident, MacroId, NsId, NsIdAllocator, NsValue, Primitive, Scope};
+use hir::scope::{Binding, Ident, MacroId, NsId, NsIdAllocator, NsValue, Prim, Scope};
 use hir::module::Module;
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::error::{Error, Result};
@@ -21,11 +21,11 @@ pub struct LoweringContext<'ccx> {
 
 // TODO: Change this to define_lower_expr_impl() and remove $lower_expr?
 macro_rules! lower_expr_impl {
-    ($self:ident, $scope:ident, $datum:ident, $lower_primitive_apply:ident, $lower_expr:ident) => {
+    ($self:ident, $scope:ident, $datum:ident, $lower_prim_apply:ident, $lower_expr:ident) => {
         match $datum {
             NsValue::Ident(span, ref ident) => match $scope.get(ident) {
                 Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
-                Some(Binding::Primitive(_)) => Err(Error::PrimitiveRef(span)),
+                Some(Binding::Prim(_)) => Err(Error::PrimRef(span)),
                 Some(Binding::Macro(_)) => Err(Error::MacroRef(span, ident.name().clone())),
                 None => Err(Error::UnboundSymbol(span, ident.name().clone())),
             },
@@ -39,8 +39,8 @@ macro_rules! lower_expr_impl {
 
                 match fn_datum {
                     NsValue::Ident(fn_span, ref ident) => match $scope.get(ident) {
-                        Some(Binding::Primitive(ref fn_prim)) => {
-                            $self.$lower_primitive_apply($scope, span, fn_prim, arg_data)
+                        Some(Binding::Prim(ref fn_prim)) => {
+                            $self.$lower_prim_apply($scope, span, fn_prim, arg_data)
                         }
                         Some(Binding::Macro(macro_id)) => {
                             let (mut expanded_scope, expanded_datum) = {
@@ -77,7 +77,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 vec!["risp".to_owned(), "internal".to_owned()],
                 "primitives".to_owned(),
             ),
-            Module::primitives_module(),
+            Module::prims_module(),
         );
 
         LoweringContext {
@@ -110,7 +110,7 @@ impl<'ccx> LoweringContext<'ccx> {
         let macro_rules_data = if let NsValue::List(span, mut vs) = transformer_spec {
             match vs.first() {
                 Some(&NsValue::Ident(_, ref ident))
-                    if scope.get(ident) == Some(Binding::Primitive(Primitive::MacroRules)) => {}
+                    if scope.get(ident) == Some(Binding::Prim(Prim::MacroRules)) => {}
                 _ => return Err(Error::IllegalArg(span, "Unsupported macro type".to_owned())),
             }
 
@@ -229,24 +229,22 @@ impl<'ccx> LoweringContext<'ccx> {
         ))
     }
 
-    fn lower_primitive_apply(
+    fn lower_prim_apply(
         &mut self,
         scope: &Scope,
         span: Span,
-        fn_prim: &Primitive,
+        fn_prim: &Prim,
         mut arg_data: Vec<NsValue>,
     ) -> Result<Expr> {
         match fn_prim {
-            &Primitive::Def | &Primitive::DefMacro | &Primitive::Import => {
-                Err(Error::DefOutsideBody(span))
-            }
-            &Primitive::Export => Err(Error::ExportOutsideModule(span)),
-            &Primitive::Quote => match arg_data.len() {
+            &Prim::Def | &Prim::DefMacro | &Prim::Import => Err(Error::DefOutsideBody(span)),
+            &Prim::Export => Err(Error::ExportOutsideModule(span)),
+            &Prim::Quote => match arg_data.len() {
                 1 => Ok(Expr::Lit(arg_data[0].clone().into_value())),
                 _ => Err(Error::WrongArgCount(span, 1)),
             },
-            &Primitive::Fun => self.lower_fun(scope, span, arg_data),
-            &Primitive::If => {
+            &Prim::Fun => self.lower_fun(scope, span, arg_data),
+            &Prim::If => {
                 let arg_count = arg_data.len();
 
                 if arg_count != 3 {
@@ -266,9 +264,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     },
                 ))
             }
-            &Primitive::Ellipsis | &Primitive::Wildcard | &Primitive::MacroRules => {
-                Err(Error::PrimitiveRef(span))
-            }
+            &Prim::Ellipsis | &Prim::Wildcard | &Prim::MacroRules => Err(Error::PrimRef(span)),
         }
     }
 
@@ -339,15 +335,15 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(())
     }
 
-    fn lower_body_primitive_apply(
+    fn lower_body_prim_apply(
         &mut self,
         scope: &mut Scope,
         span: Span,
-        fn_prim: &Primitive,
+        fn_prim: &Prim,
         mut arg_data: Vec<NsValue>,
     ) -> Result<Expr> {
         match fn_prim {
-            &Primitive::Def => {
+            &Prim::Def => {
                 let arg_count = arg_data.len();
 
                 if arg_count != 2 {
@@ -359,7 +355,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
                 self.lower_def_var(scope, span, sym_datum, value_datum)
             }
-            &Primitive::DefMacro => {
+            &Prim::DefMacro => {
                 let arg_count = arg_data.len();
 
                 if arg_count != 2 {
@@ -372,23 +368,23 @@ impl<'ccx> LoweringContext<'ccx> {
                 self.lower_defmacro(scope, span, sym_datum, transformer_spec)
                     .map(|_| Expr::Do(vec![]))
             }
-            &Primitive::Import => {
+            &Prim::Import => {
                 self.lower_import(scope, arg_data)?;
                 Ok(Expr::Do(vec![]))
             }
-            _ => self.lower_primitive_apply(scope, span, fn_prim, arg_data),
+            _ => self.lower_prim_apply(scope, span, fn_prim, arg_data),
         }
     }
 
-    fn lower_module_primitive_apply(
+    fn lower_module_prim_apply(
         &mut self,
         scope: &mut Scope,
         span: Span,
-        fn_prim: &Primitive,
+        fn_prim: &Prim,
         arg_data: Vec<NsValue>,
     ) -> Result<Expr> {
         match fn_prim {
-            &Primitive::Export => {
+            &Prim::Export => {
                 for arg_datum in arg_data {
                     match arg_datum {
                         NsValue::Ident(span, ident) => {
@@ -402,7 +398,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
                 Ok(Expr::from_vec(vec![]))
             }
-            _ => self.lower_body_primitive_apply(scope, span, fn_prim, arg_data),
+            _ => self.lower_body_prim_apply(scope, span, fn_prim, arg_data),
         }
     }
 
@@ -422,17 +418,11 @@ impl<'ccx> LoweringContext<'ccx> {
     }
 
     fn lower_expr(&mut self, scope: &Scope, datum: NsValue) -> Result<Expr> {
-        lower_expr_impl!(self, scope, datum, lower_primitive_apply, lower_expr)
+        lower_expr_impl!(self, scope, datum, lower_prim_apply, lower_expr)
     }
 
     fn lower_body_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr> {
-        lower_expr_impl!(
-            self,
-            scope,
-            datum,
-            lower_body_primitive_apply,
-            lower_body_expr
-        )
+        lower_expr_impl!(self, scope, datum, lower_body_prim_apply, lower_body_expr)
     }
 
     fn lower_module_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr> {
@@ -440,7 +430,7 @@ impl<'ccx> LoweringContext<'ccx> {
             self,
             scope,
             datum,
-            lower_module_primitive_apply,
+            lower_module_prim_apply,
             lower_module_expr
         )
     }
@@ -452,7 +442,7 @@ impl<'ccx> LoweringContext<'ccx> {
         // The default scope only consists of (import)
         scope.insert_binding(
             Ident::new(ns_id, "import".to_owned()),
-            Binding::Primitive(Primitive::Import),
+            Binding::Prim(Prim::Import),
         );
 
         let exprs = data.into_iter()
@@ -607,11 +597,11 @@ fn def_in_non_body() {
 }
 
 #[test]
-fn reference_primitive() {
+fn reference_prim() {
     let j = "def";
     let t = "^^^";
 
-    let err = Error::PrimitiveRef(t2s(t));
+    let err = Error::PrimRef(t2s(t));
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
