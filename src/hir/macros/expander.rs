@@ -67,13 +67,12 @@ impl<'a> ExpandContext<'a> {
 
                 // Skip the ellipsis as well
                 templates = &templates[2..];
-                continue;
+            } else {
+                let expanded = self.expand_datum(match_data, &templates[0]);
+                result.push(expanded);
+
+                templates = &templates[1..];
             }
-
-            let expanded = self.expand_datum(match_data, &templates[0]);
-            result.push(expanded);
-
-            templates = &templates[1..];
         }
 
         result
