@@ -80,25 +80,23 @@ impl<'a> MatchContext<'a> {
         loop {
             match (patterns.first(), args.first()) {
                 (Some(pattern), Some(arg)) => {
-                    if let Some(&NsValue::Ident(_, ref next_ident)) = patterns.get(1) {
-                        let next_var = MacroVar::from_ident(self.scope, next_ident);
+                    if self.special_vars
+                        .starts_with_zero_or_more(self.scope, patterns)
+                    {
+                        let rest_patterns_len = patterns.len() - 2;
 
-                        if self.special_vars.is_zero_or_more(&next_var) {
-                            let rest_patterns_len = patterns.len() - 2;
-
-                            if args.len() < rest_patterns_len {
-                                // Cannot match
-                                return Err(());
-                            }
-
-                            let (zero_or_more_args, rest_args) =
-                                args.split_at(args.len() - rest_patterns_len);
-
-                            self.visit_zero_or_more(pattern, zero_or_more_args)?;
-                            patterns = &patterns[2..];
-                            args = rest_args;
-                            continue;
+                        if args.len() < rest_patterns_len {
+                            // Cannot match
+                            return Err(());
                         }
+
+                        let (zero_or_more_args, rest_args) =
+                            args.split_at(args.len() - rest_patterns_len);
+
+                        self.visit_zero_or_more(pattern, zero_or_more_args)?;
+                        patterns = &patterns[2..];
+                        args = rest_args;
+                        continue;
                     }
 
                     self.visit_datum(pattern, arg)?

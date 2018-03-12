@@ -59,17 +59,15 @@ impl<'a> ExpandContext<'a> {
         let mut result: Vec<NsValue> = vec![];
 
         while !templates.is_empty() {
-            if let Some(&NsValue::Ident(_, ref next_ident)) = templates.get(1) {
-                let next_var = MacroVar::from_ident(&self.scope, next_ident);
+            if self.special_vars
+                .starts_with_zero_or_more(&self.scope, templates)
+            {
+                let mut expanded = self.expand_zero_or_more(match_data, &templates[0]);
+                result.append(&mut expanded);
 
-                if self.special_vars.is_zero_or_more(&next_var) {
-                    let mut expanded = self.expand_zero_or_more(match_data, &templates[0]);
-                    result.append(&mut expanded);
-
-                    // Skip the ellipsis as well
-                    templates = &templates[2..];
-                    continue;
-                }
+                // Skip the ellipsis as well
+                templates = &templates[2..];
+                continue;
             }
 
             let expanded = self.expand_datum(match_data, &templates[0]);
