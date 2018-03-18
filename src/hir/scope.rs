@@ -25,7 +25,7 @@ pub enum Binding {
 }
 
 pub struct Scope {
-    bindings: HashMap<Ident, Binding>,
+    pub bindings: HashMap<Ident, Binding>,
     exports: HashMap<Ident, Span>,
 }
 

@@ -268,11 +268,16 @@ impl<'ccx> LoweringContext<'ccx> {
         }
     }
 
-    fn load_library(&mut self, span: Span, library_name: LibraryName) -> Result<&Module> {
+    fn load_library(
+        &mut self,
+        root_scope: &mut Scope,
+        span: Span,
+        library_name: LibraryName,
+    ) -> Result<&Module> {
         // TODO: This does a lot of hash lookups
         if !self.loaded_libraries.contains_key(&library_name) {
             let library_data = load_library_data(self.ccx, span, &library_name)?;
-            let loaded_library = self.lower_module(library_data)?;
+            let loaded_library = self.lower_module(root_scope, library_data)?;
 
             self.loaded_libraries
                 .insert(library_name.clone(), loaded_library);
@@ -311,7 +316,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
                 let terminal_name = name_components.pop().unwrap();
                 let library_name = LibraryName::new(name_components, terminal_name);
-                let loaded_library = self.load_library(span, library_name)?;
+                let loaded_library = self.load_library(scope, span, library_name)?;
 
                 for (name, binding) in loaded_library.exports() {
                     let imported_ident = Ident::new(import_ns_id, name.clone());
@@ -435,12 +440,11 @@ impl<'ccx> LoweringContext<'ccx> {
         )
     }
 
-    fn lower_module(&mut self, data: Vec<Value>) -> Result<Module> {
+    fn lower_module(&mut self, root_scope: &mut Scope, data: Vec<Value>) -> Result<Module> {
         let ns_id = self.ns_id_alloc.alloc();
-        let mut scope = Scope::new_empty();
 
         // The default scope only consists of (import)
-        scope.insert_binding(
+        root_scope.insert_binding(
             Ident::new(ns_id, "import".to_owned()),
             Binding::Prim(Prim::Import),
         );
@@ -448,27 +452,32 @@ impl<'ccx> LoweringContext<'ccx> {
         let exprs = data.into_iter()
             .map(|datum| {
                 let ns_datum = NsValue::from_value(datum, ns_id);
-                self.lower_module_expr(&mut scope, ns_datum)
+                self.lower_module_expr(root_scope, ns_datum)
             })
             .collect::<Result<Vec<Expr>>>()?;
 
         let body_expr = Expr::from_vec(exprs);
 
         let mut exports = HashMap::new();
-        for (ident, span) in scope.exports() {
-            let binding = scope
-                .get(ident)
-                .ok_or_else(|| Error::UnboundSymbol(*span, ident.name().clone()))?;
+        for (ident, span) in root_scope.exports() {
+            if ident.ns_id() == ns_id {
+                let binding = root_scope
+                    .get(ident)
+                    .ok_or_else(|| Error::UnboundSymbol(*span, ident.name().clone()))?;
 
-            exports.insert(ident.name().clone(), binding);
+                exports.insert(ident.name().clone(), binding);
+            }
         }
 
         Ok(Module::new(body_expr, exports))
     }
 
     pub fn lower_program(&mut self, display_name: String, input_reader: &mut Read) -> Result<Expr> {
+        let mut root_scope = Scope::new_empty();
+
         let data = load_module_data(self.ccx, display_name, input_reader)?;
-        self.lower_module(data)
+
+        self.lower_module(&mut root_scope, data)
             .map(|module| module.into_body_expr())
     }
 }
@@ -497,12 +506,14 @@ fn module_for_str(data_str: &str) -> Result<Module> {
         ],
     );
 
+    let mut root_scope = Scope::new_empty();
+
     let mut test_data = data_from_str(data_str).unwrap();
     test_data.insert(0, import_statement);
 
     let mut ccx = CompileContext::new();
     let mut lcx = LoweringContext::new(&mut ccx);
-    lcx.lower_module(test_data)
+    lcx.lower_module(&mut root_scope, test_data)
 }
 
 #[cfg(test)]
