@@ -133,6 +133,9 @@ pub trait Reportable {
     fn level(&self) -> Level;
     fn message(&self) -> String;
     fn span(&self) -> Option<Span>;
+    fn macro_invocation_span(&self) -> Option<Span> {
+        None
+    }
 
     fn report(&self, ccx: &CompileContext) {
         let default_bold = Style::new().bold();
@@ -146,6 +149,11 @@ pub trait Reportable {
 
         if let Some(span) = self.span() {
             print_snippet(ccx, self.level(), span);
+        }
+
+        if let Some(macro_invocation_span) = self.macro_invocation_span() {
+            eprintln!("{}", default_bold.paint("in this macro invocation"));
+            print_snippet(ccx, Level::Note, macro_invocation_span);
         }
 
         if let Some(associated_report) = self.associated_report() {
@@ -163,6 +171,7 @@ pub trait Reportable {
 
 pub enum Level {
     Error,
+    Note,
     Help,
 }
 
@@ -170,6 +179,7 @@ impl Level {
     fn name(&self) -> &'static str {
         match *self {
             Level::Error => "error",
+            Level::Note => "note",
             Level::Help => "help",
         }
     }
@@ -177,6 +187,7 @@ impl Level {
     fn colour(&self) -> Colour {
         match *self {
             Level::Error => Colour::Red,
+            Level::Note => Colour::Blue,
             Level::Help => Colour::Cyan,
         }
     }

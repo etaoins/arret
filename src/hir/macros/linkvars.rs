@@ -95,7 +95,11 @@ impl<'a> FindVarsContext<'a> {
         if let Some(ref mut unbound_var_spans) = self.unbound_var_spans {
             if let MacroVar::Unbound(ref name) = macro_var {
                 if let Some(old_span) = unbound_var_spans.insert(name.clone(), span) {
-                    return Err(Error::DuplicateMacroVar(span, name.clone(), old_span));
+                    return Err(Error::DuplicateMacroVar(
+                        self.scope.span_to_error_loc(span),
+                        name.clone(),
+                        old_span,
+                    ));
                 }
             }
         }
@@ -146,7 +150,10 @@ impl<'a> FindVarsContext<'a> {
                     match zero_or_more_span {
                         Some(old_span) => {
                             // We've already had a zero-or-more match!
-                            return Err(Error::MultipleZeroOrMoreMatch(pattern.span(), old_span));
+                            return Err(Error::MultipleZeroOrMoreMatch(
+                                self.scope.span_to_error_loc(pattern.span()),
+                                old_span,
+                            ));
                         }
                         None => {
                             zero_or_more_span = Some(pattern.span());
@@ -167,6 +174,7 @@ impl<'a> FindVarsContext<'a> {
 }
 
 fn link_found_vars(
+    scope: &Scope,
     pattern_idx: usize,
     pattern_vars: &FoundVars,
     template_vars: &FoundVars,
@@ -177,7 +185,7 @@ fn link_found_vars(
         .map(|subtemplate_vars| {
             if subtemplate_vars.vars.is_empty() {
                 return Err(Error::IllegalArg(
-                    template_vars.span,
+                    scope.span_to_error_loc(template_vars.span),
                     "Subtemplate does not include any macro variables".to_owned(),
                 ));
             }
@@ -192,12 +200,12 @@ fn link_found_vars(
 
             let (pattern_idx, subpattern_vars) = if possible_indices.len() == 0 {
                 return Err(Error::IllegalArg(
-                    template_vars.span,
+                    scope.span_to_error_loc(template_vars.span),
                     "Subtemplate does not reference macro variables from any subpattern".to_owned(),
                 ));
             } else if possible_indices.len() > 1 {
                 return Err(Error::IllegalArg(
-                    template_vars.span,
+                    scope.span_to_error_loc(template_vars.span),
                     "Subtemplate references macro variables from multiple subpatterns".to_owned(),
                 ));
             } else {
@@ -205,7 +213,7 @@ fn link_found_vars(
             };
 
             // Iterate over our subpatterns
-            link_found_vars(pattern_idx, subpattern_vars, subtemplate_vars)
+            link_found_vars(scope, pattern_idx, subpattern_vars, subtemplate_vars)
         })
         .collect::<Result<Vec<VarLinks>>>()?;
 
@@ -230,5 +238,5 @@ pub fn link_vars(
     let mut template_vars = FoundVars::new(template.span());
     fvcx.visit_datum(&mut template_vars, template)?;
 
-    link_found_vars(0, &pattern_vars, &template_vars)
+    link_found_vars(scope, 0, &pattern_vars, &template_vars)
 }

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use syntax::span::Span;
 use syntax::value::Value;
+use hir::error::ErrorLoc;
 use hir::VarId;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
@@ -27,6 +28,7 @@ pub enum Binding {
 pub struct Scope {
     bindings: HashMap<Ident, Binding>,
     exports: HashMap<Ident, Span>,
+    macro_invocation_span: Option<Span>,
 }
 
 impl Scope {
@@ -34,6 +36,7 @@ impl Scope {
         Scope {
             bindings: HashMap::new(),
             exports: HashMap::new(),
+            macro_invocation_span: None,
         }
     }
 
@@ -42,6 +45,15 @@ impl Scope {
         Scope {
             bindings: parent.bindings.clone(),
             exports: HashMap::new(),
+            macro_invocation_span: parent.macro_invocation_span,
+        }
+    }
+
+    pub fn new_macro_child(parent: &Scope, macro_invocation_span: Span) -> Scope {
+        Scope {
+            bindings: parent.bindings.clone(),
+            exports: HashMap::new(),
+            macro_invocation_span: Some(macro_invocation_span),
         }
     }
 
@@ -77,6 +89,10 @@ impl Scope {
 
     pub fn exports(&self) -> &HashMap<Ident, Span> {
         &self.exports
+    }
+
+    pub fn span_to_error_loc(&self, span: Span) -> ErrorLoc {
+        ErrorLoc::new(span, self.macro_invocation_span)
     }
 }
 

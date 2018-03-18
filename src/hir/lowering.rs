@@ -25,9 +25,9 @@ macro_rules! lower_expr_impl {
         match $datum {
             NsValue::Ident(span, ref ident) => match $scope.get(ident) {
                 Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
-                Some(Binding::Prim(_)) => Err(Error::PrimRef(span)),
-                Some(Binding::Macro(_)) => Err(Error::MacroRef(span, ident.name().clone())),
-                None => Err(Error::UnboundSymbol(span, ident.name().clone())),
+                Some(Binding::Prim(_)) => Err(Error::PrimRef($scope.span_to_error_loc(span))),
+                Some(Binding::Macro(_)) => Err(Error::MacroRef($scope.span_to_error_loc(span), ident.name().clone())),
+                None => Err(Error::UnboundSymbol($scope.span_to_error_loc(span), ident.name().clone())),
             },
             NsValue::List(span, mut vs) => {
                 if vs.len() == 0 {
@@ -54,7 +54,7 @@ macro_rules! lower_expr_impl {
                         Some(Binding::Var(id)) => {
                             $self.lower_expr_apply($scope, span, Expr::Ref(span, id), arg_data)
                         }
-                        None => Err(Error::UnboundSymbol(fn_span, ident.name().clone())),
+                        None => Err(Error::UnboundSymbol($scope.span_to_error_loc(fn_span), ident.name().clone())),
                     },
                     _ => {
                         let fn_expr = $self.lower_expr($scope, fn_datum)?;
@@ -104,21 +104,28 @@ impl<'ccx> LoweringContext<'ccx> {
         let self_ident = if let NsValue::Ident(_, ident) = sym_datum {
             ident
         } else {
-            return Err(Error::ExpectedSymbol(sym_datum.span()));
+            return Err(Error::ExpectedSymbol(
+                scope.span_to_error_loc(sym_datum.span()),
+            ));
         };
 
         let macro_rules_data = if let NsValue::List(span, mut vs) = transformer_spec {
             match vs.first() {
                 Some(&NsValue::Ident(_, ref ident))
                     if scope.get(ident) == Some(Binding::Prim(Prim::MacroRules)) => {}
-                _ => return Err(Error::IllegalArg(span, "Unsupported macro type".to_owned())),
+                _ => {
+                    return Err(Error::IllegalArg(
+                        scope.span_to_error_loc(span),
+                        "Unsupported macro type".to_owned(),
+                    ))
+                }
             }
 
             vs.remove(0);
             vs
         } else {
             return Err(Error::IllegalArg(
-                transformer_spec.span(),
+                scope.span_to_error_loc(transformer_spec.span()),
                 "Macro specification must be a list".to_owned(),
             ));
         };
@@ -142,7 +149,7 @@ impl<'ccx> LoweringContext<'ccx> {
         let sym_ident = match sym_datum {
             NsValue::Ident(_, ident) => ident.clone(),
             other => {
-                return Err(Error::ExpectedSymbol(other.span()));
+                return Err(Error::ExpectedSymbol(scope.span_to_error_loc(other.span())));
             }
         };
 
@@ -166,7 +173,7 @@ impl<'ccx> LoweringContext<'ccx> {
     fn lower_fun(&mut self, scope: &Scope, span: Span, mut arg_data: Vec<NsValue>) -> Result<Expr> {
         if arg_data.len() < 1 {
             return Err(Error::IllegalArg(
-                span,
+                scope.span_to_error_loc(span),
                 "parameter declaration missing".to_owned(),
             ));
         }
@@ -178,7 +185,7 @@ impl<'ccx> LoweringContext<'ccx> {
             NsValue::List(_, vs) => vs,
             other => {
                 return Err(Error::IllegalArg(
-                    other.span().clone(),
+                    scope.span_to_error_loc(other.span()),
                     "parameter declaration should be a list".to_owned(),
                 ));
             }
@@ -194,7 +201,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     NsValue::Ident(_, ident) => ident,
                     other => {
                         return Err(Error::IllegalArg(
-                            other.span().clone(),
+                            scope.span_to_error_loc(other.span()),
                             "unsupported binding type".to_owned(),
                         ));
                     }
@@ -237,18 +244,20 @@ impl<'ccx> LoweringContext<'ccx> {
         mut arg_data: Vec<NsValue>,
     ) -> Result<Expr> {
         match fn_prim {
-            &Prim::Def | &Prim::DefMacro | &Prim::Import => Err(Error::DefOutsideBody(span)),
-            &Prim::Export => Err(Error::ExportOutsideModule(span)),
+            &Prim::Def | &Prim::DefMacro | &Prim::Import => {
+                Err(Error::DefOutsideBody(scope.span_to_error_loc(span)))
+            }
+            &Prim::Export => Err(Error::ExportOutsideModule(scope.span_to_error_loc(span))),
             &Prim::Quote => match arg_data.len() {
                 1 => Ok(Expr::Lit(arg_data[0].clone().into_value())),
-                _ => Err(Error::WrongArgCount(span, 1)),
+                _ => Err(Error::WrongArgCount(scope.span_to_error_loc(span), 1)),
             },
             &Prim::Fun => self.lower_fun(scope, span, arg_data),
             &Prim::If => {
                 let arg_count = arg_data.len();
 
                 if arg_count != 3 {
-                    return Err(Error::WrongArgCount(span, 3));
+                    return Err(Error::WrongArgCount(scope.span_to_error_loc(span), 3));
                 }
 
                 macro_rules! pop_as_boxed_expr {
@@ -264,20 +273,22 @@ impl<'ccx> LoweringContext<'ccx> {
                     },
                 ))
             }
-            &Prim::Ellipsis | &Prim::Wildcard | &Prim::MacroRules => Err(Error::PrimRef(span)),
+            &Prim::Ellipsis | &Prim::Wildcard | &Prim::MacroRules => {
+                Err(Error::PrimRef(scope.span_to_error_loc(span)))
+            }
         }
     }
 
     fn load_library(
         &mut self,
-        root_scope: &mut Scope,
+        scope: &mut Scope,
         span: Span,
         library_name: LibraryName,
     ) -> Result<&Module> {
         // TODO: This does a lot of hash lookups
         if !self.loaded_libraries.contains_key(&library_name) {
-            let library_data = load_library_data(self.ccx, span, &library_name)?;
-            let loaded_library = self.lower_module(root_scope, library_data)?;
+            let library_data = load_library_data(self.ccx, scope, span, &library_name)?;
+            let loaded_library = self.lower_module(scope, library_data)?;
 
             self.loaded_libraries
                 .insert(library_name.clone(), loaded_library);
@@ -291,7 +302,7 @@ impl<'ccx> LoweringContext<'ccx> {
             NsValue::Vector(span, vs) => {
                 if vs.len() < 1 {
                     return Err(Error::IllegalArg(
-                        span,
+                        scope.span_to_error_loc(span),
                         "Library name requires a least one element".to_owned(),
                     ));
                 }
@@ -307,7 +318,7 @@ impl<'ccx> LoweringContext<'ccx> {
                                 Ok(ident.name().clone())
                             }
                             other => Err(Error::IllegalArg(
-                                other.span(),
+                                scope.span_to_error_loc(other.span()),
                                 "Library name component must be a symbol".to_owned(),
                             )),
                         }
@@ -326,7 +337,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 Ok(())
             }
             other => Err(Error::IllegalArg(
-                other.span(),
+                scope.span_to_error_loc(other.span()),
                 "import set must be a vector".to_owned(),
             )),
         }
@@ -352,7 +363,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 let arg_count = arg_data.len();
 
                 if arg_count != 2 {
-                    return Err(Error::WrongArgCount(span, 2));
+                    return Err(Error::WrongArgCount(scope.span_to_error_loc(span), 2));
                 }
 
                 let value_datum = arg_data.pop().unwrap();
@@ -364,7 +375,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 let arg_count = arg_data.len();
 
                 if arg_count != 2 {
-                    return Err(Error::WrongArgCount(span, 2));
+                    return Err(Error::WrongArgCount(scope.span_to_error_loc(span), 2));
                 }
 
                 let transformer_spec = arg_data.pop().unwrap();
@@ -396,7 +407,9 @@ impl<'ccx> LoweringContext<'ccx> {
                             scope.insert_export(span, ident);
                         }
                         other => {
-                            return Err(Error::ExpectedSymbol(other.span()));
+                            return Err(Error::ExpectedSymbol(
+                                scope.span_to_error_loc(other.span()),
+                            ));
                         }
                     };
                 }
@@ -431,6 +444,7 @@ impl<'ccx> LoweringContext<'ccx> {
     }
 
     fn lower_module_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr> {
+        // TODO: What happens if we expand an (import)/(export) in a macro?
         lower_expr_impl!(
             self,
             scope,
@@ -440,11 +454,11 @@ impl<'ccx> LoweringContext<'ccx> {
         )
     }
 
-    fn lower_module(&mut self, root_scope: &mut Scope, data: Vec<Value>) -> Result<Module> {
+    fn lower_module(&mut self, scope: &mut Scope, data: Vec<Value>) -> Result<Module> {
         let ns_id = self.ns_id_alloc.alloc();
 
         // The default scope only consists of (import)
-        root_scope.insert_binding(
+        scope.insert_binding(
             Ident::new(ns_id, "import".to_owned()),
             Binding::Prim(Prim::Import),
         );
@@ -452,18 +466,18 @@ impl<'ccx> LoweringContext<'ccx> {
         let exprs = data.into_iter()
             .map(|datum| {
                 let ns_datum = NsValue::from_value(datum, ns_id);
-                self.lower_module_expr(root_scope, ns_datum)
+                self.lower_module_expr(scope, ns_datum)
             })
             .collect::<Result<Vec<Expr>>>()?;
 
         let body_expr = Expr::from_vec(exprs);
 
         let mut exports = HashMap::new();
-        for (ident, span) in root_scope.exports() {
+        for (ident, span) in scope.exports() {
             if ident.ns_id() == ns_id {
-                let binding = root_scope
-                    .get(ident)
-                    .ok_or_else(|| Error::UnboundSymbol(*span, ident.name().clone()))?;
+                let binding = scope.get(ident).ok_or_else(|| {
+                    Error::UnboundSymbol(scope.span_to_error_loc(*span), ident.name().clone())
+                })?;
 
                 exports.insert(ident.name().clone(), binding);
             }
@@ -486,6 +500,8 @@ impl<'ccx> LoweringContext<'ccx> {
 
 #[cfg(test)]
 use syntax::span::{t2s, EMPTY_SPAN};
+#[cfg(test)]
+use hir::error::t2el;
 #[cfg(test)]
 use syntax::parser::data_from_str;
 
@@ -562,7 +578,7 @@ fn quoted_multiple_data() {
     let j = "(quote 1 2 3)";
     let t = "^^^^^^^^^^^^^";
 
-    let err = Error::WrongArgCount(t2s(t), 1);
+    let err = Error::WrongArgCount(t2el(t), 1);
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -594,7 +610,7 @@ fn def_of_non_symbol() {
     let j = "(def 1 1)";
     let t = "     ^   ";
 
-    let err = Error::ExpectedSymbol(t2s(t));
+    let err = Error::ExpectedSymbol(t2el(t));
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -603,7 +619,7 @@ fn def_in_non_body() {
     let j = "(def x (def y 1))";
     let t = "       ^^^^^^^^^ ";
 
-    let err = Error::DefOutsideBody(t2s(t));
+    let err = Error::DefOutsideBody(t2el(t));
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -612,7 +628,7 @@ fn reference_prim() {
     let j = "def";
     let t = "^^^";
 
-    let err = Error::PrimRef(t2s(t));
+    let err = Error::PrimRef(t2el(t));
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -621,7 +637,7 @@ fn reference_unbound() {
     let j = "nopenopenope";
     let t = "^^^^^^^^^^^^";
 
-    let err = Error::UnboundSymbol(t2s(t), "nopenopenope".to_owned());
+    let err = Error::UnboundSymbol(t2el(t), "nopenopenope".to_owned());
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -630,7 +646,7 @@ fn fn_without_param_decl() {
     let j = "(fn)";
     let t = "^^^^";
 
-    let err = Error::IllegalArg(t2s(t), "parameter declaration missing".to_owned());
+    let err = Error::IllegalArg(t2el(t), "parameter declaration missing".to_owned());
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -639,7 +655,7 @@ fn fn_with_non_list_param_decl() {
     let j = "(fn [])";
     let t = "    ^^ ";
 
-    let err = Error::IllegalArg(t2s(t), "parameter declaration should be a list".to_owned());
+    let err = Error::IllegalArg(t2el(t), "parameter declaration should be a list".to_owned());
 
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
@@ -649,7 +665,7 @@ fn fn_with_non_symbol_param() {
     let j = "(fn (()))";
     let t = "     ^^  ";
 
-    let err = Error::IllegalArg(t2s(t), "unsupported binding type".to_owned());
+    let err = Error::IllegalArg(t2el(t), "unsupported binding type".to_owned());
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -803,7 +819,7 @@ fn empty_if() {
     let j = "(if)";
     let t = "^^^^";
 
-    let err = Error::WrongArgCount(t2s(t), 3);
+    let err = Error::WrongArgCount(t2el(t), 3);
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -812,7 +828,7 @@ fn if_without_test() {
     let j = "(if true)";
     let t = "^^^^^^^^^";
 
-    let err = Error::WrongArgCount(t2s(t), 3);
+    let err = Error::WrongArgCount(t2el(t), 3);
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -821,7 +837,7 @@ fn if_without_false_branch() {
     let j = "(if true 1)";
     let t = "^^^^^^^^^^^";
 
-    let err = Error::WrongArgCount(t2s(t), 3);
+    let err = Error::WrongArgCount(t2el(t), 3);
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -875,7 +891,7 @@ fn export_unbound() {
     let j = "(export x)";
     let t = "        ^ ";
 
-    let err = Error::UnboundSymbol(t2s(t), "x".to_owned());
+    let err = Error::UnboundSymbol(t2el(t), "x".to_owned());
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -884,7 +900,7 @@ fn defmacro_of_non_symbol() {
     let j = "(defmacro 1 (macro-rules ${}))";
     let t = "          ^                   ";
 
-    let err = Error::ExpectedSymbol(t2s(t));
+    let err = Error::ExpectedSymbol(t2el(t));
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -893,7 +909,7 @@ fn defmacro_of_non_list() {
     let j = "(defmacro a b)";
     let t = "            ^ ";
 
-    let err = Error::IllegalArg(t2s(t), "Macro specification must be a list".to_owned());
+    let err = Error::IllegalArg(t2el(t), "Macro specification must be a list".to_owned());
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -902,7 +918,7 @@ fn defmacro_of_unsupported_type() {
     let j = "(defmacro a (macro-fn #{}))";
     let t = "            ^^^^^^^^^^^^^^ ";
 
-    let err = Error::IllegalArg(t2s(t), "Unsupported macro type".to_owned());
+    let err = Error::IllegalArg(t2el(t), "Unsupported macro type".to_owned());
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -912,7 +928,7 @@ fn defmacro_with_duplicate_vars() {
     let t = "                                  ^         ";
     let u = "                                    ^       ";
 
-    let err = Error::DuplicateMacroVar(t2s(u), "x".to_owned(), t2s(t));
+    let err = Error::DuplicateMacroVar(t2el(u), "x".to_owned(), t2s(t));
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -926,7 +942,7 @@ fn expand_macro_without_matching_rule() {
     let j = &[j1, j2].join("");
     let t = &[t1, t2].join("");
 
-    let err = Error::NoMacroRule(t2s(t));
+    let err = Error::NoMacroRule(t2el(t));
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -996,7 +1012,7 @@ fn expand_with_non_matching_literals() {
     let j = &[j1, j2].join("");
     let t = &[t1, t2].join("");
 
-    let err = Error::NoMacroRule(t2s(t));
+    let err = Error::NoMacroRule(t2el(t));
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -1163,7 +1179,7 @@ fn expand_multiple_zero_or_more_in_same_pattern_seq() {
     let t = "                                     ^                     ";
     let u = "                                           ^               ";
 
-    let err = Error::MultipleZeroOrMoreMatch(t2s(u), t2s(t));
+    let err = Error::MultipleZeroOrMoreMatch(t2el(u), t2s(t));
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -1178,7 +1194,7 @@ fn expand_subtemplate_without_matching_subpattern() {
     let t = &[t1, t2].join("");
 
     let err = Error::IllegalArg(
-        t2s(t),
+        t2el(t),
         "Subtemplate does not include any macro variables".to_owned(),
     );
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
@@ -1190,7 +1206,7 @@ fn expand_subtemplate_matching_multiple_subpatterns() {
     let t = "                                                           ^^^^^^^^^^^^^^^^^^^    ";
 
     let err = Error::IllegalArg(
-        t2s(t),
+        t2el(t),
         "Subtemplate references macro variables from multiple subpatterns".to_owned(),
     );
     assert_eq!(err, body_expr_for_str(j).unwrap_err());

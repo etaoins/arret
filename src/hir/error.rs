@@ -6,25 +6,64 @@ use syntax::span::Span;
 use syntax::error::Error as SyntaxError;
 use reporting::{Level, Reportable};
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct ErrorLoc {
+    span: Span,
+    macro_invocation_span: Option<Span>,
+}
+
+impl ErrorLoc {
+    pub fn new(span: Span, macro_invocation_span: Option<Span>) -> ErrorLoc {
+        ErrorLoc {
+            span,
+            macro_invocation_span,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Error {
-    PrimRef(Span),
-    MacroRef(Span, String),
-    UnboundSymbol(Span, String),
-    WrongArgCount(Span, usize),
-    IllegalArg(Span, String),
-    ExpectedSymbol(Span),
-    DefOutsideBody(Span),
-    ExportOutsideModule(Span),
-    LibraryNotFound(Span),
-    NoMacroRule(Span),
-    DuplicateMacroVar(Span, String, Span),
-    MultipleZeroOrMoreMatch(Span, Span),
+    PrimRef(ErrorLoc),
+    MacroRef(ErrorLoc, String),
+    UnboundSymbol(ErrorLoc, String),
+    WrongArgCount(ErrorLoc, usize),
+    IllegalArg(ErrorLoc, String),
+    ExpectedSymbol(ErrorLoc),
+    DefOutsideBody(ErrorLoc),
+    ExportOutsideModule(ErrorLoc),
+    LibraryNotFound(ErrorLoc),
+    NoMacroRule(ErrorLoc),
+    DuplicateMacroVar(ErrorLoc, String, Span),
+    MultipleZeroOrMoreMatch(ErrorLoc, Span),
     ReadError(String),
     SyntaxError(SyntaxError),
 }
 
 pub type Result<T> = result::Result<T, Error>;
+
+impl Error {
+    fn error_loc(&self) -> Option<ErrorLoc> {
+        match *self {
+            Error::PrimRef(ref error_loc) => Some(error_loc.clone()),
+            Error::MacroRef(ref error_loc, _) => Some(error_loc.clone()),
+            Error::UnboundSymbol(ref error_loc, _) => Some(error_loc.clone()),
+            Error::WrongArgCount(ref error_loc, _) => Some(error_loc.clone()),
+            Error::IllegalArg(ref error_loc, _) => Some(error_loc.clone()),
+            Error::ExpectedSymbol(ref error_loc) => Some(error_loc.clone()),
+            Error::DefOutsideBody(ref error_loc) => Some(error_loc.clone()),
+            Error::ExportOutsideModule(ref error_loc) => Some(error_loc.clone()),
+            Error::LibraryNotFound(ref error_loc) => Some(error_loc.clone()),
+            Error::NoMacroRule(ref error_loc) => Some(error_loc.clone()),
+            Error::DuplicateMacroVar(ref error_loc, _, _) => Some(error_loc.clone()),
+            Error::MultipleZeroOrMoreMatch(ref error_loc, _) => Some(error_loc.clone()),
+            Error::ReadError(_) => None,
+            Error::SyntaxError(ref err) => err.span().map(|span| ErrorLoc {
+                span: span,
+                macro_invocation_span: None,
+            }),
+        }
+    }
+}
 
 impl Reportable for Error {
     fn level(&self) -> Level {
@@ -55,22 +94,11 @@ impl Reportable for Error {
     }
 
     fn span(&self) -> Option<Span> {
-        match *self {
-            Error::PrimRef(span) => Some(span),
-            Error::MacroRef(span, _) => Some(span),
-            Error::UnboundSymbol(span, _) => Some(span),
-            Error::WrongArgCount(span, _) => Some(span),
-            Error::IllegalArg(span, _) => Some(span),
-            Error::ExpectedSymbol(span) => Some(span),
-            Error::DefOutsideBody(span) => Some(span),
-            Error::ExportOutsideModule(span) => Some(span),
-            Error::LibraryNotFound(span) => Some(span),
-            Error::NoMacroRule(span) => Some(span),
-            Error::DuplicateMacroVar(span, _, _) => Some(span),
-            Error::MultipleZeroOrMoreMatch(span, _) => Some(span),
-            Error::ReadError(_) => None,
-            Error::SyntaxError(ref err) => err.span(),
-        }
+        self.error_loc().map(|el| el.span)
+    }
+
+    fn macro_invocation_span(&self) -> Option<Span> {
+        self.error_loc().and_then(|el| el.macro_invocation_span)
     }
 
     fn associated_report(&self) -> Option<Box<Reportable>> {
@@ -117,4 +145,11 @@ impl Reportable for FirstDefHelp {
     fn message(&self) -> String {
         "first definition here".to_owned()
     }
+}
+
+/// Wrapper for t2s that produces an ErrorLoc with no macro invocation span
+#[cfg(test)]
+pub fn t2el(v: &str) -> ErrorLoc {
+    use syntax::span::t2s;
+    ErrorLoc::new(t2s(v), None)
 }

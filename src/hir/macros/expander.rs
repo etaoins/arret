@@ -21,11 +21,12 @@ impl<'a> ExpandContext<'a> {
     fn new(
         ns_id_alloc: &'a mut NsIdAlloc,
         scope: &Scope,
+        invocation_span: Span,
         special_vars: &'a SpecialVars,
     ) -> ExpandContext<'a> {
         ExpandContext {
             ns_id_alloc,
-            scope: Scope::new_child(scope),
+            scope: Scope::new_macro_child(scope, invocation_span),
             special_vars,
             ns_mapping: HashMap::new(),
         }
@@ -128,12 +129,13 @@ impl<'a> ExpandContext<'a> {
 pub fn expand_rule(
     ns_id_alloc: &mut NsIdAlloc,
     scope: &Scope,
+    invocation_span: Span,
     special_vars: &SpecialVars,
     match_data: MatchData,
     var_links: &VarLinks,
     template: &NsValue,
 ) -> (Scope, NsValue) {
-    let mcx = ExpandContext::new(ns_id_alloc, scope, special_vars);
+    let mcx = ExpandContext::new(ns_id_alloc, scope, invocation_span, special_vars);
 
     let mut cursor = ExpandCursor {
         match_data: &match_data,

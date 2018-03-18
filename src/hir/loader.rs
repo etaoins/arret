@@ -6,6 +6,7 @@ use syntax::value::Value;
 use syntax::span::Span;
 use syntax::parser::data_from_str_with_span_offset;
 use hir::error::{Error, Result};
+use hir::scope::Scope;
 use ctx::{CompileContext, LoadedFile};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
@@ -49,6 +50,7 @@ pub fn load_module_data(
 
 pub fn load_library_data(
     ccx: &mut CompileContext,
+    scope: &Scope,
     span: Span,
     library_name: &LibraryName,
 ) -> Result<Vec<Value>> {
@@ -62,7 +64,8 @@ pub fn load_library_data(
     path_buf.push(format!("{}.rsp", library_name.terminal_name));
 
     let display_name = path_buf.to_string_lossy().into_owned();
-    let mut source_file = File::open(path_buf).map_err(|_| Error::LibraryNotFound(span))?;
+    let mut source_file =
+        File::open(path_buf).map_err(|_| Error::LibraryNotFound(scope.span_to_error_loc(span)))?;
 
     load_module_data(ccx, display_name, &mut source_file)
 }
