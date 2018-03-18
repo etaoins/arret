@@ -1158,6 +1158,16 @@ fn expand_multiple_zero_or_more() {
 }
 
 #[test]
+fn expand_multiple_zero_or_more_in_same_pattern_seq() {
+    let j = "(defmacro vm (macro-rules #{} [[(vm (l ... r ...)) true]]))";
+    let t = "                                     ^                     ";
+    let u = "                                           ^               ";
+
+    let err = Error::MultipleZeroOrMoreMatch(t2s(u), t2s(t));
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
+}
+
+#[test]
 fn expand_subtemplate_without_matching_subpattern() {
     let j1 = "(defmacro m (macro-rules #{} [[(m expr ...) (5 ...)]]))";
     let t1 = "                                            ^^^^^^^    ";

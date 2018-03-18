@@ -39,9 +39,17 @@ impl FoundVars {
     }
 }
 
+/// Tracks which type of input is being provided to FindVarsContext
+#[derive(Clone, Copy, PartialEq)]
+enum FindVarsInputType {
+    Pattern,
+    Template,
+}
+
 struct FindVarsContext<'a> {
     scope: &'a Scope,
     special_vars: &'a SpecialVars,
+    input_type: FindVarsInputType,
     unbound_var_spans: Option<HashMap<String, Span>>,
 }
 
@@ -51,10 +59,11 @@ impl<'a> FindVarsContext<'a> {
     fn new(
         scope: &'a Scope,
         special_vars: &'a SpecialVars,
-        allow_duplicate_vars: bool,
+        input_type: FindVarsInputType,
     ) -> FindVarsContext<'a> {
-        let unbound_var_spans = if allow_duplicate_vars {
-            // No need to track
+        let unbound_var_spans = if input_type == FindVarsInputType::Template {
+            // Duplicate vars are allowed in the template as one match can be expanded in multiple
+            // places
             None
         } else {
             // This tracks the name of unbound variables and where they were first used (for error
@@ -65,6 +74,7 @@ impl<'a> FindVarsContext<'a> {
         FindVarsContext {
             scope,
             special_vars,
+            input_type,
             unbound_var_spans,
         }
     }
@@ -123,11 +133,28 @@ impl<'a> FindVarsContext<'a> {
         pattern_vars: &mut FoundVars,
         mut patterns: &[NsValue],
     ) -> FindVarsResult {
+        let mut zero_or_more_span: Option<Span> = None;
+
         while !patterns.is_empty() {
             if self.special_vars
                 .starts_with_zero_or_more(&self.scope, patterns)
             {
-                self.visit_zero_or_more(pattern_vars, &patterns[0])?;
+                let pattern = &patterns[0];
+
+                // Make sure we don't have multiple zero or more matches in the same slice
+                if self.input_type == FindVarsInputType::Pattern {
+                    match zero_or_more_span {
+                        Some(old_span) => {
+                            // We've already had a zero-or-more match!
+                            return Err(Error::MultipleZeroOrMoreMatch(pattern.span(), old_span));
+                        }
+                        None => {
+                            zero_or_more_span = Some(pattern.span());
+                        }
+                    }
+                }
+
+                self.visit_zero_or_more(pattern_vars, pattern)?;
                 patterns = &patterns[2..];
             } else {
                 self.visit_datum(pattern_vars, &patterns[0])?;
@@ -194,12 +221,12 @@ pub fn link_vars(
     patterns: &[NsValue],
     template: &NsValue,
 ) -> Result<VarLinks> {
-    let mut fvcx = FindVarsContext::new(scope, special_vars, false);
+    let mut fvcx = FindVarsContext::new(scope, special_vars, FindVarsInputType::Pattern);
     // We don't need to report the root span for the pattern
     let mut pattern_vars = FoundVars::new(EMPTY_SPAN);
     fvcx.visit_slice(&mut pattern_vars, patterns)?;
 
-    let mut fvcx = FindVarsContext::new(scope, special_vars, true);
+    let mut fvcx = FindVarsContext::new(scope, special_vars, FindVarsInputType::Template);
     let mut template_vars = FoundVars::new(template.span());
     fvcx.visit_datum(&mut template_vars, template)?;
 

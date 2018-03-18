@@ -19,6 +19,7 @@ pub enum Error {
     LibraryNotFound(Span),
     NoMacroRule(Span),
     DuplicateMacroVar(Span, String, Span),
+    MultipleZeroOrMoreMatch(Span, Span),
     ReadError(String),
     SyntaxError(SyntaxError),
 }
@@ -45,6 +46,9 @@ impl Reportable for Error {
             Error::DuplicateMacroVar(_, ref sym, _) => {
                 format!("duplicate macro variable: `{}`", sym)
             }
+            Error::MultipleZeroOrMoreMatch(_, _) => {
+                "Multiple zero or more matches in the same sequence".to_owned()
+            }
             Error::ReadError(ref filename) => format!("error reading `{}`", filename),
             Error::SyntaxError(ref err) => err.message(),
         }
@@ -63,6 +67,7 @@ impl Reportable for Error {
             Error::LibraryNotFound(span) => Some(span),
             Error::NoMacroRule(span) => Some(span),
             Error::DuplicateMacroVar(span, _, _) => Some(span),
+            Error::MultipleZeroOrMoreMatch(span, _) => Some(span),
             Error::ReadError(_) => None,
             Error::SyntaxError(ref err) => err.span(),
         }
@@ -71,6 +76,7 @@ impl Reportable for Error {
     fn associated_report(&self) -> Option<Box<Reportable>> {
         match *self {
             Error::DuplicateMacroVar(_, _, span) => Some(Box::new(FirstDefHelp { span })),
+            Error::MultipleZeroOrMoreMatch(_, span) => Some(Box::new(FirstDefHelp { span })),
             Error::SyntaxError(ref err) => err.associated_report(),
             _ => None,
         }
