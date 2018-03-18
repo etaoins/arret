@@ -1,6 +1,6 @@
 use hir::scope::{Ident, NsId, NsIdAlloc, NsValue, Scope};
 use hir::macros::{MacroVar, MatchData, SpecialVars};
-use hir::macros::linkvars::VarLinks;
+use hir::macros::checker::VarLinks;
 use std::collections::HashMap;
 use syntax::span::Span;
 

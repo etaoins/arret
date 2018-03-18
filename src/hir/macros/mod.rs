@@ -1,6 +1,6 @@
+mod checker;
 mod matcher;
 mod expander;
-mod linkvars;
 
 use std::collections::{HashMap, HashSet};
 
@@ -9,7 +9,7 @@ use hir::scope::{Binding, Ident, NsIdAlloc, NsValue, Prim, Scope};
 use hir::error::{Error, Result};
 use hir::macros::matcher::match_rule;
 use hir::macros::expander::expand_rule;
-use hir::macros::linkvars::{link_vars, VarLinks};
+use hir::macros::checker::{check_rule, VarLinks};
 
 #[derive(PartialEq, Eq, Debug, Hash)]
 pub enum MacroVar {
@@ -148,7 +148,7 @@ pub fn lower_macro_rule(
         ));
     };
 
-    let var_links = link_vars(scope, special_vars, pattern.as_slice(), &template)?;
+    let var_links = check_rule(scope, special_vars, pattern.as_slice(), &template)?;
 
     Ok(Rule {
         pattern,

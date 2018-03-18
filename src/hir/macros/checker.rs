@@ -62,8 +62,8 @@ impl<'a> FindVarsContext<'a> {
         input_type: FindVarsInputType,
     ) -> FindVarsContext<'a> {
         let unbound_var_spans = if input_type == FindVarsInputType::Template {
-            // Duplicate vars are allowed in the template as one match can be expanded in multiple
-            // places
+            // Duplicate bound vars are allowed in the template as they must all resolve to the
+            // same value.
             None
         } else {
             // This tracks the name of unbound variables and where they were first used (for error
@@ -249,20 +249,20 @@ fn link_found_vars(
     })
 }
 
-pub fn link_vars(
+pub fn check_rule(
     scope: &Scope,
     special_vars: &SpecialVars,
     patterns: &[NsValue],
     template: &NsValue,
 ) -> Result<VarLinks> {
-    let mut fvcx = FindVarsContext::new(scope, special_vars, FindVarsInputType::Pattern);
+    let mut fpvcx = FindVarsContext::new(scope, special_vars, FindVarsInputType::Pattern);
     // We don't need to report the root span for the pattern
     let mut pattern_vars = FoundVars::new(EMPTY_SPAN);
-    fvcx.visit_seq(&mut pattern_vars, patterns)?;
+    fpvcx.visit_seq(&mut pattern_vars, patterns)?;
 
-    let mut fvcx = FindVarsContext::new(scope, special_vars, FindVarsInputType::Template);
+    let mut ftvcx = FindVarsContext::new(scope, special_vars, FindVarsInputType::Template);
     let mut template_vars = FoundVars::new(template.span());
-    fvcx.visit_datum(&mut template_vars, template)?;
+    ftvcx.visit_datum(&mut template_vars, template)?;
 
     link_found_vars(scope, 0, &pattern_vars, &template_vars)
 }
