@@ -175,11 +175,11 @@ impl<'ccx> LoweringContext<'ccx> {
         let body_data = arg_data.split_off(1);
 
         let param_data = match arg_data.pop().unwrap() {
-            NsValue::Vector(_, vs) => vs,
+            NsValue::List(_, vs) => vs,
             other => {
                 return Err(Error::IllegalArg(
                     other.span().clone(),
-                    "parameter declaration should be a vector".to_owned(),
+                    "parameter declaration should be a list".to_owned(),
                 ));
             }
         };
@@ -635,21 +635,18 @@ fn fn_without_param_decl() {
 }
 
 #[test]
-fn fn_with_non_vector_param_decl() {
-    let j = "(fn ())";
+fn fn_with_non_list_param_decl() {
+    let j = "(fn [])";
     let t = "    ^^ ";
 
-    let err = Error::IllegalArg(
-        t2s(t),
-        "parameter declaration should be a vector".to_owned(),
-    );
+    let err = Error::IllegalArg(t2s(t), "parameter declaration should be a list".to_owned());
 
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
 #[test]
 fn fn_with_non_symbol_param() {
-    let j = "(fn [()])";
+    let j = "(fn (()))";
     let t = "     ^^  ";
 
     let err = Error::IllegalArg(t2s(t), "unsupported binding type".to_owned());
@@ -658,7 +655,7 @@ fn fn_with_non_symbol_param() {
 
 #[test]
 fn empty_fn() {
-    let j = "(fn [])";
+    let j = "(fn ())";
     let t = "^^^^^^^";
 
     let expected = Expr::Fun(
@@ -677,7 +674,7 @@ fn empty_fn() {
 
 #[test]
 fn identity_fn() {
-    let j = "(fn [x] x)";
+    let j = "(fn (x) x)";
     let t = "^^^^^^^^^^";
     let u = "        ^ ";
 
@@ -704,7 +701,7 @@ fn identity_fn() {
 
 #[test]
 fn capturing_fn() {
-    let j = "(def x 1)(fn [] x)";
+    let j = "(def x 1)(fn () x)";
     let t = "^^^^^^^^^         ";
     let u = "       ^          ";
     let v = "         ^^^^^^^^^";
@@ -740,7 +737,7 @@ fn capturing_fn() {
 
 #[test]
 fn shadowing_fn() {
-    let j = "(def x 1)(fn [x] x)";
+    let j = "(def x 1)(fn (x) x)";
     let t = "^^^^^^^^^          ";
     let u = "       ^           ";
     let v = "         ^^^^^^^^^^";

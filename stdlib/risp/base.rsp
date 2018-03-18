@@ -4,5 +4,5 @@
 (export let)
 (defmacro let (macro-rules #{} [
   [(let ([name val] ...) expr ...)
-   ((fn [name ...] expr ...) val ...)]
+   ((fn (name ...) expr ...) val ...)]
 ]))
