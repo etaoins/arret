@@ -13,7 +13,6 @@ impl Span {
     }
 }
 
-#[cfg(test)]
 pub const EMPTY_SPAN: Span = Span { lo: 0, hi: 0 };
 
 #[cfg(test)]

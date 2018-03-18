@@ -78,18 +78,6 @@ impl<'a> MatchContext<'a> {
 
     fn visit_slice(&mut self, mut patterns: &[NsValue], mut args: &[NsValue]) -> MatchVisitResult {
         loop {
-            let (pattern, arg) = match (patterns.first(), args.first()) {
-                (Some(pattern), Some(arg)) => (pattern, arg),
-                (None, None) => {
-                    // Patterns and args ran out at the same time
-                    return Ok(());
-                }
-                _ => {
-                    // Mismatched lengths
-                    return Err(());
-                }
-            };
-
             if self.special_vars
                 .starts_with_zero_or_more(self.scope, patterns)
             {
@@ -101,11 +89,23 @@ impl<'a> MatchContext<'a> {
                 }
 
                 let (zero_or_more_args, rest_args) = args.split_at(args.len() - rest_patterns_len);
-                self.visit_zero_or_more(pattern, zero_or_more_args)?;
+                self.visit_zero_or_more(&patterns[0], zero_or_more_args)?;
 
                 patterns = &patterns[2..];
                 args = rest_args;
             } else {
+                let (pattern, arg) = match (patterns.first(), args.first()) {
+                    (Some(pattern), Some(arg)) => (pattern, arg),
+                    (None, None) => {
+                        // Patterns and args ran out at the same time
+                        return Ok(());
+                    }
+                    _ => {
+                        // Mismatched lengths
+                        return Err(());
+                    }
+                };
+
                 self.visit_datum(pattern, arg)?;
 
                 patterns = &patterns[1..];

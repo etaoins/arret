@@ -1108,3 +1108,104 @@ fn expand_middle_zero_or_more_match() {
     ));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
+
+#[test]
+fn expand_multiple_zero_or_more() {
+    let j1 = "(defmacro vm (macro-rules #{} [[(vm (l ...) (r ...)) [r ... l ...]]]))";
+    let t1 = "                                                     ^^^^^^^^^^^^^    ";
+    let sp = "                                                                      ";
+    let j2 = "(vm (1 2) (3 4))";
+    let u2 = "     ^          ";
+    let v2 = "       ^        ";
+    let w2 = "           ^    ";
+    let x2 = "             ^  ";
+
+    let j = &[j1, j2].join("");
+    let t = t1;
+    let u = &[sp, u2].join("");
+    let v = &[sp, v2].join("");
+    let w = &[sp, w2].join("");
+    let x = &[sp, x2].join("");
+
+    let expected = Expr::Lit(Value::Vector(
+        t2s(t),
+        vec![
+            Value::Int(t2s(w), 3),
+            Value::Int(t2s(x), 4),
+            Value::Int(t2s(u), 1),
+            Value::Int(t2s(v), 2),
+        ],
+    ));
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
+
+#[test]
+fn expand_subtemplate_without_matching_subpattern() {
+    let j1 = "(defmacro m (macro-rules #{} [[(m expr ...) (5 ...)]]))";
+    let t1 = "                                            ^^^^^^^    ";
+    let j2 = "(m 1 2 3 4)";
+    let t2 = "           ";
+
+    let j = &[j1, j2].join("");
+    let t = &[t1, t2].join("");
+
+    let err = Error::IllegalArg(
+        t2s(t),
+        "Subtemplate does not include any macro variables".to_owned(),
+    );
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
+}
+
+#[test]
+fn expand_subtemplate_matching_multiple_subpatterns() {
+    let j = "(defmacro m (macro-rules #{} [[(m (list1 ...) (list2 ...)) ([list1 list2] ...)]]))";
+    let t = "                                                           ^^^^^^^^^^^^^^^^^^^    ";
+
+    let err = Error::IllegalArg(
+        t2s(t),
+        "Subtemplate references macro variables from multiple subpatterns".to_owned(),
+    );
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
+}
+
+#[test]
+fn expand_nested_subpatterns() {
+    let j1 = "(defmacro m (macro-rules #{} [[(m (a b rest ...) ...) [(rest ... b a) ...]]]))";
+    let t1 = "                                                      ^^^^^^^^^^^^^^^^^^^^    ";
+    let u1 = "                                                       ^^^^^^^^^^^^^^         ";
+    let sp = "                                                                              ";
+    let j2 = "(m (1 2 3 4) (5 6))";
+    let v2 = "    ^              ";
+    let w2 = "      ^            ";
+    let x2 = "        ^          ";
+    let y2 = "          ^        ";
+    let z2 = "              ^    ";
+    let a2 = "                ^  ";
+
+    let j = &[j1, j2].join("");
+    let t = t1;
+    let u = u1;
+    let v = &[sp, v2].join("");
+    let w = &[sp, w2].join("");
+    let x = &[sp, x2].join("");
+    let y = &[sp, y2].join("");
+    let z = &[sp, z2].join("");
+    let a = &[sp, a2].join("");
+
+    let expected = Expr::Lit(Value::Vector(
+        t2s(t),
+        vec![
+            Value::List(
+                t2s(u),
+                vec![
+                    Value::Int(t2s(x), 3),
+                    Value::Int(t2s(y), 4),
+                    Value::Int(t2s(w), 2),
+                    Value::Int(t2s(v), 1),
+                ],
+            ),
+            Value::List(t2s(u), vec![Value::Int(t2s(a), 6), Value::Int(t2s(z), 5)]),
+        ],
+    ));
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}

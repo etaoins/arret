@@ -1,5 +1,6 @@
 mod matcher;
 mod expander;
+mod linkvars;
 
 use std::collections::{HashMap, HashSet};
 
@@ -8,6 +9,7 @@ use hir::scope::{Binding, Ident, NsIdAlloc, NsValue, Prim, Scope};
 use hir::error::{Error, Result};
 use hir::macros::matcher::match_rule;
 use hir::macros::expander::expand_rule;
+use hir::macros::linkvars::{link_vars, VarLinks};
 
 #[derive(PartialEq, Eq, Debug, Hash)]
 pub enum MacroVar {
@@ -61,6 +63,7 @@ impl SpecialVars {
 pub struct Rule {
     pattern: Vec<NsValue>,
     template: NsValue,
+    var_links: VarLinks,
 }
 
 #[derive(PartialEq, Debug)]
@@ -94,7 +97,12 @@ impl Macro {
     }
 }
 
-pub fn lower_macro_rule(self_ident: &Ident, rule_datum: NsValue) -> Result<Rule> {
+pub fn lower_macro_rule(
+    scope: &Scope,
+    self_ident: &Ident,
+    special_vars: &SpecialVars,
+    rule_datum: NsValue,
+) -> Result<Rule> {
     let (span, mut rule_values) = if let NsValue::Vector(span, vs) = rule_datum {
         (span, vs)
     } else {
@@ -140,7 +148,13 @@ pub fn lower_macro_rule(self_ident: &Ident, rule_datum: NsValue) -> Result<Rule>
         ));
     };
 
-    Ok(Rule { pattern, template })
+    let var_links = link_vars(scope, special_vars, pattern.as_slice(), &template)?;
+
+    Ok(Rule {
+        pattern,
+        template,
+        var_links,
+    })
 }
 
 pub fn lower_macro_rules(
@@ -199,7 +213,7 @@ pub fn lower_macro_rules(
 
     let rules = rules_values
         .into_iter()
-        .map(|rule_datum| lower_macro_rule(self_ident, rule_datum))
+        .map(|rule_datum| lower_macro_rule(scope, self_ident, &special_vars, rule_datum))
         .collect::<Result<Vec<Rule>>>()?;
 
     Ok(Macro::new(special_vars, rules))
@@ -220,7 +234,8 @@ pub fn expand_macro(
                 ns_id_alloc,
                 scope,
                 &mac.special_vars,
-                &match_data,
+                match_data,
+                &rule.var_links,
                 &rule.template,
             ));
         }
@@ -296,31 +311,6 @@ fn empty_rules() {
     };
 
     let expected = Macro::new(special_vars, vec![]);
-    assert_eq!(expected, macro_rules_for_str(j).unwrap());
-}
-
-#[test]
-fn trivial_rules() {
-    let j = "#{a b} [[(self x) x]]";
-    let t = "               ^     ";
-    let u = "                  ^  ";
-
-    let mut literals = HashSet::new();
-    literals.insert(MacroVar::Unbound("a".to_owned()));
-    literals.insert(MacroVar::Unbound("b".to_owned()));
-
-    let special_vars = SpecialVars {
-        zero_or_more: Some(MacroVar::Bound(Binding::Prim(Prim::Ellipsis))),
-        literals,
-    };
-
-    let pattern = vec![
-        NsValue::Ident(t2s(t), Ident::new(test_ns_id(), "x".to_owned())),
-    ];
-    let template = NsValue::Ident(t2s(u), Ident::new(test_ns_id(), "x".to_owned()));
-    let rules = vec![Rule { pattern, template }];
-
-    let expected = Macro::new(special_vars, rules);
     assert_eq!(expected, macro_rules_for_str(j).unwrap());
 }
 

@@ -1,7 +1,14 @@
 use hir::scope::{Ident, NsId, NsIdAlloc, NsValue, Scope};
 use hir::macros::{MacroVar, MatchData, SpecialVars};
+use hir::macros::linkvars::VarLinks;
 use std::collections::HashMap;
 use syntax::span::Span;
+
+struct ExpandCursor<'a> {
+    match_data: &'a MatchData,
+    var_links: &'a VarLinks,
+    subtemplate_idx: usize,
+}
 
 struct ExpandContext<'a> {
     ns_id_alloc: &'a mut NsIdAlloc,
@@ -24,10 +31,10 @@ impl<'a> ExpandContext<'a> {
         }
     }
 
-    fn expand_ident(&mut self, match_data: &MatchData, span: Span, ident: &Ident) -> NsValue {
+    fn expand_ident(&mut self, cursor: &ExpandCursor, span: Span, ident: &Ident) -> NsValue {
         let macro_var = MacroVar::from_ident(&self.scope, ident);
 
-        if let Some(replacement) = match_data.vars.get(&macro_var) {
+        if let Some(replacement) = cursor.match_data.vars.get(&macro_var) {
             return replacement.clone();
         }
 
@@ -44,31 +51,52 @@ impl<'a> ExpandContext<'a> {
         NsValue::Ident(span, new_ident)
     }
 
-    fn expand_zero_or_more(&mut self, match_data: &MatchData, template: &NsValue) -> Vec<NsValue> {
-        // TODO: Find correct subpattern
-        let matches = &match_data.subpatterns[0];
-        println!("{:?}", matches);
+    fn expand_zero_or_more(
+        &mut self,
+        cursor: &mut ExpandCursor,
+        template: &NsValue,
+    ) -> Vec<NsValue> {
+        // Find our subpattern index from our subtemplate index
+        let subtemplate_idx = cursor.subtemplate_idx;
+        let subvar_links = &cursor.var_links.subtemplates()[subtemplate_idx];
+        let subpattern_idx = subvar_links.pattern_idx();
+        let submatches = &cursor.match_data.subpatterns[subpattern_idx];
 
-        matches
+        cursor.subtemplate_idx = cursor.subtemplate_idx + 1;
+
+        submatches
             .iter()
-            .map(|m| self.expand_datum(m, template))
+            .map(|m| {
+                // Build a new cursor pointing to our subpattern
+                let mut subcursor = ExpandCursor {
+                    match_data: m,
+                    var_links: subvar_links,
+                    subtemplate_idx: 0,
+                };
+
+                self.expand_datum(&mut subcursor, template)
+            })
             .collect()
     }
 
-    fn expand_slice(&mut self, match_data: &MatchData, mut templates: &[NsValue]) -> Vec<NsValue> {
+    fn expand_slice(
+        &mut self,
+        cursor: &mut ExpandCursor,
+        mut templates: &[NsValue],
+    ) -> Vec<NsValue> {
         let mut result: Vec<NsValue> = vec![];
 
         while !templates.is_empty() {
             if self.special_vars
                 .starts_with_zero_or_more(&self.scope, templates)
             {
-                let mut expanded = self.expand_zero_or_more(match_data, &templates[0]);
+                let mut expanded = self.expand_zero_or_more(cursor, &templates[0]);
                 result.append(&mut expanded);
 
                 // Skip the ellipsis as well
                 templates = &templates[2..];
             } else {
-                let expanded = self.expand_datum(match_data, &templates[0]);
+                let expanded = self.expand_datum(cursor, &templates[0]);
                 result.push(expanded);
 
                 templates = &templates[1..];
@@ -78,19 +106,21 @@ impl<'a> ExpandContext<'a> {
         result
     }
 
-    fn expand_datum(&mut self, match_data: &MatchData, template: &NsValue) -> NsValue {
+    fn expand_datum(&mut self, cursor: &mut ExpandCursor, template: &NsValue) -> NsValue {
         match template {
-            &NsValue::Ident(span, ref ident) => self.expand_ident(match_data, span, ident),
-            &NsValue::List(span, ref vs) => NsValue::List(span, self.expand_slice(match_data, vs)),
-            &NsValue::Vector(span, ref vs) => {
-                NsValue::Vector(span, self.expand_slice(match_data, vs))
-            }
+            &NsValue::Ident(span, ref ident) => self.expand_ident(cursor, span, ident),
+            &NsValue::List(span, ref vs) => NsValue::List(span, self.expand_slice(cursor, vs)),
+            &NsValue::Vector(span, ref vs) => NsValue::Vector(span, self.expand_slice(cursor, vs)),
             other => other.clone(),
         }
     }
 
-    fn expand_template(mut self, match_data: &MatchData, template: &NsValue) -> (Scope, NsValue) {
-        let expanded_datum = self.expand_datum(match_data, template);
+    fn expand_template(
+        mut self,
+        cursor: &mut ExpandCursor,
+        template: &NsValue,
+    ) -> (Scope, NsValue) {
+        let expanded_datum = self.expand_datum(cursor, template);
         (self.scope, expanded_datum)
     }
 }
@@ -99,9 +129,17 @@ pub fn expand_rule(
     ns_id_alloc: &mut NsIdAlloc,
     scope: &Scope,
     special_vars: &SpecialVars,
-    match_data: &MatchData,
+    match_data: MatchData,
+    var_links: &VarLinks,
     template: &NsValue,
 ) -> (Scope, NsValue) {
     let mcx = ExpandContext::new(ns_id_alloc, scope, special_vars);
-    mcx.expand_template(match_data, template)
+
+    let mut cursor = ExpandCursor {
+        match_data: &match_data,
+        var_links,
+        subtemplate_idx: 0,
+    };
+
+    mcx.expand_template(&mut cursor, template)
 }
