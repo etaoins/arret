@@ -121,7 +121,7 @@ impl ExpectedContent {
     }
 }
 
-pub struct ContentStartHelp {
+struct ContentStartHelp {
     expected_content: ExpectedContent,
     open_char_span: Span,
 }

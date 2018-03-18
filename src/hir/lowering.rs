@@ -899,10 +899,20 @@ fn defmacro_of_non_list() {
 
 #[test]
 fn defmacro_of_unsupported_type() {
-    let j = "(defmacro a (macro-fn ${}))";
+    let j = "(defmacro a (macro-fn #{}))";
     let t = "            ^^^^^^^^^^^^^^ ";
 
     let err = Error::IllegalArg(t2s(t), "Unsupported macro type".to_owned());
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
+}
+
+#[test]
+fn defmacro_with_duplicate_vars() {
+    let j = "(defmacro a (macro-rules #{} [[(a x x) x]]))";
+    let t = "                                  ^         ";
+    let u = "                                    ^       ";
+
+    let err = Error::DuplicateMacroVar(t2s(u), "x".to_owned(), t2s(t));
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 

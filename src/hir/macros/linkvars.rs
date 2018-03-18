@@ -1,4 +1,5 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::result;
 
 use hir::macros::{MacroVar, SpecialVars};
 use hir::error::{Error, Result};
@@ -41,57 +42,100 @@ impl FoundVars {
 struct FindVarsContext<'a> {
     scope: &'a Scope,
     special_vars: &'a SpecialVars,
+    unbound_var_spans: Option<HashMap<String, Span>>,
 }
 
+type FindVarsResult = result::Result<(), Error>;
+
 impl<'a> FindVarsContext<'a> {
-    fn new(scope: &'a Scope, special_vars: &'a SpecialVars) -> FindVarsContext<'a> {
+    fn new(
+        scope: &'a Scope,
+        special_vars: &'a SpecialVars,
+        allow_duplicate_vars: bool,
+    ) -> FindVarsContext<'a> {
+        let unbound_var_spans = if allow_duplicate_vars {
+            // No need to track
+            None
+        } else {
+            // This tracks the name of unbound variables and where they were first used (for error
+            // reporting)
+            Some(HashMap::<String, Span>::new())
+        };
+
         FindVarsContext {
             scope,
             special_vars,
+            unbound_var_spans,
         }
     }
 
-    fn visit_ident(&mut self, pattern_vars: &mut FoundVars, ident: &Ident) {
+    fn visit_ident(
+        &mut self,
+        pattern_vars: &mut FoundVars,
+        span: Span,
+        ident: &Ident,
+    ) -> FindVarsResult {
         let macro_var = MacroVar::from_ident(&self.scope, ident);
 
         if self.special_vars.is_literal(&macro_var) || self.special_vars.is_wildcard(&macro_var) {
             // Not a variable
-            return;
+            return Ok(());
+        }
+
+        if let Some(ref mut unbound_var_spans) = self.unbound_var_spans {
+            if let MacroVar::Unbound(ref name) = macro_var {
+                if let Some(old_span) = unbound_var_spans.insert(name.clone(), span) {
+                    return Err(Error::DuplicateMacroVar(span, name.clone(), old_span));
+                }
+            }
         }
 
         pattern_vars.vars.insert(macro_var);
+        Ok(())
     }
 
-    fn visit_zero_or_more(&mut self, pattern_vars: &mut FoundVars, pattern: &NsValue) {
+    fn visit_zero_or_more(
+        &mut self,
+        pattern_vars: &mut FoundVars,
+        pattern: &NsValue,
+    ) -> FindVarsResult {
         let mut sub_vars = FoundVars::new(pattern.span());
-        self.visit_datum(&mut sub_vars, pattern);
+        self.visit_datum(&mut sub_vars, pattern)?;
 
         pattern_vars.subs.push(sub_vars);
+        Ok(())
     }
 
-    fn visit_datum(&mut self, pattern_vars: &mut FoundVars, pattern: &NsValue) {
+    fn visit_datum(&mut self, pattern_vars: &mut FoundVars, pattern: &NsValue) -> FindVarsResult {
         match pattern {
-            &NsValue::Ident(_, ref ident) => self.visit_ident(pattern_vars, ident),
+            &NsValue::Ident(span, ref ident) => self.visit_ident(pattern_vars, span, ident),
             &NsValue::List(_, ref vs) => self.visit_slice(pattern_vars, vs),
             &NsValue::Vector(_, ref vs) => self.visit_slice(pattern_vars, vs),
             _ => {
                 // Can't contain a pattern var
+                Ok(())
             }
-        };
+        }
     }
 
-    fn visit_slice(&mut self, pattern_vars: &mut FoundVars, mut patterns: &[NsValue]) {
+    fn visit_slice(
+        &mut self,
+        pattern_vars: &mut FoundVars,
+        mut patterns: &[NsValue],
+    ) -> FindVarsResult {
         while !patterns.is_empty() {
             if self.special_vars
                 .starts_with_zero_or_more(&self.scope, patterns)
             {
-                self.visit_zero_or_more(pattern_vars, &patterns[0]);
+                self.visit_zero_or_more(pattern_vars, &patterns[0])?;
                 patterns = &patterns[2..];
             } else {
-                self.visit_datum(pattern_vars, &patterns[0]);
+                self.visit_datum(pattern_vars, &patterns[0])?;
                 patterns = &patterns[1..];
             }
         }
+
+        Ok(())
     }
 }
 
@@ -150,14 +194,14 @@ pub fn link_vars(
     patterns: &[NsValue],
     template: &NsValue,
 ) -> Result<VarLinks> {
-    let mut fvcx = FindVarsContext::new(scope, special_vars);
-
+    let mut fvcx = FindVarsContext::new(scope, special_vars, false);
     // We don't need to report the root span for the pattern
     let mut pattern_vars = FoundVars::new(EMPTY_SPAN);
-    fvcx.visit_slice(&mut pattern_vars, patterns);
+    fvcx.visit_slice(&mut pattern_vars, patterns)?;
 
+    let mut fvcx = FindVarsContext::new(scope, special_vars, true);
     let mut template_vars = FoundVars::new(template.span());
-    fvcx.visit_datum(&mut template_vars, template);
+    fvcx.visit_datum(&mut template_vars, template)?;
 
     link_found_vars(0, &pattern_vars, &template_vars)
 }

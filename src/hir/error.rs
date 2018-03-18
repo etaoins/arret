@@ -18,6 +18,7 @@ pub enum Error {
     ExportOutsideModule(Span),
     LibraryNotFound(Span),
     NoMacroRule(Span),
+    DuplicateMacroVar(Span, String, Span),
     ReadError(String),
     SyntaxError(SyntaxError),
 }
@@ -41,6 +42,9 @@ impl Reportable for Error {
             Error::ExportOutsideModule(_) => "(export) outside of module body".to_owned(),
             Error::LibraryNotFound(_) => "library not found".to_owned(),
             Error::NoMacroRule(_) => "no matching macro rule".to_owned(),
+            Error::DuplicateMacroVar(_, ref sym, _) => {
+                format!("duplicate macro variable: `{}`", sym)
+            }
             Error::ReadError(ref filename) => format!("error reading `{}`", filename),
             Error::SyntaxError(ref err) => err.message(),
         }
@@ -58,6 +62,7 @@ impl Reportable for Error {
             Error::ExportOutsideModule(span) => Some(span),
             Error::LibraryNotFound(span) => Some(span),
             Error::NoMacroRule(span) => Some(span),
+            Error::DuplicateMacroVar(span, _, _) => Some(span),
             Error::ReadError(_) => None,
             Error::SyntaxError(ref err) => err.span(),
         }
@@ -65,6 +70,7 @@ impl Reportable for Error {
 
     fn associated_report(&self) -> Option<Box<Reportable>> {
         match *self {
+            Error::DuplicateMacroVar(_, _, span) => Some(Box::new(FirstDefHelp { span })),
             Error::SyntaxError(ref err) => err.associated_report(),
             _ => None,
         }
@@ -86,5 +92,23 @@ impl Display for Error {
 impl From<SyntaxError> for Error {
     fn from(err: SyntaxError) -> Error {
         Error::SyntaxError(err)
+    }
+}
+
+struct FirstDefHelp {
+    span: Span,
+}
+
+impl Reportable for FirstDefHelp {
+    fn level(&self) -> Level {
+        Level::Help
+    }
+
+    fn span(&self) -> Option<Span> {
+        Some(self.span)
+    }
+
+    fn message(&self) -> String {
+        "first definition here".to_owned()
     }
 }
