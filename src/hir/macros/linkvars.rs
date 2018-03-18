@@ -123,8 +123,9 @@ impl<'a> FindVarsContext<'a> {
     fn visit_datum(&mut self, pattern_vars: &mut FoundVars, pattern: &NsValue) -> FindVarsResult {
         match pattern {
             &NsValue::Ident(span, ref ident) => self.visit_ident(pattern_vars, span, ident),
-            &NsValue::List(_, ref vs) => self.visit_slice(pattern_vars, vs),
-            &NsValue::Vector(_, ref vs) => self.visit_slice(pattern_vars, vs),
+            &NsValue::List(_, ref vs) => self.visit_seq(pattern_vars, vs),
+            &NsValue::Vector(_, ref vs) => self.visit_seq(pattern_vars, vs),
+            &NsValue::Set(span, ref vs) => self.visit_set(pattern_vars, span, vs),
             _ => {
                 // Can't contain a pattern var
                 Ok(())
@@ -132,7 +133,7 @@ impl<'a> FindVarsContext<'a> {
         }
     }
 
-    fn visit_slice(
+    fn visit_seq(
         &mut self,
         pattern_vars: &mut FoundVars,
         mut patterns: &[NsValue],
@@ -170,6 +171,31 @@ impl<'a> FindVarsContext<'a> {
         }
 
         Ok(())
+    }
+
+    fn visit_set(
+        &mut self,
+        pattern_vars: &mut FoundVars,
+        span: Span,
+        patterns: &[NsValue],
+    ) -> FindVarsResult {
+        if self.input_type == FindVarsInputType::Template {
+            // Sets are expanded exactly as seq
+            return self.visit_seq(pattern_vars, patterns);
+        }
+
+        match patterns.len() {
+            0 => Ok(()),
+            2 if self.special_vars
+                .starts_with_zero_or_more(&self.scope, patterns) =>
+            {
+                self.visit_zero_or_more(pattern_vars, &patterns[0])
+            }
+            _ => Err(Error::IllegalArg(
+                self.scope.span_to_error_loc(span),
+                "Set patterns must either be empty or a zero or more match".to_owned(),
+            )),
+        }
     }
 }
 
@@ -232,7 +258,7 @@ pub fn link_vars(
     let mut fvcx = FindVarsContext::new(scope, special_vars, FindVarsInputType::Pattern);
     // We don't need to report the root span for the pattern
     let mut pattern_vars = FoundVars::new(EMPTY_SPAN);
-    fvcx.visit_slice(&mut pattern_vars, patterns)?;
+    fvcx.visit_seq(&mut pattern_vars, patterns)?;
 
     let mut fvcx = FindVarsContext::new(scope, special_vars, FindVarsInputType::Template);
     let mut template_vars = FoundVars::new(template.span());

@@ -42,7 +42,7 @@ impl<'a> MatchContext<'a> {
         }
     }
 
-    // TODO: Floats, sets, maps
+    // TODO: Floats, maps
     fn visit_datum(&mut self, pattern: &NsValue, arg: &NsValue) -> MatchVisitResult {
         match (pattern, arg) {
             (&NsValue::Ident(_, ref pattern_ident), arg) => self.visit_ident(pattern_ident, arg),
@@ -50,6 +50,7 @@ impl<'a> MatchContext<'a> {
             (&NsValue::Vector(_, ref pvs), &NsValue::Vector(_, ref avs)) => {
                 self.visit_slice(pvs, avs)
             }
+            (&NsValue::Set(_, ref pvs), &NsValue::Set(_, ref avs)) => self.visit_slice(pvs, avs),
             (&NsValue::Bool(_, pv), &NsValue::Bool(_, av)) if pv == av => Ok(()),
             (&NsValue::Int(_, pv), &NsValue::Int(_, av)) if pv == av => Ok(()),
             (&NsValue::Char(_, pv), &NsValue::Char(_, av)) if pv == av => Ok(()),

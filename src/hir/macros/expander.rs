@@ -112,6 +112,7 @@ impl<'a> ExpandContext<'a> {
             &NsValue::Ident(span, ref ident) => self.expand_ident(cursor, span, ident),
             &NsValue::List(span, ref vs) => NsValue::List(span, self.expand_slice(cursor, vs)),
             &NsValue::Vector(span, ref vs) => NsValue::Vector(span, self.expand_slice(cursor, vs)),
+            &NsValue::Set(span, ref vs) => NsValue::Set(span, self.expand_slice(cursor, vs)),
             other => other.clone(),
         }
     }

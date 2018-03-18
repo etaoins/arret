@@ -1073,6 +1073,58 @@ fn expand_fixed_vector_match() {
 }
 
 #[test]
+fn expand_empty_set_match() {
+    let j1 = "(defmacro empty-set? (macro-rules #{} [[(empty-set? #{}) true]]))";
+    let t1 = "                                                         ^^^^    ";
+    let j2 = "(empty-set? #{})";
+
+    let j = &[j1, j2].join("");
+    let t = t1;
+
+    let expected = Expr::Lit(Value::Bool(t2s(t), true));
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
+
+#[test]
+fn expand_zero_or_more_set_match() {
+    let j1 = "(defmacro set->list (macro-rules #{} [[(set->list #{v ...}) '(v ...)]]))";
+    let t1 = "                                                             ^^^^^^^    ";
+    let sp = "                                                                        ";
+    let j2 = "(set->list #{1 2 3})";
+    let u2 = "             ^      ";
+    let v2 = "               ^    ";
+    let w2 = "                 ^  ";
+
+    let j = &[j1, j2].join("");
+    let t = t1;
+    let u = &[sp, u2].join("");
+    let v = &[sp, v2].join("");
+    let w = &[sp, w2].join("");
+
+    let expected = Expr::Lit(Value::List(
+        t2s(t),
+        vec![
+            Value::Int(t2s(u), 1),
+            Value::Int(t2s(v), 2),
+            Value::Int(t2s(w), 3),
+        ],
+    ));
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
+
+#[test]
+fn expand_fixed_set_match() {
+    let j = "(defmacro two-set? (macro-rules #{} [[(two-set? #{_ _}) false]]))";
+    let t = "                                                ^^^^^^           ";
+
+    let err = Error::IllegalArg(
+        t2el(t),
+        "Set patterns must either be empty or a zero or more match".to_owned(),
+    );
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
+}
+
+#[test]
 fn expand_constant_match() {
     let j1 = "(defmacro alph (macro-rules #{} [[(alph 1) 'a] [(alph 2) 'b] [(alph 3) 'c]]))";
     let t1 = "                                                          ^                  ";
