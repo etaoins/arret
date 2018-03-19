@@ -124,7 +124,7 @@ impl<'a> FindVarsContext<'a> {
         match pattern {
             &NsValue::Ident(span, ref ident) => self.visit_ident(pattern_vars, span, ident),
             &NsValue::List(_, ref vs) => self.visit_seq(pattern_vars, vs),
-            &NsValue::Vector(_, ref vs) => self.visit_seq(pattern_vars, vs),
+            &NsValue::Vec(_, ref vs) => self.visit_seq(pattern_vars, vs),
             &NsValue::Set(span, ref vs) => self.visit_set(pattern_vars, span, vs),
             _ => {
                 // Can't contain a pattern var

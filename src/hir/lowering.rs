@@ -299,7 +299,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
     fn lower_import_set(&mut self, scope: &mut Scope, import_set_datum: NsValue) -> Result<()> {
         match import_set_datum {
-            NsValue::Vector(span, vs) => {
+            NsValue::Vec(span, vs) => {
                 if vs.len() < 1 {
                     return Err(Error::IllegalArg(
                         scope.span_to_error_loc(span),
@@ -510,13 +510,13 @@ fn module_for_str(data_str: &str) -> Result<Module> {
     let import_statement = Value::List(
         EMPTY_SPAN,
         vec![
-            Value::Symbol(EMPTY_SPAN, "import".to_owned()),
-            Value::Vector(
+            Value::Sym(EMPTY_SPAN, "import".to_owned()),
+            Value::Vec(
                 EMPTY_SPAN,
                 vec![
-                    Value::Symbol(EMPTY_SPAN, "risp".to_owned()),
-                    Value::Symbol(EMPTY_SPAN, "internal".to_owned()),
-                    Value::Symbol(EMPTY_SPAN, "primitives".to_owned()),
+                    Value::Sym(EMPTY_SPAN, "risp".to_owned()),
+                    Value::Sym(EMPTY_SPAN, "internal".to_owned()),
+                    Value::Sym(EMPTY_SPAN, "primitives".to_owned()),
                 ],
             ),
         ],
@@ -560,7 +560,7 @@ fn quoted_datum_shorthand() {
     let j = "'foo";
     let t = " ^^^";
 
-    let expected = Expr::Lit(Value::Symbol(t2s(t), "foo".to_owned()));
+    let expected = Expr::Lit(Value::Sym(t2s(t), "foo".to_owned()));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
@@ -569,7 +569,7 @@ fn quoted_datum_explicit() {
     let j = "(quote foo)";
     let t = "       ^^^ ";
 
-    let expected = Expr::Lit(Value::Symbol(t2s(t), "foo".to_owned()));
+    let expected = Expr::Lit(Value::Sym(t2s(t), "foo".to_owned()));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
@@ -981,7 +981,7 @@ fn expand_two_value_replacement() {
     let u = "                                                                      ^   ";
     let v = "                                                                        ^ ";
 
-    let expected = Expr::Lit(Value::Vector(
+    let expected = Expr::Lit(Value::Vec(
         t2s(t),
         vec![Value::Int(t2s(u), 1), Value::Int(t2s(v), 2)],
     ));
@@ -995,7 +995,7 @@ fn expand_with_matching_literals() {
     let u = "                                                               ^      ";
     let v = "                                                                    ^ ";
 
-    let expected = Expr::Lit(Value::Vector(
+    let expected = Expr::Lit(Value::Vec(
         t2s(t),
         vec![Value::Int(t2s(u), 1), Value::Int(t2s(v), 2)],
     ));
@@ -1134,7 +1134,7 @@ fn expand_constant_match() {
     let j = &[j1, j2].join("");
     let t = &[t1, t2].join("");
 
-    let expected = Expr::Lit(Value::Symbol(t2s(t), "b".to_owned()));
+    let expected = Expr::Lit(Value::Sym(t2s(t), "b".to_owned()));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
@@ -1183,7 +1183,7 @@ fn expand_middle_zero_or_more_match() {
     let w = &[sp, w2].join("");
     let x = &[sp, x2].join("");
 
-    let expected = Expr::Lit(Value::Vector(
+    let expected = Expr::Lit(Value::Vec(
         t2s(t),
         vec![
             Value::Bool(t2s(u), true),
@@ -1213,7 +1213,7 @@ fn expand_multiple_zero_or_more() {
     let w = &[sp, w2].join("");
     let x = &[sp, x2].join("");
 
-    let expected = Expr::Lit(Value::Vector(
+    let expected = Expr::Lit(Value::Vec(
         t2s(t),
         vec![
             Value::Int(t2s(w), 3),
@@ -1288,7 +1288,7 @@ fn expand_nested_subpatterns() {
     let z = &[sp, z2].join("");
     let a = &[sp, a2].join("");
 
-    let expected = Expr::Lit(Value::Vector(
+    let expected = Expr::Lit(Value::Vec(
         t2s(t),
         vec![
             Value::List(

@@ -103,7 +103,7 @@ pub fn lower_macro_rule(
     special_vars: &SpecialVars,
     rule_datum: NsValue,
 ) -> Result<Rule> {
-    let (span, mut rule_values) = if let NsValue::Vector(span, vs) = rule_datum {
+    let (span, mut rule_values) = if let NsValue::Vec(span, vs) = rule_datum {
         (span, vs)
     } else {
         return Err(Error::IllegalArg(
@@ -190,7 +190,7 @@ pub fn lower_macro_rules(
         ));
     };
 
-    let rules_values = if let NsValue::Vector(_, vs) = rules_datum {
+    let rules_values = if let NsValue::Vec(_, vs) = rules_datum {
         vs
     } else {
         return Err(Error::IllegalArg(

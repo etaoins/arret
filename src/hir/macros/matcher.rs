@@ -47,14 +47,12 @@ impl<'a> MatchContext<'a> {
         match (pattern, arg) {
             (&NsValue::Ident(_, ref pattern_ident), arg) => self.visit_ident(pattern_ident, arg),
             (&NsValue::List(_, ref pvs), &NsValue::List(_, ref avs)) => self.visit_slice(pvs, avs),
-            (&NsValue::Vector(_, ref pvs), &NsValue::Vector(_, ref avs)) => {
-                self.visit_slice(pvs, avs)
-            }
+            (&NsValue::Vec(_, ref pvs), &NsValue::Vec(_, ref avs)) => self.visit_slice(pvs, avs),
             (&NsValue::Set(_, ref pvs), &NsValue::Set(_, ref avs)) => self.visit_slice(pvs, avs),
             (&NsValue::Bool(_, pv), &NsValue::Bool(_, av)) if pv == av => Ok(()),
             (&NsValue::Int(_, pv), &NsValue::Int(_, av)) if pv == av => Ok(()),
             (&NsValue::Char(_, pv), &NsValue::Char(_, av)) if pv == av => Ok(()),
-            (&NsValue::String(_, ref pv), &NsValue::String(_, ref av)) if pv == av => Ok(()),
+            (&NsValue::Str(_, ref pv), &NsValue::Str(_, ref av)) if pv == av => Ok(()),
             _ => Err(()),
         }
     }

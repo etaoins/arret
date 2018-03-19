@@ -7,9 +7,9 @@ pub enum Value {
     Int(Span, i64),
     Float(Span, f64),
     List(Span, Vec<Value>),
-    String(Span, String),
-    Symbol(Span, String),
-    Vector(Span, Vec<Value>),
+    Str(Span, String),
+    Sym(Span, String),
+    Vec(Span, Vec<Value>),
     Map(Span, Vec<(Value, Value)>),
     Set(Span, Vec<Value>),
 }
