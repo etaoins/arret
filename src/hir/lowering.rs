@@ -19,15 +19,18 @@ pub struct LoweringContext<'ccx> {
     ccx: &'ccx mut CompileContext,
 }
 
-// TODO: Change this to define_lower_expr_impl() and remove $lower_expr?
 macro_rules! lower_expr_impl {
-    ($self:ident, $scope:ident, $datum:ident, $lower_prim_apply:ident, $lower_expr:ident) => {
+    ($self:ident, $scope:ident, $datum:ident, $lower_prim_apply:ident) => {
         match $datum {
             NsValue::Ident(span, ref ident) => match $scope.get(ident) {
                 Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
                 Some(Binding::Prim(_)) => Err(Error::PrimRef($scope.span_to_error_loc(span))),
-                Some(Binding::Macro(_)) => Err(Error::MacroRef($scope.span_to_error_loc(span), ident.name().clone())),
-                None => Err(Error::UnboundSymbol($scope.span_to_error_loc(span), ident.name().clone())),
+                Some(Binding::Macro(_)) => {
+                    Err(Error::MacroRef($scope.span_to_error_loc(span), ident.name().clone()))
+                }
+                None => {
+                    Err(Error::UnboundSymbol($scope.span_to_error_loc(span), ident.name().clone()))
+                }
             },
             NsValue::List(span, mut vs) => {
                 if vs.len() == 0 {
@@ -48,13 +51,14 @@ macro_rules! lower_expr_impl {
                                 expand_macro(&mut $self.ns_id_alloc, $scope, span, mac, arg_data)?
                             };
 
-                            // This will recurse
-                            $self.$lower_expr(&mut expanded_scope, expanded_datum)
+                            $self.lower_body_expr(&mut expanded_scope, expanded_datum)
                         }
                         Some(Binding::Var(id)) => {
                             $self.lower_expr_apply($scope, span, Expr::Ref(span, id), arg_data)
                         }
-                        None => Err(Error::UnboundSymbol($scope.span_to_error_loc(fn_span), ident.name().clone())),
+                        None => {
+                            Err(Error::UnboundSymbol($scope.span_to_error_loc(fn_span), ident.name().clone()))
+                        }
                     },
                     _ => {
                         let fn_expr = $self.lower_expr($scope, fn_datum)?;
@@ -436,22 +440,15 @@ impl<'ccx> LoweringContext<'ccx> {
     }
 
     fn lower_expr(&mut self, scope: &Scope, datum: NsValue) -> Result<Expr> {
-        lower_expr_impl!(self, scope, datum, lower_prim_apply, lower_expr)
+        lower_expr_impl!(self, scope, datum, lower_prim_apply)
     }
 
     fn lower_body_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr> {
-        lower_expr_impl!(self, scope, datum, lower_body_prim_apply, lower_body_expr)
+        lower_expr_impl!(self, scope, datum, lower_body_prim_apply)
     }
 
     fn lower_module_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr> {
-        // TODO: What happens if we expand an (import)/(export) in a macro?
-        lower_expr_impl!(
-            self,
-            scope,
-            datum,
-            lower_module_prim_apply,
-            lower_module_expr
-        )
+        lower_expr_impl!(self, scope, datum, lower_module_prim_apply)
     }
 
     fn lower_module(&mut self, scope: &mut Scope, data: Vec<Value>) -> Result<Module> {
