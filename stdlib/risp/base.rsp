@@ -1,5 +1,5 @@
 (import [risp internal primitives])
-(export def fn if quote export ... _)
+(export def fn if quote export ... _ defmacro macro-rules)
 
 (export let)
 (defmacro let (macro-rules #{} [
