@@ -150,7 +150,7 @@ impl<'ccx> LoweringContext<'ccx> {
     ) -> Result<Destruc<T>> {
         match destruc_datum {
             NsValue::Ident(_, ident) => {
-                if let Some(Binding::Prim(Prim::Wildcard)) = scope.get(&ident) {
+                if scope.get(&ident) == Some(Binding::Prim(Prim::Wildcard)) {
                     return Ok(Destruc::Wildcard(None));
                 }
 
@@ -165,12 +165,31 @@ impl<'ccx> LoweringContext<'ccx> {
                     bound: None,
                 }))
             }
-            NsValue::List(_, vs) => {
+            NsValue::List(_, mut vs) => {
+                let has_rest = if vs.len() > 2 {
+                    match &vs[vs.len() - 1] {
+                        &NsValue::Ident(_, ref ident) => {
+                            scope.get(ident) == Some(Binding::Prim(Prim::Ellipsis))
+                        }
+                        _ => false,
+                    }
+                } else {
+                    false
+                };
+
+                let rest_destruc = if has_rest {
+                    // Remove the ellipsis completely
+                    vs.pop();
+                    Some(Box::new(self.lower_destruc(scope, vs.pop().unwrap())?))
+                } else {
+                    None
+                };
+
                 let fixed_destrucs = vs.into_iter()
                     .map(|v| self.lower_destruc(scope, v))
                     .collect::<Result<Vec<Destruc<T>>>>()?;
 
-                Ok(Destruc::List(fixed_destrucs, None))
+                Ok(Destruc::List(fixed_destrucs, rest_destruc))
             }
             _ => Err(Error::IllegalArg(
                 scope.span_to_error_loc(destruc_datum.span()),
@@ -612,21 +631,25 @@ fn wildcard_def() {
 
 #[test]
 fn list_destruc_def() {
-    let j = "(def (x) '(1)) x";
-    let t = "^^^^^^^^^^^^^^  ";
-    let u = "          ^^^   ";
-    let v = "           ^    ";
-    let w = "               ^";
+    let j = "(def (x rest ...) '(1)) x";
+    let t = "^^^^^^^^^^^^^^^^^^^^^^^  ";
+    let u = "                   ^^^   ";
+    let v = "                    ^    ";
+    let w = "                        ^";
 
     let destruc = Destruc::List(
         vec![
             Destruc::Var(Var {
-                id: VarId(1),
+                id: VarId(2),
                 source_name: "x".to_owned(),
                 bound: None,
             }),
         ],
-        None,
+        Some(Box::new(Destruc::Var(Var {
+            id: VarId(1),
+            source_name: "rest".to_owned(),
+            bound: None,
+        }))),
     );
 
     let expected = Expr::Do(vec![
@@ -635,7 +658,7 @@ fn list_destruc_def() {
             destruc,
             Box::new(Expr::Lit(Value::List(t2s(u), vec![Value::Int(t2s(v), 1)]))),
         ),
-        Expr::Ref(t2s(w), VarId(1)),
+        Expr::Ref(t2s(w), VarId(2)),
     ]);
 
     assert_eq!(expected, body_expr_for_str(j).unwrap());
