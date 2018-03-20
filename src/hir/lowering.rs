@@ -150,6 +150,10 @@ impl<'ccx> LoweringContext<'ccx> {
     ) -> Result<Destruc<T>> {
         match destruc_datum {
             NsValue::Ident(_, ident) => {
+                if let Some(Binding::Prim(Prim::Wildcard)) = scope.get(&ident) {
+                    return Ok(Destruc::Wildcard(None));
+                }
+
                 let var_id = self.alloc_var_id();
                 let source_name = ident.name().clone();
 
@@ -591,6 +595,18 @@ fn basic_untyped_var_def() {
         Expr::Ref(t2s(v), VarId(1)),
     ]);
 
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
+
+#[test]
+fn wildcard_def() {
+    let j = "(def _ 1)";
+    let t = "^^^^^^^^^";
+    let u = "       ^ ";
+
+    let destruc = Destruc::Wildcard(None);
+
+    let expected = Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Value::Int(t2s(u), 1))));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 

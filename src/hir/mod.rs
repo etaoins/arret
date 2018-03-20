@@ -34,6 +34,7 @@ impl<T> PartialEq for Var<T> {
 #[derive(Debug, PartialEq)]
 pub enum Destruc<T> {
     Var(Var<T>),
+    Wildcard(Option<T>),
     List(Vec<Destruc<T>>, Option<Box<Destruc<T>>>),
 }
 
