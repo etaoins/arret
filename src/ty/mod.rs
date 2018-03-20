@@ -1,6 +1,7 @@
 // Stub out to silence warnings
 pub type Ty = ();
-pub type PFun = ();
+pub type PTy = ();
+pub type PVar = ();
 
 /*
 use std::collections::BTreeSet;

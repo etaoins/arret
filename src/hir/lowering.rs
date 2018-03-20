@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::io::Read;
 
-use hir::{Cond, Expr, Fun, Var, VarId};
+use hir::{Cond, Destruc, Expr, Fun, Var, VarId};
 use hir::loader::{load_library_data, load_module_data, LibraryName};
 use hir::scope::{Binding, Ident, MacroId, NsId, NsIdAlloc, NsValue, Prim, Scope};
 use hir::module::Module;
@@ -143,35 +143,49 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(())
     }
 
+    fn lower_destruc<T>(
+        &mut self,
+        scope: &mut Scope,
+        destruc_datum: NsValue,
+    ) -> Result<Destruc<T>> {
+        match destruc_datum {
+            NsValue::Ident(_, ident) => {
+                let var_id = self.alloc_var_id();
+                let source_name = ident.name().clone();
+
+                scope.insert_var(ident, var_id);
+
+                Ok(Destruc::Var(Var {
+                    id: var_id,
+                    source_name,
+                    bound: None,
+                }))
+            }
+            NsValue::List(_, vs) => {
+                let fixed_destrucs = vs.into_iter()
+                    .map(|v| self.lower_destruc(scope, v))
+                    .collect::<Result<Vec<Destruc<T>>>>()?;
+
+                Ok(Destruc::List(fixed_destrucs, None))
+            }
+            _ => Err(Error::IllegalArg(
+                scope.span_to_error_loc(destruc_datum.span()),
+                "values can only be bound to variables or destructured into lists".to_owned(),
+            )),
+        }
+    }
+
     fn lower_def_var(
         &mut self,
         scope: &mut Scope,
         span: Span,
-        sym_datum: NsValue,
+        destruc_datum: NsValue,
         value_datum: NsValue,
     ) -> Result<Expr> {
-        let sym_ident = match sym_datum {
-            NsValue::Ident(_, ident) => ident.clone(),
-            other => {
-                return Err(Error::ExpectedSymbol(scope.span_to_error_loc(other.span())));
-            }
-        };
-
-        let var_id = self.alloc_var_id();
-        let sym_name = sym_ident.name().clone();
+        let destruc = self.lower_destruc(scope, destruc_datum)?;
         let value_expr = self.lower_expr(scope, value_datum)?;
 
-        scope.insert_var(sym_ident, var_id);
-
-        Ok(Expr::Def(
-            span,
-            Var {
-                id: var_id,
-                source_name: sym_name,
-                bound: None,
-            },
-            Box::new(value_expr),
-        ))
+        Ok(Expr::Def(span, destruc, Box::new(value_expr)))
     }
 
     fn lower_fun(&mut self, scope: &Scope, span: Span, mut arg_data: Vec<NsValue>) -> Result<Expr> {
@@ -184,44 +198,24 @@ impl<'ccx> LoweringContext<'ccx> {
 
         // Body starts after the parameter declaration
         let body_data = arg_data.split_off(1);
+        let param_datum = arg_data.pop().unwrap();
 
-        let param_data = match arg_data.pop().unwrap() {
-            NsValue::List(_, vs) => vs,
+        // TODO: It would be consistent to also allow assigning the entire argument list to a
+        // symbol. This would be the same as using a list with a single rest parameter. It could
+        // potentially be confusing/ambiguous to allow both so require a list for now.
+        match param_datum {
+            NsValue::List(_, _) => {}
             other => {
                 return Err(Error::IllegalArg(
                     scope.span_to_error_loc(other.span()),
                     "parameter declaration should be a list".to_owned(),
                 ));
             }
-        };
+        }
 
-        // Pull our our params
+        // Pull out our params
         let mut body_scope = Scope::new_child(scope);
-
-        let fixed_params = param_data
-            .into_iter()
-            .map(|param_datum| {
-                let ident = match param_datum {
-                    NsValue::Ident(_, ident) => ident,
-                    other => {
-                        return Err(Error::IllegalArg(
-                            scope.span_to_error_loc(other.span()),
-                            "unsupported binding type".to_owned(),
-                        ));
-                    }
-                };
-
-                let var_id = self.alloc_var_id();
-                let var = Var {
-                    id: var_id,
-                    source_name: ident.name().clone(),
-                    bound: None,
-                };
-
-                body_scope.insert_var(ident, var_id);
-                Ok(var)
-            })
-            .collect::<Result<Vec<Var>>>()?;
+        let params = self.lower_destruc(&mut body_scope, param_datum)?;
 
         let body_exprs = body_data
             .into_iter()
@@ -232,9 +226,9 @@ impl<'ccx> LoweringContext<'ccx> {
             span,
             Fun {
                 source_name: None,
-                ty: None,
-                fixed_params,
-                rest_param: None,
+                poly_vars: vec![],
+                params,
+                ret_ty: None,
                 body_expr: Box::new(Expr::from_vec(body_exprs)),
             },
         ))
@@ -371,9 +365,9 @@ impl<'ccx> LoweringContext<'ccx> {
                 }
 
                 let value_datum = arg_data.pop().unwrap();
-                let sym_datum = arg_data.pop().unwrap();
+                let destruc_datum = arg_data.pop().unwrap();
 
-                self.lower_def_var(scope, span, sym_datum, value_datum)
+                self.lower_def_var(scope, span, destruc_datum, value_datum)
             }
             &Prim::DefMacro => {
                 let arg_count = arg_data.len();
@@ -580,22 +574,20 @@ fn quoted_multiple_data() {
 }
 
 #[test]
-fn basic_untyped_def() {
+fn basic_untyped_var_def() {
     let j = "(def x 1) x";
     let t = "^^^^^^^^^  ";
     let u = "       ^   ";
     let v = "          ^";
 
+    let destruc = Destruc::Var(Var {
+        id: VarId(1),
+        source_name: "x".to_owned(),
+        bound: None,
+    });
+
     let expected = Expr::Do(vec![
-        Expr::Def(
-            t2s(t),
-            Var {
-                id: VarId(1),
-                source_name: "x".to_owned(),
-                bound: None,
-            },
-            Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
-        ),
+        Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Value::Int(t2s(u), 1)))),
         Expr::Ref(t2s(v), VarId(1)),
     ]);
 
@@ -603,11 +595,45 @@ fn basic_untyped_def() {
 }
 
 #[test]
-fn def_of_non_symbol() {
+fn list_destruc_def() {
+    let j = "(def (x) '(1)) x";
+    let t = "^^^^^^^^^^^^^^  ";
+    let u = "          ^^^   ";
+    let v = "           ^    ";
+    let w = "               ^";
+
+    let destruc = Destruc::List(
+        vec![
+            Destruc::Var(Var {
+                id: VarId(1),
+                source_name: "x".to_owned(),
+                bound: None,
+            }),
+        ],
+        None,
+    );
+
+    let expected = Expr::Do(vec![
+        Expr::Def(
+            t2s(t),
+            destruc,
+            Box::new(Expr::Lit(Value::List(t2s(u), vec![Value::Int(t2s(v), 1)]))),
+        ),
+        Expr::Ref(t2s(w), VarId(1)),
+    ]);
+
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
+
+#[test]
+fn def_of_bad_destruc() {
     let j = "(def 1 1)";
     let t = "     ^   ";
 
-    let err = Error::ExpectedSymbol(t2el(t));
+    let err = Error::IllegalArg(
+        t2el(t),
+        "values can only be bound to variables or destructured into lists".to_owned(),
+    );
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -658,11 +684,14 @@ fn fn_with_non_list_param_decl() {
 }
 
 #[test]
-fn fn_with_non_symbol_param() {
-    let j = "(fn (()))";
-    let t = "     ^^  ";
+fn fn_with_bad_destruc_param() {
+    let j = "(fn (1))";
+    let t = "     ^  ";
 
-    let err = Error::IllegalArg(t2el(t), "unsupported binding type".to_owned());
+    let err = Error::IllegalArg(
+        t2el(t),
+        "values can only be bound to variables or destructured into lists".to_owned(),
+    );
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -675,9 +704,9 @@ fn empty_fn() {
         t2s(t),
         Fun {
             source_name: None,
-            ty: None,
-            fixed_params: vec![],
-            rest_param: None,
+            poly_vars: vec![],
+            params: Destruc::List(vec![], None),
+            ret_ty: None,
             body_expr: Box::new(Expr::from_vec(vec![])),
         },
     );
@@ -692,19 +721,24 @@ fn identity_fn() {
     let u = "        ^ ";
 
     let param_var_id = VarId::new(1);
-    let param_var = Var {
-        id: param_var_id,
-        source_name: "x".to_owned(),
-        bound: None,
-    };
+    let params = Destruc::List(
+        vec![
+            Destruc::Var(Var {
+                id: param_var_id,
+                source_name: "x".to_owned(),
+                bound: None,
+            }),
+        ],
+        None,
+    );
 
     let expected = Expr::Fun(
         t2s(t),
         Fun {
             source_name: None,
-            ty: None,
-            fixed_params: vec![param_var],
-            rest_param: None,
+            poly_vars: vec![],
+            params,
+            ret_ty: None,
             body_expr: Box::new(Expr::Ref(t2s(u), param_var_id)),
         },
     );
@@ -721,25 +755,25 @@ fn capturing_fn() {
     let w = "                ^ ";
 
     let outer_var_id = VarId::new(1);
-    let outer_var = Var {
+    let outer_destruc = Destruc::Var(Var {
         id: outer_var_id,
         source_name: "x".to_owned(),
         bound: None,
-    };
+    });
 
     let expected = Expr::Do(vec![
         Expr::Def(
             t2s(t),
-            outer_var,
+            outer_destruc,
             Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
         ),
         Expr::Fun(
             t2s(v),
             Fun {
                 source_name: None,
-                ty: None,
-                fixed_params: vec![],
-                rest_param: None,
+                poly_vars: vec![],
+                params: Destruc::List(vec![], None),
+                ret_ty: None,
                 body_expr: Box::new(Expr::Ref(t2s(w), outer_var_id)),
             },
         ),
@@ -757,32 +791,37 @@ fn shadowing_fn() {
     let w = "                 ^ ";
 
     let outer_var_id = VarId::new(1);
-    let outer_var = Var {
+    let outer_destruc = Destruc::Var(Var {
         id: outer_var_id,
         source_name: "x".to_owned(),
         bound: None,
-    };
+    });
 
     let param_var_id = VarId::new(2);
-    let param_var = Var {
-        id: param_var_id,
-        source_name: "x".to_owned(),
-        bound: None,
-    };
+    let params = Destruc::List(
+        vec![
+            Destruc::Var(Var {
+                id: param_var_id,
+                source_name: "x".to_owned(),
+                bound: None,
+            }),
+        ],
+        None,
+    );
 
     let expected = Expr::Do(vec![
         Expr::Def(
             t2s(t),
-            outer_var,
+            outer_destruc,
             Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
         ),
         Expr::Fun(
             t2s(v),
             Fun {
                 source_name: None,
-                ty: None,
-                fixed_params: vec![param_var],
-                rest_param: None,
+                poly_vars: vec![],
+                params,
+                ret_ty: None,
                 body_expr: Box::new(Expr::Ref(t2s(w), param_var_id)),
             },
         ),
@@ -868,11 +907,11 @@ fn simple_export() {
 
     let expected_body_expr = Expr::Def(
         t2s(t),
-        Var {
+        Destruc::Var(Var {
             id: var_id,
             source_name: "x".to_owned(),
             bound: None,
-        },
+        }),
         Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
     );
 

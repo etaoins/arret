@@ -19,24 +19,32 @@ impl VarId {
 }
 
 #[derive(Debug)]
-pub struct Var {
+pub struct Var<T> {
     id: VarId,
     source_name: String,
-    bound: Option<ty::Ty>,
+    bound: Option<T>,
 }
 
-impl PartialEq for Var {
-    fn eq(&self, other: &Var) -> bool {
+impl<T> PartialEq for Var<T> {
+    fn eq(&self, other: &Var<T>) -> bool {
         self.id.0 == other.id.0
     }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Destruc<T> {
+    Var(Var<T>),
+    List(Vec<Destruc<T>>, Option<Box<Destruc<T>>>),
 }
 
 #[derive(PartialEq, Debug)]
 pub struct Fun {
     source_name: Option<String>,
-    ty: Option<ty::PFun>,
-    fixed_params: Vec<Var>,
-    rest_param: Option<Var>,
+
+    poly_vars: Vec<ty::PVar>,
+    params: Destruc<ty::PTy>,
+    ret_ty: Option<ty::PTy>,
+
     body_expr: Box<Expr>,
 }
 
@@ -52,7 +60,7 @@ pub enum Expr {
     Lit(Value),
     App(Span, Box<Expr>, Vec<Expr>),
     Fun(Span, Fun),
-    Def(Span, Var, Box<Expr>),
+    Def(Span, Destruc<ty::Ty>, Box<Expr>),
     Cond(Span, Cond),
     Ref(Span, VarId),
     Do(Vec<Expr>),
