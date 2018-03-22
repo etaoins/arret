@@ -120,7 +120,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 _ => {
                     return Err(Error::IllegalArg(
                         scope.span_to_error_loc(span),
-                        "Unsupported macro type".to_owned(),
+                        "unsupported macro type".to_owned(),
                     ))
                 }
             }
@@ -130,7 +130,7 @@ impl<'ccx> LoweringContext<'ccx> {
         } else {
             return Err(Error::IllegalArg(
                 scope.span_to_error_loc(transformer_spec.span()),
-                "Macro specification must be a list".to_owned(),
+                "macro specification must be a list".to_owned(),
             ));
         };
 
@@ -149,9 +149,19 @@ impl<'ccx> LoweringContext<'ccx> {
         destruc_datum: NsValue,
     ) -> Result<Destruc<T>> {
         match destruc_datum {
-            NsValue::Ident(_, ident) => {
-                if scope.get(&ident) == Some(Binding::Prim(Prim::Wildcard)) {
-                    return Ok(Destruc::Wildcard(None));
+            NsValue::Ident(span, ident) => {
+                match scope.get(&ident) {
+                    Some(Binding::Prim(Prim::Wildcard)) => {
+                        return Ok(Destruc::Wildcard(None));
+                    }
+                    Some(Binding::Prim(Prim::Ellipsis)) => {
+                        return Err(Error::IllegalArg(
+                            scope.span_to_error_loc(span),
+                            "ellipsis can only be used to destructure the rest of a list"
+                                .to_owned(),
+                        ));
+                    }
+                    _ => {}
                 }
 
                 let var_id = self.alloc_var_id();
@@ -630,6 +640,18 @@ fn wildcard_def() {
 }
 
 #[test]
+fn destruc_to_bad_ellipsis_def() {
+    let j = "(def ... 1)";
+    let t = "     ^^^   ";
+
+    let err = Error::IllegalArg(
+        t2el(t),
+        "ellipsis can only be used to destructure the rest of a list".to_owned(),
+    );
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
+}
+
+#[test]
 fn list_destruc_def() {
     let j = "(def (x rest ...) '(1)) x";
     let t = "^^^^^^^^^^^^^^^^^^^^^^^  ";
@@ -984,7 +1006,7 @@ fn defmacro_of_non_list() {
     let j = "(defmacro a b)";
     let t = "            ^ ";
 
-    let err = Error::IllegalArg(t2el(t), "Macro specification must be a list".to_owned());
+    let err = Error::IllegalArg(t2el(t), "macro specification must be a list".to_owned());
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -993,7 +1015,7 @@ fn defmacro_of_unsupported_type() {
     let j = "(defmacro a (macro-fn #{}))";
     let t = "            ^^^^^^^^^^^^^^ ";
 
-    let err = Error::IllegalArg(t2el(t), "Unsupported macro type".to_owned());
+    let err = Error::IllegalArg(t2el(t), "unsupported macro type".to_owned());
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 
@@ -1004,6 +1026,18 @@ fn defmacro_with_duplicate_vars() {
     let u = "                                    ^       ";
 
     let err = Error::DuplicateMacroVar(t2el(u), "x".to_owned(), t2s(t));
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
+}
+
+#[test]
+fn defmacro_with_bad_ellipsis() {
+    let j = "(defmacro a (macro-rules #{} [[(a ...) false]]))";
+    let t = "                                  ^^^           ";
+
+    let err = Error::IllegalArg(
+        t2el(t),
+        "ellipsis can only be used as part of a zero or more match".to_owned(),
+    );
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 

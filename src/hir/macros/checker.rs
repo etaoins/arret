@@ -92,6 +92,13 @@ impl<'a> FindVarsContext<'a> {
             return Ok(());
         }
 
+        if self.special_vars.is_zero_or_more(&macro_var) {
+            return Err(Error::IllegalArg(
+                self.scope.span_to_error_loc(span),
+                "ellipsis can only be used as part of a zero or more match".to_owned(),
+            ));
+        }
+
         if let Some(ref mut unbound_var_spans) = self.unbound_var_spans {
             if let MacroVar::Unbound(ref name) = macro_var {
                 if let Some(old_span) = unbound_var_spans.insert(name.clone(), span) {

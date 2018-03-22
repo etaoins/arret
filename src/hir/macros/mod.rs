@@ -108,14 +108,14 @@ pub fn lower_macro_rule(
     } else {
         return Err(Error::IllegalArg(
             scope.span_to_error_loc(rule_datum.span()),
-            "Expected a macro rule vector".to_owned(),
+            "expected a macro rule vector".to_owned(),
         ));
     };
 
     if rule_values.len() != 2 {
         return Err(Error::IllegalArg(
             scope.span_to_error_loc(span),
-            "Expected a macro rule vector with two elements".to_owned(),
+            "expected a macro rule vector with two elements".to_owned(),
         ));
     }
 
@@ -126,7 +126,7 @@ pub fn lower_macro_rule(
         if vs.len() < 1 {
             return Err(Error::IllegalArg(
                 scope.span_to_error_loc(span),
-                "Macro rule patterns must contain at least the name of the macro".to_owned(),
+                "macro rule patterns must contain at least the name of the macro".to_owned(),
             ));
         }
 
@@ -135,7 +135,7 @@ pub fn lower_macro_rule(
             other => {
                 return Err(Error::IllegalArg(
                     scope.span_to_error_loc(other.span()),
-                    "Macro rule patterns must start with the name of the macro".to_owned(),
+                    "macro rule patterns must start with the name of the macro".to_owned(),
                 ));
             }
         }
@@ -144,7 +144,7 @@ pub fn lower_macro_rule(
     } else {
         return Err(Error::IllegalArg(
             scope.span_to_error_loc(pattern_data.span()),
-            "Expected a macro rule pattern list".to_owned(),
+            "expected a macro rule pattern list".to_owned(),
         ));
     };
 
@@ -178,7 +178,7 @@ pub fn lower_macro_rules(
                 } else {
                     Err(Error::IllegalArg(
                         scope.span_to_error_loc(v.span()),
-                        "Pattern literal must be a symbol".to_owned(),
+                        "pattern literal must be a symbol".to_owned(),
                     ))
                 }
             })
@@ -186,7 +186,7 @@ pub fn lower_macro_rules(
     } else {
         return Err(Error::IllegalArg(
             scope.span_to_error_loc(literals_datum.span()),
-            "Expected set of pattern literals".to_owned(),
+            "expected set of pattern literals".to_owned(),
         ));
     };
 
@@ -195,7 +195,7 @@ pub fn lower_macro_rules(
     } else {
         return Err(Error::IllegalArg(
             scope.span_to_error_loc(rules_datum.span()),
-            "Expected a vector of syntax rules".to_owned(),
+            "expected a vector of syntax rules".to_owned(),
         ));
     };
 
@@ -289,7 +289,7 @@ fn non_set_literals() {
     let j = "[] []";
     let t = "^^   ";
 
-    let err = Error::IllegalArg(t2el(t), "Expected set of pattern literals".to_owned());
+    let err = Error::IllegalArg(t2el(t), "expected set of pattern literals".to_owned());
     assert_eq!(err, macro_rules_for_str(j).unwrap_err());
 }
 
@@ -298,7 +298,7 @@ fn non_symbol_literal() {
     let j = "#{one 2} []";
     let t = "      ^    ";
 
-    let err = Error::IllegalArg(t2el(t), "Pattern literal must be a symbol".to_owned());
+    let err = Error::IllegalArg(t2el(t), "pattern literal must be a symbol".to_owned());
     assert_eq!(err, macro_rules_for_str(j).unwrap_err());
 }
 
@@ -320,7 +320,7 @@ fn rule_with_non_vector() {
     let j = "#{} [1]";
     let t = "     ^ ";
 
-    let err = Error::IllegalArg(t2el(t), "Expected a macro rule vector".to_owned());
+    let err = Error::IllegalArg(t2el(t), "expected a macro rule vector".to_owned());
     assert_eq!(err, macro_rules_for_str(j).unwrap_err());
 }
 
@@ -331,7 +331,7 @@ fn rule_with_not_enough_elements() {
 
     let err = Error::IllegalArg(
         t2el(t),
-        "Expected a macro rule vector with two elements".to_owned(),
+        "expected a macro rule vector with two elements".to_owned(),
     );
     assert_eq!(err, macro_rules_for_str(j).unwrap_err());
 }
@@ -341,7 +341,7 @@ fn rule_with_non_list_pattern() {
     let j = "#{} [[self 1]]";
     let t = "      ^^^^    ";
 
-    let err = Error::IllegalArg(t2el(t), "Expected a macro rule pattern list".to_owned());
+    let err = Error::IllegalArg(t2el(t), "expected a macro rule pattern list".to_owned());
     assert_eq!(err, macro_rules_for_str(j).unwrap_err());
 }
 
@@ -352,7 +352,7 @@ fn rule_with_empty_pattern_list() {
 
     let err = Error::IllegalArg(
         t2el(t),
-        "Macro rule patterns must contain at least the name of the macro".to_owned(),
+        "macro rule patterns must contain at least the name of the macro".to_owned(),
     );
     assert_eq!(err, macro_rules_for_str(j).unwrap_err());
 }
@@ -364,7 +364,7 @@ fn rule_with_non_self_pattern() {
 
     let err = Error::IllegalArg(
         t2el(t),
-        "Macro rule patterns must start with the name of the macro".to_owned(),
+        "macro rule patterns must start with the name of the macro".to_owned(),
     );
     assert_eq!(err, macro_rules_for_str(j).unwrap_err());
 }
