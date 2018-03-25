@@ -105,7 +105,8 @@ prims!(
     ("defmacro", DefMacro),
     ("...", Ellipsis),
     ("_", Wildcard),
-    ("macro-rules", MacroRules)
+    ("macro-rules", MacroRules),
+    (":", TyColon)
 );
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]

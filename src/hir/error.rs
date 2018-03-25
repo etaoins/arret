@@ -48,6 +48,7 @@ pub enum ErrorKind {
     NoMacroRule,
     DuplicateMacroVar(String, Span),
     MultipleZeroOrMoreMatch(Span),
+    NoVecDestruc,
     ReadError(String),
     SyntaxError(SyntaxError),
 }
@@ -97,7 +98,10 @@ impl Reportable for Error {
                 format!("duplicate macro variable: `{}`", sym)
             }
             ErrorKind::MultipleZeroOrMoreMatch(_) => {
-                "Multiple zero or more matches in the same sequence".to_owned()
+                "multiple zero or more matches in the same sequence".to_owned()
+            }
+            ErrorKind::NoVecDestruc => {
+                "vectors can only be used for type ascription in the form [name : Type]".to_owned()
             }
             ErrorKind::ReadError(ref filename) => format!("error reading `{}`", filename),
             ErrorKind::SyntaxError(ref err) => err.message(),

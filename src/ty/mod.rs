@@ -1,31 +1,27 @@
-// Stub out to silence warnings
-pub type Ty = ();
-pub type PTy = ();
-pub type PVar = ();
-
-/*
 use std::collections::BTreeSet;
 
-#[derive(PartialEq, Debug, Hash)]
-pub struct Ty(BTreeSet<Datum<Ty>>, Option<Box<Fun<Ty>>>);
+#[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
+pub struct Ty(BTreeSet<NonFun<Ty>>, Option<Box<Fun<Ty>>>);
 
-#[derive(PartialEq, Debug, Hash)]
-pub enum Datum<S> {
-    Bool,
+#[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
+pub enum NonFun<S> {
+    Bool(bool),
+    List(Vec<S>, Option<S>),
+    /*
     Char,
     Int,
     Float,
-    SList(Vec<S>),
-    UList(S),
-    String,
-    Symbol,
-    SVec(Vec<S>),
-    UVec(S),
+    List(Vec<S>, Option<S>),
+    Str,
+    AnySym,
+    Sym(String),
+    Vec(Vec<S>, Option<S>),
     Hash(S, S),
     Set(S),
+    */
 }
 
-#[derive(PartialEq, Debug, Hash)]
+#[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 pub struct Fun<S> {
     impure: bool,
     fixed_args: Vec<S>,
@@ -33,7 +29,7 @@ pub struct Fun<S> {
     ret: S,
 }
 
-#[derive(Debug, Hash)]
+#[derive(Eq, Debug, Hash, PartialOrd, Ord)]
 pub struct PVar {
     inst_id: usize,
     source_name: String,
@@ -46,11 +42,19 @@ impl PartialEq for PVar {
     }
 }
 
-#[derive(PartialEq, Debug, Hash)]
+#[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 pub enum PTy {
-    Var(PVar),
-    Fixed(BTreeSet<Datum<PTy>>, Option<Box<Fun<PTy>>>),
+    //Var(PVar),
+    Fixed(BTreeSet<NonFun<PTy>>, Option<Box<Fun<PTy>>>),
 }
 
-pub type PFun = Fun<PTy>;
-*/
+impl From<NonFun<PTy>> for PTy {
+    fn from(non_fun: NonFun<PTy>) -> PTy {
+        let mut non_fun_tys = BTreeSet::<NonFun<PTy>>::new();
+        non_fun_tys.insert(non_fun.into());
+
+        PTy::Fixed(non_fun_tys, None)
+    }
+}
+
+//pub type PFun = Fun<PTy>;

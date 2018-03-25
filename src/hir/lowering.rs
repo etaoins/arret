@@ -7,6 +7,7 @@ use hir::scope::{Binding, Ident, MacroId, NsDatum, NsId, NsIdAlloc, Prim, Scope}
 use hir::module::Module;
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::error::{Error, ErrorKind, Result};
+use hir::types::lower_pty;
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 use ctx::CompileContext;
@@ -143,11 +144,7 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(())
     }
 
-    fn lower_destruc<T>(
-        &mut self,
-        scope: &mut Scope,
-        destruc_datum: NsDatum,
-    ) -> Result<Destruc<T>> {
+    fn lower_destruc(&mut self, scope: &mut Scope, destruc_datum: NsDatum) -> Result<Destruc> {
         match destruc_datum {
             NsDatum::Ident(span, ident) => {
                 match scope.get(&ident) {
@@ -199,9 +196,45 @@ impl<'ccx> LoweringContext<'ccx> {
 
                 let fixed_destrucs = vs.into_iter()
                     .map(|v| self.lower_destruc(scope, v))
-                    .collect::<Result<Vec<Destruc<T>>>>()?;
+                    .collect::<Result<Vec<Destruc>>>()?;
 
                 Ok(Destruc::List(fixed_destrucs, rest_destruc))
+            }
+            NsDatum::Vec(span, mut vs) => {
+                if vs.len() != 3 {
+                    return Err(Error::new(span, ErrorKind::NoVecDestruc));
+                }
+
+                // Make sure the middle element is a type colon
+                match &vs[1] {
+                    &NsDatum::Ident(_, ref ident) => {
+                        if scope.get(ident) != Some(Binding::Prim(Prim::TyColon)) {
+                            return Err(Error::new(span, ErrorKind::NoVecDestruc));
+                        };
+                    }
+                    _ => {
+                        return Err(Error::new(span, ErrorKind::NoVecDestruc));
+                    }
+                }
+
+                let ty = lower_pty(scope, vs.pop().unwrap())?;
+
+                // Discard the type colon
+                vs.pop();
+
+                let inner_destruc_datum = vs.pop().unwrap();
+                let inner_destruc_span = inner_destruc_datum.span();
+                let inner_destruc = self.lower_destruc(scope, inner_destruc_datum)?;
+
+                match inner_destruc {
+                    Destruc::Var(var) => Ok(Destruc::Var(var.with_bound(ty))),
+                    _ => Err(Error::new(
+                        inner_destruc_span,
+                        ErrorKind::IllegalArg(
+                            "only variables can have type ascriptions".to_owned(),
+                        ),
+                    )),
+                }
             }
             _ => Err(Error::new(
                 destruc_datum.span(),
@@ -308,7 +341,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     },
                 ))
             }
-            &Prim::Ellipsis | &Prim::Wildcard | &Prim::MacroRules => {
+            &Prim::Ellipsis | &Prim::Wildcard | &Prim::MacroRules | &Prim::TyColon => {
                 Err(Error::new(span, ErrorKind::PrimRef))
             }
         }
@@ -538,6 +571,8 @@ impl<'ccx> LoweringContext<'ccx> {
 use syntax::span::t2s;
 #[cfg(test)]
 use syntax::parser::data_from_str;
+#[cfg(test)]
+use hir::ty;
 
 #[cfg(test)]
 fn module_for_str(data_str: &str) -> Result<Module> {
@@ -638,6 +673,31 @@ fn basic_untyped_var_def() {
 }
 
 #[test]
+fn basic_typed_var_def() {
+    let j = "(def [x : true] true) x";
+    let t = "^^^^^^^^^^^^^^^^^^^^^  ";
+    let u = "                ^^^^   ";
+    let v = "                      ^";
+
+    let destruc = Destruc::Var(Var {
+        id: VarId(1),
+        source_name: "x".to_owned(),
+        bound: Some(ty::NonFun::Bool(true).into()),
+    });
+
+    let expected = Expr::Do(vec![
+        Expr::Def(
+            t2s(t),
+            destruc,
+            Box::new(Expr::Lit(Datum::Bool(t2s(u), true))),
+        ),
+        Expr::Ref(t2s(v), VarId(1)),
+    ]);
+
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
+
+#[test]
 fn wildcard_def() {
     let j = "(def _ 1)";
     let t = "^^^^^^^^^";
@@ -709,6 +769,15 @@ fn def_of_bad_destruc() {
             "values can only be bound to variables or destructured into lists".to_owned(),
         ),
     );
+    assert_eq!(err, body_expr_for_str(j).unwrap_err());
+}
+
+#[test]
+fn def_of_vec_destruc() {
+    let j = "(def [x y] [1 2])";
+    let t = "     ^^^^^       ";
+
+    let err = Error::new(t2s(t), ErrorKind::NoVecDestruc);
     assert_eq!(err, body_expr_for_str(j).unwrap_err());
 }
 

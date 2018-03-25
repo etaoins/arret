@@ -4,6 +4,7 @@ mod error;
 mod module;
 mod loader;
 mod macros;
+mod types;
 
 use syntax::span::Span;
 use syntax::datum::Datum;
@@ -19,23 +20,33 @@ impl VarId {
 }
 
 #[derive(Debug)]
-pub struct Var<T> {
+pub struct Var {
     id: VarId,
     source_name: String,
-    bound: Option<T>,
+    bound: Option<ty::PTy>,
 }
 
-impl<T> PartialEq for Var<T> {
-    fn eq(&self, other: &Var<T>) -> bool {
+impl Var {
+    fn with_bound(self, bound: ty::PTy) -> Var {
+        Var {
+            id: self.id,
+            source_name: self.source_name,
+            bound: Some(bound),
+        }
+    }
+}
+
+impl PartialEq for Var {
+    fn eq(&self, other: &Var) -> bool {
         self.id.0 == other.id.0
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Destruc<T> {
-    Var(Var<T>),
-    Wildcard(Option<T>),
-    List(Vec<Destruc<T>>, Option<Box<Destruc<T>>>),
+pub enum Destruc {
+    Var(Var),
+    Wildcard(Option<ty::PTy>),
+    List(Vec<Destruc>, Option<Box<Destruc>>),
 }
 
 #[derive(PartialEq, Debug)]
@@ -43,7 +54,7 @@ pub struct Fun {
     source_name: Option<String>,
 
     poly_vars: Vec<ty::PVar>,
-    params: Destruc<ty::PTy>,
+    params: Destruc,
     ret_ty: Option<ty::PTy>,
 
     body_expr: Box<Expr>,
@@ -61,7 +72,7 @@ pub enum Expr {
     Lit(Datum),
     App(Span, Box<Expr>, Vec<Expr>),
     Fun(Span, Fun),
-    Def(Span, Destruc<ty::Ty>, Box<Expr>),
+    Def(Span, Destruc, Box<Expr>),
     Cond(Span, Cond),
     Ref(Span, VarId),
     Do(Vec<Expr>),
