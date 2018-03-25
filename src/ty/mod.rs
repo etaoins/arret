@@ -7,14 +7,13 @@ pub struct Ty(BTreeSet<NonFun<Ty>>, Option<Box<Fun<Ty>>>);
 pub enum NonFun<S> {
     Bool(bool),
     List(Vec<S>, Option<S>),
+    Sym(String),
     /*
     Char,
     Int,
     Float,
-    List(Vec<S>, Option<S>),
     Str,
     AnySym,
-    Sym(String),
     Vec(Vec<S>, Option<S>),
     Hash(S, S),
     Set(S),

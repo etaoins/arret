@@ -1,11 +1,22 @@
 use std::collections::HashMap;
 
-use hir::scope::{Binding, Ident, NsDatum, Scope};
+use hir::scope::{Binding, Ident, NsDatum, Prim, Scope};
 use ty;
 use hir::error::{Error, ErrorKind, Result};
 use syntax::span::Span;
 
-pub fn lower_ident_pty(scope: &Scope, span: Span, ident: Ident) -> Result<ty::PTy> {
+fn lower_literal_pty(datum: NsDatum) -> Result<ty::PTy> {
+    match datum {
+        NsDatum::Bool(_, v) => Ok(ty::NonFun::Bool(v).into()),
+        NsDatum::Ident(_, ident) => Ok(ty::NonFun::Sym(ident.name().clone()).into()),
+        _ => Err(Error::new(
+            datum.span(),
+            ErrorKind::IllegalArg("only boolean and symbol literals are supported".to_owned()),
+        )),
+    }
+}
+
+fn lower_ident_pty(scope: &Scope, span: Span, ident: Ident) -> Result<ty::PTy> {
     match scope.get(&ident) {
         Some(Binding::Ty(ref ty)) => Ok(ty.clone()),
         Some(_) => Err(Error::new(span, ErrorKind::ValueAsTy)),
@@ -18,11 +29,31 @@ pub fn lower_ident_pty(scope: &Scope, span: Span, ident: Ident) -> Result<ty::PT
 
 pub fn lower_pty(scope: &Scope, datum: NsDatum) -> Result<ty::PTy> {
     match datum {
-        NsDatum::Bool(_, v) => Ok(ty::NonFun::Bool(v).into()),
-        NsDatum::Ident(span, ident) => lower_ident_pty(scope, span, ident),
-        _ => {
-            unimplemented!("HERE!");
+        NsDatum::List(span, mut vs) => {
+            if vs.len() == 0 {
+                return Ok(ty::NonFun::List(vec![], None).into());
+            }
+
+            let mut arg_data = vs.split_off(1);
+            let fn_datum = vs.pop().unwrap();
+
+            if let NsDatum::Ident(_, ref ident) = fn_datum {
+                if scope.get(ident) == Some(Binding::Prim(Prim::Quote)) {
+                    if arg_data.len() != 1 {
+                        return Err(Error::new(span, ErrorKind::WrongArgCount(1)));
+                    }
+
+                    return lower_literal_pty(arg_data.pop().unwrap());
+                }
+            }
+
+            Err(Error::new(
+                fn_datum.span(),
+                ErrorKind::IllegalArg("type constructor expected".to_owned()),
+            ))
         }
+        NsDatum::Ident(span, ident) => lower_ident_pty(scope, span, ident),
+        _ => lower_literal_pty(datum),
     }
 }
 
@@ -86,6 +117,22 @@ fn false_literal() {
 }
 
 #[test]
+fn sym_literal() {
+    let j = "'foo";
+
+    let expected = ty::NonFun::Sym("foo".to_owned());
+    assert_ty_for_str(expected.into(), j);
+}
+
+#[test]
+fn empty_list_literal() {
+    let j = "()";
+
+    let expected = ty::NonFun::List(vec![], None);
+    assert_ty_for_str(expected.into(), j);
+}
+
+#[test]
 fn ty_ref() {
     let j = "Bool";
 
@@ -99,6 +146,18 @@ fn unbound_symbol() {
     let t = "^^^^^^^^";
 
     let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("notbound".to_owned()));
+    assert_err_for_str(err, j);
+}
+
+#[test]
+fn unsupported_int_literal() {
+    let j = "1";
+    let t = "^";
+
+    let err = Error::new(
+        t2s(t),
+        ErrorKind::IllegalArg("only boolean and symbol literals are supported".to_owned()),
+    );
     assert_err_for_str(err, j);
 }
 
