@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use syntax::span::Span;
 use syntax::datum::Datum;
-use hir::VarId;
+use hir::{types, VarId};
 use ty;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
@@ -24,6 +24,7 @@ pub enum Binding {
     Prim(Prim),
     Macro(MacroId),
     Ty(ty::PTy),
+    TyCons(types::TyCons),
 }
 
 pub struct Scope {

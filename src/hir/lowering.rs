@@ -8,6 +8,7 @@ use hir::module::Module;
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::error::{Error, ErrorKind, Result};
 use hir::types::lower_pty;
+use hir::util::split_into_fixed_and_rest;
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 use ctx::CompileContext;
@@ -26,7 +27,9 @@ macro_rules! lower_expr_impl {
             NsDatum::Ident(span, ref ident) => match $scope.get(ident) {
                 Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
                 Some(Binding::Prim(_)) => Err(Error::new(span, ErrorKind::PrimRef)),
-                Some(Binding::Ty(_)) => Err(Error::new(span, ErrorKind::TyRef)),
+                Some(Binding::Ty(_)) | Some(Binding::TyCons(_)) => {
+                    Err(Error::new(span, ErrorKind::TyRef))
+                }
                 Some(Binding::Macro(_)) => {
                     Err(Error::new(span, ErrorKind::MacroRef(ident.name().clone())))
                 }
@@ -60,7 +63,9 @@ macro_rules! lower_expr_impl {
                         Some(Binding::Var(id)) => {
                             $self.lower_expr_apply($scope, span, Expr::Ref(span, id), arg_data)
                         }
-                        Some(Binding::Ty(_)) => Err(Error::new(span, ErrorKind::TyRef)),
+                        Some(Binding::Ty(_)) | Some(Binding::TyCons(_)) => {
+                            Err(Error::new(span, ErrorKind::TyRef))
+                        }
                         None => {
                             Err(Error::new(fn_span, ErrorKind::UnboundSymbol(ident.name().clone())))
                         }
@@ -184,27 +189,16 @@ impl<'ccx> LoweringContext<'ccx> {
                     bound: None,
                 }))
             }
-            NsDatum::List(_, mut vs) => {
-                let has_rest = if vs.len() > 2 {
-                    match &vs[vs.len() - 1] {
-                        &NsDatum::Ident(_, ref ident) => {
-                            scope.get(ident) == Some(Binding::Prim(Prim::Ellipsis))
-                        }
-                        _ => false,
-                    }
-                } else {
-                    false
+            NsDatum::List(_, vs) => {
+                let (fixed, rest) = split_into_fixed_and_rest(scope, vs);
+
+                let rest_destruc = match rest {
+                    Some(rest) => Some(Box::new(self.lower_destruc(scope, rest)?)),
+                    None => None,
                 };
 
-                let rest_destruc = if has_rest {
-                    // Remove the ellipsis completely
-                    vs.pop();
-                    Some(Box::new(self.lower_destruc(scope, vs.pop().unwrap())?))
-                } else {
-                    None
-                };
-
-                let fixed_destrucs = vs.into_iter()
+                let fixed_destrucs = fixed
+                    .into_iter()
                     .map(|v| self.lower_destruc(scope, v))
                     .collect::<Result<Vec<Destruc>>>()?;
 

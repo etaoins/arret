@@ -5,6 +5,7 @@ mod module;
 mod loader;
 mod macros;
 mod types;
+mod util;
 
 use syntax::span::Span;
 use syntax::datum::Datum;
