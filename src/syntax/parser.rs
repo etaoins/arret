@@ -1,4 +1,4 @@
-use syntax::error::{Error, ExpectedContent, Result};
+use syntax::error::{Error, ErrorKind, ExpectedContent, Result};
 use syntax::value::Value;
 use std;
 use syntax::span::Span;
@@ -41,7 +41,7 @@ fn is_identifier_char(c: char) -> bool {
 
 fn u64_to_positive_i64(span: Span, i: u64) -> Result<i64> {
     if i > (1 << 63) - 1 {
-        Err(Error::IntegerOverflow(span))
+        Err(Error::new(span, ErrorKind::IntegerOverflow))
     } else {
         Ok(i as i64)
     }
@@ -51,7 +51,7 @@ fn u64_to_negative_i64(span: Span, i: u64) -> Result<i64> {
     let min_i64_abs_value = 1 << 63;
 
     if i > min_i64_abs_value {
-        Err(Error::IntegerOverflow(span))
+        Err(Error::new(span, ErrorKind::IntegerOverflow))
     } else if i == min_i64_abs_value {
         Ok(i64::min_value())
     } else {
@@ -70,12 +70,12 @@ impl<'de> Parser<'de> {
     fn eof_err(&self, ec: ExpectedContent) -> Error {
         let eof_pos = (self.consumed_bytes + self.input.len()) as u32;
 
-        Error::Eof(
+        Error::new(
             Span {
                 lo: eof_pos,
                 hi: eof_pos,
             },
-            ec,
+            ErrorKind::Eof(ec),
         )
     }
 
@@ -170,8 +170,8 @@ impl<'de> Parser<'de> {
             _ => true,
         });
 
-        // TODO: Assume any error is due to overflow
-        u64::from_str_radix(digits, 10).map_err(|_| Error::IntegerOverflow(span))
+        // TODO: We assume any error is due to overflow
+        u64::from_str_radix(digits, 10).map_err(|_| Error::new(span, ErrorKind::IntegerOverflow))
     }
 
     fn parse_int(&mut self) -> Result<Value> {
@@ -195,18 +195,22 @@ impl<'de> Parser<'de> {
             Ok(valid_integer) => {
                 u64_to_negative_i64(span.clone(), valid_integer).map(|i| Value::Int(span, i))
             }
-            Err(Error::IntegerOverflow(_)) => {
-                // Treat as a symbol
-                let rest_of_symbol = self.parse_identifier_content();
+            Err(err) => {
+                // TODO: On overflow we will silently convert to a symbol
+                if *err.kind() == ErrorKind::IntegerOverflow {
+                    // Treat as a symbol
+                    let rest_of_symbol = self.parse_identifier_content();
 
-                let span_with_symbol = Span {
-                    lo: span.lo,
-                    hi: span.lo + (rest_of_symbol.len() as u32) + 1,
-                };
+                    let span_with_symbol = Span {
+                        lo: span.lo,
+                        hi: span.lo + (rest_of_symbol.len() as u32) + 1,
+                    };
 
-                Ok(Value::Sym(span_with_symbol, format!("-{}", rest_of_symbol)))
+                    Ok(Value::Sym(span_with_symbol, format!("-{}", rest_of_symbol)))
+                } else {
+                    Err(err)
+                }
             }
-            Err(other_err) => Err(other_err),
         }
     }
 
@@ -229,9 +233,10 @@ impl<'de> Parser<'de> {
                     // This is a hex code point
                     let hex_string = &char_name[1..];
                     let code_point = u32::from_str_radix(hex_string, 16)
-                        .map_err(|_| Error::UnsupportedChar(span.clone()))?;
+                        .map_err(|_| Error::new(span, ErrorKind::UnsupportedChar))?;
 
-                    return std::char::from_u32(code_point).ok_or(Error::InvalidCodePoint(span));
+                    return std::char::from_u32(code_point)
+                        .ok_or(Error::new(span, ErrorKind::InvalidCodePoint));
                 }
             }
 
@@ -240,7 +245,7 @@ impl<'de> Parser<'de> {
                 "return" => Ok('\u{0d}'),
                 "space" => Ok('\u{20}'),
                 "tab" => Ok('\u{09}'),
-                _ => Err(Error::UnsupportedChar(span)),
+                _ => Err(Error::new(span, ErrorKind::UnsupportedChar)),
             }
         });
 
@@ -258,7 +263,7 @@ impl<'de> Parser<'de> {
                 let (span, _) = self.capture_span(|s| s.consume_char(ExpectedContent::Dispatch));
                 let adj_span = span.with_lo(span.lo - 1);
 
-                Err(Error::UnsupportedDispatch(adj_span))
+                Err(Error::new(adj_span, ErrorKind::UnsupportedDispatch))
             }
         }
     }
@@ -308,7 +313,7 @@ impl<'de> Parser<'de> {
         let unpaired_contents = unpaired_contents?;
 
         if unpaired_contents.len() % 2 == 1 {
-            return Err(Error::UnevenMap(span));
+            return Err(Error::new(span, ErrorKind::UnevenMap));
         }
 
         let contents: Vec<(Value, Value)> = unpaired_contents
@@ -342,20 +347,22 @@ impl<'de> Parser<'de> {
                     (span, u32::from_str_radix(hex_string, 16))
                 };
 
-                let code_point = code_point.map_err(|_| Error::UnsupportedChar(span.clone()))?;
+                let code_point =
+                    code_point.map_err(|_| Error::new(span, ErrorKind::UnsupportedChar))?;
 
                 if self.consume_char(ExpectedContent::CodePoint)? != ';' {
-                    return Err(Error::UnsupportedChar(span));
+                    return Err(Error::new(span, ErrorKind::UnsupportedChar));
                 }
 
-                return std::char::from_u32(code_point).ok_or(Error::InvalidCodePoint(span));
+                return std::char::from_u32(code_point)
+                    .ok_or(Error::new(span, ErrorKind::InvalidCodePoint));
             }
             _ => {
                 let span = Span {
                     lo: escape_lo,
                     hi: self.consumed_bytes as u32,
                 };
-                Err(Error::UnsupportedStringEscape(span))
+                Err(Error::new(span, ErrorKind::UnsupportedStringEscape))
             }
         }
     }
@@ -392,7 +399,7 @@ impl<'de> Parser<'de> {
         if content.len() == 0 {
             let (span, next_char) =
                 self.capture_span(|s| s.consume_char(ExpectedContent::Identifier));
-            return Err(Error::UnexpectedChar(span, next_char?));
+            return Err(Error::new(span, ErrorKind::UnexpectedChar(next_char?)));
         }
 
         match content.as_ref() {
@@ -448,8 +455,13 @@ impl<'de> Parser<'de> {
                     let datum = self.parse_datum()?;
                     datum_vec.push(datum);
                 }
-                Err(Error::Eof(_, _)) => return Ok(datum_vec),
-                Err(e) => return Err(e),
+                Err(err) => {
+                    if let &ErrorKind::Eof(_) = err.kind() {
+                        return Ok(datum_vec);
+                    } else {
+                        return Err(err);
+                    }
+                }
             }
         }
     }
@@ -546,12 +558,12 @@ fn list_datum() {
     let j = "(true";
     let t = "    >";
     let u = "^    ";
-    let err = Error::Eof(t2s(t), ExpectedContent::List(t2s(u)));
+    let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::List(t2s(u))));
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
     let j = ")";
     let t = "^";
-    let err = Error::UnexpectedChar(t2s(t), ')');
+    let err = Error::new(t2s(t), ErrorKind::UnexpectedChar(')'));
     assert_eq!(err, datum_from_str(j).unwrap_err());
 }
 
@@ -584,12 +596,12 @@ fn vector_datum() {
     let j = "[true []";
     let t = "       >";
     let u = "^       ";
-    let err = Error::Eof(t2s(t), ExpectedContent::Vector(t2s(u)));
+    let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::Vector(t2s(u))));
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
     let j = "]";
     let t = "^";
-    let err = Error::UnexpectedChar(t2s(t), ']');
+    let err = Error::new(t2s(t), ErrorKind::UnexpectedChar(']'));
     assert_eq!(err, datum_from_str(j).unwrap_err());
 }
 
@@ -651,12 +663,12 @@ fn string_datum() {
     let j = r#" "foo "#;
     let t = r#"     >"#;
     let u = r#" ^    "#;
-    let err = Error::Eof(t2s(t), ExpectedContent::String(t2s(u)));
+    let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::String(t2s(u))));
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
     let j = r#""\p""#;
     let t = r#"  ^ "#;
-    let err = Error::UnsupportedStringEscape(t2s(t));
+    let err = Error::new(t2s(t), ErrorKind::UnsupportedStringEscape);
     assert_eq!(err, datum_from_str(j).unwrap_err());
 }
 
@@ -683,12 +695,12 @@ fn char_datum() {
 
     let j = r#"\SPACE"#;
     let t = r#" ^^^^^"#;
-    let err = Error::UnsupportedChar(t2s(t));
+    let err = Error::new(t2s(t), ErrorKind::UnsupportedChar);
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
     let j = r#"\u110000"#;
     let t = r#" ^^^^^^^"#;
-    let err = Error::InvalidCodePoint(t2s(t));
+    let err = Error::new(t2s(t), ErrorKind::InvalidCodePoint);
     assert_eq!(err, datum_from_str(j).unwrap_err());
 }
 
@@ -712,17 +724,17 @@ fn int_datum() {
 
     let j = "10223372036854775807";
     let t = "^^^^^^^^^^^^^^^^^^^^";
-    let err = Error::IntegerOverflow(t2s(t));
+    let err = Error::new(t2s(t), ErrorKind::IntegerOverflow);
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
     let j = "-10223372036854775807";
     let t = "^^^^^^^^^^^^^^^^^^^^^";
-    let err = Error::IntegerOverflow(t2s(t));
+    let err = Error::new(t2s(t), ErrorKind::IntegerOverflow);
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
     let j = "4545894549584910223372036854775807";
     let t = "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^";
-    let err = Error::IntegerOverflow(t2s(t));
+    let err = Error::new(t2s(t), ErrorKind::IntegerOverflow);
     assert_eq!(err, datum_from_str(j).unwrap_err());
 }
 
@@ -766,7 +778,7 @@ fn map_datum() {
 
     let j = "{1}";
     let t = "^^^";
-    let err = Error::UnevenMap(t2s(t));
+    let err = Error::new(t2s(t), ErrorKind::UnevenMap);
     assert_eq!(err, datum_from_str(j).unwrap_err());
 }
 
@@ -855,7 +867,7 @@ fn quote_shorthand() {
 
     let j = "'";
     let t = ">";
-    let err = Error::Eof(t2s(t), ExpectedContent::Datum);
+    let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::Datum));
     assert_eq!(err, datum_from_str(j).unwrap_err());
 }
 
@@ -863,13 +875,13 @@ fn quote_shorthand() {
 fn unsupported_dispatch() {
     let j = r#"#loop"#;
     let t = r#"^^   "#;
-    let err = Error::UnsupportedDispatch(t2s(t));
+    let err = Error::new(t2s(t), ErrorKind::UnsupportedDispatch);
 
     assert_eq!(err, datum_from_str(j).unwrap_err());
 
     let j = "#";
     let t = ">";
-    let err = Error::Eof(t2s(t), ExpectedContent::Dispatch);
+    let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::Dispatch));
 
     assert_eq!(err, datum_from_str(j).unwrap_err());
 }
@@ -909,6 +921,6 @@ fn multiple_data() {
 
     let j = "(true)))";
     let t = "      ^ ";
-    let err = Error::UnexpectedChar(t2s(t), ')');
+    let err = Error::new(t2s(t), ErrorKind::UnexpectedChar(')'));
     assert_eq!(err, data_from_str(j).unwrap_err());
 }

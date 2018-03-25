@@ -7,46 +7,53 @@ use syntax::span::Span;
 use reporting::{Level, Reportable};
 
 #[derive(Debug, PartialEq)]
-pub enum Error {
-    Eof(Span, ExpectedContent),
-    UnsupportedDispatch(Span),
-    UnsupportedChar(Span),
-    InvalidCodePoint(Span),
-    UnsupportedStringEscape(Span),
-    IntegerOverflow(Span),
-    UnexpectedChar(Span, char),
-    UnevenMap(Span),
+pub struct Error {
+    span: Span,
+    kind: ErrorKind,
+}
+
+impl Error {
+    pub fn new(span: Span, kind: ErrorKind) -> Error {
+        Error { span, kind }
+    }
+
+    pub fn kind(&self) -> &ErrorKind {
+        &self.kind
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ErrorKind {
+    Eof(ExpectedContent),
+    UnsupportedDispatch,
+    UnsupportedChar,
+    InvalidCodePoint,
+    UnsupportedStringEscape,
+    IntegerOverflow,
+    UnexpectedChar(char),
+    UnevenMap,
 }
 
 pub type Result<T> = result::Result<T, Error>;
 
 impl Reportable for Error {
     fn message(&self) -> String {
-        match *self {
-            Error::Eof(_, ref ec) => {
+        match self.kind {
+            ErrorKind::Eof(ref ec) => {
                 format!("unexpected end of file while parsing {}", ec.description())
             }
-            Error::UnsupportedDispatch(_) => "unsupported dispatch".to_owned(),
-            Error::UnsupportedChar(_) => "unsupported character".to_owned(),
-            Error::InvalidCodePoint(_) => "invalid code point".to_owned(),
-            Error::UnsupportedStringEscape(_) => "unsupported string escape".to_owned(),
-            Error::IntegerOverflow(_) => "integer literal does not fit in i64".to_owned(),
-            Error::UnexpectedChar(_, c) => format!("unexpected `{}`", c),
-            Error::UnevenMap(_) => "map literal must have an even number of values".to_owned(),
+            ErrorKind::UnsupportedDispatch => "unsupported dispatch".to_owned(),
+            ErrorKind::UnsupportedChar => "unsupported character".to_owned(),
+            ErrorKind::InvalidCodePoint => "invalid code point".to_owned(),
+            ErrorKind::UnsupportedStringEscape => "unsupported string escape".to_owned(),
+            ErrorKind::IntegerOverflow => "integer literal does not fit in i64".to_owned(),
+            ErrorKind::UnexpectedChar(c) => format!("unexpected `{}`", c),
+            ErrorKind::UnevenMap => "map literal must have an even number of values".to_owned(),
         }
     }
 
     fn span(&self) -> Span {
-        match *self {
-            Error::Eof(span, _) => span,
-            Error::UnsupportedDispatch(span) => span,
-            Error::UnsupportedChar(span) => span,
-            Error::InvalidCodePoint(span) => span,
-            Error::UnsupportedStringEscape(span) => span,
-            Error::IntegerOverflow(span) => span,
-            Error::UnexpectedChar(span, _) => span,
-            Error::UnevenMap(span) => span,
-        }
+        self.span
     }
 
     fn level(&self) -> Level {
@@ -54,7 +61,7 @@ impl Reportable for Error {
     }
 
     fn associated_report(&self) -> Option<Box<Reportable>> {
-        if let Error::Eof(_, ref ec) = *self {
+        if let ErrorKind::Eof(ref ec) = self.kind {
             if let Some(open_char_span) = ec.open_char_span() {
                 return Some(Box::new(ContentStartHelp {
                     expected_content: *ec,
