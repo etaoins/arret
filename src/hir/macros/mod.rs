@@ -221,11 +221,11 @@ pub fn lower_macro_rules(
 
 pub fn expand_macro(
     ns_id_alloc: &mut NsIdAlloc,
-    scope: &Scope,
+    scope: &mut Scope,
     invocation_span: Span,
     mac: &Macro,
     arg_data: Vec<NsValue>,
-) -> Result<(Scope, NsValue)> {
+) -> Result<NsValue> {
     for rule in mac.rules.iter() {
         let match_result = match_rule(scope, &mac.special_vars, rule, arg_data.as_slice());
 
@@ -233,7 +233,6 @@ pub fn expand_macro(
             return Ok(expand_rule(
                 ns_id_alloc,
                 scope,
-                invocation_span,
                 &mac.special_vars,
                 match_data,
                 &rule.var_links,

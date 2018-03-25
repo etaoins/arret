@@ -21,6 +21,12 @@ impl ErrorLoc {
     }
 }
 
+impl From<Span> for ErrorLoc {
+    fn from(span: Span) -> ErrorLoc {
+        ErrorLoc::new(span, None)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Error {
     PrimRef(ErrorLoc),

@@ -20,7 +20,7 @@ pub struct LoweringContext<'ccx> {
 }
 
 macro_rules! lower_expr_impl {
-    ($self:ident, $scope:ident, $datum:ident, $lower_prim_apply:ident) => {
+    ($self:ident, $scope:ident, $datum:ident, $lower_prim_apply:ident, $lower_macro_expr:ident) => {
         match $datum {
             NsValue::Ident(span, ref ident) => match $scope.get(ident) {
                 Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
@@ -46,12 +46,12 @@ macro_rules! lower_expr_impl {
                             $self.$lower_prim_apply($scope, span, fn_prim, arg_data)
                         }
                         Some(Binding::Macro(macro_id)) => {
-                            let (mut expanded_scope, expanded_datum) = {
+                            let expanded_datum = {
                                 let mac = &$self.macros[macro_id.to_usize()];
                                 expand_macro(&mut $self.ns_id_alloc, $scope, span, mac, arg_data)?
                             };
 
-                            $self.lower_body_expr(&mut expanded_scope, expanded_datum)
+                            $self.$lower_macro_expr($scope, expanded_datum)
                         }
                         Some(Binding::Var(id)) => {
                             $self.lower_expr_apply($scope, span, Expr::Ref(span, id), arg_data)
@@ -269,7 +269,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
     fn lower_prim_apply(
         &mut self,
-        scope: &Scope,
+        scope: &mut Scope,
         span: Span,
         fn_prim: &Prim,
         mut arg_data: Vec<NsValue>,
@@ -453,7 +453,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
     fn lower_expr_apply(
         &mut self,
-        scope: &Scope,
+        scope: &mut Scope,
         span: Span,
         fn_expr: Expr,
         arg_data: Vec<NsValue>,
@@ -466,16 +466,22 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(Expr::App(span, Box::new(fn_expr), arg_exprs))
     }
 
-    fn lower_expr(&mut self, scope: &Scope, datum: NsValue) -> Result<Expr> {
-        lower_expr_impl!(self, scope, datum, lower_prim_apply)
+    fn lower_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr> {
+        lower_expr_impl!(self, scope, datum, lower_prim_apply, lower_expr)
     }
 
     fn lower_body_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr> {
-        lower_expr_impl!(self, scope, datum, lower_body_prim_apply)
+        lower_expr_impl!(self, scope, datum, lower_body_prim_apply, lower_body_expr)
     }
 
     fn lower_module_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr> {
-        lower_expr_impl!(self, scope, datum, lower_module_prim_apply)
+        lower_expr_impl!(
+            self,
+            scope,
+            datum,
+            lower_module_prim_apply,
+            lower_module_expr
+        )
     }
 
     fn lower_module(&mut self, scope: &mut Scope, data: Vec<Value>) -> Result<Module> {
@@ -1412,5 +1418,34 @@ fn expand_nested_subpatterns() {
             Value::List(t2s(u), vec![Value::Int(t2s(a), 6), Value::Int(t2s(z), 5)]),
         ],
     ));
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
+
+#[test]
+fn expand_body_def() {
+    let j1 = "(defmacro def1 (macro-rules #{} [[(def1 name) (def name 1)]]))";
+    let t1 = "                                              ^^^^^^^^^^^^    ";
+    let u1 = "                                                        ^     ";
+    let s1 = "                                                              ";
+    let j2 = "(def1 x)";
+    let s2 = "        ";
+    let j3 = "x";
+    let v3 = "^";
+
+    let j = &[j1, j2, j3].join("");
+    let t = t1;
+    let u = u1;
+    let v = &[s1, s2, v3].join("");
+
+    let destruc = Destruc::Var(Var {
+        id: VarId(1),
+        source_name: "x".to_owned(),
+        bound: None,
+    });
+
+    let expected = Expr::Do(vec![
+        Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Value::Int(t2s(u), 1)))),
+        Expr::Ref(t2s(v), VarId(1)),
+    ]);
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
