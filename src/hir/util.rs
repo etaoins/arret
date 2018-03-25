@@ -7,7 +7,7 @@ pub fn split_into_fixed_and_rest(
     scope: &Scope,
     mut vs: Vec<NsDatum>,
 ) -> (Vec<NsDatum>, Option<NsDatum>) {
-    let has_rest = if vs.len() > 2 {
+    let has_rest = if vs.len() >= 2 {
         match &vs[vs.len() - 1] {
             &NsDatum::Ident(_, ref ident) => {
                 scope.get(ident) == Some(Binding::Prim(Prim::Ellipsis))

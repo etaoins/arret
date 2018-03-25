@@ -8,12 +8,12 @@ pub enum NonFun<S> {
     Bool(bool),
     List(Vec<S>, Option<S>),
     Sym(String),
+    AnySym,
     /*
     Char,
     Int,
     Float,
     Str,
-    AnySym,
     Vec(Vec<S>, Option<S>),
     Hash(S, S),
     Set(S),
@@ -23,9 +23,18 @@ pub enum NonFun<S> {
 #[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord, Clone)]
 pub struct Fun<S> {
     impure: bool,
-    fixed_args: Vec<S>,
-    rest_arg: Option<S>,
+    params: S,
     ret: S,
+}
+
+impl<S> Fun<S> {
+    pub fn new(impure: bool, params: S, ret: S) -> Fun<S> {
+        Fun {
+            impure,
+            params,
+            ret,
+        }
+    }
 }
 
 #[derive(Eq, Debug, Hash, PartialOrd, Ord, Clone)]
@@ -56,6 +65,14 @@ impl From<NonFun<PTy>> for PTy {
     }
 }
 
+pub type PFun = Fun<PTy>;
+
+impl From<PFun> for PTy {
+    fn from(fun: PFun) -> PTy {
+        PTy::Fixed(BTreeSet::new(), Some(Box::new(fun)))
+    }
+}
+
 #[macro_export]
 macro_rules! union {
     ( $($t:expr),* ) => {{
@@ -69,5 +86,3 @@ macro_rules! union {
         ty::PTy::Fixed(non_fun_tys, None)
     }}
 }
-
-//pub type PFun = Fun<PTy>;

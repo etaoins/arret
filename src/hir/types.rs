@@ -10,6 +10,23 @@ use syntax::span::Span;
 pub enum TyCons {
     List,
     Listof,
+    Fun,
+}
+
+fn lower_list_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::PTy> {
+    let (fixed, rest) = split_into_fixed_and_rest(scope, arg_data);
+
+    let fixed_tys = fixed
+        .into_iter()
+        .map(|arg_datum| lower_pty(scope, arg_datum))
+        .collect::<Result<Vec<ty::PTy>>>()?;
+
+    let rest_ty = match rest {
+        Some(rest) => Some(lower_pty(scope, rest)?),
+        None => None,
+    };
+
+    Ok(ty::NonFun::List(fixed_tys, rest_ty).into())
 }
 
 fn lower_ty_cons_apply(
@@ -19,21 +36,7 @@ fn lower_ty_cons_apply(
     mut arg_data: Vec<NsDatum>,
 ) -> Result<ty::PTy> {
     match ty_cons {
-        TyCons::List => {
-            let (fixed, rest) = split_into_fixed_and_rest(scope, arg_data);
-
-            let fixed_tys = fixed
-                .into_iter()
-                .map(|arg_datum| lower_pty(scope, arg_datum))
-                .collect::<Result<Vec<ty::PTy>>>()?;
-
-            let rest_ty = match rest {
-                Some(rest) => Some(lower_pty(scope, rest)?),
-                None => None,
-            };
-
-            Ok(ty::NonFun::List(fixed_tys, rest_ty).into())
-        }
+        TyCons::List => lower_list_cons(scope, arg_data),
         TyCons::Listof => {
             if arg_data.len() != 1 {
                 return Err(Error::new(span, ErrorKind::WrongArgCount(1)));
@@ -41,6 +44,19 @@ fn lower_ty_cons_apply(
 
             let rest_ty = lower_pty(scope, arg_data.pop().unwrap())?;
             Ok(ty::NonFun::List(vec![], Some(rest_ty)).into())
+        }
+        TyCons::Fun => {
+            if arg_data.is_empty() {
+                return Err(Error::new(
+                    span,
+                    ErrorKind::IllegalArg("-> requires at least one argument".to_owned()),
+                ));
+            }
+
+            let ret_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+            let params_ty = lower_list_cons(scope, arg_data)?;
+
+            Ok(ty::PFun::new(false, params_ty, ret_ty).into())
         }
     }
 }
@@ -126,9 +142,11 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
         "Bool",
         union![ty::NonFun::Bool(false), ty::NonFun::Bool(true)]
     );
+    export_ty!("Symbol", ty::NonFun::AnySym.into());
 
     export_ty_cons!("List", TyCons::List);
     export_ty_cons!("Listof", TyCons::Listof);
+    export_ty_cons!("->", TyCons::Fun);
 }
 
 #[cfg(test)]
@@ -201,9 +219,9 @@ fn empty_list_literal() {
 
 #[test]
 fn ty_ref() {
-    let j = "Bool";
+    let j = "Symbol";
 
-    let expected = union![ty::NonFun::Bool(false), ty::NonFun::Bool(true)];
+    let expected = ty::NonFun::AnySym;
     assert_ty_for_str(expected.into(), j);
 }
 
@@ -278,6 +296,45 @@ fn rest_list_cons() {
     let expected = ty::NonFun::List(
         vec![ty::NonFun::Bool(true).into()],
         Some(ty::NonFun::Bool(false).into()),
+    );
+
+    assert_ty_for_str(expected.into(), j);
+}
+
+#[test]
+fn trivial_fun() {
+    let j = "(-> true)";
+
+    let expected = ty::PFun::new(
+        false,
+        ty::NonFun::List(vec![], None).into(),
+        ty::NonFun::Bool(true).into(),
+    );
+
+    assert_ty_for_str(expected.into(), j);
+}
+
+#[test]
+fn fixed_fun() {
+    let j = "(-> false true)";
+
+    let expected = ty::PFun::new(
+        false,
+        ty::NonFun::List(vec![ty::NonFun::Bool(false).into()], None).into(),
+        ty::NonFun::Bool(true).into(),
+    );
+
+    assert_ty_for_str(expected.into(), j);
+}
+
+#[test]
+fn rest_fun() {
+    let j = "(-> Symbol ... true)";
+
+    let expected = ty::PFun::new(
+        false,
+        ty::NonFun::List(vec![], Some(ty::NonFun::AnySym.into())).into(),
+        ty::NonFun::Bool(true).into(),
     );
 
     assert_ty_for_str(expected.into(), j);
