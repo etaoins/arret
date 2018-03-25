@@ -36,8 +36,8 @@ impl Reportable for Error {
         }
     }
 
-    fn span(&self) -> Option<Span> {
-        Some(match *self {
+    fn span(&self) -> Span {
+        match *self {
             Error::Eof(span, _) => span,
             Error::UnsupportedDispatch(span) => span,
             Error::UnsupportedChar(span) => span,
@@ -46,7 +46,7 @@ impl Reportable for Error {
             Error::IntegerOverflow(span) => span,
             Error::UnexpectedChar(span, _) => span,
             Error::UnevenMap(span) => span,
-        })
+        }
     }
 
     fn level(&self) -> Level {
@@ -131,8 +131,8 @@ impl Reportable for ContentStartHelp {
         Level::Help
     }
 
-    fn span(&self) -> Option<Span> {
-        Some(self.open_char_span)
+    fn span(&self) -> Span {
+        self.open_char_span
     }
 
     fn message(&self) -> String {

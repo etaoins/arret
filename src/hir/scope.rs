@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use syntax::span::Span;
 use syntax::value::Value;
-use hir::error::ErrorLoc;
 use hir::VarId;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
@@ -78,10 +77,6 @@ impl Scope {
 
     pub fn exports(&self) -> &HashMap<Ident, Span> {
         &self.exports
-    }
-
-    pub fn span_to_error_loc(&self, span: Span) -> ErrorLoc {
-        span.into()
     }
 }
 

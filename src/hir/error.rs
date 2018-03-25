@@ -19,6 +19,13 @@ impl ErrorLoc {
             macro_invocation_span,
         }
     }
+
+    fn with_macro_invocation_span(self, macro_invocation_span: Span) -> ErrorLoc {
+        ErrorLoc {
+            span: self.span,
+            macro_invocation_span: Some(macro_invocation_span),
+        }
+    }
 }
 
 impl From<Span> for ErrorLoc {
@@ -28,45 +35,43 @@ impl From<Span> for ErrorLoc {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Error {
-    PrimRef(ErrorLoc),
-    MacroRef(ErrorLoc, String),
-    UnboundSymbol(ErrorLoc, String),
-    WrongArgCount(ErrorLoc, usize),
-    IllegalArg(ErrorLoc, String),
-    ExpectedSymbol(ErrorLoc),
-    DefOutsideBody(ErrorLoc),
-    ExportOutsideModule(ErrorLoc),
-    LibraryNotFound(ErrorLoc),
-    NoMacroRule(ErrorLoc),
-    DuplicateMacroVar(ErrorLoc, String, Span),
-    MultipleZeroOrMoreMatch(ErrorLoc, Span),
+pub enum ErrorKind {
+    PrimRef,
+    MacroRef(String),
+    UnboundSymbol(String),
+    WrongArgCount(usize),
+    IllegalArg(String),
+    ExpectedSymbol,
+    DefOutsideBody,
+    ExportOutsideModule,
+    LibraryNotFound,
+    NoMacroRule,
+    DuplicateMacroVar(String, Span),
+    MultipleZeroOrMoreMatch(Span),
     ReadError(String),
     SyntaxError(SyntaxError),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Error {
+    error_loc: ErrorLoc,
+    kind: ErrorKind,
 }
 
 pub type Result<T> = result::Result<T, Error>;
 
 impl Error {
-    fn error_loc(&self) -> Option<ErrorLoc> {
-        match *self {
-            Error::PrimRef(ref error_loc) => Some(error_loc.clone()),
-            Error::MacroRef(ref error_loc, _) => Some(error_loc.clone()),
-            Error::UnboundSymbol(ref error_loc, _) => Some(error_loc.clone()),
-            Error::WrongArgCount(ref error_loc, _) => Some(error_loc.clone()),
-            Error::IllegalArg(ref error_loc, _) => Some(error_loc.clone()),
-            Error::ExpectedSymbol(ref error_loc) => Some(error_loc.clone()),
-            Error::DefOutsideBody(ref error_loc) => Some(error_loc.clone()),
-            Error::ExportOutsideModule(ref error_loc) => Some(error_loc.clone()),
-            Error::LibraryNotFound(ref error_loc) => Some(error_loc.clone()),
-            Error::NoMacroRule(ref error_loc) => Some(error_loc.clone()),
-            Error::DuplicateMacroVar(ref error_loc, _, _) => Some(error_loc.clone()),
-            Error::MultipleZeroOrMoreMatch(ref error_loc, _) => Some(error_loc.clone()),
-            Error::ReadError(_) => None,
-            Error::SyntaxError(ref err) => err.span().map(|span| ErrorLoc {
-                span: span,
-                macro_invocation_span: None,
-            }),
+    pub fn new(span: Span, kind: ErrorKind) -> Error {
+        Error {
+            error_loc: span.into(),
+            kind,
+        }
+    }
+
+    pub fn with_macro_invocation_span(self, span: Span) -> Error {
+        Error {
+            error_loc: self.error_loc.with_macro_invocation_span(span),
+            kind: self.kind,
         }
     }
 }
@@ -77,41 +82,41 @@ impl Reportable for Error {
     }
 
     fn message(&self) -> String {
-        match *self {
-            Error::PrimRef(_) => "cannot take the value of a primitive".to_owned(),
-            Error::MacroRef(_, ref sym) => format!("cannot take the value of macro: `{}`", sym),
-            Error::UnboundSymbol(_, ref sym) => format!("unable to resolve symbol: `{}`", sym),
-            Error::WrongArgCount(_, expected) => format!("wrong arg count; expected {}", expected),
-            Error::IllegalArg(_, ref description) => format!("illegal argument: {}", description),
-            Error::ExpectedSymbol(_) => "expected symbol".to_owned(),
-            Error::DefOutsideBody(_) => "(def) outside module or function body".to_owned(),
-            Error::ExportOutsideModule(_) => "(export) outside of module body".to_owned(),
-            Error::LibraryNotFound(_) => "library not found".to_owned(),
-            Error::NoMacroRule(_) => "no matching macro rule".to_owned(),
-            Error::DuplicateMacroVar(_, ref sym, _) => {
+        match self.kind {
+            ErrorKind::PrimRef => "cannot take the value of a primitive".to_owned(),
+            ErrorKind::MacroRef(ref sym) => format!("cannot take the value of macro: `{}`", sym),
+            ErrorKind::UnboundSymbol(ref sym) => format!("unable to resolve symbol: `{}`", sym),
+            ErrorKind::WrongArgCount(expected) => format!("wrong arg count; expected {}", expected),
+            ErrorKind::IllegalArg(ref description) => format!("illegal argument: {}", description),
+            ErrorKind::ExpectedSymbol => "expected symbol".to_owned(),
+            ErrorKind::DefOutsideBody => "(def) outside module or function body".to_owned(),
+            ErrorKind::ExportOutsideModule => "(export) outside of module body".to_owned(),
+            ErrorKind::LibraryNotFound => "library not found".to_owned(),
+            ErrorKind::NoMacroRule => "no matching macro rule".to_owned(),
+            ErrorKind::DuplicateMacroVar(ref sym, _) => {
                 format!("duplicate macro variable: `{}`", sym)
             }
-            Error::MultipleZeroOrMoreMatch(_, _) => {
+            ErrorKind::MultipleZeroOrMoreMatch(_) => {
                 "Multiple zero or more matches in the same sequence".to_owned()
             }
-            Error::ReadError(ref filename) => format!("error reading `{}`", filename),
-            Error::SyntaxError(ref err) => err.message(),
+            ErrorKind::ReadError(ref filename) => format!("error reading `{}`", filename),
+            ErrorKind::SyntaxError(ref err) => err.message(),
         }
     }
 
-    fn span(&self) -> Option<Span> {
-        self.error_loc().map(|el| el.span)
+    fn span(&self) -> Span {
+        self.error_loc.span
     }
 
     fn macro_invocation_span(&self) -> Option<Span> {
-        self.error_loc().and_then(|el| el.macro_invocation_span)
+        self.error_loc.macro_invocation_span
     }
 
     fn associated_report(&self) -> Option<Box<Reportable>> {
-        match *self {
-            Error::DuplicateMacroVar(_, _, span) => Some(Box::new(FirstDefHelp { span })),
-            Error::MultipleZeroOrMoreMatch(_, span) => Some(Box::new(FirstDefHelp { span })),
-            Error::SyntaxError(ref err) => err.associated_report(),
+        match self.kind {
+            ErrorKind::DuplicateMacroVar(_, span) => Some(Box::new(FirstDefHelp { span })),
+            ErrorKind::MultipleZeroOrMoreMatch(span) => Some(Box::new(FirstDefHelp { span })),
+            ErrorKind::SyntaxError(ref err) => err.associated_report(),
             _ => None,
         }
     }
@@ -131,7 +136,7 @@ impl Display for Error {
 
 impl From<SyntaxError> for Error {
     fn from(err: SyntaxError) -> Error {
-        Error::SyntaxError(err)
+        Error::new(err.span(), ErrorKind::SyntaxError(err))
     }
 }
 
@@ -144,18 +149,11 @@ impl Reportable for FirstDefHelp {
         Level::Help
     }
 
-    fn span(&self) -> Option<Span> {
-        Some(self.span)
+    fn span(&self) -> Span {
+        self.span
     }
 
     fn message(&self) -> String {
         "first definition here".to_owned()
     }
-}
-
-/// Wrapper for t2s that produces an ErrorLoc with no macro invocation span
-#[cfg(test)]
-pub fn t2el(v: &str) -> ErrorLoc {
-    use syntax::span::t2s;
-    ErrorLoc::new(t2s(v), None)
 }

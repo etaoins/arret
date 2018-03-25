@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::result;
 
 use hir::macros::{MacroVar, SpecialVars};
-use hir::error::{Error, Result};
+use hir::error::{Error, ErrorKind, Result};
 use hir::scope::{Ident, NsValue, Scope};
 use syntax::span::{Span, EMPTY_SPAN};
 
@@ -93,19 +93,20 @@ impl<'a> FindVarsContext<'a> {
         }
 
         if self.special_vars.is_zero_or_more(&macro_var) {
-            return Err(Error::IllegalArg(
-                self.scope.span_to_error_loc(span),
-                "ellipsis can only be used as part of a zero or more match".to_owned(),
+            return Err(Error::new(
+                span,
+                ErrorKind::IllegalArg(
+                    "ellipsis can only be used as part of a zero or more match".to_owned(),
+                ),
             ));
         }
 
         if let Some(ref mut unbound_var_spans) = self.unbound_var_spans {
             if let MacroVar::Unbound(ref name) = macro_var {
                 if let Some(old_span) = unbound_var_spans.insert(name.clone(), span) {
-                    return Err(Error::DuplicateMacroVar(
-                        self.scope.span_to_error_loc(span),
-                        name.clone(),
-                        old_span,
+                    return Err(Error::new(
+                        span,
+                        ErrorKind::DuplicateMacroVar(name.clone(), old_span),
                     ));
                 }
             }
@@ -158,9 +159,9 @@ impl<'a> FindVarsContext<'a> {
                     match zero_or_more_span {
                         Some(old_span) => {
                             // We've already had a zero-or-more match!
-                            return Err(Error::MultipleZeroOrMoreMatch(
-                                self.scope.span_to_error_loc(pattern.span()),
-                                old_span,
+                            return Err(Error::new(
+                                pattern.span(),
+                                ErrorKind::MultipleZeroOrMoreMatch(old_span),
                             ));
                         }
                         None => {
@@ -198,9 +199,11 @@ impl<'a> FindVarsContext<'a> {
             {
                 self.visit_zero_or_more(pattern_vars, &patterns[0])
             }
-            _ => Err(Error::IllegalArg(
-                self.scope.span_to_error_loc(span),
-                "Set patterns must either be empty or a zero or more match".to_owned(),
+            _ => Err(Error::new(
+                span,
+                ErrorKind::IllegalArg(
+                    "set patterns must either be empty or a zero or more match".to_owned(),
+                ),
             )),
         }
     }
@@ -217,9 +220,11 @@ fn link_found_vars(
         .iter()
         .map(|subtemplate_vars| {
             if subtemplate_vars.vars.is_empty() {
-                return Err(Error::IllegalArg(
-                    scope.span_to_error_loc(template_vars.span),
-                    "Subtemplate does not include any macro variables".to_owned(),
+                return Err(Error::new(
+                    template_vars.span,
+                    ErrorKind::IllegalArg(
+                        "subtemplate does not include any macro variables".to_owned(),
+                    ),
                 ));
             }
 
@@ -232,14 +237,20 @@ fn link_found_vars(
                 .collect::<Vec<(usize, &FoundVars)>>();
 
             let (pattern_idx, subpattern_vars) = if possible_indices.len() == 0 {
-                return Err(Error::IllegalArg(
-                    scope.span_to_error_loc(template_vars.span),
-                    "Subtemplate does not reference macro variables from any subpattern".to_owned(),
+                return Err(Error::new(
+                    template_vars.span,
+                    ErrorKind::IllegalArg(
+                        "subtemplate does not reference macro variables from any subpattern"
+                            .to_owned(),
+                    ),
                 ));
             } else if possible_indices.len() > 1 {
-                return Err(Error::IllegalArg(
-                    scope.span_to_error_loc(template_vars.span),
-                    "Subtemplate references macro variables from multiple subpatterns".to_owned(),
+                return Err(Error::new(
+                    template_vars.span,
+                    ErrorKind::IllegalArg(
+                        "subtemplate references macro variables from multiple subpatterns"
+                            .to_owned(),
+                    ),
                 ));
             } else {
                 possible_indices[0]

@@ -11,6 +11,10 @@ impl Span {
             hi: self.hi,
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.lo == self.hi
+    }
 }
 
 pub const EMPTY_SPAN: Span = Span { lo: 0, hi: 0 };

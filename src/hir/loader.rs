@@ -5,8 +5,7 @@ use std::io::prelude::*;
 use syntax::value::Value;
 use syntax::span::Span;
 use syntax::parser::data_from_str_with_span_offset;
-use hir::error::{Error, Result};
-use hir::scope::Scope;
+use hir::error::{Error, ErrorKind, Result};
 use ctx::{CompileContext, LoadedFile};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
@@ -26,6 +25,7 @@ impl LibraryName {
 
 pub fn load_module_data(
     ccx: &mut CompileContext,
+    span: Span,
     display_name: String,
     input_reader: &mut Read,
 ) -> Result<Vec<Value>> {
@@ -35,7 +35,7 @@ pub fn load_module_data(
 
     input_reader
         .read_to_string(&mut source)
-        .map_err(|_| Error::ReadError(display_name.clone()))?;
+        .map_err(|_| Error::new(span, ErrorKind::ReadError(display_name.clone())))?;
 
     let data = data_from_str_with_span_offset(&source, span_offset);
 
@@ -50,7 +50,6 @@ pub fn load_module_data(
 
 pub fn load_library_data(
     ccx: &mut CompileContext,
-    scope: &Scope,
     span: Span,
     library_name: &LibraryName,
 ) -> Result<Vec<Value>> {
@@ -65,7 +64,7 @@ pub fn load_library_data(
 
     let display_name = path_buf.to_string_lossy().into_owned();
     let mut source_file =
-        File::open(path_buf).map_err(|_| Error::LibraryNotFound(scope.span_to_error_loc(span)))?;
+        File::open(path_buf).map_err(|_| Error::new(span, ErrorKind::LibraryNotFound))?;
 
-    load_module_data(ccx, display_name, &mut source_file)
+    load_module_data(ccx, span, display_name, &mut source_file)
 }

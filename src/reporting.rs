@@ -132,7 +132,7 @@ fn print_snippet(ccx: &CompileContext, level: Level, span: Span) {
 pub trait Reportable {
     fn level(&self) -> Level;
     fn message(&self) -> String;
-    fn span(&self) -> Option<Span>;
+    fn span(&self) -> Span;
     fn macro_invocation_span(&self) -> Option<Span> {
         None
     }
@@ -147,7 +147,8 @@ pub trait Reportable {
             default_bold.paint(self.message())
         );
 
-        if let Some(span) = self.span() {
+        let span = self.span();
+        if !span.is_empty() {
             print_snippet(ccx, self.level(), span);
         }
 
