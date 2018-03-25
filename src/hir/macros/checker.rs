@@ -3,7 +3,7 @@ use std::result;
 
 use hir::macros::{MacroVar, SpecialVars};
 use hir::error::{Error, ErrorKind, Result};
-use hir::scope::{Ident, NsValue, Scope};
+use hir::scope::{Ident, NsDatum, Scope};
 use syntax::span::{Span, EMPTY_SPAN};
 
 #[derive(PartialEq, Debug)]
@@ -119,7 +119,7 @@ impl<'a> FindVarsContext<'a> {
     fn visit_zero_or_more(
         &mut self,
         pattern_vars: &mut FoundVars,
-        pattern: &NsValue,
+        pattern: &NsDatum,
     ) -> FindVarsResult {
         let mut sub_vars = FoundVars::new(pattern.span());
         self.visit_datum(&mut sub_vars, pattern)?;
@@ -128,12 +128,12 @@ impl<'a> FindVarsContext<'a> {
         Ok(())
     }
 
-    fn visit_datum(&mut self, pattern_vars: &mut FoundVars, pattern: &NsValue) -> FindVarsResult {
+    fn visit_datum(&mut self, pattern_vars: &mut FoundVars, pattern: &NsDatum) -> FindVarsResult {
         match pattern {
-            &NsValue::Ident(span, ref ident) => self.visit_ident(pattern_vars, span, ident),
-            &NsValue::List(_, ref vs) => self.visit_seq(pattern_vars, vs),
-            &NsValue::Vec(_, ref vs) => self.visit_seq(pattern_vars, vs),
-            &NsValue::Set(span, ref vs) => self.visit_set(pattern_vars, span, vs),
+            &NsDatum::Ident(span, ref ident) => self.visit_ident(pattern_vars, span, ident),
+            &NsDatum::List(_, ref vs) => self.visit_seq(pattern_vars, vs),
+            &NsDatum::Vec(_, ref vs) => self.visit_seq(pattern_vars, vs),
+            &NsDatum::Set(span, ref vs) => self.visit_set(pattern_vars, span, vs),
             _ => {
                 // Can't contain a pattern var
                 Ok(())
@@ -144,7 +144,7 @@ impl<'a> FindVarsContext<'a> {
     fn visit_seq(
         &mut self,
         pattern_vars: &mut FoundVars,
-        mut patterns: &[NsValue],
+        mut patterns: &[NsDatum],
     ) -> FindVarsResult {
         let mut zero_or_more_span: Option<Span> = None;
 
@@ -185,7 +185,7 @@ impl<'a> FindVarsContext<'a> {
         &mut self,
         pattern_vars: &mut FoundVars,
         span: Span,
-        patterns: &[NsValue],
+        patterns: &[NsDatum],
     ) -> FindVarsResult {
         if self.input_type == FindVarsInputType::Template {
             // Sets are expanded exactly as seq
@@ -270,8 +270,8 @@ fn link_found_vars(
 pub fn check_rule(
     scope: &Scope,
     special_vars: &SpecialVars,
-    patterns: &[NsValue],
-    template: &NsValue,
+    patterns: &[NsDatum],
+    template: &NsDatum,
 ) -> Result<VarLinks> {
     let mut fpvcx = FindVarsContext::new(scope, special_vars, FindVarsInputType::Pattern);
     // We don't need to report the root span for the pattern

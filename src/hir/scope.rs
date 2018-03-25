@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use syntax::span::Span;
-use syntax::value::Value;
+use syntax::datum::Datum;
 use hir::VarId;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
@@ -139,60 +139,60 @@ impl Ident {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub enum NsValue {
+pub enum NsDatum {
     Bool(Span, bool),
     Char(Span, char),
     Int(Span, i64),
     Float(Span, f64),
-    List(Span, Vec<NsValue>),
+    List(Span, Vec<NsDatum>),
     Str(Span, String),
     Ident(Span, Ident),
-    Vec(Span, Vec<NsValue>),
-    Map(Span, Vec<(NsValue, NsValue)>),
-    Set(Span, Vec<NsValue>),
+    Vec(Span, Vec<NsDatum>),
+    Map(Span, Vec<(NsDatum, NsDatum)>),
+    Set(Span, Vec<NsDatum>),
 }
 
-impl NsValue {
-    fn map_value_vec(vs: Vec<Value>, ns_id: NsId) -> Vec<NsValue> {
+impl NsDatum {
+    fn map_value_vec(vs: Vec<Datum>, ns_id: NsId) -> Vec<NsDatum> {
         vs.into_iter().map(|v| Self::from_value(v, ns_id)).collect()
     }
 
-    pub fn from_value(value: Value, ns_id: NsId) -> NsValue {
+    pub fn from_value(value: Datum, ns_id: NsId) -> NsDatum {
         match value {
-            Value::Bool(span, v) => NsValue::Bool(span, v),
-            Value::Char(span, v) => NsValue::Char(span, v),
-            Value::Int(span, v) => NsValue::Int(span, v),
-            Value::Float(span, v) => NsValue::Float(span, v),
-            Value::Str(span, v) => NsValue::Str(span, v),
-            Value::Sym(span, v) => NsValue::Ident(span, Ident(ns_id, v)),
-            Value::List(span, vs) => NsValue::List(span, Self::map_value_vec(vs, ns_id)),
-            Value::Vec(span, vs) => NsValue::Vec(span, Self::map_value_vec(vs, ns_id)),
-            Value::Set(span, vs) => NsValue::Set(span, Self::map_value_vec(vs, ns_id)),
-            Value::Map(span, vs) => NsValue::Map(
+            Datum::Bool(span, v) => NsDatum::Bool(span, v),
+            Datum::Char(span, v) => NsDatum::Char(span, v),
+            Datum::Int(span, v) => NsDatum::Int(span, v),
+            Datum::Float(span, v) => NsDatum::Float(span, v),
+            Datum::Str(span, v) => NsDatum::Str(span, v),
+            Datum::Sym(span, v) => NsDatum::Ident(span, Ident(ns_id, v)),
+            Datum::List(span, vs) => NsDatum::List(span, Self::map_value_vec(vs, ns_id)),
+            Datum::Vec(span, vs) => NsDatum::Vec(span, Self::map_value_vec(vs, ns_id)),
+            Datum::Set(span, vs) => NsDatum::Set(span, Self::map_value_vec(vs, ns_id)),
+            Datum::Map(span, vs) => NsDatum::Map(
                 span,
                 vs.into_iter()
-                    .map(|(k, v)| (NsValue::from_value(k, ns_id), NsValue::from_value(v, ns_id)))
+                    .map(|(k, v)| (NsDatum::from_value(k, ns_id), NsDatum::from_value(v, ns_id)))
                     .collect(),
             ),
         }
     }
 
-    fn map_nsvalue_vec(vs: Vec<NsValue>) -> Vec<Value> {
+    fn map_nsvalue_vec(vs: Vec<NsDatum>) -> Vec<Datum> {
         vs.into_iter().map(|v| v.into_value()).collect()
     }
 
-    pub fn into_value(self) -> Value {
+    pub fn into_value(self) -> Datum {
         match self {
-            NsValue::Bool(span, v) => Value::Bool(span, v),
-            NsValue::Char(span, v) => Value::Char(span, v),
-            NsValue::Int(span, v) => Value::Int(span, v),
-            NsValue::Float(span, v) => Value::Float(span, v),
-            NsValue::Str(span, v) => Value::Str(span, v),
-            NsValue::Ident(span, v) => Value::Sym(span, v.1),
-            NsValue::List(span, vs) => Value::List(span, Self::map_nsvalue_vec(vs)),
-            NsValue::Vec(span, vs) => Value::Vec(span, Self::map_nsvalue_vec(vs)),
-            NsValue::Set(span, vs) => Value::Set(span, Self::map_nsvalue_vec(vs)),
-            NsValue::Map(span, vs) => Value::Map(
+            NsDatum::Bool(span, v) => Datum::Bool(span, v),
+            NsDatum::Char(span, v) => Datum::Char(span, v),
+            NsDatum::Int(span, v) => Datum::Int(span, v),
+            NsDatum::Float(span, v) => Datum::Float(span, v),
+            NsDatum::Str(span, v) => Datum::Str(span, v),
+            NsDatum::Ident(span, v) => Datum::Sym(span, v.1),
+            NsDatum::List(span, vs) => Datum::List(span, Self::map_nsvalue_vec(vs)),
+            NsDatum::Vec(span, vs) => Datum::Vec(span, Self::map_nsvalue_vec(vs)),
+            NsDatum::Set(span, vs) => Datum::Set(span, Self::map_nsvalue_vec(vs)),
+            NsDatum::Map(span, vs) => Datum::Map(
                 span,
                 vs.into_iter()
                     .map(|(k, v)| (k.into_value(), v.into_value()))
@@ -203,16 +203,16 @@ impl NsValue {
 
     pub fn span(&self) -> Span {
         match *self {
-            NsValue::Bool(span, _) => span,
-            NsValue::Char(span, _) => span,
-            NsValue::Int(span, _) => span,
-            NsValue::Float(span, _) => span,
-            NsValue::Str(span, _) => span,
-            NsValue::Ident(span, _) => span,
-            NsValue::List(span, _) => span,
-            NsValue::Vec(span, _) => span,
-            NsValue::Set(span, _) => span,
-            NsValue::Map(span, _) => span,
+            NsDatum::Bool(span, _) => span,
+            NsDatum::Char(span, _) => span,
+            NsDatum::Int(span, _) => span,
+            NsDatum::Float(span, _) => span,
+            NsDatum::Str(span, _) => span,
+            NsDatum::Ident(span, _) => span,
+            NsDatum::List(span, _) => span,
+            NsDatum::Vec(span, _) => span,
+            NsDatum::Set(span, _) => span,
+            NsDatum::Map(span, _) => span,
         }
     }
 }

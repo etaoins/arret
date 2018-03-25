@@ -5,7 +5,7 @@ mod expander;
 use std::collections::{HashMap, HashSet};
 
 use syntax::span::Span;
-use hir::scope::{Binding, Ident, NsIdAlloc, NsValue, Prim, Scope};
+use hir::scope::{Binding, Ident, NsDatum, NsIdAlloc, Prim, Scope};
 use hir::error::{Error, ErrorKind, Result};
 use hir::macros::matcher::match_rule;
 use hir::macros::expander::expand_rule;
@@ -49,8 +49,8 @@ impl SpecialVars {
         }
     }
 
-    fn starts_with_zero_or_more(&self, scope: &Scope, data: &[NsValue]) -> bool {
-        if let Some(&NsValue::Ident(_, ref next_ident)) = data.get(1) {
+    fn starts_with_zero_or_more(&self, scope: &Scope, data: &[NsDatum]) -> bool {
+        if let Some(&NsDatum::Ident(_, ref next_ident)) = data.get(1) {
             let next_var = MacroVar::from_ident(scope, next_ident);
             self.is_zero_or_more(&next_var)
         } else {
@@ -61,8 +61,8 @@ impl SpecialVars {
 
 #[derive(PartialEq, Debug)]
 pub struct Rule {
-    pattern: Vec<NsValue>,
-    template: NsValue,
+    pattern: Vec<NsDatum>,
+    template: NsDatum,
     var_links: VarLinks,
 }
 
@@ -74,7 +74,7 @@ pub struct Macro {
 
 #[derive(Debug)]
 pub struct MatchData {
-    vars: HashMap<MacroVar, NsValue>,
+    vars: HashMap<MacroVar, NsDatum>,
     // The outside vector is the subpatterns; the inside vector contains the zero or more matches
     subpatterns: Vec<Vec<MatchData>>,
 }
@@ -101,9 +101,9 @@ pub fn lower_macro_rule(
     scope: &Scope,
     self_ident: &Ident,
     special_vars: &SpecialVars,
-    rule_datum: NsValue,
+    rule_datum: NsDatum,
 ) -> Result<Rule> {
-    let (span, mut rule_values) = if let NsValue::Vec(span, vs) = rule_datum {
+    let (span, mut rule_values) = if let NsDatum::Vec(span, vs) = rule_datum {
         (span, vs)
     } else {
         return Err(Error::new(
@@ -122,7 +122,7 @@ pub fn lower_macro_rule(
     let template = rule_values.pop().unwrap();
     let pattern_data = rule_values.pop().unwrap();
 
-    let pattern = if let NsValue::List(span, mut vs) = pattern_data {
+    let pattern = if let NsDatum::List(span, mut vs) = pattern_data {
         if vs.len() < 1 {
             return Err(Error::new(
                 span,
@@ -133,7 +133,7 @@ pub fn lower_macro_rule(
         }
 
         match vs.remove(0) {
-            NsValue::Ident(_, ref ident) if ident.name() == self_ident.name() => {}
+            NsDatum::Ident(_, ref ident) if ident.name() == self_ident.name() => {}
             other => {
                 return Err(Error::new(
                     other.span(),
@@ -165,7 +165,7 @@ pub fn lower_macro_rules(
     scope: &Scope,
     span: Span,
     self_ident: &Ident,
-    mut macro_rules_data: Vec<NsValue>,
+    mut macro_rules_data: Vec<NsDatum>,
 ) -> Result<Macro> {
     if macro_rules_data.len() != 2 {
         return Err(Error::new(span, ErrorKind::WrongArgCount(2)));
@@ -174,10 +174,10 @@ pub fn lower_macro_rules(
     let rules_datum = macro_rules_data.pop().unwrap();
     let literals_datum = macro_rules_data.pop().unwrap();
 
-    let literals = if let NsValue::Set(_, vs) = literals_datum {
+    let literals = if let NsDatum::Set(_, vs) = literals_datum {
         vs.into_iter()
             .map(|v| {
-                if let NsValue::Ident(_, ref ident) = v {
+                if let NsDatum::Ident(_, ref ident) = v {
                     Ok(MacroVar::from_ident(scope, ident))
                 } else {
                     Err(Error::new(
@@ -194,7 +194,7 @@ pub fn lower_macro_rules(
         ));
     };
 
-    let rules_values = if let NsValue::Vec(_, vs) = rules_datum {
+    let rules_values = if let NsDatum::Vec(_, vs) = rules_datum {
         vs
     } else {
         return Err(Error::new(
@@ -228,8 +228,8 @@ pub fn expand_macro(
     scope: &mut Scope,
     invocation_span: Span,
     mac: &Macro,
-    arg_data: Vec<NsValue>,
-) -> Result<NsValue> {
+    arg_data: Vec<NsDatum>,
+) -> Result<NsDatum> {
     for rule in mac.rules.iter() {
         let match_result = match_rule(scope, &mac.special_vars, rule, arg_data.as_slice());
 
@@ -271,8 +271,8 @@ fn macro_rules_for_str(data_str: &str) -> Result<Macro> {
 
     let test_ns_data = test_data
         .into_iter()
-        .map(|datum| NsValue::from_value(datum, test_ns_id()))
-        .collect::<Vec<NsValue>>();
+        .map(|datum| NsDatum::from_value(datum, test_ns_id()))
+        .collect::<Vec<NsDatum>>();
 
     let self_ident = Ident::new(test_ns_id(), "self".to_owned());
     lower_macro_rules(&Scope::new_empty(), full_span, &self_ident, test_ns_data)

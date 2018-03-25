@@ -1,4 +1,4 @@
-use hir::scope::{Ident, NsId, NsIdAlloc, NsValue, Scope};
+use hir::scope::{Ident, NsDatum, NsId, NsIdAlloc, Scope};
 use hir::macros::{MacroVar, MatchData, SpecialVars};
 use hir::macros::checker::VarLinks;
 use std::collections::HashMap;
@@ -31,7 +31,7 @@ impl<'a> ExpandContext<'a> {
         }
     }
 
-    fn expand_ident(&mut self, cursor: &ExpandCursor, span: Span, ident: &Ident) -> NsValue {
+    fn expand_ident(&mut self, cursor: &ExpandCursor, span: Span, ident: &Ident) -> NsDatum {
         let macro_var = MacroVar::from_ident(&self.scope, ident);
 
         if let Some(replacement) = cursor.match_data.vars.get(&macro_var) {
@@ -48,14 +48,14 @@ impl<'a> ExpandContext<'a> {
         let new_ident = ident.with_ns_id(*new_ns_id);
         self.scope.rebind(ident, &new_ident);
 
-        NsValue::Ident(span, new_ident)
+        NsDatum::Ident(span, new_ident)
     }
 
     fn expand_zero_or_more(
         &mut self,
         cursor: &mut ExpandCursor,
-        template: &NsValue,
-    ) -> Vec<NsValue> {
+        template: &NsDatum,
+    ) -> Vec<NsDatum> {
         // Find our subpattern index from our subtemplate index
         let subtemplate_idx = cursor.subtemplate_idx;
         let subvar_links = &cursor.var_links.subtemplates()[subtemplate_idx];
@@ -82,9 +82,9 @@ impl<'a> ExpandContext<'a> {
     fn expand_slice(
         &mut self,
         cursor: &mut ExpandCursor,
-        mut templates: &[NsValue],
-    ) -> Vec<NsValue> {
-        let mut result: Vec<NsValue> = vec![];
+        mut templates: &[NsDatum],
+    ) -> Vec<NsDatum> {
+        let mut result: Vec<NsDatum> = vec![];
 
         while !templates.is_empty() {
             if self.special_vars
@@ -106,12 +106,12 @@ impl<'a> ExpandContext<'a> {
         result
     }
 
-    fn expand_datum(&mut self, cursor: &mut ExpandCursor, template: &NsValue) -> NsValue {
+    fn expand_datum(&mut self, cursor: &mut ExpandCursor, template: &NsDatum) -> NsDatum {
         match template {
-            &NsValue::Ident(span, ref ident) => self.expand_ident(cursor, span, ident),
-            &NsValue::List(span, ref vs) => NsValue::List(span, self.expand_slice(cursor, vs)),
-            &NsValue::Vec(span, ref vs) => NsValue::Vec(span, self.expand_slice(cursor, vs)),
-            &NsValue::Set(span, ref vs) => NsValue::Set(span, self.expand_slice(cursor, vs)),
+            &NsDatum::Ident(span, ref ident) => self.expand_ident(cursor, span, ident),
+            &NsDatum::List(span, ref vs) => NsDatum::List(span, self.expand_slice(cursor, vs)),
+            &NsDatum::Vec(span, ref vs) => NsDatum::Vec(span, self.expand_slice(cursor, vs)),
+            &NsDatum::Set(span, ref vs) => NsDatum::Set(span, self.expand_slice(cursor, vs)),
             other => other.clone(),
         }
     }
@@ -123,8 +123,8 @@ pub fn expand_rule(
     special_vars: &SpecialVars,
     match_data: MatchData,
     var_links: &VarLinks,
-    template: &NsValue,
-) -> NsValue {
+    template: &NsDatum,
+) -> NsDatum {
     let mut mcx = ExpandContext::new(ns_id_alloc, scope, special_vars);
 
     let mut cursor = ExpandCursor {

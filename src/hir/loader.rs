@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::io::prelude::*;
 
-use syntax::value::Value;
+use syntax::datum::Datum;
 use syntax::span::Span;
 use syntax::parser::data_from_str_with_span_offset;
 use hir::error::{Error, ErrorKind, Result};
@@ -28,7 +28,7 @@ pub fn load_module_data(
     span: Span,
     display_name: String,
     input_reader: &mut Read,
-) -> Result<Vec<Value>> {
+) -> Result<Vec<Datum>> {
     let span_offset = ccx.next_span_offset();
 
     let mut source = String::new();
@@ -52,7 +52,7 @@ pub fn load_library_data(
     ccx: &mut CompileContext,
     span: Span,
     library_name: &LibraryName,
-) -> Result<Vec<Value>> {
+) -> Result<Vec<Datum>> {
     let mut path_buf = PathBuf::new();
 
     path_buf.push("stdlib");

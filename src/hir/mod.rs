@@ -6,7 +6,7 @@ mod loader;
 mod macros;
 
 use syntax::span::Span;
-use syntax::value::Value;
+use syntax::datum::Datum;
 use ty;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
@@ -58,7 +58,7 @@ pub struct Cond {
 
 #[derive(PartialEq, Debug)]
 pub enum Expr {
-    Lit(Value),
+    Lit(Datum),
     App(Span, Box<Expr>, Vec<Expr>),
     Fun(Span, Fun),
     Def(Span, Destruc<ty::Ty>, Box<Expr>),

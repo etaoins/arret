@@ -3,11 +3,11 @@ use std::io::Read;
 
 use hir::{Cond, Destruc, Expr, Fun, Var, VarId};
 use hir::loader::{load_library_data, load_module_data, LibraryName};
-use hir::scope::{Binding, Ident, MacroId, NsId, NsIdAlloc, NsValue, Prim, Scope};
+use hir::scope::{Binding, Ident, MacroId, NsDatum, NsId, NsIdAlloc, Prim, Scope};
 use hir::module::Module;
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::error::{Error, ErrorKind, Result};
-use syntax::value::Value;
+use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 use ctx::CompileContext;
 
@@ -22,7 +22,7 @@ pub struct LoweringContext<'ccx> {
 macro_rules! lower_expr_impl {
     ($self:ident, $scope:ident, $datum:ident, $lower_prim_apply:ident, $lower_macro_expr:ident) => {
         match $datum {
-            NsValue::Ident(span, ref ident) => match $scope.get(ident) {
+            NsDatum::Ident(span, ref ident) => match $scope.get(ident) {
                 Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
                 Some(Binding::Prim(_)) => Err(Error::new(span, ErrorKind::PrimRef)),
                 Some(Binding::Macro(_)) => {
@@ -32,16 +32,16 @@ macro_rules! lower_expr_impl {
                     Err(Error::new(span, ErrorKind::UnboundSymbol(ident.name().clone())))
                 }
             },
-            NsValue::List(span, mut vs) => {
+            NsDatum::List(span, mut vs) => {
                 if vs.len() == 0 {
-                    return Ok(Expr::Lit(Value::List(span, vec![])));
+                    return Ok(Expr::Lit(Datum::List(span, vec![])));
                 }
 
                 let arg_data = vs.split_off(1);
                 let fn_datum = vs.pop().unwrap();
 
                 match fn_datum {
-                    NsValue::Ident(fn_span, ref ident) => match $scope.get(ident) {
+                    NsDatum::Ident(fn_span, ref ident) => match $scope.get(ident) {
                         Some(Binding::Prim(ref fn_prim)) => {
                             $self.$lower_prim_apply($scope, span, fn_prim, arg_data)
                         }
@@ -104,18 +104,18 @@ impl<'ccx> LoweringContext<'ccx> {
         &mut self,
         scope: &mut Scope,
         span: Span,
-        sym_datum: NsValue,
-        transformer_spec: NsValue,
+        sym_datum: NsDatum,
+        transformer_spec: NsDatum,
     ) -> Result<()> {
-        let self_ident = if let NsValue::Ident(_, ident) = sym_datum {
+        let self_ident = if let NsDatum::Ident(_, ident) = sym_datum {
             ident
         } else {
             return Err(Error::new(sym_datum.span(), ErrorKind::ExpectedSymbol));
         };
 
-        let macro_rules_data = if let NsValue::List(span, mut vs) = transformer_spec {
+        let macro_rules_data = if let NsDatum::List(span, mut vs) = transformer_spec {
             match vs.first() {
-                Some(&NsValue::Ident(_, ref ident))
+                Some(&NsDatum::Ident(_, ref ident))
                     if scope.get(ident) == Some(Binding::Prim(Prim::MacroRules)) => {}
                 _ => {
                     return Err(Error::new(
@@ -146,10 +146,10 @@ impl<'ccx> LoweringContext<'ccx> {
     fn lower_destruc<T>(
         &mut self,
         scope: &mut Scope,
-        destruc_datum: NsValue,
+        destruc_datum: NsDatum,
     ) -> Result<Destruc<T>> {
         match destruc_datum {
-            NsValue::Ident(span, ident) => {
+            NsDatum::Ident(span, ident) => {
                 match scope.get(&ident) {
                     Some(Binding::Prim(Prim::Wildcard)) => {
                         return Ok(Destruc::Wildcard(None));
@@ -177,10 +177,10 @@ impl<'ccx> LoweringContext<'ccx> {
                     bound: None,
                 }))
             }
-            NsValue::List(_, mut vs) => {
+            NsDatum::List(_, mut vs) => {
                 let has_rest = if vs.len() > 2 {
                     match &vs[vs.len() - 1] {
-                        &NsValue::Ident(_, ref ident) => {
+                        &NsDatum::Ident(_, ref ident) => {
                             scope.get(ident) == Some(Binding::Prim(Prim::Ellipsis))
                         }
                         _ => false,
@@ -216,8 +216,8 @@ impl<'ccx> LoweringContext<'ccx> {
         &mut self,
         scope: &mut Scope,
         span: Span,
-        destruc_datum: NsValue,
-        value_datum: NsValue,
+        destruc_datum: NsDatum,
+        value_datum: NsDatum,
     ) -> Result<Expr> {
         let destruc = self.lower_destruc(scope, destruc_datum)?;
         let value_expr = self.lower_expr(scope, value_datum)?;
@@ -225,7 +225,7 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(Expr::Def(span, destruc, Box::new(value_expr)))
     }
 
-    fn lower_fun(&mut self, scope: &Scope, span: Span, mut arg_data: Vec<NsValue>) -> Result<Expr> {
+    fn lower_fun(&mut self, scope: &Scope, span: Span, mut arg_data: Vec<NsDatum>) -> Result<Expr> {
         if arg_data.len() < 1 {
             return Err(Error::new(
                 span,
@@ -241,7 +241,7 @@ impl<'ccx> LoweringContext<'ccx> {
         // symbol. This would be the same as using a list with a single rest parameter. It could
         // potentially be confusing/ambiguous to allow both so require a list for now.
         match param_datum {
-            NsValue::List(_, _) => {}
+            NsDatum::List(_, _) => {}
             other => {
                 return Err(Error::new(
                     other.span(),
@@ -276,7 +276,7 @@ impl<'ccx> LoweringContext<'ccx> {
         scope: &mut Scope,
         span: Span,
         fn_prim: &Prim,
-        mut arg_data: Vec<NsValue>,
+        mut arg_data: Vec<NsDatum>,
     ) -> Result<Expr> {
         match fn_prim {
             &Prim::Def | &Prim::DefMacro | &Prim::Import => {
@@ -332,9 +332,9 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(self.loaded_libraries.get(&library_name).unwrap())
     }
 
-    fn lower_import_set(&mut self, scope: &mut Scope, import_set_datum: NsValue) -> Result<()> {
+    fn lower_import_set(&mut self, scope: &mut Scope, import_set_datum: NsDatum) -> Result<()> {
         match import_set_datum {
-            NsValue::Vec(span, vs) => {
+            NsDatum::Vec(span, vs) => {
                 if vs.len() < 1 {
                     return Err(Error::new(
                         span,
@@ -349,7 +349,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 let mut name_components = vs.into_iter()
                     .map(|datum| {
                         match datum {
-                            NsValue::Ident(_, ident) => {
+                            NsDatum::Ident(_, ident) => {
                                 // TODO: What happens with mixed namespaces?
                                 import_ns_id = ident.ns_id();
                                 Ok(ident.name().clone())
@@ -382,7 +382,7 @@ impl<'ccx> LoweringContext<'ccx> {
         }
     }
 
-    fn lower_import(&mut self, scope: &mut Scope, arg_data: Vec<NsValue>) -> Result<()> {
+    fn lower_import(&mut self, scope: &mut Scope, arg_data: Vec<NsDatum>) -> Result<()> {
         for arg_datum in arg_data {
             self.lower_import_set(scope, arg_datum)?;
         }
@@ -395,7 +395,7 @@ impl<'ccx> LoweringContext<'ccx> {
         scope: &mut Scope,
         span: Span,
         fn_prim: &Prim,
-        mut arg_data: Vec<NsValue>,
+        mut arg_data: Vec<NsDatum>,
     ) -> Result<Expr> {
         match fn_prim {
             &Prim::Def => {
@@ -436,13 +436,13 @@ impl<'ccx> LoweringContext<'ccx> {
         scope: &mut Scope,
         span: Span,
         fn_prim: &Prim,
-        arg_data: Vec<NsValue>,
+        arg_data: Vec<NsDatum>,
     ) -> Result<Expr> {
         match fn_prim {
             &Prim::Export => {
                 for arg_datum in arg_data {
                     match arg_datum {
-                        NsValue::Ident(span, ident) => {
+                        NsDatum::Ident(span, ident) => {
                             scope.insert_export(span, ident);
                         }
                         other => {
@@ -462,7 +462,7 @@ impl<'ccx> LoweringContext<'ccx> {
         scope: &mut Scope,
         span: Span,
         fn_expr: Expr,
-        arg_data: Vec<NsValue>,
+        arg_data: Vec<NsDatum>,
     ) -> Result<Expr> {
         let arg_exprs = arg_data
             .into_iter()
@@ -472,15 +472,15 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(Expr::App(span, Box::new(fn_expr), arg_exprs))
     }
 
-    fn lower_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr> {
+    fn lower_expr(&mut self, scope: &mut Scope, datum: NsDatum) -> Result<Expr> {
         lower_expr_impl!(self, scope, datum, lower_prim_apply, lower_expr)
     }
 
-    fn lower_body_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr> {
+    fn lower_body_expr(&mut self, scope: &mut Scope, datum: NsDatum) -> Result<Expr> {
         lower_expr_impl!(self, scope, datum, lower_body_prim_apply, lower_body_expr)
     }
 
-    fn lower_module_expr(&mut self, scope: &mut Scope, datum: NsValue) -> Result<Expr> {
+    fn lower_module_expr(&mut self, scope: &mut Scope, datum: NsDatum) -> Result<Expr> {
         lower_expr_impl!(
             self,
             scope,
@@ -490,7 +490,7 @@ impl<'ccx> LoweringContext<'ccx> {
         )
     }
 
-    fn lower_module(&mut self, scope: &mut Scope, data: Vec<Value>) -> Result<Module> {
+    fn lower_module(&mut self, scope: &mut Scope, data: Vec<Datum>) -> Result<Module> {
         let ns_id = self.ns_id_alloc.alloc();
 
         // The default scope only consists of (import)
@@ -501,7 +501,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
         let exprs = data.into_iter()
             .map(|datum| {
-                let ns_datum = NsValue::from_value(datum, ns_id);
+                let ns_datum = NsDatum::from_value(datum, ns_id);
                 self.lower_module_expr(scope, ns_datum)
             })
             .collect::<Result<Vec<Expr>>>()?;
@@ -541,16 +541,16 @@ use syntax::parser::data_from_str;
 
 #[cfg(test)]
 fn module_for_str(data_str: &str) -> Result<Module> {
-    let import_statement = Value::List(
+    let import_statement = Datum::List(
         EMPTY_SPAN,
         vec![
-            Value::Sym(EMPTY_SPAN, "import".to_owned()),
-            Value::Vec(
+            Datum::Sym(EMPTY_SPAN, "import".to_owned()),
+            Datum::Vec(
                 EMPTY_SPAN,
                 vec![
-                    Value::Sym(EMPTY_SPAN, "risp".to_owned()),
-                    Value::Sym(EMPTY_SPAN, "internal".to_owned()),
-                    Value::Sym(EMPTY_SPAN, "primitives".to_owned()),
+                    Datum::Sym(EMPTY_SPAN, "risp".to_owned()),
+                    Datum::Sym(EMPTY_SPAN, "internal".to_owned()),
+                    Datum::Sym(EMPTY_SPAN, "primitives".to_owned()),
                 ],
             ),
         ],
@@ -576,7 +576,7 @@ fn self_quoting_bool() {
     let j = "false";
     let t = "^^^^^";
 
-    let expected = Expr::Lit(Value::Bool(t2s(t), false));
+    let expected = Expr::Lit(Datum::Bool(t2s(t), false));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
@@ -585,7 +585,7 @@ fn self_quoting_empty_list() {
     let j = "()";
     let t = "^^";
 
-    let expected = Expr::Lit(Value::List(t2s(t), vec![]));
+    let expected = Expr::Lit(Datum::List(t2s(t), vec![]));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
@@ -594,7 +594,7 @@ fn quoted_datum_shorthand() {
     let j = "'foo";
     let t = " ^^^";
 
-    let expected = Expr::Lit(Value::Sym(t2s(t), "foo".to_owned()));
+    let expected = Expr::Lit(Datum::Sym(t2s(t), "foo".to_owned()));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
@@ -603,7 +603,7 @@ fn quoted_datum_explicit() {
     let j = "(quote foo)";
     let t = "       ^^^ ";
 
-    let expected = Expr::Lit(Value::Sym(t2s(t), "foo".to_owned()));
+    let expected = Expr::Lit(Datum::Sym(t2s(t), "foo".to_owned()));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
@@ -630,7 +630,7 @@ fn basic_untyped_var_def() {
     });
 
     let expected = Expr::Do(vec![
-        Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Value::Int(t2s(u), 1)))),
+        Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Datum::Int(t2s(u), 1)))),
         Expr::Ref(t2s(v), VarId(1)),
     ]);
 
@@ -645,7 +645,7 @@ fn wildcard_def() {
 
     let destruc = Destruc::Wildcard(None);
 
-    let expected = Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Value::Int(t2s(u), 1))));
+    let expected = Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Datum::Int(t2s(u), 1))));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
@@ -690,7 +690,7 @@ fn list_destruc_def() {
         Expr::Def(
             t2s(t),
             destruc,
-            Box::new(Expr::Lit(Value::List(t2s(u), vec![Value::Int(t2s(v), 1)]))),
+            Box::new(Expr::Lit(Datum::List(t2s(u), vec![Datum::Int(t2s(v), 1)]))),
         ),
         Expr::Ref(t2s(w), VarId(2)),
     ]);
@@ -848,7 +848,7 @@ fn capturing_fn() {
         Expr::Def(
             t2s(t),
             outer_destruc,
-            Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
+            Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
         ),
         Expr::Fun(
             t2s(v),
@@ -896,7 +896,7 @@ fn shadowing_fn() {
         Expr::Def(
             t2s(t),
             outer_destruc,
-            Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
+            Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
         ),
         Expr::Fun(
             t2s(v),
@@ -923,10 +923,10 @@ fn expr_apply() {
 
     let expected = Expr::App(
         t2s(t),
-        Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
+        Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
         vec![
-            Expr::Lit(Value::Int(t2s(v), 2)),
-            Expr::Lit(Value::Int(t2s(w), 3)),
+            Expr::Lit(Datum::Int(t2s(v), 2)),
+            Expr::Lit(Datum::Int(t2s(w), 3)),
         ],
     );
 
@@ -971,9 +971,9 @@ fn if_expr() {
     let expected = Expr::Cond(
         t2s(t),
         Cond {
-            test_expr: Box::new(Expr::Lit(Value::Bool(t2s(u), true))),
-            true_expr: Box::new(Expr::Lit(Value::Int(t2s(v), 1))),
-            false_expr: Box::new(Expr::Lit(Value::Int(t2s(w), 2))),
+            test_expr: Box::new(Expr::Lit(Datum::Bool(t2s(u), true))),
+            true_expr: Box::new(Expr::Lit(Datum::Int(t2s(v), 1))),
+            false_expr: Box::new(Expr::Lit(Datum::Int(t2s(w), 2))),
         },
     );
 
@@ -995,7 +995,7 @@ fn simple_export() {
             source_name: "x".to_owned(),
             bound: None,
         }),
-        Box::new(Expr::Lit(Value::Int(t2s(u), 1))),
+        Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
     );
 
     let mut expected_exports = HashMap::new();
@@ -1095,7 +1095,7 @@ fn expand_trivial_macro() {
     let j = &[j1, j2].join("");
     let t = &[t1, t2].join("");
 
-    let expected = Expr::Lit(Value::Int(t2s(t), 1));
+    let expected = Expr::Lit(Datum::Int(t2s(t), 1));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
@@ -1109,7 +1109,7 @@ fn expand_replacing_macro() {
     let j = &[j1, j2].join("");
     let t = &[t1, t2].join("");
 
-    let expected = Expr::Lit(Value::Int(t2s(t), 1));
+    let expected = Expr::Lit(Datum::Int(t2s(t), 1));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
@@ -1120,9 +1120,9 @@ fn expand_two_value_replacement() {
     let u = "                                                                      ^   ";
     let v = "                                                                        ^ ";
 
-    let expected = Expr::Lit(Value::Vec(
+    let expected = Expr::Lit(Datum::Vec(
         t2s(t),
-        vec![Value::Int(t2s(u), 1), Value::Int(t2s(v), 2)],
+        vec![Datum::Int(t2s(u), 1), Datum::Int(t2s(v), 2)],
     ));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
@@ -1134,9 +1134,9 @@ fn expand_with_matching_literals() {
     let u = "                                                               ^      ";
     let v = "                                                                    ^ ";
 
-    let expected = Expr::Lit(Value::Vec(
+    let expected = Expr::Lit(Datum::Vec(
         t2s(t),
-        vec![Value::Int(t2s(u), 1), Value::Int(t2s(v), 2)],
+        vec![Datum::Int(t2s(u), 1), Datum::Int(t2s(v), 2)],
     ));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
@@ -1165,7 +1165,7 @@ fn expand_with_wildcard() {
     let j = &[j1, j2].join("");
     let t = &[t1, t2].join("");
 
-    let expected = Expr::Lit(Value::Int(t2s(t), 3));
+    let expected = Expr::Lit(Datum::Int(t2s(t), 3));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
@@ -1179,7 +1179,7 @@ fn expand_recursive() {
     let j = &[j1, j2].join("");
     let t = &[t1, t2].join("");
 
-    let expected = Expr::Lit(Value::Int(t2s(t), 7));
+    let expected = Expr::Lit(Datum::Int(t2s(t), 7));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
@@ -1193,7 +1193,7 @@ fn expand_fixed_list_match() {
     let j = &[j1, j2].join("");
     let t = &[t1, t2].join("");
 
-    let expected = Expr::Lit(Value::Int(t2s(t), 2));
+    let expected = Expr::Lit(Datum::Int(t2s(t), 2));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
@@ -1207,7 +1207,7 @@ fn expand_fixed_vector_match() {
     let j = &[j1, j2].join("");
     let t = &[t1, t2].join("");
 
-    let expected = Expr::Lit(Value::Int(t2s(t), 3));
+    let expected = Expr::Lit(Datum::Int(t2s(t), 3));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
@@ -1220,7 +1220,7 @@ fn expand_empty_set_match() {
     let j = &[j1, j2].join("");
     let t = t1;
 
-    let expected = Expr::Lit(Value::Bool(t2s(t), true));
+    let expected = Expr::Lit(Datum::Bool(t2s(t), true));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
@@ -1240,12 +1240,12 @@ fn expand_zero_or_more_set_match() {
     let v = &[sp, v2].join("");
     let w = &[sp, w2].join("");
 
-    let expected = Expr::Lit(Value::List(
+    let expected = Expr::Lit(Datum::List(
         t2s(t),
         vec![
-            Value::Int(t2s(u), 1),
-            Value::Int(t2s(v), 2),
-            Value::Int(t2s(w), 3),
+            Datum::Int(t2s(u), 1),
+            Datum::Int(t2s(v), 2),
+            Datum::Int(t2s(w), 3),
         ],
     ));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
@@ -1275,7 +1275,7 @@ fn expand_constant_match() {
     let j = &[j1, j2].join("");
     let t = &[t1, t2].join("");
 
-    let expected = Expr::Lit(Value::Sym(t2s(t), "b".to_owned()));
+    let expected = Expr::Lit(Datum::Sym(t2s(t), "b".to_owned()));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
 
@@ -1295,12 +1295,12 @@ fn expand_terminal_zero_or_more_match() {
     let v = &[sp, v2].join("");
     let w = &[sp, w2].join("");
 
-    let expected = Expr::Lit(Value::List(
+    let expected = Expr::Lit(Datum::List(
         t2s(t),
         vec![
-            Value::Int(t2s(u), 1),
-            Value::Int(t2s(v), 2),
-            Value::Int(t2s(w), 3),
+            Datum::Int(t2s(u), 1),
+            Datum::Int(t2s(v), 2),
+            Datum::Int(t2s(w), 3),
         ],
     ));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
@@ -1324,13 +1324,13 @@ fn expand_middle_zero_or_more_match() {
     let w = &[sp, w2].join("");
     let x = &[sp, x2].join("");
 
-    let expected = Expr::Lit(Value::Vec(
+    let expected = Expr::Lit(Datum::Vec(
         t2s(t),
         vec![
-            Value::Bool(t2s(u), true),
-            Value::Int(t2s(w), 2),
-            Value::Int(t2s(x), 3),
-            Value::Bool(t2s(v), false),
+            Datum::Bool(t2s(u), true),
+            Datum::Int(t2s(w), 2),
+            Datum::Int(t2s(x), 3),
+            Datum::Bool(t2s(v), false),
         ],
     ));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
@@ -1354,13 +1354,13 @@ fn expand_multiple_zero_or_more() {
     let w = &[sp, w2].join("");
     let x = &[sp, x2].join("");
 
-    let expected = Expr::Lit(Value::Vec(
+    let expected = Expr::Lit(Datum::Vec(
         t2s(t),
         vec![
-            Value::Int(t2s(w), 3),
-            Value::Int(t2s(x), 4),
-            Value::Int(t2s(u), 1),
-            Value::Int(t2s(v), 2),
+            Datum::Int(t2s(w), 3),
+            Datum::Int(t2s(x), 4),
+            Datum::Int(t2s(u), 1),
+            Datum::Int(t2s(v), 2),
         ],
     ));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
@@ -1431,19 +1431,19 @@ fn expand_nested_subpatterns() {
     let z = &[sp, z2].join("");
     let a = &[sp, a2].join("");
 
-    let expected = Expr::Lit(Value::Vec(
+    let expected = Expr::Lit(Datum::Vec(
         t2s(t),
         vec![
-            Value::List(
+            Datum::List(
                 t2s(u),
                 vec![
-                    Value::Int(t2s(x), 3),
-                    Value::Int(t2s(y), 4),
-                    Value::Int(t2s(w), 2),
-                    Value::Int(t2s(v), 1),
+                    Datum::Int(t2s(x), 3),
+                    Datum::Int(t2s(y), 4),
+                    Datum::Int(t2s(w), 2),
+                    Datum::Int(t2s(v), 1),
                 ],
             ),
-            Value::List(t2s(u), vec![Value::Int(t2s(a), 6), Value::Int(t2s(z), 5)]),
+            Datum::List(t2s(u), vec![Datum::Int(t2s(a), 6), Datum::Int(t2s(z), 5)]),
         ],
     ));
     assert_eq!(expected, body_expr_for_str(j).unwrap());
@@ -1472,7 +1472,7 @@ fn expand_body_def() {
     });
 
     let expected = Expr::Do(vec![
-        Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Value::Int(t2s(u), 1)))),
+        Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Datum::Int(t2s(u), 1)))),
         Expr::Ref(t2s(v), VarId(1)),
     ]);
     assert_eq!(expected, body_expr_for_str(j).unwrap());

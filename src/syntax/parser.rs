@@ -1,9 +1,9 @@
 use syntax::error::{Error, ErrorKind, ExpectedContent, Result};
-use syntax::value::Value;
+use syntax::datum::Datum;
 use std;
 use syntax::span::Span;
 
-pub fn data_from_str_with_span_offset(s: &str, span_offset: usize) -> Result<Vec<Value>> {
+pub fn data_from_str_with_span_offset(s: &str, span_offset: usize) -> Result<Vec<Datum>> {
     let mut parser = Parser::from_str(s, span_offset);
     parser.parse_data()
 }
@@ -174,15 +174,15 @@ impl<'de> Parser<'de> {
         u64::from_str_radix(digits, 10).map_err(|_| Error::new(span, ErrorKind::IntegerOverflow))
     }
 
-    fn parse_int(&mut self) -> Result<Value> {
+    fn parse_int(&mut self) -> Result<Datum> {
         let (span, content) = self.capture_span(|s| s.parse_int_content());
 
         content
             .and_then(|content| u64_to_positive_i64(span.clone(), content))
-            .map(|i| Value::Int(span, i))
+            .map(|i| Datum::Int(span, i))
     }
 
-    fn parse_negative_or_symbol(&mut self) -> Result<Value> {
+    fn parse_negative_or_symbol(&mut self) -> Result<Datum> {
         let (span, content) = self.capture_span(|s| {
             // Consume the -
             s.eat_bytes(1);
@@ -193,7 +193,7 @@ impl<'de> Parser<'de> {
 
         match content {
             Ok(valid_integer) => {
-                u64_to_negative_i64(span.clone(), valid_integer).map(|i| Value::Int(span, i))
+                u64_to_negative_i64(span.clone(), valid_integer).map(|i| Datum::Int(span, i))
             }
             Err(err) => {
                 // TODO: On overflow we will silently convert to a symbol
@@ -206,7 +206,7 @@ impl<'de> Parser<'de> {
                         hi: span.lo + (rest_of_symbol.len() as u32) + 1,
                     };
 
-                    Ok(Value::Sym(span_with_symbol, format!("-{}", rest_of_symbol)))
+                    Ok(Datum::Sym(span_with_symbol, format!("-{}", rest_of_symbol)))
                 } else {
                     Err(err)
                 }
@@ -214,7 +214,7 @@ impl<'de> Parser<'de> {
         }
     }
 
-    fn parse_char(&mut self) -> Result<Value> {
+    fn parse_char(&mut self) -> Result<Datum> {
         let (span, c) = self.capture_span(|s| {
             // Consume the \
             s.eat_bytes(1);
@@ -249,10 +249,10 @@ impl<'de> Parser<'de> {
             }
         });
 
-        c.map(|c| Value::Char(span, c))
+        c.map(|c| Datum::Char(span, c))
     }
 
-    fn parse_dispatch(&mut self) -> Result<Value> {
+    fn parse_dispatch(&mut self) -> Result<Datum> {
         // Consume the #
         // This means we need to adjust our spans below to cover it for reporting
         self.eat_bytes(1);
@@ -268,7 +268,7 @@ impl<'de> Parser<'de> {
         }
     }
 
-    fn parse_seq<F>(&mut self, terminator: char, make_ec: F) -> Result<Vec<Value>>
+    fn parse_seq<F>(&mut self, terminator: char, make_ec: F) -> Result<Vec<Datum>>
     where
         F: FnOnce(Span) -> ExpectedContent,
     {
@@ -292,20 +292,20 @@ impl<'de> Parser<'de> {
         }
     }
 
-    fn parse_list(&mut self) -> Result<Value> {
+    fn parse_list(&mut self) -> Result<Datum> {
         let (outer_span, contents) = self.capture_span(|s| s.parse_seq(')', ExpectedContent::List));
 
-        contents.map(|contents| Value::List(outer_span, contents))
+        contents.map(|contents| Datum::List(outer_span, contents))
     }
 
-    fn parse_vector(&mut self) -> Result<Value> {
+    fn parse_vector(&mut self) -> Result<Datum> {
         let (outer_span, contents) =
             self.capture_span(|s| s.parse_seq(']', ExpectedContent::Vector));
 
-        contents.map(|contents| Value::Vec(outer_span, contents))
+        contents.map(|contents| Datum::Vec(outer_span, contents))
     }
 
-    fn parse_map(&mut self) -> Result<Value> {
+    fn parse_map(&mut self) -> Result<Datum> {
         // First get the contents without splitting pairwise
         let (span, unpaired_contents) =
             self.capture_span(|s| s.parse_seq('}', ExpectedContent::Map));
@@ -316,20 +316,20 @@ impl<'de> Parser<'de> {
             return Err(Error::new(span, ErrorKind::UnevenMap));
         }
 
-        let contents: Vec<(Value, Value)> = unpaired_contents
+        let contents: Vec<(Datum, Datum)> = unpaired_contents
             .chunks(2)
             .map(|chunk| (chunk[0].clone(), chunk[1].clone()))
             .collect();
 
-        Ok(Value::Map(span, contents))
+        Ok(Datum::Map(span, contents))
     }
 
-    fn parse_set(&mut self) -> Result<Value> {
+    fn parse_set(&mut self) -> Result<Datum> {
         let (outer_span, contents) = self.capture_span(|s| s.parse_seq('}', ExpectedContent::Set));
 
         // Cover the # in our span
         let adj_span = outer_span.with_lo(outer_span.lo - 1);
-        contents.map(|contents| Value::Set(adj_span, contents))
+        contents.map(|contents| Datum::Set(adj_span, contents))
     }
 
     fn parse_quote_escape(&mut self) -> Result<char> {
@@ -366,7 +366,7 @@ impl<'de> Parser<'de> {
             }
         }
     }
-    fn parse_string(&mut self) -> Result<Value> {
+    fn parse_string(&mut self) -> Result<Datum> {
         let (span, contents) = self.capture_span(|s| {
             let (open_quote_span, _) = s.capture_span(|s| {
                 // Eat the opening quote
@@ -386,14 +386,14 @@ impl<'de> Parser<'de> {
                 }
             }
         });
-        contents.map(|contents| Value::Str(span, contents))
+        contents.map(|contents| Datum::Str(span, contents))
     }
 
     fn parse_identifier_content(&mut self) -> &str {
         self.consume_until(|c| !is_identifier_char(c)).1
     }
 
-    fn parse_identifier(&mut self) -> Result<Value> {
+    fn parse_identifier(&mut self) -> Result<Datum> {
         let (span, content) = self.capture_span(|s| s.parse_identifier_content().to_owned());
 
         if content.len() == 0 {
@@ -403,13 +403,13 @@ impl<'de> Parser<'de> {
         }
 
         match content.as_ref() {
-            "true" => Ok(Value::Bool(span, true)),
-            "false" => Ok(Value::Bool(span, false)),
-            _ => Ok(Value::Sym(span, content)),
+            "true" => Ok(Datum::Bool(span, true)),
+            "false" => Ok(Datum::Bool(span, false)),
+            _ => Ok(Datum::Sym(span, content)),
         }
     }
 
-    fn parse_symbol_shorthand(&mut self, expansion: &str) -> Result<Value> {
+    fn parse_symbol_shorthand(&mut self, expansion: &str) -> Result<Datum> {
         let (outer_span, (shorthand_span, quoted_datum)) = self.capture_span(|s| {
             let (shorthand_span, _) = s.capture_span(|s| {
                 // Discard the shorthand. Note this must be ASCII.
@@ -420,17 +420,17 @@ impl<'de> Parser<'de> {
         });
 
         quoted_datum.map(|quoted_datum| {
-            Value::List(
+            Datum::List(
                 outer_span,
                 vec![
-                    Value::Sym(shorthand_span, expansion.to_owned()),
+                    Datum::Sym(shorthand_span, expansion.to_owned()),
                     quoted_datum,
                 ],
             )
         })
     }
 
-    fn parse_datum(&mut self) -> Result<Value> {
+    fn parse_datum(&mut self) -> Result<Datum> {
         match self.skip_until_non_whitespace(ExpectedContent::Datum)? {
             '(' => self.parse_list(),
             '[' => self.parse_vector(),
@@ -445,7 +445,7 @@ impl<'de> Parser<'de> {
         }
     }
 
-    fn parse_data(&mut self) -> Result<Vec<Value>> {
+    fn parse_data(&mut self) -> Result<Vec<Datum>> {
         let mut datum_vec = Vec::new();
 
         // Keep eating datums until we hit EOF
@@ -481,12 +481,12 @@ fn whole_str_span(v: &str) -> Span {
 }
 
 #[cfg(test)]
-pub fn data_from_str(s: &str) -> Result<Vec<Value>> {
+pub fn data_from_str(s: &str) -> Result<Vec<Datum>> {
     data_from_str_with_span_offset(s, 0)
 }
 
 #[cfg(test)]
-fn datum_from_str(s: &str) -> Result<Value> {
+fn datum_from_str(s: &str) -> Result<Datum> {
     let mut parser = Parser::from_str(s, 0);
     parser.parse_datum()
 }
@@ -495,28 +495,28 @@ fn datum_from_str(s: &str) -> Result<Value> {
 fn bool_datum() {
     let j = "false";
     let t = "^^^^^";
-    let expected = Value::Bool(t2s(t), false);
+    let expected = Datum::Bool(t2s(t), false);
 
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "true";
     let t = "^^^^";
-    let expected = Value::Bool(t2s(t), true);
+    let expected = Datum::Bool(t2s(t), true);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "     false";
     let t = "     ^^^^^";
-    let expected = Value::Bool(t2s(t), false);
+    let expected = Datum::Bool(t2s(t), false);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "\ttrue\t";
     let t = "\t^^^^\t";
-    let expected = Value::Bool(t2s(t), true);
+    let expected = Datum::Bool(t2s(t), true);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = " trueorfalse  ";
     let t = " ^^^^^^^^^^^  ";
-    let expected = Value::Sym(t2s(t), "trueorfalse".to_owned());
+    let expected = Datum::Sym(t2s(t), "trueorfalse".to_owned());
     assert_eq!(expected, datum_from_str(j).unwrap());
 }
 
@@ -524,7 +524,7 @@ fn bool_datum() {
 fn list_datum() {
     let j = "() ; with a comment";
     let t = "^^                 ";
-    let expected = Value::List(t2s(t), vec![]);
+    let expected = Datum::List(t2s(t), vec![]);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "( true   false )";
@@ -532,9 +532,9 @@ fn list_datum() {
     let u = "  ^^^^          ";
     let v = "         ^^^^^  ";
 
-    let expected = Value::List(
+    let expected = Datum::List(
         t2s(t),
-        vec![Value::Bool(t2s(u), true), Value::Bool(t2s(v), false)],
+        vec![Datum::Bool(t2s(u), true), Datum::Bool(t2s(v), false)],
     );
     assert_eq!(expected, datum_from_str(j).unwrap());
 
@@ -545,12 +545,12 @@ fn list_datum() {
     let w = "       ^^^ ";
     let x = "        ^  ";
 
-    let expected = Value::List(
+    let expected = Datum::List(
         t2s(t),
         vec![
-            Value::Int(t2s(u), 1),
-            Value::Int(t2s(v), 2),
-            Value::List(t2s(w), vec![Value::Int(t2s(x), 3)]),
+            Datum::Int(t2s(u), 1),
+            Datum::Int(t2s(v), 2),
+            Datum::List(t2s(w), vec![Datum::Int(t2s(x), 3)]),
         ],
     );
     assert_eq!(expected, datum_from_str(j).unwrap());
@@ -571,7 +571,7 @@ fn list_datum() {
 fn vector_datum() {
     let j = "  []";
     let t = "  ^^";
-    let expected = Value::Vec(t2s(t), vec![]);
+    let expected = Datum::Vec(t2s(t), vec![]);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "[ true   (true false) ]";
@@ -581,13 +581,13 @@ fn vector_datum() {
     let w = "          ^^^^         ";
     let x = "               ^^^^^   ";
 
-    let expected = Value::Vec(
+    let expected = Datum::Vec(
         t2s(t),
         vec![
-            Value::Bool(t2s(u), true),
-            Value::List(
+            Datum::Bool(t2s(u), true),
+            Datum::List(
                 t2s(v),
-                vec![Value::Bool(t2s(w), true), Value::Bool(t2s(x), false)],
+                vec![Datum::Bool(t2s(w), true), Datum::Bool(t2s(x), false)],
             ),
         ],
     );
@@ -618,7 +618,7 @@ fn symbol_datum() {
         "-",
     ] {
         let s = whole_str_span(test_symbol);
-        let expected = Value::Sym(s, test_symbol.to_owned());
+        let expected = Datum::Sym(s, test_symbol.to_owned());
 
         assert_eq!(expected, datum_from_str(test_symbol).unwrap());
     }
@@ -628,7 +628,7 @@ fn symbol_datum() {
 fn keyword_symbol_datum() {
     for test_symbol in vec![":HELLO", ":HELLO123", ":predicate?", ":mutate!"] {
         let s = whole_str_span(test_symbol);
-        let expected = Value::Sym(s, test_symbol.to_owned());
+        let expected = Datum::Sym(s, test_symbol.to_owned());
 
         assert_eq!(expected, datum_from_str(test_symbol).unwrap());
     }
@@ -655,7 +655,7 @@ fn string_datum() {
 
     for (test_string, expected_contents) in test_strings {
         let s = whole_str_span(test_string);
-        let expected = Value::Str(s, expected_contents.to_owned());
+        let expected = Datum::Str(s, expected_contents.to_owned());
 
         assert_eq!(expected, datum_from_str(test_string).unwrap());
     }
@@ -688,7 +688,7 @@ fn char_datum() {
 
     for (j, expected_char) in test_chars {
         let s = whole_str_span(j);
-        let expected = Value::Char(s, expected_char);
+        let expected = Datum::Char(s, expected_char);
 
         assert_eq!(expected, datum_from_str(j).unwrap());
     }
@@ -717,7 +717,7 @@ fn int_datum() {
 
     for (j, expected_int) in test_ints {
         let s = whole_str_span(j);
-        let expected = Value::Int(s, expected_int);
+        let expected = Datum::Int(s, expected_int);
 
         assert_eq!(expected, datum_from_str(j).unwrap());
     }
@@ -742,7 +742,7 @@ fn int_datum() {
 fn map_datum() {
     let j = "{}";
     let t = "^^";
-    let expected = Value::Map(t2s(t), vec![]);
+    let expected = Datum::Map(t2s(t), vec![]);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "{ 1,2 ,, 3  4}";
@@ -752,10 +752,10 @@ fn map_datum() {
     let w = "         ^    ";
     let x = "            ^ ";
 
-    let mut expected_contents = Vec::<(Value, Value)>::new();
-    expected_contents.push((Value::Int(t2s(u), 1), Value::Int(t2s(v), 2)));
-    expected_contents.push((Value::Int(t2s(w), 3), Value::Int(t2s(x), 4)));
-    let expected = Value::Map(t2s(t), expected_contents);
+    let mut expected_contents = Vec::<(Datum, Datum)>::new();
+    expected_contents.push((Datum::Int(t2s(u), 1), Datum::Int(t2s(v), 2)));
+    expected_contents.push((Datum::Int(t2s(w), 3), Datum::Int(t2s(x), 4)));
+    let expected = Datum::Map(t2s(t), expected_contents);
 
     assert_eq!(expected, datum_from_str(j).unwrap());
 
@@ -766,13 +766,13 @@ fn map_datum() {
     let w = "    ^    ";
     let x = "      ^  ";
 
-    let mut inner_contents = Vec::<(Value, Value)>::new();
-    inner_contents.push((Value::Int(t2s(w), 2), Value::Int(t2s(x), 3)));
-    let inner = Value::Map(t2s(v), inner_contents);
+    let mut inner_contents = Vec::<(Datum, Datum)>::new();
+    inner_contents.push((Datum::Int(t2s(w), 2), Datum::Int(t2s(x), 3)));
+    let inner = Datum::Map(t2s(v), inner_contents);
 
-    let mut outer_contents = Vec::<(Value, Value)>::new();
-    outer_contents.push((Value::Int(t2s(u), 1), inner));
-    let expected = Value::Map(t2s(t), outer_contents);
+    let mut outer_contents = Vec::<(Datum, Datum)>::new();
+    outer_contents.push((Datum::Int(t2s(u), 1), inner));
+    let expected = Datum::Map(t2s(t), outer_contents);
 
     assert_eq!(expected, datum_from_str(j).unwrap());
 
@@ -786,7 +786,7 @@ fn map_datum() {
 fn set_datum() {
     let j = "#{}";
     let t = "^^^";
-    let expected = Value::Set(t2s(t), Vec::new());
+    let expected = Datum::Set(t2s(t), Vec::new());
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "#{ 1 2  3 4}";
@@ -796,12 +796,12 @@ fn set_datum() {
     let w = "        ^   ";
     let x = "          ^ ";
 
-    let mut expected_contents = Vec::<Value>::new();
-    expected_contents.push((Value::Int(t2s(u), 1)));
-    expected_contents.push((Value::Int(t2s(v), 2)));
-    expected_contents.push((Value::Int(t2s(w), 3)));
-    expected_contents.push((Value::Int(t2s(x), 4)));
-    let expected = Value::Set(t2s(t), expected_contents);
+    let mut expected_contents = Vec::<Datum>::new();
+    expected_contents.push((Datum::Int(t2s(u), 1)));
+    expected_contents.push((Datum::Int(t2s(v), 2)));
+    expected_contents.push((Datum::Int(t2s(w), 3)));
+    expected_contents.push((Datum::Int(t2s(x), 4)));
+    let expected = Datum::Set(t2s(t), expected_contents);
 
     assert_eq!(expected, datum_from_str(j).unwrap());
 
@@ -812,15 +812,15 @@ fn set_datum() {
     let w = "      ^    ";
     let x = "        ^  ";
 
-    let mut inner_contents = Vec::<Value>::new();
-    inner_contents.push((Value::Int(t2s(w), 2)));
-    inner_contents.push((Value::Int(t2s(x), 3)));
-    let inner = Value::Set(t2s(v), inner_contents);
+    let mut inner_contents = Vec::<Datum>::new();
+    inner_contents.push((Datum::Int(t2s(w), 2)));
+    inner_contents.push((Datum::Int(t2s(x), 3)));
+    let inner = Datum::Set(t2s(v), inner_contents);
 
-    let mut outer_contents = Vec::<Value>::new();
-    outer_contents.push((Value::Int(t2s(u), 1)));
+    let mut outer_contents = Vec::<Datum>::new();
+    outer_contents.push((Datum::Int(t2s(u), 1)));
     outer_contents.push(inner);
-    let expected = Value::Set(t2s(t), outer_contents);
+    let expected = Datum::Set(t2s(t), outer_contents);
 
     assert_eq!(expected, datum_from_str(j).unwrap());
 }
@@ -832,11 +832,11 @@ fn quote_shorthand() {
     let u = "^   ";
     let v = " ^^^";
 
-    let expected = Value::List(
+    let expected = Datum::List(
         t2s(t),
         vec![
-            Value::Sym(t2s(u), "quote".to_owned()),
-            Value::Sym(t2s(v), "foo".to_owned()),
+            Datum::Sym(t2s(u), "quote".to_owned()),
+            Datum::Sym(t2s(v), "foo".to_owned()),
         ],
     );
     assert_eq!(expected, datum_from_str(j).unwrap());
@@ -849,16 +849,16 @@ fn quote_shorthand() {
     let x = "     ^   ";
     let y = "       ^ ";
 
-    let expected = Value::List(
+    let expected = Datum::List(
         t2s(t),
         vec![
-            Value::Sym(t2s(u), "quote".to_owned()),
-            Value::List(
+            Datum::Sym(t2s(u), "quote".to_owned()),
+            Datum::List(
                 t2s(v),
                 vec![
-                    Value::Int(t2s(w), 1),
-                    Value::Int(t2s(x), 2),
-                    Value::Int(t2s(y), 3),
+                    Datum::Int(t2s(w), 1),
+                    Datum::Int(t2s(x), 2),
+                    Datum::Int(t2s(y), 3),
                 ],
             ),
         ],
@@ -892,7 +892,7 @@ fn datum_comment() {
     let t = "^^^^^^^^^^^^^^^^^^^^";
     let u = " ^^^^^              ";
 
-    let expected = Value::List(t2s(t), vec![Value::Sym(t2s(u), "Hello".to_owned())]);
+    let expected = Datum::List(t2s(t), vec![Datum::Sym(t2s(u), "Hello".to_owned())]);
     assert_eq!(expected, datum_from_str(j).unwrap());
 
     let j = "(Hello #_  you jerk)";
@@ -900,11 +900,11 @@ fn datum_comment() {
     let u = " ^^^^^              ";
     let v = "               ^^^^ ";
 
-    let expected = Value::List(
+    let expected = Datum::List(
         t2s(t),
         vec![
-            Value::Sym(t2s(u), "Hello".to_owned()),
-            Value::Sym(t2s(v), "jerk".to_owned()),
+            Datum::Sym(t2s(u), "Hello".to_owned()),
+            Datum::Sym(t2s(v), "jerk".to_owned()),
         ],
     );
     assert_eq!(expected, datum_from_str(j).unwrap());
@@ -916,7 +916,7 @@ fn multiple_data() {
     let t = " ^           ";
     let u = "          ^  ";
 
-    let expected = vec![Value::Int(t2s(t), 1), Value::Int(t2s(u), 3)];
+    let expected = vec![Datum::Int(t2s(t), 1), Datum::Int(t2s(u), 3)];
     assert_eq!(expected, data_from_str(j).unwrap());
 
     let j = "(true)))";
