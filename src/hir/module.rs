@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use hir::Expr;
+use hir::types::insert_ty_exports;
 use hir::scope::{insert_prim_exports, Binding};
 
 #[derive(PartialEq, Debug)]
@@ -18,6 +19,13 @@ impl Module {
         insert_prim_exports(&mut prim_exports);
 
         Module::new(Expr::Do(vec![]), prim_exports)
+    }
+
+    pub fn tys_module() -> Module {
+        let mut type_exports = HashMap::<String, Binding>::new();
+        insert_ty_exports(&mut type_exports);
+
+        Module::new(Expr::Do(vec![]), type_exports)
     }
 
     pub fn into_body_expr(self) -> Expr {

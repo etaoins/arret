@@ -486,7 +486,7 @@ pub fn data_from_str(s: &str) -> Result<Vec<Datum>> {
 }
 
 #[cfg(test)]
-fn datum_from_str(s: &str) -> Result<Datum> {
+pub fn datum_from_str(s: &str) -> Result<Datum> {
     let mut parser = Parser::from_str(s, 0);
     parser.parse_datum()
 }

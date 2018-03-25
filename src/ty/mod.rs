@@ -1,9 +1,9 @@
 use std::collections::BTreeSet;
 
-#[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord, Clone)]
 pub struct Ty(BTreeSet<NonFun<Ty>>, Option<Box<Fun<Ty>>>);
 
-#[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord, Clone)]
 pub enum NonFun<S> {
     Bool(bool),
     List(Vec<S>, Option<S>),
@@ -21,7 +21,7 @@ pub enum NonFun<S> {
     */
 }
 
-#[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord, Clone)]
 pub struct Fun<S> {
     impure: bool,
     fixed_args: Vec<S>,
@@ -29,7 +29,7 @@ pub struct Fun<S> {
     ret: S,
 }
 
-#[derive(Eq, Debug, Hash, PartialOrd, Ord)]
+#[derive(Eq, Debug, Hash, PartialOrd, Ord, Clone)]
 pub struct PVar {
     inst_id: usize,
     source_name: String,
@@ -42,7 +42,7 @@ impl PartialEq for PVar {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord, Clone)]
 pub enum PTy {
     //Var(PVar),
     Fixed(BTreeSet<NonFun<PTy>>, Option<Box<Fun<PTy>>>),
@@ -55,6 +55,20 @@ impl From<NonFun<PTy>> for PTy {
 
         PTy::Fixed(non_fun_tys, None)
     }
+}
+
+#[macro_export]
+macro_rules! union {
+    ( $($t:expr),* ) => {{
+        use std::collections::BTreeSet;
+        let mut non_fun_tys = BTreeSet::<ty::NonFun<ty::PTy>>::new();
+
+        $(
+            non_fun_tys.insert($t.into());
+        )*
+
+        ty::PTy::Fixed(non_fun_tys, None)
+    }}
 }
 
 //pub type PFun = Fun<PTy>;

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use syntax::span::Span;
 use syntax::datum::Datum;
 use hir::VarId;
+use ty;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct MacroId(usize);
@@ -22,6 +23,7 @@ pub enum Binding {
     Var(VarId),
     Prim(Prim),
     Macro(MacroId),
+    Ty(ty::PTy),
 }
 
 pub struct Scope {

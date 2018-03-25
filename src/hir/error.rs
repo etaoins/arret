@@ -37,6 +37,7 @@ impl From<Span> for ErrorLoc {
 #[derive(Debug, PartialEq)]
 pub enum ErrorKind {
     PrimRef,
+    TyRef,
     MacroRef(String),
     UnboundSymbol(String),
     WrongArgCount(usize),
@@ -49,6 +50,7 @@ pub enum ErrorKind {
     DuplicateMacroVar(String, Span),
     MultipleZeroOrMoreMatch(Span),
     NoVecDestruc,
+    ValueAsTy,
     ReadError(String),
     SyntaxError(SyntaxError),
 }
@@ -85,6 +87,7 @@ impl Reportable for Error {
     fn message(&self) -> String {
         match self.kind {
             ErrorKind::PrimRef => "cannot take the value of a primitive".to_owned(),
+            ErrorKind::TyRef => "cannot take the value of a type".to_owned(),
             ErrorKind::MacroRef(ref sym) => format!("cannot take the value of macro: `{}`", sym),
             ErrorKind::UnboundSymbol(ref sym) => format!("unable to resolve symbol: `{}`", sym),
             ErrorKind::WrongArgCount(expected) => format!("wrong arg count; expected {}", expected),
@@ -103,6 +106,7 @@ impl Reportable for Error {
             ErrorKind::NoVecDestruc => {
                 "vectors can only be used for type ascription in the form [name : Type]".to_owned()
             }
+            ErrorKind::ValueAsTy => "value cannot be used as a type".to_owned(),
             ErrorKind::ReadError(ref filename) => format!("error reading `{}`", filename),
             ErrorKind::SyntaxError(ref err) => err.message(),
         }

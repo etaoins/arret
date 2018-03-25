@@ -3,8 +3,9 @@
 extern crate ansi_term;
 extern crate clap;
 
-mod syntax;
+#[macro_use]
 mod ty;
+mod syntax;
 mod hir;
 mod ctx;
 mod reporting;

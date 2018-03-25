@@ -26,6 +26,7 @@ macro_rules! lower_expr_impl {
             NsDatum::Ident(span, ref ident) => match $scope.get(ident) {
                 Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
                 Some(Binding::Prim(_)) => Err(Error::new(span, ErrorKind::PrimRef)),
+                Some(Binding::Ty(_)) => Err(Error::new(span, ErrorKind::TyRef)),
                 Some(Binding::Macro(_)) => {
                     Err(Error::new(span, ErrorKind::MacroRef(ident.name().clone())))
                 }
@@ -59,6 +60,7 @@ macro_rules! lower_expr_impl {
                         Some(Binding::Var(id)) => {
                             $self.lower_expr_apply($scope, span, Expr::Ref(span, id), arg_data)
                         }
+                        Some(Binding::Ty(_)) => Err(Error::new(span, ErrorKind::TyRef)),
                         None => {
                             Err(Error::new(fn_span, ErrorKind::UnboundSymbol(ident.name().clone())))
                         }
@@ -78,13 +80,21 @@ impl<'ccx> LoweringContext<'ccx> {
     pub fn new(ccx: &'ccx mut CompileContext) -> LoweringContext {
         let mut loaded_libraries = BTreeMap::new();
 
-        // This library is always loaded
+        // These libraries are always loaded
         loaded_libraries.insert(
             LibraryName::new(
                 vec!["risp".to_owned(), "internal".to_owned()],
                 "primitives".to_owned(),
             ),
             Module::prims_module(),
+        );
+
+        loaded_libraries.insert(
+            LibraryName::new(
+                vec!["risp".to_owned(), "internal".to_owned()],
+                "types".to_owned(),
+            ),
+            Module::tys_module(),
         );
 
         LoweringContext {
