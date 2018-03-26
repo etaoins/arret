@@ -11,6 +11,7 @@ pub enum TyCons {
     List,
     Listof,
     Fun,
+    ImpureFun,
 }
 
 fn lower_list_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::PTy> {
@@ -29,6 +30,26 @@ fn lower_list_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::PTy> {
     Ok(ty::NonFun::List(fixed_tys, rest_ty).into())
 }
 
+fn lower_fun_cons(
+    scope: &Scope,
+    span: Span,
+    ty_cons_name: &'static str,
+    impure: bool,
+    mut arg_data: Vec<NsDatum>,
+) -> Result<ty::PTy> {
+    if arg_data.is_empty() {
+        return Err(Error::new(
+            span,
+            ErrorKind::IllegalArg(format!("{} requires at least one argument", ty_cons_name)),
+        ));
+    }
+
+    let ret_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+    let params_ty = lower_list_cons(scope, arg_data)?;
+
+    Ok(ty::PFun::new(impure, params_ty, ret_ty).into())
+}
+
 fn lower_ty_cons_apply(
     scope: &Scope,
     span: Span,
@@ -45,19 +66,8 @@ fn lower_ty_cons_apply(
             let rest_ty = lower_pty(scope, arg_data.pop().unwrap())?;
             Ok(ty::NonFun::List(vec![], Some(rest_ty)).into())
         }
-        TyCons::Fun => {
-            if arg_data.is_empty() {
-                return Err(Error::new(
-                    span,
-                    ErrorKind::IllegalArg("-> requires at least one argument".to_owned()),
-                ));
-            }
-
-            let ret_ty = lower_pty(scope, arg_data.pop().unwrap())?;
-            let params_ty = lower_list_cons(scope, arg_data)?;
-
-            Ok(ty::PFun::new(false, params_ty, ret_ty).into())
-        }
+        TyCons::Fun => lower_fun_cons(scope, span, "->", false, arg_data),
+        TyCons::ImpureFun => lower_fun_cons(scope, span, "->!", true, arg_data),
     }
 }
 
@@ -147,6 +157,7 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
     export_ty_cons!("List", TyCons::List);
     export_ty_cons!("Listof", TyCons::Listof);
     export_ty_cons!("->", TyCons::Fun);
+    export_ty_cons!("->!", TyCons::ImpureFun);
 }
 
 #[cfg(test)]
@@ -302,11 +313,36 @@ fn rest_list_cons() {
 }
 
 #[test]
-fn trivial_fun() {
+fn empty_fun() {
+    let j = "(->)";
+    let t = "^^^^";
+
+    let err = Error::new(
+        t2s(t),
+        ErrorKind::IllegalArg("-> requires at least one argument".to_owned()),
+    );
+    assert_err_for_str(err, j);
+}
+
+#[test]
+fn pure_fun() {
     let j = "(-> true)";
 
     let expected = ty::PFun::new(
         false,
+        ty::NonFun::List(vec![], None).into(),
+        ty::NonFun::Bool(true).into(),
+    );
+
+    assert_ty_for_str(expected.into(), j);
+}
+
+#[test]
+fn impure_fun() {
+    let j = "(->! true)";
+
+    let expected = ty::PFun::new(
+        true,
         ty::NonFun::List(vec![], None).into(),
         ty::NonFun::Bool(true).into(),
     );
