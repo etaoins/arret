@@ -140,7 +140,7 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
 
     export_ty!(
         "Bool",
-        union![ty::NonFun::Bool(false), ty::NonFun::Bool(true)]
+        union_ty![ty::NonFun::Bool(false), ty::NonFun::Bool(true)]
     );
     export_ty!("Symbol", ty::NonFun::AnySym.into());
 

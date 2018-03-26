@@ -74,7 +74,7 @@ impl From<PFun> for PTy {
 }
 
 #[macro_export]
-macro_rules! union {
+macro_rules! union_ty {
     ( $($t:expr),* ) => {{
         use std::collections::BTreeSet;
         let mut non_fun_tys = BTreeSet::<ty::NonFun<ty::PTy>>::new();
