@@ -8,7 +8,7 @@ use hir::module::Module;
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::error::{Error, ErrorKind, Result};
 use hir::types::lower_pty;
-use hir::util::split_into_fixed_and_rest;
+use hir::util::{expect_arg_count, expect_ident, split_into_fixed_and_rest};
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 use ctx::CompileContext;
@@ -123,11 +123,7 @@ impl<'ccx> LoweringContext<'ccx> {
         sym_datum: NsDatum,
         transformer_spec: NsDatum,
     ) -> Result<()> {
-        let self_ident = if let NsDatum::Ident(_, ident) = sym_datum {
-            ident
-        } else {
-            return Err(Error::new(sym_datum.span(), ErrorKind::ExpectedSymbol));
-        };
+        let self_ident = expect_ident(sym_datum)?;
 
         let macro_rules_data = if let NsDatum::List(span, mut vs) = transformer_spec {
             match vs.first() {
@@ -316,21 +312,17 @@ impl<'ccx> LoweringContext<'ccx> {
         mut arg_data: Vec<NsDatum>,
     ) -> Result<Expr> {
         match fn_prim {
-            &Prim::Def | &Prim::DefMacro | &Prim::Import => {
+            &Prim::Def | &Prim::DefMacro | &Prim::DefType | &Prim::Import => {
                 Err(Error::new(span, ErrorKind::DefOutsideBody))
             }
             &Prim::Export => Err(Error::new(span, ErrorKind::ExportOutsideModule)),
-            &Prim::Quote => match arg_data.len() {
-                1 => Ok(Expr::Lit(arg_data[0].clone().into_value())),
-                _ => Err(Error::new(span, ErrorKind::WrongArgCount(1))),
-            },
+            &Prim::Quote => {
+                expect_arg_count(span, &arg_data, 1)?;
+                Ok(Expr::Lit(arg_data[0].clone().into_value()))
+            }
             &Prim::Fun => self.lower_fun(scope, span, arg_data),
             &Prim::If => {
-                let arg_count = arg_data.len();
-
-                if arg_count != 3 {
-                    return Err(Error::new(span, ErrorKind::WrongArgCount(3)));
-                }
+                expect_arg_count(span, &arg_data, 3)?;
 
                 macro_rules! pop_as_boxed_expr {
                     () => {Box::new(self.lower_expr(scope, arg_data.pop().unwrap())?)}
@@ -436,11 +428,7 @@ impl<'ccx> LoweringContext<'ccx> {
     ) -> Result<Expr> {
         match fn_prim {
             &Prim::Def => {
-                let arg_count = arg_data.len();
-
-                if arg_count != 2 {
-                    return Err(Error::new(span, ErrorKind::WrongArgCount(2)));
-                }
+                expect_arg_count(span, &arg_data, 2)?;
 
                 let value_datum = arg_data.pop().unwrap();
                 let destruc_datum = arg_data.pop().unwrap();
@@ -448,17 +436,24 @@ impl<'ccx> LoweringContext<'ccx> {
                 self.lower_def_var(scope, span, destruc_datum, value_datum)
             }
             &Prim::DefMacro => {
-                let arg_count = arg_data.len();
-
-                if arg_count != 2 {
-                    return Err(Error::new(span, ErrorKind::WrongArgCount(2)));
-                }
+                expect_arg_count(span, &arg_data, 2)?;
 
                 let transformer_spec = arg_data.pop().unwrap();
                 let sym_datum = arg_data.pop().unwrap();
 
                 self.lower_defmacro(scope, span, sym_datum, transformer_spec)
                     .map(|_| Expr::Do(vec![]))
+            }
+            &Prim::DefType => {
+                expect_arg_count(span, &arg_data, 2)?;
+
+                let ty_datum = arg_data.pop().unwrap();
+                let ident = expect_ident(arg_data.pop().unwrap())?;
+
+                let ty = lower_pty(scope, ty_datum)?;
+
+                scope.insert_binding(ident, Binding::Ty(ty));
+                Ok(Expr::Do(vec![]))
             }
             &Prim::Import => {
                 self.lower_import(scope, arg_data)?;
@@ -1548,5 +1543,32 @@ fn expand_body_def() {
         Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Datum::Int(t2s(u), 1)))),
         Expr::Ref(t2s(v), VarId(1)),
     ]);
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
+
+#[test]
+fn trivial_deftype() {
+    let j1 = "(deftype MyTrue true)";
+    let s1 = "                     ";
+    let j2 = "(def [x : MyTrue] true)";
+    let t2 = "^^^^^^^^^^^^^^^^^^^^^^^";
+    let u2 = "                  ^^^^ ";
+
+    let j = &[j1, j2].join("");
+    let t = &[s1, t2].join("");
+    let u = &[s1, u2].join("");
+
+    let destruc = Destruc::Var(Var {
+        id: VarId(1),
+        source_name: "x".to_owned(),
+        bound: Some(ty::NonFun::Bool(true).into()),
+    });
+
+    let expected = Expr::Def(
+        t2s(t),
+        destruc,
+        Box::new(Expr::Lit(Datum::Bool(t2s(u), true))),
+    );
+
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }

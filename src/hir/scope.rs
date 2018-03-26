@@ -109,7 +109,8 @@ prims!(
     ("...", Ellipsis),
     ("_", Wildcard),
     ("macro-rules", MacroRules),
-    (":", TyColon)
+    (":", TyColon),
+    ("deftype", DefType)
 );
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
