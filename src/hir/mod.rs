@@ -24,11 +24,11 @@ impl VarId {
 pub struct Var {
     id: VarId,
     source_name: String,
-    bound: Option<ty::PTy>,
+    bound: Option<ty::Poly>,
 }
 
 impl Var {
-    fn with_bound(self, bound: ty::PTy) -> Var {
+    fn with_bound(self, bound: ty::Poly) -> Var {
         Var {
             id: self.id,
             source_name: self.source_name,
@@ -46,7 +46,7 @@ impl PartialEq for Var {
 #[derive(Debug, PartialEq)]
 pub enum Destruc {
     Var(Var),
-    Wildcard(Option<ty::PTy>),
+    Wildcard(Option<ty::Poly>),
     List(Vec<Destruc>, Option<Box<Destruc>>),
 }
 
@@ -56,7 +56,7 @@ pub struct Fun {
 
     poly_vars: Vec<ty::PVar>,
     params: Destruc,
-    ret_ty: Option<ty::PTy>,
+    ret_ty: Option<ty::Poly>,
 
     body_expr: Box<Expr>,
 }

@@ -23,7 +23,7 @@ pub enum Binding {
     Var(VarId),
     Prim(Prim),
     Macro(MacroId),
-    Ty(ty::PTy),
+    Ty(ty::Poly),
     TyCons(types::TyCons),
 }
 

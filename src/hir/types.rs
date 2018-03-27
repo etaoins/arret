@@ -14,13 +14,13 @@ pub enum TyCons {
     ImpureFun,
 }
 
-fn lower_list_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::PTy> {
+fn lower_list_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
     let (fixed, rest) = split_into_fixed_and_rest(scope, arg_data);
 
     let fixed_tys = fixed
         .into_iter()
         .map(|arg_datum| lower_pty(scope, arg_datum))
-        .collect::<Result<Vec<ty::PTy>>>()?;
+        .collect::<Result<Vec<ty::Poly>>>()?;
 
     let rest_ty = match rest {
         Some(rest) => Some(lower_pty(scope, rest)?),
@@ -36,7 +36,7 @@ fn lower_fun_cons(
     ty_cons_name: &'static str,
     impure: bool,
     mut arg_data: Vec<NsDatum>,
-) -> Result<ty::PTy> {
+) -> Result<ty::Poly> {
     if arg_data.is_empty() {
         return Err(Error::new(
             span,
@@ -47,7 +47,7 @@ fn lower_fun_cons(
     let ret_ty = lower_pty(scope, arg_data.pop().unwrap())?;
     let params_ty = lower_list_cons(scope, arg_data)?;
 
-    Ok(ty::PFun::new(impure, params_ty, ret_ty).into())
+    Ok(ty::Fun::new(impure, params_ty, ret_ty).into())
 }
 
 fn lower_ty_cons_apply(
@@ -55,7 +55,7 @@ fn lower_ty_cons_apply(
     span: Span,
     ty_cons: TyCons,
     mut arg_data: Vec<NsDatum>,
-) -> Result<ty::PTy> {
+) -> Result<ty::Poly> {
     match ty_cons {
         TyCons::List => lower_list_cons(scope, arg_data),
         TyCons::Listof => {
@@ -71,7 +71,7 @@ fn lower_ty_cons_apply(
     }
 }
 
-fn lower_literal(datum: NsDatum) -> Result<ty::PTy> {
+fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
     match datum {
         NsDatum::Bool(_, v) => Ok(ty::NonFun::Bool(v).into()),
         NsDatum::Ident(_, ident) => Ok(ty::NonFun::Sym(ident.name().clone()).into()),
@@ -82,7 +82,7 @@ fn lower_literal(datum: NsDatum) -> Result<ty::PTy> {
     }
 }
 
-fn lower_ident(scope: &Scope, span: Span, ident: Ident) -> Result<ty::PTy> {
+fn lower_ident(scope: &Scope, span: Span, ident: Ident) -> Result<ty::Poly> {
     match scope.get(&ident) {
         Some(Binding::Ty(ref ty)) => Ok(ty.clone()),
         Some(_) => Err(Error::new(span, ErrorKind::ValueAsTy)),
@@ -93,7 +93,7 @@ fn lower_ident(scope: &Scope, span: Span, ident: Ident) -> Result<ty::PTy> {
     }
 }
 
-pub fn lower_pty(scope: &Scope, datum: NsDatum) -> Result<ty::PTy> {
+pub fn lower_pty(scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
     match datum {
         NsDatum::List(span, mut vs) => {
             if vs.len() == 0 {
@@ -168,7 +168,7 @@ use hir::scope::{insert_prim_exports, NsId};
 use syntax::span::t2s;
 
 #[cfg(test)]
-fn pty_for_str(datum_str: &str) -> Result<ty::PTy> {
+fn pty_for_str(datum_str: &str) -> Result<ty::Poly> {
     let test_ns_id = NsId::new(1);
 
     // Capture our exports
@@ -187,7 +187,7 @@ fn pty_for_str(datum_str: &str) -> Result<ty::PTy> {
 }
 
 #[cfg(test)]
-fn assert_ty_for_str(expected: ty::PTy, datum_str: &str) {
+fn assert_ty_for_str(expected: ty::Poly, datum_str: &str) {
     assert_eq!(expected, pty_for_str(datum_str).unwrap());
 }
 
@@ -328,7 +328,7 @@ fn empty_fun() {
 fn pure_fun() {
     let j = "(-> true)";
 
-    let expected = ty::PFun::new(
+    let expected = ty::Fun::new(
         false,
         ty::NonFun::List(vec![], None).into(),
         ty::NonFun::Bool(true).into(),
@@ -341,7 +341,7 @@ fn pure_fun() {
 fn impure_fun() {
     let j = "(->! true)";
 
-    let expected = ty::PFun::new(
+    let expected = ty::Fun::new(
         true,
         ty::NonFun::List(vec![], None).into(),
         ty::NonFun::Bool(true).into(),
@@ -354,7 +354,7 @@ fn impure_fun() {
 fn fixed_fun() {
     let j = "(-> false true)";
 
-    let expected = ty::PFun::new(
+    let expected = ty::Fun::new(
         false,
         ty::NonFun::List(vec![ty::NonFun::Bool(false).into()], None).into(),
         ty::NonFun::Bool(true).into(),
@@ -367,7 +367,7 @@ fn fixed_fun() {
 fn rest_fun() {
     let j = "(-> Symbol ... true)";
 
-    let expected = ty::PFun::new(
+    let expected = ty::Fun::new(
         false,
         ty::NonFun::List(vec![], Some(ty::NonFun::AnySym.into())).into(),
         ty::NonFun::Bool(true).into(),
