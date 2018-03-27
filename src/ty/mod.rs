@@ -6,11 +6,11 @@ pub enum NonFun<S> {
     List(Vec<S>, Option<S>),
     Sym(String),
     AnySym,
-    /*
-    Char,
     Int,
     Float,
     Str,
+    Char,
+    /*
     Vec(Vec<S>, Option<S>),
     Hash(S, S),
     Set(S),

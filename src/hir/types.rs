@@ -153,6 +153,10 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
         union_ty![ty::NonFun::Bool(false), ty::NonFun::Bool(true)]
     );
     export_ty!("Symbol", ty::NonFun::AnySym.into());
+    export_ty!("String", ty::NonFun::Str.into());
+    export_ty!("Int", ty::NonFun::Int.into());
+    export_ty!("Float", ty::NonFun::Float.into());
+    export_ty!("Char", ty::NonFun::Char.into());
 
     export_ty_cons!("List", TyCons::List);
     export_ty_cons!("Listof", TyCons::Listof);
