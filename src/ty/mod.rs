@@ -1,6 +1,4 @@
-use std::collections::BTreeSet;
-
-#[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord, Clone)]
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub enum NonFun<S> {
     Bool(bool),
     List(Vec<S>, Option<S>),
@@ -15,7 +13,7 @@ pub enum NonFun<S> {
     Hash(S, S),
 }
 
-#[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord, Clone)]
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct Fun<S> {
     impure: bool,
     params: S,
@@ -32,7 +30,7 @@ impl<S> Fun<S> {
     }
 }
 
-#[derive(Eq, Debug, Hash, PartialOrd, Ord, Clone)]
+#[derive(Eq, Debug, Hash, Clone)]
 pub struct PVar {
     inst_id: usize,
     source_name: String,
@@ -45,37 +43,27 @@ impl PartialEq for PVar {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord, Clone)]
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub enum Poly {
     //Var(PVar),
-    Fixed(BTreeSet<NonFun<Poly>>, Option<Box<Fun<Poly>>>),
+    Fixed(Vec<NonFun<Poly>>, Option<Box<Fun<Poly>>>),
 }
 
 impl From<NonFun<Poly>> for Poly {
     fn from(non_fun: NonFun<Poly>) -> Poly {
-        let mut non_fun_tys = BTreeSet::<NonFun<Poly>>::new();
-        non_fun_tys.insert(non_fun.into());
-
-        Poly::Fixed(non_fun_tys, None)
+        Poly::Fixed(vec![non_fun], None)
     }
 }
 
 impl From<Fun<Poly>> for Poly {
     fn from(fun: Fun<Poly>) -> Poly {
-        Poly::Fixed(BTreeSet::new(), Some(Box::new(fun)))
+        Poly::Fixed(vec![], Some(Box::new(fun)))
     }
 }
 
 #[macro_export]
 macro_rules! union_ty {
     ( $($t:expr),* ) => {{
-        use std::collections::BTreeSet;
-        let mut non_fun_tys = BTreeSet::<ty::NonFun<ty::Poly>>::new();
-
-        $(
-            non_fun_tys.insert($t.into());
-        )*
-
-        ty::Poly::Fixed(non_fun_tys, None)
+        ty::Poly::Fixed(vec![$( $t, )*], None)
     }}
 }
