@@ -126,15 +126,12 @@ impl<'ccx> LoweringContext<'ccx> {
         let self_ident = expect_ident(sym_datum)?;
 
         let macro_rules_data = if let NsDatum::List(span, mut vs) = transformer_spec {
-            match vs.first() {
-                Some(&NsDatum::Ident(_, ref ident))
-                    if scope.get(ident) == Some(Binding::Prim(Prim::MacroRules)) => {}
-                _ => {
-                    return Err(Error::new(
-                        span,
-                        ErrorKind::IllegalArg("unsupported macro type".to_owned()),
-                    ))
-                }
+            if vs.first().and_then(|d| scope.get_datum(d)) != Some(Binding::Prim(Prim::MacroRules))
+            {
+                return Err(Error::new(
+                    span,
+                    ErrorKind::IllegalArg("unsupported macro type".to_owned()),
+                ));
             }
 
             vs.remove(0);
@@ -206,15 +203,8 @@ impl<'ccx> LoweringContext<'ccx> {
                 }
 
                 // Make sure the middle element is a type colon
-                match &vs[1] {
-                    &NsDatum::Ident(_, ref ident) => {
-                        if scope.get(ident) != Some(Binding::Prim(Prim::TyColon)) {
-                            return Err(Error::new(span, ErrorKind::NoVecDestruc));
-                        };
-                    }
-                    _ => {
-                        return Err(Error::new(span, ErrorKind::NoVecDestruc));
-                    }
+                if scope.get_datum(&vs[1]) != Some(Binding::Prim(Prim::TyColon)) {
+                    return Err(Error::new(span, ErrorKind::NoVecDestruc));
                 }
 
                 let ty = lower_pty(scope, vs.pop().unwrap())?;

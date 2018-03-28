@@ -10,12 +10,7 @@ pub fn split_into_fixed_and_rest(
     mut vs: Vec<NsDatum>,
 ) -> (Vec<NsDatum>, Option<NsDatum>) {
     let has_rest = if vs.len() >= 2 {
-        match &vs[vs.len() - 1] {
-            &NsDatum::Ident(_, ref ident) => {
-                scope.get(ident) == Some(Binding::Prim(Prim::Ellipsis))
-            }
-            _ => false,
-        }
+        scope.get_datum(&vs[vs.len() - 1]) == Some(Binding::Prim(Prim::Ellipsis))
     } else {
         false
     };
@@ -39,12 +34,7 @@ pub fn split_into_start_and_fixed(
     mut vs: Vec<NsDatum>,
 ) -> (Option<NsDatum>, Vec<NsDatum>) {
     let has_start = if vs.len() >= 2 {
-        match &vs[1] {
-            &NsDatum::Ident(_, ref ident) => {
-                scope.get(ident) == Some(Binding::Prim(Prim::Ellipsis))
-            }
-            _ => false,
-        }
+        scope.get_datum(&vs[1]) == Some(Binding::Prim(Prim::Ellipsis))
     } else {
         false
     };

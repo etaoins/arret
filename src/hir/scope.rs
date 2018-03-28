@@ -48,6 +48,18 @@ impl Scope {
         }
     }
 
+    /// Returns the binding for a given datum if it exists
+    ///
+    /// Only idents can have bindings; other data will return None.
+    pub fn get_datum(&self, datum: &NsDatum) -> Option<Binding> {
+        if let &NsDatum::Ident(_, ref ident) = datum {
+            self.get(ident)
+        } else {
+            None
+        }
+    }
+
+    /// Returns the binding for a given ident if it exists
     pub fn get(&self, ident: &Ident) -> Option<Binding> {
         match self.bindings.get(ident) {
             Some(b) => Some(b.clone()),
