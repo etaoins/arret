@@ -11,10 +11,8 @@ pub enum NonFun<S> {
     Float,
     Str,
     Char,
-    /*
-    Hash(S, S),
     Set(S),
-    */
+    Hash(S, S),
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, PartialOrd, Ord, Clone)]

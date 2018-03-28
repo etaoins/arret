@@ -14,6 +14,8 @@ pub enum TyCons {
     Vectorof,
     Fun,
     ImpureFun,
+    Set,
+    Hash,
 }
 
 fn lower_list_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
@@ -89,6 +91,17 @@ fn lower_ty_cons_apply(
         }
         TyCons::Fun => lower_fun_cons(scope, span, "->", false, arg_data),
         TyCons::ImpureFun => lower_fun_cons(scope, span, "->!", true, arg_data),
+        TyCons::Set => {
+            expect_arg_count(span, &arg_data, 1)?;
+            let member_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+            Ok(ty::NonFun::Set(member_ty).into())
+        }
+        TyCons::Hash => {
+            expect_arg_count(span, &arg_data, 2)?;
+            let value_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+            let key_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+            Ok(ty::NonFun::Hash(key_ty, value_ty).into())
+        }
     }
 }
 
@@ -182,6 +195,8 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
     export_ty_cons!("Vectorof", TyCons::Vectorof);
     export_ty_cons!("->", TyCons::Fun);
     export_ty_cons!("->!", TyCons::ImpureFun);
+    export_ty_cons!("Setof", TyCons::Set);
+    export_ty_cons!("Hash", TyCons::Hash);
 }
 
 #[cfg(test)]
@@ -433,6 +448,27 @@ fn rest_fun() {
         ty::NonFun::List(vec![], Some(ty::NonFun::AnySym.into())).into(),
         ty::NonFun::Bool(true).into(),
     );
+
+    assert_ty_for_str(expected.into(), j);
+}
+
+#[test]
+fn set_cons() {
+    let j = "(Setof true)";
+
+    let inner_ty = ty::NonFun::Bool(true);
+    let expected = ty::NonFun::Set(inner_ty.into());
+
+    assert_ty_for_str(expected.into(), j);
+}
+
+#[test]
+fn hash_cons() {
+    let j = "(Hash true false)";
+
+    let key_ty = ty::NonFun::Bool(true);
+    let value_ty = ty::NonFun::Bool(false);
+    let expected = ty::NonFun::Hash(key_ty.into(), value_ty.into());
 
     assert_ty_for_str(expected.into(), j);
 }
