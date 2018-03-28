@@ -70,6 +70,21 @@ fn lower_fun_cons(
     Ok(ty::Fun::new(impure, params_ty, ret_ty).into())
 }
 
+fn lower_infix_fun_cons(
+    scope: &Scope,
+    impure: bool,
+    mut arg_data: Vec<NsDatum>,
+) -> Result<ty::Poly> {
+    let ret_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+
+    // Discard the constructor
+    arg_data.pop();
+
+    let params_ty = lower_list_cons(scope, arg_data)?;
+
+    Ok(ty::Fun::new(impure, params_ty, ret_ty).into())
+}
+
 fn lower_ty_cons_apply(
     scope: &Scope,
     span: Span,
@@ -132,6 +147,18 @@ pub fn lower_pty(scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
         NsDatum::List(span, mut vs) => {
             if vs.len() == 0 {
                 return Ok(ty::NonFun::List(vec![], None).into());
+            }
+
+            if vs.len() >= 3 {
+                match scope.get_datum(&vs[vs.len() - 2]) {
+                    Some(Binding::TyCons(TyCons::Fun)) => {
+                        return lower_infix_fun_cons(scope, false, vs);
+                    }
+                    Some(Binding::TyCons(TyCons::ImpureFun)) => {
+                        return lower_infix_fun_cons(scope, true, vs);
+                    }
+                    _ => {}
+                };
             }
 
             let mut arg_data = vs.split_off(1);
@@ -446,6 +473,35 @@ fn rest_fun() {
     let expected = ty::Fun::new(
         false,
         ty::NonFun::List(vec![], Some(ty::NonFun::AnySym.into())).into(),
+        ty::NonFun::Bool(true).into(),
+    );
+
+    assert_ty_for_str(expected.into(), j);
+}
+
+#[test]
+fn fixed_infix_fun() {
+    let j = "(false -> true)";
+
+    let expected = ty::Fun::new(
+        false,
+        ty::NonFun::List(vec![ty::NonFun::Bool(false).into()], None).into(),
+        ty::NonFun::Bool(true).into(),
+    );
+
+    assert_ty_for_str(expected.into(), j);
+}
+
+#[test]
+fn rest_infix_impure_fun() {
+    let j = "(String Symbol ... ->! true)";
+
+    let expected = ty::Fun::new(
+        true,
+        ty::NonFun::List(
+            vec![ty::NonFun::Str.into()],
+            Some(ty::NonFun::AnySym.into()),
+        ).into(),
         ty::NonFun::Bool(true).into(),
     );
 
