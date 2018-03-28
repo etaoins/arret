@@ -4,7 +4,7 @@ use syntax::span::Span;
 
 /// Splits data in to fixed arguments and an optional rest argument
 ///
-/// The rest argument is denoted by using ... at the end of the data
+/// The rest argument is denoted by using `...` at the end of the data
 pub fn split_into_fixed_and_rest(
     scope: &Scope,
     mut vs: Vec<NsDatum>,
@@ -29,6 +29,35 @@ pub fn split_into_fixed_and_rest(
     };
 
     (vs, rest_datum)
+}
+
+/// Splits data in an optional start argument and fixed arguments
+///
+/// The start argument is denoted by using `...` after the first element
+pub fn split_into_start_and_fixed(
+    scope: &Scope,
+    mut vs: Vec<NsDatum>,
+) -> (Option<NsDatum>, Vec<NsDatum>) {
+    let has_start = if vs.len() >= 2 {
+        match &vs[1] {
+            &NsDatum::Ident(_, ref ident) => {
+                scope.get(ident) == Some(Binding::Prim(Prim::Ellipsis))
+            }
+            _ => false,
+        }
+    } else {
+        false
+    };
+
+    if has_start {
+        let fixed_data = vs.split_off(2);
+        // Remove the ellipsis completely
+        vs.pop();
+
+        (Some(vs.pop().unwrap()), fixed_data)
+    } else {
+        (None, vs)
+    }
 }
 
 pub fn expect_arg_count(span: Span, vs: &Vec<NsDatum>, expected_arg_count: usize) -> Result<()> {

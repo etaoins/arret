@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 pub enum NonFun<S> {
     Bool(bool),
     List(Vec<S>, Option<S>),
+    Vec(Option<S>, Vec<S>),
     Sym(String),
     AnySym,
     Int,
@@ -11,7 +12,6 @@ pub enum NonFun<S> {
     Str,
     Char,
     /*
-    Vec(Vec<S>, Option<S>),
     Hash(S, S),
     Set(S),
     */

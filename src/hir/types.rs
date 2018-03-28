@@ -3,13 +3,15 @@ use std::collections::HashMap;
 use hir::scope::{Binding, Ident, NsDatum, Prim, Scope};
 use ty;
 use hir::error::{Error, ErrorKind, Result};
-use hir::util::split_into_fixed_and_rest;
+use hir::util::{expect_arg_count, split_into_fixed_and_rest, split_into_start_and_fixed};
 use syntax::span::Span;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum TyCons {
     List,
     Listof,
+    Vector,
+    Vectorof,
     Fun,
     ImpureFun,
 }
@@ -28,6 +30,22 @@ fn lower_list_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
     };
 
     Ok(ty::NonFun::List(fixed_tys, rest_ty).into())
+}
+
+fn lower_vec_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
+    let (start, fixed) = split_into_start_and_fixed(scope, arg_data);
+
+    let fixed_tys = fixed
+        .into_iter()
+        .map(|arg_datum| lower_pty(scope, arg_datum))
+        .collect::<Result<Vec<ty::Poly>>>()?;
+
+    let start_ty = match start {
+        Some(start) => Some(lower_pty(scope, start)?),
+        None => None,
+    };
+
+    Ok(ty::NonFun::Vec(start_ty, fixed_tys).into())
 }
 
 fn lower_fun_cons(
@@ -59,12 +77,15 @@ fn lower_ty_cons_apply(
     match ty_cons {
         TyCons::List => lower_list_cons(scope, arg_data),
         TyCons::Listof => {
-            if arg_data.len() != 1 {
-                return Err(Error::new(span, ErrorKind::WrongArgCount(1)));
-            }
-
+            expect_arg_count(span, &arg_data, 1)?;
             let rest_ty = lower_pty(scope, arg_data.pop().unwrap())?;
             Ok(ty::NonFun::List(vec![], Some(rest_ty)).into())
+        }
+        TyCons::Vector => lower_vec_cons(scope, arg_data),
+        TyCons::Vectorof => {
+            expect_arg_count(span, &arg_data, 1)?;
+            let start_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+            Ok(ty::NonFun::Vec(Some(start_ty), vec![]).into())
         }
         TyCons::Fun => lower_fun_cons(scope, span, "->", false, arg_data),
         TyCons::ImpureFun => lower_fun_cons(scope, span, "->!", true, arg_data),
@@ -106,10 +127,7 @@ pub fn lower_pty(scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
             if let NsDatum::Ident(ident_span, ref ident) = fn_datum {
                 match scope.get(ident) {
                     Some(Binding::Prim(Prim::Quote)) => {
-                        if arg_data.len() != 1 {
-                            return Err(Error::new(span, ErrorKind::WrongArgCount(1)));
-                        }
-
+                        expect_arg_count(span, &arg_data, 1)?;
                         return lower_literal(arg_data.pop().unwrap());
                     }
                     Some(Binding::TyCons(ty_cons)) => {
@@ -160,6 +178,8 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
 
     export_ty_cons!("List", TyCons::List);
     export_ty_cons!("Listof", TyCons::Listof);
+    export_ty_cons!("Vector", TyCons::Vector);
+    export_ty_cons!("Vectorof", TyCons::Vectorof);
     export_ty_cons!("->", TyCons::Fun);
     export_ty_cons!("->!", TyCons::ImpureFun);
 }
@@ -311,6 +331,43 @@ fn rest_list_cons() {
     let expected = ty::NonFun::List(
         vec![ty::NonFun::Bool(true).into()],
         Some(ty::NonFun::Bool(false).into()),
+    );
+
+    assert_ty_for_str(expected.into(), j);
+}
+
+#[test]
+fn vectorof_cons() {
+    let j = "(Vectorof true)";
+
+    let inner_ty = ty::NonFun::Bool(true);
+    let expected = ty::NonFun::Vec(Some(inner_ty.into()), vec![]);
+
+    assert_ty_for_str(expected.into(), j);
+}
+
+#[test]
+fn fixed_vector_cons() {
+    let j = "(Vector true false)";
+
+    let expected = ty::NonFun::Vec(
+        None,
+        vec![
+            ty::NonFun::Bool(true).into(),
+            ty::NonFun::Bool(false).into(),
+        ],
+    );
+
+    assert_ty_for_str(expected.into(), j);
+}
+
+#[test]
+fn rest_vector_cons() {
+    let j = "(Vector false ... true)";
+
+    let expected = ty::NonFun::Vec(
+        Some(ty::NonFun::Bool(false).into()),
+        vec![ty::NonFun::Bool(true).into()],
     );
 
     assert_ty_for_str(expected.into(), j);
