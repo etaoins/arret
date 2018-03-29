@@ -286,7 +286,6 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(Expr::Fun(
             span,
             Fun {
-                source_name: None,
                 poly_vars: vec![],
                 params,
                 ret_ty,
@@ -859,7 +858,6 @@ fn empty_fn() {
     let expected = Expr::Fun(
         t2s(t),
         Fun {
-            source_name: None,
             poly_vars: vec![],
             params: Destruc::List(vec![], None),
             ret_ty: None,
@@ -879,7 +877,6 @@ fn empty_fn_with_ret_ty() {
     let expected = Expr::Fun(
         t2s(t),
         Fun {
-            source_name: None,
             poly_vars: vec![],
             params: Destruc::List(vec![], None),
             ret_ty: Some(ty::NonFun::Int.into()),
@@ -911,7 +908,6 @@ fn identity_fn() {
     let expected = Expr::Fun(
         t2s(t),
         Fun {
-            source_name: None,
             poly_vars: vec![],
             params,
             ret_ty: None,
@@ -946,7 +942,6 @@ fn capturing_fn() {
         Expr::Fun(
             t2s(v),
             Fun {
-                source_name: None,
                 poly_vars: vec![],
                 params: Destruc::List(vec![], None),
                 ret_ty: None,
@@ -994,7 +989,6 @@ fn shadowing_fn() {
         Expr::Fun(
             t2s(v),
             Fun {
-                source_name: None,
                 poly_vars: vec![],
                 params,
                 ret_ty: None,

@@ -52,8 +52,6 @@ pub enum Destruc {
 
 #[derive(PartialEq, Debug)]
 pub struct Fun {
-    source_name: Option<String>,
-
     poly_vars: Vec<ty::PVar>,
     params: Destruc,
     ret_ty: Option<ty::Poly>,
