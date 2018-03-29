@@ -235,19 +235,6 @@ impl<'ccx> LoweringContext<'ccx> {
         }
     }
 
-    fn lower_def_var(
-        &mut self,
-        scope: &mut Scope,
-        span: Span,
-        destruc_datum: NsDatum,
-        value_datum: NsDatum,
-    ) -> Result<Expr> {
-        let destruc = self.lower_destruc(scope, destruc_datum)?;
-        let value_expr = self.lower_expr(scope, value_datum)?;
-
-        Ok(Expr::Def(span, destruc, Box::new(value_expr)))
-    }
-
     fn lower_fun(&mut self, scope: &Scope, span: Span, mut arg_data: Vec<NsDatum>) -> Result<Expr> {
         if arg_data.len() < 1 {
             return Err(Error::new(
@@ -423,7 +410,10 @@ impl<'ccx> LoweringContext<'ccx> {
                 let value_datum = arg_data.pop().unwrap();
                 let destruc_datum = arg_data.pop().unwrap();
 
-                self.lower_def_var(scope, span, destruc_datum, value_datum)
+                let value_expr = self.lower_expr(scope, value_datum)?;
+                let destruc = self.lower_destruc(scope, destruc_datum)?;
+
+                Ok(Expr::Def(span, destruc, Box::new(value_expr)))
             }
             &Prim::DefMacro => {
                 expect_arg_count(span, &arg_data, 2)?;
