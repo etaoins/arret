@@ -7,7 +7,7 @@ use hir::scope::{Binding, Ident, MacroId, NsDatum, NsId, NsIdAlloc, Prim, Scope}
 use hir::module::Module;
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::error::{Error, ErrorKind, Result};
-use hir::types::lower_pty;
+use hir::types::{lower_pty, TyCons};
 use hir::util::{expect_arg_count, expect_ident, split_into_fixed_and_rest};
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
@@ -243,8 +243,8 @@ impl<'ccx> LoweringContext<'ccx> {
             ));
         }
 
-        // Body starts after the parameter declaration
-        let body_data = arg_data.split_off(1);
+        // Param declaration is the first datum
+        let mut after_param_data = arg_data.split_off(1);
         let param_datum = arg_data.pop().unwrap();
 
         // TODO: It would be consistent to also allow assigning the entire argument list to a
@@ -264,6 +264,20 @@ impl<'ccx> LoweringContext<'ccx> {
         let mut body_scope = Scope::new_child(scope);
         let params = self.lower_destruc(&mut body_scope, param_datum)?;
 
+        // Determine if we have a return type after the parameters, eg (param) -> RetTy
+        let ret_ty;
+        let body_data;
+        if after_param_data.len() >= 2
+            && scope.get_datum(&after_param_data[0]) == Some(Binding::TyCons(TyCons::Fun))
+        {
+            body_data = after_param_data.split_off(2);
+            ret_ty = Some(lower_pty(scope, after_param_data.pop().unwrap())?)
+        } else {
+            body_data = after_param_data;
+            ret_ty = None;
+        };
+
+        // Extract the body
         let body_exprs = body_data
             .into_iter()
             .map(|body_datum| self.lower_body_expr(&mut body_scope, body_datum))
@@ -275,7 +289,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 source_name: None,
                 poly_vars: vec![],
                 params,
-                ret_ty: None,
+                ret_ty,
                 body_expr: Box::new(Expr::from_vec(body_exprs)),
             },
         ))
@@ -554,26 +568,37 @@ use syntax::parser::data_from_str;
 use hir::ty;
 
 #[cfg(test)]
-fn module_for_str(data_str: &str) -> Result<Module> {
-    let import_statement = Datum::List(
+fn import_statement_for_library(names: &[&'static str]) -> Datum {
+    Datum::List(
         EMPTY_SPAN,
         vec![
             Datum::Sym(EMPTY_SPAN, "import".to_owned()),
             Datum::Vec(
                 EMPTY_SPAN,
-                vec![
-                    Datum::Sym(EMPTY_SPAN, "risp".to_owned()),
-                    Datum::Sym(EMPTY_SPAN, "internal".to_owned()),
-                    Datum::Sym(EMPTY_SPAN, "primitives".to_owned()),
-                ],
+                names
+                    .iter()
+                    .map(|n| Datum::Sym(EMPTY_SPAN, (*n).to_owned()))
+                    .collect(),
             ),
         ],
-    );
+    )
+}
 
+#[cfg(test)]
+fn module_for_str(data_str: &str) -> Result<Module> {
     let mut root_scope = Scope::new_empty();
 
     let mut test_data = data_from_str(data_str).unwrap();
-    test_data.insert(0, import_statement);
+
+    test_data.insert(
+        0,
+        import_statement_for_library(&["risp", "internal", "primitives"]),
+    );
+
+    test_data.insert(
+        0,
+        import_statement_for_library(&["risp", "internal", "types"]),
+    );
 
     let mut ccx = CompileContext::new();
     let mut lcx = LoweringContext::new(&mut ccx);
@@ -839,6 +864,26 @@ fn empty_fn() {
             params: Destruc::List(vec![], None),
             ret_ty: None,
             body_expr: Box::new(Expr::from_vec(vec![])),
+        },
+    );
+
+    assert_eq!(expected, body_expr_for_str(j).unwrap());
+}
+
+#[test]
+fn empty_fn_with_ret_ty() {
+    let j = "(fn () -> Int 1)";
+    let t = "^^^^^^^^^^^^^^^^";
+    let u = "              ^ ";
+
+    let expected = Expr::Fun(
+        t2s(t),
+        Fun {
+            source_name: None,
+            poly_vars: vec![],
+            params: Destruc::List(vec![], None),
+            ret_ty: Some(ty::NonFun::Int.into()),
+            body_expr: Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
         },
     );
 
