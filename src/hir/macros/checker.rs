@@ -236,7 +236,7 @@ fn link_found_vars(
                 .filter(|&(_, pv)| !pv.vars.is_disjoint(&subtemplate_vars.vars))
                 .collect::<Vec<(usize, &FoundVars)>>();
 
-            let (pattern_idx, subpattern_vars) = if possible_indices.len() == 0 {
+            if possible_indices.len() == 0 {
                 return Err(Error::new(
                     template_vars.span,
                     ErrorKind::IllegalArg(
@@ -252,11 +252,10 @@ fn link_found_vars(
                             .to_owned(),
                     ),
                 ));
-            } else {
-                possible_indices[0]
-            };
+            }
 
             // Iterate over our subpatterns
+            let (pattern_idx, subpattern_vars) = possible_indices[0];
             link_found_vars(scope, pattern_idx, subpattern_vars, subtemplate_vars)
         })
         .collect::<Result<Vec<VarLinks>>>()?;
