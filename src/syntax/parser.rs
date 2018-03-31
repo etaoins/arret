@@ -797,10 +797,10 @@ fn set_datum() {
     let x = "          ^ ";
 
     let mut expected_contents = Vec::<Datum>::new();
-    expected_contents.push((Datum::Int(t2s(u), 1)));
-    expected_contents.push((Datum::Int(t2s(v), 2)));
-    expected_contents.push((Datum::Int(t2s(w), 3)));
-    expected_contents.push((Datum::Int(t2s(x), 4)));
+    expected_contents.push(Datum::Int(t2s(u), 1));
+    expected_contents.push(Datum::Int(t2s(v), 2));
+    expected_contents.push(Datum::Int(t2s(w), 3));
+    expected_contents.push(Datum::Int(t2s(x), 4));
     let expected = Datum::Set(t2s(t), expected_contents);
 
     assert_eq!(expected, datum_from_str(j).unwrap());
@@ -813,12 +813,12 @@ fn set_datum() {
     let x = "        ^  ";
 
     let mut inner_contents = Vec::<Datum>::new();
-    inner_contents.push((Datum::Int(t2s(w), 2)));
-    inner_contents.push((Datum::Int(t2s(x), 3)));
+    inner_contents.push(Datum::Int(t2s(w), 2));
+    inner_contents.push(Datum::Int(t2s(x), 3));
     let inner = Datum::Set(t2s(v), inner_contents);
 
     let mut outer_contents = Vec::<Datum>::new();
-    outer_contents.push((Datum::Int(t2s(u), 1)));
+    outer_contents.push(Datum::Int(t2s(u), 1));
     outer_contents.push(inner);
     let expected = Datum::Set(t2s(t), outer_contents);
 
