@@ -21,66 +21,6 @@ pub struct LoweringContext<'ccx> {
     ccx: &'ccx mut CompileContext,
 }
 
-macro_rules! lower_expr_impl {
-    ($self:ident, $scope:ident, $datum:ident, $lower_prim_apply:ident, $lower_macro_expr:ident) => {
-        match $datum {
-            NsDatum::Ident(span, ref ident) => match $scope.get(ident) {
-                Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
-                Some(Binding::Prim(_)) => Err(Error::new(span, ErrorKind::PrimRef)),
-                Some(Binding::Ty(_)) | Some(Binding::TyCons(_)) => {
-                    Err(Error::new(span, ErrorKind::TyRef))
-                }
-                Some(Binding::Macro(_)) => {
-                    Err(Error::new(span, ErrorKind::MacroRef(ident.name().clone())))
-                }
-                None => {
-                    Err(Error::new(span, ErrorKind::UnboundSymbol(ident.name().clone())))
-                }
-            },
-            NsDatum::List(span, mut vs) => {
-                if vs.len() == 0 {
-                    return Ok(Expr::Lit(Datum::List(span, vec![])));
-                }
-
-                let arg_data = vs.split_off(1);
-                let fn_datum = vs.pop().unwrap();
-
-                match fn_datum {
-                    NsDatum::Ident(fn_span, ref ident) => match $scope.get(ident) {
-                        Some(Binding::Prim(ref fn_prim)) => {
-                            $self.$lower_prim_apply($scope, span, fn_prim, arg_data)
-                        }
-                        Some(Binding::Macro(macro_id)) => {
-                            let expanded_datum = {
-                                let mac = &$self.macros[macro_id.to_usize()];
-                                expand_macro(&mut $self.ns_id_alloc, $scope, span, mac, arg_data)?
-                            };
-
-                            $self.$lower_macro_expr($scope, expanded_datum).map_err(|e| {
-                                e.with_macro_invocation_span(span)
-                            })
-                        }
-                        Some(Binding::Var(id)) => {
-                            $self.lower_expr_apply($scope, span, Expr::Ref(span, id), arg_data)
-                        }
-                        Some(Binding::Ty(_)) | Some(Binding::TyCons(_)) => {
-                            Err(Error::new(span, ErrorKind::TyRef))
-                        }
-                        None => {
-                            Err(Error::new(fn_span, ErrorKind::UnboundSymbol(ident.name().clone())))
-                        }
-                    },
-                    _ => {
-                        let fn_expr = $self.lower_expr($scope, fn_datum)?;
-                        $self.lower_expr_apply($scope, span, fn_expr, arg_data)
-                    }
-                }
-            },
-            other => Ok(Expr::Lit(other.into_value())),
-        }
-    }
-}
-
 enum DeferredModulePrim {
     Def(Span, Destruc, NsDatum),
     Export(Span, Ident),
@@ -476,12 +416,79 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(Expr::App(span, Box::new(fn_expr), arg_exprs))
     }
 
+    fn generic_lower_expr<F>(
+        &mut self,
+        scope: &mut Scope,
+        datum: NsDatum,
+        lower_prim_apply: F,
+    ) -> Result<Expr>
+    where
+        F: Fn(&mut Self, &mut Scope, Span, &Prim, Vec<NsDatum>) -> Result<Expr>,
+    {
+        match datum {
+            NsDatum::Ident(span, ref ident) => match scope.get(ident) {
+                Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
+                Some(Binding::Prim(_)) => Err(Error::new(span, ErrorKind::PrimRef)),
+                Some(Binding::Ty(_)) | Some(Binding::TyCons(_)) => {
+                    Err(Error::new(span, ErrorKind::TyRef))
+                }
+                Some(Binding::Macro(_)) => {
+                    Err(Error::new(span, ErrorKind::MacroRef(ident.name().clone())))
+                }
+                None => Err(Error::new(
+                    span,
+                    ErrorKind::UnboundSymbol(ident.name().clone()),
+                )),
+            },
+            NsDatum::List(span, mut vs) => {
+                if vs.len() == 0 {
+                    return Ok(Expr::Lit(Datum::List(span, vec![])));
+                }
+
+                let arg_data = vs.split_off(1);
+                let fn_datum = vs.pop().unwrap();
+
+                match fn_datum {
+                    NsDatum::Ident(fn_span, ref ident) => match scope.get(ident) {
+                        Some(Binding::Prim(ref fn_prim)) => {
+                            lower_prim_apply(self, scope, span, fn_prim, arg_data)
+                        }
+                        Some(Binding::Macro(macro_id)) => {
+                            let expanded_datum = {
+                                let mac = &self.macros[macro_id.to_usize()];
+                                expand_macro(&mut self.ns_id_alloc, scope, span, mac, arg_data)?
+                            };
+
+                            self.generic_lower_expr(scope, expanded_datum, lower_prim_apply)
+                                .map_err(|e| e.with_macro_invocation_span(span))
+                        }
+                        Some(Binding::Var(id)) => {
+                            self.lower_expr_apply(scope, span, Expr::Ref(span, id), arg_data)
+                        }
+                        Some(Binding::Ty(_)) | Some(Binding::TyCons(_)) => {
+                            Err(Error::new(span, ErrorKind::TyRef))
+                        }
+                        None => Err(Error::new(
+                            fn_span,
+                            ErrorKind::UnboundSymbol(ident.name().clone()),
+                        )),
+                    },
+                    _ => {
+                        let fn_expr = self.lower_expr(scope, fn_datum)?;
+                        self.lower_expr_apply(scope, span, fn_expr, arg_data)
+                    }
+                }
+            }
+            other => Ok(Expr::Lit(other.into_value())),
+        }
+    }
+
     fn lower_expr(&mut self, scope: &mut Scope, datum: NsDatum) -> Result<Expr> {
-        lower_expr_impl!(self, scope, datum, lower_prim_apply, lower_expr)
+        self.generic_lower_expr(scope, datum, LoweringContext::lower_prim_apply)
     }
 
     fn lower_body_expr(&mut self, scope: &mut Scope, datum: NsDatum) -> Result<Expr> {
-        lower_expr_impl!(self, scope, datum, lower_body_prim_apply, lower_body_expr)
+        self.generic_lower_expr(scope, datum, LoweringContext::lower_body_prim_apply)
     }
 
     fn lower_module_prim_apply(
