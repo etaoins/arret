@@ -506,13 +506,32 @@ impl<'ccx> LoweringContext<'ccx> {
     }
 
     fn lower_module_expr(&mut self, scope: &mut Scope, datum: NsDatum) -> Result<Expr> {
-        lower_expr_impl!(
-            self,
-            scope,
-            datum,
-            lower_module_prim_apply,
-            lower_module_expr
-        )
+        let span = datum.span();
+
+        if let NsDatum::List(span, mut vs) = datum {
+            if !vs.is_empty() {
+                let arg_data = vs.split_off(1);
+                let fn_datum = vs.pop().unwrap();
+
+                match scope.get_datum(&fn_datum) {
+                    Some(Binding::Prim(ref fn_prim)) => {
+                        return self.lower_module_prim_apply(scope, span, fn_prim, arg_data)
+                    }
+                    Some(Binding::Macro(macro_id)) => {
+                        let expanded_datum = {
+                            let mac = &self.macros[macro_id.to_usize()];
+                            expand_macro(&mut self.ns_id_alloc, scope, span, mac, arg_data)?
+                        };
+
+                        return self.lower_module_expr(scope, expanded_datum)
+                            .map_err(|e| e.with_macro_invocation_span(span));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Err(Error::new(span, ErrorKind::ExprInsideModule))
     }
 
     fn lower_module(&mut self, scope: &mut Scope, data: Vec<Datum>) -> Result<Module> {
@@ -606,7 +625,43 @@ fn module_for_str(data_str: &str) -> Result<Module> {
 
 #[cfg(test)]
 fn body_expr_for_str(data_str: &str) -> Result<Expr> {
-    module_for_str(data_str).map(|module| module.into_body_expr())
+    let mut root_scope = Scope::new_empty();
+
+    // Wrap the test data in a function definition
+    let mut test_data = data_from_str(data_str).unwrap();
+    let mut main_function_data = vec![
+        Datum::Sym(EMPTY_SPAN, "fn".to_owned()),
+        Datum::List(EMPTY_SPAN, vec![]),
+    ];
+
+    main_function_data.append(&mut test_data);
+
+    // Wrap the function definition in a program
+    let program_data = vec![
+        import_statement_for_library(&["risp", "internal", "primitives"]),
+        import_statement_for_library(&["risp", "internal", "types"]),
+        Datum::List(
+            EMPTY_SPAN,
+            vec![
+                Datum::Sym(EMPTY_SPAN, "def".to_owned()),
+                Datum::Sym(EMPTY_SPAN, "main!".to_owned()),
+                Datum::List(EMPTY_SPAN, main_function_data),
+            ],
+        ),
+    ];
+
+    let mut ccx = CompileContext::new();
+    let mut lcx = LoweringContext::new(&mut ccx);
+    let program_module = lcx.lower_module(&mut root_scope, program_data)?;
+
+    // Assume the program has the correct strucutre
+    if let Expr::Def(_, _, main_func_box) = program_module.into_body_expr() {
+        if let Expr::Fun(_, main_func) = *main_func_box {
+            return Ok(*main_func.body_expr);
+        }
+    }
+
+    panic!("Unexpected program structure");
 }
 
 #[test]
@@ -1098,7 +1153,7 @@ fn export_unbound() {
     let t = "        ^ ";
 
     let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("x".to_owned()));
-    assert_eq!(err, body_expr_for_str(j).unwrap_err());
+    assert_eq!(err, module_for_str(j).unwrap_err());
 }
 
 #[test]
