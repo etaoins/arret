@@ -39,3 +39,7 @@
     (let ([x test1])
       (if x x (or test2 ...)))]
 ]))
+
+; False is the only non-truthy value
+(export not)
+(def not (type-predicate false))
