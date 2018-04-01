@@ -272,7 +272,7 @@ impl<'ccx> LoweringContext<'ccx> {
             &Prim::Export => Err(Error::new(span, ErrorKind::ExportOutsideModule)),
             &Prim::Quote => {
                 expect_arg_count(span, &arg_data, 1)?;
-                Ok(Expr::Lit(arg_data[0].clone().into_syntax_datum()))
+                Ok(Expr::Lit(arg_data.pop().unwrap().into_syntax_datum()))
             }
             &Prim::Fun => self.lower_fun(scope, span, arg_data),
             &Prim::If => {
