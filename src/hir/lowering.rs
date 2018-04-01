@@ -73,6 +73,19 @@ impl<'ccx> LoweringContext<'ccx> {
         VarId::new(self.curr_var_id)
     }
 
+    // This would be less ugly as Result<!> once it's stabilised
+    fn lower_user_compile_error(span: Span, mut arg_data: Vec<NsDatum>) -> Error {
+        expect_arg_count(span, &arg_data, 1)
+            .err()
+            .unwrap_or_else(|| {
+                if let NsDatum::Str(_, user_message) = arg_data.pop().unwrap() {
+                    Error::new(span, ErrorKind::UserError(user_message))
+                } else {
+                    Error::new(span, ErrorKind::IllegalArg("string expected".to_owned()))
+                }
+            })
+    }
+
     fn lower_defmacro(
         &mut self,
         scope: &mut Scope,
@@ -340,6 +353,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     lower_pty(scope, arg_data.pop().unwrap())?,
                 ))
             }
+            &Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),
             &Prim::Ellipsis | &Prim::Wildcard | &Prim::MacroRules | &Prim::TyColon => {
                 Err(Error::new(span, ErrorKind::PrimRef))
             }
@@ -575,6 +589,7 @@ impl<'ccx> LoweringContext<'ccx> {
             &Prim::DefMacro => self.lower_defmacro(scope, span, arg_data).map(|_| vec![]),
             &Prim::DefType => self.lower_deftype(scope, span, arg_data).map(|_| vec![]),
             &Prim::Import => self.lower_import(scope, arg_data).map(|_| vec![]),
+            &Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),
             _ => Err(Error::new(span, ErrorKind::NonDefInsideModule)),
         }
     }
@@ -1834,5 +1849,23 @@ mod test {
 
         let expected = Expr::TyPred(t2s(t), ty::NonFun::Bool(true).into());
         assert_eq!(expected, body_expr_for_str(j).unwrap());
+    }
+
+    #[test]
+    fn module_user_compile_error() {
+        let j = r#"(compile-error "Hello")"#;
+        let t = r#"^^^^^^^^^^^^^^^^^^^^^^^"#;
+
+        let err = Error::new(t2s(t), ErrorKind::UserError("Hello".to_owned()));
+        assert_eq!(err, module_for_str(j).unwrap_err());
+    }
+
+    #[test]
+    fn body_expr_user_compile_error() {
+        let j = r#"(compile-error "Hello")"#;
+        let t = r#"^^^^^^^^^^^^^^^^^^^^^^^"#;
+
+        let err = Error::new(t2s(t), ErrorKind::UserError("Hello".to_owned()));
+        assert_eq!(err, body_expr_for_str(j).unwrap_err());
     }
 }

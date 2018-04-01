@@ -52,6 +52,7 @@ pub enum ErrorKind {
     MultipleZeroOrMoreMatch(Span),
     NoVecDestruc,
     ValueAsTy,
+    UserError(String),
     ReadError(String),
     SyntaxError(SyntaxError),
 }
@@ -97,7 +98,7 @@ impl Reportable for Error {
             ErrorKind::DefOutsideBody => "(def) outside module or function body".to_owned(),
             ErrorKind::ExportOutsideModule => "(export) outside of module body".to_owned(),
             ErrorKind::NonDefInsideModule => {
-                "definitions expected at the top-level of a module body".to_owned()
+                "definition expected at the top-level of a module body".to_owned()
             }
             ErrorKind::LibraryNotFound => "library not found".to_owned(),
             ErrorKind::NoMacroRule => "no matching macro rule".to_owned(),
@@ -111,6 +112,7 @@ impl Reportable for Error {
                 "vectors can only be used for type ascription in the form [name : Type]".to_owned()
             }
             ErrorKind::ValueAsTy => "value cannot be used as a type".to_owned(),
+            ErrorKind::UserError(ref message) => message.clone(),
             ErrorKind::ReadError(ref filename) => format!("error reading `{}`", filename),
             ErrorKind::SyntaxError(ref err) => err.message(),
         }

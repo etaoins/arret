@@ -29,5 +29,6 @@ prims!(
     ("macro-rules", MacroRules),
     (":", TyColon),
     ("deftype", DefType),
-    ("type-predicate", TyPred)
+    ("type-predicate", TyPred),
+    ("compile-error", CompileError)
 );
