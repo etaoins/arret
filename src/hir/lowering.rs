@@ -61,7 +61,7 @@ impl<'ccx> LoweringContext<'ccx> {
         }
     }
 
-    pub fn insert_pvar(&mut self, pvar: ty::PVar) -> ty::PVarId {
+    fn insert_pvar(&mut self, pvar: ty::PVar) -> ty::PVarId {
         let pvar_id = ty::PVarId::new(self.pvars.len());
         self.pvars.push(pvar);
 
@@ -224,15 +224,19 @@ impl<'ccx> LoweringContext<'ccx> {
         let (mut next_datum, mut rest_data) = pop_vec_front(arg_data);
 
         // We can either begin with a set of polymorphic variables or a list of parameters
-        if let NsDatum::Set(_, vs) = next_datum {
+        let pvar_ids = if let NsDatum::Set(_, vs) = next_datum {
             let pvars = vs.into_iter()
                 .map(|pvar_datum| lower_pvar(scope, pvar_datum))
                 .collect::<Result<Vec<(Ident, ty::PVar)>>>()?;
 
-            for (ident, pvar) in pvars.into_iter() {
-                let pvar_id = self.insert_pvar(pvar);
-                fun_scope.insert_binding(ident, Binding::Ty(ty::Poly::Var(pvar_id)));
-            }
+            let pvar_ids = pvars
+                .into_iter()
+                .map(|(ident, pvar)| {
+                    let pvar_id = self.insert_pvar(pvar);
+                    fun_scope.insert_binding(ident, Binding::Ty(ty::Poly::Var(pvar_id)));
+                    pvar_id
+                })
+                .collect::<Vec<ty::PVarId>>();
 
             if rest_data.is_empty() {
                 return Err(Error::new(
@@ -246,6 +250,10 @@ impl<'ccx> LoweringContext<'ccx> {
             let (new_next_datum, new_rest_data) = pop_vec_front(rest_data);
             next_datum = new_next_datum;
             rest_data = new_rest_data;
+
+            pvar_ids
+        } else {
+            vec![]
         };
 
         // TODO: It would be consistent to also allow assigning the entire argument list to a
@@ -284,7 +292,7 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(Expr::Fun(
             span,
             Fun {
-                poly_vars: vec![],
+                pvar_ids,
                 params,
                 ret_ty,
                 body_expr: Box::new(Expr::from_vec(body_exprs)),
@@ -984,7 +992,7 @@ mod test {
         let expected = Expr::Fun(
             t2s(t),
             Fun {
-                poly_vars: vec![],
+                pvar_ids: vec![],
                 params: Destruc::List(vec![], None),
                 ret_ty: None,
                 body_expr: Box::new(Expr::from_vec(vec![])),
@@ -1003,7 +1011,7 @@ mod test {
         let expected = Expr::Fun(
             t2s(t),
             Fun {
-                poly_vars: vec![],
+                pvar_ids: vec![],
                 params: Destruc::List(vec![], None),
                 ret_ty: Some(ty::NonFun::Int.into()),
                 body_expr: Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
@@ -1034,7 +1042,7 @@ mod test {
         let expected = Expr::Fun(
             t2s(t),
             Fun {
-                poly_vars: vec![],
+                pvar_ids: vec![],
                 params,
                 ret_ty: None,
                 body_expr: Box::new(Expr::Ref(t2s(u), param_var_id)),
@@ -1067,7 +1075,7 @@ mod test {
         let expected = Expr::Fun(
             t2s(t),
             Fun {
-                poly_vars: vec![],
+                pvar_ids: vec![pvar_id],
                 params,
                 ret_ty: Some(ty::Poly::Var(pvar_id)),
                 body_expr: Box::new(Expr::Ref(t2s(u), param_var_id)),
@@ -1101,7 +1109,7 @@ mod test {
             Expr::Fun(
                 t2s(v),
                 Fun {
-                    poly_vars: vec![],
+                    pvar_ids: vec![],
                     params: Destruc::List(vec![], None),
                     ret_ty: None,
                     body_expr: Box::new(Expr::Ref(t2s(w), outer_var_id)),
@@ -1148,7 +1156,7 @@ mod test {
             Expr::Fun(
                 t2s(v),
                 Fun {
-                    poly_vars: vec![],
+                    pvar_ids: vec![],
                     params,
                     ret_ty: None,
                     body_expr: Box::new(Expr::Ref(t2s(w), param_var_id)),
