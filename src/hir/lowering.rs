@@ -540,7 +540,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
                 Ok(vec![])
             }
-            _ => Err(Error::new(span, ErrorKind::ExprInsideModule)),
+            _ => Err(Error::new(span, ErrorKind::NonDefInsideModule)),
         }
     }
 
@@ -574,7 +574,7 @@ impl<'ccx> LoweringContext<'ccx> {
             }
         }
 
-        Err(Error::new(span, ErrorKind::ExprInsideModule))
+        Err(Error::new(span, ErrorKind::NonDefInsideModule))
     }
 
     fn lower_module(&mut self, scope: &mut Scope, data: Vec<Datum>) -> Result<Module> {

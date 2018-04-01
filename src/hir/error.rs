@@ -45,7 +45,7 @@ pub enum ErrorKind {
     ExpectedSymbol,
     DefOutsideBody,
     ExportOutsideModule,
-    ExprInsideModule,
+    NonDefInsideModule,
     LibraryNotFound,
     NoMacroRule,
     DuplicateMacroVar(String, Span),
@@ -96,9 +96,8 @@ impl Reportable for Error {
             ErrorKind::ExpectedSymbol => "expected symbol".to_owned(),
             ErrorKind::DefOutsideBody => "(def) outside module or function body".to_owned(),
             ErrorKind::ExportOutsideModule => "(export) outside of module body".to_owned(),
-            ErrorKind::ExprInsideModule => {
-                "expression inside module body; only definitions are allowed at the top-level"
-                    .to_owned()
+            ErrorKind::NonDefInsideModule => {
+                "definitions expected at the top-level of a module body".to_owned()
             }
             ErrorKind::LibraryNotFound => "library not found".to_owned(),
             ErrorKind::NoMacroRule => "no matching macro rule".to_owned(),
