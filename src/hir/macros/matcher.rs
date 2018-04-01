@@ -30,7 +30,7 @@ impl<'a> MatchContext<'a> {
             Ok(())
         } else if self.special_vars.is_literal(&pattern_var) {
             // The arg must be the exact same pattern variable
-            if let &NsDatum::Ident(_, ref arg_ident) = arg {
+            if let NsDatum::Ident(_, ref arg_ident) = *arg {
                 if pattern_var == MacroVar::from_ident(self.scope, arg_ident) {
                     return Ok(());
                 }

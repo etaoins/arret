@@ -56,7 +56,7 @@ pub fn load_library_data(
     let mut path_buf = PathBuf::new();
 
     path_buf.push("stdlib");
-    for path_component in library_name.path.iter() {
+    for path_component in &library_name.path {
         path_buf.push(path_component);
     }
 

@@ -70,7 +70,7 @@ impl Reportable for Error {
             }
         }
 
-        return None;
+        None
     }
 }
 

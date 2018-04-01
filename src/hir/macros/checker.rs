@@ -40,7 +40,7 @@ impl FoundVars {
     }
 }
 
-/// Tracks which type of input is being provided to FindVarsContext
+/// Tracks which type of input is being provided to `FindVarsContext`
 #[derive(Clone, Copy, PartialEq)]
 enum FindVarsInputType {
     Pattern,
@@ -86,7 +86,7 @@ impl<'a> FindVarsContext<'a> {
         span: Span,
         ident: &Ident,
     ) -> FindVarsResult {
-        let macro_var = MacroVar::from_ident(&self.scope, ident);
+        let macro_var = MacroVar::from_ident(self.scope, ident);
 
         if self.special_vars.is_literal(&macro_var) || self.special_vars.is_wildcard(&macro_var) {
             // Not a variable
@@ -130,11 +130,11 @@ impl<'a> FindVarsContext<'a> {
     }
 
     fn visit_datum(&mut self, pattern_vars: &mut FoundVars, pattern: &NsDatum) -> FindVarsResult {
-        match pattern {
-            &NsDatum::Ident(span, ref ident) => self.visit_ident(pattern_vars, span, ident),
-            &NsDatum::List(_, ref vs) => self.visit_seq(pattern_vars, vs),
-            &NsDatum::Vec(_, ref vs) => self.visit_seq(pattern_vars, vs),
-            &NsDatum::Set(span, ref vs) => self.visit_set(pattern_vars, span, vs),
+        match *pattern {
+            NsDatum::Ident(span, ref ident) => self.visit_ident(pattern_vars, span, ident),
+            NsDatum::List(_, ref vs) => self.visit_seq(pattern_vars, vs),
+            NsDatum::Vec(_, ref vs) => self.visit_seq(pattern_vars, vs),
+            NsDatum::Set(span, ref vs) => self.visit_set(pattern_vars, span, vs),
             _ => {
                 // Can't contain a pattern var
                 Ok(())
@@ -151,7 +151,7 @@ impl<'a> FindVarsContext<'a> {
 
         while !patterns.is_empty() {
             if self.special_vars
-                .starts_with_zero_or_more(&self.scope, patterns)
+                .starts_with_zero_or_more(self.scope, patterns)
             {
                 let pattern = &patterns[0];
 
@@ -196,7 +196,7 @@ impl<'a> FindVarsContext<'a> {
         match patterns.len() {
             0 => Ok(()),
             2 if self.special_vars
-                .starts_with_zero_or_more(&self.scope, patterns) =>
+                .starts_with_zero_or_more(self.scope, patterns) =>
             {
                 self.visit_zero_or_more(pattern_vars, &patterns[0])
             }
@@ -237,7 +237,7 @@ fn link_found_vars(
                 .filter(|&(_, pv)| !pv.vars.is_disjoint(&subtemplate_vars.vars))
                 .collect::<Vec<(usize, &FoundVars)>>();
 
-            if possible_indices.len() == 0 {
+            if possible_indices.is_empty() {
                 return Err(Error::new(
                     template_vars.span,
                     ErrorKind::IllegalArg(

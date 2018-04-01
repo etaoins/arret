@@ -33,7 +33,7 @@ impl<'a> ExpandContext<'a> {
     }
 
     fn expand_ident(&mut self, cursor: &ExpandCursor, span: Span, ident: &Ident) -> NsDatum {
-        let macro_var = MacroVar::from_ident(&self.scope, ident);
+        let macro_var = MacroVar::from_ident(self.scope, ident);
 
         if let Some(replacement) = cursor.match_data.vars.get(&macro_var) {
             return replacement.clone();
@@ -63,7 +63,7 @@ impl<'a> ExpandContext<'a> {
         let subpattern_idx = subvar_links.pattern_idx();
         let submatches = &cursor.match_data.subpatterns[subpattern_idx];
 
-        cursor.subtemplate_idx = cursor.subtemplate_idx + 1;
+        cursor.subtemplate_idx += 1;
 
         submatches
             .iter()
@@ -89,7 +89,7 @@ impl<'a> ExpandContext<'a> {
 
         while !templates.is_empty() {
             if self.special_vars
-                .starts_with_zero_or_more(&self.scope, templates)
+                .starts_with_zero_or_more(self.scope, templates)
             {
                 let mut expanded = self.expand_zero_or_more(cursor, &templates[0]);
                 result.append(&mut expanded);
@@ -122,14 +122,14 @@ pub fn expand_rule(
     ns_id_alloc: &mut NsIdAlloc,
     scope: &mut Scope,
     special_vars: &SpecialVars,
-    match_data: MatchData,
+    match_data: &MatchData,
     var_links: &VarLinks,
     template: &NsDatum,
 ) -> NsDatum {
     let mut mcx = ExpandContext::new(ns_id_alloc, scope, special_vars);
 
     let mut cursor = ExpandCursor {
-        match_data: &match_data,
+        match_data,
         var_links,
         subtemplate_idx: 0,
     };

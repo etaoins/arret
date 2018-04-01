@@ -9,7 +9,7 @@ use hir::util::{expect_arg_count, expect_ident, split_into_fixed_and_rest,
                 split_into_start_and_fixed};
 use syntax::span::Span;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum TyCons {
     List,
     Listof,
@@ -48,12 +48,12 @@ pub fn lower_pvar(scope: &Scope, pvar_datum: NsDatum) -> Result<(Ident, ty::PVar
         _ => {}
     }
 
-    return Err(Error::new(
+    Err(Error::new(
         span,
         ErrorKind::IllegalArg(
             "polymorphic variables must be either an identifier or [identifier : Type]".to_owned(),
         ),
-    ));
+    ))
 }
 
 fn lower_list_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
@@ -175,7 +175,7 @@ fn lower_ident(scope: &Scope, span: Span, ident: Ident) -> Result<ty::Poly> {
         Some(_) => Err(Error::new(span, ErrorKind::ValueAsTy)),
         None => Err(Error::new(
             span,
-            ErrorKind::UnboundSymbol(ident.name().clone()),
+            ErrorKind::UnboundSymbol(ident.into_name()),
         )),
     }
 }
@@ -183,7 +183,7 @@ fn lower_ident(scope: &Scope, span: Span, ident: Ident) -> Result<ty::Poly> {
 pub fn lower_pty(scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
     match datum {
         NsDatum::List(span, mut vs) => {
-            if vs.len() == 0 {
+            if vs.is_empty() {
                 return Ok(ty::NonFun::List(vec![], None).into());
             }
 

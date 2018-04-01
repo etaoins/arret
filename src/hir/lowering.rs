@@ -69,7 +69,7 @@ impl<'ccx> LoweringContext<'ccx> {
     }
 
     fn alloc_var_id(&mut self) -> VarId {
-        self.curr_var_id = self.curr_var_id + 1;
+        self.curr_var_id += 1;
         VarId::new(self.curr_var_id)
     }
 
@@ -320,17 +320,17 @@ impl<'ccx> LoweringContext<'ccx> {
         fn_prim: &Prim,
         mut arg_data: Vec<NsDatum>,
     ) -> Result<Expr> {
-        match fn_prim {
-            &Prim::Def | &Prim::DefMacro | &Prim::DefType | &Prim::Import => {
+        match *fn_prim {
+            Prim::Def | Prim::DefMacro | Prim::DefType | Prim::Import => {
                 Err(Error::new(span, ErrorKind::DefOutsideBody))
             }
-            &Prim::Export => Err(Error::new(span, ErrorKind::ExportOutsideModule)),
-            &Prim::Quote => {
+            Prim::Export => Err(Error::new(span, ErrorKind::ExportOutsideModule)),
+            Prim::Quote => {
                 expect_arg_count(span, &arg_data, 1)?;
                 Ok(Expr::Lit(arg_data.pop().unwrap().into_syntax_datum()))
             }
-            &Prim::Fun => self.lower_fun(scope, span, arg_data),
-            &Prim::If => {
+            Prim::Fun => self.lower_fun(scope, span, arg_data),
+            Prim::If => {
                 expect_arg_count(span, &arg_data, 3)?;
 
                 macro_rules! pop_as_boxed_expr {
@@ -346,15 +346,15 @@ impl<'ccx> LoweringContext<'ccx> {
                     },
                 ))
             }
-            &Prim::TyPred => {
+            Prim::TyPred => {
                 expect_arg_count(span, &arg_data, 1)?;
                 Ok(Expr::TyPred(
                     span,
                     lower_pty(scope, arg_data.pop().unwrap())?,
                 ))
             }
-            &Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),
-            &Prim::Ellipsis | &Prim::Wildcard | &Prim::MacroRules | &Prim::TyColon => {
+            Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),
+            Prim::Ellipsis | Prim::Wildcard | Prim::MacroRules | Prim::TyColon => {
                 Err(Error::new(span, ErrorKind::PrimRef))
             }
         }
@@ -364,18 +364,18 @@ impl<'ccx> LoweringContext<'ccx> {
         &mut self,
         scope: &mut Scope,
         span: Span,
-        library_name: LibraryName,
+        library_name: &LibraryName,
     ) -> Result<&Module> {
         // TODO: This does a lot of hash lookups
-        if !self.loaded_libraries.contains_key(&library_name) {
-            let library_data = load_library_data(self.ccx, span, &library_name)?;
+        if !self.loaded_libraries.contains_key(library_name) {
+            let library_data = load_library_data(self.ccx, span, library_name)?;
             let loaded_library = self.lower_module(scope, library_data)?;
 
             self.loaded_libraries
                 .insert(library_name.clone(), loaded_library);
         }
 
-        Ok(self.loaded_libraries.get(&library_name).unwrap())
+        Ok(&self.loaded_libraries[library_name])
     }
 
     fn lower_import_set(&mut self, scope: &mut Scope, import_set_datum: NsDatum) -> Result<()> {
@@ -412,7 +412,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
                 let terminal_name = name_components.pop().unwrap();
                 let library_name = LibraryName::new(name_components, terminal_name);
-                let loaded_library = self.load_library(scope, span, library_name)?;
+                let loaded_library = self.load_library(scope, span, &library_name)?;
 
                 for (name, binding) in loaded_library.exports() {
                     let imported_ident = Ident::new(import_ns_id, name.clone());
@@ -443,8 +443,8 @@ impl<'ccx> LoweringContext<'ccx> {
         fn_prim: &Prim,
         mut arg_data: Vec<NsDatum>,
     ) -> Result<Expr> {
-        match fn_prim {
-            &Prim::Def => {
+        match *fn_prim {
+            Prim::Def => {
                 expect_arg_count(span, &arg_data, 2)?;
 
                 let value_datum = arg_data.pop().unwrap();
@@ -455,11 +455,11 @@ impl<'ccx> LoweringContext<'ccx> {
 
                 Ok(Expr::Def(span, destruc, Box::new(value_expr)))
             }
-            &Prim::DefMacro => self.lower_defmacro(scope, span, arg_data)
+            Prim::DefMacro => self.lower_defmacro(scope, span, arg_data)
                 .map(|_| Expr::Do(vec![])),
-            &Prim::DefType => self.lower_deftype(scope, span, arg_data)
+            Prim::DefType => self.lower_deftype(scope, span, arg_data)
                 .map(|_| Expr::Do(vec![])),
-            &Prim::Import => self.lower_import(scope, arg_data).map(|_| Expr::Do(vec![])),
+            Prim::Import => self.lower_import(scope, arg_data).map(|_| Expr::Do(vec![])),
             _ => self.lower_inner_prim_apply(scope, span, fn_prim, arg_data),
         }
     }
@@ -504,7 +504,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 )),
             },
             NsDatum::List(span, mut vs) => {
-                if vs.len() == 0 {
+                if vs.is_empty() {
                     return Ok(Expr::Lit(Datum::List(span, vec![])));
                 }
 
@@ -519,7 +519,7 @@ impl<'ccx> LoweringContext<'ccx> {
                         Some(Binding::Macro(macro_id)) => {
                             let expanded_datum = {
                                 let mac = &self.macros[macro_id.to_usize()];
-                                expand_macro(&mut self.ns_id_alloc, scope, span, mac, arg_data)?
+                                expand_macro(&mut self.ns_id_alloc, scope, span, mac, &arg_data)?
                             };
 
                             self.generic_lower_expr(scope, expanded_datum, lower_prim_apply)
@@ -561,8 +561,8 @@ impl<'ccx> LoweringContext<'ccx> {
         fn_prim: &Prim,
         mut arg_data: Vec<NsDatum>,
     ) -> Result<Vec<DeferredModulePrim>> {
-        match fn_prim {
-            &Prim::Export => {
+        match *fn_prim {
+            Prim::Export => {
                 let deferred_exports = arg_data
                     .into_iter()
                     .map(|datum| {
@@ -576,7 +576,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
                 Ok(deferred_exports)
             }
-            &Prim::Def => {
+            Prim::Def => {
                 expect_arg_count(span, &arg_data, 2)?;
 
                 let value_datum = arg_data.pop().unwrap();
@@ -586,10 +586,10 @@ impl<'ccx> LoweringContext<'ccx> {
 
                 Ok(vec![DeferredModulePrim::Def(span, destruc, value_datum)])
             }
-            &Prim::DefMacro => self.lower_defmacro(scope, span, arg_data).map(|_| vec![]),
-            &Prim::DefType => self.lower_deftype(scope, span, arg_data).map(|_| vec![]),
-            &Prim::Import => self.lower_import(scope, arg_data).map(|_| vec![]),
-            &Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),
+            Prim::DefMacro => self.lower_defmacro(scope, span, arg_data).map(|_| vec![]),
+            Prim::DefType => self.lower_deftype(scope, span, arg_data).map(|_| vec![]),
+            Prim::Import => self.lower_import(scope, arg_data).map(|_| vec![]),
+            Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),
             _ => Err(Error::new(span, ErrorKind::NonDefInsideModule)),
         }
     }
@@ -613,7 +613,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     Some(Binding::Macro(macro_id)) => {
                         let expanded_datum = {
                             let mac = &self.macros[macro_id.to_usize()];
-                            expand_macro(&mut self.ns_id_alloc, scope, span, mac, arg_data)?
+                            expand_macro(&mut self.ns_id_alloc, scope, span, mac, &arg_data)?
                         };
 
                         return self.lower_module_def(scope, expanded_datum)
@@ -641,7 +641,7 @@ impl<'ccx> LoweringContext<'ccx> {
         // the body. Exports and variable definitions (including defn) are deferred to a second
         // pass once all binding have been introduced. All other expressions are forbidden.
         let mut deferred_prims = Vec::<DeferredModulePrim>::new();
-        for input_datum in data.into_iter() {
+        for input_datum in data {
             let ns_datum = NsDatum::from_syntax_datum(ns_id, input_datum);
             let mut new_deferred_prims = self.lower_module_def(scope, ns_datum)?;
 
@@ -651,7 +651,7 @@ impl<'ccx> LoweringContext<'ccx> {
         // Process our variable definitions and exports
         let mut module_defs = Vec::<ModuleDef>::new();
         let mut exports = HashMap::<String, Binding>::new();
-        for deferred_prim in deferred_prims.into_iter() {
+        for deferred_prim in deferred_prims {
             match deferred_prim {
                 DeferredModulePrim::Def(span, destruc, value_datum) => {
                     let value_expr = self.lower_inner_expr(scope, value_datum)?;

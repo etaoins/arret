@@ -113,16 +113,16 @@ impl NsDatum {
 
     pub fn span(&self) -> Span {
         match *self {
-            NsDatum::Bool(span, _) => span,
-            NsDatum::Char(span, _) => span,
-            NsDatum::Int(span, _) => span,
-            NsDatum::Float(span, _) => span,
-            NsDatum::Str(span, _) => span,
-            NsDatum::Ident(span, _) => span,
-            NsDatum::List(span, _) => span,
-            NsDatum::Vec(span, _) => span,
-            NsDatum::Set(span, _) => span,
-            NsDatum::Map(span, _) => span,
+            NsDatum::Bool(span, _)
+            | NsDatum::Char(span, _)
+            | NsDatum::Int(span, _)
+            | NsDatum::Float(span, _)
+            | NsDatum::Str(span, _)
+            | NsDatum::Ident(span, _)
+            | NsDatum::List(span, _)
+            | NsDatum::Vec(span, _)
+            | NsDatum::Set(span, _)
+            | NsDatum::Map(span, _) => span,
         }
     }
 }
@@ -137,7 +137,7 @@ impl NsIdAlloc {
     }
 
     pub fn alloc(&mut self) -> NsId {
-        self.curr_ns_id = self.curr_ns_id + 1;
+        self.curr_ns_id += 1;
         NsId::new(self.curr_ns_id)
     }
 }

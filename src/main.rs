@@ -1,4 +1,4 @@
-//#![feature(nll)]
+#![cfg_attr(feature = "cargo-clippy", warn(clippy))]
 
 extern crate ansi_term;
 extern crate clap;

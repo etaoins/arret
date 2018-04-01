@@ -230,17 +230,17 @@ pub fn expand_macro(
     scope: &mut Scope,
     invocation_span: Span,
     mac: &Macro,
-    arg_data: Vec<NsDatum>,
+    arg_data: &[NsDatum],
 ) -> Result<NsDatum> {
-    for rule in mac.rules.iter() {
-        let match_result = match_rule(scope, &mac.special_vars, rule, arg_data.as_slice());
+    for rule in &mac.rules {
+        let match_result = match_rule(scope, &mac.special_vars, rule, arg_data);
 
         if let Ok(match_data) = match_result {
             return Ok(expand_rule(
                 ns_id_alloc,
                 scope,
                 &mac.special_vars,
-                match_data,
+                &match_data,
                 &rule.var_links,
                 &rule.template,
             ));

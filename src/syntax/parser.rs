@@ -22,19 +22,13 @@ fn is_whitespace(c: char) -> bool {
 
 fn is_identifier_char(c: char) -> bool {
     match c {
-        'A'...'Z' | 'a'...'z' | '0'...'9' => true,
-        '.' | '*' | '+' | '!' | '-' | '_' | '?' | '$' | '%' | '&' | '=' | '<' | '>' | ':' => {
-            // Punctuation allowed at beginning of an identiifer
-            true
-        }
-        '#' => {
-            // Punctuation allowed anywhere
-            true
-        }
-        '/' => {
-            // We don't support namespacing so we treat this as a normal char
-            true
-        }
+        'A'...'Z' | 'a'...'z' | '0'...'9' |
+        // Punctuation allowed at beginning of an identiifer
+        '.' | '*' | '+' | '!' | '-' | '_' | '?' | '$' | '%' | '&' | '=' | '<' | '>' | ':' |
+        // Punctuation allowed anywhere
+        '#' |
+        // We don't support namespacing so we treat this as a normal char
+        '/' => true,
         _ => false,
     }
 }
@@ -80,16 +74,16 @@ impl<'de> Parser<'de> {
     }
 
     fn peek_char(&mut self, ec: ExpectedContent) -> Result<char> {
-        self.input.chars().next().ok_or(self.eof_err(ec))
+        self.input.chars().next().ok_or_else(|| self.eof_err(ec))
     }
 
     fn peek_nth_char(&mut self, i: usize, ec: ExpectedContent) -> Result<char> {
-        self.input.chars().nth(i).ok_or(self.eof_err(ec))
+        self.input.chars().nth(i).ok_or_else(|| self.eof_err(ec))
     }
 
     fn eat_bytes(&mut self, count: usize) {
         self.input = &self.input[count..];
-        self.consumed_bytes = self.consumed_bytes + count
+        self.consumed_bytes += count;
     }
 
     fn consume_char(&mut self, ec: ExpectedContent) -> Result<char> {
@@ -97,7 +91,10 @@ impl<'de> Parser<'de> {
 
         match char_indices.next() {
             Some((_, c)) => {
-                let next_index = char_indices.next().map(|t| t.0).unwrap_or(self.input.len());
+                let next_index = char_indices
+                    .next()
+                    .map(|t| t.0)
+                    .unwrap_or_else(|| self.input.len());
                 self.eat_bytes(next_index);
 
                 Ok(c)
@@ -134,16 +131,18 @@ impl<'de> Parser<'de> {
         }
     }
 
-    fn consume_until<'a, T>(&'a mut self, predicate: T) -> (Span, &'a str)
+    fn consume_until<T>(&mut self, predicate: T) -> (Span, &str)
     where
         T: Fn(char) -> bool,
     {
         let lo = self.consumed_bytes as u32;
-        let last_index = self.input.find(predicate).unwrap_or(self.input.len());
+        let last_index = self.input
+            .find(predicate)
+            .unwrap_or_else(|| self.input.len());
         let (consumed, remaining_input) = self.input.split_at(last_index);
 
         self.input = remaining_input;
-        self.consumed_bytes = self.consumed_bytes + last_index;
+        self.consumed_bytes += last_index;
 
         let span = Span {
             lo,
@@ -220,7 +219,7 @@ impl<'de> Parser<'de> {
             s.eat_bytes(1);
 
             // Take everything up to the next whitespace
-            let (span, char_name) = s.consume_until(|c| is_whitespace(c));
+            let (span, char_name) = s.consume_until(is_whitespace);
 
             let mut char_name_chars = char_name.chars();
             if let Some(first_char) = char_name_chars.next() {
@@ -236,7 +235,7 @@ impl<'de> Parser<'de> {
                         .map_err(|_| Error::new(span, ErrorKind::UnsupportedChar))?;
 
                     return std::char::from_u32(code_point)
-                        .ok_or(Error::new(span, ErrorKind::InvalidCodePoint));
+                        .ok_or_else(|| Error::new(span, ErrorKind::InvalidCodePoint));
                 }
             }
 
@@ -354,8 +353,8 @@ impl<'de> Parser<'de> {
                     return Err(Error::new(span, ErrorKind::UnsupportedChar));
                 }
 
-                return std::char::from_u32(code_point)
-                    .ok_or(Error::new(span, ErrorKind::InvalidCodePoint));
+                std::char::from_u32(code_point)
+                    .ok_or_else(|| Error::new(span, ErrorKind::InvalidCodePoint))
             }
             _ => {
                 let span = Span {
@@ -396,7 +395,7 @@ impl<'de> Parser<'de> {
     fn parse_identifier(&mut self) -> Result<Datum> {
         let (span, content) = self.capture_span(|s| s.parse_identifier_content().to_owned());
 
-        if content.len() == 0 {
+        if content.is_empty() {
             let (span, next_char) =
                 self.capture_span(|s| s.consume_char(ExpectedContent::Identifier));
             return Err(Error::new(span, ErrorKind::UnexpectedChar(next_char?)));
@@ -456,7 +455,7 @@ impl<'de> Parser<'de> {
                     datum_vec.push(datum);
                 }
                 Err(err) => {
-                    if let &ErrorKind::Eof(_) = err.kind() {
+                    if let ErrorKind::Eof(_) = *err.kind() {
                         return Ok(datum_vec);
                     } else {
                         return Err(err);

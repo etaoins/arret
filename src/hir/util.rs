@@ -57,7 +57,7 @@ pub fn pop_vec_front<T>(mut vs: Vec<T>) -> (T, Vec<T>) {
     (vs.pop().unwrap(), rest_vs)
 }
 
-pub fn expect_arg_count(span: Span, vs: &Vec<NsDatum>, expected_arg_count: usize) -> Result<()> {
+pub fn expect_arg_count(span: Span, vs: &[NsDatum], expected_arg_count: usize) -> Result<()> {
     if vs.len() != expected_arg_count {
         Err(Error::new(
             span,

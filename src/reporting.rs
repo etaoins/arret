@@ -30,7 +30,7 @@ fn bytepos_to_human_pos(ccx: &CompileContext, bp: u32) -> HumanPos {
             break next_file;
         }
 
-        remaining_bytes = remaining_bytes - next_file_size;
+        remaining_bytes -= next_file_size;
     };
 
     let mut remaining_source = &loaded_file.source()[..];
@@ -42,15 +42,15 @@ fn bytepos_to_human_pos(ccx: &CompileContext, bp: u32) -> HumanPos {
         let next_line_pos = remaining_source
             .find('\n')
             .map(|i| i + 1)
-            .unwrap_or(remaining_source.len());
+            .unwrap_or_else(|| remaining_source.len());
 
         if remaining_bytes < next_line_pos {
             break;
         }
 
-        remaining_bytes = remaining_bytes - next_line_pos;
+        remaining_bytes -= next_line_pos;
         remaining_source = &remaining_source[next_line_pos..];
-        line = line + 1;
+        line += 1
     }
 
     let mut column = 1;
@@ -63,7 +63,7 @@ fn bytepos_to_human_pos(ccx: &CompileContext, bp: u32) -> HumanPos {
         }
         assert!(remaining_bytes > off);
 
-        column = column + 1;
+        column += 1
     }
 
     HumanPos {
@@ -92,7 +92,7 @@ fn print_snippet(ccx: &CompileContext, level: Level, span: Span) {
     let line_number_text = format!("{}", hp.line);
     let line_number_chars = line_number_text.len();
 
-    let snippet_next_newline = hp.snippet.find('\n').unwrap_or(hp.snippet.len());
+    let snippet_next_newline = hp.snippet.find('\n').unwrap_or_else(|| hp.snippet.len());
     let snippet_first_line = &hp.snippet[0..snippet_next_newline];
 
     let print_border_line = || {
@@ -170,6 +170,7 @@ pub trait Reportable {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum Level {
     Error,
     Note,

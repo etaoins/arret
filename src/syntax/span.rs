@@ -6,10 +6,7 @@ pub struct Span {
 
 impl Span {
     pub fn with_lo(&self, lo: u32) -> Span {
-        Span {
-            lo: lo,
-            hi: self.hi,
-        }
+        Span { lo, hi: self.hi }
     }
 
     pub fn is_empty(&self) -> bool {
