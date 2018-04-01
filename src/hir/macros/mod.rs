@@ -251,137 +251,138 @@ pub fn expand_macro(
 }
 
 #[cfg(test)]
-use syntax::parser::data_from_str;
-#[cfg(test)]
-use syntax::span::t2s;
+mod test {
+    use super::*;
+    use syntax::parser::data_from_str;
+    use syntax::span::t2s;
 
-#[cfg(test)]
-fn macro_rules_for_str(data_str: &str) -> Result<Macro> {
-    use hir::ns::NsId;
+    fn macro_rules_for_str(data_str: &str) -> Result<Macro> {
+        use hir::ns::NsId;
 
-    let test_data = data_from_str(data_str).unwrap();
+        let test_data = data_from_str(data_str).unwrap();
 
-    let full_span = Span {
-        lo: 0,
-        hi: data_str.len() as u32,
-    };
+        let full_span = Span {
+            lo: 0,
+            hi: data_str.len() as u32,
+        };
 
-    let test_ns_id = NsId::new(0);
-    let test_ns_data = test_data
-        .into_iter()
-        .map(|datum| NsDatum::from_syntax_datum(test_ns_id, datum))
-        .collect::<Vec<NsDatum>>();
+        let test_ns_id = NsId::new(0);
+        let test_ns_data = test_data
+            .into_iter()
+            .map(|datum| NsDatum::from_syntax_datum(test_ns_id, datum))
+            .collect::<Vec<NsDatum>>();
 
-    let self_ident = Ident::new(test_ns_id, "self".to_owned());
-    lower_macro_rules(&Scope::new_empty(), full_span, &self_ident, test_ns_data)
-}
+        let self_ident = Ident::new(test_ns_id, "self".to_owned());
+        lower_macro_rules(&Scope::new_empty(), full_span, &self_ident, test_ns_data)
+    }
 
-#[test]
-fn wrong_arg_count() {
-    let j = "#{} [] []";
-    let t = "^^^^^^^^^";
+    #[test]
+    fn wrong_arg_count() {
+        let j = "#{} [] []";
+        let t = "^^^^^^^^^";
 
-    let err = Error::new(t2s(t), ErrorKind::WrongArgCount(2));
-    assert_eq!(err, macro_rules_for_str(j).unwrap_err());
-}
+        let err = Error::new(t2s(t), ErrorKind::WrongArgCount(2));
+        assert_eq!(err, macro_rules_for_str(j).unwrap_err());
+    }
 
-#[test]
-fn non_set_literals() {
-    let j = "[] []";
-    let t = "^^   ";
+    #[test]
+    fn non_set_literals() {
+        let j = "[] []";
+        let t = "^^   ";
 
-    let err = Error::new(
-        t2s(t),
-        ErrorKind::IllegalArg("expected set of pattern literals".to_owned()),
-    );
-    assert_eq!(err, macro_rules_for_str(j).unwrap_err());
-}
+        let err = Error::new(
+            t2s(t),
+            ErrorKind::IllegalArg("expected set of pattern literals".to_owned()),
+        );
+        assert_eq!(err, macro_rules_for_str(j).unwrap_err());
+    }
 
-#[test]
-fn non_symbol_literal() {
-    let j = "#{one 2} []";
-    let t = "      ^    ";
+    #[test]
+    fn non_symbol_literal() {
+        let j = "#{one 2} []";
+        let t = "      ^    ";
 
-    let err = Error::new(
-        t2s(t),
-        ErrorKind::IllegalArg("pattern literal must be a symbol".to_owned()),
-    );
-    assert_eq!(err, macro_rules_for_str(j).unwrap_err());
-}
+        let err = Error::new(
+            t2s(t),
+            ErrorKind::IllegalArg("pattern literal must be a symbol".to_owned()),
+        );
+        assert_eq!(err, macro_rules_for_str(j).unwrap_err());
+    }
 
-#[test]
-fn empty_rules() {
-    let j = "#{} []";
+    #[test]
+    fn empty_rules() {
+        let j = "#{} []";
 
-    let special_vars = SpecialVars {
-        zero_or_more: Some(MacroVar::Bound(Binding::Prim(Prim::Ellipsis))),
-        literals: HashSet::new(),
-    };
+        let special_vars = SpecialVars {
+            zero_or_more: Some(MacroVar::Bound(Binding::Prim(Prim::Ellipsis))),
+            literals: HashSet::new(),
+        };
 
-    let expected = Macro::new(special_vars, vec![]);
-    assert_eq!(expected, macro_rules_for_str(j).unwrap());
-}
+        let expected = Macro::new(special_vars, vec![]);
+        assert_eq!(expected, macro_rules_for_str(j).unwrap());
+    }
 
-#[test]
-fn rule_with_non_vector() {
-    let j = "#{} [1]";
-    let t = "     ^ ";
+    #[test]
+    fn rule_with_non_vector() {
+        let j = "#{} [1]";
+        let t = "     ^ ";
 
-    let err = Error::new(
-        t2s(t),
-        ErrorKind::IllegalArg("expected a macro rule vector".to_owned()),
-    );
-    assert_eq!(err, macro_rules_for_str(j).unwrap_err());
-}
+        let err = Error::new(
+            t2s(t),
+            ErrorKind::IllegalArg("expected a macro rule vector".to_owned()),
+        );
+        assert_eq!(err, macro_rules_for_str(j).unwrap_err());
+    }
 
-#[test]
-fn rule_with_not_enough_elements() {
-    let j = "#{} [[(self)]]";
-    let t = "     ^^^^^^^^ ";
+    #[test]
+    fn rule_with_not_enough_elements() {
+        let j = "#{} [[(self)]]";
+        let t = "     ^^^^^^^^ ";
 
-    let err = Error::new(
-        t2s(t),
-        ErrorKind::IllegalArg("expected a macro rule vector with two elements".to_owned()),
-    );
-    assert_eq!(err, macro_rules_for_str(j).unwrap_err());
-}
+        let err = Error::new(
+            t2s(t),
+            ErrorKind::IllegalArg("expected a macro rule vector with two elements".to_owned()),
+        );
+        assert_eq!(err, macro_rules_for_str(j).unwrap_err());
+    }
 
-#[test]
-fn rule_with_non_list_pattern() {
-    let j = "#{} [[self 1]]";
-    let t = "      ^^^^    ";
+    #[test]
+    fn rule_with_non_list_pattern() {
+        let j = "#{} [[self 1]]";
+        let t = "      ^^^^    ";
 
-    let err = Error::new(
-        t2s(t),
-        ErrorKind::IllegalArg("expected a macro rule pattern list".to_owned()),
-    );
-    assert_eq!(err, macro_rules_for_str(j).unwrap_err());
-}
+        let err = Error::new(
+            t2s(t),
+            ErrorKind::IllegalArg("expected a macro rule pattern list".to_owned()),
+        );
+        assert_eq!(err, macro_rules_for_str(j).unwrap_err());
+    }
 
-#[test]
-fn rule_with_empty_pattern_list() {
-    let j = "#{} [[() 1]]";
-    let t = "      ^^    ";
+    #[test]
+    fn rule_with_empty_pattern_list() {
+        let j = "#{} [[() 1]]";
+        let t = "      ^^    ";
 
-    let err = Error::new(
-        t2s(t),
-        ErrorKind::IllegalArg(
-            "macro rule patterns must contain at least the name of the macro".to_owned(),
-        ),
-    );
-    assert_eq!(err, macro_rules_for_str(j).unwrap_err());
-}
+        let err = Error::new(
+            t2s(t),
+            ErrorKind::IllegalArg(
+                "macro rule patterns must contain at least the name of the macro".to_owned(),
+            ),
+        );
+        assert_eq!(err, macro_rules_for_str(j).unwrap_err());
+    }
 
-#[test]
-fn rule_with_non_self_pattern() {
-    let j = "#{} [[(notself) 1]]";
-    let t = "       ^^^^^^^     ";
+    #[test]
+    fn rule_with_non_self_pattern() {
+        let j = "#{} [[(notself) 1]]";
+        let t = "       ^^^^^^^     ";
 
-    let err = Error::new(
-        t2s(t),
-        ErrorKind::IllegalArg(
-            "macro rule patterns must start with the name of the macro".to_owned(),
-        ),
-    );
-    assert_eq!(err, macro_rules_for_str(j).unwrap_err());
+        let err = Error::new(
+            t2s(t),
+            ErrorKind::IllegalArg(
+                "macro rule patterns must start with the name of the macro".to_owned(),
+            ),
+        );
+        assert_eq!(err, macro_rules_for_str(j).unwrap_err());
+    }
 }

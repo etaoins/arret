@@ -195,88 +195,91 @@ impl Level {
 }
 
 #[cfg(test)]
-use ctx::LoadedFile;
+mod test {
+    use super::*;
+    use ctx::LoadedFile;
 
-#[test]
-fn bytepos_to_human_pos_tests() {
-    let mut ccx = CompileContext::new();
+    #[test]
+    fn bytepos_to_human_pos_tests() {
+        let mut ccx = CompileContext::new();
 
-    let first_contents = "12\n34\n";
-    let second_contents = "☃6";
+        let first_contents = "12\n34\n";
+        let second_contents = "☃6";
 
-    ccx.add_loaded_file(LoadedFile::new(
-        "<first>".to_owned(),
-        first_contents.to_owned(),
-    ));
-    ccx.add_loaded_file(LoadedFile::new(
-        "<second>".to_owned(),
-        second_contents.to_owned(),
-    ));
+        ccx.add_loaded_file(LoadedFile::new(
+            "<first>".to_owned(),
+            first_contents.to_owned(),
+        ));
+        ccx.add_loaded_file(LoadedFile::new(
+            "<second>".to_owned(),
+            second_contents.to_owned(),
+        ));
 
-    let test_cases = vec![
-        (
-            0,
-            HumanPos {
-                display_name: "<first>".to_owned(),
-                line: 1,
-                column: 1,
-                snippet: &first_contents[0..],
-                snippet_byte_off: 0,
-            },
-        ),
-        (
-            1,
-            HumanPos {
-                display_name: "<first>".to_owned(),
-                line: 1,
-                column: 2,
-                snippet: &first_contents[0..],
-                snippet_byte_off: 1,
-            },
-        ),
-        (
-            2,
-            HumanPos {
-                display_name: "<first>".to_owned(),
-                line: 1,
-                column: 3,
-                snippet: &first_contents[0..],
-                snippet_byte_off: 2,
-            },
-        ),
-        (
-            3,
-            HumanPos {
-                display_name: "<first>".to_owned(),
-                line: 2,
-                column: 1,
-                snippet: &first_contents[3..],
-                snippet_byte_off: 0,
-            },
-        ),
-        (
-            6,
-            HumanPos {
-                display_name: "<second>".to_owned(),
-                line: 1,
-                column: 1,
-                snippet: &second_contents[0..],
-                snippet_byte_off: 0,
-            },
-        ),
-        (
-            9,
-            HumanPos {
-                display_name: "<second>".to_owned(),
-                line: 1,
-                column: 2,
-                snippet: &second_contents[0..],
-                snippet_byte_off: 3,
-            },
-        ),
-    ];
+        let test_cases = vec![
+            (
+                0,
+                HumanPos {
+                    display_name: "<first>".to_owned(),
+                    line: 1,
+                    column: 1,
+                    snippet: &first_contents[0..],
+                    snippet_byte_off: 0,
+                },
+            ),
+            (
+                1,
+                HumanPos {
+                    display_name: "<first>".to_owned(),
+                    line: 1,
+                    column: 2,
+                    snippet: &first_contents[0..],
+                    snippet_byte_off: 1,
+                },
+            ),
+            (
+                2,
+                HumanPos {
+                    display_name: "<first>".to_owned(),
+                    line: 1,
+                    column: 3,
+                    snippet: &first_contents[0..],
+                    snippet_byte_off: 2,
+                },
+            ),
+            (
+                3,
+                HumanPos {
+                    display_name: "<first>".to_owned(),
+                    line: 2,
+                    column: 1,
+                    snippet: &first_contents[3..],
+                    snippet_byte_off: 0,
+                },
+            ),
+            (
+                6,
+                HumanPos {
+                    display_name: "<second>".to_owned(),
+                    line: 1,
+                    column: 1,
+                    snippet: &second_contents[0..],
+                    snippet_byte_off: 0,
+                },
+            ),
+            (
+                9,
+                HumanPos {
+                    display_name: "<second>".to_owned(),
+                    line: 1,
+                    column: 2,
+                    snippet: &second_contents[0..],
+                    snippet_byte_off: 3,
+                },
+            ),
+        ];
 
-    for (bp, expected) in test_cases.into_iter() {
-        assert_eq!(expected, bytepos_to_human_pos(&ccx, bp));
+        for (bp, expected) in test_cases.into_iter() {
+            assert_eq!(expected, bytepos_to_human_pos(&ccx, bp));
+        }
     }
 }

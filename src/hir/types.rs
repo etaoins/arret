@@ -229,305 +229,303 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
 }
 
 #[cfg(test)]
-use syntax::parser::datum_from_str;
-#[cfg(test)]
-use hir::prim::insert_prim_exports;
-#[cfg(test)]
-use syntax::span::t2s;
+mod test {
+    use super::*;
+    use syntax::parser::datum_from_str;
+    use hir::prim::insert_prim_exports;
+    use syntax::span::t2s;
 
-#[cfg(test)]
-fn pty_for_str(datum_str: &str) -> Result<ty::Poly> {
-    use hir::ns::NsId;
-    let test_ns_id = NsId::new(1);
+    fn pty_for_str(datum_str: &str) -> Result<ty::Poly> {
+        use hir::ns::NsId;
+        let test_ns_id = NsId::new(1);
 
-    // Capture our exports
-    let mut exports = HashMap::<String, Binding>::new();
-    insert_prim_exports(&mut exports);
-    insert_ty_exports(&mut exports);
+        // Capture our exports
+        let mut exports = HashMap::<String, Binding>::new();
+        insert_prim_exports(&mut exports);
+        insert_ty_exports(&mut exports);
 
-    // Place them on our scope
-    let mut scope = Scope::new_empty();
-    for (name, binding) in exports.into_iter() {
-        scope.insert_binding(Ident::new(test_ns_id, name), binding);
+        // Place them on our scope
+        let mut scope = Scope::new_empty();
+        for (name, binding) in exports.into_iter() {
+            scope.insert_binding(Ident::new(test_ns_id, name), binding);
+        }
+
+        let test_datum = datum_from_str(datum_str).unwrap();
+        lower_pty(&scope, NsDatum::from_syntax_datum(test_ns_id, test_datum))
     }
 
-    let test_datum = datum_from_str(datum_str).unwrap();
-    lower_pty(&scope, NsDatum::from_syntax_datum(test_ns_id, test_datum))
-}
+    fn assert_ty_for_str(expected: ty::Poly, datum_str: &str) {
+        assert_eq!(expected, pty_for_str(datum_str).unwrap());
+    }
 
-#[cfg(test)]
-fn assert_ty_for_str(expected: ty::Poly, datum_str: &str) {
-    assert_eq!(expected, pty_for_str(datum_str).unwrap());
-}
+    fn assert_err_for_str(err: Error, datum_str: &str) {
+        assert_eq!(err, pty_for_str(datum_str).unwrap_err());
+    }
 
-#[cfg(test)]
-fn assert_err_for_str(err: Error, datum_str: &str) {
-    assert_eq!(err, pty_for_str(datum_str).unwrap_err());
-}
+    #[test]
+    fn true_literal() {
+        let j = "true";
 
-#[test]
-fn true_literal() {
-    let j = "true";
+        let expected = ty::NonFun::Bool(true);
+        assert_ty_for_str(expected.into(), j);
+    }
 
-    let expected = ty::NonFun::Bool(true);
-    assert_ty_for_str(expected.into(), j);
-}
+    #[test]
+    fn false_literal() {
+        let j = "false";
 
-#[test]
-fn false_literal() {
-    let j = "false";
+        let expected = ty::NonFun::Bool(false);
+        assert_ty_for_str(expected.into(), j);
+    }
 
-    let expected = ty::NonFun::Bool(false);
-    assert_ty_for_str(expected.into(), j);
-}
+    #[test]
+    fn sym_literal() {
+        let j = "'foo";
 
-#[test]
-fn sym_literal() {
-    let j = "'foo";
+        let expected = ty::NonFun::Sym("foo".to_owned());
+        assert_ty_for_str(expected.into(), j);
+    }
 
-    let expected = ty::NonFun::Sym("foo".to_owned());
-    assert_ty_for_str(expected.into(), j);
-}
+    #[test]
+    fn empty_list_literal() {
+        let j = "()";
 
-#[test]
-fn empty_list_literal() {
-    let j = "()";
+        let expected = ty::NonFun::List(vec![], None);
+        assert_ty_for_str(expected.into(), j);
+    }
 
-    let expected = ty::NonFun::List(vec![], None);
-    assert_ty_for_str(expected.into(), j);
-}
+    #[test]
+    fn ty_ref() {
+        let j = "Symbol";
 
-#[test]
-fn ty_ref() {
-    let j = "Symbol";
+        let expected = ty::NonFun::AnySym;
+        assert_ty_for_str(expected.into(), j);
+    }
 
-    let expected = ty::NonFun::AnySym;
-    assert_ty_for_str(expected.into(), j);
-}
+    #[test]
+    fn unbound_symbol() {
+        let j = "notbound";
+        let t = "^^^^^^^^";
 
-#[test]
-fn unbound_symbol() {
-    let j = "notbound";
-    let t = "^^^^^^^^";
+        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("notbound".to_owned()));
+        assert_err_for_str(err, j);
+    }
 
-    let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("notbound".to_owned()));
-    assert_err_for_str(err, j);
-}
+    #[test]
+    fn unsupported_int_literal() {
+        let j = "1";
+        let t = "^";
 
-#[test]
-fn unsupported_int_literal() {
-    let j = "1";
-    let t = "^";
+        let err = Error::new(
+            t2s(t),
+            ErrorKind::IllegalArg("only boolean and symbol literals are supported".to_owned()),
+        );
+        assert_err_for_str(err, j);
+    }
 
-    let err = Error::new(
-        t2s(t),
-        ErrorKind::IllegalArg("only boolean and symbol literals are supported".to_owned()),
-    );
-    assert_err_for_str(err, j);
-}
+    #[test]
+    fn non_literal_value_ref() {
+        let j = "quote";
+        let t = "^^^^^";
 
-#[test]
-fn non_literal_value_ref() {
-    let j = "quote";
-    let t = "^^^^^";
+        let err = Error::new(t2s(t), ErrorKind::ValueAsTy);
+        assert_err_for_str(err, j);
+    }
 
-    let err = Error::new(t2s(t), ErrorKind::ValueAsTy);
-    assert_err_for_str(err, j);
-}
+    #[test]
+    fn unbound_cons() {
+        let j = "(notbound)";
+        let t = " ^^^^^^^^ ";
 
-#[test]
-fn unbound_cons() {
-    let j = "(notbound)";
-    let t = " ^^^^^^^^ ";
+        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("notbound".to_owned()));
+        assert_err_for_str(err, j);
+    }
 
-    let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("notbound".to_owned()));
-    assert_err_for_str(err, j);
-}
+    #[test]
+    fn listof_cons() {
+        let j = "(Listof true)";
 
-#[test]
-fn listof_cons() {
-    let j = "(Listof true)";
+        let inner_ty = ty::NonFun::Bool(true);
+        let expected = ty::NonFun::List(vec![], Some(inner_ty.into()));
 
-    let inner_ty = ty::NonFun::Bool(true);
-    let expected = ty::NonFun::List(vec![], Some(inner_ty.into()));
+        assert_ty_for_str(expected.into(), j);
+    }
 
-    assert_ty_for_str(expected.into(), j);
-}
+    #[test]
+    fn fixed_list_cons() {
+        let j = "(List true false)";
 
-#[test]
-fn fixed_list_cons() {
-    let j = "(List true false)";
+        let expected = ty::NonFun::List(
+            vec![
+                ty::NonFun::Bool(true).into(),
+                ty::NonFun::Bool(false).into(),
+            ],
+            None,
+        );
 
-    let expected = ty::NonFun::List(
-        vec![
+        assert_ty_for_str(expected.into(), j);
+    }
+
+    #[test]
+    fn rest_list_cons() {
+        let j = "(List true false ...)";
+
+        let expected = ty::NonFun::List(
+            vec![ty::NonFun::Bool(true).into()],
+            Some(ty::NonFun::Bool(false).into()),
+        );
+
+        assert_ty_for_str(expected.into(), j);
+    }
+
+    #[test]
+    fn vectorof_cons() {
+        let j = "(Vectorof true)";
+
+        let inner_ty = ty::NonFun::Bool(true);
+        let expected = ty::NonFun::Vec(Some(inner_ty.into()), vec![]);
+
+        assert_ty_for_str(expected.into(), j);
+    }
+
+    #[test]
+    fn fixed_vector_cons() {
+        let j = "(Vector true false)";
+
+        let expected = ty::NonFun::Vec(
+            None,
+            vec![
+                ty::NonFun::Bool(true).into(),
+                ty::NonFun::Bool(false).into(),
+            ],
+        );
+
+        assert_ty_for_str(expected.into(), j);
+    }
+
+    #[test]
+    fn rest_vector_cons() {
+        let j = "(Vector false ... true)";
+
+        let expected = ty::NonFun::Vec(
+            Some(ty::NonFun::Bool(false).into()),
+            vec![ty::NonFun::Bool(true).into()],
+        );
+
+        assert_ty_for_str(expected.into(), j);
+    }
+
+    #[test]
+    fn empty_fun() {
+        let j = "(->)";
+        let t = "^^^^";
+
+        let err = Error::new(
+            t2s(t),
+            ErrorKind::IllegalArg("-> requires at least one argument".to_owned()),
+        );
+        assert_err_for_str(err, j);
+    }
+
+    #[test]
+    fn pure_fun() {
+        let j = "(-> true)";
+
+        let expected = ty::Fun::new(
+            false,
+            ty::NonFun::List(vec![], None).into(),
             ty::NonFun::Bool(true).into(),
-            ty::NonFun::Bool(false).into(),
-        ],
-        None,
-    );
+        );
 
-    assert_ty_for_str(expected.into(), j);
-}
+        assert_ty_for_str(expected.into(), j);
+    }
 
-#[test]
-fn rest_list_cons() {
-    let j = "(List true false ...)";
+    #[test]
+    fn impure_fun() {
+        let j = "(->! true)";
 
-    let expected = ty::NonFun::List(
-        vec![ty::NonFun::Bool(true).into()],
-        Some(ty::NonFun::Bool(false).into()),
-    );
-
-    assert_ty_for_str(expected.into(), j);
-}
-
-#[test]
-fn vectorof_cons() {
-    let j = "(Vectorof true)";
-
-    let inner_ty = ty::NonFun::Bool(true);
-    let expected = ty::NonFun::Vec(Some(inner_ty.into()), vec![]);
-
-    assert_ty_for_str(expected.into(), j);
-}
-
-#[test]
-fn fixed_vector_cons() {
-    let j = "(Vector true false)";
-
-    let expected = ty::NonFun::Vec(
-        None,
-        vec![
+        let expected = ty::Fun::new(
+            true,
+            ty::NonFun::List(vec![], None).into(),
             ty::NonFun::Bool(true).into(),
-            ty::NonFun::Bool(false).into(),
-        ],
-    );
+        );
 
-    assert_ty_for_str(expected.into(), j);
-}
+        assert_ty_for_str(expected.into(), j);
+    }
 
-#[test]
-fn rest_vector_cons() {
-    let j = "(Vector false ... true)";
+    #[test]
+    fn fixed_fun() {
+        let j = "(-> false true)";
 
-    let expected = ty::NonFun::Vec(
-        Some(ty::NonFun::Bool(false).into()),
-        vec![ty::NonFun::Bool(true).into()],
-    );
+        let expected = ty::Fun::new(
+            false,
+            ty::NonFun::List(vec![ty::NonFun::Bool(false).into()], None).into(),
+            ty::NonFun::Bool(true).into(),
+        );
 
-    assert_ty_for_str(expected.into(), j);
-}
+        assert_ty_for_str(expected.into(), j);
+    }
 
-#[test]
-fn empty_fun() {
-    let j = "(->)";
-    let t = "^^^^";
+    #[test]
+    fn rest_fun() {
+        let j = "(-> Symbol ... true)";
 
-    let err = Error::new(
-        t2s(t),
-        ErrorKind::IllegalArg("-> requires at least one argument".to_owned()),
-    );
-    assert_err_for_str(err, j);
-}
+        let expected = ty::Fun::new(
+            false,
+            ty::NonFun::List(vec![], Some(ty::NonFun::AnySym.into())).into(),
+            ty::NonFun::Bool(true).into(),
+        );
 
-#[test]
-fn pure_fun() {
-    let j = "(-> true)";
+        assert_ty_for_str(expected.into(), j);
+    }
 
-    let expected = ty::Fun::new(
-        false,
-        ty::NonFun::List(vec![], None).into(),
-        ty::NonFun::Bool(true).into(),
-    );
+    #[test]
+    fn fixed_infix_fun() {
+        let j = "(false -> true)";
 
-    assert_ty_for_str(expected.into(), j);
-}
+        let expected = ty::Fun::new(
+            false,
+            ty::NonFun::List(vec![ty::NonFun::Bool(false).into()], None).into(),
+            ty::NonFun::Bool(true).into(),
+        );
 
-#[test]
-fn impure_fun() {
-    let j = "(->! true)";
+        assert_ty_for_str(expected.into(), j);
+    }
 
-    let expected = ty::Fun::new(
-        true,
-        ty::NonFun::List(vec![], None).into(),
-        ty::NonFun::Bool(true).into(),
-    );
+    #[test]
+    fn rest_infix_impure_fun() {
+        let j = "(String Symbol ... ->! true)";
 
-    assert_ty_for_str(expected.into(), j);
-}
+        let expected = ty::Fun::new(
+            true,
+            ty::NonFun::List(
+                vec![ty::NonFun::Str.into()],
+                Some(ty::NonFun::AnySym.into()),
+            ).into(),
+            ty::NonFun::Bool(true).into(),
+        );
 
-#[test]
-fn fixed_fun() {
-    let j = "(-> false true)";
+        assert_ty_for_str(expected.into(), j);
+    }
 
-    let expected = ty::Fun::new(
-        false,
-        ty::NonFun::List(vec![ty::NonFun::Bool(false).into()], None).into(),
-        ty::NonFun::Bool(true).into(),
-    );
+    #[test]
+    fn set_cons() {
+        let j = "(Setof true)";
 
-    assert_ty_for_str(expected.into(), j);
-}
+        let inner_ty = ty::NonFun::Bool(true);
+        let expected = ty::NonFun::Set(inner_ty.into());
 
-#[test]
-fn rest_fun() {
-    let j = "(-> Symbol ... true)";
+        assert_ty_for_str(expected.into(), j);
+    }
 
-    let expected = ty::Fun::new(
-        false,
-        ty::NonFun::List(vec![], Some(ty::NonFun::AnySym.into())).into(),
-        ty::NonFun::Bool(true).into(),
-    );
+    #[test]
+    fn hash_cons() {
+        let j = "(Hash true false)";
 
-    assert_ty_for_str(expected.into(), j);
-}
+        let key_ty = ty::NonFun::Bool(true);
+        let value_ty = ty::NonFun::Bool(false);
+        let expected = ty::NonFun::Hash(key_ty.into(), value_ty.into());
 
-#[test]
-fn fixed_infix_fun() {
-    let j = "(false -> true)";
-
-    let expected = ty::Fun::new(
-        false,
-        ty::NonFun::List(vec![ty::NonFun::Bool(false).into()], None).into(),
-        ty::NonFun::Bool(true).into(),
-    );
-
-    assert_ty_for_str(expected.into(), j);
-}
-
-#[test]
-fn rest_infix_impure_fun() {
-    let j = "(String Symbol ... ->! true)";
-
-    let expected = ty::Fun::new(
-        true,
-        ty::NonFun::List(
-            vec![ty::NonFun::Str.into()],
-            Some(ty::NonFun::AnySym.into()),
-        ).into(),
-        ty::NonFun::Bool(true).into(),
-    );
-
-    assert_ty_for_str(expected.into(), j);
-}
-
-#[test]
-fn set_cons() {
-    let j = "(Setof true)";
-
-    let inner_ty = ty::NonFun::Bool(true);
-    let expected = ty::NonFun::Set(inner_ty.into());
-
-    assert_ty_for_str(expected.into(), j);
-}
-
-#[test]
-fn hash_cons() {
-    let j = "(Hash true false)";
-
-    let key_ty = ty::NonFun::Bool(true);
-    let value_ty = ty::NonFun::Bool(false);
-    let expected = ty::NonFun::Hash(key_ty.into(), value_ty.into());
-
-    assert_ty_for_str(expected.into(), j);
+        assert_ty_for_str(expected.into(), j);
+    }
 }
