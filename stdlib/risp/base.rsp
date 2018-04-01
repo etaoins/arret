@@ -1,5 +1,5 @@
 (import [risp internal primitives])
-(export def defn fn if quote export ... _ defmacro macro-rules do)
+(export def fn if quote export ... _ defmacro macro-rules)
 
 (export let)
 (defmacro let (macro-rules #{} [
@@ -7,11 +7,35 @@
    ((fn (name ...) expr ...) val ...)]
 ]))
 
+(export defn)
 (defmacro defn (macro-rules #{} [
   [(defn destruc fn-data ...) (def destruc (fn fn-data ...))]
 ]))
 
 ; `do` becomes a self-executing function containing the inner statements
+(export do)
 (defmacro do (macro-rules #{} [
   [(do expr-data ...) ((fn () expr-data ... ))]
+]))
+
+(export when)
+(defmacro when (macro-rules #{} [
+  [(when test body-data ...) (if test (do body-data ...) false)]
+]))
+
+(export and)
+(defmacro and (macro-rules #{} [
+  [(and) true]
+  [(and test) test]
+  [(and test1 test2 ...)
+   (if test1 (and test2 ...) false)]
+]))
+
+(export or)
+(defmacro or (macro-rules #{} [
+  [(or) false]
+  [(or test) test]
+  [(or test1 test2 ...)
+    (let ([x test1])
+      (if x x (or test2 ...)))]
 ]))
