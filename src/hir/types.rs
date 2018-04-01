@@ -23,7 +23,7 @@ pub enum TyCons {
     PolyTy,
 }
 
-fn lower_pvar(
+pub fn lower_pvar(
     lcx: &mut LoweringContext,
     scope: &Scope,
     pvar_datum: NsDatum,

@@ -9,8 +9,8 @@ use hir::prim::Prim;
 use hir::module::{Module, ModuleDef};
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::error::{Error, ErrorKind, Result};
-use hir::types::{lower_pty, TyCons};
-use hir::util::{expect_arg_count, expect_ident, split_into_fixed_and_rest};
+use hir::types::{lower_pty, lower_pvar, TyCons};
+use hir::util::{expect_arg_count, expect_ident, pop_vec_front, split_into_fixed_and_rest};
 use ty;
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
@@ -211,52 +211,74 @@ impl<'ccx> LoweringContext<'ccx> {
         }
     }
 
-    fn lower_fun(&mut self, scope: &Scope, span: Span, mut arg_data: Vec<NsDatum>) -> Result<Expr> {
-        if arg_data.len() < 1 {
+    fn lower_fun(&mut self, scope: &Scope, span: Span, arg_data: Vec<NsDatum>) -> Result<Expr> {
+        if arg_data.is_empty() {
             return Err(Error::new(
                 span,
                 ErrorKind::IllegalArg("parameter declaration missing".to_owned()),
             ));
         }
 
-        // Param declaration is the first datum
-        let mut after_param_data = arg_data.split_off(1);
-        let param_datum = arg_data.pop().unwrap();
+        let mut fun_scope = Scope::new_child(scope);
+
+        let (mut next_datum, mut rest_data) = pop_vec_front(arg_data);
+
+        // We can either begin with a set of polymorphic variables or a list of parameters
+        if let NsDatum::Set(_, vs) = next_datum {
+            let pvars = vs.into_iter()
+                .map(|pvar_datum| lower_pvar(self, scope, pvar_datum))
+                .collect::<Result<Vec<(Ident, ty::PVar)>>>()?;
+
+            for (ident, pvar) in pvars.into_iter() {
+                let pvar_id = self.insert_pvar(pvar);
+                fun_scope.insert_binding(ident, Binding::Ty(ty::Poly::Var(pvar_id)));
+            }
+
+            if rest_data.is_empty() {
+                return Err(Error::new(
+                    span,
+                    ErrorKind::IllegalArg(
+                        "polymorphic variables should be followed by parameters".to_owned(),
+                    ),
+                ));
+            }
+
+            let (new_next_datum, new_rest_data) = pop_vec_front(rest_data);
+            next_datum = new_next_datum;
+            rest_data = new_rest_data;
+        };
 
         // TODO: It would be consistent to also allow assigning the entire argument list to a
         // symbol. This would be the same as using a list with a single rest parameter. It could
         // potentially be confusing/ambiguous to allow both so require a list for now.
-        match param_datum {
-            NsDatum::List(_, _) => {}
-            other => {
-                return Err(Error::new(
-                    other.span(),
-                    ErrorKind::IllegalArg("parameter declaration should be a list".to_owned()),
-                ));
-            }
+        if let NsDatum::List(_, _) = next_datum {
+        } else {
+            return Err(Error::new(
+                next_datum.span(),
+                ErrorKind::IllegalArg("parameter declaration should be a list".to_owned()),
+            ));
         }
 
         // Pull out our params
-        let mut body_scope = Scope::new_child(scope);
-        let params = self.lower_destruc(&mut body_scope, param_datum)?;
+        let params = self.lower_destruc(&mut fun_scope, next_datum)?;
 
         // Determine if we have a return type after the parameters, eg (param) -> RetTy
         let ret_ty;
         let body_data;
-        if after_param_data.len() >= 2
-            && scope.get_datum(&after_param_data[0]) == Some(Binding::TyCons(TyCons::Fun))
+        if rest_data.len() >= 2
+            && scope.get_datum(&rest_data[0]) == Some(Binding::TyCons(TyCons::Fun))
         {
-            body_data = after_param_data.split_off(2);
-            ret_ty = Some(lower_pty(self, scope, after_param_data.pop().unwrap())?)
+            body_data = rest_data.split_off(2);
+            ret_ty = Some(lower_pty(self, &fun_scope, rest_data.pop().unwrap())?)
         } else {
-            body_data = after_param_data;
+            body_data = rest_data;
             ret_ty = None;
         };
 
         // Extract the body
         let body_exprs = body_data
             .into_iter()
-            .map(|body_datum| self.lower_body_expr(&mut body_scope, body_datum))
+            .map(|body_datum| self.lower_body_expr(&mut fun_scope, body_datum))
             .collect::<Result<Vec<Expr>>>()?;
 
         Ok(Expr::Fun(
@@ -1015,6 +1037,39 @@ mod test {
                 poly_vars: vec![],
                 params,
                 ret_ty: None,
+                body_expr: Box::new(Expr::Ref(t2s(u), param_var_id)),
+            },
+        );
+
+        assert_eq!(expected, body_expr_for_str(j).unwrap());
+    }
+
+    #[test]
+    fn poly_identity_fn() {
+        let j = "(fn #{A} ([x : A]) -> A x)";
+        let t = "^^^^^^^^^^^^^^^^^^^^^^^^^^";
+        let u = "                        ^ ";
+
+        let pvar_id = ty::PVarId::new(0);
+
+        let param_var_id = VarId::new(2);
+        let params = Destruc::List(
+            vec![
+                Destruc::Var(Var {
+                    id: param_var_id,
+                    source_name: "x".to_owned(),
+                    bound: Some(ty::Poly::Var(pvar_id)),
+                }),
+            ],
+            None,
+        );
+
+        let expected = Expr::Fun(
+            t2s(t),
+            Fun {
+                poly_vars: vec![],
+                params,
+                ret_ty: Some(ty::Poly::Var(pvar_id)),
                 body_expr: Box::new(Expr::Ref(t2s(u), param_var_id)),
             },
         );
