@@ -272,7 +272,7 @@ impl<'ccx> LoweringContext<'ccx> {
             &Prim::Export => Err(Error::new(span, ErrorKind::ExportOutsideModule)),
             &Prim::Quote => {
                 expect_arg_count(span, &arg_data, 1)?;
-                Ok(Expr::Lit(arg_data[0].clone().into_value()))
+                Ok(Expr::Lit(arg_data[0].clone().into_syntax_datum()))
             }
             &Prim::Fun => self.lower_fun(scope, span, arg_data),
             &Prim::If => {
@@ -479,7 +479,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     }
                 }
             }
-            other => Ok(Expr::Lit(other.into_value())),
+            other => Ok(Expr::Lit(other.into_syntax_datum())),
         }
     }
 
@@ -578,7 +578,7 @@ impl<'ccx> LoweringContext<'ccx> {
         // pass once all binding have been introduced. All other expressions are forbidden.
         let mut deferred_prims = Vec::<DeferredModulePrim>::new();
         for input_datum in data.into_iter() {
-            let ns_datum = NsDatum::from_value(input_datum, ns_id);
+            let ns_datum = NsDatum::from_syntax_datum(ns_id, input_datum);
             let mut new_deferred_prims = self.lower_module_def(scope, ns_datum)?;
 
             deferred_prims.append(&mut new_deferred_prims);

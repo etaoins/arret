@@ -124,27 +124,33 @@ impl NsId {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Ident(NsId, String);
+pub struct Ident {
+    ns_id: NsId,
+    name: String,
+}
 
 impl Ident {
     pub fn new(ns_id: NsId, name: String) -> Ident {
-        Ident(ns_id, name)
+        Ident { ns_id, name }
     }
 
     pub fn ns_id(&self) -> NsId {
-        self.0
+        self.ns_id
     }
 
     pub fn name(&self) -> &String {
-        &self.1
+        &self.name
     }
 
     pub fn into_name(self) -> String {
-        self.1
+        self.name
     }
 
     pub fn with_ns_id(&self, new_ns_id: NsId) -> Ident {
-        Ident(new_ns_id, self.1.clone())
+        Ident {
+            ns_id: new_ns_id,
+            name: self.name.clone(),
+        }
     }
 }
 
@@ -163,49 +169,56 @@ pub enum NsDatum {
 }
 
 impl NsDatum {
-    fn map_value_vec(vs: Vec<Datum>, ns_id: NsId) -> Vec<NsDatum> {
-        vs.into_iter().map(|v| Self::from_value(v, ns_id)).collect()
+    fn map_syntax_datum_vec(ns_id: NsId, vs: Vec<Datum>) -> Vec<NsDatum> {
+        vs.into_iter()
+            .map(|v| Self::from_syntax_datum(ns_id, v))
+            .collect()
     }
 
-    pub fn from_value(value: Datum, ns_id: NsId) -> NsDatum {
+    pub fn from_syntax_datum(ns_id: NsId, value: Datum) -> NsDatum {
         match value {
             Datum::Bool(span, v) => NsDatum::Bool(span, v),
             Datum::Char(span, v) => NsDatum::Char(span, v),
             Datum::Int(span, v) => NsDatum::Int(span, v),
             Datum::Float(span, v) => NsDatum::Float(span, v),
             Datum::Str(span, v) => NsDatum::Str(span, v),
-            Datum::Sym(span, v) => NsDatum::Ident(span, Ident(ns_id, v)),
-            Datum::List(span, vs) => NsDatum::List(span, Self::map_value_vec(vs, ns_id)),
-            Datum::Vec(span, vs) => NsDatum::Vec(span, Self::map_value_vec(vs, ns_id)),
-            Datum::Set(span, vs) => NsDatum::Set(span, Self::map_value_vec(vs, ns_id)),
+            Datum::Sym(span, v) => NsDatum::Ident(span, Ident::new(ns_id, v)),
+            Datum::List(span, vs) => NsDatum::List(span, Self::map_syntax_datum_vec(ns_id, vs)),
+            Datum::Vec(span, vs) => NsDatum::Vec(span, Self::map_syntax_datum_vec(ns_id, vs)),
+            Datum::Set(span, vs) => NsDatum::Set(span, Self::map_syntax_datum_vec(ns_id, vs)),
             Datum::Map(span, vs) => NsDatum::Map(
                 span,
                 vs.into_iter()
-                    .map(|(k, v)| (NsDatum::from_value(k, ns_id), NsDatum::from_value(v, ns_id)))
+                    .map(|(k, v)| {
+                        (
+                            NsDatum::from_syntax_datum(ns_id, k),
+                            NsDatum::from_syntax_datum(ns_id, v),
+                        )
+                    })
                     .collect(),
             ),
         }
     }
 
-    fn map_nsvalue_vec(vs: Vec<NsDatum>) -> Vec<Datum> {
-        vs.into_iter().map(|v| v.into_value()).collect()
+    fn map_nsdatum_vec(vs: Vec<NsDatum>) -> Vec<Datum> {
+        vs.into_iter().map(|v| v.into_syntax_datum()).collect()
     }
 
-    pub fn into_value(self) -> Datum {
+    pub fn into_syntax_datum(self) -> Datum {
         match self {
             NsDatum::Bool(span, v) => Datum::Bool(span, v),
             NsDatum::Char(span, v) => Datum::Char(span, v),
             NsDatum::Int(span, v) => Datum::Int(span, v),
             NsDatum::Float(span, v) => Datum::Float(span, v),
             NsDatum::Str(span, v) => Datum::Str(span, v),
-            NsDatum::Ident(span, v) => Datum::Sym(span, v.1),
-            NsDatum::List(span, vs) => Datum::List(span, Self::map_nsvalue_vec(vs)),
-            NsDatum::Vec(span, vs) => Datum::Vec(span, Self::map_nsvalue_vec(vs)),
-            NsDatum::Set(span, vs) => Datum::Set(span, Self::map_nsvalue_vec(vs)),
+            NsDatum::Ident(span, v) => Datum::Sym(span, v.into_name()),
+            NsDatum::List(span, vs) => Datum::List(span, Self::map_nsdatum_vec(vs)),
+            NsDatum::Vec(span, vs) => Datum::Vec(span, Self::map_nsdatum_vec(vs)),
+            NsDatum::Set(span, vs) => Datum::Set(span, Self::map_nsdatum_vec(vs)),
             NsDatum::Map(span, vs) => Datum::Map(
                 span,
                 vs.into_iter()
-                    .map(|(k, v)| (k.into_value(), v.into_value()))
+                    .map(|(k, v)| (k.into_syntax_datum(), v.into_syntax_datum()))
                     .collect(),
             ),
         }

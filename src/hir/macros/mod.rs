@@ -271,7 +271,7 @@ fn macro_rules_for_str(data_str: &str) -> Result<Macro> {
 
     let test_ns_data = test_data
         .into_iter()
-        .map(|datum| NsDatum::from_value(datum, test_ns_id()))
+        .map(|datum| NsDatum::from_syntax_datum(test_ns_id(), datum))
         .collect::<Vec<NsDatum>>();
 
     let self_ident = Ident::new(test_ns_id(), "self".to_owned());

@@ -249,7 +249,7 @@ fn pty_for_str(datum_str: &str) -> Result<ty::Poly> {
     }
 
     let test_datum = datum_from_str(datum_str).unwrap();
-    lower_pty(&scope, NsDatum::from_value(test_datum, test_ns_id))
+    lower_pty(&scope, NsDatum::from_syntax_datum(test_ns_id, test_datum))
 }
 
 #[cfg(test)]
