@@ -30,22 +30,30 @@ impl<S> Fun<S> {
     }
 }
 
-#[derive(Eq, Debug, Hash, Clone)]
-pub struct PVar {
-    inst_id: usize,
-    source_name: String,
-    bound: Poly,
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub struct PVarId(usize);
+
+impl PVarId {
+    pub fn new(id: usize) -> PVarId {
+        PVarId(id)
+    }
 }
 
-impl PartialEq for PVar {
-    fn eq(&self, other: &PVar) -> bool {
-        self.inst_id == other.inst_id
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+pub struct PVar {
+    source_name: String,
+    bound: Option<Poly>,
+}
+
+impl PVar {
+    pub fn new(source_name: String, bound: Option<Poly>) -> PVar {
+        PVar { source_name, bound }
     }
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub enum Poly {
-    //Var(PVar),
+    Var(PVarId),
     Fixed(Vec<NonFun<Poly>>, Option<Box<Fun<Poly>>>),
 }
 

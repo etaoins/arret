@@ -11,6 +11,7 @@ use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::error::{Error, ErrorKind, Result};
 use hir::types::{lower_pty, TyCons};
 use hir::util::{expect_arg_count, expect_ident, split_into_fixed_and_rest};
+use ty;
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 use ctx::CompileContext;
@@ -20,6 +21,7 @@ pub struct LoweringContext<'ccx> {
     ns_id_alloc: NsIdAlloc,
     loaded_libraries: BTreeMap<LibraryName, Module>,
     macros: Vec<Macro>,
+    pvars: Vec<ty::PVar>,
     ccx: &'ccx mut CompileContext,
 }
 
@@ -54,8 +56,16 @@ impl<'ccx> LoweringContext<'ccx> {
             ns_id_alloc: NsIdAlloc::new(),
             loaded_libraries,
             macros: vec![],
+            pvars: vec![],
             ccx,
         }
+    }
+
+    pub fn insert_pvar(&mut self, pvar: ty::PVar) -> ty::PVarId {
+        let pvar_id = ty::PVarId::new(self.pvars.len());
+        self.pvars.push(pvar);
+
+        pvar_id
     }
 
     fn alloc_var_id(&mut self) -> VarId {
@@ -112,7 +122,7 @@ impl<'ccx> LoweringContext<'ccx> {
         let ty_datum = arg_data.pop().unwrap();
         let ident = expect_ident(arg_data.pop().unwrap())?;
 
-        let ty = lower_pty(scope, ty_datum)?;
+        let ty = lower_pty(self, scope, ty_datum)?;
 
         scope.insert_binding(ident, Binding::Ty(ty));
         Ok(())
@@ -173,7 +183,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     return Err(Error::new(span, ErrorKind::NoVecDestruc));
                 }
 
-                let ty = lower_pty(scope, vs.pop().unwrap())?;
+                let ty = lower_pty(self, scope, vs.pop().unwrap())?;
 
                 // Discard the type colon
                 vs.pop();
@@ -237,7 +247,7 @@ impl<'ccx> LoweringContext<'ccx> {
             && scope.get_datum(&after_param_data[0]) == Some(Binding::TyCons(TyCons::Fun))
         {
             body_data = after_param_data.split_off(2);
-            ret_ty = Some(lower_pty(scope, after_param_data.pop().unwrap())?)
+            ret_ty = Some(lower_pty(self, scope, after_param_data.pop().unwrap())?)
         } else {
             body_data = after_param_data;
             ret_ty = None;

@@ -5,7 +5,9 @@ use hir::ns::{Ident, NsDatum};
 use hir::prim::Prim;
 use ty;
 use hir::error::{Error, ErrorKind, Result};
-use hir::util::{expect_arg_count, split_into_fixed_and_rest, split_into_start_and_fixed};
+use hir::lowering::LoweringContext;
+use hir::util::{expect_arg_count, expect_ident, split_into_fixed_and_rest,
+                split_into_start_and_fixed};
 use syntax::span::Span;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -18,34 +20,116 @@ pub enum TyCons {
     ImpureFun,
     Set,
     Hash,
+    PolyTy,
 }
 
-fn lower_list_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
+fn lower_pvar(
+    lcx: &mut LoweringContext,
+    scope: &Scope,
+    pvar_datum: NsDatum,
+) -> Result<(Ident, ty::PVar)> {
+    let span = pvar_datum.span();
+
+    match pvar_datum {
+        NsDatum::Ident(_, ident) => {
+            let source_name = ident.name().clone();
+            return Ok((ident, ty::PVar::new(source_name, None)));
+        }
+        NsDatum::Vec(_, mut arg_data) => {
+            if arg_data.len() == 3
+                && scope.get_datum(&arg_data[1]) == Some(Binding::Prim(Prim::TyColon))
+            {
+                let bound_datum = arg_data.pop().unwrap();
+                let bound_ty = lower_pty(lcx, scope, bound_datum)?;
+
+                // Discard the : completely
+                arg_data.pop();
+
+                let pvar_ident = expect_ident(arg_data.pop().unwrap())?;
+
+                let source_name = pvar_ident.name().clone();
+                return Ok((pvar_ident, ty::PVar::new(source_name, Some(bound_ty))));
+            }
+        }
+        _ => {}
+    }
+
+    return Err(Error::new(
+        span,
+        ErrorKind::IllegalArg(
+            "polymorphic variables must be either an identifier or [identifier : Type]".to_owned(),
+        ),
+    ));
+}
+
+fn lower_poly_ty_cons(
+    lcx: &mut LoweringContext,
+    outer_scope: &Scope,
+    span: Span,
+    mut arg_data: Vec<NsDatum>,
+) -> Result<ty::Poly> {
+    expect_arg_count(span, &arg_data, 2)?;
+
+    let inner_ty_datum = arg_data.pop().unwrap();
+    let pvar_datum = arg_data.pop().unwrap();
+
+    let pvar_data = if let NsDatum::Set(_, vs) = pvar_datum {
+        vs
+    } else {
+        return Err(Error::new(
+            span,
+            ErrorKind::IllegalArg("expected a set of polymorphic variables".to_owned()),
+        ));
+    };
+
+    let pvars = pvar_data
+        .into_iter()
+        .map(|pvar_datum| lower_pvar(lcx, outer_scope, pvar_datum))
+        .collect::<Result<Vec<(Ident, ty::PVar)>>>()?;
+
+    let mut inner_scope = Scope::new_child(outer_scope);
+    for (ident, pvar) in pvars.into_iter() {
+        let pvar_id = lcx.insert_pvar(pvar);
+        inner_scope.insert_binding(ident, Binding::Ty(ty::Poly::Var(pvar_id)));
+    }
+
+    lower_pty(lcx, &inner_scope, inner_ty_datum)
+}
+
+fn lower_list_cons(
+    lcx: &mut LoweringContext,
+    scope: &Scope,
+    arg_data: Vec<NsDatum>,
+) -> Result<ty::Poly> {
     let (fixed, rest) = split_into_fixed_and_rest(scope, arg_data);
 
     let fixed_tys = fixed
         .into_iter()
-        .map(|arg_datum| lower_pty(scope, arg_datum))
+        .map(|arg_datum| lower_pty(lcx, scope, arg_datum))
         .collect::<Result<Vec<ty::Poly>>>()?;
 
     let rest_ty = match rest {
-        Some(rest) => Some(lower_pty(scope, rest)?),
+        Some(rest) => Some(lower_pty(lcx, scope, rest)?),
         None => None,
     };
 
     Ok(ty::NonFun::List(fixed_tys, rest_ty).into())
 }
 
-fn lower_vec_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
+fn lower_vec_cons(
+    lcx: &mut LoweringContext,
+    scope: &Scope,
+    arg_data: Vec<NsDatum>,
+) -> Result<ty::Poly> {
     let (start, fixed) = split_into_start_and_fixed(scope, arg_data);
 
     let fixed_tys = fixed
         .into_iter()
-        .map(|arg_datum| lower_pty(scope, arg_datum))
+        .map(|arg_datum| lower_pty(lcx, scope, arg_datum))
         .collect::<Result<Vec<ty::Poly>>>()?;
 
     let start_ty = match start {
-        Some(start) => Some(lower_pty(scope, start)?),
+        Some(start) => Some(lower_pty(lcx, scope, start)?),
         None => None,
     };
 
@@ -53,6 +137,7 @@ fn lower_vec_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
 }
 
 fn lower_fun_cons(
+    lcx: &mut LoweringContext,
     scope: &Scope,
     span: Span,
     ty_cons_name: &'static str,
@@ -66,59 +151,62 @@ fn lower_fun_cons(
         ));
     }
 
-    let ret_ty = lower_pty(scope, arg_data.pop().unwrap())?;
-    let params_ty = lower_list_cons(scope, arg_data)?;
+    let ret_ty = lower_pty(lcx, scope, arg_data.pop().unwrap())?;
+    let params_ty = lower_list_cons(lcx, scope, arg_data)?;
 
     Ok(ty::Fun::new(impure, params_ty, ret_ty).into())
 }
 
 fn lower_infix_fun_cons(
+    lcx: &mut LoweringContext,
     scope: &Scope,
     impure: bool,
     mut arg_data: Vec<NsDatum>,
 ) -> Result<ty::Poly> {
-    let ret_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+    let ret_ty = lower_pty(lcx, scope, arg_data.pop().unwrap())?;
 
     // Discard the constructor
     arg_data.pop();
 
-    let params_ty = lower_list_cons(scope, arg_data)?;
+    let params_ty = lower_list_cons(lcx, scope, arg_data)?;
 
     Ok(ty::Fun::new(impure, params_ty, ret_ty).into())
 }
 
 fn lower_ty_cons_apply(
+    lcx: &mut LoweringContext,
     scope: &Scope,
     span: Span,
     ty_cons: TyCons,
     mut arg_data: Vec<NsDatum>,
 ) -> Result<ty::Poly> {
     match ty_cons {
-        TyCons::List => lower_list_cons(scope, arg_data),
+        TyCons::List => lower_list_cons(lcx, scope, arg_data),
         TyCons::Listof => {
             expect_arg_count(span, &arg_data, 1)?;
-            let rest_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+            let rest_ty = lower_pty(lcx, scope, arg_data.pop().unwrap())?;
             Ok(ty::NonFun::List(vec![], Some(rest_ty)).into())
         }
-        TyCons::Vector => lower_vec_cons(scope, arg_data),
+        TyCons::Vector => lower_vec_cons(lcx, scope, arg_data),
         TyCons::Vectorof => {
             expect_arg_count(span, &arg_data, 1)?;
-            let start_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+            let start_ty = lower_pty(lcx, scope, arg_data.pop().unwrap())?;
             Ok(ty::NonFun::Vec(Some(start_ty), vec![]).into())
         }
-        TyCons::Fun => lower_fun_cons(scope, span, "->", false, arg_data),
-        TyCons::ImpureFun => lower_fun_cons(scope, span, "->!", true, arg_data),
+        TyCons::Fun => lower_fun_cons(lcx, scope, span, "->", false, arg_data),
+        TyCons::ImpureFun => lower_fun_cons(lcx, scope, span, "->!", true, arg_data),
         TyCons::Set => {
             expect_arg_count(span, &arg_data, 1)?;
-            let member_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+            let member_ty = lower_pty(lcx, scope, arg_data.pop().unwrap())?;
             Ok(ty::NonFun::Set(member_ty).into())
         }
         TyCons::Hash => {
             expect_arg_count(span, &arg_data, 2)?;
-            let value_ty = lower_pty(scope, arg_data.pop().unwrap())?;
-            let key_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+            let value_ty = lower_pty(lcx, scope, arg_data.pop().unwrap())?;
+            let key_ty = lower_pty(lcx, scope, arg_data.pop().unwrap())?;
             Ok(ty::NonFun::Hash(key_ty, value_ty).into())
         }
+        TyCons::PolyTy => lower_poly_ty_cons(lcx, scope, span, arg_data),
     }
 }
 
@@ -144,7 +232,7 @@ fn lower_ident(scope: &Scope, span: Span, ident: Ident) -> Result<ty::Poly> {
     }
 }
 
-pub fn lower_pty(scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
+pub fn lower_pty(lcx: &mut LoweringContext, scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
     match datum {
         NsDatum::List(span, mut vs) => {
             if vs.len() == 0 {
@@ -154,10 +242,10 @@ pub fn lower_pty(scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
             if vs.len() >= 3 {
                 match scope.get_datum(&vs[vs.len() - 2]) {
                     Some(Binding::TyCons(TyCons::Fun)) => {
-                        return lower_infix_fun_cons(scope, false, vs);
+                        return lower_infix_fun_cons(lcx, scope, false, vs);
                     }
                     Some(Binding::TyCons(TyCons::ImpureFun)) => {
-                        return lower_infix_fun_cons(scope, true, vs);
+                        return lower_infix_fun_cons(lcx, scope, true, vs);
                     }
                     _ => {}
                 };
@@ -173,7 +261,7 @@ pub fn lower_pty(scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
                         return lower_literal(arg_data.pop().unwrap());
                     }
                     Some(Binding::TyCons(ty_cons)) => {
-                        return lower_ty_cons_apply(scope, span, ty_cons, arg_data);
+                        return lower_ty_cons_apply(lcx, scope, span, ty_cons, arg_data);
                     }
                     None => {
                         return Err(Error::new(
@@ -226,11 +314,13 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
     export_ty_cons!("->!", TyCons::ImpureFun);
     export_ty_cons!("Setof", TyCons::Set);
     export_ty_cons!("Hash", TyCons::Hash);
+    export_ty_cons!("All", TyCons::PolyTy);
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use ctx::CompileContext;
     use syntax::parser::datum_from_str;
     use hir::prim::insert_prim_exports;
     use syntax::span::t2s;
@@ -251,7 +341,14 @@ mod test {
         }
 
         let test_datum = datum_from_str(datum_str).unwrap();
-        lower_pty(&scope, NsDatum::from_syntax_datum(test_ns_id, test_datum))
+
+        let mut ccx = CompileContext::new();
+        let mut lcx = LoweringContext::new(&mut ccx);
+        lower_pty(
+            &mut lcx,
+            &scope,
+            NsDatum::from_syntax_datum(test_ns_id, test_datum),
+        )
     }
 
     fn assert_ty_for_str(expected: ty::Poly, datum_str: &str) {
@@ -525,6 +622,22 @@ mod test {
         let key_ty = ty::NonFun::Bool(true);
         let value_ty = ty::NonFun::Bool(false);
         let expected = ty::NonFun::Hash(key_ty.into(), value_ty.into());
+
+        assert_ty_for_str(expected.into(), j);
+    }
+
+    #[test]
+    fn poly_fun() {
+        let j = "(All #{A [B : Symbol]} (A -> B))";
+
+        let pvarid_a = ty::PVarId::new(0);
+        let pvarid_b = ty::PVarId::new(1);
+
+        let expected = ty::Fun::new(
+            false,
+            ty::NonFun::List(vec![ty::Poly::Var(pvarid_a)], None).into(),
+            ty::Poly::Var(pvarid_b),
+        );
 
         assert_ty_for_str(expected.into(), j);
     }
