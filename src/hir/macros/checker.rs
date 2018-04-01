@@ -3,7 +3,8 @@ use std::result;
 
 use hir::macros::{MacroVar, SpecialVars};
 use hir::error::{Error, ErrorKind, Result};
-use hir::scope::{Ident, NsDatum, Scope};
+use hir::ns::{Ident, NsDatum};
+use hir::scope::Scope;
 use syntax::span::{Span, EMPTY_SPAN};
 
 #[derive(PartialEq, Debug)]

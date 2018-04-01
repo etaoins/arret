@@ -3,7 +3,9 @@ use std::io::Read;
 
 use hir::{Cond, Destruc, Expr, Fun, Var, VarId};
 use hir::loader::{load_library_data, load_module_data, LibraryName};
-use hir::scope::{Binding, Ident, MacroId, NsDatum, NsId, NsIdAlloc, Prim, Scope};
+use hir::scope::{Binding, MacroId, Scope};
+use hir::ns::{Ident, NsDatum, NsId, NsIdAlloc};
+use hir::prim::Prim;
 use hir::module::{Module, ModuleDef};
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::error::{Error, ErrorKind, Result};

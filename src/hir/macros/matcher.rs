@@ -1,6 +1,7 @@
 use std::result;
 
-use hir::scope::{Ident, NsDatum, Scope};
+use hir::scope::Scope;
+use hir::ns::{Ident, NsDatum};
 use hir::macros::{MacroVar, MatchData, Rule, SpecialVars};
 
 struct MatchContext<'a> {

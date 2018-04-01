@@ -3,6 +3,8 @@ mod scope;
 mod error;
 mod module;
 mod loader;
+mod prim;
+mod ns;
 mod macros;
 mod types;
 mod util;

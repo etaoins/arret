@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use syntax::span::Span;
 use hir::{Destruc, Expr};
 use hir::types::insert_ty_exports;
-use hir::scope::{insert_prim_exports, Binding};
+use hir::prim::insert_prim_exports;
+use hir::scope::Binding;
 
 #[derive(PartialEq, Debug)]
 pub struct ModuleDef {

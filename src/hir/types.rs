@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use hir::scope::{Binding, Ident, NsDatum, Prim, Scope};
+use hir::scope::{Binding, Scope};
+use hir::ns::{Ident, NsDatum};
+use hir::prim::Prim;
 use ty;
 use hir::error::{Error, ErrorKind, Result};
 use hir::util::{expect_arg_count, split_into_fixed_and_rest, split_into_start_and_fixed};
@@ -229,12 +231,13 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
 #[cfg(test)]
 use syntax::parser::datum_from_str;
 #[cfg(test)]
-use hir::scope::{insert_prim_exports, NsId};
+use hir::prim::insert_prim_exports;
 #[cfg(test)]
 use syntax::span::t2s;
 
 #[cfg(test)]
 fn pty_for_str(datum_str: &str) -> Result<ty::Poly> {
+    use hir::ns::NsId;
     let test_ns_id = NsId::new(1);
 
     // Capture our exports

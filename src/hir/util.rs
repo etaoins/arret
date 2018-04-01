@@ -1,4 +1,6 @@
-use hir::scope::{Binding, Ident, NsDatum, Prim, Scope};
+use hir::ns::{Ident, NsDatum};
+use hir::scope::{Binding, Scope};
+use hir::prim::Prim;
 use hir::error::{Error, ErrorKind, Result};
 use syntax::span::Span;
 

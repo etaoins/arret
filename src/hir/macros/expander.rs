@@ -1,4 +1,5 @@
-use hir::scope::{Ident, NsDatum, NsId, NsIdAlloc, Scope};
+use hir::scope::Scope;
+use hir::ns::{Ident, NsDatum, NsId, NsIdAlloc};
 use hir::macros::{MacroVar, MatchData, SpecialVars};
 use hir::macros::checker::VarLinks;
 use std::collections::HashMap;

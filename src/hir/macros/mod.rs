@@ -5,7 +5,9 @@ mod expander;
 use std::collections::{HashMap, HashSet};
 
 use syntax::span::Span;
-use hir::scope::{Binding, Ident, NsDatum, NsIdAlloc, Prim, Scope};
+use hir::scope::{Binding, Scope};
+use hir::ns::{Ident, NsDatum, NsIdAlloc};
+use hir::prim::Prim;
 use hir::error::{Error, ErrorKind, Result};
 use hir::macros::matcher::match_rule;
 use hir::macros::expander::expand_rule;
@@ -249,19 +251,14 @@ pub fn expand_macro(
 }
 
 #[cfg(test)]
-use hir::scope::NsId;
-#[cfg(test)]
 use syntax::parser::data_from_str;
 #[cfg(test)]
 use syntax::span::t2s;
 
 #[cfg(test)]
-fn test_ns_id() -> NsId {
-    NsId::new(0)
-}
-
-#[cfg(test)]
 fn macro_rules_for_str(data_str: &str) -> Result<Macro> {
+    use hir::ns::NsId;
+
     let test_data = data_from_str(data_str).unwrap();
 
     let full_span = Span {
@@ -269,12 +266,13 @@ fn macro_rules_for_str(data_str: &str) -> Result<Macro> {
         hi: data_str.len() as u32,
     };
 
+    let test_ns_id = NsId::new(0);
     let test_ns_data = test_data
         .into_iter()
-        .map(|datum| NsDatum::from_syntax_datum(test_ns_id(), datum))
+        .map(|datum| NsDatum::from_syntax_datum(test_ns_id, datum))
         .collect::<Vec<NsDatum>>();
 
-    let self_ident = Ident::new(test_ns_id(), "self".to_owned());
+    let self_ident = Ident::new(test_ns_id, "self".to_owned());
     lower_macro_rules(&Scope::new_empty(), full_span, &self_ident, test_ns_data)
 }
 
