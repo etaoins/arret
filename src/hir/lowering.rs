@@ -258,7 +258,7 @@ impl<'ccx> LoweringContext<'ccx> {
         ))
     }
 
-    fn lower_prim_apply(
+    fn lower_inner_prim_apply(
         &mut self,
         scope: &mut Scope,
         span: Span,
@@ -279,7 +279,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 expect_arg_count(span, &arg_data, 3)?;
 
                 macro_rules! pop_as_boxed_expr {
-                    () => {Box::new(self.lower_expr(scope, arg_data.pop().unwrap())?)}
+                    () => {Box::new(self.lower_inner_expr(scope, arg_data.pop().unwrap())?)}
                 };
 
                 Ok(Expr::Cond(
@@ -387,7 +387,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 let value_datum = arg_data.pop().unwrap();
                 let destruc_datum = arg_data.pop().unwrap();
 
-                let value_expr = self.lower_expr(scope, value_datum)?;
+                let value_expr = self.lower_inner_expr(scope, value_datum)?;
                 let destruc = self.lower_destruc(scope, destruc_datum)?;
 
                 Ok(Expr::Def(span, destruc, Box::new(value_expr)))
@@ -397,7 +397,7 @@ impl<'ccx> LoweringContext<'ccx> {
             &Prim::DefType => self.lower_deftype(scope, span, arg_data)
                 .map(|_| Expr::Do(vec![])),
             &Prim::Import => self.lower_import(scope, arg_data).map(|_| Expr::Do(vec![])),
-            _ => self.lower_prim_apply(scope, span, fn_prim, arg_data),
+            _ => self.lower_inner_prim_apply(scope, span, fn_prim, arg_data),
         }
     }
 
@@ -410,7 +410,7 @@ impl<'ccx> LoweringContext<'ccx> {
     ) -> Result<Expr> {
         let arg_exprs = arg_data
             .into_iter()
-            .map(|arg_datum| self.lower_expr(scope, arg_datum))
+            .map(|arg_datum| self.lower_inner_expr(scope, arg_datum))
             .collect::<Result<Vec<Expr>>>()?;
 
         Ok(Expr::App(span, Box::new(fn_expr), arg_exprs))
@@ -474,7 +474,7 @@ impl<'ccx> LoweringContext<'ccx> {
                         )),
                     },
                     _ => {
-                        let fn_expr = self.lower_expr(scope, fn_datum)?;
+                        let fn_expr = self.lower_inner_expr(scope, fn_datum)?;
                         self.lower_expr_apply(scope, span, fn_expr, arg_data)
                     }
                 }
@@ -483,8 +483,8 @@ impl<'ccx> LoweringContext<'ccx> {
         }
     }
 
-    fn lower_expr(&mut self, scope: &mut Scope, datum: NsDatum) -> Result<Expr> {
-        self.generic_lower_expr(scope, datum, LoweringContext::lower_prim_apply)
+    fn lower_inner_expr(&mut self, scope: &mut Scope, datum: NsDatum) -> Result<Expr> {
+        self.generic_lower_expr(scope, datum, LoweringContext::lower_inner_prim_apply)
     }
 
     fn lower_body_expr(&mut self, scope: &mut Scope, datum: NsDatum) -> Result<Expr> {
@@ -590,7 +590,7 @@ impl<'ccx> LoweringContext<'ccx> {
         for deferred_prim in deferred_prims.into_iter() {
             match deferred_prim {
                 DeferredModulePrim::Def(span, destruc, value_datum) => {
-                    let value_expr = self.lower_expr(scope, value_datum)?;
+                    let value_expr = self.lower_inner_expr(scope, value_datum)?;
                     module_defs.push(ModuleDef::new(span, destruc, value_expr));
                 }
                 DeferredModulePrim::Export(span, ident) => {
