@@ -178,7 +178,7 @@ impl<'de> Parser<'de> {
         let (span, content) = self.capture_span(|s| s.parse_int_content());
 
         content
-            .and_then(|content| u64_to_positive_i64(span.clone(), content))
+            .and_then(|content| u64_to_positive_i64(span, content))
             .map(|i| Datum::Int(span, i))
     }
 
@@ -193,7 +193,7 @@ impl<'de> Parser<'de> {
 
         match content {
             Ok(valid_integer) => {
-                u64_to_negative_i64(span.clone(), valid_integer).map(|i| Datum::Int(span, i))
+                u64_to_negative_i64(span, valid_integer).map(|i| Datum::Int(span, i))
             }
             Err(err) => {
                 // TODO: On overflow we will silently convert to a symbol
