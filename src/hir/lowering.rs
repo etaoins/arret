@@ -333,6 +333,13 @@ impl<'ccx> LoweringContext<'ccx> {
                     },
                 ))
             }
+            &Prim::TyPred => {
+                expect_arg_count(span, &arg_data, 1)?;
+                Ok(Expr::TyPred(
+                    span,
+                    lower_pty(scope, arg_data.pop().unwrap())?,
+                ))
+            }
             &Prim::Ellipsis | &Prim::Wildcard | &Prim::MacroRules | &Prim::TyColon => {
                 Err(Error::new(span, ErrorKind::PrimRef))
             }
@@ -1818,5 +1825,14 @@ mod test {
 
         let module = module_for_str(j).unwrap();
         assert_eq!(2, module.into_defs().len());
+    }
+
+    #[test]
+    fn type_predicate() {
+        let j = "(type-predicate true)";
+        let t = "^^^^^^^^^^^^^^^^^^^^^";
+
+        let expected = Expr::TyPred(t2s(t), ty::NonFun::Bool(true).into());
+        assert_eq!(expected, body_expr_for_str(j).unwrap());
     }
 }

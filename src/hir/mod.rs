@@ -76,6 +76,7 @@ pub enum Expr {
     Def(Span, Destruc, Box<Expr>),
     Cond(Span, Cond),
     Ref(Span, VarId),
+    TyPred(Span, ty::Poly),
     Do(Vec<Expr>),
 }
 

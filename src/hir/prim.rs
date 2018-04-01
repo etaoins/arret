@@ -28,5 +28,6 @@ prims!(
     ("_", Wildcard),
     ("macro-rules", MacroRules),
     (":", TyColon),
-    ("deftype", DefType)
+    ("deftype", DefType),
+    ("type-predicate", TyPred)
 );
