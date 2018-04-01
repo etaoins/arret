@@ -4,7 +4,7 @@ use std::io::Read;
 use hir::{Cond, Destruc, Expr, Fun, Var, VarId};
 use hir::loader::{load_library_data, load_module_data, LibraryName};
 use hir::scope::{Binding, Ident, MacroId, NsDatum, NsId, NsIdAlloc, Prim, Scope};
-use hir::module::Module;
+use hir::module::{Module, ModuleDef};
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::error::{Error, ErrorKind, Result};
 use hir::types::{lower_pty, TyCons};
@@ -605,15 +605,13 @@ impl<'ccx> LoweringContext<'ccx> {
             }
         }
 
-        let def_exprs = deferred_defs
+        let module_defs = deferred_defs
             .into_iter()
             .map(|dd| {
                 let value_expr = self.lower_expr(scope, dd.value_datum)?;
-                Ok(Expr::Def(dd.span, dd.destruc, Box::new(value_expr)))
+                Ok(ModuleDef::new(dd.span, dd.destruc, value_expr))
             })
-            .collect::<Result<Vec<Expr>>>()?;
-
-        let body_expr = Expr::from_vec(def_exprs);
+            .collect::<Result<Vec<ModuleDef>>>()?;
 
         let mut exports = HashMap::new();
         for (ident, span) in scope.exports() {
@@ -626,16 +624,18 @@ impl<'ccx> LoweringContext<'ccx> {
             }
         }
 
-        Ok(Module::new(body_expr, exports))
+        Ok(Module::new(module_defs, exports))
     }
 
-    pub fn lower_program(&mut self, display_name: String, input_reader: &mut Read) -> Result<Expr> {
+    pub fn lower_program(
+        &mut self,
+        display_name: String,
+        input_reader: &mut Read,
+    ) -> Result<Module> {
         let mut root_scope = Scope::new_empty();
 
         let data = load_module_data(self.ccx, EMPTY_SPAN, display_name, input_reader)?;
-
         self.lower_module(&mut root_scope, data)
-            .map(|module| module.into_body_expr())
     }
 }
 
@@ -715,16 +715,16 @@ fn body_expr_for_str(data_str: &str) -> Result<Expr> {
 
     let mut ccx = CompileContext::new();
     let mut lcx = LoweringContext::new(&mut ccx);
-    let program_module = lcx.lower_module(&mut root_scope, program_data)?;
+    let mut program_defs = lcx.lower_module(&mut root_scope, program_data)?.into_defs();
 
-    // Assume the program has the correct strucutre
-    if let Expr::Def(_, _, main_func_box) = program_module.into_body_expr() {
-        if let Expr::Fun(_, main_func) = *main_func_box {
-            return Ok(*main_func.body_expr);
-        }
+    assert_eq!(1, program_defs.len());
+    let main_func_def = program_defs.pop().unwrap();
+
+    if let Expr::Fun(_, main_func) = main_func_def.into_value() {
+        Ok(*main_func.body_expr)
+    } else {
+        panic!("Unexpected program structure");
     }
-
-    panic!("Unexpected program structure");
 }
 
 #[test]
@@ -1193,20 +1193,20 @@ fn simple_export() {
 
     let var_id = VarId(1);
 
-    let expected_body_expr = Expr::Def(
+    let expected_module_def = ModuleDef::new(
         t2s(t),
         Destruc::Var(Var {
             id: var_id,
             source_name: "x".to_owned(),
             bound: None,
         }),
-        Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
+        Expr::Lit(Datum::Int(t2s(u), 1)),
     );
 
     let mut expected_exports = HashMap::new();
     expected_exports.insert("x".to_owned(), Binding::Var(var_id));
 
-    let expected = Module::new(expected_body_expr, expected_exports);
+    let expected = Module::new(vec![expected_module_def], expected_exports);
     assert_eq!(expected, module_for_str(j).unwrap());
 }
 
