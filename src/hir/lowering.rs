@@ -65,10 +65,12 @@ impl<'ccx> LoweringContext<'ccx> {
         &mut self,
         scope: &mut Scope,
         span: Span,
-        sym_datum: NsDatum,
-        transformer_spec: NsDatum,
+        mut arg_data: Vec<NsDatum>,
     ) -> Result<()> {
-        let self_ident = expect_ident(sym_datum)?;
+        expect_arg_count(span, &arg_data, 2)?;
+
+        let transformer_spec = arg_data.pop().unwrap();
+        let self_ident = expect_ident(arg_data.pop().unwrap())?;
 
         let macro_rules_data = if let NsDatum::List(span, mut vs) = transformer_spec {
             if vs.first().and_then(|d| scope.get_datum(d)) != Some(Binding::Prim(Prim::MacroRules))
@@ -94,6 +96,23 @@ impl<'ccx> LoweringContext<'ccx> {
         self.macros.push(mac);
         scope.insert_binding(self_ident, Binding::Macro(macro_id));
 
+        Ok(())
+    }
+
+    fn lower_deftype(
+        &mut self,
+        scope: &mut Scope,
+        span: Span,
+        mut arg_data: Vec<NsDatum>,
+    ) -> Result<()> {
+        expect_arg_count(span, &arg_data, 2)?;
+
+        let ty_datum = arg_data.pop().unwrap();
+        let ident = expect_ident(arg_data.pop().unwrap())?;
+
+        let ty = lower_pty(scope, ty_datum)?;
+
+        scope.insert_binding(ident, Binding::Ty(ty));
         Ok(())
     }
 
@@ -373,30 +392,11 @@ impl<'ccx> LoweringContext<'ccx> {
 
                 Ok(Expr::Def(span, destruc, Box::new(value_expr)))
             }
-            &Prim::DefMacro => {
-                expect_arg_count(span, &arg_data, 2)?;
-
-                let transformer_spec = arg_data.pop().unwrap();
-                let sym_datum = arg_data.pop().unwrap();
-
-                self.lower_defmacro(scope, span, sym_datum, transformer_spec)
-                    .map(|_| Expr::Do(vec![]))
-            }
-            &Prim::DefType => {
-                expect_arg_count(span, &arg_data, 2)?;
-
-                let ty_datum = arg_data.pop().unwrap();
-                let ident = expect_ident(arg_data.pop().unwrap())?;
-
-                let ty = lower_pty(scope, ty_datum)?;
-
-                scope.insert_binding(ident, Binding::Ty(ty));
-                Ok(Expr::Do(vec![]))
-            }
-            &Prim::Import => {
-                self.lower_import(scope, arg_data)?;
-                Ok(Expr::Do(vec![]))
-            }
+            &Prim::DefMacro => self.lower_defmacro(scope, span, arg_data)
+                .map(|_| Expr::Do(vec![])),
+            &Prim::DefType => self.lower_deftype(scope, span, arg_data)
+                .map(|_| Expr::Do(vec![])),
+            &Prim::Import => self.lower_import(scope, arg_data).map(|_| Expr::Do(vec![])),
             _ => self.lower_prim_apply(scope, span, fn_prim, arg_data),
         }
     }
@@ -499,10 +499,6 @@ impl<'ccx> LoweringContext<'ccx> {
         mut arg_data: Vec<NsDatum>,
     ) -> Result<Vec<DeferredModulePrim>> {
         match fn_prim {
-            &Prim::Import => {
-                self.lower_import(scope, arg_data)?;
-                Ok(vec![])
-            }
             &Prim::Export => {
                 let deferred_exports = arg_data
                     .into_iter()
@@ -527,26 +523,9 @@ impl<'ccx> LoweringContext<'ccx> {
 
                 Ok(vec![DeferredModulePrim::Def(span, destruc, value_datum)])
             }
-            &Prim::DefMacro => {
-                expect_arg_count(span, &arg_data, 2)?;
-
-                let transformer_spec = arg_data.pop().unwrap();
-                let sym_datum = arg_data.pop().unwrap();
-
-                self.lower_defmacro(scope, span, sym_datum, transformer_spec)?;
-                Ok(vec![])
-            }
-            &Prim::DefType => {
-                expect_arg_count(span, &arg_data, 2)?;
-
-                let ty_datum = arg_data.pop().unwrap();
-                let ident = expect_ident(arg_data.pop().unwrap())?;
-
-                let ty = lower_pty(scope, ty_datum)?;
-                scope.insert_binding(ident, Binding::Ty(ty));
-
-                Ok(vec![])
-            }
+            &Prim::DefMacro => self.lower_defmacro(scope, span, arg_data).map(|_| vec![]),
+            &Prim::DefType => self.lower_deftype(scope, span, arg_data).map(|_| vec![]),
+            &Prim::Import => self.lower_import(scope, arg_data).map(|_| vec![]),
             _ => Err(Error::new(span, ErrorKind::NonDefInsideModule)),
         }
     }
