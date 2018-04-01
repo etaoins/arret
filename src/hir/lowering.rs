@@ -81,6 +81,12 @@ macro_rules! lower_expr_impl {
     }
 }
 
+struct DeferredDef {
+    span: Span,
+    destruc: Destruc,
+    value_datum: NsDatum,
+}
+
 impl<'ccx> LoweringContext<'ccx> {
     pub fn new(ccx: &'ccx mut CompileContext) -> LoweringContext {
         let mut loaded_libraries = BTreeMap::new();
@@ -456,32 +462,6 @@ impl<'ccx> LoweringContext<'ccx> {
         }
     }
 
-    fn lower_module_prim_apply(
-        &mut self,
-        scope: &mut Scope,
-        span: Span,
-        fn_prim: &Prim,
-        arg_data: Vec<NsDatum>,
-    ) -> Result<Expr> {
-        match fn_prim {
-            &Prim::Export => {
-                for arg_datum in arg_data {
-                    match arg_datum {
-                        NsDatum::Ident(span, ident) => {
-                            scope.insert_export(span, ident);
-                        }
-                        other => {
-                            return Err(Error::new(other.span(), ErrorKind::ExpectedSymbol));
-                        }
-                    };
-                }
-
-                Ok(Expr::from_vec(vec![]))
-            }
-            _ => self.lower_body_prim_apply(scope, span, fn_prim, arg_data),
-        }
-    }
-
     fn lower_expr_apply(
         &mut self,
         scope: &mut Scope,
@@ -505,7 +485,75 @@ impl<'ccx> LoweringContext<'ccx> {
         lower_expr_impl!(self, scope, datum, lower_body_prim_apply, lower_body_expr)
     }
 
-    fn lower_module_expr(&mut self, scope: &mut Scope, datum: NsDatum) -> Result<Expr> {
+    fn lower_module_prim_apply(
+        &mut self,
+        scope: &mut Scope,
+        span: Span,
+        fn_prim: &Prim,
+        mut arg_data: Vec<NsDatum>,
+    ) -> Result<Option<DeferredDef>> {
+        match fn_prim {
+            &Prim::Import => {
+                self.lower_import(scope, arg_data)?;
+                Ok(None)
+            }
+            &Prim::Export => {
+                for arg_datum in arg_data {
+                    match arg_datum {
+                        NsDatum::Ident(span, ident) => {
+                            scope.insert_export(span, ident);
+                        }
+                        other => {
+                            return Err(Error::new(other.span(), ErrorKind::ExpectedSymbol));
+                        }
+                    };
+                }
+
+                Ok(None)
+            }
+            &Prim::Def => {
+                expect_arg_count(span, &arg_data, 2)?;
+
+                let value_datum = arg_data.pop().unwrap();
+
+                let destruc_datum = arg_data.pop().unwrap();
+                let destruc = self.lower_destruc(scope, destruc_datum)?;
+
+                Ok(Some(DeferredDef {
+                    span,
+                    destruc,
+                    value_datum,
+                }))
+            }
+            &Prim::DefMacro => {
+                expect_arg_count(span, &arg_data, 2)?;
+
+                let transformer_spec = arg_data.pop().unwrap();
+                let sym_datum = arg_data.pop().unwrap();
+
+                self.lower_defmacro(scope, span, sym_datum, transformer_spec)?;
+                Ok(None)
+            }
+            &Prim::DefType => {
+                expect_arg_count(span, &arg_data, 2)?;
+
+                let ty_datum = arg_data.pop().unwrap();
+                let ident = expect_ident(arg_data.pop().unwrap())?;
+
+                let ty = lower_pty(scope, ty_datum)?;
+                scope.insert_binding(ident, Binding::Ty(ty));
+
+                Ok(None)
+            }
+            _ => Err(Error::new(span, ErrorKind::ExprInsideModule)),
+        }
+    }
+
+    fn lower_module_expr(
+        &mut self,
+        scope: &mut Scope,
+        datum: NsDatum,
+    ) -> Result<Option<DeferredDef>> {
         let span = datum.span();
 
         if let NsDatum::List(span, mut vs) = datum {
@@ -543,14 +591,29 @@ impl<'ccx> LoweringContext<'ccx> {
             Binding::Prim(Prim::Import),
         );
 
-        let exprs = data.into_iter()
-            .map(|datum| {
-                let ns_datum = NsDatum::from_value(datum, ns_id);
-                self.lower_module_expr(scope, ns_datum)
+        let mut deferred_defs = Vec::<DeferredDef>::new();
+
+        // Extract all of our definitions.
+        // Variable definitions are deferred to the second pass. Imports, type and macros are
+        // resolved immediately. Everything else is forbidden.
+        for input_datum in data.into_iter() {
+            let ns_datum = NsDatum::from_value(input_datum, ns_id);
+            let deferred_def = self.lower_module_expr(scope, ns_datum)?;
+
+            if let Some(deferred_def) = deferred_def {
+                deferred_defs.push(deferred_def);
+            }
+        }
+
+        let def_exprs = deferred_defs
+            .into_iter()
+            .map(|dd| {
+                let value_expr = self.lower_expr(scope, dd.value_datum)?;
+                Ok(Expr::Def(dd.span, dd.destruc, Box::new(value_expr)))
             })
             .collect::<Result<Vec<Expr>>>()?;
 
-        let body_expr = Expr::from_vec(exprs);
+        let body_expr = Expr::from_vec(def_exprs);
 
         let mut exports = HashMap::new();
         for (ident, span) in scope.exports() {
@@ -717,14 +780,14 @@ fn basic_untyped_var_def() {
     let v = "          ^";
 
     let destruc = Destruc::Var(Var {
-        id: VarId(1),
+        id: VarId(2),
         source_name: "x".to_owned(),
         bound: None,
     });
 
     let expected = Expr::Do(vec![
         Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Datum::Int(t2s(u), 1)))),
-        Expr::Ref(t2s(v), VarId(1)),
+        Expr::Ref(t2s(v), VarId(2)),
     ]);
 
     assert_eq!(expected, body_expr_for_str(j).unwrap());
@@ -738,7 +801,7 @@ fn basic_typed_var_def() {
     let v = "                      ^";
 
     let destruc = Destruc::Var(Var {
-        id: VarId(1),
+        id: VarId(2),
         source_name: "x".to_owned(),
         bound: Some(ty::NonFun::Bool(true).into()),
     });
@@ -749,7 +812,7 @@ fn basic_typed_var_def() {
             destruc,
             Box::new(Expr::Lit(Datum::Bool(t2s(u), true))),
         ),
-        Expr::Ref(t2s(v), VarId(1)),
+        Expr::Ref(t2s(v), VarId(2)),
     ]);
 
     assert_eq!(expected, body_expr_for_str(j).unwrap());
@@ -792,13 +855,13 @@ fn list_destruc_def() {
     let destruc = Destruc::List(
         vec![
             Destruc::Var(Var {
-                id: VarId(2),
+                id: VarId(3),
                 source_name: "x".to_owned(),
                 bound: None,
             }),
         ],
         Some(Box::new(Destruc::Var(Var {
-            id: VarId(1),
+            id: VarId(2),
             source_name: "rest".to_owned(),
             bound: None,
         }))),
@@ -810,7 +873,7 @@ fn list_destruc_def() {
             destruc,
             Box::new(Expr::Lit(Datum::List(t2s(u), vec![Datum::Int(t2s(v), 1)]))),
         ),
-        Expr::Ref(t2s(w), VarId(2)),
+        Expr::Ref(t2s(w), VarId(3)),
     ]);
 
     assert_eq!(expected, body_expr_for_str(j).unwrap());
@@ -948,7 +1011,7 @@ fn identity_fn() {
     let t = "^^^^^^^^^^";
     let u = "        ^ ";
 
-    let param_var_id = VarId::new(1);
+    let param_var_id = VarId::new(2);
     let params = Destruc::List(
         vec![
             Destruc::Var(Var {
@@ -981,7 +1044,7 @@ fn capturing_fn() {
     let v = "         ^^^^^^^^^";
     let w = "                ^ ";
 
-    let outer_var_id = VarId::new(1);
+    let outer_var_id = VarId::new(2);
     let outer_destruc = Destruc::Var(Var {
         id: outer_var_id,
         source_name: "x".to_owned(),
@@ -1016,14 +1079,14 @@ fn shadowing_fn() {
     let v = "         ^^^^^^^^^^";
     let w = "                 ^ ";
 
-    let outer_var_id = VarId::new(1);
+    let outer_var_id = VarId::new(2);
     let outer_destruc = Destruc::Var(Var {
         id: outer_var_id,
         source_name: "x".to_owned(),
         bound: None,
     });
 
-    let param_var_id = VarId::new(2);
+    let param_var_id = VarId::new(3);
     let params = Destruc::List(
         vec![
             Destruc::Var(Var {
@@ -1608,14 +1671,14 @@ fn expand_body_def() {
     let v = &[s1, s2, v3].join("");
 
     let destruc = Destruc::Var(Var {
-        id: VarId(1),
+        id: VarId(2),
         source_name: "x".to_owned(),
         bound: None,
     });
 
     let expected = Expr::Do(vec![
         Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Datum::Int(t2s(u), 1)))),
-        Expr::Ref(t2s(v), VarId(1)),
+        Expr::Ref(t2s(v), VarId(2)),
     ]);
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
@@ -1633,7 +1696,7 @@ fn trivial_deftype() {
     let u = &[s1, u2].join("");
 
     let destruc = Destruc::Var(Var {
-        id: VarId(1),
+        id: VarId(2),
         source_name: "x".to_owned(),
         bound: Some(ty::NonFun::Bool(true).into()),
     });
