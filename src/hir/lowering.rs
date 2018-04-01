@@ -1712,3 +1712,59 @@ fn trivial_deftype() {
 
     assert_eq!(expected, body_expr_for_str(j).unwrap());
 }
+
+#[test]
+fn literal_forbidden_in_module() {
+    let j = "1";
+    let t = "^";
+
+    let err = Error::new(t2s(t), ErrorKind::NonDefInsideModule);
+    assert_eq!(err, module_for_str(j).unwrap_err());
+}
+
+#[test]
+fn quote_forbidden_in_module() {
+    let j = "'foo";
+    let t = "^^^^";
+
+    let err = Error::new(t2s(t), ErrorKind::NonDefInsideModule);
+    assert_eq!(err, module_for_str(j).unwrap_err());
+}
+
+#[test]
+fn if_forbidden_in_module() {
+    let j = "(if true 1 2)";
+    let t = "^^^^^^^^^^^^^";
+
+    let err = Error::new(t2s(t), ErrorKind::NonDefInsideModule);
+    assert_eq!(err, module_for_str(j).unwrap_err());
+}
+
+#[test]
+fn fun_forbidden_in_module() {
+    let j = "(fn () 1)";
+    let t = "^^^^^^^^^";
+
+    let err = Error::new(t2s(t), ErrorKind::NonDefInsideModule);
+    assert_eq!(err, module_for_str(j).unwrap_err());
+}
+
+#[test]
+fn apply_forbidden_in_module() {
+    let j = "((fn () 1))";
+    let t = "^^^^^^^^^^^";
+
+    let err = Error::new(t2s(t), ErrorKind::NonDefInsideModule);
+    assert_eq!(err, module_for_str(j).unwrap_err());
+}
+
+#[test]
+fn mutual_module_def() {
+    let j1 = "(def x y)";
+    let j2 = "(def y x)";
+
+    let j = &[j1, j2].join("");
+
+    let module = module_for_str(j).unwrap();
+    assert_eq!(2, module.into_defs().len());
+}
