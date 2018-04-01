@@ -81,10 +81,9 @@ macro_rules! lower_expr_impl {
     }
 }
 
-struct DeferredDef {
-    span: Span,
-    destruc: Destruc,
-    value_datum: NsDatum,
+enum DeferredModulePrim {
+    Def(Span, Destruc, NsDatum),
+    Export(Span, Ident),
 }
 
 impl<'ccx> LoweringContext<'ccx> {
@@ -491,25 +490,25 @@ impl<'ccx> LoweringContext<'ccx> {
         span: Span,
         fn_prim: &Prim,
         mut arg_data: Vec<NsDatum>,
-    ) -> Result<Option<DeferredDef>> {
+    ) -> Result<Vec<DeferredModulePrim>> {
         match fn_prim {
             &Prim::Import => {
                 self.lower_import(scope, arg_data)?;
-                Ok(None)
+                Ok(vec![])
             }
             &Prim::Export => {
-                for arg_datum in arg_data {
-                    match arg_datum {
-                        NsDatum::Ident(span, ident) => {
-                            scope.insert_export(span, ident);
+                let deferred_exports = arg_data
+                    .into_iter()
+                    .map(|datum| {
+                        if let NsDatum::Ident(span, ident) = datum {
+                            Ok(DeferredModulePrim::Export(span, ident))
+                        } else {
+                            Err(Error::new(datum.span(), ErrorKind::ExpectedSymbol))
                         }
-                        other => {
-                            return Err(Error::new(other.span(), ErrorKind::ExpectedSymbol));
-                        }
-                    };
-                }
+                    })
+                    .collect::<Result<Vec<DeferredModulePrim>>>()?;
 
-                Ok(None)
+                Ok(deferred_exports)
             }
             &Prim::Def => {
                 expect_arg_count(span, &arg_data, 2)?;
@@ -519,11 +518,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 let destruc_datum = arg_data.pop().unwrap();
                 let destruc = self.lower_destruc(scope, destruc_datum)?;
 
-                Ok(Some(DeferredDef {
-                    span,
-                    destruc,
-                    value_datum,
-                }))
+                Ok(vec![DeferredModulePrim::Def(span, destruc, value_datum)])
             }
             &Prim::DefMacro => {
                 expect_arg_count(span, &arg_data, 2)?;
@@ -532,7 +527,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 let sym_datum = arg_data.pop().unwrap();
 
                 self.lower_defmacro(scope, span, sym_datum, transformer_spec)?;
-                Ok(None)
+                Ok(vec![])
             }
             &Prim::DefType => {
                 expect_arg_count(span, &arg_data, 2)?;
@@ -543,17 +538,17 @@ impl<'ccx> LoweringContext<'ccx> {
                 let ty = lower_pty(scope, ty_datum)?;
                 scope.insert_binding(ident, Binding::Ty(ty));
 
-                Ok(None)
+                Ok(vec![])
             }
             _ => Err(Error::new(span, ErrorKind::ExprInsideModule)),
         }
     }
 
-    fn lower_module_expr(
+    fn lower_module_def(
         &mut self,
         scope: &mut Scope,
         datum: NsDatum,
-    ) -> Result<Option<DeferredDef>> {
+    ) -> Result<Vec<DeferredModulePrim>> {
         let span = datum.span();
 
         if let NsDatum::List(span, mut vs) = datum {
@@ -571,7 +566,7 @@ impl<'ccx> LoweringContext<'ccx> {
                             expand_macro(&mut self.ns_id_alloc, scope, span, mac, arg_data)?
                         };
 
-                        return self.lower_module_expr(scope, expanded_datum)
+                        return self.lower_module_def(scope, expanded_datum)
                             .map_err(|e| e.with_macro_invocation_span(span));
                     }
                     _ => {}
@@ -591,36 +586,37 @@ impl<'ccx> LoweringContext<'ccx> {
             Binding::Prim(Prim::Import),
         );
 
-        let mut deferred_defs = Vec::<DeferredDef>::new();
-
         // Extract all of our definitions.
-        // Variable definitions are deferred to the second pass. Imports, type and macros are
-        // resolved immediately. Everything else is forbidden.
+        // Imports, types and macros are resolved immediate and cannot refer to bindings later in
+        // the body. Exports and variable definitions (including defn) are deferred to a second
+        // pass once all binding have been introduced. All other expressions are forbidden.
+        let mut deferred_prims = Vec::<DeferredModulePrim>::new();
         for input_datum in data.into_iter() {
             let ns_datum = NsDatum::from_value(input_datum, ns_id);
-            let deferred_def = self.lower_module_expr(scope, ns_datum)?;
+            let mut new_deferred_prims = self.lower_module_def(scope, ns_datum)?;
 
-            if let Some(deferred_def) = deferred_def {
-                deferred_defs.push(deferred_def);
-            }
+            deferred_prims.append(&mut new_deferred_prims);
         }
 
-        let module_defs = deferred_defs
-            .into_iter()
-            .map(|dd| {
-                let value_expr = self.lower_expr(scope, dd.value_datum)?;
-                Ok(ModuleDef::new(dd.span, dd.destruc, value_expr))
-            })
-            .collect::<Result<Vec<ModuleDef>>>()?;
-
-        let mut exports = HashMap::new();
-        for (ident, span) in scope.exports() {
-            if ident.ns_id() == ns_id {
-                let binding = scope.get(ident).ok_or_else(|| {
-                    Error::new(*span, ErrorKind::UnboundSymbol(ident.name().clone()))
-                })?;
-
-                exports.insert(ident.name().clone(), binding);
+        // Process our variable definitions and exports
+        let mut module_defs = Vec::<ModuleDef>::new();
+        let mut exports = HashMap::<String, Binding>::new();
+        for deferred_prim in deferred_prims.into_iter() {
+            match deferred_prim {
+                DeferredModulePrim::Def(span, destruc, value_datum) => {
+                    let value_expr = self.lower_expr(scope, value_datum)?;
+                    module_defs.push(ModuleDef::new(span, destruc, value_expr));
+                }
+                DeferredModulePrim::Export(span, ident) => {
+                    if let Some(binding) = scope.get(&ident) {
+                        exports.insert(ident.into_name(), binding);
+                    } else {
+                        return Err(Error::new(
+                            span,
+                            ErrorKind::UnboundSymbol(ident.into_name()),
+                        ));
+                    }
+                }
             }
         }
 

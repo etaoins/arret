@@ -29,14 +29,12 @@ pub enum Binding {
 
 pub struct Scope {
     bindings: HashMap<Ident, Binding>,
-    exports: HashMap<Ident, Span>,
 }
 
 impl Scope {
     pub fn new_empty() -> Scope {
         Scope {
             bindings: HashMap::new(),
-            exports: HashMap::new(),
         }
     }
 
@@ -44,7 +42,6 @@ impl Scope {
         // TODO: Can we use a pointer to our parent without entering borrow checker hell?
         Scope {
             bindings: parent.bindings.clone(),
-            exports: HashMap::new(),
         }
     }
 
@@ -67,10 +64,6 @@ impl Scope {
         }
     }
 
-    pub fn insert_export(&mut self, span: Span, ident: Ident) {
-        self.exports.insert(ident, span);
-    }
-
     pub fn insert_binding(&mut self, ident: Ident, binding: Binding) {
         self.bindings.insert(ident, binding);
     }
@@ -88,10 +81,6 @@ impl Scope {
         };
 
         self.bindings.insert(new_ident.clone(), new_binding);
-    }
-
-    pub fn exports(&self) -> &HashMap<Ident, Span> {
-        &self.exports
     }
 }
 
@@ -148,6 +137,10 @@ impl Ident {
 
     pub fn name(&self) -> &String {
         &self.1
+    }
+
+    pub fn into_name(self) -> String {
+        self.1
     }
 
     pub fn with_ns_id(&self, new_ns_id: NsId) -> Ident {
