@@ -122,7 +122,7 @@ impl<'ccx> LoweringContext<'ccx> {
         let ty_datum = arg_data.pop().unwrap();
         let ident = expect_ident(arg_data.pop().unwrap())?;
 
-        let ty = lower_pty(self, scope, ty_datum)?;
+        let ty = lower_pty(scope, ty_datum)?;
 
         scope.insert_binding(ident, Binding::Ty(ty));
         Ok(())
@@ -183,7 +183,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     return Err(Error::new(span, ErrorKind::NoVecDestruc));
                 }
 
-                let ty = lower_pty(self, scope, vs.pop().unwrap())?;
+                let ty = lower_pty(scope, vs.pop().unwrap())?;
 
                 // Discard the type colon
                 vs.pop();
@@ -226,7 +226,7 @@ impl<'ccx> LoweringContext<'ccx> {
         // We can either begin with a set of polymorphic variables or a list of parameters
         if let NsDatum::Set(_, vs) = next_datum {
             let pvars = vs.into_iter()
-                .map(|pvar_datum| lower_pvar(self, scope, pvar_datum))
+                .map(|pvar_datum| lower_pvar(scope, pvar_datum))
                 .collect::<Result<Vec<(Ident, ty::PVar)>>>()?;
 
             for (ident, pvar) in pvars.into_iter() {
@@ -269,7 +269,7 @@ impl<'ccx> LoweringContext<'ccx> {
             && scope.get_datum(&rest_data[0]) == Some(Binding::TyCons(TyCons::Fun))
         {
             body_data = rest_data.split_off(2);
-            ret_ty = Some(lower_pty(self, &fun_scope, rest_data.pop().unwrap())?)
+            ret_ty = Some(lower_pty(&fun_scope, rest_data.pop().unwrap())?)
         } else {
             body_data = rest_data;
             ret_ty = None;
