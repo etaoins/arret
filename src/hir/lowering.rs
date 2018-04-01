@@ -673,20 +673,15 @@ fn module_for_str(data_str: &str) -> Result<Module> {
     let mut root_scope = Scope::new_empty();
 
     let mut test_data = data_from_str(data_str).unwrap();
-
-    test_data.insert(
-        0,
+    let mut program_data = vec![
         import_statement_for_library(&["risp", "internal", "primitives"]),
-    );
-
-    test_data.insert(
-        0,
         import_statement_for_library(&["risp", "internal", "types"]),
-    );
+    ];
+    program_data.append(&mut test_data);
 
     let mut ccx = CompileContext::new();
     let mut lcx = LoweringContext::new(&mut ccx);
-    lcx.lower_module(&mut root_scope, test_data)
+    lcx.lower_module(&mut root_scope, program_data)
 }
 
 #[cfg(test)]
