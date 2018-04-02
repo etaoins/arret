@@ -18,6 +18,12 @@
   [(do expr-data ...) ((fn () expr-data ... ))]
 ]))
 
+; emulates `apply` from R7RS and Clojure
+(export apply)
+(defmacro apply (macro-rules #{} [
+ [(apply fun fixed ... rest) (fun fixed ... rest (... ...))]
+]))
+
 (export when)
 (defmacro when (macro-rules #{} [
   [(when test body-data ...) (if test (do body-data ...) false)]
