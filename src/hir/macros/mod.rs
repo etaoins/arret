@@ -30,34 +30,43 @@ impl MacroVar {
 
 #[derive(PartialEq, Debug)]
 pub struct SpecialVars {
-    zero_or_more: Option<MacroVar>,
     literals: HashSet<MacroVar>,
 }
 
 impl SpecialVars {
-    fn is_wildcard(&self, var: &MacroVar) -> bool {
-        *var == MacroVar::Bound(Binding::Prim(Prim::Wildcard))
-    }
-
     fn is_literal(&self, var: &MacroVar) -> bool {
         self.literals.contains(var)
     }
 
-    fn is_zero_or_more(&self, var: &MacroVar) -> bool {
-        if let Some(ref zero_or_more) = self.zero_or_more {
-            zero_or_more == var
+    fn is_non_literal_prim(&self, var: &MacroVar, prim: Prim) -> bool {
+        *var == MacroVar::Bound(Binding::Prim(prim)) && !self.is_literal(var)
+    }
+
+    fn is_wildcard(&self, var: &MacroVar) -> bool {
+        self.is_non_literal_prim(var, Prim::Wildcard)
+    }
+
+    fn is_ellipsis(&self, var: &MacroVar) -> bool {
+        self.is_non_literal_prim(var, Prim::Ellipsis)
+    }
+
+    fn is_ellipsis_datum(&self, scope: &Scope, datum: &NsDatum) -> bool {
+        if let NsDatum::Ident(_, ref ident) = *datum {
+            let var = MacroVar::from_ident(scope, ident);
+            self.is_ellipsis(&var)
         } else {
             false
         }
     }
 
     fn starts_with_zero_or_more(&self, scope: &Scope, data: &[NsDatum]) -> bool {
-        if let Some(&NsDatum::Ident(_, ref next_ident)) = data.get(1) {
-            let next_var = MacroVar::from_ident(scope, next_ident);
-            self.is_zero_or_more(&next_var)
-        } else {
-            false
-        }
+        data.get(1)
+            .map(|d| self.is_ellipsis_datum(scope, d))
+            .unwrap_or(false)
+    }
+
+    fn is_escaped_ellipsis(&self, scope: &Scope, data: &[NsDatum]) -> bool {
+        data.len() == 2 && data.iter().all(|d| self.is_ellipsis_datum(scope, d))
     }
 }
 
@@ -205,17 +214,7 @@ pub fn lower_macro_rules(
         ));
     };
 
-    let default_zero_or_more = MacroVar::Bound(Binding::Prim(Prim::Ellipsis));
-    let zero_or_more = if literals.contains(&default_zero_or_more) {
-        None
-    } else {
-        Some(default_zero_or_more)
-    };
-
-    let special_vars = SpecialVars {
-        zero_or_more,
-        literals,
-    };
+    let special_vars = SpecialVars { literals };
 
     let rules = rules_values
         .into_iter()
@@ -314,7 +313,6 @@ mod test {
         let j = "#{} []";
 
         let special_vars = SpecialVars {
-            zero_or_more: Some(MacroVar::Bound(Binding::Prim(Prim::Ellipsis))),
             literals: HashSet::new(),
         };
 

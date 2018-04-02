@@ -1455,6 +1455,33 @@ mod test {
     }
 
     #[test]
+    fn expand_with_escaped_ellipsis() {
+        let j1 = "(defmacro m (macro-rules #{} [[(m) '(... ...)]]))";
+        let t1 = "                                         ^^^     ";
+        let j2 = "(m)";
+
+        let j = &[j1, j2].join("");
+        let t = t1;
+
+        let expected = Expr::Lit(Datum::Sym(t2s(t), "...".to_owned()));
+        assert_eq!(expected, body_expr_for_str(j).unwrap());
+    }
+
+    #[test]
+    fn expand_with_literal_underscore() {
+        let j1 = "(defmacro m (macro-rules #{_} [[(m _) 1][(m a) a]]))";
+        let sp = "                                                    ";
+        let j2 = "(m 2)";
+        let t2 = "   ^ ";
+
+        let j = &[j1, j2].join("");
+        let t = &[sp, t2].join("");
+
+        let expected = Expr::Lit(Datum::Int(t2s(t), 2));
+        assert_eq!(expected, body_expr_for_str(j).unwrap());
+    }
+
+    #[test]
     fn expand_with_non_matching_literals() {
         let j1 = "(defmacro for (macro-rules #{in} [[(for x in y) [x y]]]))";
         let t1 = "                                                         ";

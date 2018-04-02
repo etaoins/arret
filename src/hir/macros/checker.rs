@@ -93,7 +93,7 @@ impl<'a> FindVarsContext<'a> {
             return Ok(());
         }
 
-        if self.special_vars.is_zero_or_more(&macro_var) {
+        if self.special_vars.is_ellipsis(&macro_var) {
             return Err(Error::new(
                 span,
                 ErrorKind::IllegalArg(
@@ -132,7 +132,7 @@ impl<'a> FindVarsContext<'a> {
     fn visit_datum(&mut self, pattern_vars: &mut FoundVars, pattern: &NsDatum) -> FindVarsResult {
         match *pattern {
             NsDatum::Ident(span, ref ident) => self.visit_ident(pattern_vars, span, ident),
-            NsDatum::List(_, ref vs) => self.visit_seq(pattern_vars, vs),
+            NsDatum::List(_, ref vs) => self.visit_list(pattern_vars, vs),
             NsDatum::Vec(_, ref vs) => self.visit_seq(pattern_vars, vs),
             NsDatum::Set(span, ref vs) => self.visit_set(pattern_vars, span, vs),
             _ => {
@@ -180,6 +180,16 @@ impl<'a> FindVarsContext<'a> {
         }
 
         Ok(())
+    }
+
+    fn visit_list(&mut self, pattern_vars: &mut FoundVars, patterns: &[NsDatum]) -> FindVarsResult {
+        if self.input_type == FindVarsInputType::Template
+            && self.special_vars.is_escaped_ellipsis(self.scope, patterns)
+        {
+            Ok(())
+        } else {
+            self.visit_seq(pattern_vars, patterns)
+        }
     }
 
     fn visit_set(

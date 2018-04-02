@@ -107,10 +107,23 @@ impl<'a> ExpandContext<'a> {
         result
     }
 
+    fn expand_list(
+        &mut self,
+        cursor: &mut ExpandCursor,
+        span: Span,
+        templates: &[NsDatum],
+    ) -> NsDatum {
+        if self.special_vars.is_escaped_ellipsis(self.scope, templates) {
+            templates[1].clone()
+        } else {
+            NsDatum::List(span, self.expand_slice(cursor, templates))
+        }
+    }
+
     fn expand_datum(&mut self, cursor: &mut ExpandCursor, template: &NsDatum) -> NsDatum {
         match template {
             &NsDatum::Ident(span, ref ident) => self.expand_ident(cursor, span, ident),
-            &NsDatum::List(span, ref vs) => NsDatum::List(span, self.expand_slice(cursor, vs)),
+            &NsDatum::List(span, ref vs) => self.expand_list(cursor, span, vs),
             &NsDatum::Vec(span, ref vs) => NsDatum::Vec(span, self.expand_slice(cursor, vs)),
             &NsDatum::Set(span, ref vs) => NsDatum::Set(span, self.expand_slice(cursor, vs)),
             other => other.clone(),
