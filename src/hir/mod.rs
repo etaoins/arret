@@ -69,9 +69,16 @@ pub struct Cond {
 }
 
 #[derive(PartialEq, Debug)]
+pub struct App {
+    fun_expr: Box<Expr>,
+    fixed_arg_exprs: Vec<Expr>,
+    rest_arg_expr: Option<Box<Expr>>,
+}
+
+#[derive(PartialEq, Debug)]
 pub enum Expr {
     Lit(Datum),
-    App(Span, Box<Expr>, Vec<Expr>),
+    App(Span, App),
     Fun(Span, Fun),
     Def(Span, Destruc, Box<Expr>),
     Cond(Span, Cond),

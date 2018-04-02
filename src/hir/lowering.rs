@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::io::Read;
 
-use hir::{Cond, Destruc, Expr, Fun, Var, VarId};
+use hir::{App, Cond, Destruc, Expr, Fun, Var, VarId};
 use hir::loader::{load_library_data, load_module_data, LibraryName};
 use hir::scope::{Binding, MacroId, Scope};
 use hir::ns::{Ident, NsDatum, NsId, NsIdAlloc};
@@ -468,15 +468,29 @@ impl<'ccx> LoweringContext<'ccx> {
         &mut self,
         scope: &mut Scope,
         span: Span,
-        fn_expr: Expr,
+        fun_expr: Expr,
         arg_data: Vec<NsDatum>,
     ) -> Result<Expr> {
-        let arg_exprs = arg_data
+        let (fixed_arg_data, rest_arg_datum) = split_into_fixed_and_rest(scope, arg_data);
+
+        let fixed_arg_exprs = fixed_arg_data
             .into_iter()
             .map(|arg_datum| self.lower_inner_expr(scope, arg_datum))
             .collect::<Result<Vec<Expr>>>()?;
 
-        Ok(Expr::App(span, Box::new(fn_expr), arg_exprs))
+        let rest_arg_expr = match rest_arg_datum {
+            Some(rest_arg_datum) => Some(Box::new(self.lower_inner_expr(scope, rest_arg_datum)?)),
+            None => None,
+        };
+
+        Ok(Expr::App(
+            span,
+            App {
+                fun_expr: Box::new(fun_expr),
+                fixed_arg_exprs,
+                rest_arg_expr,
+            },
+        ))
     }
 
     fn generic_lower_expr<F>(
@@ -1190,7 +1204,7 @@ mod test {
     }
 
     #[test]
-    fn expr_apply() {
+    fn fixed_expr_apply() {
         let j = "(1 2 3)";
         let t = "^^^^^^^";
         let u = " ^     ";
@@ -1199,11 +1213,34 @@ mod test {
 
         let expected = Expr::App(
             t2s(t),
-            Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
-            vec![
-                Expr::Lit(Datum::Int(t2s(v), 2)),
-                Expr::Lit(Datum::Int(t2s(w), 3)),
-            ],
+            App {
+                fun_expr: Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
+                fixed_arg_exprs: vec![
+                    Expr::Lit(Datum::Int(t2s(v), 2)),
+                    Expr::Lit(Datum::Int(t2s(w), 3)),
+                ],
+                rest_arg_expr: None,
+            },
+        );
+
+        assert_eq!(expected, body_expr_for_str(j).unwrap());
+    }
+
+    #[test]
+    fn rest_expr_apply() {
+        let j = "(1 2 3 ...)";
+        let t = "^^^^^^^^^^^";
+        let u = " ^         ";
+        let v = "   ^       ";
+        let w = "     ^     ";
+
+        let expected = Expr::App(
+            t2s(t),
+            App {
+                fun_expr: Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
+                fixed_arg_exprs: vec![Expr::Lit(Datum::Int(t2s(v), 2))],
+                rest_arg_expr: Some(Box::new(Expr::Lit(Datum::Int(t2s(w), 3)))),
+            },
         );
 
         assert_eq!(expected, body_expr_for_str(j).unwrap());
