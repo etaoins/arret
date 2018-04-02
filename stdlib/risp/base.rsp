@@ -1,4 +1,5 @@
 (import [risp internal primitives])
+(import [risp internal types])
 (export def fn if quote export ... _ defmacro macro-rules)
 
 (export let)
@@ -23,6 +24,10 @@
 (defmacro apply (macro-rules #{} [
  [(apply fun fixed ... rest) (fun fixed ... rest (... ...))]
 ]))
+
+(export list)
+(defn list #{A} [l : A] -> A
+  l)
 
 (export when)
 (defmacro when (macro-rules #{} [

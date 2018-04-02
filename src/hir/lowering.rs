@@ -269,17 +269,6 @@ impl<'ccx> LoweringContext<'ccx> {
             vec![]
         };
 
-        // TODO: It would be consistent to also allow assigning the entire argument list to a
-        // symbol. This would be the same as using a list with a single rest parameter. It could
-        // potentially be confusing/ambiguous to allow both so require a list for now.
-        if let NsDatum::List(_, _) = next_datum {
-        } else {
-            return Err(Error::new(
-                next_datum.span(),
-                ErrorKind::IllegalArg("parameter declaration should be a list".to_owned()),
-            ));
-        }
-
         // Pull out our params
         let params = self.lower_destruc(&mut fun_scope, next_datum)?;
 
@@ -994,19 +983,6 @@ mod test {
     }
 
     #[test]
-    fn fn_with_non_list_param_decl() {
-        let j = "(fn [])";
-        let t = "    ^^ ";
-
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg("parameter declaration should be a list".to_owned()),
-        );
-
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
     fn fn_with_bad_destruc_param() {
         let j = "(fn (1))";
         let t = "     ^  ";
@@ -1074,6 +1050,32 @@ mod test {
             ],
             None,
         );
+
+        let expected = Expr::Fun(
+            t2s(t),
+            Fun {
+                pvar_ids: vec![],
+                params,
+                ret_ty: None,
+                body_expr: Box::new(Expr::Ref(t2s(u), param_var_id)),
+            },
+        );
+
+        assert_eq!(expected, body_expr_for_str(j).unwrap());
+    }
+
+    #[test]
+    fn ret_arg_list_fn() {
+        let j = "(fn x x)";
+        let t = "^^^^^^^^";
+        let u = "      ^ ";
+
+        let param_var_id = VarId::new(2);
+        let params = Destruc::Var(Var {
+            id: param_var_id,
+            source_name: "x".to_owned(),
+            bound: None,
+        });
 
         let expected = Expr::Fun(
             t2s(t),
