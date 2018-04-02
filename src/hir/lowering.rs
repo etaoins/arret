@@ -9,7 +9,7 @@ use hir::prim::Prim;
 use hir::module::{Module, ModuleDef};
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::error::{Error, ErrorKind, Result};
-use hir::types::{lower_pty, lower_pvar, TyCons};
+use hir::types::{lower_pvar, lower_ty, TyCons};
 use hir::util::{expect_arg_count, expect_ident, pop_vec_front, split_into_fixed_and_rest};
 use ty;
 use syntax::datum::Datum;
@@ -135,7 +135,7 @@ impl<'ccx> LoweringContext<'ccx> {
         let ty_datum = arg_data.pop().unwrap();
         let ident = expect_ident(arg_data.pop().unwrap())?;
 
-        let ty = lower_pty(scope, ty_datum)?;
+        let ty = lower_ty(scope, ty_datum)?;
 
         scope.insert_binding(ident, Binding::Ty(ty));
         Ok(())
@@ -196,7 +196,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     return Err(Error::new(span, ErrorKind::NoVecDestruc));
                 }
 
-                let ty = lower_pty(scope, vs.pop().unwrap())?;
+                let ty = lower_ty(scope, vs.pop().unwrap())?;
 
                 // Discard the type colon
                 vs.pop();
@@ -279,7 +279,7 @@ impl<'ccx> LoweringContext<'ccx> {
             && scope.get_datum(&rest_data[0]) == Some(Binding::TyCons(TyCons::Fun))
         {
             body_data = rest_data.split_off(2);
-            ret_ty = Some(lower_pty(&fun_scope, rest_data.pop().unwrap())?)
+            ret_ty = Some(lower_ty(&fun_scope, rest_data.pop().unwrap())?)
         } else {
             body_data = rest_data;
             ret_ty = None;
@@ -339,7 +339,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 expect_arg_count(span, &arg_data, 1)?;
                 Ok(Expr::TyPred(
                     span,
-                    lower_pty(scope, arg_data.pop().unwrap())?,
+                    lower_ty(scope, arg_data.pop().unwrap())?,
                 ))
             }
             Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),

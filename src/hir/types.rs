@@ -34,7 +34,7 @@ pub fn lower_pvar(scope: &Scope, pvar_datum: NsDatum) -> Result<(Ident, ty::PVar
                 && scope.get_datum(&arg_data[1]) == Some(Binding::Prim(Prim::TyColon))
             {
                 let bound_datum = arg_data.pop().unwrap();
-                let bound_ty = lower_pty(scope, bound_datum)?;
+                let bound_ty = lower_ty(scope, bound_datum)?;
 
                 // Discard the : completely
                 arg_data.pop();
@@ -61,11 +61,11 @@ fn lower_list_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
 
     let fixed_tys = fixed
         .into_iter()
-        .map(|arg_datum| lower_pty(scope, arg_datum))
+        .map(|arg_datum| lower_ty(scope, arg_datum))
         .collect::<Result<Vec<ty::Poly>>>()?;
 
     let rest_ty = match rest {
-        Some(rest) => Some(lower_pty(scope, rest)?),
+        Some(rest) => Some(lower_ty(scope, rest)?),
         None => None,
     };
 
@@ -77,11 +77,11 @@ fn lower_vec_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
 
     let fixed_tys = fixed
         .into_iter()
-        .map(|arg_datum| lower_pty(scope, arg_datum))
+        .map(|arg_datum| lower_ty(scope, arg_datum))
         .collect::<Result<Vec<ty::Poly>>>()?;
 
     let start_ty = match start {
-        Some(start) => Some(lower_pty(scope, start)?),
+        Some(start) => Some(lower_ty(scope, start)?),
         None => None,
     };
 
@@ -102,7 +102,7 @@ fn lower_fun_cons(
         ));
     }
 
-    let ret_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+    let ret_ty = lower_ty(scope, arg_data.pop().unwrap())?;
     let params_ty = lower_list_cons(scope, arg_data)?;
 
     Ok(ty::Fun::new(impure, params_ty, ret_ty).into())
@@ -113,7 +113,7 @@ fn lower_infix_fun_cons(
     impure: bool,
     mut arg_data: Vec<NsDatum>,
 ) -> Result<ty::Poly> {
-    let ret_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+    let ret_ty = lower_ty(scope, arg_data.pop().unwrap())?;
 
     // Discard the constructor
     arg_data.pop();
@@ -133,26 +133,26 @@ fn lower_ty_cons_apply(
         TyCons::List => lower_list_cons(scope, arg_data),
         TyCons::Listof => {
             expect_arg_count(span, &arg_data, 1)?;
-            let rest_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+            let rest_ty = lower_ty(scope, arg_data.pop().unwrap())?;
             Ok(ty::NonFun::List(vec![], Some(rest_ty)).into())
         }
         TyCons::Vector => lower_vec_cons(scope, arg_data),
         TyCons::Vectorof => {
             expect_arg_count(span, &arg_data, 1)?;
-            let start_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+            let start_ty = lower_ty(scope, arg_data.pop().unwrap())?;
             Ok(ty::NonFun::Vec(Some(start_ty), vec![]).into())
         }
         TyCons::Fun => lower_fun_cons(scope, span, "->", false, arg_data),
         TyCons::ImpureFun => lower_fun_cons(scope, span, "->!", true, arg_data),
         TyCons::Set => {
             expect_arg_count(span, &arg_data, 1)?;
-            let member_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+            let member_ty = lower_ty(scope, arg_data.pop().unwrap())?;
             Ok(ty::NonFun::Set(member_ty).into())
         }
         TyCons::Hash => {
             expect_arg_count(span, &arg_data, 2)?;
-            let value_ty = lower_pty(scope, arg_data.pop().unwrap())?;
-            let key_ty = lower_pty(scope, arg_data.pop().unwrap())?;
+            let value_ty = lower_ty(scope, arg_data.pop().unwrap())?;
+            let key_ty = lower_ty(scope, arg_data.pop().unwrap())?;
             Ok(ty::NonFun::Hash(key_ty, value_ty).into())
         }
     }
@@ -180,7 +180,7 @@ fn lower_ident(scope: &Scope, span: Span, ident: Ident) -> Result<ty::Poly> {
     }
 }
 
-pub fn lower_pty(scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
+pub fn lower_ty(scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
     match datum {
         NsDatum::List(span, mut vs) => {
             if vs.is_empty() {
@@ -271,7 +271,7 @@ mod test {
     use hir::prim::insert_prim_exports;
     use syntax::span::t2s;
 
-    fn pty_for_str(datum_str: &str) -> Result<ty::Poly> {
+    fn ty_for_str(datum_str: &str) -> Result<ty::Poly> {
         use hir::ns::NsId;
         let test_ns_id = NsId::new(1);
 
@@ -288,15 +288,15 @@ mod test {
 
         let test_datum = datum_from_str(datum_str).unwrap();
 
-        lower_pty(&scope, NsDatum::from_syntax_datum(test_ns_id, test_datum))
+        lower_ty(&scope, NsDatum::from_syntax_datum(test_ns_id, test_datum))
     }
 
     fn assert_ty_for_str(expected: ty::Poly, datum_str: &str) {
-        assert_eq!(expected, pty_for_str(datum_str).unwrap());
+        assert_eq!(expected, ty_for_str(datum_str).unwrap());
     }
 
     fn assert_err_for_str(err: Error, datum_str: &str) {
-        assert_eq!(err, pty_for_str(datum_str).unwrap_err());
+        assert_eq!(err, ty_for_str(datum_str).unwrap_err());
     }
 
     #[test]
