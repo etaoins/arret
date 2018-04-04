@@ -65,8 +65,25 @@ pub enum Poly {
     Fixed(Ty<Poly>),
 }
 
-impl From<Ty<Poly>> for Poly {
-    fn from(ty: Ty<Poly>) -> Poly {
-        Poly::Fixed(ty)
+impl Ty<Poly> {
+    pub fn into_poly(self) -> Poly {
+        Poly::Fixed(self)
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct Mono(Ty<Mono>);
+
+impl Mono {
+    #[allow(dead_code)]
+    fn as_ty(&self) -> &Ty<Mono> {
+        &self.0
+    }
+}
+
+impl Ty<Mono> {
+    #[allow(dead_code)]
+    pub fn into_mono(self) -> Mono {
+        Mono(self)
     }
 }

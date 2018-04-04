@@ -69,7 +69,7 @@ fn lower_list_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
         None => None,
     };
 
-    Ok(ty::Ty::List(fixed_tys, rest_ty).into())
+    Ok(ty::Ty::List(fixed_tys, rest_ty).into_poly())
 }
 
 fn lower_vec_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
@@ -85,7 +85,7 @@ fn lower_vec_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
         None => None,
     };
 
-    Ok(ty::Ty::Vec(start_ty, fixed_tys).into())
+    Ok(ty::Ty::Vec(start_ty, fixed_tys).into_poly())
 }
 
 fn lower_fun_cons(
@@ -105,7 +105,7 @@ fn lower_fun_cons(
     let ret_ty = lower_ty(scope, arg_data.pop().unwrap())?;
     let params_ty = lower_list_cons(scope, arg_data)?;
 
-    Ok(ty::Ty::new_fun(impure, params_ty, ret_ty).into())
+    Ok(ty::Ty::new_fun(impure, params_ty, ret_ty).into_poly())
 }
 
 fn lower_infix_fun_cons(
@@ -120,7 +120,7 @@ fn lower_infix_fun_cons(
 
     let params_ty = lower_list_cons(scope, arg_data)?;
 
-    Ok(ty::Ty::new_fun(impure, params_ty, ret_ty).into())
+    Ok(ty::Ty::new_fun(impure, params_ty, ret_ty).into_poly())
 }
 
 fn lower_ty_cons_apply(
@@ -134,34 +134,34 @@ fn lower_ty_cons_apply(
         TyCons::Listof => {
             expect_arg_count(span, &arg_data, 1)?;
             let rest_ty = lower_ty(scope, arg_data.pop().unwrap())?;
-            Ok(ty::Ty::List(vec![], Some(Box::new(rest_ty))).into())
+            Ok(ty::Ty::List(vec![], Some(Box::new(rest_ty))).into_poly())
         }
         TyCons::Vector => lower_vec_cons(scope, arg_data),
         TyCons::Vectorof => {
             expect_arg_count(span, &arg_data, 1)?;
             let start_ty = lower_ty(scope, arg_data.pop().unwrap())?;
-            Ok(ty::Ty::Vec(Some(Box::new(start_ty)), vec![]).into())
+            Ok(ty::Ty::Vec(Some(Box::new(start_ty)), vec![]).into_poly())
         }
         TyCons::Fun => lower_fun_cons(scope, span, "->", false, arg_data),
         TyCons::ImpureFun => lower_fun_cons(scope, span, "->!", true, arg_data),
         TyCons::Set => {
             expect_arg_count(span, &arg_data, 1)?;
             let member_ty = lower_ty(scope, arg_data.pop().unwrap())?;
-            Ok(ty::Ty::Set(Box::new(member_ty)).into())
+            Ok(ty::Ty::Set(Box::new(member_ty)).into_poly())
         }
         TyCons::Hash => {
             expect_arg_count(span, &arg_data, 2)?;
             let value_ty = lower_ty(scope, arg_data.pop().unwrap())?;
             let key_ty = lower_ty(scope, arg_data.pop().unwrap())?;
-            Ok(ty::Ty::Hash(Box::new(key_ty), Box::new(value_ty)).into())
+            Ok(ty::Ty::Hash(Box::new(key_ty), Box::new(value_ty)).into_poly())
         }
     }
 }
 
 fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
     match datum {
-        NsDatum::Bool(_, v) => Ok(ty::Ty::Bool(v).into()),
-        NsDatum::Ident(_, ident) => Ok(ty::Ty::Sym(ident.name().clone()).into()),
+        NsDatum::Bool(_, v) => Ok(ty::Ty::Bool(v).into_poly()),
+        NsDatum::Ident(_, ident) => Ok(ty::Ty::Sym(ident.name().clone()).into_poly()),
         _ => Err(Error::new(
             datum.span(),
             ErrorKind::IllegalArg("only boolean and symbol literals are supported".to_owned()),
@@ -184,7 +184,7 @@ pub fn lower_ty(scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
     match datum {
         NsDatum::List(span, mut vs) => {
             if vs.is_empty() {
-                return Ok(ty::Ty::List(vec![], None).into());
+                return Ok(ty::Ty::List(vec![], None).into_poly());
             }
 
             if vs.len() >= 3 {
@@ -246,13 +246,16 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
 
     export_ty!(
         "Bool",
-        ty::Ty::Union(vec![ty::Ty::Bool(false).into(), ty::Ty::Bool(true).into()]).into()
+        ty::Ty::Union(vec![
+            ty::Ty::Bool(false).into_poly(),
+            ty::Ty::Bool(true).into_poly(),
+        ]).into_poly()
     );
-    export_ty!("Symbol", ty::Ty::AnySym.into());
-    export_ty!("String", ty::Ty::Str.into());
-    export_ty!("Int", ty::Ty::Int.into());
-    export_ty!("Float", ty::Ty::Float.into());
-    export_ty!("Char", ty::Ty::Char.into());
+    export_ty!("Symbol", ty::Ty::AnySym.into_poly());
+    export_ty!("String", ty::Ty::Str.into_poly());
+    export_ty!("Int", ty::Ty::Int.into_poly());
+    export_ty!("Float", ty::Ty::Float.into_poly());
+    export_ty!("Char", ty::Ty::Char.into_poly());
 
     export_ty_cons!("List", TyCons::List);
     export_ty_cons!("Listof", TyCons::Listof);
@@ -303,40 +306,40 @@ mod test {
     fn true_literal() {
         let j = "true";
 
-        let expected = ty::Ty::Bool(true);
-        assert_ty_for_str(expected.into(), j);
+        let expected = ty::Ty::Bool(true).into_poly();
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn false_literal() {
         let j = "false";
 
-        let expected = ty::Ty::Bool(false);
-        assert_ty_for_str(expected.into(), j);
+        let expected = ty::Ty::Bool(false).into_poly();
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn sym_literal() {
         let j = "'foo";
 
-        let expected = ty::Ty::Sym("foo".to_owned());
-        assert_ty_for_str(expected.into(), j);
+        let expected = ty::Ty::Sym("foo".to_owned()).into_poly();
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn empty_list_literal() {
         let j = "()";
 
-        let expected = ty::Ty::List(vec![], None);
-        assert_ty_for_str(expected.into(), j);
+        let expected = ty::Ty::List(vec![], None).into_poly();
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn ty_ref() {
         let j = "Symbol";
 
-        let expected = ty::Ty::AnySym;
-        assert_ty_for_str(expected.into(), j);
+        let expected = ty::Ty::AnySym.into_poly();
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -382,10 +385,10 @@ mod test {
     fn listof_cons() {
         let j = "(Listof true)";
 
-        let inner_ty = ty::Ty::Bool(true);
-        let expected = ty::Ty::List(vec![], Some(Box::new(inner_ty.into())));
+        let inner_ty = ty::Ty::Bool(true).into_poly();
+        let expected = ty::Ty::List(vec![], Some(Box::new(inner_ty))).into_poly();
 
-        assert_ty_for_str(expected.into(), j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -393,11 +396,14 @@ mod test {
         let j = "(List true false)";
 
         let expected = ty::Ty::List(
-            vec![ty::Ty::Bool(true).into(), ty::Ty::Bool(false).into()],
+            vec![
+                ty::Ty::Bool(true).into_poly(),
+                ty::Ty::Bool(false).into_poly(),
+            ],
             None,
-        );
+        ).into_poly();
 
-        assert_ty_for_str(expected.into(), j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -405,21 +411,21 @@ mod test {
         let j = "(List true false ...)";
 
         let expected = ty::Ty::List(
-            vec![ty::Ty::Bool(true).into()],
-            Some(Box::new(ty::Ty::Bool(false).into())),
-        );
+            vec![ty::Ty::Bool(true).into_poly()],
+            Some(Box::new(ty::Ty::Bool(false).into_poly())),
+        ).into_poly();
 
-        assert_ty_for_str(expected.into(), j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn vectorof_cons() {
         let j = "(Vectorof true)";
 
-        let inner_ty = ty::Ty::Bool(true);
-        let expected = ty::Ty::Vec(Some(Box::new(inner_ty.into())), vec![]);
+        let inner_ty = ty::Ty::Bool(true).into_poly();
+        let expected = ty::Ty::Vec(Some(Box::new(inner_ty)), vec![]).into_poly();
 
-        assert_ty_for_str(expected.into(), j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -428,10 +434,13 @@ mod test {
 
         let expected = ty::Ty::Vec(
             None,
-            vec![ty::Ty::Bool(true).into(), ty::Ty::Bool(false).into()],
-        );
+            vec![
+                ty::Ty::Bool(true).into_poly(),
+                ty::Ty::Bool(false).into_poly(),
+            ],
+        ).into_poly();
 
-        assert_ty_for_str(expected.into(), j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -439,11 +448,11 @@ mod test {
         let j = "(Vector false ... true)";
 
         let expected = ty::Ty::Vec(
-            Some(Box::new(ty::Ty::Bool(false).into())),
-            vec![ty::Ty::Bool(true).into()],
-        );
+            Some(Box::new(ty::Ty::Bool(false).into_poly())),
+            vec![ty::Ty::Bool(true).into_poly()],
+        ).into_poly();
 
-        assert_ty_for_str(expected.into(), j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -464,11 +473,11 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             false,
-            ty::Ty::List(vec![], None).into(),
-            ty::Ty::Bool(true).into(),
-        );
+            ty::Ty::List(vec![], None).into_poly(),
+            ty::Ty::Bool(true).into_poly(),
+        ).into_poly();
 
-        assert_ty_for_str(expected.into(), j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -477,11 +486,11 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             true,
-            ty::Ty::List(vec![], None).into(),
-            ty::Ty::Bool(true).into(),
-        );
+            ty::Ty::List(vec![], None).into_poly(),
+            ty::Ty::Bool(true).into_poly(),
+        ).into_poly();
 
-        assert_ty_for_str(expected.into(), j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -490,11 +499,11 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             false,
-            ty::Ty::List(vec![ty::Ty::Bool(false).into()], None).into(),
-            ty::Ty::Bool(true).into(),
-        );
+            ty::Ty::List(vec![ty::Ty::Bool(false).into_poly()], None).into_poly(),
+            ty::Ty::Bool(true).into_poly(),
+        ).into_poly();
 
-        assert_ty_for_str(expected.into(), j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -503,11 +512,11 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             false,
-            ty::Ty::List(vec![], Some(Box::new(ty::Ty::AnySym.into()))).into(),
-            ty::Ty::Bool(true).into(),
-        );
+            ty::Ty::List(vec![], Some(Box::new(ty::Ty::AnySym.into_poly()))).into_poly(),
+            ty::Ty::Bool(true).into_poly(),
+        ).into_poly();
 
-        assert_ty_for_str(expected.into(), j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -516,11 +525,11 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             false,
-            ty::Ty::List(vec![ty::Ty::Bool(false).into()], None).into(),
-            ty::Ty::Bool(true).into(),
-        );
+            ty::Ty::List(vec![ty::Ty::Bool(false).into_poly()], None).into_poly(),
+            ty::Ty::Bool(true).into_poly(),
+        ).into_poly();
 
-        assert_ty_for_str(expected.into(), j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -530,23 +539,23 @@ mod test {
         let expected = ty::Ty::new_fun(
             true,
             ty::Ty::List(
-                vec![ty::Ty::Str.into()],
-                Some(Box::new(ty::Ty::AnySym.into())),
-            ).into(),
-            ty::Ty::Bool(true).into(),
-        );
+                vec![ty::Ty::Str.into_poly()],
+                Some(Box::new(ty::Ty::AnySym.into_poly())),
+            ).into_poly(),
+            ty::Ty::Bool(true).into_poly(),
+        ).into_poly();
 
-        assert_ty_for_str(expected.into(), j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn set_cons() {
         let j = "(Setof true)";
 
-        let inner_ty = ty::Ty::Bool(true);
-        let expected = ty::Ty::Set(Box::new(inner_ty.into()));
+        let inner_ty = ty::Ty::Bool(true).into_poly();
+        let expected = ty::Ty::Set(Box::new(inner_ty)).into_poly();
 
-        assert_ty_for_str(expected.into(), j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -555,8 +564,9 @@ mod test {
 
         let key_ty = ty::Ty::Bool(true);
         let value_ty = ty::Ty::Bool(false);
-        let expected = ty::Ty::Hash(Box::new(key_ty.into()), Box::new(value_ty.into()));
+        let expected =
+            ty::Ty::Hash(Box::new(key_ty.into_poly()), Box::new(value_ty.into_poly())).into_poly();
 
-        assert_ty_for_str(expected.into(), j);
+        assert_ty_for_str(expected, j);
     }
 }
