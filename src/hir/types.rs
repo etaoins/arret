@@ -65,11 +65,11 @@ fn lower_list_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
         .collect::<Result<Vec<ty::Poly>>>()?;
 
     let rest_ty = match rest {
-        Some(rest) => Some(lower_ty(scope, rest)?),
+        Some(rest) => Some(Box::new(lower_ty(scope, rest)?)),
         None => None,
     };
 
-    Ok(ty::NonFun::List(fixed_tys, rest_ty).into())
+    Ok(ty::Ty::List(fixed_tys, rest_ty).into())
 }
 
 fn lower_vec_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
@@ -81,11 +81,11 @@ fn lower_vec_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
         .collect::<Result<Vec<ty::Poly>>>()?;
 
     let start_ty = match start {
-        Some(start) => Some(lower_ty(scope, start)?),
+        Some(start) => Some(Box::new(lower_ty(scope, start)?)),
         None => None,
     };
 
-    Ok(ty::NonFun::Vec(start_ty, fixed_tys).into())
+    Ok(ty::Ty::Vec(start_ty, fixed_tys).into())
 }
 
 fn lower_fun_cons(
@@ -105,7 +105,7 @@ fn lower_fun_cons(
     let ret_ty = lower_ty(scope, arg_data.pop().unwrap())?;
     let params_ty = lower_list_cons(scope, arg_data)?;
 
-    Ok(ty::Fun::new(impure, params_ty, ret_ty).into())
+    Ok(ty::Ty::new_fun(impure, params_ty, ret_ty).into())
 }
 
 fn lower_infix_fun_cons(
@@ -120,7 +120,7 @@ fn lower_infix_fun_cons(
 
     let params_ty = lower_list_cons(scope, arg_data)?;
 
-    Ok(ty::Fun::new(impure, params_ty, ret_ty).into())
+    Ok(ty::Ty::new_fun(impure, params_ty, ret_ty).into())
 }
 
 fn lower_ty_cons_apply(
@@ -134,34 +134,34 @@ fn lower_ty_cons_apply(
         TyCons::Listof => {
             expect_arg_count(span, &arg_data, 1)?;
             let rest_ty = lower_ty(scope, arg_data.pop().unwrap())?;
-            Ok(ty::NonFun::List(vec![], Some(rest_ty)).into())
+            Ok(ty::Ty::List(vec![], Some(Box::new(rest_ty))).into())
         }
         TyCons::Vector => lower_vec_cons(scope, arg_data),
         TyCons::Vectorof => {
             expect_arg_count(span, &arg_data, 1)?;
             let start_ty = lower_ty(scope, arg_data.pop().unwrap())?;
-            Ok(ty::NonFun::Vec(Some(start_ty), vec![]).into())
+            Ok(ty::Ty::Vec(Some(Box::new(start_ty)), vec![]).into())
         }
         TyCons::Fun => lower_fun_cons(scope, span, "->", false, arg_data),
         TyCons::ImpureFun => lower_fun_cons(scope, span, "->!", true, arg_data),
         TyCons::Set => {
             expect_arg_count(span, &arg_data, 1)?;
             let member_ty = lower_ty(scope, arg_data.pop().unwrap())?;
-            Ok(ty::NonFun::Set(member_ty).into())
+            Ok(ty::Ty::Set(Box::new(member_ty)).into())
         }
         TyCons::Hash => {
             expect_arg_count(span, &arg_data, 2)?;
             let value_ty = lower_ty(scope, arg_data.pop().unwrap())?;
             let key_ty = lower_ty(scope, arg_data.pop().unwrap())?;
-            Ok(ty::NonFun::Hash(key_ty, value_ty).into())
+            Ok(ty::Ty::Hash(Box::new(key_ty), Box::new(value_ty)).into())
         }
     }
 }
 
 fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
     match datum {
-        NsDatum::Bool(_, v) => Ok(ty::NonFun::Bool(v).into()),
-        NsDatum::Ident(_, ident) => Ok(ty::NonFun::Sym(ident.name().clone()).into()),
+        NsDatum::Bool(_, v) => Ok(ty::Ty::Bool(v).into()),
+        NsDatum::Ident(_, ident) => Ok(ty::Ty::Sym(ident.name().clone()).into()),
         _ => Err(Error::new(
             datum.span(),
             ErrorKind::IllegalArg("only boolean and symbol literals are supported".to_owned()),
@@ -184,7 +184,7 @@ pub fn lower_ty(scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
     match datum {
         NsDatum::List(span, mut vs) => {
             if vs.is_empty() {
-                return Ok(ty::NonFun::List(vec![], None).into());
+                return Ok(ty::Ty::List(vec![], None).into());
             }
 
             if vs.len() >= 3 {
@@ -246,13 +246,13 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
 
     export_ty!(
         "Bool",
-        union_ty![ty::NonFun::Bool(false), ty::NonFun::Bool(true)]
+        ty::Ty::Union(vec![ty::Ty::Bool(false).into(), ty::Ty::Bool(true).into()]).into()
     );
-    export_ty!("Symbol", ty::NonFun::AnySym.into());
-    export_ty!("String", ty::NonFun::Str.into());
-    export_ty!("Int", ty::NonFun::Int.into());
-    export_ty!("Float", ty::NonFun::Float.into());
-    export_ty!("Char", ty::NonFun::Char.into());
+    export_ty!("Symbol", ty::Ty::AnySym.into());
+    export_ty!("String", ty::Ty::Str.into());
+    export_ty!("Int", ty::Ty::Int.into());
+    export_ty!("Float", ty::Ty::Float.into());
+    export_ty!("Char", ty::Ty::Char.into());
 
     export_ty_cons!("List", TyCons::List);
     export_ty_cons!("Listof", TyCons::Listof);
@@ -303,7 +303,7 @@ mod test {
     fn true_literal() {
         let j = "true";
 
-        let expected = ty::NonFun::Bool(true);
+        let expected = ty::Ty::Bool(true);
         assert_ty_for_str(expected.into(), j);
     }
 
@@ -311,7 +311,7 @@ mod test {
     fn false_literal() {
         let j = "false";
 
-        let expected = ty::NonFun::Bool(false);
+        let expected = ty::Ty::Bool(false);
         assert_ty_for_str(expected.into(), j);
     }
 
@@ -319,7 +319,7 @@ mod test {
     fn sym_literal() {
         let j = "'foo";
 
-        let expected = ty::NonFun::Sym("foo".to_owned());
+        let expected = ty::Ty::Sym("foo".to_owned());
         assert_ty_for_str(expected.into(), j);
     }
 
@@ -327,7 +327,7 @@ mod test {
     fn empty_list_literal() {
         let j = "()";
 
-        let expected = ty::NonFun::List(vec![], None);
+        let expected = ty::Ty::List(vec![], None);
         assert_ty_for_str(expected.into(), j);
     }
 
@@ -335,7 +335,7 @@ mod test {
     fn ty_ref() {
         let j = "Symbol";
 
-        let expected = ty::NonFun::AnySym;
+        let expected = ty::Ty::AnySym;
         assert_ty_for_str(expected.into(), j);
     }
 
@@ -382,8 +382,8 @@ mod test {
     fn listof_cons() {
         let j = "(Listof true)";
 
-        let inner_ty = ty::NonFun::Bool(true);
-        let expected = ty::NonFun::List(vec![], Some(inner_ty.into()));
+        let inner_ty = ty::Ty::Bool(true);
+        let expected = ty::Ty::List(vec![], Some(Box::new(inner_ty.into())));
 
         assert_ty_for_str(expected.into(), j);
     }
@@ -392,11 +392,8 @@ mod test {
     fn fixed_list_cons() {
         let j = "(List true false)";
 
-        let expected = ty::NonFun::List(
-            vec![
-                ty::NonFun::Bool(true).into(),
-                ty::NonFun::Bool(false).into(),
-            ],
+        let expected = ty::Ty::List(
+            vec![ty::Ty::Bool(true).into(), ty::Ty::Bool(false).into()],
             None,
         );
 
@@ -407,9 +404,9 @@ mod test {
     fn rest_list_cons() {
         let j = "(List true false ...)";
 
-        let expected = ty::NonFun::List(
-            vec![ty::NonFun::Bool(true).into()],
-            Some(ty::NonFun::Bool(false).into()),
+        let expected = ty::Ty::List(
+            vec![ty::Ty::Bool(true).into()],
+            Some(Box::new(ty::Ty::Bool(false).into())),
         );
 
         assert_ty_for_str(expected.into(), j);
@@ -419,8 +416,8 @@ mod test {
     fn vectorof_cons() {
         let j = "(Vectorof true)";
 
-        let inner_ty = ty::NonFun::Bool(true);
-        let expected = ty::NonFun::Vec(Some(inner_ty.into()), vec![]);
+        let inner_ty = ty::Ty::Bool(true);
+        let expected = ty::Ty::Vec(Some(Box::new(inner_ty.into())), vec![]);
 
         assert_ty_for_str(expected.into(), j);
     }
@@ -429,12 +426,9 @@ mod test {
     fn fixed_vector_cons() {
         let j = "(Vector true false)";
 
-        let expected = ty::NonFun::Vec(
+        let expected = ty::Ty::Vec(
             None,
-            vec![
-                ty::NonFun::Bool(true).into(),
-                ty::NonFun::Bool(false).into(),
-            ],
+            vec![ty::Ty::Bool(true).into(), ty::Ty::Bool(false).into()],
         );
 
         assert_ty_for_str(expected.into(), j);
@@ -444,9 +438,9 @@ mod test {
     fn rest_vector_cons() {
         let j = "(Vector false ... true)";
 
-        let expected = ty::NonFun::Vec(
-            Some(ty::NonFun::Bool(false).into()),
-            vec![ty::NonFun::Bool(true).into()],
+        let expected = ty::Ty::Vec(
+            Some(Box::new(ty::Ty::Bool(false).into())),
+            vec![ty::Ty::Bool(true).into()],
         );
 
         assert_ty_for_str(expected.into(), j);
@@ -468,10 +462,10 @@ mod test {
     fn pure_fun() {
         let j = "(-> true)";
 
-        let expected = ty::Fun::new(
+        let expected = ty::Ty::new_fun(
             false,
-            ty::NonFun::List(vec![], None).into(),
-            ty::NonFun::Bool(true).into(),
+            ty::Ty::List(vec![], None).into(),
+            ty::Ty::Bool(true).into(),
         );
 
         assert_ty_for_str(expected.into(), j);
@@ -481,10 +475,10 @@ mod test {
     fn impure_fun() {
         let j = "(->! true)";
 
-        let expected = ty::Fun::new(
+        let expected = ty::Ty::new_fun(
             true,
-            ty::NonFun::List(vec![], None).into(),
-            ty::NonFun::Bool(true).into(),
+            ty::Ty::List(vec![], None).into(),
+            ty::Ty::Bool(true).into(),
         );
 
         assert_ty_for_str(expected.into(), j);
@@ -494,10 +488,10 @@ mod test {
     fn fixed_fun() {
         let j = "(-> false true)";
 
-        let expected = ty::Fun::new(
+        let expected = ty::Ty::new_fun(
             false,
-            ty::NonFun::List(vec![ty::NonFun::Bool(false).into()], None).into(),
-            ty::NonFun::Bool(true).into(),
+            ty::Ty::List(vec![ty::Ty::Bool(false).into()], None).into(),
+            ty::Ty::Bool(true).into(),
         );
 
         assert_ty_for_str(expected.into(), j);
@@ -507,10 +501,10 @@ mod test {
     fn rest_fun() {
         let j = "(-> Symbol ... true)";
 
-        let expected = ty::Fun::new(
+        let expected = ty::Ty::new_fun(
             false,
-            ty::NonFun::List(vec![], Some(ty::NonFun::AnySym.into())).into(),
-            ty::NonFun::Bool(true).into(),
+            ty::Ty::List(vec![], Some(Box::new(ty::Ty::AnySym.into()))).into(),
+            ty::Ty::Bool(true).into(),
         );
 
         assert_ty_for_str(expected.into(), j);
@@ -520,10 +514,10 @@ mod test {
     fn fixed_infix_fun() {
         let j = "(false -> true)";
 
-        let expected = ty::Fun::new(
+        let expected = ty::Ty::new_fun(
             false,
-            ty::NonFun::List(vec![ty::NonFun::Bool(false).into()], None).into(),
-            ty::NonFun::Bool(true).into(),
+            ty::Ty::List(vec![ty::Ty::Bool(false).into()], None).into(),
+            ty::Ty::Bool(true).into(),
         );
 
         assert_ty_for_str(expected.into(), j);
@@ -533,13 +527,13 @@ mod test {
     fn rest_infix_impure_fun() {
         let j = "(String Symbol ... ->! true)";
 
-        let expected = ty::Fun::new(
+        let expected = ty::Ty::new_fun(
             true,
-            ty::NonFun::List(
-                vec![ty::NonFun::Str.into()],
-                Some(ty::NonFun::AnySym.into()),
+            ty::Ty::List(
+                vec![ty::Ty::Str.into()],
+                Some(Box::new(ty::Ty::AnySym.into())),
             ).into(),
-            ty::NonFun::Bool(true).into(),
+            ty::Ty::Bool(true).into(),
         );
 
         assert_ty_for_str(expected.into(), j);
@@ -549,8 +543,8 @@ mod test {
     fn set_cons() {
         let j = "(Setof true)";
 
-        let inner_ty = ty::NonFun::Bool(true);
-        let expected = ty::NonFun::Set(inner_ty.into());
+        let inner_ty = ty::Ty::Bool(true);
+        let expected = ty::Ty::Set(Box::new(inner_ty.into()));
 
         assert_ty_for_str(expected.into(), j);
     }
@@ -559,9 +553,9 @@ mod test {
     fn hash_cons() {
         let j = "(Hash true false)";
 
-        let key_ty = ty::NonFun::Bool(true);
-        let value_ty = ty::NonFun::Bool(false);
-        let expected = ty::NonFun::Hash(key_ty.into(), value_ty.into());
+        let key_ty = ty::Ty::Bool(true);
+        let value_ty = ty::Ty::Bool(false);
+        let expected = ty::Ty::Hash(Box::new(key_ty.into()), Box::new(value_ty.into()));
 
         assert_ty_for_str(expected.into(), j);
     }

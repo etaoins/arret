@@ -1,16 +1,24 @@
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub enum NonFun<S> {
-    Bool(bool),
-    List(Vec<S>, Option<S>),
-    Vec(Option<S>, Vec<S>),
-    Sym(String),
+pub enum Ty<S> {
     AnySym,
-    Int,
-    Float,
-    Str,
+    Bool(bool),
     Char,
-    Set(S),
-    Hash(S, S),
+    Float,
+    Fun(Box<Fun<S>>),
+    Hash(Box<S>, Box<S>),
+    Int,
+    List(Vec<S>, Option<Box<S>>),
+    Set(Box<S>),
+    Str,
+    Sym(String),
+    Union(Vec<S>),
+    Vec(Option<Box<S>>, Vec<S>),
+}
+
+impl<S> Ty<S> {
+    pub fn new_fun(impure: bool, params: S, ret: S) -> Ty<S> {
+        Ty::Fun(Box::new(Fun::new(impure, params, ret)))
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
@@ -54,24 +62,11 @@ impl PVar {
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub enum Poly {
     Var(PVarId),
-    Fixed(Vec<NonFun<Poly>>, Option<Box<Fun<Poly>>>),
+    Fixed(Ty<Poly>),
 }
 
-impl From<NonFun<Poly>> for Poly {
-    fn from(non_fun: NonFun<Poly>) -> Poly {
-        Poly::Fixed(vec![non_fun], None)
+impl From<Ty<Poly>> for Poly {
+    fn from(ty: Ty<Poly>) -> Poly {
+        Poly::Fixed(ty)
     }
-}
-
-impl From<Fun<Poly>> for Poly {
-    fn from(fun: Fun<Poly>) -> Poly {
-        Poly::Fixed(vec![], Some(Box::new(fun)))
-    }
-}
-
-#[macro_export]
-macro_rules! union_ty {
-    ( $($t:expr),* ) => {{
-        ty::Poly::Fixed(vec![$( $t, )*], None)
-    }}
 }

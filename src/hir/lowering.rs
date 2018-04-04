@@ -844,7 +844,7 @@ mod test {
         let destruc = Destruc::Var(Var {
             id: VarId(2),
             source_name: "x".to_owned(),
-            bound: Some(ty::NonFun::Bool(true).into()),
+            bound: Some(ty::Ty::Bool(true).into()),
         });
 
         let expected = Expr::Do(vec![
@@ -1025,7 +1025,7 @@ mod test {
             Fun {
                 pvar_ids: vec![],
                 params: Destruc::List(vec![], None),
-                ret_ty: Some(ty::NonFun::Int.into()),
+                ret_ty: Some(ty::Ty::Int.into()),
                 body_expr: Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
             },
         );
@@ -1840,7 +1840,7 @@ mod test {
         let destruc = Destruc::Var(Var {
             id: VarId(2),
             source_name: "x".to_owned(),
-            bound: Some(ty::NonFun::Bool(true).into()),
+            bound: Some(ty::Ty::Bool(true).into()),
         });
 
         let expected = Expr::Def(
@@ -1913,7 +1913,7 @@ mod test {
         let j = "(type-predicate true)";
         let t = "^^^^^^^^^^^^^^^^^^^^^";
 
-        let expected = Expr::TyPred(t2s(t), ty::NonFun::Bool(true).into());
+        let expected = Expr::TyPred(t2s(t), ty::Ty::Bool(true).into());
         assert_eq!(expected, body_expr_for_str(j).unwrap());
     }
 
