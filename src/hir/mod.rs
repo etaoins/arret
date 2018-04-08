@@ -26,7 +26,7 @@ impl VarId {
 pub struct Var {
     id: VarId,
     source_name: String,
-    bound: Option<ty::Poly>,
+    bound: ty::Decl,
 }
 
 impl Var {
@@ -34,7 +34,7 @@ impl Var {
         Var {
             id: self.id,
             source_name: self.source_name,
-            bound: Some(bound),
+            bound: bound.into_decl(),
         }
     }
 }
@@ -48,7 +48,7 @@ impl PartialEq for Var {
 #[derive(Debug, PartialEq)]
 pub enum Destruc {
     Var(Var),
-    Wildcard(Option<ty::Poly>),
+    Wildcard(ty::Decl),
     List(Vec<Destruc>, Option<Box<Destruc>>),
 }
 
@@ -56,7 +56,7 @@ pub enum Destruc {
 pub struct Fun {
     pvar_ids: Vec<ty::PVarId>,
     params: Destruc,
-    ret_ty: Option<ty::Poly>,
+    ret_ty: ty::Decl,
 
     body_expr: Box<Expr>,
 }
@@ -106,6 +106,32 @@ impl Expr {
             flattened_exprs.pop().unwrap()
         } else {
             Expr::Do(flattened_exprs)
+        }
+    }
+
+    /// Returns the span for the expression
+    ///
+    /// This will return None for `Expr::Do` as it may not have a single contiguous span
+    fn span(&self) -> Option<Span> {
+        match *self {
+            Expr::Lit(ref datum) => Some(datum.span()),
+            Expr::App(span, _)
+            | Expr::Fun(span, _)
+            | Expr::Def(span, _, _)
+            | Expr::Cond(span, _)
+            | Expr::Ref(span, _)
+            | Expr::TyPred(span, _) => Some(span),
+            Expr::Do(_) => None,
+        }
+    }
+
+    /// Returns the last expression
+    ///
+    /// This is the expression itself except for `Expr::Do` which will return the last expression
+    fn last_expr(&self) -> Option<&Expr> {
+        match self {
+            &Expr::Do(ref exprs) => exprs.last(),
+            other => Some(other),
         }
     }
 }

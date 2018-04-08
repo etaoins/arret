@@ -146,7 +146,7 @@ impl<'ccx> LoweringContext<'ccx> {
             NsDatum::Ident(span, ident) => {
                 match scope.get(&ident) {
                     Some(Binding::Prim(Prim::Wildcard)) => {
-                        return Ok(Destruc::Wildcard(None));
+                        return Ok(Destruc::Wildcard(ty::Decl::Free(span)));
                     }
                     Some(Binding::Prim(Prim::Ellipsis)) => {
                         return Err(Error::new(
@@ -168,7 +168,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 Ok(Destruc::Var(Var {
                     id: var_id,
                     source_name,
-                    bound: None,
+                    bound: ty::Decl::Free(span),
                 }))
             }
             NsDatum::List(_, vs) => {
@@ -279,7 +279,7 @@ impl<'ccx> LoweringContext<'ccx> {
             && scope.get_datum(&rest_data[0]) == Some(Binding::TyCons(TyCons::Fun))
         {
             body_data = rest_data.split_off(2);
-            ret_ty = Some(lower_ty(&fun_scope, rest_data.pop().unwrap())?)
+            ret_ty = Some(lower_ty(&fun_scope, rest_data.pop().unwrap())?.into_decl());
         } else {
             body_data = rest_data;
             ret_ty = None;
@@ -291,13 +291,22 @@ impl<'ccx> LoweringContext<'ccx> {
             .map(|body_datum| self.lower_body_expr(&mut fun_scope, body_datum))
             .collect::<Result<Vec<Expr>>>()?;
 
+        let body_expr = Expr::from_vec(body_exprs);
+
+        // If we don't have a return type try to guess a span for the last expression so we can
+        // locate inference errors
+        let ret_ty = ret_ty.unwrap_or_else(|| {
+            let last_expr_span = body_expr.last_expr().and_then(|e| e.span()).unwrap_or(span);
+            ty::Decl::Free(last_expr_span)
+        });
+
         Ok(Expr::Fun(
             span,
             Fun {
                 pvar_ids,
                 params,
                 ret_ty,
-                body_expr: Box::new(Expr::from_vec(body_exprs)),
+                body_expr: Box::new(body_expr),
             },
         ))
     }
@@ -817,18 +826,19 @@ mod test {
     fn basic_untyped_var_def() {
         let j = "(def x 1) x";
         let t = "^^^^^^^^^  ";
-        let u = "       ^   ";
-        let v = "          ^";
+        let u = "     ^     ";
+        let v = "       ^   ";
+        let w = "          ^";
 
         let destruc = Destruc::Var(Var {
             id: VarId(2),
             source_name: "x".to_owned(),
-            bound: None,
+            bound: ty::Decl::Free(t2s(u)),
         });
 
         let expected = Expr::Do(vec![
-            Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Datum::Int(t2s(u), 1)))),
-            Expr::Ref(t2s(v), VarId(2)),
+            Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Datum::Int(t2s(v), 1)))),
+            Expr::Ref(t2s(w), VarId(2)),
         ]);
 
         assert_eq!(expected, body_expr_for_str(j).unwrap());
@@ -844,7 +854,7 @@ mod test {
         let destruc = Destruc::Var(Var {
             id: VarId(2),
             source_name: "x".to_owned(),
-            bound: Some(ty::Ty::Bool(true).into_poly()),
+            bound: ty::Ty::Bool(true).into_decl(),
         });
 
         let expected = Expr::Do(vec![
@@ -863,11 +873,12 @@ mod test {
     fn wildcard_def() {
         let j = "(def _ 1)";
         let t = "^^^^^^^^^";
-        let u = "       ^ ";
+        let u = "     ^   ";
+        let v = "       ^ ";
 
-        let destruc = Destruc::Wildcard(None);
+        let destruc = Destruc::Wildcard(ty::Decl::Free(t2s(u)));
 
-        let expected = Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Datum::Int(t2s(u), 1))));
+        let expected = Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Datum::Int(t2s(v), 1))));
         assert_eq!(expected, body_expr_for_str(j).unwrap());
     }
 
@@ -889,22 +900,24 @@ mod test {
     fn list_destruc_def() {
         let j = "(def (x rest ...) '(1)) x";
         let t = "^^^^^^^^^^^^^^^^^^^^^^^  ";
-        let u = "                   ^^^   ";
-        let v = "                    ^    ";
-        let w = "                        ^";
+        let u = "      ^                  ";
+        let v = "        ^^^^             ";
+        let w = "                   ^^^   ";
+        let x = "                    ^    ";
+        let y = "                        ^";
 
         let destruc = Destruc::List(
             vec![
                 Destruc::Var(Var {
                     id: VarId(3),
                     source_name: "x".to_owned(),
-                    bound: None,
+                    bound: ty::Decl::Free(t2s(u)),
                 }),
             ],
             Some(Box::new(Destruc::Var(Var {
                 id: VarId(2),
                 source_name: "rest".to_owned(),
-                bound: None,
+                bound: ty::Decl::Free(t2s(v)),
             }))),
         );
 
@@ -912,9 +925,9 @@ mod test {
             Expr::Def(
                 t2s(t),
                 destruc,
-                Box::new(Expr::Lit(Datum::List(t2s(u), vec![Datum::Int(t2s(v), 1)]))),
+                Box::new(Expr::Lit(Datum::List(t2s(w), vec![Datum::Int(t2s(x), 1)]))),
             ),
-            Expr::Ref(t2s(w), VarId(3)),
+            Expr::Ref(t2s(y), VarId(3)),
         ]);
 
         assert_eq!(expected, body_expr_for_str(j).unwrap());
@@ -1006,7 +1019,7 @@ mod test {
             Fun {
                 pvar_ids: vec![],
                 params: Destruc::List(vec![], None),
-                ret_ty: None,
+                ret_ty: ty::Decl::Free(t2s(t)),
                 body_expr: Box::new(Expr::from_vec(vec![])),
             },
         );
@@ -1025,7 +1038,7 @@ mod test {
             Fun {
                 pvar_ids: vec![],
                 params: Destruc::List(vec![], None),
-                ret_ty: Some(ty::Ty::Int.into_poly()),
+                ret_ty: ty::Ty::Int.into_decl(),
                 body_expr: Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
             },
         );
@@ -1037,7 +1050,8 @@ mod test {
     fn identity_fn() {
         let j = "(fn (x) x)";
         let t = "^^^^^^^^^^";
-        let u = "        ^ ";
+        let u = "     ^    ";
+        let v = "        ^ ";
 
         let param_var_id = VarId::new(2);
         let params = Destruc::List(
@@ -1045,7 +1059,7 @@ mod test {
                 Destruc::Var(Var {
                     id: param_var_id,
                     source_name: "x".to_owned(),
-                    bound: None,
+                    bound: ty::Decl::Free(t2s(u)),
                 }),
             ],
             None,
@@ -1056,8 +1070,8 @@ mod test {
             Fun {
                 pvar_ids: vec![],
                 params,
-                ret_ty: None,
-                body_expr: Box::new(Expr::Ref(t2s(u), param_var_id)),
+                ret_ty: ty::Decl::Free(t2s(v)),
+                body_expr: Box::new(Expr::Ref(t2s(v), param_var_id)),
             },
         );
 
@@ -1068,13 +1082,14 @@ mod test {
     fn ret_arg_list_fn() {
         let j = "(fn x x)";
         let t = "^^^^^^^^";
-        let u = "      ^ ";
+        let u = "    ^   ";
+        let v = "      ^ ";
 
         let param_var_id = VarId::new(2);
         let params = Destruc::Var(Var {
             id: param_var_id,
             source_name: "x".to_owned(),
-            bound: None,
+            bound: ty::Decl::Free(t2s(u)),
         });
 
         let expected = Expr::Fun(
@@ -1082,8 +1097,8 @@ mod test {
             Fun {
                 pvar_ids: vec![],
                 params,
-                ret_ty: None,
-                body_expr: Box::new(Expr::Ref(t2s(u), param_var_id)),
+                ret_ty: ty::Decl::Free(t2s(v)),
+                body_expr: Box::new(Expr::Ref(t2s(v), param_var_id)),
             },
         );
 
@@ -1104,7 +1119,7 @@ mod test {
                 Destruc::Var(Var {
                     id: param_var_id,
                     source_name: "x".to_owned(),
-                    bound: Some(ty::Poly::Var(pvar_id)),
+                    bound: ty::Decl::Var(pvar_id),
                 }),
             ],
             None,
@@ -1115,7 +1130,7 @@ mod test {
             Fun {
                 pvar_ids: vec![pvar_id],
                 params,
-                ret_ty: Some(ty::Poly::Var(pvar_id)),
+                ret_ty: ty::Decl::Var(pvar_id),
                 body_expr: Box::new(Expr::Ref(t2s(u), param_var_id)),
             },
         );
@@ -1127,30 +1142,31 @@ mod test {
     fn capturing_fn() {
         let j = "(def x 1)(fn () x)";
         let t = "^^^^^^^^^         ";
-        let u = "       ^          ";
-        let v = "         ^^^^^^^^^";
-        let w = "                ^ ";
+        let u = "     ^            ";
+        let v = "       ^          ";
+        let w = "         ^^^^^^^^^";
+        let x = "                ^ ";
 
         let outer_var_id = VarId::new(2);
         let outer_destruc = Destruc::Var(Var {
             id: outer_var_id,
             source_name: "x".to_owned(),
-            bound: None,
+            bound: ty::Decl::Free(t2s(u)),
         });
 
         let expected = Expr::Do(vec![
             Expr::Def(
                 t2s(t),
                 outer_destruc,
-                Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
+                Box::new(Expr::Lit(Datum::Int(t2s(v), 1))),
             ),
             Expr::Fun(
-                t2s(v),
+                t2s(w),
                 Fun {
                     pvar_ids: vec![],
                     params: Destruc::List(vec![], None),
-                    ret_ty: None,
-                    body_expr: Box::new(Expr::Ref(t2s(w), outer_var_id)),
+                    ret_ty: ty::Decl::Free(t2s(x)),
+                    body_expr: Box::new(Expr::Ref(t2s(x), outer_var_id)),
                 },
             ),
         ]);
@@ -1162,15 +1178,17 @@ mod test {
     fn shadowing_fn() {
         let j = "(def x 1)(fn (x) x)";
         let t = "^^^^^^^^^          ";
-        let u = "       ^           ";
-        let v = "         ^^^^^^^^^^";
-        let w = "                 ^ ";
+        let u = "     ^             ";
+        let v = "       ^           ";
+        let w = "              ^    ";
+        let x = "         ^^^^^^^^^^";
+        let y = "                 ^ ";
 
         let outer_var_id = VarId::new(2);
         let outer_destruc = Destruc::Var(Var {
             id: outer_var_id,
             source_name: "x".to_owned(),
-            bound: None,
+            bound: ty::Decl::Free(t2s(u)),
         });
 
         let param_var_id = VarId::new(3);
@@ -1179,7 +1197,7 @@ mod test {
                 Destruc::Var(Var {
                     id: param_var_id,
                     source_name: "x".to_owned(),
-                    bound: None,
+                    bound: ty::Decl::Free(t2s(w)),
                 }),
             ],
             None,
@@ -1189,15 +1207,15 @@ mod test {
             Expr::Def(
                 t2s(t),
                 outer_destruc,
-                Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
+                Box::new(Expr::Lit(Datum::Int(t2s(v), 1))),
             ),
             Expr::Fun(
-                t2s(v),
+                t2s(x),
                 Fun {
                     pvar_ids: vec![],
                     params,
-                    ret_ty: None,
-                    body_expr: Box::new(Expr::Ref(t2s(w), param_var_id)),
+                    ret_ty: ty::Decl::Free(t2s(y)),
+                    body_expr: Box::new(Expr::Ref(t2s(y), param_var_id)),
                 },
             ),
         ]);
@@ -1299,7 +1317,8 @@ mod test {
     fn simple_export() {
         let j = "(def x 1)(export x)";
         let t = "^^^^^^^^^          ";
-        let u = "       ^           ";
+        let u = "     ^             ";
+        let v = "       ^           ";
 
         let var_id = VarId(1);
 
@@ -1308,9 +1327,9 @@ mod test {
             Destruc::Var(Var {
                 id: var_id,
                 source_name: "x".to_owned(),
-                bound: None,
+                bound: ty::Decl::Free(t2s(u)),
             }),
-            Expr::Lit(Datum::Int(t2s(u), 1)),
+            Expr::Lit(Datum::Int(t2s(v), 1)),
         );
 
         let mut expected_exports = HashMap::new();
@@ -1803,24 +1822,26 @@ mod test {
         let u1 = "                                                        ^     ";
         let s1 = "                                                              ";
         let j2 = "(def1 x)";
+        let v2 = "      ^ ";
         let s2 = "        ";
         let j3 = "x";
-        let v3 = "^";
+        let w3 = "^";
 
         let j = &[j1, j2, j3].join("");
         let t = t1;
         let u = u1;
-        let v = &[s1, s2, v3].join("");
+        let v = &[s1, v2].join("");
+        let w = &[s1, s2, w3].join("");
 
         let destruc = Destruc::Var(Var {
             id: VarId(2),
             source_name: "x".to_owned(),
-            bound: None,
+            bound: ty::Decl::Free(t2s(v)),
         });
 
         let expected = Expr::Do(vec![
             Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Datum::Int(t2s(u), 1)))),
-            Expr::Ref(t2s(v), VarId(2)),
+            Expr::Ref(t2s(w), VarId(2)),
         ]);
         assert_eq!(expected, body_expr_for_str(j).unwrap());
     }
@@ -1840,7 +1861,7 @@ mod test {
         let destruc = Destruc::Var(Var {
             id: VarId(2),
             source_name: "x".to_owned(),
-            bound: Some(ty::Ty::Bool(true).into_poly()),
+            bound: ty::Ty::Bool(true).into_decl(),
         });
 
         let expected = Expr::Def(

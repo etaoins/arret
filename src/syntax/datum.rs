@@ -13,3 +13,20 @@ pub enum Datum {
     Map(Span, Vec<(Datum, Datum)>),
     Set(Span, Vec<Datum>),
 }
+
+impl Datum {
+    pub fn span(&self) -> Span {
+        match *self {
+            Datum::Bool(span, _)
+            | Datum::Char(span, _)
+            | Datum::Int(span, _)
+            | Datum::Float(span, _)
+            | Datum::List(span, _)
+            | Datum::Str(span, _)
+            | Datum::Sym(span, _)
+            | Datum::Vec(span, _)
+            | Datum::Map(span, _)
+            | Datum::Set(span, _) => span,
+        }
+    }
+}

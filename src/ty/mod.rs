@@ -1,3 +1,5 @@
+use syntax::span::Span;
+
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub enum Ty<S> {
     AnySym,
@@ -65,6 +67,15 @@ pub enum Poly {
     Fixed(Ty<Poly>),
 }
 
+impl Poly {
+    pub fn into_decl(self) -> Decl {
+        match self {
+            Poly::Var(pvar_id) => Decl::Var(pvar_id),
+            Poly::Fixed(ty) => Decl::Fixed(ty),
+        }
+    }
+}
+
 impl Ty<Poly> {
     pub fn into_poly(self) -> Poly {
         Poly::Fixed(self)
@@ -85,5 +96,24 @@ impl Ty<Mono> {
     #[allow(dead_code)]
     pub fn into_mono(self) -> Mono {
         Mono(self)
+    }
+}
+
+/// Decl is a type declared by a user
+///
+/// It is identical to a Poly type except there is an additional `Free` variant that indicates the
+/// user did not specify an explicit type and it must be inferred. `Free` takes a `Span` of the
+/// declaration for the purposes of reporting inference errors.
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum Decl {
+    Var(PVarId),
+    Fixed(Ty<Poly>),
+    Free(Span),
+}
+
+impl Ty<Poly> {
+    #[cfg(test)]
+    pub fn into_decl(self) -> Decl {
+        Decl::Fixed(self)
     }
 }
