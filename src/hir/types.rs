@@ -270,31 +270,33 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
 }
 
 #[cfg(test)]
-mod test {
-    use super::*;
+pub fn ty_for_str(datum_str: &str) -> Result<ty::Poly> {
+    use hir::ns::NsId;
     use syntax::parser::datum_from_str;
     use hir::prim::insert_prim_exports;
-    use syntax::span::t2s;
 
-    fn ty_for_str(datum_str: &str) -> Result<ty::Poly> {
-        use hir::ns::NsId;
-        let test_ns_id = NsId::new(1);
+    let test_ns_id = NsId::new(1);
 
-        // Capture our exports
-        let mut exports = HashMap::<String, Binding>::new();
-        insert_prim_exports(&mut exports);
-        insert_ty_exports(&mut exports);
+    // Capture our exports
+    let mut exports = HashMap::<String, Binding>::new();
+    insert_prim_exports(&mut exports);
+    insert_ty_exports(&mut exports);
 
-        // Place them on our scope
-        let mut scope = Scope::new_empty();
-        for (name, binding) in exports.into_iter() {
-            scope.insert_binding(Ident::new(test_ns_id, name), binding);
-        }
-
-        let test_datum = datum_from_str(datum_str).unwrap();
-
-        lower_ty(&scope, NsDatum::from_syntax_datum(test_ns_id, test_datum))
+    // Place them on our scope
+    let mut scope = Scope::new_empty();
+    for (name, binding) in exports.into_iter() {
+        scope.insert_binding(Ident::new(test_ns_id, name), binding);
     }
+
+    let test_datum = datum_from_str(datum_str).unwrap();
+
+    lower_ty(&scope, NsDatum::from_syntax_datum(test_ns_id, test_datum))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use syntax::span::t2s;
 
     fn assert_ty_for_str(expected: ty::Poly, datum_str: &str) {
         assert_eq!(expected, ty_for_str(datum_str).unwrap());

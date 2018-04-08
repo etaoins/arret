@@ -1,3 +1,8 @@
+#[cfg(test)]
+pub mod is_a;
+#[cfg(test)]
+pub mod subst;
+
 use syntax::span::Span;
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
@@ -87,14 +92,14 @@ impl Ty<Poly> {
 pub struct Mono(Ty<Mono>);
 
 impl Mono {
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn as_ty(&self) -> &Ty<Mono> {
         &self.0
     }
 }
 
 impl Ty<Mono> {
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn into_mono(self) -> Mono {
         Mono(self)
     }
