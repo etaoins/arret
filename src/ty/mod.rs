@@ -2,6 +2,7 @@ use syntax::span::Span;
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub enum Ty<S> {
+    Any,
     AnySym,
     Bool(bool),
     Char,
@@ -52,11 +53,11 @@ impl PVarId {
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct PVar {
     source_name: String,
-    bound: Option<Poly>,
+    bound: Poly,
 }
 
 impl PVar {
-    pub fn new(source_name: String, bound: Option<Poly>) -> PVar {
+    pub fn new(source_name: String, bound: Poly) -> PVar {
         PVar { source_name, bound }
     }
 }

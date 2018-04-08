@@ -27,7 +27,7 @@ pub fn lower_pvar(scope: &Scope, pvar_datum: NsDatum) -> Result<(Ident, ty::PVar
     match pvar_datum {
         NsDatum::Ident(_, ident) => {
             let source_name = ident.name().clone();
-            return Ok((ident, ty::PVar::new(source_name, None)));
+            return Ok((ident, ty::PVar::new(source_name, ty::Ty::Any.into_poly())));
         }
         NsDatum::Vec(_, mut arg_data) => {
             if arg_data.len() == 3
@@ -42,7 +42,7 @@ pub fn lower_pvar(scope: &Scope, pvar_datum: NsDatum) -> Result<(Ident, ty::PVar
                 let pvar_ident = expect_ident(arg_data.pop().unwrap())?;
 
                 let source_name = pvar_ident.name().clone();
-                return Ok((pvar_ident, ty::PVar::new(source_name, Some(bound_ty))));
+                return Ok((pvar_ident, ty::PVar::new(source_name, bound_ty)));
             }
         }
         _ => {}
@@ -243,6 +243,8 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
             exports.insert($name.to_owned(), Binding::TyCons($ty_cons));
         }
     }
+
+    export_ty!("Any", ty::Ty::Any.into_poly());
 
     export_ty!(
         "Bool",
