@@ -84,6 +84,7 @@ pub enum Expr {
     Cond(Span, Cond),
     Ref(Span, VarId),
     TyPred(Span, ty::Poly),
+    Ann(Span, Box<Expr>, ty::Poly),
     Do(Vec<Expr>),
 }
 
@@ -120,7 +121,8 @@ impl Expr {
             | Expr::Def(span, _, _)
             | Expr::Cond(span, _)
             | Expr::Ref(span, _)
-            | Expr::TyPred(span, _) => Some(span),
+            | Expr::TyPred(span, _)
+            | Expr::Ann(span, _, _) => Some(span),
             Expr::Do(_) => None,
         }
     }

@@ -351,8 +351,20 @@ impl<'ccx> LoweringContext<'ccx> {
                     lower_ty(scope, arg_data.pop().unwrap())?,
                 ))
             }
+            Prim::TyColon => {
+                expect_arg_count(span, &arg_data, 2)?;
+
+                let ty_datum = arg_data.pop().unwrap();
+                let expr_datum = arg_data.pop().unwrap();
+
+                Ok(Expr::Ann(
+                    span,
+                    Box::new(self.lower_inner_expr(scope, expr_datum)?),
+                    lower_ty(scope, ty_datum)?,
+                ))
+            }
             Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),
-            Prim::Ellipsis | Prim::Wildcard | Prim::MacroRules | Prim::TyColon => {
+            Prim::Ellipsis | Prim::Wildcard | Prim::MacroRules => {
                 Err(Error::new(span, ErrorKind::PrimRef))
             }
         }
@@ -1954,5 +1966,19 @@ mod test {
 
         let err = Error::new(t2s(t), ErrorKind::UserError("Hello".to_owned()));
         assert_eq!(err, body_expr_for_str(j).unwrap_err());
+    }
+
+    #[test]
+    fn type_annotation() {
+        let j = "(: 1 Int)";
+        let t = "^^^^^^^^^";
+        let u = "   ^     ";
+
+        let expected = Expr::Ann(
+            t2s(t),
+            Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
+            ty::Ty::Int.into_poly(),
+        );
+        assert_eq!(expected, body_expr_for_str(j).unwrap());
     }
 }
