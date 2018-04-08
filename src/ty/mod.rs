@@ -5,8 +5,13 @@ pub mod subst;
 
 use syntax::span::Span;
 
+pub trait TyRef: PartialEq + Clone + Sized {}
+
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub enum Ty<S> {
+pub enum Ty<S>
+where
+    S: TyRef,
+{
     Any,
     AnyBool,
     AnySym,
@@ -24,7 +29,10 @@ pub enum Ty<S> {
     Vec(Option<Box<S>>, Vec<S>),
 }
 
-impl<S> Ty<S> {
+impl<S> Ty<S>
+where
+    S: TyRef,
+{
     pub fn new_fun(impure: bool, params: S, ret: S) -> Ty<S> {
         Ty::Fun(Box::new(Fun::new(impure, params, ret)))
     }
@@ -83,6 +91,8 @@ impl Poly {
     }
 }
 
+impl TyRef for Poly {}
+
 impl Ty<Poly> {
     pub fn into_poly(self) -> Poly {
         Poly::Fixed(self)
@@ -105,6 +115,8 @@ impl Ty<Mono> {
         Mono(self)
     }
 }
+
+impl TyRef for Mono {}
 
 /// Decl is a type declared by a user
 ///
