@@ -212,6 +212,8 @@ fn ty_is_a(sub: &ty::Ty<ty::Mono>, parent: &ty::Ty<ty::Mono>) -> Result {
         (&ty::Ty::Any, _) => Result::May,
         (&ty::Ty::Sym(_), &ty::Ty::AnySym) => Result::Yes,
         (&ty::Ty::AnySym, &ty::Ty::Sym(_)) => Result::May,
+        (&ty::Ty::Bool(_), &ty::Ty::AnyBool) => Result::Yes,
+        (&ty::Ty::AnyBool, &ty::Ty::Bool(_)) => Result::May,
         (&ty::Ty::Set(ref sub), &ty::Ty::Set(ref par)) => is_a(sub, par),
         (&ty::Ty::Hash(ref sub_key, ref sub_value), &ty::Ty::Hash(ref par_key, ref par_value)) => {
             merge_field_results(&[is_a(sub_key, par_key), is_a(sub_value, par_value)])
@@ -393,5 +395,16 @@ mod test {
 
         assert_eq!(Result::Yes, is_a(&pure_sym_to_sym, &impure_sym_to_sym));
         assert_eq!(Result::No, is_a(&impure_sym_to_sym, &pure_sym_to_sym));
+    }
+
+    #[test]
+    fn bool_types() {
+        let true_type = ty_for_str("true");
+        let false_type = ty_for_str("false");
+        let bool_type = ty_for_str("Bool");
+
+        assert_eq!(Result::Yes, is_a(&true_type, &bool_type));
+        assert_eq!(Result::May, is_a(&bool_type, &true_type));
+        assert_eq!(Result::No, is_a(&false_type, &true_type));
     }
 }

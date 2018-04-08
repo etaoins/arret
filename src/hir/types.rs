@@ -246,13 +246,7 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
 
     export_ty!("Any", ty::Ty::Any.into_poly());
 
-    export_ty!(
-        "Bool",
-        ty::Ty::Union(vec![
-            ty::Ty::Bool(false).into_poly(),
-            ty::Ty::Bool(true).into_poly(),
-        ]).into_poly()
-    );
+    export_ty!("Bool", ty::Ty::AnyBool.into_poly());
     export_ty!("Symbol", ty::Ty::AnySym.into_poly());
     export_ty!("String", ty::Ty::Str.into_poly());
     export_ty!("Int", ty::Ty::Int.into_poly());

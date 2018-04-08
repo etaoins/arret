@@ -26,6 +26,7 @@ fn subst_ty(
 ) -> Result<ty::Ty<ty::Mono>> {
     match *fixed {
         ty::Ty::Any => Ok(ty::Ty::Any),
+        ty::Ty::AnyBool => Ok(ty::Ty::AnyBool),
         ty::Ty::AnySym => Ok(ty::Ty::AnySym),
         ty::Ty::Bool(val) => Ok(ty::Ty::Bool(val)),
         ty::Ty::Char => Ok(ty::Ty::Char),

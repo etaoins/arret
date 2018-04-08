@@ -8,6 +8,7 @@ use syntax::span::Span;
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub enum Ty<S> {
     Any,
+    AnyBool,
     AnySym,
     Bool(bool),
     Char,
