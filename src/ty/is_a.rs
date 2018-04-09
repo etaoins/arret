@@ -10,6 +10,25 @@ pub enum Result {
     No,
 }
 
+impl Result {
+    fn and_then<F>(&self, op: F) -> Result
+    where
+        F: FnOnce() -> Result,
+    {
+        match *self {
+            Result::Yes => op(),
+            Result::May => {
+                if op() == Result::No {
+                    Result::No
+                } else {
+                    Result::May
+                }
+            }
+            Result::No => Result::No,
+        }
+    }
+}
+
 type IsAFun<S> = fn(&S, &S) -> Result;
 
 trait SeqTyIterator<'a, S> {
@@ -81,16 +100,6 @@ impl<'a, S> SeqTyIterator<'a, S> for RevVecTyIterator<'a, S> {
     }
 }
 
-fn merge_field_results(results: &[Result]) -> Result {
-    if results.contains(&Result::No) {
-        Result::No
-    } else if results.contains(&Result::May) {
-        Result::May
-    } else {
-        Result::Yes
-    }
-}
-
 fn fun_is_a<S>(ref_is_a: IsAFun<S>, sub_fun: &ty::Fun<S>, par_fun: &ty::Fun<S>) -> Result
 where
     S: ty::TyRef,
@@ -100,13 +109,8 @@ where
         return Result::No;
     }
 
-    let results = [
-        // Note that the param type is contravariant
-        ref_is_a(&par_fun.params, &sub_fun.params),
-        ref_is_a(&sub_fun.ret, &par_fun.ret),
-    ];
-
-    merge_field_results(&results)
+    // Note that the param type is contravariant
+    ref_is_a(&par_fun.params, &sub_fun.params).and_then(|| ref_is_a(&sub_fun.ret, &par_fun.ret))
 }
 
 fn seq_is_a<'a, 'b, S, T, U>(ref_is_a: IsAFun<S>, mut sub_iter: T, mut par_iter: U) -> Result
@@ -231,7 +235,7 @@ where
         (&ty::Ty::AnyBool, &ty::Ty::Bool(_)) => Result::May,
         (&ty::Ty::Set(ref sub), &ty::Ty::Set(ref par)) => ref_is_a(sub, par),
         (&ty::Ty::Hash(ref sub_key, ref sub_value), &ty::Ty::Hash(ref par_key, ref par_value)) => {
-            merge_field_results(&[ref_is_a(sub_key, par_key), ref_is_a(sub_value, par_value)])
+            ref_is_a(sub_key, par_key).and_then(|| ref_is_a(sub_value, par_value))
         }
         (
             &ty::Ty::List(ref sub_fixed, ref sub_rest),
