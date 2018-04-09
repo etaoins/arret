@@ -229,10 +229,10 @@ where
         }
         (_, &ty::Ty::Any) => Result::Yes,
         (&ty::Ty::Any, _) => Result::May,
-        (&ty::Ty::Sym(_), &ty::Ty::AnySym) => Result::Yes,
-        (&ty::Ty::AnySym, &ty::Ty::Sym(_)) => Result::May,
-        (&ty::Ty::Bool(_), &ty::Ty::AnyBool) => Result::Yes,
-        (&ty::Ty::AnyBool, &ty::Ty::Bool(_)) => Result::May,
+        (&ty::Ty::LitSym(_), &ty::Ty::Sym) => Result::Yes,
+        (&ty::Ty::Sym, &ty::Ty::LitSym(_)) => Result::May,
+        (&ty::Ty::LitBool(_), &ty::Ty::Bool) => Result::Yes,
+        (&ty::Ty::Bool, &ty::Ty::LitBool(_)) => Result::May,
         (&ty::Ty::Set(ref sub), &ty::Ty::Set(ref par)) => ref_is_a(sub, par),
         (&ty::Ty::Hash(ref sub_key, ref sub_value), &ty::Ty::Hash(ref par_key, ref par_value)) => {
             ref_is_a(sub_key, par_key).and_then(|| ref_is_a(sub_value, par_value))

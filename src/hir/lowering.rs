@@ -866,7 +866,7 @@ mod test {
         let destruc = Destruc::Var(Var {
             id: VarId(2),
             source_name: "x".to_owned(),
-            bound: ty::Ty::Bool(true).into_decl(),
+            bound: ty::Ty::LitBool(true).into_decl(),
         });
 
         let expected = Expr::Do(vec![
@@ -1873,7 +1873,7 @@ mod test {
         let destruc = Destruc::Var(Var {
             id: VarId(2),
             source_name: "x".to_owned(),
-            bound: ty::Ty::Bool(true).into_decl(),
+            bound: ty::Ty::LitBool(true).into_decl(),
         });
 
         let expected = Expr::Def(
@@ -1946,7 +1946,7 @@ mod test {
         let j = "(type-predicate true)";
         let t = "^^^^^^^^^^^^^^^^^^^^^";
 
-        let expected = Expr::TyPred(t2s(t), ty::Ty::Bool(true).into_poly());
+        let expected = Expr::TyPred(t2s(t), ty::Ty::LitBool(true).into_poly());
         assert_eq!(expected, body_expr_for_str(j).unwrap());
     }
 

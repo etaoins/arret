@@ -26,9 +26,7 @@ fn subst_ty(
 ) -> Result<ty::Ty<ty::Mono>> {
     match *fixed {
         ty::Ty::Any => Ok(ty::Ty::Any),
-        ty::Ty::AnyBool => Ok(ty::Ty::AnyBool),
-        ty::Ty::AnySym => Ok(ty::Ty::AnySym),
-        ty::Ty::Bool(val) => Ok(ty::Ty::Bool(val)),
+        ty::Ty::Bool => Ok(ty::Ty::Bool),
         ty::Ty::Char => Ok(ty::Ty::Char),
         ty::Ty::Float => Ok(ty::Ty::Float),
         ty::Ty::Fun(ref fun) => Ok(ty::Ty::new_fun(
@@ -50,9 +48,11 @@ fn subst_ty(
 
             Ok(ty::Ty::List(fixed_mono, rest_mono))
         }
+        ty::Ty::LitBool(val) => Ok(ty::Ty::LitBool(val)),
+        ty::Ty::LitSym(ref val) => Ok(ty::Ty::LitSym(val.clone())),
         ty::Ty::Set(ref member) => Ok(ty::Ty::Set(Box::new(subst(&member, pvars)?))),
         ty::Ty::Str => Ok(ty::Ty::Str),
-        ty::Ty::Sym(ref val) => Ok(ty::Ty::Sym(val.clone())),
+        ty::Ty::Sym => Ok(ty::Ty::Sym),
         ty::Ty::Union(ref members) => Ok(ty::Ty::Union(subst_ty_vec(members, pvars)?)),
         ty::Ty::Vec(ref start, ref fixed) => {
             let start_mono = match *start {

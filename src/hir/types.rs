@@ -160,8 +160,8 @@ fn lower_ty_cons_apply(
 
 fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
     match datum {
-        NsDatum::Bool(_, v) => Ok(ty::Ty::Bool(v).into_poly()),
-        NsDatum::Ident(_, ident) => Ok(ty::Ty::Sym(ident.name().clone()).into_poly()),
+        NsDatum::Bool(_, v) => Ok(ty::Ty::LitBool(v).into_poly()),
+        NsDatum::Ident(_, ident) => Ok(ty::Ty::LitSym(ident.name().clone()).into_poly()),
         _ => Err(Error::new(
             datum.span(),
             ErrorKind::IllegalArg("only boolean and symbol literals are supported".to_owned()),
@@ -246,8 +246,8 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
 
     export_ty!("Any", ty::Ty::Any.into_poly());
 
-    export_ty!("Bool", ty::Ty::AnyBool.into_poly());
-    export_ty!("Symbol", ty::Ty::AnySym.into_poly());
+    export_ty!("Bool", ty::Ty::Bool.into_poly());
+    export_ty!("Symbol", ty::Ty::Sym.into_poly());
     export_ty!("String", ty::Ty::Str.into_poly());
     export_ty!("Int", ty::Ty::Int.into_poly());
     export_ty!("Float", ty::Ty::Float.into_poly());
@@ -304,7 +304,7 @@ mod test {
     fn true_literal() {
         let j = "true";
 
-        let expected = ty::Ty::Bool(true).into_poly();
+        let expected = ty::Ty::LitBool(true).into_poly();
         assert_ty_for_str(expected, j);
     }
 
@@ -312,7 +312,7 @@ mod test {
     fn false_literal() {
         let j = "false";
 
-        let expected = ty::Ty::Bool(false).into_poly();
+        let expected = ty::Ty::LitBool(false).into_poly();
         assert_ty_for_str(expected, j);
     }
 
@@ -320,7 +320,7 @@ mod test {
     fn sym_literal() {
         let j = "'foo";
 
-        let expected = ty::Ty::Sym("foo".to_owned()).into_poly();
+        let expected = ty::Ty::LitSym("foo".to_owned()).into_poly();
         assert_ty_for_str(expected, j);
     }
 
@@ -336,7 +336,7 @@ mod test {
     fn ty_ref() {
         let j = "Symbol";
 
-        let expected = ty::Ty::AnySym.into_poly();
+        let expected = ty::Ty::Sym.into_poly();
         assert_ty_for_str(expected, j);
     }
 
@@ -383,7 +383,7 @@ mod test {
     fn listof_cons() {
         let j = "(Listof true)";
 
-        let inner_ty = ty::Ty::Bool(true).into_poly();
+        let inner_ty = ty::Ty::LitBool(true).into_poly();
         let expected = ty::Ty::List(vec![], Some(Box::new(inner_ty))).into_poly();
 
         assert_ty_for_str(expected, j);
@@ -395,8 +395,8 @@ mod test {
 
         let expected = ty::Ty::List(
             vec![
-                ty::Ty::Bool(true).into_poly(),
-                ty::Ty::Bool(false).into_poly(),
+                ty::Ty::LitBool(true).into_poly(),
+                ty::Ty::LitBool(false).into_poly(),
             ],
             None,
         ).into_poly();
@@ -409,8 +409,8 @@ mod test {
         let j = "(List true false ...)";
 
         let expected = ty::Ty::List(
-            vec![ty::Ty::Bool(true).into_poly()],
-            Some(Box::new(ty::Ty::Bool(false).into_poly())),
+            vec![ty::Ty::LitBool(true).into_poly()],
+            Some(Box::new(ty::Ty::LitBool(false).into_poly())),
         ).into_poly();
 
         assert_ty_for_str(expected, j);
@@ -420,7 +420,7 @@ mod test {
     fn vectorof_cons() {
         let j = "(Vectorof true)";
 
-        let inner_ty = ty::Ty::Bool(true).into_poly();
+        let inner_ty = ty::Ty::LitBool(true).into_poly();
         let expected = ty::Ty::Vec(Some(Box::new(inner_ty)), vec![]).into_poly();
 
         assert_ty_for_str(expected, j);
@@ -433,8 +433,8 @@ mod test {
         let expected = ty::Ty::Vec(
             None,
             vec![
-                ty::Ty::Bool(true).into_poly(),
-                ty::Ty::Bool(false).into_poly(),
+                ty::Ty::LitBool(true).into_poly(),
+                ty::Ty::LitBool(false).into_poly(),
             ],
         ).into_poly();
 
@@ -446,8 +446,8 @@ mod test {
         let j = "(Vector false ... true)";
 
         let expected = ty::Ty::Vec(
-            Some(Box::new(ty::Ty::Bool(false).into_poly())),
-            vec![ty::Ty::Bool(true).into_poly()],
+            Some(Box::new(ty::Ty::LitBool(false).into_poly())),
+            vec![ty::Ty::LitBool(true).into_poly()],
         ).into_poly();
 
         assert_ty_for_str(expected, j);
@@ -472,7 +472,7 @@ mod test {
         let expected = ty::Ty::new_fun(
             false,
             ty::Ty::List(vec![], None).into_poly(),
-            ty::Ty::Bool(true).into_poly(),
+            ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
 
         assert_ty_for_str(expected, j);
@@ -485,7 +485,7 @@ mod test {
         let expected = ty::Ty::new_fun(
             true,
             ty::Ty::List(vec![], None).into_poly(),
-            ty::Ty::Bool(true).into_poly(),
+            ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
 
         assert_ty_for_str(expected, j);
@@ -497,8 +497,8 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             false,
-            ty::Ty::List(vec![ty::Ty::Bool(false).into_poly()], None).into_poly(),
-            ty::Ty::Bool(true).into_poly(),
+            ty::Ty::List(vec![ty::Ty::LitBool(false).into_poly()], None).into_poly(),
+            ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
 
         assert_ty_for_str(expected, j);
@@ -510,8 +510,8 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             false,
-            ty::Ty::List(vec![], Some(Box::new(ty::Ty::AnySym.into_poly()))).into_poly(),
-            ty::Ty::Bool(true).into_poly(),
+            ty::Ty::List(vec![], Some(Box::new(ty::Ty::Sym.into_poly()))).into_poly(),
+            ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
 
         assert_ty_for_str(expected, j);
@@ -523,8 +523,8 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             false,
-            ty::Ty::List(vec![ty::Ty::Bool(false).into_poly()], None).into_poly(),
-            ty::Ty::Bool(true).into_poly(),
+            ty::Ty::List(vec![ty::Ty::LitBool(false).into_poly()], None).into_poly(),
+            ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
 
         assert_ty_for_str(expected, j);
@@ -538,9 +538,9 @@ mod test {
             true,
             ty::Ty::List(
                 vec![ty::Ty::Str.into_poly()],
-                Some(Box::new(ty::Ty::AnySym.into_poly())),
+                Some(Box::new(ty::Ty::Sym.into_poly())),
             ).into_poly(),
-            ty::Ty::Bool(true).into_poly(),
+            ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
 
         assert_ty_for_str(expected, j);
@@ -550,7 +550,7 @@ mod test {
     fn set_cons() {
         let j = "(Setof true)";
 
-        let inner_ty = ty::Ty::Bool(true).into_poly();
+        let inner_ty = ty::Ty::LitBool(true).into_poly();
         let expected = ty::Ty::Set(Box::new(inner_ty)).into_poly();
 
         assert_ty_for_str(expected, j);
@@ -560,8 +560,8 @@ mod test {
     fn hash_cons() {
         let j = "(Hash true false)";
 
-        let key_ty = ty::Ty::Bool(true);
-        let value_ty = ty::Ty::Bool(false);
+        let key_ty = ty::Ty::LitBool(true);
+        let value_ty = ty::Ty::LitBool(false);
         let expected =
             ty::Ty::Hash(Box::new(key_ty.into_poly()), Box::new(value_ty.into_poly())).into_poly();
 
