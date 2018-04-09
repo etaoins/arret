@@ -29,8 +29,6 @@ impl Result {
     }
 }
 
-type IsAFun<S> = fn(&S, &S) -> Result;
-
 trait SeqTyIterator<'a, S> {
     /// Returns the remaining number of fixed member types
     fn fixed_len(&self) -> usize;
@@ -100,9 +98,10 @@ impl<'a, S> SeqTyIterator<'a, S> for RevVecTyIterator<'a, S> {
     }
 }
 
-fn fun_is_a<S>(ref_is_a: IsAFun<S>, sub_fun: &ty::Fun<S>, par_fun: &ty::Fun<S>) -> Result
+fn fun_is_a<S, F>(ref_is_a: F, sub_fun: &ty::Fun<S>, par_fun: &ty::Fun<S>) -> Result
 where
     S: ty::TyRef,
+    F: Fn(&S, &S) -> Result,
 {
     if sub_fun.impure && !par_fun.impure {
         // Impure functions cannot satisfy pure function types
@@ -113,11 +112,11 @@ where
     ref_is_a(&par_fun.params, &sub_fun.params).and_then(|| ref_is_a(&sub_fun.ret, &par_fun.ret))
 }
 
-fn seq_is_a<'a, 'b, S, T, U>(ref_is_a: IsAFun<S>, mut sub_iter: T, mut par_iter: U) -> Result
+fn seq_is_a<'a, S, T, F>(ref_is_a: F, mut sub_iter: T, mut par_iter: T) -> Result
 where
-    S: 'a + 'b + ty::TyRef,
+    S: 'a + ty::TyRef,
     T: SeqTyIterator<'a, S>,
-    U: SeqTyIterator<'b, S>,
+    F: Fn(&S, &S) -> Result,
 {
     let mut is_exact = sub_iter.fixed_len() >= par_iter.fixed_len();
     loop {
@@ -159,8 +158,8 @@ where
     }
 }
 
-fn ty_is_a<S>(
-    ref_is_a: IsAFun<S>,
+fn ty_is_a<S, F>(
+    ref_is_a: F,
     sub_ref: &S,
     sub_ty: &ty::Ty<S>,
     parent_ref: &S,
@@ -168,6 +167,7 @@ fn ty_is_a<S>(
 ) -> Result
 where
     S: ty::TyRef,
+    F: Fn(&S, &S) -> Result,
 {
     if sub_ty == parent_ty {
         return Result::Yes;
