@@ -14,7 +14,6 @@ where
 {
     Any,
     Bool,
-    Sym,
     Char,
     Float,
     Fun(Box<Fun<S>>),
@@ -25,6 +24,7 @@ where
     LitSym(String),
     Set(Box<S>),
     Str,
+    Sym,
     Union(Vec<S>),
     Vec(Option<Box<S>>, Vec<S>),
 }
@@ -61,6 +61,11 @@ pub struct PVarId(usize);
 impl PVarId {
     pub fn new(id: usize) -> PVarId {
         PVarId(id)
+    }
+
+    #[cfg(test)]
+    pub fn to_usize(self) -> usize {
+        self.0
     }
 }
 
