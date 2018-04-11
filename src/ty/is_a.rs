@@ -264,61 +264,6 @@ pub fn mono_is_a(sub: &ty::Mono, parent: &ty::Mono) -> Result {
     ty_is_a(mono_is_a, sub, sub.as_ty(), parent, parent.as_ty())
 }
 
-fn poly_ty_has_subtypes(pvars: &[ty::PVar], poly_ty: &ty::Ty<ty::Poly>) -> bool {
-    match *poly_ty {
-        ty::Ty::Any | ty::Ty::Bool | ty::Ty::Sym => true,
-        ty::Ty::Char
-        | ty::Ty::Float
-        | ty::Ty::Int
-        | ty::Ty::LitBool(_)
-        | ty::Ty::LitSym(_)
-        | ty::Ty::Str => false,
-        ty::Ty::Fun(ref fun) => {
-            fun.impure
-                || fun.params
-                    != ty::Ty::List(vec![], Some(Box::new(ty::Ty::Any.into_poly()))).into_poly()
-                || poly_has_subtypes(pvars, &fun.ret)
-        }
-        ty::Ty::Hash(ref key, ref value) => [key, value]
-            .iter()
-            .any(|poly| poly_has_subtypes(pvars, poly)),
-        ty::Ty::List(ref fixed, ref rest) => {
-            rest.is_some() || fixed.iter().any(|poly| poly_has_subtypes(pvars, poly))
-        }
-        ty::Ty::Set(ref member) => poly_has_subtypes(pvars, member),
-        ty::Ty::Vec(ref begin, ref fixed) => {
-            begin.is_some() || fixed.iter().any(|poly| poly_has_subtypes(pvars, poly))
-        }
-        ty::Ty::Union(ref members) => !members.is_empty(),
-    }
-}
-
-fn poly_has_subtypes(pvars: &[ty::PVar], poly: &ty::Poly) -> bool {
-    let poly_ty = resolve_poly_ty(pvars, poly).as_ty();
-    poly_ty_has_subtypes(pvars, poly_ty)
-}
-
-enum ResolveResult<'a> {
-    Fixed(&'a ty::Ty<ty::Poly>),
-    Bound(&'a ty::Ty<ty::Poly>),
-}
-
-impl<'a> ResolveResult<'a> {
-    fn as_ty(&self) -> &'a ty::Ty<ty::Poly> {
-        match *self {
-            ResolveResult::Fixed(ty) => ty,
-            ResolveResult::Bound(ty) => ty,
-        }
-    }
-}
-
-fn resolve_pvar_id_bound(pvars: &[ty::PVar], pvar_id: ty::PVarId) -> &ty::Ty<ty::Poly> {
-    match pvars[pvar_id.to_usize()].bound {
-        ty::Poly::Fixed(ref fixed_ty) => fixed_ty,
-        ty::Poly::Var(pvar_id) => resolve_pvar_id_bound(pvars, pvar_id),
-    }
-}
-
 fn pvar_id_is_bounded_by(
     pvars: &[ty::PVar],
     sub_pvar_id: ty::PVarId,
@@ -334,17 +279,6 @@ fn pvar_id_is_bounded_by(
     }
 }
 
-/// Resolves a Poly to either a fixed type or polymorphic variable's bound
-fn resolve_poly_ty<'a>(pvars: &'a [ty::PVar], poly: &'a ty::Poly) -> ResolveResult<'a> {
-    match *poly {
-        ty::Poly::Fixed(ref ty) => ResolveResult::Fixed(ty),
-        ty::Poly::Var(pvar_id) => {
-            let ty = resolve_pvar_id_bound(pvars, pvar_id);
-            ResolveResult::Bound(ty)
-        }
-    }
-}
-
 pub fn poly_is_a(pvars: &[ty::PVar], sub: &ty::Poly, parent: &ty::Poly) -> Result {
     if let &ty::Poly::Var(parent_pvar_id) = parent {
         if let &ty::Poly::Var(sub_pvar_id) = sub {
@@ -354,10 +288,10 @@ pub fn poly_is_a(pvars: &[ty::PVar], sub: &ty::Poly, parent: &ty::Poly) -> Resul
         }
     }
 
-    let sub_ty = resolve_poly_ty(pvars, sub).as_ty();
-    let (parent_ty, parent_is_bound) = match resolve_poly_ty(pvars, parent) {
-        ResolveResult::Bound(ty) => (ty, true),
-        ResolveResult::Fixed(ty) => (ty, false),
+    let sub_ty = ty::resolve::resolve_poly_ty(pvars, sub).as_ty();
+    let (parent_ty, parent_is_bound) = match ty::resolve::resolve_poly_ty(pvars, parent) {
+        ty::resolve::Result::Bound(ty) => (ty, true),
+        ty::resolve::Result::Fixed(ty) => (ty, false),
     };
 
     let result = ty_is_a(
@@ -368,7 +302,7 @@ pub fn poly_is_a(pvars: &[ty::PVar], sub: &ty::Poly, parent: &ty::Poly) -> Resul
         parent_ty,
     );
 
-    if parent_is_bound && poly_ty_has_subtypes(pvars, parent_ty) {
+    if parent_is_bound {
         // The parent is polymorphic and has child types. We can't ensure that the sub satisfies
         // all child types of the parent bound.
         Result::May.and_then(|| result)
@@ -384,11 +318,6 @@ mod test {
     fn poly_for_str(datum_str: &str) -> ty::Poly {
         use hir;
         hir::ty_for_str(datum_str).unwrap()
-    }
-
-    fn str_has_subtypes(datum_str: &str) -> bool {
-        let poly = poly_for_str(datum_str);
-        poly_has_subtypes(&[], &poly)
     }
 
     fn mono_ty_for_str(datum_str: &str) -> ty::Mono {
@@ -668,41 +597,6 @@ mod test {
         assert_eq!(
             Result::May,
             poly_is_a(&pvars, &ptype1_unbounded, &ptype2_bounded_by_1)
-        );
-    }
-
-    #[test]
-    fn poly_subtypes() {
-        assert_eq!(true, str_has_subtypes("Any"));
-        assert_eq!(true, str_has_subtypes("Bool"));
-        assert_eq!(false, str_has_subtypes("true"));
-        assert_eq!(false, str_has_subtypes("Char"));
-        assert_eq!(false, str_has_subtypes("Float"));
-        assert_eq!(false, str_has_subtypes("String"));
-        assert_eq!(true, str_has_subtypes("Symbol"));
-
-        assert_eq!(false, str_has_subtypes("(-> Any ... true)"));
-        assert_eq!(true, str_has_subtypes("(->! Any ... true)"));
-        assert_eq!(true, str_has_subtypes("(-> Any true)"));
-        assert_eq!(true, str_has_subtypes("(-> Int ... true)"));
-        assert_eq!(true, str_has_subtypes("(-> Any ... Any)"));
-
-        assert_eq!(true, str_has_subtypes("(Hash Symbol Int)"));
-        assert_eq!(false, str_has_subtypes("(Hash Float Int)"));
-
-        assert_eq!(true, str_has_subtypes("(List Symbol Int)"));
-        assert_eq!(true, str_has_subtypes("(List String Int ...)"));
-        assert_eq!(false, str_has_subtypes("(List String Int)"));
-
-        assert_eq!(true, str_has_subtypes("(Setof Symbol)"));
-        assert_eq!(false, str_has_subtypes("(Setof Float)"));
-
-        assert_eq!(true, str_has_subtypes("(Vector false ...)"));
-        assert_eq!(false, str_has_subtypes("(Vector false true)"));
-
-        assert_eq!(
-            false,
-            poly_has_subtypes(&[], &ty::Ty::Union(vec![]).into_poly())
         );
     }
 }

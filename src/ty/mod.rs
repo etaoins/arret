@@ -2,6 +2,8 @@
 pub mod is_a;
 #[cfg(test)]
 pub mod subst;
+#[cfg(test)]
+pub mod resolve;
 
 use syntax::span::Span;
 
