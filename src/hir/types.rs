@@ -19,6 +19,8 @@ pub enum TyCons {
     ImpureFun,
     Set,
     Hash,
+    #[cfg(test)]
+    RawU,
 }
 
 pub fn lower_pvar(scope: &Scope, pvar_datum: NsDatum) -> Result<(Ident, ty::PVar)> {
@@ -155,6 +157,17 @@ fn lower_ty_cons_apply(
             let key_ty = lower_ty(scope, arg_data.pop().unwrap())?;
             Ok(ty::Ty::Hash(Box::new(key_ty), Box::new(value_ty)).into_poly())
         }
+        #[cfg(test)]
+        TyCons::RawU => {
+            // This performs a union *without* unifying the types. This is used when testing the
+            // union code itself
+            let member_tys = arg_data
+                .into_iter()
+                .map(|arg_datum| lower_ty(scope, arg_datum))
+                .collect::<Result<Vec<ty::Poly>>>()?;
+
+            Ok(ty::Ty::Union(member_tys).into_poly())
+        }
     }
 }
 
@@ -261,6 +274,9 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
     export_ty_cons!("->!", TyCons::ImpureFun);
     export_ty_cons!("Setof", TyCons::Set);
     export_ty_cons!("Hash", TyCons::Hash);
+
+    #[cfg(test)]
+    export_ty_cons!("RawU", TyCons::RawU);
 }
 
 #[cfg(test)]
