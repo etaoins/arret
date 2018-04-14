@@ -19,6 +19,7 @@ pub enum TyCons {
     ImpureFun,
     Set,
     Hash,
+    Union,
     #[cfg(test)]
     RawU,
 }
@@ -157,6 +158,21 @@ fn lower_ty_cons_apply(
             let key_ty = lower_ty(scope, arg_data.pop().unwrap())?;
             Ok(ty::Ty::Hash(Box::new(key_ty), Box::new(value_ty)).into_poly())
         }
+        TyCons::Union => {
+            let member_tys = arg_data
+                .into_iter()
+                .map(|arg_datum| lower_ty(scope, arg_datum))
+                .collect::<Result<Vec<ty::Poly>>>()?;
+
+            ty::unify::poly_unify_iter(&[], member_tys.iter()).map_err(|err| match err {
+                ty::unify::Error::Erased(left, right) => {
+                    Error::new(span, ErrorKind::TypeErased(left, right))
+                }
+                ty::unify::Error::Unnatural(_, _) => {
+                    panic!("Unnatural types should be allowed");
+                }
+            })
+        }
         #[cfg(test)]
         TyCons::RawU => {
             // This performs a union *without* unifying the types. This is used when testing the
@@ -274,6 +290,7 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
     export_ty_cons!("->!", TyCons::ImpureFun);
     export_ty_cons!("Setof", TyCons::Set);
     export_ty_cons!("Hash", TyCons::Hash);
+    export_ty_cons!("U", TyCons::Union);
 
     #[cfg(test)]
     export_ty_cons!("RawU", TyCons::RawU);
@@ -582,5 +599,34 @@ mod test {
             ty::Ty::Hash(Box::new(key_ty.into_poly()), Box::new(value_ty.into_poly())).into_poly();
 
         assert_ty_for_str(expected, j);
+    }
+
+    #[test]
+    fn union_cons() {
+        let j = "(U true false)";
+        let expected = ty::Ty::Bool.into_poly();
+
+        assert_ty_for_str(expected, j);
+    }
+
+    #[test]
+    fn erased_union_cons() {
+        let j = "(U (-> Symbol) (-> String))";
+        let t = "^^^^^^^^^^^^^^^^^^^^^^^^^^^";
+
+        let left = ty::Ty::new_fun(
+            false,
+            ty::Ty::List(vec![], None).into_poly(),
+            ty::Ty::Sym.into_poly(),
+        ).into_poly();
+
+        let right = ty::Ty::new_fun(
+            false,
+            ty::Ty::List(vec![], None).into_poly(),
+            ty::Ty::Str.into_poly(),
+        ).into_poly();
+
+        let err = Error::new(t2s(t), ErrorKind::TypeErased(left, right));
+        assert_err_for_str(err, j);
     }
 }
