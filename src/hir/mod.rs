@@ -139,4 +139,4 @@ impl Expr {
 }
 
 #[cfg(test)]
-pub use self::types::ty_for_str;
+pub use self::types::poly_for_str;

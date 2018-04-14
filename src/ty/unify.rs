@@ -295,7 +295,7 @@ mod test {
 
     fn poly_for_str(datum_str: &str) -> ty::Poly {
         use hir;
-        hir::ty_for_str(datum_str).unwrap()
+        hir::poly_for_str(datum_str).unwrap()
     }
 
     fn assert_unnatural_disjoint(ty_str1: &str, ty_str2: &str) {

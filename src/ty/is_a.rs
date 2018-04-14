@@ -332,10 +332,10 @@ mod test {
 
     fn poly_for_str(datum_str: &str) -> ty::Poly {
         use hir;
-        hir::ty_for_str(datum_str).unwrap()
+        hir::poly_for_str(datum_str).unwrap()
     }
 
-    fn mono_ty_for_str(datum_str: &str) -> ty::Mono {
+    fn mono_for_str(datum_str: &str) -> ty::Mono {
         use std::collections::HashMap;
 
         let poly = poly_for_str(datum_str);
@@ -344,10 +344,10 @@ mod test {
 
     #[test]
     fn sym_types() {
-        let foo_sym = mono_ty_for_str("'foo");
-        let bar_sym = mono_ty_for_str("'bar");
-        let any_sym = mono_ty_for_str("Symbol");
-        let any_int = mono_ty_for_str("Int");
+        let foo_sym = mono_for_str("'foo");
+        let bar_sym = mono_for_str("'bar");
+        let any_sym = mono_for_str("Symbol");
+        let any_int = mono_for_str("Int");
 
         assert_eq!(Result::Yes, mono_is_a(&foo_sym, &foo_sym));
         assert_eq!(Result::No, mono_is_a(&foo_sym, &bar_sym));
@@ -361,9 +361,9 @@ mod test {
 
     #[test]
     fn set_types() {
-        let foo_set = mono_ty_for_str("(Setof 'foo)");
-        let bar_set = mono_ty_for_str("(Setof 'bar)");
-        let any_set = mono_ty_for_str("(Setof Symbol)");
+        let foo_set = mono_for_str("(Setof 'foo)");
+        let bar_set = mono_for_str("(Setof 'bar)");
+        let any_set = mono_for_str("(Setof Symbol)");
 
         assert_eq!(Result::Yes, mono_is_a(&foo_set, &foo_set));
         assert_eq!(Result::No, mono_is_a(&foo_set, &bar_set));
@@ -374,9 +374,9 @@ mod test {
 
     #[test]
     fn hash_types() {
-        let foo_sym = mono_ty_for_str("'foo");
-        let any_sym = mono_ty_for_str("Symbol");
-        let any_int = mono_ty_for_str("Int");
+        let foo_sym = mono_for_str("'foo");
+        let any_sym = mono_for_str("Symbol");
+        let any_int = mono_for_str("Int");
 
         let int_to_any_sym =
             ty::Ty::Hash(Box::new(any_int.clone()), Box::new(any_sym.clone())).into_mono();
@@ -392,12 +392,12 @@ mod test {
 
     #[test]
     fn union_types() {
-        let foo_sym = mono_ty_for_str("'foo");
-        let baz_sym = mono_ty_for_str("'baz");
+        let foo_sym = mono_for_str("'foo");
+        let baz_sym = mono_for_str("'baz");
 
-        let foo_bar_union = mono_ty_for_str("(RawU 'foo 'bar)");
-        let bar_baz_union = mono_ty_for_str("(RawU 'bar 'baz)");
-        let never = mono_ty_for_str("(RawU)");
+        let foo_bar_union = mono_for_str("(RawU 'foo 'bar)");
+        let bar_baz_union = mono_for_str("(RawU 'bar 'baz)");
+        let never = mono_for_str("(RawU)");
 
         assert_eq!(Result::Yes, mono_is_a(&foo_sym, &foo_bar_union));
         assert_eq!(Result::No, mono_is_a(&baz_sym, &foo_bar_union));
@@ -414,9 +414,9 @@ mod test {
 
     #[test]
     fn any_and_never_types() {
-        let any = mono_ty_for_str("Any");
+        let any = mono_for_str("Any");
         let never = ty::Ty::Union(vec![]).into_mono();
-        let foo_sym = mono_ty_for_str("'foo");
+        let foo_sym = mono_for_str("'foo");
 
         assert_eq!(Result::Yes, mono_is_a(&foo_sym, &any));
         assert_eq!(Result::May, mono_is_a(&any, &foo_sym));
@@ -427,11 +427,11 @@ mod test {
 
     #[test]
     fn list_types() {
-        let listof_any = mono_ty_for_str("(Listof Any)");
-        let listof_int = mono_ty_for_str("(Listof Int)");
-        let two_ints_list = mono_ty_for_str("(List Int Int)");
-        let three_ints_list = mono_ty_for_str("(List Int Int Int)");
-        let at_least_one_int_list = mono_ty_for_str("(List Int Int ...)");
+        let listof_any = mono_for_str("(Listof Any)");
+        let listof_int = mono_for_str("(Listof Int)");
+        let two_ints_list = mono_for_str("(List Int Int)");
+        let three_ints_list = mono_for_str("(List Int Int Int)");
+        let at_least_one_int_list = mono_for_str("(List Int Int ...)");
 
         assert_eq!(Result::Yes, mono_is_a(&listof_int, &listof_any));
         assert_eq!(Result::May, mono_is_a(&listof_any, &listof_int));
@@ -449,11 +449,11 @@ mod test {
 
     #[test]
     fn vec_types() {
-        let vecof_any = mono_ty_for_str("(Vectorof Any)");
-        let vecof_int = mono_ty_for_str("(Vectorof Int)");
-        let two_ints_vec = mono_ty_for_str("(Vector Int Int)");
-        let three_ints_vec = mono_ty_for_str("(Vector Int Int Int)");
-        let at_least_one_int_vec = mono_ty_for_str("(Vector Int ... Int)");
+        let vecof_any = mono_for_str("(Vectorof Any)");
+        let vecof_int = mono_for_str("(Vectorof Int)");
+        let two_ints_vec = mono_for_str("(Vector Int Int)");
+        let three_ints_vec = mono_for_str("(Vector Int Int Int)");
+        let at_least_one_int_vec = mono_for_str("(Vector Int ... Int)");
 
         assert_eq!(Result::Yes, mono_is_a(&vecof_int, &vecof_any));
         assert_eq!(Result::May, mono_is_a(&vecof_any, &vecof_int));
@@ -471,10 +471,10 @@ mod test {
 
     #[test]
     fn fun_types() {
-        let impure_any_to_sym = mono_ty_for_str("(->! Any Symbol)");
-        let impure_sym_to_any = mono_ty_for_str("(->! Symbol Any)");
-        let impure_sym_to_sym = mono_ty_for_str("(->! Symbol Symbol)");
-        let pure_sym_to_sym = mono_ty_for_str("(-> Symbol Symbol)");
+        let impure_any_to_sym = mono_for_str("(->! Any Symbol)");
+        let impure_sym_to_any = mono_for_str("(->! Symbol Any)");
+        let impure_sym_to_sym = mono_for_str("(->! Symbol Symbol)");
+        let pure_sym_to_sym = mono_for_str("(-> Symbol Symbol)");
 
         assert_eq!(
             Result::Yes,
@@ -495,9 +495,9 @@ mod test {
 
     #[test]
     fn bool_types() {
-        let true_type = mono_ty_for_str("true");
-        let false_type = mono_ty_for_str("false");
-        let bool_type = mono_ty_for_str("Bool");
+        let true_type = mono_for_str("true");
+        let false_type = mono_for_str("false");
+        let bool_type = mono_for_str("Bool");
 
         assert_eq!(Result::Yes, mono_is_a(&true_type, &bool_type));
         assert_eq!(Result::May, mono_is_a(&bool_type, &true_type));

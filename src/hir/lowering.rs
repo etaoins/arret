@@ -9,7 +9,7 @@ use hir::prim::Prim;
 use hir::module::{Module, ModuleDef};
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::error::{Error, ErrorKind, Result};
-use hir::types::{lower_pvar, lower_ty, TyCons};
+use hir::types::{lower_poly, lower_pvar, TyCons};
 use hir::util::{expect_arg_count, expect_ident, pop_vec_front, split_into_fixed_and_rest};
 use ty;
 use syntax::datum::Datum;
@@ -135,7 +135,7 @@ impl<'ccx> LoweringContext<'ccx> {
         let ty_datum = arg_data.pop().unwrap();
         let ident = expect_ident(arg_data.pop().unwrap())?;
 
-        let ty = lower_ty(&self.pvars, scope, ty_datum)?;
+        let ty = lower_poly(&self.pvars, scope, ty_datum)?;
 
         scope.insert_binding(ident, Binding::Ty(ty));
         Ok(())
@@ -196,7 +196,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     return Err(Error::new(span, ErrorKind::NoVecDestruc));
                 }
 
-                let ty = lower_ty(&self.pvars, scope, vs.pop().unwrap())?;
+                let ty = lower_poly(&self.pvars, scope, vs.pop().unwrap())?;
 
                 // Discard the type colon
                 vs.pop();
@@ -279,7 +279,8 @@ impl<'ccx> LoweringContext<'ccx> {
             && scope.get_datum(&rest_data[0]) == Some(Binding::TyCons(TyCons::Fun))
         {
             body_data = rest_data.split_off(2);
-            ret_ty = Some(lower_ty(&self.pvars, &fun_scope, rest_data.pop().unwrap())?.into_decl());
+            ret_ty =
+                Some(lower_poly(&self.pvars, &fun_scope, rest_data.pop().unwrap())?.into_decl());
         } else {
             body_data = rest_data;
             ret_ty = None;
@@ -348,7 +349,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 expect_arg_count(span, &arg_data, 1)?;
                 Ok(Expr::TyPred(
                     span,
-                    lower_ty(&self.pvars, scope, arg_data.pop().unwrap())?,
+                    lower_poly(&self.pvars, scope, arg_data.pop().unwrap())?,
                 ))
             }
             Prim::TyColon => {
@@ -360,7 +361,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 Ok(Expr::Ann(
                     span,
                     Box::new(self.lower_inner_expr(scope, expr_datum)?),
-                    lower_ty(&self.pvars, scope, ty_datum)?,
+                    lower_poly(&self.pvars, scope, ty_datum)?,
                 ))
             }
             Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),
