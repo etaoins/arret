@@ -1,13 +1,14 @@
-#[cfg(test)]
 pub mod is_a;
+pub mod resolve;
 #[cfg(test)]
 pub mod subst;
-#[cfg(test)]
-pub mod resolve;
+pub mod unify;
 
 use syntax::span::Span;
 
-pub trait TyRef: PartialEq + Clone + Sized {}
+pub trait TyRef: PartialEq + Clone + Sized {
+    fn from_ty(Ty<Self>) -> Self;
+}
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub enum Ty<S>
@@ -65,7 +66,6 @@ impl PVarId {
         PVarId(id)
     }
 
-    #[cfg(test)]
     pub fn to_usize(self) -> usize {
         self.0
     }
@@ -98,7 +98,11 @@ impl Poly {
     }
 }
 
-impl TyRef for Poly {}
+impl TyRef for Poly {
+    fn from_ty(ty: Ty<Poly>) -> Poly {
+        ty.into_poly()
+    }
+}
 
 impl Ty<Poly> {
     pub fn into_poly(self) -> Poly {
@@ -110,20 +114,22 @@ impl Ty<Poly> {
 pub struct Mono(Ty<Mono>);
 
 impl Mono {
-    #[cfg(test)]
     fn as_ty(&self) -> &Ty<Mono> {
         &self.0
     }
 }
 
 impl Ty<Mono> {
-    #[cfg(test)]
     pub fn into_mono(self) -> Mono {
         Mono(self)
     }
 }
 
-impl TyRef for Mono {}
+impl TyRef for Mono {
+    fn from_ty(ty: Ty<Mono>) -> Mono {
+        ty.into_mono()
+    }
+}
 
 /// Decl is a type declared by a user
 ///
@@ -138,7 +144,6 @@ pub enum Decl {
 }
 
 impl Ty<Poly> {
-    #[cfg(test)]
     pub fn into_decl(self) -> Decl {
         Decl::Fixed(self)
     }
