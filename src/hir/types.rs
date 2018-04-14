@@ -24,240 +24,257 @@ pub enum TyCons {
     RawU,
 }
 
-pub fn lower_pvar(scope: &Scope, pvar_datum: NsDatum) -> Result<(Ident, ty::PVar)> {
-    let span = pvar_datum.span();
+struct LowerTyContext<'a> {
+    pvars: &'a [ty::PVar],
+    scope: &'a Scope,
+}
 
-    match pvar_datum {
-        NsDatum::Ident(_, ident) => {
-            let source_name = ident.name().clone();
-            return Ok((ident, ty::PVar::new(source_name, ty::Ty::Any.into_poly())));
-        }
-        NsDatum::Vec(_, mut arg_data) => {
-            if arg_data.len() == 3
-                && scope.get_datum(&arg_data[1]) == Some(Binding::Prim(Prim::TyColon))
-            {
-                let bound_datum = arg_data.pop().unwrap();
-                let bound_ty = lower_ty(scope, bound_datum)?;
+impl<'a> LowerTyContext<'a> {
+    fn lower_pvar(&self, pvar_datum: NsDatum) -> Result<(Ident, ty::PVar)> {
+        let span = pvar_datum.span();
 
-                // Discard the : completely
-                arg_data.pop();
-
-                let pvar_ident = expect_ident(arg_data.pop().unwrap())?;
-
-                let source_name = pvar_ident.name().clone();
-                return Ok((pvar_ident, ty::PVar::new(source_name, bound_ty)));
+        match pvar_datum {
+            NsDatum::Ident(_, ident) => {
+                let source_name = ident.name().clone();
+                return Ok((ident, ty::PVar::new(source_name, ty::Ty::Any.into_poly())));
             }
+            NsDatum::Vec(_, mut arg_data) => {
+                if arg_data.len() == 3
+                    && self.scope.get_datum(&arg_data[1]) == Some(Binding::Prim(Prim::TyColon))
+                {
+                    let bound_datum = arg_data.pop().unwrap();
+                    let bound_ty = self.lower_ty(bound_datum)?;
+
+                    // Discard the : completely
+                    arg_data.pop();
+
+                    let pvar_ident = expect_ident(arg_data.pop().unwrap())?;
+
+                    let source_name = pvar_ident.name().clone();
+                    return Ok((pvar_ident, ty::PVar::new(source_name, bound_ty)));
+                }
+            }
+            _ => {}
         }
-        _ => {}
-    }
 
-    Err(Error::new(
-        span,
-        ErrorKind::IllegalArg(
-            "polymorphic variables must be either an identifier or [identifier : Type]".to_owned(),
-        ),
-    ))
-}
-
-fn lower_list_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
-    let (fixed, rest) = split_into_fixed_and_rest(scope, arg_data);
-
-    let fixed_tys = fixed
-        .into_iter()
-        .map(|arg_datum| lower_ty(scope, arg_datum))
-        .collect::<Result<Vec<ty::Poly>>>()?;
-
-    let rest_ty = match rest {
-        Some(rest) => Some(Box::new(lower_ty(scope, rest)?)),
-        None => None,
-    };
-
-    Ok(ty::Ty::List(fixed_tys, rest_ty).into_poly())
-}
-
-fn lower_vec_cons(scope: &Scope, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
-    let (start, fixed) = split_into_start_and_fixed(scope, arg_data);
-
-    let fixed_tys = fixed
-        .into_iter()
-        .map(|arg_datum| lower_ty(scope, arg_datum))
-        .collect::<Result<Vec<ty::Poly>>>()?;
-
-    let start_ty = match start {
-        Some(start) => Some(Box::new(lower_ty(scope, start)?)),
-        None => None,
-    };
-
-    Ok(ty::Ty::Vec(start_ty, fixed_tys).into_poly())
-}
-
-fn lower_fun_cons(
-    scope: &Scope,
-    span: Span,
-    ty_cons_name: &'static str,
-    impure: bool,
-    mut arg_data: Vec<NsDatum>,
-) -> Result<ty::Poly> {
-    if arg_data.is_empty() {
-        return Err(Error::new(
+        Err(Error::new(
             span,
-            ErrorKind::IllegalArg(format!("{} requires at least one argument", ty_cons_name)),
-        ));
+            ErrorKind::IllegalArg(
+                "polymorphic variables must be either an identifier or [identifier : Type]"
+                    .to_owned(),
+            ),
+        ))
+    }
+    fn lower_list_cons(&self, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
+        let (fixed, rest) = split_into_fixed_and_rest(self.scope, arg_data);
+
+        let fixed_tys = fixed
+            .into_iter()
+            .map(|arg_datum| self.lower_ty(arg_datum))
+            .collect::<Result<Vec<ty::Poly>>>()?;
+
+        let rest_ty = match rest {
+            Some(rest) => Some(Box::new(self.lower_ty(rest)?)),
+            None => None,
+        };
+
+        Ok(ty::Ty::List(fixed_tys, rest_ty).into_poly())
     }
 
-    let ret_ty = lower_ty(scope, arg_data.pop().unwrap())?;
-    let params_ty = lower_list_cons(scope, arg_data)?;
+    fn lower_vec_cons(&self, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
+        let (start, fixed) = split_into_start_and_fixed(self.scope, arg_data);
 
-    Ok(ty::Ty::new_fun(impure, params_ty, ret_ty).into_poly())
+        let fixed_tys = fixed
+            .into_iter()
+            .map(|arg_datum| self.lower_ty(arg_datum))
+            .collect::<Result<Vec<ty::Poly>>>()?;
+
+        let start_ty = match start {
+            Some(start) => Some(Box::new(self.lower_ty(start)?)),
+            None => None,
+        };
+
+        Ok(ty::Ty::Vec(start_ty, fixed_tys).into_poly())
+    }
+
+    fn lower_fun_cons(
+        &self,
+        span: Span,
+        ty_cons_name: &'static str,
+        impure: bool,
+        mut arg_data: Vec<NsDatum>,
+    ) -> Result<ty::Poly> {
+        if arg_data.is_empty() {
+            return Err(Error::new(
+                span,
+                ErrorKind::IllegalArg(format!("{} requires at least one argument", ty_cons_name)),
+            ));
+        }
+
+        let ret_ty = self.lower_ty(arg_data.pop().unwrap())?;
+        let params_ty = self.lower_list_cons(arg_data)?;
+
+        Ok(ty::Ty::new_fun(impure, params_ty, ret_ty).into_poly())
+    }
+
+    fn lower_infix_fun_cons(&self, impure: bool, mut arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
+        let ret_ty = self.lower_ty(arg_data.pop().unwrap())?;
+
+        // Discard the constructor
+        arg_data.pop();
+
+        let params_ty = self.lower_list_cons(arg_data)?;
+
+        Ok(ty::Ty::new_fun(impure, params_ty, ret_ty).into_poly())
+    }
+
+    fn lower_ty_cons_apply(
+        &self,
+        span: Span,
+        ty_cons: TyCons,
+        mut arg_data: Vec<NsDatum>,
+    ) -> Result<ty::Poly> {
+        match ty_cons {
+            TyCons::List => self.lower_list_cons(arg_data),
+            TyCons::Listof => {
+                expect_arg_count(span, &arg_data, 1)?;
+                let rest_ty = self.lower_ty(arg_data.pop().unwrap())?;
+                Ok(ty::Ty::List(vec![], Some(Box::new(rest_ty))).into_poly())
+            }
+            TyCons::Vector => self.lower_vec_cons(arg_data),
+            TyCons::Vectorof => {
+                expect_arg_count(span, &arg_data, 1)?;
+                let start_ty = self.lower_ty(arg_data.pop().unwrap())?;
+                Ok(ty::Ty::Vec(Some(Box::new(start_ty)), vec![]).into_poly())
+            }
+            TyCons::Fun => self.lower_fun_cons(span, "->", false, arg_data),
+            TyCons::ImpureFun => self.lower_fun_cons(span, "->!", true, arg_data),
+            TyCons::Set => {
+                expect_arg_count(span, &arg_data, 1)?;
+                let member_ty = self.lower_ty(arg_data.pop().unwrap())?;
+                Ok(ty::Ty::Set(Box::new(member_ty)).into_poly())
+            }
+            TyCons::Hash => {
+                expect_arg_count(span, &arg_data, 2)?;
+                let value_ty = self.lower_ty(arg_data.pop().unwrap())?;
+                let key_ty = self.lower_ty(arg_data.pop().unwrap())?;
+                Ok(ty::Ty::Hash(Box::new(key_ty), Box::new(value_ty)).into_poly())
+            }
+            TyCons::Union => {
+                let member_tys = arg_data
+                    .into_iter()
+                    .map(|arg_datum| self.lower_ty(arg_datum))
+                    .collect::<Result<Vec<ty::Poly>>>()?;
+
+                ty::unify::poly_unify_iter(self.pvars, member_tys.iter()).map_err(|err| match err {
+                    ty::unify::Error::Erased(left, right) => {
+                        Error::new(span, ErrorKind::TypeErased(left, right))
+                    }
+                    ty::unify::Error::Unnatural(_, _) => {
+                        panic!("Unnatural types should be allowed");
+                    }
+                })
+            }
+            #[cfg(test)]
+            TyCons::RawU => {
+                // This performs a union *without* unifying the types. This is used when testing the
+                // union code itself
+                let member_tys = arg_data
+                    .into_iter()
+                    .map(|arg_datum| self.lower_ty(arg_datum))
+                    .collect::<Result<Vec<ty::Poly>>>()?;
+
+                Ok(ty::Ty::Union(member_tys).into_poly())
+            }
+        }
+    }
+
+    fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
+        match datum {
+            NsDatum::Bool(_, v) => Ok(ty::Ty::LitBool(v).into_poly()),
+            NsDatum::Ident(_, ident) => Ok(ty::Ty::LitSym(ident.name().clone()).into_poly()),
+            _ => Err(Error::new(
+                datum.span(),
+                ErrorKind::IllegalArg("only boolean and symbol literals are supported".to_owned()),
+            )),
+        }
+    }
+
+    fn lower_ident(&self, span: Span, ident: Ident) -> Result<ty::Poly> {
+        match self.scope.get(&ident) {
+            Some(Binding::Ty(ref ty)) => Ok(ty.clone()),
+            Some(_) => Err(Error::new(span, ErrorKind::ValueAsTy)),
+            None => Err(Error::new(
+                span,
+                ErrorKind::UnboundSymbol(ident.into_name()),
+            )),
+        }
+    }
+
+    fn lower_ty(&self, datum: NsDatum) -> Result<ty::Poly> {
+        match datum {
+            NsDatum::List(span, mut vs) => {
+                if vs.is_empty() {
+                    return Ok(ty::Ty::List(vec![], None).into_poly());
+                }
+
+                if vs.len() >= 3 {
+                    match self.scope.get_datum(&vs[vs.len() - 2]) {
+                        Some(Binding::TyCons(TyCons::Fun)) => {
+                            return self.lower_infix_fun_cons(false, vs);
+                        }
+                        Some(Binding::TyCons(TyCons::ImpureFun)) => {
+                            return self.lower_infix_fun_cons(true, vs);
+                        }
+                        _ => {}
+                    };
+                }
+
+                let mut arg_data = vs.split_off(1);
+                let fn_datum = vs.pop().unwrap();
+
+                if let NsDatum::Ident(ident_span, ref ident) = fn_datum {
+                    match self.scope.get(ident) {
+                        Some(Binding::Prim(Prim::Quote)) => {
+                            expect_arg_count(span, &arg_data, 1)?;
+                            return Self::lower_literal(arg_data.pop().unwrap());
+                        }
+                        Some(Binding::TyCons(ty_cons)) => {
+                            return self.lower_ty_cons_apply(span, ty_cons, arg_data);
+                        }
+                        None => {
+                            return Err(Error::new(
+                                ident_span,
+                                ErrorKind::UnboundSymbol(ident.name().clone()),
+                            ));
+                        }
+                        Some(_) => {}
+                    }
+                }
+
+                Err(Error::new(
+                    fn_datum.span(),
+                    ErrorKind::IllegalArg("type constructor expected".to_owned()),
+                ))
+            }
+            NsDatum::Ident(span, ident) => self.lower_ident(span, ident),
+            _ => Self::lower_literal(datum),
+        }
+    }
 }
 
-fn lower_infix_fun_cons(
+pub fn lower_pvar(
+    pvars: &[ty::PVar],
     scope: &Scope,
-    impure: bool,
-    mut arg_data: Vec<NsDatum>,
-) -> Result<ty::Poly> {
-    let ret_ty = lower_ty(scope, arg_data.pop().unwrap())?;
-
-    // Discard the constructor
-    arg_data.pop();
-
-    let params_ty = lower_list_cons(scope, arg_data)?;
-
-    Ok(ty::Ty::new_fun(impure, params_ty, ret_ty).into_poly())
+    pvar_datum: NsDatum,
+) -> Result<(Ident, ty::PVar)> {
+    let ctx = LowerTyContext { pvars, scope };
+    ctx.lower_pvar(pvar_datum)
 }
 
-fn lower_ty_cons_apply(
-    scope: &Scope,
-    span: Span,
-    ty_cons: TyCons,
-    mut arg_data: Vec<NsDatum>,
-) -> Result<ty::Poly> {
-    match ty_cons {
-        TyCons::List => lower_list_cons(scope, arg_data),
-        TyCons::Listof => {
-            expect_arg_count(span, &arg_data, 1)?;
-            let rest_ty = lower_ty(scope, arg_data.pop().unwrap())?;
-            Ok(ty::Ty::List(vec![], Some(Box::new(rest_ty))).into_poly())
-        }
-        TyCons::Vector => lower_vec_cons(scope, arg_data),
-        TyCons::Vectorof => {
-            expect_arg_count(span, &arg_data, 1)?;
-            let start_ty = lower_ty(scope, arg_data.pop().unwrap())?;
-            Ok(ty::Ty::Vec(Some(Box::new(start_ty)), vec![]).into_poly())
-        }
-        TyCons::Fun => lower_fun_cons(scope, span, "->", false, arg_data),
-        TyCons::ImpureFun => lower_fun_cons(scope, span, "->!", true, arg_data),
-        TyCons::Set => {
-            expect_arg_count(span, &arg_data, 1)?;
-            let member_ty = lower_ty(scope, arg_data.pop().unwrap())?;
-            Ok(ty::Ty::Set(Box::new(member_ty)).into_poly())
-        }
-        TyCons::Hash => {
-            expect_arg_count(span, &arg_data, 2)?;
-            let value_ty = lower_ty(scope, arg_data.pop().unwrap())?;
-            let key_ty = lower_ty(scope, arg_data.pop().unwrap())?;
-            Ok(ty::Ty::Hash(Box::new(key_ty), Box::new(value_ty)).into_poly())
-        }
-        TyCons::Union => {
-            let member_tys = arg_data
-                .into_iter()
-                .map(|arg_datum| lower_ty(scope, arg_datum))
-                .collect::<Result<Vec<ty::Poly>>>()?;
-
-            ty::unify::poly_unify_iter(&[], member_tys.iter()).map_err(|err| match err {
-                ty::unify::Error::Erased(left, right) => {
-                    Error::new(span, ErrorKind::TypeErased(left, right))
-                }
-                ty::unify::Error::Unnatural(_, _) => {
-                    panic!("Unnatural types should be allowed");
-                }
-            })
-        }
-        #[cfg(test)]
-        TyCons::RawU => {
-            // This performs a union *without* unifying the types. This is used when testing the
-            // union code itself
-            let member_tys = arg_data
-                .into_iter()
-                .map(|arg_datum| lower_ty(scope, arg_datum))
-                .collect::<Result<Vec<ty::Poly>>>()?;
-
-            Ok(ty::Ty::Union(member_tys).into_poly())
-        }
-    }
-}
-
-fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
-    match datum {
-        NsDatum::Bool(_, v) => Ok(ty::Ty::LitBool(v).into_poly()),
-        NsDatum::Ident(_, ident) => Ok(ty::Ty::LitSym(ident.name().clone()).into_poly()),
-        _ => Err(Error::new(
-            datum.span(),
-            ErrorKind::IllegalArg("only boolean and symbol literals are supported".to_owned()),
-        )),
-    }
-}
-
-fn lower_ident(scope: &Scope, span: Span, ident: Ident) -> Result<ty::Poly> {
-    match scope.get(&ident) {
-        Some(Binding::Ty(ref ty)) => Ok(ty.clone()),
-        Some(_) => Err(Error::new(span, ErrorKind::ValueAsTy)),
-        None => Err(Error::new(
-            span,
-            ErrorKind::UnboundSymbol(ident.into_name()),
-        )),
-    }
-}
-
-pub fn lower_ty(scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
-    match datum {
-        NsDatum::List(span, mut vs) => {
-            if vs.is_empty() {
-                return Ok(ty::Ty::List(vec![], None).into_poly());
-            }
-
-            if vs.len() >= 3 {
-                match scope.get_datum(&vs[vs.len() - 2]) {
-                    Some(Binding::TyCons(TyCons::Fun)) => {
-                        return lower_infix_fun_cons(scope, false, vs);
-                    }
-                    Some(Binding::TyCons(TyCons::ImpureFun)) => {
-                        return lower_infix_fun_cons(scope, true, vs);
-                    }
-                    _ => {}
-                };
-            }
-
-            let mut arg_data = vs.split_off(1);
-            let fn_datum = vs.pop().unwrap();
-
-            if let NsDatum::Ident(ident_span, ref ident) = fn_datum {
-                match scope.get(ident) {
-                    Some(Binding::Prim(Prim::Quote)) => {
-                        expect_arg_count(span, &arg_data, 1)?;
-                        return lower_literal(arg_data.pop().unwrap());
-                    }
-                    Some(Binding::TyCons(ty_cons)) => {
-                        return lower_ty_cons_apply(scope, span, ty_cons, arg_data);
-                    }
-                    None => {
-                        return Err(Error::new(
-                            ident_span,
-                            ErrorKind::UnboundSymbol(ident.name().clone()),
-                        ));
-                    }
-                    Some(_) => {}
-                }
-            }
-
-            Err(Error::new(
-                fn_datum.span(),
-                ErrorKind::IllegalArg("type constructor expected".to_owned()),
-            ))
-        }
-        NsDatum::Ident(span, ident) => lower_ident(scope, span, ident),
-        _ => lower_literal(datum),
-    }
+pub fn lower_ty(pvars: &[ty::PVar], scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
+    let ctx = LowerTyContext { pvars, scope };
+    ctx.lower_ty(datum)
 }
 
 pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
@@ -317,7 +334,11 @@ pub fn ty_for_str(datum_str: &str) -> Result<ty::Poly> {
 
     let test_datum = datum_from_str(datum_str).unwrap();
 
-    lower_ty(&scope, NsDatum::from_syntax_datum(test_ns_id, test_datum))
+    lower_ty(
+        &[],
+        &scope,
+        NsDatum::from_syntax_datum(test_ns_id, test_datum),
+    )
 }
 
 #[cfg(test)]

@@ -135,7 +135,7 @@ impl<'ccx> LoweringContext<'ccx> {
         let ty_datum = arg_data.pop().unwrap();
         let ident = expect_ident(arg_data.pop().unwrap())?;
 
-        let ty = lower_ty(scope, ty_datum)?;
+        let ty = lower_ty(&self.pvars, scope, ty_datum)?;
 
         scope.insert_binding(ident, Binding::Ty(ty));
         Ok(())
@@ -196,7 +196,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     return Err(Error::new(span, ErrorKind::NoVecDestruc));
                 }
 
-                let ty = lower_ty(scope, vs.pop().unwrap())?;
+                let ty = lower_ty(&self.pvars, scope, vs.pop().unwrap())?;
 
                 // Discard the type colon
                 vs.pop();
@@ -239,7 +239,7 @@ impl<'ccx> LoweringContext<'ccx> {
         // We can either begin with a set of polymorphic variables or a list of parameters
         let pvar_ids = if let NsDatum::Set(_, vs) = next_datum {
             let pvars = vs.into_iter()
-                .map(|pvar_datum| lower_pvar(scope, pvar_datum))
+                .map(|pvar_datum| lower_pvar(&self.pvars, scope, pvar_datum))
                 .collect::<Result<Vec<(Ident, ty::PVar)>>>()?;
 
             let pvar_ids = pvars
@@ -279,7 +279,7 @@ impl<'ccx> LoweringContext<'ccx> {
             && scope.get_datum(&rest_data[0]) == Some(Binding::TyCons(TyCons::Fun))
         {
             body_data = rest_data.split_off(2);
-            ret_ty = Some(lower_ty(&fun_scope, rest_data.pop().unwrap())?.into_decl());
+            ret_ty = Some(lower_ty(&self.pvars, &fun_scope, rest_data.pop().unwrap())?.into_decl());
         } else {
             body_data = rest_data;
             ret_ty = None;
@@ -348,7 +348,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 expect_arg_count(span, &arg_data, 1)?;
                 Ok(Expr::TyPred(
                     span,
-                    lower_ty(scope, arg_data.pop().unwrap())?,
+                    lower_ty(&self.pvars, scope, arg_data.pop().unwrap())?,
                 ))
             }
             Prim::TyColon => {
@@ -360,7 +360,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 Ok(Expr::Ann(
                     span,
                     Box::new(self.lower_inner_expr(scope, expr_datum)?),
-                    lower_ty(scope, ty_datum)?,
+                    lower_ty(&self.pvars, scope, ty_datum)?,
                 ))
             }
             Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),
