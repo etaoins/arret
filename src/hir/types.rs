@@ -161,11 +161,11 @@ impl<'a> LowerTyContext<'a> {
                     .collect::<Result<Vec<ty::Poly>>>()?;
 
                 ty::unify::poly_unify_iter(self.pvars, member_tys.iter()).map_err(|err| match err {
-                    ty::unify::Error::Erased(left, right) => {
+                    ty::unify::PolyError::PolyMember(left, right) => {
                         let left_str = str_for_poly(self.pvars, &left);
                         let right_str = str_for_poly(self.pvars, &right);
 
-                        Error::new(span, ErrorKind::TypeErased(left_str, right_str))
+                        Error::new(span, ErrorKind::PolyUnionMember(left_str, right_str))
                     }
                 })
             }
@@ -719,17 +719,5 @@ mod test {
         let expected = ty::Ty::Bool.into_poly();
 
         assert_poly_for_str(expected, j);
-    }
-
-    #[test]
-    fn erased_union_cons() {
-        let j = "(UnifyingU (-> Int Float) (-> Float Int))";
-        let t = "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^";
-
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::TypeErased("(-> Int Float)".to_owned(), "(-> Float Int)".to_owned()),
-        );
-        assert_err_for_str(err, j);
     }
 }

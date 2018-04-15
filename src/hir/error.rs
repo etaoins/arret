@@ -52,7 +52,7 @@ pub enum ErrorKind {
     MultipleZeroOrMoreMatch(Span),
     NoVecDestruc,
     ValueAsTy,
-    TypeErased(String, String),
+    PolyUnionMember(String, String),
     UserError(String),
     ReadError(String),
     SyntaxError(SyntaxError),
@@ -113,12 +113,10 @@ impl Reportable for Error {
                 "vectors can only be used for type ascription in the form [name : Type]".to_owned()
             }
             ErrorKind::ValueAsTy => "value cannot be used as a type".to_owned(),
-            ErrorKind::TypeErased(ref left, ref right) => {
-                format!("type {} cannot be distinguished from {} at runtime due to type erasure; they cannot be members of the same union type",
-                    left,
-                    right,
-                )
-            }
+            ErrorKind::PolyUnionMember(ref left, ref right) => format!(
+                "polymorphism prevents `{}` and `{}` from being members of the same union",
+                left, right,
+            ),
             ErrorKind::UserError(ref message) => message.clone(),
             ErrorKind::ReadError(ref filename) => format!("error reading `{}`", filename),
             ErrorKind::SyntaxError(ref err) => err.message(),
