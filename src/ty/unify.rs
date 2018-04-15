@@ -217,9 +217,20 @@ where
                     }
                 })
             }
-            (&ty::Ty::Fun(_), &ty::Ty::Fun(_)) => {
-                // TODO: We can't intersect the parameter lists due to lack of intersect logic
-                Err(Error::Erased(ref1.clone(), ref2.clone()))
+            (&ty::Ty::Fun(ref fun1), &ty::Ty::Fun(ref fun2)) => {
+                if fun1.params() == fun2.params() {
+                    let unified_impure = fun1.impure() || fun2.impure();
+                    let unified_ret = self.unify_into_ty_ref(fun1.ret(), fun2.ret())?;
+
+                    Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::new_fun(
+                        unified_impure,
+                        fun1.params().clone(),
+                        unified_ret,
+                    ))))
+                } else {
+                    // TODO: We can't intersect the parameter lists due to lack of intersect logic
+                    Err(Error::Erased(ref1.clone(), ref2.clone()))
+                }
             }
             (&ty::Ty::Union(ref members1), &ty::Ty::Union(ref members2)) => {
                 let new_union = self.unify_ref_iters(members1.iter(), members2.iter())?;
@@ -362,7 +373,9 @@ mod test {
 
     #[test]
     fn fun_types() {
-        assert_erased("(-> Int)", "(-> Float)");
+        assert_erased("(-> Float Int)", "(-> Int Float)");
+        assert_merged("(->! Int)", "(-> Int)", "(->! Int)");
+        assert_merged("(->! Bool)", "(-> true)", "(->! false)");
     }
 
     #[test]
@@ -398,7 +411,7 @@ mod test {
             "(RawU Char Int)",
             "(RawU String Symbol)",
         );
-        assert_erased("(RawU true (-> Float))", "(RawU true (-> Int))");
+        assert_erased("(RawU true (-> Int Float))", "(RawU true (-> Float Int))");
         assert_merged("(RawU 'foo 'bar Bool)", "(RawU 'foo 'bar)", "Bool");
         assert_merged("Symbol", "(RawU 'foo 'bar)", "Symbol");
         assert_merged("Symbol", "(RawU)", "Symbol");
@@ -421,8 +434,8 @@ mod test {
             &["(Setof String)", "(Setof Symbol)", "(Setof Int)"],
         );
 
-        assert_erased_iter(&["(-> String)", "(-> Symbol)"]);
-        assert_erased_iter(&["(-> String)", "(RawU)", "(-> Symbol)"]);
+        assert_erased_iter(&["(-> String Symbol)", "(-> Symbol String)"]);
+        assert_erased_iter(&["(-> String Symbol)", "(RawU)", "(-> Symbol String)"]);
     }
 
     #[test]

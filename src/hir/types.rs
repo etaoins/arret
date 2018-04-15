@@ -723,12 +723,12 @@ mod test {
 
     #[test]
     fn erased_union_cons() {
-        let j = "(UnifyingU (-> Symbol) (-> String))";
-        let t = "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^";
+        let j = "(UnifyingU (-> Int Float) (-> Float Int))";
+        let t = "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^";
 
         let err = Error::new(
             t2s(t),
-            ErrorKind::TypeErased("(-> Symbol)".to_owned(), "(-> String)".to_owned()),
+            ErrorKind::TypeErased("(-> Int Float)".to_owned(), "(-> Float Int)".to_owned()),
         );
         assert_err_for_str(err, j);
     }
