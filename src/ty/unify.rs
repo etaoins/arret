@@ -1,5 +1,6 @@
 use std::result;
 use std::iter;
+use std::borrow::Borrow;
 
 use ty;
 use ty::seq_ty_iter::{ListTyIterator, RevVecTyIterator, SeqTyIterator};
@@ -162,17 +163,18 @@ where
     ///
     /// It is assumed `existing_members` refers to the members of an already unified union. This is
     /// important as they are not re-unified as a performance optimisation.
-    fn unify_ref_iters<'a, I, J>(&self, existing_members: I, new_members: J) -> Result<S, S>
+    fn unify_ref_iters<'a, I, J, K>(&self, existing_members: I, new_members: J) -> Result<S, S>
     where
         S: 'a,
         I: Iterator<Item = &'a S>,
-        J: Iterator<Item = &'a S>,
+        J: IntoIterator<Item = K>,
+        K: Borrow<S>,
     {
         // Start with the members of existing union
         let mut output_members: Vec<S> = existing_members.cloned().collect();
 
         for new_member in new_members {
-            self.unify_ref_into_vec(&mut output_members, new_member)?;
+            self.unify_ref_into_vec(&mut output_members, new_member.borrow())?;
         }
 
         if output_members.len() == 1 {
@@ -316,12 +318,52 @@ pub fn poly_unify<'a>(
     ctx.unify_ref(poly1, poly2)
 }
 
-pub fn poly_unify_iter<'a, I>(pvars: &'a [ty::PVar], members: I) -> Result<ty::Poly, ty::Poly>
+pub fn poly_unify_iter<I, J>(pvars: &[ty::PVar], members: I) -> Result<ty::Poly, ty::Poly>
 where
-    I: Iterator<Item = &'a ty::Poly>,
+    I: IntoIterator<Item = J>,
+    J: Borrow<ty::Poly>,
 {
     let ctx = PolyUnifyCtx { pvars };
-    ctx.unify_ref_iters(iter::empty(), members)
+    ctx.unify_ref_iters(iter::empty(), members.into_iter())
+}
+
+struct MonoUnifyCtx {}
+
+impl<'a> UnifyCtx<ty::Mono> for MonoUnifyCtx {
+    fn unify_ref(
+        &self,
+        mono1: &ty::Mono,
+        mono2: &ty::Mono,
+    ) -> Result<UnifiedTy<ty::Mono>, ty::Mono> {
+        if ty::is_a::mono_is_a(mono1, mono2).to_bool() {
+            return Ok(UnifiedTy::Merged(mono2.clone()));
+        } else if ty::is_a::mono_is_a(mono2, mono1).to_bool() {
+            return Ok(UnifiedTy::Merged(mono1.clone()));
+        }
+
+        self.non_subty_unify(mono1, mono1.as_ty(), mono2, mono2.as_ty())
+    }
+
+    fn intersect_ref(&self, mono1: &ty::Mono, mono2: &ty::Mono) -> ty::intersect::Result<ty::Mono> {
+        ty::intersect::mono_intersect(mono1, mono2)
+    }
+}
+
+pub fn mono_unify<'a>(
+    mono1: &'a ty::Mono,
+    mono2: &'a ty::Mono,
+) -> Result<UnifiedTy<ty::Mono>, ty::Mono> {
+    let ctx = MonoUnifyCtx {};
+    ctx.unify_ref(mono1, mono2)
+}
+
+pub fn mono_unify_iter<I, J>(members: I) -> Result<ty::Mono, ty::Mono>
+where
+    I: IntoIterator<Item = J>,
+    J: Borrow<ty::Mono>,
+{
+    let ctx = MonoUnifyCtx {};
+    ctx.unify_ref_iters(iter::empty(), members.into_iter())
 }
 
 #[cfg(test)]
@@ -374,9 +416,9 @@ mod test {
 
     fn assert_merged_iter(expected_str: &str, ty_strs: &[&str]) {
         let expected = poly_for_str(expected_str);
-        let polys: Vec<ty::Poly> = ty_strs.iter().map(|&s| poly_for_str(s)).collect();
+        let polys = ty_strs.iter().map(|&s| poly_for_str(s));
 
-        assert_eq!(expected, poly_unify_iter(&[], polys.iter()).unwrap());
+        assert_eq!(expected, poly_unify_iter(&[], polys).unwrap());
     }
 
     fn assert_erased_iter(ty_strs: &[&str]) {

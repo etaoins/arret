@@ -195,6 +195,33 @@ pub fn poly_intersect<'a>(
     ctx.intersect_ref(poly1, poly2)
 }
 
+struct MonoIntersectCtx {}
+
+impl<'a> IntersectCtx<ty::Mono> for MonoIntersectCtx {
+    fn intersect_ref(&self, mono1: &ty::Mono, mono2: &ty::Mono) -> Result<ty::Mono> {
+        if ty::is_a::mono_is_a(mono1, mono2).to_bool() {
+            return Ok(mono1.clone());
+        } else if ty::is_a::mono_is_a(mono2, mono1).to_bool() {
+            return Ok(mono2.clone());
+        }
+
+        self.non_subty_intersect(mono1, mono1.as_ty(), mono2, mono2.as_ty())
+    }
+
+    fn unify_ref(
+        &self,
+        mono1: &ty::Mono,
+        mono2: &ty::Mono,
+    ) -> ty::unify::Result<ty::unify::UnifiedTy<ty::Mono>, ty::Mono> {
+        ty::unify::mono_unify(mono1, mono2)
+    }
+}
+
+pub fn mono_intersect<'a>(mono1: &'a ty::Mono, mono2: &'a ty::Mono) -> Result<ty::Mono> {
+    let ctx = MonoIntersectCtx {};
+    ctx.intersect_ref(mono1, mono2)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

@@ -4,6 +4,8 @@ pub mod resolve;
 pub mod subst;
 pub mod unify;
 mod intersect;
+#[cfg(test)]
+mod datum;
 mod seq_ty_iter;
 
 use syntax::span::Span;
@@ -130,6 +132,12 @@ impl Ty<Poly> {
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Mono(Ty<Mono>);
+
+impl Mono {
+    pub fn as_ty(&self) -> &Ty<Mono> {
+        &self.0
+    }
+}
 
 impl Ty<Mono> {
     pub fn into_mono(self) -> Mono {

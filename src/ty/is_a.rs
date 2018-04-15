@@ -251,6 +251,19 @@ pub fn poly_is_a(pvars: &[ty::PVar], sub: &ty::Poly, parent: &ty::Poly) -> Resul
     ctx.ref_is_a(sub, parent)
 }
 
+struct MonoIsACtx {}
+
+impl<'a> IsACtx<ty::Mono> for MonoIsACtx {
+    fn ref_is_a(&self, sub: &ty::Mono, parent: &ty::Mono) -> Result {
+        self.ty_is_a(sub, sub.as_ty(), parent, parent.as_ty())
+    }
+}
+
+pub fn mono_is_a(sub: &ty::Mono, parent: &ty::Mono) -> Result {
+    let ctx = MonoIsACtx {};
+    ctx.ref_is_a(sub, parent)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
