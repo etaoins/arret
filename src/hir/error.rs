@@ -5,7 +5,6 @@ use std::fmt::Display;
 use syntax::span::Span;
 use syntax::error::Error as SyntaxError;
 use reporting::{Level, Reportable};
-use ty;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ErrorLoc {
@@ -53,7 +52,7 @@ pub enum ErrorKind {
     MultipleZeroOrMoreMatch(Span),
     NoVecDestruc,
     ValueAsTy,
-    TypeErased(ty::Poly, ty::Poly),
+    TypeErased(String, String),
     UserError(String),
     ReadError(String),
     SyntaxError(SyntaxError),
@@ -114,8 +113,11 @@ impl Reportable for Error {
                 "vectors can only be used for type ascription in the form [name : Type]".to_owned()
             }
             ErrorKind::ValueAsTy => "value cannot be used as a type".to_owned(),
-            ErrorKind::TypeErased(_, _) => {
-                "types cannot be distinguished at runtime due to type erasure".to_owned()
+            ErrorKind::TypeErased(ref left, ref right) => {
+                format!("type {} cannot be distinguished from {} at runtime due to type erasure; they cannot be members of the same union type",
+                    left,
+                    right,
+                )
             }
             ErrorKind::UserError(ref message) => message.clone(),
             ErrorKind::ReadError(ref filename) => format!("error reading `{}`", filename),

@@ -168,7 +168,10 @@ impl<'a> LowerTyContext<'a> {
 
                 ty::unify::poly_unify_iter(self.pvars, member_tys.iter()).map_err(|err| match err {
                     ty::unify::Error::Erased(left, right) => {
-                        Error::new(span, ErrorKind::TypeErased(left, right))
+                        let left_str = str_for_poly(self.pvars, &left);
+                        let right_str = str_for_poly(self.pvars, &right);
+
+                        Error::new(span, ErrorKind::TypeErased(left_str, right_str))
                     }
                     ty::unify::Error::Unnatural(_, _) => {
                         panic!("Unnatural types should be allowed");
@@ -313,6 +316,81 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
     export_ty_cons!("RawU", TyCons::RawU);
 }
 
+fn strs_for_list_ty_args(
+    pvars: &[ty::PVar],
+    fixed: &[ty::Poly],
+    rest: &Option<Box<ty::Poly>>,
+) -> Vec<String> {
+    let mut result_parts: Vec<String> = fixed.iter().map(|p| str_for_poly(pvars, p)).collect();
+
+    if let Some(ref rest) = *rest {
+        result_parts.push(str_for_poly(pvars, rest));
+        result_parts.push("...".to_owned());
+    }
+
+    result_parts
+}
+
+fn str_for_poly_ty(pvars: &[ty::PVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
+    match *poly_ty {
+        ty::Ty::Any => "Any".to_owned(),
+        ty::Ty::Bool => "Bool".to_owned(),
+        ty::Ty::Sym => "Symbol".to_owned(),
+        ty::Ty::Str => "String".to_owned(),
+        ty::Ty::Float => "Float".to_owned(),
+        ty::Ty::LitBool(false) => "false".to_owned(),
+        ty::Ty::LitBool(true) => "true".to_owned(),
+        ty::Ty::LitSym(ref name) => format!("'{}", name),
+        ty::Ty::Hash(ref key, ref value) => format!(
+            "(Hash {} {})",
+            str_for_poly(pvars, key),
+            str_for_poly(pvars, value)
+        ),
+        ty::Ty::Set(ref member) => format!("(Setof {})", str_for_poly(pvars, member)),
+        ty::Ty::List(ref fixed, ref rest) => format!(
+            "(List {})",
+            strs_for_list_ty_args(pvars, fixed, rest).join(" ")
+        ),
+        ty::Ty::Vec(ref begin, ref fixed) => {
+            let mut result_parts: Vec<String> = vec![];
+
+            if let Some(ref begin) = *begin {
+                result_parts.push(str_for_poly(pvars, begin));
+                result_parts.push("...".to_owned());
+            }
+
+            result_parts.extend(fixed.iter().map(|p| str_for_poly(pvars, p)));
+            format!("(Vector {})", result_parts.join(" "))
+        }
+        ty::Ty::Fun(ref fun) => {
+            let fun_cons = if fun.impure() { "->!" } else { "->" };
+
+            if let ty::Poly::Fixed(ty::Ty::List(ref fixed, ref rest)) = *fun.params() {
+                let mut strs = strs_for_list_ty_args(pvars, fixed, rest);
+                strs.push(fun_cons.to_owned());
+                strs.push(str_for_poly(pvars, fun.ret()));
+
+                format!("({})", strs.join(" "))
+            } else {
+                // TODO: These types can be constructed implicitly (e.g. the definition for `list`)
+                // but cannot be built using a type constructor
+                "!FN_WITH_NON_LIST_PARAMS!".to_owned()
+            }
+        }
+        _ => "UNIMPLEMENTED".to_owned(),
+    }
+}
+
+pub fn str_for_poly(pvars: &[ty::PVar], poly: &ty::Poly) -> String {
+    match *poly {
+        ty::Poly::Var(pvar_id) => {
+            // TODO: It's possible to have pvars with overlapping source names
+            pvars[pvar_id.to_usize()].source_name().clone()
+        }
+        ty::Poly::Fixed(ref poly_ty) => str_for_poly_ty(pvars, poly_ty),
+    }
+}
+
 #[cfg(test)]
 pub fn poly_for_str(datum_str: &str) -> Result<ty::Poly> {
     use hir::ns::NsId;
@@ -348,6 +426,10 @@ mod test {
 
     fn assert_poly_for_str(expected: ty::Poly, datum_str: &str) {
         assert_eq!(expected, poly_for_str(datum_str).unwrap());
+
+        // Try to round trip this to make sure str_for_poly works
+        let recovered_str = str_for_poly(&[], &expected);
+        assert_eq!(expected, poly_for_str(&recovered_str).unwrap());
     }
 
     fn assert_err_for_str(err: Error, datum_str: &str) {
@@ -647,7 +729,10 @@ mod test {
             ty::Ty::Str.into_poly(),
         ).into_poly();
 
-        let err = Error::new(t2s(t), ErrorKind::TypeErased(left, right));
+        let err = Error::new(
+            t2s(t),
+            ErrorKind::TypeErased("(-> Symbol)".to_owned(), "(-> String)".to_owned()),
+        );
         assert_err_for_str(err, j);
     }
 }

@@ -56,6 +56,18 @@ impl<S> Fun<S> {
             ret,
         }
     }
+
+    pub fn impure(&self) -> bool {
+        self.impure
+    }
+
+    pub fn params(&self) -> &S {
+        &self.params
+    }
+
+    pub fn ret(&self) -> &S {
+        &self.ret
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
@@ -80,6 +92,10 @@ pub struct PVar {
 impl PVar {
     pub fn new(source_name: String, bound: Poly) -> PVar {
         PVar { source_name, bound }
+    }
+
+    pub fn source_name(&self) -> &String {
+        &self.source_name
     }
 }
 
