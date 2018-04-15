@@ -73,7 +73,7 @@ where
             let next1 = iter1.next().unwrap();
             let next2 = iter2.next().unwrap();
 
-            let merged_next = match self.unify_ref(&next1, &next2)? {
+            let merged_next = match self.unify_ref(next1, next2)? {
                 UnifiedTy::Merged(ty_ref) => ty_ref,
                 UnifiedTy::Disjoint => {
                     // Within our fixed types we're willing to build a runtime type check of the
