@@ -114,24 +114,6 @@ where
         }
 
         match (sub_ty, parent_ty) {
-            (_, &ty::Ty::Union(ref par_members)) => {
-                let results = par_members
-                    .iter()
-                    .map(|par_member| self.ref_is_a(sub_ref, par_member));
-
-                // Manually consume the iterator to avoid building a temporary Vec and to let us bail
-                // early on Yes
-                let mut best_result = Result::No;
-                for result in results {
-                    if result == Result::Yes {
-                        return Result::Yes;
-                    } else if result == Result::May {
-                        best_result = Result::May;
-                    }
-                }
-
-                best_result
-            }
             (&ty::Ty::Union(ref sub_members), _) => {
                 let results = sub_members
                     .iter()
@@ -166,6 +148,24 @@ where
                 } else {
                     Result::May
                 }
+            }
+            (_, &ty::Ty::Union(ref par_members)) => {
+                let results = par_members
+                    .iter()
+                    .map(|par_member| self.ref_is_a(sub_ref, par_member));
+
+                // Manually consume the iterator to avoid building a temporary Vec and to let us bail
+                // early on Yes
+                let mut best_result = Result::No;
+                for result in results {
+                    if result == Result::Yes {
+                        return Result::Yes;
+                    } else if result == Result::May {
+                        best_result = Result::May;
+                    }
+                }
+
+                best_result
             }
             (_, &ty::Ty::Any) => Result::Yes,
             (&ty::Ty::Any, _) => Result::May,
@@ -324,6 +324,7 @@ mod test {
 
         let foo_bar_union = poly_for_str("(RawU 'foo 'bar)");
         let bar_baz_union = poly_for_str("(RawU 'bar 'baz)");
+        let foo_bar_baz_union = poly_for_str("(RawU 'foo 'bar 'baz)");
         let never = poly_for_str("(RawU)");
 
         assert_eq!(Result::Yes, poly_is_a(&[], &foo_sym, &foo_bar_union));
@@ -337,6 +338,11 @@ mod test {
         assert_eq!(Result::May, poly_is_a(&[], &foo_bar_union, &bar_baz_union));
         assert_eq!(Result::Yes, poly_is_a(&[], &foo_bar_union, &foo_bar_union));
         assert_eq!(Result::Yes, poly_is_a(&[], &never, &foo_bar_union));
+
+        assert_eq!(
+            Result::Yes,
+            poly_is_a(&[], &foo_bar_union, &foo_bar_baz_union)
+        );
     }
 
     #[test]

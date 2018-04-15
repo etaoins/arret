@@ -346,8 +346,19 @@ mod test {
         let poly1 = poly_for_str(ty_str1);
         let poly2 = poly_for_str(ty_str2);
 
+        // This is the basic invariant we're testing - each of our input types satsifies the merged
+        // type
         assert_eq!(
-            UnifiedTy::Merged(expected.clone()),
+            ty::is_a::Result::Yes,
+            ty::is_a::poly_is_a(&[], &poly1, &expected)
+        );
+        assert_eq!(
+            ty::is_a::Result::Yes,
+            ty::is_a::poly_is_a(&[], &poly2, &expected)
+        );
+
+        assert_eq!(
+            UnifiedTy::Merged(expected),
             poly_unify(&[], &poly1, &poly2).unwrap()
         );
     }
