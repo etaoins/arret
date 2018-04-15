@@ -3,6 +3,7 @@ pub mod resolve;
 #[cfg(test)]
 pub mod subst;
 pub mod unify;
+mod seq_ty_iter;
 
 use syntax::span::Span;
 
