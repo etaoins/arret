@@ -167,9 +167,6 @@ impl<'a> LowerTyContext<'a> {
 
                         Error::new(span, ErrorKind::TypeErased(left_str, right_str))
                     }
-                    ty::unify::Error::Unnatural(_, _) => {
-                        panic!("Unnatural types should be allowed");
-                    }
                 })
             }
             #[cfg(test)]
@@ -710,7 +707,7 @@ mod test {
     }
 
     #[test]
-    fn natural_union_cons() {
+    fn merged_union_cons() {
         let j = "(U true false)";
         let expected = ty::Ty::Bool.into_poly();
 
@@ -718,7 +715,7 @@ mod test {
     }
 
     #[test]
-    fn unnatural_union_cons() {
+    fn disjoint_union_cons() {
         let j = "(U String Symbol)";
         let expected =
             ty::Ty::Union(vec![ty::Ty::Str.into_poly(), ty::Ty::Sym.into_poly()]).into_poly();
