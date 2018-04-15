@@ -421,10 +421,10 @@ mod test {
 
     #[test]
     fn fun_types() {
-        let impure_any_to_sym = poly_for_str("(->! Any Symbol)");
-        let impure_sym_to_any = poly_for_str("(->! Symbol Any)");
-        let impure_sym_to_sym = poly_for_str("(->! Symbol Symbol)");
-        let pure_sym_to_sym = poly_for_str("(-> Symbol Symbol)");
+        let impure_any_to_sym = poly_for_str("(Any ->! Symbol)");
+        let impure_sym_to_any = poly_for_str("(Symbol ->! Any)");
+        let impure_sym_to_sym = poly_for_str("(Symbol ->! Symbol)");
+        let pure_sym_to_sym = poly_for_str("(Symbol -> Symbol)");
 
         assert_eq!(
             Result::Yes,

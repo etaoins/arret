@@ -6,6 +6,7 @@ use ty::seq_ty_iter::{ListTyIterator, RevVecTyIterator, SeqTyIterator};
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
+    /// The two types cannot be intersected as they are disjoint
     Disjoint,
 }
 
@@ -18,6 +19,7 @@ where
     S: ty::TyRef,
 {
     fn intersect_ref(&self, &S, &S) -> Result<S>;
+    fn unify_ref(&self, &S, &S) -> ty::unify::Result<ty::unify::UnifiedTy<S>, S>;
 
     fn intersect_seq<'a, I>(&self, mut iter1: I, mut iter2: I) -> Result<IntersectedSeq<S>>
     where
@@ -81,7 +83,7 @@ where
         }
     }
 
-    /// Unifies two types under the assumption that they are not subtypes
+    /// Intersects two types under the assumption that they are not subtypes
     fn non_subty_intersect(
         &self,
         ref1: &S,
@@ -121,6 +123,27 @@ where
                     S::from_ty(ty::Ty::List(fixed, rest.map(Box::new)))
                 })
             }
+            (&ty::Ty::Fun(ref fun1), &ty::Ty::Fun(ref fun2)) => {
+                let intersected_impure = fun1.impure() && fun2.impure();
+                let intersected_params = match self.unify_ref(fun1.params(), fun2.params()) {
+                    Ok(ty::unify::UnifiedTy::Merged(merged)) => merged,
+                    Ok(ty::unify::UnifiedTy::Disjoint) => S::from_ty(ty::Ty::Union(vec![
+                        fun1.params().clone(),
+                        fun2.params().clone(),
+                    ])),
+                    _ => {
+                        // TODO: Do we need to handle erased types differently?
+                        return Err(Error::Disjoint);
+                    }
+                };
+                let intersected_ret = self.intersect_ref(fun1.ret(), fun2.ret())?;
+
+                Ok(S::from_ty(ty::Ty::new_fun(
+                    intersected_impure,
+                    intersected_params,
+                    intersected_ret,
+                )))
+            }
             (_, _) => Err(Error::Disjoint),
         }
     }
@@ -144,7 +167,7 @@ impl<'a> IntersectCtx<ty::Poly> for PolyIntersectCtx<'a> {
 
         match (&resolved1, &resolved2) {
             (&ty::resolve::Result::Fixed(ty1), &ty::resolve::Result::Fixed(ty2)) => {
-                // We can invoke full unification logic if we have fixed types
+                // We can invoke full intersection logic if we have fixed types
                 self.non_subty_intersect(poly1, ty1, poly2, ty2)
             }
             _ => {
@@ -152,6 +175,14 @@ impl<'a> IntersectCtx<ty::Poly> for PolyIntersectCtx<'a> {
                 Err(Error::Disjoint)
             }
         }
+    }
+
+    fn unify_ref(
+        &self,
+        poly1: &ty::Poly,
+        poly2: &ty::Poly,
+    ) -> ty::unify::Result<ty::unify::UnifiedTy<ty::Poly>, ty::Poly> {
+        ty::unify::poly_unify(self.pvars, poly1, poly2)
     }
 }
 
@@ -267,6 +298,19 @@ mod test {
             "(Vector true false)",
             "(Vector Symbol ... true Bool)",
             "(Vector Bool false)",
+        );
+    }
+
+    #[test]
+    fn fun_types() {
+        assert_disjoint("(Float -> Int)", "(Int -> Float)");
+        assert_merged("(-> true)", "(-> Bool)", "(->! true)");
+        assert_merged("(Bool -> String)", "(true -> String)", "(false ->! String)");
+
+        assert_merged(
+            "(-> (RawU (List String) (List String String)) Symbol)",
+            "(String -> Symbol)",
+            "(String String -> Symbol)",
         );
     }
 }

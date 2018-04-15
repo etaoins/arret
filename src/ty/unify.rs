@@ -53,6 +53,7 @@ where
     S: ty::TyRef,
 {
     fn unify_ref(&self, &S, &S) -> Result<UnifiedTy<S>, S>;
+    fn intersect_ref(&self, &S, &S) -> ty::intersect::Result<S>;
 
     fn unify_seq<'a, I>(&self, mut iter1: I, mut iter2: I) -> Result<UnifiedSeq<S>, S>
     where
@@ -238,19 +239,16 @@ where
                 })
             }
             (&ty::Ty::Fun(ref fun1), &ty::Ty::Fun(ref fun2)) => {
-                if fun1.params() == fun2.params() {
-                    let unified_impure = fun1.impure() || fun2.impure();
-                    let unified_ret = self.unify_into_ty_ref(fun1.ret(), fun2.ret())?;
+                let unified_impure = fun1.impure() || fun2.impure();
+                let unified_params = self.intersect_ref(fun1.params(), fun2.params())
+                    .map_err(|_| Error::Erased(ref1.clone(), ref2.clone()))?;
+                let unified_ret = self.unify_into_ty_ref(fun1.ret(), fun2.ret())?;
 
-                    Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::new_fun(
-                        unified_impure,
-                        fun1.params().clone(),
-                        unified_ret,
-                    ))))
-                } else {
-                    // TODO: We can't intersect the parameter lists due to lack of intersect logic
-                    Err(Error::Erased(ref1.clone(), ref2.clone()))
-                }
+                Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::new_fun(
+                    unified_impure,
+                    unified_params,
+                    unified_ret,
+                ))))
             }
             (&ty::Ty::Union(ref members1), &ty::Ty::Union(ref members2)) => {
                 let new_union = self.unify_ref_iters(members1.iter(), members2.iter())?;
@@ -302,6 +300,10 @@ impl<'a> UnifyCtx<ty::Poly> for PolyUnifyCtx<'a> {
                 Err(Error::Erased(poly1.clone(), poly2.clone()))
             }
         }
+    }
+
+    fn intersect_ref(&self, poly1: &ty::Poly, poly2: &ty::Poly) -> ty::intersect::Result<ty::Poly> {
+        ty::intersect::poly_intersect(self.pvars, poly1, poly2)
     }
 }
 
@@ -404,7 +406,13 @@ mod test {
 
     #[test]
     fn fun_types() {
-        assert_erased("(-> Float Int)", "(-> Int Float)");
+        assert_erased("(Float -> Int)", "(Int -> Float)");
+
+        assert_merged(
+            "(-> true (RawU Int Float))",
+            "(-> Bool Int)",
+            "(-> true Float)",
+        );
         assert_merged("(->! Int)", "(-> Int)", "(->! Int)");
         assert_merged("(->! Bool)", "(-> true)", "(->! false)");
     }
