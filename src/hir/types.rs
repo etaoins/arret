@@ -329,6 +329,8 @@ fn str_for_poly_ty(pvars: &[ty::PVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
     match *poly_ty {
         ty::Ty::Any => "Any".to_owned(),
         ty::Ty::Bool => "Bool".to_owned(),
+        ty::Ty::Char => "Char".to_owned(),
+        ty::Ty::Int => "Int".to_owned(),
         ty::Ty::Sym => "Symbol".to_owned(),
         ty::Ty::Str => "String".to_owned(),
         ty::Ty::Float => "Float".to_owned(),
@@ -377,7 +379,14 @@ fn str_for_poly_ty(pvars: &[ty::PVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
                 )
             }
         }
-        _ => "UNIMPLEMENTED".to_owned(),
+        ty::Ty::Union(ref members) => {
+            let member_strs: Vec<String> = members
+                .iter()
+                .map(|m| format!(" {}", str_for_poly(pvars, m)))
+                .collect();
+
+            format!("(U{})", member_strs.join(""))
+        }
     }
 }
 
@@ -701,9 +710,18 @@ mod test {
     }
 
     #[test]
-    fn union_cons() {
+    fn natural_union_cons() {
         let j = "(U true false)";
         let expected = ty::Ty::Bool.into_poly();
+
+        assert_poly_for_str(expected, j);
+    }
+
+    #[test]
+    fn unnatural_union_cons() {
+        let j = "(U String Symbol)";
+        let expected =
+            ty::Ty::Union(vec![ty::Ty::Str.into_poly(), ty::Ty::Sym.into_poly()]).into_poly();
 
         assert_poly_for_str(expected, j);
     }
@@ -712,18 +730,6 @@ mod test {
     fn erased_union_cons() {
         let j = "(U (-> Symbol) (-> String))";
         let t = "^^^^^^^^^^^^^^^^^^^^^^^^^^^";
-
-        let left = ty::Ty::new_fun(
-            false,
-            ty::Ty::List(vec![], None).into_poly(),
-            ty::Ty::Sym.into_poly(),
-        ).into_poly();
-
-        let right = ty::Ty::new_fun(
-            false,
-            ty::Ty::List(vec![], None).into_poly(),
-            ty::Ty::Str.into_poly(),
-        ).into_poly();
 
         let err = Error::new(
             t2s(t),
