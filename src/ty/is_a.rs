@@ -263,19 +263,6 @@ where
     }
 }
 
-struct MonoIsACtx {}
-
-impl IsACtx<ty::Mono> for MonoIsACtx {
-    fn ref_is_a(&self, sub: &ty::Mono, parent: &ty::Mono) -> Result {
-        self.ty_is_a(sub, sub.as_ty(), parent, parent.as_ty())
-    }
-}
-
-pub fn mono_is_a(sub: &ty::Mono, parent: &ty::Mono) -> Result {
-    let ctx = MonoIsACtx {};
-    ctx.ty_is_a(sub, sub.as_ty(), parent, parent.as_ty())
-}
-
 struct PolyIsACtx<'a> {
     pvars: &'a [ty::PVar],
 }
@@ -335,173 +322,193 @@ mod test {
         hir::poly_for_str(datum_str).unwrap()
     }
 
-    fn mono_for_str(datum_str: &str) -> ty::Mono {
-        use std::collections::HashMap;
-
-        let poly = poly_for_str(datum_str);
-        ty::subst::subst(&poly, &HashMap::new()).unwrap()
-    }
-
     #[test]
     fn sym_types() {
-        let foo_sym = mono_for_str("'foo");
-        let bar_sym = mono_for_str("'bar");
-        let any_sym = mono_for_str("Symbol");
-        let any_int = mono_for_str("Int");
+        let foo_sym = poly_for_str("'foo");
+        let bar_sym = poly_for_str("'bar");
+        let any_sym = poly_for_str("Symbol");
+        let any_int = poly_for_str("Int");
 
-        assert_eq!(Result::Yes, mono_is_a(&foo_sym, &foo_sym));
-        assert_eq!(Result::No, mono_is_a(&foo_sym, &bar_sym));
+        assert_eq!(Result::Yes, poly_is_a(&[], &foo_sym, &foo_sym));
+        assert_eq!(Result::No, poly_is_a(&[], &foo_sym, &bar_sym));
 
-        assert_eq!(Result::Yes, mono_is_a(&foo_sym, &any_sym));
-        assert_eq!(Result::May, mono_is_a(&any_sym, &foo_sym));
+        assert_eq!(Result::Yes, poly_is_a(&[], &foo_sym, &any_sym));
+        assert_eq!(Result::May, poly_is_a(&[], &any_sym, &foo_sym));
 
-        assert_eq!(Result::No, mono_is_a(&any_sym, &any_int));
-        assert_eq!(Result::No, mono_is_a(&any_int, &any_sym));
+        assert_eq!(Result::No, poly_is_a(&[], &any_sym, &any_int));
+        assert_eq!(Result::No, poly_is_a(&[], &any_int, &any_sym));
     }
 
     #[test]
     fn set_types() {
-        let foo_set = mono_for_str("(Setof 'foo)");
-        let bar_set = mono_for_str("(Setof 'bar)");
-        let any_set = mono_for_str("(Setof Symbol)");
+        let foo_set = poly_for_str("(Setof 'foo)");
+        let bar_set = poly_for_str("(Setof 'bar)");
+        let any_set = poly_for_str("(Setof Symbol)");
 
-        assert_eq!(Result::Yes, mono_is_a(&foo_set, &foo_set));
-        assert_eq!(Result::No, mono_is_a(&foo_set, &bar_set));
+        assert_eq!(Result::Yes, poly_is_a(&[], &foo_set, &foo_set));
+        assert_eq!(Result::No, poly_is_a(&[], &foo_set, &bar_set));
 
-        assert_eq!(Result::Yes, mono_is_a(&foo_set, &any_set));
-        assert_eq!(Result::May, mono_is_a(&any_set, &foo_set));
+        assert_eq!(Result::Yes, poly_is_a(&[], &foo_set, &any_set));
+        assert_eq!(Result::May, poly_is_a(&[], &any_set, &foo_set));
     }
 
     #[test]
     fn hash_types() {
-        let foo_sym = mono_for_str("'foo");
-        let any_sym = mono_for_str("Symbol");
-        let any_int = mono_for_str("Int");
+        let foo_sym = poly_for_str("'foo");
+        let any_sym = poly_for_str("Symbol");
+        let any_int = poly_for_str("Int");
 
         let int_to_any_sym =
-            ty::Ty::Hash(Box::new(any_int.clone()), Box::new(any_sym.clone())).into_mono();
+            ty::Ty::Hash(Box::new(any_int.clone()), Box::new(any_sym.clone())).into_poly();
         let int_to_foo_sym =
-            ty::Ty::Hash(Box::new(any_int.clone()), foo_sym.clone().into()).into_mono();
+            ty::Ty::Hash(Box::new(any_int.clone()), foo_sym.clone().into()).into_poly();
         let any_sym_to_any_sym =
-            ty::Ty::Hash(Box::new(any_sym.clone()), Box::new(any_sym.clone())).into_mono();
+            ty::Ty::Hash(Box::new(any_sym.clone()), Box::new(any_sym.clone())).into_poly();
 
-        assert_eq!(Result::Yes, mono_is_a(&int_to_foo_sym, &int_to_any_sym));
-        assert_eq!(Result::May, mono_is_a(&int_to_any_sym, &int_to_foo_sym));
-        assert_eq!(Result::No, mono_is_a(&int_to_any_sym, &any_sym_to_any_sym));
+        assert_eq!(
+            Result::Yes,
+            poly_is_a(&[], &int_to_foo_sym, &int_to_any_sym)
+        );
+        assert_eq!(
+            Result::May,
+            poly_is_a(&[], &int_to_any_sym, &int_to_foo_sym)
+        );
+        assert_eq!(
+            Result::No,
+            poly_is_a(&[], &int_to_any_sym, &any_sym_to_any_sym)
+        );
     }
 
     #[test]
     fn union_types() {
-        let foo_sym = mono_for_str("'foo");
-        let baz_sym = mono_for_str("'baz");
+        let foo_sym = poly_for_str("'foo");
+        let baz_sym = poly_for_str("'baz");
 
-        let foo_bar_union = mono_for_str("(RawU 'foo 'bar)");
-        let bar_baz_union = mono_for_str("(RawU 'bar 'baz)");
-        let never = mono_for_str("(RawU)");
+        let foo_bar_union = poly_for_str("(RawU 'foo 'bar)");
+        let bar_baz_union = poly_for_str("(RawU 'bar 'baz)");
+        let never = poly_for_str("(RawU)");
 
-        assert_eq!(Result::Yes, mono_is_a(&foo_sym, &foo_bar_union));
-        assert_eq!(Result::No, mono_is_a(&baz_sym, &foo_bar_union));
-        assert_eq!(Result::No, mono_is_a(&baz_sym, &never));
+        assert_eq!(Result::Yes, poly_is_a(&[], &foo_sym, &foo_bar_union));
+        assert_eq!(Result::No, poly_is_a(&[], &baz_sym, &foo_bar_union));
+        assert_eq!(Result::No, poly_is_a(&[], &baz_sym, &never));
 
-        assert_eq!(Result::May, mono_is_a(&foo_bar_union, &foo_sym));
-        assert_eq!(Result::No, mono_is_a(&foo_bar_union, &baz_sym));
-        assert_eq!(Result::Yes, mono_is_a(&never, &foo_sym));
+        assert_eq!(Result::May, poly_is_a(&[], &foo_bar_union, &foo_sym));
+        assert_eq!(Result::No, poly_is_a(&[], &foo_bar_union, &baz_sym));
+        assert_eq!(Result::Yes, poly_is_a(&[], &never, &foo_sym));
 
-        assert_eq!(Result::May, mono_is_a(&foo_bar_union, &bar_baz_union));
-        assert_eq!(Result::Yes, mono_is_a(&foo_bar_union, &foo_bar_union));
-        assert_eq!(Result::Yes, mono_is_a(&never, &foo_bar_union));
+        assert_eq!(Result::May, poly_is_a(&[], &foo_bar_union, &bar_baz_union));
+        assert_eq!(Result::Yes, poly_is_a(&[], &foo_bar_union, &foo_bar_union));
+        assert_eq!(Result::Yes, poly_is_a(&[], &never, &foo_bar_union));
     }
 
     #[test]
     fn any_and_never_types() {
-        let any = mono_for_str("Any");
-        let never = ty::Ty::Union(vec![]).into_mono();
-        let foo_sym = mono_for_str("'foo");
+        let any = poly_for_str("Any");
+        let never = ty::Ty::Union(vec![]).into_poly();
+        let foo_sym = poly_for_str("'foo");
 
-        assert_eq!(Result::Yes, mono_is_a(&foo_sym, &any));
-        assert_eq!(Result::May, mono_is_a(&any, &foo_sym));
-        assert_eq!(Result::Yes, mono_is_a(&never, &any));
-        assert_eq!(Result::Yes, mono_is_a(&never, &never));
-        assert_eq!(Result::No, mono_is_a(&any, &never));
+        assert_eq!(Result::Yes, poly_is_a(&[], &foo_sym, &any));
+        assert_eq!(Result::May, poly_is_a(&[], &any, &foo_sym));
+        assert_eq!(Result::Yes, poly_is_a(&[], &never, &any));
+        assert_eq!(Result::Yes, poly_is_a(&[], &never, &never));
+        assert_eq!(Result::No, poly_is_a(&[], &any, &never));
     }
 
     #[test]
     fn list_types() {
-        let listof_any = mono_for_str("(Listof Any)");
-        let listof_int = mono_for_str("(Listof Int)");
-        let two_ints_list = mono_for_str("(List Int Int)");
-        let three_ints_list = mono_for_str("(List Int Int Int)");
-        let at_least_one_int_list = mono_for_str("(List Int Int ...)");
+        let listof_any = poly_for_str("(Listof Any)");
+        let listof_int = poly_for_str("(Listof Int)");
+        let two_ints_list = poly_for_str("(List Int Int)");
+        let three_ints_list = poly_for_str("(List Int Int Int)");
+        let at_least_one_int_list = poly_for_str("(List Int Int ...)");
 
-        assert_eq!(Result::Yes, mono_is_a(&listof_int, &listof_any));
-        assert_eq!(Result::May, mono_is_a(&listof_any, &listof_int));
+        assert_eq!(Result::Yes, poly_is_a(&[], &listof_int, &listof_any));
+        assert_eq!(Result::May, poly_is_a(&[], &listof_any, &listof_int));
 
-        assert_eq!(Result::Yes, mono_is_a(&two_ints_list, &listof_int));
-        assert_eq!(Result::May, mono_is_a(&listof_int, &two_ints_list));
-        assert_eq!(Result::Yes, mono_is_a(&two_ints_list, &listof_any));
+        assert_eq!(Result::Yes, poly_is_a(&[], &two_ints_list, &listof_int));
+        assert_eq!(Result::May, poly_is_a(&[], &listof_int, &two_ints_list));
+        assert_eq!(Result::Yes, poly_is_a(&[], &two_ints_list, &listof_any));
 
-        assert_eq!(Result::No, mono_is_a(&two_ints_list, &three_ints_list));
-        assert_eq!(Result::No, mono_is_a(&three_ints_list, &two_ints_list));
+        assert_eq!(Result::No, poly_is_a(&[], &two_ints_list, &three_ints_list));
+        assert_eq!(Result::No, poly_is_a(&[], &three_ints_list, &two_ints_list));
 
-        assert_eq!(Result::Yes, mono_is_a(&at_least_one_int_list, &listof_int));
-        assert_eq!(Result::May, mono_is_a(&listof_int, &at_least_one_int_list));
+        assert_eq!(
+            Result::Yes,
+            poly_is_a(&[], &at_least_one_int_list, &listof_int)
+        );
+        assert_eq!(
+            Result::May,
+            poly_is_a(&[], &listof_int, &at_least_one_int_list)
+        );
     }
 
     #[test]
     fn vec_types() {
-        let vecof_any = mono_for_str("(Vectorof Any)");
-        let vecof_int = mono_for_str("(Vectorof Int)");
-        let two_ints_vec = mono_for_str("(Vector Int Int)");
-        let three_ints_vec = mono_for_str("(Vector Int Int Int)");
-        let at_least_one_int_vec = mono_for_str("(Vector Int ... Int)");
+        let vecof_any = poly_for_str("(Vectorof Any)");
+        let vecof_int = poly_for_str("(Vectorof Int)");
+        let two_ints_vec = poly_for_str("(Vector Int Int)");
+        let three_ints_vec = poly_for_str("(Vector Int Int Int)");
+        let at_least_one_int_vec = poly_for_str("(Vector Int ... Int)");
 
-        assert_eq!(Result::Yes, mono_is_a(&vecof_int, &vecof_any));
-        assert_eq!(Result::May, mono_is_a(&vecof_any, &vecof_int));
+        assert_eq!(Result::Yes, poly_is_a(&[], &vecof_int, &vecof_any));
+        assert_eq!(Result::May, poly_is_a(&[], &vecof_any, &vecof_int));
 
-        assert_eq!(Result::Yes, mono_is_a(&two_ints_vec, &vecof_int));
-        assert_eq!(Result::May, mono_is_a(&vecof_int, &two_ints_vec));
-        assert_eq!(Result::Yes, mono_is_a(&two_ints_vec, &vecof_any));
+        assert_eq!(Result::Yes, poly_is_a(&[], &two_ints_vec, &vecof_int));
+        assert_eq!(Result::May, poly_is_a(&[], &vecof_int, &two_ints_vec));
+        assert_eq!(Result::Yes, poly_is_a(&[], &two_ints_vec, &vecof_any));
 
-        assert_eq!(Result::No, mono_is_a(&two_ints_vec, &three_ints_vec));
-        assert_eq!(Result::No, mono_is_a(&three_ints_vec, &two_ints_vec));
+        assert_eq!(Result::No, poly_is_a(&[], &two_ints_vec, &three_ints_vec));
+        assert_eq!(Result::No, poly_is_a(&[], &three_ints_vec, &two_ints_vec));
 
-        assert_eq!(Result::Yes, mono_is_a(&at_least_one_int_vec, &vecof_int));
-        assert_eq!(Result::May, mono_is_a(&vecof_int, &at_least_one_int_vec));
+        assert_eq!(
+            Result::Yes,
+            poly_is_a(&[], &at_least_one_int_vec, &vecof_int)
+        );
+        assert_eq!(
+            Result::May,
+            poly_is_a(&[], &vecof_int, &at_least_one_int_vec)
+        );
     }
 
     #[test]
     fn fun_types() {
-        let impure_any_to_sym = mono_for_str("(->! Any Symbol)");
-        let impure_sym_to_any = mono_for_str("(->! Symbol Any)");
-        let impure_sym_to_sym = mono_for_str("(->! Symbol Symbol)");
-        let pure_sym_to_sym = mono_for_str("(-> Symbol Symbol)");
+        let impure_any_to_sym = poly_for_str("(->! Any Symbol)");
+        let impure_sym_to_any = poly_for_str("(->! Symbol Any)");
+        let impure_sym_to_sym = poly_for_str("(->! Symbol Symbol)");
+        let pure_sym_to_sym = poly_for_str("(-> Symbol Symbol)");
 
         assert_eq!(
             Result::Yes,
-            mono_is_a(&impure_sym_to_sym, &impure_sym_to_any)
+            poly_is_a(&[], &impure_sym_to_sym, &impure_sym_to_any)
         );
         assert_eq!(
             Result::Yes,
-            mono_is_a(&impure_any_to_sym, &impure_sym_to_sym)
+            poly_is_a(&[], &impure_any_to_sym, &impure_sym_to_sym)
         );
         assert_eq!(
             Result::May,
-            mono_is_a(&impure_sym_to_any, &impure_sym_to_sym)
+            poly_is_a(&[], &impure_sym_to_any, &impure_sym_to_sym)
         );
 
-        assert_eq!(Result::Yes, mono_is_a(&pure_sym_to_sym, &impure_sym_to_sym));
-        assert_eq!(Result::No, mono_is_a(&impure_sym_to_sym, &pure_sym_to_sym));
+        assert_eq!(
+            Result::Yes,
+            poly_is_a(&[], &pure_sym_to_sym, &impure_sym_to_sym)
+        );
+        assert_eq!(
+            Result::No,
+            poly_is_a(&[], &impure_sym_to_sym, &pure_sym_to_sym)
+        );
     }
 
     #[test]
     fn bool_types() {
-        let true_type = mono_for_str("true");
-        let false_type = mono_for_str("false");
-        let bool_type = mono_for_str("Bool");
+        let true_type = poly_for_str("true");
+        let false_type = poly_for_str("false");
+        let bool_type = poly_for_str("Bool");
 
-        assert_eq!(Result::Yes, mono_is_a(&true_type, &bool_type));
-        assert_eq!(Result::May, mono_is_a(&bool_type, &true_type));
-        assert_eq!(Result::No, mono_is_a(&false_type, &true_type));
+        assert_eq!(Result::Yes, poly_is_a(&[], &true_type, &bool_type));
+        assert_eq!(Result::May, poly_is_a(&[], &bool_type, &true_type));
+        assert_eq!(Result::No, poly_is_a(&[], &false_type, &true_type));
     }
 
     #[test]

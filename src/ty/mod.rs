@@ -129,12 +129,6 @@ impl Ty<Poly> {
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Mono(Ty<Mono>);
 
-impl Mono {
-    fn as_ty(&self) -> &Ty<Mono> {
-        &self.0
-    }
-}
-
 impl Ty<Mono> {
     pub fn into_mono(self) -> Mono {
         Mono(self)
@@ -160,6 +154,7 @@ pub enum Decl {
 }
 
 impl Ty<Poly> {
+    #[cfg(test)]
     pub fn into_decl(self) -> Decl {
         Decl::Fixed(self)
     }

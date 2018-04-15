@@ -21,20 +21,6 @@ where
     Merged(S),
 }
 
-impl<S> UnifiedTy<S>
-where
-    S: ty::TyRef,
-{
-    fn into_ty_ref<'a>(self, ty_ref1: &'a S, ty_ref2: &'a S) -> S {
-        match self {
-            UnifiedTy::Merged(ty_ref) => ty_ref,
-            UnifiedTy::Disjoint => {
-                S::from_ty(ty::Ty::Union(vec![ty_ref1.clone(), ty_ref2.clone()]))
-            }
-        }
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub enum Error<S>
 where
