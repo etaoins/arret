@@ -413,7 +413,14 @@ pub fn poly_for_str(datum_str: &str) -> Result<ty::Poly> {
     // Place them on our scope
     let mut scope = Scope::new_empty();
     for (name, binding) in exports.into_iter() {
-        scope.insert_binding(Ident::new(test_ns_id, name), binding);
+        if name == "U" {
+            // Using `U` in tests is very dubious as it invokes a lot of type system logic. It's
+            // easy to write tautological tests due to `U` creating a simplified type. Rename to
+            // `UnifyingU` so it's clear what's happening.
+            scope.insert_binding(Ident::new(test_ns_id, "UnifyingU".to_owned()), binding);
+        } else {
+            scope.insert_binding(Ident::new(test_ns_id, name), binding);
+        }
     }
 
     let test_datum = datum_from_str(datum_str).unwrap();
@@ -708,25 +715,16 @@ mod test {
 
     #[test]
     fn merged_union_cons() {
-        let j = "(U true false)";
+        let j = "(UnifyingU true false)";
         let expected = ty::Ty::Bool.into_poly();
 
         assert_poly_for_str(expected, j);
     }
 
     #[test]
-    fn disjoint_union_cons() {
-        let j = "(U String Symbol)";
-        let expected =
-            ty::Ty::Union(vec![ty::Ty::Str.into_poly(), ty::Ty::Sym.into_poly()]).into_poly();
-
-        assert_poly_for_str(expected, j);
-    }
-
-    #[test]
     fn erased_union_cons() {
-        let j = "(U (-> Symbol) (-> String))";
-        let t = "^^^^^^^^^^^^^^^^^^^^^^^^^^^";
+        let j = "(UnifyingU (-> Symbol) (-> String))";
+        let t = "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^";
 
         let err = Error::new(
             t2s(t),
