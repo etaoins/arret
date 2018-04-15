@@ -85,25 +85,37 @@ where
             merged_fixed.push(merged_next);
         }
 
-        // TODO: Building a temporary here sucks
-        let mut rest_types: Vec<&S> = vec![];
-        while iter1.fixed_len() > 0 {
-            rest_types.push(iter1.next().unwrap());
-        }
-        if iter1.is_infinite() {
-            rest_types.push(iter1.next().unwrap());
-        }
-        while iter2.fixed_len() > 0 {
-            rest_types.push(iter2.next().unwrap());
-        }
-        if iter2.is_infinite() {
-            rest_types.push(iter2.next().unwrap());
+        let mut rest_members: Vec<S> = vec![];
+        // TODO: We can almost get away with checking `rest_members.is_empty()`. However, that
+        // breaks if one of the list has a rest of `(U)`. It might actually make sense to represent
+        // rest lists as `(U)` instead of None but that probably complicates as much as it
+        // simplifies.
+        let mut have_rest = false;
+
+        macro_rules! consume_iter_rest {
+            ( $iter:expr ) => {
+                while $iter.fixed_len() > 0 {
+                    have_rest = true;
+                    self.unify_ref_into_vec(&mut rest_members, $iter.next().unwrap())?;
+                }
+                if $iter.is_infinite() {
+                    have_rest = true;
+                    self.unify_ref_into_vec(&mut rest_members, $iter.next().unwrap())?;
+                }
+            }
         }
 
-        let merged_rest = if rest_types.is_empty() {
-            None
+        consume_iter_rest!(iter1);
+        consume_iter_rest!(iter2);
+
+        let merged_rest = if have_rest {
+            if rest_members.len() == 1 {
+                Some(rest_members.pop().unwrap())
+            } else {
+                Some(S::from_ty(ty::Ty::Union(rest_members)))
+            }
         } else {
-            Some(self.unify_ref_iters(iter::empty(), rest_types.into_iter())?)
+            None
         };
 
         Ok(UnifiedSeq::Merged(merged_fixed, merged_rest))
@@ -119,6 +131,32 @@ where
         }
     }
 
+    /// Unifies a member in to an existing vector of members
+    ///
+    /// It is assumed `output_members` refers to members of an already unified union.
+    fn unify_ref_into_vec(&self, output_members: &mut Vec<S>, new_member: &S) -> Result<(), S> {
+        for output_member in output_members.iter_mut() {
+            match self.unify_ref(output_member, new_member) {
+                Ok(UnifiedTy::Merged(merged_member)) => {
+                    // Found a member to merge with!
+                    *output_member = merged_member;
+                    return Ok(());
+                }
+                Ok(UnifiedTy::Disjoint) => {
+                    // If we're disjoint with all output types we'll push this type once we
+                    // exit the loop
+                }
+                Err(erased @ Error::Erased(_, _)) => {
+                    // We can't be distinguished from another union member at runtime
+                    return Err(erased);
+                }
+            }
+        }
+
+        output_members.push(new_member.clone());
+        Ok(())
+    }
+
     /// Unifies two iterators in to a new type
     ///
     /// It is assumed `existing_members` refers to the members of an already unified union. This is
@@ -132,26 +170,8 @@ where
         // Start with the members of existing union
         let mut output_members: Vec<S> = existing_members.cloned().collect();
 
-        'outer: for new_member in new_members {
-            for output_member in &mut output_members {
-                match self.unify_ref(output_member, new_member) {
-                    Ok(UnifiedTy::Merged(merged_member)) => {
-                        // Found a member to merge with!
-                        *output_member = merged_member;
-                        continue 'outer;
-                    }
-                    Ok(UnifiedTy::Disjoint) => {
-                        // If we're disjoint with all output types we'll push this type once we
-                        // exit the loop
-                    }
-                    Err(erased @ Error::Erased(_, _)) => {
-                        // We can't be distinguished from another union member at runtime
-                        return Err(erased);
-                    }
-                }
-            }
-
-            output_members.push(new_member.clone());
+        for new_member in new_members {
+            self.unify_ref_into_vec(&mut output_members, new_member)?;
         }
 
         if output_members.len() == 1 {
