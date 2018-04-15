@@ -57,7 +57,9 @@ where
         I: SeqTyIterator<'a, S>,
     {
         let mut is_exact = sub_iter.fixed_len() >= par_iter.fixed_len();
-        loop {
+
+        // Compare our fixed types
+        while sub_iter.fixed_len() > 0 || par_iter.fixed_len() > 0 {
             let sub_next = sub_iter.next();
             let par_next = par_iter.next();
 
@@ -77,15 +79,19 @@ where
                     break;
                 }
                 (_, _) => {
-                    // Fixed sequence ended at different lengths
+                    // Type sequence ended at different lengths
                     return Result::No;
                 }
             };
+        }
 
-            if sub_iter.fixed_len() == 0 && par_iter.fixed_len() == 0 {
-                // We have no more fixed types to evaluate so we can exit. This has to happen at the
-                // end of the loop body to ensure we have checked our rest type if present.
-                break;
+        if sub_iter.is_infinite() && par_iter.is_infinite() {
+            let sub_rest = sub_iter.next().unwrap();
+            let par_rest = par_iter.next().unwrap();
+
+            // If the rest doesn't match it's a May as the rest might not be present
+            if self.ref_is_a(sub_rest, par_rest) != Result::Yes {
+                is_exact = false;
             }
         }
 
@@ -382,6 +388,9 @@ mod test {
         let three_ints_vec = poly_for_str("(Vector Int Int Int)");
         let at_least_one_int_vec = poly_for_str("(Vector Int ... Int)");
 
+        let foos_then_int = poly_for_str("(Vector 'foo ... Int)");
+        let bars_then_int = poly_for_str("(Vector 'bar ... Int)");
+
         assert_eq!(Result::Yes, poly_is_a(&[], &vecof_int, &vecof_any));
         assert_eq!(Result::May, poly_is_a(&[], &vecof_any, &vecof_int));
 
@@ -400,6 +409,8 @@ mod test {
             Result::May,
             poly_is_a(&[], &vecof_int, &at_least_one_int_vec)
         );
+
+        assert_eq!(Result::May, poly_is_a(&[], &foos_then_int, &bars_then_int));
     }
 
     #[test]

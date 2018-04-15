@@ -2,6 +2,7 @@ use std::result;
 use std::iter;
 
 use ty;
+use ty::seq_ty_iter::{ListTyIterator, RevVecTyIterator, SeqTyIterator};
 
 #[derive(Debug, PartialEq)]
 pub enum UnifiedTy<S>
@@ -37,6 +38,14 @@ where
     Erased(S, S),
 }
 
+enum UnifiedSeq<S>
+where
+    S: ty::TyRef,
+{
+    Disjoint,
+    Merged(Vec<S>, Option<S>),
+}
+
 pub type Result<T, S> = result::Result<T, Error<S>>;
 
 trait UnifyCtx<S>
@@ -44,6 +53,61 @@ where
     S: ty::TyRef,
 {
     fn unify_ref(&self, &S, &S) -> Result<UnifiedTy<S>, S>;
+
+    fn unify_seq<'a, I>(&self, mut iter1: I, mut iter2: I) -> Result<UnifiedSeq<S>, S>
+    where
+        S: 'a,
+        I: SeqTyIterator<'a, S>,
+    {
+        let range1 = iter1.size_range();
+        let range2 = iter2.size_range();
+
+        if range2.start > range1.end || range2.end < range1.start {
+            // The sizes are completely disjoint; we can perform a simple length check at runtime.
+            // It's important we bail out here so we don't hit a type erasure error below.
+            return Ok(UnifiedSeq::Disjoint);
+        }
+
+        let mut merged_fixed: Vec<S> = vec![];
+        while iter1.fixed_len() > 0 && iter2.fixed_len() > 0 {
+            let next1 = iter1.next().unwrap();
+            let next2 = iter2.next().unwrap();
+
+            let merged_next = match self.unify_ref(&next1, &next2)? {
+                UnifiedTy::Merged(ty_ref) => ty_ref,
+                UnifiedTy::Disjoint => {
+                    // Within our fixed types we're willing to build a runtime type check of the
+                    // member. This means we can consider the seq disjoint.
+                    return Ok(UnifiedSeq::Disjoint);
+                }
+            };
+
+            merged_fixed.push(merged_next);
+        }
+
+        // TODO: Building a temporary here sucks
+        let mut rest_types: Vec<&S> = vec![];
+        while iter1.fixed_len() > 0 {
+            rest_types.push(iter1.next().unwrap());
+        }
+        if iter1.is_infinite() {
+            rest_types.push(iter1.next().unwrap());
+        }
+        while iter2.fixed_len() > 0 {
+            rest_types.push(iter2.next().unwrap());
+        }
+        if iter2.is_infinite() {
+            rest_types.push(iter2.next().unwrap());
+        }
+
+        let merged_rest = if rest_types.is_empty() {
+            None
+        } else {
+            Some(self.unify_ref_iters(iter::empty(), rest_types.into_iter())?)
+        };
+
+        Ok(UnifiedSeq::Merged(merged_fixed, merged_rest))
+    }
 
     fn unify_into_ty_ref(&self, ty_ref1: &S, ty_ref2: &S) -> Result<S, S> {
         match self.unify_ref(ty_ref1, ty_ref2)? {
@@ -129,13 +193,29 @@ where
                     Box::new(unified_val_ref),
                 ))))
             }
-            (&ty::Ty::Vec(_, _), &ty::Ty::Vec(_, _)) => {
-                // TODO: All sorts of logic here
-                Err(Error::Erased(ref1.clone(), ref2.clone()))
+            (&ty::Ty::Vec(ref begin1, ref fixed1), &ty::Ty::Vec(ref begin2, ref fixed2)) => {
+                self.unify_seq(
+                    RevVecTyIterator::new(begin1, fixed1),
+                    RevVecTyIterator::new(begin2, fixed2),
+                ).map(|result| match result {
+                    UnifiedSeq::Disjoint => UnifiedTy::Disjoint,
+                    UnifiedSeq::Merged(mut fixed, begin) => {
+                        // We iterator over our types in reverse so we need to flip them back here
+                        fixed.reverse();
+                        UnifiedTy::Merged(S::from_ty(ty::Ty::Vec(begin.map(Box::new), fixed)))
+                    }
+                })
             }
-            (&ty::Ty::List(_, _), &ty::Ty::List(_, _)) => {
-                // TODO: All sorts of logic here
-                Err(Error::Erased(ref1.clone(), ref2.clone()))
+            (&ty::Ty::List(ref fixed1, ref rest1), &ty::Ty::List(ref fixed2, ref rest2)) => {
+                self.unify_seq(
+                    ListTyIterator::new(fixed1, rest1),
+                    ListTyIterator::new(fixed2, rest2),
+                ).map(|result| match result {
+                    UnifiedSeq::Disjoint => UnifiedTy::Disjoint,
+                    UnifiedSeq::Merged(fixed, rest) => {
+                        UnifiedTy::Merged(S::from_ty(ty::Ty::List(fixed, rest.map(Box::new))))
+                    }
+                })
             }
             (&ty::Ty::Fun(_), &ty::Ty::Fun(_)) => {
                 // TODO: We can't intersect the parameter lists due to lack of intersect logic
@@ -343,5 +423,32 @@ mod test {
 
         assert_erased_iter(&["(-> String)", "(-> Symbol)"]);
         assert_erased_iter(&["(-> String)", "(RawU)", "(-> Symbol)"]);
+    }
+
+    #[test]
+    fn list_types() {
+        assert_merged("(Listof Any)", "(List Any)", "(Listof Any)");
+        assert_disjoint("(List Any)", "(List Any Any)");
+        assert_disjoint("(List Symbol)", "(List String)");
+        assert_disjoint("(List String)", "(List String String String ...)");
+        assert_merged(
+            "(List Int (RawU Symbol Float String) ...)",
+            "(List Int Symbol ...)",
+            "(List Int Float String ...)",
+        );
+    }
+
+    #[test]
+    fn vec_types() {
+        assert_merged("(Vectorof Bool)", "(Vector true)", "(Vectorof false)");
+        assert_disjoint(
+            "(Vector 'foo ... Int Symbol)",
+            "(Vector 'bar ... Int String)",
+        );
+        assert_merged(
+            "(Vector (RawU 'foo 'bar) ... Int Symbol)",
+            "(Vector 'foo ... Int Symbol)",
+            "(Vector 'bar ... Int Symbol)",
+        );
     }
 }

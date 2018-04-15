@@ -1,8 +1,22 @@
+use std::ops::Range;
+
 pub trait SeqTyIterator<'a, S> {
     /// Returns the remaining number of fixed member types
     fn fixed_len(&self) -> usize;
+
+    /// Returns true if we have a rest/begin type
+    fn is_infinite(&self) -> bool;
+
     /// Returns the next member type or None if there are no more types
     fn next(&mut self) -> Option<&'a S>;
+
+    fn size_range(&self) -> Range<usize> {
+        if self.is_infinite() {
+            (self.fixed_len()..usize::max_value())
+        } else {
+            (self.fixed_len()..self.fixed_len())
+        }
+    }
 }
 
 /// Iterates through the member types of a list in forward order
@@ -20,6 +34,10 @@ impl<'a, S> ListTyIterator<'a, S> {
 impl<'a, S> SeqTyIterator<'a, S> for ListTyIterator<'a, S> {
     fn fixed_len(&self) -> usize {
         self.fixed.len()
+    }
+
+    fn is_infinite(&self) -> bool {
+        self.rest.is_some()
     }
 
     fn next(&mut self) -> Option<&'a S> {
@@ -51,6 +69,10 @@ impl<'a, S> RevVecTyIterator<'a, S> {
 impl<'a, S> SeqTyIterator<'a, S> for RevVecTyIterator<'a, S> {
     fn fixed_len(&self) -> usize {
         self.fixed.len()
+    }
+
+    fn is_infinite(&self) -> bool {
+        self.begin.is_some()
     }
 
     fn next(&mut self) -> Option<&'a S> {
