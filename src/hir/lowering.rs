@@ -631,20 +631,30 @@ impl<'ccx> LoweringContext<'ccx> {
                 let arg_data = vs.split_off(1);
                 let fn_datum = vs.pop().unwrap();
 
-                match scope.get_datum(&fn_datum) {
-                    Some(Binding::Prim(ref fn_prim)) => {
-                        return self.lower_module_prim_apply(scope, span, fn_prim, arg_data)
-                    }
-                    Some(Binding::Macro(macro_id)) => {
-                        let expanded_datum = {
-                            let mac = &self.macros[macro_id.to_usize()];
-                            expand_macro(&mut self.ns_id_alloc, scope, span, mac, &arg_data)?
-                        };
+                if let NsDatum::Ident(fn_span, ref ident) = fn_datum {
+                    match scope.get(ident) {
+                        Some(Binding::Prim(ref fn_prim)) => {
+                            return self.lower_module_prim_apply(scope, span, fn_prim, arg_data)
+                        }
+                        Some(Binding::Macro(macro_id)) => {
+                            let expanded_datum = {
+                                let mac = &self.macros[macro_id.to_usize()];
+                                expand_macro(&mut self.ns_id_alloc, scope, span, mac, &arg_data)?
+                            };
 
-                        return self.lower_module_def(scope, expanded_datum)
-                            .map_err(|e| e.with_macro_invocation_span(span));
+                            return self.lower_module_def(scope, expanded_datum)
+                                .map_err(|e| e.with_macro_invocation_span(span));
+                        }
+                        Some(_) => {
+                            // Non-def
+                        }
+                        None => {
+                            return Err(Error::new(
+                                fn_span,
+                                ErrorKind::UnboundSymbol(ident.name().clone()),
+                            ));
+                        }
                     }
-                    _ => {}
                 }
             }
         }
