@@ -100,8 +100,8 @@ where
             (&ty::Ty::Set(ref member1), &ty::Ty::Set(ref member2)) => Ok(S::from_ty(ty::Ty::Set(
                 Box::new(self.intersect_ref(member1, member2)?),
             ))),
-            (&ty::Ty::Hash(ref key1, ref value1), &ty::Ty::Hash(ref key2, ref value2)) => {
-                Ok(S::from_ty(ty::Ty::Hash(
+            (&ty::Ty::Map(ref key1, ref value1), &ty::Ty::Map(ref key2, ref value2)) => {
+                Ok(S::from_ty(ty::Ty::Map(
                     Box::new(self.intersect_ref(key1, key2)?),
                     Box::new(self.intersect_ref(value1, value2)?),
                 )))
@@ -283,12 +283,12 @@ mod test {
     }
 
     #[test]
-    fn hash_types() {
-        assert_disjoint("(Hash Int Float)", "(Hash Float Int)");
+    fn map_types() {
+        assert_disjoint("(Map Int Float)", "(Map Float Int)");
         assert_merged(
-            "(Hash 'foo Int)",
-            "(Hash (RawU 'foo 'bar) Int)",
-            "(Hash (RawU 'foo 'baz) Int)",
+            "(Map 'foo Int)",
+            "(Map (RawU 'foo 'bar) Int)",
+            "(Map (RawU 'foo 'baz) Int)",
         );
     }
 

@@ -27,7 +27,7 @@ pub fn mono_for_datum(datum: &Datum) -> ty::Mono {
             let unified_value =
                 ty::unify::mono_unify_iter(vs.iter().map(|&(_, ref v)| mono_for_datum(v))).unwrap();
 
-            ty::Ty::Hash(Box::new(unified_key), Box::new(unified_value)).into_mono()
+            ty::Ty::Map(Box::new(unified_key), Box::new(unified_value)).into_mono()
         }
     }
 }
@@ -89,8 +89,8 @@ mod test {
     }
 
     #[test]
-    fn fixed_hash() {
-        assert_mono_for_str("(Hash (RawU) (RawU))", "{}");
-        assert_mono_for_str("(Hash Bool (RawU Int 'foo))", "{true 1, false foo}");
+    fn fixed_map() {
+        assert_mono_for_str("(Map (RawU) (RawU))", "{}");
+        assert_mono_for_str("(Map Bool (RawU Int 'foo))", "{true 1, false foo}");
     }
 }

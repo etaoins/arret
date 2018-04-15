@@ -205,13 +205,13 @@ where
                 )))))
             }
             (
-                &ty::Ty::Hash(ref key_ref1, ref val_ref1),
-                &ty::Ty::Hash(ref key_ref2, ref val_ref2),
+                &ty::Ty::Map(ref key_ref1, ref val_ref1),
+                &ty::Ty::Map(ref key_ref2, ref val_ref2),
             ) => {
                 let unified_key_ref = self.unify_into_ty_ref(&key_ref1, &key_ref2)?;
                 let unified_val_ref = self.unify_into_ty_ref(&val_ref1, &val_ref2)?;
 
-                Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::Hash(
+                Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::Map(
                     Box::new(unified_key_ref),
                     Box::new(unified_val_ref),
                 ))))
@@ -470,11 +470,11 @@ mod test {
     }
 
     #[test]
-    fn hash_types() {
+    fn map_types() {
         assert_merged(
-            "(Hash Bool (RawU 'bar 'foo))",
-            "(Hash true 'bar)",
-            "(Hash false 'foo)",
+            "(Map Bool (RawU 'bar 'foo))",
+            "(Map true 'bar)",
+            "(Map false 'foo)",
         );
     }
 

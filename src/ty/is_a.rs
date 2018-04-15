@@ -175,8 +175,8 @@ where
             (&ty::Ty::Bool, &ty::Ty::LitBool(_)) => Result::May,
             (&ty::Ty::Set(ref sub), &ty::Ty::Set(ref par)) => self.ref_is_a(sub, par),
             (
-                &ty::Ty::Hash(ref sub_key, ref sub_value),
-                &ty::Ty::Hash(ref par_key, ref par_value),
+                &ty::Ty::Map(ref sub_key, ref sub_value),
+                &ty::Ty::Map(ref par_key, ref par_value),
             ) => self.ref_is_a(sub_key, par_key)
                 .and_then(|| self.ref_is_a(sub_value, par_value)),
             (
@@ -304,17 +304,17 @@ mod test {
     }
 
     #[test]
-    fn hash_types() {
+    fn map_types() {
         let foo_sym = poly_for_str("'foo");
         let any_sym = poly_for_str("Symbol");
         let any_int = poly_for_str("Int");
 
         let int_to_any_sym =
-            ty::Ty::Hash(Box::new(any_int.clone()), Box::new(any_sym.clone())).into_poly();
+            ty::Ty::Map(Box::new(any_int.clone()), Box::new(any_sym.clone())).into_poly();
         let int_to_foo_sym =
-            ty::Ty::Hash(Box::new(any_int.clone()), foo_sym.clone().into()).into_poly();
+            ty::Ty::Map(Box::new(any_int.clone()), foo_sym.clone().into()).into_poly();
         let any_sym_to_any_sym =
-            ty::Ty::Hash(Box::new(any_sym.clone()), Box::new(any_sym.clone())).into_poly();
+            ty::Ty::Map(Box::new(any_sym.clone()), Box::new(any_sym.clone())).into_poly();
 
         assert_eq!(
             Result::Yes,

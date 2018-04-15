@@ -18,7 +18,7 @@ pub enum TyCons {
     Fun,
     ImpureFun,
     Set,
-    Hash,
+    Map,
     Union,
     #[cfg(test)]
     RawU,
@@ -148,11 +148,11 @@ impl<'a> LowerTyContext<'a> {
                 let member_ty = self.lower_poly(arg_data.pop().unwrap())?;
                 Ok(ty::Ty::Set(Box::new(member_ty)).into_poly())
             }
-            TyCons::Hash => {
+            TyCons::Map => {
                 expect_arg_count(span, &arg_data, 2)?;
                 let value_ty = self.lower_poly(arg_data.pop().unwrap())?;
                 let key_ty = self.lower_poly(arg_data.pop().unwrap())?;
-                Ok(ty::Ty::Hash(Box::new(key_ty), Box::new(value_ty)).into_poly())
+                Ok(ty::Ty::Map(Box::new(key_ty), Box::new(value_ty)).into_poly())
             }
             TyCons::Union => {
                 let member_tys = arg_data
@@ -300,7 +300,7 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
     export_ty_cons!("->", TyCons::Fun);
     export_ty_cons!("->!", TyCons::ImpureFun);
     export_ty_cons!("Setof", TyCons::Set);
-    export_ty_cons!("Hash", TyCons::Hash);
+    export_ty_cons!("Map", TyCons::Map);
     export_ty_cons!("U", TyCons::Union);
 
     #[cfg(test)]
@@ -334,8 +334,8 @@ fn str_for_poly_ty(pvars: &[ty::PVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
         ty::Ty::LitBool(false) => "false".to_owned(),
         ty::Ty::LitBool(true) => "true".to_owned(),
         ty::Ty::LitSym(ref name) => format!("'{}", name),
-        ty::Ty::Hash(ref key, ref value) => format!(
-            "(Hash {} {})",
+        ty::Ty::Map(ref key, ref value) => format!(
+            "(Map {} {})",
             str_for_poly(pvars, key),
             str_for_poly(pvars, value)
         ),
@@ -702,13 +702,13 @@ mod test {
     }
 
     #[test]
-    fn hash_cons() {
-        let j = "(Hash true false)";
+    fn map_cons() {
+        let j = "(Map true false)";
 
         let key_ty = ty::Ty::LitBool(true);
         let value_ty = ty::Ty::LitBool(false);
         let expected =
-            ty::Ty::Hash(Box::new(key_ty.into_poly()), Box::new(value_ty.into_poly())).into_poly();
+            ty::Ty::Map(Box::new(key_ty.into_poly()), Box::new(value_ty.into_poly())).into_poly();
 
         assert_poly_for_str(expected, j);
     }

@@ -24,7 +24,7 @@ where
     Char,
     Float,
     Fun(Box<Fun<S>>),
-    Hash(Box<S>, Box<S>),
+    Map(Box<S>, Box<S>),
     Int,
     List(Vec<S>, Option<Box<S>>),
     LitBool(bool),

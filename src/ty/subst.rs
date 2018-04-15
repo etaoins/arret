@@ -34,7 +34,7 @@ fn subst_ty(
             subst(&fun.params, pvars)?,
             subst(&fun.ret, pvars)?,
         )),
-        ty::Ty::Hash(ref key, ref value) => Ok(ty::Ty::Hash(
+        ty::Ty::Map(ref key, ref value) => Ok(ty::Ty::Map(
             Box::new(subst(key, pvars)?),
             Box::new(subst(value, pvars)?),
         )),

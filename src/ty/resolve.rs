@@ -29,7 +29,7 @@ fn poly_ty_has_subtypes(pvars: &[ty::PVar], poly_ty: &ty::Ty<ty::Poly>) -> bool 
                     != ty::Ty::List(vec![], Some(Box::new(ty::Ty::Any.into_poly()))).into_poly()
                 || poly_has_subtypes(pvars, &fun.ret)
         }
-        ty::Ty::Hash(ref key, ref value) => [key, value]
+        ty::Ty::Map(ref key, ref value) => [key, value]
             .iter()
             .any(|poly| poly_has_subtypes(pvars, poly)),
         ty::Ty::List(ref fixed, ref rest) => {
@@ -104,8 +104,8 @@ mod test {
         assert_eq!(true, str_has_subtypes("(Int ... -> true)"));
         assert_eq!(true, str_has_subtypes("(Any ... -> Any)"));
 
-        assert_eq!(true, str_has_subtypes("(Hash Symbol Int)"));
-        assert_eq!(false, str_has_subtypes("(Hash Float Int)"));
+        assert_eq!(true, str_has_subtypes("(Map Symbol Int)"));
+        assert_eq!(false, str_has_subtypes("(Map Float Int)"));
 
         assert_eq!(true, str_has_subtypes("(List Symbol Int)"));
         assert_eq!(true, str_has_subtypes("(List String Int ...)"));
