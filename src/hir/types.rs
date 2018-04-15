@@ -97,26 +97,6 @@ impl<'a> LowerTyContext<'a> {
         Ok(ty::Ty::Vec(start_ty, fixed_tys).into_poly())
     }
 
-    fn lower_fun_cons(
-        &self,
-        span: Span,
-        ty_cons_name: &'static str,
-        impure: bool,
-        mut arg_data: Vec<NsDatum>,
-    ) -> Result<ty::Poly> {
-        if arg_data.is_empty() {
-            return Err(Error::new(
-                span,
-                ErrorKind::IllegalArg(format!("{} requires at least one argument", ty_cons_name)),
-            ));
-        }
-
-        let ret_ty = self.lower_poly(arg_data.pop().unwrap())?;
-        let params_ty = self.lower_list_cons(arg_data)?;
-
-        Ok(ty::Ty::new_fun(impure, params_ty, ret_ty).into_poly())
-    }
-
     fn lower_infix_fun_cons(&self, impure: bool, mut arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
         let ret_ty = self.lower_poly(arg_data.pop().unwrap())?;
 
@@ -124,6 +104,20 @@ impl<'a> LowerTyContext<'a> {
         arg_data.pop();
 
         let params_ty = self.lower_list_cons(arg_data)?;
+
+        Ok(ty::Ty::new_fun(impure, params_ty, ret_ty).into_poly())
+    }
+
+    fn lower_complex_fun_cons(
+        &self,
+        span: Span,
+        impure: bool,
+        mut arg_data: Vec<NsDatum>,
+    ) -> Result<ty::Poly> {
+        expect_arg_count(span, &arg_data, 2)?;
+
+        let ret_ty = self.lower_poly(arg_data.pop().unwrap())?;
+        let params_ty = self.lower_poly(arg_data.pop().unwrap())?;
 
         Ok(ty::Ty::new_fun(impure, params_ty, ret_ty).into_poly())
     }
@@ -147,8 +141,8 @@ impl<'a> LowerTyContext<'a> {
                 let start_ty = self.lower_poly(arg_data.pop().unwrap())?;
                 Ok(ty::Ty::Vec(Some(Box::new(start_ty)), vec![]).into_poly())
             }
-            TyCons::Fun => self.lower_fun_cons(span, "->", false, arg_data),
-            TyCons::ImpureFun => self.lower_fun_cons(span, "->!", true, arg_data),
+            TyCons::Fun => self.lower_complex_fun_cons(span, false, arg_data),
+            TyCons::ImpureFun => self.lower_complex_fun_cons(span, true, arg_data),
             TyCons::Set => {
                 expect_arg_count(span, &arg_data, 1)?;
                 let member_ty = self.lower_poly(arg_data.pop().unwrap())?;
@@ -221,7 +215,7 @@ impl<'a> LowerTyContext<'a> {
                     return Ok(ty::Ty::List(vec![], None).into_poly());
                 }
 
-                if vs.len() >= 3 {
+                if vs.len() >= 2 {
                     match self.scope.get_datum(&vs[vs.len() - 2]) {
                         Some(Binding::TyCons(TyCons::Fun)) => {
                             return self.lower_infix_fun_cons(false, vs);
@@ -366,15 +360,21 @@ fn str_for_poly_ty(pvars: &[ty::PVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
             let fun_cons = if fun.impure() { "->!" } else { "->" };
 
             if let ty::Poly::Fixed(ty::Ty::List(ref fixed, ref rest)) = *fun.params() {
+                // This has a simple param type; build an infix function type
                 let mut strs = strs_for_list_ty_args(pvars, fixed, rest);
                 strs.push(fun_cons.to_owned());
                 strs.push(str_for_poly(pvars, fun.ret()));
 
                 format!("({})", strs.join(" "))
             } else {
-                // TODO: These types can be constructed implicitly (e.g. the definition for `list`)
-                // but cannot be built using a type constructor
-                "!FN_WITH_NON_LIST_PARAMS!".to_owned()
+                // This has a non-trivial param type (e.g. a polymorphic variable). Use a complex
+                // function type
+                format!(
+                    "({} {} {})",
+                    fun_cons,
+                    str_for_poly(pvars, fun.params()),
+                    str_for_poly(pvars, fun.ret())
+                )
             }
         }
         _ => "UNIMPLEMENTED".to_owned(),
@@ -594,15 +594,12 @@ mod test {
         let j = "(->)";
         let t = "^^^^";
 
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg("-> requires at least one argument".to_owned()),
-        );
+        let err = Error::new(t2s(t), ErrorKind::WrongArgCount(2));
         assert_err_for_str(err, j);
     }
 
     #[test]
-    fn pure_fun() {
+    fn pure_infix_fun() {
         let j = "(-> true)";
 
         let expected = ty::Ty::new_fun(
@@ -615,38 +612,12 @@ mod test {
     }
 
     #[test]
-    fn impure_fun() {
+    fn impure_infix_fun() {
         let j = "(->! true)";
 
         let expected = ty::Ty::new_fun(
             true,
             ty::Ty::List(vec![], None).into_poly(),
-            ty::Ty::LitBool(true).into_poly(),
-        ).into_poly();
-
-        assert_poly_for_str(expected, j);
-    }
-
-    #[test]
-    fn fixed_fun() {
-        let j = "(-> false true)";
-
-        let expected = ty::Ty::new_fun(
-            false,
-            ty::Ty::List(vec![ty::Ty::LitBool(false).into_poly()], None).into_poly(),
-            ty::Ty::LitBool(true).into_poly(),
-        ).into_poly();
-
-        assert_poly_for_str(expected, j);
-    }
-
-    #[test]
-    fn rest_fun() {
-        let j = "(-> Symbol ... true)";
-
-        let expected = ty::Ty::new_fun(
-            false,
-            ty::Ty::List(vec![], Some(Box::new(ty::Ty::Sym.into_poly()))).into_poly(),
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
 
@@ -682,6 +653,31 @@ mod test {
         assert_poly_for_str(expected, j);
     }
 
+    #[test]
+    fn fixed_complex_fun() {
+        let j = "(-> (List false) true)";
+
+        let expected = ty::Ty::new_fun(
+            false,
+            ty::Ty::List(vec![ty::Ty::LitBool(false).into_poly()], None).into_poly(),
+            ty::Ty::LitBool(true).into_poly(),
+        ).into_poly();
+
+        assert_poly_for_str(expected, j);
+    }
+
+    #[test]
+    fn rest_complex_fun() {
+        let j = "(-> (Listof Symbol) true)";
+
+        let expected = ty::Ty::new_fun(
+            false,
+            ty::Ty::List(vec![], Some(Box::new(ty::Ty::Sym.into_poly()))).into_poly(),
+            ty::Ty::LitBool(true).into_poly(),
+        ).into_poly();
+
+        assert_poly_for_str(expected, j);
+    }
     #[test]
     fn set_cons() {
         let j = "(Setof true)";

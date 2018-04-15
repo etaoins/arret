@@ -98,11 +98,11 @@ mod test {
         assert_eq!(false, str_has_subtypes("String"));
         assert_eq!(true, str_has_subtypes("Symbol"));
 
-        assert_eq!(false, str_has_subtypes("(-> Any ... true)"));
-        assert_eq!(true, str_has_subtypes("(->! Any ... true)"));
-        assert_eq!(true, str_has_subtypes("(-> Any true)"));
-        assert_eq!(true, str_has_subtypes("(-> Int ... true)"));
-        assert_eq!(true, str_has_subtypes("(-> Any ... Any)"));
+        assert_eq!(false, str_has_subtypes("(Any ... -> true)"));
+        assert_eq!(true, str_has_subtypes("(Any ... ->! true)"));
+        assert_eq!(true, str_has_subtypes("(Any -> true)"));
+        assert_eq!(true, str_has_subtypes("(Int ... -> true)"));
+        assert_eq!(true, str_has_subtypes("(Any ... -> Any)"));
 
         assert_eq!(true, str_has_subtypes("(Hash Symbol Int)"));
         assert_eq!(false, str_has_subtypes("(Hash Float Int)"));
