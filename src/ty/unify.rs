@@ -32,9 +32,9 @@ where
     /// An example would be (Setof Str) and (Setof Sym) and most function types. This is also
     /// commonly encountered when one of the types is a polymorphic variable as it's difficult to
     /// guarantee all possible subtypes of the variable's bound can be distinguished. As a result
-    /// the union of two unbounded polymorphic types will always conflict.
+    /// the union of two unbounded polymorphic types will always be considered erased.
     ///
-    /// The conflicting types are returned as they may have been nested in to the passed types.
+    /// The erased types are returned as they may have been nested in to the passed types.
     Erased(S, S),
 }
 
@@ -293,10 +293,10 @@ impl<'a> UnifyCtx<ty::Poly> for PolyUnifyCtx<'a> {
                 self.non_subty_unify(poly1, ty1, poly2, ty2)
             }
             _ => {
-                // TODO: We are probably too eager to conflict here. If one type is a literal
-                // we should be able to unify. Lists of different lengths should be allowed as
-                // they're disjoint and testable at runtime - however two function types can be
-                // disjoint and *not* testable so they should still conflict.
+                // TODO: We are probably too eager to fail here. If one type is a literal we should
+                // be able to unify. Lists of different lengths should be allowed as they're
+                // disjoint and testable at runtime - however two function types can be disjoint
+                // and *not* testable so they should still be considered erased.
                 Err(Error::Erased(poly1.clone(), poly2.clone()))
             }
         }
