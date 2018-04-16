@@ -15,7 +15,9 @@ pub enum TyCons {
     Listof,
     Vector,
     Vectorof,
-    Fun,
+    PureArrow,
+    ImpureArrow,
+    PureFun,
     ImpureFun,
     Set,
     Map,
@@ -141,8 +143,12 @@ impl<'a> LowerTyContext<'a> {
                 let start_ty = self.lower_poly(arg_data.pop().unwrap())?;
                 Ok(ty::Ty::Vec(Some(Box::new(start_ty)), vec![]).into_poly())
             }
-            TyCons::Fun => self.lower_complex_fun_cons(span, false, arg_data),
+            TyCons::PureFun => self.lower_complex_fun_cons(span, false, arg_data),
             TyCons::ImpureFun => self.lower_complex_fun_cons(span, true, arg_data),
+            TyCons::PureArrow | TyCons::ImpureArrow => Err(Error::new(
+                span,
+                ErrorKind::IllegalArg("functions must return exactly one value".to_owned()),
+            )),
             TyCons::Set => {
                 expect_arg_count(span, &arg_data, 1)?;
                 let member_ty = self.lower_poly(arg_data.pop().unwrap())?;
@@ -214,10 +220,10 @@ impl<'a> LowerTyContext<'a> {
 
                 if vs.len() >= 2 {
                     match self.scope.get_datum(&vs[vs.len() - 2]) {
-                        Some(Binding::TyCons(TyCons::Fun)) => {
+                        Some(Binding::TyCons(TyCons::PureArrow)) => {
                             return self.lower_infix_fun_cons(false, vs);
                         }
-                        Some(Binding::TyCons(TyCons::ImpureFun)) => {
+                        Some(Binding::TyCons(TyCons::ImpureArrow)) => {
                             return self.lower_infix_fun_cons(true, vs);
                         }
                         _ => {}
@@ -297,8 +303,10 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
     export_ty_cons!("Listof", TyCons::Listof);
     export_ty_cons!("Vector", TyCons::Vector);
     export_ty_cons!("Vectorof", TyCons::Vectorof);
-    export_ty_cons!("->", TyCons::Fun);
-    export_ty_cons!("->!", TyCons::ImpureFun);
+    export_ty_cons!("->", TyCons::PureArrow);
+    export_ty_cons!("->!", TyCons::ImpureArrow);
+    export_ty_cons!("Fn", TyCons::PureFun);
+    export_ty_cons!("Fn!", TyCons::ImpureFun);
     export_ty_cons!("Setof", TyCons::Set);
     export_ty_cons!("Map", TyCons::Map);
     export_ty_cons!("U", TyCons::Union);
@@ -356,12 +364,12 @@ fn str_for_poly_ty(pvars: &[ty::PVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
             format!("(Vector {})", result_parts.join(" "))
         }
         ty::Ty::Fun(ref fun) => {
-            let fun_cons = if fun.impure() { "->!" } else { "->" };
-
             if let ty::Poly::Fixed(ty::Ty::List(ref fixed, ref rest)) = *fun.params() {
                 // This has a simple param type; build an infix function type
                 let mut strs = strs_for_list_ty_args(pvars, fixed, rest);
-                strs.push(fun_cons.to_owned());
+
+                let fn_cons = if fun.impure() { "->!" } else { "->" };
+                strs.push(fn_cons.to_owned());
                 strs.push(str_for_poly(pvars, fun.ret()));
 
                 format!("({})", strs.join(" "))
@@ -370,7 +378,7 @@ fn str_for_poly_ty(pvars: &[ty::PVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
                 // function type
                 format!(
                     "({} {} {})",
-                    fun_cons,
+                    if fun.impure() { "Fn!" } else { "Fn" },
                     str_for_poly(pvars, fun.params()),
                     str_for_poly(pvars, fun.ret())
                 )
@@ -607,7 +615,10 @@ mod test {
         let j = "(->)";
         let t = "^^^^";
 
-        let err = Error::new(t2s(t), ErrorKind::WrongArgCount(2));
+        let err = Error::new(
+            t2s(t),
+            ErrorKind::IllegalArg("functions must return exactly one value".to_owned()),
+        );
         assert_err_for_str(err, j);
     }
 
@@ -668,7 +679,7 @@ mod test {
 
     #[test]
     fn fixed_complex_fun() {
-        let j = "(-> (List false) true)";
+        let j = "(Fn (List false) true)";
 
         let expected = ty::Ty::new_fun(
             false,
@@ -681,7 +692,7 @@ mod test {
 
     #[test]
     fn rest_complex_fun() {
-        let j = "(-> (Listof Symbol) true)";
+        let j = "(Fn (Listof Symbol) true)";
 
         let expected = ty::Ty::new_fun(
             false,

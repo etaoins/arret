@@ -276,7 +276,7 @@ impl<'ccx> LoweringContext<'ccx> {
         let ret_ty;
         let body_data;
         if rest_data.len() >= 2
-            && scope.get_datum(&rest_data[0]) == Some(Binding::TyCons(TyCons::Fun))
+            && scope.get_datum(&rest_data[0]) == Some(Binding::TyCons(TyCons::PureArrow))
         {
             body_data = rest_data.split_off(2);
             ret_ty =

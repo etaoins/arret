@@ -356,7 +356,7 @@ mod test {
         // allow for runtime type checks. However, it just ends up producing a weird (but correct)
         // type.
         assert_merged(
-            "(-> (RawU (List Float) (List Int)) (RawU))",
+            "(Fn (RawU (List Float) (List Int)) (RawU))",
             "(Float -> Int)",
             "(Int -> Float)",
         );
@@ -364,7 +364,7 @@ mod test {
         assert_merged("(Bool -> String)", "(true -> String)", "(false ->! String)");
 
         assert_merged(
-            "(-> (RawU (List String) (List String String)) Symbol)",
+            "(Fn (RawU (List String) (List String String)) Symbol)",
             "(String -> Symbol)",
             "(String String -> Symbol)",
         );

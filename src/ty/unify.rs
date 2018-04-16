@@ -453,9 +453,9 @@ mod test {
         );
 
         assert_merged(
-            "(-> true (RawU Int Float))",
-            "(-> Bool Int)",
-            "(-> true Float)",
+            "(true -> (RawU Int Float))",
+            "(Bool -> Int)",
+            "(true -> Float)",
         );
         assert_merged("(->! Int)", "(-> Int)", "(->! Int)");
         assert_merged("(->! Bool)", "(-> true)", "(->! false)");
