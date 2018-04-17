@@ -6,7 +6,10 @@ use ty::seq_ty_iter::{ListTyIterator, RevVecTyIterator, SeqTyIterator};
 
 #[derive(PartialEq, Debug)]
 pub enum IntersectedTy<S> {
+    /// The types are disjoint; their intersection would be the empty union
     Disjoint,
+
+    /// The types can be intersected in to a new type
     Merged(S),
 }
 
@@ -148,7 +151,7 @@ where
                 let intersected_impure = fun1.impure() && fun2.impure();
                 let intersected_params = match self.unify_ref(fun1.params(), fun2.params()) {
                     Ok(ty::unify::UnifiedTy::Merged(merged)) => merged,
-                    Ok(ty::unify::UnifiedTy::Disjoint) => S::from_ty(ty::Ty::Union(vec![
+                    Ok(ty::unify::UnifiedTy::Discerned) => S::from_ty(ty::Ty::Union(vec![
                         fun1.params().clone(),
                         fun2.params().clone(),
                     ])),

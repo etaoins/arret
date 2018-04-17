@@ -52,7 +52,7 @@ pub enum ErrorKind {
     MultipleZeroOrMoreMatch(Span),
     NoVecDestruc,
     ValueAsTy,
-    PolyUnionMember(String, String),
+    PolyUnionConflict(String, String),
     UserError(String),
     ReadError(String),
     SyntaxError(SyntaxError),
@@ -113,7 +113,7 @@ impl Reportable for Error {
                 "vectors can only be used for type ascription in the form [name : Type]".to_owned()
             }
             ErrorKind::ValueAsTy => "value cannot be used as a type".to_owned(),
-            ErrorKind::PolyUnionMember(ref left, ref right) => format!(
+            ErrorKind::PolyUnionConflict(ref left, ref right) => format!(
                 "polymorphism prevents `{}` and `{}` from being members of the same union",
                 left, right,
             ),

@@ -10,16 +10,16 @@ pub enum UnifiedTy<S>
 where
     S: ty::TyRef,
 {
-    /// The types are disjoint but can be distinguished at runtime
+    /// The types can be discerned at runtime
     ///
     /// An example would be Str and Sym. These can be safely placed in a Union to create a new
     /// type.
-    Disjoint,
+    Discerned,
 
     /// The types can be unified in to a single non-union type
     ///
     /// A trivial example would be Sym and 'foo because of their subtype relationship. More complex
-    /// per-type logic exists that is aware of the runtime's type checking capabilities.
+    /// per-type logic exists, especially surrounding sequences.
     Merged(S),
 }
 
@@ -27,7 +27,7 @@ enum UnifiedSeq<S>
 where
     S: ty::TyRef,
 {
-    Disjoint,
+    Discerned,
     Merged(Vec<S>, Option<S>),
 }
 
@@ -48,8 +48,8 @@ where
 
         if range2.start > range1.end || range2.end < range1.start {
             // The sizes are completely disjoint; we can perform a simple length check at runtime.
-            // It's important we bail out here so we don't hit a type erasure error below.
-            return Ok(UnifiedSeq::Disjoint);
+            // It's important we bail out here so we don't hit a needless poly conflict below.
+            return Ok(UnifiedSeq::Discerned);
         }
 
         let mut merged_fixed: Vec<S> = vec![];
@@ -59,10 +59,10 @@ where
 
             let merged_next = match self.unify_ref(next1, next2)? {
                 UnifiedTy::Merged(ty_ref) => ty_ref,
-                UnifiedTy::Disjoint => {
+                UnifiedTy::Discerned => {
                     // Within our fixed types we're willing to build a runtime type check of the
-                    // member. This means we can consider the seq disjoint.
-                    return Ok(UnifiedSeq::Disjoint);
+                    // member. This means we can consider the seqs discerned.
+                    return Ok(UnifiedSeq::Discerned);
                 }
             };
 
@@ -108,7 +108,7 @@ where
     fn unify_into_ty_ref(&self, ty_ref1: &S, ty_ref2: &S) -> Result<S, E> {
         match self.unify_ref(ty_ref1, ty_ref2)? {
             UnifiedTy::Merged(ty_ref) => Ok(ty_ref),
-            UnifiedTy::Disjoint => Ok(S::from_ty(ty::Ty::Union(vec![
+            UnifiedTy::Discerned => Ok(S::from_ty(ty::Ty::Union(vec![
                 ty_ref1.clone(),
                 ty_ref2.clone(),
             ]))),
@@ -126,8 +126,8 @@ where
                     *output_member = merged_member;
                     return Ok(());
                 }
-                UnifiedTy::Disjoint => {
-                    // If we're disjoint with all output types we'll push this type once we
+                UnifiedTy::Discerned => {
+                    // If we can be discerned from all output types we'll push this type once we
                     // exit the loop
                 }
             }
@@ -199,7 +199,7 @@ where
                     RevVecTyIterator::new(begin1, fixed1),
                     RevVecTyIterator::new(begin2, fixed2),
                 ).map(|result| match result {
-                    UnifiedSeq::Disjoint => UnifiedTy::Disjoint,
+                    UnifiedSeq::Discerned => UnifiedTy::Discerned,
                     UnifiedSeq::Merged(mut fixed, begin) => {
                         // We iterator over our types in reverse so we need to flip them back here
                         fixed.reverse();
@@ -212,7 +212,7 @@ where
                     ListTyIterator::new(fixed1, rest1),
                     ListTyIterator::new(fixed2, rest2),
                 ).map(|result| match result {
-                    UnifiedSeq::Disjoint => UnifiedTy::Disjoint,
+                    UnifiedSeq::Discerned => UnifiedTy::Discerned,
                     UnifiedSeq::Merged(fixed, rest) => {
                         UnifiedTy::Merged(S::from_ty(ty::Ty::List(fixed, rest.map(Box::new))))
                     }
@@ -242,7 +242,7 @@ where
                 let new_union = self.unify_ref_iters(members2.iter(), iter::once(ref1))?;
                 Ok(UnifiedTy::Merged(new_union))
             }
-            _ => Ok(UnifiedTy::Disjoint),
+            _ => Ok(UnifiedTy::Discerned),
         }
     }
 }
@@ -266,10 +266,10 @@ pub enum PolyError {
     /// This runs in to issues with polymorphic types as it's hard to prove all of their possible
     /// subtypes don't need to be merged with another union member. This is best effort logic to
     /// allow this in some cases (e.g. bounds with no subtypes) but in the general case it will
-    /// return a `PolyMember` error.
+    /// return a `PolyConflict` error.
     ///
     /// The conflicting types are returned as they may have been nested in to the passed types.
-    PolyMember(ty::Poly, ty::Poly),
+    PolyConflict(ty::Poly, ty::Poly),
 }
 
 struct PolyUnifyCtx<'a> {
@@ -282,23 +282,42 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
         poly1: &ty::Poly,
         poly2: &ty::Poly,
     ) -> Result<UnifiedTy<ty::Poly>, PolyError> {
-        if ty::is_a::poly_is_a(self.pvars, poly1, poly2).to_bool() {
+        use ty::{is_a, resolve};
+
+        let poly1_is_poly2 = is_a::poly_is_a(self.pvars, poly1, poly2);
+        if poly1_is_poly2.to_bool() {
             return Ok(UnifiedTy::Merged(poly2.clone()));
-        } else if ty::is_a::poly_is_a(self.pvars, poly2, poly1).to_bool() {
+        }
+
+        let poly2_is_poly1 = is_a::poly_is_a(self.pvars, poly2, poly1);
+        if poly2_is_poly1.to_bool() {
             return Ok(UnifiedTy::Merged(poly1.clone()));
         }
 
         // Determine if we're dealing with fixed types or polymorphic bounds
-        let resolved1 = ty::resolve::resolve_poly_ty(self.pvars, poly1);
-        let resolved2 = ty::resolve::resolve_poly_ty(self.pvars, poly2);
+        let resolved1 = resolve::resolve_poly_ty(self.pvars, poly1);
+        let resolved2 = resolve::resolve_poly_ty(self.pvars, poly2);
 
-        match (&resolved1, &resolved2) {
-            (&ty::resolve::Result::Fixed(ty1), &ty::resolve::Result::Fixed(ty2)) => {
-                // We can invoke full unification logic if we have fixed types
-                self.non_subty_unify(poly1, ty1, poly2, ty2)
-            }
-            _ => Err(PolyError::PolyMember(poly1.clone(), poly2.clone())),
+        if let (&resolve::Result::Fixed(ty1), &resolve::Result::Fixed(ty2)) =
+            (&resolved1, &resolved2)
+        {
+            // We can invoke full unification logic if we have fixed types
+            return self.non_subty_unify(poly1, ty1, poly2, ty2);
         }
+
+        // Are the polymorphic bounds completely disjoint?
+        if poly1_is_poly2 == is_a::Result::No && poly2_is_poly1 == is_a::Result::No {
+            let ty1 = resolved1.as_ty();
+            let ty2 = resolved2.as_ty();
+            let unified_bound = self.non_subty_unify(poly1, ty1, poly2, ty2)?;
+
+            // The bounds are completely disjoint and can't be merged
+            if unified_bound == UnifiedTy::Discerned {
+                return Ok(UnifiedTy::Discerned);
+            }
+        }
+
+        Err(PolyError::PolyConflict(poly1.clone(), poly2.clone()))
     }
 
     fn intersect_ref(
@@ -384,12 +403,12 @@ mod test {
         hir::poly_for_str(datum_str).unwrap()
     }
 
-    fn assert_disjoint(ty_str1: &str, ty_str2: &str) {
+    fn assert_discerned(ty_str1: &str, ty_str2: &str) {
         let poly1 = poly_for_str(ty_str1);
         let poly2 = poly_for_str(ty_str2);
 
         assert_eq!(
-            UnifiedTy::Disjoint,
+            UnifiedTy::Discerned,
             poly_unify(&[], &poly1, &poly2).unwrap()
         );
     }
@@ -423,14 +442,63 @@ mod test {
         assert_eq!(expected, poly_unify_iter(&[], polys).unwrap());
     }
 
+    fn bounded_polys(bound_str1: &str, bound_str2: &str) -> (Vec<ty::PVar>, ty::Poly, ty::Poly) {
+        let bound1 = poly_for_str(bound_str1);
+        let bound2 = poly_for_str(bound_str2);
+
+        let pvars = vec![
+            ty::PVar::new("poly1".to_owned(), bound1),
+            ty::PVar::new("poly2".to_owned(), bound2),
+        ];
+
+        let poly1 = ty::Poly::Var(ty::PVarId::new(0));
+        let poly2 = ty::Poly::Var(ty::PVarId::new(1));
+
+        (pvars, poly1, poly2)
+    }
+
+    fn assert_poly_bound_merged(expected_str: &str, bound_str1: &str, bound_str2: &str) {
+        let expected = poly_for_str(expected_str);
+        let (pvars, poly1, poly2) = bounded_polys(bound_str1, bound_str2);
+
+        let result = poly_unify(&pvars, &poly1, &poly2).unwrap();
+
+        if let UnifiedTy::Merged(merged_poly) = result {
+            let merged_ty = ty::resolve::resolve_poly_ty(&pvars, &merged_poly).as_ty();
+            assert_eq!(expected, ty::Poly::Fixed(merged_ty.clone()));
+        } else {
+            panic!("Expected merged type; got {:?}", result);
+        }
+    }
+
+    fn assert_poly_bound_discerned(bound_str1: &str, bound_str2: &str) {
+        let (pvars, poly1, poly2) = bounded_polys(bound_str1, bound_str2);
+
+        assert_eq!(
+            Ok(UnifiedTy::Discerned),
+            poly_unify(&pvars, &poly1, &poly2),
+            "Poly bounds are not discernible"
+        );
+    }
+
+    fn assert_poly_bound_conflict(bound_str1: &str, bound_str2: &str) {
+        let (pvars, poly1, poly2) = bounded_polys(bound_str1, bound_str2);
+
+        assert_eq!(
+            Err(PolyError::PolyConflict(poly1.clone(), poly2.clone())),
+            poly_unify(&pvars, &poly1, &poly2),
+            "Poly bounds do not conflict"
+        );
+    }
+
     #[test]
     fn disjoint_types() {
-        assert_disjoint("String", "Symbol");
+        assert_discerned("String", "Symbol");
     }
 
     #[test]
     fn two_sym_types() {
-        assert_disjoint("'foo", "'bar");
+        assert_discerned("'foo", "'bar");
     }
 
     #[test]
@@ -445,7 +513,7 @@ mod test {
 
     #[test]
     fn fun_types() {
-        // Parameters are contravariant and Float/Int are disjoint
+        // Parameters are contravariant and Float/Int are discernible
         assert_merged(
             "((RawU) -> (RawU Int Float))",
             "(Float -> Int)",
@@ -530,9 +598,9 @@ mod test {
     #[test]
     fn list_types() {
         assert_merged("(Listof Any)", "(List Any)", "(Listof Any)");
-        assert_disjoint("(List Any)", "(List Any Any)");
-        assert_disjoint("(List Symbol)", "(List String)");
-        assert_disjoint("(List String)", "(List String String String ...)");
+        assert_discerned("(List Any)", "(List Any Any)");
+        assert_discerned("(List Symbol)", "(List String)");
+        assert_discerned("(List String)", "(List String String String ...)");
         assert_merged(
             "(List Int (RawU Symbol Float String) ...)",
             "(List Int Symbol ...)",
@@ -543,7 +611,7 @@ mod test {
     #[test]
     fn vec_types() {
         assert_merged("(Vectorof Bool)", "(Vector true)", "(Vectorof false)");
-        assert_disjoint(
+        assert_discerned(
             "(Vector 'foo ... Int Symbol)",
             "(Vector 'bar ... Int String)",
         );
@@ -552,5 +620,36 @@ mod test {
             "(Vector 'foo ... Int Symbol)",
             "(Vector 'bar ... Int Symbol)",
         );
+    }
+
+    #[test]
+    fn poly_bounds() {
+        // Literals can be treated as fixed types
+        assert_poly_bound_merged("Bool", "true", "false");
+
+        // These are discernible and can't be merged
+        assert_poly_bound_discerned("Symbol", "String");
+
+        // This does not have subtypes; it can be unified
+        assert_poly_bound_merged(
+            "(Any ... -> (RawU))",
+            "(Any ... -> (RawU))",
+            "(Any ... -> (RawU))",
+        );
+
+        // This does have subtypes; they can't be in the same union
+        assert_poly_bound_conflict("(Int -> Float)", "(Int -> Float)");
+
+        // Any is the most extreme case of this
+        assert_poly_bound_conflict("Any", "(Int -> Float)");
+
+        // These are almost disjoint except an empty list is both
+        assert_poly_bound_conflict("(Listof Symbol)", "(Listof String)");
+
+        // These types are completely disjoint but they can't be discerned at runtime
+        assert_poly_bound_conflict("(Setof Symbol)", "(Setof String)");
+
+        // These have a strict subtype relationship but the larger bound can become more specific
+        assert_poly_bound_conflict("(Listof Any)", "(List Any)");
     }
 }
