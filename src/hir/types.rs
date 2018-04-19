@@ -166,12 +166,14 @@ impl<'a> LowerTyContext<'a> {
                     .map(|arg_datum| self.lower_poly(arg_datum))
                     .collect::<Result<Vec<ty::Poly>>>()?;
 
-                ty::unify::poly_unify_iter(self.pvars, member_tys.iter()).map_err(|err| match err {
-                    ty::unify::PolyError::PolyConflict(left, right) => {
-                        let left_str = str_for_poly(self.pvars, &left);
-                        let right_str = str_for_poly(self.pvars, &right);
+                ty::unify::poly_unify_iter(self.pvars, member_tys.into_iter()).map_err(|err| {
+                    match err {
+                        ty::unify::PolyError::PolyConflict(left, right) => {
+                            let left_str = str_for_poly(self.pvars, &left);
+                            let right_str = str_for_poly(self.pvars, &right);
 
-                        Error::new(span, ErrorKind::PolyUnionConflict(left_str, right_str))
+                            Error::new(span, ErrorKind::PolyUnionConflict(left_str, right_str))
+                        }
                     }
                 })
             }
