@@ -271,6 +271,38 @@ struct PolyUnifyCtx<'a> {
     pvars: &'a [ty::PVar],
 }
 
+impl<'a> PolyUnifyCtx<'a> {
+    /// Determines if a type and all of its subtypes are discernible at runtime
+    ///
+    /// This is to allow literal types to appear with poly variables even if they may have a
+    /// possible subtype relationship. Otherwise, (U ([A : Symbol] 'foo)) would not be allow as A
+    /// may need to merge with 'foo.
+    fn poly_ty_is_discernible(&self, ty: &ty::Ty<ty::Poly>) -> bool {
+        match *ty {
+            ty::Ty::Any => false,
+            ty::Ty::Bool
+            | ty::Ty::Char
+            | ty::Ty::Float
+            | ty::Ty::Int
+            | ty::Ty::LitBool(_)
+            | ty::Ty::LitSym(_)
+            | ty::Ty::Str
+            | ty::Ty::Sym => true,
+            ty::Ty::Fun(_)
+            | ty::Ty::List(_, _)
+            | ty::Ty::Map(_, _)
+            | ty::Ty::Set(_)
+            | ty::Ty::Vec(_, _) => false,
+            ty::Ty::Union(ref members) => members.iter().any(|m| self.poly_is_discernible(m)),
+        }
+    }
+
+    fn poly_is_discernible(&self, poly: &ty::Poly) -> bool {
+        let ty = ty::resolve::resolve_poly_ty(self.pvars, poly).as_ty();
+        self.poly_ty_is_discernible(ty)
+    }
+}
+
 impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
     fn unify_ref(
         &self,
@@ -292,13 +324,19 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
             let ty1 = resolved1.as_ty();
             let ty2 = resolved2.as_ty();
 
-            match self.ty_unify(poly1, ty1, poly2, ty2)? {
-                UnifiedTy::Merged(_) => {
-                    // We need to merge for correctness but we don't know the specific subtypes
-                    // we're merging.
-                    Err(PolyError::PolyConflict(poly1.clone(), poly2.clone()))
+            if self.poly_ty_is_discernible(ty1) && self.poly_ty_is_discernible(ty2) {
+                // One of the members can be fully distinguished at runtime so we can let them be
+                // members of the same union
+                Ok(UnifiedTy::Discerned)
+            } else {
+                match self.ty_unify(poly1, ty1, poly2, ty2)? {
+                    UnifiedTy::Merged(_) => {
+                        // We need to merge for correctness but we don't know the specific subtypes
+                        // we're merging.
+                        Err(PolyError::PolyConflict(poly1.clone(), poly2.clone()))
+                    }
+                    UnifiedTy::Discerned => Ok(UnifiedTy::Discerned),
                 }
-                other => Ok(other),
             }
         }
     }
@@ -606,6 +644,10 @@ mod test {
         // These are discernible and can't be merged
         assert_poly_bound_discerned("Symbol", "String");
 
+        // These are discernible because all symbol subtypes are discernible
+        assert_poly_bound_discerned("Symbol", "Symbol");
+        assert_poly_bound_discerned("Symbol", "'foo");
+
         // This does not have subtypes; it can be unified
         assert_poly_bound_merged(
             "(Any ... -> (RawU))",
@@ -618,6 +660,10 @@ mod test {
 
         // Any is the most extreme case of this
         assert_poly_bound_conflict("Any", "(Int -> Float)");
+
+        // These are not disjoint but have subtypes the can't be discerned at runtime as it would
+        // require iterating over the list tail
+        assert_poly_bound_conflict("(Listof Symbol)", "(Listof Symbol)");
 
         // These are almost disjoint except an empty list is both
         assert_poly_bound_conflict("(Listof Symbol)", "(Listof String)");
