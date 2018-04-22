@@ -24,46 +24,37 @@ fn subst_ty(
     fixed: &ty::Ty<ty::Poly>,
     pvars: &HashMap<ty::PVarId, ty::Mono>,
 ) -> Result<ty::Ty<ty::Mono>> {
-    match *fixed {
-        ty::Ty::Any => Ok(ty::Ty::Any),
-        ty::Ty::Bool => Ok(ty::Ty::Bool),
-        ty::Ty::Char => Ok(ty::Ty::Char),
-        ty::Ty::Float => Ok(ty::Ty::Float),
-        ty::Ty::Fun(ref fun) => Ok(ty::Ty::new_fun(
+    Ok(match *fixed {
+        ty::Ty::Any => ty::Ty::Any,
+        ty::Ty::Bool => ty::Ty::Bool,
+        ty::Ty::Char => ty::Ty::Char,
+        ty::Ty::Float => ty::Ty::Float,
+        ty::Ty::Int => ty::Ty::Int,
+        ty::Ty::Nil => ty::Ty::Nil,
+        ty::Ty::Str => ty::Ty::Str,
+        ty::Ty::Sym => ty::Ty::Sym,
+        ty::Ty::Fun(ref fun) => ty::Ty::new_fun(
             fun.impure,
             subst(&fun.params, pvars)?,
             subst(&fun.ret, pvars)?,
-        )),
-        ty::Ty::Map(ref key, ref value) => Ok(ty::Ty::Map(
-            Box::new(subst(key, pvars)?),
-            Box::new(subst(value, pvars)?),
-        )),
-        ty::Ty::Int => Ok(ty::Ty::Int),
-        ty::Ty::List(ref fixed, ref rest) => {
-            let fixed_mono = subst_ty_vec(fixed, pvars)?;
-            let rest_mono = match *rest {
-                Some(ref rest) => Some(Box::new(subst(rest, pvars)?)),
-                None => None,
-            };
-
-            Ok(ty::Ty::List(fixed_mono, rest_mono))
+        ),
+        ty::Ty::Map(ref key, ref value) => {
+            ty::Ty::Map(Box::new(subst(key, pvars)?), Box::new(subst(value, pvars)?))
         }
-        ty::Ty::LitBool(val) => Ok(ty::Ty::LitBool(val)),
-        ty::Ty::LitSym(ref val) => Ok(ty::Ty::LitSym(val.clone())),
-        ty::Ty::Set(ref member) => Ok(ty::Ty::Set(Box::new(subst(&member, pvars)?))),
-        ty::Ty::Str => Ok(ty::Ty::Str),
-        ty::Ty::Sym => Ok(ty::Ty::Sym),
-        ty::Ty::Union(ref members) => Ok(ty::Ty::Union(subst_ty_vec(members, pvars)?)),
-        ty::Ty::Vec(ref start, ref fixed) => {
-            let start_mono = match *start {
-                Some(ref start) => Some(Box::new(subst(start, pvars)?)),
-                None => None,
-            };
-            let fixed_mono = subst_ty_vec(fixed, pvars)?;
-
-            Ok(ty::Ty::Vec(start_mono, fixed_mono))
+        ty::Ty::LitBool(val) => ty::Ty::LitBool(val),
+        ty::Ty::LitSym(ref val) => ty::Ty::LitSym(val.clone()),
+        ty::Ty::Set(ref member) => ty::Ty::Set(Box::new(subst(&member, pvars)?)),
+        ty::Ty::Union(ref members) => ty::Ty::Union(subst_ty_vec(members, pvars)?),
+        ty::Ty::Vec(ref members) => {
+            let members_mono = subst_ty_vec(members, pvars)?;
+            ty::Ty::Vec(members_mono)
         }
-    }
+        ty::Ty::Vecof(ref member) => ty::Ty::Vecof(Box::new(subst(member, pvars)?)),
+        ty::Ty::Listof(ref member) => ty::Ty::Listof(Box::new(subst(member, pvars)?)),
+        ty::Ty::Cons(ref car, ref cdr) => {
+            ty::Ty::Cons(Box::new(subst(car, pvars)?), Box::new(subst(cdr, pvars)?))
+        }
+    })
 }
 
 pub fn subst(poly: &ty::Poly, pvars: &HashMap<ty::PVarId, ty::Mono>) -> Result<ty::Mono> {

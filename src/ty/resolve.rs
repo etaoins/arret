@@ -22,24 +22,28 @@ fn poly_ty_has_subtypes(pvars: &[ty::PVar], poly_ty: &ty::Ty<ty::Poly>) -> bool 
         | ty::Ty::Int
         | ty::Ty::LitBool(_)
         | ty::Ty::LitSym(_)
-        | ty::Ty::Str => false,
+        | ty::Ty::Str
+        | ty::Ty::Nil => false,
         ty::Ty::Fun(ref fun) => {
             fun.impure
-                || fun.params
-                    != ty::Ty::List(vec![], Some(Box::new(ty::Ty::Any.into_poly()))).into_poly()
+                || fun.params != ty::Ty::Listof(Box::new(ty::Ty::Any.into_poly())).into_poly()
                 || poly_has_subtypes(pvars, &fun.ret)
         }
         ty::Ty::Map(ref key, ref value) => [key, value]
             .iter()
             .any(|poly| poly_has_subtypes(pvars, poly)),
-        ty::Ty::List(ref fixed, ref rest) => {
-            rest.is_some() || fixed.iter().any(|poly| poly_has_subtypes(pvars, poly))
-        }
         ty::Ty::Set(ref member) => poly_has_subtypes(pvars, member),
-        ty::Ty::Vec(ref begin, ref fixed) => {
-            begin.is_some() || fixed.iter().any(|poly| poly_has_subtypes(pvars, poly))
-        }
+        ty::Ty::Vec(ref members) => members
+            .iter()
+            .any(|member| poly_has_subtypes(pvars, member)),
         ty::Ty::Union(ref members) => !members.is_empty(),
+        ty::Ty::Cons(ref car, ref cdr) => {
+            poly_has_subtypes(pvars, car) || poly_has_subtypes(pvars, cdr)
+        }
+        ty::Ty::Listof(_) | ty::Ty::Vecof(_) => {
+            // Any arbitrary fixed length sequence is a subtype of this sequence
+            true
+        }
     }
 }
 
@@ -114,7 +118,7 @@ mod test {
         assert_eq!(true, str_has_subtypes("(Setof Symbol)"));
         assert_eq!(false, str_has_subtypes("(Setof Float)"));
 
-        assert_eq!(true, str_has_subtypes("(Vector false ...)"));
+        assert_eq!(true, str_has_subtypes("(Vectorof false)"));
         assert_eq!(false, str_has_subtypes("(Vector false true)"));
 
         assert_eq!(

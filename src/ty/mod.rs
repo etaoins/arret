@@ -6,7 +6,6 @@ pub mod unify;
 mod intersect;
 #[cfg(test)]
 mod datum;
-mod seq_ty_iter;
 
 use syntax::span::Span;
 
@@ -26,14 +25,21 @@ where
     Fun(Box<Fun<S>>),
     Map(Box<S>, Box<S>),
     Int,
-    List(Vec<S>, Option<Box<S>>),
     LitBool(bool),
     LitSym(String),
     Set(Box<S>),
     Str,
     Sym,
     Union(Vec<S>),
-    Vec(Option<Box<S>>, Vec<S>),
+
+    // Vector types
+    Vec(Vec<S>),
+    Vecof(Box<S>),
+
+    // List types
+    Listof(Box<S>),
+    Cons(Box<S>, Box<S>),
+    Nil,
 }
 
 impl<S> Ty<S>

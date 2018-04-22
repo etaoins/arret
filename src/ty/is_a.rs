@@ -1,5 +1,4 @@
 use ty;
-use ty::seq_ty_iter::{ListTyIterator, RevVecTyIterator, SeqTyIterator};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Result {
@@ -32,6 +31,26 @@ impl Result {
             Result::No => Result::No,
         }
     }
+
+    fn from_iter<I>(mut iter: I) -> Result
+    where
+        I: Iterator<Item = Result>,
+    {
+        let mut best_result = Result::Yes;
+
+        loop {
+            match iter.next() {
+                Some(Result::Yes) => {}
+                Some(Result::May) => {
+                    best_result = Result::May;
+                }
+                Some(Result::No) => {
+                    return Result::No;
+                }
+                None => return best_result,
+            }
+        }
+    }
 }
 
 trait IsACtx<S>
@@ -51,57 +70,6 @@ where
             .and_then(|| self.ref_is_a(&sub_fun.ret, &par_fun.ret))
     }
 
-    fn seq_is_a<'a, I>(&self, mut sub_iter: I, mut par_iter: I) -> Result
-    where
-        S: 'a,
-        I: SeqTyIterator<'a, S>,
-    {
-        let mut is_exact = sub_iter.fixed_len() >= par_iter.fixed_len();
-
-        // Compare our fixed types
-        while sub_iter.fixed_len() > 0 || par_iter.fixed_len() > 0 {
-            let sub_next = sub_iter.next();
-            let par_next = par_iter.next();
-
-            match (sub_next, par_next) {
-                (Some(sub), Some(par)) => match self.ref_is_a(sub, par) {
-                    Result::Yes => {}
-                    Result::May => {
-                        is_exact = false;
-                    }
-                    Result::No => {
-                        // Member type does not match
-                        return Result::No;
-                    }
-                },
-                (None, None) => {
-                    // Fixed sequence ended at the same length
-                    break;
-                }
-                (_, _) => {
-                    // Type sequence ended at different lengths
-                    return Result::No;
-                }
-            };
-        }
-
-        if sub_iter.is_infinite() && par_iter.is_infinite() {
-            let sub_rest = sub_iter.next().unwrap();
-            let par_rest = par_iter.next().unwrap();
-
-            // If the rest doesn't match it's a May as the rest might not be present
-            if self.ref_is_a(sub_rest, par_rest) != Result::Yes {
-                is_exact = false;
-            }
-        }
-
-        if is_exact {
-            Result::Yes
-        } else {
-            Result::May
-        }
-    }
-
     fn ty_is_a(
         &self,
         sub_ref: &S,
@@ -114,6 +82,7 @@ where
         }
 
         match (sub_ty, parent_ty) {
+            // Union types
             (&ty::Ty::Union(ref sub_members), _) => {
                 let results = sub_members
                     .iter()
@@ -167,34 +136,83 @@ where
 
                 best_result
             }
+
+            // Any type
             (_, &ty::Ty::Any) => Result::Yes,
             (&ty::Ty::Any, _) => Result::May,
+
+            // Symbol types
             (&ty::Ty::LitSym(_), &ty::Ty::Sym) => Result::Yes,
             (&ty::Ty::Sym, &ty::Ty::LitSym(_)) => Result::May,
+
+            // Bool types
             (&ty::Ty::LitBool(_), &ty::Ty::Bool) => Result::Yes,
             (&ty::Ty::Bool, &ty::Ty::LitBool(_)) => Result::May,
+
+            // Sets
             (&ty::Ty::Set(ref sub), &ty::Ty::Set(ref par)) => self.ref_is_a(sub, par),
+
+            // Maps
             (
                 &ty::Ty::Map(ref sub_key, ref sub_value),
                 &ty::Ty::Map(ref par_key, ref par_value),
             ) => self.ref_is_a(sub_key, par_key)
                 .and_then(|| self.ref_is_a(sub_value, par_value)),
-            (
-                &ty::Ty::List(ref sub_fixed, ref sub_rest),
-                &ty::Ty::List(ref par_fixed, ref par_rest),
-            ) => self.seq_is_a(
-                ListTyIterator::new(sub_fixed, sub_rest),
-                ListTyIterator::new(par_fixed, par_rest),
+
+            // Vector types
+            (&ty::Ty::Vec(ref sub_members), &ty::Ty::Vec(ref par_members)) => {
+                if sub_members.len() != par_members.len() {
+                    Result::No
+                } else {
+                    Result::from_iter(
+                        sub_members
+                            .iter()
+                            .zip(par_members.iter())
+                            .map(|(sub_member, par_member)| self.ref_is_a(sub_member, par_member)),
+                    )
+                }
+            }
+            (&ty::Ty::Vecof(ref sub_member), &ty::Ty::Vecof(ref par_member)) => {
+                self.ref_is_a(sub_member, par_member)
+            }
+            (&ty::Ty::Vec(ref sub_members), &ty::Ty::Vecof(ref par_member)) => Result::from_iter(
+                sub_members
+                    .iter()
+                    .map(|sub_member| self.ref_is_a(sub_member, par_member)),
             ),
-            (
-                &ty::Ty::Vec(ref sub_start, ref sub_fixed),
-                &ty::Ty::Vec(ref par_start, ref par_fixed),
-            ) => self.seq_is_a(
-                RevVecTyIterator::new(sub_start, sub_fixed),
-                RevVecTyIterator::new(par_start, par_fixed),
-            ),
+            (&ty::Ty::Vecof(ref sub_member), &ty::Ty::Vec(ref par_members)) => Result::May
+                .and_then(|| {
+                    Result::from_iter(
+                        par_members
+                            .iter()
+                            .map(|par_member| self.ref_is_a(sub_member, par_member)),
+                    )
+                }),
+
+            // Functions
             (&ty::Ty::Fun(ref sub_fun), &ty::Ty::Fun(ref par_fun)) => {
                 self.fun_is_a(sub_fun, par_fun)
+            }
+
+            // List types
+            (&ty::Ty::Cons(ref sub_car, ref sub_cdr), &ty::Ty::Cons(ref par_car, ref par_cdr)) => {
+                self.ref_is_a(sub_car, par_car)
+                    .and_then(|| self.ref_is_a(sub_cdr, par_cdr))
+            }
+            (&ty::Ty::Listof(ref sub_member), &ty::Ty::Listof(ref par_member)) => {
+                self.ref_is_a(sub_member, par_member)
+            }
+            (&ty::Ty::Nil, &ty::Ty::Listof(_)) => Result::Yes,
+            (&ty::Ty::Listof(_), &ty::Ty::Nil) => Result::May,
+            (&ty::Ty::Cons(ref sub_car, ref sub_cdr), &ty::Ty::Listof(ref par_member)) => {
+                self.ref_is_a(sub_car, par_member)
+                    .and_then(|| self.ref_is_a(sub_cdr, parent_ref))
+            }
+            (&ty::Ty::Listof(ref sub_member), &ty::Ty::Cons(ref par_car, ref par_cdr)) => {
+                Result::May.and_then(|| {
+                    self.ref_is_a(sub_member, par_car)
+                        .and_then(|| self.ref_is_a(sub_ref, par_cdr))
+                })
             }
             _ => Result::No,
         }
@@ -372,6 +390,15 @@ mod test {
     }
 
     #[test]
+    fn cons_types() {
+        let cons_bool_bool = poly_for_str("(Cons Bool Bool)");
+        let cons_any_any = poly_for_str("(Cons Any Any)");
+
+        assert_eq!(Result::Yes, poly_is_a(&[], &cons_bool_bool, &cons_any_any));
+        assert_eq!(Result::May, poly_is_a(&[], &cons_any_any, &cons_bool_bool));
+    }
+
+    #[test]
     fn list_types() {
         let listof_any = poly_for_str("(Listof Any)");
         let listof_int = poly_for_str("(Listof Int)");
@@ -405,10 +432,6 @@ mod test {
         let vecof_int = poly_for_str("(Vectorof Int)");
         let two_ints_vec = poly_for_str("(Vector Int Int)");
         let three_ints_vec = poly_for_str("(Vector Int Int Int)");
-        let at_least_one_int_vec = poly_for_str("(Vector Int ... Int)");
-
-        let foos_then_int = poly_for_str("(Vector 'foo ... Int)");
-        let bars_then_int = poly_for_str("(Vector 'bar ... Int)");
 
         assert_eq!(Result::Yes, poly_is_a(&[], &vecof_int, &vecof_any));
         assert_eq!(Result::May, poly_is_a(&[], &vecof_any, &vecof_int));
@@ -419,17 +442,6 @@ mod test {
 
         assert_eq!(Result::No, poly_is_a(&[], &two_ints_vec, &three_ints_vec));
         assert_eq!(Result::No, poly_is_a(&[], &three_ints_vec, &two_ints_vec));
-
-        assert_eq!(
-            Result::Yes,
-            poly_is_a(&[], &at_least_one_int_vec, &vecof_int)
-        );
-        assert_eq!(
-            Result::May,
-            poly_is_a(&[], &vecof_int, &at_least_one_int_vec)
-        );
-
-        assert_eq!(Result::May, poly_is_a(&[], &foos_then_int, &bars_then_int));
     }
 
     #[test]

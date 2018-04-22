@@ -2,7 +2,6 @@ use std::iter;
 use std::result::Result;
 
 use ty;
-use ty::seq_ty_iter::{ListTyIterator, RevVecTyIterator, SeqTyIterator};
 
 #[derive(PartialEq, Debug)]
 pub enum IntersectedTy<S> {
@@ -25,11 +24,6 @@ where
     }
 }
 
-enum IntersectedSeq<S> {
-    Disjoint,
-    Merged(Vec<S>, Option<S>),
-}
-
 trait IntersectCtx<S>
 where
     S: ty::TyRef,
@@ -37,37 +31,20 @@ where
     fn intersect_ref(&self, &S, &S) -> IntersectedTy<S>;
     fn unify_ref(&self, &S, &S) -> Result<ty::unify::UnifiedTy<S>, ()>;
 
-    fn intersect_seq<'a, I>(&self, mut iter1: I, mut iter2: I) -> IntersectedSeq<S>
-    where
-        S: 'a,
-        I: SeqTyIterator<'a, S>,
-    {
-        let range1 = iter1.size_range();
-        let range2 = iter2.size_range();
+    fn intersect_list_cons_refs(
+        &self,
+        list_ref: &S,
+        member_ref: &S,
+        car_ref: &S,
+        cdr_ref: &S,
+    ) -> IntersectedTy<S> {
+        let intersected_car = self.intersect_ref(member_ref, car_ref).into_ty_ref();
+        let intersected_cdr = self.intersect_ref(list_ref, cdr_ref).into_ty_ref();
 
-        if range2.start > range1.end || range2.end < range1.start {
-            return IntersectedSeq::Disjoint;
-        }
-
-        let mut merged_fixed: Vec<S> = vec![];
-        while iter1.fixed_len() > 0 || iter2.fixed_len() > 0 {
-            let next1 = iter1.next().unwrap();
-            let next2 = iter2.next().unwrap();
-
-            let merged_next = self.intersect_ref(next1, next2);
-            merged_fixed.push(merged_next.into_ty_ref());
-        }
-
-        let merged_rest = if iter1.is_infinite() && iter2.is_infinite() {
-            let rest1 = iter1.next().unwrap();
-            let rest2 = iter2.next().unwrap();
-
-            Some(self.intersect_ref(rest1, rest2).into_ty_ref())
-        } else {
-            None
-        };
-
-        IntersectedSeq::Merged(merged_fixed, merged_rest)
+        IntersectedTy::Merged(S::from_ty(ty::Ty::Cons(
+            Box::new(intersected_car),
+            Box::new(intersected_cdr),
+        )))
     }
 
     /// Intersects a vector of refs with an iterator
@@ -108,45 +85,81 @@ where
         ty2: &ty::Ty<S>,
     ) -> IntersectedTy<S> {
         match (ty1, ty2) {
+            // Union types
             (&ty::Ty::Union(ref refs1), &ty::Ty::Union(ref refs2)) => {
                 self.intersect_refs(refs1, refs2.iter())
             }
             (&ty::Ty::Union(ref refs1), _) => self.intersect_refs(refs1, iter::once(ref2)),
             (_, &ty::Ty::Union(ref refs2)) => self.intersect_refs(refs2, iter::once(ref1)),
+
+            // Set type
             (&ty::Ty::Set(ref member1), &ty::Ty::Set(ref member2)) => IntersectedTy::Merged(
                 S::from_ty(ty::Ty::Set(Box::new(
                     self.intersect_ref(member1, member2).into_ty_ref(),
                 ))),
             ),
+
+            // Map type
             (&ty::Ty::Map(ref key1, ref value1), &ty::Ty::Map(ref key2, ref value2)) => {
                 IntersectedTy::Merged(S::from_ty(ty::Ty::Map(
                     Box::new(self.intersect_ref(key1, key2).into_ty_ref()),
                     Box::new(self.intersect_ref(value1, value2).into_ty_ref()),
                 )))
             }
-            (&ty::Ty::Vec(ref begin1, ref fixed1), &ty::Ty::Vec(ref begin2, ref fixed2)) => {
-                match self.intersect_seq(
-                    RevVecTyIterator::new(begin1, fixed1),
-                    RevVecTyIterator::new(begin2, fixed2),
-                ) {
-                    IntersectedSeq::Merged(mut fixed, begin) => {
-                        fixed.reverse();
-                        IntersectedTy::Merged(S::from_ty(ty::Ty::Vec(begin.map(Box::new), fixed)))
-                    }
-                    IntersectedSeq::Disjoint => IntersectedTy::Disjoint,
+
+            // Vector types
+            (&ty::Ty::Vecof(ref member1), &ty::Ty::Vecof(ref member2)) => {
+                IntersectedTy::Merged(S::from_ty(ty::Ty::Vecof(Box::new(self.intersect_ref(
+                    member1,
+                    member2,
+                ).into_ty_ref()))))
+            }
+            (&ty::Ty::Vec(ref members1), &ty::Ty::Vec(ref members2)) => {
+                if members1.len() != members2.len() {
+                    IntersectedTy::Disjoint
+                } else {
+                    let intersected_members = members1
+                        .iter()
+                        .zip(members2.iter())
+                        .map(|(member1, member2)| {
+                            self.intersect_ref(member1, member2).into_ty_ref()
+                        })
+                        .collect::<Vec<S>>();
+
+                    IntersectedTy::Merged(S::from_ty(ty::Ty::Vec(intersected_members)))
                 }
             }
-            (&ty::Ty::List(ref fixed1, ref rest1), &ty::Ty::List(ref fixed2, ref rest2)) => {
-                match self.intersect_seq(
-                    ListTyIterator::new(fixed1, rest1),
-                    ListTyIterator::new(fixed2, rest2),
-                ) {
-                    IntersectedSeq::Merged(fixed, rest) => {
-                        IntersectedTy::Merged(S::from_ty(ty::Ty::List(fixed, rest.map(Box::new))))
-                    }
-                    IntersectedSeq::Disjoint => IntersectedTy::Disjoint,
-                }
+            (&ty::Ty::Vecof(ref member1), &ty::Ty::Vec(ref members2))
+            | (&ty::Ty::Vec(ref members2), &ty::Ty::Vecof(ref member1)) => {
+                let intersected_members = members2
+                    .iter()
+                    .map(|member2| self.intersect_ref(member1, member2).into_ty_ref())
+                    .collect::<Vec<S>>();
+
+                IntersectedTy::Merged(S::from_ty(ty::Ty::Vec(intersected_members)))
             }
+
+            // List types
+            (&ty::Ty::Listof(ref member1), &ty::Ty::Listof(ref member2)) => {
+                IntersectedTy::Merged(S::from_ty(ty::Ty::Listof(Box::new(self.intersect_ref(
+                    member1,
+                    member2,
+                ).into_ty_ref()))))
+            }
+            (&ty::Ty::Cons(ref car1, ref cdr1), &ty::Ty::Cons(ref car2, ref cdr2)) => {
+                IntersectedTy::Merged(S::from_ty(ty::Ty::Cons(
+                    Box::new(self.intersect_ref(car1, car2).into_ty_ref()),
+                    Box::new(self.intersect_ref(cdr1, cdr2).into_ty_ref()),
+                )))
+            }
+            (&ty::Ty::Listof(ref member), &ty::Ty::Cons(ref car, ref cdr)) => {
+                self.intersect_list_cons_refs(ref1, member, car, cdr)
+            }
+            (&ty::Ty::Cons(ref car, ref cdr), &ty::Ty::Listof(ref member)) => {
+                self.intersect_list_cons_refs(ref2, member, car, cdr)
+            }
+
+            // Function type
             (&ty::Ty::Fun(ref fun1), &ty::Ty::Fun(ref fun2)) => {
                 let intersected_impure = fun1.impure() && fun2.impure();
                 let intersected_params = match self.unify_ref(fun1.params(), fun2.params()) {
@@ -328,9 +341,13 @@ mod test {
     }
 
     #[test]
+    fn cons_types() {
+        assert_merged("(Cons true false)", "(Cons true Bool)", "(Cons Bool false)");
+    }
+
+    #[test]
     fn list_types() {
         assert_merged("(List (RawU))", "(List Symbol)", "(List String)");
-        assert_disjoint("(List Symbol Symbol)", "(List Symbol)");
         assert_merged(
             "(List Symbol Symbol)",
             "(List Any Symbol)",
@@ -341,16 +358,22 @@ mod test {
             "(List Bool true)",
             "(List false Bool Any ...)",
         );
+
+        // This is tricky - we can dereference the first element but we can't go further
+        //
+        // This requires `(Cons)` syntax as it's no longer a simple list type
+        assert_merged(
+            "(Cons Symbol (RawU))",
+            "(List Symbol Symbol)",
+            "(List Symbol)",
+        );
     }
 
     #[test]
     fn vec_types() {
         assert_merged("(Vector (RawU))", "(Vector Int)", "(Vector Float)");
-        assert_merged(
-            "(Vector true false)",
-            "(Vector Symbol ... true Bool)",
-            "(Vector Bool false)",
-        );
+        assert_merged("(Vector true)", "(Vector Bool)", "(Vectorof true)");
+        assert_merged("(Vectorof false)", "(Vectorof Bool)", "(Vectorof false)");
     }
 
     #[test]

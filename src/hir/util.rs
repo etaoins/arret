@@ -28,30 +28,6 @@ pub fn split_into_fixed_and_rest(
     (vs, rest_datum)
 }
 
-/// Splits data in an optional start argument and fixed arguments
-///
-/// The start argument is denoted by using `...` after the first element
-pub fn split_into_start_and_fixed(
-    scope: &Scope,
-    mut vs: Vec<NsDatum>,
-) -> (Option<NsDatum>, Vec<NsDatum>) {
-    let has_start = if vs.len() >= 2 {
-        scope.get_datum(&vs[1]) == Some(Binding::Prim(Prim::Ellipsis))
-    } else {
-        false
-    };
-
-    if has_start {
-        let fixed_data = vs.split_off(2);
-        // Remove the ellipsis completely
-        vs.pop();
-
-        (Some(vs.pop().unwrap()), fixed_data)
-    } else {
-        (None, vs)
-    }
-}
-
 pub fn pop_vec_front<T>(mut vs: Vec<T>) -> (T, Vec<T>) {
     let rest_vs = vs.split_off(1);
     (vs.pop().unwrap(), rest_vs)

@@ -2,7 +2,6 @@ use std::result::Result;
 use std::iter;
 
 use ty;
-use ty::seq_ty_iter::{ListTyIterator, RevVecTyIterator, SeqTyIterator};
 
 #[derive(Debug, PartialEq)]
 pub enum UnifiedTy<S>
@@ -22,75 +21,12 @@ where
     Merged(S),
 }
 
-enum UnifiedSeq<S>
-where
-    S: ty::TyRef,
-{
-    Discerned,
-    Merged(Vec<S>, Option<S>),
-}
-
 trait UnifyCtx<S, E>
 where
     S: ty::TyRef,
 {
     fn unify_ref(&self, &S, &S) -> Result<UnifiedTy<S>, E>;
     fn intersect_ref(&self, &S, &S) -> ty::intersect::IntersectedTy<S>;
-
-    fn unify_seq_ty_iters<'a, I>(&self, mut iter1: I, mut iter2: I) -> Result<UnifiedSeq<S>, E>
-    where
-        S: 'a,
-        I: SeqTyIterator<'a, S>,
-    {
-        let range1 = iter1.size_range();
-        let range2 = iter2.size_range();
-
-        if range2.start > range1.end || range2.end < range1.start {
-            // The sizes are completely disjoint; we can perform a simple length check at runtime.
-            // It's important we bail out here so we don't hit a needless poly conflict below.
-            return Ok(UnifiedSeq::Discerned);
-        }
-
-        let mut merged_fixed: Vec<S> = vec![];
-        while iter1.fixed_len() > 0 && iter2.fixed_len() > 0 {
-            let next1 = iter1.next().unwrap();
-            let next2 = iter2.next().unwrap();
-
-            let merged_next = match self.unify_ref(next1, next2)? {
-                UnifiedTy::Merged(ty_ref) => ty_ref,
-                UnifiedTy::Discerned => {
-                    // Within our fixed types we're willing to build a runtime type check of the
-                    // member. This means we can consider the seqs discerned.
-                    return Ok(UnifiedSeq::Discerned);
-                }
-            };
-
-            merged_fixed.push(merged_next);
-        }
-
-        let mut rest_refs: Vec<S> = vec![];
-
-        while iter1.fixed_len() > 0 {
-            rest_refs.push(iter1.next().unwrap().clone());
-        }
-        if iter1.is_infinite() {
-            rest_refs.push(iter1.next().unwrap().clone());
-        }
-        while iter2.fixed_len() > 0 {
-            rest_refs.push(iter2.next().unwrap().clone());
-        }
-        if iter2.is_infinite() {
-            rest_refs.push(iter2.next().unwrap().clone());
-        }
-
-        let merged_rest = if rest_refs.is_empty() {
-            None
-        } else {
-            Some(self.unify_ref_iter(vec![], rest_refs.into_iter())?)
-        };
-
-        Ok(UnifiedSeq::Merged(merged_fixed, merged_rest))
-    }
 
     fn unify_into_ty_ref(&self, ty_ref1: &S, ty_ref2: &S) -> Result<S, E> {
         match self.unify_ref(ty_ref1, ty_ref2)? {
@@ -99,6 +35,22 @@ where
                 ty_ref1.clone(),
                 ty_ref2.clone(),
             ]))),
+        }
+    }
+
+    /// Unifies a uniform list with with a Cons
+    fn unify_list_cons_refs(
+        &self,
+        list_ref: &S,
+        car_ref: &S,
+        cdr_ref: &S,
+    ) -> Result<UnifiedTy<S>, E> {
+        match self.unify_ref(list_ref, cdr_ref)? {
+            UnifiedTy::Discerned => Ok(UnifiedTy::Discerned),
+            UnifiedTy::Merged(merged_tail) => self.unify_ref(
+                &merged_tail,
+                &S::from_ty(ty::Ty::Listof(Box::new(car_ref.clone()))),
+            ),
         }
     }
 
@@ -147,7 +99,7 @@ where
     }
 
     /// Unifies two types under the assumption that they are not subtypes
-    fn ty_unify(
+    fn unify_ty(
         &self,
         ref1: &S,
         ty1: &ty::Ty<S>,
@@ -167,16 +119,21 @@ where
             (&ty::Ty::LitBool(_), &ty::Ty::Bool) | (&ty::Ty::Bool, &ty::Ty::LitBool(_)) => {
                 UnifiedTy::Merged(S::from_ty(ty::Ty::Bool))
             }
+
             // Simplify (U true false) => Bool
             (&ty::Ty::LitBool(true), &ty::Ty::LitBool(false))
             | (&ty::Ty::LitBool(false), &ty::Ty::LitBool(true)) => {
                 UnifiedTy::Merged(S::from_ty(ty::Ty::Bool))
             }
+
+            // Set type
             (&ty::Ty::Set(ref ty_ref1), &ty::Ty::Set(ref ty_ref2)) => {
                 let unified_ty_ref = self.unify_into_ty_ref(&ty_ref1, &ty_ref2)?;
 
                 UnifiedTy::Merged(S::from_ty(ty::Ty::Set(Box::new(unified_ty_ref))))
             }
+
+            // Map type
             (
                 &ty::Ty::Map(ref key_ref1, ref val_ref1),
                 &ty::Ty::Map(ref key_ref2, ref val_ref2),
@@ -189,30 +146,44 @@ where
                     Box::new(unified_val_ref),
                 )))
             }
-            (&ty::Ty::Vec(ref begin1, ref fixed1), &ty::Ty::Vec(ref begin2, ref fixed2)) => {
-                match self.unify_seq_ty_iters(
-                    RevVecTyIterator::new(begin1, fixed1),
-                    RevVecTyIterator::new(begin2, fixed2),
-                )? {
-                    UnifiedSeq::Discerned => UnifiedTy::Discerned,
-                    UnifiedSeq::Merged(mut fixed, begin) => {
-                        // We iterator over our types in reverse so we need to flip them back here
-                        fixed.reverse();
-                        UnifiedTy::Merged(S::from_ty(ty::Ty::Vec(begin.map(Box::new), fixed)))
+
+            // Vector types
+            (&ty::Ty::Vec(ref members1), &ty::Ty::Vec(ref members2)) => {
+                if members1.len() != members2.len() {
+                    // We can check vector lengths at runtime
+                    UnifiedTy::Discerned
+                } else {
+                    let mut unified_members = Vec::with_capacity(members1.len());
+
+                    for (member1, member2) in members1.iter().zip(members2.iter()) {
+                        match self.unify_ref(member1, member2)? {
+                            UnifiedTy::Discerned => {
+                                // We can check the types of fixed vector elements
+                                return Ok(UnifiedTy::Discerned);
+                            }
+                            UnifiedTy::Merged(merged) => {
+                                unified_members.push(merged);
+                            }
+                        }
                     }
+
+                    UnifiedTy::Merged(S::from_ty(ty::Ty::Vec(unified_members)))
                 }
             }
-            (&ty::Ty::List(ref fixed1, ref rest1), &ty::Ty::List(ref fixed2, ref rest2)) => {
-                match self.unify_seq_ty_iters(
-                    ListTyIterator::new(fixed1, rest1),
-                    ListTyIterator::new(fixed2, rest2),
-                )? {
-                    UnifiedSeq::Discerned => UnifiedTy::Discerned,
-                    UnifiedSeq::Merged(fixed, rest) => {
-                        UnifiedTy::Merged(S::from_ty(ty::Ty::List(fixed, rest.map(Box::new))))
-                    }
-                }
+            (&ty::Ty::Vecof(ref member1), &ty::Ty::Vecof(ref member2)) => {
+                UnifiedTy::Merged(S::from_ty(ty::Ty::Vecof(Box::new(
+                    self.unify_into_ty_ref(member1, member2)?,
+                ))))
             }
+            (&ty::Ty::Vec(ref members1), &ty::Ty::Vecof(ref member2))
+            | (&ty::Ty::Vecof(ref member2), &ty::Ty::Vec(ref members1)) => {
+                let unified_member =
+                    self.unify_ref_iter(vec![member2.as_ref().clone()], members1.iter().cloned())?;
+
+                UnifiedTy::Merged(S::from_ty(ty::Ty::Vecof(Box::new(unified_member))))
+            }
+
+            // Function type
             (&ty::Ty::Fun(ref fun1), &ty::Ty::Fun(ref fun2)) => {
                 let unified_impure = fun1.impure() || fun2.impure();
                 let unified_params = self.intersect_ref(fun1.params(), fun2.params())
@@ -225,6 +196,8 @@ where
                     unified_ret,
                 )))
             }
+
+            // Union types
             (&ty::Ty::Union(ref members1), &ty::Ty::Union(ref members2)) => {
                 let new_union = self.unify_ref_iter(members1.clone(), members2.iter().cloned())?;
                 UnifiedTy::Merged(new_union)
@@ -236,6 +209,34 @@ where
             (_, &ty::Ty::Union(ref members2)) => {
                 let new_union = self.unify_ref_iter(members2.clone(), iter::once(ref1).cloned())?;
                 UnifiedTy::Merged(new_union)
+            }
+
+            // List types
+            (&ty::Ty::Listof(ref member1), &ty::Ty::Listof(ref member2)) => {
+                UnifiedTy::Merged(S::from_ty(ty::Ty::Listof(Box::new(
+                    self.unify_into_ty_ref(member1, member2)?,
+                ))))
+            }
+            (&ty::Ty::Cons(ref car1, ref cdr1), &ty::Ty::Cons(ref car2, ref cdr2)) => {
+                match self.unify_ref(car1, car2)? {
+                    UnifiedTy::Discerned => UnifiedTy::Discerned,
+                    UnifiedTy::Merged(merged_car) => match self.unify_ref(cdr1, cdr2)? {
+                        UnifiedTy::Discerned => UnifiedTy::Discerned,
+                        UnifiedTy::Merged(merged_cdr) => UnifiedTy::Merged(S::from_ty(
+                            ty::Ty::Cons(Box::new(merged_car), Box::new(merged_cdr)),
+                        )),
+                    },
+                }
+            }
+            (&ty::Ty::Nil, &ty::Ty::Listof(ref member))
+            | (&ty::Ty::Listof(ref member), &ty::Ty::Nil) => {
+                UnifiedTy::Merged(S::from_ty(ty::Ty::Listof(member.clone())))
+            }
+            (&ty::Ty::Listof(_), &ty::Ty::Cons(ref car, ref cdr)) => {
+                self.unify_list_cons_refs(ref1, car, cdr)?
+            }
+            (&ty::Ty::Cons(ref car, ref cdr), &ty::Ty::Listof(_)) => {
+                self.unify_list_cons_refs(ref2, car, cdr)?
             }
             _ => UnifiedTy::Discerned,
         })
@@ -275,25 +276,42 @@ impl<'a> PolyUnifyCtx<'a> {
     /// Determines if a type and all of its subtypes are discernible at runtime
     ///
     /// This is to allow literal types to appear with poly variables even if they may have a
-    /// possible subtype relationship. Otherwise, (U ([A : Symbol] 'foo)) would not be allow as A
+    /// possible subtype relationship. Otherwise, (U ([A : Symbol] 'foo)) would not be allowed as A
     /// may need to merge with 'foo.
     fn poly_ty_is_discernible(&self, ty: &ty::Ty<ty::Poly>) -> bool {
         match *ty {
+            // `Any` has non-discernible subtypes
             ty::Ty::Any => false,
+
+            // These are tagged directly
             ty::Ty::Bool
             | ty::Ty::Char
             | ty::Ty::Float
             | ty::Ty::Int
             | ty::Ty::LitBool(_)
-            | ty::Ty::LitSym(_)
             | ty::Ty::Str
-            | ty::Ty::Sym => true,
+            | ty::Ty::Sym
+            | ty::Ty::Nil => true,
+
+            // We can build type checks for literal symbols
+            ty::Ty::LitSym(_) => true,
+
+            // We will build type checks that need to look inside Cons, as long as the types
+            // themselves are discernible
+            ty::Ty::Cons(ref car, ref cdr) => {
+                self.poly_is_discernible(car) && self.poly_is_discernible(cdr)
+            }
+
+            // If we can discern every union member we can discern the union itself
+            ty::Ty::Union(ref members) => members.iter().all(|m| self.poly_is_discernible(m)),
+
+            // Type erased types
             ty::Ty::Fun(_)
-            | ty::Ty::List(_, _)
             | ty::Ty::Map(_, _)
             | ty::Ty::Set(_)
-            | ty::Ty::Vec(_, _) => false,
-            ty::Ty::Union(ref members) => members.iter().any(|m| self.poly_is_discernible(m)),
+            | ty::Ty::Vec(_)
+            | ty::Ty::Vecof(_)
+            | ty::Ty::Listof(_) => false,
         }
     }
 
@@ -319,7 +337,7 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
             (&resolved1, &resolved2)
         {
             // We can invoke full unification logic if we have fixed types
-            self.ty_unify(poly1, ty1, poly2, ty2)
+            self.unify_ty(poly1, ty1, poly2, ty2)
         } else {
             let ty1 = resolved1.as_ty();
             let ty2 = resolved2.as_ty();
@@ -329,7 +347,7 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
                 // members of the same union
                 Ok(UnifiedTy::Discerned)
             } else {
-                match self.ty_unify(poly1, ty1, poly2, ty2)? {
+                match self.unify_ty(poly1, ty1, poly2, ty2)? {
                     UnifiedTy::Merged(_) => {
                         // We need to merge for correctness but we don't know the specific subtypes
                         // we're merging.
@@ -379,7 +397,7 @@ impl<'a> UnifyCtx<ty::Mono, MonoError> for MonoUnifyCtx {
         mono1: &ty::Mono,
         mono2: &ty::Mono,
     ) -> Result<UnifiedTy<ty::Mono>, MonoError> {
-        self.ty_unify(mono1, mono1.as_ty(), mono2, mono2.as_ty())
+        self.unify_ty(mono1, mono1.as_ty(), mono2, mono2.as_ty())
     }
 
     fn intersect_ref(
@@ -500,7 +518,6 @@ mod test {
         assert_eq!(
             Err(PolyError::PolyConflict(poly1.clone(), poly2.clone())),
             poly_unify(&pvars, &poly1, &poly2),
-            "Poly bounds do not conflict"
         );
     }
 
@@ -610,13 +627,25 @@ mod test {
     }
 
     #[test]
+    fn cons_types() {
+        // These are implicitly tested more extensively in the list tests
+
+        assert_discerned("(Cons Int Float)", "(Cons Float Int)");
+        assert_merged(
+            "(Cons (Setof (RawU Int Float)) Bool)",
+            "(Cons (Setof Int) true)",
+            "(Cons (Setof Float) false)",
+        );
+    }
+
+    #[test]
     fn list_types() {
         assert_merged("(Listof Any)", "(List Any)", "(Listof Any)");
         assert_discerned("(List Any)", "(List Any Any)");
         assert_discerned("(List Symbol)", "(List String)");
         assert_discerned("(List String)", "(List String String String ...)");
         assert_merged(
-            "(List Int (RawU Symbol Float String) ...)",
+            "(List Int (RawU Symbol String Float) ...)",
             "(List Int Symbol ...)",
             "(List Int Float String ...)",
         );
@@ -625,15 +654,7 @@ mod test {
     #[test]
     fn vec_types() {
         assert_merged("(Vectorof Bool)", "(Vector true)", "(Vectorof false)");
-        assert_discerned(
-            "(Vector 'foo ... Int Symbol)",
-            "(Vector 'bar ... Int String)",
-        );
-        assert_merged(
-            "(Vector (RawU 'foo 'bar) ... Int Symbol)",
-            "(Vector 'foo ... Int Symbol)",
-            "(Vector 'bar ... Int Symbol)",
-        );
+        assert_discerned("(Vector 'foo Int Symbol)", "(Vector 'bar Int String)");
     }
 
     #[test]
@@ -670,8 +691,5 @@ mod test {
 
         // These types are completely disjoint but they can't be discerned at runtime
         assert_poly_bound_conflict("(Setof Symbol)", "(Setof String)");
-
-        // These have a strict subtype relationship but the larger bound can become more specific
-        assert_poly_bound_conflict("(Listof Any)", "(List Any)");
     }
 }

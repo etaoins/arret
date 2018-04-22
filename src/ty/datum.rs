@@ -9,12 +9,13 @@ pub fn mono_for_datum(datum: &Datum) -> ty::Mono {
         Datum::Int(_, _) => ty::Ty::Int.into_mono(),
         Datum::Float(_, _) => ty::Ty::Float.into_mono(),
         Datum::Str(_, _) => ty::Ty::Str.into_mono(),
-        Datum::List(_, ref vs) => {
-            ty::Ty::List(vs.iter().map(mono_for_datum).collect(), None).into_mono()
-        }
-        Datum::Vec(_, ref vs) => {
-            ty::Ty::Vec(None, vs.iter().map(mono_for_datum).collect()).into_mono()
-        }
+        Datum::List(_, ref vs) => vs.iter().rev().fold(
+            ty::Ty::Nil.into_mono(),
+            |tail_mono, fixed_datum| {
+                ty::Ty::Cons(Box::new(mono_for_datum(fixed_datum)), Box::new(tail_mono)).into_mono()
+            },
+        ),
+        Datum::Vec(_, ref vs) => ty::Ty::Vec(vs.iter().map(mono_for_datum).collect()).into_mono(),
         Datum::Set(_, ref vs) => {
             // Without function, begin or rest types we should never hit erasure
             let unified_type = ty::unify::mono_unify_iter(vs.iter().map(mono_for_datum)).unwrap();
