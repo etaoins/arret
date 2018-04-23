@@ -90,12 +90,7 @@ where
             self.unify_ref_into_vec(&mut output_members, new_member)?;
         }
 
-        // TODO: Use a slice pattern here once they're stable
-        if output_members.len() == 1 {
-            Ok(output_members.pop().unwrap())
-        } else {
-            Ok(S::from_ty(ty::Ty::Union(output_members)))
-        }
+        Ok(S::from_vec(output_members))
     }
 
     /// Unifies two types under the assumption that they are not subtypes
@@ -171,9 +166,10 @@ where
                 }
             }
             (&ty::Ty::Vecof(ref member1), &ty::Ty::Vecof(ref member2)) => {
-                UnifiedTy::Merged(S::from_ty(ty::Ty::Vecof(Box::new(
-                    self.unify_into_ty_ref(member1, member2)?,
-                ))))
+                UnifiedTy::Merged(S::from_ty(ty::Ty::Vecof(Box::new(self.unify_into_ty_ref(
+                    member1,
+                    member2,
+                )?))))
             }
             (&ty::Ty::Vec(ref members1), &ty::Ty::Vecof(ref member2))
             | (&ty::Ty::Vecof(ref member2), &ty::Ty::Vec(ref members1)) => {
@@ -417,6 +413,7 @@ pub fn mono_unify<'a>(
     ctx.unify_ref(mono1, mono2)
 }
 
+#[cfg(test)]
 pub fn mono_unify_iter<I>(members: I) -> Result<ty::Mono, MonoError>
 where
     I: Iterator<Item = ty::Mono>,

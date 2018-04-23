@@ -1,16 +1,27 @@
+#[cfg(test)]
+mod datum;
+mod intersect;
 pub mod is_a;
+#[cfg(test)]
+pub mod pred;
 pub mod resolve;
 #[cfg(test)]
 pub mod subst;
 pub mod unify;
-mod intersect;
-#[cfg(test)]
-mod datum;
 
 use syntax::span::Span;
 
 pub trait TyRef: PartialEq + Clone + Sized {
     fn from_ty(Ty<Self>) -> Self;
+
+    fn from_vec(mut members: Vec<Self>) -> Self {
+        // TODO: Use a slice pattern here once they're stable
+        if members.len() == 1 {
+            members.pop().unwrap()
+        } else {
+            Self::from_ty(Ty::Union(members))
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
