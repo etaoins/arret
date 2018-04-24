@@ -1,7 +1,7 @@
-use hir::ns::{Ident, NsDatum};
-use hir::scope::{Binding, Scope};
-use hir::prim::Prim;
 use hir::error::{Error, ErrorKind, Result};
+use hir::ns::{Ident, NsDatum};
+use hir::prim::Prim;
+use hir::scope::{Binding, Scope};
 use syntax::span::Span;
 
 /// Splits data in to fixed arguments and an optional rest argument
@@ -44,10 +44,14 @@ pub fn expect_arg_count(span: Span, vs: &[NsDatum], expected_arg_count: usize) -
     }
 }
 
-pub fn expect_ident(datum: NsDatum) -> Result<Ident> {
-    if let NsDatum::Ident(_, ident) = datum {
-        Ok(ident)
+pub fn expect_ident_and_span(datum: NsDatum) -> Result<(Ident, Span)> {
+    if let NsDatum::Ident(span, ident) = datum {
+        Ok((ident, span))
     } else {
         Err(Error::new(datum.span(), ErrorKind::ExpectedSymbol))
     }
+}
+
+pub fn expect_ident(datum: NsDatum) -> Result<Ident> {
+    expect_ident_and_span(datum).map(|(ident, _)| ident)
 }

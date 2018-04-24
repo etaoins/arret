@@ -1,16 +1,17 @@
-pub mod lowering;
-mod scope;
 mod error;
-mod module;
+mod import;
 mod loader;
-mod prim;
-mod ns;
+pub mod lowering;
 mod macros;
+mod module;
+mod ns;
+mod prim;
+mod scope;
 mod types;
 mod util;
 
-use syntax::span::Span;
 use syntax::datum::Datum;
+use syntax::span::Span;
 use ty;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]

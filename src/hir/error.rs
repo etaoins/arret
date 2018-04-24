@@ -1,10 +1,10 @@
-use std::{error, result};
 use std::fmt;
 use std::fmt::Display;
+use std::{error, result};
 
-use syntax::span::Span;
-use syntax::error::Error as SyntaxError;
 use reporting::{Level, Reportable};
+use syntax::error::Error as SyntaxError;
+use syntax::span::Span;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ErrorLoc {

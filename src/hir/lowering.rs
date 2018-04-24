@@ -1,20 +1,21 @@
 use std::collections::{BTreeMap, HashMap};
 use std::io::Read;
 
-use hir::{App, Cond, Destruc, Expr, Fun, Var, VarId};
+use ctx::CompileContext;
+use hir::error::{Error, ErrorKind, Result};
+use hir::import::lower_import_set;
 use hir::loader::{load_library_data, load_module_data, LibraryName};
-use hir::scope::{Binding, MacroId, Scope};
+use hir::macros::{expand_macro, lower_macro_rules, Macro};
+use hir::module::{Module, ModuleDef};
 use hir::ns::{Ident, NsDatum, NsId, NsIdAlloc};
 use hir::prim::Prim;
-use hir::module::{Module, ModuleDef};
-use hir::macros::{expand_macro, lower_macro_rules, Macro};
-use hir::error::{Error, ErrorKind, Result};
+use hir::scope::{Binding, MacroId, Scope};
 use hir::types::{lower_poly, lower_pvar, TyCons};
 use hir::util::{expect_arg_count, expect_ident, pop_vec_front, split_into_fixed_and_rest};
-use ty;
+use hir::{App, Cond, Destruc, Expr, Fun, Var, VarId};
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
-use ctx::CompileContext;
+use ty;
 
 pub struct LoweringContext<'ccx> {
     curr_var_id: usize,
@@ -28,6 +29,20 @@ pub struct LoweringContext<'ccx> {
 enum DeferredModulePrim {
     Def(Span, Destruc, NsDatum),
     Export(Span, Ident),
+}
+
+#[derive(Clone, Copy)]
+struct AppliedPrim {
+    /// Primitive that was applied
+    prim: Prim,
+
+    /// Namespace the primitive identifier was in
+    ///
+    /// This is the namespace which (import) will place the new identifiers
+    ns_id: NsId,
+
+    /// Span of the entire application
+    span: Span,
 }
 
 impl<'ccx> LoweringContext<'ccx> {
@@ -315,11 +330,12 @@ impl<'ccx> LoweringContext<'ccx> {
     fn lower_inner_prim_apply(
         &mut self,
         scope: &mut Scope,
-        span: Span,
-        fn_prim: &Prim,
+        applied_prim: AppliedPrim,
         mut arg_data: Vec<NsDatum>,
     ) -> Result<Expr> {
-        match *fn_prim {
+        let AppliedPrim { prim, span, .. } = applied_prim;
+
+        match prim {
             Prim::Def | Prim::DefMacro | Prim::DefType | Prim::Import => {
                 Err(Error::new(span, ErrorKind::DefOutsideBody))
             }
@@ -333,7 +349,9 @@ impl<'ccx> LoweringContext<'ccx> {
                 expect_arg_count(span, &arg_data, 3)?;
 
                 macro_rules! pop_as_boxed_expr {
-                    () => {Box::new(self.lower_inner_expr(scope, arg_data.pop().unwrap())?)}
+                    () => {
+                        Box::new(self.lower_inner_expr(scope, arg_data.pop().unwrap())?)
+                    };
                 };
 
                 Ok(Expr::Cond(
@@ -377,59 +395,22 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(&self.loaded_libraries[library_name])
     }
 
-    fn lower_import_set(&mut self, scope: &mut Scope, import_set_datum: NsDatum) -> Result<()> {
-        match import_set_datum {
-            NsDatum::Vec(span, vs) => {
-                if vs.len() < 1 {
-                    return Err(Error::new(
-                        span,
-                        ErrorKind::IllegalArg(
-                            "library name requires a least one element".to_owned(),
-                        ),
-                    ));
-                }
-
-                let mut import_ns_id = NsId::new(0);
-
-                let mut name_components = vs.into_iter()
-                    .map(|datum| {
-                        match datum {
-                            NsDatum::Ident(_, ident) => {
-                                // TODO: What happens with mixed namespaces?
-                                import_ns_id = ident.ns_id();
-                                Ok(ident.name().clone())
-                            }
-                            other => Err(Error::new(
-                                other.span(),
-                                ErrorKind::IllegalArg(
-                                    "library name component must be a symbol".to_owned(),
-                                ),
-                            )),
-                        }
-                    })
-                    .collect::<Result<Vec<String>>>()?;
-
-                let terminal_name = name_components.pop().unwrap();
-                let library_name = LibraryName::new(name_components, terminal_name);
-                let loaded_library = self.load_library(scope, span, &library_name)?;
-
-                for (name, binding) in loaded_library.exports() {
-                    let imported_ident = Ident::new(import_ns_id, name.clone());
-                    scope.insert_binding(imported_ident, binding.clone());
-                }
-
-                Ok(())
-            }
-            other => Err(Error::new(
-                other.span(),
-                ErrorKind::IllegalArg("import set must be a vector".to_owned()),
-            )),
-        }
-    }
-
-    fn lower_import(&mut self, scope: &mut Scope, arg_data: Vec<NsDatum>) -> Result<()> {
+    fn lower_import(
+        &mut self,
+        scope: &mut Scope,
+        ns_id: NsId,
+        arg_data: Vec<NsDatum>,
+    ) -> Result<()> {
         for arg_datum in arg_data {
-            self.lower_import_set(scope, arg_datum)?;
+            let bindings = lower_import_set(arg_datum, |span, library_name| {
+                Ok(self.load_library(scope, span, library_name)?
+                    .exports()
+                    .clone())
+            })?;
+
+            for (name, binding) in bindings {
+                scope.insert_binding(Ident::new(ns_id, name), binding);
+            }
         }
 
         Ok(())
@@ -438,11 +419,12 @@ impl<'ccx> LoweringContext<'ccx> {
     fn lower_body_prim_apply(
         &mut self,
         scope: &mut Scope,
-        span: Span,
-        fn_prim: &Prim,
+        applied_prim: AppliedPrim,
         mut arg_data: Vec<NsDatum>,
     ) -> Result<Expr> {
-        match *fn_prim {
+        let AppliedPrim { prim, ns_id, span } = applied_prim;
+
+        match prim {
             Prim::Def => {
                 expect_arg_count(span, &arg_data, 2)?;
 
@@ -458,8 +440,9 @@ impl<'ccx> LoweringContext<'ccx> {
                 .map(|_| Expr::Do(vec![])),
             Prim::DefType => self.lower_deftype(scope, span, arg_data)
                 .map(|_| Expr::Do(vec![])),
-            Prim::Import => self.lower_import(scope, arg_data).map(|_| Expr::Do(vec![])),
-            _ => self.lower_inner_prim_apply(scope, span, fn_prim, arg_data),
+            Prim::Import => self.lower_import(scope, ns_id, arg_data)
+                .map(|_| Expr::Do(vec![])),
+            _ => self.lower_inner_prim_apply(scope, applied_prim, arg_data),
         }
     }
 
@@ -499,7 +482,7 @@ impl<'ccx> LoweringContext<'ccx> {
         lower_prim_apply: F,
     ) -> Result<Expr>
     where
-        F: Fn(&mut Self, &mut Scope, Span, &Prim, Vec<NsDatum>) -> Result<Expr>,
+        F: Fn(&mut Self, &mut Scope, AppliedPrim, Vec<NsDatum>) -> Result<Expr>,
     {
         match datum {
             NsDatum::Ident(span, ref ident) => match scope.get(ident) {
@@ -526,8 +509,13 @@ impl<'ccx> LoweringContext<'ccx> {
 
                 match fn_datum {
                     NsDatum::Ident(fn_span, ref ident) => match scope.get(ident) {
-                        Some(Binding::Prim(ref fn_prim)) => {
-                            lower_prim_apply(self, scope, span, fn_prim, arg_data)
+                        Some(Binding::Prim(prim)) => {
+                            let applied_prim = AppliedPrim {
+                                prim,
+                                ns_id: ident.ns_id(),
+                                span,
+                            };
+                            lower_prim_apply(self, scope, applied_prim, arg_data)
                         }
                         Some(Binding::Macro(macro_id)) => {
                             let expanded_datum = {
@@ -570,11 +558,12 @@ impl<'ccx> LoweringContext<'ccx> {
     fn lower_module_prim_apply(
         &mut self,
         scope: &mut Scope,
-        span: Span,
-        fn_prim: &Prim,
+        applied_prim: AppliedPrim,
         mut arg_data: Vec<NsDatum>,
     ) -> Result<Vec<DeferredModulePrim>> {
-        match *fn_prim {
+        let AppliedPrim { prim, ns_id, span } = applied_prim;
+
+        match prim {
             Prim::Export => {
                 let deferred_exports = arg_data
                     .into_iter()
@@ -601,7 +590,7 @@ impl<'ccx> LoweringContext<'ccx> {
             }
             Prim::DefMacro => self.lower_defmacro(scope, span, arg_data).map(|_| vec![]),
             Prim::DefType => self.lower_deftype(scope, span, arg_data).map(|_| vec![]),
-            Prim::Import => self.lower_import(scope, arg_data).map(|_| vec![]),
+            Prim::Import => self.lower_import(scope, ns_id, arg_data).map(|_| vec![]),
             Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),
             _ => Err(Error::new(span, ErrorKind::NonDefInsideModule)),
         }
@@ -621,8 +610,14 @@ impl<'ccx> LoweringContext<'ccx> {
 
                 if let NsDatum::Ident(fn_span, ref ident) = fn_datum {
                     match scope.get(ident) {
-                        Some(Binding::Prim(ref fn_prim)) => {
-                            return self.lower_module_prim_apply(scope, span, fn_prim, arg_data)
+                        Some(Binding::Prim(prim)) => {
+                            let applied_prim = AppliedPrim {
+                                prim,
+                                ns_id: ident.ns_id(),
+                                span,
+                            };
+
+                            return self.lower_module_prim_apply(scope, applied_prim, arg_data);
                         }
                         Some(Binding::Macro(macro_id)) => {
                             let expanded_datum = {
@@ -713,9 +708,9 @@ impl<'ccx> LoweringContext<'ccx> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use syntax::span::t2s;
-    use syntax::parser::data_from_str;
     use hir::ty;
+    use syntax::parser::data_from_str;
+    use syntax::span::t2s;
 
     fn import_statement_for_library(names: &[&'static str]) -> Datum {
         Datum::List(
@@ -918,13 +913,11 @@ mod test {
         let y = "                        ^";
 
         let destruc = Destruc::List(
-            vec![
-                Destruc::Var(Var {
-                    id: VarId(3),
-                    source_name: "x".to_owned(),
-                    bound: ty::Decl::Free(t2s(u)),
-                }),
-            ],
+            vec![Destruc::Var(Var {
+                id: VarId(3),
+                source_name: "x".to_owned(),
+                bound: ty::Decl::Free(t2s(u)),
+            })],
             Some(Box::new(Destruc::Var(Var {
                 id: VarId(2),
                 source_name: "rest".to_owned(),
@@ -1066,13 +1059,11 @@ mod test {
 
         let param_var_id = VarId::new(2);
         let params = Destruc::List(
-            vec![
-                Destruc::Var(Var {
-                    id: param_var_id,
-                    source_name: "x".to_owned(),
-                    bound: ty::Decl::Free(t2s(u)),
-                }),
-            ],
+            vec![Destruc::Var(Var {
+                id: param_var_id,
+                source_name: "x".to_owned(),
+                bound: ty::Decl::Free(t2s(u)),
+            })],
             None,
         );
 
@@ -1126,13 +1117,11 @@ mod test {
 
         let param_var_id = VarId::new(2);
         let params = Destruc::List(
-            vec![
-                Destruc::Var(Var {
-                    id: param_var_id,
-                    source_name: "x".to_owned(),
-                    bound: ty::Decl::Var(pvar_id),
-                }),
-            ],
+            vec![Destruc::Var(Var {
+                id: param_var_id,
+                source_name: "x".to_owned(),
+                bound: ty::Decl::Var(pvar_id),
+            })],
             None,
         );
 
@@ -1204,13 +1193,11 @@ mod test {
 
         let param_var_id = VarId::new(3);
         let params = Destruc::List(
-            vec![
-                Destruc::Var(Var {
-                    id: param_var_id,
-                    source_name: "x".to_owned(),
-                    bound: ty::Decl::Free(t2s(w)),
-                }),
-            ],
+            vec![Destruc::Var(Var {
+                id: param_var_id,
+                source_name: "x".to_owned(),
+                bound: ty::Decl::Free(t2s(w)),
+            })],
             None,
         );
 
