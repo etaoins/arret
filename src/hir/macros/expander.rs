@@ -1,7 +1,7 @@
-use hir::scope::Scope;
-use hir::ns::{Ident, NsDatum, NsId, NsIdAlloc};
-use hir::macros::{MacroVar, MatchData, SpecialVars};
 use hir::macros::checker::VarLinks;
+use hir::macros::{MacroVar, MatchData, SpecialVars};
+use hir::ns::{Ident, NsDatum, NsId, NsIdAlloc};
+use hir::scope::Scope;
 use std::collections::HashMap;
 use syntax::span::Span;
 
@@ -39,12 +39,13 @@ impl<'a> ExpandContext<'a> {
             return replacement.clone();
         }
 
-        // TODO: Always allocate an NsId even if we never use it to get around the borrow checker
-        let alloced_ns_id = self.ns_id_alloc.alloc();
-
         // Rescope this ident
         let old_ns_id = ident.ns_id();
-        let new_ns_id = self.ns_mapping.entry(old_ns_id).or_insert(alloced_ns_id);
+
+        let ns_id_alloc = &mut self.ns_id_alloc;
+        let new_ns_id = self.ns_mapping
+            .entry(old_ns_id)
+            .or_insert_with(|| ns_id_alloc.alloc());
 
         let new_ident = ident.with_ns_id(*new_ns_id);
         self.scope.rebind(ident, &new_ident);

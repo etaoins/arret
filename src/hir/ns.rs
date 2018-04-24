@@ -1,11 +1,11 @@
-use syntax::span::Span;
 use syntax::datum::Datum;
+use syntax::span::Span;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct NsId(usize);
+pub struct NsId(u32);
 
 impl NsId {
-    pub fn new(id: usize) -> NsId {
+    pub fn new(id: u32) -> NsId {
         NsId(id)
     }
 }
@@ -128,7 +128,7 @@ impl NsDatum {
 }
 
 pub struct NsIdAlloc {
-    curr_ns_id: usize,
+    curr_ns_id: u32,
 }
 
 impl NsIdAlloc {
