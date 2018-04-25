@@ -727,7 +727,7 @@ impl<'ccx> LoweringContext<'ccx> {
     }
 }
 
-pub fn lower_program<'ccx>(
+pub fn lower_program(
     ccx: &mut CompileContext,
     display_name: String,
     input_reader: &mut Read,
