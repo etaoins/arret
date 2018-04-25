@@ -27,6 +27,19 @@ pub struct LoweringContext<'ccx> {
     ccx: &'ccx mut CompileContext,
 }
 
+pub struct LoweredProgram {
+    pvars: Vec<ty::PVar>,
+    free_tys: Vec<Span>,
+    libraries: BTreeMap<LibraryName, Module>,
+    entry_module: Module,
+}
+
+impl LoweredProgram {
+    pub fn entry_module(&self) -> &Module {
+        &self.entry_module
+    }
+}
+
 enum DeferredModulePrim {
     Def(Span, Destruc, NsDatum),
     Export(Span, Ident),
@@ -701,7 +714,7 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(Module::new(module_defs, exports))
     }
 
-    pub fn lower_program(
+    fn lower_entry_module(
         &mut self,
         display_name: String,
         input_reader: &mut Read,
@@ -711,6 +724,22 @@ impl<'ccx> LoweringContext<'ccx> {
         let data = load_module_data(self.ccx, EMPTY_SPAN, display_name, input_reader)?;
         self.lower_module(&mut root_scope, data)
     }
+}
+
+pub fn lower_program<'ccx>(
+    ccx: &mut CompileContext,
+    display_name: String,
+    input_reader: &mut Read,
+) -> Result<LoweredProgram> {
+    let mut lcx = LoweringContext::new(ccx);
+    let entry_module = lcx.lower_entry_module(display_name, input_reader)?;
+
+    Ok(LoweredProgram {
+        libraries: lcx.loaded_libraries,
+        entry_module,
+        pvars: lcx.pvars,
+        free_tys: lcx.free_tys,
+    })
 }
 
 ////

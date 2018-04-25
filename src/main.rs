@@ -3,17 +3,16 @@
 extern crate ansi_term;
 extern crate clap;
 
-mod ty;
-mod syntax;
-mod hir;
 mod ctx;
+mod hir;
 mod reporting;
+mod syntax;
+mod ty;
 
-use std::fs::File;
-use hir::lowering::LoweringContext;
 use clap::{App, Arg};
 use ctx::CompileContext;
 use reporting::Reportable;
+use std::fs::File;
 
 fn main() {
     let matches = App::new("risp")
@@ -30,14 +29,11 @@ fn main() {
 
     let mut ccx = CompileContext::new();
 
-    let result = {
-        let mut lcx = LoweringContext::new(&mut ccx);
-        lcx.lower_program(input_path.to_owned(), &mut input_file)
-    };
+    let result = { hir::lowering::lower_program(&mut ccx, input_path.to_owned(), &mut input_file) };
 
     match result {
-        Ok(exprs) => {
-            println!("{:?}", exprs);
+        Ok(program) => {
+            println!("{:?}", program.entry_module());
         }
         Err(err) => {
             let _: &reporting::Reportable = &err;
