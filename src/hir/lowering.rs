@@ -28,9 +28,10 @@ pub struct LoweringContext<'ccx> {
 }
 
 pub struct LoweredProgram {
+    /*
     pvars: Vec<ty::PVar>,
     free_tys: Vec<Span>,
-    libraries: BTreeMap<LibraryName, Module>,
+    libraries: BTreeMap<LibraryName, Module>,*/
     entry_module: Module,
 }
 
@@ -735,10 +736,10 @@ pub fn lower_program<'ccx>(
     let entry_module = lcx.lower_entry_module(display_name, input_reader)?;
 
     Ok(LoweredProgram {
-        libraries: lcx.loaded_libraries,
+        //libraries: lcx.loaded_libraries,
         entry_module,
-        pvars: lcx.pvars,
-        free_tys: lcx.free_tys,
+        //pvars: lcx.pvars,
+        //free_tys: lcx.free_tys,
     })
 }
 
