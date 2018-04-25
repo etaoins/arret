@@ -9,8 +9,6 @@ pub mod resolve;
 pub mod subst;
 pub mod unify;
 
-use syntax::span::Span;
-
 pub trait TyRef: PartialEq + Clone + Sized {
     fn from_ty(Ty<Self>) -> Self;
 
@@ -92,15 +90,15 @@ impl<S> Fun<S> {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub struct PVarId(usize);
+pub struct PVarId(u32);
 
 impl PVarId {
     pub fn new(id: usize) -> PVarId {
-        PVarId(id)
+        PVarId(id as u32)
     }
 
     pub fn to_usize(self) -> usize {
-        self.0
+        self.0 as usize
     }
 }
 
@@ -177,7 +175,16 @@ impl TyRef for Mono {
 pub enum Decl {
     Var(PVarId),
     Fixed(Ty<Poly>),
-    Free(Span),
+    Free(FreeTyId),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub struct FreeTyId(u32);
+
+impl FreeTyId {
+    pub fn new(id: usize) -> FreeTyId {
+        FreeTyId(id as u32)
+    }
 }
 
 impl Ty<Poly> {
