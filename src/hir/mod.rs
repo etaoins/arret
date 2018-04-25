@@ -27,15 +27,15 @@ impl VarId {
 pub struct Var {
     id: VarId,
     source_name: String,
-    bound: ty::Decl,
+    ty: ty::Decl,
 }
 
 impl Var {
-    fn with_bound(self, bound: ty::Poly) -> Var {
+    fn with_ty(self, ty: ty::Poly) -> Var {
         Var {
             id: self.id,
             source_name: self.source_name,
-            bound: bound.into_decl(),
+            ty: ty.into_decl(),
         }
     }
 }

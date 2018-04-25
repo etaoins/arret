@@ -207,7 +207,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 Ok(Destruc::Var(Var {
                     id: var_id,
                     source_name,
-                    bound: ty::Decl::Free(self.insert_free_ty(span)),
+                    ty: ty::Decl::Free(self.insert_free_ty(span)),
                 }))
             }
             NsDatum::List(_, vs) => {
@@ -245,7 +245,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 let inner_destruc = self.lower_destruc(scope, inner_destruc_datum)?;
 
                 match inner_destruc {
-                    Destruc::Var(var) => Ok(Destruc::Var(var.with_bound(ty))),
+                    Destruc::Var(var) => Ok(Destruc::Var(var.with_ty(ty))),
                     _ => Err(Error::new(
                         inner_destruc_span,
                         ErrorKind::IllegalArg(
@@ -878,7 +878,7 @@ mod test {
         let destruc = Destruc::Var(Var {
             id: VarId(2),
             source_name: "x".to_owned(),
-            bound: ty::Decl::Free(ty::FreeTyId::new(1)),
+            ty: ty::Decl::Free(ty::FreeTyId::new(1)),
         });
 
         let expected = Expr::Do(vec![
@@ -899,7 +899,7 @@ mod test {
         let destruc = Destruc::Var(Var {
             id: VarId(2),
             source_name: "x".to_owned(),
-            bound: ty::Ty::LitBool(true).into_decl(),
+            ty: ty::Ty::LitBool(true).into_decl(),
         });
 
         let expected = Expr::Do(vec![
@@ -952,12 +952,12 @@ mod test {
             vec![Destruc::Var(Var {
                 id: VarId(3),
                 source_name: "x".to_owned(),
-                bound: ty::Decl::Free(ty::FreeTyId::new(1)),
+                ty: ty::Decl::Free(ty::FreeTyId::new(1)),
             })],
             Some(Box::new(Destruc::Var(Var {
                 id: VarId(2),
                 source_name: "rest".to_owned(),
-                bound: ty::Decl::Free(ty::FreeTyId::new(2)),
+                ty: ty::Decl::Free(ty::FreeTyId::new(2)),
             }))),
         );
 
@@ -1097,7 +1097,7 @@ mod test {
             vec![Destruc::Var(Var {
                 id: param_var_id,
                 source_name: "x".to_owned(),
-                bound: ty::Decl::Free(ty::FreeTyId::new(1)),
+                ty: ty::Decl::Free(ty::FreeTyId::new(1)),
             })],
             None,
         );
@@ -1125,7 +1125,7 @@ mod test {
         let params = Destruc::Var(Var {
             id: param_var_id,
             source_name: "x".to_owned(),
-            bound: ty::Decl::Free(ty::FreeTyId::new(1)),
+            ty: ty::Decl::Free(ty::FreeTyId::new(1)),
         });
 
         let expected = Expr::Fun(
@@ -1154,7 +1154,7 @@ mod test {
             vec![Destruc::Var(Var {
                 id: param_var_id,
                 source_name: "x".to_owned(),
-                bound: ty::Decl::Var(pvar_id),
+                ty: ty::Decl::Var(pvar_id),
             })],
             None,
         );
@@ -1184,7 +1184,7 @@ mod test {
         let outer_destruc = Destruc::Var(Var {
             id: outer_var_id,
             source_name: "x".to_owned(),
-            bound: ty::Decl::Free(ty::FreeTyId::new(1)),
+            ty: ty::Decl::Free(ty::FreeTyId::new(1)),
         });
 
         let expected = Expr::Do(vec![
@@ -1219,7 +1219,7 @@ mod test {
         let outer_destruc = Destruc::Var(Var {
             id: outer_var_id,
             source_name: "x".to_owned(),
-            bound: ty::Decl::Free(ty::FreeTyId::new(1)),
+            ty: ty::Decl::Free(ty::FreeTyId::new(1)),
         });
 
         let param_var_id = VarId::new(3);
@@ -1227,7 +1227,7 @@ mod test {
             vec![Destruc::Var(Var {
                 id: param_var_id,
                 source_name: "x".to_owned(),
-                bound: ty::Decl::Free(ty::FreeTyId::new(2)),
+                ty: ty::Decl::Free(ty::FreeTyId::new(2)),
             })],
             None,
         );
@@ -1355,7 +1355,7 @@ mod test {
             Destruc::Var(Var {
                 id: var_id,
                 source_name: "x".to_owned(),
-                bound: ty::Decl::Free(ty::FreeTyId::new(1)),
+                ty: ty::Decl::Free(ty::FreeTyId::new(1)),
             }),
             Expr::Lit(Datum::Int(t2s(u), 1)),
         );
@@ -1862,7 +1862,7 @@ mod test {
         let destruc = Destruc::Var(Var {
             id: VarId(2),
             source_name: "x".to_owned(),
-            bound: ty::Decl::Free(ty::FreeTyId::new(2)),
+            ty: ty::Decl::Free(ty::FreeTyId::new(2)),
         });
 
         let expected = Expr::Do(vec![
@@ -1887,7 +1887,7 @@ mod test {
         let destruc = Destruc::Var(Var {
             id: VarId(2),
             source_name: "x".to_owned(),
-            bound: ty::Ty::LitBool(true).into_decl(),
+            ty: ty::Ty::LitBool(true).into_decl(),
         });
 
         let expected = Expr::Def(
