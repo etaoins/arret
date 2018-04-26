@@ -540,7 +540,7 @@ mod test {
 
     #[test]
     fn fun_types() {
-        // Parameters are contravariant and Float/Int are discernible
+        // Parameters are contravariant and Float/Int are disjoint
         assert_merged(
             "((RawU) -> (RawU Int Float))",
             "(Float -> Int)",
