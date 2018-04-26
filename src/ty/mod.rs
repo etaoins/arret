@@ -31,7 +31,6 @@ where
     Bool,
     Char,
     Float,
-    Fun(Box<Fun<S>>),
     Map(Box<S>, Box<S>),
     Int,
     LitBool(bool),
@@ -40,6 +39,10 @@ where
     Str,
     Sym,
     Union(Vec<S>),
+
+    // Function types
+    Fun(Box<Fun<S>>),
+    TyPred(Box<S>),
 
     // Vector types
     Vec(Vec<S>),
@@ -55,25 +58,57 @@ impl<S> Ty<S>
 where
     S: TyRef,
 {
+    pub fn new_simple_list_type<I>(fixed: I, rest: Option<S>) -> S
+    where
+        I: DoubleEndedIterator<Item = S>,
+    {
+        let tail_poly = rest.map(|t| S::from_ty(Ty::Listof(Box::new(t))))
+            .unwrap_or_else(|| S::from_ty(Ty::Nil));
+
+        fixed.rev().fold(tail_poly, |tail_ref, fixed_ref| {
+            S::from_ty(Ty::Cons(Box::new(fixed_ref), Box::new(tail_ref)))
+        })
+    }
+
     pub fn new_fun(impure: bool, params: S, ret: S) -> Ty<S> {
         Ty::Fun(Box::new(Fun::new(impure, params, ret)))
     }
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct Fun<S> {
+pub struct Fun<S>
+where
+    S: TyRef,
+{
     impure: bool,
     params: S,
     ret: S,
 }
 
-impl<S> Fun<S> {
+impl<S> Fun<S>
+where
+    S: TyRef,
+{
     pub fn new(impure: bool, params: S, ret: S) -> Fun<S> {
         Fun {
             impure,
             params,
             ret,
         }
+    }
+
+    /// Returns the `Fun` supertype for all type predicate functions
+    ///
+    /// This is the type `(Any -> Bool)`. It captures the signature of the type predicates; however
+    /// it does not support occurrence typing.
+    pub fn new_for_ty_pred() -> Fun<S> {
+        use std::iter;
+
+        Self::new(
+            false,
+            Ty::new_simple_list_type(iter::once(S::from_ty(Ty::Any)), None),
+            S::from_ty(Ty::Bool),
+        )
     }
 
     pub fn impure(&self) -> bool {

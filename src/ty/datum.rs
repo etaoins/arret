@@ -20,15 +20,9 @@ where
             Datum::Int(_, _) => S::from_ty(ty::Ty::Int),
             Datum::Float(_, _) => S::from_ty(ty::Ty::Float),
             Datum::Str(_, _) => S::from_ty(ty::Ty::Str),
-            Datum::List(_, ref vs) => vs.iter().rev().fold(
-                S::from_ty(ty::Ty::Nil),
-                |tail_mono, fixed_datum| {
-                    S::from_ty(ty::Ty::Cons(
-                        Box::new(self.ref_for_datum(fixed_datum)),
-                        Box::new(tail_mono),
-                    ))
-                },
-            ),
+            Datum::List(_, ref vs) => {
+                ty::Ty::new_simple_list_type(vs.iter().map(|datum| self.ref_for_datum(datum)), None)
+            }
             Datum::Vec(_, ref vs) => S::from_ty(ty::Ty::Vec(
                 vs.iter().map(|v| self.ref_for_datum(v)).collect(),
             )),

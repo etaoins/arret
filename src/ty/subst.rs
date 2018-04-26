@@ -1,5 +1,5 @@
-use std::result;
 use std::collections::HashMap;
+use std::result;
 
 use ty;
 
@@ -38,6 +38,7 @@ fn subst_ty(
             subst(&fun.params, pvars)?,
             subst(&fun.ret, pvars)?,
         ),
+        ty::Ty::TyPred(ref test_ty) => ty::Ty::TyPred(Box::new(subst(test_ty, pvars)?)),
         ty::Ty::Map(ref key, ref value) => {
             ty::Ty::Map(Box::new(subst(key, pvars)?), Box::new(subst(value, pvars)?))
         }

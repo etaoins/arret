@@ -29,6 +29,7 @@ fn poly_ty_has_subtypes(pvars: &[ty::PVar], poly_ty: &ty::Ty<ty::Poly>) -> bool 
                 || fun.params != ty::Ty::Listof(Box::new(ty::Ty::Any.into_poly())).into_poly()
                 || poly_has_subtypes(pvars, &fun.ret)
         }
+        ty::Ty::TyPred(_) => false,
         ty::Ty::Map(ref key, ref value) => [key, value]
             .iter()
             .any(|poly| poly_has_subtypes(pvars, poly)),

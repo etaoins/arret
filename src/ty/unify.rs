@@ -1,5 +1,5 @@
-use std::result::Result;
 use std::iter;
+use std::result::Result;
 
 use ty;
 
@@ -93,6 +93,19 @@ where
         Ok(S::from_vec(output_members))
     }
 
+    fn unify_fun(&self, fun1: &ty::Fun<S>, fun2: &ty::Fun<S>) -> Result<UnifiedTy<S>, E> {
+        let unified_impure = fun1.impure() || fun2.impure();
+        let unified_params = self.intersect_ref(fun1.params(), fun2.params())
+            .into_ty_ref();
+        let unified_ret = self.unify_into_ty_ref(fun1.ret(), fun2.ret())?;
+
+        Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::new_fun(
+            unified_impure,
+            unified_params,
+            unified_ret,
+        ))))
+    }
+
     /// Unifies two types under the assumption that they are not subtypes
     fn unify_ty(
         &self,
@@ -167,8 +180,7 @@ where
             }
             (&ty::Ty::Vecof(ref member1), &ty::Ty::Vecof(ref member2)) => {
                 UnifiedTy::Merged(S::from_ty(ty::Ty::Vecof(Box::new(self.unify_into_ty_ref(
-                    member1,
-                    member2,
+                    member1, member2,
                 )?))))
             }
             (&ty::Ty::Vec(ref members1), &ty::Ty::Vecof(ref member2))
@@ -179,19 +191,17 @@ where
                 UnifiedTy::Merged(S::from_ty(ty::Ty::Vecof(Box::new(unified_member))))
             }
 
-            // Function type
-            (&ty::Ty::Fun(ref fun1), &ty::Ty::Fun(ref fun2)) => {
-                let unified_impure = fun1.impure() || fun2.impure();
-                let unified_params = self.intersect_ref(fun1.params(), fun2.params())
-                    .into_ty_ref();
-                let unified_ret = self.unify_into_ty_ref(fun1.ret(), fun2.ret())?;
-
-                UnifiedTy::Merged(S::from_ty(ty::Ty::new_fun(
-                    unified_impure,
-                    unified_params,
-                    unified_ret,
-                )))
+            // Function types
+            (&ty::Ty::Fun(ref fun1), &ty::Ty::Fun(ref fun2)) => self.unify_fun(fun1, fun2)?,
+            (&ty::Ty::TyPred(_), &ty::Ty::Fun(ref fun2)) => {
+                self.unify_fun(&ty::Fun::new_for_ty_pred(), fun2)?
             }
+            (&ty::Ty::Fun(ref fun1), &ty::Ty::TyPred(_)) => {
+                self.unify_fun(fun1, &ty::Fun::new_for_ty_pred())?
+            }
+            (&ty::Ty::TyPred(_), &ty::Ty::TyPred(_)) => UnifiedTy::Merged(S::from_ty(ty::Ty::Fun(
+                Box::new(ty::Fun::new_for_ty_pred()),
+            ))),
 
             // Union types
             (&ty::Ty::Union(ref members1), &ty::Ty::Union(ref members2)) => {
@@ -303,6 +313,7 @@ impl<'a> PolyUnifyCtx<'a> {
 
             // Type erased types
             ty::Ty::Fun(_)
+            | ty::Ty::TyPred(_)
             | ty::Ty::Map(_, _)
             | ty::Ty::Set(_)
             | ty::Ty::Vec(_)
@@ -554,6 +565,13 @@ mod test {
         );
         assert_merged("(->! Int)", "(-> Int)", "(->! Int)");
         assert_merged("(->! Bool)", "(-> true)", "(->! false)");
+    }
+
+    #[test]
+    fn ty_pred_types() {
+        assert_merged("(Type? String)", "(Type? String)", "(Type? String)");
+        assert_merged("(Any -> Bool)", "(Type? String)", "(Type? Symbol)");
+        assert_merged("(Int -> Any)", "(Int -> Any)", "(Type? Symbol)");
     }
 
     #[test]

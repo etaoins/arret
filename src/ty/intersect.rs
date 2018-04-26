@@ -93,11 +93,11 @@ where
             (_, &ty::Ty::Union(ref refs2)) => self.intersect_refs(refs2, iter::once(ref1)),
 
             // Set type
-            (&ty::Ty::Set(ref member1), &ty::Ty::Set(ref member2)) => IntersectedTy::Merged(
-                S::from_ty(ty::Ty::Set(Box::new(
-                    self.intersect_ref(member1, member2).into_ty_ref(),
-                ))),
-            ),
+            (&ty::Ty::Set(ref member1), &ty::Ty::Set(ref member2)) => {
+                IntersectedTy::Merged(S::from_ty(ty::Ty::Set(Box::new(self.intersect_ref(
+                    member1, member2,
+                ).into_ty_ref()))))
+            }
 
             // Map type
             (&ty::Ty::Map(ref key1, ref value1), &ty::Ty::Map(ref key2, ref value2)) => {
@@ -110,8 +110,7 @@ where
             // Vector types
             (&ty::Ty::Vecof(ref member1), &ty::Ty::Vecof(ref member2)) => {
                 IntersectedTy::Merged(S::from_ty(ty::Ty::Vecof(Box::new(self.intersect_ref(
-                    member1,
-                    member2,
+                    member1, member2,
                 ).into_ty_ref()))))
             }
             (&ty::Ty::Vec(ref members1), &ty::Ty::Vec(ref members2)) => {
@@ -142,8 +141,7 @@ where
             // List types
             (&ty::Ty::Listof(ref member1), &ty::Ty::Listof(ref member2)) => {
                 IntersectedTy::Merged(S::from_ty(ty::Ty::Listof(Box::new(self.intersect_ref(
-                    member1,
-                    member2,
+                    member1, member2,
                 ).into_ty_ref()))))
             }
             (&ty::Ty::Cons(ref car1, ref cdr1), &ty::Ty::Cons(ref car2, ref cdr2)) => {
@@ -394,5 +392,11 @@ mod test {
             "(String -> Symbol)",
             "(String String -> Symbol)",
         );
+    }
+
+    #[test]
+    fn ty_pred_types() {
+        assert_disjoint("(Type? String)", "(Type? Symbol)");
+        assert_merged("(Type? String)", "(Type? String)", "(Type? String)");
     }
 }

@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-use hir::scope::{Binding, Scope};
+use hir::error::{Error, ErrorKind, Result};
 use hir::ns::{Ident, NsDatum};
 use hir::prim::Prim;
-use ty;
-use hir::error::{Error, ErrorKind, Result};
+use hir::scope::{Binding, Scope};
 use hir::util::{expect_arg_count, expect_ident, split_into_fixed_and_rest};
 use syntax::span::Span;
+use ty;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum TyCons {
@@ -18,6 +18,7 @@ pub enum TyCons {
     ImpureArrow,
     PureFun,
     ImpureFun,
+    TyPred,
     Set,
     Map,
     Union,
@@ -140,6 +141,11 @@ impl<'a> LowerTyContext<'a> {
                 span,
                 ErrorKind::IllegalArg("functions must return exactly one value".to_owned()),
             )),
+            TyCons::TyPred => {
+                expect_arg_count(span, &arg_data, 1)?;
+                let test_ty = self.lower_poly(arg_data.pop().unwrap())?;
+                Ok(ty::Ty::TyPred(Box::new(test_ty)).into_poly())
+            }
             TyCons::Set => {
                 expect_arg_count(span, &arg_data, 1)?;
                 let member_ty = self.lower_poly(arg_data.pop().unwrap())?;
@@ -279,15 +285,15 @@ pub fn lower_poly(pvars: &[ty::PVar], scope: &Scope, datum: NsDatum) -> Result<t
 
 pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
     macro_rules! export_ty {
-        ( $name:expr, $type:expr) => {
+        ($name:expr, $type:expr) => {
             exports.insert($name.to_owned(), Binding::Ty($type));
-        }
+        };
     }
 
     macro_rules! export_ty_cons {
-        ( $name:expr, $ty_cons:expr) => {
+        ($name:expr, $ty_cons:expr) => {
             exports.insert($name.to_owned(), Binding::TyCons($ty_cons));
-        }
+        };
     }
 
     export_ty!("Any", ty::Ty::Any.into_poly());
@@ -303,14 +309,16 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
     export_ty_cons!("Listof", TyCons::Listof);
     export_ty_cons!("Vector", TyCons::Vector);
     export_ty_cons!("Vectorof", TyCons::Vectorof);
-    export_ty_cons!("->", TyCons::PureArrow);
-    export_ty_cons!("->!", TyCons::ImpureArrow);
-    export_ty_cons!("Fn", TyCons::PureFun);
-    export_ty_cons!("Fn!", TyCons::ImpureFun);
     export_ty_cons!("Setof", TyCons::Set);
     export_ty_cons!("Map", TyCons::Map);
     export_ty_cons!("Cons", TyCons::Cons);
     export_ty_cons!("U", TyCons::Union);
+
+    export_ty_cons!("->", TyCons::PureArrow);
+    export_ty_cons!("->!", TyCons::ImpureArrow);
+    export_ty_cons!("Fn", TyCons::PureFun);
+    export_ty_cons!("Fn!", TyCons::ImpureFun);
+    export_ty_cons!("Type?", TyCons::TyPred);
 
     #[cfg(test)]
     export_ty_cons!("RawU", TyCons::RawU);
@@ -408,6 +416,7 @@ fn str_for_poly_ty(pvars: &[ty::PVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
                 )
             }
         }
+        ty::Ty::TyPred(ref test) => format!("(Type? {})", str_for_poly(pvars, test)),
         ty::Ty::Union(ref members) => {
             let member_strs: Vec<String> = members
                 .iter()
@@ -448,8 +457,8 @@ pub fn str_for_poly(pvars: &[ty::PVar], poly: &ty::Poly) -> String {
 #[cfg(test)]
 pub fn poly_for_str(datum_str: &str) -> Result<ty::Poly> {
     use hir::ns::NsId;
-    use syntax::parser::datum_from_str;
     use hir::prim::insert_prim_exports;
+    use syntax::parser::datum_from_str;
 
     let test_ns_id = NsId::new(1);
 
@@ -748,6 +757,15 @@ mod test {
 
         assert_poly_for_str(expected, j);
     }
+
+    #[test]
+    fn ty_predicate() {
+        let j = "(Type? String)";
+
+        let expected = ty::Ty::TyPred(Box::new(ty::Ty::Str.into_poly())).into_poly();
+        assert_poly_for_str(expected, j);
+    }
+
     #[test]
     fn set_cons() {
         let j = "(Setof true)";

@@ -193,6 +193,12 @@ where
             (&ty::Ty::Fun(ref sub_fun), &ty::Ty::Fun(ref par_fun)) => {
                 self.fun_is_a(sub_fun, par_fun)
             }
+            (&ty::Ty::TyPred(_), &ty::Ty::Fun(ref par_fun)) => {
+                self.fun_is_a(&ty::Fun::new_for_ty_pred(), par_fun)
+            }
+            (&ty::Ty::Fun(ref sub_fun), &ty::Ty::TyPred(_)) => {
+                Result::May.and_then(|| self.fun_is_a(sub_fun, &ty::Fun::new_for_ty_pred()))
+            }
 
             // List types
             (&ty::Ty::Cons(ref sub_car, ref sub_cdr), &ty::Ty::Cons(ref par_car, ref par_cdr)) => {
@@ -472,6 +478,24 @@ mod test {
             Result::No,
             poly_is_a(&[], &impure_sym_to_sym, &pure_sym_to_sym)
         );
+    }
+
+    #[test]
+    fn ty_pred_types() {
+        let sym_ty_pred = poly_for_str("(Type? Symbol)");
+        let lit_sym_ty_pred = poly_for_str("(Type? 'foo)");
+        let general_pred = poly_for_str("(Any -> Bool)");
+
+        // Type predicates always equal themselves
+        assert_eq!(Result::Yes, poly_is_a(&[], &sym_ty_pred, &sym_ty_pred));
+
+        // Type predicates never equal other type predicates
+        assert_eq!(Result::No, poly_is_a(&[], &sym_ty_pred, &lit_sym_ty_pred));
+        assert_eq!(Result::No, poly_is_a(&[], &lit_sym_ty_pred, &sym_ty_pred));
+
+        // Type predicates are a subtype of (Any -> Bool)
+        assert_eq!(Result::Yes, poly_is_a(&[], &sym_ty_pred, &general_pred));
+        assert_eq!(Result::May, poly_is_a(&[], &general_pred, &sym_ty_pred));
     }
 
     #[test]
