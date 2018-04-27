@@ -15,42 +15,26 @@ use syntax::span::Span;
 use ty;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub struct VarId(usize);
+pub struct VarId(u32);
 
 impl VarId {
-    fn new(id: usize) -> VarId {
+    fn new(id: u32) -> VarId {
         VarId(id)
-    }
-}
-
-#[derive(Debug)]
-pub struct Var {
-    id: VarId,
-    source_name: String,
-    ty: ty::Decl,
-}
-
-impl Var {
-    fn with_ty(self, ty: ty::Poly) -> Var {
-        Var {
-            id: self.id,
-            source_name: self.source_name,
-            ty: ty.into_decl(),
-        }
-    }
-}
-
-impl PartialEq for Var {
-    fn eq(&self, other: &Var) -> bool {
-        self.id.0 == other.id.0
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Destruc {
-    Var(Var),
-    Wildcard(ty::Decl),
-    List(Vec<Destruc>, Option<Box<Destruc>>),
+    Scalar(Scalar),
+    List(Vec<Destruc>, Option<Box<Scalar>>),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Scalar {
+    /// ID of the variable. If this is None it's treated as a wildcard.
+    var_id: Option<VarId>,
+    source_name: String,
+    ty: ty::Decl,
 }
 
 #[derive(PartialEq, Debug)]

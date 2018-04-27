@@ -11,14 +11,15 @@ use hir::ns::{Ident, NsDatum, NsId, NsIdAlloc};
 use hir::prim::Prim;
 use hir::scope::{Binding, MacroId, Scope};
 use hir::types::{lower_poly, lower_pvar, TyCons};
-use hir::util::{expect_arg_count, expect_ident, pop_vec_front, split_into_fixed_and_rest};
-use hir::{App, Cond, Destruc, Expr, Fun, Var, VarId};
+use hir::util::{expect_arg_count, expect_ident, expect_ident_and_span, pop_vec_front,
+                split_into_fixed_and_rest};
+use hir::{App, Cond, Destruc, Expr, Fun, Scalar, VarId};
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 use ty;
 
 pub struct LoweringContext<'ccx> {
-    curr_var_id: usize,
+    curr_var_id: u32,
     ns_id_alloc: NsIdAlloc,
     loaded_libraries: BTreeMap<LibraryName, Module>,
     macros: Vec<Macro>,
@@ -179,51 +180,50 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(())
     }
 
-    fn lower_destruc(&mut self, scope: &mut Scope, destruc_datum: NsDatum) -> Result<Destruc> {
-        match destruc_datum {
-            NsDatum::Ident(span, ident) => {
-                match scope.get(&ident) {
-                    Some(Binding::Prim(Prim::Wildcard)) => {
-                        let free_ty_id = self.insert_free_ty(span);
-                        return Ok(Destruc::Wildcard(ty::Decl::Free(free_ty_id)));
-                    }
-                    Some(Binding::Prim(Prim::Ellipsis)) => {
-                        return Err(Error::new(
-                            span,
-                            ErrorKind::IllegalArg(
-                                "ellipsis can only be used to destructure the rest of a list"
-                                    .to_owned(),
-                            ),
-                        ));
-                    }
-                    _ => {}
-                }
-
+    /// Lowers an identifier in to a scalar destruc with the passed type
+    fn lower_ident_destruc(
+        &mut self,
+        scope: &mut Scope,
+        span: Span,
+        ident: Ident,
+        decl_ty: ty::Decl,
+    ) -> Result<Scalar> {
+        match scope.get(&ident) {
+            Some(Binding::Prim(Prim::Wildcard)) => Ok(Scalar {
+                var_id: None,
+                source_name: ident.into_name(),
+                ty: decl_ty,
+            }),
+            Some(Binding::Prim(Prim::Ellipsis)) => Err(Error::new(
+                span,
+                ErrorKind::IllegalArg(
+                    "ellipsis can only be used to destructure the rest of a list".to_owned(),
+                ),
+            )),
+            _ => {
                 let var_id = self.alloc_var_id();
                 let source_name = ident.name().clone();
 
                 scope.insert_var(ident, var_id);
 
-                Ok(Destruc::Var(Var {
-                    id: var_id,
+                Ok(Scalar {
+                    var_id: Some(var_id),
                     source_name,
-                    ty: ty::Decl::Free(self.insert_free_ty(span)),
-                }))
+                    ty: decl_ty,
+                })
             }
-            NsDatum::List(_, vs) => {
-                let (fixed, rest) = split_into_fixed_and_rest(scope, vs);
+        }
+    }
 
-                let rest_destruc = match rest {
-                    Some(rest) => Some(Box::new(self.lower_destruc(scope, rest)?)),
-                    None => None,
-                };
-
-                let fixed_destrucs = fixed
-                    .into_iter()
-                    .map(|v| self.lower_destruc(scope, v))
-                    .collect::<Result<Vec<Destruc>>>()?;
-
-                Ok(Destruc::List(fixed_destrucs, rest_destruc))
+    fn lower_scalar_destruc(
+        &mut self,
+        scope: &mut Scope,
+        destruc_datum: NsDatum,
+    ) -> Result<Scalar> {
+        match destruc_datum {
+            NsDatum::Ident(span, ident) => {
+                let free_ty_id = self.insert_free_ty(span);
+                self.lower_ident_destruc(scope, span, ident, ty::Decl::Free(free_ty_id))
             }
             NsDatum::Vec(span, mut vs) => {
                 if vs.len() != 3 {
@@ -240,19 +240,36 @@ impl<'ccx> LoweringContext<'ccx> {
                 // Discard the type colon
                 vs.pop();
 
-                let inner_destruc_datum = vs.pop().unwrap();
-                let inner_destruc_span = inner_destruc_datum.span();
-                let inner_destruc = self.lower_destruc(scope, inner_destruc_datum)?;
+                let (ident, span) = expect_ident_and_span(vs.pop().unwrap())?;
+                self.lower_ident_destruc(scope, span, ident, ty.into_decl())
+            }
+            _ => Err(Error::new(
+                destruc_datum.span(),
+                ErrorKind::IllegalArg("expected a variable name or [name : Type]".to_owned()),
+            )),
+        }
+    }
 
-                match inner_destruc {
-                    Destruc::Var(var) => Ok(Destruc::Var(var.with_ty(ty))),
-                    _ => Err(Error::new(
-                        inner_destruc_span,
-                        ErrorKind::IllegalArg(
-                            "only variables can have type ascriptions".to_owned(),
-                        ),
-                    )),
-                }
+    fn lower_destruc(&mut self, scope: &mut Scope, destruc_datum: NsDatum) -> Result<Destruc> {
+        match destruc_datum {
+            NsDatum::Ident(_, _) | NsDatum::Vec(_, _) => {
+                self.lower_scalar_destruc(scope, destruc_datum)
+                    .map(Destruc::Scalar)
+            }
+            NsDatum::List(_, vs) => {
+                let (fixed, rest) = split_into_fixed_and_rest(scope, vs);
+
+                let fixed_destrucs = fixed
+                    .into_iter()
+                    .map(|v| self.lower_destruc(scope, v))
+                    .collect::<Result<Vec<Destruc>>>()?;
+
+                let rest_destruc = match rest {
+                    Some(rest) => Some(Box::new(self.lower_scalar_destruc(scope, rest)?)),
+                    None => None,
+                };
+
+                Ok(Destruc::List(fixed_destrucs, rest_destruc))
             }
             _ => Err(Error::new(
                 destruc_datum.span(),
@@ -875,8 +892,8 @@ mod test {
         let u = "       ^   ";
         let v = "          ^";
 
-        let destruc = Destruc::Var(Var {
-            id: VarId(2),
+        let destruc = Destruc::Scalar(Scalar {
+            var_id: Some(VarId(2)),
             source_name: "x".to_owned(),
             ty: ty::Decl::Free(ty::FreeTyId::new(1)),
         });
@@ -896,8 +913,8 @@ mod test {
         let u = "                ^^^^   ";
         let v = "                      ^";
 
-        let destruc = Destruc::Var(Var {
-            id: VarId(2),
+        let destruc = Destruc::Scalar(Scalar {
+            var_id: Some(VarId(2)),
             source_name: "x".to_owned(),
             ty: ty::Ty::LitBool(true).into_decl(),
         });
@@ -915,12 +932,26 @@ mod test {
     }
 
     #[test]
+    fn double_typed_var_def() {
+        // We should fail to annotate a variable a second time
+        let j = "(def [[x : true] : false] 1)";
+        let t = "      ^^^^^^^^^^            ";
+
+        let err = Error::new(t2s(t), ErrorKind::ExpectedSymbol);
+        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+    }
+
+    #[test]
     fn wildcard_def() {
         let j = "(def _ 1)";
         let t = "^^^^^^^^^";
         let u = "       ^ ";
 
-        let destruc = Destruc::Wildcard(ty::Decl::Free(ty::FreeTyId::new(1)));
+        let destruc = Destruc::Scalar(Scalar {
+            var_id: None,
+            source_name: "_".to_owned(),
+            ty: ty::Decl::Free(ty::FreeTyId::new(1)),
+        });
 
         let expected = Expr::Def(t2s(t), destruc, Box::new(Expr::Lit(Datum::Int(t2s(u), 1))));
         assert_eq!(expected, body_expr_for_str(j).unwrap());
@@ -949,16 +980,16 @@ mod test {
         let w = "                        ^";
 
         let destruc = Destruc::List(
-            vec![Destruc::Var(Var {
-                id: VarId(3),
+            vec![Destruc::Scalar(Scalar {
+                var_id: Some(VarId(2)),
                 source_name: "x".to_owned(),
                 ty: ty::Decl::Free(ty::FreeTyId::new(1)),
             })],
-            Some(Box::new(Destruc::Var(Var {
-                id: VarId(2),
+            Some(Box::new(Scalar {
+                var_id: Some(VarId(3)),
                 source_name: "rest".to_owned(),
                 ty: ty::Decl::Free(ty::FreeTyId::new(2)),
-            }))),
+            })),
         );
 
         let expected = Expr::Do(vec![
@@ -967,7 +998,7 @@ mod test {
                 destruc,
                 Box::new(Expr::Lit(Datum::List(t2s(u), vec![Datum::Int(t2s(v), 1)]))),
             ),
-            Expr::Ref(t2s(w), VarId(3)),
+            Expr::Ref(t2s(w), VarId(2)),
         ]);
 
         assert_eq!(expected, body_expr_for_str(j).unwrap());
@@ -1094,8 +1125,8 @@ mod test {
 
         let param_var_id = VarId::new(2);
         let params = Destruc::List(
-            vec![Destruc::Var(Var {
-                id: param_var_id,
+            vec![Destruc::Scalar(Scalar {
+                var_id: Some(param_var_id),
                 source_name: "x".to_owned(),
                 ty: ty::Decl::Free(ty::FreeTyId::new(1)),
             })],
@@ -1122,8 +1153,8 @@ mod test {
         let u = "      ^ ";
 
         let param_var_id = VarId::new(2);
-        let params = Destruc::Var(Var {
-            id: param_var_id,
+        let params = Destruc::Scalar(Scalar {
+            var_id: Some(param_var_id),
             source_name: "x".to_owned(),
             ty: ty::Decl::Free(ty::FreeTyId::new(1)),
         });
@@ -1151,8 +1182,8 @@ mod test {
 
         let param_var_id = VarId::new(2);
         let params = Destruc::List(
-            vec![Destruc::Var(Var {
-                id: param_var_id,
+            vec![Destruc::Scalar(Scalar {
+                var_id: Some(param_var_id),
                 source_name: "x".to_owned(),
                 ty: ty::Decl::Var(pvar_id),
             })],
@@ -1181,8 +1212,8 @@ mod test {
         let w = "                ^ ";
 
         let outer_var_id = VarId::new(2);
-        let outer_destruc = Destruc::Var(Var {
-            id: outer_var_id,
+        let outer_destruc = Destruc::Scalar(Scalar {
+            var_id: Some(outer_var_id),
             source_name: "x".to_owned(),
             ty: ty::Decl::Free(ty::FreeTyId::new(1)),
         });
@@ -1216,16 +1247,16 @@ mod test {
         let w = "                 ^ ";
 
         let outer_var_id = VarId::new(2);
-        let outer_destruc = Destruc::Var(Var {
-            id: outer_var_id,
+        let outer_destruc = Destruc::Scalar(Scalar {
+            var_id: Some(outer_var_id),
             source_name: "x".to_owned(),
             ty: ty::Decl::Free(ty::FreeTyId::new(1)),
         });
 
         let param_var_id = VarId::new(3);
         let params = Destruc::List(
-            vec![Destruc::Var(Var {
-                id: param_var_id,
+            vec![Destruc::Scalar(Scalar {
+                var_id: Some(param_var_id),
                 source_name: "x".to_owned(),
                 ty: ty::Decl::Free(ty::FreeTyId::new(2)),
             })],
@@ -1352,10 +1383,10 @@ mod test {
 
         let expected_module_def = ModuleDef::new(
             t2s(t),
-            Destruc::Var(Var {
-                id: var_id,
+            Destruc::Scalar(Scalar {
+                var_id: Some(var_id),
                 source_name: "x".to_owned(),
-                ty: ty::Decl::Free(ty::FreeTyId::new(1)),
+                ty: ty::Decl::Free(ty::FreeTyId::new(0)),
             }),
             Expr::Lit(Datum::Int(t2s(u), 1)),
         );
@@ -1859,10 +1890,10 @@ mod test {
         let u = u1;
         let v = &[s1, s2, v3].join("");
 
-        let destruc = Destruc::Var(Var {
-            id: VarId(2),
+        let destruc = Destruc::Scalar(Scalar {
+            var_id: Some(VarId(2)),
             source_name: "x".to_owned(),
-            ty: ty::Decl::Free(ty::FreeTyId::new(2)),
+            ty: ty::Decl::Free(ty::FreeTyId::new(1)),
         });
 
         let expected = Expr::Do(vec![
@@ -1884,8 +1915,8 @@ mod test {
         let t = &[s1, t2].join("");
         let u = &[s1, u2].join("");
 
-        let destruc = Destruc::Var(Var {
-            id: VarId(2),
+        let destruc = Destruc::Scalar(Scalar {
+            var_id: Some(VarId(2)),
             source_name: "x".to_owned(),
             ty: ty::Ty::LitBool(true).into_decl(),
         });
