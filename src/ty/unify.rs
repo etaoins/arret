@@ -28,7 +28,7 @@ where
     fn unify_ref(&self, &S, &S) -> Result<UnifiedTy<S>, E>;
     fn intersect_ref(&self, &S, &S) -> ty::intersect::IntersectedTy<S>;
 
-    fn unify_into_ty_ref(&self, ty_ref1: &S, ty_ref2: &S) -> Result<S, E> {
+    fn unify_to_ty_ref(&self, ty_ref1: &S, ty_ref2: &S) -> Result<S, E> {
         match self.unify_ref(ty_ref1, ty_ref2)? {
             UnifiedTy::Merged(ty_ref) => Ok(ty_ref),
             UnifiedTy::Discerned => Ok(S::from_ty(ty::Ty::Union(vec![
@@ -97,7 +97,7 @@ where
         let unified_impure = fun1.impure() || fun2.impure();
         let unified_params = self.intersect_ref(fun1.params(), fun2.params())
             .into_ty_ref();
-        let unified_ret = self.unify_into_ty_ref(fun1.ret(), fun2.ret())?;
+        let unified_ret = self.unify_to_ty_ref(fun1.ret(), fun2.ret())?;
 
         Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::new_fun(
             unified_impure,
@@ -136,7 +136,7 @@ where
 
             // Set type
             (&ty::Ty::Set(ref ty_ref1), &ty::Ty::Set(ref ty_ref2)) => {
-                let unified_ty_ref = self.unify_into_ty_ref(&ty_ref1, &ty_ref2)?;
+                let unified_ty_ref = self.unify_to_ty_ref(&ty_ref1, &ty_ref2)?;
 
                 UnifiedTy::Merged(S::from_ty(ty::Ty::Set(Box::new(unified_ty_ref))))
             }
@@ -146,8 +146,8 @@ where
                 &ty::Ty::Map(ref key_ref1, ref val_ref1),
                 &ty::Ty::Map(ref key_ref2, ref val_ref2),
             ) => {
-                let unified_key_ref = self.unify_into_ty_ref(&key_ref1, &key_ref2)?;
-                let unified_val_ref = self.unify_into_ty_ref(&val_ref1, &val_ref2)?;
+                let unified_key_ref = self.unify_to_ty_ref(&key_ref1, &key_ref2)?;
+                let unified_val_ref = self.unify_to_ty_ref(&val_ref1, &val_ref2)?;
 
                 UnifiedTy::Merged(S::from_ty(ty::Ty::Map(
                     Box::new(unified_key_ref),
@@ -179,7 +179,7 @@ where
                 }
             }
             (&ty::Ty::Vecof(ref member1), &ty::Ty::Vecof(ref member2)) => {
-                UnifiedTy::Merged(S::from_ty(ty::Ty::Vecof(Box::new(self.unify_into_ty_ref(
+                UnifiedTy::Merged(S::from_ty(ty::Ty::Vecof(Box::new(self.unify_to_ty_ref(
                     member1, member2,
                 )?))))
             }
@@ -219,9 +219,9 @@ where
 
             // List types
             (&ty::Ty::Listof(ref member1), &ty::Ty::Listof(ref member2)) => {
-                UnifiedTy::Merged(S::from_ty(ty::Ty::Listof(Box::new(
-                    self.unify_into_ty_ref(member1, member2)?,
-                ))))
+                UnifiedTy::Merged(S::from_ty(ty::Ty::Listof(Box::new(self.unify_to_ty_ref(
+                    member1, member2,
+                )?))))
             }
             (&ty::Ty::Cons(ref car1, ref cdr1), &ty::Ty::Cons(ref car2, ref cdr2)) => {
                 match self.unify_ref(car1, car2)? {
