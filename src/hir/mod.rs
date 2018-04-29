@@ -25,8 +25,8 @@ impl VarId {
 
 #[derive(Debug, PartialEq)]
 pub enum Destruc {
-    Scalar(Scalar),
-    List(Vec<Destruc>, Option<Box<Scalar>>),
+    Scalar(Span, Scalar),
+    List(Span, Vec<Destruc>, Option<Box<Scalar>>),
 }
 
 #[derive(Debug, PartialEq)]
