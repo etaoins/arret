@@ -388,6 +388,7 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
     ) -> Result<(), PolyError> {
         if (fun1.is_polymorphic() || fun2.is_polymorphic()) && (fun1.pvar_ids() != fun2.pvar_ids())
         {
+            // We cannot handle two polymorphic functions in the same union
             Err(PolyError::PolyConflict(
                 ty::Ty::Fun(Box::new(fun1.clone())).into_poly(),
                 ty::Ty::Fun(Box::new(fun2.clone())).into_poly(),

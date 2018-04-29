@@ -116,6 +116,16 @@ where
         )
     }
 
+    /// Returns the top function type
+    pub fn new_top() -> Fun<S> {
+        Self::new(
+            true,
+            PVarId::new(0)..PVarId::new(0),
+            S::from_ty(Ty::Union(vec![])),
+            S::from_ty(Ty::Any),
+        )
+    }
+
     pub fn impure(&self) -> bool {
         self.impure
     }
