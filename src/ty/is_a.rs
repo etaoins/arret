@@ -65,18 +65,6 @@ where
             return Result::No;
         }
 
-        if (sub_fun.is_polymorphic() || par_fun.is_polymorphic())
-            && (sub_fun.pvar_ids() != par_fun.pvar_ids())
-        {
-            // Polymorphic functions are disjoint with all other function types except the top
-            // function type
-            if sub_fun.is_polymorphic() && !par_fun.is_polymorphic() {
-                return self.fun_is_a(&ty::Fun::new_top(), par_fun);
-            } else {
-                return Result::No;
-            }
-        }
-
         // Note that the param type is contravariant
         self.ref_is_a(&par_fun.params, &sub_fun.params)
             .and_then(|| self.ref_is_a(&sub_fun.ret, &par_fun.ret))
@@ -265,6 +253,13 @@ impl<'a> IsACtx<ty::Poly> for PolyIsACtx<'a> {
         }
 
         let sub_ty = ty::resolve::resolve_poly_ty(self.pvars, sub).as_ty();
+        if sub_ty == &ty::Ty::Union(vec![]) {
+            // (U) is a definite subtype of every type, regardless if the parent is bound. This is
+            // important as (U) is used as a placeholder for parameters with unknown type. More
+            // generally, it's the contravariant equivalent of Any.
+            return Result::Yes;
+        }
+
         let (parent_ty, parent_is_bound) = match ty::resolve::resolve_poly_ty(self.pvars, parent) {
             ty::resolve::Result::Bound(ty) => (ty, true),
             ty::resolve::Result::Fixed(ty) => (ty, false),
@@ -627,6 +622,151 @@ mod test {
         assert_eq!(
             Result::May,
             poly_is_a(&pvars, &ptype1_unbounded, &ptype2_bounded_by_1)
+        );
+    }
+
+    #[test]
+    fn polymorphic_funs() {
+        let ptype1_unbounded = ty::Poly::Var(ty::PVarId::new(0));
+        let ptype2_symbol = ty::Poly::Var(ty::PVarId::new(1));
+        let ptype3_string = ty::Poly::Var(ty::PVarId::new(2));
+
+        let pvars = [
+            ty::PVar::new("PAny".to_owned(), poly_for_str("Any")),
+            ty::PVar::new("PSymbol".to_owned(), poly_for_str("Symbol")),
+            ty::PVar::new("PString".to_owned(), poly_for_str("String")),
+        ];
+
+        // (All A (A -> A))
+        let pidentity_fun = ty::Ty::new_fun(
+            false,
+            ty::PVarId::new(0)..ty::PVarId::new(1),
+            ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None),
+            ptype1_unbounded.clone(),
+        ).into_poly();
+
+        // (All A (A A -> (Cons A A))
+        let panys_to_cons = ty::Ty::new_fun(
+            false,
+            ty::PVarId::new(0)..ty::PVarId::new(1),
+            ty::Ty::new_simple_list_type(
+                vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
+                None,
+            ),
+            ty::Ty::Cons(
+                Box::new(ptype1_unbounded.clone()),
+                Box::new(ptype1_unbounded.clone()),
+            ).into_poly(),
+        ).into_poly();
+
+        // (All [A : Symbol] (A -> A))
+        let pidentity_sym_fun = ty::Ty::new_fun(
+            false,
+            ty::PVarId::new(1)..ty::PVarId::new(2),
+            ty::Ty::new_simple_list_type(vec![ptype2_symbol.clone()].into_iter(), None),
+            ptype2_symbol.clone(),
+        ).into_poly();
+
+        // (All [A : String] (A ->! A))
+        let pidentity_impure_string_fun = ty::Ty::new_fun(
+            true,
+            ty::PVarId::new(2)..ty::PVarId::new(3),
+            ty::Ty::new_simple_list_type(vec![ptype3_string.clone()].into_iter(), None),
+            ptype3_string.clone(),
+        ).into_poly();
+
+        // All functions should have the top function type
+        let top_fun = poly_for_str("(Fn! (RawU) Any)");
+        assert_eq!(Result::Yes, poly_is_a(&pvars, &pidentity_fun, &top_fun));
+        assert_eq!(Result::Yes, poly_is_a(&pvars, &panys_to_cons, &top_fun));
+        assert_eq!(Result::Yes, poly_is_a(&pvars, &pidentity_sym_fun, &top_fun));
+        assert_eq!(
+            Result::Yes,
+            poly_is_a(&pvars, &pidentity_impure_string_fun, &top_fun)
+        );
+
+        // We should take in to account purity
+        let top_pure_fun = poly_for_str("(Fn (RawU) Any)");
+        assert_eq!(
+            Result::Yes,
+            poly_is_a(&pvars, &pidentity_fun, &top_pure_fun)
+        );
+        assert_eq!(
+            Result::No,
+            poly_is_a(&pvars, &pidentity_impure_string_fun, &top_pure_fun)
+        );
+
+        // All functions should have the top one param function type except panys
+        let top_one_param_fun = poly_for_str("((RawU) ->! Any)");
+        assert_eq!(
+            Result::Yes,
+            poly_is_a(&pvars, &pidentity_fun, &top_one_param_fun)
+        );
+        assert_eq!(
+            Result::No,
+            poly_is_a(&pvars, &panys_to_cons, &top_one_param_fun)
+        );
+        assert_eq!(
+            Result::Yes,
+            poly_is_a(&pvars, &pidentity_sym_fun, &top_one_param_fun)
+        );
+        assert_eq!(
+            Result::Yes,
+            poly_is_a(&pvars, &pidentity_impure_string_fun, &top_one_param_fun)
+        );
+
+        // The identity function is *not* (Any -> Any) as that would allow the types to be
+        // unrelated
+        let any_to_any_fun = poly_for_str("(Any ->! Any)");
+        assert_eq!(
+            Result::May,
+            poly_is_a(&pvars, &pidentity_fun, &any_to_any_fun)
+        );
+
+        // The symbol function satisfies ((U) -> Symbol) as all of its returns must be bounded by
+        // that
+        let top_to_sym_fun = poly_for_str("(Fn! (RawU) Symbol)");
+        assert_eq!(
+            Result::May,
+            poly_is_a(&pvars, &pidentity_fun, &top_to_sym_fun)
+        );
+        assert_eq!(
+            Result::No,
+            poly_is_a(&pvars, &panys_to_cons, &top_to_sym_fun)
+        );
+        assert_eq!(
+            Result::Yes,
+            poly_is_a(&pvars, &pidentity_sym_fun, &top_to_sym_fun)
+        );
+
+        // The identity string function satisfies (String -> String) as it has no subtypes
+        let str_to_str_fun = poly_for_str("(String ->! String)");
+        assert_eq!(
+            Result::May,
+            poly_is_a(&pvars, &pidentity_fun, &str_to_str_fun)
+        );
+        assert_eq!(
+            Result::No,
+            poly_is_a(&pvars, &panys_to_cons, &str_to_str_fun)
+        );
+        assert_eq!(
+            Result::No,
+            poly_is_a(&pvars, &pidentity_sym_fun, &str_to_str_fun)
+        );
+        assert_eq!(
+            Result::Yes,
+            poly_is_a(&pvars, &pidentity_impure_string_fun, &str_to_str_fun)
+        );
+
+        // panys_to_cons has a very specific shape we should be able to test
+        let top_any_to_cons_fun = poly_for_str("((RawU) (RawU) ->! (Cons Any Any))");
+        assert_eq!(
+            Result::No,
+            poly_is_a(&pvars, &pidentity_fun, &top_any_to_cons_fun)
+        );
+        assert_eq!(
+            Result::Yes,
+            poly_is_a(&pvars, &panys_to_cons, &top_any_to_cons_fun)
         );
     }
 }

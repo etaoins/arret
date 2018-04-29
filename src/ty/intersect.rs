@@ -162,7 +162,8 @@ where
                 if (fun1.is_polymorphic() || fun2.is_polymorphic())
                     && (fun1.pvar_ids() != fun2.pvar_ids())
                 {
-                    // Polymorphic functions are disjoint
+                    // TODO: This might be possible but we would have to recalculate the pvars for
+                    // the intersected function
                     return IntersectedTy::Disjoint;
                 }
 
