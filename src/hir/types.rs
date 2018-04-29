@@ -92,7 +92,12 @@ impl<'a> LowerTyContext<'a> {
 
         let params_ty = self.lower_list_cons(arg_data)?;
 
-        Ok(ty::Ty::new_fun(impure, params_ty, ret_ty).into_poly())
+        Ok(ty::Ty::new_fun(
+            impure,
+            ty::PVarId::new(0)..ty::PVarId::new(0),
+            params_ty,
+            ret_ty,
+        ).into_poly())
     }
 
     fn lower_complex_fun_cons(
@@ -106,7 +111,12 @@ impl<'a> LowerTyContext<'a> {
         let ret_ty = self.lower_poly(arg_data.pop().unwrap())?;
         let params_ty = self.lower_poly(arg_data.pop().unwrap())?;
 
-        Ok(ty::Ty::new_fun(impure, params_ty, ret_ty).into_poly())
+        Ok(ty::Ty::new_fun(
+            impure,
+            ty::PVarId::new(0)..ty::PVarId::new(0),
+            params_ty,
+            ret_ty,
+        ).into_poly())
     }
 
     fn lower_ty_cons_apply(
@@ -686,6 +696,7 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             false,
+            ty::PVarId::new(0)..ty::PVarId::new(0),
             simple_list_type(vec![], None),
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
@@ -699,6 +710,7 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             true,
+            ty::PVarId::new(0)..ty::PVarId::new(0),
             simple_list_type(vec![], None),
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
@@ -712,6 +724,7 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             false,
+            ty::PVarId::new(0)..ty::PVarId::new(0),
             simple_list_type(vec![ty::Ty::LitBool(false)], None),
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
@@ -725,6 +738,7 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             true,
+            ty::PVarId::new(0)..ty::PVarId::new(0),
             simple_list_type(vec![ty::Ty::Str], Some(ty::Ty::Sym)),
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
@@ -738,6 +752,7 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             false,
+            ty::PVarId::new(0)..ty::PVarId::new(0),
             simple_list_type(vec![ty::Ty::LitBool(false)], None),
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
@@ -751,6 +766,7 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             false,
+            ty::PVarId::new(0)..ty::PVarId::new(0),
             ty::Ty::Listof(Box::new(ty::Ty::Sym.into_poly())).into_poly(),
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();

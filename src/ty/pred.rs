@@ -79,6 +79,7 @@ where
             S::from_ty(Ty::Float),
             S::from_ty(Ty::new_fun(
                 true,
+                ty::PVarId::new(0)..ty::PVarId::new(0),
                 S::from_ty(Ty::Union(vec![])),
                 S::from_ty(Ty::Any),
             )),

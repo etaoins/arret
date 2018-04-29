@@ -28,6 +28,10 @@ where
     fn unify_ref(&self, &S, &S) -> Result<UnifiedTy<S>, E>;
     fn intersect_ref(&self, &S, &S) -> ty::intersect::IntersectedTy<S>;
 
+    fn ensure_funs_can_unify(&self, &ty::Fun<S>, &ty::Fun<S>) -> Result<(), E> {
+        Ok(())
+    }
+
     fn unify_to_ty_ref(&self, ty_ref1: &S, ty_ref2: &S) -> Result<S, E> {
         match self.unify_ref(ty_ref1, ty_ref2)? {
             UnifiedTy::Merged(ty_ref) => Ok(ty_ref),
@@ -94,6 +98,8 @@ where
     }
 
     fn unify_fun(&self, fun1: &ty::Fun<S>, fun2: &ty::Fun<S>) -> Result<UnifiedTy<S>, E> {
+        self.ensure_funs_can_unify(fun1, fun2)?;
+
         let unified_impure = fun1.impure() || fun2.impure();
         let unified_params = self.intersect_ref(fun1.params(), fun2.params())
             .into_ty_ref();
@@ -101,6 +107,7 @@ where
 
         Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::new_fun(
             unified_impure,
+            fun1.pvar_ids().clone(),
             unified_params,
             unified_ret,
         ))))
@@ -372,6 +379,22 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
         poly2: &ty::Poly,
     ) -> ty::intersect::IntersectedTy<ty::Poly> {
         ty::intersect::poly_intersect(self.pvars, poly1, poly2)
+    }
+
+    fn ensure_funs_can_unify(
+        &self,
+        fun1: &ty::Fun<ty::Poly>,
+        fun2: &ty::Fun<ty::Poly>,
+    ) -> Result<(), PolyError> {
+        if (fun1.is_polymorphic() || fun2.is_polymorphic()) && (fun1.pvar_ids() != fun2.pvar_ids())
+        {
+            Err(PolyError::PolyConflict(
+                ty::Ty::Fun(Box::new(fun1.clone())).into_poly(),
+                ty::Ty::Fun(Box::new(fun2.clone())).into_poly(),
+            ))
+        } else {
+            Ok(())
+        }
     }
 }
 

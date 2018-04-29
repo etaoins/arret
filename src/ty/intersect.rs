@@ -159,6 +159,13 @@ where
 
             // Function type
             (&ty::Ty::Fun(ref fun1), &ty::Ty::Fun(ref fun2)) => {
+                if (fun1.is_polymorphic() || fun2.is_polymorphic())
+                    && (fun1.pvar_ids() != fun2.pvar_ids())
+                {
+                    // Polymorphic functions are disjoint
+                    return IntersectedTy::Disjoint;
+                }
+
                 let intersected_impure = fun1.impure() && fun2.impure();
                 let intersected_params = match self.unify_ref(fun1.params(), fun2.params()) {
                     Ok(ty::unify::UnifiedTy::Merged(merged)) => merged,
@@ -174,6 +181,7 @@ where
 
                 IntersectedTy::Merged(S::from_ty(ty::Ty::new_fun(
                     intersected_impure,
+                    fun1.pvar_ids().clone(),
                     intersected_params,
                     intersected_ret,
                 )))

@@ -9,6 +9,8 @@ pub mod resolve;
 pub mod subst;
 pub mod unify;
 
+use std::ops::Range;
+
 pub trait TyRef: PartialEq + Clone + Sized {
     fn from_ty(Ty<Self>) -> Self;
 
@@ -70,8 +72,8 @@ where
         })
     }
 
-    pub fn new_fun(impure: bool, params: S, ret: S) -> Ty<S> {
-        Ty::Fun(Box::new(Fun::new(impure, params, ret)))
+    pub fn new_fun(impure: bool, pvar_ids: Range<PVarId>, params: S, ret: S) -> Ty<S> {
+        Ty::Fun(Box::new(Fun::new(impure, pvar_ids, params, ret)))
     }
 }
 
@@ -81,6 +83,7 @@ where
     S: TyRef,
 {
     impure: bool,
+    pvar_ids: Range<PVarId>,
     params: S,
     ret: S,
 }
@@ -89,9 +92,10 @@ impl<S> Fun<S>
 where
     S: TyRef,
 {
-    pub fn new(impure: bool, params: S, ret: S) -> Fun<S> {
+    pub fn new(impure: bool, pvar_ids: Range<PVarId>, params: S, ret: S) -> Fun<S> {
         Fun {
             impure,
+            pvar_ids,
             params,
             ret,
         }
@@ -106,6 +110,7 @@ where
 
         Self::new(
             false,
+            PVarId::new(0)..PVarId::new(0),
             Ty::new_simple_list_type(iter::once(S::from_ty(Ty::Any)), None),
             S::from_ty(Ty::Bool),
         )
@@ -115,12 +120,20 @@ where
         self.impure
     }
 
+    pub fn pvar_ids(&self) -> &Range<PVarId> {
+        &self.pvar_ids
+    }
+
     pub fn params(&self) -> &S {
         &self.params
     }
 
     pub fn ret(&self) -> &S {
         &self.ret
+    }
+
+    pub fn is_polymorphic(&self) -> bool {
+        self.pvar_ids.start < self.pvar_ids.end
     }
 }
 

@@ -60,6 +60,13 @@ where
     fn ref_is_a(&self, &S, &S) -> Result;
 
     fn fun_is_a(&self, sub_fun: &ty::Fun<S>, par_fun: &ty::Fun<S>) -> Result {
+        if (sub_fun.is_polymorphic() || par_fun.is_polymorphic())
+            && (sub_fun.pvar_ids() != par_fun.pvar_ids())
+        {
+            // Polymorphic functions are disjoint
+            return Result::No;
+        }
+
         if sub_fun.impure && !par_fun.impure {
             // Impure functions cannot satisfy pure function types
             return Result::No;
