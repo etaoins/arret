@@ -291,21 +291,15 @@ impl<'ccx> LoweringContext<'ccx> {
         let mut fun_scope = Scope::new_child(scope);
 
         let (mut next_datum, mut rest_data) = pop_vec_front(arg_data);
+        let pvar_id_start = ty::PVarId::new(self.pvars.len());
 
         // We can either begin with a set of polymorphic variables or a list of parameters
-        let pvar_ids = if let NsDatum::Set(_, vs) = next_datum {
-            let pvars = vs.into_iter()
-                .map(|pvar_datum| lower_pvar(&self.pvars, scope, pvar_datum))
-                .collect::<Result<Vec<(Ident, ty::PVar)>>>()?;
-
-            let pvar_ids = pvars
-                .into_iter()
-                .map(|(ident, pvar)| {
-                    let pvar_id = self.insert_pvar(pvar);
-                    fun_scope.insert_binding(ident, Binding::Ty(ty::Poly::Var(pvar_id)));
-                    pvar_id
-                })
-                .collect::<Vec<ty::PVarId>>();
+        if let NsDatum::Set(_, vs) = next_datum {
+            for pvar_datum in vs.into_iter() {
+                let (ident, pvar) = lower_pvar(&self.pvars, scope, pvar_datum)?;
+                let pvar_id = self.insert_pvar(pvar);
+                fun_scope.insert_binding(ident, Binding::Ty(ty::Poly::Var(pvar_id)));
+            }
 
             if rest_data.is_empty() {
                 return Err(Error::new(
@@ -319,11 +313,10 @@ impl<'ccx> LoweringContext<'ccx> {
             let (new_next_datum, new_rest_data) = pop_vec_front(rest_data);
             next_datum = new_next_datum;
             rest_data = new_rest_data;
-
-            pvar_ids
-        } else {
-            vec![]
         };
+
+        // We allocate pvar IDs sequentially so we can use a simple range to track them
+        let pvar_ids = pvar_id_start..ty::PVarId::new(self.pvars.len());
 
         // Pull out our params
         let params = self.lower_destruc(&mut fun_scope, next_datum)?;
@@ -1107,7 +1100,7 @@ mod test {
         let expected = Expr::Fun(
             t2s(t),
             Fun {
-                pvar_ids: vec![],
+                pvar_ids: ty::PVarId::new(0)..ty::PVarId::new(0),
                 params: Destruc::List(t2s(u), vec![], None),
                 ret_ty: ty::Decl::Free(ty::FreeTyId::new(1)),
                 body_expr: Box::new(Expr::from_vec(vec![])),
@@ -1127,7 +1120,7 @@ mod test {
         let expected = Expr::Fun(
             t2s(t),
             Fun {
-                pvar_ids: vec![],
+                pvar_ids: ty::PVarId::new(0)..ty::PVarId::new(0),
                 params: Destruc::List(t2s(u), vec![], None),
                 ret_ty: ty::Ty::Int.into_decl(),
                 body_expr: Box::new(Expr::Lit(Datum::Int(t2s(v), 1))),
@@ -1162,7 +1155,7 @@ mod test {
         let expected = Expr::Fun(
             t2s(v),
             Fun {
-                pvar_ids: vec![],
+                pvar_ids: ty::PVarId::new(0)..ty::PVarId::new(0),
                 params,
                 ret_ty: ty::Decl::Free(ty::FreeTyId::new(2)),
                 body_expr: Box::new(Expr::Ref(t2s(w), param_var_id)),
@@ -1192,7 +1185,7 @@ mod test {
         let expected = Expr::Fun(
             t2s(u),
             Fun {
-                pvar_ids: vec![],
+                pvar_ids: ty::PVarId::new(0)..ty::PVarId::new(0),
                 params,
                 ret_ty: ty::Decl::Free(ty::FreeTyId::new(2)),
                 body_expr: Box::new(Expr::Ref(t2s(v), param_var_id)),
@@ -1229,7 +1222,7 @@ mod test {
         let expected = Expr::Fun(
             t2s(v),
             Fun {
-                pvar_ids: vec![pvar_id],
+                pvar_ids: ty::PVarId::new(0)..ty::PVarId::new(1),
                 params,
                 ret_ty: ty::Decl::Var(pvar_id),
                 body_expr: Box::new(Expr::Ref(t2s(w), param_var_id)),
@@ -1268,7 +1261,7 @@ mod test {
             Expr::Fun(
                 t2s(w),
                 Fun {
-                    pvar_ids: vec![],
+                    pvar_ids: ty::PVarId::new(0)..ty::PVarId::new(0),
                     params: Destruc::List(t2s(x), vec![], None),
                     ret_ty: ty::Decl::Free(ty::FreeTyId::new(2)),
                     body_expr: Box::new(Expr::Ref(t2s(y), outer_var_id)),
@@ -1323,7 +1316,7 @@ mod test {
             Expr::Fun(
                 t2s(y),
                 Fun {
-                    pvar_ids: vec![],
+                    pvar_ids: ty::PVarId::new(0)..ty::PVarId::new(0),
                     params,
                     ret_ty: ty::Decl::Free(ty::FreeTyId::new(3)),
                     body_expr: Box::new(Expr::Ref(t2s(z), param_var_id)),

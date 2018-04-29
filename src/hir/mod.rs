@@ -10,6 +10,8 @@ mod scope;
 mod types;
 mod util;
 
+use std::ops::Range;
+
 use syntax::datum::Datum;
 use syntax::span::Span;
 use ty;
@@ -39,7 +41,7 @@ pub struct Scalar {
 
 #[derive(PartialEq, Debug)]
 pub struct Fun {
-    pvar_ids: Vec<ty::PVarId>,
+    pvar_ids: Range<ty::PVarId>,
     params: Destruc,
     ret_ty: ty::Decl,
 

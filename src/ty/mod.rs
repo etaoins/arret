@@ -124,7 +124,7 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd)]
 pub struct PVarId(u32);
 
 impl PVarId {
