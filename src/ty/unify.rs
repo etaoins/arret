@@ -28,10 +28,6 @@ where
     fn unify_ref(&self, &S, &S) -> Result<UnifiedTy<S>, E>;
     fn intersect_ref(&self, &S, &S) -> ty::intersect::IntersectedTy<S>;
 
-    fn ensure_funs_can_unify(&self, &ty::Fun<S>, &ty::Fun<S>) -> Result<(), E> {
-        Ok(())
-    }
-
     fn unify_to_ty_ref(&self, ty_ref1: &S, ty_ref2: &S) -> Result<S, E> {
         match self.unify_ref(ty_ref1, ty_ref2)? {
             UnifiedTy::Merged(ty_ref) => Ok(ty_ref),
@@ -98,19 +94,26 @@ where
     }
 
     fn unify_fun(&self, fun1: &ty::Fun<S>, fun2: &ty::Fun<S>) -> Result<UnifiedTy<S>, E> {
-        self.ensure_funs_can_unify(fun1, fun2)?;
-
         let unified_impure = fun1.impure() || fun2.impure();
-        let unified_params = self.intersect_ref(fun1.params(), fun2.params())
-            .into_ty_ref();
-        let unified_ret = self.unify_to_ty_ref(fun1.ret(), fun2.ret())?;
 
-        Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::new_fun(
-            unified_impure,
-            fun1.pvar_ids().clone(),
-            unified_params,
-            unified_ret,
-        ))))
+        if fun1.is_polymorphic() || fun2.is_polymorphic() {
+            // TODO: We could do better here by finding our upper bound and unifying them
+            // Preserving the polymorphicness would be very complex
+            Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::Fun(Box::new(
+                ty::Fun::new_top(unified_impure),
+            )))))
+        } else {
+            let unified_params = self.intersect_ref(fun1.params(), fun2.params())
+                .into_ty_ref();
+            let unified_ret = self.unify_to_ty_ref(fun1.ret(), fun2.ret())?;
+
+            Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::new_fun(
+                unified_impure,
+                ty::PVarId::new(0)..ty::PVarId::new(0),
+                unified_params,
+                unified_ret,
+            ))))
+        }
     }
 
     /// Unifies two types under the assumption that they are not subtypes
@@ -379,24 +382,6 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
         poly2: &ty::Poly,
     ) -> ty::intersect::IntersectedTy<ty::Poly> {
         ty::intersect::poly_intersect(self.pvars, poly1, poly2)
-    }
-
-    fn ensure_funs_can_unify(
-        &self,
-        fun1: &ty::Fun<ty::Poly>,
-        fun2: &ty::Fun<ty::Poly>,
-    ) -> Result<(), PolyError> {
-        if (fun1.is_polymorphic() || fun2.is_polymorphic()) && (fun1.pvar_ids() != fun2.pvar_ids())
-        {
-            // TODO: We cannot handle two polymorphic functions in the same union. This might be
-            // possible but we would need to recalculate the pvars.
-            Err(PolyError::PolyConflict(
-                ty::Ty::Fun(Box::new(fun1.clone())).into_poly(),
-                ty::Ty::Fun(Box::new(fun2.clone())).into_poly(),
-            ))
-        } else {
-            Ok(())
-        }
     }
 }
 
@@ -731,5 +716,63 @@ mod test {
 
         // These types are completely disjoint but they can't be discerned at runtime
         assert_poly_bound_conflict("(Setof Symbol)", "(Setof String)");
+    }
+
+    #[test]
+    fn polymorphic_funs() {
+        let ptype1_unbounded = ty::Poly::Var(ty::PVarId::new(0));
+        let ptype2_string = ty::Poly::Var(ty::PVarId::new(1));
+
+        let pvars = [
+            ty::PVar::new("PAny".to_owned(), poly_for_str("Any")),
+            ty::PVar::new("PString".to_owned(), poly_for_str("String")),
+        ];
+
+        // (All A (A -> A))
+        let pidentity_fun = ty::Ty::new_fun(
+            false,
+            ty::PVarId::new(0)..ty::PVarId::new(1),
+            ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None),
+            ptype1_unbounded.clone(),
+        ).into_poly();
+
+        // (All A (A A -> (Cons A A))
+        let panys_to_cons = ty::Ty::new_fun(
+            false,
+            ty::PVarId::new(0)..ty::PVarId::new(1),
+            ty::Ty::new_simple_list_type(
+                vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
+                None,
+            ),
+            ty::Ty::Cons(
+                Box::new(ptype1_unbounded.clone()),
+                Box::new(ptype1_unbounded.clone()),
+            ).into_poly(),
+        ).into_poly();
+
+        // (All [A : String] (A ->! A))
+        let pidentity_impure_string_fun = ty::Ty::new_fun(
+            true,
+            ty::PVarId::new(1)..ty::PVarId::new(2),
+            ty::Ty::new_simple_list_type(vec![ptype2_string.clone()].into_iter(), None),
+            ptype2_string.clone(),
+        ).into_poly();
+
+        assert_eq!(
+            UnifiedTy::Merged(pidentity_fun.clone()),
+            poly_unify(&pvars, &pidentity_fun, &pidentity_fun).unwrap()
+        );
+
+        let top_pure_fun = poly_for_str("(Fn (RawU) Any)");
+        assert_eq!(
+            UnifiedTy::Merged(top_pure_fun),
+            poly_unify(&pvars, &pidentity_fun, &panys_to_cons).unwrap()
+        );
+
+        let top_impure_fun = poly_for_str("(Fn! (RawU) Any)");
+        assert_eq!(
+            UnifiedTy::Merged(top_impure_fun),
+            poly_unify(&pvars, &pidentity_fun, &pidentity_impure_string_fun).unwrap()
+        );
     }
 }

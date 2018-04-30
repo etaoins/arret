@@ -77,7 +77,7 @@ where
             S::from_ty(Ty::Bool),
             S::from_ty(Ty::Char),
             S::from_ty(Ty::Float),
-            S::from_ty(Ty::Fun(Box::new(ty::Fun::new_top()))),
+            S::from_ty(Ty::Fun(Box::new(ty::Fun::new_top(true)))),
             S::from_ty(Ty::Map(
                 Box::new(S::from_ty(Ty::Any)),
                 Box::new(S::from_ty(Ty::Any)),
