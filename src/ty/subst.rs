@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::result;
 
 use ty;
+use ty::PVarIds;
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
@@ -35,8 +36,7 @@ fn subst_ty(
         ty::Ty::Sym => ty::Ty::Sym,
         ty::Ty::Fun(ref fun) => ty::Ty::new_fun(
             fun.impure,
-            // Once we subst we should have no type variables
-            ty::PVarId::new(0)..ty::PVarId::new(0),
+            ty::MonoPVarIds::empty(),
             subst(&fun.params, pvars)?,
             subst(&fun.ret, pvars)?,
         ),

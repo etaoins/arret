@@ -2,6 +2,7 @@ use std::iter;
 use std::result::Result;
 
 use ty;
+use ty::PVarIds;
 
 #[derive(Debug, PartialEq)]
 pub enum UnifiedTy<S>
@@ -109,7 +110,7 @@ where
 
             Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::new_fun(
                 unified_impure,
-                ty::PVarId::new(0)..ty::PVarId::new(0),
+                S::PVarIds::empty(),
                 unified_params,
                 unified_ret,
             ))))

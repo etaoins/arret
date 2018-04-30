@@ -2,6 +2,7 @@ use std::iter;
 use std::result::Result;
 
 use ty;
+use ty::PVarIds;
 
 #[derive(PartialEq, Debug)]
 pub enum IntersectedTy<S> {
@@ -182,7 +183,7 @@ where
 
                 IntersectedTy::Merged(S::from_ty(ty::Ty::new_fun(
                     intersected_impure,
-                    ty::PVarId::new(0)..ty::PVarId::new(0),
+                    S::PVarIds::empty(),
                     intersected_params,
                     intersected_ret,
                 )))
