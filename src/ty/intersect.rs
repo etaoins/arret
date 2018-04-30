@@ -182,7 +182,7 @@ where
 
                 IntersectedTy::Merged(S::from_ty(ty::Ty::new_fun(
                     intersected_impure,
-                    fun1.pvar_ids().clone(),
+                    ty::PVarId::new(0)..ty::PVarId::new(0),
                     intersected_params,
                     intersected_ret,
                 )))
@@ -407,5 +407,79 @@ mod test {
     fn ty_pred_types() {
         assert_disjoint("(Type? String)", "(Type? Symbol)");
         assert_merged("(Type? String)", "(Type? String)", "(Type? String)");
+    }
+
+    #[test]
+    fn polymorphic_funs() {
+        let ptype1_unbounded = ty::Poly::Var(ty::PVarId::new(0));
+        let ptype2_string = ty::Poly::Var(ty::PVarId::new(1));
+
+        let pvars = [
+            ty::PVar::new("PAny".to_owned(), poly_for_str("Any")),
+            ty::PVar::new("PString".to_owned(), poly_for_str("String")),
+        ];
+
+        // (All A (A -> A))
+        let pidentity_fun = ty::Ty::new_fun(
+            false,
+            ty::PVarId::new(0)..ty::PVarId::new(1),
+            ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None),
+            ptype1_unbounded.clone(),
+        ).into_poly();
+
+        // (All A (A A -> (Cons A A))
+        let panys_to_cons = ty::Ty::new_fun(
+            false,
+            ty::PVarId::new(0)..ty::PVarId::new(1),
+            ty::Ty::new_simple_list_type(
+                vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
+                None,
+            ),
+            ty::Ty::Cons(
+                Box::new(ptype1_unbounded.clone()),
+                Box::new(ptype1_unbounded.clone()),
+            ).into_poly(),
+        ).into_poly();
+
+        // (All [A : String] (A ->! A))
+        let pidentity_impure_string_fun = ty::Ty::new_fun(
+            true,
+            ty::PVarId::new(1)..ty::PVarId::new(2),
+            ty::Ty::new_simple_list_type(vec![ptype2_string.clone()].into_iter(), None),
+            ptype2_string.clone(),
+        ).into_poly();
+
+        let top_pure_fun = poly_for_str("(Fn (RawU) Any)");
+
+        // We should intersect polymorphic functions with themselves
+        assert_eq!(
+            IntersectedTy::Merged(pidentity_fun.clone()),
+            poly_intersect(&pvars, &pidentity_fun, &pidentity_fun)
+        );
+
+        // The intersection of the pure identity function and the top pure function is the identity
+        // function
+        assert_eq!(
+            IntersectedTy::Merged(pidentity_fun.clone()),
+            poly_intersect(&pvars, &pidentity_fun, &top_pure_fun)
+        );
+
+        // The intersections of the two polymorphic functions is disjoint
+        assert_eq!(
+            IntersectedTy::Disjoint,
+            poly_intersect(&pvars, &pidentity_fun, &panys_to_cons)
+        );
+        assert_eq!(
+            IntersectedTy::Disjoint,
+            poly_intersect(&pvars, &pidentity_fun, &pidentity_impure_string_fun)
+        );
+
+        // Pure and impure functions are disjoint
+        // TODO: There is a better answer here of `(All [A : String] (A ->! A))`. This is just
+        // checking we don't create a nonsense type.
+        assert_eq!(
+            IntersectedTy::Disjoint,
+            poly_intersect(&pvars, &pidentity_impure_string_fun, &top_pure_fun)
+        );
     }
 }
