@@ -10,8 +10,8 @@ pub enum Error {
 
 pub type Result<T> = result::Result<T, Error>;
 
-fn subst_ty_vec(
-    fixed: &Vec<ty::Poly>,
+fn subst_ty_slice(
+    fixed: &[ty::Poly],
     pvars: &HashMap<ty::PVarId, ty::Mono>,
 ) -> Result<Vec<ty::Mono>> {
     fixed
@@ -47,9 +47,9 @@ fn subst_ty(
         ty::Ty::LitBool(val) => ty::Ty::LitBool(val),
         ty::Ty::LitSym(ref val) => ty::Ty::LitSym(val.clone()),
         ty::Ty::Set(ref member) => ty::Ty::Set(Box::new(subst(&member, pvars)?)),
-        ty::Ty::Union(ref members) => ty::Ty::Union(subst_ty_vec(members, pvars)?),
+        ty::Ty::Union(ref members) => ty::Ty::Union(subst_ty_slice(members, pvars)?),
         ty::Ty::Vec(ref members) => {
-            let members_mono = subst_ty_vec(members, pvars)?;
+            let members_mono = subst_ty_slice(members, pvars)?;
             ty::Ty::Vec(members_mono)
         }
         ty::Ty::Vecof(ref member) => ty::Ty::Vecof(Box::new(subst(member, pvars)?)),
@@ -65,8 +65,8 @@ pub fn subst(poly: &ty::Poly, pvars: &HashMap<ty::PVarId, ty::Mono>) -> Result<t
         ty::Poly::Fixed(ref fixed) => subst_ty(fixed, pvars).map(|t| t.into_mono()),
         ty::Poly::Var(pvar_id) => pvars
             .get(&pvar_id)
-            .map(|mono| mono.clone())
-            .ok_or(Error::Unresolved(pvar_id)),
+            .cloned()
+            .ok_or_else(|| Error::Unresolved(pvar_id)),
     }
 }
 

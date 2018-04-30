@@ -172,19 +172,19 @@ mod test {
         hir::poly_for_str(datum_str).unwrap()
     }
 
-    fn assert_result(result: Result<ty::Poly>, subject_str: &str, test_str: &str) {
+    fn assert_result(result: &Result<ty::Poly>, subject_str: &str, test_str: &str) {
         let subject_poly = poly_for_str(subject_str);
         let test_poly = poly_for_str(test_str);
 
-        assert_eq!(result, interpret_poly_pred(&[], &subject_poly, &test_poly));
+        assert_eq!(*result, interpret_poly_pred(&[], &subject_poly, &test_poly));
     }
 
     fn assert_static_false(subject_str: &str, test_str: &str) {
-        assert_result(Ok(InterpretedPred::StaticFalse), subject_str, test_str);
+        assert_result(&Ok(InterpretedPred::StaticFalse), subject_str, test_str);
     }
 
     fn assert_static_true(subject_str: &str, test_str: &str) {
-        assert_result(Ok(InterpretedPred::StaticTrue), subject_str, test_str);
+        assert_result(&Ok(InterpretedPred::StaticTrue), subject_str, test_str);
     }
 
     fn assert_dynamic((true_str, false_str): (&str, &str), subject_str: &str, test_str: &str) {
@@ -192,7 +192,7 @@ mod test {
             poly_for_str(true_str),
             poly_for_str(false_str),
         ));
-        assert_result(expected, subject_str, test_str)
+        assert_result(&expected, subject_str, test_str)
     }
 
     fn assert_erased(subject_str: &str, test_str: &str) {

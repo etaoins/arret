@@ -295,7 +295,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
         // We can either begin with a set of polymorphic variables or a list of parameters
         if let NsDatum::Set(_, vs) = next_datum {
-            for pvar_datum in vs.into_iter() {
+            for pvar_datum in vs {
                 let (ident, pvar) = lower_pvar(&self.pvars, scope, pvar_datum)?;
                 let pvar_id = self.insert_pvar(pvar);
                 fun_scope.insert_binding(ident, Binding::Ty(ty::Poly::Var(pvar_id)));

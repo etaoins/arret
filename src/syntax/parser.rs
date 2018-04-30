@@ -1,6 +1,6 @@
-use syntax::error::{Error, ErrorKind, ExpectedContent, Result};
-use syntax::datum::Datum;
 use std;
+use syntax::datum::Datum;
+use syntax::error::{Error, ErrorKind, ExpectedContent, Result};
 use syntax::span::Span;
 
 pub fn data_from_str_with_span_offset(s: &str, span_offset: usize) -> Result<Vec<Datum>> {
@@ -606,7 +606,7 @@ mod test {
 
     #[test]
     fn symbol_datum() {
-        for test_symbol in vec![
+        for &test_symbol in &[
             "HELLO",
             "HELLO123",
             "predicate?",
@@ -625,7 +625,7 @@ mod test {
 
     #[test]
     fn keyword_symbol_datum() {
-        for test_symbol in vec![":HELLO", ":HELLO123", ":predicate?", ":mutate!"] {
+        for &test_symbol in &[":HELLO", ":HELLO123", ":predicate?", ":mutate!"] {
             let s = whole_str_span(test_symbol);
             let expected = Datum::Sym(s, test_symbol.to_owned());
 
@@ -705,7 +705,8 @@ mod test {
 
     #[test]
     fn int_datum() {
-        let test_ints = vec![
+        #[allow(unreadable_literal)]
+        let test_ints = [
             ("0", 0),
             ("000", 0),
             ("1000", 1000),
@@ -714,7 +715,7 @@ mod test {
             ("-9223372036854775808", -9223372036854775808),
         ];
 
-        for (j, expected_int) in test_ints {
+        for &(j, expected_int) in &test_ints {
             let s = whole_str_span(j);
             let expected = Datum::Int(s, expected_int);
 

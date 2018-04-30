@@ -479,7 +479,7 @@ pub fn poly_for_str(datum_str: &str) -> Result<ty::Poly> {
 
     // Place them on our scope
     let mut scope = Scope::new_empty();
-    for (name, binding) in exports.into_iter() {
+    for (name, binding) in exports {
         if name == "U" {
             // Using `U` in tests is very dubious as it invokes a lot of type system logic. It's
             // easy to write tautological tests due to `U` creating a simplified type. Rename to

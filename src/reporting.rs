@@ -1,10 +1,10 @@
-use std::iter;
 use std::cmp;
+use std::iter;
 
 use ansi_term::Colour;
 use ansi_term::Style;
-use syntax::span::Span;
 use ctx::CompileContext;
+use syntax::span::Span;
 
 #[derive(PartialEq, Debug)]
 struct HumanPos<'a> {
@@ -279,7 +279,7 @@ mod test {
             ),
         ];
 
-        for (bp, expected) in test_cases.into_iter() {
+        for (bp, expected) in test_cases {
             assert_eq!(expected, bytepos_to_human_pos(&ccx, bp));
         }
     }
