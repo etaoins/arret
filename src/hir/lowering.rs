@@ -10,7 +10,7 @@ use hir::module::{Module, ModuleDef};
 use hir::ns::{Ident, NsDatum, NsId, NsIdAlloc};
 use hir::prim::Prim;
 use hir::scope::{Binding, MacroId, Scope};
-use hir::types::{lower_poly, lower_pvar, TyCons};
+use hir::types::{lower_poly, lower_tvar, TyCons};
 use hir::util::{expect_arg_count, expect_ident, expect_ident_and_span, pop_vec_front,
                 split_into_fixed_and_rest};
 use hir::{App, Cond, Destruc, Expr, Fun, Scalar, VarId};
@@ -23,14 +23,14 @@ pub struct LoweringContext<'ccx> {
     ns_id_alloc: NsIdAlloc,
     loaded_libraries: BTreeMap<LibraryName, Module>,
     macros: Vec<Macro>,
-    pvars: Vec<ty::PVar>,
+    tvars: Vec<ty::TVar>,
     free_tys: Vec<Span>,
     ccx: &'ccx mut CompileContext,
 }
 
 pub struct LoweredProgram {
     /*
-    pvars: Vec<ty::PVar>,
+    tvars: Vec<ty::TVar>,
     free_tys: Vec<Span>,
     libraries: BTreeMap<LibraryName, Module>,*/
     entry_module: Module,
@@ -87,17 +87,17 @@ impl<'ccx> LoweringContext<'ccx> {
             ns_id_alloc: NsIdAlloc::new(),
             loaded_libraries,
             macros: vec![],
-            pvars: vec![],
+            tvars: vec![],
             free_tys: vec![],
             ccx,
         }
     }
 
-    fn insert_pvar(&mut self, pvar: ty::PVar) -> ty::PVarId {
-        let pvar_id = ty::PVarId::new(self.pvars.len());
-        self.pvars.push(pvar);
+    fn insert_tvar(&mut self, tvar: ty::TVar) -> ty::TVarId {
+        let tvar_id = ty::TVarId::new(self.tvars.len());
+        self.tvars.push(tvar);
 
-        pvar_id
+        tvar_id
     }
 
     fn insert_free_ty(&mut self, span: Span) -> ty::FreeTyId {
@@ -174,7 +174,7 @@ impl<'ccx> LoweringContext<'ccx> {
         let ty_datum = arg_data.pop().unwrap();
         let ident = expect_ident(arg_data.pop().unwrap())?;
 
-        let ty = lower_poly(&self.pvars, scope, ty_datum)?;
+        let ty = lower_poly(&self.tvars, scope, ty_datum)?;
 
         scope.insert_binding(ident, Binding::Ty(ty));
         Ok(())
@@ -235,7 +235,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     return Err(Error::new(span, ErrorKind::NoVecDestruc));
                 }
 
-                let ty = lower_poly(&self.pvars, scope, vs.pop().unwrap())?;
+                let ty = lower_poly(&self.tvars, scope, vs.pop().unwrap())?;
 
                 // Discard the type colon
                 vs.pop();
@@ -291,14 +291,14 @@ impl<'ccx> LoweringContext<'ccx> {
         let mut fun_scope = Scope::new_child(scope);
 
         let (mut next_datum, mut rest_data) = pop_vec_front(arg_data);
-        let pvar_id_start = ty::PVarId::new(self.pvars.len());
+        let tvar_id_start = ty::TVarId::new(self.tvars.len());
 
-        // We can either begin with a set of polymorphic variables or a list of parameters
+        // We can either begin with a set of type variables or a list of parameters
         if let NsDatum::Set(_, vs) = next_datum {
-            for pvar_datum in vs {
-                let (ident, pvar) = lower_pvar(&self.pvars, scope, pvar_datum)?;
-                let pvar_id = self.insert_pvar(pvar);
-                fun_scope.insert_binding(ident, Binding::Ty(ty::Poly::Var(pvar_id)));
+            for tvar_datum in vs {
+                let (ident, tvar) = lower_tvar(&self.tvars, scope, tvar_datum)?;
+                let tvar_id = self.insert_tvar(tvar);
+                fun_scope.insert_binding(ident, Binding::Ty(ty::Poly::Var(tvar_id)));
             }
 
             if rest_data.is_empty() {
@@ -315,8 +315,8 @@ impl<'ccx> LoweringContext<'ccx> {
             rest_data = new_rest_data;
         };
 
-        // We allocate pvar IDs sequentially so we can use a simple range to track them
-        let pvar_ids = pvar_id_start..ty::PVarId::new(self.pvars.len());
+        // We allocate tvar IDs sequentially so we can use a simple range to track them
+        let tvar_ids = tvar_id_start..ty::TVarId::new(self.tvars.len());
 
         // Pull out our params
         let params = self.lower_destruc(&mut fun_scope, next_datum)?;
@@ -329,7 +329,7 @@ impl<'ccx> LoweringContext<'ccx> {
         {
             body_data = rest_data.split_off(2);
             ret_ty =
-                Some(lower_poly(&self.pvars, &fun_scope, rest_data.pop().unwrap())?.into_decl());
+                Some(lower_poly(&self.tvars, &fun_scope, rest_data.pop().unwrap())?.into_decl());
         } else {
             body_data = rest_data;
             ret_ty = None;
@@ -353,7 +353,7 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(Expr::Fun(
             span,
             Fun {
-                pvar_ids,
+                tvar_ids,
                 params,
                 ret_ty,
                 body_expr: Box::new(body_expr),
@@ -401,7 +401,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 expect_arg_count(span, &arg_data, 1)?;
                 Ok(Expr::TyPred(
                     span,
-                    lower_poly(&self.pvars, scope, arg_data.pop().unwrap())?,
+                    lower_poly(&self.tvars, scope, arg_data.pop().unwrap())?,
                 ))
             }
             Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),
@@ -748,7 +748,7 @@ pub fn lower_program(
     Ok(LoweredProgram {
         //libraries: lcx.loaded_libraries,
         entry_module,
-        //pvars: lcx.pvars,
+        //tvars: lcx.tvars,
         //free_tys: lcx.free_tys,
     })
 }
@@ -1100,7 +1100,7 @@ mod test {
         let expected = Expr::Fun(
             t2s(t),
             Fun {
-                pvar_ids: ty::PVarId::new(0)..ty::PVarId::new(0),
+                tvar_ids: ty::TVarIds::empty(),
                 params: Destruc::List(t2s(u), vec![], None),
                 ret_ty: ty::Decl::Free(ty::FreeTyId::new(1)),
                 body_expr: Box::new(Expr::from_vec(vec![])),
@@ -1120,7 +1120,7 @@ mod test {
         let expected = Expr::Fun(
             t2s(t),
             Fun {
-                pvar_ids: ty::PVarId::new(0)..ty::PVarId::new(0),
+                tvar_ids: ty::TVarIds::empty(),
                 params: Destruc::List(t2s(u), vec![], None),
                 ret_ty: ty::Ty::Int.into_decl(),
                 body_expr: Box::new(Expr::Lit(Datum::Int(t2s(v), 1))),
@@ -1155,7 +1155,7 @@ mod test {
         let expected = Expr::Fun(
             t2s(v),
             Fun {
-                pvar_ids: ty::PVarId::new(0)..ty::PVarId::new(0),
+                tvar_ids: ty::TVarIds::empty(),
                 params,
                 ret_ty: ty::Decl::Free(ty::FreeTyId::new(2)),
                 body_expr: Box::new(Expr::Ref(t2s(w), param_var_id)),
@@ -1185,7 +1185,7 @@ mod test {
         let expected = Expr::Fun(
             t2s(u),
             Fun {
-                pvar_ids: ty::PVarId::new(0)..ty::PVarId::new(0),
+                tvar_ids: ty::TVarIds::empty(),
                 params,
                 ret_ty: ty::Decl::Free(ty::FreeTyId::new(2)),
                 body_expr: Box::new(Expr::Ref(t2s(v), param_var_id)),
@@ -1203,7 +1203,7 @@ mod test {
         let v = "^^^^^^^^^^^^^^^^^^^^^^^^^^";
         let w = "                        ^ ";
 
-        let pvar_id = ty::PVarId::new(0);
+        let tvar_id = ty::TVarId::new(0);
 
         let param_var_id = VarId::new(2);
         let params = Destruc::List(
@@ -1213,7 +1213,7 @@ mod test {
                 Scalar {
                     var_id: Some(param_var_id),
                     source_name: "x".to_owned(),
-                    ty: ty::Decl::Var(pvar_id),
+                    ty: ty::Decl::Var(tvar_id),
                 },
             )],
             None,
@@ -1222,9 +1222,9 @@ mod test {
         let expected = Expr::Fun(
             t2s(v),
             Fun {
-                pvar_ids: ty::PVarId::new(0)..ty::PVarId::new(1),
+                tvar_ids: ty::TVarId::new(0)..ty::TVarId::new(1),
                 params,
-                ret_ty: ty::Decl::Var(pvar_id),
+                ret_ty: ty::Decl::Var(tvar_id),
                 body_expr: Box::new(Expr::Ref(t2s(w), param_var_id)),
             },
         );
@@ -1261,7 +1261,7 @@ mod test {
             Expr::Fun(
                 t2s(w),
                 Fun {
-                    pvar_ids: ty::PVarId::new(0)..ty::PVarId::new(0),
+                    tvar_ids: ty::TVarIds::empty(),
                     params: Destruc::List(t2s(x), vec![], None),
                     ret_ty: ty::Decl::Free(ty::FreeTyId::new(2)),
                     body_expr: Box::new(Expr::Ref(t2s(y), outer_var_id)),
@@ -1316,7 +1316,7 @@ mod test {
             Expr::Fun(
                 t2s(y),
                 Fun {
-                    pvar_ids: ty::PVarId::new(0)..ty::PVarId::new(0),
+                    tvar_ids: ty::TVarIds::empty(),
                     params,
                     ret_ty: ty::Decl::Free(ty::FreeTyId::new(3)),
                     body_expr: Box::new(Expr::Ref(t2s(z), param_var_id)),

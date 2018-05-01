@@ -2,7 +2,7 @@ use std::iter;
 use std::result::Result;
 
 use ty;
-use ty::PVarIds;
+use ty::TVarIds;
 
 #[derive(Debug, PartialEq)]
 pub enum UnifiedTy<S>
@@ -110,7 +110,7 @@ where
 
             Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::new_fun(
                 unified_impure,
-                S::PVarIds::empty(),
+                S::TVarIds::empty(),
                 unified_params,
                 unified_ret,
             ))))
@@ -286,13 +286,13 @@ pub enum PolyError {
 }
 
 struct PolyUnifyCtx<'a> {
-    pvars: &'a [ty::PVar],
+    tvars: &'a [ty::TVar],
 }
 
 impl<'a> PolyUnifyCtx<'a> {
     /// Determines if a type and all of its subtypes are discernible at runtime
     ///
-    /// This is to allow literal types to appear with poly variables even if they may have a
+    /// This is to allow literal types to appear with type variables even if they may have a
     /// possible subtype relationship. Otherwise, (U ([A : Symbol] 'foo)) would not be allowed as A
     /// may need to merge with 'foo.
     fn poly_ty_is_discernible(&self, ty: &ty::Ty<ty::Poly>) -> bool {
@@ -334,7 +334,7 @@ impl<'a> PolyUnifyCtx<'a> {
     }
 
     fn poly_is_discernible(&self, poly: &ty::Poly) -> bool {
-        let ty = ty::resolve::resolve_poly_ty(self.pvars, poly).as_ty();
+        let ty = ty::resolve::resolve_poly_ty(self.tvars, poly).as_ty();
         self.poly_ty_is_discernible(ty)
     }
 }
@@ -348,8 +348,8 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
         use ty::resolve;
 
         // Determine if we're dealing with fixed types or polymorphic bounds
-        let resolved1 = resolve::resolve_poly_ty(self.pvars, poly1);
-        let resolved2 = resolve::resolve_poly_ty(self.pvars, poly2);
+        let resolved1 = resolve::resolve_poly_ty(self.tvars, poly1);
+        let resolved2 = resolve::resolve_poly_ty(self.tvars, poly2);
 
         if let (&resolve::Result::Fixed(ty1), &resolve::Result::Fixed(ty2)) =
             (&resolved1, &resolved2)
@@ -382,24 +382,24 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
         poly1: &ty::Poly,
         poly2: &ty::Poly,
     ) -> ty::intersect::IntersectedTy<ty::Poly> {
-        ty::intersect::poly_intersect(self.pvars, poly1, poly2)
+        ty::intersect::poly_intersect(self.tvars, poly1, poly2)
     }
 }
 
 pub fn poly_unify<'a>(
-    pvars: &'a [ty::PVar],
+    tvars: &'a [ty::TVar],
     poly1: &'a ty::Poly,
     poly2: &'a ty::Poly,
 ) -> Result<UnifiedTy<ty::Poly>, PolyError> {
-    let ctx = PolyUnifyCtx { pvars };
+    let ctx = PolyUnifyCtx { tvars };
     ctx.unify_ref(poly1, poly2)
 }
 
-pub fn poly_unify_iter<I>(pvars: &[ty::PVar], members: I) -> Result<ty::Poly, PolyError>
+pub fn poly_unify_iter<I>(tvars: &[ty::TVar], members: I) -> Result<ty::Poly, PolyError>
 where
     I: Iterator<Item = ty::Poly>,
 {
-    let ctx = PolyUnifyCtx { pvars };
+    let ctx = PolyUnifyCtx { tvars };
     ctx.unify_ref_iter(vec![], members)
 }
 
@@ -492,29 +492,29 @@ mod test {
         assert_eq!(expected, poly_unify_iter(&[], polys).unwrap());
     }
 
-    fn bounded_polys(bound_str1: &str, bound_str2: &str) -> (Vec<ty::PVar>, ty::Poly, ty::Poly) {
+    fn bounded_polys(bound_str1: &str, bound_str2: &str) -> (Vec<ty::TVar>, ty::Poly, ty::Poly) {
         let bound1 = poly_for_str(bound_str1);
         let bound2 = poly_for_str(bound_str2);
 
-        let pvars = vec![
-            ty::PVar::new("poly1".to_owned(), bound1),
-            ty::PVar::new("poly2".to_owned(), bound2),
+        let tvars = vec![
+            ty::TVar::new("poly1".to_owned(), bound1),
+            ty::TVar::new("poly2".to_owned(), bound2),
         ];
 
-        let poly1 = ty::Poly::Var(ty::PVarId::new(0));
-        let poly2 = ty::Poly::Var(ty::PVarId::new(1));
+        let poly1 = ty::Poly::Var(ty::TVarId::new(0));
+        let poly2 = ty::Poly::Var(ty::TVarId::new(1));
 
-        (pvars, poly1, poly2)
+        (tvars, poly1, poly2)
     }
 
     fn assert_poly_bound_merged(expected_str: &str, bound_str1: &str, bound_str2: &str) {
         let expected = poly_for_str(expected_str);
-        let (pvars, poly1, poly2) = bounded_polys(bound_str1, bound_str2);
+        let (tvars, poly1, poly2) = bounded_polys(bound_str1, bound_str2);
 
-        let result = poly_unify(&pvars, &poly1, &poly2).unwrap();
+        let result = poly_unify(&tvars, &poly1, &poly2).unwrap();
 
         if let UnifiedTy::Merged(merged_poly) = result {
-            let merged_ty = ty::resolve::resolve_poly_ty(&pvars, &merged_poly).as_ty();
+            let merged_ty = ty::resolve::resolve_poly_ty(&tvars, &merged_poly).as_ty();
             assert_eq!(expected, ty::Poly::Fixed(merged_ty.clone()));
         } else {
             panic!("Expected merged type; got {:?}", result);
@@ -522,21 +522,21 @@ mod test {
     }
 
     fn assert_poly_bound_discerned(bound_str1: &str, bound_str2: &str) {
-        let (pvars, poly1, poly2) = bounded_polys(bound_str1, bound_str2);
+        let (tvars, poly1, poly2) = bounded_polys(bound_str1, bound_str2);
 
         assert_eq!(
             Ok(UnifiedTy::Discerned),
-            poly_unify(&pvars, &poly1, &poly2),
+            poly_unify(&tvars, &poly1, &poly2),
             "Poly bounds are not discernible"
         );
     }
 
     fn assert_poly_bound_conflict(bound_str1: &str, bound_str2: &str) {
-        let (pvars, poly1, poly2) = bounded_polys(bound_str1, bound_str2);
+        let (tvars, poly1, poly2) = bounded_polys(bound_str1, bound_str2);
 
         assert_eq!(
             Err(PolyError::PolyConflict(poly1.clone(), poly2.clone())),
-            poly_unify(&pvars, &poly1, &poly2),
+            poly_unify(&tvars, &poly1, &poly2),
         );
     }
 
@@ -721,18 +721,18 @@ mod test {
 
     #[test]
     fn polymorphic_funs() {
-        let ptype1_unbounded = ty::Poly::Var(ty::PVarId::new(0));
-        let ptype2_string = ty::Poly::Var(ty::PVarId::new(1));
+        let ptype1_unbounded = ty::Poly::Var(ty::TVarId::new(0));
+        let ptype2_string = ty::Poly::Var(ty::TVarId::new(1));
 
-        let pvars = [
-            ty::PVar::new("PAny".to_owned(), poly_for_str("Any")),
-            ty::PVar::new("PString".to_owned(), poly_for_str("String")),
+        let tvars = [
+            ty::TVar::new("PAny".to_owned(), poly_for_str("Any")),
+            ty::TVar::new("PString".to_owned(), poly_for_str("String")),
         ];
 
         // (All A (A -> A))
         let pidentity_fun = ty::Ty::new_fun(
             false,
-            ty::PVarId::new(0)..ty::PVarId::new(1),
+            ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None),
             ptype1_unbounded.clone(),
         ).into_poly();
@@ -740,7 +740,7 @@ mod test {
         // (All A (A A -> (Cons A A))
         let panys_to_cons = ty::Ty::new_fun(
             false,
-            ty::PVarId::new(0)..ty::PVarId::new(1),
+            ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(
                 vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
                 None,
@@ -754,26 +754,26 @@ mod test {
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Ty::new_fun(
             true,
-            ty::PVarId::new(1)..ty::PVarId::new(2),
+            ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::Ty::new_simple_list_type(vec![ptype2_string.clone()].into_iter(), None),
             ptype2_string.clone(),
         ).into_poly();
 
         assert_eq!(
             UnifiedTy::Merged(pidentity_fun.clone()),
-            poly_unify(&pvars, &pidentity_fun, &pidentity_fun).unwrap()
+            poly_unify(&tvars, &pidentity_fun, &pidentity_fun).unwrap()
         );
 
         let top_pure_fun = poly_for_str("(Fn (RawU) Any)");
         assert_eq!(
             UnifiedTy::Merged(top_pure_fun),
-            poly_unify(&pvars, &pidentity_fun, &panys_to_cons).unwrap()
+            poly_unify(&tvars, &pidentity_fun, &panys_to_cons).unwrap()
         );
 
         let top_impure_fun = poly_for_str("(Fn! (RawU) Any)");
         assert_eq!(
             UnifiedTy::Merged(top_impure_fun),
-            poly_unify(&pvars, &pidentity_fun, &pidentity_impure_string_fun).unwrap()
+            poly_unify(&tvars, &pidentity_fun, &pidentity_impure_string_fun).unwrap()
         );
     }
 }

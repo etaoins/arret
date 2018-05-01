@@ -129,7 +129,7 @@ where
 }
 
 struct InterpretPolyPredCtx<'a> {
-    pvars: &'a [ty::PVar],
+    tvars: &'a [ty::TVar],
 }
 
 impl<'a> InterpretPredCtx<ty::Poly> for InterpretPolyPredCtx<'a> {
@@ -137,10 +137,10 @@ impl<'a> InterpretPredCtx<ty::Poly> for InterpretPolyPredCtx<'a> {
         use ty::is_a;
         use ty::resolve;
 
-        match is_a::poly_is_a(self.pvars, subject_ref, test_ref) {
+        match is_a::poly_is_a(self.tvars, subject_ref, test_ref) {
             is_a::Result::Yes => Ok(InterpretedPred::StaticTrue),
             is_a::Result::May => {
-                let subject_resolved = resolve::resolve_poly_ty(self.pvars, subject_ref);
+                let subject_resolved = resolve::resolve_poly_ty(self.tvars, subject_ref);
                 if let resolve::Result::Fixed(subject_ty) = subject_resolved {
                     self.interpret_non_subty(subject_ref, subject_ty, test_ref)
                 } else {
@@ -155,11 +155,11 @@ impl<'a> InterpretPredCtx<ty::Poly> for InterpretPolyPredCtx<'a> {
 /// Performs abstract interpretation of applying a type predicate for `test` type on a `subject`
 /// value
 fn interpret_poly_pred<'a>(
-    pvars: &'a [ty::PVar],
+    tvars: &'a [ty::TVar],
     subject: &ty::Poly,
     test: &ty::Poly,
 ) -> Result<ty::Poly> {
-    let ctx = InterpretPolyPredCtx { pvars };
+    let ctx = InterpretPolyPredCtx { tvars };
     ctx.interpret_refs(subject, test)
 }
 

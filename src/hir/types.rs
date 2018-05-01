@@ -28,18 +28,18 @@ pub enum TyCons {
 }
 
 struct LowerTyContext<'a> {
-    pvars: &'a [ty::PVar],
+    tvars: &'a [ty::TVar],
     scope: &'a Scope,
 }
 
 impl<'a> LowerTyContext<'a> {
-    fn lower_pvar(&self, pvar_datum: NsDatum) -> Result<(Ident, ty::PVar)> {
-        let span = pvar_datum.span();
+    fn lower_tvar(&self, tvar_datum: NsDatum) -> Result<(Ident, ty::TVar)> {
+        let span = tvar_datum.span();
 
-        match pvar_datum {
+        match tvar_datum {
             NsDatum::Ident(_, ident) => {
                 let source_name = ident.name().clone();
-                return Ok((ident, ty::PVar::new(source_name, ty::Ty::Any.into_poly())));
+                return Ok((ident, ty::TVar::new(source_name, ty::Ty::Any.into_poly())));
             }
             NsDatum::Vec(_, mut arg_data) => {
                 if arg_data.len() == 3
@@ -51,10 +51,10 @@ impl<'a> LowerTyContext<'a> {
                     // Discard the : completely
                     arg_data.pop();
 
-                    let pvar_ident = expect_ident(arg_data.pop().unwrap())?;
+                    let tvar_ident = expect_ident(arg_data.pop().unwrap())?;
 
-                    let source_name = pvar_ident.name().clone();
-                    return Ok((pvar_ident, ty::PVar::new(source_name, bound_ty)));
+                    let source_name = tvar_ident.name().clone();
+                    return Ok((tvar_ident, ty::TVar::new(source_name, bound_ty)));
                 }
             }
             _ => {}
@@ -92,12 +92,7 @@ impl<'a> LowerTyContext<'a> {
 
         let params_ty = self.lower_list_cons(arg_data)?;
 
-        Ok(ty::Ty::new_fun(
-            impure,
-            ty::PVarId::new(0)..ty::PVarId::new(0),
-            params_ty,
-            ret_ty,
-        ).into_poly())
+        Ok(ty::Ty::new_fun(impure, ty::TVarIds::empty(), params_ty, ret_ty).into_poly())
     }
 
     fn lower_complex_fun_cons(
@@ -111,12 +106,7 @@ impl<'a> LowerTyContext<'a> {
         let ret_ty = self.lower_poly(arg_data.pop().unwrap())?;
         let params_ty = self.lower_poly(arg_data.pop().unwrap())?;
 
-        Ok(ty::Ty::new_fun(
-            impure,
-            ty::PVarId::new(0)..ty::PVarId::new(0),
-            params_ty,
-            ret_ty,
-        ).into_poly())
+        Ok(ty::Ty::new_fun(impure, ty::TVarIds::empty(), params_ty, ret_ty).into_poly())
     }
 
     fn lower_ty_cons_apply(
@@ -179,11 +169,11 @@ impl<'a> LowerTyContext<'a> {
                     .map(|arg_datum| self.lower_poly(arg_datum))
                     .collect::<Result<Vec<ty::Poly>>>()?;
 
-                ty::unify::poly_unify_iter(self.pvars, member_tys.into_iter()).map_err(|err| {
+                ty::unify::poly_unify_iter(self.tvars, member_tys.into_iter()).map_err(|err| {
                     match err {
                         ty::unify::PolyError::PolyConflict(left, right) => {
-                            let left_str = str_for_poly(self.pvars, &left);
-                            let right_str = str_for_poly(self.pvars, &right);
+                            let left_str = str_for_poly(self.tvars, &left);
+                            let right_str = str_for_poly(self.tvars, &right);
 
                             Error::new(span, ErrorKind::PolyUnionConflict(left_str, right_str))
                         }
@@ -279,17 +269,17 @@ impl<'a> LowerTyContext<'a> {
     }
 }
 
-pub fn lower_pvar(
-    pvars: &[ty::PVar],
+pub fn lower_tvar(
+    tvars: &[ty::TVar],
     scope: &Scope,
-    pvar_datum: NsDatum,
-) -> Result<(Ident, ty::PVar)> {
-    let ctx = LowerTyContext { pvars, scope };
-    ctx.lower_pvar(pvar_datum)
+    tvar_datum: NsDatum,
+) -> Result<(Ident, ty::TVar)> {
+    let ctx = LowerTyContext { tvars, scope };
+    ctx.lower_tvar(tvar_datum)
 }
 
-pub fn lower_poly(pvars: &[ty::PVar], scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
-    let ctx = LowerTyContext { pvars, scope };
+pub fn lower_poly(tvars: &[ty::TVar], scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
+    let ctx = LowerTyContext { tvars, scope };
     ctx.lower_poly(datum)
 }
 
@@ -340,7 +330,7 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
 /// This can occur because not all "list-like" types can be expressed using shorthand. A fallback
 /// to `(Cons)`/`(Fn)` is required for those cases.
 fn str_for_simple_list_poly_ty(
-    pvars: &[ty::PVar],
+    tvars: &[ty::TVar],
     mut poly_ty: &ty::Ty<ty::Poly>,
 ) -> Option<String> {
     let mut list_parts: Vec<String> = vec![];
@@ -351,12 +341,12 @@ fn str_for_simple_list_poly_ty(
                 break;
             }
             ty::Ty::Listof(ref rest) => {
-                list_parts.push(str_for_poly(pvars, rest));
+                list_parts.push(str_for_poly(tvars, rest));
                 list_parts.push("...".to_owned());
                 break;
             }
             ty::Ty::Cons(ref car_poly, ref cdr_poly) => {
-                list_parts.push(str_for_poly(pvars, car_poly));
+                list_parts.push(str_for_poly(tvars, car_poly));
                 match *cdr_poly.as_ref() {
                     ty::Poly::Fixed(ref tail) => {
                         poly_ty = tail;
@@ -375,14 +365,14 @@ fn str_for_simple_list_poly_ty(
     Some(list_parts.join(" "))
 }
 
-fn str_for_simple_list_poly(pvars: &[ty::PVar], poly: &ty::Poly) -> Option<String> {
+fn str_for_simple_list_poly(tvars: &[ty::TVar], poly: &ty::Poly) -> Option<String> {
     match *poly {
-        ty::Poly::Fixed(ref poly_ty) => str_for_simple_list_poly_ty(pvars, poly_ty),
+        ty::Poly::Fixed(ref poly_ty) => str_for_simple_list_poly_ty(tvars, poly_ty),
         _ => None,
     }
 }
 
-fn str_for_poly_ty(pvars: &[ty::PVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
+fn str_for_poly_ty(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
     match *poly_ty {
         ty::Ty::Any => "Any".to_owned(),
         ty::Ty::Bool => "Bool".to_owned(),
@@ -396,54 +386,54 @@ fn str_for_poly_ty(pvars: &[ty::PVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
         ty::Ty::LitSym(ref name) => format!("'{}", name),
         ty::Ty::Map(ref key, ref value) => format!(
             "(Map {} {})",
-            str_for_poly(pvars, key),
-            str_for_poly(pvars, value)
+            str_for_poly(tvars, key),
+            str_for_poly(tvars, value)
         ),
-        ty::Ty::Set(ref member) => format!("(Setof {})", str_for_poly(pvars, member)),
+        ty::Ty::Set(ref member) => format!("(Setof {})", str_for_poly(tvars, member)),
         ty::Ty::Vec(ref members) => {
             let mut result_parts: Vec<String> = members
                 .iter()
-                .map(|member| format!(" {}", str_for_poly(pvars, member)))
+                .map(|member| format!(" {}", str_for_poly(tvars, member)))
                 .collect();
 
             format!("(Vector{})", result_parts.join(""))
         }
-        ty::Ty::Vecof(ref member) => format!("(Vectorof {})", str_for_poly(pvars, member)),
+        ty::Ty::Vecof(ref member) => format!("(Vectorof {})", str_for_poly(tvars, member)),
         ty::Ty::Fun(ref fun) => {
-            if let Some(simple_params_str) = str_for_simple_list_poly(pvars, fun.params()) {
+            if let Some(simple_params_str) = str_for_simple_list_poly(tvars, fun.params()) {
                 format!(
                     "({} {} {})",
                     simple_params_str,
                     if fun.impure() { "->!" } else { "->" },
-                    str_for_poly(pvars, fun.ret())
+                    str_for_poly(tvars, fun.ret())
                 )
             } else {
                 format!(
                     "({} {} {})",
                     if fun.impure() { "Fn!" } else { "Fn" },
-                    str_for_poly(pvars, fun.params()),
-                    str_for_poly(pvars, fun.ret())
+                    str_for_poly(tvars, fun.params()),
+                    str_for_poly(tvars, fun.ret())
                 )
             }
         }
-        ty::Ty::TyPred(ref test) => format!("(Type? {})", str_for_poly(pvars, test)),
+        ty::Ty::TyPred(ref test) => format!("(Type? {})", str_for_poly(tvars, test)),
         ty::Ty::Union(ref members) => {
             let member_strs: Vec<String> = members
                 .iter()
-                .map(|m| format!(" {}", str_for_poly(pvars, m)))
+                .map(|m| format!(" {}", str_for_poly(tvars, m)))
                 .collect();
 
             format!("(U{})", member_strs.join(""))
         }
-        ty::Ty::Listof(ref member) => format!("(Listof {})", str_for_poly(pvars, member)),
-        ty::Ty::Cons(ref car, ref cdr) => str_for_simple_list_poly_ty(pvars, poly_ty)
+        ty::Ty::Listof(ref member) => format!("(Listof {})", str_for_poly(tvars, member)),
+        ty::Ty::Cons(ref car, ref cdr) => str_for_simple_list_poly_ty(tvars, poly_ty)
             .map(|cons_args| format!("(List {})", cons_args))
             .unwrap_or_else(|| {
                 // Fall back to rendering the type using (Cons)
                 format!(
                     "(Cons {} {})",
-                    str_for_poly(pvars, car),
-                    str_for_poly(pvars, cdr)
+                    str_for_poly(tvars, car),
+                    str_for_poly(tvars, cdr)
                 )
             }),
         ty::Ty::Nil => {
@@ -454,13 +444,13 @@ fn str_for_poly_ty(pvars: &[ty::PVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
     }
 }
 
-pub fn str_for_poly(pvars: &[ty::PVar], poly: &ty::Poly) -> String {
+pub fn str_for_poly(tvars: &[ty::TVar], poly: &ty::Poly) -> String {
     match *poly {
-        ty::Poly::Var(pvar_id) => {
-            // TODO: It's possible to have pvars with overlapping source names
-            pvars[pvar_id.to_usize()].source_name().clone()
+        ty::Poly::Var(tvar_id) => {
+            // TODO: It's possible to have tvars with overlapping source names
+            tvars[tvar_id.to_usize()].source_name().clone()
         }
-        ty::Poly::Fixed(ref poly_ty) => str_for_poly_ty(pvars, poly_ty),
+        ty::Poly::Fixed(ref poly_ty) => str_for_poly_ty(tvars, poly_ty),
     }
 }
 
@@ -696,7 +686,7 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             false,
-            ty::PVarId::new(0)..ty::PVarId::new(0),
+            ty::TVarIds::empty(),
             simple_list_type(vec![], None),
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
@@ -710,7 +700,7 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             true,
-            ty::PVarId::new(0)..ty::PVarId::new(0),
+            ty::TVarIds::empty(),
             simple_list_type(vec![], None),
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
@@ -724,7 +714,7 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             false,
-            ty::PVarId::new(0)..ty::PVarId::new(0),
+            ty::TVarIds::empty(),
             simple_list_type(vec![ty::Ty::LitBool(false)], None),
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
@@ -738,7 +728,7 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             true,
-            ty::PVarId::new(0)..ty::PVarId::new(0),
+            ty::TVarIds::empty(),
             simple_list_type(vec![ty::Ty::Str], Some(ty::Ty::Sym)),
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
@@ -752,7 +742,7 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             false,
-            ty::PVarId::new(0)..ty::PVarId::new(0),
+            ty::TVarIds::empty(),
             simple_list_type(vec![ty::Ty::LitBool(false)], None),
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
@@ -766,7 +756,7 @@ mod test {
 
         let expected = ty::Ty::new_fun(
             false,
-            ty::PVarId::new(0)..ty::PVarId::new(0),
+            ty::TVarIds::empty(),
             ty::Ty::Listof(Box::new(ty::Ty::Sym.into_poly())).into_poly(),
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();

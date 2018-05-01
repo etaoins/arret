@@ -16,8 +16,8 @@ use std::ops::Range;
 ///
 /// This allows the implementation of our type system to be generic over `Mono` versus `Poly` types.
 pub trait TyRef: PartialEq + Clone + Sized {
-    /// Type used to store the polymorphic variables introduced by a function
-    type PVarIds: PVarIds;
+    /// Type used to store the type variables introduced by a function
+    type TVarIds: TVarIds;
 
     /// Constructs a fixed TyRef from the passed Ty
     fn from_ty(Ty<Self>) -> Self;
@@ -36,7 +36,7 @@ pub trait TyRef: PartialEq + Clone + Sized {
     }
 }
 
-pub trait PVarIds: PartialEq + Eq + Clone + std::fmt::Debug + std::hash::Hash + Sized {
+pub trait TVarIds: PartialEq + Eq + Clone + std::fmt::Debug + std::hash::Hash + Sized {
     fn empty() -> Self;
     fn is_empty(&self) -> bool;
 }
@@ -89,8 +89,8 @@ where
         })
     }
 
-    pub fn new_fun(impure: bool, pvar_ids: S::PVarIds, params: S, ret: S) -> Ty<S> {
-        Ty::Fun(Box::new(Fun::new(impure, pvar_ids, params, ret)))
+    pub fn new_fun(impure: bool, tvar_ids: S::TVarIds, params: S, ret: S) -> Ty<S> {
+        Ty::Fun(Box::new(Fun::new(impure, tvar_ids, params, ret)))
     }
 }
 
@@ -100,7 +100,7 @@ where
     S: TyRef,
 {
     impure: bool,
-    pvar_ids: S::PVarIds,
+    tvar_ids: S::TVarIds,
     params: S,
     ret: S,
 }
@@ -109,10 +109,10 @@ impl<S> Fun<S>
 where
     S: TyRef,
 {
-    pub fn new(impure: bool, pvar_ids: S::PVarIds, params: S, ret: S) -> Fun<S> {
+    pub fn new(impure: bool, tvar_ids: S::TVarIds, params: S, ret: S) -> Fun<S> {
         Fun {
             impure,
-            pvar_ids,
+            tvar_ids,
             params,
             ret,
         }
@@ -127,7 +127,7 @@ where
 
         Self::new(
             false,
-            S::PVarIds::empty(),
+            S::TVarIds::empty(),
             Ty::new_simple_list_type(iter::once(S::from_ty(Ty::Any)), None),
             S::from_ty(Ty::Bool),
         )
@@ -137,7 +137,7 @@ where
     pub fn new_top(impure: bool) -> Fun<S> {
         Self::new(
             impure,
-            S::PVarIds::empty(),
+            S::TVarIds::empty(),
             S::from_ty(Ty::Union(vec![])),
             S::from_ty(Ty::Any),
         )
@@ -145,10 +145,6 @@ where
 
     pub fn impure(&self) -> bool {
         self.impure
-    }
-
-    pub fn pvar_ids(&self) -> &S::PVarIds {
-        &self.pvar_ids
     }
 
     pub fn params(&self) -> &S {
@@ -160,16 +156,16 @@ where
     }
 
     pub fn is_polymorphic(&self) -> bool {
-        !self.pvar_ids.is_empty()
+        !self.tvar_ids.is_empty()
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd)]
-pub struct PVarId(u32);
+pub struct TVarId(u32);
 
-impl PVarId {
-    pub fn new(id: usize) -> PVarId {
-        PVarId(id as u32)
+impl TVarId {
+    pub fn new(id: usize) -> TVarId {
+        TVarId(id as u32)
     }
 
     pub fn to_usize(self) -> usize {
@@ -178,14 +174,14 @@ impl PVarId {
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct PVar {
+pub struct TVar {
     source_name: String,
     bound: Poly,
 }
 
-impl PVar {
-    pub fn new(source_name: String, bound: Poly) -> PVar {
-        PVar { source_name, bound }
+impl TVar {
+    pub fn new(source_name: String, bound: Poly) -> TVar {
+        TVar { source_name, bound }
     }
 
     pub fn source_name(&self) -> &String {
@@ -195,21 +191,21 @@ impl PVar {
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub enum Poly {
-    Var(PVarId),
+    Var(TVarId),
     Fixed(Ty<Poly>),
 }
 
 impl Poly {
     pub fn into_decl(self) -> Decl {
         match self {
-            Poly::Var(pvar_id) => Decl::Var(pvar_id),
+            Poly::Var(tvar_id) => Decl::Var(tvar_id),
             Poly::Fixed(ty) => Decl::Fixed(ty),
         }
     }
 }
 
 impl TyRef for Poly {
-    type PVarIds = Range<PVarId>;
+    type TVarIds = Range<TVarId>;
 
     fn from_ty(ty: Ty<Poly>) -> Poly {
         ty.into_poly()
@@ -222,9 +218,9 @@ impl Ty<Poly> {
     }
 }
 
-impl PVarIds for Range<PVarId> {
-    fn empty() -> Range<PVarId> {
-        PVarId::new(0)..PVarId::new(0)
+impl TVarIds for Range<TVarId> {
+    fn empty() -> Range<TVarId> {
+        TVarId::new(0)..TVarId::new(0)
     }
 
     fn is_empty(&self) -> bool {
@@ -248,7 +244,7 @@ impl Ty<Mono> {
 }
 
 impl TyRef for Mono {
-    type PVarIds = MonoPVarIds;
+    type TVarIds = EmptyTVarIds;
 
     fn from_ty(ty: Ty<Mono>) -> Mono {
         ty.into_mono()
@@ -256,11 +252,11 @@ impl TyRef for Mono {
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct MonoPVarIds();
+pub struct EmptyTVarIds();
 
-impl PVarIds for MonoPVarIds {
-    fn empty() -> MonoPVarIds {
-        MonoPVarIds()
+impl TVarIds for EmptyTVarIds {
+    fn empty() -> EmptyTVarIds {
+        EmptyTVarIds()
     }
 
     fn is_empty(&self) -> bool {
@@ -275,7 +271,7 @@ impl PVarIds for MonoPVarIds {
 /// declaration for the purposes of reporting inference errors.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Decl {
-    Var(PVarId),
+    Var(TVarId),
     Fixed(Ty<Poly>),
     Free(FreeTyId),
 }

@@ -226,33 +226,33 @@ where
 }
 
 struct PolyIsACtx<'a> {
-    pvars: &'a [ty::PVar],
+    tvars: &'a [ty::TVar],
 }
 
 impl<'a> PolyIsACtx<'a> {
-    fn pvar_id_is_bounded_by(&self, sub_pvar_id: ty::PVarId, parent_pvar_id: ty::PVarId) -> bool {
-        if sub_pvar_id == parent_pvar_id {
+    fn tvar_id_is_bounded_by(&self, sub_tvar_id: ty::TVarId, parent_tvar_id: ty::TVarId) -> bool {
+        if sub_tvar_id == parent_tvar_id {
             return true;
         }
 
-        match self.pvars[sub_pvar_id.to_usize()].bound {
+        match self.tvars[sub_tvar_id.to_usize()].bound {
             ty::Poly::Fixed(_) => false,
-            ty::Poly::Var(pvar_id) => self.pvar_id_is_bounded_by(pvar_id, parent_pvar_id),
+            ty::Poly::Var(tvar_id) => self.tvar_id_is_bounded_by(tvar_id, parent_tvar_id),
         }
     }
 }
 
 impl<'a> IsACtx<ty::Poly> for PolyIsACtx<'a> {
     fn ref_is_a(&self, sub: &ty::Poly, parent: &ty::Poly) -> Result {
-        if let ty::Poly::Var(parent_pvar_id) = *parent {
-            if let ty::Poly::Var(sub_pvar_id) = *sub {
-                if self.pvar_id_is_bounded_by(sub_pvar_id, parent_pvar_id) {
+        if let ty::Poly::Var(parent_tvar_id) = *parent {
+            if let ty::Poly::Var(sub_tvar_id) = *sub {
+                if self.tvar_id_is_bounded_by(sub_tvar_id, parent_tvar_id) {
                     return Result::Yes;
                 }
             }
         }
 
-        let sub_ty = ty::resolve::resolve_poly_ty(self.pvars, sub).as_ty();
+        let sub_ty = ty::resolve::resolve_poly_ty(self.tvars, sub).as_ty();
         if sub_ty == &ty::Ty::Union(vec![]) {
             // (U) is a definite subtype of every type, regardless if the parent is bound. This is
             // important as (U) is used as a placeholder for parameters with unknown type. More
@@ -260,7 +260,7 @@ impl<'a> IsACtx<ty::Poly> for PolyIsACtx<'a> {
             return Result::Yes;
         }
 
-        let (parent_ty, parent_is_bound) = match ty::resolve::resolve_poly_ty(self.pvars, parent) {
+        let (parent_ty, parent_is_bound) = match ty::resolve::resolve_poly_ty(self.tvars, parent) {
             ty::resolve::Result::Bound(ty) => (ty, true),
             ty::resolve::Result::Fixed(ty) => (ty, false),
         };
@@ -277,8 +277,8 @@ impl<'a> IsACtx<ty::Poly> for PolyIsACtx<'a> {
     }
 }
 
-pub fn poly_is_a(pvars: &[ty::PVar], sub: &ty::Poly, parent: &ty::Poly) -> Result {
-    let ctx = PolyIsACtx { pvars };
+pub fn poly_is_a(tvars: &[ty::TVar], sub: &ty::Poly, parent: &ty::Poly) -> Result {
+    let ctx = PolyIsACtx { tvars };
     ctx.ref_is_a(sub, parent)
 }
 
@@ -529,118 +529,118 @@ mod test {
 
     #[test]
     fn unbounded_poly_vars() {
-        let pvar_id1 = ty::PVarId::new(0);
-        let ptype1 = ty::Poly::Var(pvar_id1);
+        let tvar_id1 = ty::TVarId::new(0);
+        let ptype1 = ty::Poly::Var(tvar_id1);
 
-        let pvar_id2 = ty::PVarId::new(1);
-        let ptype2 = ty::Poly::Var(pvar_id2);
+        let tvar_id2 = ty::TVarId::new(1);
+        let ptype2 = ty::Poly::Var(tvar_id2);
 
         let poly_bool = poly_for_str("Bool");
 
-        let pvars = [
-            ty::PVar::new("one".to_owned(), ty::Ty::Any.into_poly()),
-            ty::PVar::new("two".to_owned(), ty::Ty::Any.into_poly()),
+        let tvars = [
+            ty::TVar::new("one".to_owned(), ty::Ty::Any.into_poly()),
+            ty::TVar::new("two".to_owned(), ty::Ty::Any.into_poly()),
         ];
 
-        assert_eq!(Result::Yes, poly_is_a(&pvars, &ptype1, &ptype1));
-        assert_eq!(Result::May, poly_is_a(&pvars, &ptype1, &ptype2));
-        assert_eq!(Result::May, poly_is_a(&pvars, &ptype1, &poly_bool));
+        assert_eq!(Result::Yes, poly_is_a(&tvars, &ptype1, &ptype1));
+        assert_eq!(Result::May, poly_is_a(&tvars, &ptype1, &ptype2));
+        assert_eq!(Result::May, poly_is_a(&tvars, &ptype1, &poly_bool));
     }
 
     #[test]
     fn bounded_poly_vars() {
-        let sym_ptype = ty::Poly::Var(ty::PVarId::new(0));
-        let str_ptype = ty::Poly::Var(ty::PVarId::new(1));
-        let foo_sym_ptype = ty::Poly::Var(ty::PVarId::new(2));
+        let sym_ptype = ty::Poly::Var(ty::TVarId::new(0));
+        let str_ptype = ty::Poly::Var(ty::TVarId::new(1));
+        let foo_sym_ptype = ty::Poly::Var(ty::TVarId::new(2));
 
-        let pvars = [
-            ty::PVar::new("sym".to_owned(), poly_for_str("Symbol")),
-            ty::PVar::new("str".to_owned(), poly_for_str("String")),
-            ty::PVar::new("foo".to_owned(), poly_for_str("'foo")),
+        let tvars = [
+            ty::TVar::new("sym".to_owned(), poly_for_str("Symbol")),
+            ty::TVar::new("str".to_owned(), poly_for_str("String")),
+            ty::TVar::new("foo".to_owned(), poly_for_str("'foo")),
         ];
 
         let poly_foo_sym = poly_for_str("'foo");
         let any = poly_for_str("Any");
 
-        // A poly var always satisfies itself
-        assert_eq!(Result::Yes, poly_is_a(&pvars, &sym_ptype, &sym_ptype));
+        // A type var always satisfies itself
+        assert_eq!(Result::Yes, poly_is_a(&tvars, &sym_ptype, &sym_ptype));
 
         // The bounds of these vars are disjoint
-        assert_eq!(Result::No, poly_is_a(&pvars, &sym_ptype, &str_ptype));
+        assert_eq!(Result::No, poly_is_a(&tvars, &sym_ptype, &str_ptype));
 
-        // The poly var may satisfy a more specific bound
-        assert_eq!(Result::May, poly_is_a(&pvars, &sym_ptype, &poly_foo_sym));
+        // The type var may satisfy a more specific bound
+        assert_eq!(Result::May, poly_is_a(&tvars, &sym_ptype, &poly_foo_sym));
 
-        // A sub never satisfies a poly var with a disjoint bound
-        assert_eq!(Result::No, poly_is_a(&pvars, &poly_foo_sym, &str_ptype));
+        // A sub never satisfies a type var with a disjoint bound
+        assert_eq!(Result::No, poly_is_a(&tvars, &poly_foo_sym, &str_ptype));
 
         // The sub has a fixed type while the parent has a poly type. We can't ensure that 'foo
         // satisfies all possible Symbol subtypes (such as 'bar)
-        assert_eq!(Result::May, poly_is_a(&pvars, &poly_foo_sym, &sym_ptype));
+        assert_eq!(Result::May, poly_is_a(&tvars, &poly_foo_sym, &sym_ptype));
 
         // Both the sub and parent have fixed types by virtue of having no subtypes
         assert_eq!(
             Result::Yes,
-            poly_is_a(&pvars, &poly_foo_sym, &foo_sym_ptype)
+            poly_is_a(&tvars, &poly_foo_sym, &foo_sym_ptype)
         );
 
         // The sub has a poly type while the parent has a fixed type. If the sub satisfies the
         // parent type so should all of its subtypes.
-        assert_eq!(Result::Yes, poly_is_a(&pvars, &sym_ptype, &any));
+        assert_eq!(Result::Yes, poly_is_a(&tvars, &sym_ptype, &any));
     }
 
     #[test]
     fn related_poly_bounds() {
-        let ptype1_unbounded = ty::Poly::Var(ty::PVarId::new(0));
-        let ptype2_bounded_by_1 = ty::Poly::Var(ty::PVarId::new(1));
-        let ptype3_bounded_by_2 = ty::Poly::Var(ty::PVarId::new(2));
+        let ptype1_unbounded = ty::Poly::Var(ty::TVarId::new(0));
+        let ptype2_bounded_by_1 = ty::Poly::Var(ty::TVarId::new(1));
+        let ptype3_bounded_by_2 = ty::Poly::Var(ty::TVarId::new(2));
 
-        let pvars = [
-            ty::PVar::new("1".to_owned(), poly_for_str("Any")),
-            ty::PVar::new("2".to_owned(), ptype1_unbounded.clone()),
-            ty::PVar::new("3".to_owned(), ptype2_bounded_by_1.clone()),
+        let tvars = [
+            ty::TVar::new("1".to_owned(), poly_for_str("Any")),
+            ty::TVar::new("2".to_owned(), ptype1_unbounded.clone()),
+            ty::TVar::new("3".to_owned(), ptype2_bounded_by_1.clone()),
         ];
 
         // Direct bounding
         assert_eq!(
             Result::Yes,
-            poly_is_a(&pvars, &ptype2_bounded_by_1, &ptype1_unbounded)
+            poly_is_a(&tvars, &ptype2_bounded_by_1, &ptype1_unbounded)
         );
         assert_eq!(
             Result::Yes,
-            poly_is_a(&pvars, &ptype3_bounded_by_2, &ptype2_bounded_by_1)
+            poly_is_a(&tvars, &ptype3_bounded_by_2, &ptype2_bounded_by_1)
         );
 
         // Commutative bounding
         assert_eq!(
             Result::Yes,
-            poly_is_a(&pvars, &ptype3_bounded_by_2, &ptype1_unbounded)
+            poly_is_a(&tvars, &ptype3_bounded_by_2, &ptype1_unbounded)
         );
 
         // Inverse bounding relationship may not satisfy - the bounded type can have arbitrary
         // subtypes
         assert_eq!(
             Result::May,
-            poly_is_a(&pvars, &ptype1_unbounded, &ptype2_bounded_by_1)
+            poly_is_a(&tvars, &ptype1_unbounded, &ptype2_bounded_by_1)
         );
     }
 
     #[test]
     fn polymorphic_funs() {
-        let ptype1_unbounded = ty::Poly::Var(ty::PVarId::new(0));
-        let ptype2_symbol = ty::Poly::Var(ty::PVarId::new(1));
-        let ptype3_string = ty::Poly::Var(ty::PVarId::new(2));
+        let ptype1_unbounded = ty::Poly::Var(ty::TVarId::new(0));
+        let ptype2_symbol = ty::Poly::Var(ty::TVarId::new(1));
+        let ptype3_string = ty::Poly::Var(ty::TVarId::new(2));
 
-        let pvars = [
-            ty::PVar::new("PAny".to_owned(), poly_for_str("Any")),
-            ty::PVar::new("PSymbol".to_owned(), poly_for_str("Symbol")),
-            ty::PVar::new("PString".to_owned(), poly_for_str("String")),
+        let tvars = [
+            ty::TVar::new("TAny".to_owned(), poly_for_str("Any")),
+            ty::TVar::new("TSymbol".to_owned(), poly_for_str("Symbol")),
+            ty::TVar::new("TString".to_owned(), poly_for_str("String")),
         ];
 
         // (All A (A -> A))
         let pidentity_fun = ty::Ty::new_fun(
             false,
-            ty::PVarId::new(0)..ty::PVarId::new(1),
+            ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None),
             ptype1_unbounded.clone(),
         ).into_poly();
@@ -648,7 +648,7 @@ mod test {
         // (All A (A A -> (Cons A A))
         let panys_to_cons = ty::Ty::new_fun(
             false,
-            ty::PVarId::new(0)..ty::PVarId::new(1),
+            ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(
                 vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
                 None,
@@ -662,7 +662,7 @@ mod test {
         // (All [A : Symbol] (A -> A))
         let pidentity_sym_fun = ty::Ty::new_fun(
             false,
-            ty::PVarId::new(1)..ty::PVarId::new(2),
+            ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::Ty::new_simple_list_type(vec![ptype2_symbol.clone()].into_iter(), None),
             ptype2_symbol.clone(),
         ).into_poly();
@@ -670,49 +670,49 @@ mod test {
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Ty::new_fun(
             true,
-            ty::PVarId::new(2)..ty::PVarId::new(3),
+            ty::TVarId::new(2)..ty::TVarId::new(3),
             ty::Ty::new_simple_list_type(vec![ptype3_string.clone()].into_iter(), None),
             ptype3_string.clone(),
         ).into_poly();
 
         // All functions should have the top function type
         let top_fun = poly_for_str("(Fn! (RawU) Any)");
-        assert_eq!(Result::Yes, poly_is_a(&pvars, &pidentity_fun, &top_fun));
-        assert_eq!(Result::Yes, poly_is_a(&pvars, &panys_to_cons, &top_fun));
-        assert_eq!(Result::Yes, poly_is_a(&pvars, &pidentity_sym_fun, &top_fun));
+        assert_eq!(Result::Yes, poly_is_a(&tvars, &pidentity_fun, &top_fun));
+        assert_eq!(Result::Yes, poly_is_a(&tvars, &panys_to_cons, &top_fun));
+        assert_eq!(Result::Yes, poly_is_a(&tvars, &pidentity_sym_fun, &top_fun));
         assert_eq!(
             Result::Yes,
-            poly_is_a(&pvars, &pidentity_impure_string_fun, &top_fun)
+            poly_is_a(&tvars, &pidentity_impure_string_fun, &top_fun)
         );
 
         // We should take in to account purity
         let top_pure_fun = poly_for_str("(Fn (RawU) Any)");
         assert_eq!(
             Result::Yes,
-            poly_is_a(&pvars, &pidentity_fun, &top_pure_fun)
+            poly_is_a(&tvars, &pidentity_fun, &top_pure_fun)
         );
         assert_eq!(
             Result::No,
-            poly_is_a(&pvars, &pidentity_impure_string_fun, &top_pure_fun)
+            poly_is_a(&tvars, &pidentity_impure_string_fun, &top_pure_fun)
         );
 
         // All functions should have the top one param function type except panys
         let top_one_param_fun = poly_for_str("((RawU) ->! Any)");
         assert_eq!(
             Result::Yes,
-            poly_is_a(&pvars, &pidentity_fun, &top_one_param_fun)
+            poly_is_a(&tvars, &pidentity_fun, &top_one_param_fun)
         );
         assert_eq!(
             Result::No,
-            poly_is_a(&pvars, &panys_to_cons, &top_one_param_fun)
+            poly_is_a(&tvars, &panys_to_cons, &top_one_param_fun)
         );
         assert_eq!(
             Result::Yes,
-            poly_is_a(&pvars, &pidentity_sym_fun, &top_one_param_fun)
+            poly_is_a(&tvars, &pidentity_sym_fun, &top_one_param_fun)
         );
         assert_eq!(
             Result::Yes,
-            poly_is_a(&pvars, &pidentity_impure_string_fun, &top_one_param_fun)
+            poly_is_a(&tvars, &pidentity_impure_string_fun, &top_one_param_fun)
         );
 
         // The identity function is *not* (Any -> Any) as that would allow the types to be
@@ -720,7 +720,7 @@ mod test {
         let any_to_any_fun = poly_for_str("(Any ->! Any)");
         assert_eq!(
             Result::May,
-            poly_is_a(&pvars, &pidentity_fun, &any_to_any_fun)
+            poly_is_a(&tvars, &pidentity_fun, &any_to_any_fun)
         );
 
         // The symbol function satisfies ((U) -> Symbol) as all of its returns must be bounded by
@@ -728,45 +728,45 @@ mod test {
         let top_to_sym_fun = poly_for_str("(Fn! (RawU) Symbol)");
         assert_eq!(
             Result::May,
-            poly_is_a(&pvars, &pidentity_fun, &top_to_sym_fun)
+            poly_is_a(&tvars, &pidentity_fun, &top_to_sym_fun)
         );
         assert_eq!(
             Result::No,
-            poly_is_a(&pvars, &panys_to_cons, &top_to_sym_fun)
+            poly_is_a(&tvars, &panys_to_cons, &top_to_sym_fun)
         );
         assert_eq!(
             Result::Yes,
-            poly_is_a(&pvars, &pidentity_sym_fun, &top_to_sym_fun)
+            poly_is_a(&tvars, &pidentity_sym_fun, &top_to_sym_fun)
         );
 
         // The identity string function satisfies (String -> String) as it has no subtypes
         let str_to_str_fun = poly_for_str("(String ->! String)");
         assert_eq!(
             Result::May,
-            poly_is_a(&pvars, &pidentity_fun, &str_to_str_fun)
+            poly_is_a(&tvars, &pidentity_fun, &str_to_str_fun)
         );
         assert_eq!(
             Result::No,
-            poly_is_a(&pvars, &panys_to_cons, &str_to_str_fun)
+            poly_is_a(&tvars, &panys_to_cons, &str_to_str_fun)
         );
         assert_eq!(
             Result::No,
-            poly_is_a(&pvars, &pidentity_sym_fun, &str_to_str_fun)
+            poly_is_a(&tvars, &pidentity_sym_fun, &str_to_str_fun)
         );
         assert_eq!(
             Result::Yes,
-            poly_is_a(&pvars, &pidentity_impure_string_fun, &str_to_str_fun)
+            poly_is_a(&tvars, &pidentity_impure_string_fun, &str_to_str_fun)
         );
 
         // panys_to_cons has a very specific shape we should be able to test
         let top_any_to_cons_fun = poly_for_str("((RawU) (RawU) ->! (Cons Any Any))");
         assert_eq!(
             Result::No,
-            poly_is_a(&pvars, &pidentity_fun, &top_any_to_cons_fun)
+            poly_is_a(&tvars, &pidentity_fun, &top_any_to_cons_fun)
         );
         assert_eq!(
             Result::Yes,
-            poly_is_a(&pvars, &panys_to_cons, &top_any_to_cons_fun)
+            poly_is_a(&tvars, &panys_to_cons, &top_any_to_cons_fun)
         );
     }
 }

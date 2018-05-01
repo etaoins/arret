@@ -2,7 +2,7 @@ use std::iter;
 use std::result::Result;
 
 use ty;
-use ty::PVarIds;
+use ty::TVarIds;
 
 #[derive(PartialEq, Debug)]
 pub enum IntersectedTy<S> {
@@ -160,10 +160,8 @@ where
 
             // Function type
             (&ty::Ty::Fun(ref fun1), &ty::Ty::Fun(ref fun2)) => {
-                if (fun1.is_polymorphic() || fun2.is_polymorphic())
-                    && (fun1.pvar_ids() != fun2.pvar_ids())
-                {
-                    // TODO: This might be possible but we would have to recalculate the pvars for
+                if fun1.is_polymorphic() || fun2.is_polymorphic() {
+                    // TODO: This might be possible but we would have to recalculate the tvars for
                     // the intersected function
                     return IntersectedTy::Disjoint;
                 }
@@ -183,7 +181,7 @@ where
 
                 IntersectedTy::Merged(S::from_ty(ty::Ty::new_fun(
                     intersected_impure,
-                    S::PVarIds::empty(),
+                    S::TVarIds::empty(),
                     intersected_params,
                     intersected_ret,
                 )))
@@ -194,20 +192,20 @@ where
 }
 
 struct PolyIntersectCtx<'a> {
-    pvars: &'a [ty::PVar],
+    tvars: &'a [ty::TVar],
 }
 
 impl<'a> IntersectCtx<ty::Poly> for PolyIntersectCtx<'a> {
     fn intersect_ref(&self, poly1: &ty::Poly, poly2: &ty::Poly) -> IntersectedTy<ty::Poly> {
-        if ty::is_a::poly_is_a(self.pvars, poly1, poly2).to_bool() {
+        if ty::is_a::poly_is_a(self.tvars, poly1, poly2).to_bool() {
             return IntersectedTy::Merged(poly1.clone());
-        } else if ty::is_a::poly_is_a(self.pvars, poly2, poly1).to_bool() {
+        } else if ty::is_a::poly_is_a(self.tvars, poly2, poly1).to_bool() {
             return IntersectedTy::Merged(poly2.clone());
         }
 
         // Determine if we're dealing with fixed types or polymorphic bounds
-        let resolved1 = ty::resolve::resolve_poly_ty(self.pvars, poly1);
-        let resolved2 = ty::resolve::resolve_poly_ty(self.pvars, poly2);
+        let resolved1 = ty::resolve::resolve_poly_ty(self.tvars, poly1);
+        let resolved2 = ty::resolve::resolve_poly_ty(self.tvars, poly2);
 
         match (&resolved1, &resolved2) {
             (&ty::resolve::Result::Fixed(ty1), &ty::resolve::Result::Fixed(ty2)) => {
@@ -226,16 +224,16 @@ impl<'a> IntersectCtx<ty::Poly> for PolyIntersectCtx<'a> {
         poly1: &ty::Poly,
         poly2: &ty::Poly,
     ) -> Result<ty::unify::UnifiedTy<ty::Poly>, ()> {
-        ty::unify::poly_unify(self.pvars, poly1, poly2).map_err(|_| ())
+        ty::unify::poly_unify(self.tvars, poly1, poly2).map_err(|_| ())
     }
 }
 
 pub fn poly_intersect<'a>(
-    pvars: &'a [ty::PVar],
+    tvars: &'a [ty::TVar],
     poly1: &'a ty::Poly,
     poly2: &'a ty::Poly,
 ) -> IntersectedTy<ty::Poly> {
-    let ctx = PolyIntersectCtx { pvars };
+    let ctx = PolyIntersectCtx { tvars };
     ctx.intersect_ref(poly1, poly2)
 }
 
@@ -412,18 +410,18 @@ mod test {
 
     #[test]
     fn polymorphic_funs() {
-        let ptype1_unbounded = ty::Poly::Var(ty::PVarId::new(0));
-        let ptype2_string = ty::Poly::Var(ty::PVarId::new(1));
+        let ptype1_unbounded = ty::Poly::Var(ty::TVarId::new(0));
+        let ptype2_string = ty::Poly::Var(ty::TVarId::new(1));
 
-        let pvars = [
-            ty::PVar::new("PAny".to_owned(), poly_for_str("Any")),
-            ty::PVar::new("PString".to_owned(), poly_for_str("String")),
+        let tvars = [
+            ty::TVar::new("TAny".to_owned(), poly_for_str("Any")),
+            ty::TVar::new("TString".to_owned(), poly_for_str("String")),
         ];
 
         // (All A (A -> A))
         let pidentity_fun = ty::Ty::new_fun(
             false,
-            ty::PVarId::new(0)..ty::PVarId::new(1),
+            ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None),
             ptype1_unbounded.clone(),
         ).into_poly();
@@ -431,7 +429,7 @@ mod test {
         // (All A (A A -> (Cons A A))
         let panys_to_cons = ty::Ty::new_fun(
             false,
-            ty::PVarId::new(0)..ty::PVarId::new(1),
+            ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(
                 vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
                 None,
@@ -445,7 +443,7 @@ mod test {
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Ty::new_fun(
             true,
-            ty::PVarId::new(1)..ty::PVarId::new(2),
+            ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::Ty::new_simple_list_type(vec![ptype2_string.clone()].into_iter(), None),
             ptype2_string.clone(),
         ).into_poly();
@@ -455,24 +453,24 @@ mod test {
         // We should intersect polymorphic functions with themselves
         assert_eq!(
             IntersectedTy::Merged(pidentity_fun.clone()),
-            poly_intersect(&pvars, &pidentity_fun, &pidentity_fun)
+            poly_intersect(&tvars, &pidentity_fun, &pidentity_fun)
         );
 
         // The intersection of the pure identity function and the top pure function is the identity
         // function
         assert_eq!(
             IntersectedTy::Merged(pidentity_fun.clone()),
-            poly_intersect(&pvars, &pidentity_fun, &top_pure_fun)
+            poly_intersect(&tvars, &pidentity_fun, &top_pure_fun)
         );
 
         // The intersections of the two polymorphic functions is disjoint
         assert_eq!(
             IntersectedTy::Disjoint,
-            poly_intersect(&pvars, &pidentity_fun, &panys_to_cons)
+            poly_intersect(&tvars, &pidentity_fun, &panys_to_cons)
         );
         assert_eq!(
             IntersectedTy::Disjoint,
-            poly_intersect(&pvars, &pidentity_fun, &pidentity_impure_string_fun)
+            poly_intersect(&tvars, &pidentity_fun, &pidentity_impure_string_fun)
         );
 
         // Pure and impure functions are disjoint
@@ -480,7 +478,7 @@ mod test {
         // checking we don't create a nonsense type.
         assert_eq!(
             IntersectedTy::Disjoint,
-            poly_intersect(&pvars, &pidentity_impure_string_fun, &top_pure_fun)
+            poly_intersect(&tvars, &pidentity_impure_string_fun, &top_pure_fun)
         );
     }
 }

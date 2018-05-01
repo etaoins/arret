@@ -2,28 +2,27 @@ use std::collections::HashMap;
 use std::result;
 
 use ty;
-use ty::PVarIds;
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
-    Unresolved(ty::PVarId),
+    Unresolved(ty::TVarId),
 }
 
 pub type Result<T> = result::Result<T, Error>;
 
 fn subst_ty_slice(
     fixed: &[ty::Poly],
-    pvars: &HashMap<ty::PVarId, ty::Mono>,
+    tvars: &HashMap<ty::TVarId, ty::Mono>,
 ) -> Result<Vec<ty::Mono>> {
     fixed
         .iter()
-        .map(|p| subst(p, pvars))
+        .map(|p| subst(p, tvars))
         .collect::<Result<Vec<ty::Mono>>>()
 }
 
 fn subst_ty(
     fixed: &ty::Ty<ty::Poly>,
-    pvars: &HashMap<ty::PVarId, ty::Mono>,
+    tvars: &HashMap<ty::TVarId, ty::Mono>,
 ) -> Result<ty::Ty<ty::Mono>> {
     Ok(match *fixed {
         ty::Ty::Any => ty::Ty::Any,
@@ -36,37 +35,37 @@ fn subst_ty(
         ty::Ty::Sym => ty::Ty::Sym,
         ty::Ty::Fun(ref fun) => ty::Ty::new_fun(
             fun.impure,
-            ty::MonoPVarIds::empty(),
-            subst(&fun.params, pvars)?,
-            subst(&fun.ret, pvars)?,
+            ty::TVarIds::empty(),
+            subst(&fun.params, tvars)?,
+            subst(&fun.ret, tvars)?,
         ),
-        ty::Ty::TyPred(ref test_ty) => ty::Ty::TyPred(Box::new(subst(test_ty, pvars)?)),
+        ty::Ty::TyPred(ref test_ty) => ty::Ty::TyPred(Box::new(subst(test_ty, tvars)?)),
         ty::Ty::Map(ref key, ref value) => {
-            ty::Ty::Map(Box::new(subst(key, pvars)?), Box::new(subst(value, pvars)?))
+            ty::Ty::Map(Box::new(subst(key, tvars)?), Box::new(subst(value, tvars)?))
         }
         ty::Ty::LitBool(val) => ty::Ty::LitBool(val),
         ty::Ty::LitSym(ref val) => ty::Ty::LitSym(val.clone()),
-        ty::Ty::Set(ref member) => ty::Ty::Set(Box::new(subst(&member, pvars)?)),
-        ty::Ty::Union(ref members) => ty::Ty::Union(subst_ty_slice(members, pvars)?),
+        ty::Ty::Set(ref member) => ty::Ty::Set(Box::new(subst(&member, tvars)?)),
+        ty::Ty::Union(ref members) => ty::Ty::Union(subst_ty_slice(members, tvars)?),
         ty::Ty::Vec(ref members) => {
-            let members_mono = subst_ty_slice(members, pvars)?;
+            let members_mono = subst_ty_slice(members, tvars)?;
             ty::Ty::Vec(members_mono)
         }
-        ty::Ty::Vecof(ref member) => ty::Ty::Vecof(Box::new(subst(member, pvars)?)),
-        ty::Ty::Listof(ref member) => ty::Ty::Listof(Box::new(subst(member, pvars)?)),
+        ty::Ty::Vecof(ref member) => ty::Ty::Vecof(Box::new(subst(member, tvars)?)),
+        ty::Ty::Listof(ref member) => ty::Ty::Listof(Box::new(subst(member, tvars)?)),
         ty::Ty::Cons(ref car, ref cdr) => {
-            ty::Ty::Cons(Box::new(subst(car, pvars)?), Box::new(subst(cdr, pvars)?))
+            ty::Ty::Cons(Box::new(subst(car, tvars)?), Box::new(subst(cdr, tvars)?))
         }
     })
 }
 
-pub fn subst(poly: &ty::Poly, pvars: &HashMap<ty::PVarId, ty::Mono>) -> Result<ty::Mono> {
+pub fn subst(poly: &ty::Poly, tvars: &HashMap<ty::TVarId, ty::Mono>) -> Result<ty::Mono> {
     match *poly {
-        ty::Poly::Fixed(ref fixed) => subst_ty(fixed, pvars).map(|t| t.into_mono()),
-        ty::Poly::Var(pvar_id) => pvars
-            .get(&pvar_id)
+        ty::Poly::Fixed(ref fixed) => subst_ty(fixed, tvars).map(|t| t.into_mono()),
+        ty::Poly::Var(tvar_id) => tvars
+            .get(&tvar_id)
             .cloned()
-            .ok_or_else(|| Error::Unresolved(pvar_id)),
+            .ok_or_else(|| Error::Unresolved(tvar_id)),
     }
 }
 
@@ -75,50 +74,50 @@ mod test {
     use super::*;
 
     #[test]
-    fn subst_pvar() {
-        let pvar_id = ty::PVarId::new(1);
+    fn subst_tvar() {
+        let tvar_id = ty::TVarId::new(1);
 
-        let poly_var = ty::Poly::Var(pvar_id);
-        let mut pvars = HashMap::new();
-        pvars.insert(pvar_id, ty::Ty::Int.into_mono());
+        let type_var = ty::Poly::Var(tvar_id);
+        let mut tvars = HashMap::new();
+        tvars.insert(tvar_id, ty::Ty::Int.into_mono());
 
         let expected = ty::Ty::Int.into_mono();
-        assert_eq!(expected, subst(&poly_var, &pvars).unwrap());
+        assert_eq!(expected, subst(&type_var, &tvars).unwrap());
     }
 
     #[test]
-    fn subst_pvar_unresolved() {
-        let pvar_id = ty::PVarId::new(1);
+    fn subst_tvar_unresolved() {
+        let tvar_id = ty::TVarId::new(1);
 
-        let poly_var = ty::Poly::Var(pvar_id);
-        let pvars = HashMap::new();
-        // Do not include the pvar
+        let poly_var = ty::Poly::Var(tvar_id);
+        let tvars = HashMap::new();
+        // Do not include the tvar
 
-        let err = Error::Unresolved(pvar_id);
-        assert_eq!(err, subst(&poly_var, &pvars).unwrap_err());
+        let err = Error::Unresolved(tvar_id);
+        assert_eq!(err, subst(&poly_var, &tvars).unwrap_err());
     }
 
     #[test]
     fn subst_set() {
-        let pvar_id = ty::PVarId::new(1);
+        let tvar_id = ty::TVarId::new(1);
 
-        let poly_set = ty::Ty::Set(Box::new(ty::Poly::Var(pvar_id))).into_poly();
-        let mut pvars = HashMap::new();
-        pvars.insert(pvar_id, ty::Ty::Int.into_mono());
+        let poly_set = ty::Ty::Set(Box::new(ty::Poly::Var(tvar_id))).into_poly();
+        let mut tvars = HashMap::new();
+        tvars.insert(tvar_id, ty::Ty::Int.into_mono());
 
         let expected = ty::Ty::Set(Box::new(ty::Ty::Int.into_mono())).into_mono();
-        assert_eq!(expected, subst(&poly_set, &pvars).unwrap());
+        assert_eq!(expected, subst(&poly_set, &tvars).unwrap());
     }
 
     #[test]
     fn subst_set_unresolved() {
-        let pvar_id = ty::PVarId::new(1);
+        let tvar_id = ty::TVarId::new(1);
 
-        let poly_set = ty::Ty::Set(Box::new(ty::Poly::Var(pvar_id))).into_poly();
-        let pvars = HashMap::new();
-        // Do not include the pvar
+        let poly_set = ty::Ty::Set(Box::new(ty::Poly::Var(tvar_id))).into_poly();
+        let tvars = HashMap::new();
+        // Do not include the tvar
 
-        let err = Error::Unresolved(pvar_id);
-        assert_eq!(err, subst(&poly_set, &pvars).unwrap_err());
+        let err = Error::Unresolved(tvar_id);
+        assert_eq!(err, subst(&poly_set, &tvars).unwrap_err());
     }
 }
