@@ -28,7 +28,7 @@ where
     S: ty::TyRef,
 {
     fn unify_ty_refs(&self, &S, &S) -> Result<UnifiedTy<S>, E>;
-    fn intersect_ty_refs(&self, &S, &S) -> ty::intersect::IntersectedTy<S>;
+    fn intersect_ty_refs(&self, &S, &S) -> Result<S, ty::intersect::Error>;
     fn unify_purity_refs(&self, &S::PRef, &S::PRef) -> Result<S::PRef, E>;
 
     fn unify_to_ty_ref(&self, ty_ref1: &S, ty_ref2: &S) -> Result<S, E> {
@@ -106,8 +106,22 @@ where
                 ty::Fun::new_top(unified_purity),
             )))))
         } else {
-            let unified_params = self.intersect_ty_refs(fun1.params(), fun2.params())
-                .into_ty_ref();
+            let unified_params = match self.intersect_ty_refs(fun1.params(), fun2.params()) {
+                Ok(merged) => merged,
+                Err(ty::intersect::Error::Disjoint) => {
+                    // We normally avoid using `(U)` as the intersection of two disjoint types.
+                    // This is because if it appears it an "output type" such as a function return
+                    // or inferred variable it can mislead our type system in to thinking a value
+                    // has the type `(U)`. This is by definition impossible and breaks our type
+                    // system.
+                    //
+                    // However, this is safe for parameter types as it's an "input type". Using (U)
+                    // here simply makes the function unapplicable. This is required to express our
+                    // top function types.
+                    S::from_ty(ty::Ty::Union(vec![]))
+                }
+            };
+
             let unified_ret = self.unify_to_ty_ref(fun1.ret(), fun2.ret())?;
 
             Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::new_fun(
@@ -383,7 +397,7 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
         &self,
         poly1: &ty::Poly,
         poly2: &ty::Poly,
-    ) -> ty::intersect::IntersectedTy<ty::Poly> {
+    ) -> Result<ty::Poly, ty::intersect::Error> {
         ty::intersect::poly_intersect(self.tvars, poly1, poly2)
     }
 
@@ -431,7 +445,7 @@ impl<'a> UnifyCtx<ty::Mono, MonoError> for MonoUnifyCtx {
         &self,
         mono1: &ty::Mono,
         mono2: &ty::Mono,
-    ) -> ty::intersect::IntersectedTy<ty::Mono> {
+    ) -> Result<ty::Mono, ty::intersect::Error> {
         ty::intersect::mono_intersect(mono1, mono2)
     }
 
@@ -580,7 +594,7 @@ mod test {
     fn fun_types() {
         // Parameters are contravariant and Float/Int are disjoint
         assert_merged(
-            "((RawU) -> (RawU Int Float))",
+            "(Fn (RawU) (RawU Int Float))",
             "(Float -> Int)",
             "(Int -> Float)",
         );
@@ -635,7 +649,7 @@ mod test {
             "(RawU String Symbol)",
         );
         assert_merged(
-            "(RawU true ((RawU) -> (RawU Float Int)))",
+            "(RawU true (Fn (RawU) (RawU Float Int)))",
             "(RawU true (Int -> Float))",
             "(RawU true (Float -> Int))",
         );
@@ -663,7 +677,7 @@ mod test {
         );
 
         assert_merged_iter(
-            "((RawU) -> (RawU Symbol String))",
+            "(Fn (RawU) (RawU Symbol String))",
             &["(String -> Symbol)", "(RawU)", "(Symbol -> String)"],
         );
     }
