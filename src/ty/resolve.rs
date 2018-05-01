@@ -1,4 +1,5 @@
 use ty;
+use ty::purity::Purity;
 
 pub enum Result<'a> {
     Fixed(&'a ty::Ty<ty::Poly>),
@@ -25,7 +26,7 @@ fn poly_ty_has_subtypes(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> bool 
         | ty::Ty::Str
         | ty::Ty::Nil => false,
         ty::Ty::Fun(ref fun) => {
-            fun.impure
+            (fun.purity() != &Purity::Pure)
                 || fun.params != ty::Ty::Listof(Box::new(ty::Ty::Any.into_poly())).into_poly()
                 || poly_has_subtypes(tvars, &fun.ret)
         }

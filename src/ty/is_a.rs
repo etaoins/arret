@@ -1,4 +1,5 @@
 use ty;
+use ty::purity::Purity;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Result {
@@ -57,17 +58,14 @@ trait IsACtx<S>
 where
     S: ty::TyRef,
 {
-    fn ref_is_a(&self, &S, &S) -> Result;
+    fn ty_ref_is_a(&self, &S, &S) -> Result;
+    fn purity_ref_is_a(&self, &S::PRef, &S::PRef) -> Result;
 
     fn fun_is_a(&self, sub_fun: &ty::Fun<S>, par_fun: &ty::Fun<S>) -> Result {
-        if sub_fun.impure && !par_fun.impure {
-            // Impure functions cannot satisfy pure function types
-            return Result::No;
-        }
-
         // Note that the param type is contravariant
-        self.ref_is_a(&par_fun.params, &sub_fun.params)
-            .and_then(|| self.ref_is_a(&sub_fun.ret, &par_fun.ret))
+        self.purity_ref_is_a(sub_fun.purity(), par_fun.purity())
+            .and_then(|| self.ty_ref_is_a(&par_fun.params, &sub_fun.params))
+            .and_then(|| self.ty_ref_is_a(&sub_fun.ret, &par_fun.ret))
     }
 
     fn ty_is_a(
@@ -86,7 +84,7 @@ where
             (&ty::Ty::Union(ref sub_members), _) => {
                 let results = sub_members
                     .iter()
-                    .map(|sub_member| self.ref_is_a(sub_member, parent_ref));
+                    .map(|sub_member| self.ty_ref_is_a(sub_member, parent_ref));
 
                 let mut contains_yes = false;
                 let mut contains_no = false;
@@ -121,7 +119,7 @@ where
             (_, &ty::Ty::Union(ref par_members)) => {
                 let results = par_members
                     .iter()
-                    .map(|par_member| self.ref_is_a(sub_ref, par_member));
+                    .map(|par_member| self.ty_ref_is_a(sub_ref, par_member));
 
                 // Manually consume the iterator to avoid building a temporary Vec and to let us bail
                 // early on Yes
@@ -150,14 +148,14 @@ where
             (&ty::Ty::Bool, &ty::Ty::LitBool(_)) => Result::May,
 
             // Sets
-            (&ty::Ty::Set(ref sub), &ty::Ty::Set(ref par)) => self.ref_is_a(sub, par),
+            (&ty::Ty::Set(ref sub), &ty::Ty::Set(ref par)) => self.ty_ref_is_a(sub, par),
 
             // Maps
             (
                 &ty::Ty::Map(ref sub_key, ref sub_value),
                 &ty::Ty::Map(ref par_key, ref par_value),
-            ) => self.ref_is_a(sub_key, par_key)
-                .and_then(|| self.ref_is_a(sub_value, par_value)),
+            ) => self.ty_ref_is_a(sub_key, par_key)
+                .and_then(|| self.ty_ref_is_a(sub_value, par_value)),
 
             // Vector types
             (&ty::Ty::Vec(ref sub_members), &ty::Ty::Vec(ref par_members)) => {
@@ -165,27 +163,26 @@ where
                     Result::No
                 } else {
                     Result::from_iter(
-                        sub_members
-                            .iter()
-                            .zip(par_members.iter())
-                            .map(|(sub_member, par_member)| self.ref_is_a(sub_member, par_member)),
+                        sub_members.iter().zip(par_members.iter()).map(
+                            |(sub_member, par_member)| self.ty_ref_is_a(sub_member, par_member),
+                        ),
                     )
                 }
             }
             (&ty::Ty::Vecof(ref sub_member), &ty::Ty::Vecof(ref par_member)) => {
-                self.ref_is_a(sub_member, par_member)
+                self.ty_ref_is_a(sub_member, par_member)
             }
             (&ty::Ty::Vec(ref sub_members), &ty::Ty::Vecof(ref par_member)) => Result::from_iter(
                 sub_members
                     .iter()
-                    .map(|sub_member| self.ref_is_a(sub_member, par_member)),
+                    .map(|sub_member| self.ty_ref_is_a(sub_member, par_member)),
             ),
             (&ty::Ty::Vecof(ref sub_member), &ty::Ty::Vec(ref par_members)) => Result::May
                 .and_then(|| {
                     Result::from_iter(
                         par_members
                             .iter()
-                            .map(|par_member| self.ref_is_a(sub_member, par_member)),
+                            .map(|par_member| self.ty_ref_is_a(sub_member, par_member)),
                     )
                 }),
 
@@ -202,22 +199,22 @@ where
 
             // List types
             (&ty::Ty::Cons(ref sub_car, ref sub_cdr), &ty::Ty::Cons(ref par_car, ref par_cdr)) => {
-                self.ref_is_a(sub_car, par_car)
-                    .and_then(|| self.ref_is_a(sub_cdr, par_cdr))
+                self.ty_ref_is_a(sub_car, par_car)
+                    .and_then(|| self.ty_ref_is_a(sub_cdr, par_cdr))
             }
             (&ty::Ty::Listof(ref sub_member), &ty::Ty::Listof(ref par_member)) => {
-                self.ref_is_a(sub_member, par_member)
+                self.ty_ref_is_a(sub_member, par_member)
             }
             (&ty::Ty::Nil, &ty::Ty::Listof(_)) => Result::Yes,
             (&ty::Ty::Listof(_), &ty::Ty::Nil) => Result::May,
             (&ty::Ty::Cons(ref sub_car, ref sub_cdr), &ty::Ty::Listof(ref par_member)) => {
-                self.ref_is_a(sub_car, par_member)
-                    .and_then(|| self.ref_is_a(sub_cdr, parent_ref))
+                self.ty_ref_is_a(sub_car, par_member)
+                    .and_then(|| self.ty_ref_is_a(sub_cdr, parent_ref))
             }
             (&ty::Ty::Listof(ref sub_member), &ty::Ty::Cons(ref par_car, ref par_cdr)) => {
                 Result::May.and_then(|| {
-                    self.ref_is_a(sub_member, par_car)
-                        .and_then(|| self.ref_is_a(sub_ref, par_cdr))
+                    self.ty_ref_is_a(sub_member, par_car)
+                        .and_then(|| self.ty_ref_is_a(sub_ref, par_cdr))
                 })
             }
             _ => Result::No,
@@ -243,7 +240,7 @@ impl<'a> PolyIsACtx<'a> {
 }
 
 impl<'a> IsACtx<ty::Poly> for PolyIsACtx<'a> {
-    fn ref_is_a(&self, sub: &ty::Poly, parent: &ty::Poly) -> Result {
+    fn ty_ref_is_a(&self, sub: &ty::Poly, parent: &ty::Poly) -> Result {
         if let ty::Poly::Var(parent_tvar_id) = *parent {
             if let ty::Poly::Var(sub_tvar_id) = *sub {
                 if self.tvar_id_is_bounded_by(sub_tvar_id, parent_tvar_id) {
@@ -275,24 +272,40 @@ impl<'a> IsACtx<ty::Poly> for PolyIsACtx<'a> {
             result
         }
     }
+
+    fn purity_ref_is_a(&self, sub: &Purity, parent: &Purity) -> Result {
+        if sub == &Purity::Impure && parent == &Purity::Pure {
+            Result::No
+        } else {
+            Result::Yes
+        }
+    }
 }
 
 pub fn poly_is_a(tvars: &[ty::TVar], sub: &ty::Poly, parent: &ty::Poly) -> Result {
     let ctx = PolyIsACtx { tvars };
-    ctx.ref_is_a(sub, parent)
+    ctx.ty_ref_is_a(sub, parent)
 }
 
 struct MonoIsACtx {}
 
 impl<'a> IsACtx<ty::Mono> for MonoIsACtx {
-    fn ref_is_a(&self, sub: &ty::Mono, parent: &ty::Mono) -> Result {
+    fn ty_ref_is_a(&self, sub: &ty::Mono, parent: &ty::Mono) -> Result {
         self.ty_is_a(sub, sub.as_ty(), parent, parent.as_ty())
+    }
+
+    fn purity_ref_is_a(&self, sub: &Purity, parent: &Purity) -> Result {
+        if sub == &Purity::Impure && parent == &Purity::Pure {
+            Result::No
+        } else {
+            Result::Yes
+        }
     }
 }
 
 pub fn mono_is_a(sub: &ty::Mono, parent: &ty::Mono) -> Result {
     let ctx = MonoIsACtx {};
-    ctx.ref_is_a(sub, parent)
+    ctx.ty_ref_is_a(sub, parent)
 }
 
 #[cfg(test)]
@@ -639,7 +652,7 @@ mod test {
 
         // (All A (A -> A))
         let pidentity_fun = ty::Ty::new_fun(
-            false,
+            Purity::Pure,
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None),
             ptype1_unbounded.clone(),
@@ -647,7 +660,7 @@ mod test {
 
         // (All A (A A -> (Cons A A))
         let panys_to_cons = ty::Ty::new_fun(
-            false,
+            Purity::Pure,
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(
                 vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
@@ -661,7 +674,7 @@ mod test {
 
         // (All [A : Symbol] (A -> A))
         let pidentity_sym_fun = ty::Ty::new_fun(
-            false,
+            Purity::Pure,
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::Ty::new_simple_list_type(vec![ptype2_symbol.clone()].into_iter(), None),
             ptype2_symbol.clone(),
@@ -669,7 +682,7 @@ mod test {
 
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Ty::new_fun(
-            true,
+            Purity::Impure,
             ty::TVarId::new(2)..ty::TVarId::new(3),
             ty::Ty::new_simple_list_type(vec![ptype3_string.clone()].into_iter(), None),
             ptype3_string.clone(),

@@ -34,7 +34,7 @@ fn subst_ty(
         ty::Ty::Str => ty::Ty::Str,
         ty::Ty::Sym => ty::Ty::Sym,
         ty::Ty::Fun(ref fun) => ty::Ty::new_fun(
-            fun.impure,
+            *fun.purity(),
             ty::TVarIds::empty(),
             subst(&fun.params, tvars)?,
             subst(&fun.ret, tvars)?,

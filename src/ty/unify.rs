@@ -2,6 +2,7 @@ use std::iter;
 use std::result::Result;
 
 use ty;
+use ty::purity::Purity;
 use ty::TVarIds;
 
 #[derive(Debug, PartialEq)]
@@ -26,11 +27,12 @@ trait UnifyCtx<S, E>
 where
     S: ty::TyRef,
 {
-    fn unify_ref(&self, &S, &S) -> Result<UnifiedTy<S>, E>;
-    fn intersect_ref(&self, &S, &S) -> ty::intersect::IntersectedTy<S>;
+    fn unify_ty_refs(&self, &S, &S) -> Result<UnifiedTy<S>, E>;
+    fn intersect_ty_refs(&self, &S, &S) -> ty::intersect::IntersectedTy<S>;
+    fn unify_purity_refs(&self, &S::PRef, &S::PRef) -> Result<S::PRef, E>;
 
     fn unify_to_ty_ref(&self, ty_ref1: &S, ty_ref2: &S) -> Result<S, E> {
-        match self.unify_ref(ty_ref1, ty_ref2)? {
+        match self.unify_ty_refs(ty_ref1, ty_ref2)? {
             UnifiedTy::Merged(ty_ref) => Ok(ty_ref),
             UnifiedTy::Discerned => Ok(S::from_ty(ty::Ty::Union(vec![
                 ty_ref1.clone(),
@@ -46,9 +48,9 @@ where
         car_ref: &S,
         cdr_ref: &S,
     ) -> Result<UnifiedTy<S>, E> {
-        match self.unify_ref(list_ref, cdr_ref)? {
+        match self.unify_ty_refs(list_ref, cdr_ref)? {
             UnifiedTy::Discerned => Ok(UnifiedTy::Discerned),
-            UnifiedTy::Merged(merged_tail) => self.unify_ref(
+            UnifiedTy::Merged(merged_tail) => self.unify_ty_refs(
                 &merged_tail,
                 &S::from_ty(ty::Ty::Listof(Box::new(car_ref.clone()))),
             ),
@@ -60,7 +62,7 @@ where
     /// It is assumed `output_members` refers to members of an already unified union.
     fn unify_ref_into_vec(&self, output_members: &mut Vec<S>, new_member: S) -> Result<(), E> {
         for i in 0..output_members.len() {
-            match self.unify_ref(&output_members[i], &new_member)? {
+            match self.unify_ty_refs(&output_members[i], &new_member)? {
                 UnifiedTy::Merged(merged_member) => {
                     // Our merged type may now unify with one of the already processed members of
                     // the union. Remove the member we merged with and recurse using the merged
@@ -95,21 +97,21 @@ where
     }
 
     fn unify_fun(&self, fun1: &ty::Fun<S>, fun2: &ty::Fun<S>) -> Result<UnifiedTy<S>, E> {
-        let unified_impure = fun1.impure() || fun2.impure();
+        let unified_purity = self.unify_purity_refs(fun1.purity(), fun2.purity())?;
 
         if fun1.is_polymorphic() || fun2.is_polymorphic() {
             // TODO: We could do better here by finding our upper bound and unifying them
             // Preserving the polymorphicness would be very complex
             Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::Fun(Box::new(
-                ty::Fun::new_top(unified_impure),
+                ty::Fun::new_top(unified_purity),
             )))))
         } else {
-            let unified_params = self.intersect_ref(fun1.params(), fun2.params())
+            let unified_params = self.intersect_ty_refs(fun1.params(), fun2.params())
                 .into_ty_ref();
             let unified_ret = self.unify_to_ty_ref(fun1.ret(), fun2.ret())?;
 
             Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::new_fun(
-                unified_impure,
+                unified_purity,
                 S::TVarIds::empty(),
                 unified_params,
                 unified_ret,
@@ -175,7 +177,7 @@ where
                     let mut unified_members = Vec::with_capacity(members1.len());
 
                     for (member1, member2) in members1.iter().zip(members2.iter()) {
-                        match self.unify_ref(member1, member2)? {
+                        match self.unify_ty_refs(member1, member2)? {
                             UnifiedTy::Discerned => {
                                 // We can check the types of fixed vector elements
                                 return Ok(UnifiedTy::Discerned);
@@ -235,9 +237,9 @@ where
                 )?))))
             }
             (&ty::Ty::Cons(ref car1, ref cdr1), &ty::Ty::Cons(ref car2, ref cdr2)) => {
-                match self.unify_ref(car1, car2)? {
+                match self.unify_ty_refs(car1, car2)? {
                     UnifiedTy::Discerned => UnifiedTy::Discerned,
-                    UnifiedTy::Merged(merged_car) => match self.unify_ref(cdr1, cdr2)? {
+                    UnifiedTy::Merged(merged_car) => match self.unify_ty_refs(cdr1, cdr2)? {
                         UnifiedTy::Discerned => UnifiedTy::Discerned,
                         UnifiedTy::Merged(merged_cdr) => UnifiedTy::Merged(S::from_ty(
                             ty::Ty::Cons(Box::new(merged_car), Box::new(merged_cdr)),
@@ -340,7 +342,7 @@ impl<'a> PolyUnifyCtx<'a> {
 }
 
 impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
-    fn unify_ref(
+    fn unify_ty_refs(
         &self,
         poly1: &ty::Poly,
         poly2: &ty::Poly,
@@ -377,12 +379,19 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
         }
     }
 
-    fn intersect_ref(
+    fn intersect_ty_refs(
         &self,
         poly1: &ty::Poly,
         poly2: &ty::Poly,
     ) -> ty::intersect::IntersectedTy<ty::Poly> {
         ty::intersect::poly_intersect(self.tvars, poly1, poly2)
+    }
+
+    fn unify_purity_refs(&self, purity1: &Purity, purity2: &Purity) -> Result<Purity, PolyError> {
+        match (purity1, purity2) {
+            (&Purity::Pure, &Purity::Pure) => Ok(Purity::Pure),
+            _ => Ok(Purity::Impure),
+        }
     }
 }
 
@@ -392,7 +401,7 @@ pub fn poly_unify<'a>(
     poly2: &'a ty::Poly,
 ) -> Result<UnifiedTy<ty::Poly>, PolyError> {
     let ctx = PolyUnifyCtx { tvars };
-    ctx.unify_ref(poly1, poly2)
+    ctx.unify_ty_refs(poly1, poly2)
 }
 
 pub fn poly_unify_iter<I>(tvars: &[ty::TVar], members: I) -> Result<ty::Poly, PolyError>
@@ -410,7 +419,7 @@ pub enum MonoError {}
 struct MonoUnifyCtx {}
 
 impl<'a> UnifyCtx<ty::Mono, MonoError> for MonoUnifyCtx {
-    fn unify_ref(
+    fn unify_ty_refs(
         &self,
         mono1: &ty::Mono,
         mono2: &ty::Mono,
@@ -418,12 +427,19 @@ impl<'a> UnifyCtx<ty::Mono, MonoError> for MonoUnifyCtx {
         self.unify_ty(mono1, mono1.as_ty(), mono2, mono2.as_ty())
     }
 
-    fn intersect_ref(
+    fn intersect_ty_refs(
         &self,
         mono1: &ty::Mono,
         mono2: &ty::Mono,
     ) -> ty::intersect::IntersectedTy<ty::Mono> {
         ty::intersect::mono_intersect(mono1, mono2)
+    }
+
+    fn unify_purity_refs(&self, purity1: &Purity, purity2: &Purity) -> Result<Purity, MonoError> {
+        match (purity1, purity2) {
+            (&Purity::Pure, &Purity::Pure) => Ok(Purity::Pure),
+            _ => Ok(Purity::Impure),
+        }
     }
 }
 
@@ -432,7 +448,7 @@ pub fn mono_unify<'a>(
     mono2: &'a ty::Mono,
 ) -> Result<UnifiedTy<ty::Mono>, MonoError> {
     let ctx = MonoUnifyCtx {};
-    ctx.unify_ref(mono1, mono2)
+    ctx.unify_ty_refs(mono1, mono2)
 }
 
 #[cfg(test)]
@@ -731,7 +747,7 @@ mod test {
 
         // (All A (A -> A))
         let pidentity_fun = ty::Ty::new_fun(
-            false,
+            Purity::Pure,
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None),
             ptype1_unbounded.clone(),
@@ -739,7 +755,7 @@ mod test {
 
         // (All A (A A -> (Cons A A))
         let panys_to_cons = ty::Ty::new_fun(
-            false,
+            Purity::Pure,
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(
                 vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
@@ -753,7 +769,7 @@ mod test {
 
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Ty::new_fun(
-            true,
+            Purity::Impure,
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::Ty::new_simple_list_type(vec![ptype2_string.clone()].into_iter(), None),
             ptype2_string.clone(),

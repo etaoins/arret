@@ -2,6 +2,7 @@ use std::iter;
 use std::result::Result;
 
 use ty;
+use ty::purity::Purity;
 use ty::TVarIds;
 
 #[derive(PartialEq, Debug)]
@@ -29,8 +30,9 @@ trait IntersectCtx<S>
 where
     S: ty::TyRef,
 {
-    fn intersect_ref(&self, &S, &S) -> IntersectedTy<S>;
-    fn unify_ref(&self, &S, &S) -> Result<ty::unify::UnifiedTy<S>, ()>;
+    fn intersect_ty_refs(&self, &S, &S) -> IntersectedTy<S>;
+    fn unify_ty_refs(&self, &S, &S) -> Result<ty::unify::UnifiedTy<S>, ()>;
+    fn intersect_purity_refs(&self, &S::PRef, &S::PRef) -> S::PRef;
 
     fn intersect_list_cons_refs(
         &self,
@@ -39,8 +41,8 @@ where
         car_ref: &S,
         cdr_ref: &S,
     ) -> IntersectedTy<S> {
-        let intersected_car = self.intersect_ref(member_ref, car_ref).into_ty_ref();
-        let intersected_cdr = self.intersect_ref(list_ref, cdr_ref).into_ty_ref();
+        let intersected_car = self.intersect_ty_refs(member_ref, car_ref).into_ty_ref();
+        let intersected_cdr = self.intersect_ty_refs(list_ref, cdr_ref).into_ty_ref();
 
         IntersectedTy::Merged(S::from_ty(ty::Ty::Cons(
             Box::new(intersected_car),
@@ -61,7 +63,7 @@ where
 
         for right in rights {
             for left in lefts {
-                match self.intersect_ref(left, right) {
+                match self.intersect_ty_refs(left, right) {
                     IntersectedTy::Disjoint => {}
                     IntersectedTy::Merged(intersected) => {
                         intersected_types.push(intersected);
@@ -95,7 +97,7 @@ where
 
             // Set type
             (&ty::Ty::Set(ref member1), &ty::Ty::Set(ref member2)) => {
-                IntersectedTy::Merged(S::from_ty(ty::Ty::Set(Box::new(self.intersect_ref(
+                IntersectedTy::Merged(S::from_ty(ty::Ty::Set(Box::new(self.intersect_ty_refs(
                     member1, member2,
                 ).into_ty_ref()))))
             }
@@ -103,14 +105,14 @@ where
             // Map type
             (&ty::Ty::Map(ref key1, ref value1), &ty::Ty::Map(ref key2, ref value2)) => {
                 IntersectedTy::Merged(S::from_ty(ty::Ty::Map(
-                    Box::new(self.intersect_ref(key1, key2).into_ty_ref()),
-                    Box::new(self.intersect_ref(value1, value2).into_ty_ref()),
+                    Box::new(self.intersect_ty_refs(key1, key2).into_ty_ref()),
+                    Box::new(self.intersect_ty_refs(value1, value2).into_ty_ref()),
                 )))
             }
 
             // Vector types
             (&ty::Ty::Vecof(ref member1), &ty::Ty::Vecof(ref member2)) => {
-                IntersectedTy::Merged(S::from_ty(ty::Ty::Vecof(Box::new(self.intersect_ref(
+                IntersectedTy::Merged(S::from_ty(ty::Ty::Vecof(Box::new(self.intersect_ty_refs(
                     member1, member2,
                 ).into_ty_ref()))))
             }
@@ -122,7 +124,7 @@ where
                         .iter()
                         .zip(members2.iter())
                         .map(|(member1, member2)| {
-                            self.intersect_ref(member1, member2).into_ty_ref()
+                            self.intersect_ty_refs(member1, member2).into_ty_ref()
                         })
                         .collect::<Vec<S>>();
 
@@ -133,7 +135,7 @@ where
             | (&ty::Ty::Vec(ref members2), &ty::Ty::Vecof(ref member1)) => {
                 let intersected_members = members2
                     .iter()
-                    .map(|member2| self.intersect_ref(member1, member2).into_ty_ref())
+                    .map(|member2| self.intersect_ty_refs(member1, member2).into_ty_ref())
                     .collect::<Vec<S>>();
 
                 IntersectedTy::Merged(S::from_ty(ty::Ty::Vec(intersected_members)))
@@ -141,14 +143,14 @@ where
 
             // List types
             (&ty::Ty::Listof(ref member1), &ty::Ty::Listof(ref member2)) => {
-                IntersectedTy::Merged(S::from_ty(ty::Ty::Listof(Box::new(self.intersect_ref(
-                    member1, member2,
-                ).into_ty_ref()))))
+                IntersectedTy::Merged(S::from_ty(ty::Ty::Listof(Box::new(
+                    self.intersect_ty_refs(member1, member2).into_ty_ref(),
+                ))))
             }
             (&ty::Ty::Cons(ref car1, ref cdr1), &ty::Ty::Cons(ref car2, ref cdr2)) => {
                 IntersectedTy::Merged(S::from_ty(ty::Ty::Cons(
-                    Box::new(self.intersect_ref(car1, car2).into_ty_ref()),
-                    Box::new(self.intersect_ref(cdr1, cdr2).into_ty_ref()),
+                    Box::new(self.intersect_ty_refs(car1, car2).into_ty_ref()),
+                    Box::new(self.intersect_ty_refs(cdr1, cdr2).into_ty_ref()),
                 )))
             }
             (&ty::Ty::Listof(ref member), &ty::Ty::Cons(ref car, ref cdr)) => {
@@ -166,8 +168,8 @@ where
                     return IntersectedTy::Disjoint;
                 }
 
-                let intersected_impure = fun1.impure() && fun2.impure();
-                let intersected_params = match self.unify_ref(fun1.params(), fun2.params()) {
+                let intersected_purity = self.intersect_purity_refs(fun1.purity(), fun2.purity());
+                let intersected_params = match self.unify_ty_refs(fun1.params(), fun2.params()) {
                     Ok(ty::unify::UnifiedTy::Merged(merged)) => merged,
                     Ok(ty::unify::UnifiedTy::Discerned) => S::from_ty(ty::Ty::Union(vec![
                         fun1.params().clone(),
@@ -177,10 +179,10 @@ where
                         return IntersectedTy::Disjoint;
                     }
                 };
-                let intersected_ret = self.intersect_ref(fun1.ret(), fun2.ret()).into_ty_ref();
+                let intersected_ret = self.intersect_ty_refs(fun1.ret(), fun2.ret()).into_ty_ref();
 
                 IntersectedTy::Merged(S::from_ty(ty::Ty::new_fun(
-                    intersected_impure,
+                    intersected_purity,
                     S::TVarIds::empty(),
                     intersected_params,
                     intersected_ret,
@@ -196,7 +198,7 @@ struct PolyIntersectCtx<'a> {
 }
 
 impl<'a> IntersectCtx<ty::Poly> for PolyIntersectCtx<'a> {
-    fn intersect_ref(&self, poly1: &ty::Poly, poly2: &ty::Poly) -> IntersectedTy<ty::Poly> {
+    fn intersect_ty_refs(&self, poly1: &ty::Poly, poly2: &ty::Poly) -> IntersectedTy<ty::Poly> {
         if ty::is_a::poly_is_a(self.tvars, poly1, poly2).to_bool() {
             return IntersectedTy::Merged(poly1.clone());
         } else if ty::is_a::poly_is_a(self.tvars, poly2, poly1).to_bool() {
@@ -219,12 +221,19 @@ impl<'a> IntersectCtx<ty::Poly> for PolyIntersectCtx<'a> {
         }
     }
 
-    fn unify_ref(
+    fn unify_ty_refs(
         &self,
         poly1: &ty::Poly,
         poly2: &ty::Poly,
     ) -> Result<ty::unify::UnifiedTy<ty::Poly>, ()> {
         ty::unify::poly_unify(self.tvars, poly1, poly2).map_err(|_| ())
+    }
+
+    fn intersect_purity_refs(&self, purity1: &Purity, purity2: &Purity) -> Purity {
+        match (purity1, purity2) {
+            (&Purity::Impure, &Purity::Impure) => Purity::Impure,
+            _ => Purity::Pure,
+        }
     }
 }
 
@@ -234,13 +243,13 @@ pub fn poly_intersect<'a>(
     poly2: &'a ty::Poly,
 ) -> IntersectedTy<ty::Poly> {
     let ctx = PolyIntersectCtx { tvars };
-    ctx.intersect_ref(poly1, poly2)
+    ctx.intersect_ty_refs(poly1, poly2)
 }
 
 struct MonoIntersectCtx {}
 
 impl<'a> IntersectCtx<ty::Mono> for MonoIntersectCtx {
-    fn intersect_ref(&self, mono1: &ty::Mono, mono2: &ty::Mono) -> IntersectedTy<ty::Mono> {
+    fn intersect_ty_refs(&self, mono1: &ty::Mono, mono2: &ty::Mono) -> IntersectedTy<ty::Mono> {
         if ty::is_a::mono_is_a(mono1, mono2).to_bool() {
             return IntersectedTy::Merged(mono1.clone());
         } else if ty::is_a::mono_is_a(mono2, mono1).to_bool() {
@@ -250,18 +259,25 @@ impl<'a> IntersectCtx<ty::Mono> for MonoIntersectCtx {
         self.non_subty_intersect(mono1, mono1.as_ty(), mono2, mono2.as_ty())
     }
 
-    fn unify_ref(
+    fn unify_ty_refs(
         &self,
         mono1: &ty::Mono,
         mono2: &ty::Mono,
     ) -> Result<ty::unify::UnifiedTy<ty::Mono>, ()> {
         ty::unify::mono_unify(mono1, mono2).map_err(|_| ())
     }
+
+    fn intersect_purity_refs(&self, purity1: &Purity, purity2: &Purity) -> Purity {
+        match (purity1, purity2) {
+            (&Purity::Impure, &Purity::Impure) => Purity::Impure,
+            _ => Purity::Pure,
+        }
+    }
 }
 
 pub fn mono_intersect<'a>(mono1: &'a ty::Mono, mono2: &'a ty::Mono) -> IntersectedTy<ty::Mono> {
     let ctx = MonoIntersectCtx {};
-    ctx.intersect_ref(mono1, mono2)
+    ctx.intersect_ty_refs(mono1, mono2)
 }
 
 #[cfg(test)]
@@ -420,7 +436,7 @@ mod test {
 
         // (All A (A -> A))
         let pidentity_fun = ty::Ty::new_fun(
-            false,
+            Purity::Pure,
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None),
             ptype1_unbounded.clone(),
@@ -428,7 +444,7 @@ mod test {
 
         // (All A (A A -> (Cons A A))
         let panys_to_cons = ty::Ty::new_fun(
-            false,
+            Purity::Pure,
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(
                 vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
@@ -442,7 +458,7 @@ mod test {
 
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Ty::new_fun(
-            true,
+            Purity::Impure,
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::Ty::new_simple_list_type(vec![ptype2_string.clone()].into_iter(), None),
             ptype2_string.clone(),

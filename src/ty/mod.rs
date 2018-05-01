@@ -4,6 +4,7 @@ mod intersect;
 pub mod is_a;
 #[cfg(test)]
 pub mod pred;
+pub mod purity;
 pub mod resolve;
 #[cfg(test)]
 pub mod subst;
@@ -11,6 +12,7 @@ pub mod unify;
 
 use std;
 use std::ops::Range;
+use ty::purity::PRef;
 
 /// Abstracts over a reference to a type
 ///
@@ -18,6 +20,9 @@ use std::ops::Range;
 pub trait TyRef: PartialEq + Clone + Sized {
     /// Type used to store the type variables introduced by a function
     type TVarIds: TVarIds;
+
+    // Type used to refer to function purity
+    type PRef: purity::PRef;
 
     /// Constructs a fixed TyRef from the passed Ty
     fn from_ty(Ty<Self>) -> Self;
@@ -89,8 +94,8 @@ where
         })
     }
 
-    pub fn new_fun(impure: bool, tvar_ids: S::TVarIds, params: S, ret: S) -> Ty<S> {
-        Ty::Fun(Box::new(Fun::new(impure, tvar_ids, params, ret)))
+    pub fn new_fun(purity: S::PRef, tvar_ids: S::TVarIds, params: S, ret: S) -> Ty<S> {
+        Ty::Fun(Box::new(Fun::new(purity, tvar_ids, params, ret)))
     }
 }
 
@@ -99,7 +104,7 @@ pub struct Fun<S>
 where
     S: TyRef,
 {
-    impure: bool,
+    purity: S::PRef,
     tvar_ids: S::TVarIds,
     params: S,
     ret: S,
@@ -109,9 +114,9 @@ impl<S> Fun<S>
 where
     S: TyRef,
 {
-    pub fn new(impure: bool, tvar_ids: S::TVarIds, params: S, ret: S) -> Fun<S> {
+    pub fn new(purity: S::PRef, tvar_ids: S::TVarIds, params: S, ret: S) -> Fun<S> {
         Fun {
-            impure,
+            purity,
             tvar_ids,
             params,
             ret,
@@ -126,7 +131,7 @@ where
         use std::iter;
 
         Self::new(
-            false,
+            S::PRef::from_purity(purity::Purity::Pure),
             S::TVarIds::empty(),
             Ty::new_simple_list_type(iter::once(S::from_ty(Ty::Any)), None),
             S::from_ty(Ty::Bool),
@@ -134,17 +139,17 @@ where
     }
 
     /// Returns the top function type
-    pub fn new_top(impure: bool) -> Fun<S> {
+    pub fn new_top(purity: S::PRef) -> Fun<S> {
         Self::new(
-            impure,
+            purity,
             S::TVarIds::empty(),
             S::from_ty(Ty::Union(vec![])),
             S::from_ty(Ty::Any),
         )
     }
 
-    pub fn impure(&self) -> bool {
-        self.impure
+    pub fn purity(&self) -> &S::PRef {
+        &self.purity
     }
 
     pub fn params(&self) -> &S {
@@ -206,6 +211,7 @@ impl Poly {
 
 impl TyRef for Poly {
     type TVarIds = Range<TVarId>;
+    type PRef = purity::Purity;
 
     fn from_ty(ty: Ty<Poly>) -> Poly {
         ty.into_poly()
@@ -245,6 +251,7 @@ impl Ty<Mono> {
 
 impl TyRef for Mono {
     type TVarIds = EmptyTVarIds;
+    type PRef = purity::Purity;
 
     fn from_ty(ty: Ty<Mono>) -> Mono {
         ty.into_mono()

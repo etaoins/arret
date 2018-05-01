@@ -7,6 +7,7 @@ use hir::scope::{Binding, Scope};
 use hir::util::{expect_arg_count, expect_ident, split_into_fixed_and_rest};
 use syntax::span::Span;
 use ty;
+use ty::purity::Purity;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum TyCons {
@@ -84,7 +85,7 @@ impl<'a> LowerTyContext<'a> {
         Ok(tail_poly)
     }
 
-    fn lower_infix_fun_cons(&self, impure: bool, mut arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
+    fn lower_infix_fun_cons(&self, purity: Purity, mut arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
         let ret_ty = self.lower_poly(arg_data.pop().unwrap())?;
 
         // Discard the constructor
@@ -92,13 +93,13 @@ impl<'a> LowerTyContext<'a> {
 
         let params_ty = self.lower_list_cons(arg_data)?;
 
-        Ok(ty::Ty::new_fun(impure, ty::TVarIds::empty(), params_ty, ret_ty).into_poly())
+        Ok(ty::Ty::new_fun(purity, ty::TVarIds::empty(), params_ty, ret_ty).into_poly())
     }
 
     fn lower_complex_fun_cons(
         &self,
         span: Span,
-        impure: bool,
+        purity: Purity,
         mut arg_data: Vec<NsDatum>,
     ) -> Result<ty::Poly> {
         expect_arg_count(span, &arg_data, 2)?;
@@ -106,7 +107,7 @@ impl<'a> LowerTyContext<'a> {
         let ret_ty = self.lower_poly(arg_data.pop().unwrap())?;
         let params_ty = self.lower_poly(arg_data.pop().unwrap())?;
 
-        Ok(ty::Ty::new_fun(impure, ty::TVarIds::empty(), params_ty, ret_ty).into_poly())
+        Ok(ty::Ty::new_fun(purity, ty::TVarIds::empty(), params_ty, ret_ty).into_poly())
     }
 
     fn lower_ty_cons_apply(
@@ -135,8 +136,8 @@ impl<'a> LowerTyContext<'a> {
                 let start_ty = self.lower_poly(arg_data.pop().unwrap())?;
                 Ok(ty::Ty::Vecof(Box::new(start_ty)).into_poly())
             }
-            TyCons::PureFun => self.lower_complex_fun_cons(span, false, arg_data),
-            TyCons::ImpureFun => self.lower_complex_fun_cons(span, true, arg_data),
+            TyCons::PureFun => self.lower_complex_fun_cons(span, Purity::Pure, arg_data),
+            TyCons::ImpureFun => self.lower_complex_fun_cons(span, Purity::Impure, arg_data),
             TyCons::PureArrow | TyCons::ImpureArrow => Err(Error::new(
                 span,
                 ErrorKind::IllegalArg("functions must return exactly one value".to_owned()),
@@ -227,10 +228,10 @@ impl<'a> LowerTyContext<'a> {
                 if vs.len() >= 2 {
                     match self.scope.get_datum(&vs[vs.len() - 2]) {
                         Some(Binding::TyCons(TyCons::PureArrow)) => {
-                            return self.lower_infix_fun_cons(false, vs);
+                            return self.lower_infix_fun_cons(Purity::Pure, vs);
                         }
                         Some(Binding::TyCons(TyCons::ImpureArrow)) => {
-                            return self.lower_infix_fun_cons(true, vs);
+                            return self.lower_infix_fun_cons(Purity::Impure, vs);
                         }
                         _ => {}
                     };
@@ -404,13 +405,21 @@ fn str_for_poly_ty(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
                 format!(
                     "({} {} {})",
                     simple_params_str,
-                    if fun.impure() { "->!" } else { "->" },
+                    if fun.purity() == &Purity::Impure {
+                        "->!"
+                    } else {
+                        "->"
+                    },
                     str_for_poly(tvars, fun.ret())
                 )
             } else {
                 format!(
                     "({} {} {})",
-                    if fun.impure() { "Fn!" } else { "Fn" },
+                    if fun.purity() == &Purity::Impure {
+                        "Fn!"
+                    } else {
+                        "Fn"
+                    },
                     str_for_poly(tvars, fun.params()),
                     str_for_poly(tvars, fun.ret())
                 )
@@ -685,7 +694,7 @@ mod test {
         let j = "(-> true)";
 
         let expected = ty::Ty::new_fun(
-            false,
+            Purity::Pure,
             ty::TVarIds::empty(),
             simple_list_type(vec![], None),
             ty::Ty::LitBool(true).into_poly(),
@@ -699,7 +708,7 @@ mod test {
         let j = "(->! true)";
 
         let expected = ty::Ty::new_fun(
-            true,
+            Purity::Impure,
             ty::TVarIds::empty(),
             simple_list_type(vec![], None),
             ty::Ty::LitBool(true).into_poly(),
@@ -713,7 +722,7 @@ mod test {
         let j = "(false -> true)";
 
         let expected = ty::Ty::new_fun(
-            false,
+            Purity::Pure,
             ty::TVarIds::empty(),
             simple_list_type(vec![ty::Ty::LitBool(false)], None),
             ty::Ty::LitBool(true).into_poly(),
@@ -727,7 +736,7 @@ mod test {
         let j = "(String Symbol ... ->! true)";
 
         let expected = ty::Ty::new_fun(
-            true,
+            Purity::Impure,
             ty::TVarIds::empty(),
             simple_list_type(vec![ty::Ty::Str], Some(ty::Ty::Sym)),
             ty::Ty::LitBool(true).into_poly(),
@@ -741,7 +750,7 @@ mod test {
         let j = "(Fn (List false) true)";
 
         let expected = ty::Ty::new_fun(
-            false,
+            Purity::Pure,
             ty::TVarIds::empty(),
             simple_list_type(vec![ty::Ty::LitBool(false)], None),
             ty::Ty::LitBool(true).into_poly(),
@@ -755,7 +764,7 @@ mod test {
         let j = "(Fn (Listof Symbol) true)";
 
         let expected = ty::Ty::new_fun(
-            false,
+            Purity::Pure,
             ty::TVarIds::empty(),
             ty::Ty::Listof(Box::new(ty::Ty::Sym.into_poly())).into_poly(),
             ty::Ty::LitBool(true).into_poly(),
