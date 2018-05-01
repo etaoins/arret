@@ -15,3 +15,22 @@ impl PRef for Purity {
         purity
     }
 }
+
+/// Decl is a purity declared by a user
+///
+/// By analogy with `ty::Decl` this allows an additional `Free` type where the user has not
+/// specified a purity.
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum Decl {
+    Fixed(Purity),
+    Free(FreePurityId),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub struct FreePurityId(u32);
+
+impl FreePurityId {
+    pub fn new(id: usize) -> FreePurityId {
+        FreePurityId(id as u32)
+    }
+}

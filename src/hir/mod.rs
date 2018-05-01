@@ -42,6 +42,8 @@ pub struct Scalar {
 #[derive(PartialEq, Debug)]
 pub struct Fun {
     tvar_ids: Range<ty::TVarId>,
+
+    purity: ty::purity::Decl,
     params: Destruc,
     ret_ty: ty::Decl,
 

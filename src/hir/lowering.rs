@@ -17,14 +17,18 @@ use hir::{App, Cond, Destruc, Expr, Fun, Scalar, VarId};
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 use ty;
+use ty::purity::Purity;
 
 pub struct LoweringContext<'ccx> {
     curr_var_id: u32,
     ns_id_alloc: NsIdAlloc,
     loaded_libraries: BTreeMap<LibraryName, Module>,
     macros: Vec<Macro>,
+
     tvars: Vec<ty::TVar>,
+    free_purities: Vec<Span>,
     free_tys: Vec<Span>,
+
     ccx: &'ccx mut CompileContext,
 }
 
@@ -61,6 +65,12 @@ struct AppliedPrim {
     span: Span,
 }
 
+struct LoweredFunRetDecl {
+    body_data: Vec<NsDatum>,
+    purity: Option<ty::purity::Purity>,
+    ret_ty: Option<ty::Poly>,
+}
+
 impl<'ccx> LoweringContext<'ccx> {
     pub fn new(ccx: &'ccx mut CompileContext) -> LoweringContext {
         let mut loaded_libraries = BTreeMap::new();
@@ -89,6 +99,7 @@ impl<'ccx> LoweringContext<'ccx> {
             macros: vec![],
             tvars: vec![],
             free_tys: vec![],
+            free_purities: vec![],
             ccx,
         }
     }
@@ -105,6 +116,13 @@ impl<'ccx> LoweringContext<'ccx> {
         self.free_tys.push(span);
 
         free_ty_id
+    }
+
+    fn insert_free_purity(&mut self, span: Span) -> ty::purity::FreePurityId {
+        let free_purity_id = ty::purity::FreePurityId::new(self.free_purities.len());
+        self.free_purities.push(span);
+
+        free_purity_id
     }
 
     fn alloc_var_id(&mut self) -> VarId {
@@ -280,6 +298,40 @@ impl<'ccx> LoweringContext<'ccx> {
         }
     }
 
+    fn lower_fun_ret_decl(
+        &mut self,
+        fun_scope: &Scope,
+        mut post_param_data: Vec<NsDatum>,
+    ) -> Result<LoweredFunRetDecl> {
+        if post_param_data.len() >= 2 {
+            if let Some(Binding::TyCons(ty_cons)) = fun_scope.get_datum(&post_param_data[0]) {
+                let purity = match ty_cons {
+                    TyCons::PureArrow => Purity::Pure,
+                    TyCons::ImpureArrow => Purity::Impure,
+                    _ => {
+                        return Err(Error::new(post_param_data[0].span(), ErrorKind::TyRef));
+                    }
+                };
+
+                let body_data = post_param_data.split_off(2);
+                let ret_datum = post_param_data.pop().unwrap();
+                let ret_ty = lower_poly(&self.tvars, &fun_scope, ret_datum)?;
+
+                return Ok(LoweredFunRetDecl {
+                    body_data,
+                    purity: Some(purity),
+                    ret_ty: Some(ret_ty),
+                });
+            }
+        }
+
+        Ok(LoweredFunRetDecl {
+            body_data: post_param_data,
+            purity: None,
+            ret_ty: None,
+        })
+    }
+
     fn lower_fun(&mut self, scope: &Scope, span: Span, arg_data: Vec<NsDatum>) -> Result<Expr> {
         if arg_data.is_empty() {
             return Err(Error::new(
@@ -290,7 +342,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
         let mut fun_scope = Scope::new_child(scope);
 
-        let (mut next_datum, mut rest_data) = pop_vec_front(arg_data);
+        let (mut next_datum, mut tail_data) = pop_vec_front(arg_data);
         let tvar_id_start = ty::TVarId::new(self.tvars.len());
 
         // We can either begin with a set of type variables or a list of parameters
@@ -301,18 +353,18 @@ impl<'ccx> LoweringContext<'ccx> {
                 fun_scope.insert_binding(ident, Binding::Ty(ty::Poly::Var(tvar_id)));
             }
 
-            if rest_data.is_empty() {
+            if tail_data.is_empty() {
                 return Err(Error::new(
                     span,
                     ErrorKind::IllegalArg(
-                        "polymorphic variables should be followed by parameters".to_owned(),
+                        "type variables should be followed by parameters".to_owned(),
                     ),
                 ));
             }
 
-            let (new_next_datum, new_rest_data) = pop_vec_front(rest_data);
+            let (new_next_datum, new_tail_data) = pop_vec_front(tail_data);
             next_datum = new_next_datum;
-            rest_data = new_rest_data;
+            tail_data = new_tail_data;
         };
 
         // We allocate tvar IDs sequentially so we can use a simple range to track them
@@ -321,19 +373,12 @@ impl<'ccx> LoweringContext<'ccx> {
         // Pull out our params
         let params = self.lower_destruc(&mut fun_scope, next_datum)?;
 
-        // Determine if we have a return type after the parameters, eg (param) -> RetTy
-        let ret_ty;
-        let body_data;
-        if rest_data.len() >= 2
-            && scope.get_datum(&rest_data[0]) == Some(Binding::TyCons(TyCons::PureArrow))
-        {
-            body_data = rest_data.split_off(2);
-            ret_ty =
-                Some(lower_poly(&self.tvars, &fun_scope, rest_data.pop().unwrap())?.into_decl());
-        } else {
-            body_data = rest_data;
-            ret_ty = None;
-        };
+        // Determine if we have a purity and return type after the parameters, eg (param) -> RetTy
+        let LoweredFunRetDecl {
+            body_data,
+            purity,
+            ret_ty,
+        } = self.lower_fun_ret_decl(&fun_scope, tail_data)?;
 
         // Extract the body
         let body_exprs = body_data
@@ -343,9 +388,13 @@ impl<'ccx> LoweringContext<'ccx> {
 
         let body_expr = Expr::from_vec(body_exprs);
 
+        let purity = purity
+            .map(ty::purity::Decl::Fixed)
+            .unwrap_or_else(|| ty::purity::Decl::Free(self.insert_free_purity(span)));
+
         // If we don't have a return type try to guess a span for the last expression so we can
         // locate inference errors
-        let ret_ty = ret_ty.unwrap_or_else(|| {
+        let ret_ty = ret_ty.map(|ret_ty| ret_ty.into_decl()).unwrap_or_else(|| {
             let last_expr_span = body_expr.last_expr().and_then(|e| e.span()).unwrap_or(span);
             ty::Decl::Free(self.insert_free_ty(last_expr_span))
         });
@@ -354,6 +403,7 @@ impl<'ccx> LoweringContext<'ccx> {
             span,
             Fun {
                 tvar_ids,
+                purity,
                 params,
                 ret_ty,
                 body_expr: Box::new(body_expr),
@@ -1101,6 +1151,7 @@ mod test {
             t2s(t),
             Fun {
                 tvar_ids: ty::TVarIds::empty(),
+                purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
                 params: Destruc::List(t2s(u), vec![], None),
                 ret_ty: ty::Decl::Free(ty::FreeTyId::new(1)),
                 body_expr: Box::new(Expr::from_vec(vec![])),
@@ -1121,6 +1172,7 @@ mod test {
             t2s(t),
             Fun {
                 tvar_ids: ty::TVarIds::empty(),
+                purity: ty::purity::Decl::Fixed(Purity::Pure),
                 params: Destruc::List(t2s(u), vec![], None),
                 ret_ty: ty::Ty::Int.into_decl(),
                 body_expr: Box::new(Expr::Lit(Datum::Int(t2s(v), 1))),
@@ -1156,6 +1208,7 @@ mod test {
             t2s(v),
             Fun {
                 tvar_ids: ty::TVarIds::empty(),
+                purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
                 params,
                 ret_ty: ty::Decl::Free(ty::FreeTyId::new(2)),
                 body_expr: Box::new(Expr::Ref(t2s(w), param_var_id)),
@@ -1186,6 +1239,7 @@ mod test {
             t2s(u),
             Fun {
                 tvar_ids: ty::TVarIds::empty(),
+                purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
                 params,
                 ret_ty: ty::Decl::Free(ty::FreeTyId::new(2)),
                 body_expr: Box::new(Expr::Ref(t2s(v), param_var_id)),
@@ -1196,12 +1250,12 @@ mod test {
     }
 
     #[test]
-    fn poly_identity_fn() {
-        let j = "(fn #{A} ([x : A]) -> A x)";
-        let t = "         ^^^^^^^^^        ";
-        let u = "          ^^^^^^^         ";
-        let v = "^^^^^^^^^^^^^^^^^^^^^^^^^^";
-        let w = "                        ^ ";
+    fn poly_impure_identity_fn() {
+        let j = "(fn #{A} ([x : A]) ->! A x)";
+        let t = "         ^^^^^^^^^         ";
+        let u = "          ^^^^^^^          ";
+        let v = "^^^^^^^^^^^^^^^^^^^^^^^^^^^";
+        let w = "                         ^ ";
 
         let tvar_id = ty::TVarId::new(0);
 
@@ -1223,6 +1277,7 @@ mod test {
             t2s(v),
             Fun {
                 tvar_ids: ty::TVarId::new(0)..ty::TVarId::new(1),
+                purity: ty::purity::Decl::Fixed(Purity::Impure),
                 params,
                 ret_ty: ty::Decl::Var(tvar_id),
                 body_expr: Box::new(Expr::Ref(t2s(w), param_var_id)),
@@ -1262,6 +1317,7 @@ mod test {
                 t2s(w),
                 Fun {
                     tvar_ids: ty::TVarIds::empty(),
+                    purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
                     params: Destruc::List(t2s(x), vec![], None),
                     ret_ty: ty::Decl::Free(ty::FreeTyId::new(2)),
                     body_expr: Box::new(Expr::Ref(t2s(y), outer_var_id)),
@@ -1317,6 +1373,7 @@ mod test {
                 t2s(y),
                 Fun {
                     tvar_ids: ty::TVarIds::empty(),
+                    purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
                     params,
                     ret_ty: ty::Decl::Free(ty::FreeTyId::new(3)),
                     body_expr: Box::new(Expr::Ref(t2s(z), param_var_id)),

@@ -274,8 +274,7 @@ impl TVarIds for EmptyTVarIds {
 /// Decl is a type declared by a user
 ///
 /// It is identical to a Poly type except there is an additional `Free` variant that indicates the
-/// user did not specify an explicit type and it must be inferred. `Free` takes a `Span` of the
-/// declaration for the purposes of reporting inference errors.
+/// user did not specify an explicit type and it must be inferred.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Decl {
     Var(TVarId),
