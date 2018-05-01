@@ -40,7 +40,7 @@ where
     ///
     /// `lefts` is a slice as it needs to be iterated over multiple times. `rights` is only visited
     /// once so it can be an arbitrary iterator.
-    fn intersect_refs<'a, I>(&self, lefts: &[S], rights: I) -> Result<S>
+    fn intersect_ref_iter<'a, I>(&self, lefts: &[S], rights: I) -> Result<S>
     where
         S: 'a,
         I: Iterator<Item = &'a S>,
@@ -76,10 +76,10 @@ where
         match (ty1, ty2) {
             // Union types
             (&ty::Ty::Union(ref refs1), &ty::Ty::Union(ref refs2)) => {
-                self.intersect_refs(refs1, refs2.iter())
+                self.intersect_ref_iter(refs1, refs2.iter())
             }
-            (&ty::Ty::Union(ref refs1), _) => self.intersect_refs(refs1, iter::once(ref2)),
-            (_, &ty::Ty::Union(ref refs2)) => self.intersect_refs(refs2, iter::once(ref1)),
+            (&ty::Ty::Union(ref refs1), _) => self.intersect_ref_iter(refs1, iter::once(ref2)),
+            (_, &ty::Ty::Union(ref refs2)) => self.intersect_ref_iter(refs2, iter::once(ref1)),
 
             // Set type
             (&ty::Ty::Set(ref member1), &ty::Ty::Set(ref member2)) => Ok(S::from_ty(ty::Ty::Set(
