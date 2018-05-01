@@ -504,16 +504,16 @@ mod test {
     use super::*;
     use syntax::span::t2s;
 
-    fn assert_poly_for_str(expected: ty::Poly, datum_str: &str) {
-        assert_eq!(expected, poly_for_str(datum_str).unwrap());
+    fn assert_poly_for_str(expected: &ty::Poly, datum_str: &str) {
+        assert_eq!(*expected, poly_for_str(datum_str).unwrap());
 
         // Try to round trip this to make sure str_for_poly works
         let recovered_str = str_for_poly(&[], &expected);
-        assert_eq!(expected, poly_for_str(&recovered_str).unwrap());
+        assert_eq!(*expected, poly_for_str(&recovered_str).unwrap());
     }
 
-    fn assert_err_for_str(err: Error, datum_str: &str) {
-        assert_eq!(err, poly_for_str(datum_str).unwrap_err());
+    fn assert_err_for_str(err: &Error, datum_str: &str) {
+        assert_eq!(*err, poly_for_str(datum_str).unwrap_err());
     }
 
     fn simple_list_type(fixed: Vec<ty::Ty<ty::Poly>>, rest: Option<ty::Ty<ty::Poly>>) -> ty::Poly {
@@ -543,7 +543,7 @@ mod test {
         let j = "true";
 
         let expected = ty::Ty::LitBool(true).into_poly();
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -551,7 +551,7 @@ mod test {
         let j = "false";
 
         let expected = ty::Ty::LitBool(false).into_poly();
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -559,7 +559,7 @@ mod test {
         let j = "'foo";
 
         let expected = ty::Ty::LitSym("foo".to_owned()).into_poly();
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -567,7 +567,7 @@ mod test {
         let j = "()";
 
         let expected = ty::Ty::Nil.into_poly();
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -575,7 +575,7 @@ mod test {
         let j = "Symbol";
 
         let expected = ty::Ty::Sym.into_poly();
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -584,7 +584,7 @@ mod test {
         let t = "^^^^^^^^";
 
         let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("notbound".to_owned()));
-        assert_err_for_str(err, j);
+        assert_err_for_str(&err, j);
     }
 
     #[test]
@@ -596,7 +596,7 @@ mod test {
             t2s(t),
             ErrorKind::IllegalArg("only boolean and symbol literals are supported".to_owned()),
         );
-        assert_err_for_str(err, j);
+        assert_err_for_str(&err, j);
     }
 
     #[test]
@@ -605,7 +605,7 @@ mod test {
         let t = "^^^^^";
 
         let err = Error::new(t2s(t), ErrorKind::ValueAsTy);
-        assert_err_for_str(err, j);
+        assert_err_for_str(&err, j);
     }
 
     #[test]
@@ -614,7 +614,7 @@ mod test {
         let t = " ^^^^^^^^ ";
 
         let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("notbound".to_owned()));
-        assert_err_for_str(err, j);
+        assert_err_for_str(&err, j);
     }
 
     #[test]
@@ -625,7 +625,7 @@ mod test {
             Box::new(ty::Ty::LitBool(true).into_poly()),
             Box::new(ty::Ty::LitBool(false).into_poly()),
         ).into_poly();
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -635,7 +635,7 @@ mod test {
         let inner_ty = ty::Ty::LitBool(true);
         let expected = simple_list_type(vec![], Some(inner_ty));
 
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -644,7 +644,7 @@ mod test {
 
         let expected = simple_list_type(vec![ty::Ty::LitBool(true), ty::Ty::LitBool(false)], None);
 
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -653,7 +653,7 @@ mod test {
 
         let expected = simple_list_type(vec![ty::Ty::LitBool(true)], Some(ty::Ty::LitBool(false)));
 
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -663,7 +663,7 @@ mod test {
         let inner_ty = ty::Ty::LitBool(true).into_poly();
         let expected = ty::Ty::Vecof(Box::new(inner_ty)).into_poly();
 
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -675,7 +675,7 @@ mod test {
             ty::Ty::LitBool(false).into_poly(),
         ]).into_poly();
 
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -687,7 +687,7 @@ mod test {
             t2s(t),
             ErrorKind::IllegalArg("functions must return exactly one value".to_owned()),
         );
-        assert_err_for_str(err, j);
+        assert_err_for_str(&err, j);
     }
 
     #[test]
@@ -701,7 +701,7 @@ mod test {
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
 
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -715,7 +715,7 @@ mod test {
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
 
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -729,7 +729,7 @@ mod test {
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
 
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -743,7 +743,7 @@ mod test {
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
 
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -757,7 +757,7 @@ mod test {
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
 
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -771,7 +771,7 @@ mod test {
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
 
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -779,7 +779,7 @@ mod test {
         let j = "(Type? String)";
 
         let expected = ty::Ty::TyPred(Box::new(ty::Ty::Str.into_poly())).into_poly();
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -789,7 +789,7 @@ mod test {
         let inner_ty = ty::Ty::LitBool(true).into_poly();
         let expected = ty::Ty::Set(Box::new(inner_ty)).into_poly();
 
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -801,7 +801,7 @@ mod test {
         let expected =
             ty::Ty::Map(Box::new(key_ty.into_poly()), Box::new(value_ty.into_poly())).into_poly();
 
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
@@ -809,7 +809,7 @@ mod test {
         let j = "(UnifyingU true false)";
         let expected = ty::Ty::Bool.into_poly();
 
-        assert_poly_for_str(expected, j);
+        assert_poly_for_str(&expected, j);
     }
 
     #[test]
