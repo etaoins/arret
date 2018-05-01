@@ -67,7 +67,7 @@ where
                     // Our merged type may now unify with one of the already processed members of
                     // the union. Remove the member we merged with and recurse using the merged
                     // member.
-                    output_members.remove(i);
+                    output_members.swap_remove(i);
                     return self.unify_ref_into_vec(output_members, merged_member);
                 }
                 UnifiedTy::Discerned => {}
