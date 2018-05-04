@@ -149,10 +149,9 @@ where
                 let intersected_purity = self.intersect_purity_refs(fun1.purity(), fun2.purity());
                 let intersected_params = match self.unify_ty_refs(fun1.params(), fun2.params())? {
                     ty::unify::UnifiedTy::Merged(merged) => merged,
-                    ty::unify::UnifiedTy::Discerned => S::from_ty(ty::Ty::Union(vec![
-                        fun1.params().clone(),
-                        fun2.params().clone(),
-                    ])),
+                    ty::unify::UnifiedTy::Discerned => {
+                        return Err(Error::Disjoint);
+                    }
                 };
                 let intersected_ret = self.intersect_ty_refs(fun1.ret(), fun2.ret())?;
 
@@ -368,22 +367,11 @@ mod test {
 
     #[test]
     fn fun_types() {
-        // TODO: Our list union code is trying to be helpful by making the param lists disjoint to
-        // allow for runtime type checks. However, it just ends up producing a weird (but correct)
-        // type.
-        assert_merged(
-            "(Fn (RawU (List Float) (List Int)) Int)",
-            "(Float -> Int)",
-            "(Int -> Int)",
-        );
+        assert_disjoint("(Float -> Int)", "(Int -> Int)");
         assert_merged("(-> true)", "(-> Bool)", "(->! true)");
         assert_merged("(Bool -> String)", "(true -> String)", "(false ->! String)");
 
-        assert_merged(
-            "(Fn (RawU (List String) (List String String)) Symbol)",
-            "(String -> Symbol)",
-            "(String String -> Symbol)",
-        );
+        assert_disjoint("(String -> Symbol)", "(String String -> Symbol)");
     }
 
     #[test]
