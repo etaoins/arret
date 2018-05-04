@@ -222,7 +222,7 @@ mod test {
         assert_dynamic(
             (
                 "Symbol",
-                "(RawU Bool Char Float (Fn! (RawU) Any) (Map Any Any) Int (Setof Any) String (Vectorof Any) (Cons Any Any) ())",
+                "(RawU Bool Char Float (... ->! Any) (Map Any Any) Int (Setof Any) String (Vectorof Any) (Cons Any Any) ())",
             ),
             "Any",
             "Symbol",

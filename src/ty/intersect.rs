@@ -432,7 +432,7 @@ mod test {
             ptype2_string.clone(),
         ).into_poly();
 
-        let top_pure_fun = poly_for_str("(Fn (RawU) Any)");
+        let top_pure_fun = poly_for_str("(... -> Any)");
 
         // We should intersect polymorphic functions with themselves
         assert_eq!(

@@ -594,7 +594,7 @@ mod test {
     fn fun_types() {
         // Parameters are contravariant and Float/Int are disjoint
         assert_merged(
-            "(Fn (RawU) (RawU Int Float))",
+            "(... -> (RawU Int Float))",
             "(Float -> Int)",
             "(Int -> Float)",
         );
@@ -649,7 +649,7 @@ mod test {
             "(RawU String Symbol)",
         );
         assert_merged(
-            "(RawU true (Fn (RawU) (RawU Float Int)))",
+            "(RawU true (... -> (RawU Float Int)))",
             "(RawU true (Int -> Float))",
             "(RawU true (Float -> Int))",
         );
@@ -677,7 +677,7 @@ mod test {
         );
 
         assert_merged_iter(
-            "(Fn (RawU) (RawU Symbol String))",
+            "(... -> (RawU Symbol String))",
             &["(String -> Symbol)", "(RawU)", "(Symbol -> String)"],
         );
     }
@@ -794,13 +794,13 @@ mod test {
             poly_unify(&tvars, &pidentity_fun, &pidentity_fun).unwrap()
         );
 
-        let top_pure_fun = poly_for_str("(Fn (RawU) Any)");
+        let top_pure_fun = poly_for_str("(... -> Any)");
         assert_eq!(
             UnifiedTy::Merged(top_pure_fun),
             poly_unify(&tvars, &pidentity_fun, &panys_to_cons).unwrap()
         );
 
-        let top_impure_fun = poly_for_str("(Fn! (RawU) Any)");
+        let top_impure_fun = poly_for_str("(... ->! Any)");
         assert_eq!(
             UnifiedTy::Merged(top_impure_fun),
             poly_unify(&tvars, &pidentity_fun, &pidentity_impure_string_fun).unwrap()

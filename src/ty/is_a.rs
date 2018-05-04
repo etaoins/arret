@@ -689,7 +689,7 @@ mod test {
         ).into_poly();
 
         // All functions should have the top function type
-        let top_fun = poly_for_str("(Fn! (RawU) Any)");
+        let top_fun = poly_for_str("(... ->! Any)");
         assert_eq!(Result::Yes, poly_is_a(&tvars, &pidentity_fun, &top_fun));
         assert_eq!(Result::Yes, poly_is_a(&tvars, &panys_to_cons, &top_fun));
         assert_eq!(Result::Yes, poly_is_a(&tvars, &pidentity_sym_fun, &top_fun));
@@ -699,7 +699,7 @@ mod test {
         );
 
         // We should take in to account purity
-        let top_pure_fun = poly_for_str("(Fn (RawU) Any)");
+        let top_pure_fun = poly_for_str("(... -> Any)");
         assert_eq!(
             Result::Yes,
             poly_is_a(&tvars, &pidentity_fun, &top_pure_fun)
@@ -738,7 +738,7 @@ mod test {
 
         // The symbol function satisfies ((U) -> Symbol) as all of its returns must be bounded by
         // that
-        let top_to_sym_fun = poly_for_str("(Fn! (RawU) Symbol)");
+        let top_to_sym_fun = poly_for_str("(... ->! Symbol)");
         assert_eq!(
             Result::May,
             poly_is_a(&tvars, &pidentity_fun, &top_to_sym_fun)
