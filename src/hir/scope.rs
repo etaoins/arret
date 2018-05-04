@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use hir::{types, VarId};
-use hir::prim::Prim;
 use hir::ns::{Ident, NsDatum};
+use hir::prim::Prim;
+use hir::{types, VarId};
 use ty;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
@@ -25,6 +25,7 @@ pub enum Binding {
     Macro(MacroId),
     Ty(ty::Poly),
     TyCons(types::TyCons),
+    Purity(ty::purity::Purity),
 }
 
 pub struct Scope {

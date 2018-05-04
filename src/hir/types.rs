@@ -15,8 +15,6 @@ pub enum TyCons {
     Listof,
     Vector,
     Vectorof,
-    PureArrow,
-    ImpureArrow,
     TyPred,
     Set,
     Map,
@@ -127,10 +125,6 @@ impl<'a> LowerTyContext<'a> {
                 let start_ty = self.lower_poly(arg_data.pop().unwrap())?;
                 Ok(ty::Ty::Vecof(Box::new(start_ty)).into_poly())
             }
-            TyCons::PureArrow | TyCons::ImpureArrow => Err(Error::new(
-                span,
-                ErrorKind::IllegalArg("functions must return exactly one value".to_owned()),
-            )),
             TyCons::TyPred => {
                 expect_arg_count(span, &arg_data, 1)?;
                 let test_ty = self.lower_poly(arg_data.pop().unwrap())?;
@@ -206,16 +200,6 @@ impl<'a> LowerTyContext<'a> {
         }
     }
 
-    fn try_lower_purity(&self, datum: &NsDatum) -> Option<Purity> {
-        self.scope
-            .get_datum(datum)
-            .and_then(|binding| match binding {
-                Binding::TyCons(TyCons::PureArrow) => Some(Purity::Pure),
-                Binding::TyCons(TyCons::ImpureArrow) => Some(Purity::Impure),
-                _ => None,
-            })
-    }
-
     fn lower_poly(&self, datum: NsDatum) -> Result<ty::Poly> {
         match datum {
             NsDatum::List(span, mut vs) => {
@@ -225,7 +209,7 @@ impl<'a> LowerTyContext<'a> {
                 }
 
                 if vs.len() >= 2 {
-                    if let Some(purity) = self.try_lower_purity(&vs[vs.len() - 2]) {
+                    if let Some(purity) = try_lower_purity(self.scope, &vs[vs.len() - 2]) {
                         // This is a function type
                         return self.lower_fun_cons(purity, vs);
                     };
@@ -278,6 +262,13 @@ pub fn lower_poly(tvars: &[ty::TVar], scope: &Scope, datum: NsDatum) -> Result<t
     ctx.lower_poly(datum)
 }
 
+pub fn try_lower_purity(scope: &Scope, datum: &NsDatum) -> Option<Purity> {
+    scope.get_datum(datum).and_then(|binding| match binding {
+        Binding::Purity(purity) => Some(purity),
+        _ => None,
+    })
+}
+
 pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
     macro_rules! export_ty {
         ($name:expr, $type:expr) => {
@@ -288,6 +279,12 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
     macro_rules! export_ty_cons {
         ($name:expr, $ty_cons:expr) => {
             exports.insert($name.to_owned(), Binding::TyCons($ty_cons));
+        };
+    }
+
+    macro_rules! export_purity {
+        ($name:expr, $purity:expr) => {
+            exports.insert($name.to_owned(), Binding::Purity($purity));
         };
     }
 
@@ -309,9 +306,10 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
     export_ty_cons!("Cons", TyCons::Cons);
     export_ty_cons!("U", TyCons::Union);
 
-    export_ty_cons!("->", TyCons::PureArrow);
-    export_ty_cons!("->!", TyCons::ImpureArrow);
     export_ty_cons!("Type?", TyCons::TyPred);
+
+    export_purity!("->", Purity::Pure);
+    export_purity!("->!", Purity::Impure);
 
     #[cfg(test)]
     export_ty_cons!("RawU", TyCons::RawU);
@@ -671,11 +669,11 @@ mod test {
     #[test]
     fn empty_fun() {
         let j = "(->)";
-        let t = "^^^^";
+        let t = " ^^ ";
 
         let err = Error::new(
             t2s(t),
-            ErrorKind::IllegalArg("functions must return exactly one value".to_owned()),
+            ErrorKind::IllegalArg("type constructor expected".to_owned()),
         );
         assert_err_for_str(&err, j);
     }

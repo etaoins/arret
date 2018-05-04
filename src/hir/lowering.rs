@@ -11,14 +11,13 @@ use hir::module::{Module, ModuleDef};
 use hir::ns::{Ident, NsDatum, NsId, NsIdAlloc};
 use hir::prim::Prim;
 use hir::scope::{Binding, MacroId, Scope};
-use hir::types::{lower_poly, lower_tvar, TyCons};
+use hir::types::{lower_poly, lower_tvar, try_lower_purity};
 use hir::util::{expect_arg_count, expect_ident, expect_ident_and_span, pop_vec_front,
                 split_into_fixed_and_rest};
 use hir::{App, Cond, Expr, Fun, VarId};
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 use ty;
-use ty::purity::Purity;
 
 pub struct LoweringContext<'ccx> {
     curr_var_id: u32,
@@ -306,15 +305,7 @@ impl<'ccx> LoweringContext<'ccx> {
         mut post_param_data: Vec<NsDatum>,
     ) -> Result<LoweredFunRetDecl> {
         if post_param_data.len() >= 2 {
-            if let Some(Binding::TyCons(ty_cons)) = fun_scope.get_datum(&post_param_data[0]) {
-                let purity = match ty_cons {
-                    TyCons::PureArrow => Purity::Pure,
-                    TyCons::ImpureArrow => Purity::Impure,
-                    _ => {
-                        return Err(Error::new(post_param_data[0].span(), ErrorKind::TyRef));
-                    }
-                };
-
+            if let Some(purity) = try_lower_purity(fun_scope, &post_param_data[0]) {
                 let body_data = post_param_data.split_off(2);
                 let ret_datum = post_param_data.pop().unwrap();
                 let ret_ty = lower_poly(&self.tvars, &fun_scope, ret_datum)?;
@@ -582,7 +573,7 @@ impl<'ccx> LoweringContext<'ccx> {
             NsDatum::Ident(span, ref ident) => match scope.get(ident) {
                 Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
                 Some(Binding::Prim(_)) => Err(Error::new(span, ErrorKind::PrimRef)),
-                Some(Binding::Ty(_)) | Some(Binding::TyCons(_)) => {
+                Some(Binding::Ty(_)) | Some(Binding::TyCons(_)) | Some(Binding::Purity(_)) => {
                     Err(Error::new(span, ErrorKind::TyRef))
                 }
                 Some(Binding::Macro(_)) => {
@@ -623,9 +614,9 @@ impl<'ccx> LoweringContext<'ccx> {
                         Some(Binding::Var(id)) => {
                             self.lower_expr_apply(scope, span, Expr::Ref(span, id), arg_data)
                         }
-                        Some(Binding::Ty(_)) | Some(Binding::TyCons(_)) => {
-                            Err(Error::new(span, ErrorKind::TyRef))
-                        }
+                        Some(Binding::Ty(_))
+                        | Some(Binding::TyCons(_))
+                        | Some(Binding::Purity(_)) => Err(Error::new(span, ErrorKind::TyRef)),
                         None => Err(Error::new(
                             fn_span,
                             ErrorKind::UnboundSymbol(ident.name().clone()),
@@ -818,9 +809,10 @@ pub fn lower_program(
 #[cfg(test)]
 mod test {
     use super::*;
-    use hir::ty;
     use syntax::parser::data_from_str;
     use syntax::span::t2s;
+    use ty;
+    use ty::purity::Purity;
 
     fn import_statement_for_library(names: &[&'static str]) -> Datum {
         Datum::List(
