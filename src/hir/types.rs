@@ -17,8 +17,6 @@ pub enum TyCons {
     Vectorof,
     PureArrow,
     ImpureArrow,
-    PureFun,
-    ImpureFun,
     TyPred,
     Set,
     Map,
@@ -85,7 +83,7 @@ impl<'a> LowerTyContext<'a> {
         Ok(tail_poly)
     }
 
-    fn lower_infix_fun_cons(&self, purity: Purity, mut arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
+    fn lower_fun_cons(&self, purity: Purity, mut arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
         let ret_ty = self.lower_poly(arg_data.pop().unwrap())?;
 
         // Discard the constructor
@@ -99,20 +97,6 @@ impl<'a> LowerTyContext<'a> {
         } else {
             self.lower_list_cons(arg_data)?
         };
-
-        Ok(ty::Ty::new_fun(purity, ty::TVarIds::empty(), params_ty, ret_ty).into_poly())
-    }
-
-    fn lower_complex_fun_cons(
-        &self,
-        span: Span,
-        purity: Purity,
-        mut arg_data: Vec<NsDatum>,
-    ) -> Result<ty::Poly> {
-        expect_arg_count(span, &arg_data, 2)?;
-
-        let ret_ty = self.lower_poly(arg_data.pop().unwrap())?;
-        let params_ty = self.lower_poly(arg_data.pop().unwrap())?;
 
         Ok(ty::Ty::new_fun(purity, ty::TVarIds::empty(), params_ty, ret_ty).into_poly())
     }
@@ -143,8 +127,6 @@ impl<'a> LowerTyContext<'a> {
                 let start_ty = self.lower_poly(arg_data.pop().unwrap())?;
                 Ok(ty::Ty::Vecof(Box::new(start_ty)).into_poly())
             }
-            TyCons::PureFun => self.lower_complex_fun_cons(span, Purity::Pure, arg_data),
-            TyCons::ImpureFun => self.lower_complex_fun_cons(span, Purity::Impure, arg_data),
             TyCons::PureArrow | TyCons::ImpureArrow => Err(Error::new(
                 span,
                 ErrorKind::IllegalArg("functions must return exactly one value".to_owned()),
@@ -224,6 +206,16 @@ impl<'a> LowerTyContext<'a> {
         }
     }
 
+    fn try_lower_purity(&self, datum: &NsDatum) -> Option<Purity> {
+        self.scope
+            .get_datum(datum)
+            .and_then(|binding| match binding {
+                Binding::TyCons(TyCons::PureArrow) => Some(Purity::Pure),
+                Binding::TyCons(TyCons::ImpureArrow) => Some(Purity::Impure),
+                _ => None,
+            })
+    }
+
     fn lower_poly(&self, datum: NsDatum) -> Result<ty::Poly> {
         match datum {
             NsDatum::List(span, mut vs) => {
@@ -233,14 +225,9 @@ impl<'a> LowerTyContext<'a> {
                 }
 
                 if vs.len() >= 2 {
-                    match self.scope.get_datum(&vs[vs.len() - 2]) {
-                        Some(Binding::TyCons(TyCons::PureArrow)) => {
-                            return self.lower_infix_fun_cons(Purity::Pure, vs);
-                        }
-                        Some(Binding::TyCons(TyCons::ImpureArrow)) => {
-                            return self.lower_infix_fun_cons(Purity::Impure, vs);
-                        }
-                        _ => {}
+                    if let Some(purity) = self.try_lower_purity(&vs[vs.len() - 2]) {
+                        // This is a function type
+                        return self.lower_fun_cons(purity, vs);
                     };
                 }
 
@@ -324,8 +311,6 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
 
     export_ty_cons!("->", TyCons::PureArrow);
     export_ty_cons!("->!", TyCons::ImpureArrow);
-    export_ty_cons!("Fn", TyCons::PureFun);
-    export_ty_cons!("Fn!", TyCons::ImpureFun);
     export_ty_cons!("Type?", TyCons::TyPred);
 
     #[cfg(test)]
@@ -335,8 +320,7 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
 /// Tries to construct the args for a `(List)` or `->` from a poly type
 ///
 /// This will return None if the poly type cannot be constructed using `(List)` or `->` shorthand.
-/// This can occur because not all "list-like" types can be expressed using shorthand. A fallback
-/// to `(Cons)`/`(Fn)` is required for those cases.
+/// This can occur because not all "list-like" types can be expressed using shorthand.
 fn str_for_simple_list_poly_ty(
     tvars: &[ty::TVar],
     mut poly_ty: &ty::Ty<ty::Poly>,
@@ -429,16 +413,7 @@ fn str_for_poly_ty(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
                     str_for_poly(tvars, fun.ret())
                 )
             } else {
-                format!(
-                    "({} {} {})",
-                    if fun.purity() == &Purity::Impure {
-                        "Fn!"
-                    } else {
-                        "Fn"
-                    },
-                    str_for_poly(tvars, fun.params()),
-                    str_for_poly(tvars, fun.ret())
-                )
+                panic!("Unrepresentable function type")
             }
         }
         ty::Ty::TyPred(ref test) => format!("(Type? {})", str_for_poly(tvars, test)),
@@ -706,7 +681,7 @@ mod test {
     }
 
     #[test]
-    fn pure_infix_fun() {
+    fn pure_fun() {
         let j = "(-> true)";
 
         let expected = ty::Ty::new_fun(
@@ -720,7 +695,7 @@ mod test {
     }
 
     #[test]
-    fn impure_infix_fun() {
+    fn impure_fun() {
         let j = "(->! true)";
 
         let expected = ty::Ty::new_fun(
@@ -734,7 +709,7 @@ mod test {
     }
 
     #[test]
-    fn fixed_infix_fun() {
+    fn fixed_fun() {
         let j = "(false -> true)";
 
         let expected = ty::Ty::new_fun(
@@ -748,7 +723,7 @@ mod test {
     }
 
     #[test]
-    fn rest_infix_impure_fun() {
+    fn rest_impure_fun() {
         let j = "(String Symbol ... ->! true)";
 
         let expected = ty::Ty::new_fun(
@@ -762,41 +737,13 @@ mod test {
     }
 
     #[test]
-    fn top_infix_impure_fun() {
+    fn top_impure_fun() {
         let j = "(... ->! true)";
 
         let expected = ty::Ty::new_fun(
             Purity::Impure,
             ty::TVarIds::empty(),
             ty::Ty::Union(vec![]).into_poly(),
-            ty::Ty::LitBool(true).into_poly(),
-        ).into_poly();
-
-        assert_poly_for_str(&expected, j);
-    }
-
-    #[test]
-    fn fixed_complex_fun() {
-        let j = "(Fn (List false) true)";
-
-        let expected = ty::Ty::new_fun(
-            Purity::Pure,
-            ty::TVarIds::empty(),
-            simple_list_type(vec![ty::Ty::LitBool(false)], None),
-            ty::Ty::LitBool(true).into_poly(),
-        ).into_poly();
-
-        assert_poly_for_str(&expected, j);
-    }
-
-    #[test]
-    fn rest_complex_fun() {
-        let j = "(Fn (Listof Symbol) true)";
-
-        let expected = ty::Ty::new_fun(
-            Purity::Pure,
-            ty::TVarIds::empty(),
-            ty::Ty::Listof(Box::new(ty::Ty::Sym.into_poly())).into_poly(),
             ty::Ty::LitBool(true).into_poly(),
         ).into_poly();
 
