@@ -138,13 +138,13 @@ where
         )
     }
 
-    /// Returns the top function type
-    pub fn new_top(purity: S::PRef) -> Fun<S> {
+    /// Returns a top function type
+    pub fn new_top(purity: S::PRef, ret: S) -> Fun<S> {
         Self::new(
             purity,
             S::TVarIds::empty(),
             S::from_ty(Ty::Union(vec![])),
-            S::from_ty(Ty::Any),
+            ret,
         )
     }
 

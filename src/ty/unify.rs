@@ -103,7 +103,7 @@ where
             // TODO: We could do better here by finding our upper bound and unifying them
             // Preserving the polymorphicness would be very complex
             Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::Fun(Box::new(
-                ty::Fun::new_top(unified_purity),
+                ty::Fun::new_top(unified_purity, S::from_ty(ty::Ty::Any)),
             )))))
         } else {
             let unified_params = match self.intersect_ty_refs(fun1.params(), fun2.params()) {
