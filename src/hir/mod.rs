@@ -1,3 +1,4 @@
+pub mod destruc;
 mod error;
 mod import;
 mod loader;
@@ -25,26 +26,12 @@ impl VarId {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum Destruc {
-    Scalar(Span, Scalar),
-    List(Span, Vec<Destruc>, Option<Box<Scalar>>),
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Scalar {
-    /// ID of the variable. If this is None it's treated as a wildcard.
-    var_id: Option<VarId>,
-    source_name: String,
-    ty: ty::Decl,
-}
-
 #[derive(PartialEq, Debug)]
 pub struct Fun {
     tvar_ids: Range<ty::TVarId>,
 
     purity: ty::purity::Decl,
-    params: Destruc,
+    params: destruc::List,
     ret_ty: ty::Decl,
 
     body_expr: Box<Expr>,
@@ -69,7 +56,7 @@ pub enum Expr {
     Lit(Datum),
     App(Span, App),
     Fun(Span, Fun),
-    Def(Span, Destruc, Box<Expr>),
+    Def(Span, destruc::Destruc, Box<Expr>),
     Cond(Span, Cond),
     Ref(Span, VarId),
     TyPred(Span, ty::Poly),

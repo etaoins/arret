@@ -26,7 +26,7 @@
 ]))
 
 (export list)
-(defn list #{A} [l : A] -> A
+(defn list #{A} ([l : A] ...) -> (Listof A)
   l)
 
 (export when)

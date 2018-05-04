@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::io::Read;
 
 use ctx::CompileContext;
+use hir::destruc;
 use hir::error::{Error, ErrorKind, Result};
 use hir::import::lower_import_set;
 use hir::loader::{load_library_data, load_module_data, LibraryName};
@@ -13,7 +14,7 @@ use hir::scope::{Binding, MacroId, Scope};
 use hir::types::{lower_poly, lower_tvar, TyCons};
 use hir::util::{expect_arg_count, expect_ident, expect_ident_and_span, pop_vec_front,
                 split_into_fixed_and_rest};
-use hir::{App, Cond, Destruc, Expr, Fun, Scalar, VarId};
+use hir::{App, Cond, Expr, Fun, VarId};
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 use ty;
@@ -47,7 +48,7 @@ impl LoweredProgram {
 }
 
 enum DeferredModulePrim {
-    Def(Span, Destruc, NsDatum),
+    Def(Span, destruc::Destruc, NsDatum),
     Export(Span, Ident),
 }
 
@@ -205,13 +206,11 @@ impl<'ccx> LoweringContext<'ccx> {
         span: Span,
         ident: Ident,
         decl_ty: ty::Decl,
-    ) -> Result<Scalar> {
+    ) -> Result<destruc::Scalar> {
         match scope.get(&ident) {
-            Some(Binding::Prim(Prim::Wildcard)) => Ok(Scalar {
-                var_id: None,
-                source_name: ident.into_name(),
-                ty: decl_ty,
-            }),
+            Some(Binding::Prim(Prim::Wildcard)) => {
+                Ok(destruc::Scalar::new(None, ident.into_name(), decl_ty))
+            }
             Some(Binding::Prim(Prim::Ellipsis)) => Err(Error::new(
                 span,
                 ErrorKind::IllegalArg(
@@ -224,11 +223,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
                 scope.insert_var(ident, var_id);
 
-                Ok(Scalar {
-                    var_id: Some(var_id),
-                    source_name,
-                    ty: decl_ty,
-                })
+                Ok(destruc::Scalar::new(Some(var_id), source_name, decl_ty))
             }
         }
     }
@@ -237,7 +232,7 @@ impl<'ccx> LoweringContext<'ccx> {
         &mut self,
         scope: &mut Scope,
         destruc_datum: NsDatum,
-    ) -> Result<Scalar> {
+    ) -> Result<destruc::Scalar> {
         match destruc_datum {
             NsDatum::Ident(span, ident) => {
                 let free_ty_id = self.insert_free_ty(span);
@@ -268,27 +263,34 @@ impl<'ccx> LoweringContext<'ccx> {
         }
     }
 
-    fn lower_destruc(&mut self, scope: &mut Scope, destruc_datum: NsDatum) -> Result<Destruc> {
+    fn lower_list_destruc(&mut self, scope: &mut Scope, vs: Vec<NsDatum>) -> Result<destruc::List> {
+        let (fixed, rest) = split_into_fixed_and_rest(scope, vs);
+
+        let fixed_destrucs = fixed
+            .into_iter()
+            .map(|v| self.lower_destruc(scope, v))
+            .collect::<Result<Vec<destruc::Destruc>>>()?;
+
+        let rest_destruc = match rest {
+            Some(rest) => Some(Box::new(self.lower_scalar_destruc(scope, rest)?)),
+            None => None,
+        };
+
+        Ok(destruc::List::new(fixed_destrucs, rest_destruc))
+    }
+
+    fn lower_destruc(
+        &mut self,
+        scope: &mut Scope,
+        destruc_datum: NsDatum,
+    ) -> Result<destruc::Destruc> {
         match destruc_datum {
             NsDatum::Ident(span, _) | NsDatum::Vec(span, _) => {
                 self.lower_scalar_destruc(scope, destruc_datum)
-                    .map(|scalar| Destruc::Scalar(span, scalar))
+                    .map(|scalar| destruc::Destruc::Scalar(span, scalar))
             }
-            NsDatum::List(span, vs) => {
-                let (fixed, rest) = split_into_fixed_and_rest(scope, vs);
-
-                let fixed_destrucs = fixed
-                    .into_iter()
-                    .map(|v| self.lower_destruc(scope, v))
-                    .collect::<Result<Vec<Destruc>>>()?;
-
-                let rest_destruc = match rest {
-                    Some(rest) => Some(Box::new(self.lower_scalar_destruc(scope, rest)?)),
-                    None => None,
-                };
-
-                Ok(Destruc::List(span, fixed_destrucs, rest_destruc))
-            }
+            NsDatum::List(span, vs) => self.lower_list_destruc(scope, vs)
+                .map(|list_destruc| destruc::Destruc::List(span, list_destruc)),
             _ => Err(Error::new(
                 destruc_datum.span(),
                 ErrorKind::IllegalArg(
@@ -371,7 +373,15 @@ impl<'ccx> LoweringContext<'ccx> {
         let tvar_ids = tvar_id_start..ty::TVarId::new(self.tvars.len());
 
         // Pull out our params
-        let params = self.lower_destruc(&mut fun_scope, next_datum)?;
+        let params = match next_datum {
+            NsDatum::List(_, vs) => self.lower_list_destruc(&mut fun_scope, vs)?,
+            _ => {
+                return Err(Error::new(
+                    span,
+                    ErrorKind::IllegalArg("parameter list expected".to_owned()),
+                ));
+            }
+        };
 
         // Determine if we have a purity and return type after the parameters, eg (param) -> RetTy
         let LoweredFunRetDecl {
@@ -936,13 +946,13 @@ mod test {
         let v = "       ^   ";
         let w = "          ^";
 
-        let destruc = Destruc::Scalar(
+        let destruc = destruc::Destruc::Scalar(
             t2s(t),
-            Scalar {
-                var_id: Some(VarId(2)),
-                source_name: "x".to_owned(),
-                ty: ty::Decl::Free(ty::FreeTyId::new(1)),
-            },
+            destruc::Scalar::new(
+                Some(VarId(2)),
+                "x".to_owned(),
+                ty::Decl::Free(ty::FreeTyId::new(1)),
+            ),
         );
 
         let expected = Expr::Do(vec![
@@ -961,13 +971,13 @@ mod test {
         let v = "                ^^^^   ";
         let w = "                      ^";
 
-        let destruc = Destruc::Scalar(
+        let destruc = destruc::Destruc::Scalar(
             t2s(t),
-            Scalar {
-                var_id: Some(VarId(2)),
-                source_name: "x".to_owned(),
-                ty: ty::Ty::LitBool(true).into_decl(),
-            },
+            destruc::Scalar::new(
+                Some(VarId(2)),
+                "x".to_owned(),
+                ty::Ty::LitBool(true).into_decl(),
+            ),
         );
 
         let expected = Expr::Do(vec![
@@ -999,13 +1009,9 @@ mod test {
         let u = "^^^^^^^^^";
         let v = "       ^ ";
 
-        let destruc = Destruc::Scalar(
+        let destruc = destruc::Destruc::Scalar(
             t2s(t),
-            Scalar {
-                var_id: None,
-                source_name: "_".to_owned(),
-                ty: ty::Decl::Free(ty::FreeTyId::new(1)),
-            },
+            destruc::Scalar::new(None, "_".to_owned(), ty::Decl::Free(ty::FreeTyId::new(1))),
         );
 
         let expected = Expr::Def(t2s(u), destruc, Box::new(Expr::Lit(Datum::Int(t2s(v), 1))));
@@ -1036,21 +1042,23 @@ mod test {
         let x = "                    ^    ";
         let y = "                        ^";
 
-        let destruc = Destruc::List(
+        let destruc = destruc::Destruc::List(
             t2s(t),
-            vec![Destruc::Scalar(
-                t2s(u),
-                Scalar {
-                    var_id: Some(VarId(2)),
-                    source_name: "x".to_owned(),
-                    ty: ty::Decl::Free(ty::FreeTyId::new(1)),
-                },
-            )],
-            Some(Box::new(Scalar {
-                var_id: Some(VarId(3)),
-                source_name: "rest".to_owned(),
-                ty: ty::Decl::Free(ty::FreeTyId::new(2)),
-            })),
+            destruc::List::new(
+                vec![destruc::Destruc::Scalar(
+                    t2s(u),
+                    destruc::Scalar::new(
+                        Some(VarId(2)),
+                        "x".to_owned(),
+                        ty::Decl::Free(ty::FreeTyId::new(1)),
+                    ),
+                )],
+                Some(Box::new(destruc::Scalar::new(
+                    Some(VarId(3)),
+                    "rest".to_owned(),
+                    ty::Decl::Free(ty::FreeTyId::new(2)),
+                ))),
+            ),
         );
 
         let expected = Expr::Do(vec![
@@ -1145,14 +1153,13 @@ mod test {
     fn empty_fn() {
         let j = "(fn ())";
         let t = "^^^^^^^";
-        let u = "    ^^  ";
 
         let expected = Expr::Fun(
             t2s(t),
             Fun {
                 tvar_ids: ty::TVarIds::empty(),
                 purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
-                params: Destruc::List(t2s(u), vec![], None),
+                params: destruc::List::new(vec![], None),
                 ret_ty: ty::Decl::Free(ty::FreeTyId::new(1)),
                 body_expr: Box::new(Expr::from_vec(vec![])),
             },
@@ -1165,17 +1172,16 @@ mod test {
     fn empty_fn_with_ret_ty() {
         let j = "(fn () -> Int 1)";
         let t = "^^^^^^^^^^^^^^^^";
-        let u = "    ^^          ";
-        let v = "              ^ ";
+        let u = "              ^ ";
 
         let expected = Expr::Fun(
             t2s(t),
             Fun {
                 tvar_ids: ty::TVarIds::empty(),
                 purity: ty::purity::Decl::Fixed(Purity::Pure),
-                params: Destruc::List(t2s(u), vec![], None),
+                params: destruc::List::new(vec![], None),
                 ret_ty: ty::Ty::Int.into_decl(),
-                body_expr: Box::new(Expr::Lit(Datum::Int(t2s(v), 1))),
+                body_expr: Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
             },
         );
 
@@ -1185,54 +1191,21 @@ mod test {
     #[test]
     fn identity_fn() {
         let j = "(fn (x) x)";
-        let t = "    ^^^   ";
-        let u = "     ^    ";
-        let v = "^^^^^^^^^^";
-        let w = "        ^ ";
+        let t = "     ^    ";
+        let u = "^^^^^^^^^^";
+        let v = "        ^ ";
 
         let param_var_id = VarId::new(2);
-        let params = Destruc::List(
-            t2s(t),
-            vec![Destruc::Scalar(
-                t2s(u),
-                Scalar {
-                    var_id: Some(param_var_id),
-                    source_name: "x".to_owned(),
-                    ty: ty::Decl::Free(ty::FreeTyId::new(1)),
-                },
+        let params = destruc::List::new(
+            vec![destruc::Destruc::Scalar(
+                t2s(t),
+                destruc::Scalar::new(
+                    Some(param_var_id),
+                    "x".to_owned(),
+                    ty::Decl::Free(ty::FreeTyId::new(1)),
+                ),
             )],
             None,
-        );
-
-        let expected = Expr::Fun(
-            t2s(v),
-            Fun {
-                tvar_ids: ty::TVarIds::empty(),
-                purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
-                params,
-                ret_ty: ty::Decl::Free(ty::FreeTyId::new(2)),
-                body_expr: Box::new(Expr::Ref(t2s(w), param_var_id)),
-            },
-        );
-
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
-    }
-
-    #[test]
-    fn ret_arg_list_fn() {
-        let j = "(fn x x)";
-        let t = "    ^   ";
-        let u = "^^^^^^^^";
-        let v = "      ^ ";
-
-        let param_var_id = VarId::new(2);
-        let params = Destruc::Scalar(
-            t2s(t),
-            Scalar {
-                var_id: Some(param_var_id),
-                source_name: "x".to_owned(),
-                ty: ty::Decl::Free(ty::FreeTyId::new(1)),
-            },
         );
 
         let expected = Expr::Fun(
@@ -1252,35 +1225,29 @@ mod test {
     #[test]
     fn poly_impure_identity_fn() {
         let j = "(fn #{A} ([x : A]) ->! A x)";
-        let t = "         ^^^^^^^^^         ";
-        let u = "          ^^^^^^^          ";
-        let v = "^^^^^^^^^^^^^^^^^^^^^^^^^^^";
-        let w = "                         ^ ";
+        let t = "          ^^^^^^^          ";
+        let u = "^^^^^^^^^^^^^^^^^^^^^^^^^^^";
+        let v = "                         ^ ";
 
         let tvar_id = ty::TVarId::new(0);
 
         let param_var_id = VarId::new(2);
-        let params = Destruc::List(
-            t2s(t),
-            vec![Destruc::Scalar(
-                t2s(u),
-                Scalar {
-                    var_id: Some(param_var_id),
-                    source_name: "x".to_owned(),
-                    ty: ty::Decl::Var(tvar_id),
-                },
+        let params = destruc::List::new(
+            vec![destruc::Destruc::Scalar(
+                t2s(t),
+                destruc::Scalar::new(Some(param_var_id), "x".to_owned(), ty::Decl::Var(tvar_id)),
             )],
             None,
         );
 
         let expected = Expr::Fun(
-            t2s(v),
+            t2s(u),
             Fun {
                 tvar_ids: ty::TVarId::new(0)..ty::TVarId::new(1),
                 purity: ty::purity::Decl::Fixed(Purity::Impure),
                 params,
                 ret_ty: ty::Decl::Var(tvar_id),
-                body_expr: Box::new(Expr::Ref(t2s(w), param_var_id)),
+                body_expr: Box::new(Expr::Ref(t2s(v), param_var_id)),
             },
         );
 
@@ -1294,17 +1261,16 @@ mod test {
         let u = "^^^^^^^^^         ";
         let v = "       ^          ";
         let w = "         ^^^^^^^^^";
-        let x = "             ^^    ";
-        let y = "                ^ ";
+        let x = "                ^ ";
 
         let outer_var_id = VarId::new(2);
-        let outer_destruc = Destruc::Scalar(
+        let outer_destruc = destruc::Destruc::Scalar(
             t2s(t),
-            Scalar {
-                var_id: Some(outer_var_id),
-                source_name: "x".to_owned(),
-                ty: ty::Decl::Free(ty::FreeTyId::new(1)),
-            },
+            destruc::Scalar::new(
+                Some(outer_var_id),
+                "x".to_owned(),
+                ty::Decl::Free(ty::FreeTyId::new(1)),
+            ),
         );
 
         let expected = Expr::Do(vec![
@@ -1318,9 +1284,9 @@ mod test {
                 Fun {
                     tvar_ids: ty::TVarIds::empty(),
                     purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
-                    params: Destruc::List(t2s(x), vec![], None),
+                    params: destruc::List::new(vec![], None),
                     ret_ty: ty::Decl::Free(ty::FreeTyId::new(2)),
-                    body_expr: Box::new(Expr::Ref(t2s(y), outer_var_id)),
+                    body_expr: Box::new(Expr::Ref(t2s(x), outer_var_id)),
                 },
             ),
         ]);
@@ -1332,33 +1298,31 @@ mod test {
     fn shadowing_fn() {
         let j = "(def x 1)(fn (x) x)";
         let t = "     ^             ";
-        let u = "             ^^^   ";
+        let u = "       ^           ";
         let v = "              ^    ";
         let w = "^^^^^^^^^          ";
-        let x = "       ^           ";
-        let y = "         ^^^^^^^^^^";
-        let z = "                 ^ ";
+        let x = "         ^^^^^^^^^^";
+        let y = "                 ^ ";
 
         let outer_var_id = VarId::new(2);
-        let outer_destruc = Destruc::Scalar(
+        let outer_destruc = destruc::Destruc::Scalar(
             t2s(t),
-            Scalar {
-                var_id: Some(outer_var_id),
-                source_name: "x".to_owned(),
-                ty: ty::Decl::Free(ty::FreeTyId::new(1)),
-            },
+            destruc::Scalar::new(
+                Some(outer_var_id),
+                "x".to_owned(),
+                ty::Decl::Free(ty::FreeTyId::new(1)),
+            ),
         );
 
         let param_var_id = VarId::new(3);
-        let params = Destruc::List(
-            t2s(u),
-            vec![Destruc::Scalar(
+        let params = destruc::List::new(
+            vec![destruc::Destruc::Scalar(
                 t2s(v),
-                Scalar {
-                    var_id: Some(param_var_id),
-                    source_name: "x".to_owned(),
-                    ty: ty::Decl::Free(ty::FreeTyId::new(2)),
-                },
+                destruc::Scalar::new(
+                    Some(param_var_id),
+                    "x".to_owned(),
+                    ty::Decl::Free(ty::FreeTyId::new(2)),
+                ),
             )],
             None,
         );
@@ -1367,16 +1331,16 @@ mod test {
             Expr::Def(
                 t2s(w),
                 outer_destruc,
-                Box::new(Expr::Lit(Datum::Int(t2s(x), 1))),
+                Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
             ),
             Expr::Fun(
-                t2s(y),
+                t2s(x),
                 Fun {
                     tvar_ids: ty::TVarIds::empty(),
                     purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
                     params,
                     ret_ty: ty::Decl::Free(ty::FreeTyId::new(3)),
-                    body_expr: Box::new(Expr::Ref(t2s(z), param_var_id)),
+                    body_expr: Box::new(Expr::Ref(t2s(y), param_var_id)),
                 },
             ),
         ]);
@@ -1485,13 +1449,13 @@ mod test {
 
         let expected_module_def = ModuleDef::new(
             t2s(t),
-            Destruc::Scalar(
+            destruc::Destruc::Scalar(
                 t2s(u),
-                Scalar {
-                    var_id: Some(var_id),
-                    source_name: "x".to_owned(),
-                    ty: ty::Decl::Free(ty::FreeTyId::new(0)),
-                },
+                destruc::Scalar::new(
+                    Some(var_id),
+                    "x".to_owned(),
+                    ty::Decl::Free(ty::FreeTyId::new(0)),
+                ),
             ),
             Expr::Lit(Datum::Int(t2s(v), 1)),
         );
@@ -1999,13 +1963,13 @@ mod test {
         let v = v1;
         let w = &[s1, s2, w3].join("");
 
-        let destruc = Destruc::Scalar(
+        let destruc = destruc::Destruc::Scalar(
             t2s(t),
-            Scalar {
-                var_id: Some(VarId(2)),
-                source_name: "x".to_owned(),
-                ty: ty::Decl::Free(ty::FreeTyId::new(1)),
-            },
+            destruc::Scalar::new(
+                Some(VarId(2)),
+                "x".to_owned(),
+                ty::Decl::Free(ty::FreeTyId::new(1)),
+            ),
         );
 
         let expected = Expr::Do(vec![
@@ -2030,13 +1994,13 @@ mod test {
         let u = &[s1, u2].join("");
         let v = &[s1, v2].join("");
 
-        let destruc = Destruc::Scalar(
+        let destruc = destruc::Destruc::Scalar(
             t2s(t),
-            Scalar {
-                var_id: Some(VarId(2)),
-                source_name: "x".to_owned(),
-                ty: ty::Ty::LitBool(true).into_decl(),
-            },
+            destruc::Scalar::new(
+                Some(VarId(2)),
+                "x".to_owned(),
+                ty::Ty::LitBool(true).into_decl(),
+            ),
         );
 
         let expected = Expr::Def(

@@ -1,9 +1,10 @@
-use std::collections::HashMap;
-use syntax::span::Span;
-use hir::{Destruc, Expr};
-use hir::types::insert_ty_exports;
+use hir::destruc::Destruc;
 use hir::prim::insert_prim_exports;
 use hir::scope::Binding;
+use hir::types::insert_ty_exports;
+use hir::Expr;
+use std::collections::HashMap;
+use syntax::span::Span;
 
 #[derive(PartialEq, Debug)]
 pub struct ModuleDef {
