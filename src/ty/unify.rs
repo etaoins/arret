@@ -96,40 +96,42 @@ where
         Ok(S::from_vec(output_members))
     }
 
+    fn unify_top_fun(
+        &self,
+        top_fun1: &ty::TopFun<S>,
+        top_fun2: &ty::TopFun<S>,
+    ) -> Result<UnifiedTy<S>, E> {
+        let unified_purity = self.unify_purity_refs(top_fun1.purity(), top_fun2.purity())?;
+        let unified_ret = self.unify_to_ty_ref(top_fun1.ret(), top_fun2.ret())?;
+
+        Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::TopFun(Box::new(
+            ty::TopFun::new(unified_purity, unified_ret),
+        )))))
+    }
+
     fn unify_fun(&self, fun1: &ty::Fun<S>, fun2: &ty::Fun<S>) -> Result<UnifiedTy<S>, E> {
         let unified_purity = self.unify_purity_refs(fun1.purity(), fun2.purity())?;
 
         if fun1.is_polymorphic() || fun2.is_polymorphic() {
             // TODO: We could do better here by finding our upper bound and unifying them
             // Preserving the polymorphicness would be very complex
-            Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::Fun(Box::new(
-                ty::Fun::new_top(unified_purity, S::from_ty(ty::Ty::Any)),
+            Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::TopFun(Box::new(
+                ty::TopFun::new(unified_purity, S::from_ty(ty::Ty::Any)),
             )))))
         } else {
-            let unified_params = match self.intersect_ty_refs(fun1.params(), fun2.params()) {
-                Ok(merged) => merged,
-                Err(ty::intersect::Error::Disjoint) => {
-                    // We normally avoid using `(U)` as the intersection of two disjoint types.
-                    // This is because if it appears it an "output type" such as a function return
-                    // or inferred variable it can mislead our type system in to thinking a value
-                    // has the type `(U)`. This is by definition impossible and breaks our type
-                    // system.
-                    //
-                    // However, this is safe for parameter types as it's an "input type". Using (U)
-                    // here simply makes the function unapplicable. This is required to express our
-                    // top function types.
-                    S::from_ty(ty::Ty::Union(vec![]))
-                }
-            };
-
             let unified_ret = self.unify_to_ty_ref(fun1.ret(), fun2.ret())?;
 
-            Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::new_fun(
-                unified_purity,
-                S::TVarIds::empty(),
-                unified_params,
-                unified_ret,
-            ))))
+            match self.intersect_ty_refs(fun1.params(), fun2.params()) {
+                Ok(unified_params) => Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::new_fun(
+                    unified_purity,
+                    S::TVarIds::empty(),
+                    unified_params,
+                    unified_ret,
+                )))),
+                Err(ty::intersect::Error::Disjoint) => Ok(UnifiedTy::Merged(S::from_ty(
+                    ty::Ty::TopFun(Box::new(ty::TopFun::new(unified_purity, unified_ret))),
+                ))),
+            }
         }
     }
 
@@ -144,7 +146,6 @@ where
         if ty1 == ty2 {
             return Ok(UnifiedTy::Merged(ref1.clone()));
         }
-
         Ok(match (ty1, ty2) {
             // Handle supertype relationships
             (_, &ty::Ty::Any) | (&ty::Ty::Any, _) => UnifiedTy::Merged(S::from_ty(ty::Ty::Any)),
@@ -219,13 +220,24 @@ where
             }
 
             // Function types
+            (&ty::Ty::TopFun(ref top_fun1), &ty::Ty::TopFun(ref top_fun2)) => {
+                self.unify_top_fun(top_fun1, top_fun2)?
+            }
+            (&ty::Ty::Fun(ref fun), &ty::Ty::TopFun(ref top_fun))
+            | (&ty::Ty::TopFun(ref top_fun), &ty::Ty::Fun(ref fun)) => {
+                self.unify_top_fun(fun.top_fun(), top_fun)?
+            }
+            (&ty::Ty::TyPred(_), &ty::Ty::TopFun(ref top_fun))
+            | (&ty::Ty::TopFun(ref top_fun), &ty::Ty::TyPred(_)) => {
+                self.unify_top_fun(&ty::TopFun::new_for_ty_pred(), top_fun)?
+            }
+
             (&ty::Ty::Fun(ref fun1), &ty::Ty::Fun(ref fun2)) => self.unify_fun(fun1, fun2)?,
-            (&ty::Ty::TyPred(_), &ty::Ty::Fun(ref fun2)) => {
-                self.unify_fun(&ty::Fun::new_for_ty_pred(), fun2)?
+            (&ty::Ty::TyPred(_), &ty::Ty::Fun(ref fun))
+            | (&ty::Ty::Fun(ref fun), &ty::Ty::TyPred(_)) => {
+                self.unify_fun(&ty::Fun::new_for_ty_pred(), fun)?
             }
-            (&ty::Ty::Fun(ref fun1), &ty::Ty::TyPred(_)) => {
-                self.unify_fun(fun1, &ty::Fun::new_for_ty_pred())?
-            }
+
             (&ty::Ty::TyPred(_), &ty::Ty::TyPred(_)) => UnifiedTy::Merged(S::from_ty(ty::Ty::Fun(
                 Box::new(ty::Fun::new_for_ty_pred()),
             ))),
@@ -339,7 +351,8 @@ impl<'a> PolyUnifyCtx<'a> {
             ty::Ty::Union(ref members) => members.iter().all(|m| self.poly_is_discernible(m)),
 
             // Type erased types
-            ty::Ty::Fun(_)
+            ty::Ty::TopFun(_)
+            | ty::Ty::Fun(_)
             | ty::Ty::TyPred(_)
             | ty::Ty::Map(_, _)
             | ty::Ty::Set(_)
@@ -591,6 +604,11 @@ mod test {
     }
 
     #[test]
+    fn top_fun_types() {
+        assert_merged("(... ->! Bool)", "(... ->! true)", "(... -> false)");
+    }
+
+    #[test]
     fn fun_types() {
         // Parameters are contravariant and Float/Int are disjoint
         assert_merged(
@@ -606,6 +624,8 @@ mod test {
         );
         assert_merged("(->! Int)", "(-> Int)", "(->! Int)");
         assert_merged("(->! Bool)", "(-> true)", "(->! false)");
+
+        assert_merged("(... ->! Bool)", "(... -> true)", "(->! false)");
     }
 
     #[test]
@@ -613,6 +633,7 @@ mod test {
         assert_merged("(Type? String)", "(Type? String)", "(Type? String)");
         assert_merged("(Any -> Bool)", "(Type? String)", "(Type? Symbol)");
         assert_merged("(Int -> Any)", "(Int -> Any)", "(Type? Symbol)");
+        assert_merged("(... ->! Bool)", "(... ->! Bool)", "(Type? Symbol)");
     }
 
     #[test]

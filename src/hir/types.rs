@@ -87,16 +87,15 @@ impl<'a> LowerTyContext<'a> {
         // Discard the constructor
         arg_data.pop();
 
-        let params_ty = if arg_data.len() == 1
+        if arg_data.len() == 1
             && self.scope.get_datum(&arg_data[0]) == Some(Binding::Prim(Prim::Ellipsis))
         {
             // Top function type in the form `(... -> ReturnType)`
-            ty::Ty::Union(vec![]).into_poly()
+            Ok(ty::Ty::TopFun(Box::new(ty::TopFun::new(purity, ret_ty))).into_poly())
         } else {
-            self.lower_list_cons(arg_data)?
-        };
-
-        Ok(ty::Ty::new_fun(purity, ty::TVarIds::empty(), params_ty, ret_ty).into_poly())
+            let params_ty = self.lower_list_cons(arg_data)?;
+            Ok(ty::Ty::new_fun(purity, ty::TVarIds::empty(), params_ty, ret_ty).into_poly())
+        }
     }
 
     fn lower_ty_cons_apply(
@@ -396,14 +395,13 @@ fn str_for_poly_ty(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
             format!("(Vector{})", result_parts.join(""))
         }
         ty::Ty::Vecof(ref member) => format!("(Vectorof {})", str_for_poly(tvars, member)),
+        ty::Ty::TopFun(ref top_fun) => format!(
+            "(... {} {})",
+            str_for_purity(*top_fun.purity()),
+            str_for_poly(tvars, top_fun.ret())
+        ),
         ty::Ty::Fun(ref fun) => {
-            if fun.params() == &ty::Ty::Union(vec![]).into_poly() {
-                format!(
-                    "(... {} {})",
-                    str_for_purity(*fun.purity()),
-                    str_for_poly(tvars, fun.ret())
-                )
-            } else if let Some(simple_params_str) = str_for_simple_list_poly(tvars, fun.params()) {
+            if let Some(simple_params_str) = str_for_simple_list_poly(tvars, fun.params()) {
                 format!(
                     "({} {} {})",
                     simple_params_str,
@@ -738,12 +736,10 @@ mod test {
     fn top_impure_fun() {
         let j = "(... ->! true)";
 
-        let expected = ty::Ty::new_fun(
+        let expected = ty::Ty::TopFun(Box::new(ty::TopFun::new(
             Purity::Impure,
-            ty::TVarIds::empty(),
-            ty::Ty::Union(vec![]).into_poly(),
             ty::Ty::LitBool(true).into_poly(),
-        ).into_poly();
+        ))).into_poly();
 
         assert_poly_for_str(&expected, j);
     }

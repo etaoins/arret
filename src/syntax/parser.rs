@@ -705,7 +705,7 @@ mod test {
 
     #[test]
     fn int_datum() {
-        #[allow(unreadable_literal)]
+        //#[allow(unreadable_literal)]
         let test_ints = [
             ("0", 0),
             ("000", 0),

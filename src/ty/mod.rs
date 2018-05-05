@@ -65,6 +65,7 @@ where
     Union(Vec<S>),
 
     // Function types
+    TopFun(Box<TopFun<S>>),
     Fun(Box<Fun<S>>),
     TyPred(Box<S>),
 
@@ -100,14 +101,48 @@ where
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct Fun<S>
+pub struct TopFun<S>
 where
     S: TyRef,
 {
     purity: S::PRef,
-    tvar_ids: S::TVarIds,
-    params: S,
     ret: S,
+}
+
+impl<S> TopFun<S>
+where
+    S: TyRef,
+{
+    /// Returns a top function type
+    pub fn new(purity: S::PRef, ret: S) -> TopFun<S> {
+        TopFun { purity, ret }
+    }
+
+    /// Returns the `Fun` top type for all type predicate functions
+    pub fn new_for_ty_pred() -> TopFun<S> {
+        Self::new(
+            S::PRef::from_purity(purity::Purity::Pure),
+            S::from_ty(Ty::Bool),
+        )
+    }
+
+    pub fn purity(&self) -> &S::PRef {
+        &self.purity
+    }
+
+    pub fn ret(&self) -> &S {
+        &self.ret
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+pub struct Fun<S>
+where
+    S: TyRef,
+{
+    tvar_ids: S::TVarIds,
+    top_fun: TopFun<S>,
+    params: S,
 }
 
 impl<S> Fun<S>
@@ -116,10 +151,9 @@ where
 {
     pub fn new(purity: S::PRef, tvar_ids: S::TVarIds, params: S, ret: S) -> Fun<S> {
         Fun {
-            purity,
             tvar_ids,
+            top_fun: TopFun { purity, ret },
             params,
-            ret,
         }
     }
 
@@ -138,18 +172,12 @@ where
         )
     }
 
-    /// Returns a top function type
-    pub fn new_top(purity: S::PRef, ret: S) -> Fun<S> {
-        Self::new(
-            purity,
-            S::TVarIds::empty(),
-            S::from_ty(Ty::Union(vec![])),
-            ret,
-        )
+    pub fn top_fun(&self) -> &TopFun<S> {
+        &self.top_fun
     }
 
     pub fn purity(&self) -> &S::PRef {
-        &self.purity
+        &self.top_fun.purity
     }
 
     pub fn params(&self) -> &S {
@@ -157,7 +185,7 @@ where
     }
 
     pub fn ret(&self) -> &S {
-        &self.ret
+        &self.top_fun.ret
     }
 
     pub fn is_polymorphic(&self) -> bool {

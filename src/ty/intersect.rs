@@ -138,11 +138,39 @@ where
                 self.intersect_list_cons_refs(ref2, member, car, cdr)
             }
 
-            // Function type
-            (&ty::Ty::Fun(ref fun1), &ty::Ty::Fun(ref fun2)) => {
-                if fun1.is_polymorphic() || fun2.is_polymorphic() {
+            // Function types
+            (&ty::Ty::TopFun(ref top_fun1), &ty::Ty::TopFun(ref top_fun2)) => {
+                let intersected_purity =
+                    self.intersect_purity_refs(top_fun1.purity(), top_fun2.purity());
+                let intersected_ret = self.intersect_ty_refs(top_fun1.ret(), top_fun2.ret())?;
+
+                Ok(S::from_ty(ty::Ty::TopFun(Box::new(ty::TopFun::new(
+                    intersected_purity,
+                    intersected_ret,
+                )))))
+            }
+            (&ty::Ty::TopFun(ref top_fun), &ty::Ty::Fun(ref fun))
+            | (&ty::Ty::Fun(ref fun), &ty::Ty::TopFun(ref top_fun)) => {
+                if fun.is_polymorphic() {
                     // TODO: This might be possible but we would have to recalculate the tvars for
                     // the intersected function
+                    return Err(Error::Disjoint);
+                }
+
+                let intersected_purity = self.intersect_purity_refs(top_fun.purity(), fun.purity());
+                let intersected_params = fun.params().clone();
+                let intersected_ret = self.intersect_ty_refs(top_fun.ret(), fun.ret())?;
+
+                Ok(S::from_ty(ty::Ty::new_fun(
+                    intersected_purity,
+                    S::TVarIds::empty(),
+                    intersected_params,
+                    intersected_ret,
+                )))
+            }
+            (&ty::Ty::Fun(ref fun1), &ty::Ty::Fun(ref fun2)) => {
+                if fun1.is_polymorphic() || fun2.is_polymorphic() {
+                    // TODO: Same issue as top functions
                     return Err(Error::Disjoint);
                 }
 
@@ -366,18 +394,29 @@ mod test {
     }
 
     #[test]
+    fn top_fun_types() {
+        assert_disjoint("(... -> Float)", "(... -> Int)");
+        assert_merged("(... -> true)", "(... -> Bool)", "(... ->! true)");
+    }
+
+    #[test]
     fn fun_types() {
         assert_disjoint("(Float -> Int)", "(Int -> Int)");
+        assert_disjoint("(String -> Symbol)", "(String String -> Symbol)");
         assert_merged("(-> true)", "(-> Bool)", "(->! true)");
         assert_merged("(Bool -> String)", "(true -> String)", "(false ->! String)");
 
-        assert_disjoint("(String -> Symbol)", "(String String -> Symbol)");
+        assert_merged("(->! true)", "(... ->! true)", "(->! Any)");
     }
 
     #[test]
     fn ty_pred_types() {
         assert_disjoint("(Type? String)", "(Type? Symbol)");
         assert_merged("(Type? String)", "(Type? String)", "(Type? String)");
+
+        assert_merged("(Type? String)", "(Type? String)", "(Any -> Bool)");
+
+        assert_merged("(Type? String)", "(Type? String)", "(... -> Bool)");
     }
 
     #[test]

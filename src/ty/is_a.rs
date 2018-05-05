@@ -61,11 +61,16 @@ where
     fn ty_ref_is_a(&self, &S, &S) -> Result;
     fn purity_ref_is_a(&self, &S::PRef, &S::PRef) -> Result;
 
+    fn top_fun_is_a(&self, sub_top_fun: &ty::TopFun<S>, par_top_fun: &ty::TopFun<S>) -> Result {
+        self.purity_ref_is_a(sub_top_fun.purity(), par_top_fun.purity())
+            .and_then(|| self.ty_ref_is_a(sub_top_fun.ret(), par_top_fun.ret()))
+    }
+
     fn fun_is_a(&self, sub_fun: &ty::Fun<S>, par_fun: &ty::Fun<S>) -> Result {
         // Note that the param type is contravariant
         self.purity_ref_is_a(sub_fun.purity(), par_fun.purity())
-            .and_then(|| self.ty_ref_is_a(&par_fun.params, &sub_fun.params))
-            .and_then(|| self.ty_ref_is_a(&sub_fun.ret, &par_fun.ret))
+            .and_then(|| self.ty_ref_is_a(par_fun.params(), sub_fun.params()))
+            .and_then(|| self.ty_ref_is_a(sub_fun.ret(), par_fun.ret()))
     }
 
     fn ty_is_a(
@@ -187,9 +192,24 @@ where
                 }),
 
             // Functions
+            (&ty::Ty::TopFun(ref sub_top_fun), &ty::Ty::TopFun(ref par_top_fun)) => {
+                self.top_fun_is_a(sub_top_fun, par_top_fun)
+            }
+            (&ty::Ty::Fun(ref sub_fun), &ty::Ty::TopFun(ref par_top_fun)) => {
+                self.top_fun_is_a(sub_fun.top_fun(), par_top_fun)
+            }
+            (&ty::Ty::TopFun(ref sub_top_fun), &ty::Ty::Fun(ref par_fun)) => {
+                Result::May.and_then(|| self.top_fun_is_a(sub_top_fun, par_fun.top_fun()))
+            }
             (&ty::Ty::Fun(ref sub_fun), &ty::Ty::Fun(ref par_fun)) => {
                 self.fun_is_a(sub_fun, par_fun)
             }
+
+            (&ty::Ty::TyPred(_), &ty::Ty::TopFun(ref par_top_fun)) => {
+                self.top_fun_is_a(&ty::TopFun::new_for_ty_pred(), par_top_fun)
+            }
+            (&ty::Ty::TopFun(ref sub_top_fun), &ty::Ty::TyPred(_)) => Result::May
+                .and_then(|| self.top_fun_is_a(sub_top_fun, &ty::TopFun::new_for_ty_pred())),
             (&ty::Ty::TyPred(_), &ty::Ty::Fun(ref par_fun)) => {
                 self.fun_is_a(&ty::Fun::new_for_ty_pred(), par_fun)
             }
@@ -505,6 +525,7 @@ mod test {
         let sym_ty_pred = poly_for_str("(Type? Symbol)");
         let lit_sym_ty_pred = poly_for_str("(Type? 'foo)");
         let general_pred = poly_for_str("(Any -> Bool)");
+        let pred_top_fun = poly_for_str("(... -> Bool)");
 
         // Type predicates always equal themselves
         assert_eq!(Result::Yes, poly_is_a(&[], &sym_ty_pred, &sym_ty_pred));
@@ -516,6 +537,10 @@ mod test {
         // Type predicates are a subtype of (Any -> Bool)
         assert_eq!(Result::Yes, poly_is_a(&[], &sym_ty_pred, &general_pred));
         assert_eq!(Result::May, poly_is_a(&[], &general_pred, &sym_ty_pred));
+
+        // Type predicates are a subtype of (... -> Bool)
+        assert_eq!(Result::Yes, poly_is_a(&[], &sym_ty_pred, &pred_top_fun));
+        assert_eq!(Result::May, poly_is_a(&[], &pred_top_fun, &sym_ty_pred));
     }
 
     #[test]

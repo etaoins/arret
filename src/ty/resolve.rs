@@ -17,7 +17,7 @@ impl<'a> Result<'a> {
 
 fn poly_ty_has_subtypes(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> bool {
     match *poly_ty {
-        ty::Ty::Any | ty::Ty::Bool | ty::Ty::Sym => true,
+        ty::Ty::Any | ty::Ty::Bool | ty::Ty::Sym | ty::Ty::TopFun(_) => true,
         ty::Ty::Char
         | ty::Ty::Float
         | ty::Ty::Int
@@ -28,7 +28,7 @@ fn poly_ty_has_subtypes(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> bool 
         ty::Ty::Fun(ref fun) => {
             (fun.purity() != &Purity::Pure)
                 || fun.params != ty::Ty::Listof(Box::new(ty::Ty::Any.into_poly())).into_poly()
-                || poly_has_subtypes(tvars, &fun.ret)
+                || poly_has_subtypes(tvars, fun.ret())
         }
         ty::Ty::TyPred(_) => false,
         ty::Ty::Map(ref key, ref value) => [key, value]
