@@ -87,14 +87,16 @@ impl<'a> LowerTyContext<'a> {
         // Discard the constructor
         arg_data.pop();
 
+        let top_fun = ty::TopFun::new(purity, ret_ty);
+
         if arg_data.len() == 1
             && self.scope.get_datum(&arg_data[0]) == Some(Binding::Prim(Prim::Ellipsis))
         {
             // Top function type in the form `(... -> ReturnType)`
-            Ok(ty::Ty::TopFun(Box::new(ty::TopFun::new(purity, ret_ty))).into_poly())
+            Ok(top_fun.into_ref())
         } else {
             let params_ty = self.lower_list_cons(arg_data)?;
-            Ok(ty::Ty::new_fun(purity, ty::TVarIds::empty(), params_ty, ret_ty).into_poly())
+            Ok(ty::Fun::new(top_fun, ty::TVarIds::empty(), params_ty).into_ref())
         }
     }
 
@@ -680,12 +682,11 @@ mod test {
     fn pure_fun() {
         let j = "(-> true)";
 
-        let expected = ty::Ty::new_fun(
-            Purity::Pure,
+        let expected = ty::Fun::new(
+            ty::TopFun::new(Purity::Pure, ty::Ty::LitBool(true).into_poly()),
             ty::TVarIds::empty(),
             simple_list_type(vec![], None),
-            ty::Ty::LitBool(true).into_poly(),
-        ).into_poly();
+        ).into_ref();
 
         assert_poly_for_str(&expected, j);
     }
@@ -694,12 +695,11 @@ mod test {
     fn impure_fun() {
         let j = "(->! true)";
 
-        let expected = ty::Ty::new_fun(
-            Purity::Impure,
+        let expected = ty::Fun::new(
+            ty::TopFun::new(Purity::Impure, ty::Ty::LitBool(true).into_poly()),
             ty::TVarIds::empty(),
             simple_list_type(vec![], None),
-            ty::Ty::LitBool(true).into_poly(),
-        ).into_poly();
+        ).into_ref();
 
         assert_poly_for_str(&expected, j);
     }
@@ -708,12 +708,11 @@ mod test {
     fn fixed_fun() {
         let j = "(false -> true)";
 
-        let expected = ty::Ty::new_fun(
-            Purity::Pure,
+        let expected = ty::Fun::new(
+            ty::TopFun::new(Purity::Pure, ty::Ty::LitBool(true).into_poly()),
             ty::TVarIds::empty(),
             simple_list_type(vec![ty::Ty::LitBool(false)], None),
-            ty::Ty::LitBool(true).into_poly(),
-        ).into_poly();
+        ).into_ref();
 
         assert_poly_for_str(&expected, j);
     }
@@ -722,12 +721,11 @@ mod test {
     fn rest_impure_fun() {
         let j = "(String Symbol ... ->! true)";
 
-        let expected = ty::Ty::new_fun(
-            Purity::Impure,
+        let expected = ty::Fun::new(
+            ty::TopFun::new(Purity::Impure, ty::Ty::LitBool(true).into_poly()),
             ty::TVarIds::empty(),
             simple_list_type(vec![ty::Ty::Str], Some(ty::Ty::Sym)),
-            ty::Ty::LitBool(true).into_poly(),
-        ).into_poly();
+        ).into_ref();
 
         assert_poly_for_str(&expected, j);
     }

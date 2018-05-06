@@ -78,10 +78,7 @@ where
             S::from_ty(Ty::Bool),
             S::from_ty(Ty::Char),
             S::from_ty(Ty::Float),
-            S::from_ty(Ty::TopFun(Box::new(ty::TopFun::new(
-                S::PRef::from_purity(Purity::Impure),
-                S::from_ty(Ty::Any),
-            )))),
+            ty::TopFun::new(S::PRef::from_purity(Purity::Impure), S::from_ty(Ty::Any)).into_ref(),
             S::from_ty(Ty::Map(
                 Box::new(S::from_ty(Ty::Any)),
                 Box::new(S::from_ty(Ty::Any)),

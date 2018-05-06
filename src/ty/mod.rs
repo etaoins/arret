@@ -94,10 +94,6 @@ where
             S::from_ty(Ty::Cons(Box::new(fixed_ref), Box::new(tail_ref)))
         })
     }
-
-    pub fn new_fun(purity: S::PRef, tvar_ids: S::TVarIds, params: S, ret: S) -> Ty<S> {
-        Ty::Fun(Box::new(Fun::new(purity, tvar_ids, params, ret)))
-    }
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
@@ -133,6 +129,14 @@ where
     pub fn ret(&self) -> &S {
         &self.ret
     }
+
+    pub fn into_ty(self) -> Ty<S> {
+        Ty::TopFun(Box::new(self))
+    }
+
+    pub fn into_ref(self) -> S {
+        S::from_ty(self.into_ty())
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
@@ -140,8 +144,8 @@ pub struct Fun<S>
 where
     S: TyRef,
 {
-    tvar_ids: S::TVarIds,
     top_fun: TopFun<S>,
+    tvar_ids: S::TVarIds,
     params: S,
 }
 
@@ -149,10 +153,10 @@ impl<S> Fun<S>
 where
     S: TyRef,
 {
-    pub fn new(purity: S::PRef, tvar_ids: S::TVarIds, params: S, ret: S) -> Fun<S> {
+    pub fn new(top_fun: TopFun<S>, tvar_ids: S::TVarIds, params: S) -> Fun<S> {
         Fun {
+            top_fun,
             tvar_ids,
-            top_fun: TopFun { purity, ret },
             params,
         }
     }
@@ -165,10 +169,9 @@ where
         use std::iter;
 
         Self::new(
-            S::PRef::from_purity(purity::Purity::Pure),
+            TopFun::new_for_ty_pred(),
             S::TVarIds::empty(),
             Ty::new_simple_list_type(iter::once(S::from_ty(Ty::Any)), None),
-            S::from_ty(Ty::Bool),
         )
     }
 
@@ -190,6 +193,14 @@ where
 
     pub fn is_polymorphic(&self) -> bool {
         !self.tvar_ids.is_empty()
+    }
+
+    pub fn into_ty(self) -> Ty<S> {
+        Ty::Fun(Box::new(self))
+    }
+
+    pub fn into_ref(self) -> S {
+        S::from_ty(self.into_ty())
     }
 }
 

@@ -104,9 +104,9 @@ where
         let unified_purity = self.unify_purity_refs(top_fun1.purity(), top_fun2.purity())?;
         let unified_ret = self.unify_to_ty_ref(top_fun1.ret(), top_fun2.ret())?;
 
-        Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::TopFun(Box::new(
-            ty::TopFun::new(unified_purity, unified_ret),
-        )))))
+        Ok(UnifiedTy::Merged(
+            ty::TopFun::new(unified_purity, unified_ret).into_ref(),
+        ))
     }
 
     fn unify_fun(&self, fun1: &ty::Fun<S>, fun2: &ty::Fun<S>) -> Result<UnifiedTy<S>, E> {
@@ -115,22 +115,23 @@ where
         if fun1.is_polymorphic() || fun2.is_polymorphic() {
             // TODO: We could do better here by finding our upper bound and unifying them
             // Preserving the polymorphicness would be very complex
-            Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::TopFun(Box::new(
-                ty::TopFun::new(unified_purity, S::from_ty(ty::Ty::Any)),
-            )))))
+            Ok(UnifiedTy::Merged(
+                ty::TopFun::new(unified_purity, S::from_ty(ty::Ty::Any)).into_ref(),
+            ))
         } else {
             let unified_ret = self.unify_to_ty_ref(fun1.ret(), fun2.ret())?;
 
             match self.intersect_ty_refs(fun1.params(), fun2.params()) {
-                Ok(unified_params) => Ok(UnifiedTy::Merged(S::from_ty(ty::Ty::new_fun(
-                    unified_purity,
-                    S::TVarIds::empty(),
-                    unified_params,
-                    unified_ret,
-                )))),
-                Err(ty::intersect::Error::Disjoint) => Ok(UnifiedTy::Merged(S::from_ty(
-                    ty::Ty::TopFun(Box::new(ty::TopFun::new(unified_purity, unified_ret))),
-                ))),
+                Ok(unified_params) => Ok(UnifiedTy::Merged(
+                    ty::Fun::new(
+                        ty::TopFun::new(unified_purity, unified_ret),
+                        S::TVarIds::empty(),
+                        unified_params,
+                    ).into_ref(),
+                )),
+                Err(ty::intersect::Error::Disjoint) => Ok(UnifiedTy::Merged(
+                    ty::TopFun::new(unified_purity, unified_ret).into_ref(),
+                )),
             }
         }
     }
@@ -781,34 +782,34 @@ mod test {
         ];
 
         // (All A (A -> A))
-        let pidentity_fun = ty::Ty::new_fun(
-            Purity::Pure,
+        let pidentity_fun = ty::Fun::new(
+            ty::TopFun::new(Purity::Pure, ptype1_unbounded.clone()),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None),
-            ptype1_unbounded.clone(),
-        ).into_poly();
+        ).into_ref();
 
         // (All A (A A -> (Cons A A))
-        let panys_to_cons = ty::Ty::new_fun(
-            Purity::Pure,
+        let panys_to_cons = ty::Fun::new(
+            ty::TopFun::new(
+                Purity::Pure,
+                ty::Ty::Cons(
+                    Box::new(ptype1_unbounded.clone()),
+                    Box::new(ptype1_unbounded.clone()),
+                ).into_poly(),
+            ),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(
                 vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
                 None,
             ),
-            ty::Ty::Cons(
-                Box::new(ptype1_unbounded.clone()),
-                Box::new(ptype1_unbounded.clone()),
-            ).into_poly(),
-        ).into_poly();
+        ).into_ref();
 
         // (All [A : String] (A ->! A))
-        let pidentity_impure_string_fun = ty::Ty::new_fun(
-            Purity::Impure,
+        let pidentity_impure_string_fun = ty::Fun::new(
+            ty::TopFun::new(Purity::Impure, ptype2_string.clone()),
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::Ty::new_simple_list_type(vec![ptype2_string.clone()].into_iter(), None),
-            ptype2_string.clone(),
-        ).into_poly();
+        ).into_ref();
 
         assert_eq!(
             UnifiedTy::Merged(pidentity_fun.clone()),

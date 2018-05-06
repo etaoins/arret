@@ -144,10 +144,7 @@ where
                     self.intersect_purity_refs(top_fun1.purity(), top_fun2.purity());
                 let intersected_ret = self.intersect_ty_refs(top_fun1.ret(), top_fun2.ret())?;
 
-                Ok(S::from_ty(ty::Ty::TopFun(Box::new(ty::TopFun::new(
-                    intersected_purity,
-                    intersected_ret,
-                )))))
+                Ok(ty::TopFun::new(intersected_purity, intersected_ret).into_ref())
             }
             (&ty::Ty::TopFun(ref top_fun), &ty::Ty::Fun(ref fun))
             | (&ty::Ty::Fun(ref fun), &ty::Ty::TopFun(ref top_fun)) => {
@@ -161,12 +158,11 @@ where
                 let intersected_params = fun.params().clone();
                 let intersected_ret = self.intersect_ty_refs(top_fun.ret(), fun.ret())?;
 
-                Ok(S::from_ty(ty::Ty::new_fun(
-                    intersected_purity,
+                Ok(ty::Fun::new(
+                    ty::TopFun::new(intersected_purity, intersected_ret),
                     S::TVarIds::empty(),
                     intersected_params,
-                    intersected_ret,
-                )))
+                ).into_ref())
             }
             (&ty::Ty::Fun(ref fun1), &ty::Ty::Fun(ref fun2)) => {
                 if fun1.is_polymorphic() || fun2.is_polymorphic() {
@@ -183,12 +179,11 @@ where
                 };
                 let intersected_ret = self.intersect_ty_refs(fun1.ret(), fun2.ret())?;
 
-                Ok(S::from_ty(ty::Ty::new_fun(
-                    intersected_purity,
+                Ok(ty::Fun::new(
+                    ty::TopFun::new(intersected_purity, intersected_ret),
                     S::TVarIds::empty(),
                     intersected_params,
-                    intersected_ret,
-                )))
+                ).into_ref())
             }
             (_, _) => Err(Error::Disjoint),
         }
@@ -430,34 +425,34 @@ mod test {
         ];
 
         // (All A (A -> A))
-        let pidentity_fun = ty::Ty::new_fun(
-            Purity::Pure,
+        let pidentity_fun = ty::Fun::new(
+            ty::TopFun::new(Purity::Pure, ptype1_unbounded.clone()),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None),
-            ptype1_unbounded.clone(),
-        ).into_poly();
+        ).into_ref();
 
         // (All A (A A -> (Cons A A))
-        let panys_to_cons = ty::Ty::new_fun(
-            Purity::Pure,
+        let panys_to_cons = ty::Fun::new(
+            ty::TopFun::new(
+                Purity::Pure,
+                ty::Ty::Cons(
+                    Box::new(ptype1_unbounded.clone()),
+                    Box::new(ptype1_unbounded.clone()),
+                ).into_poly(),
+            ),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(
                 vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
                 None,
             ),
-            ty::Ty::Cons(
-                Box::new(ptype1_unbounded.clone()),
-                Box::new(ptype1_unbounded.clone()),
-            ).into_poly(),
-        ).into_poly();
+        ).into_ref();
 
         // (All [A : String] (A ->! A))
-        let pidentity_impure_string_fun = ty::Ty::new_fun(
-            Purity::Impure,
+        let pidentity_impure_string_fun = ty::Fun::new(
+            ty::TopFun::new(Purity::Impure, ptype2_string.clone()),
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::Ty::new_simple_list_type(vec![ptype2_string.clone()].into_iter(), None),
-            ptype2_string.clone(),
-        ).into_poly();
+        ).into_ref();
 
         let top_pure_fun = poly_for_str("(... -> Any)");
 

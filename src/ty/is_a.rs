@@ -676,42 +676,41 @@ mod test {
         ];
 
         // (All A (A -> A))
-        let pidentity_fun = ty::Ty::new_fun(
-            Purity::Pure,
+        let pidentity_fun = ty::Fun::new(
+            ty::TopFun::new(Purity::Pure, ptype1_unbounded.clone()),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None),
-            ptype1_unbounded.clone(),
-        ).into_poly();
+        ).into_ref();
 
         // (All A (A A -> (Cons A A))
-        let panys_to_cons = ty::Ty::new_fun(
-            Purity::Pure,
+        let panys_to_cons = ty::Fun::new(
+            ty::TopFun::new(
+                Purity::Pure,
+                ty::Ty::Cons(
+                    Box::new(ptype1_unbounded.clone()),
+                    Box::new(ptype1_unbounded.clone()),
+                ).into_poly(),
+            ),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::Ty::new_simple_list_type(
                 vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
                 None,
             ),
-            ty::Ty::Cons(
-                Box::new(ptype1_unbounded.clone()),
-                Box::new(ptype1_unbounded.clone()),
-            ).into_poly(),
-        ).into_poly();
+        ).into_ref();
 
         // (All [A : Symbol] (A -> A))
-        let pidentity_sym_fun = ty::Ty::new_fun(
-            Purity::Pure,
+        let pidentity_sym_fun = ty::Fun::new(
+            ty::TopFun::new(Purity::Pure, ptype2_symbol.clone()),
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::Ty::new_simple_list_type(vec![ptype2_symbol.clone()].into_iter(), None),
-            ptype2_symbol.clone(),
-        ).into_poly();
+        ).into_ref();
 
         // (All [A : String] (A ->! A))
-        let pidentity_impure_string_fun = ty::Ty::new_fun(
-            Purity::Impure,
+        let pidentity_impure_string_fun = ty::Fun::new(
+            ty::TopFun::new(Purity::Impure, ptype3_string.clone()),
             ty::TVarId::new(2)..ty::TVarId::new(3),
             ty::Ty::new_simple_list_type(vec![ptype3_string.clone()].into_iter(), None),
-            ptype3_string.clone(),
-        ).into_poly();
+        ).into_ref();
 
         // All functions should have the top function type
         let top_fun = poly_for_str("(... ->! Any)");

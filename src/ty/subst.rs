@@ -33,16 +33,14 @@ fn subst_ty(
         ty::Ty::Nil => ty::Ty::Nil,
         ty::Ty::Str => ty::Ty::Str,
         ty::Ty::Sym => ty::Ty::Sym,
-        ty::Ty::TopFun(ref top_fun) => ty::Ty::TopFun(Box::new(ty::TopFun::new(
-            *top_fun.purity(),
-            subst(top_fun.ret(), tvars)?,
-        ))),
-        ty::Ty::Fun(ref fun) => ty::Ty::new_fun(
-            *fun.purity(),
+        ty::Ty::TopFun(ref top_fun) => {
+            ty::TopFun::new(*top_fun.purity(), subst(top_fun.ret(), tvars)?).into_ty()
+        }
+        ty::Ty::Fun(ref fun) => ty::Fun::new(
+            ty::TopFun::new(*fun.purity(), subst(fun.ret(), tvars)?),
             ty::TVarIds::empty(),
             subst(fun.params(), tvars)?,
-            subst(fun.ret(), tvars)?,
-        ),
+        ).into_ty(),
         ty::Ty::TyPred(ref test_ty) => ty::Ty::TyPred(Box::new(subst(test_ty, tvars)?)),
         ty::Ty::Map(ref key, ref value) => {
             ty::Ty::Map(Box::new(subst(key, tvars)?), Box::new(subst(value, tvars)?))
