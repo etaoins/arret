@@ -1,4 +1,5 @@
 use std;
+use std::ops::Range;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Purity {
@@ -22,7 +23,7 @@ impl PRef for Purity {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd)]
 pub struct PVarId(u32);
 
 impl PVarId {
@@ -88,5 +89,33 @@ pub struct FreePurityId(u32);
 impl FreePurityId {
     pub fn new(id: usize) -> FreePurityId {
         FreePurityId(id as u32)
+    }
+}
+
+pub trait PVarIds: PartialEq + Eq + Clone + std::fmt::Debug + std::hash::Hash + Sized {
+    fn empty() -> Self;
+    fn is_empty(&self) -> bool;
+}
+
+impl PVarIds for Range<PVarId> {
+    fn empty() -> Range<PVarId> {
+        PVarId::new(0)..PVarId::new(0)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.start >= self.end
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+pub struct EmptyPVarIds();
+
+impl PVarIds for EmptyPVarIds {
+    fn empty() -> EmptyPVarIds {
+        EmptyPVarIds()
+    }
+
+    fn is_empty(&self) -> bool {
+        true
     }
 }

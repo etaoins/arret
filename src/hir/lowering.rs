@@ -11,7 +11,7 @@ use hir::module::{Module, ModuleDef};
 use hir::ns::{Ident, NsDatum, NsId, NsIdAlloc};
 use hir::prim::Prim;
 use hir::scope::{Binding, MacroId, Scope};
-use hir::types::{lower_poly, lower_tvar, try_lower_purity};
+use hir::types::{lower_poly, lower_polymorphic_var, try_lower_purity, PolymorphicVar};
 use hir::util::{
     expect_arg_count, expect_ident, expect_ident_and_span, pop_vec_front, split_into_fixed_and_rest,
 };
@@ -19,6 +19,7 @@ use hir::{App, Cond, Expr, Fun, VarId};
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 use ty;
+use ty::purity::Purity;
 
 pub struct LoweringContext<'ccx> {
     curr_var_id: u32,
@@ -105,6 +106,13 @@ impl<'ccx> LoweringContext<'ccx> {
             free_purities: vec![],
             ccx,
         }
+    }
+
+    fn insert_pvar(&mut self, pvar: ty::purity::PVar) -> ty::purity::PVarId {
+        let pvar_id = ty::purity::PVarId::new(self.pvars.len());
+        self.pvars.push(pvar);
+
+        pvar_id
     }
 
     fn insert_tvar(&mut self, tvar: ty::TVar) -> ty::TVarId {
@@ -339,14 +347,29 @@ impl<'ccx> LoweringContext<'ccx> {
         let mut fun_scope = Scope::new_child(scope);
 
         let (mut next_datum, mut tail_data) = pop_vec_front(arg_data);
+        let pvar_id_start = ty::purity::PVarId::new(self.pvars.len());
         let tvar_id_start = ty::TVarId::new(self.tvars.len());
 
         // We can either begin with a set of type variables or a list of parameters
         if let NsDatum::Set(_, vs) = next_datum {
             for tvar_datum in vs {
-                let (ident, tvar) = lower_tvar(&self.pvars, &self.tvars, scope, tvar_datum)?;
-                let tvar_id = self.insert_tvar(tvar);
-                fun_scope.insert_binding(ident, Binding::Ty(ty::Poly::Var(tvar_id)));
+                let (ident, polymorphic_var) =
+                    lower_polymorphic_var(&self.pvars, &self.tvars, scope, tvar_datum)?;
+
+                match polymorphic_var {
+                    PolymorphicVar::TVar(tvar) => {
+                        let tvar_id = self.insert_tvar(tvar);
+                        fun_scope.insert_binding(ident, Binding::Ty(ty::Poly::Var(tvar_id)));
+                    }
+                    PolymorphicVar::PVar(pvar) => {
+                        let pvar_id = self.insert_pvar(pvar);
+                        fun_scope
+                            .insert_binding(ident, Binding::Purity(ty::purity::Poly::Var(pvar_id)));
+                    }
+                    PolymorphicVar::Pure => {
+                        fun_scope.insert_binding(ident, Binding::Purity(Purity::Pure.into_poly()));
+                    }
+                }
             }
 
             if tail_data.is_empty() {
@@ -364,6 +387,7 @@ impl<'ccx> LoweringContext<'ccx> {
         };
 
         // We allocate tvar IDs sequentially so we can use a simple range to track them
+        let pvar_ids = pvar_id_start..ty::purity::PVarId::new(self.pvars.len());
         let tvar_ids = tvar_id_start..ty::TVarId::new(self.tvars.len());
 
         // Pull out our params
@@ -406,6 +430,7 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(Expr::Fun(
             span,
             Fun {
+                pvar_ids,
                 tvar_ids,
                 purity,
                 params,
@@ -815,7 +840,6 @@ mod test {
     use syntax::parser::data_from_str;
     use syntax::span::t2s;
     use ty;
-    use ty::purity::Purity;
 
     fn import_statement_for_library(names: &[&'static str]) -> Datum {
         Datum::List(
@@ -1152,6 +1176,7 @@ mod test {
         let expected = Expr::Fun(
             t2s(t),
             Fun {
+                pvar_ids: ty::purity::PVarIds::empty(),
                 tvar_ids: ty::TVarIds::empty(),
                 purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
                 params: destruc::List::new(vec![], None),
@@ -1172,6 +1197,7 @@ mod test {
         let expected = Expr::Fun(
             t2s(t),
             Fun {
+                pvar_ids: ty::purity::PVarIds::empty(),
                 tvar_ids: ty::TVarIds::empty(),
                 purity: ty::purity::Decl::Fixed(Purity::Pure),
                 params: destruc::List::new(vec![], None),
@@ -1206,6 +1232,7 @@ mod test {
         let expected = Expr::Fun(
             t2s(u),
             Fun {
+                pvar_ids: ty::purity::PVarIds::empty(),
                 tvar_ids: ty::TVarIds::empty(),
                 purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
                 params,
@@ -1218,11 +1245,11 @@ mod test {
     }
 
     #[test]
-    fn poly_impure_identity_fn() {
-        let j = "(fn #{A} ([x : A]) ->! A x)";
-        let t = "          ^^^^^^^          ";
-        let u = "^^^^^^^^^^^^^^^^^^^^^^^^^^^";
-        let v = "                         ^ ";
+    fn poly_purity_identity_fn() {
+        let j = "(fn #{A [->_ : ->!]} ([x : A]) ->_ A x)";
+        let t = "                      ^^^^^^^          ";
+        let u = "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^";
+        let v = "                                     ^ ";
 
         let tvar_id = ty::TVarId::new(0);
 
@@ -1238,8 +1265,9 @@ mod test {
         let expected = Expr::Fun(
             t2s(u),
             Fun {
+                pvar_ids: ty::purity::PVarId::new(0)..ty::purity::PVarId::new(1),
                 tvar_ids: ty::TVarId::new(0)..ty::TVarId::new(1),
-                purity: ty::purity::Decl::Fixed(Purity::Impure),
+                purity: ty::purity::Decl::Var(ty::purity::PVarId::new(0)),
                 params,
                 ret_ty: ty::Decl::Var(tvar_id),
                 body_expr: Box::new(Expr::Ref(t2s(v), param_var_id)),
@@ -1277,6 +1305,7 @@ mod test {
             Expr::Fun(
                 t2s(w),
                 Fun {
+                    pvar_ids: ty::purity::PVarIds::empty(),
                     tvar_ids: ty::TVarIds::empty(),
                     purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
                     params: destruc::List::new(vec![], None),
@@ -1331,6 +1360,7 @@ mod test {
             Expr::Fun(
                 t2s(x),
                 Fun {
+                    pvar_ids: ty::purity::PVarIds::empty(),
                     tvar_ids: ty::TVarIds::empty(),
                     purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
                     params,

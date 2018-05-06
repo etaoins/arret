@@ -24,6 +24,12 @@ pub enum TyCons {
     RawU,
 }
 
+pub enum PolymorphicVar {
+    TVar(ty::TVar),
+    PVar(ty::purity::PVar),
+    Pure,
+}
+
 struct LowerTyContext<'a> {
     pvars: &'a [ty::purity::PVar],
     tvars: &'a [ty::TVar],
@@ -31,28 +37,55 @@ struct LowerTyContext<'a> {
 }
 
 impl<'a> LowerTyContext<'a> {
-    fn lower_tvar(&self, tvar_datum: NsDatum) -> Result<(Ident, ty::TVar)> {
+    fn lower_polymorphic_var(&self, tvar_datum: NsDatum) -> Result<(Ident, PolymorphicVar)> {
         let span = tvar_datum.span();
 
         match tvar_datum {
             NsDatum::Ident(_, ident) => {
                 let source_name = ident.name().clone();
-                return Ok((ident, ty::TVar::new(source_name, ty::Ty::Any.into_poly())));
+                return Ok((
+                    ident,
+                    PolymorphicVar::TVar(ty::TVar::new(source_name, ty::Ty::Any.into_poly())),
+                ));
             }
-            NsDatum::Vec(_, mut arg_data) => {
+            NsDatum::Vec(span, mut arg_data) => {
                 if arg_data.len() == 3
                     && self.scope.get_datum(&arg_data[1]) == Some(Binding::Prim(Prim::TyColon))
                 {
                     let bound_datum = arg_data.pop().unwrap();
-                    let bound_ty = self.lower_poly(bound_datum)?;
+                    arg_data.pop(); // Discard the : completely
+                    let ident = expect_ident(arg_data.pop().unwrap())?;
 
-                    // Discard the : completely
-                    arg_data.pop();
+                    let source_name = ident.name().clone();
 
-                    let tvar_ident = expect_ident(arg_data.pop().unwrap())?;
-
-                    let source_name = tvar_ident.name().clone();
-                    return Ok((tvar_ident, ty::TVar::new(source_name, bound_ty)));
+                    match try_lower_purity(self.scope, &bound_datum) {
+                        Some(ty::purity::Poly::Fixed(Purity::Impure)) => {
+                            return Ok((
+                                ident,
+                                PolymorphicVar::PVar(ty::purity::PVar::new(source_name)),
+                            ));
+                        }
+                        Some(ty::purity::Poly::Fixed(Purity::Pure)) => {
+                            // Emulate bounding to pure in case the purity comes from e.g. a macro
+                            // expansion
+                            return Ok((ident, PolymorphicVar::Pure));
+                        }
+                        Some(_) => {
+                            return Err(Error::new(
+                                span,
+                                ErrorKind::IllegalArg(
+                                    "Purity variables do not support variable bounds".to_owned(),
+                                ),
+                            ))
+                        }
+                        None => {
+                            let bound_ty = self.lower_poly(bound_datum)?;
+                            return Ok((
+                                ident,
+                                PolymorphicVar::TVar(ty::TVar::new(source_name, bound_ty)),
+                            ));
+                        }
+                    }
                 }
             }
             _ => {}
@@ -66,6 +99,7 @@ impl<'a> LowerTyContext<'a> {
             ),
         ))
     }
+
     fn lower_list_cons(&self, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
         let (fixed, rest) = split_into_fixed_and_rest(self.scope, arg_data);
 
@@ -266,18 +300,18 @@ impl<'a> LowerTyContext<'a> {
     }
 }
 
-pub fn lower_tvar(
+pub fn lower_polymorphic_var(
     pvars: &[ty::purity::PVar],
     tvars: &[ty::TVar],
     scope: &Scope,
     tvar_datum: NsDatum,
-) -> Result<(Ident, ty::TVar)> {
+) -> Result<(Ident, PolymorphicVar)> {
     let ctx = LowerTyContext {
         pvars,
         tvars,
         scope,
     };
-    ctx.lower_tvar(tvar_datum)
+    ctx.lower_polymorphic_var(tvar_datum)
 }
 
 pub fn lower_poly(

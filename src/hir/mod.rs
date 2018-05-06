@@ -28,6 +28,7 @@ impl VarId {
 
 #[derive(PartialEq, Debug)]
 pub struct Fun {
+    pvar_ids: Range<ty::purity::PVarId>,
     tvar_ids: Range<ty::TVarId>,
 
     purity: ty::purity::Decl,

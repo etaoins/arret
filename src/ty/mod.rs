@@ -19,6 +19,9 @@ use ty::purity::PRef;
 ///
 /// This allows the implementation of our type system to be generic over `Mono` versus `Poly` types.
 pub trait TyRef: PartialEq + Clone + Sized {
+    /// Type used to store the purity variables introduced by a function
+    type PVarIds: purity::PVarIds;
+
     /// Type used to store the type variables introduced by a function
     type TVarIds: TVarIds;
 
@@ -281,6 +284,7 @@ impl Poly {
 }
 
 impl TyRef for Poly {
+    type PVarIds = Range<purity::PVarId>;
     type TVarIds = Range<TVarId>;
     type PRef = purity::Poly;
 
@@ -322,6 +326,7 @@ impl Ty<Mono> {
 }
 
 impl TyRef for Mono {
+    type PVarIds = purity::EmptyPVarIds;
     type TVarIds = EmptyTVarIds;
     type PRef = purity::Purity;
 
