@@ -1,4 +1,5 @@
 use ty;
+use ty::params_iter::ParamsIterator;
 use ty::purity::Purity;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -66,11 +67,54 @@ where
             .and_then(|| self.ty_ref_is_a(sub_top_fun.ret(), par_top_fun.ret()))
     }
 
+    fn params_is_a(&self, sub_params: &ty::Params<S>, par_params: &ty::Params<S>) -> Result {
+        let mut sub_iter = ParamsIterator::new(sub_params);
+        let mut par_iter = ParamsIterator::new(par_params);
+
+        let mut is_exact = sub_iter.fixed_len() >= par_iter.fixed_len();
+
+        // Compare our fixed types. If one of the fixed params ends early then its rest param will
+        // be used for the remaining params.
+        while sub_iter.fixed_len() > 0 || par_iter.fixed_len() > 0 {
+            match (sub_iter.next(), par_iter.next()) {
+                (Some(sub), Some(par)) => match self.ty_ref_is_a(par, sub) {
+                    Result::Yes => {}
+                    Result::May => {
+                        is_exact = false;
+                    }
+                    Result::No => {
+                        // Member type does not match
+                        return Result::No;
+                    }
+                },
+                (None, None) => {
+                    // Fixed params ended at the same length
+                    break;
+                }
+                (_, _) => {
+                    // Fixed params ended at different lengths
+                    return Result::No;
+                }
+            };
+        }
+
+        if let (&Some(ref sub_rest), &Some(ref par_rest)) = (sub_params.rest(), par_params.rest()) {
+            // If the rest doesn't match it's a May as the rest might not be present
+            if self.ty_ref_is_a(par_rest, sub_rest) != Result::Yes {
+                is_exact = false;
+            }
+        }
+
+        if is_exact {
+            Result::Yes
+        } else {
+            Result::May
+        }
+    }
+
     fn fun_is_a(&self, sub_fun: &ty::Fun<S>, par_fun: &ty::Fun<S>) -> Result {
-        // Note that the param type is contravariant
-        self.purity_ref_is_a(sub_fun.purity(), par_fun.purity())
-            .and_then(|| self.ty_ref_is_a(par_fun.params(), sub_fun.params()))
-            .and_then(|| self.ty_ref_is_a(sub_fun.ret(), par_fun.ret()))
+        self.top_fun_is_a(sub_fun.top_fun(), par_fun.top_fun())
+            .and_then(|| self.params_is_a(sub_fun.params(), par_fun.params()))
     }
 
     fn ty_is_a(
@@ -677,14 +721,14 @@ mod test {
 
         // (All A (A -> A))
         let pidentity_fun = ty::Fun::new(
-            ty::TopFun::new(Purity::Pure, ptype1_unbounded.clone()),
             ty::TVarId::new(0)..ty::TVarId::new(1),
-            ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None)
-                .into_ref(),
+            ty::TopFun::new(Purity::Pure, ptype1_unbounded.clone()),
+            ty::Params::new(vec![ptype1_unbounded.clone()], None),
         ).into_ref();
 
         // (All A (A A -> (Cons A A))
         let panys_to_cons = ty::Fun::new(
+            ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(
                 Purity::Pure,
                 ty::Ty::Cons(
@@ -692,25 +736,24 @@ mod test {
                     Box::new(ptype1_unbounded.clone()),
                 ).into_poly(),
             ),
-            ty::TVarId::new(0)..ty::TVarId::new(1),
-            ty::Ty::new_simple_list_type(
-                vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
+            ty::Params::new(
+                vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()],
                 None,
-            ).into_ref(),
+            ),
         ).into_ref();
 
         // (All [A : Symbol] (A -> A))
         let pidentity_sym_fun = ty::Fun::new(
-            ty::TopFun::new(Purity::Pure, ptype2_symbol.clone()),
             ty::TVarId::new(1)..ty::TVarId::new(2),
-            ty::Ty::new_simple_list_type(vec![ptype2_symbol.clone()].into_iter(), None).into_ref(),
+            ty::TopFun::new(Purity::Pure, ptype2_symbol.clone()),
+            ty::Params::new(vec![ptype2_symbol.clone()], None),
         ).into_ref();
 
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Fun::new(
-            ty::TopFun::new(Purity::Impure, ptype3_string.clone()),
             ty::TVarId::new(2)..ty::TVarId::new(3),
-            ty::Ty::new_simple_list_type(vec![ptype3_string.clone()].into_iter(), None).into_ref(),
+            ty::TopFun::new(Purity::Impure, ptype3_string.clone()),
+            ty::Params::new(vec![ptype3_string.clone()], None),
         ).into_ref();
 
         // All functions should have the top function type

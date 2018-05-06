@@ -1,3 +1,4 @@
+use std::cmp;
 use std::iter;
 use std::result;
 
@@ -17,8 +18,12 @@ where
     S: ty::TyRef,
 {
     fn intersect_ty_refs(&self, &S, &S) -> Result<S>;
-    fn unify_ty_refs(&self, &S, &S) -> Result<ty::unify::UnifiedTy<S>>;
     fn intersect_purity_refs(&self, &S::PRef, &S::PRef) -> S::PRef;
+
+    fn unify_ty_refs(&self, &S, &S) -> Result<ty::unify::UnifiedTy<S>>;
+    fn unify_ref_iter<I>(&self, members: I) -> Result<S>
+    where
+        I: Iterator<Item = S>;
 
     fn intersect_list_cons_refs(
         &self,
@@ -60,6 +65,49 @@ where
             1 => Ok(intersected_types.pop().unwrap()),
             _ => Ok(ty::Ty::Union(intersected_types).into_ref()),
         }
+    }
+
+    fn unify_to_ty_ref(&self, ref1: &S, ref2: &S) -> Result<S> {
+        match self.unify_ty_refs(ref1, ref2)? {
+            ty::unify::UnifiedTy::Merged(merged) => Ok(merged),
+            ty::unify::UnifiedTy::Discerned => {
+                Ok(ty::Ty::Union(vec![ref1.clone(), ref2.clone()]).into_ref())
+            }
+        }
+    }
+
+    fn intersect_params<'a>(
+        &self,
+        params1: &ty::Params<S>,
+        params2: &ty::Params<S>,
+    ) -> Result<ty::Params<S>> {
+        if params1.has_disjoint_arity(&params2) {
+            return Err(Error::Disjoint);
+        }
+
+        let mut fixed_iter1 = params1.fixed().iter();
+        let mut fixed_iter2 = params2.fixed().iter();
+
+        let mut merged_fixed: Vec<S> =
+            Vec::with_capacity(cmp::min(fixed_iter1.len(), fixed_iter2.len()));
+
+        while let (Some(fixed1), Some(fixed2)) = (fixed_iter1.next(), fixed_iter2.next()) {
+            merged_fixed.push(self.unify_to_ty_ref(fixed1, fixed2)?);
+        }
+
+        let merged_rest = if fixed_iter1.len() > 0 || fixed_iter2.len() > 0
+            || params1.rest().is_some() || params2.rest().is_some()
+        {
+            // Merge all remaining fixed and rest args together
+            let rest_iter = fixed_iter1
+                .chain(fixed_iter2.chain(params1.rest().iter().chain(params2.rest().iter())));
+
+            Some(self.unify_ref_iter(rest_iter.cloned())?)
+        } else {
+            None
+        };
+
+        Ok(ty::Params::new(merged_fixed, merged_rest))
     }
 
     /// Intersects two types under the assumption that they are not subtypes
@@ -156,8 +204,8 @@ where
                 let intersected_ret = self.intersect_ty_refs(top_fun.ret(), fun.ret())?;
 
                 Ok(ty::Fun::new(
-                    ty::TopFun::new(intersected_purity, intersected_ret),
                     S::TVarIds::empty(),
+                    ty::TopFun::new(intersected_purity, intersected_ret),
                     intersected_params,
                 ).into_ref())
             }
@@ -168,17 +216,12 @@ where
                 }
 
                 let intersected_purity = self.intersect_purity_refs(fun1.purity(), fun2.purity());
-                let intersected_params = match self.unify_ty_refs(fun1.params(), fun2.params())? {
-                    ty::unify::UnifiedTy::Merged(merged) => merged,
-                    ty::unify::UnifiedTy::Discerned => {
-                        return Err(Error::Disjoint);
-                    }
-                };
+                let intersected_params = self.intersect_params(fun1.params(), fun2.params())?;
                 let intersected_ret = self.intersect_ty_refs(fun1.ret(), fun2.ret())?;
 
                 Ok(ty::Fun::new(
-                    ty::TopFun::new(intersected_purity, intersected_ret),
                     S::TVarIds::empty(),
+                    ty::TopFun::new(intersected_purity, intersected_ret),
                     intersected_params,
                 ).into_ref())
             }
@@ -215,6 +258,13 @@ impl<'a> IntersectCtx<ty::Poly> for PolyIntersectCtx<'a> {
         }
     }
 
+    fn intersect_purity_refs(&self, purity1: &Purity, purity2: &Purity) -> Purity {
+        match (purity1, purity2) {
+            (&Purity::Impure, &Purity::Impure) => Purity::Impure,
+            _ => Purity::Pure,
+        }
+    }
+
     fn unify_ty_refs(
         &self,
         poly1: &ty::Poly,
@@ -223,11 +273,11 @@ impl<'a> IntersectCtx<ty::Poly> for PolyIntersectCtx<'a> {
         ty::unify::poly_unify(self.tvars, poly1, poly2).map_err(|_| Error::Disjoint)
     }
 
-    fn intersect_purity_refs(&self, purity1: &Purity, purity2: &Purity) -> Purity {
-        match (purity1, purity2) {
-            (&Purity::Impure, &Purity::Impure) => Purity::Impure,
-            _ => Purity::Pure,
-        }
+    fn unify_ref_iter<I>(&self, members: I) -> Result<ty::Poly>
+    where
+        I: Iterator<Item = ty::Poly>,
+    {
+        ty::unify::poly_unify_iter(self.tvars, members).map_err(|_| Error::Disjoint)
     }
 }
 
@@ -253,6 +303,13 @@ impl<'a> IntersectCtx<ty::Mono> for MonoIntersectCtx {
         self.non_subty_intersect(mono1, mono1.as_ty(), mono2, mono2.as_ty())
     }
 
+    fn intersect_purity_refs(&self, purity1: &Purity, purity2: &Purity) -> Purity {
+        match (purity1, purity2) {
+            (&Purity::Impure, &Purity::Impure) => Purity::Impure,
+            _ => Purity::Pure,
+        }
+    }
+
     fn unify_ty_refs(
         &self,
         mono1: &ty::Mono,
@@ -261,11 +318,11 @@ impl<'a> IntersectCtx<ty::Mono> for MonoIntersectCtx {
         ty::unify::mono_unify(mono1, mono2).map_err(|_| Error::Disjoint)
     }
 
-    fn intersect_purity_refs(&self, purity1: &Purity, purity2: &Purity) -> Purity {
-        match (purity1, purity2) {
-            (&Purity::Impure, &Purity::Impure) => Purity::Impure,
-            _ => Purity::Pure,
-        }
+    fn unify_ref_iter<I>(&self, members: I) -> Result<ty::Mono>
+    where
+        I: Iterator<Item = ty::Mono>,
+    {
+        ty::unify::mono_unify_iter(members).map_err(|_| Error::Disjoint)
     }
 }
 
@@ -393,7 +450,11 @@ mod test {
 
     #[test]
     fn fun_types() {
-        assert_disjoint("(Float -> Int)", "(Int -> Int)");
+        assert_merged(
+            "((RawU Float Int) -> Int)",
+            "(Float -> Int)",
+            "(Int -> Int)",
+        );
         assert_disjoint("(String -> Symbol)", "(String String -> Symbol)");
         assert_merged("(-> true)", "(-> Bool)", "(->! true)");
         assert_merged("(Bool -> String)", "(true -> String)", "(false ->! String)");
@@ -423,14 +484,14 @@ mod test {
 
         // (All A (A -> A))
         let pidentity_fun = ty::Fun::new(
-            ty::TopFun::new(Purity::Pure, ptype1_unbounded.clone()),
             ty::TVarId::new(0)..ty::TVarId::new(1),
-            ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None)
-                .into_ref(),
+            ty::TopFun::new(Purity::Pure, ptype1_unbounded.clone()),
+            ty::Params::new(vec![ptype1_unbounded.clone()], None),
         ).into_ref();
 
         // (All A (A A -> (Cons A A))
         let panys_to_cons = ty::Fun::new(
+            ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(
                 Purity::Pure,
                 ty::Ty::Cons(
@@ -438,18 +499,17 @@ mod test {
                     Box::new(ptype1_unbounded.clone()),
                 ).into_poly(),
             ),
-            ty::TVarId::new(0)..ty::TVarId::new(1),
-            ty::Ty::new_simple_list_type(
-                vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
+            ty::Params::new(
+                vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()],
                 None,
-            ).into_ref(),
+            ),
         ).into_ref();
 
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Fun::new(
-            ty::TopFun::new(Purity::Impure, ptype2_string.clone()),
             ty::TVarId::new(1)..ty::TVarId::new(2),
-            ty::Ty::new_simple_list_type(vec![ptype2_string.clone()].into_iter(), None).into_ref(),
+            ty::TopFun::new(Purity::Impure, ptype2_string.clone()),
+            ty::Params::new(vec![ptype2_string.clone()], None),
         ).into_ref();
 
         let top_pure_fun = poly_for_str("(... -> Any)");

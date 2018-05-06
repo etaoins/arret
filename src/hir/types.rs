@@ -95,8 +95,20 @@ impl<'a> LowerTyContext<'a> {
             // Top function type in the form `(... -> ReturnType)`
             Ok(top_fun.into_ref())
         } else {
-            let params_ty = self.lower_list_cons(arg_data)?;
-            Ok(ty::Fun::new(top_fun, ty::TVarIds::empty(), params_ty).into_ref())
+            let (fixed, rest) = split_into_fixed_and_rest(self.scope, arg_data);
+
+            let fixed_polys = fixed
+                .into_iter()
+                .map(|fixed_datum| self.lower_poly(fixed_datum))
+                .collect::<Result<Vec<ty::Poly>>>()?;
+
+            let rest_poly = match rest {
+                Some(rest) => Some(self.lower_poly(rest)?),
+                None => None,
+            };
+
+            let params = ty::Params::new(fixed_polys, rest_poly);
+            Ok(ty::Fun::new(ty::TVarIds::empty(), top_fun, params).into_ref())
         }
     }
 
@@ -356,13 +368,6 @@ fn str_for_simple_list_poly_ty(
     Some(list_parts.join(" "))
 }
 
-fn str_for_simple_list_poly(tvars: &[ty::TVar], poly: &ty::Poly) -> Option<String> {
-    match *poly {
-        ty::Poly::Fixed(ref poly_ty) => str_for_simple_list_poly_ty(tvars, poly_ty),
-        _ => None,
-    }
-}
-
 fn str_for_purity(purity: Purity) -> &'static str {
     match purity {
         Purity::Pure => "->",
@@ -403,16 +408,19 @@ fn str_for_poly_ty(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
             str_for_poly(tvars, top_fun.ret())
         ),
         ty::Ty::Fun(ref fun) => {
-            if let Some(simple_params_str) = str_for_simple_list_poly(tvars, fun.params()) {
-                format!(
-                    "({} {} {})",
-                    simple_params_str,
-                    str_for_purity(*fun.purity()),
-                    str_for_poly(tvars, fun.ret())
-                )
-            } else {
-                panic!("Unrepresentable function type")
+            let mut fun_parts = Vec::with_capacity(2);
+
+            for fixed in fun.params().fixed() {
+                fun_parts.push(str_for_poly(tvars, fixed));
             }
+            for rest in fun.params().rest() {
+                fun_parts.push(str_for_poly(tvars, rest));
+                fun_parts.push("...".to_owned());
+            }
+            fun_parts.push(str_for_purity(*fun.purity()).to_owned());
+            fun_parts.push(str_for_poly(tvars, fun.ret()));
+
+            format!("({})", fun_parts.join(" "),)
         }
         ty::Ty::TyPred(ref test) => format!("(Type? {})", str_for_poly(tvars, test)),
         ty::Ty::Union(ref members) => {
@@ -683,9 +691,9 @@ mod test {
         let j = "(-> true)";
 
         let expected = ty::Fun::new(
-            ty::TopFun::new(Purity::Pure, ty::Ty::LitBool(true).into_poly()),
             ty::TVarIds::empty(),
-            simple_list_type(vec![], None),
+            ty::TopFun::new(Purity::Pure, ty::Ty::LitBool(true).into_poly()),
+            ty::Params::new(vec![], None),
         ).into_ref();
 
         assert_poly_for_str(&expected, j);
@@ -696,9 +704,9 @@ mod test {
         let j = "(->! true)";
 
         let expected = ty::Fun::new(
-            ty::TopFun::new(Purity::Impure, ty::Ty::LitBool(true).into_poly()),
             ty::TVarIds::empty(),
-            simple_list_type(vec![], None),
+            ty::TopFun::new(Purity::Impure, ty::Ty::LitBool(true).into_poly()),
+            ty::Params::new(vec![], None),
         ).into_ref();
 
         assert_poly_for_str(&expected, j);
@@ -709,9 +717,9 @@ mod test {
         let j = "(false -> true)";
 
         let expected = ty::Fun::new(
-            ty::TopFun::new(Purity::Pure, ty::Ty::LitBool(true).into_poly()),
             ty::TVarIds::empty(),
-            simple_list_type(vec![ty::Ty::LitBool(false)], None),
+            ty::TopFun::new(Purity::Pure, ty::Ty::LitBool(true).into_poly()),
+            ty::Params::new(vec![ty::Ty::LitBool(false).into_poly()], None),
         ).into_ref();
 
         assert_poly_for_str(&expected, j);
@@ -722,9 +730,9 @@ mod test {
         let j = "(String Symbol ... ->! true)";
 
         let expected = ty::Fun::new(
-            ty::TopFun::new(Purity::Impure, ty::Ty::LitBool(true).into_poly()),
             ty::TVarIds::empty(),
-            simple_list_type(vec![ty::Ty::Str], Some(ty::Ty::Sym)),
+            ty::TopFun::new(Purity::Impure, ty::Ty::LitBool(true).into_poly()),
+            ty::Params::new(vec![ty::Ty::Str.into_poly()], Some(ty::Ty::Sym.into_poly())),
         ).into_ref();
 
         assert_poly_for_str(&expected, j);

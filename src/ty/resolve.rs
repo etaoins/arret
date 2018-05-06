@@ -26,8 +26,8 @@ fn poly_ty_has_subtypes(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> bool 
         | ty::Ty::Str
         | ty::Ty::Nil => false,
         ty::Ty::Fun(ref fun) => {
-            (fun.purity() != &Purity::Pure)
-                || fun.params != ty::Ty::Listof(Box::new(ty::Ty::Any.into_poly())).into_poly()
+            (fun.purity() != &Purity::Pure) || !fun.params().fixed().is_empty()
+                || fun.params().rest() != &Some(ty::Ty::Any.into_poly())
                 || poly_has_subtypes(tvars, fun.ret())
         }
         ty::Ty::TyPred(_) => false,

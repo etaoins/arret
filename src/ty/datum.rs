@@ -9,6 +9,18 @@ where
     where
         I: Iterator<Item = S>;
 
+    fn new_simple_list_type<I>(fixed: I, rest: Option<S>) -> ty::Ty<S>
+    where
+        I: DoubleEndedIterator<Item = S>,
+    {
+        let tail_poly = rest.map(|t| ty::Ty::Listof(Box::new(t)))
+            .unwrap_or_else(|| ty::Ty::Nil);
+
+        fixed.rev().fold(tail_poly, |tail_ty, fixed_ref| {
+            ty::Ty::Cons(Box::new(fixed_ref), Box::new(tail_ty.into_ref()))
+        })
+    }
+
     fn ref_for_datum(&self, datum: &Datum) -> S
     where
         S: ty::TyRef,
@@ -21,7 +33,7 @@ where
             Datum::Float(_, _) => ty::Ty::Float,
             Datum::Str(_, _) => ty::Ty::Str,
             Datum::List(_, ref vs) => {
-                ty::Ty::new_simple_list_type(vs.iter().map(|datum| self.ref_for_datum(datum)), None)
+                Self::new_simple_list_type(vs.iter().map(|datum| self.ref_for_datum(datum)), None)
             }
             Datum::Vec(_, ref vs) => {
                 ty::Ty::Vec(vs.iter().map(|v| self.ref_for_datum(v)).collect())

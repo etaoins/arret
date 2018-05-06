@@ -1,7 +1,9 @@
+use std::cmp;
 use std::iter;
 use std::result::Result;
 
 use ty;
+use ty::params_iter::ParamsIterator;
 use ty::purity::Purity;
 use ty::TVarIds;
 
@@ -108,6 +110,37 @@ where
         ))
     }
 
+    fn unify_params(
+        &self,
+        params1: &ty::Params<S>,
+        params2: &ty::Params<S>,
+    ) -> Result<ty::Params<S>, ty::intersect::Error> {
+        if params1.has_disjoint_arity(&params2) {
+            return Err(ty::intersect::Error::Disjoint);
+        }
+
+        let mut iter1 = ParamsIterator::new(params1);
+        let mut iter2 = ParamsIterator::new(params2);
+
+        let mut merged_fixed: Vec<S> =
+            Vec::with_capacity(cmp::max(iter1.fixed_len(), iter2.fixed_len()));
+
+        while iter1.fixed_len() > 0 || iter2.fixed_len() > 0 {
+            let next1 = iter1.next().unwrap();
+            let next2 = iter2.next().unwrap();
+
+            let merged_next = self.intersect_ty_refs(next1, next2)?;
+            merged_fixed.push(merged_next);
+        }
+
+        let merged_rest = match (params1.rest(), params2.rest()) {
+            (&Some(ref rest1), &Some(ref rest2)) => Some(self.intersect_ty_refs(rest1, rest2)?),
+            _ => None,
+        };
+
+        Ok(ty::Params::new(merged_fixed, merged_rest))
+    }
+
     fn unify_fun(&self, fun1: &ty::Fun<S>, fun2: &ty::Fun<S>) -> Result<UnifiedTy<S>, E> {
         let unified_purity = self.unify_purity_refs(fun1.purity(), fun2.purity())?;
 
@@ -120,11 +153,11 @@ where
         } else {
             let unified_ret = self.unify_to_ty_ref(fun1.ret(), fun2.ret())?;
 
-            match self.intersect_ty_refs(fun1.params(), fun2.params()) {
+            match self.unify_params(fun1.params(), fun2.params()) {
                 Ok(unified_params) => Ok(UnifiedTy::Merged(
                     ty::Fun::new(
-                        ty::TopFun::new(unified_purity, unified_ret),
                         S::TVarIds::empty(),
+                        ty::TopFun::new(unified_purity, unified_ret),
                         unified_params,
                     ).into_ref(),
                 )),
@@ -473,7 +506,6 @@ pub fn mono_unify<'a>(
     ctx.unify_ty_refs(mono1, mono2)
 }
 
-#[cfg(test)]
 pub fn mono_unify_iter<I>(members: I) -> Result<ty::Mono, MonoError>
 where
     I: Iterator<Item = ty::Mono>,
@@ -777,14 +809,14 @@ mod test {
 
         // (All A (A -> A))
         let pidentity_fun = ty::Fun::new(
-            ty::TopFun::new(Purity::Pure, ptype1_unbounded.clone()),
             ty::TVarId::new(0)..ty::TVarId::new(1),
-            ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None)
-                .into_ref(),
+            ty::TopFun::new(Purity::Pure, ptype1_unbounded.clone()),
+            ty::Params::new(vec![ptype1_unbounded.clone()], None),
         ).into_ref();
 
         // (All A (A A -> (Cons A A))
         let panys_to_cons = ty::Fun::new(
+            ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(
                 Purity::Pure,
                 ty::Ty::Cons(
@@ -792,18 +824,17 @@ mod test {
                     Box::new(ptype1_unbounded.clone()),
                 ).into_poly(),
             ),
-            ty::TVarId::new(0)..ty::TVarId::new(1),
-            ty::Ty::new_simple_list_type(
-                vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
+            ty::Params::new(
+                vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()],
                 None,
-            ).into_ref(),
+            ),
         ).into_ref();
 
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Fun::new(
-            ty::TopFun::new(Purity::Impure, ptype2_string.clone()),
             ty::TVarId::new(1)..ty::TVarId::new(2),
-            ty::Ty::new_simple_list_type(vec![ptype2_string.clone()].into_iter(), None).into_ref(),
+            ty::TopFun::new(Purity::Impure, ptype2_string.clone()),
+            ty::Params::new(vec![ptype2_string.clone()], None),
         ).into_ref();
 
         assert_eq!(

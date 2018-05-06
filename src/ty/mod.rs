@@ -2,6 +2,7 @@
 mod datum;
 mod intersect;
 pub mod is_a;
+mod params_iter;
 #[cfg(test)]
 pub mod pred;
 pub mod purity;
@@ -83,18 +84,6 @@ impl<S> Ty<S>
 where
     S: TyRef,
 {
-    pub fn new_simple_list_type<I>(fixed: I, rest: Option<S>) -> Ty<S>
-    where
-        I: DoubleEndedIterator<Item = S>,
-    {
-        let tail_poly = rest.map(|t| Ty::Listof(Box::new(t)))
-            .unwrap_or_else(|| Ty::Nil);
-
-        fixed.rev().fold(tail_poly, |tail_ty, fixed_ref| {
-            Ty::Cons(Box::new(fixed_ref), Box::new(tail_ty.into_ref()))
-        })
-    }
-
     pub fn into_ref(self) -> S {
         S::from_ty(self)
     }
@@ -144,23 +133,64 @@ where
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
+pub struct Params<S>
+where
+    S: TyRef,
+{
+    fixed: Vec<S>,
+    rest: Option<S>,
+}
+
+impl<S> Params<S>
+where
+    S: TyRef,
+{
+    pub fn new(fixed: Vec<S>, rest: Option<S>) -> Params<S> {
+        Params { fixed, rest }
+    }
+
+    pub fn fixed(&self) -> &Vec<S> {
+        &self.fixed
+    }
+
+    pub fn rest(&self) -> &Option<S> {
+        &self.rest
+    }
+
+    fn size_range(&self) -> Range<usize> {
+        if self.rest.is_some() {
+            (self.fixed.len()..usize::max_value())
+        } else {
+            (self.fixed.len()..self.fixed.len())
+        }
+    }
+
+    pub fn has_disjoint_arity(&self, other: &Self) -> bool {
+        let range1 = self.size_range();
+        let range2 = other.size_range();
+
+        range2.start > range1.end || range2.end < range1.start
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct Fun<S>
 where
     S: TyRef,
 {
-    top_fun: TopFun<S>,
     tvar_ids: S::TVarIds,
-    params: S,
+    top_fun: TopFun<S>,
+    params: Params<S>,
 }
 
 impl<S> Fun<S>
 where
     S: TyRef,
 {
-    pub fn new(top_fun: TopFun<S>, tvar_ids: S::TVarIds, params: S) -> Fun<S> {
+    pub fn new(tvar_ids: S::TVarIds, top_fun: TopFun<S>, params: Params<S>) -> Fun<S> {
         Fun {
-            top_fun,
             tvar_ids,
+            top_fun,
             params,
         }
     }
@@ -170,12 +200,10 @@ where
     /// This is the type `(Any -> Bool)`. It captures the signature of the type predicates; however
     /// it does not support occurrence typing.
     pub fn new_for_ty_pred() -> Fun<S> {
-        use std::iter;
-
         Self::new(
-            TopFun::new_for_ty_pred(),
             S::TVarIds::empty(),
-            Ty::new_simple_list_type(iter::once(Ty::Any.into_ref()), None).into_ref(),
+            TopFun::new_for_ty_pred(),
+            Params::new(vec![Ty::Any.into_ref()], None),
         )
     }
 
@@ -187,7 +215,7 @@ where
         &self.top_fun.purity
     }
 
-    pub fn params(&self) -> &S {
+    pub fn params(&self) -> &Params<S> {
         &self.params
     }
 

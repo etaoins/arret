@@ -10,21 +10,27 @@ pub enum Error {
 
 pub type Result<T> = result::Result<T, Error>;
 
-fn subst_ty_slice(
-    fixed: &[ty::Poly],
-    tvars: &HashMap<ty::TVarId, ty::Mono>,
-) -> Result<Vec<ty::Mono>> {
-    fixed
-        .iter()
+fn subst_ty_slice(ty: &[ty::Poly], tvars: &HashMap<ty::TVarId, ty::Mono>) -> Result<Vec<ty::Mono>> {
+    ty.iter()
         .map(|p| subst(p, tvars))
         .collect::<Result<Vec<ty::Mono>>>()
 }
 
+fn subst_ty_option(
+    ty: &Option<ty::Poly>,
+    tvars: &HashMap<ty::TVarId, ty::Mono>,
+) -> Result<Option<ty::Mono>> {
+    Ok(match *ty {
+        Some(ref ty) => Some(subst(ty, tvars)?),
+        None => None,
+    })
+}
+
 fn subst_ty(
-    fixed: &ty::Ty<ty::Poly>,
+    ty: &ty::Ty<ty::Poly>,
     tvars: &HashMap<ty::TVarId, ty::Mono>,
 ) -> Result<ty::Ty<ty::Mono>> {
-    Ok(match *fixed {
+    Ok(match *ty {
         ty::Ty::Any => ty::Ty::Any,
         ty::Ty::Bool => ty::Ty::Bool,
         ty::Ty::Char => ty::Ty::Char,
@@ -37,9 +43,12 @@ fn subst_ty(
             ty::TopFun::new(*top_fun.purity(), subst(top_fun.ret(), tvars)?).into_ty()
         }
         ty::Ty::Fun(ref fun) => ty::Fun::new(
-            ty::TopFun::new(*fun.purity(), subst(fun.ret(), tvars)?),
             ty::TVarIds::empty(),
-            subst(fun.params(), tvars)?,
+            ty::TopFun::new(*fun.purity(), subst(fun.ret(), tvars)?),
+            ty::Params::new(
+                subst_ty_slice(fun.params().fixed(), tvars)?,
+                subst_ty_option(fun.params().rest(), tvars)?,
+            ),
         ).into_ty(),
         ty::Ty::TyPred(ref test_ty) => ty::Ty::TyPred(Box::new(subst(test_ty, tvars)?)),
         ty::Ty::Map(ref key, ref value) => {
