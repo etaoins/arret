@@ -26,6 +26,7 @@ pub struct LoweringContext<'ccx> {
     loaded_libraries: BTreeMap<LibraryName, Module>,
     macros: Vec<Macro>,
 
+    pvars: Vec<ty::purity::PVar>,
     tvars: Vec<ty::TVar>,
     free_purities: Vec<Span>,
     free_tys: Vec<Span>,
@@ -98,6 +99,7 @@ impl<'ccx> LoweringContext<'ccx> {
             ns_id_alloc: NsIdAlloc::new(),
             loaded_libraries,
             macros: vec![],
+            pvars: vec![],
             tvars: vec![],
             free_tys: vec![],
             free_purities: vec![],
@@ -193,7 +195,7 @@ impl<'ccx> LoweringContext<'ccx> {
         let ty_datum = arg_data.pop().unwrap();
         let ident = expect_ident(arg_data.pop().unwrap())?;
 
-        let ty = lower_poly(&self.tvars, scope, ty_datum)?;
+        let ty = lower_poly(&self.pvars, &self.tvars, scope, ty_datum)?;
 
         scope.insert_binding(ident, Binding::Ty(ty));
         Ok(())
@@ -248,7 +250,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     return Err(Error::new(span, ErrorKind::NoVecDestruc));
                 }
 
-                let ty = lower_poly(&self.tvars, scope, vs.pop().unwrap())?;
+                let ty = lower_poly(&self.pvars, &self.tvars, scope, vs.pop().unwrap())?;
 
                 // Discard the type colon
                 vs.pop();
@@ -309,7 +311,7 @@ impl<'ccx> LoweringContext<'ccx> {
             if let Some(purity) = try_lower_purity(fun_scope, &post_param_data[0]) {
                 let body_data = post_param_data.split_off(2);
                 let ret_datum = post_param_data.pop().unwrap();
-                let ret_ty = lower_poly(&self.tvars, &fun_scope, ret_datum)?;
+                let ret_ty = lower_poly(&self.pvars, &self.tvars, &fun_scope, ret_datum)?;
 
                 return Ok(LoweredFunRetDecl {
                     body_data,
@@ -342,7 +344,7 @@ impl<'ccx> LoweringContext<'ccx> {
         // We can either begin with a set of type variables or a list of parameters
         if let NsDatum::Set(_, vs) = next_datum {
             for tvar_datum in vs {
-                let (ident, tvar) = lower_tvar(&self.tvars, scope, tvar_datum)?;
+                let (ident, tvar) = lower_tvar(&self.pvars, &self.tvars, scope, tvar_datum)?;
                 let tvar_id = self.insert_tvar(tvar);
                 fun_scope.insert_binding(ident, Binding::Ty(ty::Poly::Var(tvar_id)));
             }
@@ -453,7 +455,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 expect_arg_count(span, &arg_data, 1)?;
                 Ok(Expr::TyPred(
                     span,
-                    lower_poly(&self.tvars, scope, arg_data.pop().unwrap())?,
+                    lower_poly(&self.pvars, &self.tvars, scope, arg_data.pop().unwrap())?,
                 ))
             }
             Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),

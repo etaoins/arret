@@ -29,9 +29,28 @@ impl PVarId {
     pub fn new(id: usize) -> PVarId {
         PVarId(id as u32)
     }
+
+    pub fn to_usize(self) -> usize {
+        self.0 as usize
+    }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+pub struct PVar {
+    source_name: String,
+}
+
+impl PVar {
+    pub fn new(source_name: String) -> PVar {
+        PVar { source_name }
+    }
+
+    pub fn source_name(&self) -> &String {
+        &self.source_name
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum Poly {
     Fixed(Purity),
     Var(PVarId),

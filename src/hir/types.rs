@@ -25,6 +25,7 @@ pub enum TyCons {
 }
 
 struct LowerTyContext<'a> {
+    pvars: &'a [ty::purity::PVar],
     tvars: &'a [ty::TVar],
     scope: &'a Scope,
 }
@@ -173,8 +174,8 @@ impl<'a> LowerTyContext<'a> {
                 ty::unify::poly_unify_iter(self.tvars, member_tys.into_iter()).map_err(|err| {
                     match err {
                         ty::unify::PolyError::PolyConflict(left, right) => {
-                            let left_str = str_for_poly(self.tvars, &left);
-                            let right_str = str_for_poly(self.tvars, &right);
+                            let left_str = str_for_poly(self.pvars, self.tvars, &left);
+                            let right_str = str_for_poly(self.pvars, self.tvars, &right);
 
                             Error::new(span, ErrorKind::PolyUnionConflict(left_str, right_str))
                         }
@@ -266,16 +267,30 @@ impl<'a> LowerTyContext<'a> {
 }
 
 pub fn lower_tvar(
+    pvars: &[ty::purity::PVar],
     tvars: &[ty::TVar],
     scope: &Scope,
     tvar_datum: NsDatum,
 ) -> Result<(Ident, ty::TVar)> {
-    let ctx = LowerTyContext { tvars, scope };
+    let ctx = LowerTyContext {
+        pvars,
+        tvars,
+        scope,
+    };
     ctx.lower_tvar(tvar_datum)
 }
 
-pub fn lower_poly(tvars: &[ty::TVar], scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
-    let ctx = LowerTyContext { tvars, scope };
+pub fn lower_poly(
+    pvars: &[ty::purity::PVar],
+    tvars: &[ty::TVar],
+    scope: &Scope,
+    datum: NsDatum,
+) -> Result<ty::Poly> {
+    let ctx = LowerTyContext {
+        pvars,
+        tvars,
+        scope,
+    };
     ctx.lower_poly(datum)
 }
 
@@ -332,140 +347,147 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
     export_ty_cons!("RawU", TyCons::RawU);
 }
 
-/// Tries to construct the args for a `(List)` or `->` from a poly type
-///
-/// This will return None if the poly type cannot be constructed using `(List)` or `->` shorthand.
-/// This can occur because not all "list-like" types can be expressed using shorthand.
-fn str_for_simple_list_poly_ty(
-    tvars: &[ty::TVar],
-    mut poly_ty: &ty::Ty<ty::Poly>,
-) -> Option<String> {
-    let mut list_parts: Vec<String> = vec![];
+struct StrForPolyContext<'a> {
+    pvars: &'a [ty::purity::PVar],
+    tvars: &'a [ty::TVar],
+}
 
-    loop {
+impl<'a> StrForPolyContext<'a> {
+    /// Tries to construct the args for a `(List)` or `->` from a poly type
+    ///
+    /// This will return None if the poly type cannot be constructed using `(List)` or `->`
+    /// shorthand. This can occur because not all "list-like" types can be expressed using
+    /// shorthand.
+    fn str_for_simple_list(&self, mut poly_ty: &ty::Ty<ty::Poly>) -> Option<String> {
+        let mut list_parts: Vec<String> = vec![];
+
+        loop {
+            match *poly_ty {
+                ty::Ty::Nil => {
+                    break;
+                }
+                ty::Ty::Listof(ref rest) => {
+                    list_parts.push(self.str_for_poly(rest));
+                    list_parts.push("...".to_owned());
+                    break;
+                }
+                ty::Ty::Cons(ref car_poly, ref cdr_poly) => {
+                    list_parts.push(self.str_for_poly(car_poly));
+                    match *cdr_poly.as_ref() {
+                        ty::Poly::Fixed(ref tail) => {
+                            poly_ty = tail;
+                        }
+                        _ => {
+                            return None;
+                        }
+                    };
+                }
+                _ => {
+                    return None;
+                }
+            }
+        }
+
+        Some(list_parts.join(" "))
+    }
+
+    fn str_for_purity(&self, purity: &ty::purity::Poly) -> String {
+        match purity {
+            &ty::purity::Poly::Fixed(Purity::Pure) => "->".to_owned(),
+            &ty::purity::Poly::Fixed(Purity::Impure) => "->!".to_owned(),
+            &ty::purity::Poly::Var(pvar_id) => self.pvars[pvar_id.to_usize()].source_name().clone(),
+        }
+    }
+
+    fn str_for_poly_ty(&self, poly_ty: &ty::Ty<ty::Poly>) -> String {
         match *poly_ty {
+            ty::Ty::Any => "Any".to_owned(),
+            ty::Ty::Bool => "Bool".to_owned(),
+            ty::Ty::Char => "Char".to_owned(),
+            ty::Ty::Int => "Int".to_owned(),
+            ty::Ty::Sym => "Symbol".to_owned(),
+            ty::Ty::Str => "String".to_owned(),
+            ty::Ty::Float => "Float".to_owned(),
+            ty::Ty::LitBool(false) => "false".to_owned(),
+            ty::Ty::LitBool(true) => "true".to_owned(),
+            ty::Ty::LitSym(ref name) => format!("'{}", name),
+            ty::Ty::Map(ref key, ref value) => format!(
+                "(Map {} {})",
+                self.str_for_poly(key),
+                self.str_for_poly(value)
+            ),
+            ty::Ty::Set(ref member) => format!("(Setof {})", self.str_for_poly(member)),
+            ty::Ty::Vec(ref members) => {
+                let mut result_parts: Vec<String> = members
+                    .iter()
+                    .map(|member| format!(" {}", self.str_for_poly(member)))
+                    .collect();
+
+                format!("(Vector{})", result_parts.join(""))
+            }
+            ty::Ty::Vecof(ref member) => format!("(Vectorof {})", self.str_for_poly(member)),
+            ty::Ty::TopFun(ref top_fun) => format!(
+                "(... {} {})",
+                self.str_for_purity(top_fun.purity()),
+                self.str_for_poly(top_fun.ret())
+            ),
+            ty::Ty::Fun(ref fun) => {
+                let mut fun_parts = Vec::with_capacity(2);
+
+                for fixed in fun.params().fixed() {
+                    fun_parts.push(self.str_for_poly(fixed));
+                }
+                for rest in fun.params().rest() {
+                    fun_parts.push(self.str_for_poly(rest));
+                    fun_parts.push("...".to_owned());
+                }
+                fun_parts.push(self.str_for_purity(fun.purity()));
+                fun_parts.push(self.str_for_poly(fun.ret()));
+
+                format!("({})", fun_parts.join(" "),)
+            }
+            ty::Ty::TyPred(ref test) => format!("(Type? {})", self.str_for_poly(test)),
+            ty::Ty::Union(ref members) => {
+                let member_strs: Vec<String> = members
+                    .iter()
+                    .map(|m| format!(" {}", self.str_for_poly(m)))
+                    .collect();
+
+                format!("(U{})", member_strs.join(""))
+            }
+            ty::Ty::Listof(ref member) => format!("(Listof {})", self.str_for_poly(member)),
+            ty::Ty::Cons(ref car, ref cdr) => self.str_for_simple_list(poly_ty)
+                .map(|cons_args| format!("(List {})", cons_args))
+                .unwrap_or_else(|| {
+                    // Fall back to rendering the type using (Cons)
+                    format!(
+                        "(Cons {} {})",
+                        self.str_for_poly(car),
+                        self.str_for_poly(cdr)
+                    )
+                }),
             ty::Ty::Nil => {
-                break;
-            }
-            ty::Ty::Listof(ref rest) => {
-                list_parts.push(str_for_poly(tvars, rest));
-                list_parts.push("...".to_owned());
-                break;
-            }
-            ty::Ty::Cons(ref car_poly, ref cdr_poly) => {
-                list_parts.push(str_for_poly(tvars, car_poly));
-                match *cdr_poly.as_ref() {
-                    ty::Poly::Fixed(ref tail) => {
-                        poly_ty = tail;
-                    }
-                    _ => {
-                        return None;
-                    }
-                };
-            }
-            _ => {
-                return None;
+                // This has many representations: `(List)`, `()` and `'()`. ()` has been chosen as idiomatic as it's the shortest.
+                // TODO: Is the lexographic correspondence with Rust's unit type a good thing?
+                "()".to_owned()
             }
         }
     }
 
-    Some(list_parts.join(" "))
-}
-
-fn str_for_purity(purity: ty::purity::Poly) -> String {
-    match purity {
-        ty::purity::Poly::Fixed(Purity::Pure) => "->".to_owned(),
-        ty::purity::Poly::Fixed(Purity::Impure) => "->!".to_owned(),
-        ty::purity::Poly::Var(_) => {
-            // TODO
-            unimplemented!("Need to implement context with `pvars`");
+    fn str_for_poly(&self, poly: &ty::Poly) -> String {
+        match *poly {
+            ty::Poly::Var(tvar_id) => {
+                // TODO: It's possible to have tvars with overlapping source names
+                self.tvars[tvar_id.to_usize()].source_name().clone()
+            }
+            ty::Poly::Fixed(ref poly_ty) => self.str_for_poly_ty(poly_ty),
         }
     }
 }
 
-fn str_for_poly_ty(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
-    match *poly_ty {
-        ty::Ty::Any => "Any".to_owned(),
-        ty::Ty::Bool => "Bool".to_owned(),
-        ty::Ty::Char => "Char".to_owned(),
-        ty::Ty::Int => "Int".to_owned(),
-        ty::Ty::Sym => "Symbol".to_owned(),
-        ty::Ty::Str => "String".to_owned(),
-        ty::Ty::Float => "Float".to_owned(),
-        ty::Ty::LitBool(false) => "false".to_owned(),
-        ty::Ty::LitBool(true) => "true".to_owned(),
-        ty::Ty::LitSym(ref name) => format!("'{}", name),
-        ty::Ty::Map(ref key, ref value) => format!(
-            "(Map {} {})",
-            str_for_poly(tvars, key),
-            str_for_poly(tvars, value)
-        ),
-        ty::Ty::Set(ref member) => format!("(Setof {})", str_for_poly(tvars, member)),
-        ty::Ty::Vec(ref members) => {
-            let mut result_parts: Vec<String> = members
-                .iter()
-                .map(|member| format!(" {}", str_for_poly(tvars, member)))
-                .collect();
-
-            format!("(Vector{})", result_parts.join(""))
-        }
-        ty::Ty::Vecof(ref member) => format!("(Vectorof {})", str_for_poly(tvars, member)),
-        ty::Ty::TopFun(ref top_fun) => format!(
-            "(... {} {})",
-            str_for_purity(*top_fun.purity()),
-            str_for_poly(tvars, top_fun.ret())
-        ),
-        ty::Ty::Fun(ref fun) => {
-            let mut fun_parts = Vec::with_capacity(2);
-
-            for fixed in fun.params().fixed() {
-                fun_parts.push(str_for_poly(tvars, fixed));
-            }
-            for rest in fun.params().rest() {
-                fun_parts.push(str_for_poly(tvars, rest));
-                fun_parts.push("...".to_owned());
-            }
-            fun_parts.push(str_for_purity(*fun.purity()));
-            fun_parts.push(str_for_poly(tvars, fun.ret()));
-
-            format!("({})", fun_parts.join(" "),)
-        }
-        ty::Ty::TyPred(ref test) => format!("(Type? {})", str_for_poly(tvars, test)),
-        ty::Ty::Union(ref members) => {
-            let member_strs: Vec<String> = members
-                .iter()
-                .map(|m| format!(" {}", str_for_poly(tvars, m)))
-                .collect();
-
-            format!("(U{})", member_strs.join(""))
-        }
-        ty::Ty::Listof(ref member) => format!("(Listof {})", str_for_poly(tvars, member)),
-        ty::Ty::Cons(ref car, ref cdr) => str_for_simple_list_poly_ty(tvars, poly_ty)
-            .map(|cons_args| format!("(List {})", cons_args))
-            .unwrap_or_else(|| {
-                // Fall back to rendering the type using (Cons)
-                format!(
-                    "(Cons {} {})",
-                    str_for_poly(tvars, car),
-                    str_for_poly(tvars, cdr)
-                )
-            }),
-        ty::Ty::Nil => {
-            // This has many representations: `(List)`, `()` and `'()`. ()` has been chosen as idiomatic as it's the shortest.
-            // TODO: Is the lexographic correspondence with Rust's unit type a good thing?
-            "()".to_owned()
-        }
-    }
-}
-
-pub fn str_for_poly(tvars: &[ty::TVar], poly: &ty::Poly) -> String {
-    match *poly {
-        ty::Poly::Var(tvar_id) => {
-            // TODO: It's possible to have tvars with overlapping source names
-            tvars[tvar_id.to_usize()].source_name().clone()
-        }
-        ty::Poly::Fixed(ref poly_ty) => str_for_poly_ty(tvars, poly_ty),
-    }
+pub fn str_for_poly(pvars: &[ty::purity::PVar], tvars: &[ty::TVar], poly: &ty::Poly) -> String {
+    let ctx = StrForPolyContext { pvars, tvars };
+    ctx.str_for_poly(poly)
 }
 
 #[cfg(test)]
@@ -498,6 +520,7 @@ pub fn poly_for_str(datum_str: &str) -> Result<ty::Poly> {
 
     lower_poly(
         &[],
+        &[],
         &scope,
         NsDatum::from_syntax_datum(test_ns_id, test_datum),
     )
@@ -512,7 +535,7 @@ mod test {
         assert_eq!(*expected, poly_for_str(datum_str).unwrap());
 
         // Try to round trip this to make sure str_for_poly works
-        let recovered_str = str_for_poly(&[], &expected);
+        let recovered_str = str_for_poly(&[], &[], &expected);
         assert_eq!(*expected, poly_for_str(&recovered_str).unwrap());
     }
 
@@ -538,7 +561,7 @@ mod test {
     fn assert_exact_str_repr(datum_str: &str) {
         assert_eq!(
             datum_str,
-            str_for_poly(&[], &poly_for_str(datum_str).unwrap())
+            str_for_poly(&[], &[], &poly_for_str(datum_str).unwrap())
         );
     }
 

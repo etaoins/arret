@@ -12,19 +12,12 @@ pub enum Error {
 
 pub type Result<T> = result::Result<T, Error>;
 
-struct SubstCtx<'a> {
+struct SubstContext<'a> {
     pvars: &'a HashMap<ty::purity::PVarId, Purity>,
     tvars: &'a HashMap<ty::TVarId, ty::Mono>,
 }
 
-impl<'a> SubstCtx<'a> {
-    fn new(
-        pvars: &'a HashMap<ty::purity::PVarId, Purity>,
-        tvars: &'a HashMap<ty::TVarId, ty::Mono>,
-    ) -> SubstCtx<'a> {
-        SubstCtx { pvars, tvars }
-    }
-
+impl<'a> SubstContext<'a> {
     fn subst_ty_ref_slice(&self, polys: &[ty::Poly]) -> Result<Vec<ty::Mono>> {
         polys
             .iter()
@@ -112,7 +105,7 @@ pub fn subst(
     tvars: &HashMap<ty::TVarId, ty::Mono>,
     poly: &ty::Poly,
 ) -> Result<ty::Mono> {
-    let ctx = SubstCtx::new(pvars, tvars);
+    let ctx = SubstContext { pvars, tvars };
     ctx.subst_ty_ref(poly)
 }
 
