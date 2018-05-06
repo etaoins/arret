@@ -75,24 +75,18 @@ where
         use ty::Ty;
 
         [
-            S::from_ty(Ty::Bool),
-            S::from_ty(Ty::Char),
-            S::from_ty(Ty::Float),
-            ty::TopFun::new(S::PRef::from_purity(Purity::Impure), S::from_ty(Ty::Any)).into_ref(),
-            S::from_ty(Ty::Map(
-                Box::new(S::from_ty(Ty::Any)),
-                Box::new(S::from_ty(Ty::Any)),
-            )),
-            S::from_ty(Ty::Int),
-            S::from_ty(Ty::Set(Box::new(S::from_ty(Ty::Any)))),
-            S::from_ty(Ty::Str),
-            S::from_ty(Ty::Sym),
-            S::from_ty(Ty::Vecof(Box::new(S::from_ty(Ty::Any)))),
-            S::from_ty(Ty::Cons(
-                Box::new(S::from_ty(Ty::Any)),
-                Box::new(S::from_ty(Ty::Any)),
-            )),
-            S::from_ty(Ty::Nil),
+            Ty::Bool.into_ref(),
+            Ty::Char.into_ref(),
+            Ty::Float.into_ref(),
+            ty::TopFun::new(S::PRef::from_purity(Purity::Impure), Ty::Any.into_ref()).into_ref(),
+            Ty::Map(Box::new(Ty::Any.into_ref()), Box::new(Ty::Any.into_ref())).into_ref(),
+            Ty::Int.into_ref(),
+            Ty::Set(Box::new(Ty::Any.into_ref())).into_ref(),
+            Ty::Str.into_ref(),
+            Ty::Sym.into_ref(),
+            Ty::Vecof(Box::new(Ty::Any.into_ref())).into_ref(),
+            Ty::Cons(Box::new(Ty::Any.into_ref()), Box::new(Ty::Any.into_ref())).into_ref(),
+            Ty::Nil.into_ref(),
         ]
     }
 
@@ -111,15 +105,15 @@ where
             ty::Ty::Any => self.interpret_ref_iter(Self::any_union_members().iter(), test_ref),
             ty::Ty::Bool => self.interpret_ref_iter(
                 [
-                    S::from_ty(ty::Ty::LitBool(true)),
-                    S::from_ty(ty::Ty::LitBool(false)),
+                    ty::Ty::LitBool(true).into_ref(),
+                    ty::Ty::LitBool(false).into_ref(),
                 ].iter(),
                 test_ref,
             ),
             ty::Ty::Listof(ref member) => self.interpret_ref_iter(
                 [
-                    S::from_ty(ty::Ty::Nil),
-                    S::from_ty(ty::Ty::Cons(member.clone(), Box::new(subject_ref.clone()))),
+                    ty::Ty::Nil.into_ref(),
+                    ty::Ty::Cons(member.clone(), Box::new(subject_ref.clone())).into_ref(),
                 ].iter(),
                 test_ref,
             ),

@@ -13,24 +13,24 @@ where
     where
         S: ty::TyRef,
     {
-        match *datum {
-            Datum::Bool(_, val) => S::from_ty(ty::Ty::LitBool(val)),
-            Datum::Sym(_, ref val) => S::from_ty(ty::Ty::LitSym(val.clone())),
-            Datum::Char(_, _) => S::from_ty(ty::Ty::Char),
-            Datum::Int(_, _) => S::from_ty(ty::Ty::Int),
-            Datum::Float(_, _) => S::from_ty(ty::Ty::Float),
-            Datum::Str(_, _) => S::from_ty(ty::Ty::Str),
+        (match *datum {
+            Datum::Bool(_, val) => ty::Ty::LitBool(val),
+            Datum::Sym(_, ref val) => ty::Ty::LitSym(val.clone()),
+            Datum::Char(_, _) => ty::Ty::Char,
+            Datum::Int(_, _) => ty::Ty::Int,
+            Datum::Float(_, _) => ty::Ty::Float,
+            Datum::Str(_, _) => ty::Ty::Str,
             Datum::List(_, ref vs) => {
                 ty::Ty::new_simple_list_type(vs.iter().map(|datum| self.ref_for_datum(datum)), None)
             }
-            Datum::Vec(_, ref vs) => S::from_ty(ty::Ty::Vec(
-                vs.iter().map(|v| self.ref_for_datum(v)).collect(),
-            )),
+            Datum::Vec(_, ref vs) => {
+                ty::Ty::Vec(vs.iter().map(|v| self.ref_for_datum(v)).collect())
+            }
             Datum::Set(_, ref vs) => {
                 // Without function, begin or rest types we should never hit erasure
                 let unified_type = self.unify_ref_iter(vs.iter().map(|v| self.ref_for_datum(v)));
 
-                S::from_ty(ty::Ty::Set(Box::new(unified_type)))
+                ty::Ty::Set(Box::new(unified_type))
             }
             Datum::Map(_, ref vs) => {
                 let unified_key =
@@ -39,9 +39,9 @@ where
                 let unified_value =
                     self.unify_ref_iter(vs.iter().map(|&(_, ref v)| self.ref_for_datum(v)));
 
-                S::from_ty(ty::Ty::Map(Box::new(unified_key), Box::new(unified_value)))
+                ty::Ty::Map(Box::new(unified_key), Box::new(unified_value))
             }
-        }
+        }).into_ref()
     }
 }
 

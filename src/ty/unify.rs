@@ -34,10 +34,9 @@ where
     fn unify_to_ty_ref(&self, ty_ref1: &S, ty_ref2: &S) -> Result<S, E> {
         match self.unify_ty_refs(ty_ref1, ty_ref2)? {
             UnifiedTy::Merged(ty_ref) => Ok(ty_ref),
-            UnifiedTy::Discerned => Ok(S::from_ty(ty::Ty::Union(vec![
-                ty_ref1.clone(),
-                ty_ref2.clone(),
-            ]))),
+            UnifiedTy::Discerned => {
+                Ok(ty::Ty::Union(vec![ty_ref1.clone(), ty_ref2.clone()]).into_ref())
+            }
         }
     }
 
@@ -52,7 +51,7 @@ where
             UnifiedTy::Discerned => Ok(UnifiedTy::Discerned),
             UnifiedTy::Merged(merged_tail) => self.unify_ty_refs(
                 &merged_tail,
-                &S::from_ty(ty::Ty::Listof(Box::new(car_ref.clone()))),
+                &ty::Ty::Listof(Box::new(car_ref.clone())).into_ref(),
             ),
         }
     }
@@ -116,7 +115,7 @@ where
             // TODO: We could do better here by finding our upper bound and unifying them
             // Preserving the polymorphicness would be very complex
             Ok(UnifiedTy::Merged(
-                ty::TopFun::new(unified_purity, S::from_ty(ty::Ty::Any)).into_ref(),
+                ty::TopFun::new(unified_purity, ty::Ty::Any.into_ref()).into_ref(),
             ))
         } else {
             let unified_ret = self.unify_to_ty_ref(fun1.ret(), fun2.ret())?;
@@ -149,25 +148,25 @@ where
         }
         Ok(match (ty1, ty2) {
             // Handle supertype relationships
-            (_, &ty::Ty::Any) | (&ty::Ty::Any, _) => UnifiedTy::Merged(S::from_ty(ty::Ty::Any)),
+            (_, &ty::Ty::Any) | (&ty::Ty::Any, _) => UnifiedTy::Merged(ty::Ty::Any.into_ref()),
             (&ty::Ty::LitSym(_), &ty::Ty::Sym) | (&ty::Ty::Sym, &ty::Ty::LitSym(_)) => {
-                UnifiedTy::Merged(S::from_ty(ty::Ty::Sym))
+                UnifiedTy::Merged(ty::Ty::Sym.into_ref())
             }
             (&ty::Ty::LitBool(_), &ty::Ty::Bool) | (&ty::Ty::Bool, &ty::Ty::LitBool(_)) => {
-                UnifiedTy::Merged(S::from_ty(ty::Ty::Bool))
+                UnifiedTy::Merged(ty::Ty::Bool.into_ref())
             }
 
             // Simplify (U true false) => Bool
             (&ty::Ty::LitBool(true), &ty::Ty::LitBool(false))
             | (&ty::Ty::LitBool(false), &ty::Ty::LitBool(true)) => {
-                UnifiedTy::Merged(S::from_ty(ty::Ty::Bool))
+                UnifiedTy::Merged(ty::Ty::Bool.into_ref())
             }
 
             // Set type
             (&ty::Ty::Set(ref ty_ref1), &ty::Ty::Set(ref ty_ref2)) => {
                 let unified_ty_ref = self.unify_to_ty_ref(&ty_ref1, &ty_ref2)?;
 
-                UnifiedTy::Merged(S::from_ty(ty::Ty::Set(Box::new(unified_ty_ref))))
+                UnifiedTy::Merged(ty::Ty::Set(Box::new(unified_ty_ref)).into_ref())
             }
 
             // Map type
@@ -178,10 +177,9 @@ where
                 let unified_key_ref = self.unify_to_ty_ref(&key_ref1, &key_ref2)?;
                 let unified_val_ref = self.unify_to_ty_ref(&val_ref1, &val_ref2)?;
 
-                UnifiedTy::Merged(S::from_ty(ty::Ty::Map(
-                    Box::new(unified_key_ref),
-                    Box::new(unified_val_ref),
-                )))
+                UnifiedTy::Merged(
+                    ty::Ty::Map(Box::new(unified_key_ref), Box::new(unified_val_ref)).into_ref(),
+                )
             }
 
             // Vector types
@@ -204,20 +202,18 @@ where
                         }
                     }
 
-                    UnifiedTy::Merged(S::from_ty(ty::Ty::Vec(unified_members)))
+                    UnifiedTy::Merged(ty::Ty::Vec(unified_members).into_ref())
                 }
             }
-            (&ty::Ty::Vecof(ref member1), &ty::Ty::Vecof(ref member2)) => {
-                UnifiedTy::Merged(S::from_ty(ty::Ty::Vecof(Box::new(self.unify_to_ty_ref(
-                    member1, member2,
-                )?))))
-            }
+            (&ty::Ty::Vecof(ref member1), &ty::Ty::Vecof(ref member2)) => UnifiedTy::Merged(
+                ty::Ty::Vecof(Box::new(self.unify_to_ty_ref(member1, member2)?)).into_ref(),
+            ),
             (&ty::Ty::Vec(ref members1), &ty::Ty::Vecof(ref member2))
             | (&ty::Ty::Vecof(ref member2), &ty::Ty::Vec(ref members1)) => {
                 let unified_member =
                     self.unify_ref_iter(vec![member2.as_ref().clone()], members1.iter().cloned())?;
 
-                UnifiedTy::Merged(S::from_ty(ty::Ty::Vecof(Box::new(unified_member))))
+                UnifiedTy::Merged(ty::Ty::Vecof(Box::new(unified_member)).into_ref())
             }
 
             // Function types
@@ -239,9 +235,9 @@ where
                 self.unify_fun(&ty::Fun::new_for_ty_pred(), fun)?
             }
 
-            (&ty::Ty::TyPred(_), &ty::Ty::TyPred(_)) => UnifiedTy::Merged(S::from_ty(ty::Ty::Fun(
-                Box::new(ty::Fun::new_for_ty_pred()),
-            ))),
+            (&ty::Ty::TyPred(_), &ty::Ty::TyPred(_)) => {
+                UnifiedTy::Merged(ty::Ty::Fun(Box::new(ty::Fun::new_for_ty_pred())).into_ref())
+            }
 
             // Union types
             (&ty::Ty::Union(ref members1), &ty::Ty::Union(ref members2)) => {
@@ -258,25 +254,23 @@ where
             }
 
             // List types
-            (&ty::Ty::Listof(ref member1), &ty::Ty::Listof(ref member2)) => {
-                UnifiedTy::Merged(S::from_ty(ty::Ty::Listof(Box::new(self.unify_to_ty_ref(
-                    member1, member2,
-                )?))))
-            }
+            (&ty::Ty::Listof(ref member1), &ty::Ty::Listof(ref member2)) => UnifiedTy::Merged(
+                ty::Ty::Listof(Box::new(self.unify_to_ty_ref(member1, member2)?)).into_ref(),
+            ),
             (&ty::Ty::Cons(ref car1, ref cdr1), &ty::Ty::Cons(ref car2, ref cdr2)) => {
                 match self.unify_ty_refs(car1, car2)? {
                     UnifiedTy::Discerned => UnifiedTy::Discerned,
                     UnifiedTy::Merged(merged_car) => match self.unify_ty_refs(cdr1, cdr2)? {
                         UnifiedTy::Discerned => UnifiedTy::Discerned,
-                        UnifiedTy::Merged(merged_cdr) => UnifiedTy::Merged(S::from_ty(
-                            ty::Ty::Cons(Box::new(merged_car), Box::new(merged_cdr)),
-                        )),
+                        UnifiedTy::Merged(merged_cdr) => UnifiedTy::Merged(
+                            ty::Ty::Cons(Box::new(merged_car), Box::new(merged_cdr)).into_ref(),
+                        ),
                     },
                 }
             }
             (&ty::Ty::Nil, &ty::Ty::Listof(ref member))
             | (&ty::Ty::Listof(ref member), &ty::Ty::Nil) => {
-                UnifiedTy::Merged(S::from_ty(ty::Ty::Listof(member.clone())))
+                UnifiedTy::Merged(ty::Ty::Listof(member.clone()).into_ref())
             }
             (&ty::Ty::Listof(_), &ty::Ty::Cons(ref car, ref cdr)) => {
                 self.unify_list_cons_refs(ref1, car, cdr)?
@@ -785,7 +779,8 @@ mod test {
         let pidentity_fun = ty::Fun::new(
             ty::TopFun::new(Purity::Pure, ptype1_unbounded.clone()),
             ty::TVarId::new(0)..ty::TVarId::new(1),
-            ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None),
+            ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None)
+                .into_ref(),
         ).into_ref();
 
         // (All A (A A -> (Cons A A))
@@ -801,14 +796,14 @@ mod test {
             ty::Ty::new_simple_list_type(
                 vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
                 None,
-            ),
+            ).into_ref(),
         ).into_ref();
 
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Fun::new(
             ty::TopFun::new(Purity::Impure, ptype2_string.clone()),
             ty::TVarId::new(1)..ty::TVarId::new(2),
-            ty::Ty::new_simple_list_type(vec![ptype2_string.clone()].into_iter(), None),
+            ty::Ty::new_simple_list_type(vec![ptype2_string.clone()].into_iter(), None).into_ref(),
         ).into_ref();
 
         assert_eq!(

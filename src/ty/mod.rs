@@ -83,16 +83,20 @@ impl<S> Ty<S>
 where
     S: TyRef,
 {
-    pub fn new_simple_list_type<I>(fixed: I, rest: Option<S>) -> S
+    pub fn new_simple_list_type<I>(fixed: I, rest: Option<S>) -> Ty<S>
     where
         I: DoubleEndedIterator<Item = S>,
     {
-        let tail_poly = rest.map(|t| S::from_ty(Ty::Listof(Box::new(t))))
-            .unwrap_or_else(|| S::from_ty(Ty::Nil));
+        let tail_poly = rest.map(|t| Ty::Listof(Box::new(t)))
+            .unwrap_or_else(|| Ty::Nil);
 
-        fixed.rev().fold(tail_poly, |tail_ref, fixed_ref| {
-            S::from_ty(Ty::Cons(Box::new(fixed_ref), Box::new(tail_ref)))
+        fixed.rev().fold(tail_poly, |tail_ty, fixed_ref| {
+            Ty::Cons(Box::new(fixed_ref), Box::new(tail_ty.into_ref()))
         })
+    }
+
+    pub fn into_ref(self) -> S {
+        S::from_ty(self)
     }
 }
 
@@ -118,7 +122,7 @@ where
     pub fn new_for_ty_pred() -> TopFun<S> {
         Self::new(
             S::PRef::from_purity(purity::Purity::Pure),
-            S::from_ty(Ty::Bool),
+            Ty::Bool.into_ref(),
         )
     }
 
@@ -135,7 +139,7 @@ where
     }
 
     pub fn into_ref(self) -> S {
-        S::from_ty(self.into_ty())
+        self.into_ty().into_ref()
     }
 }
 
@@ -171,7 +175,7 @@ where
         Self::new(
             TopFun::new_for_ty_pred(),
             S::TVarIds::empty(),
-            Ty::new_simple_list_type(iter::once(S::from_ty(Ty::Any)), None),
+            Ty::new_simple_list_type(iter::once(Ty::Any.into_ref()), None).into_ref(),
         )
     }
 
@@ -253,7 +257,7 @@ impl TyRef for Poly {
     type PRef = purity::Purity;
 
     fn from_ty(ty: Ty<Poly>) -> Poly {
-        ty.into_poly()
+        Poly::Fixed(ty)
     }
 }
 
@@ -283,6 +287,7 @@ impl Mono {
 }
 
 impl Ty<Mono> {
+    #[cfg(test)]
     pub fn into_mono(self) -> Mono {
         Mono(self)
     }
@@ -293,7 +298,7 @@ impl TyRef for Mono {
     type PRef = purity::Purity;
 
     fn from_ty(ty: Ty<Mono>) -> Mono {
-        ty.into_mono()
+        Mono(ty)
     }
 }
 

@@ -30,10 +30,7 @@ where
         let intersected_car = self.intersect_ty_refs(member_ref, car_ref)?;
         let intersected_cdr = self.intersect_ty_refs(list_ref, cdr_ref)?;
 
-        Ok(S::from_ty(ty::Ty::Cons(
-            Box::new(intersected_car),
-            Box::new(intersected_cdr),
-        )))
+        Ok(ty::Ty::Cons(Box::new(intersected_car), Box::new(intersected_cdr)).into_ref())
     }
 
     /// Intersects a vector of refs with an iterator
@@ -61,7 +58,7 @@ where
         match intersected_types.len() {
             0 => Err(Error::Disjoint),
             1 => Ok(intersected_types.pop().unwrap()),
-            _ => Ok(S::from_ty(ty::Ty::Union(intersected_types))),
+            _ => Ok(ty::Ty::Union(intersected_types).into_ref()),
         }
     }
 
@@ -82,22 +79,22 @@ where
             (_, &ty::Ty::Union(ref refs2)) => self.intersect_ref_iter(refs2, iter::once(ref1)),
 
             // Set type
-            (&ty::Ty::Set(ref member1), &ty::Ty::Set(ref member2)) => Ok(S::from_ty(ty::Ty::Set(
-                Box::new(self.intersect_ty_refs(member1, member2)?),
-            ))),
+            (&ty::Ty::Set(ref member1), &ty::Ty::Set(ref member2)) => {
+                Ok(ty::Ty::Set(Box::new(self.intersect_ty_refs(member1, member2)?)).into_ref())
+            }
 
             // Map type
             (&ty::Ty::Map(ref key1, ref value1), &ty::Ty::Map(ref key2, ref value2)) => {
-                Ok(S::from_ty(ty::Ty::Map(
+                Ok(ty::Ty::Map(
                     Box::new(self.intersect_ty_refs(key1, key2)?),
                     Box::new(self.intersect_ty_refs(value1, value2)?),
-                )))
+                ).into_ref())
             }
 
             // Vector types
-            (&ty::Ty::Vecof(ref member1), &ty::Ty::Vecof(ref member2)) => Ok(S::from_ty(
-                ty::Ty::Vecof(Box::new(self.intersect_ty_refs(member1, member2)?)),
-            )),
+            (&ty::Ty::Vecof(ref member1), &ty::Ty::Vecof(ref member2)) => {
+                Ok(ty::Ty::Vecof(Box::new(self.intersect_ty_refs(member1, member2)?)).into_ref())
+            }
             (&ty::Ty::Vec(ref members1), &ty::Ty::Vec(ref members2)) => {
                 if members1.len() != members2.len() {
                     Err(Error::Disjoint)
@@ -108,7 +105,7 @@ where
                         .map(|(member1, member2)| self.intersect_ty_refs(member1, member2))
                         .collect::<Result<Vec<S>>>()?;
 
-                    Ok(S::from_ty(ty::Ty::Vec(intersected_members)))
+                    Ok(ty::Ty::Vec(intersected_members).into_ref())
                 }
             }
             (&ty::Ty::Vecof(ref member1), &ty::Ty::Vec(ref members2))
@@ -118,18 +115,18 @@ where
                     .map(|member2| self.intersect_ty_refs(member1, member2))
                     .collect::<Result<Vec<S>>>()?;
 
-                Ok(S::from_ty(ty::Ty::Vec(intersected_members)))
+                Ok(ty::Ty::Vec(intersected_members).into_ref())
             }
 
             // List types
-            (&ty::Ty::Listof(ref member1), &ty::Ty::Listof(ref member2)) => Ok(S::from_ty(
-                ty::Ty::Listof(Box::new(self.intersect_ty_refs(member1, member2)?)),
-            )),
+            (&ty::Ty::Listof(ref member1), &ty::Ty::Listof(ref member2)) => {
+                Ok(ty::Ty::Listof(Box::new(self.intersect_ty_refs(member1, member2)?)).into_ref())
+            }
             (&ty::Ty::Cons(ref car1, ref cdr1), &ty::Ty::Cons(ref car2, ref cdr2)) => {
-                Ok(S::from_ty(ty::Ty::Cons(
+                Ok(ty::Ty::Cons(
                     Box::new(self.intersect_ty_refs(car1, car2)?),
                     Box::new(self.intersect_ty_refs(cdr1, cdr2)?),
-                )))
+                ).into_ref())
             }
             (&ty::Ty::Listof(ref member), &ty::Ty::Cons(ref car, ref cdr)) => {
                 self.intersect_list_cons_refs(ref1, member, car, cdr)
@@ -428,7 +425,8 @@ mod test {
         let pidentity_fun = ty::Fun::new(
             ty::TopFun::new(Purity::Pure, ptype1_unbounded.clone()),
             ty::TVarId::new(0)..ty::TVarId::new(1),
-            ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None),
+            ty::Ty::new_simple_list_type(vec![ptype1_unbounded.clone()].into_iter(), None)
+                .into_ref(),
         ).into_ref();
 
         // (All A (A A -> (Cons A A))
@@ -444,14 +442,14 @@ mod test {
             ty::Ty::new_simple_list_type(
                 vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()].into_iter(),
                 None,
-            ),
+            ).into_ref(),
         ).into_ref();
 
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Fun::new(
             ty::TopFun::new(Purity::Impure, ptype2_string.clone()),
             ty::TVarId::new(1)..ty::TVarId::new(2),
-            ty::Ty::new_simple_list_type(vec![ptype2_string.clone()].into_iter(), None),
+            ty::Ty::new_simple_list_type(vec![ptype2_string.clone()].into_iter(), None).into_ref(),
         ).into_ref();
 
         let top_pure_fun = poly_for_str("(... -> Any)");
