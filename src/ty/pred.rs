@@ -149,7 +149,7 @@ impl<'a> InterpretPredCtx<ty::Poly> for InterpretPolyPredCtx<'a> {
 
 /// Performs abstract interpretation of applying a type predicate for `test` type on a `subject`
 /// value
-fn interpret_poly_pred<'a>(
+pub fn interpret_poly_pred<'a>(
     tvars: &'a [ty::TVar],
     subject: &ty::Poly,
     test: &ty::Poly,

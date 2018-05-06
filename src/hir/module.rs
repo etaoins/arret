@@ -22,6 +22,18 @@ impl ModuleDef {
         }
     }
 
+    pub fn span(&self) -> &Span {
+        &self.span
+    }
+
+    pub fn destruc(&self) -> &Destruc {
+        &self.destruc
+    }
+
+    pub fn value(&self) -> &Expr {
+        &self.value
+    }
+
     #[cfg(test)]
     pub fn into_value(self) -> Expr {
         self.value
@@ -51,6 +63,10 @@ impl Module {
         insert_ty_exports(&mut type_exports);
 
         Module::new(vec![], type_exports)
+    }
+
+    pub fn defs(&self) -> &[ModuleDef] {
+        &self.defs
     }
 
     #[cfg(test)]

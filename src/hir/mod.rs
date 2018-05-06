@@ -4,7 +4,7 @@ mod import;
 mod loader;
 pub mod lowering;
 mod macros;
-mod module;
+pub mod module;
 mod ns;
 mod prim;
 mod scope;
@@ -38,6 +38,28 @@ pub struct Fun {
     body_expr: Box<Expr>,
 }
 
+impl Fun {
+    pub fn pvar_ids(&self) -> &Range<ty::purity::PVarId> {
+        &self.pvar_ids
+    }
+
+    pub fn tvar_ids(&self) -> &Range<ty::TVarId> {
+        &self.tvar_ids
+    }
+
+    pub fn params(&self) -> &destruc::List {
+        &self.params
+    }
+
+    pub fn ret_ty(&self) -> &ty::Decl {
+        &self.ret_ty
+    }
+
+    pub fn body_expr(&self) -> &Expr {
+        &self.body_expr
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub struct Cond {
     test_expr: Box<Expr>,
@@ -45,11 +67,39 @@ pub struct Cond {
     false_expr: Box<Expr>,
 }
 
+impl Cond {
+    pub fn test_expr(&self) -> &Expr {
+        &self.test_expr
+    }
+
+    pub fn true_expr(&self) -> &Expr {
+        &self.true_expr
+    }
+
+    pub fn false_expr(&self) -> &Expr {
+        &self.false_expr
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub struct App {
     fun_expr: Box<Expr>,
     fixed_arg_exprs: Vec<Expr>,
     rest_arg_expr: Option<Box<Expr>>,
+}
+
+impl App {
+    pub fn fun_expr(&self) -> &Expr {
+        &self.fun_expr
+    }
+
+    pub fn fixed_arg_exprs(&self) -> &[Expr] {
+        self.fixed_arg_exprs.as_ref()
+    }
+
+    pub fn rest_arg_expr(&self) -> &Option<Box<Expr>> {
+        &self.rest_arg_expr
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -89,7 +139,7 @@ impl Expr {
     /// Returns the span for the expression
     ///
     /// This will return None for `Expr::Do` as it may not have a single contiguous span
-    fn span(&self) -> Option<Span> {
+    pub fn span(&self) -> Option<Span> {
         match self {
             Expr::Lit(datum) => Some(datum.span()),
             Expr::App(span, _)
@@ -113,5 +163,10 @@ impl Expr {
     }
 }
 
+pub use self::types::str_for_poly;
+
 #[cfg(test)]
 pub use self::types::poly_for_str;
+
+#[cfg(test)]
+pub use self::lowering::body_expr_for_str;

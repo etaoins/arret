@@ -1,15 +1,11 @@
-#[cfg(test)]
-mod datum;
-mod intersect;
+pub mod datum;
+pub mod intersect;
 pub mod is_a;
 mod params_iter;
-#[cfg(test)]
 pub mod pred;
 pub mod purity;
 pub mod resolve;
-#[cfg(test)]
-mod select;
-#[cfg(test)]
+pub mod select;
 pub mod subst;
 pub mod unify;
 
@@ -89,6 +85,25 @@ impl<S> Ty<S>
 where
     S: TyRef,
 {
+    pub fn new_list_type<I>(fixed: I, tail: Ty<S>) -> Ty<S>
+    where
+        I: DoubleEndedIterator<Item = S>,
+    {
+        fixed.rev().fold(tail, |tail_ty, fixed_ref| {
+            Ty::Cons(Box::new(fixed_ref), Box::new(tail_ty.into_ref()))
+        })
+    }
+
+    pub fn new_simple_list_type<I>(fixed: I, rest: Option<S>) -> Ty<S>
+    where
+        I: DoubleEndedIterator<Item = S>,
+    {
+        let tail_ty = rest.map(|t| Ty::Listof(Box::new(t)))
+            .unwrap_or_else(|| Ty::Nil);
+
+        Self::new_list_type(fixed, tail_ty)
+    }
+
     pub fn into_ref(self) -> S {
         S::from_ty(self)
     }
@@ -220,6 +235,14 @@ where
         )
     }
 
+    pub fn pvar_ids(&self) -> &S::PVarIds {
+        &self.pvar_ids
+    }
+
+    pub fn tvar_ids(&self) -> &S::TVarIds {
+        &self.tvar_ids
+    }
+
     pub fn top_fun(&self) -> &TopFun<S> {
         &self.top_fun
     }
@@ -277,7 +300,6 @@ impl TVar {
         &self.source_name
     }
 
-    #[cfg(test)]
     pub fn bound(&self) -> &Poly {
         &self.bound
     }
@@ -372,6 +394,16 @@ pub enum Decl {
     Var(TVarId),
     Fixed(Ty<Poly>),
     Free(FreeTyId),
+}
+
+impl Decl {
+    pub fn try_to_poly(&self) -> Option<Poly> {
+        match *self {
+            Decl::Fixed(ref fixed) => Some(Poly::Fixed(fixed.clone())),
+            Decl::Var(tvar_id) => Some(Poly::Var(tvar_id)),
+            Decl::Free(_) => None,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]

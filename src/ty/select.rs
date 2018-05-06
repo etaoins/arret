@@ -1,12 +1,6 @@
 use std::ops::Range;
-use std::result::Result;
 
 use ty;
-
-#[derive(PartialEq, Debug)]
-pub enum Error {
-    NotWithinBound,
-}
 
 /// Selects a set of polymorphic variables for a function application
 ///
@@ -14,6 +8,7 @@ pub enum Error {
 /// polymorphic on. Evidence from the return and argument types can then be incrementally added to
 /// the context. The calculated polymorphic types and purities can be retrieved from the
 /// `pvar_purities` and `tvar_types` methods.
+#[derive(Clone, Debug)]
 pub struct SelectContext<'a> {
     pvar_ids: Range<ty::purity::PVarId>,
     tvar_ids: Range<ty::TVarId>,
@@ -45,20 +40,20 @@ impl<'a> SelectContext<'a> {
         }
     }
 
-    fn is_selected_pvar(&self, pvar_id: ty::purity::PVarId) -> bool {
-        pvar_id >= self.pvar_ids.start && pvar_id < self.pvar_ids.end
+    pub fn selected_pvar_idx(&self, pvar_id: ty::purity::PVarId) -> Option<usize> {
+        if pvar_id >= self.pvar_ids.start && pvar_id < self.pvar_ids.end {
+            Some(pvar_id.to_usize() - self.pvar_ids.start.to_usize())
+        } else {
+            None
+        }
     }
 
-    fn pvar_idx(&self, pvar_id: ty::purity::PVarId) -> usize {
-        pvar_id.to_usize() - self.pvar_ids.start.to_usize()
-    }
-
-    fn is_selected_tvar(&self, tvar_id: ty::TVarId) -> bool {
-        tvar_id >= self.tvar_ids.start && tvar_id < self.tvar_ids.end
-    }
-
-    fn tvar_idx(&self, tvar_id: ty::TVarId) -> usize {
-        tvar_id.to_usize() - self.tvar_ids.start.to_usize()
+    pub fn selected_tvar_idx(&self, tvar_id: ty::TVarId) -> Option<usize> {
+        if tvar_id >= self.tvar_ids.start && tvar_id < self.tvar_ids.end {
+            Some(tvar_id.to_usize() - self.tvar_ids.start.to_usize())
+        } else {
+            None
+        }
     }
 
     fn add_evidence_purity(
@@ -67,9 +62,7 @@ impl<'a> SelectContext<'a> {
         evidence_purity: &ty::purity::Poly,
     ) {
         if let ty::purity::Poly::Var(pvar_id) = target_purity {
-            if self.is_selected_pvar(*pvar_id) {
-                let pvar_idx = self.pvar_idx(*pvar_id);
-
+            if let Some(pvar_idx) = self.selected_pvar_idx(*pvar_id) {
                 self.pvar_purities[pvar_idx] = Some(match self.pvar_purities[pvar_idx] {
                     None => evidence_purity.clone(),
                     Some(ref existing) => ty::unify::poly_unify_purity(existing, evidence_purity),
@@ -82,11 +75,9 @@ impl<'a> SelectContext<'a> {
         &mut self,
         target_top_fun: &ty::TopFun<ty::Poly>,
         evidence_top_fun: &ty::TopFun<ty::Poly>,
-    ) -> Result<(), Error> {
+    ) {
         self.add_evidence_purity(target_top_fun.purity(), evidence_top_fun.purity());
-        self.add_evidence(target_top_fun.ret(), evidence_top_fun.ret())?;
-
-        Ok(())
+        self.add_evidence(target_top_fun.ret(), evidence_top_fun.ret());
     }
 
     fn add_evidence_ty(
@@ -95,89 +86,81 @@ impl<'a> SelectContext<'a> {
         target_ty: &ty::Ty<ty::Poly>,
         evidence_poly: &ty::Poly,
         evidence_ty: &ty::Ty<ty::Poly>,
-    ) -> Result<(), Error> {
+    ) {
         match (target_ty, evidence_ty) {
             (ty::Ty::Set(target_member), ty::Ty::Set(evidence_member)) => {
-                self.add_evidence(target_member, evidence_member)?;
+                self.add_evidence(target_member, evidence_member);
             }
             (ty::Ty::Map(target_key, target_value), ty::Ty::Map(evidence_key, evidence_value)) => {
-                self.add_evidence(target_key, evidence_key)?;
-                self.add_evidence(target_value, evidence_value)?;
+                self.add_evidence(target_key, evidence_key);
+                self.add_evidence(target_value, evidence_value);
             }
             (ty::Ty::Cons(target_car, target_cdr), ty::Ty::Cons(evidence_car, evidence_cdr)) => {
-                self.add_evidence(target_car, evidence_car)?;
-                self.add_evidence(target_cdr, evidence_cdr)?;
+                self.add_evidence(target_car, evidence_car);
+                self.add_evidence(target_cdr, evidence_cdr);
             }
             (ty::Ty::Listof(target_member), ty::Ty::Listof(evidence_member)) => {
-                self.add_evidence(target_member, evidence_member)?;
+                self.add_evidence(target_member, evidence_member);
             }
             (ty::Ty::Listof(target_member), ty::Ty::Cons(evidence_car, evidence_cdr)) => {
-                self.add_evidence(target_member, evidence_car)?;
-                self.add_evidence(target_poly, evidence_cdr)?;
+                self.add_evidence(target_member, evidence_car);
+                self.add_evidence(target_poly, evidence_cdr);
             }
             (ty::Ty::Vec(target_members), ty::Ty::Vec(evidence_members)) => {
                 for (target_member, evidence_member) in
                     target_members.iter().zip(evidence_members.iter())
                 {
-                    self.add_evidence(target_member, evidence_member)?;
+                    self.add_evidence(target_member, evidence_member);
                 }
             }
             (ty::Ty::Vecof(target_member), ty::Ty::Vecof(evidence_member)) => {
-                self.add_evidence(target_member, evidence_member)?;
+                self.add_evidence(target_member, evidence_member);
             }
             (ty::Ty::Vecof(target_member), ty::Ty::Vec(evidence_members)) => {
                 for evidence_member in evidence_members {
-                    self.add_evidence(target_member, evidence_member)?;
+                    self.add_evidence(target_member, evidence_member);
                 }
             }
             (ty::Ty::TopFun(target_top_fun), ty::Ty::TopFun(evidence_top_fun)) => {
-                self.add_evidence_top_fun(target_top_fun, evidence_top_fun)?;
+                self.add_evidence_top_fun(target_top_fun, evidence_top_fun);
             }
             (ty::Ty::TopFun(target_top_fun), ty::Ty::Fun(evidence_fun)) => {
-                self.add_evidence_top_fun(target_top_fun, evidence_fun.top_fun())?;
+                self.add_evidence_top_fun(target_top_fun, evidence_fun.top_fun());
             }
             (ty::Ty::TopFun(target_top_fun), ty::Ty::TyPred(_)) => {
-                self.add_evidence_top_fun(target_top_fun, &ty::TopFun::new_for_ty_pred())?;
+                self.add_evidence_top_fun(target_top_fun, &ty::TopFun::new_for_ty_pred());
             }
             (ty::Ty::Fun(target_fun), ty::Ty::Fun(evidence_fun)) => {
-                self.add_evidence_top_fun(target_fun.top_fun(), evidence_fun.top_fun())?;
+                self.add_evidence_top_fun(target_fun.top_fun(), evidence_fun.top_fun());
             }
             (ty::Ty::Fun(target_fun), ty::Ty::TyPred(_)) => {
-                self.add_evidence_top_fun(target_fun.top_fun(), &ty::TopFun::new_for_ty_pred())?;
+                self.add_evidence_top_fun(target_fun.top_fun(), &ty::TopFun::new_for_ty_pred());
             }
             (ty::Ty::TyPred(target_test), ty::Ty::TyPred(evidence_test)) => {
-                self.add_evidence(target_test, evidence_test)?;
+                self.add_evidence(target_test, evidence_test);
             }
             (ty::Ty::Union(target_members), _) => {
                 for target_member in target_members {
-                    match self.add_evidence(target_member, evidence_poly) {
-                        Ok(_) => {}
-                        Err(Error::NotWithinBound) => {
-                            // We only want to use the evidence on the appropriate members
-                        }
-                    };
+                    self.add_evidence(target_member, evidence_poly);
                 }
             }
             _ => {}
         }
-        Ok(())
     }
 
-    fn add_var_evidence(
-        &mut self,
-        tvar_id: ty::TVarId,
-        evidence_poly: &ty::Poly,
-    ) -> Result<(), Error> {
-        if !self.is_selected_tvar(tvar_id) {
-            return Ok(());
-        }
+    fn add_var_evidence(&mut self, tvar_id: ty::TVarId, evidence_poly: &ty::Poly) {
+        let tvar_idx = if let Some(tvar_idx) = self.selected_tvar_idx(tvar_id) {
+            // We're selecting on this
+            tvar_idx
+        } else {
+            return;
+        };
 
         let var_bound = self.tvars[tvar_id.to_usize()].bound();
         if !ty::is_a::poly_is_a(self.tvars, evidence_poly, var_bound).to_bool() {
-            return Err(Error::NotWithinBound);
+            return;
         }
 
-        let tvar_idx = self.tvar_idx(tvar_id);
         self.tvar_types[tvar_idx] = Some(match self.tvar_types[tvar_idx] {
             None => evidence_poly.clone(),
             Some(ref existing) => {
@@ -192,15 +175,9 @@ impl<'a> SelectContext<'a> {
                 }
             }
         });
-
-        Ok(())
     }
 
-    pub fn add_evidence(
-        &mut self,
-        target_poly: &ty::Poly,
-        evidence_poly: &ty::Poly,
-    ) -> Result<(), Error> {
+    pub fn add_evidence(&mut self, target_poly: &ty::Poly, evidence_poly: &ty::Poly) {
         match target_poly {
             ty::Poly::Var(tvar_id) => self.add_var_evidence(*tvar_id, evidence_poly),
             ty::Poly::Fixed(target_ty) => {
@@ -208,6 +185,10 @@ impl<'a> SelectContext<'a> {
                 self.add_evidence_ty(target_poly, target_ty, evidence_poly, evidence_ty)
             }
         }
+    }
+
+    pub fn tvars(&self) -> &[ty::TVar] {
+        &self.tvars
     }
 
     pub fn pvar_purities(&self) -> &[Option<ty::purity::Poly>] {
@@ -229,7 +210,7 @@ mod test {
         ctx.add_evidence(
             &poly_for_str(target_str).unwrap(),
             &poly_for_str(evidence_str).unwrap(),
-        ).unwrap();
+        );
     }
 
     fn assert_unselected_type(ctx: &SelectContext, name: char) {

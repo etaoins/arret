@@ -18,6 +18,14 @@ impl List {
     pub fn new(fixed: Vec<Destruc>, rest: Option<Box<Scalar>>) -> List {
         List { fixed, rest }
     }
+
+    pub fn fixed(&self) -> &Vec<Destruc> {
+        &self.fixed
+    }
+
+    pub fn rest(&self) -> &Option<Box<Scalar>> {
+        &self.rest
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -35,5 +43,13 @@ impl Scalar {
             source_name,
             ty,
         }
+    }
+
+    pub fn var_id(&self) -> &Option<hir::VarId> {
+        &self.var_id
+    }
+
+    pub fn ty(&self) -> &ty::Decl {
+        &self.ty
     }
 }

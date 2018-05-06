@@ -36,14 +36,23 @@ pub struct LoweringContext<'ccx> {
 }
 
 pub struct LoweredProgram {
-    /*
+    pvars: Vec<ty::purity::PVar>,
     tvars: Vec<ty::TVar>,
+    /*
     free_tys: Vec<Span>,
     libraries: BTreeMap<LibraryName, Module>,*/
     entry_module: Module,
 }
 
 impl LoweredProgram {
+    pub fn pvars(&self) -> &[ty::purity::PVar] {
+        self.pvars.as_ref()
+    }
+
+    pub fn tvars(&self) -> &[ty::TVar] {
+        self.tvars.as_ref()
+    }
+
     pub fn entry_module(&self) -> &Module {
         &self.entry_module
     }
@@ -825,92 +834,113 @@ pub fn lower_program(
     let entry_module = lcx.lower_entry_module(display_name, input_reader)?;
 
     Ok(LoweredProgram {
-        //libraries: lcx.loaded_libraries,
+        pvars: lcx.pvars,
+        tvars: lcx.tvars,
         entry_module,
-        //tvars: lcx.tvars,
         //free_tys: lcx.free_tys,
     })
 }
 
 ////
+#[cfg(test)]
+fn import_statement_for_library(names: &[&'static str]) -> Datum {
+    Datum::List(
+        EMPTY_SPAN,
+        vec![
+            Datum::Sym(EMPTY_SPAN, "import".to_owned()),
+            Datum::Vec(
+                EMPTY_SPAN,
+                names
+                    .iter()
+                    .map(|n| Datum::Sym(EMPTY_SPAN, (*n).to_owned()))
+                    .collect(),
+            ),
+        ],
+    )
+}
+
+#[cfg(test)]
+fn module_for_str(data_str: &str) -> Result<Module> {
+    use syntax::parser::data_from_str;
+
+    let mut root_scope = Scope::new_empty();
+
+    let mut test_data = data_from_str(data_str).unwrap();
+    let mut program_data = vec![
+        import_statement_for_library(&["risp", "internal", "primitives"]),
+        import_statement_for_library(&["risp", "internal", "types"]),
+    ];
+    program_data.append(&mut test_data);
+
+    let mut ccx = CompileContext::new();
+    let mut lcx = LoweringContext::new(&mut ccx);
+    lcx.lower_module(&mut root_scope, program_data)
+}
+
+#[cfg(test)]
+pub struct LoweredTestBody {
+    pub pvars: Vec<ty::purity::PVar>,
+    pub tvars: Vec<ty::TVar>,
+    pub expr: Expr,
+}
+
+#[cfg(test)]
+pub fn body_for_str(data_str: &str) -> Result<LoweredTestBody> {
+    use syntax::parser::data_from_str;
+
+    let mut root_scope = Scope::new_empty();
+
+    // Wrap the test data in a function definition
+    let mut test_data = data_from_str(data_str).unwrap();
+    let mut main_function_data = vec![
+        Datum::Sym(EMPTY_SPAN, "fn".to_owned()),
+        Datum::List(EMPTY_SPAN, vec![]),
+    ];
+
+    main_function_data.append(&mut test_data);
+
+    // Wrap the function definition in a program
+    let program_data = vec![
+        import_statement_for_library(&["risp", "internal", "primitives"]),
+        import_statement_for_library(&["risp", "internal", "types"]),
+        Datum::List(
+            EMPTY_SPAN,
+            vec![
+                Datum::Sym(EMPTY_SPAN, "def".to_owned()),
+                Datum::Sym(EMPTY_SPAN, "main!".to_owned()),
+                Datum::List(EMPTY_SPAN, main_function_data),
+            ],
+        ),
+    ];
+
+    let mut ccx = CompileContext::new();
+    let mut lcx = LoweringContext::new(&mut ccx);
+    let mut program_defs = lcx.lower_module(&mut root_scope, program_data)?.into_defs();
+
+    assert_eq!(1, program_defs.len());
+    let main_func_def = program_defs.pop().unwrap();
+
+    if let Expr::Fun(_, main_func) = main_func_def.into_value() {
+        Ok(LoweredTestBody {
+            pvars: lcx.pvars,
+            tvars: lcx.tvars,
+            expr: *main_func.body_expr,
+        })
+    } else {
+        panic!("Unexpected program structure");
+    }
+}
+
+#[cfg(test)]
+pub fn body_expr_for_str(data_str: &str) -> Result<Expr> {
+    body_for_str(data_str).map(|body| body.expr)
+}
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use syntax::parser::data_from_str;
     use syntax::span::t2s;
     use ty;
-
-    fn import_statement_for_library(names: &[&'static str]) -> Datum {
-        Datum::List(
-            EMPTY_SPAN,
-            vec![
-                Datum::Sym(EMPTY_SPAN, "import".to_owned()),
-                Datum::Vec(
-                    EMPTY_SPAN,
-                    names
-                        .iter()
-                        .map(|n| Datum::Sym(EMPTY_SPAN, (*n).to_owned()))
-                        .collect(),
-                ),
-            ],
-        )
-    }
-
-    fn module_for_str(data_str: &str) -> Result<Module> {
-        let mut root_scope = Scope::new_empty();
-
-        let mut test_data = data_from_str(data_str).unwrap();
-        let mut program_data = vec![
-            import_statement_for_library(&["risp", "internal", "primitives"]),
-            import_statement_for_library(&["risp", "internal", "types"]),
-        ];
-        program_data.append(&mut test_data);
-
-        let mut ccx = CompileContext::new();
-        let mut lcx = LoweringContext::new(&mut ccx);
-        lcx.lower_module(&mut root_scope, program_data)
-    }
-
-    fn body_expr_for_str(data_str: &str) -> Result<Expr> {
-        let mut root_scope = Scope::new_empty();
-
-        // Wrap the test data in a function definition
-        let mut test_data = data_from_str(data_str).unwrap();
-        let mut main_function_data = vec![
-            Datum::Sym(EMPTY_SPAN, "fn".to_owned()),
-            Datum::List(EMPTY_SPAN, vec![]),
-        ];
-
-        main_function_data.append(&mut test_data);
-
-        // Wrap the function definition in a program
-        let program_data = vec![
-            import_statement_for_library(&["risp", "internal", "primitives"]),
-            import_statement_for_library(&["risp", "internal", "types"]),
-            Datum::List(
-                EMPTY_SPAN,
-                vec![
-                    Datum::Sym(EMPTY_SPAN, "def".to_owned()),
-                    Datum::Sym(EMPTY_SPAN, "main!".to_owned()),
-                    Datum::List(EMPTY_SPAN, main_function_data),
-                ],
-            ),
-        ];
-
-        let mut ccx = CompileContext::new();
-        let mut lcx = LoweringContext::new(&mut ccx);
-        let mut program_defs = lcx.lower_module(&mut root_scope, program_data)?.into_defs();
-
-        assert_eq!(1, program_defs.len());
-        let main_func_def = program_defs.pop().unwrap();
-
-        if let Expr::Fun(_, main_func) = main_func_def.into_value() {
-            Ok(*main_func.body_expr)
-        } else {
-            panic!("Unexpected program structure");
-        }
-    }
 
     #[test]
     fn self_quoting_bool() {

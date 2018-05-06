@@ -8,6 +8,7 @@ mod hir;
 mod reporting;
 mod syntax;
 mod ty;
+mod typeck;
 
 use clap::{App, Arg};
 use ctx::CompileContext;
@@ -29,15 +30,23 @@ fn main() {
 
     let mut ccx = CompileContext::new();
 
-    let result = hir::lowering::lower_program(&mut ccx, input_path.to_owned(), &mut input_file);
-
-    match result {
-        Ok(program) => {
-            println!("{:?}", program.entry_module());
-        }
+    let hir = match hir::lowering::lower_program(&mut ccx, input_path.to_owned(), &mut input_file) {
+        Ok(hir) => hir,
         Err(err) => {
-            let _: &reporting::Reportable = &err;
             err.report(&ccx);
+            return;
+        }
+    };
+
+    match typeck::infer::infer_module(hir.pvars(), hir.tvars(), hir.entry_module()) {
+        Ok(()) => {
+            println!("{:?}", hir.entry_module());
+        }
+        Err(errs) => {
+            for err in errs {
+                err.report(&ccx);
+            }
+            return;
         }
     }
 }
