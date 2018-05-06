@@ -258,10 +258,15 @@ impl<'a> IntersectCtx<ty::Poly> for PolyIntersectCtx<'a> {
         }
     }
 
-    fn intersect_purity_refs(&self, purity1: &Purity, purity2: &Purity) -> Purity {
-        match (purity1, purity2) {
-            (&Purity::Impure, &Purity::Impure) => Purity::Impure,
-            _ => Purity::Pure,
+    fn intersect_purity_refs(
+        &self,
+        purity1: &ty::purity::Poly,
+        purity2: &ty::purity::Poly,
+    ) -> ty::purity::Poly {
+        if purity1 == purity2 {
+            purity1.clone()
+        } else {
+            Purity::Pure.into_poly()
         }
     }
 
@@ -304,9 +309,10 @@ impl<'a> IntersectCtx<ty::Mono> for MonoIntersectCtx {
     }
 
     fn intersect_purity_refs(&self, purity1: &Purity, purity2: &Purity) -> Purity {
-        match (purity1, purity2) {
-            (&Purity::Impure, &Purity::Impure) => Purity::Impure,
-            _ => Purity::Pure,
+        if purity1 == purity2 {
+            *purity1
+        } else {
+            Purity::Pure
         }
     }
 
@@ -485,7 +491,7 @@ mod test {
         // (All A (A -> A))
         let pidentity_fun = ty::Fun::new(
             ty::TVarId::new(0)..ty::TVarId::new(1),
-            ty::TopFun::new(Purity::Pure, ptype1_unbounded.clone()),
+            ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
             ty::Params::new(vec![ptype1_unbounded.clone()], None),
         ).into_ref();
 
@@ -493,7 +499,7 @@ mod test {
         let panys_to_cons = ty::Fun::new(
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(
-                Purity::Pure,
+                Purity::Pure.into_poly(),
                 ty::Ty::Cons(
                     Box::new(ptype1_unbounded.clone()),
                     Box::new(ptype1_unbounded.clone()),
@@ -508,7 +514,7 @@ mod test {
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Fun::new(
             ty::TVarId::new(1)..ty::TVarId::new(2),
-            ty::TopFun::new(Purity::Impure, ptype2_string.clone()),
+            ty::TopFun::new(Purity::Impure.into_poly(), ptype2_string.clone()),
             ty::Params::new(vec![ptype2_string.clone()], None),
         ).into_ref();
 

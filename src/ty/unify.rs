@@ -31,7 +31,7 @@ where
 {
     fn unify_ty_refs(&self, &S, &S) -> Result<UnifiedTy<S>, E>;
     fn intersect_ty_refs(&self, &S, &S) -> Result<S, ty::intersect::Error>;
-    fn unify_purity_refs(&self, &S::PRef, &S::PRef) -> Result<S::PRef, E>;
+    fn unify_purity_refs(&self, &S::PRef, &S::PRef) -> S::PRef;
 
     fn unify_to_ty_ref(&self, ty_ref1: &S, ty_ref2: &S) -> Result<S, E> {
         match self.unify_ty_refs(ty_ref1, ty_ref2)? {
@@ -102,7 +102,7 @@ where
         top_fun1: &ty::TopFun<S>,
         top_fun2: &ty::TopFun<S>,
     ) -> Result<UnifiedTy<S>, E> {
-        let unified_purity = self.unify_purity_refs(top_fun1.purity(), top_fun2.purity())?;
+        let unified_purity = self.unify_purity_refs(top_fun1.purity(), top_fun2.purity());
         let unified_ret = self.unify_to_ty_ref(top_fun1.ret(), top_fun2.ret())?;
 
         Ok(UnifiedTy::Merged(
@@ -142,7 +142,7 @@ where
     }
 
     fn unify_fun(&self, fun1: &ty::Fun<S>, fun2: &ty::Fun<S>) -> Result<UnifiedTy<S>, E> {
-        let unified_purity = self.unify_purity_refs(fun1.purity(), fun2.purity())?;
+        let unified_purity = self.unify_purity_refs(fun1.purity(), fun2.purity());
 
         if fun1.is_polymorphic() || fun2.is_polymorphic() {
             // TODO: We could do better here by finding our upper bound and unifying them
@@ -442,10 +442,15 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
         ty::intersect::poly_intersect(self.tvars, poly1, poly2)
     }
 
-    fn unify_purity_refs(&self, purity1: &Purity, purity2: &Purity) -> Result<Purity, PolyError> {
-        match (purity1, purity2) {
-            (&Purity::Pure, &Purity::Pure) => Ok(Purity::Pure),
-            _ => Ok(Purity::Impure),
+    fn unify_purity_refs(
+        &self,
+        purity1: &ty::purity::Poly,
+        purity2: &ty::purity::Poly,
+    ) -> ty::purity::Poly {
+        if purity1 == purity2 {
+            purity1.clone()
+        } else {
+            Purity::Impure.into_poly()
         }
     }
 }
@@ -490,10 +495,11 @@ impl<'a> UnifyCtx<ty::Mono, MonoError> for MonoUnifyCtx {
         ty::intersect::mono_intersect(mono1, mono2)
     }
 
-    fn unify_purity_refs(&self, purity1: &Purity, purity2: &Purity) -> Result<Purity, MonoError> {
-        match (purity1, purity2) {
-            (&Purity::Pure, &Purity::Pure) => Ok(Purity::Pure),
-            _ => Ok(Purity::Impure),
+    fn unify_purity_refs(&self, purity1: &Purity, purity2: &Purity) -> Purity {
+        if purity1 == purity2 {
+            *purity1
+        } else {
+            Purity::Impure
         }
     }
 }
@@ -810,7 +816,7 @@ mod test {
         // (All A (A -> A))
         let pidentity_fun = ty::Fun::new(
             ty::TVarId::new(0)..ty::TVarId::new(1),
-            ty::TopFun::new(Purity::Pure, ptype1_unbounded.clone()),
+            ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
             ty::Params::new(vec![ptype1_unbounded.clone()], None),
         ).into_ref();
 
@@ -818,7 +824,7 @@ mod test {
         let panys_to_cons = ty::Fun::new(
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(
-                Purity::Pure,
+                Purity::Pure.into_poly(),
                 ty::Ty::Cons(
                     Box::new(ptype1_unbounded.clone()),
                     Box::new(ptype1_unbounded.clone()),
@@ -833,7 +839,7 @@ mod test {
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Fun::new(
             ty::TVarId::new(1)..ty::TVarId::new(2),
-            ty::TopFun::new(Purity::Impure, ptype2_string.clone()),
+            ty::TopFun::new(Purity::Impure.into_poly(), ptype2_string.clone()),
             ty::Params::new(vec![ptype2_string.clone()], None),
         ).into_ref();
 

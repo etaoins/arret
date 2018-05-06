@@ -98,7 +98,7 @@ mod test {
         use std::collections::HashMap;
 
         let poly = poly_for_str(ty_str).unwrap();
-        ty::subst::subst(&poly, &HashMap::new()).unwrap()
+        ty::subst::subst(&HashMap::new(), &HashMap::new(), &poly).unwrap()
     }
 
     fn assert_mono_for_str(ty_str: &str, datum_str: &str) {

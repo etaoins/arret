@@ -337,11 +337,17 @@ impl<'a> IsACtx<ty::Poly> for PolyIsACtx<'a> {
         }
     }
 
-    fn purity_ref_is_a(&self, sub: &Purity, parent: &Purity) -> Result {
-        if sub == &Purity::Impure && parent == &Purity::Pure {
-            Result::No
-        } else {
-            Result::Yes
+    fn purity_ref_is_a(&self, sub: &ty::purity::Poly, parent: &ty::purity::Poly) -> Result {
+        if sub == parent {
+            return Result::Yes;
+        }
+
+        match (sub, parent) {
+            (_, &ty::purity::Poly::Fixed(Purity::Impure)) => Result::Yes,
+            (&ty::purity::Poly::Fixed(Purity::Impure), &ty::purity::Poly::Fixed(Purity::Pure)) => {
+                Result::No
+            }
+            _ => Result::May,
         }
     }
 }
@@ -722,7 +728,7 @@ mod test {
         // (All A (A -> A))
         let pidentity_fun = ty::Fun::new(
             ty::TVarId::new(0)..ty::TVarId::new(1),
-            ty::TopFun::new(Purity::Pure, ptype1_unbounded.clone()),
+            ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
             ty::Params::new(vec![ptype1_unbounded.clone()], None),
         ).into_ref();
 
@@ -730,7 +736,7 @@ mod test {
         let panys_to_cons = ty::Fun::new(
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(
-                Purity::Pure,
+                Purity::Pure.into_poly(),
                 ty::Ty::Cons(
                     Box::new(ptype1_unbounded.clone()),
                     Box::new(ptype1_unbounded.clone()),
@@ -745,14 +751,14 @@ mod test {
         // (All [A : Symbol] (A -> A))
         let pidentity_sym_fun = ty::Fun::new(
             ty::TVarId::new(1)..ty::TVarId::new(2),
-            ty::TopFun::new(Purity::Pure, ptype2_symbol.clone()),
+            ty::TopFun::new(Purity::Pure.into_poly(), ptype2_symbol.clone()),
             ty::Params::new(vec![ptype2_symbol.clone()], None),
         ).into_ref();
 
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Fun::new(
             ty::TVarId::new(2)..ty::TVarId::new(3),
-            ty::TopFun::new(Purity::Impure, ptype3_string.clone()),
+            ty::TopFun::new(Purity::Impure.into_poly(), ptype3_string.clone()),
             ty::Params::new(vec![ptype3_string.clone()], None),
         ).into_ref();
 

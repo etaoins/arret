@@ -25,7 +25,7 @@ pub enum Binding {
     Macro(MacroId),
     Ty(ty::Poly),
     TyCons(types::TyCons),
-    Purity(ty::purity::Purity),
+    Purity(ty::purity::Poly),
 }
 
 pub struct Scope {

@@ -12,8 +12,9 @@ use hir::ns::{Ident, NsDatum, NsId, NsIdAlloc};
 use hir::prim::Prim;
 use hir::scope::{Binding, MacroId, Scope};
 use hir::types::{lower_poly, lower_tvar, try_lower_purity};
-use hir::util::{expect_arg_count, expect_ident, expect_ident_and_span, pop_vec_front,
-                split_into_fixed_and_rest};
+use hir::util::{
+    expect_arg_count, expect_ident, expect_ident_and_span, pop_vec_front, split_into_fixed_and_rest,
+};
 use hir::{App, Cond, Expr, Fun, VarId};
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
@@ -67,7 +68,7 @@ struct AppliedPrim {
 
 struct LoweredFunRetDecl {
     body_data: Vec<NsDatum>,
-    purity: Option<ty::purity::Purity>,
+    purity: Option<ty::purity::Poly>,
     ret_ty: Option<ty::Poly>,
 }
 
@@ -390,7 +391,7 @@ impl<'ccx> LoweringContext<'ccx> {
         let body_expr = Expr::from_vec(body_exprs);
 
         let purity = purity
-            .map(ty::purity::Decl::Fixed)
+            .map(ty::purity::Poly::into_decl)
             .unwrap_or_else(|| ty::purity::Decl::Free(self.insert_free_purity(span)));
 
         // If we don't have a return type try to guess a span for the last expression so we can

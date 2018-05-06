@@ -282,7 +282,7 @@ impl Poly {
 
 impl TyRef for Poly {
     type TVarIds = Range<TVarId>;
-    type PRef = purity::Purity;
+    type PRef = purity::Poly;
 
     fn from_ty(ty: Ty<Poly>) -> Poly {
         Poly::Fixed(ty)

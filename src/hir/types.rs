@@ -81,7 +81,11 @@ impl<'a> LowerTyContext<'a> {
         Ok(tail_poly)
     }
 
-    fn lower_fun_cons(&self, purity: Purity, mut arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
+    fn lower_fun_cons(
+        &self,
+        purity: ty::purity::Poly,
+        mut arg_data: Vec<NsDatum>,
+    ) -> Result<ty::Poly> {
         let ret_ty = self.lower_poly(arg_data.pop().unwrap())?;
 
         // Discard the constructor
@@ -275,7 +279,7 @@ pub fn lower_poly(tvars: &[ty::TVar], scope: &Scope, datum: NsDatum) -> Result<t
     ctx.lower_poly(datum)
 }
 
-pub fn try_lower_purity(scope: &Scope, datum: &NsDatum) -> Option<Purity> {
+pub fn try_lower_purity(scope: &Scope, datum: &NsDatum) -> Option<ty::purity::Poly> {
     scope.get_datum(datum).and_then(|binding| match binding {
         Binding::Purity(purity) => Some(purity),
         _ => None,
@@ -321,8 +325,8 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
 
     export_ty_cons!("Type?", TyCons::TyPred);
 
-    export_purity!("->", Purity::Pure);
-    export_purity!("->!", Purity::Impure);
+    export_purity!("->", Purity::Pure.into_poly());
+    export_purity!("->!", Purity::Impure.into_poly());
 
     #[cfg(test)]
     export_ty_cons!("RawU", TyCons::RawU);
@@ -368,10 +372,14 @@ fn str_for_simple_list_poly_ty(
     Some(list_parts.join(" "))
 }
 
-fn str_for_purity(purity: Purity) -> &'static str {
+fn str_for_purity(purity: ty::purity::Poly) -> String {
     match purity {
-        Purity::Pure => "->",
-        Purity::Impure => "->!",
+        ty::purity::Poly::Fixed(Purity::Pure) => "->".to_owned(),
+        ty::purity::Poly::Fixed(Purity::Impure) => "->!".to_owned(),
+        ty::purity::Poly::Var(_) => {
+            // TODO
+            unimplemented!("Need to implement context with `pvars`");
+        }
     }
 }
 
@@ -417,7 +425,7 @@ fn str_for_poly_ty(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> String {
                 fun_parts.push(str_for_poly(tvars, rest));
                 fun_parts.push("...".to_owned());
             }
-            fun_parts.push(str_for_purity(*fun.purity()).to_owned());
+            fun_parts.push(str_for_purity(*fun.purity()));
             fun_parts.push(str_for_poly(tvars, fun.ret()));
 
             format!("({})", fun_parts.join(" "),)
@@ -692,7 +700,7 @@ mod test {
 
         let expected = ty::Fun::new(
             ty::TVarIds::empty(),
-            ty::TopFun::new(Purity::Pure, ty::Ty::LitBool(true).into_poly()),
+            ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
             ty::Params::new(vec![], None),
         ).into_ref();
 
@@ -705,7 +713,10 @@ mod test {
 
         let expected = ty::Fun::new(
             ty::TVarIds::empty(),
-            ty::TopFun::new(Purity::Impure, ty::Ty::LitBool(true).into_poly()),
+            ty::TopFun::new(
+                Purity::Impure.into_poly(),
+                ty::Ty::LitBool(true).into_poly(),
+            ),
             ty::Params::new(vec![], None),
         ).into_ref();
 
@@ -718,7 +729,7 @@ mod test {
 
         let expected = ty::Fun::new(
             ty::TVarIds::empty(),
-            ty::TopFun::new(Purity::Pure, ty::Ty::LitBool(true).into_poly()),
+            ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
             ty::Params::new(vec![ty::Ty::LitBool(false).into_poly()], None),
         ).into_ref();
 
@@ -731,7 +742,10 @@ mod test {
 
         let expected = ty::Fun::new(
             ty::TVarIds::empty(),
-            ty::TopFun::new(Purity::Impure, ty::Ty::LitBool(true).into_poly()),
+            ty::TopFun::new(
+                Purity::Impure.into_poly(),
+                ty::Ty::LitBool(true).into_poly(),
+            ),
             ty::Params::new(vec![ty::Ty::Str.into_poly()], Some(ty::Ty::Sym.into_poly())),
         ).into_ref();
 
@@ -743,7 +757,7 @@ mod test {
         let j = "(... ->! true)";
 
         let expected = ty::Ty::TopFun(Box::new(ty::TopFun::new(
-            Purity::Impure,
+            Purity::Impure.into_poly(),
             ty::Ty::LitBool(true).into_poly(),
         ))).into_poly();
 
