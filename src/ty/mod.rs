@@ -14,6 +14,7 @@ pub mod unify;
 use std;
 use std::ops::Range;
 use ty::purity::PRef;
+use ty::purity::PVarIds;
 
 /// Abstracts over a reference to a type
 ///
@@ -181,6 +182,7 @@ pub struct Fun<S>
 where
     S: TyRef,
 {
+    pvar_ids: S::PVarIds,
     tvar_ids: S::TVarIds,
     top_fun: TopFun<S>,
     params: Params<S>,
@@ -190,8 +192,14 @@ impl<S> Fun<S>
 where
     S: TyRef,
 {
-    pub fn new(tvar_ids: S::TVarIds, top_fun: TopFun<S>, params: Params<S>) -> Fun<S> {
+    pub fn new(
+        pvar_ids: S::PVarIds,
+        tvar_ids: S::TVarIds,
+        top_fun: TopFun<S>,
+        params: Params<S>,
+    ) -> Fun<S> {
         Fun {
+            pvar_ids,
             tvar_ids,
             top_fun,
             params,
@@ -204,6 +212,7 @@ where
     /// it does not support occurrence typing.
     pub fn new_for_ty_pred() -> Fun<S> {
         Self::new(
+            S::PVarIds::empty(),
             S::TVarIds::empty(),
             TopFun::new_for_ty_pred(),
             Params::new(vec![Ty::Any.into_ref()], None),
@@ -227,7 +236,7 @@ where
     }
 
     pub fn is_polymorphic(&self) -> bool {
-        !self.tvar_ids.is_empty()
+        !self.pvar_ids.is_empty() || !self.tvar_ids.is_empty()
     }
 
     pub fn into_ty(self) -> Ty<S> {

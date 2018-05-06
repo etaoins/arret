@@ -4,6 +4,7 @@ use std::result::Result;
 
 use ty;
 use ty::params_iter::ParamsIterator;
+use ty::purity::PVarIds;
 use ty::purity::Purity;
 use ty::TVarIds;
 
@@ -156,6 +157,7 @@ where
             match self.unify_params(fun1.params(), fun2.params()) {
                 Ok(unified_params) => Ok(UnifiedTy::Merged(
                     ty::Fun::new(
+                        S::PVarIds::empty(),
                         S::TVarIds::empty(),
                         ty::TopFun::new(unified_purity, unified_ret),
                         unified_params,
@@ -815,6 +817,7 @@ mod test {
 
         // (All A (A -> A))
         let pidentity_fun = ty::Fun::new(
+            ty::purity::PVarIds::empty(),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
             ty::Params::new(vec![ptype1_unbounded.clone()], None),
@@ -822,6 +825,7 @@ mod test {
 
         // (All A (A A -> (Cons A A))
         let panys_to_cons = ty::Fun::new(
+            ty::purity::PVarIds::empty(),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(
                 Purity::Pure.into_poly(),
@@ -838,6 +842,7 @@ mod test {
 
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Fun::new(
+            ty::purity::PVarIds::empty(),
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::TopFun::new(Purity::Impure.into_poly(), ptype2_string.clone()),
             ty::Params::new(vec![ptype2_string.clone()], None),

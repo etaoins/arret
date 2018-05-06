@@ -147,7 +147,12 @@ impl<'a> LowerTyContext<'a> {
             };
 
             let params = ty::Params::new(fixed_polys, rest_poly);
-            Ok(ty::Fun::new(ty::TVarIds::empty(), top_fun, params).into_ref())
+            Ok(ty::Fun::new(
+                ty::purity::PVarIds::empty(),
+                ty::TVarIds::empty(),
+                top_fun,
+                params,
+            ).into_ref())
         }
     }
 
@@ -756,6 +761,7 @@ mod test {
         let j = "(-> true)";
 
         let expected = ty::Fun::new(
+            ty::purity::PVarIds::empty(),
             ty::TVarIds::empty(),
             ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
             ty::Params::new(vec![], None),
@@ -769,6 +775,7 @@ mod test {
         let j = "(->! true)";
 
         let expected = ty::Fun::new(
+            ty::purity::PVarIds::empty(),
             ty::TVarIds::empty(),
             ty::TopFun::new(
                 Purity::Impure.into_poly(),
@@ -785,6 +792,7 @@ mod test {
         let j = "(false -> true)";
 
         let expected = ty::Fun::new(
+            ty::purity::PVarIds::empty(),
             ty::TVarIds::empty(),
             ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
             ty::Params::new(vec![ty::Ty::LitBool(false).into_poly()], None),
@@ -798,6 +806,7 @@ mod test {
         let j = "(String Symbol ... ->! true)";
 
         let expected = ty::Fun::new(
+            ty::purity::PVarIds::empty(),
             ty::TVarIds::empty(),
             ty::TopFun::new(
                 Purity::Impure.into_poly(),
