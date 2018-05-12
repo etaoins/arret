@@ -21,7 +21,7 @@ impl Result {
     where
         F: FnOnce() -> Result,
     {
-        match *self {
+        match self {
             Result::Yes => op(),
             Result::May => {
                 if op() == Result::No {
@@ -98,7 +98,7 @@ where
             };
         }
 
-        if let (&Some(ref sub_rest), &Some(ref par_rest)) = (sub_params.rest(), par_params.rest()) {
+        if let (Some(sub_rest), Some(par_rest)) = (sub_params.rest(), par_params.rest()) {
             // If the rest doesn't match it's a May as the rest might not be present
             if self.ty_ref_is_a(par_rest, sub_rest) != Result::Yes {
                 is_exact = false;
@@ -130,7 +130,7 @@ where
 
         match (sub_ty, parent_ty) {
             // Union types
-            (&ty::Ty::Union(ref sub_members), _) => {
+            (ty::Ty::Union(sub_members), _) => {
                 let results = sub_members
                     .iter()
                     .map(|sub_member| self.ty_ref_is_a(sub_member, parent_ref));
@@ -165,7 +165,7 @@ where
                     Result::May
                 }
             }
-            (_, &ty::Ty::Union(ref par_members)) => {
+            (_, ty::Ty::Union(par_members)) => {
                 let results = par_members
                     .iter()
                     .map(|par_member| self.ty_ref_is_a(sub_ref, par_member));
@@ -185,29 +185,27 @@ where
             }
 
             // Any type
-            (_, &ty::Ty::Any) => Result::Yes,
-            (&ty::Ty::Any, _) => Result::May,
+            (_, ty::Ty::Any) => Result::Yes,
+            (ty::Ty::Any, _) => Result::May,
 
             // Symbol types
-            (&ty::Ty::LitSym(_), &ty::Ty::Sym) => Result::Yes,
-            (&ty::Ty::Sym, &ty::Ty::LitSym(_)) => Result::May,
+            (ty::Ty::LitSym(_), ty::Ty::Sym) => Result::Yes,
+            (ty::Ty::Sym, ty::Ty::LitSym(_)) => Result::May,
 
             // Bool types
-            (&ty::Ty::LitBool(_), &ty::Ty::Bool) => Result::Yes,
-            (&ty::Ty::Bool, &ty::Ty::LitBool(_)) => Result::May,
+            (ty::Ty::LitBool(_), ty::Ty::Bool) => Result::Yes,
+            (ty::Ty::Bool, ty::Ty::LitBool(_)) => Result::May,
 
             // Sets
-            (&ty::Ty::Set(ref sub), &ty::Ty::Set(ref par)) => self.ty_ref_is_a(sub, par),
+            (ty::Ty::Set(sub), ty::Ty::Set(par)) => self.ty_ref_is_a(sub, par),
 
             // Maps
-            (
-                &ty::Ty::Map(ref sub_key, ref sub_value),
-                &ty::Ty::Map(ref par_key, ref par_value),
-            ) => self.ty_ref_is_a(sub_key, par_key)
-                .and_then(|| self.ty_ref_is_a(sub_value, par_value)),
+            (ty::Ty::Map(sub_key, sub_value), ty::Ty::Map(par_key, par_value)) => self.ty_ref_is_a(
+                sub_key, par_key,
+            ).and_then(|| self.ty_ref_is_a(sub_value, par_value)),
 
             // Vector types
-            (&ty::Ty::Vec(ref sub_members), &ty::Ty::Vec(ref par_members)) => {
+            (ty::Ty::Vec(sub_members), ty::Ty::Vec(par_members)) => {
                 if sub_members.len() != par_members.len() {
                     Result::No
                 } else {
@@ -218,64 +216,59 @@ where
                     )
                 }
             }
-            (&ty::Ty::Vecof(ref sub_member), &ty::Ty::Vecof(ref par_member)) => {
+            (ty::Ty::Vecof(sub_member), ty::Ty::Vecof(par_member)) => {
                 self.ty_ref_is_a(sub_member, par_member)
             }
-            (&ty::Ty::Vec(ref sub_members), &ty::Ty::Vecof(ref par_member)) => Result::from_iter(
+            (ty::Ty::Vec(sub_members), ty::Ty::Vecof(par_member)) => Result::from_iter(
                 sub_members
                     .iter()
                     .map(|sub_member| self.ty_ref_is_a(sub_member, par_member)),
             ),
-            (&ty::Ty::Vecof(ref sub_member), &ty::Ty::Vec(ref par_members)) => Result::May
-                .and_then(|| {
-                    Result::from_iter(
-                        par_members
-                            .iter()
-                            .map(|par_member| self.ty_ref_is_a(sub_member, par_member)),
-                    )
-                }),
+            (ty::Ty::Vecof(sub_member), ty::Ty::Vec(par_members)) => Result::May.and_then(|| {
+                Result::from_iter(
+                    par_members
+                        .iter()
+                        .map(|par_member| self.ty_ref_is_a(sub_member, par_member)),
+                )
+            }),
 
             // Functions
-            (&ty::Ty::TopFun(ref sub_top_fun), &ty::Ty::TopFun(ref par_top_fun)) => {
+            (ty::Ty::TopFun(sub_top_fun), ty::Ty::TopFun(par_top_fun)) => {
                 self.top_fun_is_a(sub_top_fun, par_top_fun)
             }
-            (&ty::Ty::Fun(ref sub_fun), &ty::Ty::TopFun(ref par_top_fun)) => {
+            (ty::Ty::Fun(sub_fun), ty::Ty::TopFun(par_top_fun)) => {
                 self.top_fun_is_a(sub_fun.top_fun(), par_top_fun)
             }
-            (&ty::Ty::TopFun(ref sub_top_fun), &ty::Ty::Fun(ref par_fun)) => {
+            (ty::Ty::TopFun(sub_top_fun), ty::Ty::Fun(par_fun)) => {
                 Result::May.and_then(|| self.top_fun_is_a(sub_top_fun, par_fun.top_fun()))
             }
-            (&ty::Ty::Fun(ref sub_fun), &ty::Ty::Fun(ref par_fun)) => {
-                self.fun_is_a(sub_fun, par_fun)
-            }
+            (ty::Ty::Fun(sub_fun), ty::Ty::Fun(par_fun)) => self.fun_is_a(sub_fun, par_fun),
 
-            (&ty::Ty::TyPred(_), &ty::Ty::TopFun(ref par_top_fun)) => {
+            (ty::Ty::TyPred(_), ty::Ty::TopFun(par_top_fun)) => {
                 self.top_fun_is_a(&ty::TopFun::new_for_ty_pred(), par_top_fun)
             }
-            (&ty::Ty::TopFun(ref sub_top_fun), &ty::Ty::TyPred(_)) => Result::May
+            (ty::Ty::TopFun(sub_top_fun), ty::Ty::TyPred(_)) => Result::May
                 .and_then(|| self.top_fun_is_a(sub_top_fun, &ty::TopFun::new_for_ty_pred())),
-            (&ty::Ty::TyPred(_), &ty::Ty::Fun(ref par_fun)) => {
+            (ty::Ty::TyPred(_), ty::Ty::Fun(par_fun)) => {
                 self.fun_is_a(&ty::Fun::new_for_ty_pred(), par_fun)
             }
-            (&ty::Ty::Fun(ref sub_fun), &ty::Ty::TyPred(_)) => {
+            (ty::Ty::Fun(sub_fun), ty::Ty::TyPred(_)) => {
                 Result::May.and_then(|| self.fun_is_a(sub_fun, &ty::Fun::new_for_ty_pred()))
             }
 
             // List types
-            (&ty::Ty::Cons(ref sub_car, ref sub_cdr), &ty::Ty::Cons(ref par_car, ref par_cdr)) => {
-                self.ty_ref_is_a(sub_car, par_car)
-                    .and_then(|| self.ty_ref_is_a(sub_cdr, par_cdr))
-            }
-            (&ty::Ty::Listof(ref sub_member), &ty::Ty::Listof(ref par_member)) => {
+            (ty::Ty::Cons(sub_car, sub_cdr), ty::Ty::Cons(par_car, par_cdr)) => self.ty_ref_is_a(
+                sub_car, par_car,
+            ).and_then(|| self.ty_ref_is_a(sub_cdr, par_cdr)),
+            (ty::Ty::Listof(sub_member), ty::Ty::Listof(par_member)) => {
                 self.ty_ref_is_a(sub_member, par_member)
             }
-            (&ty::Ty::Nil, &ty::Ty::Listof(_)) => Result::Yes,
-            (&ty::Ty::Listof(_), &ty::Ty::Nil) => Result::May,
-            (&ty::Ty::Cons(ref sub_car, ref sub_cdr), &ty::Ty::Listof(ref par_member)) => {
-                self.ty_ref_is_a(sub_car, par_member)
-                    .and_then(|| self.ty_ref_is_a(sub_cdr, parent_ref))
-            }
-            (&ty::Ty::Listof(ref sub_member), &ty::Ty::Cons(ref par_car, ref par_cdr)) => {
+            (ty::Ty::Nil, ty::Ty::Listof(_)) => Result::Yes,
+            (ty::Ty::Listof(_), ty::Ty::Nil) => Result::May,
+            (ty::Ty::Cons(sub_car, sub_cdr), ty::Ty::Listof(par_member)) => self.ty_ref_is_a(
+                sub_car, par_member,
+            ).and_then(|| self.ty_ref_is_a(sub_cdr, parent_ref)),
+            (ty::Ty::Listof(sub_member), ty::Ty::Cons(par_car, par_cdr)) => {
                 Result::May.and_then(|| {
                     self.ty_ref_is_a(sub_member, par_car)
                         .and_then(|| self.ty_ref_is_a(sub_ref, par_cdr))
@@ -343,8 +336,8 @@ impl<'a> IsACtx<ty::Poly> for PolyIsACtx<'a> {
         }
 
         match (sub, parent) {
-            (_, &ty::purity::Poly::Fixed(Purity::Impure)) => Result::Yes,
-            (&ty::purity::Poly::Fixed(Purity::Impure), &ty::purity::Poly::Fixed(Purity::Pure)) => {
+            (_, ty::purity::Poly::Fixed(Purity::Impure)) => Result::Yes,
+            (ty::purity::Poly::Fixed(Purity::Impure), &ty::purity::Poly::Fixed(Purity::Pure)) => {
                 Result::No
             }
             _ => Result::May,

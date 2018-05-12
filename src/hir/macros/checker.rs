@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::result;
 
-use hir::macros::{MacroVar, SpecialVars};
 use hir::error::{Error, ErrorKind, Result};
+use hir::macros::{MacroVar, SpecialVars};
 use hir::ns::{Ident, NsDatum};
 use hir::scope::Scope;
 use syntax::span::{Span, EMPTY_SPAN};
@@ -130,11 +130,11 @@ impl<'a> FindVarsContext<'a> {
     }
 
     fn visit_datum(&mut self, pattern_vars: &mut FoundVars, pattern: &NsDatum) -> FindVarsResult {
-        match *pattern {
-            NsDatum::Ident(span, ref ident) => self.visit_ident(pattern_vars, span, ident),
-            NsDatum::List(_, ref vs) => self.visit_list(pattern_vars, vs),
-            NsDatum::Vec(_, ref vs) => self.visit_seq(pattern_vars, vs),
-            NsDatum::Set(span, ref vs) => self.visit_set(pattern_vars, span, vs),
+        match pattern {
+            NsDatum::Ident(span, ident) => self.visit_ident(pattern_vars, *span, ident),
+            NsDatum::List(_, vs) => self.visit_list(pattern_vars, vs),
+            NsDatum::Vec(_, vs) => self.visit_seq(pattern_vars, vs),
+            NsDatum::Set(span, vs) => self.visit_set(pattern_vars, *span, vs),
             _ => {
                 // Can't contain a pattern var
                 Ok(())
@@ -244,7 +244,7 @@ fn link_found_vars(
                 .subs
                 .iter()
                 .enumerate()
-                .filter(|&(_, pv)| !pv.vars.is_disjoint(&subtemplate_vars.vars))
+                .filter(|(_, pv)| !pv.vars.is_disjoint(&subtemplate_vars.vars))
                 .collect::<Vec<(usize, &FoundVars)>>();
 
             if possible_indices.is_empty() {

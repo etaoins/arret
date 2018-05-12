@@ -1,10 +1,10 @@
-use std::result;
+use std::error;
 use std::fmt;
 use std::fmt::Display;
-use std::error;
+use std::result;
 
-use syntax::span::Span;
 use reporting::{Level, Reportable};
+use syntax::span::Span;
 
 #[derive(Debug, PartialEq)]
 pub struct Error {
@@ -102,7 +102,7 @@ pub enum ExpectedContent {
 
 impl ExpectedContent {
     fn description(&self) -> &'static str {
-        match *self {
+        match self {
             ExpectedContent::List(_) => "list",
             ExpectedContent::Vector(_) => "vector",
             ExpectedContent::Set(_) => "set",
@@ -117,12 +117,12 @@ impl ExpectedContent {
     }
 
     fn open_char_span(&self) -> Option<Span> {
-        match *self {
-            ExpectedContent::List(span) => Some(span),
-            ExpectedContent::Vector(span) => Some(span),
-            ExpectedContent::Set(span) => Some(span),
-            ExpectedContent::Map(span) => Some(span),
-            ExpectedContent::String(span) => Some(span),
+        match self {
+            ExpectedContent::List(span)
+            | ExpectedContent::Vector(span)
+            | ExpectedContent::Set(span)
+            | ExpectedContent::Map(span)
+            | ExpectedContent::String(span) => Some(*span),
             _ => None,
         }
     }

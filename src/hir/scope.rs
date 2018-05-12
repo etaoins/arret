@@ -50,7 +50,7 @@ impl Scope {
     ///
     /// Only idents can have bindings; other data will return None.
     pub fn get_datum(&self, datum: &NsDatum) -> Option<Binding> {
-        if let NsDatum::Ident(_, ref ident) = *datum {
+        if let NsDatum::Ident(_, ident) = datum {
             self.get(ident)
         } else {
             None

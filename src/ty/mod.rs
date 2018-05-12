@@ -37,7 +37,6 @@ pub trait TyRef: PartialEq + Clone + Sized {
     /// `members` should already be unified by the type system; this cannot be used to construct
     /// arbitrary valid unions.
     fn from_vec(mut members: Vec<Self>) -> Self {
-        // TODO: Use a slice pattern here once they're stable
         if members.len() == 1 {
             members.pop().unwrap()
         } else {

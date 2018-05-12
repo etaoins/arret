@@ -101,7 +101,7 @@ where
         subject_ty: &ty::Ty<S>,
         test_ref: &S,
     ) -> Result<S> {
-        match *subject_ty {
+        match subject_ty {
             ty::Ty::Any => self.interpret_ref_iter(Self::any_union_members().iter(), test_ref),
             ty::Ty::Bool => self.interpret_ref_iter(
                 [
@@ -110,14 +110,14 @@ where
                 ].iter(),
                 test_ref,
             ),
-            ty::Ty::Listof(ref member) => self.interpret_ref_iter(
+            ty::Ty::Listof(member) => self.interpret_ref_iter(
                 [
                     ty::Ty::Nil.into_ref(),
                     ty::Ty::Cons(member.clone(), Box::new(subject_ref.clone())).into_ref(),
                 ].iter(),
                 test_ref,
             ),
-            ty::Ty::Union(ref members) => self.interpret_ref_iter(members.iter(), test_ref),
+            ty::Ty::Union(members) => self.interpret_ref_iter(members.iter(), test_ref),
             _ => Err(Error::TypeErased(subject_ref.clone(), test_ref.clone())),
         }
     }

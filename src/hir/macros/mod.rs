@@ -1,17 +1,17 @@
 mod checker;
-mod matcher;
 mod expander;
+mod matcher;
 
 use std::collections::{HashMap, HashSet};
 
-use syntax::span::Span;
-use hir::scope::{Binding, Scope};
+use hir::error::{Error, ErrorKind, Result};
+use hir::macros::checker::{check_rule, VarLinks};
+use hir::macros::expander::expand_rule;
+use hir::macros::matcher::match_rule;
 use hir::ns::{Ident, NsDatum, NsIdAlloc};
 use hir::prim::Prim;
-use hir::error::{Error, ErrorKind, Result};
-use hir::macros::matcher::match_rule;
-use hir::macros::expander::expand_rule;
-use hir::macros::checker::{check_rule, VarLinks};
+use hir::scope::{Binding, Scope};
+use syntax::span::Span;
 
 #[derive(PartialEq, Eq, Debug, Hash)]
 pub enum MacroVar {
@@ -51,7 +51,7 @@ impl SpecialVars {
     }
 
     fn is_ellipsis_datum(&self, scope: &Scope, datum: &NsDatum) -> bool {
-        if let NsDatum::Ident(_, ref ident) = *datum {
+        if let NsDatum::Ident(_, ident) = datum {
             let var = MacroVar::from_ident(scope, ident);
             self.is_ellipsis(&var)
         } else {

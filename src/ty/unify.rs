@@ -135,7 +135,7 @@ where
         }
 
         let merged_rest = match (params1.rest(), params2.rest()) {
-            (&Some(ref rest1), &Some(ref rest2)) => Some(self.intersect_ty_refs(rest1, rest2)?),
+            (Some(rest1), Some(rest2)) => Some(self.intersect_ty_refs(rest1, rest2)?),
             _ => None,
         };
 
@@ -183,32 +183,29 @@ where
         }
         Ok(match (ty1, ty2) {
             // Handle supertype relationships
-            (_, &ty::Ty::Any) | (&ty::Ty::Any, _) => UnifiedTy::Merged(ty::Ty::Any.into_ref()),
-            (&ty::Ty::LitSym(_), &ty::Ty::Sym) | (&ty::Ty::Sym, &ty::Ty::LitSym(_)) => {
+            (_, ty::Ty::Any) | (ty::Ty::Any, _) => UnifiedTy::Merged(ty::Ty::Any.into_ref()),
+            (ty::Ty::LitSym(_), ty::Ty::Sym) | (ty::Ty::Sym, ty::Ty::LitSym(_)) => {
                 UnifiedTy::Merged(ty::Ty::Sym.into_ref())
             }
-            (&ty::Ty::LitBool(_), &ty::Ty::Bool) | (&ty::Ty::Bool, &ty::Ty::LitBool(_)) => {
+            (ty::Ty::LitBool(_), ty::Ty::Bool) | (ty::Ty::Bool, ty::Ty::LitBool(_)) => {
                 UnifiedTy::Merged(ty::Ty::Bool.into_ref())
             }
 
             // Simplify (U true false) => Bool
-            (&ty::Ty::LitBool(true), &ty::Ty::LitBool(false))
-            | (&ty::Ty::LitBool(false), &ty::Ty::LitBool(true)) => {
+            (ty::Ty::LitBool(true), ty::Ty::LitBool(false))
+            | (ty::Ty::LitBool(false), ty::Ty::LitBool(true)) => {
                 UnifiedTy::Merged(ty::Ty::Bool.into_ref())
             }
 
             // Set type
-            (&ty::Ty::Set(ref ty_ref1), &ty::Ty::Set(ref ty_ref2)) => {
+            (ty::Ty::Set(ty_ref1), ty::Ty::Set(ty_ref2)) => {
                 let unified_ty_ref = self.unify_to_ty_ref(&ty_ref1, &ty_ref2)?;
 
                 UnifiedTy::Merged(ty::Ty::Set(Box::new(unified_ty_ref)).into_ref())
             }
 
             // Map type
-            (
-                &ty::Ty::Map(ref key_ref1, ref val_ref1),
-                &ty::Ty::Map(ref key_ref2, ref val_ref2),
-            ) => {
+            (ty::Ty::Map(key_ref1, val_ref1), ty::Ty::Map(key_ref2, val_ref2)) => {
                 let unified_key_ref = self.unify_to_ty_ref(&key_ref1, &key_ref2)?;
                 let unified_val_ref = self.unify_to_ty_ref(&val_ref1, &val_ref2)?;
 
@@ -218,7 +215,7 @@ where
             }
 
             // Vector types
-            (&ty::Ty::Vec(ref members1), &ty::Ty::Vec(ref members2)) => {
+            (ty::Ty::Vec(members1), ty::Ty::Vec(members2)) => {
                 if members1.len() != members2.len() {
                     // We can check vector lengths at runtime
                     UnifiedTy::Discerned
@@ -240,11 +237,11 @@ where
                     UnifiedTy::Merged(ty::Ty::Vec(unified_members).into_ref())
                 }
             }
-            (&ty::Ty::Vecof(ref member1), &ty::Ty::Vecof(ref member2)) => UnifiedTy::Merged(
+            (ty::Ty::Vecof(member1), ty::Ty::Vecof(member2)) => UnifiedTy::Merged(
                 ty::Ty::Vecof(Box::new(self.unify_to_ty_ref(member1, member2)?)).into_ref(),
             ),
-            (&ty::Ty::Vec(ref members1), &ty::Ty::Vecof(ref member2))
-            | (&ty::Ty::Vecof(ref member2), &ty::Ty::Vec(ref members1)) => {
+            (ty::Ty::Vec(members1), ty::Ty::Vecof(member2))
+            | (ty::Ty::Vecof(member2), ty::Ty::Vec(members1)) => {
                 let unified_member =
                     self.unify_ref_iter(vec![member2.as_ref().clone()], members1.iter().cloned())?;
 
@@ -252,47 +249,46 @@ where
             }
 
             // Function types
-            (&ty::Ty::TopFun(ref top_fun1), &ty::Ty::TopFun(ref top_fun2)) => {
+            (ty::Ty::TopFun(top_fun1), ty::Ty::TopFun(top_fun2)) => {
                 self.unify_top_fun(top_fun1, top_fun2)?
             }
-            (&ty::Ty::Fun(ref fun), &ty::Ty::TopFun(ref top_fun))
-            | (&ty::Ty::TopFun(ref top_fun), &ty::Ty::Fun(ref fun)) => {
+            (ty::Ty::Fun(fun), ty::Ty::TopFun(top_fun))
+            | (ty::Ty::TopFun(top_fun), ty::Ty::Fun(fun)) => {
                 self.unify_top_fun(fun.top_fun(), top_fun)?
             }
-            (&ty::Ty::TyPred(_), &ty::Ty::TopFun(ref top_fun))
-            | (&ty::Ty::TopFun(ref top_fun), &ty::Ty::TyPred(_)) => {
+            (ty::Ty::TyPred(_), ty::Ty::TopFun(top_fun))
+            | (ty::Ty::TopFun(top_fun), ty::Ty::TyPred(_)) => {
                 self.unify_top_fun(&ty::TopFun::new_for_ty_pred(), top_fun)?
             }
 
-            (&ty::Ty::Fun(ref fun1), &ty::Ty::Fun(ref fun2)) => self.unify_fun(fun1, fun2)?,
-            (&ty::Ty::TyPred(_), &ty::Ty::Fun(ref fun))
-            | (&ty::Ty::Fun(ref fun), &ty::Ty::TyPred(_)) => {
+            (ty::Ty::Fun(fun1), ty::Ty::Fun(fun2)) => self.unify_fun(fun1, fun2)?,
+            (ty::Ty::TyPred(_), ty::Ty::Fun(fun)) | (ty::Ty::Fun(fun), ty::Ty::TyPred(_)) => {
                 self.unify_fun(&ty::Fun::new_for_ty_pred(), fun)?
             }
 
-            (&ty::Ty::TyPred(_), &ty::Ty::TyPred(_)) => {
+            (ty::Ty::TyPred(_), ty::Ty::TyPred(_)) => {
                 UnifiedTy::Merged(ty::Ty::Fun(Box::new(ty::Fun::new_for_ty_pred())).into_ref())
             }
 
             // Union types
-            (&ty::Ty::Union(ref members1), &ty::Ty::Union(ref members2)) => {
+            (ty::Ty::Union(members1), ty::Ty::Union(members2)) => {
                 let new_union = self.unify_ref_iter(members1.clone(), members2.iter().cloned())?;
                 UnifiedTy::Merged(new_union)
             }
-            (&ty::Ty::Union(ref members1), _) => {
+            (ty::Ty::Union(members1), _) => {
                 let new_union = self.unify_ref_iter(members1.clone(), iter::once(ref2).cloned())?;
                 UnifiedTy::Merged(new_union)
             }
-            (_, &ty::Ty::Union(ref members2)) => {
+            (_, ty::Ty::Union(members2)) => {
                 let new_union = self.unify_ref_iter(members2.clone(), iter::once(ref1).cloned())?;
                 UnifiedTy::Merged(new_union)
             }
 
             // List types
-            (&ty::Ty::Listof(ref member1), &ty::Ty::Listof(ref member2)) => UnifiedTy::Merged(
+            (ty::Ty::Listof(member1), ty::Ty::Listof(member2)) => UnifiedTy::Merged(
                 ty::Ty::Listof(Box::new(self.unify_to_ty_ref(member1, member2)?)).into_ref(),
             ),
-            (&ty::Ty::Cons(ref car1, ref cdr1), &ty::Ty::Cons(ref car2, ref cdr2)) => {
+            (ty::Ty::Cons(car1, cdr1), ty::Ty::Cons(car2, cdr2)) => {
                 match self.unify_ty_refs(car1, car2)? {
                     UnifiedTy::Discerned => UnifiedTy::Discerned,
                     UnifiedTy::Merged(merged_car) => match self.unify_ty_refs(cdr1, cdr2)? {
@@ -303,14 +299,13 @@ where
                     },
                 }
             }
-            (&ty::Ty::Nil, &ty::Ty::Listof(ref member))
-            | (&ty::Ty::Listof(ref member), &ty::Ty::Nil) => {
+            (ty::Ty::Nil, ty::Ty::Listof(member)) | (ty::Ty::Listof(member), ty::Ty::Nil) => {
                 UnifiedTy::Merged(ty::Ty::Listof(member.clone()).into_ref())
             }
-            (&ty::Ty::Listof(_), &ty::Ty::Cons(ref car, ref cdr)) => {
+            (ty::Ty::Listof(_), ty::Ty::Cons(car, cdr)) => {
                 self.unify_list_cons_refs(ref1, car, cdr)?
             }
-            (&ty::Ty::Cons(ref car, ref cdr), &ty::Ty::Listof(_)) => {
+            (ty::Ty::Cons(car, cdr), ty::Ty::Listof(_)) => {
                 self.unify_list_cons_refs(ref2, car, cdr)?
             }
             _ => UnifiedTy::Discerned,
@@ -354,7 +349,7 @@ impl<'a> PolyUnifyCtx<'a> {
     /// possible subtype relationship. Otherwise, (U ([A : Symbol] 'foo)) would not be allowed as A
     /// may need to merge with 'foo.
     fn poly_ty_is_discernible(&self, ty: &ty::Ty<ty::Poly>) -> bool {
-        match *ty {
+        match ty {
             // `Any` has non-discernible subtypes
             ty::Ty::Any => false,
 
@@ -373,12 +368,12 @@ impl<'a> PolyUnifyCtx<'a> {
 
             // We will build type checks that need to look inside Cons, as long as the types
             // themselves are discernible
-            ty::Ty::Cons(ref car, ref cdr) => {
+            ty::Ty::Cons(car, cdr) => {
                 self.poly_is_discernible(car) && self.poly_is_discernible(cdr)
             }
 
             // If we can discern every union member we can discern the union itself
-            ty::Ty::Union(ref members) => members.iter().all(|m| self.poly_is_discernible(m)),
+            ty::Ty::Union(members) => members.iter().all(|m| self.poly_is_discernible(m)),
 
             // Type erased types
             ty::Ty::TopFun(_)
@@ -410,8 +405,7 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
         let resolved1 = resolve::resolve_poly_ty(self.tvars, poly1);
         let resolved2 = resolve::resolve_poly_ty(self.tvars, poly2);
 
-        if let (&resolve::Result::Fixed(ty1), &resolve::Result::Fixed(ty2)) =
-            (&resolved1, &resolved2)
+        if let (resolve::Result::Fixed(ty1), resolve::Result::Fixed(ty2)) = (&resolved1, &resolved2)
         {
             // We can invoke full unification logic if we have fixed types
             self.unify_ty(poly1, ty1, poly2, ty2)

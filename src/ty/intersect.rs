@@ -76,7 +76,7 @@ where
         }
     }
 
-    fn intersect_params<'a>(
+    fn intersect_params(
         &self,
         params1: &ty::Params<S>,
         params2: &ty::Params<S>,
@@ -120,30 +120,28 @@ where
     ) -> Result<S> {
         match (ty1, ty2) {
             // Union types
-            (&ty::Ty::Union(ref refs1), &ty::Ty::Union(ref refs2)) => {
+            (ty::Ty::Union(refs1), ty::Ty::Union(refs2)) => {
                 self.intersect_ref_iter(refs1, refs2.iter())
             }
-            (&ty::Ty::Union(ref refs1), _) => self.intersect_ref_iter(refs1, iter::once(ref2)),
-            (_, &ty::Ty::Union(ref refs2)) => self.intersect_ref_iter(refs2, iter::once(ref1)),
+            (ty::Ty::Union(refs1), _) => self.intersect_ref_iter(refs1, iter::once(ref2)),
+            (_, ty::Ty::Union(refs2)) => self.intersect_ref_iter(refs2, iter::once(ref1)),
 
             // Set type
-            (&ty::Ty::Set(ref member1), &ty::Ty::Set(ref member2)) => {
+            (ty::Ty::Set(member1), ty::Ty::Set(member2)) => {
                 Ok(ty::Ty::Set(Box::new(self.intersect_ty_refs(member1, member2)?)).into_ref())
             }
 
             // Map type
-            (&ty::Ty::Map(ref key1, ref value1), &ty::Ty::Map(ref key2, ref value2)) => {
-                Ok(ty::Ty::Map(
-                    Box::new(self.intersect_ty_refs(key1, key2)?),
-                    Box::new(self.intersect_ty_refs(value1, value2)?),
-                ).into_ref())
-            }
+            (ty::Ty::Map(key1, value1), ty::Ty::Map(key2, value2)) => Ok(ty::Ty::Map(
+                Box::new(self.intersect_ty_refs(key1, key2)?),
+                Box::new(self.intersect_ty_refs(value1, value2)?),
+            ).into_ref()),
 
             // Vector types
-            (&ty::Ty::Vecof(ref member1), &ty::Ty::Vecof(ref member2)) => {
+            (ty::Ty::Vecof(member1), ty::Ty::Vecof(member2)) => {
                 Ok(ty::Ty::Vecof(Box::new(self.intersect_ty_refs(member1, member2)?)).into_ref())
             }
-            (&ty::Ty::Vec(ref members1), &ty::Ty::Vec(ref members2)) => {
+            (ty::Ty::Vec(members1), ty::Ty::Vec(members2)) => {
                 if members1.len() != members2.len() {
                     Err(Error::Disjoint)
                 } else {
@@ -156,8 +154,8 @@ where
                     Ok(ty::Ty::Vec(intersected_members).into_ref())
                 }
             }
-            (&ty::Ty::Vecof(ref member1), &ty::Ty::Vec(ref members2))
-            | (&ty::Ty::Vec(ref members2), &ty::Ty::Vecof(ref member1)) => {
+            (ty::Ty::Vecof(member1), ty::Ty::Vec(members2))
+            | (ty::Ty::Vec(members2), ty::Ty::Vecof(member1)) => {
                 let intersected_members = members2
                     .iter()
                     .map(|member2| self.intersect_ty_refs(member1, member2))
@@ -167,32 +165,30 @@ where
             }
 
             // List types
-            (&ty::Ty::Listof(ref member1), &ty::Ty::Listof(ref member2)) => {
+            (ty::Ty::Listof(member1), ty::Ty::Listof(member2)) => {
                 Ok(ty::Ty::Listof(Box::new(self.intersect_ty_refs(member1, member2)?)).into_ref())
             }
-            (&ty::Ty::Cons(ref car1, ref cdr1), &ty::Ty::Cons(ref car2, ref cdr2)) => {
-                Ok(ty::Ty::Cons(
-                    Box::new(self.intersect_ty_refs(car1, car2)?),
-                    Box::new(self.intersect_ty_refs(cdr1, cdr2)?),
-                ).into_ref())
-            }
-            (&ty::Ty::Listof(ref member), &ty::Ty::Cons(ref car, ref cdr)) => {
+            (ty::Ty::Cons(car1, cdr1), ty::Ty::Cons(car2, cdr2)) => Ok(ty::Ty::Cons(
+                Box::new(self.intersect_ty_refs(car1, car2)?),
+                Box::new(self.intersect_ty_refs(cdr1, cdr2)?),
+            ).into_ref()),
+            (ty::Ty::Listof(member), ty::Ty::Cons(car, cdr)) => {
                 self.intersect_list_cons_refs(ref1, member, car, cdr)
             }
-            (&ty::Ty::Cons(ref car, ref cdr), &ty::Ty::Listof(ref member)) => {
+            (ty::Ty::Cons(car, cdr), ty::Ty::Listof(member)) => {
                 self.intersect_list_cons_refs(ref2, member, car, cdr)
             }
 
             // Function types
-            (&ty::Ty::TopFun(ref top_fun1), &ty::Ty::TopFun(ref top_fun2)) => {
+            (ty::Ty::TopFun(top_fun1), ty::Ty::TopFun(top_fun2)) => {
                 let intersected_purity =
                     self.intersect_purity_refs(top_fun1.purity(), top_fun2.purity());
                 let intersected_ret = self.intersect_ty_refs(top_fun1.ret(), top_fun2.ret())?;
 
                 Ok(ty::TopFun::new(intersected_purity, intersected_ret).into_ref())
             }
-            (&ty::Ty::TopFun(ref top_fun), &ty::Ty::Fun(ref fun))
-            | (&ty::Ty::Fun(ref fun), &ty::Ty::TopFun(ref top_fun)) => {
+            (ty::Ty::TopFun(top_fun), ty::Ty::Fun(fun))
+            | (ty::Ty::Fun(fun), ty::Ty::TopFun(top_fun)) => {
                 if fun.is_polymorphic() {
                     // TODO: This might be possible but we would have to recalculate the tvars for
                     // the intersected function
@@ -210,7 +206,7 @@ where
                     intersected_params,
                 ).into_ref())
             }
-            (&ty::Ty::Fun(ref fun1), &ty::Ty::Fun(ref fun2)) => {
+            (ty::Ty::Fun(fun1), ty::Ty::Fun(fun2)) => {
                 if fun1.is_polymorphic() || fun2.is_polymorphic() {
                     // TODO: Same issue as top functions
                     return Err(Error::Disjoint);
@@ -248,8 +244,8 @@ impl<'a> IntersectCtx<ty::Poly> for PolyIntersectCtx<'a> {
         let resolved1 = ty::resolve::resolve_poly_ty(self.tvars, poly1);
         let resolved2 = ty::resolve::resolve_poly_ty(self.tvars, poly2);
 
-        match (&resolved1, &resolved2) {
-            (&ty::resolve::Result::Fixed(ty1), &ty::resolve::Result::Fixed(ty2)) => {
+        match (resolved1, resolved2) {
+            (ty::resolve::Result::Fixed(ty1), ty::resolve::Result::Fixed(ty2)) => {
                 // We can invoke full intersection logic if we have fixed types
                 self.non_subty_intersect(poly1, ty1, poly2, ty2)
             }

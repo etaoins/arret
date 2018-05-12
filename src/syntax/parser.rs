@@ -455,10 +455,10 @@ impl<'de> Parser<'de> {
                     datum_vec.push(datum);
                 }
                 Err(err) => {
-                    if let ErrorKind::Eof(_) = *err.kind() {
-                        return Ok(datum_vec);
+                    if let ErrorKind::Eof(_) = err.kind() {
+                        break Ok(datum_vec);
                     } else {
-                        return Err(err);
+                        break Err(err);
                     }
                 }
             }
@@ -705,7 +705,7 @@ mod test {
 
     #[test]
     fn int_datum() {
-        //#[allow(unreadable_literal)]
+        #[allow(unreadable_literal)]
         let test_ints = [
             ("0", 0),
             ("000", 0),

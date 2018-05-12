@@ -112,7 +112,7 @@ impl NsDatum {
     }
 
     pub fn span(&self) -> Span {
-        match *self {
+        match self {
             NsDatum::Bool(span, _)
             | NsDatum::Char(span, _)
             | NsDatum::Int(span, _)
@@ -122,7 +122,7 @@ impl NsDatum {
             | NsDatum::List(span, _)
             | NsDatum::Vec(span, _)
             | NsDatum::Set(span, _)
-            | NsDatum::Map(span, _) => span,
+            | NsDatum::Map(span, _) => *span,
         }
     }
 }

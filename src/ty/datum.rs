@@ -25,31 +25,29 @@ where
     where
         S: ty::TyRef,
     {
-        (match *datum {
-            Datum::Bool(_, val) => ty::Ty::LitBool(val),
-            Datum::Sym(_, ref val) => ty::Ty::LitSym(val.clone()),
+        (match datum {
+            Datum::Bool(_, val) => ty::Ty::LitBool(*val),
+            Datum::Sym(_, val) => ty::Ty::LitSym(val.clone()),
             Datum::Char(_, _) => ty::Ty::Char,
             Datum::Int(_, _) => ty::Ty::Int,
             Datum::Float(_, _) => ty::Ty::Float,
             Datum::Str(_, _) => ty::Ty::Str,
-            Datum::List(_, ref vs) => {
+            Datum::List(_, vs) => {
                 Self::new_simple_list_type(vs.iter().map(|datum| self.ref_for_datum(datum)), None)
             }
-            Datum::Vec(_, ref vs) => {
-                ty::Ty::Vec(vs.iter().map(|v| self.ref_for_datum(v)).collect())
-            }
-            Datum::Set(_, ref vs) => {
+            Datum::Vec(_, vs) => ty::Ty::Vec(vs.iter().map(|v| self.ref_for_datum(v)).collect()),
+            Datum::Set(_, vs) => {
                 // Without function, begin or rest types we should never hit erasure
                 let unified_type = self.unify_ref_iter(vs.iter().map(|v| self.ref_for_datum(v)));
 
                 ty::Ty::Set(Box::new(unified_type))
             }
-            Datum::Map(_, ref vs) => {
+            Datum::Map(_, vs) => {
                 let unified_key =
-                    self.unify_ref_iter(vs.iter().map(|&(ref k, _)| self.ref_for_datum(k)));
+                    self.unify_ref_iter(vs.iter().map(|(k, _)| self.ref_for_datum(k)));
 
                 let unified_value =
-                    self.unify_ref_iter(vs.iter().map(|&(_, ref v)| self.ref_for_datum(v)));
+                    self.unify_ref_iter(vs.iter().map(|(_, v)| self.ref_for_datum(v)));
 
                 ty::Ty::Map(Box::new(unified_key), Box::new(unified_value))
             }

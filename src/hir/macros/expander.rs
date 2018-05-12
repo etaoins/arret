@@ -123,10 +123,10 @@ impl<'a> ExpandContext<'a> {
 
     fn expand_datum(&mut self, cursor: &mut ExpandCursor, template: &NsDatum) -> NsDatum {
         match template {
-            &NsDatum::Ident(span, ref ident) => self.expand_ident(cursor, span, ident),
-            &NsDatum::List(span, ref vs) => self.expand_list(cursor, span, vs),
-            &NsDatum::Vec(span, ref vs) => NsDatum::Vec(span, self.expand_slice(cursor, vs)),
-            &NsDatum::Set(span, ref vs) => NsDatum::Set(span, self.expand_slice(cursor, vs)),
+            NsDatum::Ident(span, ident) => self.expand_ident(cursor, *span, ident),
+            NsDatum::List(span, vs) => self.expand_list(cursor, *span, vs),
+            NsDatum::Vec(span, vs) => NsDatum::Vec(*span, self.expand_slice(cursor, vs)),
+            NsDatum::Set(span, vs) => NsDatum::Set(*span, self.expand_slice(cursor, vs)),
             other => other.clone(),
         }
     }

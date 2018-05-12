@@ -16,7 +16,7 @@ pub enum Datum {
 
 impl Datum {
     pub fn span(&self) -> Span {
-        match *self {
+        match self {
             Datum::Bool(span, _)
             | Datum::Char(span, _)
             | Datum::Int(span, _)
@@ -26,7 +26,7 @@ impl Datum {
             | Datum::Sym(span, _)
             | Datum::Vec(span, _)
             | Datum::Map(span, _)
-            | Datum::Set(span, _) => span,
+            | Datum::Set(span, _) => *span,
         }
     }
 }

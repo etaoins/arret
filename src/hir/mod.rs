@@ -90,14 +90,14 @@ impl Expr {
     ///
     /// This will return None for `Expr::Do` as it may not have a single contiguous span
     fn span(&self) -> Option<Span> {
-        match *self {
-            Expr::Lit(ref datum) => Some(datum.span()),
+        match self {
+            Expr::Lit(datum) => Some(datum.span()),
             Expr::App(span, _)
             | Expr::Fun(span, _)
             | Expr::Def(span, _, _)
             | Expr::Cond(span, _)
             | Expr::Ref(span, _)
-            | Expr::TyPred(span, _) => Some(span),
+            | Expr::TyPred(span, _) => Some(*span),
             Expr::Do(_) => None,
         }
     }
@@ -107,7 +107,7 @@ impl Expr {
     /// This is the expression itself except for `Expr::Do` which will return the last expression
     fn last_expr(&self) -> Option<&Expr> {
         match self {
-            &Expr::Do(ref exprs) => exprs.last(),
+            Expr::Do(exprs) => exprs.last(),
             other => Some(other),
         }
     }

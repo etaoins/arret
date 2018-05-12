@@ -1,8 +1,8 @@
 use std::result;
 
-use hir::scope::Scope;
-use hir::ns::{Ident, NsDatum};
 use hir::macros::{MacroVar, MatchData, Rule, SpecialVars};
+use hir::ns::{Ident, NsDatum};
+use hir::scope::Scope;
 
 struct MatchContext<'a> {
     scope: &'a Scope,
@@ -30,7 +30,7 @@ impl<'a> MatchContext<'a> {
             Ok(())
         } else if self.special_vars.is_literal(&pattern_var) {
             // The arg must be the exact same pattern variable
-            if let NsDatum::Ident(_, ref arg_ident) = *arg {
+            if let NsDatum::Ident(_, arg_ident) = arg {
                 if pattern_var == MacroVar::from_ident(self.scope, arg_ident) {
                     return Ok(());
                 }
@@ -46,14 +46,14 @@ impl<'a> MatchContext<'a> {
     // TODO: Floats, maps
     fn visit_datum(&mut self, pattern: &NsDatum, arg: &NsDatum) -> MatchVisitResult {
         match (pattern, arg) {
-            (&NsDatum::Ident(_, ref pattern_ident), arg) => self.visit_ident(pattern_ident, arg),
-            (&NsDatum::List(_, ref pvs), &NsDatum::List(_, ref avs)) => self.visit_slice(pvs, avs),
-            (&NsDatum::Vec(_, ref pvs), &NsDatum::Vec(_, ref avs)) => self.visit_slice(pvs, avs),
-            (&NsDatum::Set(_, ref pvs), &NsDatum::Set(_, ref avs)) => self.visit_slice(pvs, avs),
-            (&NsDatum::Bool(_, pv), &NsDatum::Bool(_, av)) if pv == av => Ok(()),
-            (&NsDatum::Int(_, pv), &NsDatum::Int(_, av)) if pv == av => Ok(()),
-            (&NsDatum::Char(_, pv), &NsDatum::Char(_, av)) if pv == av => Ok(()),
-            (&NsDatum::Str(_, ref pv), &NsDatum::Str(_, ref av)) if pv == av => Ok(()),
+            (NsDatum::Ident(_, pattern_ident), arg) => self.visit_ident(pattern_ident, arg),
+            (NsDatum::List(_, pvs), NsDatum::List(_, avs)) => self.visit_slice(pvs, avs),
+            (NsDatum::Vec(_, pvs), NsDatum::Vec(_, avs)) => self.visit_slice(pvs, avs),
+            (NsDatum::Set(_, pvs), NsDatum::Set(_, avs)) => self.visit_slice(pvs, avs),
+            (NsDatum::Bool(_, pv), NsDatum::Bool(_, av)) if pv == av => Ok(()),
+            (NsDatum::Int(_, pv), NsDatum::Int(_, av)) if pv == av => Ok(()),
+            (NsDatum::Char(_, pv), NsDatum::Char(_, av)) if pv == av => Ok(()),
+            (NsDatum::Str(_, pv), NsDatum::Str(_, av)) if pv == av => Ok(()),
             _ => Err(()),
         }
     }

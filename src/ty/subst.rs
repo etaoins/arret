@@ -26,14 +26,14 @@ impl<'a> SubstContext<'a> {
     }
 
     fn subst_ty_ref_option(&self, ty: &Option<ty::Poly>) -> Result<Option<ty::Mono>> {
-        Ok(match *ty {
-            Some(ref ty) => Some(self.subst_ty_ref(ty)?),
+        Ok(match ty {
+            Some(ty) => Some(self.subst_ty_ref(ty)?),
             None => None,
         })
     }
 
     fn subst_ty(&self, ty: &ty::Ty<ty::Poly>) -> Result<ty::Ty<ty::Mono>> {
-        Ok(match *ty {
+        Ok(match ty {
             ty::Ty::Any => ty::Ty::Any,
             ty::Ty::Bool => ty::Ty::Bool,
             ty::Ty::Char => ty::Ty::Char,
@@ -42,11 +42,11 @@ impl<'a> SubstContext<'a> {
             ty::Ty::Nil => ty::Ty::Nil,
             ty::Ty::Str => ty::Ty::Str,
             ty::Ty::Sym => ty::Ty::Sym,
-            ty::Ty::TopFun(ref top_fun) => ty::TopFun::new(
+            ty::Ty::TopFun(top_fun) => ty::TopFun::new(
                 self.subst_purity_ref(top_fun.purity())?,
                 self.subst_ty_ref(top_fun.ret())?,
             ).into_ty(),
-            ty::Ty::Fun(ref fun) => ty::Fun::new(
+            ty::Ty::Fun(fun) => ty::Fun::new(
                 ty::PVarIds::empty(),
                 ty::TVarIds::empty(),
                 ty::TopFun::new(
@@ -58,22 +58,19 @@ impl<'a> SubstContext<'a> {
                     self.subst_ty_ref_option(fun.params().rest())?,
                 ),
             ).into_ty(),
-            ty::Ty::TyPred(ref test_ty) => ty::Ty::TyPred(Box::new(self.subst_ty_ref(test_ty)?)),
-            ty::Ty::Map(ref key, ref value) => ty::Ty::Map(
+            ty::Ty::TyPred(test_ty) => ty::Ty::TyPred(Box::new(self.subst_ty_ref(test_ty)?)),
+            ty::Ty::Map(key, value) => ty::Ty::Map(
                 Box::new(self.subst_ty_ref(key)?),
                 Box::new(self.subst_ty_ref(value)?),
             ),
-            ty::Ty::LitBool(val) => ty::Ty::LitBool(val),
-            ty::Ty::LitSym(ref val) => ty::Ty::LitSym(val.clone()),
-            ty::Ty::Set(ref member) => ty::Ty::Set(Box::new(self.subst_ty_ref(&member)?)),
-            ty::Ty::Union(ref members) => ty::Ty::Union(self.subst_ty_ref_slice(members)?),
-            ty::Ty::Vec(ref members) => {
-                let members_mono = self.subst_ty_ref_slice(members)?;
-                ty::Ty::Vec(members_mono)
-            }
-            ty::Ty::Vecof(ref member) => ty::Ty::Vecof(Box::new(self.subst_ty_ref(member)?)),
-            ty::Ty::Listof(ref member) => ty::Ty::Listof(Box::new(self.subst_ty_ref(member)?)),
-            ty::Ty::Cons(ref car, ref cdr) => ty::Ty::Cons(
+            ty::Ty::LitBool(val) => ty::Ty::LitBool(*val),
+            ty::Ty::LitSym(val) => ty::Ty::LitSym(val.clone()),
+            ty::Ty::Set(member) => ty::Ty::Set(Box::new(self.subst_ty_ref(&member)?)),
+            ty::Ty::Union(members) => ty::Ty::Union(self.subst_ty_ref_slice(members)?),
+            ty::Ty::Vec(members) => ty::Ty::Vec(self.subst_ty_ref_slice(members)?),
+            ty::Ty::Vecof(member) => ty::Ty::Vecof(Box::new(self.subst_ty_ref(member)?)),
+            ty::Ty::Listof(member) => ty::Ty::Listof(Box::new(self.subst_ty_ref(member)?)),
+            ty::Ty::Cons(car, cdr) => ty::Ty::Cons(
                 Box::new(self.subst_ty_ref(car)?),
                 Box::new(self.subst_ty_ref(cdr)?),
             ),
@@ -81,22 +78,22 @@ impl<'a> SubstContext<'a> {
     }
 
     fn subst_purity_ref(&self, poly: &ty::purity::Poly) -> Result<Purity> {
-        match *poly {
-            ty::purity::Poly::Fixed(ref fixed) => Ok(*fixed),
+        match poly {
+            ty::purity::Poly::Fixed(fixed) => Ok(*fixed),
             ty::purity::Poly::Var(pvar_id) => self.pvars
                 .get(&pvar_id)
                 .cloned()
-                .ok_or_else(|| Error::UnresolvedPurity(pvar_id)),
+                .ok_or_else(|| Error::UnresolvedPurity(*pvar_id)),
         }
     }
 
     fn subst_ty_ref(&self, poly: &ty::Poly) -> Result<ty::Mono> {
-        match *poly {
-            ty::Poly::Fixed(ref fixed) => self.subst_ty(fixed).map(|t| t.into_mono()),
+        match poly {
+            ty::Poly::Fixed(fixed) => self.subst_ty(fixed).map(|t| t.into_mono()),
             ty::Poly::Var(tvar_id) => self.tvars
                 .get(&tvar_id)
                 .cloned()
-                .ok_or_else(|| Error::UnresolvedType(tvar_id)),
+                .ok_or_else(|| Error::UnresolvedType(*tvar_id)),
         }
     }
 }

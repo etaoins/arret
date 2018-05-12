@@ -248,7 +248,7 @@ impl<'a> LowerTyContext<'a> {
 
     fn lower_ident(&self, span: Span, ident: Ident) -> Result<ty::Poly> {
         match self.scope.get(&ident) {
-            Some(Binding::Ty(ref ty)) => Ok(ty.clone()),
+            Some(Binding::Ty(ty)) => Ok(ty),
             Some(_) => Err(Error::new(span, ErrorKind::ValueAsTy)),
             None => Err(Error::new(
                 span,
@@ -401,19 +401,19 @@ impl<'a> StrForPolyContext<'a> {
         let mut list_parts: Vec<String> = vec![];
 
         loop {
-            match *poly_ty {
+            match poly_ty {
                 ty::Ty::Nil => {
                     break;
                 }
-                ty::Ty::Listof(ref rest) => {
+                ty::Ty::Listof(rest) => {
                     list_parts.push(self.str_for_poly(rest));
                     list_parts.push("...".to_owned());
                     break;
                 }
-                ty::Ty::Cons(ref car_poly, ref cdr_poly) => {
+                ty::Ty::Cons(car_poly, cdr_poly) => {
                     list_parts.push(self.str_for_poly(car_poly));
-                    match *cdr_poly.as_ref() {
-                        ty::Poly::Fixed(ref tail) => {
+                    match cdr_poly.as_ref() {
+                        ty::Poly::Fixed(tail) => {
                             poly_ty = tail;
                         }
                         _ => {
@@ -432,14 +432,14 @@ impl<'a> StrForPolyContext<'a> {
 
     fn str_for_purity(&self, purity: &ty::purity::Poly) -> String {
         match purity {
-            &ty::purity::Poly::Fixed(Purity::Pure) => "->".to_owned(),
-            &ty::purity::Poly::Fixed(Purity::Impure) => "->!".to_owned(),
-            &ty::purity::Poly::Var(pvar_id) => self.pvars[pvar_id.to_usize()].source_name().clone(),
+            ty::purity::Poly::Fixed(Purity::Pure) => "->".to_owned(),
+            ty::purity::Poly::Fixed(Purity::Impure) => "->!".to_owned(),
+            ty::purity::Poly::Var(pvar_id) => self.pvars[pvar_id.to_usize()].source_name().clone(),
         }
     }
 
     fn str_for_poly_ty(&self, poly_ty: &ty::Ty<ty::Poly>) -> String {
-        match *poly_ty {
+        match poly_ty {
             ty::Ty::Any => "Any".to_owned(),
             ty::Ty::Bool => "Bool".to_owned(),
             ty::Ty::Char => "Char".to_owned(),
@@ -449,14 +449,14 @@ impl<'a> StrForPolyContext<'a> {
             ty::Ty::Float => "Float".to_owned(),
             ty::Ty::LitBool(false) => "false".to_owned(),
             ty::Ty::LitBool(true) => "true".to_owned(),
-            ty::Ty::LitSym(ref name) => format!("'{}", name),
-            ty::Ty::Map(ref key, ref value) => format!(
+            ty::Ty::LitSym(name) => format!("'{}", name),
+            ty::Ty::Map(key, value) => format!(
                 "(Map {} {})",
                 self.str_for_poly(key),
                 self.str_for_poly(value)
             ),
-            ty::Ty::Set(ref member) => format!("(Setof {})", self.str_for_poly(member)),
-            ty::Ty::Vec(ref members) => {
+            ty::Ty::Set(member) => format!("(Setof {})", self.str_for_poly(member)),
+            ty::Ty::Vec(members) => {
                 let mut result_parts: Vec<String> = members
                     .iter()
                     .map(|member| format!(" {}", self.str_for_poly(member)))
@@ -464,13 +464,13 @@ impl<'a> StrForPolyContext<'a> {
 
                 format!("(Vector{})", result_parts.join(""))
             }
-            ty::Ty::Vecof(ref member) => format!("(Vectorof {})", self.str_for_poly(member)),
-            ty::Ty::TopFun(ref top_fun) => format!(
+            ty::Ty::Vecof(member) => format!("(Vectorof {})", self.str_for_poly(member)),
+            ty::Ty::TopFun(top_fun) => format!(
                 "(... {} {})",
                 self.str_for_purity(top_fun.purity()),
                 self.str_for_poly(top_fun.ret())
             ),
-            ty::Ty::Fun(ref fun) => {
+            ty::Ty::Fun(fun) => {
                 let mut fun_parts = Vec::with_capacity(2);
 
                 for fixed in fun.params().fixed() {
@@ -485,8 +485,8 @@ impl<'a> StrForPolyContext<'a> {
 
                 format!("({})", fun_parts.join(" "),)
             }
-            ty::Ty::TyPred(ref test) => format!("(Type? {})", self.str_for_poly(test)),
-            ty::Ty::Union(ref members) => {
+            ty::Ty::TyPred(test) => format!("(Type? {})", self.str_for_poly(test)),
+            ty::Ty::Union(members) => {
                 let member_strs: Vec<String> = members
                     .iter()
                     .map(|m| format!(" {}", self.str_for_poly(m)))
@@ -494,8 +494,8 @@ impl<'a> StrForPolyContext<'a> {
 
                 format!("(U{})", member_strs.join(""))
             }
-            ty::Ty::Listof(ref member) => format!("(Listof {})", self.str_for_poly(member)),
-            ty::Ty::Cons(ref car, ref cdr) => self.str_for_simple_list(poly_ty)
+            ty::Ty::Listof(member) => format!("(Listof {})", self.str_for_poly(member)),
+            ty::Ty::Cons(car, cdr) => self.str_for_simple_list(poly_ty)
                 .map(|cons_args| format!("(List {})", cons_args))
                 .unwrap_or_else(|| {
                     // Fall back to rendering the type using (Cons)
@@ -514,12 +514,12 @@ impl<'a> StrForPolyContext<'a> {
     }
 
     fn str_for_poly(&self, poly: &ty::Poly) -> String {
-        match *poly {
+        match poly {
             ty::Poly::Var(tvar_id) => {
                 // TODO: It's possible to have tvars with overlapping source names
                 self.tvars[tvar_id.to_usize()].source_name().clone()
             }
-            ty::Poly::Fixed(ref poly_ty) => self.str_for_poly_ty(poly_ty),
+            ty::Poly::Fixed(poly_ty) => self.str_for_poly_ty(poly_ty),
         }
     }
 }

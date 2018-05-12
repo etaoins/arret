@@ -8,7 +8,7 @@ pub enum Result<'a> {
 
 impl<'a> Result<'a> {
     pub fn as_ty(&self) -> &'a ty::Ty<ty::Poly> {
-        match *self {
+        match self {
             Result::Fixed(ty) => ty,
             Result::Bound(ty) => ty,
         }
@@ -16,7 +16,7 @@ impl<'a> Result<'a> {
 }
 
 fn poly_ty_has_subtypes(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> bool {
-    match *poly_ty {
+    match poly_ty {
         ty::Ty::Any | ty::Ty::Bool | ty::Ty::Sym | ty::Ty::TopFun(_) => true,
         ty::Ty::Char
         | ty::Ty::Float
@@ -25,23 +25,21 @@ fn poly_ty_has_subtypes(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> bool 
         | ty::Ty::LitSym(_)
         | ty::Ty::Str
         | ty::Ty::Nil => false,
-        ty::Ty::Fun(ref fun) => {
+        ty::Ty::Fun(fun) => {
             (fun.purity() != &Purity::Pure.into_poly()) || !fun.params().fixed().is_empty()
                 || fun.params().rest() != &Some(ty::Ty::Any.into_poly())
                 || poly_has_subtypes(tvars, fun.ret())
         }
         ty::Ty::TyPred(_) => false,
-        ty::Ty::Map(ref key, ref value) => [key, value]
+        ty::Ty::Map(key, value) => [key, value]
             .iter()
             .any(|poly| poly_has_subtypes(tvars, poly)),
-        ty::Ty::Set(ref member) => poly_has_subtypes(tvars, member),
-        ty::Ty::Vec(ref members) => members
+        ty::Ty::Set(member) => poly_has_subtypes(tvars, member),
+        ty::Ty::Vec(members) => members
             .iter()
             .any(|member| poly_has_subtypes(tvars, member)),
-        ty::Ty::Union(ref members) => !members.is_empty(),
-        ty::Ty::Cons(ref car, ref cdr) => {
-            poly_has_subtypes(tvars, car) || poly_has_subtypes(tvars, cdr)
-        }
+        ty::Ty::Union(members) => !members.is_empty(),
+        ty::Ty::Cons(car, cdr) => poly_has_subtypes(tvars, car) || poly_has_subtypes(tvars, cdr),
         ty::Ty::Listof(_) | ty::Ty::Vecof(_) => {
             // Any arbitrary fixed length sequence is a subtype of this sequence
             true
@@ -66,10 +64,10 @@ fn resolve_tvar_id_bound(tvars: &[ty::TVar], tvar_id: ty::TVarId) -> &ty::Ty<ty:
 /// If a type variable is bounded by a type with no subtypes (e.g. Str or LitBool) then it's treated
 /// as fixed.
 pub fn resolve_poly_ty<'a>(tvars: &'a [ty::TVar], poly: &'a ty::Poly) -> Result<'a> {
-    match *poly {
-        ty::Poly::Fixed(ref ty) => Result::Fixed(ty),
+    match poly {
+        ty::Poly::Fixed(ty) => Result::Fixed(ty),
         ty::Poly::Var(tvar_id) => {
-            let ty = resolve_tvar_id_bound(tvars, tvar_id);
+            let ty = resolve_tvar_id_bound(tvars, *tvar_id);
 
             if poly_ty_has_subtypes(tvars, ty) {
                 Result::Bound(ty)
