@@ -555,6 +555,29 @@ pub fn poly_for_str(datum_str: &str) -> Result<ty::Poly> {
         }
     }
 
+    // Add some test polymorphic variables
+    for var_idx in 0..26 {
+        let var_name = (b'A' + var_idx) as char;
+        let tvar_id = ty::TVarId::new(var_idx as usize);
+        let poly = ty::Poly::Var(tvar_id);
+
+        scope.insert_binding(
+            Ident::new(test_ns_id, var_name.to_string()),
+            Binding::Ty(poly),
+        );
+    }
+
+    for var_idx in 0..26 {
+        let var_name = format!("->{}", (b'A' + var_idx) as char);
+        let pvar_id = ty::purity::PVarId::new(var_idx as usize);
+        let poly = ty::purity::Poly::Var(pvar_id);
+
+        scope.insert_binding(
+            Ident::new(test_ns_id, var_name.to_string()),
+            Binding::Purity(poly),
+        );
+    }
+
     let test_datum = datum_from_str(datum_str).unwrap();
 
     lower_poly(

@@ -443,11 +443,7 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
         purity1: &ty::purity::Poly,
         purity2: &ty::purity::Poly,
     ) -> ty::purity::Poly {
-        if purity1 == purity2 {
-            purity1.clone()
-        } else {
-            Purity::Impure.into_poly()
-        }
+        poly_unify_purity(purity1, purity2)
     }
 }
 
@@ -458,6 +454,18 @@ pub fn poly_unify_to_poly<'a>(
 ) -> Result<ty::Poly, PolyError> {
     let ctx = PolyUnifyCtx { tvars };
     ctx.unify_to_ty_ref(poly1, poly2)
+}
+
+pub fn poly_unify_purity(
+    purity1: &ty::purity::Poly,
+    purity2: &ty::purity::Poly,
+) -> ty::purity::Poly {
+    // TODO: Is this right in the case of two vars? Should we trigger a poly conflict?
+    if purity1 == purity2 {
+        purity1.clone()
+    } else {
+        Purity::Impure.into_poly()
+    }
 }
 
 pub fn poly_unify_iter<I>(tvars: &[ty::TVar], members: I) -> Result<ty::Poly, PolyError>

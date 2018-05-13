@@ -8,6 +8,8 @@ pub mod pred;
 pub mod purity;
 pub mod resolve;
 #[cfg(test)]
+mod select;
+#[cfg(test)]
 pub mod subst;
 pub mod unify;
 
@@ -273,6 +275,11 @@ impl TVar {
 
     pub fn source_name(&self) -> &String {
         &self.source_name
+    }
+
+    #[cfg(test)]
+    pub fn bound(&self) -> &Poly {
+        &self.bound
     }
 }
 
