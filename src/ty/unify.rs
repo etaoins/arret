@@ -9,7 +9,7 @@ use ty::purity::Purity;
 use ty::TVarIds;
 
 #[derive(Debug, PartialEq)]
-pub enum UnifiedTy<S>
+enum UnifiedTy<S>
 where
     S: ty::TyRef,
 {
@@ -451,13 +451,13 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
     }
 }
 
-pub fn poly_unify<'a>(
+pub fn poly_unify_to_poly<'a>(
     tvars: &'a [ty::TVar],
     poly1: &'a ty::Poly,
     poly2: &'a ty::Poly,
-) -> Result<UnifiedTy<ty::Poly>, PolyError> {
+) -> Result<ty::Poly, PolyError> {
     let ctx = PolyUnifyCtx { tvars };
-    ctx.unify_ty_refs(poly1, poly2)
+    ctx.unify_to_ty_ref(poly1, poly2)
 }
 
 pub fn poly_unify_iter<I>(tvars: &[ty::TVar], members: I) -> Result<ty::Poly, PolyError>
@@ -500,12 +500,12 @@ impl<'a> UnifyCtx<ty::Mono, MonoError> for MonoUnifyCtx {
     }
 }
 
-pub fn mono_unify<'a>(
+pub fn mono_unify_to_mono<'a>(
     mono1: &'a ty::Mono,
     mono2: &'a ty::Mono,
-) -> Result<UnifiedTy<ty::Mono>, MonoError> {
+) -> Result<ty::Mono, MonoError> {
     let ctx = MonoUnifyCtx {};
-    ctx.unify_ty_refs(mono1, mono2)
+    ctx.unify_to_ty_ref(mono1, mono2)
 }
 
 pub fn mono_unify_iter<I>(members: I) -> Result<ty::Mono, MonoError>
@@ -523,6 +523,15 @@ mod test {
     fn poly_for_str(datum_str: &str) -> ty::Poly {
         use hir;
         hir::poly_for_str(datum_str).unwrap()
+    }
+
+    fn poly_unify<'a>(
+        tvars: &'a [ty::TVar],
+        poly1: &'a ty::Poly,
+        poly2: &'a ty::Poly,
+    ) -> Result<UnifiedTy<ty::Poly>, PolyError> {
+        let ctx = PolyUnifyCtx { tvars };
+        ctx.unify_ty_refs(poly1, poly2)
     }
 
     fn assert_discerned(ty_str1: &str, ty_str2: &str) {

@@ -19,8 +19,8 @@ where
 {
     fn intersect_ty_refs(&self, &S, &S) -> Result<S>;
     fn intersect_purity_refs(&self, &S::PRef, &S::PRef) -> S::PRef;
+    fn unify_to_ty_ref(&self, ref1: &S, ref2: &S) -> Result<S>;
 
-    fn unify_ty_refs(&self, &S, &S) -> Result<ty::unify::UnifiedTy<S>>;
     fn unify_ref_iter<I>(&self, members: I) -> Result<S>
     where
         I: Iterator<Item = S>;
@@ -64,15 +64,6 @@ where
             0 => Err(Error::Disjoint),
             1 => Ok(intersected_types.pop().unwrap()),
             _ => Ok(ty::Ty::Union(intersected_types).into_ref()),
-        }
-    }
-
-    fn unify_to_ty_ref(&self, ref1: &S, ref2: &S) -> Result<S> {
-        match self.unify_ty_refs(ref1, ref2)? {
-            ty::unify::UnifiedTy::Merged(merged) => Ok(merged),
-            ty::unify::UnifiedTy::Discerned => {
-                Ok(ty::Ty::Union(vec![ref1.clone(), ref2.clone()]).into_ref())
-            }
         }
     }
 
@@ -268,12 +259,8 @@ impl<'a> IntersectCtx<ty::Poly> for PolyIntersectCtx<'a> {
         }
     }
 
-    fn unify_ty_refs(
-        &self,
-        poly1: &ty::Poly,
-        poly2: &ty::Poly,
-    ) -> Result<ty::unify::UnifiedTy<ty::Poly>> {
-        ty::unify::poly_unify(self.tvars, poly1, poly2).map_err(|_| Error::Disjoint)
+    fn unify_to_ty_ref(&self, poly1: &ty::Poly, poly2: &ty::Poly) -> Result<ty::Poly> {
+        ty::unify::poly_unify_to_poly(self.tvars, poly1, poly2).map_err(|_| Error::Disjoint)
     }
 
     fn unify_ref_iter<I>(&self, members: I) -> Result<ty::Poly>
@@ -314,12 +301,8 @@ impl<'a> IntersectCtx<ty::Mono> for MonoIntersectCtx {
         }
     }
 
-    fn unify_ty_refs(
-        &self,
-        mono1: &ty::Mono,
-        mono2: &ty::Mono,
-    ) -> Result<ty::unify::UnifiedTy<ty::Mono>> {
-        ty::unify::mono_unify(mono1, mono2).map_err(|_| Error::Disjoint)
+    fn unify_to_ty_ref(&self, mono1: &ty::Mono, mono2: &ty::Mono) -> Result<ty::Mono> {
+        ty::unify::mono_unify_to_mono(mono1, mono2).map_err(|_| Error::Disjoint)
     }
 
     fn unify_ref_iter<I>(&self, members: I) -> Result<ty::Mono>
