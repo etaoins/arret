@@ -1,2 +1,3 @@
 /target/
+/rls/
 **/*.rs.bk
