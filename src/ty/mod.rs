@@ -398,9 +398,9 @@ pub enum Decl {
 
 impl Decl {
     pub fn try_to_poly(&self) -> Option<Poly> {
-        match *self {
+        match self {
             Decl::Fixed(ref fixed) => Some(Poly::Fixed(fixed.clone())),
-            Decl::Var(tvar_id) => Some(Poly::Var(tvar_id)),
+            Decl::Var(tvar_id) => Some(Poly::Var(*tvar_id)),
             Decl::Free(_) => None,
         }
     }

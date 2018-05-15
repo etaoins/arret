@@ -25,6 +25,27 @@ struct InferCtx<'a> {
 
     free_ty_to_poly: HashMap<ty::FreeTyId, ty::Poly>,
     var_to_type: HashMap<hir::VarId, VarType>,
+
+    free_purity_to_poly: HashMap<ty::purity::FreePurityId, ty::purity::Poly>,
+}
+
+#[derive(Clone)]
+enum PurityVarType {
+    Free(ty::purity::Poly),
+    Known(ty::purity::Poly),
+}
+
+impl PurityVarType {
+    fn into_poly(self) -> ty::purity::Poly {
+        match self {
+            PurityVarType::Free(poly) => poly,
+            PurityVarType::Known(poly) => poly,
+        }
+    }
+}
+
+struct SubtreeCtx {
+    fun_purity: PurityVarType,
 }
 
 impl<'a> InferCtx<'a> {
@@ -34,6 +55,7 @@ impl<'a> InferCtx<'a> {
             tvars,
             free_ty_to_poly: HashMap::new(),
             var_to_type: HashMap::new(),
+            free_purity_to_poly: HashMap::new(),
         }
     }
 
@@ -81,14 +103,15 @@ impl<'a> InferCtx<'a> {
 
     fn visit_cond(
         &mut self,
+        scx: &mut SubtreeCtx,
         required_type: &ty::Poly,
         span: Span,
         cond: &hir::Cond,
     ) -> Result<ty::Poly> {
-        self.visit_expr(&ty::Ty::Bool.into_poly(), cond.test_expr())?;
+        self.visit_expr(scx, &ty::Ty::Bool.into_poly(), cond.test_expr())?;
 
-        let true_type = self.visit_expr(required_type, cond.true_expr())?;
-        let false_type = self.visit_expr(required_type, cond.false_expr())?;
+        let true_type = self.visit_expr(scx, required_type, cond.true_expr())?;
+        let false_type = self.visit_expr(scx, required_type, cond.false_expr())?;
 
         ty::unify::poly_unify_to_poly(self.tvars, &true_type, &false_type)
             .map_err(|unify_err| self.new_union_conflict_error(span, &unify_err))
@@ -139,6 +162,26 @@ impl<'a> InferCtx<'a> {
         Ok(common_type)
     }
 
+    fn unify_app_purity(
+        &self,
+        scx: &mut SubtreeCtx,
+        span: Span,
+        app_purity: &ty::purity::Poly,
+    ) -> Result<()> {
+        if let PurityVarType::Free(ref mut free_purity) = scx.fun_purity {
+            match ty::unify::poly_unify_purity(free_purity, &app_purity) {
+                Ok(unified_purity) => {
+                    *free_purity = unified_purity;
+                }
+                Err(unify_err) => {
+                    return Err(self.new_union_conflict_error(span, &unify_err));
+                }
+            }
+        };
+
+        Ok(())
+    }
+
     fn visit_ref(
         &mut self,
         required_type: &ty::Poly,
@@ -161,17 +204,22 @@ impl<'a> InferCtx<'a> {
         Ok(new_free_type)
     }
 
-    fn visit_do(&mut self, required_type: &ty::Poly, exprs: &[hir::Expr]) -> Result<ty::Poly> {
+    fn visit_do(
+        &mut self,
+        scx: &mut SubtreeCtx,
+        required_type: &ty::Poly,
+        exprs: &[hir::Expr],
+    ) -> Result<ty::Poly> {
         if exprs.is_empty() {
             return Ok(ty::Ty::Union(vec![]).into_poly());
         }
 
         for non_terminal_expr in &exprs[0..exprs.len() - 1] {
             // The type of this expression doesn't matter; its value is discarded
-            self.visit_expr(&ty::Ty::Any.into_poly(), non_terminal_expr)?;
+            self.visit_expr(scx, &ty::Ty::Any.into_poly(), non_terminal_expr)?;
         }
 
-        self.visit_expr(required_type, exprs.last().unwrap())
+        self.visit_expr(scx, required_type, exprs.last().unwrap())
     }
 
     /// Visits a function expression
@@ -214,26 +262,50 @@ impl<'a> InferCtx<'a> {
             VarType::Free,
         )?;
 
+        // Use the declared return type if possible
         let wanted_ret_type = decl_fun.ret_ty().try_to_poly().unwrap_or_else(|| {
             if let Some(ref required_top_fun_type) = required_top_fun_type {
+                // Fall back to the backwards type
                 required_top_fun_type.ret().clone()
             } else {
+                // Use Any as a last resort
                 ty::Ty::Any.into_poly()
             }
         });
 
-        let actual_ret_type = self.visit_expr(&wanted_ret_type, decl_fun.body_expr())?;
+        let fun_purity_var = decl_fun
+            .purity()
+            .try_to_poly()
+            .map(|poly_purity| {
+                // This function has a declared purity
+                PurityVarType::Known(poly_purity)
+            })
+            // Functions start pure until proven otherwise
+            .unwrap_or_else(|| PurityVarType::Free(Purity::Pure.into_poly()));
+
+        let mut fun_scx = SubtreeCtx {
+            fun_purity: fun_purity_var,
+        };
+
+        let actual_ret_type =
+            self.visit_expr(&mut fun_scx, &wanted_ret_type, decl_fun.body_expr())?;
 
         if let ty::Decl::Free(free_ty_id) = decl_fun.ret_ty() {
             self.free_ty_to_poly
                 .insert(*free_ty_id, actual_ret_type.clone());
         }
 
-        // TODO: Purity
+        let actual_purity = fun_scx.fun_purity.into_poly();
+
+        if let ty::purity::Decl::Free(free_purity_id) = decl_fun.purity() {
+            self.free_purity_to_poly
+                .insert(*free_purity_id, actual_purity.clone());
+        }
+
         let found_type = ty::Fun::new(
             decl_fun.pvar_ids().clone(),
             decl_fun.tvar_ids().clone(),
-            ty::TopFun::new(Purity::Pure.into_poly(), actual_ret_type),
+            ty::TopFun::new(actual_purity.clone(), actual_ret_type),
             actual_param_type,
         ).into_ref();
 
@@ -242,6 +314,7 @@ impl<'a> InferCtx<'a> {
 
     fn visit_fun_app(
         &mut self,
+        scx: &mut SubtreeCtx,
         required_type: &ty::Poly,
         span: Span,
         app: &hir::App,
@@ -275,16 +348,16 @@ impl<'a> InferCtx<'a> {
                 ));
             };
 
-            let wanted_arg_type = ty::subst::inst_poly_selection(&param_select_ctx, param_type);
-            let actual_arg_type = self.visit_expr(&wanted_arg_type, fixed_arg_expr)?;
+            let wanted_arg_type = ty::subst::inst_ty_selection(&param_select_ctx, param_type);
+            let actual_arg_type = self.visit_expr(scx, &wanted_arg_type, fixed_arg_expr)?;
 
             ret_select_ctx.add_evidence(param_type, &actual_arg_type);
         }
 
         if let Some(rest_arg_expr) = app.rest_arg_expr() {
             let tail_type = param_iter.tail_type();
-            let wanted_tail_type = ty::subst::inst_poly_selection(&param_select_ctx, &tail_type);
-            let actual_tail_type = self.visit_expr(&wanted_tail_type, rest_arg_expr)?;
+            let wanted_tail_type = ty::subst::inst_ty_selection(&param_select_ctx, &tail_type);
+            let actual_tail_type = self.visit_expr(scx, &wanted_tail_type, rest_arg_expr)?;
 
             ret_select_ctx.add_evidence(&tail_type, &actual_tail_type);
         } else if param_iter.next().expect("TODO") != None && fun.params().rest().is_none() {
@@ -298,25 +371,38 @@ impl<'a> InferCtx<'a> {
             ));
         }
 
-        let ret_type = ty::subst::inst_poly_selection(&ret_select_ctx, fun.ret());
+        let ret_type = ty::subst::inst_ty_selection(&ret_select_ctx, fun.ret());
+
+        // Keep track of the purity from the application
+        let app_purity = ty::subst::inst_purity_selection(&ret_select_ctx, fun.purity());
+        self.unify_app_purity(scx, span, &app_purity)?;
+
         self.ensure_is_a(span, ret_type, required_type)
     }
 
     fn visit_app(
         &mut self,
+        scx: &mut SubtreeCtx,
         required_type: &ty::Poly,
         span: Span,
         app: &hir::App,
     ) -> Result<ty::Poly> {
-        // The only type information we can feed back is that we want a function returning a
-        // certain value
-        let wanted_fun_type = ty::TopFun::new(
-            // TODO: Purity
-            Purity::Impure.into_poly(),
-            required_type.clone(),
-        ).into_ref();
+        // The only type information we can feed back is that we want a function of a certain
+        // purity returning a certain value
+        let wanted_purity = match scx.fun_purity.clone() {
+            PurityVarType::Free(_) => {
+                // We're inferring the purity; this application can have any purity
+                Purity::Impure.into_poly()
+            }
+            PurityVarType::Known(purity_type) => {
+                // We have a specific declared purity
+                purity_type.clone()
+            }
+        };
 
-        let actual_fun_type = self.visit_expr(&wanted_fun_type, app.fun_expr())?;
+        let wanted_fun_type = ty::TopFun::new(wanted_purity, required_type.clone()).into_ref();
+
+        let actual_fun_type = self.visit_expr(scx, &wanted_fun_type, app.fun_expr())?;
 
         match ty::resolve::resolve_poly_ty(self.tvars, &actual_fun_type).as_ty() {
             ty::Ty::TopFun(_) => Err(Error::new(
@@ -326,7 +412,7 @@ impl<'a> InferCtx<'a> {
             ty::Ty::TyPred(subject_poly) => {
                 // TODO: Arity
                 let test_poly =
-                    self.visit_expr(&ty::Ty::Any.into_poly(), &app.fixed_arg_exprs()[0])?;
+                    self.visit_expr(scx, &ty::Ty::Any.into_poly(), &app.fixed_arg_exprs()[0])?;
 
                 let result = ty::pred::interpret_poly_pred(self.tvars, &subject_poly, &test_poly)
                     .map_err(|ty::pred::Error::TypeErased(subject, testing)| {
@@ -349,26 +435,31 @@ impl<'a> InferCtx<'a> {
                     }
                 }.into_poly())
             }
-            ty::Ty::Fun(fun) => self.visit_fun_app(required_type, span, app, fun),
+            ty::Ty::Fun(fun) => self.visit_fun_app(scx, required_type, span, app, fun),
             _ => panic!("Unexpected type"),
         }
     }
 
-    fn visit_expr(&mut self, required_type: &ty::Poly, expr: &hir::Expr) -> Result<ty::Poly> {
+    fn visit_expr(
+        &mut self,
+        scx: &mut SubtreeCtx,
+        required_type: &ty::Poly,
+        expr: &hir::Expr,
+    ) -> Result<ty::Poly> {
         match expr {
             hir::Expr::Lit(datum) => self.visit_lit(required_type, datum),
-            hir::Expr::Cond(span, cond) => self.visit_cond(required_type, *span, cond),
-            hir::Expr::Do(exprs) => self.visit_do(required_type, exprs),
+            hir::Expr::Cond(span, cond) => self.visit_cond(scx, required_type, *span, cond),
+            hir::Expr::Do(exprs) => self.visit_do(scx, required_type, exprs),
             hir::Expr::Fun(span, fun) => self.visit_fun(required_type, *span, fun),
             hir::Expr::TyPred(span, test_type) => {
                 self.visit_ty_pred(required_type, *span, test_type)
             }
             hir::Expr::Def(span, destruc, expr) => {
-                self.visit_def(*span, destruc, expr)?;
+                self.visit_def(scx, *span, destruc, expr)?;
                 Ok(ty::Ty::Union(vec![]).into_poly())
             }
             hir::Expr::Ref(span, var_id) => self.visit_ref(required_type, *span, *var_id),
-            hir::Expr::App(span, app) => self.visit_app(required_type, *span, app),
+            hir::Expr::App(span, app) => self.visit_app(scx, required_type, *span, app),
         }
     }
 
@@ -452,12 +543,13 @@ impl<'a> InferCtx<'a> {
 
     fn visit_def(
         &mut self,
+        scx: &mut SubtreeCtx,
         span: Span,
         destruc: &destruc::Destruc,
         value_expr: &hir::Expr,
     ) -> Result<()> {
         let required_type = typeck::destruc::type_for_destruc(self.tvars, destruc, None);
-        let actual_type = self.visit_expr(&required_type, value_expr)?;
+        let actual_type = self.visit_expr(scx, &required_type, value_expr)?;
 
         self.destruc_value(
             destruc,
@@ -470,7 +562,17 @@ impl<'a> InferCtx<'a> {
     }
 
     fn visit_module_def(&mut self, module_def: &hir::module::ModuleDef) -> Result<()> {
-        self.visit_def(*module_def.span(), module_def.destruc(), module_def.value())
+        let mut scx = SubtreeCtx {
+            // Module definiitions must be pure
+            fun_purity: PurityVarType::Known(Purity::Pure.into_poly()),
+        };
+
+        self.visit_def(
+            &mut scx,
+            *module_def.span(),
+            module_def.destruc(),
+            module_def.value(),
+        )
     }
 }
 
@@ -506,7 +608,11 @@ mod test {
         body: &hir::lowering::LoweredTestBody,
     ) -> Result<ty::Poly> {
         let mut icx = InferCtx::new(&body.pvars, &body.tvars);
-        icx.visit_expr(required_type, &body.expr)
+        let mut scx = SubtreeCtx {
+            fun_purity: PurityVarType::Known(Purity::Pure.into_poly()),
+        };
+
+        icx.visit_expr(&mut scx, required_type, &body.expr)
     }
 
     fn assert_type_for_expr(ty_str: &str, expr_str: &str) {
@@ -586,6 +692,32 @@ mod test {
             "(Listof Bool)",
             "((fn #{A} ([rest : A] ...) -> (Listof A) rest) true false)",
         );
+    }
+
+    #[test]
+    fn app_purity() {
+        // An empty function is pure
+        assert_type_for_expr("(-> false)", "(fn () false)");
+
+        // Calling a pure function in an inferred purity should leave us pure
+        assert_type_for_expr("(-> false)", "(fn () ((fn () -> false false)))");
+
+        // Calling the impure function in an inferred purity should make us impure
+        assert_type_for_expr("(->! false)", "(fn () ((fn () ->! false false)))");
+    }
+
+    #[test]
+    fn impure_app_within_pure() {
+        // Calling an impure function inside a function declared as pure should fail
+        let j = "(fn () -> Bool ((fn () ->! false false)))";
+        let t = "                ^^^^^^^^^^^^^^^^^^^^^^^  ";
+
+        let err = Error::new(
+            t2s(t),
+            // TODO: This error is technically correct but a bit inscrutable
+            ErrorKind::IsNotA("(->! false)".to_owned(), "(... -> Bool)".to_owned()),
+        );
+        assert_type_error(&err, j);
     }
 
     #[test]

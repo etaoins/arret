@@ -117,9 +117,17 @@ impl<'a> SubstContext<ty::Poly, ty::Poly, InstPolySelectionError> for InstPolySe
     }
 }
 
-pub fn inst_poly_selection(select_ctx: &ty::select::SelectContext, poly: &ty::Poly) -> ty::Poly {
+pub fn inst_ty_selection(select_ctx: &ty::select::SelectContext, poly: &ty::Poly) -> ty::Poly {
     let ctx = InstPolySelectionCtx { select_ctx };
     ctx.subst_ty_ref(poly).unwrap()
+}
+
+pub fn inst_purity_selection(
+    select_ctx: &ty::select::SelectContext,
+    purity: &ty::purity::Poly,
+) -> ty::purity::Poly {
+    let ctx = InstPolySelectionCtx { select_ctx };
+    ctx.subst_purity_ref(purity).unwrap()
 }
 
 #[cfg(test)]

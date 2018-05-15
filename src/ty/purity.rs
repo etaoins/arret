@@ -83,6 +83,16 @@ pub enum Decl {
     Free(FreePurityId),
 }
 
+impl Decl {
+    pub fn try_to_poly(&self) -> Option<Poly> {
+        match self {
+            Decl::Fixed(fixed) => Some(Poly::Fixed(*fixed)),
+            Decl::Var(pvar_id) => Some(Poly::Var(*pvar_id)),
+            Decl::Free(_) => None,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct FreePurityId(u32);
 

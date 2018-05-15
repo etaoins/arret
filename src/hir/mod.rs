@@ -47,6 +47,10 @@ impl Fun {
         &self.tvar_ids
     }
 
+    pub fn purity(&self) -> &ty::purity::Decl {
+        &self.purity
+    }
+
     pub fn params(&self) -> &destruc::List {
         &self.params
     }
