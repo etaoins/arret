@@ -41,6 +41,22 @@ impl<'a> InferCtx<'a> {
         hir::str_for_poly(self.pvars, self.tvars, poly)
     }
 
+    fn new_union_conflict_error(&self, span: Span, unify_err: &ty::unify::PolyError) -> Error {
+        match unify_err {
+            ty::unify::PolyError::TyConflict(left, right) => Error::new(
+                span,
+                ErrorKind::PolyUnionConflict(self.str_for_poly(&left), self.str_for_poly(&right)),
+            ),
+            ty::unify::PolyError::PurityConflict(purity1, purity2) => Error::new(
+                span,
+                ErrorKind::PolyUnionConflict(
+                    hir::str_for_purity(self.pvars, &purity1),
+                    hir::str_for_purity(self.pvars, &purity2),
+                ),
+            ),
+        }
+    }
+
     /// Ensures `sub_poly` is a subtype of `parent_poly`
     fn ensure_is_a(
         &self,
@@ -74,14 +90,8 @@ impl<'a> InferCtx<'a> {
         let true_type = self.visit_expr(required_type, cond.true_expr())?;
         let false_type = self.visit_expr(required_type, cond.false_expr())?;
 
-        ty::unify::poly_unify_to_poly(self.tvars, &true_type, &false_type).map_err(|poly_error| {
-            // Repackage the error with the offending span
-            let ty::unify::PolyError::PolyConflict(poly1, poly2) = poly_error;
-            Error::new(
-                span,
-                ErrorKind::PolyUnionConflict(self.str_for_poly(&poly1), self.str_for_poly(&poly2)),
-            )
-        })
+        ty::unify::poly_unify_to_poly(self.tvars, &true_type, &false_type)
+            .map_err(|unify_err| self.new_union_conflict_error(span, &unify_err))
     }
 
     fn visit_ty_pred(
@@ -402,14 +412,8 @@ impl<'a> InferCtx<'a> {
         for fixed_destruc in list.fixed() {
             let member_type = match value_type_iter.next() {
                 Ok(Some(member_type)) => member_type,
-                Err(list_type::Error::PolyConflict(left, right)) => {
-                    return Err(Error::new(
-                        value_span,
-                        ErrorKind::PolyUnionConflict(
-                            self.str_for_poly(&left),
-                            self.str_for_poly(&right),
-                        ),
-                    ));
+                Err(list_type::Error::UnifyError(unify_err)) => {
+                    return Err(self.new_union_conflict_error(value_span, &unify_err))
                 }
                 _ => panic!("Destructured value with unexpected type"),
             };

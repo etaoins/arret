@@ -7,7 +7,13 @@ type Result<T> = result::Result<T, Error>;
 pub enum Error {
     NonList(ty::Poly),
     PolyStructure(ty::Poly),
-    PolyConflict(ty::Poly, ty::Poly),
+    UnifyError(ty::unify::PolyError),
+}
+
+impl From<ty::unify::PolyError> for Error {
+    fn from(unify_err: ty::unify::PolyError) -> Error {
+        Error::UnifyError(unify_err)
+    }
 }
 
 pub trait FromListMembers {
@@ -105,11 +111,10 @@ impl<'a> ListTypeIterator for PolyIterator<'a> {
             }
         }
 
-        ty::unify::poly_unify_iter(tvars, tail_types.into_iter())
-            .map(Some)
-            .map_err(|ty::unify::PolyError::PolyConflict(left, right)| {
-                Error::PolyConflict(left, right)
-            })
+        Ok(Some(ty::unify::poly_unify_iter(
+            tvars,
+            tail_types.into_iter(),
+        )?))
     }
 }
 
@@ -147,16 +152,12 @@ impl<'a> ListTypeIterator for ParamsIterator<'a> {
             return Ok(self.rest.clone());
         }
 
-        // TODO: Span
-        ty::unify::poly_unify_iter(
+        Ok(Some(ty::unify::poly_unify_iter(
             tvars,
             self.fixed
                 .into_iter()
                 .cloned()
                 .chain(self.rest.clone().into_iter()),
-        ).map(Some)
-            .map_err(|ty::unify::PolyError::PolyConflict(left, right)| {
-                Error::PolyConflict(left, right)
-            })
+        )?))
     }
 }

@@ -32,7 +32,7 @@ where
 {
     fn unify_ty_refs(&self, &S, &S) -> Result<UnifiedTy<S>, E>;
     fn intersect_ty_refs(&self, &S, &S) -> Result<S, ty::intersect::Error>;
-    fn unify_purity_refs(&self, &S::PRef, &S::PRef) -> S::PRef;
+    fn unify_purity_refs(&self, &S::PRef, &S::PRef) -> Result<S::PRef, E>;
 
     fn unify_to_ty_ref(&self, ty_ref1: &S, ty_ref2: &S) -> Result<S, E> {
         match self.unify_ty_refs(ty_ref1, ty_ref2)? {
@@ -103,7 +103,7 @@ where
         top_fun1: &ty::TopFun<S>,
         top_fun2: &ty::TopFun<S>,
     ) -> Result<UnifiedTy<S>, E> {
-        let unified_purity = self.unify_purity_refs(top_fun1.purity(), top_fun2.purity());
+        let unified_purity = self.unify_purity_refs(top_fun1.purity(), top_fun2.purity())?;
         let unified_ret = self.unify_to_ty_ref(top_fun1.ret(), top_fun2.ret())?;
 
         Ok(UnifiedTy::Merged(
@@ -143,7 +143,7 @@ where
     }
 
     fn unify_fun(&self, fun1: &ty::Fun<S>, fun2: &ty::Fun<S>) -> Result<UnifiedTy<S>, E> {
-        let unified_purity = self.unify_purity_refs(fun1.purity(), fun2.purity());
+        let unified_purity = self.unify_purity_refs(fun1.purity(), fun2.purity())?;
 
         if fun1.is_polymorphic() || fun2.is_polymorphic() {
             // TODO: We could do better here by finding our upper bound and unifying them
@@ -335,7 +335,9 @@ pub enum PolyError {
     /// return a `PolyConflict` error.
     ///
     /// The conflicting types are returned as they may have been nested in to the passed types.
-    PolyConflict(ty::Poly, ty::Poly),
+    TyConflict(ty::Poly, ty::Poly),
+
+    PurityConflict(ty::purity::Poly, ty::purity::Poly),
 }
 
 struct PolyUnifyCtx<'a> {
@@ -422,7 +424,7 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
                     UnifiedTy::Merged(_) => {
                         // We need to merge for correctness but we don't know the specific subtypes
                         // we're merging.
-                        Err(PolyError::PolyConflict(poly1.clone(), poly2.clone()))
+                        Err(PolyError::TyConflict(poly1.clone(), poly2.clone()))
                     }
                     UnifiedTy::Discerned => Ok(UnifiedTy::Discerned),
                 }
@@ -442,7 +444,7 @@ impl<'a> UnifyCtx<ty::Poly, PolyError> for PolyUnifyCtx<'a> {
         &self,
         purity1: &ty::purity::Poly,
         purity2: &ty::purity::Poly,
-    ) -> ty::purity::Poly {
+    ) -> Result<ty::purity::Poly, PolyError> {
         poly_unify_purity(purity1, purity2)
     }
 }
@@ -459,12 +461,22 @@ pub fn poly_unify_to_poly<'a>(
 pub fn poly_unify_purity(
     purity1: &ty::purity::Poly,
     purity2: &ty::purity::Poly,
-) -> ty::purity::Poly {
-    // TODO: Is this right in the case of two vars? Should we trigger a poly conflict?
+) -> Result<ty::purity::Poly, PolyError> {
     if purity1 == purity2 {
-        purity1.clone()
-    } else {
-        Purity::Impure.into_poly()
+        return Ok(purity1.clone());
+    }
+
+    match (purity1, purity1) {
+        // Pure is the "empty type" so this is a no-op
+        // TODO: Replacing `_` and `purity2` with `other` doesn't work
+        (ty::purity::Poly::Fixed(Purity::Pure), _) => Ok(purity2.clone()),
+        (_, ty::purity::Poly::Fixed(Purity::Pure)) => Ok(purity1.clone()),
+        (ty::purity::Poly::Fixed(Purity::Impure), _)
+        | (_, ty::purity::Poly::Fixed(Purity::Impure)) => {
+            // Impure is the "top type" so this becomes impure
+            Ok(Purity::Impure.into_poly())
+        }
+        _ => Err(PolyError::PurityConflict(purity1.clone(), purity2.clone())),
     }
 }
 
@@ -499,12 +511,12 @@ impl<'a> UnifyCtx<ty::Mono, MonoError> for MonoUnifyCtx {
         ty::intersect::mono_intersect(mono1, mono2)
     }
 
-    fn unify_purity_refs(&self, purity1: &Purity, purity2: &Purity) -> Purity {
-        if purity1 == purity2 {
+    fn unify_purity_refs(&self, purity1: &Purity, purity2: &Purity) -> Result<Purity, MonoError> {
+        Ok(if purity1 == purity2 {
             *purity1
         } else {
             Purity::Impure
-        }
+        })
     }
 }
 
@@ -624,7 +636,7 @@ mod test {
         let (tvars, poly1, poly2) = bounded_polys(bound_str1, bound_str2);
 
         assert_eq!(
-            Err(PolyError::PolyConflict(poly1.clone(), poly2.clone())),
+            Err(PolyError::TyConflict(poly1.clone(), poly2.clone())),
             poly_unify(&tvars, &poly1, &poly2),
         );
     }
@@ -874,6 +886,49 @@ mod test {
         assert_eq!(
             UnifiedTy::Merged(top_impure_fun),
             poly_unify(&tvars, &pidentity_fun, &pidentity_impure_string_fun).unwrap()
+        );
+    }
+
+    #[test]
+    fn purity_refs() {
+        let purity_pure = Purity::Pure.into_poly();
+        let purity_impure = Purity::Impure.into_poly();
+        let purity_var1 = ty::purity::Poly::Var(ty::purity::PVarId::new(1));
+        let purity_var2 = ty::purity::Poly::Var(ty::purity::PVarId::new(2));
+
+        assert_eq!(
+            purity_pure,
+            poly_unify_purity(&purity_pure, &purity_pure).unwrap()
+        );
+
+        assert_eq!(
+            purity_impure,
+            poly_unify_purity(&purity_impure, &purity_impure).unwrap()
+        );
+
+        assert_eq!(
+            purity_var1,
+            poly_unify_purity(&purity_var1, &purity_var1).unwrap()
+        );
+
+        assert_eq!(
+            purity_impure,
+            poly_unify_purity(&purity_pure, &purity_impure).unwrap()
+        );
+
+        assert_eq!(
+            purity_var1,
+            poly_unify_purity(&purity_pure, &purity_var1).unwrap()
+        );
+
+        assert_eq!(
+            purity_impure,
+            poly_unify_purity(&purity_impure, &purity_var1).unwrap()
+        );
+
+        assert_eq!(
+            PolyError::PurityConflict(purity_var1.clone(), purity_var2.clone()),
+            poly_unify_purity(&purity_var1, &purity_var2).unwrap_err()
         );
     }
 }

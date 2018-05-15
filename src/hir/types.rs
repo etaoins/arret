@@ -212,9 +212,15 @@ impl<'a> LowerTyContext<'a> {
 
                 ty::unify::poly_unify_iter(self.tvars, member_tys.into_iter()).map_err(|err| {
                     match err {
-                        ty::unify::PolyError::PolyConflict(left, right) => {
+                        ty::unify::PolyError::TyConflict(left, right) => {
                             let left_str = str_for_poly(self.pvars, self.tvars, &left);
                             let right_str = str_for_poly(self.pvars, self.tvars, &right);
+
+                            Error::new(span, ErrorKind::PolyUnionConflict(left_str, right_str))
+                        }
+                        ty::unify::PolyError::PurityConflict(left, right) => {
+                            let left_str = str_for_purity(self.pvars, &left);
+                            let right_str = str_for_purity(self.pvars, &right);
 
                             Error::new(span, ErrorKind::PolyUnionConflict(left_str, right_str))
                         }
@@ -527,6 +533,11 @@ impl<'a> StrForPolyContext<'a> {
 pub fn str_for_poly(pvars: &[ty::purity::PVar], tvars: &[ty::TVar], poly: &ty::Poly) -> String {
     let ctx = StrForPolyContext { pvars, tvars };
     ctx.str_for_poly(poly)
+}
+
+pub fn str_for_purity(pvars: &[ty::purity::PVar], purity: &ty::purity::Poly) -> String {
+    let ctx = StrForPolyContext { pvars, tvars: &[] };
+    ctx.str_for_purity(purity)
 }
 
 #[cfg(test)]

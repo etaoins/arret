@@ -1,6 +1,7 @@
 use std::ops::Range;
 
 use ty;
+use ty::purity::Purity;
 
 /// Selects a set of polymorphic variables for a function application
 ///
@@ -61,14 +62,27 @@ impl<'a> SelectContext<'a> {
         target_purity: &ty::purity::Poly,
         evidence_purity: &ty::purity::Poly,
     ) {
-        if let ty::purity::Poly::Var(pvar_id) = target_purity {
-            if let Some(pvar_idx) = self.selected_pvar_idx(*pvar_id) {
-                self.pvar_purities[pvar_idx] = Some(match self.pvar_purities[pvar_idx] {
-                    None => evidence_purity.clone(),
-                    Some(ref existing) => ty::unify::poly_unify_purity(existing, evidence_purity),
-                });
+        let pvar_id = if let ty::purity::Poly::Var(pvar_id) = target_purity {
+            pvar_id
+        } else {
+            return;
+        };
+
+        let pvar_idx = if let Some(pvar_idx) = self.selected_pvar_idx(*pvar_id) {
+            pvar_idx
+        } else {
+            return;
+        };
+
+        self.pvar_purities[pvar_idx] = Some(match self.pvar_purities[pvar_idx] {
+            None => evidence_purity.clone(),
+            Some(ref existing) => {
+                // Much like the type case we default to the "bound" (impure) if we get a poly
+                // conflict
+                ty::unify::poly_unify_purity(existing, evidence_purity)
+                    .unwrap_or_else(|_| Purity::Impure.into_poly())
             }
-        }
+        });
     }
 
     fn add_evidence_top_fun(
@@ -166,7 +180,7 @@ impl<'a> SelectContext<'a> {
             Some(ref existing) => {
                 match ty::unify::poly_unify_to_poly(self.tvars, existing, evidence_poly) {
                     Ok(unified) => unified,
-                    Err(ty::unify::PolyError::PolyConflict(_, _)) => {
+                    Err(_) => {
                         // We tried to build a union type with conflicting poly members. It isn't
                         // the caller's fault we tried to build a union we can't represent;
                         // silently fall back to the bound.
@@ -502,6 +516,21 @@ mod test {
         assert_unselected_purity(&ctx, 'A');
 
         add_str_evidence(&mut ctx, "(->A true)", "(->! true)");
+        assert_selected_purity(&ctx, 'A', Purity::Impure);
+    }
+
+    #[test]
+    fn fun_purity_conflict() {
+        let pvars = [ty::purity::PVar::new("->A".to_owned())];
+        let pvar_ids = ty::purity::PVarId::new(0)..ty::purity::PVarId::new(pvars.len());
+        let tvar_ids = ty::TVarIds::empty();
+
+        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &[]);
+        assert_unselected_purity(&ctx, 'A');
+
+        add_str_evidence(&mut ctx, "(->A true)", "(->B true)");
+        add_str_evidence(&mut ctx, "(->A true)", "(->C true)");
+
         assert_selected_purity(&ctx, 'A', Purity::Impure);
     }
 

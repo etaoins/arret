@@ -163,7 +163,7 @@ impl Expr {
     }
 }
 
-pub use self::types::str_for_poly;
+pub use self::types::{str_for_poly, str_for_purity};
 
 #[cfg(test)]
 pub use self::types::poly_for_str;
