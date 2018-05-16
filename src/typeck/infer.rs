@@ -15,7 +15,7 @@ use typeck::list_type::ListTypeIterator;
 type Result<T> = result::Result<T, Error>;
 
 enum VarType {
-    Free(ty::Poly),
+    Free(ty::FreeTyId),
     Known(ty::Poly),
 }
 
@@ -130,29 +130,6 @@ impl<'a> InferCtx<'a> {
         )
     }
 
-    fn type_for_free_ref(
-        &self,
-        required_type: &ty::Poly,
-        span: Span,
-        current_type: &ty::Poly,
-    ) -> Result<ty::Poly> {
-        // Unlike references to known variables the `current_type` and `required_type` have equal
-        // footing. We intersect here to find the commonality between the two types. This will
-        // become the new type of the variable.
-        let common_type = ty::intersect::poly_intersect(self.tvars, required_type, current_type)
-            .map_err(|_| {
-                Error::new(
-                    span,
-                    ErrorKind::VarHasEmptyType(
-                        self.str_for_poly(required_type),
-                        self.str_for_poly(current_type),
-                    ),
-                )
-            })?;
-
-        Ok(common_type)
-    }
-
     fn unify_app_purity(
         &self,
         scx: &mut SubtreeCtx,
@@ -173,26 +150,51 @@ impl<'a> InferCtx<'a> {
         Ok(())
     }
 
+    fn type_for_free_ref(
+        &self,
+        required_type: &ty::Poly,
+        span: Span,
+        free_ty_id: ty::FreeTyId,
+    ) -> Result<ty::Poly> {
+        let current_type = &self.free_ty_to_poly[&free_ty_id];
+
+        // Unlike references to known variables the `current_type` and `required_type` have equal
+        // footing. We intersect here to find the commonality between the two types. This will
+        // become the new type of the variable.
+        let common_type = ty::intersect::poly_intersect(self.tvars, required_type, current_type)
+            .map_err(|_| {
+                Error::new(
+                    span,
+                    ErrorKind::VarHasEmptyType(
+                        self.str_for_poly(required_type),
+                        self.str_for_poly(current_type),
+                    ),
+                )
+            })?;
+
+        Ok(common_type)
+    }
+
     fn visit_ref(
         &mut self,
         required_type: &ty::Poly,
         span: Span,
         var_id: hir::VarId,
     ) -> Result<ty::Poly> {
-        let new_free_type = match self.var_to_type[&var_id] {
+        match self.var_to_type[&var_id] {
             VarType::Known(ref known_type) => {
-                return Ok(self.ensure_is_a(span, known_type.clone(), required_type)?)
+                Ok(self.ensure_is_a(span, known_type.clone(), required_type)?)
             }
-            VarType::Free(ref current_type) => {
-                self.type_for_free_ref(required_type, span, current_type)?
+            VarType::Free(free_ty_id) => {
+                let new_free_type = self.type_for_free_ref(required_type, span, free_ty_id)?;
+
+                // Update the free var's type
+                self.free_ty_to_poly
+                    .insert(free_ty_id, new_free_type.clone());
+
+                Ok(new_free_type)
             }
-        };
-
-        // Update the free var's type
-        self.var_to_type
-            .insert(var_id, VarType::Free(new_free_type.clone()));
-
-        Ok(new_free_type)
+        }
     }
 
     fn visit_do(
@@ -237,7 +239,7 @@ impl<'a> InferCtx<'a> {
                 _ => None,
             });
 
-        let actual_param_type: ty::Params<ty::Poly> = typeck::destruc::type_for_list_destruc(
+        let initial_param_type: ty::Params<ty::Poly> = typeck::destruc::type_for_list_destruc(
             self.tvars,
             decl_fun.params(),
             // Use the required type as a guide for any free types in the parameter list
@@ -248,9 +250,9 @@ impl<'a> InferCtx<'a> {
         self.destruc_list_value(
             decl_fun.params(),
             span,
-            list_type::ParamsIterator::new(&actual_param_type),
-            // If a parameter has a free decl type then perform type inference on it
-            VarType::Free,
+            list_type::ParamsIterator::new(&initial_param_type),
+            // If a parameter has a free decl type then we can refine the type
+            true,
         )?;
 
         // Use the declared return type if possible
@@ -291,7 +293,10 @@ impl<'a> InferCtx<'a> {
         if let ty::purity::Decl::Free(free_purity_id) = decl_fun.purity() {
             self.free_purity_to_poly
                 .insert(*free_purity_id, actual_purity.clone());
-        }
+        };
+
+        let actual_param_type =
+            typeck::destruc::subst_list_destruc(decl_fun.params(), &self.free_ty_to_poly);
 
         let found_type = ty::Fun::new(
             decl_fun.pvar_ids().clone(),
@@ -454,24 +459,22 @@ impl<'a> InferCtx<'a> {
         }
     }
 
-    fn destruc_scalar_value<F>(
+    fn destruc_scalar_value(
         &mut self,
         scalar: &destruc::Scalar,
         value_type: &ty::Poly,
-        free_vartype_cons: F,
-    ) where
-        F: Copy + Fn(ty::Poly) -> VarType,
-    {
-        let is_free = if let ty::Decl::Free(free_ty_id) = *scalar.ty() {
+        can_refine: bool,
+    ) {
+        let free_ty_id = if let ty::Decl::Free(free_ty_id) = *scalar.ty() {
             self.free_ty_to_poly.insert(free_ty_id, value_type.clone());
-            true
+            Some(free_ty_id)
         } else {
-            false
+            None
         };
 
         if let Some(var_id) = *scalar.var_id() {
-            let var_type = if is_free {
-                free_vartype_cons(value_type.clone())
+            let var_type = if let (Some(free_ty_id), true) = (free_ty_id, can_refine) {
+                VarType::Free(free_ty_id)
             } else {
                 VarType::Known(value_type.clone())
             };
@@ -480,15 +483,14 @@ impl<'a> InferCtx<'a> {
         }
     }
 
-    fn destruc_list_value<F, I>(
+    fn destruc_list_value<I>(
         &mut self,
         list: &destruc::List,
         value_span: Span,
         mut value_type_iter: I,
-        free_vartype_cons: F,
+        can_refine: bool,
     ) -> Result<()>
     where
-        F: Copy + Fn(ty::Poly) -> VarType,
         I: ListTypeIterator,
     {
         for fixed_destruc in list.fixed() {
@@ -500,34 +502,31 @@ impl<'a> InferCtx<'a> {
                 _ => panic!("Destructured value with unexpected type"),
             };
 
-            self.destruc_value(fixed_destruc, value_span, member_type, free_vartype_cons)?;
+            self.destruc_value(fixed_destruc, value_span, member_type, can_refine)?;
         }
 
         if let Some(scalar) = list.rest() {
-            self.destruc_scalar_value(scalar, &value_type_iter.tail_type(), free_vartype_cons);
+            self.destruc_scalar_value(scalar, &value_type_iter.tail_type(), can_refine);
         }
 
         Ok(())
     }
 
-    fn destruc_value<F>(
+    fn destruc_value(
         &mut self,
         destruc: &destruc::Destruc,
         value_span: Span,
         value_type: &ty::Poly,
-        free_vartype_cons: F,
-    ) -> Result<()>
-    where
-        F: Copy + Fn(ty::Poly) -> VarType,
-    {
+        can_refine: bool,
+    ) -> Result<()> {
         match destruc {
             destruc::Destruc::Scalar(_, scalar) => {
-                self.destruc_scalar_value(scalar, value_type, free_vartype_cons);
+                self.destruc_scalar_value(scalar, value_type, can_refine);
                 Ok(())
             }
             destruc::Destruc::List(_, list) => {
                 let value_type_iter = list_type::PolyIterator::new(value_type);
-                self.destruc_list_value(list, value_span, value_type_iter, free_vartype_cons)
+                self.destruc_list_value(list, value_span, value_type_iter, can_refine)
             }
         }
     }
@@ -548,7 +547,7 @@ impl<'a> InferCtx<'a> {
             &actual_type,
             // We know the exact type of these variables; do not infer further even if their type
             // wasn't declared
-            VarType::Known,
+            false,
         )
     }
 
@@ -641,6 +640,7 @@ mod test {
     #[test]
     fn cond_expr() {
         assert_type_for_expr("Bool", "(if true true false)");
+        assert_type_for_expr("(Bool -> Bool)", "(fn (x) (if x true false))");
     }
 
     #[test]

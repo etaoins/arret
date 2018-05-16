@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use hir::destruc;
 use ty;
 use typeck::list_type;
@@ -60,5 +62,36 @@ pub fn type_for_destruc(
 
             type_for_list_destruc(tvars, list, guide_type_iter)
         }
+    }
+}
+
+pub fn subst_list_destruc<R>(
+    list: &destruc::List,
+    free_ty_to_poly: &HashMap<ty::FreeTyId, ty::Poly>,
+) -> R
+where
+    R: FromListMembers,
+{
+    let fixed_polys = list.fixed()
+        .iter()
+        .map(|fixed_destruc| subst_destruc(fixed_destruc, free_ty_to_poly));
+
+    let rest_poly = list.rest()
+        .as_ref()
+        .map(|rest_destruc| ty::subst::subst_decl_ty(free_ty_to_poly, rest_destruc.ty()));
+
+    R::from_list_members(fixed_polys, rest_poly)
+}
+
+/// Returns the required type for a destruc
+pub fn subst_destruc(
+    destruc: &destruc::Destruc,
+    free_ty_to_poly: &HashMap<ty::FreeTyId, ty::Poly>,
+) -> ty::Poly {
+    match *destruc {
+        destruc::Destruc::Scalar(_, ref scalar) => {
+            ty::subst::subst_decl_ty(free_ty_to_poly, scalar.ty())
+        }
+        destruc::Destruc::List(_, ref list) => subst_list_destruc(list, free_ty_to_poly),
     }
 }

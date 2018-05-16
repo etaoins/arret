@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::result::Result;
 
 use ty;
@@ -130,10 +131,20 @@ pub fn inst_purity_selection(
     ctx.subst_purity_ref(purity).unwrap()
 }
 
+pub fn subst_decl_ty(
+    free_ty_to_poly: &HashMap<ty::FreeTyId, ty::Poly>,
+    decl_ty: &ty::Decl,
+) -> ty::Poly {
+    match decl_ty {
+        ty::Decl::Fixed(fixed) => ty::Poly::Fixed(fixed.clone()),
+        ty::Decl::Var(tvar_id) => ty::Poly::Var(*tvar_id),
+        ty::Decl::Free(free_ty_id) => free_ty_to_poly[free_ty_id].clone(),
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::collections::HashMap;
 
     struct PolyToMonoCtx<'a> {
         pvar_purities: &'a HashMap<ty::purity::PVarId, Purity>,
