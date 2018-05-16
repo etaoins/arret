@@ -720,7 +720,7 @@ mod test {
 
         // (All A (A -> A))
         let pidentity_fun = ty::Fun::new(
-            ty::purity::PVarIds::empty(),
+            ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
             ty::Params::new(vec![ptype1_unbounded.clone()], None),
@@ -728,7 +728,7 @@ mod test {
 
         // (All A (A A -> (Cons A A))
         let panys_to_cons = ty::Fun::new(
-            ty::purity::PVarIds::empty(),
+            ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(
                 Purity::Pure.into_poly(),
@@ -745,7 +745,7 @@ mod test {
 
         // (All [A : Symbol] (A -> A))
         let pidentity_sym_fun = ty::Fun::new(
-            ty::purity::PVarIds::empty(),
+            ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype2_symbol.clone()),
             ty::Params::new(vec![ptype2_symbol.clone()], None),
@@ -753,7 +753,7 @@ mod test {
 
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Fun::new(
-            ty::purity::PVarIds::empty(),
+            ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(2)..ty::TVarId::new(3),
             ty::TopFun::new(Purity::Impure.into_poly(), ptype3_string.clone()),
             ty::Params::new(vec![ptype3_string.clone()], None),

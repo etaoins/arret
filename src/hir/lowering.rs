@@ -1206,8 +1206,8 @@ mod test {
         let expected = Expr::Fun(
             t2s(t),
             Fun {
-                pvar_ids: ty::purity::PVarIds::empty(),
-                tvar_ids: ty::TVarIds::empty(),
+                pvar_ids: ty::purity::PVarIds::monomorphic(),
+                tvar_ids: ty::TVarIds::monomorphic(),
                 purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
                 params: destruc::List::new(vec![], None),
                 ret_ty: ty::Decl::Free(ty::FreeTyId::new(1)),
@@ -1227,8 +1227,8 @@ mod test {
         let expected = Expr::Fun(
             t2s(t),
             Fun {
-                pvar_ids: ty::purity::PVarIds::empty(),
-                tvar_ids: ty::TVarIds::empty(),
+                pvar_ids: ty::purity::PVarIds::monomorphic(),
+                tvar_ids: ty::TVarIds::monomorphic(),
                 purity: ty::purity::Decl::Fixed(Purity::Pure),
                 params: destruc::List::new(vec![], None),
                 ret_ty: ty::Ty::Int.into_decl(),
@@ -1262,8 +1262,8 @@ mod test {
         let expected = Expr::Fun(
             t2s(u),
             Fun {
-                pvar_ids: ty::purity::PVarIds::empty(),
-                tvar_ids: ty::TVarIds::empty(),
+                pvar_ids: ty::purity::PVarIds::monomorphic(),
+                tvar_ids: ty::TVarIds::monomorphic(),
                 purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
                 params,
                 ret_ty: ty::Decl::Free(ty::FreeTyId::new(2)),
@@ -1335,8 +1335,8 @@ mod test {
             Expr::Fun(
                 t2s(w),
                 Fun {
-                    pvar_ids: ty::purity::PVarIds::empty(),
-                    tvar_ids: ty::TVarIds::empty(),
+                    pvar_ids: ty::purity::PVarIds::monomorphic(),
+                    tvar_ids: ty::TVarIds::monomorphic(),
                     purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
                     params: destruc::List::new(vec![], None),
                     ret_ty: ty::Decl::Free(ty::FreeTyId::new(2)),
@@ -1390,8 +1390,8 @@ mod test {
             Expr::Fun(
                 t2s(x),
                 Fun {
-                    pvar_ids: ty::purity::PVarIds::empty(),
-                    tvar_ids: ty::TVarIds::empty(),
+                    pvar_ids: ty::purity::PVarIds::monomorphic(),
+                    tvar_ids: ty::TVarIds::monomorphic(),
                     purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
                     params,
                     ret_ty: ty::Decl::Free(ty::FreeTyId::new(3)),

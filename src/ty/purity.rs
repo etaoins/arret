@@ -103,16 +103,16 @@ impl FreePurityId {
 }
 
 pub trait PVarIds: PartialEq + Eq + Clone + std::fmt::Debug + std::hash::Hash + Sized {
-    fn empty() -> Self;
-    fn is_empty(&self) -> bool;
+    fn monomorphic() -> Self;
+    fn is_monomorphic(&self) -> bool;
 }
 
 impl PVarIds for Range<PVarId> {
-    fn empty() -> Range<PVarId> {
+    fn monomorphic() -> Range<PVarId> {
         PVarId::new(0)..PVarId::new(0)
     }
 
-    fn is_empty(&self) -> bool {
+    fn is_monomorphic(&self) -> bool {
         self.start >= self.end
     }
 }
@@ -121,11 +121,11 @@ impl PVarIds for Range<PVarId> {
 pub struct EmptyPVarIds();
 
 impl PVarIds for EmptyPVarIds {
-    fn empty() -> EmptyPVarIds {
+    fn monomorphic() -> EmptyPVarIds {
         EmptyPVarIds()
     }
 
-    fn is_empty(&self) -> bool {
+    fn is_monomorphic(&self) -> bool {
         true
     }
 }

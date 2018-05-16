@@ -40,8 +40,8 @@ where
                 self.subst_ty_ref(top_fun.ret())?,
             ).into_ty(),
             ty::Ty::Fun(fun) => ty::Fun::new(
-                ty::PVarIds::empty(),
-                ty::TVarIds::empty(),
+                ty::PVarIds::monomorphic(),
+                ty::TVarIds::monomorphic(),
                 ty::TopFun::new(
                     self.subst_purity_ref(fun.purity())?,
                     self.subst_ty_ref(fun.ret())?,

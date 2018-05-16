@@ -145,20 +145,14 @@ where
     fn unify_fun(&self, fun1: &ty::Fun<S>, fun2: &ty::Fun<S>) -> Result<UnifiedTy<S>, E> {
         let unified_purity = self.unify_purity_refs(fun1.purity(), fun2.purity())?;
 
-        if fun1.is_polymorphic() || fun2.is_polymorphic() {
-            // TODO: We could do better here by finding our upper bound and unifying them
-            // Preserving the polymorphicness would be very complex
-            Ok(UnifiedTy::Merged(
-                ty::TopFun::new(unified_purity, ty::Ty::Any.into_ref()).into_ref(),
-            ))
-        } else {
+        if fun1.is_monomorphic() && fun2.is_monomorphic() {
             let unified_ret = self.unify_to_ty_ref(fun1.ret(), fun2.ret())?;
 
             match self.unify_params(fun1.params(), fun2.params()) {
                 Ok(unified_params) => Ok(UnifiedTy::Merged(
                     ty::Fun::new(
-                        S::PVarIds::empty(),
-                        S::TVarIds::empty(),
+                        S::PVarIds::monomorphic(),
+                        S::TVarIds::monomorphic(),
                         ty::TopFun::new(unified_purity, unified_ret),
                         unified_params,
                     ).into_ref(),
@@ -167,6 +161,12 @@ where
                     ty::TopFun::new(unified_purity, unified_ret).into_ref(),
                 )),
             }
+        } else {
+            // TODO: We could do better here by finding our upper bound and unifying them
+            // Preserving the polymorphicness would be very complex
+            Ok(UnifiedTy::Merged(
+                ty::TopFun::new(unified_purity, ty::Ty::Any.into_ref()).into_ref(),
+            ))
         }
     }
 
@@ -840,7 +840,7 @@ mod test {
 
         // (All A (A -> A))
         let pidentity_fun = ty::Fun::new(
-            ty::purity::PVarIds::empty(),
+            ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
             ty::Params::new(vec![ptype1_unbounded.clone()], None),
@@ -848,7 +848,7 @@ mod test {
 
         // (All A (A A -> (Cons A A))
         let panys_to_cons = ty::Fun::new(
-            ty::purity::PVarIds::empty(),
+            ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(
                 Purity::Pure.into_poly(),
@@ -865,7 +865,7 @@ mod test {
 
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Fun::new(
-            ty::purity::PVarIds::empty(),
+            ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::TopFun::new(Purity::Impure.into_poly(), ptype2_string.clone()),
             ty::Params::new(vec![ptype2_string.clone()], None),

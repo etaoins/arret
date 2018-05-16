@@ -180,7 +180,7 @@ where
             }
             (ty::Ty::TopFun(top_fun), ty::Ty::Fun(fun))
             | (ty::Ty::Fun(fun), ty::Ty::TopFun(top_fun)) => {
-                if fun.is_polymorphic() {
+                if !fun.is_monomorphic() {
                     // TODO: This might be possible but we would have to recalculate the tvars for
                     // the intersected function
                     return Err(Error::Disjoint);
@@ -191,28 +191,29 @@ where
                 let intersected_ret = self.intersect_ty_refs(top_fun.ret(), fun.ret())?;
 
                 Ok(ty::Fun::new(
-                    ty::purity::PVarIds::empty(),
-                    S::TVarIds::empty(),
+                    ty::purity::PVarIds::monomorphic(),
+                    S::TVarIds::monomorphic(),
                     ty::TopFun::new(intersected_purity, intersected_ret),
                     intersected_params,
                 ).into_ref())
             }
             (ty::Ty::Fun(fun1), ty::Ty::Fun(fun2)) => {
-                if fun1.is_polymorphic() || fun2.is_polymorphic() {
+                if fun1.is_monomorphic() && fun2.is_monomorphic() {
+                    let intersected_purity =
+                        self.intersect_purity_refs(fun1.purity(), fun2.purity());
+                    let intersected_params = self.intersect_params(fun1.params(), fun2.params())?;
+                    let intersected_ret = self.intersect_ty_refs(fun1.ret(), fun2.ret())?;
+
+                    Ok(ty::Fun::new(
+                        ty::purity::PVarIds::monomorphic(),
+                        S::TVarIds::monomorphic(),
+                        ty::TopFun::new(intersected_purity, intersected_ret),
+                        intersected_params,
+                    ).into_ref())
+                } else {
                     // TODO: Same issue as top functions
-                    return Err(Error::Disjoint);
+                    Err(Error::Disjoint)
                 }
-
-                let intersected_purity = self.intersect_purity_refs(fun1.purity(), fun2.purity());
-                let intersected_params = self.intersect_params(fun1.params(), fun2.params())?;
-                let intersected_ret = self.intersect_ty_refs(fun1.ret(), fun2.ret())?;
-
-                Ok(ty::Fun::new(
-                    ty::purity::PVarIds::empty(),
-                    S::TVarIds::empty(),
-                    ty::TopFun::new(intersected_purity, intersected_ret),
-                    intersected_params,
-                ).into_ref())
             }
             (_, _) => Err(Error::Disjoint),
         }
@@ -471,7 +472,7 @@ mod test {
 
         // (All A (A -> A))
         let pidentity_fun = ty::Fun::new(
-            ty::purity::PVarIds::empty(),
+            ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
             ty::Params::new(vec![ptype1_unbounded.clone()], None),
@@ -479,7 +480,7 @@ mod test {
 
         // (All A (A A -> (Cons A A))
         let panys_to_cons = ty::Fun::new(
-            ty::purity::PVarIds::empty(),
+            ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(
                 Purity::Pure.into_poly(),
@@ -496,7 +497,7 @@ mod test {
 
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Fun::new(
-            ty::purity::PVarIds::empty(),
+            ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::TopFun::new(Purity::Impure.into_poly(), ptype2_string.clone()),
             ty::Params::new(vec![ptype2_string.clone()], None),

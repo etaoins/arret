@@ -44,8 +44,8 @@ pub trait TyRef: PartialEq + Clone + Sized {
 }
 
 pub trait TVarIds: PartialEq + Eq + Clone + std::fmt::Debug + std::hash::Hash + Sized {
-    fn empty() -> Self;
-    fn is_empty(&self) -> bool;
+    fn monomorphic() -> Self;
+    fn is_monomorphic(&self) -> bool;
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
@@ -228,8 +228,8 @@ where
     /// it does not support occurrence typing.
     pub fn new_for_ty_pred() -> Fun<S> {
         Self::new(
-            S::PVarIds::empty(),
-            S::TVarIds::empty(),
+            S::PVarIds::monomorphic(),
+            S::TVarIds::monomorphic(),
             TopFun::new_for_ty_pred(),
             Params::new(vec![Ty::Any.into_ref()], None),
         )
@@ -259,8 +259,8 @@ where
         &self.top_fun.ret
     }
 
-    pub fn is_polymorphic(&self) -> bool {
-        !self.pvar_ids.is_empty() || !self.tvar_ids.is_empty()
+    pub fn is_monomorphic(&self) -> bool {
+        self.pvar_ids.is_monomorphic() && self.tvar_ids.is_monomorphic()
     }
 
     pub fn into_ty(self) -> Ty<S> {
@@ -337,11 +337,11 @@ impl Ty<Poly> {
 }
 
 impl TVarIds for Range<TVarId> {
-    fn empty() -> Range<TVarId> {
+    fn monomorphic() -> Range<TVarId> {
         TVarId::new(0)..TVarId::new(0)
     }
 
-    fn is_empty(&self) -> bool {
+    fn is_monomorphic(&self) -> bool {
         self.start >= self.end
     }
 }
@@ -376,11 +376,11 @@ impl TyRef for Mono {
 pub struct EmptyTVarIds();
 
 impl TVarIds for EmptyTVarIds {
-    fn empty() -> EmptyTVarIds {
+    fn monomorphic() -> EmptyTVarIds {
         EmptyTVarIds()
     }
 
-    fn is_empty(&self) -> bool {
+    fn is_monomorphic(&self) -> bool {
         true
     }
 }
