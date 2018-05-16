@@ -130,15 +130,6 @@ impl<'a> InferCtx<'a> {
         )
     }
 
-    fn type_for_known_ref(
-        &self,
-        required_type: &ty::Poly,
-        span: Span,
-        known_type: &ty::Poly,
-    ) -> Result<ty::Poly> {
-        self.ensure_is_a(span, known_type.clone(), required_type)
-    }
-
     fn type_for_free_ref(
         &self,
         required_type: &ty::Poly,
@@ -190,7 +181,7 @@ impl<'a> InferCtx<'a> {
     ) -> Result<ty::Poly> {
         let new_free_type = match self.var_to_type[&var_id] {
             VarType::Known(ref known_type) => {
-                return self.type_for_known_ref(required_type, span, known_type);
+                return Ok(self.ensure_is_a(span, known_type.clone(), required_type)?)
             }
             VarType::Free(ref current_type) => {
                 self.type_for_free_ref(required_type, span, current_type)?
