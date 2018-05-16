@@ -48,6 +48,10 @@ struct SubtreeCtx {
     fun_purity: PurityVarType,
 }
 
+fn unit_type() -> ty::Poly {
+    ty::Ty::Nil.into_poly()
+}
+
 impl<'a> InferCtx<'a> {
     fn new(pvars: &'a [ty::purity::PVar], tvars: &'a [ty::TVar]) -> InferCtx<'a> {
         InferCtx {
@@ -208,7 +212,7 @@ impl<'a> InferCtx<'a> {
         exprs: &[hir::Expr],
     ) -> Result<ty::Poly> {
         if exprs.is_empty() {
-            return Ok(ty::Ty::Union(vec![]).into_poly());
+            return Ok(unit_type());
         }
 
         for non_terminal_expr in &exprs[0..exprs.len() - 1] {
@@ -456,7 +460,7 @@ impl<'a> InferCtx<'a> {
             }
             hir::Expr::Def(span, destruc, expr) => {
                 self.visit_def(scx, *span, destruc, expr)?;
-                Ok(ty::Ty::Union(vec![]).into_poly())
+                Ok(unit_type())
             }
             hir::Expr::Ref(span, var_id) => self.visit_ref(required_type, *span, *var_id),
             hir::Expr::App(span, app) => self.visit_app(scx, required_type, *span, app),
@@ -650,6 +654,7 @@ mod test {
 
     #[test]
     fn fun_expr() {
+        assert_type_for_expr("(-> ())", "(fn ())");
         assert_type_for_expr("(Any -> true)", "(fn (_) true)");
         assert_type_for_expr("(String -> String)", "(fn ([x : String]) x)");
 
