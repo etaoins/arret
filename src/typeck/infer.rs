@@ -108,13 +108,17 @@ impl<'a> InferCtx<'a> {
         span: Span,
         cond: &hir::Cond,
     ) -> Result<ty::Poly> {
-        self.visit_expr(scx, &ty::Ty::Bool.into_poly(), cond.test_expr())?;
+        let test_type = self.visit_expr(scx, &ty::Ty::Bool.into_poly(), cond.test_expr())?;
 
         let true_type = self.visit_expr(scx, required_type, cond.true_expr())?;
         let false_type = self.visit_expr(scx, required_type, cond.false_expr())?;
 
-        ty::unify::poly_unify_to_poly(self.tvars, &true_type, &false_type)
-            .map_err(|unify_err| self.new_union_conflict_error(span, &unify_err))
+        match test_type {
+            ty::Poly::Fixed(ty::Ty::LitBool(true)) => Ok(true_type),
+            ty::Poly::Fixed(ty::Ty::LitBool(false)) => Ok(false_type),
+            _ => ty::unify::poly_unify_to_poly(self.tvars, &true_type, &false_type)
+                .map_err(|unify_err| self.new_union_conflict_error(span, &unify_err)),
+        }
     }
 
     fn visit_ty_pred(
@@ -639,7 +643,8 @@ mod test {
 
     #[test]
     fn cond_expr() {
-        assert_type_for_expr("Bool", "(if true true false)");
+        assert_type_for_expr("'true-branch", "(if true 'true-branch 'false-branch)");
+        assert_type_for_expr("'false-branch", "(if false 'true-branch 'false-branch)");
         assert_type_for_expr("(Bool -> Bool)", "(fn (x) (if x true false))");
     }
 
