@@ -444,6 +444,31 @@ impl<'a> InferCtx<'a> {
         }
     }
 
+    fn visit_let(
+        &mut self,
+        scx: &mut SubtreeCtx,
+        required_type: &ty::Poly,
+        span: Span,
+        hir_let: &hir::Let,
+    ) -> Result<ty::Poly> {
+        let destruc = hir_let.destruc();
+        let value_expr = hir_let.value_expr();
+
+        let required_destruc_type = typeck::destruc::type_for_destruc(self.tvars, destruc, None);
+        let actual_destruc_type = self.visit_expr(scx, &required_destruc_type, value_expr)?;
+
+        self.destruc_value(
+            destruc,
+            value_expr.span().unwrap_or(span),
+            &actual_destruc_type,
+            // We know the exact type of these variables; do not infer further even if their type
+            // wasn't declared
+            false,
+        )?;
+
+        self.visit_expr(scx, required_type, hir_let.body_expr())
+    }
+
     fn visit_expr(
         &mut self,
         scx: &mut SubtreeCtx,
@@ -458,10 +483,7 @@ impl<'a> InferCtx<'a> {
             hir::Expr::TyPred(span, test_type) => {
                 self.visit_ty_pred(required_type, *span, test_type)
             }
-            hir::Expr::Def(span, destruc, expr) => {
-                self.visit_def(scx, *span, destruc, expr)?;
-                Ok(unit_type())
-            }
+            hir::Expr::Let(span, hir_let) => self.visit_let(scx, required_type, *span, hir_let),
             hir::Expr::Ref(span, var_id) => self.visit_ref(required_type, *span, *var_id),
             hir::Expr::App(span, app) => self.visit_app(scx, required_type, *span, app),
         }
@@ -539,37 +561,25 @@ impl<'a> InferCtx<'a> {
         }
     }
 
-    fn visit_def(
-        &mut self,
-        scx: &mut SubtreeCtx,
-        span: Span,
-        destruc: &destruc::Destruc,
-        value_expr: &hir::Expr,
-    ) -> Result<()> {
-        let required_type = typeck::destruc::type_for_destruc(self.tvars, destruc, None);
-        let actual_type = self.visit_expr(scx, &required_type, value_expr)?;
-
-        self.destruc_value(
-            destruc,
-            value_expr.span().unwrap_or(span),
-            &actual_type,
-            // We know the exact type of these variables; do not infer further even if their type
-            // wasn't declared
-            false,
-        )
-    }
-
     fn visit_module_def(&mut self, module_def: &hir::module::ModuleDef) -> Result<()> {
         let mut scx = SubtreeCtx {
             // Module definiitions must be pure
             fun_purity: PurityVarType::Known(Purity::Pure.into_poly()),
         };
 
-        self.visit_def(
-            &mut scx,
-            *module_def.span(),
-            module_def.destruc(),
-            module_def.value(),
+        let destruc = module_def.destruc();
+        let value_expr = module_def.value_expr();
+
+        let required_type = typeck::destruc::type_for_destruc(self.tvars, destruc, None);
+        let actual_type = self.visit_expr(&mut scx, &required_type, value_expr)?;
+
+        self.destruc_value(
+            destruc,
+            value_expr.span().unwrap_or_else(|| module_def.span()),
+            &actual_type,
+            // We know the exact type of these variables; do not infer further even if their type
+            // wasn't declared
+            false,
         )
     }
 }
@@ -598,45 +608,48 @@ pub fn infer_module(
 #[cfg(test)]
 mod test {
     use super::*;
-    use hir::lowering::body_for_str;
+    use hir::lowering::lowered_expr_for_str;
     use syntax::span::t2s;
 
-    fn type_for_body(
+    fn type_for_lowered_expr(
         required_type: &ty::Poly,
-        body: &hir::lowering::LoweredTestBody,
+        lowered_expr: &hir::lowering::LoweredTestExpr,
     ) -> Result<ty::Poly> {
-        let mut icx = InferCtx::new(&body.pvars, &body.tvars);
+        let mut icx = InferCtx::new(&lowered_expr.pvars, &lowered_expr.tvars);
         let mut scx = SubtreeCtx {
             fun_purity: PurityVarType::Known(Purity::Pure.into_poly()),
         };
 
-        icx.visit_expr(&mut scx, required_type, &body.expr)
+        icx.visit_expr(&mut scx, required_type, &lowered_expr.expr)
     }
 
     fn assert_type_for_expr(ty_str: &str, expr_str: &str) {
-        let body = body_for_str(expr_str).unwrap();
+        let lowered_expr = lowered_expr_for_str(expr_str).unwrap();
         let poly = hir::poly_for_str(ty_str).unwrap();
 
         assert_eq!(
             poly,
-            type_for_body(&ty::Ty::Any.into_poly(), &body).unwrap()
+            type_for_lowered_expr(&ty::Ty::Any.into_poly(), &lowered_expr).unwrap()
         );
     }
 
     fn assert_guided_type_for_expr(expected_ty_str: &str, expr_str: &str, guide_ty_str: &str) {
-        let body = body_for_str(expr_str).unwrap();
+        let lowered_expr = lowered_expr_for_str(expr_str).unwrap();
         let expected_poly = hir::poly_for_str(expected_ty_str).unwrap();
         let guide_poly = hir::poly_for_str(guide_ty_str).unwrap();
 
-        assert_eq!(expected_poly, type_for_body(&guide_poly, &body).unwrap());
+        assert_eq!(
+            expected_poly,
+            type_for_lowered_expr(&guide_poly, &lowered_expr).unwrap()
+        );
     }
 
     fn assert_type_error(err: &Error, expr_str: &str) {
-        let body = body_for_str(expr_str).unwrap();
+        let lowered_expr = lowered_expr_for_str(expr_str).unwrap();
 
         assert_eq!(
             err,
-            &type_for_body(&ty::Ty::Any.into_poly(), &body).unwrap_err()
+            &type_for_lowered_expr(&ty::Ty::Any.into_poly(), &lowered_expr).unwrap_err()
         )
     }
 
@@ -662,8 +675,8 @@ mod test {
         assert_guided_type_for_expr("(Symbol -> true)", "(fn (_) true)", "(Symbol -> true)");
         assert_guided_type_for_expr("(Symbol -> Symbol)", "(fn (x) x)", "(Symbol -> Any))");
 
-        let j = "(def [f : (Symbol -> true)] (fn ([_ : String]) true)) f";
-        let t = "                            ^^^^^^^^^^^^^^^^^^^^^^^^   ";
+        let j = "(let [[f : (Symbol -> true)] (fn ([_ : String]) true)])";
+        let t = "                             ^^^^^^^^^^^^^^^^^^^^^^^^  ";
         let err = Error::new(
             t2s(t),
             ErrorKind::IsNotA("(String -> true)".to_owned(), "(Symbol -> true)".to_owned()),
@@ -741,16 +754,16 @@ mod test {
 
     #[test]
     fn list_destruc() {
-        assert_type_for_expr("Int", "(def (x) '(1)) x");
+        assert_type_for_expr("Int", "(let [(x) '(1)] x)");
         assert_type_for_expr(
             "(List true false)",
-            "(def (_ rest ...) '(1 true false)) rest",
+            "(let [(_ rest ...) '(1 true false)] rest)",
         );
     }
 
     #[test]
     fn var_ref() {
-        assert_type_for_expr("Int", "(def x 1) x")
+        assert_type_for_expr("Int", "(let [x 1] x)")
     }
 
     #[test]

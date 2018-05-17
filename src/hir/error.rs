@@ -96,7 +96,7 @@ impl Reportable for Error {
             ErrorKind::WrongArgCount(expected) => format!("wrong arg count; expected {}", expected),
             ErrorKind::IllegalArg(ref description) => format!("illegal argument: {}", description),
             ErrorKind::ExpectedSymbol => "expected symbol".to_owned(),
-            ErrorKind::DefOutsideBody => "(def) outside module or function body".to_owned(),
+            ErrorKind::DefOutsideBody => "(def) outside module body".to_owned(),
             ErrorKind::ExportOutsideModule => "(export) outside of module body".to_owned(),
             ErrorKind::NonDefInsideModule => {
                 "definition expected at the top-level of a module body".to_owned()

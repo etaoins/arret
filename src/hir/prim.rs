@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use hir::scope::Binding;
+use std::collections::HashMap;
 
 macro_rules! prims {
     ( $( ($n:expr, $i:ident) ),* ) => {
@@ -18,17 +18,20 @@ macro_rules! prims {
 
 prims!(
     ("def", Def),
+    ("let", Let),
     ("fn", Fun),
     ("if", If),
     ("quote", Quote),
     ("import", Import),
     ("export", Export),
     ("defmacro", DefMacro),
+    ("letmacro", LetMacro),
     ("...", Ellipsis),
     ("_", Wildcard),
     ("macro-rules", MacroRules),
     (":", TyColon),
     ("deftype", DefType),
+    ("lettype", LetType),
     ("type-predicate", TyPred),
     ("compile-error", CompileError)
 );

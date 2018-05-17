@@ -10,33 +10,28 @@ use syntax::span::Span;
 pub struct ModuleDef {
     span: Span,
     destruc: Destruc,
-    value: Expr,
+    value_expr: Expr,
 }
 
 impl ModuleDef {
-    pub fn new(span: Span, destruc: Destruc, value: Expr) -> ModuleDef {
+    pub fn new(span: Span, destruc: Destruc, value_expr: Expr) -> ModuleDef {
         ModuleDef {
             span,
             destruc,
-            value,
+            value_expr,
         }
     }
 
-    pub fn span(&self) -> &Span {
-        &self.span
+    pub fn span(&self) -> Span {
+        self.span
     }
 
     pub fn destruc(&self) -> &Destruc {
         &self.destruc
     }
 
-    pub fn value(&self) -> &Expr {
-        &self.value
-    }
-
-    #[cfg(test)]
-    pub fn into_value(self) -> Expr {
-        self.value
+    pub fn value_expr(&self) -> &Expr {
+        &self.value_expr
     }
 }
 

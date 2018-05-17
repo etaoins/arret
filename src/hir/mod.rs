@@ -86,6 +86,27 @@ impl Cond {
 }
 
 #[derive(PartialEq, Debug)]
+pub struct Let {
+    destruc: destruc::Destruc,
+    value_expr: Box<Expr>,
+    body_expr: Box<Expr>,
+}
+
+impl Let {
+    pub fn destruc(&self) -> &destruc::Destruc {
+        &self.destruc
+    }
+
+    pub fn value_expr(&self) -> &Expr {
+        &self.value_expr
+    }
+
+    pub fn body_expr(&self) -> &Expr {
+        &self.body_expr
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub struct App {
     fun_expr: Box<Expr>,
     fixed_arg_exprs: Vec<Expr>,
@@ -111,7 +132,7 @@ pub enum Expr {
     Lit(Datum),
     App(Span, App),
     Fun(Span, Fun),
-    Def(Span, destruc::Destruc, Box<Expr>),
+    Let(Span, Let),
     Cond(Span, Cond),
     Ref(Span, VarId),
     TyPred(Span, ty::Poly),
@@ -119,27 +140,6 @@ pub enum Expr {
 }
 
 impl Expr {
-    fn from_vec(exprs: Vec<Expr>) -> Expr {
-        let mut flattened_exprs = vec![];
-
-        for expr in exprs {
-            match expr {
-                Expr::Do(mut exprs) => {
-                    flattened_exprs.append(&mut exprs);
-                }
-                other => {
-                    flattened_exprs.push(other);
-                }
-            }
-        }
-
-        if flattened_exprs.len() == 1 {
-            flattened_exprs.pop().unwrap()
-        } else {
-            Expr::Do(flattened_exprs)
-        }
-    }
-
     /// Returns the span for the expression
     ///
     /// This will return None for `Expr::Do` as it may not have a single contiguous span
@@ -148,7 +148,7 @@ impl Expr {
             Expr::Lit(datum) => Some(datum.span()),
             Expr::App(span, _)
             | Expr::Fun(span, _)
-            | Expr::Def(span, _, _)
+            | Expr::Let(span, _)
             | Expr::Cond(span, _)
             | Expr::Ref(span, _)
             | Expr::TyPred(span, _) => Some(*span),
@@ -173,4 +173,4 @@ pub use self::types::{str_for_poly, str_for_purity};
 pub use self::types::poly_for_str;
 
 #[cfg(test)]
-pub use self::lowering::body_expr_for_str;
+pub use self::lowering::expr_for_str;

@@ -15,14 +15,14 @@ use hir::types::{lower_poly, lower_polymorphic_var, try_lower_purity, Polymorphi
 use hir::util::{
     expect_arg_count, expect_ident, expect_ident_and_span, pop_vec_front, split_into_fixed_and_rest,
 };
-use hir::{App, Cond, Expr, Fun, VarId};
+use hir::{App, Cond, Expr, Fun, Let, VarId};
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 use ty;
 use ty::purity::Purity;
 
 pub struct LoweringContext<'ccx> {
-    curr_var_id: u32,
+    next_var_id: u32,
     ns_id_alloc: NsIdAlloc,
     loaded_libraries: BTreeMap<LibraryName, Module>,
     macros: Vec<Macro>,
@@ -83,6 +83,12 @@ struct LoweredFunRetDecl {
     ret_ty: Option<ty::Poly>,
 }
 
+struct LetArgs {
+    target_datum: NsDatum,
+    value_datum: NsDatum,
+    body_data: Vec<NsDatum>,
+}
+
 impl<'ccx> LoweringContext<'ccx> {
     pub fn new(ccx: &'ccx mut CompileContext) -> LoweringContext {
         let mut loaded_libraries = BTreeMap::new();
@@ -105,7 +111,7 @@ impl<'ccx> LoweringContext<'ccx> {
         );
 
         LoweringContext {
-            curr_var_id: 0,
+            next_var_id: 0,
             ns_id_alloc: NsIdAlloc::new(),
             loaded_libraries,
             macros: vec![],
@@ -146,8 +152,10 @@ impl<'ccx> LoweringContext<'ccx> {
     }
 
     fn alloc_var_id(&mut self) -> VarId {
-        self.curr_var_id += 1;
-        VarId::new(self.curr_var_id)
+        let var_id = VarId::new(self.next_var_id);
+        self.next_var_id += 1;
+
+        var_id
     }
 
     // This would be less ugly as Result<!> once it's stabilised
@@ -163,16 +171,14 @@ impl<'ccx> LoweringContext<'ccx> {
             })
     }
 
-    fn lower_defmacro(
+    fn lower_macro(
         &mut self,
         scope: &mut Scope,
         span: Span,
-        mut arg_data: Vec<NsDatum>,
+        self_datum: NsDatum,
+        transformer_spec: NsDatum,
     ) -> Result<()> {
-        expect_arg_count(span, &arg_data, 2)?;
-
-        let transformer_spec = arg_data.pop().unwrap();
-        let self_ident = expect_ident(arg_data.pop().unwrap())?;
+        let self_ident = expect_ident(self_datum)?;
 
         let macro_rules_data = if let NsDatum::List(span, mut vs) = transformer_spec {
             if vs.first().and_then(|d| scope.get_datum(d)) != Some(Binding::Prim(Prim::MacroRules))
@@ -201,6 +207,51 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(())
     }
 
+    fn lower_defmacro(
+        &mut self,
+        scope: &mut Scope,
+        span: Span,
+        mut arg_data: Vec<NsDatum>,
+    ) -> Result<()> {
+        expect_arg_count(span, &arg_data, 2)?;
+
+        let transformer_spec = arg_data.pop().unwrap();
+        let self_datum = arg_data.pop().unwrap();
+
+        self.lower_macro(scope, span, self_datum, transformer_spec)
+    }
+
+    fn lower_letmacro(
+        &mut self,
+        scope: &Scope,
+        span: Span,
+        arg_data: Vec<NsDatum>,
+    ) -> Result<Expr> {
+        let LetArgs {
+            target_datum,
+            value_datum,
+            body_data,
+        } = Self::expect_let_args(span, arg_data)?;
+
+        let mut macro_scope = Scope::new_child(scope);
+        self.lower_macro(&mut macro_scope, span, target_datum, value_datum)?;
+
+        self.lower_body(&macro_scope, body_data)
+    }
+
+    fn lower_type(
+        &mut self,
+        scope: &mut Scope,
+        self_datum: NsDatum,
+        ty_datum: NsDatum,
+    ) -> Result<()> {
+        let ident = expect_ident(self_datum)?;
+        let ty = lower_poly(&self.pvars, &self.tvars, scope, ty_datum)?;
+
+        scope.insert_binding(ident, Binding::Ty(ty));
+        Ok(())
+    }
+
     fn lower_deftype(
         &mut self,
         scope: &mut Scope,
@@ -210,12 +261,22 @@ impl<'ccx> LoweringContext<'ccx> {
         expect_arg_count(span, &arg_data, 2)?;
 
         let ty_datum = arg_data.pop().unwrap();
-        let ident = expect_ident(arg_data.pop().unwrap())?;
+        let self_datum = arg_data.pop().unwrap();
 
-        let ty = lower_poly(&self.pvars, &self.tvars, scope, ty_datum)?;
+        self.lower_type(scope, self_datum, ty_datum)
+    }
 
-        scope.insert_binding(ident, Binding::Ty(ty));
-        Ok(())
+    fn lower_lettype(&mut self, scope: &Scope, span: Span, arg_data: Vec<NsDatum>) -> Result<Expr> {
+        let LetArgs {
+            target_datum,
+            value_datum,
+            body_data,
+        } = Self::expect_let_args(span, arg_data)?;
+
+        let mut type_scope = Scope::new_child(scope);
+        self.lower_type(&mut type_scope, target_datum, value_datum)?;
+
+        self.lower_body(&type_scope, body_data)
     }
 
     /// Lowers an identifier in to a scalar destruc with the passed type
@@ -345,6 +406,84 @@ impl<'ccx> LoweringContext<'ccx> {
         })
     }
 
+    fn expect_let_args(span: Span, arg_data: Vec<NsDatum>) -> Result<LetArgs> {
+        if arg_data.is_empty() {
+            return Err(Error::new(
+                span,
+                ErrorKind::IllegalArg("bindings declaration missing".to_owned()),
+            ));
+        }
+
+        let (bindings_datum, body_data) = pop_vec_front(arg_data);
+        let mut bindings_data = if let NsDatum::Vec(span, vs) = bindings_datum {
+            if vs.len() != 2 {
+                return Err(Error::new(
+                    span,
+                    ErrorKind::IllegalArg("[target initialiser] expected".to_owned()),
+                ));
+            }
+            vs
+        } else {
+            return Err(Error::new(
+                bindings_datum.span(),
+                ErrorKind::IllegalArg("binding vector expected".to_owned()),
+            ));
+        };
+
+        let value_datum = bindings_data.pop().unwrap();
+        let target_datum = bindings_data.pop().unwrap();
+
+        Ok(LetArgs {
+            target_datum,
+            value_datum,
+            body_data,
+        })
+    }
+
+    fn lower_body(&mut self, scope: &Scope, body_data: Vec<NsDatum>) -> Result<Expr> {
+        let mut flattened_exprs = vec![];
+
+        for body_datum in body_data {
+            match self.lower_expr(&scope, body_datum)? {
+                Expr::Do(mut exprs) => {
+                    flattened_exprs.append(&mut exprs);
+                }
+                other => {
+                    flattened_exprs.push(other);
+                }
+            }
+        }
+
+        if flattened_exprs.len() == 1 {
+            Ok(flattened_exprs.pop().unwrap())
+        } else {
+            Ok(Expr::Do(flattened_exprs))
+        }
+    }
+
+    fn lower_let(&mut self, scope: &Scope, span: Span, arg_data: Vec<NsDatum>) -> Result<Expr> {
+        let LetArgs {
+            target_datum,
+            value_datum,
+            body_data,
+        } = Self::expect_let_args(span, arg_data)?;
+
+        let mut let_scope = Scope::new_child(scope);
+
+        let destruc = self.lower_destruc(&mut let_scope, target_datum)?;
+        let value_expr = self.lower_expr(&let_scope, value_datum)?;
+        let body_expr = self.lower_body(&let_scope, body_data)?;
+
+        Ok(Expr::Let(
+            span,
+            Let {
+                destruc,
+                value_expr: Box::new(value_expr),
+                body_expr: Box::new(body_expr),
+            },
+        ))
+    }
+
     fn lower_fun(&mut self, scope: &Scope, span: Span, arg_data: Vec<NsDatum>) -> Result<Expr> {
         if arg_data.is_empty() {
             return Err(Error::new(
@@ -418,12 +557,7 @@ impl<'ccx> LoweringContext<'ccx> {
         } = self.lower_fun_ret_decl(&fun_scope, tail_data)?;
 
         // Extract the body
-        let body_exprs = body_data
-            .into_iter()
-            .map(|body_datum| self.lower_body_expr(&mut fun_scope, body_datum))
-            .collect::<Result<Vec<Expr>>>()?;
-
-        let body_expr = Expr::from_vec(body_exprs);
+        let body_expr = self.lower_body(&fun_scope, body_data)?;
 
         let purity = purity
             .map(ty::purity::Poly::into_decl)
@@ -449,18 +583,20 @@ impl<'ccx> LoweringContext<'ccx> {
         ))
     }
 
-    fn lower_inner_prim_apply(
+    fn lower_expr_prim_apply(
         &mut self,
-        scope: &mut Scope,
-        applied_prim: AppliedPrim,
+        scope: &Scope,
+        span: Span,
+        prim: Prim,
         mut arg_data: Vec<NsDatum>,
     ) -> Result<Expr> {
-        let AppliedPrim { prim, span, .. } = applied_prim;
-
         match prim {
             Prim::Def | Prim::DefMacro | Prim::DefType | Prim::Import => {
                 Err(Error::new(span, ErrorKind::DefOutsideBody))
             }
+            Prim::Let => self.lower_let(scope, span, arg_data),
+            Prim::LetMacro => self.lower_letmacro(scope, span, arg_data),
+            Prim::LetType => self.lower_lettype(scope, span, arg_data),
             Prim::Export => Err(Error::new(span, ErrorKind::ExportOutsideModule)),
             Prim::Quote => {
                 expect_arg_count(span, &arg_data, 1)?;
@@ -472,7 +608,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
                 macro_rules! pop_as_boxed_expr {
                     () => {
-                        Box::new(self.lower_inner_expr(scope, arg_data.pop().unwrap())?)
+                        Box::new(self.lower_expr(scope, arg_data.pop().unwrap())?)
                     };
                 };
 
@@ -538,39 +674,9 @@ impl<'ccx> LoweringContext<'ccx> {
         Ok(())
     }
 
-    fn lower_body_prim_apply(
-        &mut self,
-        scope: &mut Scope,
-        applied_prim: AppliedPrim,
-        mut arg_data: Vec<NsDatum>,
-    ) -> Result<Expr> {
-        let AppliedPrim { prim, ns_id, span } = applied_prim;
-
-        match prim {
-            Prim::Def => {
-                expect_arg_count(span, &arg_data, 2)?;
-
-                let value_datum = arg_data.pop().unwrap();
-                let destruc_datum = arg_data.pop().unwrap();
-
-                let value_expr = self.lower_inner_expr(scope, value_datum)?;
-                let destruc = self.lower_destruc(scope, destruc_datum)?;
-
-                Ok(Expr::Def(span, destruc, Box::new(value_expr)))
-            }
-            Prim::DefMacro => self.lower_defmacro(scope, span, arg_data)
-                .map(|_| Expr::Do(vec![])),
-            Prim::DefType => self.lower_deftype(scope, span, arg_data)
-                .map(|_| Expr::Do(vec![])),
-            Prim::Import => self.lower_import(scope, ns_id, arg_data)
-                .map(|_| Expr::Do(vec![])),
-            _ => self.lower_inner_prim_apply(scope, applied_prim, arg_data),
-        }
-    }
-
     fn lower_expr_apply(
         &mut self,
-        scope: &mut Scope,
+        scope: &Scope,
         span: Span,
         fun_expr: Expr,
         arg_data: Vec<NsDatum>,
@@ -579,11 +685,11 @@ impl<'ccx> LoweringContext<'ccx> {
 
         let fixed_arg_exprs = fixed_arg_data
             .into_iter()
-            .map(|arg_datum| self.lower_inner_expr(scope, arg_datum))
+            .map(|arg_datum| self.lower_expr(scope, arg_datum))
             .collect::<Result<Vec<Expr>>>()?;
 
         let rest_arg_expr = match rest_arg_datum {
-            Some(rest_arg_datum) => Some(Box::new(self.lower_inner_expr(scope, rest_arg_datum)?)),
+            Some(rest_arg_datum) => Some(Box::new(self.lower_expr(scope, rest_arg_datum)?)),
             None => None,
         };
 
@@ -597,15 +703,7 @@ impl<'ccx> LoweringContext<'ccx> {
         ))
     }
 
-    fn generic_lower_expr<F>(
-        &mut self,
-        scope: &mut Scope,
-        datum: NsDatum,
-        lower_prim_apply: F,
-    ) -> Result<Expr>
-    where
-        F: Fn(&mut Self, &mut Scope, AppliedPrim, Vec<NsDatum>) -> Result<Expr>,
-    {
+    fn lower_expr(&mut self, scope: &Scope, datum: NsDatum) -> Result<Expr> {
         match datum {
             NsDatum::Ident(span, ref ident) => match scope.get(ident) {
                 Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
@@ -632,20 +730,24 @@ impl<'ccx> LoweringContext<'ccx> {
                 match fn_datum {
                     NsDatum::Ident(fn_span, ref ident) => match scope.get(ident) {
                         Some(Binding::Prim(prim)) => {
-                            let applied_prim = AppliedPrim {
-                                prim,
-                                ns_id: ident.ns_id(),
-                                span,
-                            };
-                            lower_prim_apply(self, scope, applied_prim, arg_data)
+                            self.lower_expr_prim_apply(scope, span, prim, arg_data)
                         }
                         Some(Binding::Macro(macro_id)) => {
+                            let mut macro_scope = Scope::new_child(scope);
+
                             let expanded_datum = {
                                 let mac = &self.macros[macro_id.to_usize()];
-                                expand_macro(&mut self.ns_id_alloc, scope, span, mac, &arg_data)?
+
+                                expand_macro(
+                                    &mut self.ns_id_alloc,
+                                    &mut macro_scope,
+                                    span,
+                                    mac,
+                                    &arg_data,
+                                )?
                             };
 
-                            self.generic_lower_expr(scope, expanded_datum, lower_prim_apply)
+                            self.lower_expr(&macro_scope, expanded_datum)
                                 .map_err(|e| e.with_macro_invocation_span(span))
                         }
                         Some(Binding::Var(id)) => {
@@ -660,21 +762,13 @@ impl<'ccx> LoweringContext<'ccx> {
                         )),
                     },
                     _ => {
-                        let fn_expr = self.lower_inner_expr(scope, fn_datum)?;
+                        let fn_expr = self.lower_expr(scope, fn_datum)?;
                         self.lower_expr_apply(scope, span, fn_expr, arg_data)
                     }
                 }
             }
             other => Ok(Expr::Lit(other.into_syntax_datum())),
         }
-    }
-
-    fn lower_inner_expr(&mut self, scope: &mut Scope, datum: NsDatum) -> Result<Expr> {
-        self.generic_lower_expr(scope, datum, LoweringContext::lower_inner_prim_apply)
-    }
-
-    fn lower_body_expr(&mut self, scope: &mut Scope, datum: NsDatum) -> Result<Expr> {
-        self.generic_lower_expr(scope, datum, LoweringContext::lower_body_prim_apply)
     }
 
     fn lower_module_prim_apply(
@@ -794,7 +888,7 @@ impl<'ccx> LoweringContext<'ccx> {
         for deferred_prim in deferred_prims {
             match deferred_prim {
                 DeferredModulePrim::Def(span, destruc, value_datum) => {
-                    let value_expr = self.lower_inner_expr(scope, value_datum)?;
+                    let value_expr = self.lower_expr(scope, value_datum)?;
                     module_defs.push(ModuleDef::new(span, destruc, value_expr));
                 }
                 DeferredModulePrim::Export(span, ident) => {
@@ -878,62 +972,49 @@ fn module_for_str(data_str: &str) -> Result<Module> {
 }
 
 #[cfg(test)]
-pub struct LoweredTestBody {
+pub struct LoweredTestExpr {
     pub pvars: Vec<ty::purity::PVar>,
     pub tvars: Vec<ty::TVar>,
     pub expr: Expr,
 }
 
 #[cfg(test)]
-pub fn body_for_str(data_str: &str) -> Result<LoweredTestBody> {
-    use syntax::parser::data_from_str;
+pub fn lowered_expr_for_str(data_str: &str) -> Result<LoweredTestExpr> {
+    use hir::prim::insert_prim_exports;
+    use hir::types::insert_ty_exports;
+    use syntax::parser::datum_from_str;
 
-    let mut root_scope = Scope::new_empty();
-
-    // Wrap the test data in a function definition
-    let mut test_data = data_from_str(data_str).unwrap();
-    let mut main_function_data = vec![
-        Datum::Sym(EMPTY_SPAN, "fn".to_owned()),
-        Datum::List(EMPTY_SPAN, vec![]),
-    ];
-
-    main_function_data.append(&mut test_data);
-
-    // Wrap the function definition in a program
-    let program_data = vec![
-        import_statement_for_library(&["risp", "internal", "primitives"]),
-        import_statement_for_library(&["risp", "internal", "types"]),
-        Datum::List(
-            EMPTY_SPAN,
-            vec![
-                Datum::Sym(EMPTY_SPAN, "def".to_owned()),
-                Datum::Sym(EMPTY_SPAN, "main!".to_owned()),
-                Datum::List(EMPTY_SPAN, main_function_data),
-            ],
-        ),
-    ];
+    let test_ns_id = NsId::new(1);
+    let mut scope = Scope::new_empty();
 
     let mut ccx = CompileContext::new();
     let mut lcx = LoweringContext::new(&mut ccx);
-    let mut program_defs = lcx.lower_module(&mut root_scope, program_data)?.into_defs();
 
-    assert_eq!(1, program_defs.len());
-    let main_func_def = program_defs.pop().unwrap();
+    let mut exports = HashMap::<String, Binding>::new();
+    insert_prim_exports(&mut exports);
+    insert_ty_exports(&mut exports);
 
-    if let Expr::Fun(_, main_func) = main_func_def.into_value() {
-        Ok(LoweredTestBody {
-            pvars: lcx.pvars,
-            tvars: lcx.tvars,
-            expr: *main_func.body_expr,
-        })
-    } else {
-        panic!("Unexpected program structure");
+    // Place them on our scope
+    for (name, binding) in exports {
+        scope.insert_binding(Ident::new(test_ns_id, name), binding);
     }
+
+    // Wrap the test data in a function definition
+    let test_datum = datum_from_str(data_str).unwrap();
+    let test_nsdatum = NsDatum::from_syntax_datum(test_ns_id, test_datum);
+
+    let expr = lcx.lower_expr(&scope, test_nsdatum)?;
+
+    Ok(LoweredTestExpr {
+        pvars: lcx.pvars,
+        tvars: lcx.tvars,
+        expr,
+    })
 }
 
 #[cfg(test)]
-pub fn body_expr_for_str(data_str: &str) -> Result<Expr> {
-    body_for_str(data_str).map(|body| body.expr)
+pub fn expr_for_str(data_str: &str) -> Result<Expr> {
+    lowered_expr_for_str(data_str).map(|body| body.expr)
 }
 
 #[cfg(test)]
@@ -948,7 +1029,7 @@ mod test {
         let t = "^^^^^";
 
         let expected = Expr::Lit(Datum::Bool(t2s(t), false));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
@@ -957,7 +1038,7 @@ mod test {
         let t = "^^";
 
         let expected = Expr::Lit(Datum::List(t2s(t), vec![]));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
@@ -966,7 +1047,7 @@ mod test {
         let t = " ^^^";
 
         let expected = Expr::Lit(Datum::Sym(t2s(t), "foo".to_owned()));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
@@ -975,7 +1056,7 @@ mod test {
         let t = "       ^^^ ";
 
         let expected = Expr::Lit(Datum::Sym(t2s(t), "foo".to_owned()));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
@@ -984,112 +1065,121 @@ mod test {
         let t = "^^^^^^^^^^^^^";
 
         let err = Error::new(t2s(t), ErrorKind::WrongArgCount(1));
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
-    fn basic_untyped_var_def() {
-        let j = "(def x 1) x";
-        let t = "     ^     ";
-        let u = "^^^^^^^^^  ";
-        let v = "       ^   ";
-        let w = "          ^";
+    fn basic_untyped_scalar_let() {
+        let j = "(let [x 1] x)";
+        let t = "      ^      ";
+        let u = "^^^^^^^^^^^^^";
+        let v = "        ^    ";
+        let w = "           ^ ";
 
         let destruc = destruc::Destruc::Scalar(
             t2s(t),
             destruc::Scalar::new(
-                Some(VarId(2)),
+                Some(VarId(0)),
                 "x".to_owned(),
-                ty::Decl::Free(ty::FreeTyId::new(1)),
+                ty::Decl::Free(ty::FreeTyId::new(0)),
             ),
         );
 
-        let expected = Expr::Do(vec![
-            Expr::Def(t2s(u), destruc, Box::new(Expr::Lit(Datum::Int(t2s(v), 1)))),
-            Expr::Ref(t2s(w), VarId(2)),
-        ]);
+        let expected = Expr::Let(
+            t2s(u),
+            Let {
+                destruc,
+                value_expr: Box::new(Expr::Lit(Datum::Int(t2s(v), 1))),
+                body_expr: Box::new(Expr::Ref(t2s(w), VarId(0))),
+            },
+        );
 
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
-    fn basic_typed_var_def() {
-        let j = "(def [x : true] true) x";
-        let t = "     ^^^^^^^^^^        ";
-        let u = "^^^^^^^^^^^^^^^^^^^^^  ";
-        let v = "                ^^^^   ";
-        let w = "                      ^";
+    fn basic_typed_let() {
+        let j = "(let [[x : true] true])";
+        let t = "      ^^^^^^^^^^       ";
+        let u = "^^^^^^^^^^^^^^^^^^^^^^^";
+        let v = "                 ^^^^  ";
 
         let destruc = destruc::Destruc::Scalar(
             t2s(t),
             destruc::Scalar::new(
-                Some(VarId(2)),
+                Some(VarId(0)),
                 "x".to_owned(),
                 ty::Ty::LitBool(true).into_decl(),
             ),
         );
 
-        let expected = Expr::Do(vec![
-            Expr::Def(
-                t2s(u),
+        let expected = Expr::Let(
+            t2s(u),
+            Let {
                 destruc,
-                Box::new(Expr::Lit(Datum::Bool(t2s(v), true))),
-            ),
-            Expr::Ref(t2s(w), VarId(2)),
-        ]);
+                value_expr: Box::new(Expr::Lit(Datum::Bool(t2s(v), true))),
+                body_expr: Box::new(Expr::Do(vec![])),
+            },
+        );
 
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn double_typed_var_def() {
         // We should fail to annotate a variable a second time
-        let j = "(def [[x : true] : false] 1)";
-        let t = "      ^^^^^^^^^^            ";
+        let j = "(let [[[x : true] : false] 1])";
+        let t = "       ^^^^^^^^^^             ";
 
         let err = Error::new(t2s(t), ErrorKind::ExpectedSymbol);
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
-    fn wildcard_def() {
-        let j = "(def _ 1)";
-        let t = "     ^   ";
-        let u = "^^^^^^^^^";
-        let v = "       ^ ";
+    fn wildcard_let() {
+        let j = "(let [_ 1])";
+        let t = "      ^    ";
+        let u = "^^^^^^^^^^^";
+        let v = "        ^  ";
 
         let destruc = destruc::Destruc::Scalar(
             t2s(t),
-            destruc::Scalar::new(None, "_".to_owned(), ty::Decl::Free(ty::FreeTyId::new(1))),
+            destruc::Scalar::new(None, "_".to_owned(), ty::Decl::Free(ty::FreeTyId::new(0))),
         );
 
-        let expected = Expr::Def(t2s(u), destruc, Box::new(Expr::Lit(Datum::Int(t2s(v), 1))));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        let expected = Expr::Let(
+            t2s(u),
+            Let {
+                destruc,
+                value_expr: Box::new(Expr::Lit(Datum::Int(t2s(v), 1))),
+                body_expr: Box::new(Expr::Do(vec![])),
+            },
+        );
+
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
-    fn destruc_to_bad_ellipsis_def() {
-        let j = "(def ... 1)";
+    fn bad_binding_let() {
+        let j = "(let foo 1)";
         let t = "     ^^^   ";
 
         let err = Error::new(
             t2s(t),
-            ErrorKind::IllegalArg(
-                "ellipsis can only be used to destructure the rest of a list".to_owned(),
-            ),
+            ErrorKind::IllegalArg("binding vector expected".to_owned()),
         );
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
-    fn list_destruc_def() {
-        let j = "(def (x rest ...) '(1)) x";
-        let t = "     ^^^^^^^^^^^^        ";
-        let u = "      ^                  ";
-        let v = "^^^^^^^^^^^^^^^^^^^^^^^  ";
-        let w = "                   ^^^   ";
-        let x = "                    ^    ";
-        let y = "                        ^";
+    fn list_destruc_let() {
+        let j = "(let [(x rest ...) '(1)] x)";
+        let t = "      ^^^^^^^^^^^^         ";
+        let u = "       ^                   ";
+        let v = "^^^^^^^^^^^^^^^^^^^^^^^^^^^";
+        let w = "                    ^^^    ";
+        let x = "                     ^     ";
+        let y = "                         ^ ";
 
         let destruc = destruc::Destruc::List(
             t2s(t),
@@ -1097,35 +1187,35 @@ mod test {
                 vec![destruc::Destruc::Scalar(
                     t2s(u),
                     destruc::Scalar::new(
-                        Some(VarId(2)),
+                        Some(VarId(0)),
                         "x".to_owned(),
-                        ty::Decl::Free(ty::FreeTyId::new(1)),
+                        ty::Decl::Free(ty::FreeTyId::new(0)),
                     ),
                 )],
                 Some(Box::new(destruc::Scalar::new(
-                    Some(VarId(3)),
+                    Some(VarId(1)),
                     "rest".to_owned(),
-                    ty::Decl::Free(ty::FreeTyId::new(2)),
+                    ty::Decl::Free(ty::FreeTyId::new(1)),
                 ))),
             ),
         );
 
-        let expected = Expr::Do(vec![
-            Expr::Def(
-                t2s(v),
+        let expected = Expr::Let(
+            t2s(v),
+            Let {
                 destruc,
-                Box::new(Expr::Lit(Datum::List(t2s(w), vec![Datum::Int(t2s(x), 1)]))),
-            ),
-            Expr::Ref(t2s(y), VarId(2)),
-        ]);
+                value_expr: Box::new(Expr::Lit(Datum::List(t2s(w), vec![Datum::Int(t2s(x), 1)]))),
+                body_expr: Box::new(Expr::Ref(t2s(y), VarId(0))),
+            },
+        );
 
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
-    fn def_of_bad_destruc() {
-        let j = "(def 1 1)";
-        let t = "     ^   ";
+    fn let_of_bad_destruc() {
+        let j = "(let [1 1])";
+        let t = "      ^    ";
 
         let err = Error::new(
             t2s(t),
@@ -1133,25 +1223,25 @@ mod test {
                 "values can only be bound to variables or destructured into lists".to_owned(),
             ),
         );
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
-    fn def_of_vec_destruc() {
-        let j = "(def [x y] [1 2])";
-        let t = "     ^^^^^       ";
+    fn let_of_vec_destruc() {
+        let j = "(let [[x y] [1 2]])";
+        let t = "      ^^^^^        ";
 
         let err = Error::new(t2s(t), ErrorKind::NoVecDestruc);
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
-    fn def_in_non_body() {
-        let j = "(def x (def y 1))";
-        let t = "       ^^^^^^^^^ ";
+    fn def_outside_module_body() {
+        let j = "(def x 1)";
+        let t = "^^^^^^^^^";
 
         let err = Error::new(t2s(t), ErrorKind::DefOutsideBody);
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
@@ -1160,7 +1250,7 @@ mod test {
         let t = "^^^";
 
         let err = Error::new(t2s(t), ErrorKind::PrimRef);
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
@@ -1169,7 +1259,7 @@ mod test {
         let t = "^^^^^^^^^^^^";
 
         let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("nopenopenope".to_owned()));
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
@@ -1181,7 +1271,7 @@ mod test {
             t2s(t),
             ErrorKind::IllegalArg("parameter declaration missing".to_owned()),
         );
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
@@ -1195,7 +1285,7 @@ mod test {
                 "values can only be bound to variables or destructured into lists".to_owned(),
             ),
         );
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
@@ -1210,12 +1300,12 @@ mod test {
                 tvar_ids: ty::TVarIds::monomorphic(),
                 purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
                 params: destruc::List::new(vec![], None),
-                ret_ty: ty::Decl::Free(ty::FreeTyId::new(1)),
-                body_expr: Box::new(Expr::from_vec(vec![])),
+                ret_ty: ty::Decl::Free(ty::FreeTyId::new(0)),
+                body_expr: Box::new(Expr::Do(vec![])),
             },
         );
 
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
@@ -1236,7 +1326,7 @@ mod test {
             },
         );
 
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
@@ -1246,14 +1336,14 @@ mod test {
         let u = "^^^^^^^^^^";
         let v = "        ^ ";
 
-        let param_var_id = VarId::new(2);
+        let param_var_id = VarId::new(0);
         let params = destruc::List::new(
             vec![destruc::Destruc::Scalar(
                 t2s(t),
                 destruc::Scalar::new(
                     Some(param_var_id),
                     "x".to_owned(),
-                    ty::Decl::Free(ty::FreeTyId::new(1)),
+                    ty::Decl::Free(ty::FreeTyId::new(0)),
                 ),
             )],
             None,
@@ -1266,12 +1356,12 @@ mod test {
                 tvar_ids: ty::TVarIds::monomorphic(),
                 purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
                 params,
-                ret_ty: ty::Decl::Free(ty::FreeTyId::new(2)),
+                ret_ty: ty::Decl::Free(ty::FreeTyId::new(1)),
                 body_expr: Box::new(Expr::Ref(t2s(v), param_var_id)),
             },
         );
 
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
@@ -1283,7 +1373,7 @@ mod test {
 
         let tvar_id = ty::TVarId::new(0);
 
-        let param_var_id = VarId::new(2);
+        let param_var_id = VarId::new(0);
         let params = destruc::List::new(
             vec![destruc::Destruc::Scalar(
                 t2s(t),
@@ -1304,103 +1394,103 @@ mod test {
             },
         );
 
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn capturing_fn() {
-        let j = "(def x 1)(fn () x)";
-        let t = "     ^            ";
-        let u = "^^^^^^^^^         ";
-        let v = "       ^          ";
-        let w = "         ^^^^^^^^^";
-        let x = "                ^ ";
+        let j = "(let [x 1] (fn () x))";
+        let t = "      ^              ";
+        let u = "^^^^^^^^^^^^^^^^^^^^^";
+        let v = "        ^            ";
+        let w = "           ^^^^^^^^^ ";
+        let x = "                  ^  ";
 
-        let outer_var_id = VarId::new(2);
+        let outer_var_id = VarId::new(0);
         let outer_destruc = destruc::Destruc::Scalar(
             t2s(t),
             destruc::Scalar::new(
                 Some(outer_var_id),
                 "x".to_owned(),
-                ty::Decl::Free(ty::FreeTyId::new(1)),
+                ty::Decl::Free(ty::FreeTyId::new(0)),
             ),
         );
 
-        let expected = Expr::Do(vec![
-            Expr::Def(
-                t2s(u),
-                outer_destruc,
-                Box::new(Expr::Lit(Datum::Int(t2s(v), 1))),
-            ),
-            Expr::Fun(
-                t2s(w),
-                Fun {
-                    pvar_ids: ty::purity::PVarIds::monomorphic(),
-                    tvar_ids: ty::TVarIds::monomorphic(),
-                    purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
-                    params: destruc::List::new(vec![], None),
-                    ret_ty: ty::Decl::Free(ty::FreeTyId::new(2)),
-                    body_expr: Box::new(Expr::Ref(t2s(x), outer_var_id)),
-                },
-            ),
-        ]);
+        let expected = Expr::Let(
+            t2s(u),
+            Let {
+                destruc: outer_destruc,
+                value_expr: Box::new(Expr::Lit(Datum::Int(t2s(v), 1))),
+                body_expr: Box::new(Expr::Fun(
+                    t2s(w),
+                    Fun {
+                        pvar_ids: ty::purity::PVarIds::monomorphic(),
+                        tvar_ids: ty::TVarIds::monomorphic(),
+                        purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
+                        params: destruc::List::new(vec![], None),
+                        ret_ty: ty::Decl::Free(ty::FreeTyId::new(1)),
+                        body_expr: Box::new(Expr::Ref(t2s(x), outer_var_id)),
+                    },
+                )),
+            },
+        );
 
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn shadowing_fn() {
-        let j = "(def x 1)(fn (x) x)";
-        let t = "     ^             ";
-        let u = "       ^           ";
-        let v = "              ^    ";
-        let w = "^^^^^^^^^          ";
-        let x = "         ^^^^^^^^^^";
-        let y = "                 ^ ";
+        let j = "(let [x 1] (fn (x) x))";
+        let t = "      ^               ";
+        let u = "        ^             ";
+        let v = "                ^     ";
+        let w = "^^^^^^^^^^^^^^^^^^^^^^";
+        let x = "           ^^^^^^^^^^ ";
+        let y = "                   ^  ";
 
-        let outer_var_id = VarId::new(2);
+        let outer_var_id = VarId::new(0);
         let outer_destruc = destruc::Destruc::Scalar(
             t2s(t),
             destruc::Scalar::new(
                 Some(outer_var_id),
                 "x".to_owned(),
-                ty::Decl::Free(ty::FreeTyId::new(1)),
+                ty::Decl::Free(ty::FreeTyId::new(0)),
             ),
         );
 
-        let param_var_id = VarId::new(3);
+        let param_var_id = VarId::new(1);
         let params = destruc::List::new(
             vec![destruc::Destruc::Scalar(
                 t2s(v),
                 destruc::Scalar::new(
                     Some(param_var_id),
                     "x".to_owned(),
-                    ty::Decl::Free(ty::FreeTyId::new(2)),
+                    ty::Decl::Free(ty::FreeTyId::new(1)),
                 ),
             )],
             None,
         );
 
-        let expected = Expr::Do(vec![
-            Expr::Def(
-                t2s(w),
-                outer_destruc,
-                Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
-            ),
-            Expr::Fun(
-                t2s(x),
-                Fun {
-                    pvar_ids: ty::purity::PVarIds::monomorphic(),
-                    tvar_ids: ty::TVarIds::monomorphic(),
-                    purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
-                    params,
-                    ret_ty: ty::Decl::Free(ty::FreeTyId::new(3)),
-                    body_expr: Box::new(Expr::Ref(t2s(y), param_var_id)),
-                },
-            ),
-        ]);
+        let expected = Expr::Let(
+            t2s(w),
+            Let {
+                destruc: outer_destruc,
+                value_expr: Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
+                body_expr: Box::new(Expr::Fun(
+                    t2s(x),
+                    Fun {
+                        pvar_ids: ty::purity::PVarIds::monomorphic(),
+                        tvar_ids: ty::TVarIds::monomorphic(),
+                        purity: ty::purity::Decl::Free(ty::purity::FreePurityId::new(0)),
+                        params,
+                        ret_ty: ty::Decl::Free(ty::FreeTyId::new(2)),
+                        body_expr: Box::new(Expr::Ref(t2s(y), param_var_id)),
+                    },
+                )),
+            },
+        );
 
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
@@ -1423,7 +1513,7 @@ mod test {
             },
         );
 
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
@@ -1443,7 +1533,7 @@ mod test {
             },
         );
 
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
@@ -1452,7 +1542,7 @@ mod test {
         let t = "^^^^";
 
         let err = Error::new(t2s(t), ErrorKind::WrongArgCount(3));
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
@@ -1461,7 +1551,7 @@ mod test {
         let t = "^^^^^^^^^";
 
         let err = Error::new(t2s(t), ErrorKind::WrongArgCount(3));
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
@@ -1470,7 +1560,7 @@ mod test {
         let t = "^^^^^^^^^^^";
 
         let err = Error::new(t2s(t), ErrorKind::WrongArgCount(3));
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
@@ -1490,7 +1580,7 @@ mod test {
             },
         );
 
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
@@ -1500,7 +1590,7 @@ mod test {
         let u = "     ^             ";
         let v = "       ^           ";
 
-        let var_id = VarId(1);
+        let var_id = VarId(0);
 
         let expected_module_def = ModuleDef::new(
             t2s(t),
@@ -1532,52 +1622,52 @@ mod test {
     }
 
     #[test]
-    fn defmacro_of_non_symbol() {
-        let j = "(defmacro 1 (macro-rules ${}))";
-        let t = "          ^                   ";
+    fn letmacro_of_non_symbol() {
+        let j = "(letmacro [1 (macro-rules ${})])";
+        let t = "           ^                    ";
 
         let err = Error::new(t2s(t), ErrorKind::ExpectedSymbol);
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
-    fn defmacro_of_non_list() {
-        let j = "(defmacro a b)";
-        let t = "            ^ ";
+    fn letmacro_of_non_list() {
+        let j = "(letmacro [a b])";
+        let t = "             ^  ";
 
         let err = Error::new(
             t2s(t),
             ErrorKind::IllegalArg("macro specification must be a list".to_owned()),
         );
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
-    fn defmacro_of_unsupported_type() {
-        let j = "(defmacro a (macro-fn #{}))";
-        let t = "            ^^^^^^^^^^^^^^ ";
+    fn letmacro_of_unsupported_type() {
+        let j = "(letmacro [a (macro-fn #{})])";
+        let t = "             ^^^^^^^^^^^^^^  ";
 
         let err = Error::new(
             t2s(t),
             ErrorKind::IllegalArg("unsupported macro type".to_owned()),
         );
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
-    fn defmacro_with_duplicate_vars() {
-        let j = "(defmacro a (macro-rules #{} [[(a x x) x]]))";
-        let t = "                                  ^         ";
-        let u = "                                    ^       ";
+    fn letmacro_with_duplicate_vars() {
+        let j = "(letmacro [a (macro-rules #{} [[(a x x) x]])])";
+        let t = "                                   ^          ";
+        let u = "                                     ^        ";
 
         let err = Error::new(t2s(u), ErrorKind::DuplicateMacroVar("x".to_owned(), t2s(t)));
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
-    fn defmacro_with_bad_ellipsis() {
-        let j = "(defmacro a (macro-rules #{} [[(a ...) false]]))";
-        let t = "                                  ^^^           ";
+    fn letmacro_with_bad_ellipsis() {
+        let j = "(letmacro [a (macro-rules #{} [[(a ...) false]])])";
+        let t = "                                   ^^^            ";
 
         let err = Error::new(
             t2s(t),
@@ -1585,200 +1675,212 @@ mod test {
                 "ellipsis can only be used as part of a zero or more match".to_owned(),
             ),
         );
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
     fn expand_macro_without_matching_rule() {
-        let j1 = "(defmacro one (macro-rules #{} [[(one) 1]]))";
-        let t1 = "                                            ";
+        let j1 = "(letmacro [one (macro-rules #{} [[(one) 1]])]";
+        let t1 = "                                             ";
         let j2 = "(one extra-arg)";
         let t2 = "^^^^^^^^^^^^^^^";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = &[t1, t2].join("");
 
         let err = Error::new(t2s(t), ErrorKind::NoMacroRule);
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
     fn expand_trivial_macro() {
-        let j1 = "(defmacro one (macro-rules #{} [[(one) 1]]))";
-        let t1 = "                                       ^    ";
+        let j1 = "(letmacro [one (macro-rules #{} [[(one) 1]])]";
+        let t1 = "                                        ^    ";
         let j2 = "(one)";
         let t2 = "     ";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = &[t1, t2].join("");
 
         let expected = Expr::Lit(Datum::Int(t2s(t), 1));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn expand_replacing_macro() {
-        let j1 = "(defmacro identity (macro-rules #{} [[(identity x) x]]))";
-        let t1 = "                                                        ";
+        let j1 = "(letmacro [identity (macro-rules #{} [[(identity x) x]])]";
+        let t1 = "                                                         ";
         let j2 = "(identity 1)";
         let t2 = "          ^ ";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = &[t1, t2].join("");
 
         let expected = Expr::Lit(Datum::Int(t2s(t), 1));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn expand_two_value_replacement() {
-        let j = "(defmacro ret-two (macro-rules #{} [[(ret-two x y) [x y]]])) (ret-two 1 2)";
-        let t = "                                                   ^^^^^                  ";
-        let u = "                                                                      ^   ";
-        let v = "                                                                        ^ ";
+        let j = "(letmacro [ret-two (macro-rules #{} [[(ret-two x y) [x y]]])] (ret-two 1 2))";
+        let t = "                                                    ^^^^^                   ";
+        let u = "                                                                       ^    ";
+        let v = "                                                                         ^  ";
 
         let expected = Expr::Lit(Datum::Vec(
             t2s(t),
             vec![Datum::Int(t2s(u), 1), Datum::Int(t2s(v), 2)],
         ));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn expand_with_matching_literals() {
-        let j = "(defmacro for (macro-rules #{in} [[(for x in y) [x y]]])) (for 1 in 2)";
-        let t = "                                                ^^^^^                 ";
-        let u = "                                                               ^      ";
-        let v = "                                                                    ^ ";
+        let j = "(letmacro [for (macro-rules #{in} [[(for x in y) [x y]]])] (for 1 in 2))";
+        let t = "                                                 ^^^^^                  ";
+        let u = "                                                                ^       ";
+        let v = "                                                                     ^  ";
 
         let expected = Expr::Lit(Datum::Vec(
             t2s(t),
             vec![Datum::Int(t2s(u), 1), Datum::Int(t2s(v), 2)],
         ));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn expand_with_escaped_ellipsis() {
-        let j1 = "(defmacro m (macro-rules #{} [[(m) '(... ...)]]))";
-        let t1 = "                                         ^^^     ";
+        let j1 = "(letmacro [m (macro-rules #{} [[(m) '(... ...)]])]";
+        let t1 = "                                          ^^^     ";
         let j2 = "(m)";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = t1;
 
         let expected = Expr::Lit(Datum::Sym(t2s(t), "...".to_owned()));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn expand_with_literal_underscore() {
-        let j1 = "(defmacro m (macro-rules #{_} [[(m _) 1][(m a) a]]))";
-        let sp = "                                                    ";
+        let j1 = "(letmacro [m (macro-rules #{_} [[(m _) 1][(m a) a]])]";
+        let sp = "                                                     ";
         let j2 = "(m 2)";
         let t2 = "   ^ ";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = &[sp, t2].join("");
 
         let expected = Expr::Lit(Datum::Int(t2s(t), 2));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn expand_with_non_matching_literals() {
-        let j1 = "(defmacro for (macro-rules #{in} [[(for x in y) [x y]]]))";
-        let t1 = "                                                         ";
+        let j1 = "(letmacro [for (macro-rules #{in} [[(for x in y) [x y]]])]";
+        let t1 = "                                                          ";
         let j2 = "(for 1 foo 2)";
         let t2 = "^^^^^^^^^^^^^";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = &[t1, t2].join("");
 
         let err = Error::new(t2s(t), ErrorKind::NoMacroRule);
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
     fn expand_with_wildcard() {
-        let j1 = "(defmacro third (macro-rules #{} [[(third _ _ x) x]]))";
-        let t1 = "                                                      ";
+        let j1 = "(letmacro [third (macro-rules #{} [[(third _ _ x) x]])]";
+        let t1 = "                                                       ";
         let j2 = "(third 1 2 3)";
         let t2 = "           ^ ";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = &[t1, t2].join("");
 
         let expected = Expr::Lit(Datum::Int(t2s(t), 3));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn expand_recursive() {
-        let j1 = "(defmacro rec (macro-rules #{} [[(rec) 7] [(rec _) (rec)]]))";
-        let t1 = "                                       ^                    ";
+        let j1 = "(letmacro [rec (macro-rules #{} [[(rec) 7] [(rec _) (rec)]])]";
+        let t1 = "                                        ^                    ";
         let j2 = "(rec)";
         let t2 = "     ";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = &[t1, t2].join("");
 
         let expected = Expr::Lit(Datum::Int(t2s(t), 7));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn expand_fixed_list_match() {
-        let j1 = "(defmacro ret-second (macro-rules #{} [[(ret-second (_ second _)) second]]))";
-        let t1 = "                                                                            ";
+        let j1 = "(letmacro [ret-second (macro-rules #{} [[(ret-second (_ second _)) second]])]";
+        let t1 = "                                                                             ";
         let j2 = "(ret-second (1 2 3))";
         let t2 = "               ^    ";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = &[t1, t2].join("");
 
         let expected = Expr::Lit(Datum::Int(t2s(t), 2));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn expand_fixed_vector_match() {
-        let j1 = "(defmacro ret-third (macro-rules #{} [[(ret-third [_ _ third]) third]]))";
-        let t1 = "                                                                        ";
+        let j1 = "(letmacro [ret-third (macro-rules #{} [[(ret-third [_ _ third]) third]])]";
+        let t1 = "                                                                         ";
         let j2 = "(ret-third [1 2 3])";
         let t2 = "                ^  ";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = &[t1, t2].join("");
 
         let expected = Expr::Lit(Datum::Int(t2s(t), 3));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn expand_empty_set_match() {
-        let j1 = "(defmacro empty-set? (macro-rules #{} [[(empty-set? #{}) true]]))";
-        let t1 = "                                                         ^^^^    ";
+        let j1 = "(letmacro [empty-set? (macro-rules #{} [[(empty-set? #{}) true]])]";
+        let t1 = "                                                          ^^^^    ";
         let j2 = "(empty-set? #{})";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = t1;
 
         let expected = Expr::Lit(Datum::Bool(t2s(t), true));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn expand_zero_or_more_set_match() {
-        let j1 = "(defmacro set->list (macro-rules #{} [[(set->list #{v ...}) '(v ...)]]))";
-        let t1 = "                                                             ^^^^^^^    ";
-        let sp = "                                                                        ";
+        let j1 = "(letmacro [set->list (macro-rules #{} [[(set->list #{v ...}) '(v ...)]])]";
+        let t1 = "                                                              ^^^^^^^    ";
+        let sp = "                                                                         ";
         let j2 = "(set->list #{1 2 3})";
         let u2 = "             ^      ";
         let v2 = "               ^    ";
         let w2 = "                 ^  ";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = t1;
         let u = &[sp, u2].join("");
         let v = &[sp, v2].join("");
@@ -1792,13 +1894,13 @@ mod test {
                 Datum::Int(t2s(w), 3),
             ],
         ));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn expand_fixed_set_match() {
-        let j = "(defmacro two-set? (macro-rules #{} [[(two-set? #{_ _}) false]]))";
-        let t = "                                                ^^^^^^           ";
+        let j = "(letmacro [two-set? (macro-rules #{} [[(two-set? #{_ _}) false]])])";
+        let t = "                                                 ^^^^^^            ";
 
         let err = Error::new(
             t2s(t),
@@ -1806,37 +1908,39 @@ mod test {
                 "set patterns must either be empty or a zero or more match".to_owned(),
             ),
         );
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
     fn expand_constant_match() {
-        let j1 = "(defmacro alph (macro-rules #{} [[(alph 1) 'a] [(alph 2) 'b] [(alph 3) 'c]]))";
-        let t1 = "                                                          ^                  ";
+        let j1 = "(letmacro [alph (macro-rules #{} [[(alph 1) 'a] [(alph 2) 'b] [(alph 3) 'c]])]";
+        let t1 = "                                                           ^                  ";
         let j2 = "(alph 2)";
         let t2 = "        ";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = &[t1, t2].join("");
 
         let expected = Expr::Lit(Datum::Sym(t2s(t), "b".to_owned()));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn expand_terminal_zero_or_more_match() {
         let j1 =
-            "(defmacro return-all (macro-rules #{} [[(return-all values ...) '(values ...)]]))";
+            "(letmacro [return-all (macro-rules #{} [[(return-all values ...) '(values ...)]])]";
         let t1 =
-            "                                                                 ^^^^^^^^^^^^    ";
+            "                                                                  ^^^^^^^^^^^^    ";
         let sp =
-            "                                                                                 ";
+            "                                                                                  ";
         let j2 = "(return-all 1 2 3)";
         let u2 = "            ^     ";
         let v2 = "              ^   ";
         let w2 = "                ^ ";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = t1;
         let u = &[sp, u2].join("");
         let v = &[sp, v2].join("");
@@ -1850,21 +1954,22 @@ mod test {
                 Datum::Int(t2s(w), 3),
             ],
         ));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn expand_middle_zero_or_more_match() {
-        let j1 = "(defmacro mid (macro-rules #{} [[(mid [_ vals ... _]) [true vals ... false]]]))";
-        let t1 = "                                                      ^^^^^^^^^^^^^^^^^^^^^    ";
-        let u1 = "                                                       ^^^^                    ";
-        let v1 = "                                                                     ^^^^^     ";
-        let sp = "                                                                               ";
+        let j1 = "(letmacro [mid (macro-rules #{} [[(mid [_ vals ... _]) [true vals ... false]]])]";
+        let t1 = "                                                       ^^^^^^^^^^^^^^^^^^^^^    ";
+        let u1 = "                                                        ^^^^                    ";
+        let v1 = "                                                                      ^^^^^     ";
+        let sp = "                                                                                ";
         let j2 = "(mid [1 2 3 4])";
         let w2 = "        ^      ";
         let x2 = "          ^    ";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = t1;
         let u = u1;
         let v = v1;
@@ -1880,21 +1985,22 @@ mod test {
                 Datum::Bool(t2s(v), false),
             ],
         ));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn expand_multiple_zero_or_more() {
-        let j1 = "(defmacro vm (macro-rules #{} [[(vm (l ...) (r ...)) [r ... l ...]]]))";
-        let t1 = "                                                     ^^^^^^^^^^^^^    ";
-        let sp = "                                                                      ";
+        let j1 = "(letmacro [vm (macro-rules #{} [[(vm (l ...) (r ...)) [r ... l ...]]])]";
+        let t1 = "                                                      ^^^^^^^^^^^^^    ";
+        let sp = "                                                                       ";
         let j2 = "(vm (1 2) (3 4))";
         let u2 = "     ^          ";
         let v2 = "       ^        ";
         let w2 = "           ^    ";
         let x2 = "             ^  ";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = t1;
         let u = &[sp, u2].join("");
         let v = &[sp, v2].join("");
@@ -1910,23 +2016,23 @@ mod test {
                 Datum::Int(t2s(v), 2),
             ],
         ));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
     fn expand_multiple_zero_or_more_in_same_pattern_seq() {
-        let j = "(defmacro vm (macro-rules #{} [[(vm (l ... r ...)) true]]))";
-        let t = "                                     ^                     ";
-        let u = "                                           ^               ";
+        let j = "(letmacro [vm (macro-rules #{} [[(vm (l ... r ...)) true]])])";
+        let t = "                                      ^                      ";
+        let u = "                                            ^                ";
 
         let err = Error::new(t2s(u), ErrorKind::MultipleZeroOrMoreMatch(t2s(t)));
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
     fn expand_subtemplate_without_matching_subpattern() {
-        let j1 = "(defmacro m (macro-rules #{} [[(m expr ...) (5 ...)]]))";
-        let t1 = "                                            ^^^^^^^    ";
+        let j1 = "(letmacro [m (macro-rules #{} [[(m expr ...) (5 ...)]])])";
+        let t1 = "                                             ^^^^^^^     ";
         let j2 = "(m 1 2 3 4)";
         let t2 = "           ";
 
@@ -1937,15 +2043,15 @@ mod test {
             t2s(t),
             ErrorKind::IllegalArg("subtemplate does not include any macro variables".to_owned()),
         );
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
     fn expand_subtemplate_matching_multiple_subpatterns() {
         let j =
-            "(defmacro m (macro-rules #{} [[(m (list1 ...) (list2 ...)) ([list1 list2] ...)]]))";
+            "(letmacro [m (macro-rules #{} [[(m (list1 ...) (list2 ...)) ([list1 list2] ...)]])])";
         let t =
-            "                                                           ^^^^^^^^^^^^^^^^^^^    ";
+            "                                                            ^^^^^^^^^^^^^^^^^^^     ";
 
         let err = Error::new(
             t2s(t),
@@ -1953,15 +2059,15 @@ mod test {
                 "subtemplate references macro variables from multiple subpatterns".to_owned(),
             ),
         );
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
     fn expand_nested_subpatterns() {
-        let j1 = "(defmacro m (macro-rules #{} [[(m (a b rest ...) ...) [(rest ... b a) ...]]]))";
-        let t1 = "                                                      ^^^^^^^^^^^^^^^^^^^^    ";
-        let u1 = "                                                       ^^^^^^^^^^^^^^         ";
-        let sp = "                                                                              ";
+        let j1 = "(letmacro [m (macro-rules #{} [[(m (a b rest ...) ...) [(rest ... b a) ...]]])]";
+        let t1 = "                                                       ^^^^^^^^^^^^^^^^^^^^    ";
+        let u1 = "                                                        ^^^^^^^^^^^^^^         ";
+        let sp = "                                                                               ";
         let j2 = "(m (1 2 3 4) (5 6))";
         let v2 = "    ^              ";
         let w2 = "      ^            ";
@@ -1969,8 +2075,9 @@ mod test {
         let y2 = "          ^        ";
         let z2 = "              ^    ";
         let a2 = "                ^  ";
+        let j3 = ")";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
         let t = t1;
         let u = u1;
         let v = &[sp, v2].join("");
@@ -1995,56 +2102,22 @@ mod test {
                 Datum::List(t2s(u), vec![Datum::Int(t2s(a), 6), Datum::Int(t2s(z), 5)]),
             ],
         ));
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
-    fn expand_body_def() {
-        let j1 = "(defmacro def1 (macro-rules #{} [[(def1 name) (def name 1)]]))";
-        let u1 = "                                              ^^^^^^^^^^^^    ";
-        let v1 = "                                                        ^     ";
-        let s1 = "                                                              ";
+    fn trivial_lettype() {
+        let j1 = "(lettype [MyTrue true]";
+        let s1 = "                      ";
 
-        let j2 = "(def1 x)";
-        let t2 = "      ^ ";
-        let s2 = "        ";
+        let j2 = "(let [[x : MyTrue] true])";
+        let t2 = "      ^^^^^^^^^^^^       ";
+        let u2 = "^^^^^^^^^^^^^^^^^^^^^^^^^";
+        let v2 = "                   ^^^^  ";
 
-        let j3 = "x";
-        let w3 = "^";
+        let j3 = ")";
 
         let j = &[j1, j2, j3].join("");
-        let t = &[s1, t2].join("");
-        let u = u1;
-        let v = v1;
-        let w = &[s1, s2, w3].join("");
-
-        let destruc = destruc::Destruc::Scalar(
-            t2s(t),
-            destruc::Scalar::new(
-                Some(VarId(2)),
-                "x".to_owned(),
-                ty::Decl::Free(ty::FreeTyId::new(1)),
-            ),
-        );
-
-        let expected = Expr::Do(vec![
-            Expr::Def(t2s(u), destruc, Box::new(Expr::Lit(Datum::Int(t2s(v), 1)))),
-            Expr::Ref(t2s(w), VarId(2)),
-        ]);
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
-    }
-
-    #[test]
-    fn trivial_deftype() {
-        let j1 = "(deftype MyTrue true)";
-        let s1 = "                     ";
-
-        let j2 = "(def [x : MyTrue] true)";
-        let t2 = "     ^^^^^^^^^^^^      ";
-        let u2 = "^^^^^^^^^^^^^^^^^^^^^^^";
-        let v2 = "                  ^^^^ ";
-
-        let j = &[j1, j2].join("");
         let t = &[s1, t2].join("");
         let u = &[s1, u2].join("");
         let v = &[s1, v2].join("");
@@ -2052,19 +2125,22 @@ mod test {
         let destruc = destruc::Destruc::Scalar(
             t2s(t),
             destruc::Scalar::new(
-                Some(VarId(2)),
+                Some(VarId(0)),
                 "x".to_owned(),
                 ty::Ty::LitBool(true).into_decl(),
             ),
         );
 
-        let expected = Expr::Def(
+        let expected = Expr::Let(
             t2s(u),
-            destruc,
-            Box::new(Expr::Lit(Datum::Bool(t2s(v), true))),
+            Let {
+                destruc,
+                value_expr: Box::new(Expr::Lit(Datum::Bool(t2s(v), true))),
+                body_expr: Box::new(Expr::Do(vec![])),
+            },
         );
 
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
@@ -2129,7 +2205,7 @@ mod test {
         let t = "^^^^^^^^^^^^^^^^^^^^^";
 
         let expected = Expr::TyPred(t2s(t), ty::Ty::LitBool(true).into_poly());
-        assert_eq!(expected, body_expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
     #[test]
@@ -2147,6 +2223,6 @@ mod test {
         let t = r#"^^^^^^^^^^^^^^^^^^^^^^^"#;
 
         let err = Error::new(t2s(t), ErrorKind::UserError("Hello".to_owned()));
-        assert_eq!(err, body_expr_for_str(j).unwrap_err());
+        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 }
