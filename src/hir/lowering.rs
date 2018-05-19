@@ -8,7 +8,7 @@ use hir::import::lower_import_set;
 use hir::loader::{load_library_data, load_module_data, LibraryName};
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::module::{Module, ModuleDef};
-use hir::ns::{Ident, NsDatum, NsId, NsIdAlloc};
+use hir::ns::{Ident, NsDatum, NsId};
 use hir::prim::Prim;
 use hir::scope::{Binding, MacroId, Scope};
 use hir::types::{lower_poly, lower_polymorphic_var, try_lower_purity, PolymorphicVar};
@@ -23,7 +23,6 @@ use ty::purity::Purity;
 
 pub struct LoweringContext<'ccx> {
     next_var_id: u32,
-    ns_id_alloc: NsIdAlloc,
     loaded_libraries: BTreeMap<LibraryName, Module>,
     macros: Vec<Macro>,
 
@@ -112,7 +111,6 @@ impl<'ccx> LoweringContext<'ccx> {
 
         LoweringContext {
             next_var_id: 0,
-            ns_id_alloc: NsIdAlloc::new(),
             loaded_libraries,
             macros: vec![],
             pvars: vec![],
@@ -738,13 +736,7 @@ impl<'ccx> LoweringContext<'ccx> {
                             let expanded_datum = {
                                 let mac = &self.macros[macro_id.to_usize()];
 
-                                expand_macro(
-                                    &mut self.ns_id_alloc,
-                                    &mut macro_scope,
-                                    span,
-                                    mac,
-                                    &arg_data,
-                                )?
+                                expand_macro(&mut macro_scope, span, mac, &arg_data)?
                             };
 
                             self.lower_expr(&macro_scope, expanded_datum)
@@ -838,7 +830,7 @@ impl<'ccx> LoweringContext<'ccx> {
                         Some(Binding::Macro(macro_id)) => {
                             let expanded_datum = {
                                 let mac = &self.macros[macro_id.to_usize()];
-                                expand_macro(&mut self.ns_id_alloc, scope, span, mac, &arg_data)?
+                                expand_macro(scope, span, mac, &arg_data)?
                             };
 
                             return self.lower_module_def(scope, expanded_datum)
@@ -862,7 +854,7 @@ impl<'ccx> LoweringContext<'ccx> {
     }
 
     fn lower_module(&mut self, scope: &mut Scope, data: Vec<Datum>) -> Result<Module> {
-        let ns_id = self.ns_id_alloc.alloc();
+        let ns_id = scope.alloc_ns_id();
 
         // The default scope only consists of (import)
         scope.insert_binding(

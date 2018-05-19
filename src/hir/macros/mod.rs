@@ -8,7 +8,7 @@ use hir::error::{Error, ErrorKind, Result};
 use hir::macros::checker::{check_rule, VarLinks};
 use hir::macros::expander::expand_rule;
 use hir::macros::matcher::match_rule;
-use hir::ns::{Ident, NsDatum, NsIdAlloc};
+use hir::ns::{Ident, NsDatum};
 use hir::prim::Prim;
 use hir::scope::{Binding, Scope};
 use syntax::span::Span;
@@ -225,7 +225,6 @@ pub fn lower_macro_rules(
 }
 
 pub fn expand_macro(
-    ns_id_alloc: &mut NsIdAlloc,
     scope: &mut Scope,
     invocation_span: Span,
     mac: &Macro,
@@ -236,7 +235,6 @@ pub fn expand_macro(
 
         if let Ok(match_data) = match_result {
             return Ok(expand_rule(
-                ns_id_alloc,
                 scope,
                 &mac.special_vars,
                 &match_data,

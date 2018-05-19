@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use hir::ns::{Ident, NsDatum};
+use hir::ns::{Ident, NsDatum, NsId};
 use hir::prim::Prim;
 use hir::{types, VarId};
 use ty;
@@ -30,12 +30,14 @@ pub enum Binding {
 
 pub struct Scope {
     bindings: HashMap<Ident, Binding>,
+    curr_ns_id: u32,
 }
 
 impl Scope {
     pub fn new_empty() -> Scope {
         Scope {
             bindings: HashMap::new(),
+            curr_ns_id: 0,
         }
     }
 
@@ -43,6 +45,7 @@ impl Scope {
         // TODO: Can we use a pointer to our parent without entering borrow checker hell?
         Scope {
             bindings: parent.bindings.clone(),
+            curr_ns_id: parent.curr_ns_id,
         }
     }
 
@@ -82,5 +85,13 @@ impl Scope {
         };
 
         self.bindings.insert(new_ident.clone(), new_binding);
+    }
+
+    /// Allocates a new ns_id
+    ///
+    /// This is not globally unique; it will only be unique in the current scope chain
+    pub fn alloc_ns_id(&mut self) -> NsId {
+        self.curr_ns_id += 1;
+        NsId::new(self.curr_ns_id)
     }
 }

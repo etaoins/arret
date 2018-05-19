@@ -126,18 +126,3 @@ impl NsDatum {
         }
     }
 }
-
-pub struct NsIdAlloc {
-    curr_ns_id: u32,
-}
-
-impl NsIdAlloc {
-    pub fn new() -> NsIdAlloc {
-        NsIdAlloc { curr_ns_id: 0 }
-    }
-
-    pub fn alloc(&mut self) -> NsId {
-        self.curr_ns_id += 1;
-        NsId::new(self.curr_ns_id)
-    }
-}

@@ -1,6 +1,6 @@
 use hir::macros::checker::VarLinks;
 use hir::macros::{MacroVar, MatchData, SpecialVars};
-use hir::ns::{Ident, NsDatum, NsId, NsIdAlloc};
+use hir::ns::{Ident, NsDatum, NsId};
 use hir::scope::Scope;
 use std::collections::HashMap;
 use syntax::span::Span;
@@ -12,20 +12,14 @@ struct ExpandCursor<'a> {
 }
 
 struct ExpandContext<'a> {
-    ns_id_alloc: &'a mut NsIdAlloc,
     scope: &'a mut Scope,
     special_vars: &'a SpecialVars,
     ns_mapping: HashMap<NsId, NsId>,
 }
 
 impl<'a> ExpandContext<'a> {
-    fn new(
-        ns_id_alloc: &'a mut NsIdAlloc,
-        scope: &'a mut Scope,
-        special_vars: &'a SpecialVars,
-    ) -> ExpandContext<'a> {
+    fn new(scope: &'a mut Scope, special_vars: &'a SpecialVars) -> ExpandContext<'a> {
         ExpandContext {
-            ns_id_alloc,
             scope,
             special_vars,
             ns_mapping: HashMap::new(),
@@ -42,13 +36,13 @@ impl<'a> ExpandContext<'a> {
         // Rescope this ident
         let old_ns_id = ident.ns_id();
 
-        let ns_id_alloc = &mut self.ns_id_alloc;
+        let scope = &mut self.scope;
         let new_ns_id = self.ns_mapping
             .entry(old_ns_id)
-            .or_insert_with(|| ns_id_alloc.alloc());
+            .or_insert_with(|| scope.alloc_ns_id());
 
         let new_ident = ident.with_ns_id(*new_ns_id);
-        self.scope.rebind(ident, &new_ident);
+        scope.rebind(ident, &new_ident);
 
         NsDatum::Ident(span, new_ident)
     }
@@ -133,14 +127,13 @@ impl<'a> ExpandContext<'a> {
 }
 
 pub fn expand_rule(
-    ns_id_alloc: &mut NsIdAlloc,
     scope: &mut Scope,
     special_vars: &SpecialVars,
     match_data: &MatchData,
     var_links: &VarLinks,
     template: &NsDatum,
 ) -> NsDatum {
-    let mut mcx = ExpandContext::new(ns_id_alloc, scope, special_vars);
+    let mut mcx = ExpandContext::new(scope, special_vars);
 
     let mut cursor = ExpandCursor {
         match_data,
