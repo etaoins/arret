@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use hir::ns::{Ident, NsDatum, NsId};
 use hir::prim::Prim;
@@ -28,25 +29,43 @@ pub enum Binding {
     Purity(ty::purity::Poly),
 }
 
-pub struct Scope {
+pub struct ScopeData {
     bindings: HashMap<Ident, Binding>,
+    parent: Option<Rc<ScopeData>>,
     curr_ns_id: u32,
 }
 
+impl ScopeData {
+    fn get(&self, ident: &Ident) -> Option<Binding> {
+        match self.bindings.get(ident) {
+            Some(b) => Some(b.clone()),
+            None => if let Some(ref parent) = self.parent {
+                parent.get(ident)
+            } else {
+                None
+            },
+        }
+    }
+}
+
+// TODO: We shouldn't need to use Rc here but the borrow checker has broken me
+pub struct Scope(Rc<ScopeData>);
+
 impl Scope {
     pub fn new_empty() -> Scope {
-        Scope {
+        Scope(Rc::new(ScopeData {
             bindings: HashMap::new(),
             curr_ns_id: 0,
-        }
+            parent: None,
+        }))
     }
 
     pub fn new_child(parent: &Scope) -> Scope {
-        // TODO: Can we use a pointer to our parent without entering borrow checker hell?
-        Scope {
-            bindings: parent.bindings.clone(),
-            curr_ns_id: parent.curr_ns_id,
-        }
+        Scope(Rc::new(ScopeData {
+            bindings: HashMap::new(),
+            curr_ns_id: parent.data().curr_ns_id,
+            parent: Some(parent.0.clone()),
+        }))
     }
 
     /// Returns the binding for a given datum if it exists
@@ -62,14 +81,11 @@ impl Scope {
 
     /// Returns the binding for a given ident if it exists
     pub fn get(&self, ident: &Ident) -> Option<Binding> {
-        match self.bindings.get(ident) {
-            Some(b) => Some(b.clone()),
-            None => None,
-        }
+        self.data().get(ident)
     }
 
     pub fn insert_binding(&mut self, ident: Ident, binding: Binding) {
-        self.bindings.insert(ident, binding);
+        self.mut_data().bindings.insert(ident, binding);
     }
 
     pub fn insert_var(&mut self, ident: Ident, var_id: VarId) {
@@ -78,20 +94,31 @@ impl Scope {
 
     // This is used to rebind variables to fresh locations when expanding macros
     pub fn rebind(&mut self, old_ident: &Ident, new_ident: &Ident) {
-        let new_binding = if let Some(old_binding) = self.bindings.get(old_ident) {
+        let new_binding = if let Some(old_binding) = self.get(old_ident) {
             old_binding.clone()
         } else {
             return;
         };
 
-        self.bindings.insert(new_ident.clone(), new_binding);
+        self.mut_data()
+            .bindings
+            .insert(new_ident.clone(), new_binding);
     }
 
     /// Allocates a new ns_id
     ///
     /// This is not globally unique; it will only be unique in the current scope chain
     pub fn alloc_ns_id(&mut self) -> NsId {
-        self.curr_ns_id += 1;
-        NsId::new(self.curr_ns_id)
+        self.mut_data().curr_ns_id += 1;
+        NsId::new(self.data().curr_ns_id)
+    }
+
+    fn data(&self) -> &ScopeData {
+        &self.0
+    }
+
+    fn mut_data(&mut self) -> &mut ScopeData {
+        // This is also important to keep our `ns_alloc_id` invariant
+        Rc::get_mut(&mut self.0).expect("Cannot mutate non-leaf scope")
     }
 }
