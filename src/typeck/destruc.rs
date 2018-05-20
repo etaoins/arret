@@ -1,14 +1,12 @@
-use std::collections::HashMap;
-
 use hir;
 use hir::destruc;
 use ty;
 use typeck::list_type;
 use typeck::list_type::{FromListMembers, ListTypeIterator};
 
-pub fn type_for_list_destruc<R, I>(
+pub fn type_for_decl_list_destruc<R, I>(
     tvars: &[ty::TVar],
-    list: &destruc::List,
+    list: &destruc::List<ty::Decl>,
     mut guide_type_iter: Option<I>,
 ) -> R
 where
@@ -24,7 +22,7 @@ where
             None
         };
 
-        fixed_polys.push(type_for_destruc(tvars, fixed_destruc, guide_type));
+        fixed_polys.push(type_for_decl_destruc(tvars, fixed_destruc, guide_type));
     }
 
     let rest_poly = match list.rest() {
@@ -45,9 +43,9 @@ where
 }
 
 /// Returns the required type for a destruc
-pub fn type_for_destruc(
+pub fn type_for_decl_destruc(
     tvars: &[ty::TVar],
-    destruc: &destruc::Destruc,
+    destruc: &destruc::Destruc<ty::Decl>,
     guide_type: Option<&ty::Poly>,
 ) -> ty::Poly {
     match *destruc {
@@ -61,39 +59,32 @@ pub fn type_for_destruc(
             let guide_type_iter =
                 guide_type.map(|guide_type| list_type::PolyIterator::new(guide_type));
 
-            type_for_list_destruc(tvars, list, guide_type_iter)
+            type_for_decl_list_destruc(tvars, list, guide_type_iter)
         }
     }
 }
 
-pub fn subst_list_destruc<R>(
-    list: &destruc::List,
-    free_ty_to_poly: &HashMap<ty::FreeTyId, ty::Poly>,
-) -> R
+pub fn type_for_poly_list_destruc<R>(list: &destruc::List<ty::Poly>) -> R
 where
     R: FromListMembers,
 {
     let fixed_polys = list.fixed()
         .iter()
-        .map(|fixed_destruc| subst_destruc(fixed_destruc, free_ty_to_poly));
+        .map(|fixed_destruc| type_for_poly_destruc(fixed_destruc));
 
-    let rest_poly = list.rest()
-        .as_ref()
-        .map(|rest_destruc| ty::subst::subst_decl_ty(free_ty_to_poly, rest_destruc.ty()));
+    let rest_poly = match list.rest() {
+        Some(rest) => Some(rest.ty().clone()),
+        None => None,
+    };
 
     R::from_list_members(fixed_polys, rest_poly)
 }
 
 /// Returns the required type for a destruc
-pub fn subst_destruc(
-    destruc: &destruc::Destruc,
-    free_ty_to_poly: &HashMap<ty::FreeTyId, ty::Poly>,
-) -> ty::Poly {
-    match destruc {
-        destruc::Destruc::Scalar(_, ref scalar) => {
-            ty::subst::subst_decl_ty(free_ty_to_poly, scalar.ty())
-        }
-        destruc::Destruc::List(_, ref list) => subst_list_destruc(list, free_ty_to_poly),
+pub fn type_for_poly_destruc(destruc: &destruc::Destruc<ty::Poly>) -> ty::Poly {
+    match *destruc {
+        destruc::Destruc::Scalar(_, ref scalar) => scalar.ty().clone(),
+        destruc::Destruc::List(_, ref list) => type_for_poly_list_destruc(list),
     }
 }
 
@@ -108,13 +99,13 @@ impl<F> VisitVarCtx<F>
 where
     F: FnMut(hir::VarId, &ty::Decl) -> (),
 {
-    fn visit_scalar_vars(&mut self, scalar: &destruc::Scalar) {
+    fn visit_scalar_vars(&mut self, scalar: &destruc::Scalar<ty::Decl>) {
         if let Some(var_id) = scalar.var_id() {
             (self.visitor)(*var_id, scalar.ty());
         }
     }
 
-    fn visit_vars(&mut self, destruc: &destruc::Destruc) {
+    fn visit_vars(&mut self, destruc: &destruc::Destruc<ty::Decl>) {
         match destruc {
             destruc::Destruc::Scalar(_, ref scalar) => {
                 self.visit_scalar_vars(scalar);
@@ -132,7 +123,7 @@ where
     }
 }
 
-pub fn visit_vars<F>(destruc: &destruc::Destruc, visitor: F)
+pub fn visit_vars<F>(destruc: &destruc::Destruc<ty::Decl>, visitor: F)
 where
     F: FnMut(hir::VarId, &ty::Decl) -> (),
 {

@@ -15,6 +15,20 @@ use typeck::list_type::ListTypeIterator;
 
 type Result<T> = result::Result<T, Error>;
 
+struct InferredNode {
+    pub expr: hir::Expr<ty::Poly>,
+    pub poly_type: ty::Poly,
+}
+
+/// Partially inferred function application
+///
+/// The function has been inferred while the arguments have not
+struct FunApp {
+    fun_expr: hir::Expr<ty::Poly>,
+    fixed_arg_exprs: Vec<hir::Expr<ty::Decl>>,
+    rest_arg_expr: Option<Box<hir::Expr<ty::Decl>>>,
+}
+
 enum VarType {
     // Introduced a definition that has yet to be processed
     Pending(usize),
@@ -24,23 +38,6 @@ enum VarType {
     Free(ty::FreeTyId),
     // Declared or previously inferred type
     Known(ty::Poly),
-}
-
-#[allow(large_enum_variant)]
-enum DefState {
-    Pending(hir::Def),
-    Complete,
-}
-
-struct InferCtx<'a> {
-    def_states: Vec<DefState>,
-    pvars: &'a [ty::purity::PVar],
-    tvars: &'a [ty::TVar],
-
-    free_ty_to_poly: HashMap<ty::FreeTyId, ty::Poly>,
-    var_to_type: HashMap<hir::VarId, VarType>,
-
-    free_purity_to_poly: HashMap<ty::purity::FreePurityId, ty::purity::Poly>,
 }
 
 #[derive(Clone)]
@@ -56,6 +53,21 @@ impl PurityVarType {
             PurityVarType::Known(poly) => poly,
         }
     }
+}
+
+#[allow(large_enum_variant)]
+enum DefState {
+    Pending(hir::Def<ty::Decl>),
+    Complete,
+}
+
+struct InferCtx<'a> {
+    def_states: Vec<DefState>,
+    pvars: &'a [ty::purity::PVar],
+    tvars: &'a [ty::TVar],
+
+    free_ty_to_poly: HashMap<ty::FreeTyId, ty::Poly>,
+    var_to_type: HashMap<hir::VarId, VarType>,
 }
 
 struct SubtreeCtx {
@@ -74,7 +86,6 @@ impl<'a> InferCtx<'a> {
             tvars,
             free_ty_to_poly: HashMap::new(),
             var_to_type: HashMap::new(),
-            free_purity_to_poly: HashMap::new(),
         }
     }
 
@@ -99,25 +110,25 @@ impl<'a> InferCtx<'a> {
     }
 
     /// Ensures `sub_poly` is a subtype of `parent_poly`
-    fn ensure_is_a(
-        &self,
-        span: Span,
-        sub_poly: ty::Poly,
-        parent_poly: &ty::Poly,
-    ) -> Result<ty::Poly> {
-        if !ty::is_a::poly_is_a(self.tvars, &sub_poly, parent_poly).to_bool() {
+    fn ensure_is_a(&self, span: Span, sub_poly: &ty::Poly, parent_poly: &ty::Poly) -> Result<()> {
+        if !ty::is_a::poly_is_a(self.tvars, sub_poly, parent_poly).to_bool() {
             Err(Error::new(
                 span,
                 ErrorKind::IsNotA(self.str_for_poly(&sub_poly), self.str_for_poly(parent_poly)),
             ))
         } else {
-            Ok(sub_poly)
+            Ok(())
         }
     }
 
-    fn visit_lit(&mut self, required_type: &ty::Poly, datum: &Datum) -> Result<ty::Poly> {
-        let lit_type = ty::datum::poly_for_datum(datum);
-        self.ensure_is_a(datum.span(), lit_type, required_type)
+    fn visit_lit(&mut self, required_type: &ty::Poly, datum: Datum) -> Result<InferredNode> {
+        let lit_type = ty::datum::poly_for_datum(&datum);
+        self.ensure_is_a(datum.span(), &lit_type, required_type)?;
+
+        Ok(InferredNode {
+            expr: hir::Expr::Lit(datum),
+            poly_type: lit_type,
+        })
     }
 
     fn visit_cond(
@@ -125,17 +136,36 @@ impl<'a> InferCtx<'a> {
         scx: &mut SubtreeCtx,
         required_type: &ty::Poly,
         span: Span,
-        cond: &hir::Cond,
-    ) -> Result<ty::Poly> {
-        let test_type = self.visit_expr(scx, &ty::Ty::Bool.into_poly(), cond.test_expr())?;
+        cond: hir::Cond<ty::Decl>,
+    ) -> Result<InferredNode> {
+        let hir::Cond {
+            test_expr,
+            true_expr,
+            false_expr,
+        } = cond;
 
-        let true_type = self.visit_expr(scx, required_type, cond.true_expr())?;
-        let false_type = self.visit_expr(scx, required_type, cond.false_expr())?;
+        let test_node = self.visit_expr(scx, &ty::Ty::Bool.into_poly(), *test_expr)?;
+        let true_node = self.visit_expr(scx, required_type, *true_expr)?;
+        let false_node = self.visit_expr(scx, required_type, *false_expr)?;
 
-        match test_type {
-            ty::Poly::Fixed(ty::Ty::LitBool(true)) => Ok(true_type),
-            ty::Poly::Fixed(ty::Ty::LitBool(false)) => Ok(false_type),
-            _ => ty::unify::poly_unify_to_poly(self.tvars, &true_type, &false_type)
+        match test_node.poly_type {
+            ty::Poly::Fixed(ty::Ty::LitBool(true)) => Ok(true_node),
+            ty::Poly::Fixed(ty::Ty::LitBool(false)) => Ok(false_node),
+            _ => ty::unify::poly_unify_to_poly(
+                self.tvars,
+                &true_node.poly_type,
+                &false_node.poly_type,
+            ).map(|unified_type| InferredNode {
+                expr: hir::Expr::Cond(
+                    span,
+                    hir::Cond {
+                        test_expr: Box::new(test_node.expr),
+                        true_expr: Box::new(true_node.expr),
+                        false_expr: Box::new(false_node.expr),
+                    },
+                ),
+                poly_type: unified_type,
+            })
                 .map_err(|unify_err| self.new_union_conflict_error(span, &unify_err)),
         }
     }
@@ -144,13 +174,16 @@ impl<'a> InferCtx<'a> {
         &self,
         required_type: &ty::Poly,
         span: Span,
-        test_type: &ty::Poly,
-    ) -> Result<ty::Poly> {
-        self.ensure_is_a(
-            span,
-            ty::Ty::TyPred(Box::new(test_type.clone())).into_poly(),
-            required_type,
-        )
+        test_type: ty::Poly,
+    ) -> Result<InferredNode> {
+        let pred_type = ty::Ty::TyPred(Box::new(test_type.clone())).into_poly();
+
+        self.ensure_is_a(span, &pred_type, required_type)?;
+
+        Ok(InferredNode {
+            expr: hir::Expr::TyPred(span, test_type),
+            poly_type: pred_type,
+        })
     }
 
     fn unify_app_purity(
@@ -203,12 +236,17 @@ impl<'a> InferCtx<'a> {
         required_type: &ty::Poly,
         span: Span,
         var_id: hir::VarId,
-    ) -> Result<ty::Poly> {
+    ) -> Result<InferredNode> {
         let pending_def_id = match self.var_to_type[&var_id] {
             VarType::Pending(def_id) => def_id,
             VarType::Recursive => return Err(Error::new(span, ErrorKind::RecursiveType)),
             VarType::Known(ref known_type) => {
-                return Ok(self.ensure_is_a(span, known_type.clone(), required_type)?)
+                self.ensure_is_a(span, known_type, required_type)?;
+
+                return Ok(InferredNode {
+                    expr: hir::Expr::Ref(span, var_id),
+                    poly_type: known_type.clone(),
+                });
             }
             VarType::Free(free_ty_id) => {
                 let new_free_type = self.type_for_free_ref(required_type, span, free_ty_id)?;
@@ -217,7 +255,10 @@ impl<'a> InferCtx<'a> {
                 self.free_ty_to_poly
                     .insert(free_ty_id, new_free_type.clone());
 
-                return Ok(new_free_type);
+                return Ok(InferredNode {
+                    expr: hir::Expr::Ref(span, var_id),
+                    poly_type: new_free_type,
+                });
             }
         };
 
@@ -230,18 +271,33 @@ impl<'a> InferCtx<'a> {
         &mut self,
         scx: &mut SubtreeCtx,
         required_type: &ty::Poly,
-        exprs: &[hir::Expr],
-    ) -> Result<ty::Poly> {
-        if exprs.is_empty() {
-            return Ok(unit_type());
-        }
+        mut exprs: Vec<hir::Expr<ty::Decl>>,
+    ) -> Result<InferredNode> {
+        let terminal_expr = if let Some(terminal_expr) = exprs.pop() {
+            terminal_expr
+        } else {
+            return Ok(InferredNode {
+                expr: hir::Expr::Do(vec![]),
+                poly_type: unit_type(),
+            });
+        };
 
-        for non_terminal_expr in &exprs[0..exprs.len() - 1] {
-            // The type of this expression doesn't matter; its value is discarded
-            self.visit_expr(scx, &ty::Ty::Any.into_poly(), non_terminal_expr)?;
-        }
+        let mut inferred_exprs = exprs
+            .into_iter()
+            .map(|non_terminal_expr| {
+                // The type of this expression doesn't matter; its value is discarded
+                self.visit_expr(scx, &ty::Ty::Any.into_poly(), non_terminal_expr)
+                    .map(|node| node.expr)
+            })
+            .collect::<Result<Vec<hir::Expr<ty::Poly>>>>()?;
 
-        self.visit_expr(scx, required_type, exprs.last().unwrap())
+        let terminal_node = self.visit_expr(scx, required_type, terminal_expr)?;
+        inferred_exprs.push(terminal_node.expr);
+
+        Ok(InferredNode {
+            expr: hir::Expr::Do(inferred_exprs),
+            poly_type: terminal_node.poly_type,
+        })
     }
 
     /// Visits a function expression
@@ -253,8 +309,8 @@ impl<'a> InferCtx<'a> {
         &mut self,
         required_type: &ty::Poly,
         span: Span,
-        decl_fun: &hir::Fun,
-    ) -> Result<ty::Poly> {
+        decl_fun: hir::Fun<ty::Decl>,
+    ) -> Result<InferredNode> {
         // TODO: Union types
         let required_fun_type = match required_type {
             ty::Poly::Fixed(ty::Ty::Fun(fun)) => Some(fun),
@@ -268,16 +324,16 @@ impl<'a> InferCtx<'a> {
                 _ => None,
             });
 
-        let initial_param_type: ty::Params<ty::Poly> = typeck::destruc::type_for_list_destruc(
+        let initial_param_type: ty::Params<ty::Poly> = typeck::destruc::type_for_decl_list_destruc(
             self.tvars,
-            decl_fun.params(),
+            &decl_fun.params,
             // Use the required type as a guide for any free types in the parameter list
             required_fun_type.map(|fun| list_type::ParamsIterator::new(fun.params())),
         );
 
         // Bind all of our parameter variables
         self.destruc_list_value(
-            decl_fun.params(),
+            &decl_fun.params,
             span,
             list_type::ParamsIterator::new(&initial_param_type),
             // If a parameter has a free decl type then we can refine the type
@@ -285,7 +341,7 @@ impl<'a> InferCtx<'a> {
         )?;
 
         // Use the declared return type if possible
-        let wanted_ret_type = decl_fun.ret_ty().try_to_poly().unwrap_or_else(|| {
+        let wanted_ret_type = decl_fun.ret_ty.try_to_poly().unwrap_or_else(|| {
             if let Some(ref required_top_fun_type) = required_top_fun_type {
                 // Fall back to the backwards type
                 required_top_fun_type.ret().clone()
@@ -296,7 +352,7 @@ impl<'a> InferCtx<'a> {
         });
 
         let fun_purity_var = decl_fun
-            .purity()
+            .purity
             .try_to_poly()
             .map(|poly_purity| {
                 // This function has a declared purity
@@ -309,32 +365,42 @@ impl<'a> InferCtx<'a> {
             fun_purity: fun_purity_var,
         };
 
-        let actual_ret_type =
-            self.visit_expr(&mut fun_scx, &wanted_ret_type, decl_fun.body_expr())?;
+        let body_node = self.visit_expr(&mut fun_scx, &wanted_ret_type, *decl_fun.body_expr)?;
+        let actual_ret_type = body_node.poly_type;
 
-        if let ty::Decl::Free(free_ty_id) = decl_fun.ret_ty() {
+        if let ty::Decl::Free(free_ty_id) = decl_fun.ret_ty {
             self.free_ty_to_poly
-                .insert(*free_ty_id, actual_ret_type.clone());
+                .insert(free_ty_id, actual_ret_type.clone());
         }
 
         let actual_purity = fun_scx.fun_purity.into_poly();
 
-        if let ty::purity::Decl::Free(free_purity_id) = decl_fun.purity() {
-            self.free_purity_to_poly
-                .insert(*free_purity_id, actual_purity.clone());
-        };
-
-        let actual_param_type =
-            typeck::destruc::subst_list_destruc(decl_fun.params(), &self.free_ty_to_poly);
+        let actual_param_destruc =
+            destruc::subst_list_destruc(decl_fun.params, &self.free_ty_to_poly);
+        let actual_param_type = typeck::destruc::type_for_poly_list_destruc(&actual_param_destruc);
 
         let found_type = ty::Fun::new(
-            decl_fun.pvar_ids().clone(),
-            decl_fun.tvar_ids().clone(),
-            ty::TopFun::new(actual_purity.clone(), actual_ret_type),
+            decl_fun.pvar_ids.clone(),
+            decl_fun.tvar_ids.clone(),
+            ty::TopFun::new(actual_purity.clone(), actual_ret_type.clone()),
             actual_param_type,
         ).into_ref();
 
-        self.ensure_is_a(span, found_type, required_type)
+        let found_fun = hir::Fun::<ty::Poly> {
+            pvar_ids: decl_fun.pvar_ids.clone(),
+            tvar_ids: decl_fun.tvar_ids.clone(),
+            purity: actual_purity,
+            params: actual_param_destruc,
+            ret_ty: actual_ret_type,
+            body_expr: Box::new(body_node.expr),
+        };
+
+        self.ensure_is_a(span, &found_type, required_type)?;
+
+        Ok(InferredNode {
+            expr: hir::Expr::Fun(span, found_fun),
+            poly_type: found_type,
+        })
     }
 
     fn visit_fun_app(
@@ -342,14 +408,20 @@ impl<'a> InferCtx<'a> {
         scx: &mut SubtreeCtx,
         required_type: &ty::Poly,
         span: Span,
-        app: &hir::App,
-        fun: &ty::Fun<ty::Poly>,
-    ) -> Result<ty::Poly> {
+        fun_type: &ty::Fun<ty::Poly>,
+        fun_app: FunApp,
+    ) -> Result<InferredNode> {
+        let FunApp {
+            fun_expr,
+            fixed_arg_exprs,
+            rest_arg_expr,
+        } = fun_app;
+
         // The context used to select the types for our parameters. It's only evidence is the
         // wanted return type which is used for backwards type propagation.
         let mut param_select_ctx = ty::select::SelectContext::new(
-            fun.pvar_ids().clone(),
-            fun.tvar_ids().clone(),
+            fun_type.pvar_ids().clone(),
+            fun_type.tvar_ids().clone(),
             self.tvars,
         );
 
@@ -358,51 +430,68 @@ impl<'a> InferCtx<'a> {
         let mut ret_select_ctx = param_select_ctx.clone();
 
         // Add our return type information
-        param_select_ctx.add_evidence(fun.ret(), required_type);
+        param_select_ctx.add_evidence(fun_type.ret(), required_type);
 
         // Iterate over our parameter type to feed type information in to the arguments
-        let mut param_iter = list_type::ParamsIterator::new(fun.params());
+        let mut param_iter = list_type::ParamsIterator::new(fun_type.params());
 
-        for fixed_arg_expr in app.fixed_arg_exprs() {
+        // TODO: Better arity messages
+        let supplied_arg_count = fixed_arg_exprs.len();
+
+        let mut inferred_fixed_arg_exprs = vec![];
+        for fixed_arg_expr in fixed_arg_exprs {
             let param_type = if let Some(param_type) = param_iter.next().expect("TODO") {
                 param_type
             } else {
                 return Err(Error::new(
                     span,
-                    ErrorKind::TooManyArgs(app.fixed_arg_exprs().len(), fun.params().fixed().len()),
+                    ErrorKind::TooManyArgs(supplied_arg_count, fun_type.params().fixed().len()),
                 ));
             };
 
             let wanted_arg_type = ty::subst::inst_ty_selection(&param_select_ctx, param_type);
-            let actual_arg_type = self.visit_expr(scx, &wanted_arg_type, fixed_arg_expr)?;
+            let fixed_arg_node = self.visit_expr(scx, &wanted_arg_type, fixed_arg_expr)?;
 
-            ret_select_ctx.add_evidence(param_type, &actual_arg_type);
+            ret_select_ctx.add_evidence(param_type, &fixed_arg_node.poly_type);
+            inferred_fixed_arg_exprs.push(fixed_arg_node.expr);
         }
 
-        if let Some(rest_arg_expr) = app.rest_arg_expr() {
+        let inferred_rest_arg_expr = if let Some(rest_arg_expr) = rest_arg_expr {
             let tail_type = param_iter.tail_type();
             let wanted_tail_type = ty::subst::inst_ty_selection(&param_select_ctx, &tail_type);
-            let actual_tail_type = self.visit_expr(scx, &wanted_tail_type, rest_arg_expr)?;
+            let rest_arg_node = self.visit_expr(scx, &wanted_tail_type, *rest_arg_expr)?;
 
-            ret_select_ctx.add_evidence(&tail_type, &actual_tail_type);
-        } else if param_iter.next().expect("TODO") != None && fun.params().rest().is_none() {
+            ret_select_ctx.add_evidence(&tail_type, &rest_arg_node.poly_type);
+            Some(Box::new(rest_arg_node.expr))
+        } else if param_iter.next().expect("TODO") != None && fun_type.params().rest().is_none() {
             // We wanted more args!
             return Err(Error::new(
                 span,
-                ErrorKind::InsufficientArgs(
-                    app.fixed_arg_exprs().len(),
-                    fun.params().fixed().len(),
-                ),
+                ErrorKind::InsufficientArgs(supplied_arg_count, fun_type.params().fixed().len()),
             ));
-        }
+        } else {
+            None
+        };
 
-        let ret_type = ty::subst::inst_ty_selection(&ret_select_ctx, fun.ret());
+        let ret_type = ty::subst::inst_ty_selection(&ret_select_ctx, fun_type.ret());
 
         // Keep track of the purity from the application
-        let app_purity = ty::subst::inst_purity_selection(&ret_select_ctx, fun.purity());
+        let app_purity = ty::subst::inst_purity_selection(&ret_select_ctx, fun_type.purity());
         self.unify_app_purity(scx, span, &app_purity)?;
 
-        self.ensure_is_a(span, ret_type, required_type)
+        self.ensure_is_a(span, &ret_type, required_type)?;
+
+        Ok(InferredNode {
+            expr: hir::Expr::App(
+                span,
+                hir::App {
+                    fun_expr: Box::new(fun_expr),
+                    fixed_arg_exprs: inferred_fixed_arg_exprs,
+                    rest_arg_expr: inferred_rest_arg_expr,
+                },
+            ),
+            poly_type: ret_type,
+        })
     }
 
     fn visit_app(
@@ -410,8 +499,14 @@ impl<'a> InferCtx<'a> {
         scx: &mut SubtreeCtx,
         required_type: &ty::Poly,
         span: Span,
-        app: &hir::App,
-    ) -> Result<ty::Poly> {
+        app: hir::App<ty::Decl>,
+    ) -> Result<InferredNode> {
+        let hir::App {
+            fun_expr,
+            mut fixed_arg_exprs,
+            rest_arg_expr,
+        } = app;
+
         // The only type information we can feed back is that we want a function of a certain
         // purity returning a certain value
         let wanted_purity = match scx.fun_purity.clone() {
@@ -427,7 +522,8 @@ impl<'a> InferCtx<'a> {
 
         let wanted_fun_type = ty::TopFun::new(wanted_purity, required_type.clone()).into_ref();
 
-        let actual_fun_type = self.visit_expr(scx, &wanted_fun_type, app.fun_expr())?;
+        let fun_node = self.visit_expr(scx, &wanted_fun_type, *fun_expr)?;
+        let actual_fun_type = fun_node.poly_type;
 
         match ty::resolve::resolve_poly_ty(self.tvars, &actual_fun_type).as_ty() {
             ty::Ty::TopFun(_) => Err(Error::new(
@@ -436,31 +532,55 @@ impl<'a> InferCtx<'a> {
             )),
             ty::Ty::TyPred(subject_poly) => {
                 // TODO: Arity
-                let test_poly =
-                    self.visit_expr(scx, &ty::Ty::Any.into_poly(), &app.fixed_arg_exprs()[0])?;
+                let test_node = self.visit_expr(
+                    scx,
+                    &ty::Ty::Any.into_poly(),
+                    fixed_arg_exprs.pop().unwrap(),
+                )?;
 
-                let result = ty::pred::interpret_poly_pred(self.tvars, &subject_poly, &test_poly)
-                    .map_err(|ty::pred::Error::TypeErased(subject, testing)| {
-                        Error::new(
-                            span,
-                            ErrorKind::PredTypeErased(
-                                self.str_for_poly(&subject),
-                                self.str_for_poly(&testing),
-                            ),
-                        )
-                    })?;
+                let pred_result =
+                    ty::pred::interpret_poly_pred(self.tvars, &subject_poly, &test_node.poly_type)
+                        .map_err(|ty::pred::Error::TypeErased(subject, testing)| {
+                            Error::new(
+                                span,
+                                ErrorKind::PredTypeErased(
+                                    self.str_for_poly(&subject),
+                                    self.str_for_poly(&testing),
+                                ),
+                            )
+                        })?;
 
                 use ty::pred::InterpretedPred;
-                Ok(match result {
+                let pred_result_type = match pred_result {
                     InterpretedPred::StaticTrue => ty::Ty::LitBool(true),
                     InterpretedPred::StaticFalse => ty::Ty::LitBool(false),
                     InterpretedPred::Dynamic(_, _) => {
                         // TODO: Occurence typing
                         ty::Ty::Bool
                     }
-                }.into_poly())
+                }.into_poly();
+
+                Ok(InferredNode {
+                    expr: hir::Expr::App(
+                        span,
+                        hir::App {
+                            fun_expr: Box::new(fun_node.expr),
+                            fixed_arg_exprs: vec![test_node.expr],
+                            rest_arg_expr: None,
+                        },
+                    ),
+                    poly_type: pred_result_type,
+                })
             }
-            ty::Ty::Fun(fun) => self.visit_fun_app(scx, required_type, span, app, fun),
+            ty::Ty::Fun(fun_type) => {
+                let fun_app = FunApp {
+                    fun_expr: fun_node.expr,
+                    fixed_arg_exprs,
+                    rest_arg_expr,
+                };
+
+                self.visit_fun_app(scx, required_type, span, fun_type, fun_app)
+            }
             _ => panic!("Unexpected type"),
         }
     }
@@ -470,49 +590,66 @@ impl<'a> InferCtx<'a> {
         scx: &mut SubtreeCtx,
         required_type: &ty::Poly,
         span: Span,
-        hir_let: &hir::Let,
-    ) -> Result<ty::Poly> {
-        let destruc = hir_let.destruc();
-        let value_expr = hir_let.value_expr();
+        hir_let: hir::Let<ty::Decl>,
+    ) -> Result<InferredNode> {
+        let hir::Let {
+            destruc,
+            value_expr,
+            body_expr,
+        } = hir_let;
 
-        let required_destruc_type = typeck::destruc::type_for_destruc(self.tvars, destruc, None);
-        let actual_destruc_type = self.visit_expr(scx, &required_destruc_type, value_expr)?;
+        let value_span = value_expr.span().unwrap_or(span);
+        let required_destruc_type =
+            typeck::destruc::type_for_decl_destruc(self.tvars, &destruc, None);
+        let value_node = self.visit_expr(scx, &required_destruc_type, *value_expr)?;
 
         self.destruc_value(
-            destruc,
-            value_expr.span().unwrap_or(span),
-            &actual_destruc_type,
+            &destruc,
+            value_span,
+            &value_node.poly_type,
             // We know the exact type of these variables; do not infer further even if their type
             // wasn't declared
             false,
         )?;
 
-        self.visit_expr(scx, required_type, hir_let.body_expr())
+        let body_node = self.visit_expr(scx, required_type, *body_expr)?;
+
+        Ok(InferredNode {
+            expr: hir::Expr::Let(
+                span,
+                hir::Let {
+                    destruc: destruc::subst_destruc(destruc, &self.free_ty_to_poly),
+                    value_expr: Box::new(value_node.expr),
+                    body_expr: Box::new(body_node.expr),
+                },
+            ),
+            poly_type: body_node.poly_type,
+        })
     }
 
     fn visit_expr(
         &mut self,
         scx: &mut SubtreeCtx,
         required_type: &ty::Poly,
-        expr: &hir::Expr,
-    ) -> Result<ty::Poly> {
+        expr: hir::Expr<ty::Decl>,
+    ) -> Result<InferredNode> {
         match expr {
             hir::Expr::Lit(datum) => self.visit_lit(required_type, datum),
-            hir::Expr::Cond(span, cond) => self.visit_cond(scx, required_type, *span, cond),
+            hir::Expr::Cond(span, cond) => self.visit_cond(scx, required_type, span, cond),
             hir::Expr::Do(exprs) => self.visit_do(scx, required_type, exprs),
-            hir::Expr::Fun(span, fun) => self.visit_fun(required_type, *span, fun),
+            hir::Expr::Fun(span, fun) => self.visit_fun(required_type, span, fun),
             hir::Expr::TyPred(span, test_type) => {
-                self.visit_ty_pred(required_type, *span, test_type)
+                self.visit_ty_pred(required_type, span, test_type)
             }
-            hir::Expr::Let(span, hir_let) => self.visit_let(scx, required_type, *span, hir_let),
-            hir::Expr::Ref(span, var_id) => self.visit_ref(required_type, *span, *var_id),
-            hir::Expr::App(span, app) => self.visit_app(scx, required_type, *span, app),
+            hir::Expr::Let(span, hir_let) => self.visit_let(scx, required_type, span, hir_let),
+            hir::Expr::Ref(span, var_id) => self.visit_ref(required_type, span, var_id),
+            hir::Expr::App(span, app) => self.visit_app(scx, required_type, span, app),
         }
     }
 
     fn destruc_scalar_value(
         &mut self,
-        scalar: &destruc::Scalar,
+        scalar: &destruc::Scalar<ty::Decl>,
         value_type: &ty::Poly,
         can_refine: bool,
     ) {
@@ -536,7 +673,7 @@ impl<'a> InferCtx<'a> {
 
     fn destruc_list_value<I>(
         &mut self,
-        list: &destruc::List,
+        list: &destruc::List<ty::Decl>,
         value_span: Span,
         mut value_type_iter: I,
         can_refine: bool,
@@ -565,7 +702,7 @@ impl<'a> InferCtx<'a> {
 
     fn destruc_value(
         &mut self,
-        destruc: &destruc::Destruc,
+        destruc: &destruc::Destruc<ty::Decl>,
         value_span: Span,
         value_type: &ty::Poly,
         can_refine: bool,
@@ -582,29 +719,33 @@ impl<'a> InferCtx<'a> {
         }
     }
 
-    fn visit_def(&mut self, hir_def: &hir::Def) -> Result<()> {
+    fn visit_def(&mut self, hir_def: hir::Def<ty::Decl>) -> Result<()> {
+        let hir::Def {
+            span,
+            destruc,
+            value_expr,
+        } = hir_def;
+
         let mut scx = SubtreeCtx {
             // Module definitions must be pure
             fun_purity: PurityVarType::Known(Purity::Pure.into_poly()),
         };
 
         // Mark all of our free typed variable as recursive
-        typeck::destruc::visit_vars(hir_def.destruc(), |var_id, decl_type| {
+        typeck::destruc::visit_vars(&destruc, |var_id, decl_type| {
             if let ty::Decl::Free(_) = decl_type {
                 self.var_to_type.insert(var_id, VarType::Recursive);
             }
         });
 
-        let destruc = hir_def.destruc();
-        let value_expr = hir_def.value_expr();
-
-        let required_type = typeck::destruc::type_for_destruc(self.tvars, destruc, None);
-        let actual_type = self.visit_expr(&mut scx, &required_type, value_expr)?;
+        let required_type = typeck::destruc::type_for_decl_destruc(self.tvars, &destruc, None);
+        let value_span = value_expr.span().unwrap_or(span);
+        let value_node = self.visit_expr(&mut scx, &required_type, value_expr)?;
 
         self.destruc_value(
-            destruc,
-            value_expr.span().unwrap_or_else(|| hir_def.span()),
-            &actual_type,
+            &destruc,
+            value_span,
+            &value_node.poly_type,
             // We know the exact type of these variables; do not infer further even if their type
             // wasn't declared
             false,
@@ -618,18 +759,18 @@ impl<'a> InferCtx<'a> {
         std::mem::swap(&mut taken_state, &mut self.def_states[def_id]);
 
         if let DefState::Pending(def) = taken_state {
-            self.visit_def(&def)?;
+            self.visit_def(def)?;
         }
 
         Ok(())
     }
 
-    fn infer_program(mut self, defs: Vec<hir::Def>) -> result::Result<(), Vec<Error>> {
+    fn infer_program(mut self, defs: Vec<hir::Def<ty::Decl>>) -> result::Result<(), Vec<Error>> {
         // First, visit all definitions to bind their variables
         for hir_def in defs {
             let def_id = self.def_states.len();
 
-            typeck::destruc::visit_vars(hir_def.destruc(), |var_id, decl_type| {
+            typeck::destruc::visit_vars(&hir_def.destruc, |var_id, decl_type| {
                 match decl_type.try_to_poly() {
                     Some(poly_type) => {
                         self.var_to_type.insert(var_id, VarType::Known(poly_type));
@@ -659,7 +800,7 @@ impl<'a> InferCtx<'a> {
 pub fn infer_program(
     pvars: &[ty::purity::PVar],
     tvars: &[ty::TVar],
-    defs: Vec<hir::Def>,
+    defs: Vec<hir::Def<ty::Decl>>,
 ) -> result::Result<(), Vec<Error>> {
     let icx = InferCtx::new(pvars, tvars);
     icx.infer_program(defs)
@@ -673,14 +814,15 @@ mod test {
 
     fn type_for_lowered_expr(
         required_type: &ty::Poly,
-        lowered_expr: &hir::lowering::LoweredTestExpr,
+        lowered_expr: hir::lowering::LoweredTestExpr,
     ) -> Result<ty::Poly> {
         let mut icx = InferCtx::new(&lowered_expr.pvars, &lowered_expr.tvars);
         let mut scx = SubtreeCtx {
             fun_purity: PurityVarType::Known(Purity::Pure.into_poly()),
         };
 
-        icx.visit_expr(&mut scx, required_type, &lowered_expr.expr)
+        icx.visit_expr(&mut scx, required_type, lowered_expr.expr)
+            .map(|node| node.poly_type)
     }
 
     fn assert_type_for_expr(ty_str: &str, expr_str: &str) {
@@ -689,7 +831,7 @@ mod test {
 
         assert_eq!(
             poly,
-            type_for_lowered_expr(&ty::Ty::Any.into_poly(), &lowered_expr).unwrap()
+            type_for_lowered_expr(&ty::Ty::Any.into_poly(), lowered_expr).unwrap()
         );
     }
 
@@ -700,7 +842,7 @@ mod test {
 
         assert_eq!(
             expected_poly,
-            type_for_lowered_expr(&guide_poly, &lowered_expr).unwrap()
+            type_for_lowered_expr(&guide_poly, lowered_expr).unwrap()
         );
     }
 
@@ -709,7 +851,7 @@ mod test {
 
         assert_eq!(
             err,
-            &type_for_lowered_expr(&ty::Ty::Any.into_poly(), &lowered_expr).unwrap_err()
+            &type_for_lowered_expr(&ty::Ty::Any.into_poly(), lowered_expr).unwrap_err()
         )
     }
 

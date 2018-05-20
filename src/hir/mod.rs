@@ -11,11 +11,24 @@ mod scope;
 mod types;
 mod util;
 
+use std;
 use std::ops::Range;
 
 use syntax::datum::Datum;
 use syntax::span::Span;
 use ty;
+
+pub trait HirType: std::cmp::PartialEq + std::fmt::Debug {
+    type Purity: std::cmp::PartialEq + std::fmt::Debug;
+}
+
+impl HirType for ty::Poly {
+    type Purity = ty::purity::Poly;
+}
+
+impl HirType for ty::Decl {
+    type Purity = ty::purity::Decl;
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct VarId(u32);
@@ -27,119 +40,69 @@ impl VarId {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct Fun {
-    pvar_ids: Range<ty::purity::PVarId>,
-    tvar_ids: Range<ty::TVarId>,
+pub struct Fun<T>
+where
+    T: HirType,
+{
+    pub pvar_ids: Range<ty::purity::PVarId>,
+    pub tvar_ids: Range<ty::TVarId>,
 
-    purity: ty::purity::Decl,
-    params: destruc::List,
-    ret_ty: ty::Decl,
+    pub purity: T::Purity,
+    pub params: destruc::List<T>,
+    pub ret_ty: T,
 
-    body_expr: Box<Expr>,
-}
-
-impl Fun {
-    pub fn pvar_ids(&self) -> &Range<ty::purity::PVarId> {
-        &self.pvar_ids
-    }
-
-    pub fn tvar_ids(&self) -> &Range<ty::TVarId> {
-        &self.tvar_ids
-    }
-
-    pub fn purity(&self) -> &ty::purity::Decl {
-        &self.purity
-    }
-
-    pub fn params(&self) -> &destruc::List {
-        &self.params
-    }
-
-    pub fn ret_ty(&self) -> &ty::Decl {
-        &self.ret_ty
-    }
-
-    pub fn body_expr(&self) -> &Expr {
-        &self.body_expr
-    }
+    pub body_expr: Box<Expr<T>>,
 }
 
 #[derive(PartialEq, Debug)]
-pub struct Cond {
-    test_expr: Box<Expr>,
-    true_expr: Box<Expr>,
-    false_expr: Box<Expr>,
-}
-
-impl Cond {
-    pub fn test_expr(&self) -> &Expr {
-        &self.test_expr
-    }
-
-    pub fn true_expr(&self) -> &Expr {
-        &self.true_expr
-    }
-
-    pub fn false_expr(&self) -> &Expr {
-        &self.false_expr
-    }
+pub struct Cond<T>
+where
+    T: HirType,
+{
+    pub test_expr: Box<Expr<T>>,
+    pub true_expr: Box<Expr<T>>,
+    pub false_expr: Box<Expr<T>>,
 }
 
 #[derive(PartialEq, Debug)]
-pub struct Let {
-    destruc: destruc::Destruc,
-    value_expr: Box<Expr>,
-    body_expr: Box<Expr>,
-}
-
-impl Let {
-    pub fn destruc(&self) -> &destruc::Destruc {
-        &self.destruc
-    }
-
-    pub fn value_expr(&self) -> &Expr {
-        &self.value_expr
-    }
-
-    pub fn body_expr(&self) -> &Expr {
-        &self.body_expr
-    }
+pub struct Let<T>
+where
+    T: HirType,
+{
+    pub destruc: destruc::Destruc<T>,
+    pub value_expr: Box<Expr<T>>,
+    pub body_expr: Box<Expr<T>>,
 }
 
 #[derive(PartialEq, Debug)]
-pub struct App {
-    fun_expr: Box<Expr>,
-    fixed_arg_exprs: Vec<Expr>,
-    rest_arg_expr: Option<Box<Expr>>,
-}
-
-impl App {
-    pub fn fun_expr(&self) -> &Expr {
-        &self.fun_expr
-    }
-
-    pub fn fixed_arg_exprs(&self) -> &[Expr] {
-        self.fixed_arg_exprs.as_ref()
-    }
-
-    pub fn rest_arg_expr(&self) -> &Option<Box<Expr>> {
-        &self.rest_arg_expr
-    }
+pub struct App<T>
+where
+    T: HirType,
+{
+    pub fun_expr: Box<Expr<T>>,
+    pub fixed_arg_exprs: Vec<Expr<T>>,
+    pub rest_arg_expr: Option<Box<Expr<T>>>,
 }
 
 #[derive(PartialEq, Debug)]
-pub enum Expr {
+pub enum Expr<T>
+where
+    T: HirType,
+{
     Lit(Datum),
-    App(Span, App),
-    Fun(Span, Fun),
-    Let(Span, Let),
-    Cond(Span, Cond),
+    App(Span, App<T>),
+    Fun(Span, Fun<T>),
+    Let(Span, Let<T>),
+    Cond(Span, Cond<T>),
     Ref(Span, VarId),
     TyPred(Span, ty::Poly),
-    Do(Vec<Expr>),
+    Do(Vec<Expr<T>>),
 }
 
-impl Expr {
+impl<T> Expr<T>
+where
+    T: HirType,
+{
     /// Returns the span for the expression
     ///
     /// This will return None for `Expr::Do` as it may not have a single contiguous span
@@ -159,7 +122,7 @@ impl Expr {
     /// Returns the last expression
     ///
     /// This is the expression itself except for `Expr::Do` which will return the last expression
-    fn last_expr(&self) -> Option<&Expr> {
+    fn last_expr(&self) -> Option<&Expr<T>> {
         match self {
             Expr::Do(exprs) => exprs.last(),
             other => Some(other),
@@ -168,32 +131,13 @@ impl Expr {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct Def {
-    span: Span,
-    destruc: destruc::Destruc,
-    value_expr: Expr,
-}
-
-impl Def {
-    pub fn new(span: Span, destruc: destruc::Destruc, value_expr: Expr) -> Def {
-        Def {
-            span,
-            destruc,
-            value_expr,
-        }
-    }
-
-    pub fn span(&self) -> Span {
-        self.span
-    }
-
-    pub fn destruc(&self) -> &destruc::Destruc {
-        &self.destruc
-    }
-
-    pub fn value_expr(&self) -> &Expr {
-        &self.value_expr
-    }
+pub struct Def<T>
+where
+    T: HirType,
+{
+    pub span: Span,
+    pub destruc: destruc::Destruc<T>,
+    pub value_expr: Expr<T>,
 }
 
 pub use self::types::{str_for_poly, str_for_purity};

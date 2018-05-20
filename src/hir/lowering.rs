@@ -38,7 +38,7 @@ pub struct LoweringContext<'ccx> {
 }
 
 pub struct LoweredProgram {
-    pub defs: Vec<Def>,
+    pub defs: Vec<Def<ty::Decl>>,
     pub pvars: Vec<ty::purity::PVar>,
     pub tvars: Vec<ty::TVar>,
 }
@@ -49,7 +49,7 @@ impl From<Error> for Vec<Error> {
     }
 }
 
-struct DeferredDef(Span, destruc::Destruc, NsDatum);
+struct DeferredDef(Span, destruc::Destruc<ty::Decl>, NsDatum);
 struct DeferredExport(Span, Ident);
 
 enum DeferredModulePrim {
@@ -220,7 +220,7 @@ impl<'ccx> LoweringContext<'ccx> {
         scope: &Scope,
         span: Span,
         arg_data: Vec<NsDatum>,
-    ) -> Result<Expr> {
+    ) -> Result<Expr<ty::Decl>> {
         let LetArgs {
             target_datum,
             value_datum,
@@ -260,7 +260,12 @@ impl<'ccx> LoweringContext<'ccx> {
         self.lower_type(scope, self_datum, ty_datum)
     }
 
-    fn lower_lettype(&mut self, scope: &Scope, span: Span, arg_data: Vec<NsDatum>) -> Result<Expr> {
+    fn lower_lettype(
+        &mut self,
+        scope: &Scope,
+        span: Span,
+        arg_data: Vec<NsDatum>,
+    ) -> Result<Expr<ty::Decl>> {
         let LetArgs {
             target_datum,
             value_datum,
@@ -280,7 +285,7 @@ impl<'ccx> LoweringContext<'ccx> {
         span: Span,
         ident: Ident,
         decl_ty: ty::Decl,
-    ) -> Result<destruc::Scalar> {
+    ) -> Result<destruc::Scalar<ty::Decl>> {
         match scope.get(&ident) {
             Some(Binding::Prim(Prim::Wildcard)) => {
                 Ok(destruc::Scalar::new(None, ident.into_name(), decl_ty))
@@ -306,7 +311,7 @@ impl<'ccx> LoweringContext<'ccx> {
         &mut self,
         scope: &mut Scope,
         destruc_datum: NsDatum,
-    ) -> Result<destruc::Scalar> {
+    ) -> Result<destruc::Scalar<ty::Decl>> {
         match destruc_datum {
             NsDatum::Ident(span, ident) => {
                 let free_ty_id = self.insert_free_ty(span);
@@ -337,13 +342,17 @@ impl<'ccx> LoweringContext<'ccx> {
         }
     }
 
-    fn lower_list_destruc(&mut self, scope: &mut Scope, vs: Vec<NsDatum>) -> Result<destruc::List> {
+    fn lower_list_destruc(
+        &mut self,
+        scope: &mut Scope,
+        vs: Vec<NsDatum>,
+    ) -> Result<destruc::List<ty::Decl>> {
         let (fixed, rest) = split_into_fixed_and_rest(scope, vs);
 
         let fixed_destrucs = fixed
             .into_iter()
             .map(|v| self.lower_destruc(scope, v))
-            .collect::<Result<Vec<destruc::Destruc>>>()?;
+            .collect::<Result<Vec<destruc::Destruc<ty::Decl>>>>()?;
 
         let rest_destruc = match rest {
             Some(rest) => Some(Box::new(self.lower_scalar_destruc(scope, rest)?)),
@@ -357,7 +366,7 @@ impl<'ccx> LoweringContext<'ccx> {
         &mut self,
         scope: &mut Scope,
         destruc_datum: NsDatum,
-    ) -> Result<destruc::Destruc> {
+    ) -> Result<destruc::Destruc<ty::Decl>> {
         match destruc_datum {
             NsDatum::Ident(span, _) | NsDatum::Vec(span, _) => {
                 self.lower_scalar_destruc(scope, destruc_datum)
@@ -434,7 +443,7 @@ impl<'ccx> LoweringContext<'ccx> {
         })
     }
 
-    fn lower_body(&mut self, scope: &Scope, body_data: Vec<NsDatum>) -> Result<Expr> {
+    fn lower_body(&mut self, scope: &Scope, body_data: Vec<NsDatum>) -> Result<Expr<ty::Decl>> {
         let mut flattened_exprs = vec![];
 
         for body_datum in body_data {
@@ -455,7 +464,12 @@ impl<'ccx> LoweringContext<'ccx> {
         }
     }
 
-    fn lower_let(&mut self, scope: &Scope, span: Span, arg_data: Vec<NsDatum>) -> Result<Expr> {
+    fn lower_let(
+        &mut self,
+        scope: &Scope,
+        span: Span,
+        arg_data: Vec<NsDatum>,
+    ) -> Result<Expr<ty::Decl>> {
         let LetArgs {
             target_datum,
             value_datum,
@@ -478,7 +492,12 @@ impl<'ccx> LoweringContext<'ccx> {
         ))
     }
 
-    fn lower_fun(&mut self, scope: &Scope, span: Span, arg_data: Vec<NsDatum>) -> Result<Expr> {
+    fn lower_fun(
+        &mut self,
+        scope: &Scope,
+        span: Span,
+        arg_data: Vec<NsDatum>,
+    ) -> Result<Expr<ty::Decl>> {
         if arg_data.is_empty() {
             return Err(Error::new(
                 span,
@@ -583,7 +602,7 @@ impl<'ccx> LoweringContext<'ccx> {
         span: Span,
         prim: Prim,
         mut arg_data: Vec<NsDatum>,
-    ) -> Result<Expr> {
+    ) -> Result<Expr<ty::Decl>> {
         match prim {
             Prim::Def | Prim::DefMacro | Prim::DefType | Prim::Import => {
                 Err(Error::new(span, ErrorKind::DefOutsideBody))
@@ -672,15 +691,15 @@ impl<'ccx> LoweringContext<'ccx> {
         &mut self,
         scope: &Scope,
         span: Span,
-        fun_expr: Expr,
+        fun_expr: Expr<ty::Decl>,
         arg_data: Vec<NsDatum>,
-    ) -> Result<Expr> {
+    ) -> Result<Expr<ty::Decl>> {
         let (fixed_arg_data, rest_arg_datum) = split_into_fixed_and_rest(scope, arg_data);
 
         let fixed_arg_exprs = fixed_arg_data
             .into_iter()
             .map(|arg_datum| self.lower_expr(scope, arg_datum))
-            .collect::<Result<Vec<Expr>>>()?;
+            .collect::<Result<Vec<Expr<ty::Decl>>>>()?;
 
         let rest_arg_expr = match rest_arg_datum {
             Some(rest_arg_datum) => Some(Box::new(self.lower_expr(scope, rest_arg_datum)?)),
@@ -697,7 +716,7 @@ impl<'ccx> LoweringContext<'ccx> {
         ))
     }
 
-    fn lower_expr(&mut self, scope: &Scope, datum: NsDatum) -> Result<Expr> {
+    fn lower_expr(&mut self, scope: &Scope, datum: NsDatum) -> Result<Expr<ty::Decl>> {
         match datum {
             NsDatum::Ident(span, ref ident) => match scope.get(ident) {
                 Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
@@ -918,14 +937,18 @@ pub fn lower_program(
     lcx.lower_module(&mut root_scope, data)?;
 
     let mut deferred_defs: Vec<DeferredDef> = vec![];
-    let mut defs: Vec<Def> = vec![];
+    let mut defs: Vec<Def<ty::Decl>> = vec![];
     let mut errors: Vec<Error> = vec![];
 
     std::mem::swap(&mut deferred_defs, &mut lcx.deferred_defs);
     for DeferredDef(span, destruc, value_datum) in deferred_defs {
         match lcx.lower_expr(&root_scope, value_datum) {
             Ok(value_expr) => {
-                defs.push(Def::new(span, destruc, value_expr));
+                defs.push(Def {
+                    span,
+                    destruc,
+                    value_expr,
+                });
             }
             Err(error) => {
                 errors.push(error);
@@ -984,7 +1007,7 @@ fn module_for_str(data_str: &str) -> Result<Module> {
 pub struct LoweredTestExpr {
     pub pvars: Vec<ty::purity::PVar>,
     pub tvars: Vec<ty::TVar>,
-    pub expr: Expr,
+    pub expr: Expr<ty::Decl>,
 }
 
 #[cfg(test)]
@@ -1022,7 +1045,7 @@ pub fn lowered_expr_for_str(data_str: &str) -> Result<LoweredTestExpr> {
 }
 
 #[cfg(test)]
-pub fn expr_for_str(data_str: &str) -> Result<Expr> {
+pub fn expr_for_str(data_str: &str) -> Result<Expr<ty::Decl>> {
     lowered_expr_for_str(data_str).map(|body| body.expr)
 }
 
