@@ -80,7 +80,7 @@ impl PRef for Poly {
 pub enum Decl {
     Fixed(Purity),
     Var(PVarId),
-    Free(FreePurityId),
+    Free,
 }
 
 impl Decl {
@@ -88,17 +88,8 @@ impl Decl {
         match self {
             Decl::Fixed(fixed) => Some(Poly::Fixed(*fixed)),
             Decl::Var(pvar_id) => Some(Poly::Var(*pvar_id)),
-            Decl::Free(_) => None,
+            Decl::Free => None,
         }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub struct FreePurityId(u32);
-
-impl FreePurityId {
-    pub fn new(id: usize) -> FreePurityId {
-        FreePurityId(id as u32)
     }
 }
 

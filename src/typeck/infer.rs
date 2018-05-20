@@ -31,11 +31,13 @@ struct FunApp {
 
 enum VarType {
     // Introduced a definition that has yet to be processed
+    //
+    // TODO: Make this a newtype
     Pending(usize),
     // (def) currently having its type inferred
     Recursive,
     // non-(def) free type being inferred
-    Free(ty::FreeTyId),
+    Free(FreeTyId),
     // Declared or previously inferred type
     Known(ty::Poly),
 }
@@ -61,12 +63,30 @@ enum DefState {
     Complete,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub struct FreeTyId(u32);
+
+impl FreeTyId {
+    fn new(id: usize) -> FreeTyId {
+        FreeTyId(id as u32)
+    }
+
+    fn to_usize(&self) -> usize {
+        self.0 as usize
+    }
+}
+
 struct InferCtx<'a> {
     def_states: Vec<DefState>,
     pvars: &'a [ty::purity::PVar],
     tvars: &'a [ty::TVar],
 
-    free_ty_to_poly: HashMap<ty::FreeTyId, ty::Poly>,
+    // The inferred types for free types in the order they're encountered
+    //
+    // Each (def), (let) and (fn) push entries to `free_ty_polys` before they evaluate their body
+    // and then pop them off afterwards.
+    free_ty_polys: Vec<ty::Poly>,
+
     var_to_type: HashMap<hir::VarId, VarType>,
 }
 
@@ -84,9 +104,16 @@ impl<'a> InferCtx<'a> {
             def_states: vec![],
             pvars,
             tvars,
-            free_ty_to_poly: HashMap::new(),
+            free_ty_polys: vec![],
             var_to_type: HashMap::new(),
         }
+    }
+
+    fn insert_free_ty(&mut self, initial_type: ty::Poly) -> FreeTyId {
+        let free_ty_id = FreeTyId::new(self.free_ty_polys.len());
+        self.free_ty_polys.push(initial_type);
+
+        free_ty_id
     }
 
     fn str_for_poly(&self, poly: &ty::Poly) -> String {
@@ -210,9 +237,9 @@ impl<'a> InferCtx<'a> {
         &self,
         required_type: &ty::Poly,
         span: Span,
-        free_ty_id: ty::FreeTyId,
+        free_ty_id: FreeTyId,
     ) -> Result<ty::Poly> {
-        let current_type = &self.free_ty_to_poly[&free_ty_id];
+        let current_type = &self.free_ty_polys[free_ty_id.to_usize()];
 
         // Unlike references to known variables the `current_type` and `required_type` have equal
         // footing. We intersect here to find the commonality between the two types. This will
@@ -252,8 +279,7 @@ impl<'a> InferCtx<'a> {
                 let new_free_type = self.type_for_free_ref(required_type, span, free_ty_id)?;
 
                 // Update the free var's type
-                self.free_ty_to_poly
-                    .insert(free_ty_id, new_free_type.clone());
+                self.free_ty_polys[free_ty_id.to_usize()] = new_free_type.clone();
 
                 return Ok(InferredNode {
                     expr: hir::Expr::Ref(span, var_id),
@@ -332,7 +358,7 @@ impl<'a> InferCtx<'a> {
         );
 
         // Bind all of our parameter variables
-        self.destruc_list_value(
+        let free_ty_offset = self.destruc_list_value(
             &decl_fun.params,
             span,
             list_type::ParamsIterator::new(&initial_param_type),
@@ -367,16 +393,12 @@ impl<'a> InferCtx<'a> {
 
         let body_node = self.visit_expr(&mut fun_scx, &wanted_ret_type, *decl_fun.body_expr)?;
         let actual_ret_type = body_node.poly_type;
-
-        if let ty::Decl::Free(free_ty_id) = decl_fun.ret_ty {
-            self.free_ty_to_poly
-                .insert(free_ty_id, actual_ret_type.clone());
-        }
-
         let actual_purity = fun_scx.fun_purity.into_poly();
 
+        let mut inferred_free_types = self.free_ty_polys.split_off(free_ty_offset);
+
         let actual_param_destruc =
-            destruc::subst_list_destruc(decl_fun.params, &self.free_ty_to_poly);
+            destruc::subst_list_destruc(&mut inferred_free_types, decl_fun.params);
         let actual_param_type = typeck::destruc::type_for_poly_list_destruc(&actual_param_destruc);
 
         let found_type = ty::Fun::new(
@@ -603,7 +625,7 @@ impl<'a> InferCtx<'a> {
             typeck::destruc::type_for_decl_destruc(self.tvars, &destruc, None);
         let value_node = self.visit_expr(scx, &required_destruc_type, *value_expr)?;
 
-        self.destruc_value(
+        let free_ty_offset = self.destruc_value(
             &destruc,
             value_span,
             &value_node.poly_type,
@@ -613,12 +635,13 @@ impl<'a> InferCtx<'a> {
         )?;
 
         let body_node = self.visit_expr(scx, required_type, *body_expr)?;
+        let mut inferred_free_types = self.free_ty_polys.split_off(free_ty_offset);
 
         Ok(InferredNode {
             expr: hir::Expr::Let(
                 span,
                 hir::Let {
-                    destruc: destruc::subst_destruc(destruc, &self.free_ty_to_poly),
+                    destruc: destruc::subst_destruc(&mut inferred_free_types, destruc),
                     value_expr: Box::new(value_node.expr),
                     body_expr: Box::new(body_node.expr),
                 },
@@ -652,10 +675,11 @@ impl<'a> InferCtx<'a> {
         scalar: &destruc::Scalar<ty::Decl>,
         value_type: &ty::Poly,
         can_refine: bool,
-    ) {
-        let free_ty_id = if let ty::Decl::Free(free_ty_id) = *scalar.ty() {
-            self.free_ty_to_poly.insert(free_ty_id, value_type.clone());
-            Some(free_ty_id)
+    ) -> usize {
+        let start_offset = self.free_ty_polys.len();
+
+        let free_ty_id = if *scalar.ty() == ty::Decl::Free {
+            Some(self.insert_free_ty(value_type.clone()))
         } else {
             None
         };
@@ -669,6 +693,8 @@ impl<'a> InferCtx<'a> {
 
             self.var_to_type.insert(var_id, var_type);
         }
+
+        start_offset
     }
 
     fn destruc_list_value<I>(
@@ -677,10 +703,12 @@ impl<'a> InferCtx<'a> {
         value_span: Span,
         mut value_type_iter: I,
         can_refine: bool,
-    ) -> Result<()>
+    ) -> Result<usize>
     where
         I: ListTypeIterator,
     {
+        let start_offset = self.free_ty_polys.len();
+
         for fixed_destruc in list.fixed() {
             let member_type = match value_type_iter.next() {
                 Ok(Some(member_type)) => member_type,
@@ -697,7 +725,7 @@ impl<'a> InferCtx<'a> {
             self.destruc_scalar_value(scalar, &value_type_iter.tail_type(), can_refine);
         }
 
-        Ok(())
+        Ok(start_offset)
     }
 
     fn destruc_value(
@@ -706,11 +734,10 @@ impl<'a> InferCtx<'a> {
         value_span: Span,
         value_type: &ty::Poly,
         can_refine: bool,
-    ) -> Result<()> {
+    ) -> Result<usize> {
         match destruc {
             destruc::Destruc::Scalar(_, scalar) => {
-                self.destruc_scalar_value(scalar, value_type, can_refine);
-                Ok(())
+                Ok(self.destruc_scalar_value(scalar, value_type, can_refine))
             }
             destruc::Destruc::List(_, list) => {
                 let value_type_iter = list_type::PolyIterator::new(value_type);
@@ -733,7 +760,7 @@ impl<'a> InferCtx<'a> {
 
         // Mark all of our free typed variable as recursive
         typeck::destruc::visit_vars(&destruc, |var_id, decl_type| {
-            if let ty::Decl::Free(_) = decl_type {
+            if *decl_type == ty::Decl::Free {
                 self.var_to_type.insert(var_id, VarType::Recursive);
             }
         });

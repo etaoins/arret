@@ -118,16 +118,6 @@ where
             Expr::Do(_) => None,
         }
     }
-
-    /// Returns the last expression
-    ///
-    /// This is the expression itself except for `Expr::Do` which will return the last expression
-    fn last_expr(&self) -> Option<&Expr<T>> {
-        match self {
-            Expr::Do(exprs) => exprs.last(),
-            other => Some(other),
-        }
-    }
 }
 
 #[derive(PartialEq, Debug)]

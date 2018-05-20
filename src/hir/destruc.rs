@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use hir;
 use hir::HirType;
 use syntax::span::Span;
@@ -77,38 +75,47 @@ where
 }
 
 pub fn subst_list_destruc(
+    free_ty_polys: &mut Vec<ty::Poly>,
     list: List<ty::Decl>,
-    free_ty_to_poly: &HashMap<ty::FreeTyId, ty::Poly>,
 ) -> List<ty::Poly> {
+    let rest = list.rest
+        .map(|rest_destruc| Box::new(subst_scalar_destruc(free_ty_polys, *rest_destruc)));
+
     let fixed = list.fixed
         .into_iter()
-        .map(|fixed_destruc| subst_destruc(fixed_destruc, free_ty_to_poly))
+        .rev()
+        .map(|fixed_destruc| subst_destruc(free_ty_polys, fixed_destruc))
         .collect();
-
-    let rest = list.rest
-        .map(|rest_destruc| Box::new(subst_scalar_destruc(*rest_destruc, free_ty_to_poly)));
 
     List::new(fixed, rest)
 }
 
 pub fn subst_scalar_destruc(
+    free_ty_polys: &mut Vec<ty::Poly>,
     scalar: Scalar<ty::Decl>,
-    free_ty_to_poly: &HashMap<ty::FreeTyId, ty::Poly>,
 ) -> Scalar<ty::Poly> {
     let var_id = *scalar.var_id();
-    let poly_type = ty::subst::subst_decl_ty(free_ty_to_poly, scalar.ty());
+    let poly_type = match scalar.ty() {
+        ty::Decl::Fixed(fixed) => ty::Poly::Fixed(fixed.clone()),
+        ty::Decl::Var(tvar_id) => ty::Poly::Var(*tvar_id),
+        ty::Decl::Free => free_ty_polys.pop().unwrap(),
+    };
 
     Scalar::new(var_id, scalar.into_source_name(), poly_type)
 }
 
+/// Substitutes free types with their inferred types
+///
+/// `free_ty_polys` must be ordered in the same way the types appear in the destruc type in
+/// depth-first order
 pub fn subst_destruc(
+    free_ty_polys: &mut Vec<ty::Poly>,
     destruc: Destruc<ty::Decl>,
-    free_ty_to_poly: &HashMap<ty::FreeTyId, ty::Poly>,
 ) -> Destruc<ty::Poly> {
     match destruc {
         Destruc::Scalar(span, scalar) => {
-            Destruc::Scalar(span, subst_scalar_destruc(scalar, free_ty_to_poly))
+            Destruc::Scalar(span, subst_scalar_destruc(free_ty_polys, scalar))
         }
-        Destruc::List(span, list) => Destruc::List(span, subst_list_destruc(list, free_ty_to_poly)),
+        Destruc::List(span, list) => Destruc::List(span, subst_list_destruc(free_ty_polys, list)),
     }
 }

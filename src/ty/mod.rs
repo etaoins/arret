@@ -393,7 +393,7 @@ impl TVarIds for EmptyTVarIds {
 pub enum Decl {
     Var(TVarId),
     Fixed(Ty<Poly>),
-    Free(FreeTyId),
+    Free,
 }
 
 impl Decl {
@@ -401,17 +401,8 @@ impl Decl {
         match self {
             Decl::Fixed(ref fixed) => Some(Poly::Fixed(fixed.clone())),
             Decl::Var(tvar_id) => Some(Poly::Var(*tvar_id)),
-            Decl::Free(_) => None,
+            Decl::Free => None,
         }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub struct FreeTyId(u32);
-
-impl FreeTyId {
-    pub fn new(id: usize) -> FreeTyId {
-        FreeTyId(id as u32)
     }
 }
 
