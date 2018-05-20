@@ -46,7 +46,7 @@ pub enum ErrorKind {
     DefOutsideBody,
     ExportOutsideModule,
     NonDefInsideModule,
-    LibraryNotFound,
+    ModuleNotFound,
     NoMacroRule,
     DuplicateMacroVar(String, Span),
     MultipleZeroOrMoreMatch(Span),
@@ -101,7 +101,7 @@ impl Reportable for Error {
             ErrorKind::NonDefInsideModule => {
                 "definition expected at the top-level of a module body".to_owned()
             }
-            ErrorKind::LibraryNotFound => "library not found".to_owned(),
+            ErrorKind::ModuleNotFound => "module not found".to_owned(),
             ErrorKind::NoMacroRule => "no matching macro rule".to_owned(),
             ErrorKind::DuplicateMacroVar(ref sym, _) => {
                 format!("duplicate macro variable: `{}`", sym)

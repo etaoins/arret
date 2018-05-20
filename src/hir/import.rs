@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::result;
 
 use hir::error::{Error, ErrorKind};
-use hir::loader::LibraryName;
+use hir::loader::ModuleName;
 use hir::ns::NsDatum;
 use hir::scope::Binding;
 use hir::util::{expect_arg_count, expect_ident, expect_ident_and_span};
@@ -13,11 +13,11 @@ type Bindings = HashMap<String, Binding>;
 
 /// Input to an (import) filter
 ///
-/// This tracks the bindings and the terminal name of the original library
+/// This tracks the bindings and the terminal name of the original module
 struct FilterInput {
     bindings: Bindings,
 
-    /// The terminal name of the library the bindings came from
+    /// The terminal name of the module the bindings came from
     ///
     /// This is to support `(prefixed)`. For example, the terminal name of `[scheme base]` would be
     /// `base` and if `(prefixed)` was used it would prepend `base/` to all of its identifiers.
@@ -26,24 +26,24 @@ struct FilterInput {
 
 struct LowerImportContext<F>
 where
-    F: FnMut(Span, &LibraryName) -> Result<Bindings>,
+    F: FnMut(Span, &ModuleName) -> Result<Bindings>,
 {
-    load_library: F,
+    load_module: F,
 }
 
 impl<F> LowerImportContext<F>
 where
-    F: FnMut(Span, &LibraryName) -> Result<Bindings>,
+    F: FnMut(Span, &ModuleName) -> Result<Bindings>,
 {
-    fn lower_library_import(&mut self, span: Span, name_data: Vec<NsDatum>) -> Result<FilterInput> {
+    fn lower_module_import(&mut self, span: Span, name_data: Vec<NsDatum>) -> Result<FilterInput> {
         let mut name_components = name_data
             .into_iter()
             .map(|datum| expect_ident(datum).map(|ident| ident.into_name()))
             .collect::<Result<Vec<String>>>()?;
 
         let terminal_name = name_components.pop().unwrap();
-        let library_name = LibraryName::new(name_components, terminal_name.clone());
-        let bindings = (self.load_library)(span, &library_name)?;
+        let module_name = ModuleName::new(name_components, terminal_name.clone());
+        let bindings = (self.load_module)(span, &module_name)?;
 
         Ok(FilterInput {
             bindings,
@@ -181,7 +181,7 @@ where
 
     fn lower_import_set(&mut self, import_set_datum: NsDatum) -> Result<FilterInput>
     where
-        F: FnMut(Span, &LibraryName) -> Result<Bindings>,
+        F: FnMut(Span, &ModuleName) -> Result<Bindings>,
     {
         let span = import_set_datum.span();
         match import_set_datum {
@@ -190,12 +190,12 @@ where
                     return Err(Error::new(
                         span,
                         ErrorKind::IllegalArg(
-                            "library name requires a least one element".to_owned(),
+                            "module name requires a least one element".to_owned(),
                         ),
                     ));
                 }
 
-                return self.lower_library_import(span, vs);
+                return self.lower_module_import(span, vs);
             }
             NsDatum::List(_, mut vs) => {
                 // Each filter requires a filter identifier and an inner import set
@@ -219,17 +219,17 @@ where
         Err(Error::new(
             span,
             ErrorKind::IllegalArg(
-                "import set must either be a library name vector or an applied filter".to_owned(),
+                "import set must either be a module name vector or an applied filter".to_owned(),
             ),
         ))
     }
 }
 
-pub fn lower_import_set<F>(import_set_datum: NsDatum, load_library: F) -> Result<Bindings>
+pub fn lower_import_set<F>(import_set_datum: NsDatum, load_module: F) -> Result<Bindings>
 where
-    F: FnMut(Span, &LibraryName) -> Result<Bindings>,
+    F: FnMut(Span, &ModuleName) -> Result<Bindings>,
 {
-    let mut lic = LowerImportContext { load_library };
+    let mut lic = LowerImportContext { load_module };
     lic.lower_import_set(import_set_datum)
         .map(|filter_input| filter_input.bindings)
 }
@@ -241,15 +241,15 @@ mod test {
     use hir::prim::Prim;
     use syntax::span::{t2s, EMPTY_SPAN};
 
-    fn load_test_library(_: Span, library_name: &LibraryName) -> Result<Bindings> {
-        if library_name == &LibraryName::new(vec!["lib".to_owned()], "test".to_owned()) {
+    fn load_test_module(_: Span, module_name: &ModuleName) -> Result<Bindings> {
+        if module_name == &ModuleName::new(vec!["lib".to_owned()], "test".to_owned()) {
             let mut bindings = HashMap::new();
             bindings.insert("quote".to_owned(), Binding::Prim(Prim::Quote));
             bindings.insert("if".to_owned(), Binding::Prim(Prim::If));
 
             Ok(bindings)
         } else {
-            Err(Error::new(EMPTY_SPAN, ErrorKind::LibraryNotFound))
+            Err(Error::new(EMPTY_SPAN, ErrorKind::ModuleNotFound))
         }
     }
 
@@ -261,7 +261,7 @@ mod test {
         let import_set_datum =
             NsDatum::from_syntax_datum(test_ns_id, datum_from_str(datum).unwrap());
 
-        lower_import_set(import_set_datum, load_test_library)
+        lower_import_set(import_set_datum, load_test_module)
     }
 
     #[test]
@@ -274,9 +274,9 @@ mod test {
     }
 
     #[test]
-    fn library_not_found() {
+    fn module_not_found() {
         let j = "[not found]";
-        let err = Error::new(EMPTY_SPAN, ErrorKind::LibraryNotFound);
+        let err = Error::new(EMPTY_SPAN, ErrorKind::ModuleNotFound);
 
         assert_eq!(err, bindings_for_import_set(j).unwrap_err());
     }

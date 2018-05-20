@@ -561,21 +561,21 @@ impl<'a> InferCtx<'a> {
         }
     }
 
-    fn visit_module_def(&mut self, module_def: &hir::module::ModuleDef) -> Result<()> {
+    fn visit_def(&mut self, hir_def: &hir::Def) -> Result<()> {
         let mut scx = SubtreeCtx {
             // Module definiitions must be pure
             fun_purity: PurityVarType::Known(Purity::Pure.into_poly()),
         };
 
-        let destruc = module_def.destruc();
-        let value_expr = module_def.value_expr();
+        let destruc = hir_def.destruc();
+        let value_expr = hir_def.value_expr();
 
         let required_type = typeck::destruc::type_for_destruc(self.tvars, destruc, None);
         let actual_type = self.visit_expr(&mut scx, &required_type, value_expr)?;
 
         self.destruc_value(
             destruc,
-            value_expr.span().unwrap_or_else(|| module_def.span()),
+            value_expr.span().unwrap_or_else(|| hir_def.span()),
             &actual_type,
             // We know the exact type of these variables; do not infer further even if their type
             // wasn't declared
@@ -584,17 +584,15 @@ impl<'a> InferCtx<'a> {
     }
 }
 
-pub fn infer_module(
+pub fn infer_program(
     pvars: &[ty::purity::PVar],
     tvars: &[ty::TVar],
-    module: &hir::module::Module,
+    defs: &[hir::Def],
 ) -> result::Result<(), Vec<Error>> {
-    let errs = module
-        .defs()
-        .iter()
-        .flat_map(|module_def| {
+    let errs = defs.iter()
+        .flat_map(|hir_def| {
             let mut icx = InferCtx::new(pvars, tvars);
-            icx.visit_module_def(&module_def).err()
+            icx.visit_def(&hir_def).err()
         })
         .collect::<Vec<Error>>();
 

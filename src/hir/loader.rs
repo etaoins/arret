@@ -1,22 +1,22 @@
-use std::path::PathBuf;
 use std::fs::File;
 use std::io::prelude::*;
+use std::path::PathBuf;
 
-use syntax::datum::Datum;
-use syntax::span::Span;
-use syntax::parser::data_from_str_with_span_offset;
-use hir::error::{Error, ErrorKind, Result};
 use ctx::{CompileContext, LoadedFile};
+use hir::error::{Error, ErrorKind, Result};
+use syntax::datum::Datum;
+use syntax::parser::data_from_str_with_span_offset;
+use syntax::span::Span;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct LibraryName {
+pub struct ModuleName {
     path: Vec<String>,
     terminal_name: String,
 }
 
-impl LibraryName {
-    pub fn new(path: Vec<String>, terminal_name: String) -> LibraryName {
-        LibraryName {
+impl ModuleName {
+    pub fn new(path: Vec<String>, terminal_name: String) -> ModuleName {
+        ModuleName {
             path,
             terminal_name,
         }
@@ -48,23 +48,23 @@ pub fn load_module_data(
     Ok(data?)
 }
 
-pub fn load_library_data(
+pub fn load_module_by_name(
     ccx: &mut CompileContext,
     span: Span,
-    library_name: &LibraryName,
+    module_name: &ModuleName,
 ) -> Result<Vec<Datum>> {
     let mut path_buf = PathBuf::new();
 
     path_buf.push("stdlib");
-    for path_component in &library_name.path {
+    for path_component in &module_name.path {
         path_buf.push(path_component);
     }
 
-    path_buf.push(format!("{}.rsp", library_name.terminal_name));
+    path_buf.push(format!("{}.rsp", module_name.terminal_name));
 
     let display_name = path_buf.to_string_lossy().into_owned();
     let mut source_file =
-        File::open(path_buf).map_err(|_| Error::new(span, ErrorKind::LibraryNotFound))?;
+        File::open(path_buf).map_err(|_| Error::new(span, ErrorKind::ModuleNotFound))?;
 
     load_module_data(ccx, span, display_name, &mut source_file)
 }

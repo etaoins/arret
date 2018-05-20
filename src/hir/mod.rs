@@ -167,6 +167,35 @@ impl Expr {
     }
 }
 
+#[derive(PartialEq, Debug)]
+pub struct Def {
+    span: Span,
+    destruc: destruc::Destruc,
+    value_expr: Expr,
+}
+
+impl Def {
+    pub fn new(span: Span, destruc: destruc::Destruc, value_expr: Expr) -> Def {
+        Def {
+            span,
+            destruc,
+            value_expr,
+        }
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
+
+    pub fn destruc(&self) -> &destruc::Destruc {
+        &self.destruc
+    }
+
+    pub fn value_expr(&self) -> &Expr {
+        &self.value_expr
+    }
+}
+
 pub use self::types::{str_for_poly, str_for_purity};
 
 #[cfg(test)]

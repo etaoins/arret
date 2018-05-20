@@ -32,15 +32,17 @@ fn main() {
 
     let hir = match hir::lowering::lower_program(&mut ccx, input_path.to_owned(), &mut input_file) {
         Ok(hir) => hir,
-        Err(err) => {
-            err.report(&ccx);
+        Err(errors) => {
+            for err in errors {
+                err.report(&ccx);
+            }
             return;
         }
     };
 
-    match typeck::infer::infer_module(hir.pvars(), hir.tvars(), hir.entry_module()) {
+    match typeck::infer::infer_program(hir.pvars(), hir.tvars(), hir.defs()) {
         Ok(()) => {
-            println!("{:?}", hir.entry_module());
+            println!("{:?}", hir.defs());
         }
         Err(errs) => {
             for err in errs {

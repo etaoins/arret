@@ -1,13 +1,14 @@
 use std::collections::{BTreeMap, HashMap};
 use std::io::Read;
+use std::result;
 
 use ctx::CompileContext;
 use hir::destruc;
 use hir::error::{Error, ErrorKind, Result};
 use hir::import::lower_import_set;
-use hir::loader::{load_library_data, load_module_data, LibraryName};
+use hir::loader::{load_module_by_name, load_module_data, ModuleName};
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
-use hir::module::{Module, ModuleDef};
+use hir::module::Module;
 use hir::ns::{Ident, NsDatum, NsId};
 use hir::prim::Prim;
 use hir::scope::{Binding, MacroId, Scope};
@@ -15,15 +16,17 @@ use hir::types::{lower_poly, lower_polymorphic_var, try_lower_purity, Polymorphi
 use hir::util::{
     expect_arg_count, expect_ident, expect_ident_and_span, pop_vec_front, split_into_fixed_and_rest,
 };
-use hir::{App, Cond, Expr, Fun, Let, VarId};
+use hir::{App, Cond, Def, Expr, Fun, Let, VarId};
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 use ty;
 use ty::purity::Purity;
 
 pub struct LoweringContext<'ccx> {
+    deferred_defs: Vec<DeferredDef>,
+
     next_var_id: u32,
-    loaded_libraries: BTreeMap<LibraryName, Module>,
+    loaded_modules: BTreeMap<ModuleName, Module>,
     macros: Vec<Macro>,
 
     pvars: Vec<ty::purity::PVar>,
@@ -35,15 +38,16 @@ pub struct LoweringContext<'ccx> {
 }
 
 pub struct LoweredProgram {
+    defs: Vec<Def>,
     pvars: Vec<ty::purity::PVar>,
     tvars: Vec<ty::TVar>,
-    /*
-    free_tys: Vec<Span>,
-    libraries: BTreeMap<LibraryName, Module>,*/
-    entry_module: Module,
 }
 
 impl LoweredProgram {
+    pub fn defs(&self) -> &[Def] {
+        self.defs.as_ref()
+    }
+
     pub fn pvars(&self) -> &[ty::purity::PVar] {
         self.pvars.as_ref()
     }
@@ -51,15 +55,20 @@ impl LoweredProgram {
     pub fn tvars(&self) -> &[ty::TVar] {
         self.tvars.as_ref()
     }
+}
 
-    pub fn entry_module(&self) -> &Module {
-        &self.entry_module
+impl From<Error> for Vec<Error> {
+    fn from(error: Error) -> Vec<Error> {
+        vec![error]
     }
 }
 
+struct DeferredDef(Span, destruc::Destruc, NsDatum);
+struct DeferredExport(Span, Ident);
+
 enum DeferredModulePrim {
-    Def(Span, destruc::Destruc, NsDatum),
-    Export(Span, Ident),
+    Def(DeferredDef),
+    Export(DeferredExport),
 }
 
 #[derive(Clone, Copy)]
@@ -90,19 +99,19 @@ struct LetArgs {
 
 impl<'ccx> LoweringContext<'ccx> {
     pub fn new(ccx: &'ccx mut CompileContext) -> LoweringContext {
-        let mut loaded_libraries = BTreeMap::new();
+        let mut loaded_modules = BTreeMap::new();
 
-        // These libraries are always loaded
-        loaded_libraries.insert(
-            LibraryName::new(
+        // These modules are always loaded
+        loaded_modules.insert(
+            ModuleName::new(
                 vec!["risp".to_owned(), "internal".to_owned()],
                 "primitives".to_owned(),
             ),
             Module::prims_module(),
         );
 
-        loaded_libraries.insert(
-            LibraryName::new(
+        loaded_modules.insert(
+            ModuleName::new(
                 vec!["risp".to_owned(), "internal".to_owned()],
                 "types".to_owned(),
             ),
@@ -110,8 +119,9 @@ impl<'ccx> LoweringContext<'ccx> {
         );
 
         LoweringContext {
+            deferred_defs: vec![],
             next_var_id: 0,
-            loaded_libraries,
+            loaded_modules,
             macros: vec![],
             pvars: vec![],
             tvars: vec![],
@@ -633,22 +643,22 @@ impl<'ccx> LoweringContext<'ccx> {
         }
     }
 
-    fn load_library(
+    fn load_module(
         &mut self,
         scope: &mut Scope,
         span: Span,
-        library_name: &LibraryName,
+        module_name: &ModuleName,
     ) -> Result<&Module> {
         // TODO: This does a lot of hash lookups
-        if !self.loaded_libraries.contains_key(library_name) {
-            let library_data = load_library_data(self.ccx, span, library_name)?;
-            let loaded_library = self.lower_module(scope, library_data)?;
+        if !self.loaded_modules.contains_key(module_name) {
+            let module_data = load_module_by_name(self.ccx, span, module_name)?;
+            let loaded_module = self.lower_module(scope, module_data)?;
 
-            self.loaded_libraries
-                .insert(library_name.clone(), loaded_library);
+            self.loaded_modules
+                .insert(module_name.clone(), loaded_module);
         }
 
-        Ok(&self.loaded_libraries[library_name])
+        Ok(&self.loaded_modules[module_name])
     }
 
     fn lower_import(
@@ -658,8 +668,8 @@ impl<'ccx> LoweringContext<'ccx> {
         arg_data: Vec<NsDatum>,
     ) -> Result<()> {
         for arg_datum in arg_data {
-            let bindings = lower_import_set(arg_datum, |span, library_name| {
-                Ok(self.load_library(scope, span, library_name)?
+            let bindings = lower_import_set(arg_datum, |span, module_name| {
+                Ok(self.load_module(scope, span, module_name)?
                     .exports()
                     .clone())
             })?;
@@ -777,7 +787,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     .into_iter()
                     .map(|datum| {
                         if let NsDatum::Ident(span, ident) = datum {
-                            Ok(DeferredModulePrim::Export(span, ident))
+                            Ok(DeferredModulePrim::Export(DeferredExport(span, ident)))
                         } else {
                             Err(Error::new(datum.span(), ErrorKind::ExpectedSymbol))
                         }
@@ -794,7 +804,11 @@ impl<'ccx> LoweringContext<'ccx> {
                 let destruc_datum = arg_data.pop().unwrap();
                 let destruc = self.lower_destruc(scope, destruc_datum)?;
 
-                Ok(vec![DeferredModulePrim::Def(span, destruc, value_datum)])
+                Ok(vec![DeferredModulePrim::Def(DeferredDef(
+                    span,
+                    destruc,
+                    value_datum,
+                ))])
             }
             Prim::DefMacro => self.lower_defmacro(scope, span, arg_data).map(|_| vec![]),
             Prim::DefType => self.lower_deftype(scope, span, arg_data).map(|_| vec![]),
@@ -863,51 +877,44 @@ impl<'ccx> LoweringContext<'ccx> {
         );
 
         // Extract all of our definitions.
-        // Imports, types and macros are resolved immediate and cannot refer to bindings later in
-        // the body. Exports and variable definitions (including defn) are deferred to a second
-        // pass once all binding have been introduced. All other expressions are forbidden.
-        let mut deferred_prims = Vec::<DeferredModulePrim>::new();
+        //
+        // This occurs in three passes:
+        // - Imports, types and macros are resolved immediately and cannot refer to bindings later
+        //   in the body
+        // - Exports are resolved after the module has been loaded
+        // - Other definitions are lowered at the end of the program once all bindings have been
+        //   introduced.
+        let mut deferred_exports = Vec::<DeferredExport>::new();
         for input_datum in data {
             let ns_datum = NsDatum::from_syntax_datum(ns_id, input_datum);
             let mut new_deferred_prims = self.lower_module_def(scope, ns_datum)?;
 
-            deferred_prims.append(&mut new_deferred_prims);
-        }
-
-        // Process our variable definitions and exports
-        let mut module_defs = Vec::<ModuleDef>::new();
-        let mut exports = HashMap::<String, Binding>::new();
-        for deferred_prim in deferred_prims {
-            match deferred_prim {
-                DeferredModulePrim::Def(span, destruc, value_datum) => {
-                    let value_expr = self.lower_expr(scope, value_datum)?;
-                    module_defs.push(ModuleDef::new(span, destruc, value_expr));
-                }
-                DeferredModulePrim::Export(span, ident) => {
-                    if let Some(binding) = scope.get(&ident) {
-                        exports.insert(ident.into_name(), binding);
-                    } else {
-                        return Err(Error::new(
-                            span,
-                            ErrorKind::UnboundSymbol(ident.into_name()),
-                        ));
+            for deferred_prim in new_deferred_prims {
+                match deferred_prim {
+                    DeferredModulePrim::Export(deferred_export) => {
+                        deferred_exports.push(deferred_export);
+                    }
+                    DeferredModulePrim::Def(deferred_def) => {
+                        self.deferred_defs.push(deferred_def);
                     }
                 }
             }
         }
 
-        Ok(Module::new(module_defs, exports))
-    }
+        // Process any exports at the end of the module
+        let mut exports = HashMap::<String, Binding>::new();
+        for DeferredExport(span, ident) in deferred_exports {
+            if let Some(binding) = scope.get(&ident) {
+                exports.insert(ident.into_name(), binding);
+            } else {
+                return Err(Error::new(
+                    span,
+                    ErrorKind::UnboundSymbol(ident.into_name()),
+                ));
+            }
+        }
 
-    fn lower_entry_module(
-        &mut self,
-        display_name: String,
-        input_reader: &mut Read,
-    ) -> Result<Module> {
-        let mut root_scope = Scope::new_empty();
-
-        let data = load_module_data(self.ccx, EMPTY_SPAN, display_name, input_reader)?;
-        self.lower_module(&mut root_scope, data)
+        Ok(Module::new(exports))
     }
 }
 
@@ -915,21 +922,45 @@ pub fn lower_program(
     ccx: &mut CompileContext,
     display_name: String,
     input_reader: &mut Read,
-) -> Result<LoweredProgram> {
-    let mut lcx = LoweringContext::new(ccx);
-    let entry_module = lcx.lower_entry_module(display_name, input_reader)?;
+) -> result::Result<LoweredProgram, Vec<Error>> {
+    use std;
 
-    Ok(LoweredProgram {
-        pvars: lcx.pvars,
-        tvars: lcx.tvars,
-        entry_module,
-        //free_tys: lcx.free_tys,
-    })
+    let data = load_module_data(ccx, EMPTY_SPAN, display_name, input_reader)?;
+
+    let mut root_scope = Scope::new_empty();
+    let mut lcx = LoweringContext::new(ccx);
+    lcx.lower_module(&mut root_scope, data)?;
+
+    let mut deferred_defs: Vec<DeferredDef> = vec![];
+    let mut defs: Vec<Def> = vec![];
+    let mut errors: Vec<Error> = vec![];
+
+    std::mem::swap(&mut deferred_defs, &mut lcx.deferred_defs);
+    for DeferredDef(span, destruc, value_datum) in deferred_defs {
+        match lcx.lower_expr(&root_scope, value_datum) {
+            Ok(value_expr) => {
+                defs.push(Def::new(span, destruc, value_expr));
+            }
+            Err(error) => {
+                errors.push(error);
+            }
+        }
+    }
+
+    if !errors.is_empty() {
+        Err(errors)
+    } else {
+        Ok(LoweredProgram {
+            pvars: lcx.pvars,
+            tvars: lcx.tvars,
+            defs,
+        })
+    }
 }
 
 ////
 #[cfg(test)]
-fn import_statement_for_library(names: &[&'static str]) -> Datum {
+fn import_statement_for_module(names: &[&'static str]) -> Datum {
     Datum::List(
         EMPTY_SPAN,
         vec![
@@ -953,8 +984,8 @@ fn module_for_str(data_str: &str) -> Result<Module> {
 
     let mut test_data = data_from_str(data_str).unwrap();
     let mut program_data = vec![
-        import_statement_for_library(&["risp", "internal", "primitives"]),
-        import_statement_for_library(&["risp", "internal", "types"]),
+        import_statement_for_module(&["risp", "internal", "primitives"]),
+        import_statement_for_module(&["risp", "internal", "types"]),
     ];
     program_data.append(&mut test_data);
 
@@ -1578,29 +1609,12 @@ mod test {
     #[test]
     fn simple_export() {
         let j = "(def x 1)(export x)";
-        let t = "^^^^^^^^^          ";
-        let u = "     ^             ";
-        let v = "       ^           ";
 
         let var_id = VarId(0);
-
-        let expected_module_def = ModuleDef::new(
-            t2s(t),
-            destruc::Destruc::Scalar(
-                t2s(u),
-                destruc::Scalar::new(
-                    Some(var_id),
-                    "x".to_owned(),
-                    ty::Decl::Free(ty::FreeTyId::new(0)),
-                ),
-            ),
-            Expr::Lit(Datum::Int(t2s(v), 1)),
-        );
-
         let mut expected_exports = HashMap::new();
         expected_exports.insert("x".to_owned(), Binding::Var(var_id));
 
-        let expected = Module::new(vec![expected_module_def], expected_exports);
+        let expected = Module::new(expected_exports);
         assert_eq!(expected, module_for_str(j).unwrap());
     }
 
@@ -2182,13 +2196,14 @@ mod test {
 
     #[test]
     fn mutual_module_def() {
-        let j1 = "(def x y)";
-        let j2 = "(def y x)";
+        let j1 = "(export x y)";
+        let j2 = "(def x y)";
+        let j3 = "(def y x)";
 
-        let j = &[j1, j2].join("");
+        let j = &[j1, j2, j3].join("");
 
         let module = module_for_str(j).unwrap();
-        assert_eq!(2, module.into_defs().len());
+        assert_eq!(2, module.exports().len());
     }
 
     #[test]
