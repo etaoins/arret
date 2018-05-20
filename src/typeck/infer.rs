@@ -1,3 +1,4 @@
+use std;
 use std::collections::HashMap;
 use std::result;
 
@@ -15,11 +16,24 @@ use typeck::list_type::ListTypeIterator;
 type Result<T> = result::Result<T, Error>;
 
 enum VarType {
+    // Introduced a definition that has yet to be processed
+    Pending(usize),
+    // (def) currently having its type inferred
+    Recursive,
+    // non-(def) free type being inferred
     Free(ty::FreeTyId),
+    // Declared or previously inferred type
     Known(ty::Poly),
 }
 
+#[allow(large_enum_variant)]
+enum DefState {
+    Pending(hir::Def),
+    Complete,
+}
+
 struct InferCtx<'a> {
+    def_states: Vec<DefState>,
     pvars: &'a [ty::purity::PVar],
     tvars: &'a [ty::TVar],
 
@@ -55,6 +69,7 @@ fn unit_type() -> ty::Poly {
 impl<'a> InferCtx<'a> {
     fn new(pvars: &'a [ty::purity::PVar], tvars: &'a [ty::TVar]) -> InferCtx<'a> {
         InferCtx {
+            def_states: vec![],
             pvars,
             tvars,
             free_ty_to_poly: HashMap::new(),
@@ -189,9 +204,11 @@ impl<'a> InferCtx<'a> {
         span: Span,
         var_id: hir::VarId,
     ) -> Result<ty::Poly> {
-        match self.var_to_type[&var_id] {
+        let pending_def_id = match self.var_to_type[&var_id] {
+            VarType::Pending(def_id) => def_id,
+            VarType::Recursive => return Err(Error::new(span, ErrorKind::RecursiveType)),
             VarType::Known(ref known_type) => {
-                Ok(self.ensure_is_a(span, known_type.clone(), required_type)?)
+                return Ok(self.ensure_is_a(span, known_type.clone(), required_type)?)
             }
             VarType::Free(free_ty_id) => {
                 let new_free_type = self.type_for_free_ref(required_type, span, free_ty_id)?;
@@ -200,9 +217,13 @@ impl<'a> InferCtx<'a> {
                 self.free_ty_to_poly
                     .insert(free_ty_id, new_free_type.clone());
 
-                Ok(new_free_type)
+                return Ok(new_free_type);
             }
-        }
+        };
+
+        self.visit_def_id(pending_def_id)?;
+        // This assumes `visit_def_id` has populated our variables now
+        self.visit_ref(required_type, span, var_id)
     }
 
     fn visit_do(
@@ -563,9 +584,16 @@ impl<'a> InferCtx<'a> {
 
     fn visit_def(&mut self, hir_def: &hir::Def) -> Result<()> {
         let mut scx = SubtreeCtx {
-            // Module definiitions must be pure
+            // Module definitions must be pure
             fun_purity: PurityVarType::Known(Purity::Pure.into_poly()),
         };
+
+        // Mark all of our free typed variable as recursive
+        typeck::destruc::visit_vars(hir_def.destruc(), |var_id, decl_type| {
+            if let ty::Decl::Free(_) = decl_type {
+                self.var_to_type.insert(var_id, VarType::Recursive);
+            }
+        });
 
         let destruc = hir_def.destruc();
         let value_expr = hir_def.value_expr();
@@ -580,27 +608,61 @@ impl<'a> InferCtx<'a> {
             // We know the exact type of these variables; do not infer further even if their type
             // wasn't declared
             false,
-        )
+        )?;
+
+        Ok(())
+    }
+
+    fn visit_def_id(&mut self, def_id: usize) -> Result<()> {
+        let mut taken_state = DefState::Complete;
+        std::mem::swap(&mut taken_state, &mut self.def_states[def_id]);
+
+        if let DefState::Pending(def) = taken_state {
+            self.visit_def(&def)?;
+        }
+
+        Ok(())
+    }
+
+    fn infer_program(mut self, defs: Vec<hir::Def>) -> result::Result<(), Vec<Error>> {
+        // First, visit all definitions to bind their variables
+        for hir_def in defs {
+            let def_id = self.def_states.len();
+
+            typeck::destruc::visit_vars(hir_def.destruc(), |var_id, decl_type| {
+                match decl_type.try_to_poly() {
+                    Some(poly_type) => {
+                        self.var_to_type.insert(var_id, VarType::Known(poly_type));
+                    }
+                    None => {
+                        // Record the definition ID so we can deal with forward type references
+                        self.var_to_type.insert(var_id, VarType::Pending(def_id));
+                    }
+                }
+            });
+
+            self.def_states.push(DefState::Pending(hir_def));
+        }
+
+        let errs = (0..self.def_states.len())
+            .flat_map(|def_id| self.visit_def_id(def_id).err())
+            .collect::<Vec<Error>>();
+
+        if errs.is_empty() {
+            Ok(())
+        } else {
+            Err(errs)
+        }
     }
 }
 
 pub fn infer_program(
     pvars: &[ty::purity::PVar],
     tvars: &[ty::TVar],
-    defs: &[hir::Def],
+    defs: Vec<hir::Def>,
 ) -> result::Result<(), Vec<Error>> {
-    let errs = defs.iter()
-        .flat_map(|hir_def| {
-            let mut icx = InferCtx::new(pvars, tvars);
-            icx.visit_def(&hir_def).err()
-        })
-        .collect::<Vec<Error>>();
-
-    if errs.is_empty() {
-        Ok(())
-    } else {
-        Err(errs)
-    }
+    let icx = InferCtx::new(pvars, tvars);
+    icx.infer_program(defs)
 }
 
 #[cfg(test)]

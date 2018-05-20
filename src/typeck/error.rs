@@ -12,6 +12,7 @@ pub enum ErrorKind {
     PolyUnionConflict(String, String),
     PredTypeErased(String, String),
     TopFunApply(String),
+    RecursiveType,
     // Have, wanted
     TooManyArgs(usize, usize),
     InsufficientArgs(usize, usize),
@@ -58,6 +59,9 @@ impl Reportable for Error {
             }
             ErrorKind::InsufficientArgs(have, wanted) => {
                 format!("insufficient arguments; wanted {}, have {}", wanted, have)
+            }
+            ErrorKind::RecursiveType => {
+                "recursive usage requires explicit type annotation".to_owned()
             }
         }
     }

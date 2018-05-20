@@ -38,23 +38,9 @@ pub struct LoweringContext<'ccx> {
 }
 
 pub struct LoweredProgram {
-    defs: Vec<Def>,
-    pvars: Vec<ty::purity::PVar>,
-    tvars: Vec<ty::TVar>,
-}
-
-impl LoweredProgram {
-    pub fn defs(&self) -> &[Def] {
-        self.defs.as_ref()
-    }
-
-    pub fn pvars(&self) -> &[ty::purity::PVar] {
-        self.pvars.as_ref()
-    }
-
-    pub fn tvars(&self) -> &[ty::TVar] {
-        self.tvars.as_ref()
-    }
+    pub defs: Vec<Def>,
+    pub pvars: Vec<ty::purity::PVar>,
+    pub tvars: Vec<ty::TVar>,
 }
 
 impl From<Error> for Vec<Error> {

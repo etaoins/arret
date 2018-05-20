@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use hir;
 use hir::destruc;
 use ty;
 use typeck::list_type;
@@ -88,10 +89,53 @@ pub fn subst_destruc(
     destruc: &destruc::Destruc,
     free_ty_to_poly: &HashMap<ty::FreeTyId, ty::Poly>,
 ) -> ty::Poly {
-    match *destruc {
+    match destruc {
         destruc::Destruc::Scalar(_, ref scalar) => {
             ty::subst::subst_decl_ty(free_ty_to_poly, scalar.ty())
         }
         destruc::Destruc::List(_, ref list) => subst_list_destruc(list, free_ty_to_poly),
     }
+}
+
+struct VisitVarCtx<F>
+where
+    F: FnMut(hir::VarId, &ty::Decl) -> (),
+{
+    visitor: F,
+}
+
+impl<F> VisitVarCtx<F>
+where
+    F: FnMut(hir::VarId, &ty::Decl) -> (),
+{
+    fn visit_scalar_vars(&mut self, scalar: &destruc::Scalar) {
+        if let Some(var_id) = scalar.var_id() {
+            (self.visitor)(*var_id, scalar.ty());
+        }
+    }
+
+    fn visit_vars(&mut self, destruc: &destruc::Destruc) {
+        match destruc {
+            destruc::Destruc::Scalar(_, ref scalar) => {
+                self.visit_scalar_vars(scalar);
+            }
+            destruc::Destruc::List(_, ref list) => {
+                for fixed in list.fixed() {
+                    self.visit_vars(fixed);
+                }
+
+                if let Some(rest) = list.rest() {
+                    self.visit_scalar_vars(rest);
+                }
+            }
+        }
+    }
+}
+
+pub fn visit_vars<F>(destruc: &destruc::Destruc, visitor: F)
+where
+    F: FnMut(hir::VarId, &ty::Decl) -> (),
+{
+    let mut vcx = VisitVarCtx { visitor };
+    vcx.visit_vars(destruc)
 }

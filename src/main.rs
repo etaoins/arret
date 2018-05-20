@@ -40,9 +40,9 @@ fn main() {
         }
     };
 
-    match typeck::infer::infer_program(hir.pvars(), hir.tvars(), hir.defs()) {
-        Ok(()) => {
-            println!("{:?}", hir.defs());
+    match typeck::infer::infer_program(&hir.pvars, &hir.tvars, hir.defs) {
+        Ok(_) => {
+            println!("DONE");
         }
         Err(errs) => {
             for err in errs {
