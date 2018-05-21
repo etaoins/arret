@@ -272,18 +272,7 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd)]
-pub struct TVarId(u32);
-
-impl TVarId {
-    pub fn new(id: usize) -> TVarId {
-        TVarId(id as u32)
-    }
-
-    pub fn to_usize(self) -> usize {
-        self.0 as usize
-    }
-}
+new_indexing_id_type!(TVarId, u32);
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct TVar {

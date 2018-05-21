@@ -16,7 +16,7 @@ use hir::types::{lower_poly, lower_polymorphic_var, try_lower_purity, Polymorphi
 use hir::util::{
     expect_arg_count, expect_ident, expect_ident_and_span, pop_vec_front, split_into_fixed_and_rest,
 };
-use hir::{App, Cond, Def, Expr, Fun, Let, VarId};
+use hir::{App, Cond, Def, Expr, Fun, Let, VarId, VarIdCounter};
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 use ty;
@@ -25,7 +25,7 @@ use ty::purity::Purity;
 pub struct LoweringContext<'ccx> {
     deferred_defs: Vec<DeferredDef>,
 
-    next_var_id: u32,
+    var_id_counter: VarIdCounter,
     loaded_modules: BTreeMap<ModuleName, Module>,
     macros: Vec<Macro>,
 
@@ -104,7 +104,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
         LoweringContext {
             deferred_defs: vec![],
-            next_var_id: 0,
+            var_id_counter: VarIdCounter::new(),
             loaded_modules,
             macros: vec![],
             pvars: vec![],
@@ -114,24 +114,11 @@ impl<'ccx> LoweringContext<'ccx> {
     }
 
     fn insert_pvar(&mut self, pvar: ty::purity::PVar) -> ty::purity::PVarId {
-        let pvar_id = ty::purity::PVarId::new(self.pvars.len());
-        self.pvars.push(pvar);
-
-        pvar_id
+        ty::purity::PVarId::new_entry_id(&mut self.pvars, pvar)
     }
 
     fn insert_tvar(&mut self, tvar: ty::TVar) -> ty::TVarId {
-        let tvar_id = ty::TVarId::new(self.tvars.len());
-        self.tvars.push(tvar);
-
-        tvar_id
-    }
-
-    fn alloc_var_id(&mut self) -> VarId {
-        let var_id = VarId::new(self.next_var_id);
-        self.next_var_id += 1;
-
-        var_id
+        ty::TVarId::new_entry_id(&mut self.tvars, tvar)
     }
 
     // This would be less ugly as Result<!> once it's stabilised
@@ -176,8 +163,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
         let mac = lower_macro_rules(scope, span, &self_ident, macro_rules_data)?;
 
-        let macro_id = MacroId::new(self.macros.len());
-        self.macros.push(mac);
+        let macro_id = MacroId::new_entry_id(&mut self.macros, mac);
         scope.insert_binding(self_ident, Binding::Macro(macro_id));
 
         Ok(())
@@ -279,7 +265,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 ),
             )),
             _ => {
-                let var_id = self.alloc_var_id();
+                let var_id = self.var_id_counter.alloc();
                 let source_name = ident.name().clone();
 
                 scope.insert_var(ident, var_id);

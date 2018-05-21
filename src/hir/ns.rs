@@ -1,14 +1,7 @@
 use syntax::datum::Datum;
 use syntax::span::Span;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct NsId(u32);
-
-impl NsId {
-    pub fn new(id: u32) -> NsId {
-        NsId(id)
-    }
-}
+new_counting_id_type!(NsIdCounter, NsId, u32);
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Ident {

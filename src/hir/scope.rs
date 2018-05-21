@@ -1,23 +1,12 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use hir::ns::{Ident, NsDatum, NsId};
+use hir::ns::{Ident, NsDatum, NsId, NsIdCounter};
 use hir::prim::Prim;
 use hir::{types, VarId};
 use ty;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub struct MacroId(usize);
-
-impl MacroId {
-    pub fn new(id: usize) -> MacroId {
-        MacroId(id)
-    }
-
-    pub fn to_usize(&self) -> usize {
-        self.0
-    }
-}
+new_indexing_id_type!(MacroId, u32);
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub enum Binding {
@@ -32,7 +21,7 @@ pub enum Binding {
 pub struct ScopeData {
     bindings: HashMap<Ident, Binding>,
     parent: Option<Rc<ScopeData>>,
-    curr_ns_id: u32,
+    ns_id_counter: NsIdCounter,
 }
 
 impl ScopeData {
@@ -55,7 +44,7 @@ impl Scope {
     pub fn new_empty() -> Scope {
         Scope(Rc::new(ScopeData {
             bindings: HashMap::new(),
-            curr_ns_id: 0,
+            ns_id_counter: NsIdCounter::new(),
             parent: None,
         }))
     }
@@ -63,7 +52,7 @@ impl Scope {
     pub fn new_child(parent: &Scope) -> Scope {
         Scope(Rc::new(ScopeData {
             bindings: HashMap::new(),
-            curr_ns_id: parent.data().curr_ns_id,
+            ns_id_counter: parent.data().ns_id_counter.clone(),
             parent: Some(parent.0.clone()),
         }))
     }
@@ -109,8 +98,7 @@ impl Scope {
     ///
     /// This is not globally unique; it will only be unique in the current scope chain
     pub fn alloc_ns_id(&mut self) -> NsId {
-        self.mut_data().curr_ns_id += 1;
-        NsId::new(self.data().curr_ns_id)
+        self.mut_data().ns_id_counter.alloc()
     }
 
     fn data(&self) -> &ScopeData {

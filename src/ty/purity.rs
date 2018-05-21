@@ -23,18 +23,7 @@ impl PRef for Purity {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd)]
-pub struct PVarId(u32);
-
-impl PVarId {
-    pub fn new(id: usize) -> PVarId {
-        PVarId(id as u32)
-    }
-
-    pub fn to_usize(self) -> usize {
-        self.0 as usize
-    }
-}
+new_indexing_id_type!(PVarId, u32);
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct PVar {

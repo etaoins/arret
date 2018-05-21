@@ -63,18 +63,7 @@ enum DefState {
     Complete,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub struct FreeTyId(u32);
-
-impl FreeTyId {
-    fn new(id: usize) -> FreeTyId {
-        FreeTyId(id as u32)
-    }
-
-    fn to_usize(&self) -> usize {
-        self.0 as usize
-    }
-}
+new_indexing_id_type!(FreeTyId, u32);
 
 struct InferCtx<'a> {
     def_states: Vec<DefState>,
@@ -110,10 +99,7 @@ impl<'a> InferCtx<'a> {
     }
 
     fn insert_free_ty(&mut self, initial_type: ty::Poly) -> FreeTyId {
-        let free_ty_id = FreeTyId::new(self.free_ty_polys.len());
-        self.free_ty_polys.push(initial_type);
-
-        free_ty_id
+        FreeTyId::new_entry_id(&mut self.free_ty_polys, initial_type)
     }
 
     fn str_for_poly(&self, poly: &ty::Poly) -> String {

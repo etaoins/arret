@@ -30,14 +30,7 @@ impl HirType for ty::Decl {
     type Purity = ty::purity::Decl;
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub struct VarId(u32);
-
-impl VarId {
-    fn new(id: u32) -> VarId {
-        VarId(id)
-    }
-}
+new_counting_id_type!(VarIdCounter, VarId, u32);
 
 #[derive(PartialEq, Debug)]
 pub struct Fun<T>
