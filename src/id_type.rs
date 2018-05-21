@@ -13,6 +13,7 @@ macro_rules! new_indexing_id_type {
                 $name(value as $ty)
             }
 
+            #[allow(unused)]
             pub fn new_entry_id<T>(lookup_vec: &mut Vec<T>, entry: T) -> $name {
                 let id = Self::new(lookup_vec.len());
                 lookup_vec.push(entry);

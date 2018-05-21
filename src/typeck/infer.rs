@@ -20,6 +20,9 @@ struct InferredNode {
     pub poly_type: ty::Poly,
 }
 
+new_indexing_id_type!(FreeTyId, u32);
+new_indexing_id_type!(DefId, u32);
+
 /// Partially inferred function application
 ///
 /// The function has been inferred while the arguments have not
@@ -31,9 +34,7 @@ struct FunApp {
 
 enum VarType {
     // Introduced a definition that has yet to be processed
-    //
-    // TODO: Make this a newtype
-    Pending(usize),
+    Pending(DefId),
     // (def) currently having its type inferred
     Recursive,
     // non-(def) free type being inferred
@@ -62,8 +63,6 @@ enum DefState {
     Pending(hir::Def<ty::Decl>),
     Complete,
 }
-
-new_indexing_id_type!(FreeTyId, u32);
 
 struct InferCtx<'a> {
     def_states: Vec<DefState>,
@@ -767,9 +766,9 @@ impl<'a> InferCtx<'a> {
         Ok(())
     }
 
-    fn visit_def_id(&mut self, def_id: usize) -> Result<()> {
+    fn visit_def_id(&mut self, def_id: DefId) -> Result<()> {
         let mut taken_state = DefState::Complete;
-        std::mem::swap(&mut taken_state, &mut self.def_states[def_id]);
+        std::mem::swap(&mut taken_state, &mut self.def_states[def_id.to_usize()]);
 
         if let DefState::Pending(def) = taken_state {
             self.visit_def(def)?;
@@ -781,7 +780,7 @@ impl<'a> InferCtx<'a> {
     fn infer_program(mut self, defs: Vec<hir::Def<ty::Decl>>) -> result::Result<(), Vec<Error>> {
         // First, visit all definitions to bind their variables
         for hir_def in defs {
-            let def_id = self.def_states.len();
+            let def_id = DefId::new(self.def_states.len());
 
             typeck::destruc::visit_vars(&hir_def.destruc, |var_id, decl_type| {
                 match decl_type.try_to_poly() {
@@ -799,7 +798,7 @@ impl<'a> InferCtx<'a> {
         }
 
         let errs = (0..self.def_states.len())
-            .flat_map(|def_id| self.visit_def_id(def_id).err())
+            .flat_map(|def_id| self.visit_def_id(DefId::new(def_id)).err())
             .collect::<Vec<Error>>();
 
         if errs.is_empty() {
