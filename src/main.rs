@@ -44,8 +44,10 @@ fn main() {
     };
 
     match typeck::infer::infer_program(&hir.pvars, &hir.tvars, hir.defs) {
-        Ok(_) => {
-            println!("DONE");
+        Ok(inferred_defs) => {
+            for inferred_def in inferred_defs {
+                println!("{:?}", inferred_def);
+            }
         }
         Err(errs) => {
             for err in errs {

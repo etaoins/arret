@@ -16,7 +16,7 @@ use hir::types::{lower_poly, lower_polymorphic_var, try_lower_purity, Polymorphi
 use hir::util::{
     expect_arg_count, expect_ident, expect_ident_and_span, pop_vec_front, split_into_fixed_and_rest,
 };
-use hir::{App, Cond, Def, Expr, Fun, Let, VarId, VarIdCounter};
+use hir::{App, Cond, Def, Expr, Fun, Let, VarIdCounter};
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 use ty;
@@ -1018,6 +1018,7 @@ pub fn expr_for_str(data_str: &str) -> Result<Expr<ty::Decl>> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use hir::VarId;
     use syntax::span::t2s;
     use ty;
 

@@ -21,7 +21,7 @@ struct InferredNode {
 }
 
 new_indexing_id_type!(FreeTyId, u32);
-new_indexing_id_type!(DefId, u32);
+new_indexing_id_type!(InputDefId, u32);
 
 /// Partially inferred function application
 ///
@@ -34,7 +34,7 @@ struct FunApp {
 
 enum VarType {
     // Introduced a definition that has yet to be processed
-    Pending(DefId),
+    Pending(InputDefId),
     // (def) currently having its type inferred
     Recursive,
     // non-(def) free type being inferred
@@ -59,13 +59,15 @@ impl PurityVarType {
 }
 
 #[allow(large_enum_variant)]
-enum DefState {
+enum InputDef {
     Pending(hir::Def<ty::Decl>),
     Complete,
 }
 
 struct InferCtx<'a> {
-    def_states: Vec<DefState>,
+    input_defs: Vec<InputDef>,
+    complete_defs: Vec<hir::Def<ty::Poly>>,
+
     pvars: &'a [ty::purity::PVar],
     tvars: &'a [ty::TVar],
 
@@ -89,7 +91,8 @@ fn unit_type() -> ty::Poly {
 impl<'a> InferCtx<'a> {
     fn new(pvars: &'a [ty::purity::PVar], tvars: &'a [ty::TVar]) -> InferCtx<'a> {
         InferCtx {
-            def_states: vec![],
+            input_defs: vec![],
+            complete_defs: vec![],
             pvars,
             tvars,
             free_ty_polys: vec![],
@@ -273,8 +276,8 @@ impl<'a> InferCtx<'a> {
             }
         };
 
-        self.visit_def_id(pending_def_id)?;
-        // This assumes `visit_def_id` has populated our variables now
+        self.recurse_into_def_id(pending_def_id)?;
+        // This assumes `recurse_into_def_id` has populated our variables now
         self.visit_ref(required_type, span, var_id)
     }
 
@@ -731,7 +734,7 @@ impl<'a> InferCtx<'a> {
         }
     }
 
-    fn visit_def(&mut self, hir_def: hir::Def<ty::Decl>) -> Result<()> {
+    fn visit_def(&mut self, hir_def: hir::Def<ty::Decl>) -> Result<hir::Def<ty::Poly>> {
         let hir::Def {
             span,
             destruc,
@@ -754,7 +757,7 @@ impl<'a> InferCtx<'a> {
         let value_span = value_expr.span().unwrap_or(span);
         let value_node = self.visit_expr(&mut scx, &required_type, value_expr)?;
 
-        self.destruc_value(
+        let free_ty_offset = self.destruc_value(
             &destruc,
             value_span,
             &value_node.poly_type,
@@ -763,24 +766,39 @@ impl<'a> InferCtx<'a> {
             false,
         )?;
 
-        Ok(())
+        let mut inferred_free_types = self.free_ty_polys.split_off(free_ty_offset);
+        Ok(hir::Def {
+            span,
+            destruc: destruc::subst_destruc(&mut inferred_free_types, destruc),
+            value_expr: value_node.expr,
+        })
     }
 
-    fn visit_def_id(&mut self, def_id: DefId) -> Result<()> {
-        let mut taken_state = DefState::Complete;
-        std::mem::swap(&mut taken_state, &mut self.def_states[def_id.to_usize()]);
+    fn recurse_into_def_id(&mut self, def_id: InputDefId) -> Result<()> {
+        let def_idx = def_id.to_usize();
 
-        if let DefState::Pending(def) = taken_state {
-            self.visit_def(def)?;
+        let previous_state = std::mem::replace(&mut self.input_defs[def_idx], InputDef::Complete);
+
+        if let InputDef::Pending(def) = previous_state {
+            let inferred_def = self.visit_def(def)?;
+            self.complete_defs.push(inferred_def);
+        } else {
+            panic!("Tried to infer already complete def. An error previously occurred?[")
         }
 
         Ok(())
     }
 
-    fn infer_program(mut self, defs: Vec<hir::Def<ty::Decl>>) -> result::Result<(), Vec<Error>> {
+    fn infer_program(
+        mut self,
+        defs: Vec<hir::Def<ty::Decl>>,
+    ) -> result::Result<Vec<hir::Def<ty::Poly>>, Vec<Error>> {
         // First, visit all definitions to bind their variables
-        for hir_def in defs {
-            let def_id = DefId::new(self.def_states.len());
+
+        // We do this in reverse order because we infer our defs in reverse order. This doesn't
+        // stricly matter but it should require less recursive resolution in the forward direction.
+        for hir_def in defs.into_iter().rev() {
+            let def_id = InputDefId::new(self.input_defs.len());
 
             typeck::destruc::visit_vars(&hir_def.destruc, |var_id, decl_type| {
                 match decl_type.try_to_poly() {
@@ -794,15 +812,26 @@ impl<'a> InferCtx<'a> {
                 }
             });
 
-            self.def_states.push(DefState::Pending(hir_def));
+            self.input_defs.push(InputDef::Pending(hir_def));
         }
 
-        let errs = (0..self.def_states.len())
-            .flat_map(|def_id| self.visit_def_id(DefId::new(def_id)).err())
-            .collect::<Vec<Error>>();
+        let mut errs = vec![];
+        while let Some(def_state) = self.input_defs.pop() {
+            match def_state {
+                InputDef::Pending(def) => match self.visit_def(def) {
+                    Ok(inferred_def) => {
+                        self.complete_defs.push(inferred_def);
+                    }
+                    Err(err) => {
+                        errs.push(err);
+                    }
+                },
+                InputDef::Complete => {}
+            }
+        }
 
         if errs.is_empty() {
-            Ok(())
+            Ok(self.complete_defs)
         } else {
             Err(errs)
         }
@@ -813,7 +842,7 @@ pub fn infer_program(
     pvars: &[ty::purity::PVar],
     tvars: &[ty::TVar],
     defs: Vec<hir::Def<ty::Decl>>,
-) -> result::Result<(), Vec<Error>> {
+) -> result::Result<Vec<hir::Def<ty::Poly>>, Vec<Error>> {
     let icx = InferCtx::new(pvars, tvars);
     icx.infer_program(defs)
 }
