@@ -1,6 +1,9 @@
 (import [risp internal primitives])
+(export def let fn if quote export ... _ defmacro macro-rules :)
+
 (import [risp internal types])
-(export def let fn if quote export ... _ defmacro macro-rules)
+(export Any Bool String Symbol Int Float Char List Listof Vector Vectorof Setof Map Cons U Type?
+        -> ->!)
 
 (export defn)
 (defmacro defn (macro-rules #{} [
