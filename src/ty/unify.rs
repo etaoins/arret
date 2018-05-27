@@ -343,6 +343,11 @@ impl<'a> PolyUnifyCtx<'a> {
             // We can build type checks for literal symbols
             ty::Ty::LitSym(_) => true,
 
+            ty::Ty::List(list) => {
+                // Only the empty list is discernible
+                list.fixed().is_empty() && list.rest().is_none()
+            }
+
             // If we can discern every union member we can discern the union itself
             ty::Ty::Union(members) => members.iter().all(|m| self.poly_is_discernible(m)),
 
@@ -353,8 +358,7 @@ impl<'a> PolyUnifyCtx<'a> {
             | ty::Ty::Map(_, _)
             | ty::Ty::Set(_)
             | ty::Ty::Vec(_)
-            | ty::Ty::Vecof(_)
-            | ty::Ty::List(_) => false,
+            | ty::Ty::Vecof(_) => false,
         }
     }
 
