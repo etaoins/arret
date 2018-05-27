@@ -19,7 +19,6 @@ pub enum TyCons {
     Set,
     Map,
     Union,
-    Cons,
     #[cfg(test)]
     RawU,
 }
@@ -103,17 +102,17 @@ impl<'a> LowerTyContext<'a> {
     fn lower_list_cons(&self, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
         let (fixed, rest) = split_into_fixed_and_rest(self.scope, arg_data);
 
-        let mut tail_poly = match rest {
-            Some(rest) => ty::Ty::Listof(Box::new(self.lower_poly(rest)?)).into_poly(),
-            None => ty::Ty::Nil.into_poly(),
+        let fixed_polys = fixed
+            .into_iter()
+            .map(|fixed_datum| self.lower_poly(fixed_datum))
+            .collect::<Result<Vec<ty::Poly>>>()?;
+
+        let rest_poly = match rest {
+            Some(rest_datum) => Some(self.lower_poly(rest_datum)?),
+            None => None,
         };
 
-        for fixed_datum in fixed.into_iter().rev() {
-            let fixed_poly = self.lower_poly(fixed_datum)?;
-            tail_poly = ty::Ty::Cons(Box::new(fixed_poly), Box::new(tail_poly)).into_poly();
-        }
-
-        Ok(tail_poly)
+        Ok(ty::Ty::List(ty::List::new(fixed_polys, rest_poly)).into_poly())
     }
 
     fn lower_fun_cons(
@@ -146,7 +145,7 @@ impl<'a> LowerTyContext<'a> {
                 None => None,
             };
 
-            let params = ty::Params::new(fixed_polys, rest_poly);
+            let params = ty::List::new(fixed_polys, rest_poly);
             Ok(ty::Fun::new(
                 ty::purity::PVarIds::monomorphic(),
                 ty::TVarIds::monomorphic(),
@@ -166,8 +165,10 @@ impl<'a> LowerTyContext<'a> {
             TyCons::List => self.lower_list_cons(arg_data),
             TyCons::Listof => {
                 expect_arg_count(span, &arg_data, 1)?;
-                let rest_ty = self.lower_poly(arg_data.pop().unwrap())?;
-                Ok(ty::Ty::Listof(Box::new(rest_ty)).into_poly())
+                let rest_poly = self.lower_poly(arg_data.pop().unwrap())?;
+                let list_poly = ty::List::new(vec![], Some(rest_poly));
+
+                Ok(ty::Ty::List(list_poly).into_poly())
             }
             TyCons::Vector => {
                 let member_tys = arg_data
@@ -197,12 +198,6 @@ impl<'a> LowerTyContext<'a> {
                 let value_ty = self.lower_poly(arg_data.pop().unwrap())?;
                 let key_ty = self.lower_poly(arg_data.pop().unwrap())?;
                 Ok(ty::Ty::Map(Box::new(key_ty), Box::new(value_ty)).into_poly())
-            }
-            TyCons::Cons => {
-                expect_arg_count(span, &arg_data, 2)?;
-                let cdr_ty = self.lower_poly(arg_data.pop().unwrap())?;
-                let car_ty = self.lower_poly(arg_data.pop().unwrap())?;
-                Ok(ty::Ty::Cons(Box::new(car_ty), Box::new(cdr_ty)).into_poly())
             }
             TyCons::Union => {
                 let member_tys = arg_data
@@ -268,7 +263,7 @@ impl<'a> LowerTyContext<'a> {
             NsDatum::List(span, mut vs) => {
                 if vs.is_empty() {
                     // This is by analogy with () being self-evaluating in expressions
-                    return Ok(ty::Ty::Nil.into_poly());
+                    return Ok(ty::Ty::List(ty::List::new(vec![], None)).into_poly());
                 }
 
                 if vs.len() >= 2 {
@@ -380,7 +375,6 @@ pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
     export_ty_cons!("Vectorof", TyCons::Vectorof);
     export_ty_cons!("Setof", TyCons::Set);
     export_ty_cons!("Map", TyCons::Map);
-    export_ty_cons!("Cons", TyCons::Cons);
     export_ty_cons!("U", TyCons::Union);
 
     export_ty_cons!("Type?", TyCons::TyPred);
@@ -398,42 +392,17 @@ struct StrForPolyContext<'a> {
 }
 
 impl<'a> StrForPolyContext<'a> {
-    /// Tries to construct the args for a `(List)` or `->` from a poly type
+    /// Pushes the arguments for a list constructor on to the passed Vec
     ///
-    /// This will return None if the poly type cannot be constructed using `(List)` or `->`
-    /// shorthand. This can occur because not all "list-like" types can be expressed using
-    /// shorthand.
-    fn str_for_simple_list(&self, mut poly_ty: &ty::Ty<ty::Poly>) -> Option<String> {
-        let mut list_parts: Vec<String> = vec![];
-
-        loop {
-            match poly_ty {
-                ty::Ty::Nil => {
-                    break;
-                }
-                ty::Ty::Listof(rest) => {
-                    list_parts.push(self.str_for_poly(rest));
-                    list_parts.push("...".to_owned());
-                    break;
-                }
-                ty::Ty::Cons(car_poly, cdr_poly) => {
-                    list_parts.push(self.str_for_poly(car_poly));
-                    match cdr_poly.as_ref() {
-                        ty::Poly::Fixed(tail) => {
-                            poly_ty = tail;
-                        }
-                        _ => {
-                            return None;
-                        }
-                    };
-                }
-                _ => {
-                    return None;
-                }
-            }
+    /// This is used to share code between list and function types
+    fn push_list_parts(&self, list_parts: &mut Vec<String>, list_poly: &ty::List<ty::Poly>) {
+        for fixed in list_poly.fixed() {
+            list_parts.push(self.str_for_poly(fixed));
         }
-
-        Some(list_parts.join(" "))
+        if let Some(rest) = list_poly.rest() {
+            list_parts.push(self.str_for_poly(rest));
+            list_parts.push("...".to_owned());
+        }
     }
 
     fn str_for_purity(&self, purity: &ty::purity::Poly) -> String {
@@ -479,13 +448,7 @@ impl<'a> StrForPolyContext<'a> {
             ty::Ty::Fun(fun) => {
                 let mut fun_parts = Vec::with_capacity(2);
 
-                for fixed in fun.params().fixed() {
-                    fun_parts.push(self.str_for_poly(fixed));
-                }
-                for rest in fun.params().rest() {
-                    fun_parts.push(self.str_for_poly(rest));
-                    fun_parts.push("...".to_owned());
-                }
+                self.push_list_parts(&mut fun_parts, fun.params());
                 fun_parts.push(self.str_for_purity(fun.purity()));
                 fun_parts.push(self.str_for_poly(fun.ret()));
 
@@ -500,21 +463,22 @@ impl<'a> StrForPolyContext<'a> {
 
                 format!("(U{})", member_strs.join(""))
             }
-            ty::Ty::Listof(member) => format!("(Listof {})", self.str_for_poly(member)),
-            ty::Ty::Cons(car, cdr) => self.str_for_simple_list(poly_ty)
-                .map(|cons_args| format!("(List {})", cons_args))
-                .unwrap_or_else(|| {
-                    // Fall back to rendering the type using (Cons)
-                    format!(
-                        "(Cons {} {})",
-                        self.str_for_poly(car),
-                        self.str_for_poly(cdr)
-                    )
-                }),
-            ty::Ty::Nil => {
-                // This has many representations: `(List)`, `()` and `'()`. ()` has been chosen as idiomatic as it's the shortest.
-                // TODO: Is the lexographic correspondence with Rust's unit type a good thing?
-                "()".to_owned()
+            ty::Ty::List(list) => {
+                // While all list types can be expressed using `(List)` we try to find the shortest
+                // representation
+                if list.fixed().is_empty() {
+                    match list.rest() {
+                        Some(rest) => format!("(Listof {})", self.str_for_poly(rest)),
+                        None => "()".to_owned(),
+                    }
+                } else {
+                    let mut list_parts = Vec::with_capacity(2);
+
+                    list_parts.push("List".to_owned());
+                    self.push_list_parts(&mut list_parts, list);
+
+                    format!("({})", list_parts.join(" "),)
+                }
             }
         }
     }
@@ -616,21 +580,9 @@ mod test {
         assert_eq!(*err, poly_for_str(datum_str).unwrap_err());
     }
 
-    fn simple_list_type(fixed: Vec<ty::Ty<ty::Poly>>, rest: Option<ty::Ty<ty::Poly>>) -> ty::Poly {
-        let tail_poly = rest.map(|t| ty::Ty::Listof(Box::new(t.into_poly())).into_poly())
-            .unwrap_or_else(|| ty::Ty::Nil.into_poly());
-
-        fixed
-            .into_iter()
-            .rev()
-            .fold(tail_poly, |tail_poly, fixed_poly| {
-                ty::Ty::Cons(Box::new(fixed_poly.into_poly()), Box::new(tail_poly)).into_poly()
-            })
-    }
-
     /// This asserts that a type uses an exact string in str_for_poly
     ///
-    /// This is to make sure we use e.g. (List Int) instead of (Cons (Cons Int ()))
+    /// This is to make sure we use e.g. `(Listof Int)` instead of `(List Int ...)`
     fn assert_exact_str_repr(datum_str: &str) {
         assert_eq!(
             datum_str,
@@ -666,7 +618,7 @@ mod test {
     fn empty_list_literal() {
         let j = "()";
 
-        let expected = ty::Ty::Nil.into_poly();
+        let expected = ty::Ty::List(ty::List::new(vec![], None)).into_poly();
         assert_poly_for_str(&expected, j);
     }
 
@@ -718,22 +670,11 @@ mod test {
     }
 
     #[test]
-    fn cons_cons() {
-        let j = "(Cons true false)";
-
-        let expected = ty::Ty::Cons(
-            Box::new(ty::Ty::LitBool(true).into_poly()),
-            Box::new(ty::Ty::LitBool(false).into_poly()),
-        ).into_poly();
-        assert_poly_for_str(&expected, j);
-    }
-
-    #[test]
     fn listof_cons() {
         let j = "(Listof true)";
 
-        let inner_ty = ty::Ty::LitBool(true);
-        let expected = simple_list_type(vec![], Some(inner_ty));
+        let inner_ty = ty::Ty::LitBool(true).into_poly();
+        let expected = ty::Ty::List(ty::List::new(vec![], Some(inner_ty))).into_poly();
 
         assert_poly_for_str(&expected, j);
     }
@@ -742,7 +683,13 @@ mod test {
     fn fixed_list_cons() {
         let j = "(List true false)";
 
-        let expected = simple_list_type(vec![ty::Ty::LitBool(true), ty::Ty::LitBool(false)], None);
+        let expected = ty::Ty::List(ty::List::new(
+            vec![
+                ty::Ty::LitBool(true).into_poly(),
+                ty::Ty::LitBool(false).into_poly(),
+            ],
+            None,
+        )).into_poly();
 
         assert_poly_for_str(&expected, j);
     }
@@ -751,7 +698,10 @@ mod test {
     fn rest_list_cons() {
         let j = "(List true false ...)";
 
-        let expected = simple_list_type(vec![ty::Ty::LitBool(true)], Some(ty::Ty::LitBool(false)));
+        let expected = ty::Ty::List(ty::List::new(
+            vec![ty::Ty::LitBool(true).into_poly()],
+            Some(ty::Ty::LitBool(false).into_poly()),
+        )).into_poly();
 
         assert_poly_for_str(&expected, j);
     }
@@ -798,7 +748,7 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarIds::monomorphic(),
             ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
-            ty::Params::new(vec![], None),
+            ty::List::new(vec![], None),
         ).into_ref();
 
         assert_poly_for_str(&expected, j);
@@ -815,7 +765,7 @@ mod test {
                 Purity::Impure.into_poly(),
                 ty::Ty::LitBool(true).into_poly(),
             ),
-            ty::Params::new(vec![], None),
+            ty::List::new(vec![], None),
         ).into_ref();
 
         assert_poly_for_str(&expected, j);
@@ -829,7 +779,7 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarIds::monomorphic(),
             ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
-            ty::Params::new(vec![ty::Ty::LitBool(false).into_poly()], None),
+            ty::List::new(vec![ty::Ty::LitBool(false).into_poly()], None),
         ).into_ref();
 
         assert_poly_for_str(&expected, j);
@@ -846,7 +796,7 @@ mod test {
                 Purity::Impure.into_poly(),
                 ty::Ty::LitBool(true).into_poly(),
             ),
-            ty::Params::new(vec![ty::Ty::Str.into_poly()], Some(ty::Ty::Sym.into_poly())),
+            ty::List::new(vec![ty::Ty::Str.into_poly()], Some(ty::Ty::Sym.into_poly())),
         ).into_ref();
 
         assert_poly_for_str(&expected, j);

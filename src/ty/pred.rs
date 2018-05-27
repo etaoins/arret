@@ -71,7 +71,7 @@ where
     /// Returns all of the direct subtypes of Any
     ///
     /// TODO: This can be expensive. `static_lazy` might make sense here.
-    fn any_union_members() -> [S; 12] {
+    fn any_union_members() -> [S; 11] {
         use ty::Ty;
 
         [
@@ -85,16 +85,15 @@ where
             Ty::Str.into_ref(),
             Ty::Sym.into_ref(),
             Ty::Vecof(Box::new(Ty::Any.into_ref())).into_ref(),
-            Ty::Cons(Box::new(Ty::Any.into_ref()), Box::new(Ty::Any.into_ref())).into_ref(),
-            Ty::Nil.into_ref(),
+            Ty::List(ty::List::new(vec![], Some(Ty::Any.into_ref()))).into_ref(),
         ]
     }
 
     /// Performs abstract interpretation of a type predicate where the subject and testing type are
     /// not direct subtypes
     ///
-    /// This logic needs to deal with typical union types and "virtual" ones such as `Bool`, `Any`
-    /// and `Listof`. The virtual unions need to be broken up in to their subtypes for processing.
+    /// This logic needs to deal with typical union types and "virtual" ones such as `Bool` and
+    /// `Any`. The virtual unions need to be broken up in to their subtypes for processing.
     fn interpret_non_subty(
         &self,
         subject_ref: &S,
@@ -107,13 +106,6 @@ where
                 [
                     ty::Ty::LitBool(true).into_ref(),
                     ty::Ty::LitBool(false).into_ref(),
-                ].iter(),
-                test_ref,
-            ),
-            ty::Ty::Listof(member) => self.interpret_ref_iter(
-                [
-                    ty::Ty::Nil.into_ref(),
-                    ty::Ty::Cons(member.clone(), Box::new(subject_ref.clone())).into_ref(),
                 ].iter(),
                 test_ref,
             ),
@@ -214,14 +206,12 @@ mod test {
         assert_dynamic(
             (
                 "Symbol",
-                "(RawU Bool Char Float (... ->! Any) (Map Any Any) Int (Setof Any) String (Vectorof Any) (Cons Any Any) ())",
+                "(RawU Bool Char Float (... ->! Any) (Map Any Any) Int (Setof Any) String (Vectorof Any) (Listof Any))",
             ),
             "Any",
             "Symbol",
         );
 
-        // TODO: Until we disallow arbitrary (Cons) types this is erased. If we only allow (Cons) with a list tail this can be allowed.
-        assert_erased("Any", "(Listof Any)");
         assert_erased("Any", "(Listof Int)")
     }
 
@@ -237,16 +227,6 @@ mod test {
             ("(List Any)", "(List Any Any)"),
             "(RawU (List Any) (List Any Any))",
             "(List Any)",
-        );
-    }
-
-    #[test]
-    fn list_types() {
-        assert_dynamic(("()", "(Cons Int (Listof Int))"), "(Listof Int)", "()");
-        assert_dynamic(
-            ("(Cons Int (Listof Int))", "()"),
-            "(Listof Int)",
-            "(Cons Any Any)",
         );
     }
 

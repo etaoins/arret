@@ -1,5 +1,5 @@
 use ty;
-use ty::params_iter::ParamsIterator;
+use ty::list_iter::ListIterator;
 use ty::purity::Purity;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -67,17 +67,17 @@ where
             .and_then(|| self.ty_ref_is_a(sub_top_fun.ret(), par_top_fun.ret()))
     }
 
-    fn params_is_a(&self, sub_params: &ty::Params<S>, par_params: &ty::Params<S>) -> Result {
-        let mut sub_iter = ParamsIterator::new(sub_params);
-        let mut par_iter = ParamsIterator::new(par_params);
+    fn list_is_a(&self, sub_list: &ty::List<S>, par_list: &ty::List<S>) -> Result {
+        let mut sub_iter = ListIterator::new(sub_list);
+        let mut par_iter = ListIterator::new(par_list);
 
         let mut is_exact = sub_iter.fixed_len() >= par_iter.fixed_len();
 
-        // Compare our fixed types. If one of the fixed params ends early then its rest param will
-        // be used for the remaining params.
+        // Compare our fixed types. If one of the fixed lists ends early then its rest will be used
+        // for the remaining list
         while sub_iter.fixed_len() > 0 || par_iter.fixed_len() > 0 {
             match (sub_iter.next(), par_iter.next()) {
-                (Some(sub), Some(par)) => match self.ty_ref_is_a(par, sub) {
+                (Some(sub), Some(par)) => match self.ty_ref_is_a(sub, par) {
                     Result::Yes => {}
                     Result::May => {
                         is_exact = false;
@@ -88,19 +88,19 @@ where
                     }
                 },
                 (None, None) => {
-                    // Fixed params ended at the same length
+                    // Fixed lists ended at the same length
                     break;
                 }
                 (_, _) => {
-                    // Fixed params ended at different lengths
+                    // Fixed lists ended at different lengths
                     return Result::No;
                 }
             };
         }
 
-        if let (Some(sub_rest), Some(par_rest)) = (sub_params.rest(), par_params.rest()) {
+        if let (Some(sub_rest), Some(par_rest)) = (sub_list.rest(), par_list.rest()) {
             // If the rest doesn't match it's a May as the rest might not be present
-            if self.ty_ref_is_a(par_rest, sub_rest) != Result::Yes {
+            if self.ty_ref_is_a(sub_rest, par_rest) != Result::Yes {
                 is_exact = false;
             }
         }
@@ -114,7 +114,8 @@ where
 
     fn fun_is_a(&self, sub_fun: &ty::Fun<S>, par_fun: &ty::Fun<S>) -> Result {
         self.top_fun_is_a(sub_fun.top_fun(), par_fun.top_fun())
-            .and_then(|| self.params_is_a(sub_fun.params(), par_fun.params()))
+            // Note that parameters are contravariant
+            .and_then(|| self.list_is_a(par_fun.params(), sub_fun.params()))
     }
 
     fn ty_is_a(
@@ -257,23 +258,8 @@ where
             }
 
             // List types
-            (ty::Ty::Cons(sub_car, sub_cdr), ty::Ty::Cons(par_car, par_cdr)) => self.ty_ref_is_a(
-                sub_car, par_car,
-            ).and_then(|| self.ty_ref_is_a(sub_cdr, par_cdr)),
-            (ty::Ty::Listof(sub_member), ty::Ty::Listof(par_member)) => {
-                self.ty_ref_is_a(sub_member, par_member)
-            }
-            (ty::Ty::Nil, ty::Ty::Listof(_)) => Result::Yes,
-            (ty::Ty::Listof(_), ty::Ty::Nil) => Result::May,
-            (ty::Ty::Cons(sub_car, sub_cdr), ty::Ty::Listof(par_member)) => self.ty_ref_is_a(
-                sub_car, par_member,
-            ).and_then(|| self.ty_ref_is_a(sub_cdr, parent_ref)),
-            (ty::Ty::Listof(sub_member), ty::Ty::Cons(par_car, par_cdr)) => {
-                Result::May.and_then(|| {
-                    self.ty_ref_is_a(sub_member, par_car)
-                        .and_then(|| self.ty_ref_is_a(sub_ref, par_cdr))
-                })
-            }
+            (ty::Ty::List(sub_list), ty::Ty::List(par_list)) => self.list_is_a(sub_list, par_list),
+
             _ => Result::No,
         }
     }
@@ -476,15 +462,6 @@ mod test {
         assert_eq!(Result::Yes, poly_is_a(&[], &never, &any));
         assert_eq!(Result::Yes, poly_is_a(&[], &never, &never));
         assert_eq!(Result::No, poly_is_a(&[], &any, &never));
-    }
-
-    #[test]
-    fn cons_types() {
-        let cons_bool_bool = poly_for_str("(Cons Bool Bool)");
-        let cons_any_any = poly_for_str("(Cons Any Any)");
-
-        assert_eq!(Result::Yes, poly_is_a(&[], &cons_bool_bool, &cons_any_any));
-        assert_eq!(Result::May, poly_is_a(&[], &cons_any_any, &cons_bool_bool));
     }
 
     #[test]
@@ -723,24 +700,7 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
-            ty::Params::new(vec![ptype1_unbounded.clone()], None),
-        ).into_ref();
-
-        // (All A (A A -> (Cons A A))
-        let panys_to_cons = ty::Fun::new(
-            ty::purity::PVarIds::monomorphic(),
-            ty::TVarId::new(0)..ty::TVarId::new(1),
-            ty::TopFun::new(
-                Purity::Pure.into_poly(),
-                ty::Ty::Cons(
-                    Box::new(ptype1_unbounded.clone()),
-                    Box::new(ptype1_unbounded.clone()),
-                ).into_poly(),
-            ),
-            ty::Params::new(
-                vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()],
-                None,
-            ),
+            ty::List::new(vec![ptype1_unbounded.clone()], None),
         ).into_ref();
 
         // (All [A : Symbol] (A -> A))
@@ -748,7 +708,7 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype2_symbol.clone()),
-            ty::Params::new(vec![ptype2_symbol.clone()], None),
+            ty::List::new(vec![ptype2_symbol.clone()], None),
         ).into_ref();
 
         // (All [A : String] (A ->! A))
@@ -756,13 +716,12 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(2)..ty::TVarId::new(3),
             ty::TopFun::new(Purity::Impure.into_poly(), ptype3_string.clone()),
-            ty::Params::new(vec![ptype3_string.clone()], None),
+            ty::List::new(vec![ptype3_string.clone()], None),
         ).into_ref();
 
         // All functions should have the top function type
         let top_fun = poly_for_str("(... ->! Any)");
         assert_eq!(Result::Yes, poly_is_a(&tvars, &pidentity_fun, &top_fun));
-        assert_eq!(Result::Yes, poly_is_a(&tvars, &panys_to_cons, &top_fun));
         assert_eq!(Result::Yes, poly_is_a(&tvars, &pidentity_sym_fun, &top_fun));
         assert_eq!(
             Result::Yes,
@@ -785,10 +744,6 @@ mod test {
         assert_eq!(
             Result::Yes,
             poly_is_a(&tvars, &pidentity_fun, &top_one_param_fun)
-        );
-        assert_eq!(
-            Result::No,
-            poly_is_a(&tvars, &panys_to_cons, &top_one_param_fun)
         );
         assert_eq!(
             Result::Yes,
@@ -815,10 +770,6 @@ mod test {
             poly_is_a(&tvars, &pidentity_fun, &top_to_sym_fun)
         );
         assert_eq!(
-            Result::No,
-            poly_is_a(&tvars, &panys_to_cons, &top_to_sym_fun)
-        );
-        assert_eq!(
             Result::Yes,
             poly_is_a(&tvars, &pidentity_sym_fun, &top_to_sym_fun)
         );
@@ -831,26 +782,11 @@ mod test {
         );
         assert_eq!(
             Result::No,
-            poly_is_a(&tvars, &panys_to_cons, &str_to_str_fun)
-        );
-        assert_eq!(
-            Result::No,
             poly_is_a(&tvars, &pidentity_sym_fun, &str_to_str_fun)
         );
         assert_eq!(
             Result::Yes,
             poly_is_a(&tvars, &pidentity_impure_string_fun, &str_to_str_fun)
-        );
-
-        // panys_to_cons has a very specific shape we should be able to test
-        let top_any_to_cons_fun = poly_for_str("((RawU) (RawU) ->! (Cons Any Any))");
-        assert_eq!(
-            Result::No,
-            poly_is_a(&tvars, &pidentity_fun, &top_any_to_cons_fun)
-        );
-        assert_eq!(
-            Result::Yes,
-            poly_is_a(&tvars, &panys_to_cons, &top_any_to_cons_fun)
         );
     }
 }

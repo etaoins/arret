@@ -3,6 +3,7 @@ use std::iter;
 use std::result;
 
 use ty;
+use ty::list_iter::ListIterator;
 use ty::purity::Purity;
 use ty::TVarIds;
 
@@ -19,24 +20,7 @@ where
 {
     fn intersect_ty_refs(&self, &S, &S) -> Result<S>;
     fn intersect_purity_refs(&self, &S::PRef, &S::PRef) -> S::PRef;
-    fn unify_to_ty_ref(&self, ref1: &S, ref2: &S) -> Result<S>;
-
-    fn unify_ref_iter<I>(&self, members: I) -> Result<S>
-    where
-        I: Iterator<Item = S>;
-
-    fn intersect_list_cons_refs(
-        &self,
-        list_ref: &S,
-        member_ref: &S,
-        car_ref: &S,
-        cdr_ref: &S,
-    ) -> Result<S> {
-        let intersected_car = self.intersect_ty_refs(member_ref, car_ref)?;
-        let intersected_cdr = self.intersect_ty_refs(list_ref, cdr_ref)?;
-
-        Ok(ty::Ty::Cons(Box::new(intersected_car), Box::new(intersected_cdr)).into_ref())
-    }
+    fn unify_list(&self, &ty::List<S>, &ty::List<S>) -> Result<ty::List<S>>;
 
     /// Intersects a vector of refs with an iterator
     ///
@@ -67,38 +51,31 @@ where
         }
     }
 
-    fn intersect_params(
-        &self,
-        params1: &ty::Params<S>,
-        params2: &ty::Params<S>,
-    ) -> Result<ty::Params<S>> {
-        if params1.has_disjoint_arity(&params2) {
-            return Err(Error::Disjoint);
+    fn intersect_list(&self, list1: &ty::List<S>, list2: &ty::List<S>) -> Result<ty::List<S>> {
+        if list1.has_disjoint_arity(&list2) {
+            return Err(ty::intersect::Error::Disjoint);
         }
 
-        let mut fixed_iter1 = params1.fixed().iter();
-        let mut fixed_iter2 = params2.fixed().iter();
+        let mut iter1 = ListIterator::new(list1);
+        let mut iter2 = ListIterator::new(list2);
 
         let mut merged_fixed: Vec<S> =
-            Vec::with_capacity(cmp::min(fixed_iter1.len(), fixed_iter2.len()));
+            Vec::with_capacity(cmp::max(iter1.fixed_len(), iter2.fixed_len()));
 
-        while let (Some(fixed1), Some(fixed2)) = (fixed_iter1.next(), fixed_iter2.next()) {
-            merged_fixed.push(self.unify_to_ty_ref(fixed1, fixed2)?);
+        while iter1.fixed_len() > 0 || iter2.fixed_len() > 0 {
+            let next1 = iter1.next().unwrap();
+            let next2 = iter2.next().unwrap();
+
+            let merged_next = self.intersect_ty_refs(next1, next2)?;
+            merged_fixed.push(merged_next);
         }
 
-        let merged_rest = if fixed_iter1.len() > 0 || fixed_iter2.len() > 0
-            || params1.rest().is_some() || params2.rest().is_some()
-        {
-            // Merge all remaining fixed and rest args together
-            let rest_iter = fixed_iter1
-                .chain(fixed_iter2.chain(params1.rest().iter().chain(params2.rest().iter())));
-
-            Some(self.unify_ref_iter(rest_iter.cloned())?)
-        } else {
-            None
+        let merged_rest = match (list1.rest(), list2.rest()) {
+            (Some(rest1), Some(rest2)) => Some(self.intersect_ty_refs(rest1, rest2)?),
+            _ => None,
         };
 
-        Ok(ty::Params::new(merged_fixed, merged_rest))
+        Ok(ty::List::new(merged_fixed, merged_rest))
     }
 
     /// Intersects two types under the assumption that they are not subtypes
@@ -156,18 +133,8 @@ where
             }
 
             // List types
-            (ty::Ty::Listof(member1), ty::Ty::Listof(member2)) => {
-                Ok(ty::Ty::Listof(Box::new(self.intersect_ty_refs(member1, member2)?)).into_ref())
-            }
-            (ty::Ty::Cons(car1, cdr1), ty::Ty::Cons(car2, cdr2)) => Ok(ty::Ty::Cons(
-                Box::new(self.intersect_ty_refs(car1, car2)?),
-                Box::new(self.intersect_ty_refs(cdr1, cdr2)?),
-            ).into_ref()),
-            (ty::Ty::Listof(member), ty::Ty::Cons(car, cdr)) => {
-                self.intersect_list_cons_refs(ref1, member, car, cdr)
-            }
-            (ty::Ty::Cons(car, cdr), ty::Ty::Listof(member)) => {
-                self.intersect_list_cons_refs(ref2, member, car, cdr)
+            (ty::Ty::List(list1), ty::Ty::List(list2)) => {
+                Ok(ty::Ty::List(self.intersect_list(list1, list2)?).into_ref())
             }
 
             // Function types
@@ -201,7 +168,7 @@ where
                 if fun1.is_monomorphic() && fun2.is_monomorphic() {
                     let intersected_purity =
                         self.intersect_purity_refs(fun1.purity(), fun2.purity());
-                    let intersected_params = self.intersect_params(fun1.params(), fun2.params())?;
+                    let intersected_params = self.unify_list(fun1.params(), fun2.params())?;
                     let intersected_ret = self.intersect_ty_refs(fun1.ret(), fun2.ret())?;
 
                     Ok(ty::Fun::new(
@@ -260,25 +227,30 @@ impl<'a> IntersectCtx<ty::Poly> for PolyIntersectCtx<'a> {
         }
     }
 
-    fn unify_to_ty_ref(&self, poly1: &ty::Poly, poly2: &ty::Poly) -> Result<ty::Poly> {
-        ty::unify::poly_unify_to_poly(self.tvars, poly1, poly2).map_err(|_| Error::Disjoint)
-    }
-
-    fn unify_ref_iter<I>(&self, members: I) -> Result<ty::Poly>
-    where
-        I: Iterator<Item = ty::Poly>,
-    {
-        ty::unify::poly_unify_iter(self.tvars, members).map_err(|_| Error::Disjoint)
+    fn unify_list(
+        &self,
+        list1: &ty::List<ty::Poly>,
+        list2: &ty::List<ty::Poly>,
+    ) -> Result<ty::List<ty::Poly>> {
+        match ty::unify::poly_unify_list(self.tvars, list1, list2) {
+            Ok(ty::unify::UnifiedList::Merged(merged)) => Ok(merged),
+            _ => Err(Error::Disjoint),
+        }
     }
 }
 
-pub fn poly_intersect<'a>(
-    tvars: &'a [ty::TVar],
-    poly1: &'a ty::Poly,
-    poly2: &'a ty::Poly,
-) -> Result<ty::Poly> {
+pub fn poly_intersect(tvars: &[ty::TVar], poly1: &ty::Poly, poly2: &ty::Poly) -> Result<ty::Poly> {
     let ctx = PolyIntersectCtx { tvars };
     ctx.intersect_ty_refs(poly1, poly2)
+}
+
+pub fn poly_intersect_list(
+    tvars: &[ty::TVar],
+    list1: &ty::List<ty::Poly>,
+    list2: &ty::List<ty::Poly>,
+) -> Result<ty::List<ty::Poly>> {
+    let ctx = PolyIntersectCtx { tvars };
+    ctx.intersect_list(list1, list2)
 }
 
 struct MonoIntersectCtx {}
@@ -302,21 +274,24 @@ impl<'a> IntersectCtx<ty::Mono> for MonoIntersectCtx {
         }
     }
 
-    fn unify_to_ty_ref(&self, mono1: &ty::Mono, mono2: &ty::Mono) -> Result<ty::Mono> {
-        ty::unify::mono_unify_to_mono(mono1, mono2).map_err(|_| Error::Disjoint)
-    }
-
-    fn unify_ref_iter<I>(&self, members: I) -> Result<ty::Mono>
-    where
-        I: Iterator<Item = ty::Mono>,
-    {
-        ty::unify::mono_unify_iter(members).map_err(|_| Error::Disjoint)
+    fn unify_list(
+        &self,
+        list1: &ty::List<ty::Mono>,
+        list2: &ty::List<ty::Mono>,
+    ) -> Result<ty::List<ty::Mono>> {
+        match ty::unify::mono_unify_list(list1, list2) {
+            Ok(ty::unify::UnifiedList::Merged(merged)) => Ok(merged),
+            _ => Err(Error::Disjoint),
+        }
     }
 }
 
-pub fn mono_intersect<'a>(mono1: &'a ty::Mono, mono2: &'a ty::Mono) -> Result<ty::Mono> {
+pub fn mono_intersect_list(
+    list1: &ty::List<ty::Mono>,
+    list2: &ty::List<ty::Mono>,
+) -> Result<ty::List<ty::Mono>> {
     let ctx = MonoIntersectCtx {};
-    ctx.intersect_ty_refs(mono1, mono2)
+    ctx.intersect_list(list1, list2)
 }
 
 #[cfg(test)]
@@ -402,11 +377,6 @@ mod test {
     }
 
     #[test]
-    fn cons_types() {
-        assert_merged("(Cons true false)", "(Cons true Bool)", "(Cons Bool false)");
-    }
-
-    #[test]
     fn list_types() {
         assert_disjoint("(List Symbol)", "(List String)");
         assert_merged(
@@ -475,24 +445,7 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
-            ty::Params::new(vec![ptype1_unbounded.clone()], None),
-        ).into_ref();
-
-        // (All A (A A -> (Cons A A))
-        let panys_to_cons = ty::Fun::new(
-            ty::purity::PVarIds::monomorphic(),
-            ty::TVarId::new(0)..ty::TVarId::new(1),
-            ty::TopFun::new(
-                Purity::Pure.into_poly(),
-                ty::Ty::Cons(
-                    Box::new(ptype1_unbounded.clone()),
-                    Box::new(ptype1_unbounded.clone()),
-                ).into_poly(),
-            ),
-            ty::Params::new(
-                vec![ptype1_unbounded.clone(), ptype1_unbounded.clone()],
-                None,
-            ),
+            ty::List::new(vec![ptype1_unbounded.clone()], None),
         ).into_ref();
 
         // (All [A : String] (A ->! A))
@@ -500,7 +453,7 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::TopFun::new(Purity::Impure.into_poly(), ptype2_string.clone()),
-            ty::Params::new(vec![ptype2_string.clone()], None),
+            ty::List::new(vec![ptype2_string.clone()], None),
         ).into_ref();
 
         let top_pure_fun = poly_for_str("(... -> Any)");
@@ -519,10 +472,6 @@ mod test {
         );
 
         // The intersections of the two polymorphic functions is disjoint
-        assert_eq!(
-            Error::Disjoint,
-            poly_intersect(&tvars, &pidentity_fun, &panys_to_cons).unwrap_err()
-        );
         assert_eq!(
             Error::Disjoint,
             poly_intersect(&tvars, &pidentity_fun, &pidentity_impure_string_fun).unwrap_err()

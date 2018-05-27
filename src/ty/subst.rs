@@ -18,11 +18,18 @@ where
             .collect::<Result<Vec<O>, E>>()
     }
 
-    fn subst_ty_ref_option(&self, ty: &Option<I>) -> Result<Option<O>, E> {
+    fn subst_ty_ref_option(&self, ty: Option<&I>) -> Result<Option<O>, E> {
         Ok(match ty {
             Some(ty) => Some(self.subst_ty_ref(ty)?),
             None => None,
         })
+    }
+
+    fn subst_list(&self, list: &ty::List<I>) -> Result<ty::List<O>, E> {
+        Ok(ty::List::new(
+            self.subst_ty_ref_slice(list.fixed())?,
+            self.subst_ty_ref_option(list.rest())?,
+        ))
     }
 
     fn subst_ty(&self, ty: &ty::Ty<I>) -> Result<ty::Ty<O>, E> {
@@ -32,7 +39,6 @@ where
             ty::Ty::Char => ty::Ty::Char,
             ty::Ty::Float => ty::Ty::Float,
             ty::Ty::Int => ty::Ty::Int,
-            ty::Ty::Nil => ty::Ty::Nil,
             ty::Ty::Str => ty::Ty::Str,
             ty::Ty::Sym => ty::Ty::Sym,
             ty::Ty::TopFun(top_fun) => ty::TopFun::new(
@@ -46,10 +52,7 @@ where
                     self.subst_purity_ref(fun.purity())?,
                     self.subst_ty_ref(fun.ret())?,
                 ),
-                ty::Params::new(
-                    self.subst_ty_ref_slice(fun.params().fixed())?,
-                    self.subst_ty_ref_option(fun.params().rest())?,
-                ),
+                self.subst_list(fun.params())?,
             ).into_ty(),
             ty::Ty::TyPred(test_ty) => ty::Ty::TyPred(Box::new(self.subst_ty_ref(test_ty)?)),
             ty::Ty::Map(key, value) => ty::Ty::Map(
@@ -62,11 +65,7 @@ where
             ty::Ty::Union(members) => ty::Ty::Union(self.subst_ty_ref_slice(members)?),
             ty::Ty::Vec(members) => ty::Ty::Vec(self.subst_ty_ref_slice(members)?),
             ty::Ty::Vecof(member) => ty::Ty::Vecof(Box::new(self.subst_ty_ref(member)?)),
-            ty::Ty::Listof(member) => ty::Ty::Listof(Box::new(self.subst_ty_ref(member)?)),
-            ty::Ty::Cons(car, cdr) => ty::Ty::Cons(
-                Box::new(self.subst_ty_ref(car)?),
-                Box::new(self.subst_ty_ref(cdr)?),
-            ),
+            ty::Ty::List(list) => ty::Ty::List(self.subst_list(list)?),
         })
     }
 }

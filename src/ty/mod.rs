@@ -1,7 +1,7 @@
 pub mod datum;
 pub mod intersect;
 pub mod is_a;
-mod params_iter;
+pub mod list_iter;
 pub mod pred;
 pub mod purity;
 pub mod resolve;
@@ -29,6 +29,9 @@ pub trait TyRef: PartialEq + Clone + Sized {
 
     /// Constructs a fixed TyRef from the passed Ty
     fn from_ty(Ty<Self>) -> Self;
+
+    /// Tries to convert the TyRef to a fixed Ty
+    fn try_to_fixed(&self) -> Option<&Ty<Self>>;
 
     /// Constructs a fixed TyRef from a union of the passed vector `members`
     ///
@@ -76,34 +79,14 @@ where
     Vecof(Box<S>),
 
     // List types
-    Listof(Box<S>),
-    Cons(Box<S>, Box<S>),
-    Nil,
+    List(List<S>),
 }
 
 impl<S> Ty<S>
 where
     S: TyRef,
 {
-    pub fn new_list_type<I>(fixed: I, tail: Ty<S>) -> Ty<S>
-    where
-        I: DoubleEndedIterator<Item = S>,
-    {
-        fixed.rev().fold(tail, |tail_ty, fixed_ref| {
-            Ty::Cons(Box::new(fixed_ref), Box::new(tail_ty.into_ref()))
-        })
-    }
-
-    pub fn new_simple_list_type<I>(fixed: I, rest: Option<S>) -> Ty<S>
-    where
-        I: DoubleEndedIterator<Item = S>,
-    {
-        let tail_ty = rest.map(|t| Ty::Listof(Box::new(t)))
-            .unwrap_or_else(|| Ty::Nil);
-
-        Self::new_list_type(fixed, tail_ty)
-    }
-
+    // TODO: Rename into_ty_ref
     pub fn into_ref(self) -> S {
         S::from_ty(self)
     }
@@ -153,28 +136,34 @@ where
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct Params<S>
+pub struct List<S>
 where
     S: TyRef,
 {
     fixed: Vec<S>,
-    rest: Option<S>,
+    rest: Option<Box<S>>,
 }
 
-impl<S> Params<S>
+impl<S> List<S>
 where
     S: TyRef,
 {
-    pub fn new(fixed: Vec<S>, rest: Option<S>) -> Params<S> {
-        Params { fixed, rest }
+    pub fn new(fixed: Vec<S>, rest: Option<S>) -> List<S> {
+        List {
+            fixed,
+            rest: rest.map(Box::new),
+        }
     }
 
     pub fn fixed(&self) -> &Vec<S> {
         &self.fixed
     }
 
-    pub fn rest(&self) -> &Option<S> {
-        &self.rest
+    pub fn rest(&self) -> Option<&S> {
+        match self.rest {
+            Some(ref rest) => Some(rest.as_ref()),
+            None => None,
+        }
     }
 
     fn size_range(&self) -> Range<usize> {
@@ -201,7 +190,7 @@ where
     pvar_ids: S::PVarIds,
     tvar_ids: S::TVarIds,
     top_fun: TopFun<S>,
-    params: Params<S>,
+    params: List<S>,
 }
 
 impl<S> Fun<S>
@@ -212,7 +201,7 @@ where
         pvar_ids: S::PVarIds,
         tvar_ids: S::TVarIds,
         top_fun: TopFun<S>,
-        params: Params<S>,
+        params: List<S>,
     ) -> Fun<S> {
         Fun {
             pvar_ids,
@@ -231,7 +220,7 @@ where
             S::PVarIds::monomorphic(),
             S::TVarIds::monomorphic(),
             TopFun::new_for_ty_pred(),
-            Params::new(vec![Ty::Any.into_ref()], None),
+            List::new(vec![Ty::Any.into_ref()], None),
         )
     }
 
@@ -251,7 +240,7 @@ where
         &self.top_fun.purity
     }
 
-    pub fn params(&self) -> &Params<S> {
+    pub fn params(&self) -> &List<S> {
         &self.params
     }
 
@@ -317,6 +306,13 @@ impl TyRef for Poly {
     fn from_ty(ty: Ty<Poly>) -> Poly {
         Poly::Fixed(ty)
     }
+
+    fn try_to_fixed(&self) -> Option<&Ty<Poly>> {
+        match self {
+            Poly::Fixed(fixed) => Some(fixed),
+            _ => None,
+        }
+    }
 }
 
 impl Ty<Poly> {
@@ -358,6 +354,10 @@ impl TyRef for Mono {
 
     fn from_ty(ty: Ty<Mono>) -> Mono {
         Mono(ty)
+    }
+
+    fn try_to_fixed(&self) -> Option<&Ty<Mono>> {
+        Some(self.as_ty())
     }
 }
 

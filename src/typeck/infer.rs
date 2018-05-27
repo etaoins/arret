@@ -7,11 +7,10 @@ use hir::destruc;
 use syntax::datum::Datum;
 use syntax::span::Span;
 use ty;
+use ty::list_iter::ListIterator;
 use ty::purity::Purity;
 use typeck;
 use typeck::error::{Error, ErrorKind};
-use typeck::list_type;
-use typeck::list_type::ListTypeIterator;
 
 type Result<T> = result::Result<T, Error>;
 
@@ -85,7 +84,7 @@ struct SubtreeCtx {
 }
 
 fn unit_type() -> ty::Poly {
-    ty::Ty::Nil.into_poly()
+    ty::Ty::List(ty::List::new(vec![], None)).into_poly()
 }
 
 impl<'a> InferCtx<'a> {
@@ -338,18 +337,18 @@ impl<'a> InferCtx<'a> {
                 _ => None,
             });
 
-        let initial_param_type: ty::Params<ty::Poly> = typeck::destruc::type_for_decl_list_destruc(
+        let initial_param_type: ty::List<ty::Poly> = typeck::destruc::type_for_decl_list_destruc(
             self.tvars,
             &decl_fun.params,
             // Use the required type as a guide for any free types in the parameter list
-            required_fun_type.map(|fun| list_type::ParamsIterator::new(fun.params())),
+            required_fun_type.map(|fun| ListIterator::new(fun.params())),
         );
 
         // Bind all of our parameter variables
         let free_ty_offset = self.destruc_list_value(
             &decl_fun.params,
             span,
-            list_type::ParamsIterator::new(&initial_param_type),
+            ListIterator::new(&initial_param_type),
             // If a parameter has a free decl type then we can refine the type
             true,
         )?;
@@ -443,14 +442,14 @@ impl<'a> InferCtx<'a> {
         param_select_ctx.add_evidence(fun_type.ret(), required_type);
 
         // Iterate over our parameter type to feed type information in to the arguments
-        let mut param_iter = list_type::ParamsIterator::new(fun_type.params());
+        let mut param_iter = ListIterator::new(fun_type.params());
 
         // TODO: Better arity messages
         let supplied_arg_count = fixed_arg_exprs.len();
 
         let mut inferred_fixed_arg_exprs = vec![];
         for fixed_arg_expr in fixed_arg_exprs {
-            let param_type = if let Some(param_type) = param_iter.next().expect("TODO") {
+            let param_type = if let Some(param_type) = param_iter.next() {
                 param_type
             } else {
                 return Err(Error::new(
@@ -467,13 +466,13 @@ impl<'a> InferCtx<'a> {
         }
 
         let inferred_rest_arg_expr = if let Some(rest_arg_expr) = rest_arg_expr {
-            let tail_type = param_iter.tail_type();
+            let tail_type = ty::Ty::List(param_iter.tail_type()).into_poly();
             let wanted_tail_type = ty::subst::inst_ty_selection(&param_select_ctx, &tail_type);
             let rest_arg_node = self.visit_expr(scx, &wanted_tail_type, *rest_arg_expr)?;
 
             ret_select_ctx.add_evidence(&tail_type, &rest_arg_node.poly_type);
             Some(Box::new(rest_arg_node.expr))
-        } else if param_iter.next().expect("TODO") != None && fun_type.params().rest().is_none() {
+        } else if param_iter.next() != None && fun_type.params().rest().is_none() {
             // We wanted more args!
             return Err(Error::new(
                 span,
@@ -685,32 +684,27 @@ impl<'a> InferCtx<'a> {
         start_offset
     }
 
-    fn destruc_list_value<I>(
+    fn destruc_list_value(
         &mut self,
         list: &destruc::List<ty::Decl>,
         value_span: Span,
-        mut value_type_iter: I,
+        mut value_type_iter: ListIterator<ty::Poly>,
         can_refine: bool,
-    ) -> Result<usize>
-    where
-        I: ListTypeIterator,
-    {
+    ) -> Result<usize> {
         let start_offset = self.free_ty_polys.len();
 
         for fixed_destruc in list.fixed() {
             let member_type = match value_type_iter.next() {
-                Ok(Some(member_type)) => member_type,
-                Err(list_type::Error::UnifyError(unify_err)) => {
-                    return Err(self.new_union_conflict_error(value_span, &unify_err))
-                }
-                _ => panic!("Destructured value with unexpected type"),
+                Some(member_type) => member_type,
+                None => panic!("Destructured value with unexpected type"),
             };
 
             self.destruc_value(fixed_destruc, value_span, member_type, can_refine)?;
         }
 
         if let Some(scalar) = list.rest() {
-            self.destruc_scalar_value(scalar, &value_type_iter.tail_type(), can_refine);
+            let tail_type = ty::Ty::List(value_type_iter.tail_type()).into_poly();
+            self.destruc_scalar_value(scalar, &tail_type, can_refine);
         }
 
         Ok(start_offset)
@@ -728,7 +722,8 @@ impl<'a> InferCtx<'a> {
                 Ok(self.destruc_scalar_value(scalar, value_type, can_refine))
             }
             destruc::Destruc::List(_, list) => {
-                let value_type_iter = list_type::PolyIterator::new(value_type);
+                let value_type_iter = ListIterator::try_new_from_ty_ref(value_type)
+                    .expect("Tried to destruc non-list");
                 self.destruc_list_value(list, value_span, value_type_iter, can_refine)
             }
         }

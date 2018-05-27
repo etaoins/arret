@@ -23,11 +23,10 @@ fn poly_ty_has_subtypes(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> bool 
         | ty::Ty::Int
         | ty::Ty::LitBool(_)
         | ty::Ty::LitSym(_)
-        | ty::Ty::Str
-        | ty::Ty::Nil => false,
+        | ty::Ty::Str => false,
         ty::Ty::Fun(fun) => {
             (fun.purity() != &Purity::Pure.into_poly()) || !fun.params().fixed().is_empty()
-                || fun.params().rest() != &Some(ty::Ty::Any.into_poly())
+                || fun.params().rest() != Some(&ty::Ty::Any.into_poly())
                 || poly_has_subtypes(tvars, fun.ret())
         }
         ty::Ty::TyPred(_) => false,
@@ -39,9 +38,15 @@ fn poly_ty_has_subtypes(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> bool 
             .iter()
             .any(|member| poly_has_subtypes(tvars, member)),
         ty::Ty::Union(members) => !members.is_empty(),
-        ty::Ty::Cons(car, cdr) => poly_has_subtypes(tvars, car) || poly_has_subtypes(tvars, cdr),
-        ty::Ty::Listof(_) | ty::Ty::Vecof(_) => {
-            // Any arbitrary fixed length sequence is a subtype of this sequence
+        ty::Ty::List(list) => {
+            // Any arbitrary fixed length list is a subtype of a list with rest
+            list.rest().is_some()
+                || list.fixed()
+                    .iter()
+                    .any(|fixed| poly_has_subtypes(tvars, fixed))
+        }
+        ty::Ty::Vecof(_) => {
+            // Any arbitrary fixed length vector is a subtype of this vector
             true
         }
     }

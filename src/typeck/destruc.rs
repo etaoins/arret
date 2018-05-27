@@ -1,23 +1,18 @@
 use hir;
 use hir::destruc;
 use ty;
-use typeck::list_type;
-use typeck::list_type::{FromListMembers, ListTypeIterator};
+use ty::list_iter::ListIterator;
 
-pub fn type_for_decl_list_destruc<R, I>(
+pub fn type_for_decl_list_destruc(
     tvars: &[ty::TVar],
     list: &destruc::List<ty::Decl>,
-    mut guide_type_iter: Option<I>,
-) -> R
-where
-    R: FromListMembers,
-    I: ListTypeIterator,
-{
+    mut guide_type_iter: Option<ListIterator<ty::Poly>>,
+) -> ty::List<ty::Poly> {
     let mut fixed_polys = vec![];
 
     for fixed_destruc in list.fixed() {
         let guide_type = if let Some(guide_type_iter) = guide_type_iter.as_mut() {
-            guide_type_iter.next().unwrap_or(None)
+            guide_type_iter.next()
         } else {
             None
         };
@@ -39,7 +34,7 @@ where
         None => None,
     };
 
-    R::from_list_members(fixed_polys.into_iter(), rest_poly)
+    ty::List::new(fixed_polys, rest_poly)
 }
 
 /// Returns the required type for a destruc
@@ -57,34 +52,34 @@ pub fn type_for_decl_destruc(
 
         destruc::Destruc::List(_, ref list) => {
             let guide_type_iter =
-                guide_type.map(|guide_type| list_type::PolyIterator::new(guide_type));
+                guide_type.and_then(|guide_type| ListIterator::try_new_from_ty_ref(guide_type));
 
-            type_for_decl_list_destruc(tvars, list, guide_type_iter)
+            ty::Ty::List(type_for_decl_list_destruc(tvars, list, guide_type_iter)).into_poly()
         }
     }
 }
 
-pub fn type_for_poly_list_destruc<R>(list: &destruc::List<ty::Poly>) -> R
-where
-    R: FromListMembers,
-{
+pub fn type_for_poly_list_destruc(list: &destruc::List<ty::Poly>) -> ty::List<ty::Poly> {
     let fixed_polys = list.fixed()
         .iter()
-        .map(|fixed_destruc| type_for_poly_destruc(fixed_destruc));
+        .map(|fixed_destruc| type_for_poly_destruc(fixed_destruc))
+        .collect();
 
     let rest_poly = match list.rest() {
         Some(rest) => Some(rest.ty().clone()),
         None => None,
     };
 
-    R::from_list_members(fixed_polys, rest_poly)
+    ty::List::new(fixed_polys, rest_poly)
 }
 
 /// Returns the required type for a destruc
 pub fn type_for_poly_destruc(destruc: &destruc::Destruc<ty::Poly>) -> ty::Poly {
     match *destruc {
         destruc::Destruc::Scalar(_, ref scalar) => scalar.ty().clone(),
-        destruc::Destruc::List(_, ref list) => type_for_poly_list_destruc(list),
+        destruc::Destruc::List(_, ref list) => {
+            ty::Ty::List(type_for_poly_list_destruc(list)).into_poly()
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 use std::ops::Range;
 
 use ty;
+use ty::list_iter::ListIterator;
 use ty::purity::Purity;
 
 /// Selects a set of polymorphic variables for a function application
@@ -94,9 +95,34 @@ impl<'a> SelectContext<'a> {
         self.add_evidence(target_top_fun.ret(), evidence_top_fun.ret());
     }
 
+    fn add_evidence_list(
+        &mut self,
+        target_list: &ty::List<ty::Poly>,
+        evidence_list: &ty::List<ty::Poly>,
+    ) {
+        let mut target_iter = ListIterator::new(target_list);
+        let mut evidence_iter = ListIterator::new(evidence_list);
+
+        while target_iter.fixed_len() > 0 {
+            let target_fixed = target_iter.next().unwrap();
+            let evidence_fixed = if let Some(evidence_fixed) = evidence_iter.next() {
+                evidence_fixed
+            } else {
+                return;
+            };
+
+            self.add_evidence(target_fixed, evidence_fixed);
+        }
+
+        if let Some(target_rest) = target_iter.next() {
+            if let Ok(Some(evidence_rest)) = evidence_iter.collect_rest(self.tvars) {
+                self.add_evidence(target_rest, &evidence_rest);
+            }
+        }
+    }
+
     fn add_evidence_ty(
         &mut self,
-        target_poly: &ty::Poly,
         target_ty: &ty::Ty<ty::Poly>,
         evidence_poly: &ty::Poly,
         evidence_ty: &ty::Ty<ty::Poly>,
@@ -109,16 +135,8 @@ impl<'a> SelectContext<'a> {
                 self.add_evidence(target_key, evidence_key);
                 self.add_evidence(target_value, evidence_value);
             }
-            (ty::Ty::Cons(target_car, target_cdr), ty::Ty::Cons(evidence_car, evidence_cdr)) => {
-                self.add_evidence(target_car, evidence_car);
-                self.add_evidence(target_cdr, evidence_cdr);
-            }
-            (ty::Ty::Listof(target_member), ty::Ty::Listof(evidence_member)) => {
-                self.add_evidence(target_member, evidence_member);
-            }
-            (ty::Ty::Listof(target_member), ty::Ty::Cons(evidence_car, evidence_cdr)) => {
-                self.add_evidence(target_member, evidence_car);
-                self.add_evidence(target_poly, evidence_cdr);
+            (ty::Ty::List(target_list), ty::Ty::List(evidence_list)) => {
+                self.add_evidence_list(target_list, evidence_list);
             }
             (ty::Ty::Vec(target_members), ty::Ty::Vec(evidence_members)) => {
                 for (target_member, evidence_member) in
@@ -196,7 +214,7 @@ impl<'a> SelectContext<'a> {
             ty::Poly::Var(tvar_id) => self.add_var_evidence(*tvar_id, evidence_poly),
             ty::Poly::Fixed(target_ty) => {
                 let evidence_ty = ty::resolve::resolve_poly_ty(self.tvars, evidence_poly).as_ty();
-                self.add_evidence_ty(target_poly, target_ty, evidence_poly, evidence_ty)
+                self.add_evidence_ty(target_ty, evidence_poly, evidence_ty)
             }
         }
     }

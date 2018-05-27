@@ -20,9 +20,10 @@ where
             Datum::Int(_, _) => ty::Ty::Int,
             Datum::Float(_, _) => ty::Ty::Float,
             Datum::Str(_, _) => ty::Ty::Str,
-            Datum::List(_, vs) => {
-                ty::Ty::new_simple_list_type(vs.iter().map(|datum| self.ref_for_datum(datum)), None)
-            }
+            Datum::List(_, vs) => ty::Ty::List(ty::List::new(
+                vs.iter().map(|datum| self.ref_for_datum(datum)).collect(),
+                None,
+            )),
             Datum::Vec(_, vs) => ty::Ty::Vec(vs.iter().map(|v| self.ref_for_datum(v)).collect()),
             Datum::Set(_, vs) => {
                 // Without function, begin or rest types we should never hit erasure
