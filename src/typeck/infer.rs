@@ -293,18 +293,15 @@ impl<'a> InferCtx<'a> {
         // Unlike references to known variables the `current_type` and `required_type` have equal
         // footing. We intersect here to find the commonality between the two types. This will
         // become the new type of the variable.
-        let common_type = ty::intersect::poly_intersect(self.tvars, required_type, current_type)
-            .map_err(|_| {
-                Error::new(
-                    span,
-                    ErrorKind::VarHasEmptyType(
-                        self.str_for_poly(required_type),
-                        self.str_for_poly(current_type),
-                    ),
-                )
-            })?;
-
-        Ok(common_type)
+        ty::intersect::poly_intersect(self.tvars, required_type, current_type).map_err(|_| {
+            Error::new(
+                span,
+                ErrorKind::VarHasEmptyType(
+                    self.str_for_poly(required_type),
+                    self.str_for_poly(current_type),
+                ),
+            )
+        })
     }
 
     fn visit_ref(
