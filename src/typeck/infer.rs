@@ -657,8 +657,7 @@ impl<'a> InferCtx<'a> {
 
                 use ty::pred::InterpretedPred;
                 let pred_result_type = match pred_result {
-                    InterpretedPred::StaticTrue => ty::Ty::LitBool(true),
-                    InterpretedPred::StaticFalse => ty::Ty::LitBool(false),
+                    InterpretedPred::Static(result) => ty::Ty::LitBool(result),
                     InterpretedPred::Dynamic(true_type, false_type) => {
                         if let Some(subject_var_id) = subject_var_id {
                             return Ok(OccurrenceTypedNode::VarTyCond(

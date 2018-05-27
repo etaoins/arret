@@ -8,17 +8,14 @@ pub enum InterpretedPred<S>
 where
     S: ty::TyRef,
 {
-    /// All values of the subject type satisfy the testing type
-    StaticTrue,
+    /// Statically known if the subject type satisfies the testing type
+    Static(bool),
 
     /// Some values of the subject type satisfy the testing type
     ///
     /// The returned types are intended for use with occurrence typing. They are the new types for
     /// the subject if the predicate returns true and false respectively.
     Dynamic(S, S),
-
-    /// No values of the subject type satisfy the testing type
-    StaticFalse,
 }
 
 #[derive(Debug, PartialEq)]
@@ -49,14 +46,14 @@ where
 
         for subject_ref in subject_refs {
             match self.interpret_refs(subject_ref, test_ref)? {
-                InterpretedPred::StaticTrue => {
+                InterpretedPred::Static(true) => {
                     true_members.push(subject_ref.clone());
                 }
                 InterpretedPred::Dynamic(true_member, false_member) => {
                     true_members.push(true_member);
                     false_members.push(false_member);
                 }
-                InterpretedPred::StaticFalse => {
+                InterpretedPred::Static(false) => {
                     false_members.push(subject_ref.clone());
                 }
             }
@@ -151,7 +148,7 @@ impl<'a> InterpretPredCtx<ty::Poly> for InterpretPolyPredCtx<'a> {
         use ty::resolve;
 
         match is_a::poly_is_a(self.tvars, subject_ref, test_ref) {
-            is_a::Result::Yes => Ok(InterpretedPred::StaticTrue),
+            is_a::Result::Yes => Ok(InterpretedPred::Static(true)),
             is_a::Result::May => {
                 let subject_resolved = resolve::resolve_poly_ty(self.tvars, subject_ref);
                 if let resolve::Result::Fixed(subject_ty) = subject_resolved {
@@ -160,7 +157,7 @@ impl<'a> InterpretPredCtx<ty::Poly> for InterpretPolyPredCtx<'a> {
                     Err(Error::TypeErased(subject_ref.clone(), test_ref.clone()))
                 }
             }
-            is_a::Result::No => Ok(InterpretedPred::StaticFalse),
+            is_a::Result::No => Ok(InterpretedPred::Static(false)),
         }
     }
 }
@@ -193,11 +190,11 @@ mod test {
     }
 
     fn assert_static_false(subject_str: &str, test_str: &str) {
-        assert_result(&Ok(InterpretedPred::StaticFalse), subject_str, test_str);
+        assert_result(&Ok(InterpretedPred::Static(false)), subject_str, test_str);
     }
 
     fn assert_static_true(subject_str: &str, test_str: &str) {
-        assert_result(&Ok(InterpretedPred::StaticTrue), subject_str, test_str);
+        assert_result(&Ok(InterpretedPred::Static(true)), subject_str, test_str);
     }
 
     fn assert_dynamic((true_str, false_str): (&str, &str), subject_str: &str, test_str: &str) {
