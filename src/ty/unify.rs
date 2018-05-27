@@ -1,6 +1,5 @@
 use std::cmp;
 use std::iter;
-use std::result::Result;
 
 use ty;
 use ty::purity::PVarIds;
