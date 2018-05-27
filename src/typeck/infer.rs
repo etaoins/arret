@@ -610,6 +610,19 @@ impl<'a> InferCtx<'a> {
         let value_span = value_expr.span().unwrap_or(span);
         let required_destruc_type =
             typeck::destruc::type_for_decl_destruc(self.tvars, &destruc, None);
+
+        // Pre-bind our variables to deal with recursive definitions
+        typeck::destruc::visit_vars(&destruc, |var_id, decl_type| {
+            match decl_type.try_to_poly() {
+                Some(poly_type) => {
+                    self.var_to_type.insert(var_id, VarType::Known(poly_type));
+                }
+                None => {
+                    self.var_to_type.insert(var_id, VarType::Recursive);
+                }
+            }
+        });
+
         let value_node = self.visit_expr(scx, &required_destruc_type, *value_expr)?;
 
         let free_ty_offset = self.destruc_value(
@@ -944,6 +957,20 @@ mod test {
             "(Listof Bool)",
             "((fn #{A} ([rest : A] ...) -> (Listof A) rest) true false)",
         );
+    }
+
+    #[test]
+    fn recursive_app() {
+        assert_type_for_expr(
+            "'foo",
+            "(let [[recurse : (-> 'foo)] (fn () (recurse))] (recurse))",
+        );
+
+        let j = "(let [recurse (fn () (recurse))] (recurse))";
+        let t = "                     ^^^^^^^^^             ";
+        let err = Error::new(t2s(t), ErrorKind::RecursiveType);
+
+        assert_type_error(&err, j);
     }
 
     #[test]
