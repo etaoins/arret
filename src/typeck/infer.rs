@@ -538,14 +538,12 @@ impl<'a> InferCtx<'a> {
 
         let mut inferred_fixed_arg_exprs = vec![];
         for fixed_arg_expr in fixed_arg_exprs {
-            let param_type = if let Some(param_type) = param_iter.next() {
-                param_type
-            } else {
-                return Err(Error::new(
+            let param_type = param_iter.next().ok_or_else(|| {
+                Error::new(
                     span,
                     ErrorKind::TooManyArgs(supplied_arg_count, fun_type.params().fixed().len()),
-                ));
-            };
+                )
+            })?;
 
             let wanted_arg_type = ty::subst::inst_ty_selection(&param_select_ctx, param_type);
             let fixed_arg_node = self.visit_expr(fcx, &wanted_arg_type, fixed_arg_expr)?;
@@ -561,7 +559,7 @@ impl<'a> InferCtx<'a> {
 
             ret_select_ctx.add_evidence(&tail_type, &rest_arg_node.poly_type);
             Some(Box::new(rest_arg_node.expr))
-        } else if param_iter.next() != None && fun_type.params().rest().is_none() {
+        } else if param_iter.next().is_some() && fun_type.params().rest().is_none() {
             // We wanted more args!
             return Err(Error::new(
                 span,
