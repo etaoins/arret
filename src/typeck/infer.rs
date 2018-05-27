@@ -19,19 +19,19 @@ struct InferredNode {
     pub poly_type: ty::Poly,
 }
 
-enum InferredAppNode {
-    VarTyPred(hir::Expr<ty::Poly>, hir::VarId, ty::Poly, ty::Poly),
+enum OccurrenceTypedNode {
+    VarTyCond(hir::Expr<ty::Poly>, hir::VarId, ty::Poly, ty::Poly),
     Other(InferredNode),
 }
 
-impl InferredAppNode {
+impl OccurrenceTypedNode {
     fn into_node(self) -> InferredNode {
         match self {
-            InferredAppNode::VarTyPred(expr, _, _, _) => InferredNode {
+            OccurrenceTypedNode::VarTyCond(expr, _, _, _) => InferredNode {
                 expr,
                 poly_type: ty::Ty::Bool.into_poly(),
             },
-            InferredAppNode::Other(other) => other,
+            OccurrenceTypedNode::Other(other) => other,
         }
     }
 }
@@ -97,9 +97,8 @@ struct InferCtx<'a> {
 }
 
 #[derive(Clone)]
-struct SubtreeCtx {
-    fun_purity: PurityVarType,
-    occurrence_types: HashMap<hir::VarId, ty::Poly>,
+struct FunCtx {
+    purity: PurityVarType,
 }
 
 fn unit_type() -> ty::Poly {
@@ -166,7 +165,7 @@ impl<'a> InferCtx<'a> {
 
     fn visit_cond(
         &mut self,
-        scx: &mut SubtreeCtx,
+        fcx: &mut FunCtx,
         required_type: &ty::Poly,
         span: Span,
         cond: hir::Cond<ty::Decl>,
@@ -177,47 +176,53 @@ impl<'a> InferCtx<'a> {
             false_expr,
         } = cond;
 
-        // Inherit our occurrence types from our parent subtree
-        let mut true_occurrence_types = scx.occurrence_types.clone();
-        let mut false_occurrence_types = scx.occurrence_types.clone();
-
-        let test_node = match *test_expr {
+        let occurrence_test_node = match *test_expr {
             hir::Expr::Ref(span, var_id) => {
-                true_occurrence_types.insert(var_id, ty::Ty::LitBool(true).into_poly());
-                false_occurrence_types.insert(var_id, ty::Ty::LitBool(false).into_poly());
+                let ref_node = self.visit_ref(fcx, &ty::Ty::Bool.into_poly(), span, var_id)?;
 
-                self.visit_ref(scx, &ty::Ty::Bool.into_poly(), span, var_id)?
+                // If we're testing a variable directly we know its type in the branches
+                OccurrenceTypedNode::VarTyCond(
+                    ref_node.expr,
+                    var_id,
+                    ty::Ty::LitBool(true).into_poly(),
+                    ty::Ty::LitBool(false).into_poly(),
+                )
             }
-            hir::Expr::App(span, app) => match self.visit_app(scx, &required_type, span, app)? {
-                InferredAppNode::VarTyPred(expr, var_id, true_type, false_type) => {
-                    true_occurrence_types.insert(var_id, true_type);
-                    false_occurrence_types.insert(var_id, false_type);
+            hir::Expr::App(span, app) => self.visit_app(fcx, &required_type, span, app)?,
+            other_expr => self.visit_expr(fcx, &ty::Ty::Bool.into_poly(), other_expr)
+                .map(OccurrenceTypedNode::Other)?,
+        };
 
+        let (test_node, true_node, false_node) = match occurrence_test_node {
+            OccurrenceTypedNode::VarTyCond(expr, var_id, true_type, false_type) => {
+                // Patch our occurrence types in to the `var_to_type` and restore it after. We
+                // avoid `?`ing our results until the end to make sure the original types are
+                // properly restored.
+                let original_var_type = std::mem::replace(
+                    self.var_to_type.get_mut(&var_id).unwrap(),
+                    VarType::Known(true_type),
+                );
+                let true_result = self.visit_expr(fcx, required_type, *true_expr);
+
+                self.var_to_type.insert(var_id, VarType::Known(false_type));
+                let false_result = self.visit_expr(fcx, required_type, *false_expr);
+
+                self.var_to_type.insert(var_id, original_var_type);
+                (
                     InferredNode {
                         expr,
                         poly_type: ty::Ty::Bool.into_poly(),
-                    }
-                }
-                InferredAppNode::Other(other) => other,
-            },
-            other_expr => self.visit_expr(scx, &ty::Ty::Bool.into_poly(), other_expr)?,
+                    },
+                    true_result?,
+                    false_result?,
+                )
+            }
+            OccurrenceTypedNode::Other(other) => {
+                let true_node = self.visit_expr(fcx, required_type, *true_expr)?;
+                let false_node = self.visit_expr(fcx, required_type, *false_expr)?;
+                (other, true_node, false_node)
+            }
         };
-
-        let mut true_scx = SubtreeCtx {
-            fun_purity: scx.fun_purity.clone(),
-            occurrence_types: true_occurrence_types,
-        };
-        let true_node = self.visit_expr(&mut true_scx, required_type, *true_expr)?;
-
-        // Thread our purity through so we don't need to unify
-        let mut false_scx = SubtreeCtx {
-            fun_purity: true_scx.fun_purity,
-            occurrence_types: false_occurrence_types,
-        };
-        let false_node = self.visit_expr(&mut false_scx, required_type, *false_expr)?;
-
-        // Now thread the purity back
-        scx.fun_purity = false_scx.fun_purity;
 
         match test_node.poly_type {
             ty::Poly::Fixed(ty::Ty::LitBool(true)) => Ok(true_node),
@@ -259,11 +264,11 @@ impl<'a> InferCtx<'a> {
 
     fn unify_app_purity(
         &self,
-        scx: &mut SubtreeCtx,
+        fcx: &mut FunCtx,
         span: Span,
         app_purity: &ty::purity::Poly,
     ) -> Result<()> {
-        if let PurityVarType::Free(ref mut free_purity) = scx.fun_purity {
+        if let PurityVarType::Free(ref mut free_purity) = fcx.purity {
             match ty::unify::poly_unify_purity(free_purity, &app_purity) {
                 Ok(unified_purity) => {
                     *free_purity = unified_purity;
@@ -304,21 +309,12 @@ impl<'a> InferCtx<'a> {
 
     fn visit_ref(
         &mut self,
-        scx: &SubtreeCtx,
+        fcx: &FunCtx,
         required_type: &ty::Poly,
         span: Span,
         var_id: hir::VarId,
     ) -> Result<InferredNode> {
         let ref_expr = hir::Expr::Ref(span, var_id);
-
-        if let Some(occurrence_type) = scx.occurrence_types.get(&var_id) {
-            self.ensure_is_a(span, occurrence_type, required_type)?;
-
-            return Ok(InferredNode {
-                expr: ref_expr,
-                poly_type: occurrence_type.clone(),
-            });
-        }
 
         let pending_def_id = match self.var_to_type[&var_id] {
             VarType::Pending(def_id) => def_id,
@@ -346,12 +342,12 @@ impl<'a> InferCtx<'a> {
 
         self.recurse_into_def_id(pending_def_id)?;
         // This assumes `recurse_into_def_id` has populated our variables now
-        self.visit_ref(scx, required_type, span, var_id)
+        self.visit_ref(fcx, required_type, span, var_id)
     }
 
     fn visit_do(
         &mut self,
-        scx: &mut SubtreeCtx,
+        fcx: &mut FunCtx,
         required_type: &ty::Poly,
         mut exprs: Vec<hir::Expr<ty::Decl>>,
     ) -> Result<InferredNode> {
@@ -368,12 +364,12 @@ impl<'a> InferCtx<'a> {
             .into_iter()
             .map(|non_terminal_expr| {
                 // The type of this expression doesn't matter; its value is discarded
-                self.visit_expr(scx, &ty::Ty::Any.into_poly(), non_terminal_expr)
+                self.visit_expr(fcx, &ty::Ty::Any.into_poly(), non_terminal_expr)
                     .map(|node| node.expr)
             })
             .collect::<Result<Vec<hir::Expr<ty::Poly>>>>()?;
 
-        let terminal_node = self.visit_expr(scx, required_type, terminal_expr)?;
+        let terminal_node = self.visit_expr(fcx, required_type, terminal_expr)?;
         inferred_exprs.push(terminal_node.expr);
 
         Ok(InferredNode {
@@ -389,7 +385,6 @@ impl<'a> InferCtx<'a> {
     /// taken as-is.
     fn visit_fun(
         &mut self,
-        scx: &SubtreeCtx,
         required_type: &ty::Poly,
         span: Span,
         decl_fun: hir::Fun<ty::Decl>,
@@ -445,7 +440,7 @@ impl<'a> InferCtx<'a> {
             }
         });
 
-        let fun_purity_var = decl_fun
+        let purity_var = decl_fun
             .purity
             .try_to_poly()
             .map(|poly_purity| {
@@ -456,7 +451,7 @@ impl<'a> InferCtx<'a> {
             .unwrap_or_else(|| PurityVarType::Free(Purity::Pure.into_poly()));
 
         if let (Some(self_var_id), true) = (self_var_id, decl_tys_are_known) {
-            if let PurityVarType::Known(ref poly_purty) = fun_purity_var {
+            if let PurityVarType::Known(ref poly_purty) = purity_var {
                 let self_type = ty::Fun::new(
                     decl_fun.pvar_ids.clone(),
                     decl_fun.tvar_ids.clone(),
@@ -470,14 +465,11 @@ impl<'a> InferCtx<'a> {
             }
         }
 
-        let mut fun_scx = SubtreeCtx {
-            fun_purity: fun_purity_var,
-            occurrence_types: scx.occurrence_types.clone(),
-        };
+        let mut fun_fcx = FunCtx { purity: purity_var };
 
-        let body_node = self.visit_expr(&mut fun_scx, &wanted_ret_type, *decl_fun.body_expr)?;
+        let body_node = self.visit_expr(&mut fun_fcx, &wanted_ret_type, *decl_fun.body_expr)?;
         let revealed_ret_type = body_node.poly_type;
-        let revealed_purity = fun_scx.fun_purity.into_poly();
+        let revealed_purity = fun_fcx.purity.into_poly();
 
         let mut inferred_free_types = self.free_ty_polys.split_off(free_ty_offset);
 
@@ -511,7 +503,7 @@ impl<'a> InferCtx<'a> {
 
     fn visit_fun_app(
         &mut self,
-        scx: &mut SubtreeCtx,
+        fcx: &mut FunCtx,
         required_type: &ty::Poly,
         span: Span,
         fun_type: &ty::Fun<ty::Poly>,
@@ -556,7 +548,7 @@ impl<'a> InferCtx<'a> {
             };
 
             let wanted_arg_type = ty::subst::inst_ty_selection(&param_select_ctx, param_type);
-            let fixed_arg_node = self.visit_expr(scx, &wanted_arg_type, fixed_arg_expr)?;
+            let fixed_arg_node = self.visit_expr(fcx, &wanted_arg_type, fixed_arg_expr)?;
 
             ret_select_ctx.add_evidence(param_type, &fixed_arg_node.poly_type);
             inferred_fixed_arg_exprs.push(fixed_arg_node.expr);
@@ -565,7 +557,7 @@ impl<'a> InferCtx<'a> {
         let inferred_rest_arg_expr = if let Some(rest_arg_expr) = rest_arg_expr {
             let tail_type = ty::Ty::List(param_iter.tail_type()).into_poly();
             let wanted_tail_type = ty::subst::inst_ty_selection(&param_select_ctx, &tail_type);
-            let rest_arg_node = self.visit_expr(scx, &wanted_tail_type, *rest_arg_expr)?;
+            let rest_arg_node = self.visit_expr(fcx, &wanted_tail_type, *rest_arg_expr)?;
 
             ret_select_ctx.add_evidence(&tail_type, &rest_arg_node.poly_type);
             Some(Box::new(rest_arg_node.expr))
@@ -583,7 +575,7 @@ impl<'a> InferCtx<'a> {
 
         // Keep track of the purity from the application
         let app_purity = ty::subst::inst_purity_selection(&ret_select_ctx, fun_type.purity());
-        self.unify_app_purity(scx, span, &app_purity)?;
+        self.unify_app_purity(fcx, span, &app_purity)?;
 
         self.ensure_is_a(span, &ret_type, required_type)?;
 
@@ -602,11 +594,11 @@ impl<'a> InferCtx<'a> {
 
     fn visit_app(
         &mut self,
-        scx: &mut SubtreeCtx,
+        fcx: &mut FunCtx,
         required_type: &ty::Poly,
         span: Span,
         app: hir::App<ty::Decl>,
-    ) -> Result<InferredAppNode> {
+    ) -> Result<OccurrenceTypedNode> {
         let hir::App {
             fun_expr,
             mut fixed_arg_exprs,
@@ -615,7 +607,7 @@ impl<'a> InferCtx<'a> {
 
         // The only type information we can feed back is that we want a function of a certain
         // purity returning a certain value
-        let wanted_purity = match scx.fun_purity.clone() {
+        let wanted_purity = match fcx.purity.clone() {
             PurityVarType::Free(_) => {
                 // We're inferring the purity; this application can have any purity
                 Purity::Impure.into_poly()
@@ -628,7 +620,7 @@ impl<'a> InferCtx<'a> {
 
         let wanted_fun_type = ty::TopFun::new(wanted_purity, required_type.clone()).into_ref();
 
-        let fun_node = self.visit_expr(scx, &wanted_fun_type, *fun_expr)?;
+        let fun_node = self.visit_expr(fcx, &wanted_fun_type, *fun_expr)?;
         let revealed_fun_type = fun_node.poly_type;
 
         match ty::resolve::resolve_poly_ty(self.tvars, &revealed_fun_type).as_ty() {
@@ -645,7 +637,7 @@ impl<'a> InferCtx<'a> {
                     None
                 };
 
-                let subject_node = self.visit_expr(scx, &ty::Ty::Any.into_poly(), subject_expr)?;
+                let subject_node = self.visit_expr(fcx, &ty::Ty::Any.into_poly(), subject_expr)?;
                 let app_expr = hir::Expr::App(
                     span,
                     hir::App {
@@ -673,7 +665,7 @@ impl<'a> InferCtx<'a> {
                     InterpretedPred::StaticFalse => ty::Ty::LitBool(false),
                     InterpretedPred::Dynamic(true_type, false_type) => {
                         if let Some(subject_var_id) = subject_var_id {
-                            return Ok(InferredAppNode::VarTyPred(
+                            return Ok(OccurrenceTypedNode::VarTyCond(
                                 app_expr,
                                 subject_var_id,
                                 true_type,
@@ -685,7 +677,7 @@ impl<'a> InferCtx<'a> {
                     }
                 }.into_poly();
 
-                Ok(InferredAppNode::Other(InferredNode {
+                Ok(OccurrenceTypedNode::Other(InferredNode {
                     expr: app_expr,
                     poly_type: pred_result_type,
                 }))
@@ -697,8 +689,8 @@ impl<'a> InferCtx<'a> {
                     rest_arg_expr,
                 };
 
-                self.visit_fun_app(scx, required_type, span, fun_type, fun_app)
-                    .map(InferredAppNode::Other)
+                self.visit_fun_app(fcx, required_type, span, fun_type, fun_app)
+                    .map(OccurrenceTypedNode::Other)
             }
             _ => panic!("Unexpected type"),
         }
@@ -706,7 +698,7 @@ impl<'a> InferCtx<'a> {
 
     fn visit_let(
         &mut self,
-        scx: &mut SubtreeCtx,
+        fcx: &mut FunCtx,
         required_type: &ty::Poly,
         span: Span,
         hir_let: hir::Let<ty::Decl>,
@@ -735,7 +727,7 @@ impl<'a> InferCtx<'a> {
         );
 
         let value_node = self.visit_expr_with_self_var_id(
-            scx,
+            fcx,
             &required_destruc_type,
             *value_expr,
             self_var_id,
@@ -750,7 +742,7 @@ impl<'a> InferCtx<'a> {
             false,
         )?;
 
-        let body_node = self.visit_expr(scx, required_type, *body_expr)?;
+        let body_node = self.visit_expr(fcx, required_type, *body_expr)?;
         let mut inferred_free_types = self.free_ty_polys.split_off(free_ty_offset);
 
         Ok(InferredNode {
@@ -768,33 +760,33 @@ impl<'a> InferCtx<'a> {
 
     fn visit_expr_with_self_var_id(
         &mut self,
-        scx: &mut SubtreeCtx,
+        fcx: &mut FunCtx,
         required_type: &ty::Poly,
         expr: hir::Expr<ty::Decl>,
         self_var_id: Option<hir::VarId>,
     ) -> Result<InferredNode> {
         match expr {
             hir::Expr::Lit(datum) => self.visit_lit(required_type, datum),
-            hir::Expr::Cond(span, cond) => self.visit_cond(scx, required_type, span, cond),
-            hir::Expr::Do(exprs) => self.visit_do(scx, required_type, exprs),
-            hir::Expr::Fun(span, fun) => self.visit_fun(scx, required_type, span, fun, self_var_id),
+            hir::Expr::Cond(span, cond) => self.visit_cond(fcx, required_type, span, cond),
+            hir::Expr::Do(exprs) => self.visit_do(fcx, required_type, exprs),
+            hir::Expr::Fun(span, fun) => self.visit_fun(required_type, span, fun, self_var_id),
             hir::Expr::TyPred(span, test_type) => {
                 self.visit_ty_pred(required_type, span, test_type)
             }
-            hir::Expr::Let(span, hir_let) => self.visit_let(scx, required_type, span, hir_let),
-            hir::Expr::Ref(span, var_id) => self.visit_ref(scx, required_type, span, var_id),
-            hir::Expr::App(span, app) => self.visit_app(scx, required_type, span, app)
+            hir::Expr::Let(span, hir_let) => self.visit_let(fcx, required_type, span, hir_let),
+            hir::Expr::Ref(span, var_id) => self.visit_ref(fcx, required_type, span, var_id),
+            hir::Expr::App(span, app) => self.visit_app(fcx, required_type, span, app)
                 .map(|app_node| app_node.into_node()),
         }
     }
 
     fn visit_expr(
         &mut self,
-        scx: &mut SubtreeCtx,
+        fcx: &mut FunCtx,
         required_type: &ty::Poly,
         expr: hir::Expr<ty::Decl>,
     ) -> Result<InferredNode> {
-        self.visit_expr_with_self_var_id(scx, required_type, expr, None)
+        self.visit_expr_with_self_var_id(fcx, required_type, expr, None)
     }
 
     fn destruc_scalar_value(
@@ -876,10 +868,9 @@ impl<'a> InferCtx<'a> {
             value_expr,
         } = hir_def;
 
-        let mut scx = SubtreeCtx {
+        let mut fcx = FunCtx {
             // Module definitions must be pure
-            fun_purity: PurityVarType::Known(Purity::Pure.into_poly()),
-            occurrence_types: HashMap::new(),
+            purity: PurityVarType::Known(Purity::Pure.into_poly()),
         };
 
         // Mark all of our free typed variable as recursive
@@ -892,7 +883,7 @@ impl<'a> InferCtx<'a> {
         let required_type = typeck::destruc::type_for_decl_destruc(self.tvars, &destruc, None);
         let value_span = value_expr.span().unwrap_or(span);
         let value_node =
-            self.visit_expr_with_self_var_id(&mut scx, &required_type, value_expr, self_var_id)?;
+            self.visit_expr_with_self_var_id(&mut fcx, &required_type, value_expr, self_var_id)?;
 
         let free_ty_offset = self.destruc_value(
             &destruc,
@@ -995,12 +986,11 @@ mod test {
         lowered_expr: hir::lowering::LoweredTestExpr,
     ) -> Result<ty::Poly> {
         let mut icx = InferCtx::new(&lowered_expr.pvars, &lowered_expr.tvars);
-        let mut scx = SubtreeCtx {
-            fun_purity: PurityVarType::Known(Purity::Pure.into_poly()),
-            occurrence_types: HashMap::new(),
+        let mut fcx = FunCtx {
+            purity: PurityVarType::Known(Purity::Pure.into_poly()),
         };
 
-        icx.visit_expr(&mut scx, required_type, lowered_expr.expr)
+        icx.visit_expr(&mut fcx, required_type, lowered_expr.expr)
             .map(|node| node.poly_type)
     }
 
