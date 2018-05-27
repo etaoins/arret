@@ -19,6 +19,23 @@ struct InferredNode {
     pub poly_type: ty::Poly,
 }
 
+enum InferredAppNode {
+    VarTyPred(hir::Expr<ty::Poly>, hir::VarId, ty::Poly, ty::Poly),
+    Other(InferredNode),
+}
+
+impl InferredAppNode {
+    fn into_node(self) -> InferredNode {
+        match self {
+            InferredAppNode::VarTyPred(expr, _, _, _) => InferredNode {
+                expr,
+                poly_type: ty::Ty::Bool.into_poly(),
+            },
+            InferredAppNode::Other(other) => other,
+        }
+    }
+}
+
 new_indexing_id_type!(FreeTyId, u32);
 new_indexing_id_type!(InputDefId, u32);
 
@@ -79,8 +96,10 @@ struct InferCtx<'a> {
     var_to_type: HashMap<hir::VarId, VarType>,
 }
 
+#[derive(Clone)]
 struct SubtreeCtx {
     fun_purity: PurityVarType,
+    occurrence_types: HashMap<hir::VarId, ty::Poly>,
 }
 
 fn unit_type() -> ty::Poly {
@@ -158,9 +177,47 @@ impl<'a> InferCtx<'a> {
             false_expr,
         } = cond;
 
-        let test_node = self.visit_expr(scx, &ty::Ty::Bool.into_poly(), *test_expr)?;
-        let true_node = self.visit_expr(scx, required_type, *true_expr)?;
-        let false_node = self.visit_expr(scx, required_type, *false_expr)?;
+        // Inherit our occurrence types from our parent subtree
+        let mut true_occurrence_types = scx.occurrence_types.clone();
+        let mut false_occurrence_types = scx.occurrence_types.clone();
+
+        let test_node = match *test_expr {
+            hir::Expr::Ref(span, var_id) => {
+                true_occurrence_types.insert(var_id, ty::Ty::LitBool(true).into_poly());
+                false_occurrence_types.insert(var_id, ty::Ty::LitBool(false).into_poly());
+
+                self.visit_ref(scx, &ty::Ty::Bool.into_poly(), span, var_id)?
+            }
+            hir::Expr::App(span, app) => match self.visit_app(scx, &required_type, span, app)? {
+                InferredAppNode::VarTyPred(expr, var_id, true_type, false_type) => {
+                    true_occurrence_types.insert(var_id, true_type);
+                    false_occurrence_types.insert(var_id, false_type);
+
+                    InferredNode {
+                        expr,
+                        poly_type: ty::Ty::Bool.into_poly(),
+                    }
+                }
+                InferredAppNode::Other(other) => other,
+            },
+            other_expr => self.visit_expr(scx, &ty::Ty::Bool.into_poly(), other_expr)?,
+        };
+
+        let mut true_scx = SubtreeCtx {
+            fun_purity: scx.fun_purity.clone(),
+            occurrence_types: true_occurrence_types,
+        };
+        let true_node = self.visit_expr(&mut true_scx, required_type, *true_expr)?;
+
+        // Thread our purity through so we don't need to unify
+        let mut false_scx = SubtreeCtx {
+            fun_purity: true_scx.fun_purity,
+            occurrence_types: false_occurrence_types,
+        };
+        let false_node = self.visit_expr(&mut false_scx, required_type, *false_expr)?;
+
+        // Now thread the purity back
+        scx.fun_purity = false_scx.fun_purity;
 
         match test_node.poly_type {
             ty::Poly::Fixed(ty::Ty::LitBool(true)) => Ok(true_node),
@@ -247,10 +304,20 @@ impl<'a> InferCtx<'a> {
 
     fn visit_ref(
         &mut self,
+        scx: &SubtreeCtx,
         required_type: &ty::Poly,
         span: Span,
         var_id: hir::VarId,
     ) -> Result<InferredNode> {
+        if let Some(occurrence_type) = scx.occurrence_types.get(&var_id) {
+            self.ensure_is_a(span, occurrence_type, required_type)?;
+
+            return Ok(InferredNode {
+                expr: hir::Expr::Ref(span, var_id),
+                poly_type: occurrence_type.clone(),
+            });
+        }
+
         let pending_def_id = match self.var_to_type[&var_id] {
             VarType::Pending(def_id) => def_id,
             VarType::Recursive => return Err(Error::new(span, ErrorKind::RecursiveType)),
@@ -277,7 +344,7 @@ impl<'a> InferCtx<'a> {
 
         self.recurse_into_def_id(pending_def_id)?;
         // This assumes `recurse_into_def_id` has populated our variables now
-        self.visit_ref(required_type, span, var_id)
+        self.visit_ref(scx, required_type, span, var_id)
     }
 
     fn visit_do(
@@ -320,6 +387,7 @@ impl<'a> InferCtx<'a> {
     /// taken as-is.
     fn visit_fun(
         &mut self,
+        scx: &SubtreeCtx,
         required_type: &ty::Poly,
         span: Span,
         decl_fun: hir::Fun<ty::Decl>,
@@ -402,6 +470,7 @@ impl<'a> InferCtx<'a> {
 
         let mut fun_scx = SubtreeCtx {
             fun_purity: fun_purity_var,
+            occurrence_types: scx.occurrence_types.clone(),
         };
 
         let body_node = self.visit_expr(&mut fun_scx, &wanted_ret_type, *decl_fun.body_expr)?;
@@ -535,7 +604,7 @@ impl<'a> InferCtx<'a> {
         required_type: &ty::Poly,
         span: Span,
         app: hir::App<ty::Decl>,
-    ) -> Result<InferredNode> {
+    ) -> Result<InferredAppNode> {
         let hir::App {
             fun_expr,
             mut fixed_arg_exprs,
@@ -565,16 +634,27 @@ impl<'a> InferCtx<'a> {
                 span,
                 ErrorKind::TopFunApply(self.str_for_poly(&revealed_fun_type)),
             )),
-            ty::Ty::TyPred(subject_poly) => {
+            ty::Ty::TyPred(test_poly) => {
                 // TODO: Arity
-                let test_node = self.visit_expr(
-                    scx,
-                    &ty::Ty::Any.into_poly(),
-                    fixed_arg_exprs.pop().unwrap(),
-                )?;
+                let subject_expr = fixed_arg_exprs.pop().unwrap();
+                let subject_var_id = if let hir::Expr::Ref(_, var_id) = subject_expr {
+                    Some(var_id)
+                } else {
+                    None
+                };
+
+                let subject_node = self.visit_expr(scx, &ty::Ty::Any.into_poly(), subject_expr)?;
+                let app_expr = hir::Expr::App(
+                    span,
+                    hir::App {
+                        fun_expr: Box::new(fun_node.expr),
+                        fixed_arg_exprs: vec![subject_node.expr],
+                        rest_arg_expr: None,
+                    },
+                );
 
                 let pred_result =
-                    ty::pred::interpret_poly_pred(self.tvars, &subject_poly, &test_node.poly_type)
+                    ty::pred::interpret_poly_pred(self.tvars, &subject_node.poly_type, &test_poly)
                         .map_err(|ty::pred::Error::TypeErased(subject, testing)| {
                             Error::new(
                                 span,
@@ -589,23 +669,24 @@ impl<'a> InferCtx<'a> {
                 let pred_result_type = match pred_result {
                     InterpretedPred::StaticTrue => ty::Ty::LitBool(true),
                     InterpretedPred::StaticFalse => ty::Ty::LitBool(false),
-                    InterpretedPred::Dynamic(_, _) => {
-                        // TODO: Occurence typing
+                    InterpretedPred::Dynamic(true_type, false_type) => {
+                        if let Some(subject_var_id) = subject_var_id {
+                            return Ok(InferredAppNode::VarTyPred(
+                                app_expr,
+                                subject_var_id,
+                                true_type,
+                                false_type,
+                            ));
+                        }
+
                         ty::Ty::Bool
                     }
                 }.into_poly();
 
-                Ok(InferredNode {
-                    expr: hir::Expr::App(
-                        span,
-                        hir::App {
-                            fun_expr: Box::new(fun_node.expr),
-                            fixed_arg_exprs: vec![test_node.expr],
-                            rest_arg_expr: None,
-                        },
-                    ),
+                Ok(InferredAppNode::Other(InferredNode {
+                    expr: app_expr,
                     poly_type: pred_result_type,
-                })
+                }))
             }
             ty::Ty::Fun(fun_type) => {
                 let fun_app = FunApp {
@@ -615,6 +696,7 @@ impl<'a> InferCtx<'a> {
                 };
 
                 self.visit_fun_app(scx, required_type, span, fun_type, fun_app)
+                    .map(InferredAppNode::Other)
             }
             _ => panic!("Unexpected type"),
         }
@@ -693,13 +775,14 @@ impl<'a> InferCtx<'a> {
             hir::Expr::Lit(datum) => self.visit_lit(required_type, datum),
             hir::Expr::Cond(span, cond) => self.visit_cond(scx, required_type, span, cond),
             hir::Expr::Do(exprs) => self.visit_do(scx, required_type, exprs),
-            hir::Expr::Fun(span, fun) => self.visit_fun(required_type, span, fun, self_var_id),
+            hir::Expr::Fun(span, fun) => self.visit_fun(scx, required_type, span, fun, self_var_id),
             hir::Expr::TyPred(span, test_type) => {
                 self.visit_ty_pred(required_type, span, test_type)
             }
             hir::Expr::Let(span, hir_let) => self.visit_let(scx, required_type, span, hir_let),
-            hir::Expr::Ref(span, var_id) => self.visit_ref(required_type, span, var_id),
-            hir::Expr::App(span, app) => self.visit_app(scx, required_type, span, app),
+            hir::Expr::Ref(span, var_id) => self.visit_ref(scx, required_type, span, var_id),
+            hir::Expr::App(span, app) => self.visit_app(scx, required_type, span, app)
+                .map(|app_node| app_node.into_node()),
         }
     }
 
@@ -794,6 +877,7 @@ impl<'a> InferCtx<'a> {
         let mut scx = SubtreeCtx {
             // Module definitions must be pure
             fun_purity: PurityVarType::Known(Purity::Pure.into_poly()),
+            occurrence_types: HashMap::new(),
         };
 
         // Mark all of our free typed variable as recursive
@@ -911,6 +995,7 @@ mod test {
         let mut icx = InferCtx::new(&lowered_expr.pvars, &lowered_expr.tvars);
         let mut scx = SubtreeCtx {
             fun_purity: PurityVarType::Known(Purity::Pure.into_poly()),
+            occurrence_types: HashMap::new(),
         };
 
         icx.visit_expr(&mut scx, required_type, lowered_expr.expr)
@@ -1099,7 +1184,24 @@ mod test {
     }
 
     #[test]
-    fn ty_pref() {
+    fn ty_pred() {
         assert_type_for_expr("(Type? Symbol)", "(type-predicate Symbol)")
+    }
+
+    #[test]
+    fn occurrence_typing() {
+        let j = "(fn ([x : Bool])
+                  (if x
+                    (let [[_ : true] x])
+                    (let [[_ : false] x])))";
+
+        assert_type_for_expr("(Bool -> ())", j);
+
+        let j = "(fn ([x : (RawU Symbol String)])
+                  (if ((type-predicate Symbol) x)
+                    (let [[_ : Symbol] x])
+                    (let [[_ : String] x])))";
+
+        assert_type_for_expr("((RawU Symbol String) -> ())", j);
     }
 }
