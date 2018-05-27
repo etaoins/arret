@@ -71,7 +71,8 @@ where
         let mut sub_iter = ListIterator::new(sub_list);
         let mut par_iter = ListIterator::new(par_list);
 
-        let mut is_exact = sub_iter.fixed_len() >= par_iter.fixed_len();
+        let mut is_exact = (sub_iter.fixed_len() >= par_iter.fixed_len())
+            && !(sub_list.rest().is_some() && par_list.rest().is_none());
 
         // Compare our fixed types. If one of the fixed lists ends early then its rest will be used
         // for the remaining list
@@ -466,11 +467,15 @@ mod test {
 
     #[test]
     fn list_types() {
+        let empty_list = poly_for_str("()");
         let listof_any = poly_for_str("(Listof Any)");
         let listof_int = poly_for_str("(Listof Int)");
         let two_ints_list = poly_for_str("(List Int Int)");
         let three_ints_list = poly_for_str("(List Int Int Int)");
         let at_least_one_int_list = poly_for_str("(List Int Int ...)");
+
+        assert_eq!(Result::Yes, poly_is_a(&[], &empty_list, &listof_any));
+        assert_eq!(Result::May, poly_is_a(&[], &listof_any, &empty_list));
 
         assert_eq!(Result::Yes, poly_is_a(&[], &listof_int, &listof_any));
         assert_eq!(Result::May, poly_is_a(&[], &listof_any, &listof_int));

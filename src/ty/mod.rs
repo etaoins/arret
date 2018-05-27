@@ -10,6 +10,7 @@ pub mod subst;
 pub mod unify;
 
 use std;
+use std::fmt;
 use std::ops::Range;
 use ty::purity::PRef;
 use ty::purity::PVarIds;
@@ -17,7 +18,7 @@ use ty::purity::PVarIds;
 /// Abstracts over a reference to a type
 ///
 /// This allows the implementation of our type system to be generic over `Mono` versus `Poly` types.
-pub trait TyRef: PartialEq + Clone + Sized {
+pub trait TyRef: PartialEq + Clone + Sized + fmt::Debug {
     /// Type used to store the purity variables introduced by a function
     type PVarIds: purity::PVarIds;
 
