@@ -605,7 +605,7 @@ impl<'a> InferCtx<'a> {
 
         // The only type information we can feed back is that we want a function of a certain
         // purity returning a certain value
-        let wanted_purity = match fcx.purity.clone() {
+        let wanted_purity = match &fcx.purity {
             PurityVarType::Free(_) => {
                 // We're inferring the purity; this application can have any purity
                 Purity::Impure.into_poly()
