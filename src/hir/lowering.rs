@@ -585,19 +585,13 @@ impl<'ccx> LoweringContext<'ccx> {
             Prim::If => {
                 expect_arg_count(span, &arg_data, 3)?;
 
-                macro_rules! pop_as_boxed_expr {
-                    () => {
-                        Box::new(self.lower_expr(scope, arg_data.pop().unwrap())?)
-                    };
-                };
-
                 Ok(Expr::Cond(
                     span,
-                    Cond {
-                        false_expr: pop_as_boxed_expr!(),
-                        true_expr: pop_as_boxed_expr!(),
-                        test_expr: pop_as_boxed_expr!(),
-                    },
+                    Box::new(Cond {
+                        false_expr: self.lower_expr(scope, arg_data.pop().unwrap())?,
+                        true_expr: self.lower_expr(scope, arg_data.pop().unwrap())?,
+                        test_expr: self.lower_expr(scope, arg_data.pop().unwrap())?,
+                    }),
                 ))
             }
             Prim::TyPred => {
@@ -1552,11 +1546,11 @@ mod test {
 
         let expected = Expr::Cond(
             t2s(t),
-            Cond {
-                test_expr: Box::new(Expr::Lit(Datum::Bool(t2s(u), true))),
-                true_expr: Box::new(Expr::Lit(Datum::Int(t2s(v), 1))),
-                false_expr: Box::new(Expr::Lit(Datum::Int(t2s(w), 2))),
-            },
+            Box::new(Cond {
+                test_expr: Expr::Lit(Datum::Bool(t2s(u), true)),
+                true_expr: Expr::Lit(Datum::Int(t2s(v), 1)),
+                false_expr: Expr::Lit(Datum::Int(t2s(w), 2)),
+            }),
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());

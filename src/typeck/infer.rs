@@ -176,7 +176,7 @@ impl<'a> InferCtx<'a> {
             false_expr,
         } = cond;
 
-        let occurrence_test_node = match *test_expr {
+        let occurrence_test_node = match test_expr {
             hir::Expr::Ref(span, var_id) => {
                 let ref_node = self.visit_ref(fcx, &ty::Ty::Bool.into_poly(), span, var_id)?;
 
@@ -202,10 +202,10 @@ impl<'a> InferCtx<'a> {
                     self.var_to_type.get_mut(&var_id).unwrap(),
                     VarType::Known(true_type),
                 );
-                let true_result = self.visit_expr(fcx, required_type, *true_expr);
+                let true_result = self.visit_expr(fcx, required_type, true_expr);
 
                 self.var_to_type.insert(var_id, VarType::Known(false_type));
-                let false_result = self.visit_expr(fcx, required_type, *false_expr);
+                let false_result = self.visit_expr(fcx, required_type, false_expr);
 
                 self.var_to_type.insert(var_id, original_var_type);
                 (
@@ -218,8 +218,8 @@ impl<'a> InferCtx<'a> {
                 )
             }
             OccurrenceTypedNode::Other(other) => {
-                let true_node = self.visit_expr(fcx, required_type, *true_expr)?;
-                let false_node = self.visit_expr(fcx, required_type, *false_expr)?;
+                let true_node = self.visit_expr(fcx, required_type, true_expr)?;
+                let false_node = self.visit_expr(fcx, required_type, false_expr)?;
                 (other, true_node, false_node)
             }
         };
@@ -234,11 +234,11 @@ impl<'a> InferCtx<'a> {
             ).map(|unified_type| InferredNode {
                 expr: hir::Expr::Cond(
                     span,
-                    hir::Cond {
-                        test_expr: Box::new(test_node.expr),
-                        true_expr: Box::new(true_node.expr),
-                        false_expr: Box::new(false_node.expr),
-                    },
+                    Box::new(hir::Cond {
+                        test_expr: test_node.expr,
+                        true_expr: true_node.expr,
+                        false_expr: false_node.expr,
+                    }),
                 ),
                 poly_type: unified_type,
             })
@@ -759,7 +759,7 @@ impl<'a> InferCtx<'a> {
     ) -> Result<InferredNode> {
         match expr {
             hir::Expr::Lit(datum) => self.visit_lit(required_type, datum),
-            hir::Expr::Cond(span, cond) => self.visit_cond(fcx, required_type, span, cond),
+            hir::Expr::Cond(span, cond) => self.visit_cond(fcx, required_type, span, *cond),
             hir::Expr::Do(exprs) => self.visit_do(fcx, required_type, exprs),
             hir::Expr::Fun(span, fun) => self.visit_fun(required_type, span, fun, self_var_id),
             hir::Expr::TyPred(span, test_type) => {

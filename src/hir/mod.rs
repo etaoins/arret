@@ -52,9 +52,9 @@ pub struct Cond<T>
 where
     T: HirType,
 {
-    pub test_expr: Box<Expr<T>>,
-    pub true_expr: Box<Expr<T>>,
-    pub false_expr: Box<Expr<T>>,
+    pub test_expr: Expr<T>,
+    pub true_expr: Expr<T>,
+    pub false_expr: Expr<T>,
 }
 
 #[derive(PartialEq, Debug)]
@@ -86,7 +86,7 @@ where
     App(Span, App<T>),
     Fun(Span, Fun<T>),
     Let(Span, Let<T>),
-    Cond(Span, Cond<T>),
+    Cond(Span, Box<Cond<T>>),
     Ref(Span, VarId),
     TyPred(Span, ty::Poly),
     Do(Vec<Expr<T>>),
