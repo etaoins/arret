@@ -309,11 +309,13 @@ impl<'a> InferCtx<'a> {
         span: Span,
         var_id: hir::VarId,
     ) -> Result<InferredNode> {
+        let ref_expr = hir::Expr::Ref(span, var_id);
+
         if let Some(occurrence_type) = scx.occurrence_types.get(&var_id) {
             self.ensure_is_a(span, occurrence_type, required_type)?;
 
             return Ok(InferredNode {
-                expr: hir::Expr::Ref(span, var_id),
+                expr: ref_expr,
                 poly_type: occurrence_type.clone(),
             });
         }
@@ -325,7 +327,7 @@ impl<'a> InferCtx<'a> {
                 self.ensure_is_a(span, known_type, required_type)?;
 
                 return Ok(InferredNode {
-                    expr: hir::Expr::Ref(span, var_id),
+                    expr: ref_expr,
                     poly_type: known_type.clone(),
                 });
             }
@@ -336,7 +338,7 @@ impl<'a> InferCtx<'a> {
                 self.free_ty_polys[free_ty_id.to_usize()] = new_free_type.clone();
 
                 return Ok(InferredNode {
-                    expr: hir::Expr::Ref(span, var_id),
+                    expr: ref_expr,
                     poly_type: new_free_type,
                 });
             }
