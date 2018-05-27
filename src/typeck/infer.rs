@@ -445,29 +445,26 @@ impl<'a> InferCtx<'a> {
 
         let purity_var = match decl_fun.purity {
             ty::purity::Decl::Known(poly_purity) => {
-                // This function has a declared purity
-                PurityVarType::Known(poly_purity.clone())
+                if let (Some(self_var_id), true) = (self_var_id, decl_tys_are_known) {
+                    let self_type = ty::Fun::new(
+                        decl_fun.pvar_ids.clone(),
+                        decl_fun.tvar_ids.clone(),
+                        ty::TopFun::new(poly_purity.clone(), wanted_ret_type.clone()),
+                        initial_param_type,
+                    ).into_ref();
+
+                    // We have a fully known type; allow recursive calls
+                    self.var_to_type
+                        .insert(self_var_id, VarType::Known(self_type));
+                }
+
+                PurityVarType::Known(poly_purity)
             }
             ty::purity::Decl::Free => {
                 // Functions start pure until proven otherwise
                 PurityVarType::Free(Purity::Pure.into_poly())
             }
         };
-
-        if let (Some(self_var_id), true) = (self_var_id, decl_tys_are_known) {
-            if let PurityVarType::Known(ref poly_purty) = purity_var {
-                let self_type = ty::Fun::new(
-                    decl_fun.pvar_ids.clone(),
-                    decl_fun.tvar_ids.clone(),
-                    ty::TopFun::new(poly_purty.clone(), wanted_ret_type.clone()),
-                    initial_param_type,
-                ).into_ref();
-
-                // We have a known type; allow recursive calls
-                self.var_to_type
-                    .insert(self_var_id, VarType::Known(self_type));
-            }
-        }
 
         let mut fun_fcx = FunCtx { purity: purity_var };
 
