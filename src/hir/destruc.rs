@@ -96,8 +96,7 @@ pub fn subst_scalar_destruc(
 ) -> Scalar<ty::Poly> {
     let var_id = *scalar.var_id();
     let poly_type = match scalar.ty() {
-        ty::Decl::Fixed(fixed) => ty::Poly::Fixed(fixed.clone()),
-        ty::Decl::Var(tvar_id) => ty::Poly::Var(*tvar_id),
+        ty::Decl::Known(poly) => poly.clone(),
         ty::Decl::Free => free_ty_polys.pop().unwrap(),
     };
 

@@ -21,16 +21,12 @@ pub fn type_for_decl_list_destruc(
     }
 
     let rest_poly = match list.rest() {
-        Some(rest) => Some(
-            rest.ty()
-                .try_to_poly()
-                .or_else(|| {
-                    guide_type_iter.and_then(|guide_type_iter| {
-                        guide_type_iter.collect_rest(tvars).unwrap_or(None)
-                    })
-                })
+        Some(rest) => Some(match rest.ty() {
+            ty::Decl::Known(poly) => poly.clone(),
+            ty::Decl::Free => guide_type_iter
+                .and_then(|guide_type_iter| guide_type_iter.collect_rest(tvars).unwrap_or(None))
                 .unwrap_or_else(|| ty::Ty::Any.into_poly()),
-        ),
+        }),
         None => None,
     };
 
@@ -44,11 +40,12 @@ pub fn type_for_decl_destruc(
     guide_type: Option<&ty::Poly>,
 ) -> ty::Poly {
     match *destruc {
-        destruc::Destruc::Scalar(_, ref scalar) => scalar
-            .ty()
-            .try_to_poly()
-            .or_else(|| guide_type.cloned())
-            .unwrap_or_else(|| ty::Ty::Any.into_poly()),
+        destruc::Destruc::Scalar(_, ref scalar) => match scalar.ty() {
+            ty::Decl::Known(poly) => poly.clone(),
+            ty::Decl::Free => guide_type
+                .cloned()
+                .unwrap_or_else(|| ty::Ty::Any.into_poly()),
+        },
 
         destruc::Destruc::List(_, ref list) => {
             let guide_type_iter =

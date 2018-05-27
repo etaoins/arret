@@ -292,10 +292,7 @@ pub enum Poly {
 
 impl Poly {
     pub fn into_decl(self) -> Decl {
-        match self {
-            Poly::Var(tvar_id) => Decl::Var(tvar_id),
-            Poly::Fixed(ty) => Decl::Fixed(ty),
-        }
+        Decl::Known(self)
     }
 }
 
@@ -377,28 +374,16 @@ impl TVarIds for EmptyTVarIds {
 
 /// Decl is a type declared by a user
 ///
-/// It is identical to a Poly type except there is an additional `Free` variant that indicates the
-/// user did not specify an explicit type and it must be inferred.
+/// The `Known` variant indicates the type is specified while `Free` indicates it must be inferred.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Decl {
-    Var(TVarId),
-    Fixed(Ty<Poly>),
+    Known(Poly),
     Free,
-}
-
-impl Decl {
-    pub fn try_to_poly(&self) -> Option<Poly> {
-        match self {
-            Decl::Fixed(ref fixed) => Some(Poly::Fixed(fixed.clone())),
-            Decl::Var(tvar_id) => Some(Poly::Var(*tvar_id)),
-            Decl::Free => None,
-        }
-    }
 }
 
 impl Ty<Poly> {
     #[cfg(test)]
     pub fn into_decl(self) -> Decl {
-        Decl::Fixed(self)
+        Decl::Known(Poly::Fixed(self))
     }
 }

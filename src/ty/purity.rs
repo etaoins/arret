@@ -11,6 +11,11 @@ impl Purity {
     pub fn into_poly(self) -> Poly {
         Poly::from_purity(self)
     }
+
+    #[cfg(test)]
+    pub fn into_decl(self) -> Decl {
+        Decl::Known(Poly::from_purity(self))
+    }
 }
 
 pub trait PRef: PartialEq + Eq + Clone + std::fmt::Debug + std::hash::Hash + Sized {
@@ -48,10 +53,7 @@ pub enum Poly {
 
 impl Poly {
     pub fn into_decl(self) -> Decl {
-        match self {
-            Poly::Fixed(fixed) => Decl::Fixed(fixed),
-            Poly::Var(var) => Decl::Var(var),
-        }
+        Decl::Known(self)
     }
 }
 
@@ -63,23 +65,12 @@ impl PRef for Poly {
 
 /// Decl is a purity declared by a user
 ///
-/// By analogy with `ty::Decl` this allows an additional `Free` type where the user has not
-/// specified a purity.
+/// The `Known` variant indicates the purity is specified while `Free` indicates it must be
+/// inferred.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Decl {
-    Fixed(Purity),
-    Var(PVarId),
+    Known(Poly),
     Free,
-}
-
-impl Decl {
-    pub fn try_to_poly(&self) -> Option<Poly> {
-        match self {
-            Decl::Fixed(fixed) => Some(Poly::Fixed(*fixed)),
-            Decl::Var(pvar_id) => Some(Poly::Var(*pvar_id)),
-            Decl::Free => None,
-        }
-    }
 }
 
 pub trait PVarIds: PartialEq + Eq + Clone + std::fmt::Debug + std::hash::Hash + Sized {

@@ -1310,7 +1310,7 @@ mod test {
             Fun {
                 pvar_ids: ty::purity::PVarIds::monomorphic(),
                 tvar_ids: ty::TVarIds::monomorphic(),
-                purity: ty::purity::Decl::Fixed(Purity::Pure),
+                purity: Purity::Pure.into_decl(),
                 params: destruc::List::new(vec![], None),
                 ret_ty: ty::Ty::Int.into_decl(),
                 body_expr: Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
@@ -1364,7 +1364,11 @@ mod test {
         let params = destruc::List::new(
             vec![destruc::Destruc::Scalar(
                 t2s(t),
-                destruc::Scalar::new(Some(param_var_id), "x".to_owned(), ty::Decl::Var(tvar_id)),
+                destruc::Scalar::new(
+                    Some(param_var_id),
+                    "x".to_owned(),
+                    ty::Poly::Var(tvar_id).into_decl(),
+                ),
             )],
             None,
         );
@@ -1374,9 +1378,9 @@ mod test {
             Fun {
                 pvar_ids: ty::purity::PVarId::new(0)..ty::purity::PVarId::new(1),
                 tvar_ids: ty::TVarId::new(0)..ty::TVarId::new(1),
-                purity: ty::purity::Decl::Var(ty::purity::PVarId::new(0)),
+                purity: ty::purity::Poly::Var(ty::purity::PVarId::new(0)).into_decl(),
                 params,
-                ret_ty: ty::Decl::Var(tvar_id),
+                ret_ty: ty::Poly::Var(tvar_id).into_decl(),
                 body_expr: Box::new(Expr::Ref(t2s(v), param_var_id)),
             },
         );

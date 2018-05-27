@@ -428,27 +428,31 @@ impl<'a> InferCtx<'a> {
         }
 
         // Use the declared return type if possible
-        let wanted_ret_type = decl_fun.ret_ty.try_to_poly().unwrap_or_else(|| {
-            decl_tys_are_known = false;
+        let wanted_ret_type = match decl_fun.ret_ty {
+            ty::Decl::Known(poly) => poly.clone(),
+            ty::Decl::Free => {
+                decl_tys_are_known = false;
 
-            if let Some(ref required_top_fun_type) = required_top_fun_type {
-                // Fall back to the backwards type
-                required_top_fun_type.ret().clone()
-            } else {
-                // Use Any as a last resort
-                ty::Ty::Any.into_poly()
+                if let Some(ref required_top_fun_type) = required_top_fun_type {
+                    // Fall back to the backwards type
+                    required_top_fun_type.ret().clone()
+                } else {
+                    // Use Any as a last resort
+                    ty::Ty::Any.into_poly()
+                }
             }
-        });
+        };
 
-        let purity_var = decl_fun
-            .purity
-            .try_to_poly()
-            .map(|poly_purity| {
+        let purity_var = match decl_fun.purity {
+            ty::purity::Decl::Known(poly_purity) => {
                 // This function has a declared purity
-                PurityVarType::Known(poly_purity)
-            })
-            // Functions start pure until proven otherwise
-            .unwrap_or_else(|| PurityVarType::Free(Purity::Pure.into_poly()));
+                PurityVarType::Known(poly_purity.clone())
+            }
+            ty::purity::Decl::Free => {
+                // Functions start pure until proven otherwise
+                PurityVarType::Free(Purity::Pure.into_poly())
+            }
+        };
 
         if let (Some(self_var_id), true) = (self_var_id, decl_tys_are_known) {
             if let PurityVarType::Known(ref poly_purty) = purity_var {
@@ -712,17 +716,16 @@ impl<'a> InferCtx<'a> {
             typeck::destruc::type_for_decl_destruc(self.tvars, &destruc, None);
 
         // Pre-bind our variables to deal with recursive definitions
-        let self_var_id = typeck::destruc::visit_vars(
-            &destruc,
-            |var_id, decl_type| match decl_type.try_to_poly() {
-                Some(poly_type) => {
-                    self.var_to_type.insert(var_id, VarType::Known(poly_type));
+        let self_var_id =
+            typeck::destruc::visit_vars(&destruc, |var_id, decl_type| match decl_type {
+                ty::Decl::Known(poly_type) => {
+                    self.var_to_type
+                        .insert(var_id, VarType::Known(poly_type.clone()));
                 }
-                None => {
+                ty::Decl::Free => {
                     self.var_to_type.insert(var_id, VarType::Recursive);
                 }
-            },
-        );
+            });
 
         let value_node = self.visit_expr_with_self_var_id(
             fcx,
@@ -926,11 +929,12 @@ impl<'a> InferCtx<'a> {
             let def_id = InputDefId::new(self.input_defs.len());
 
             typeck::destruc::visit_vars(&hir_def.destruc, |var_id, decl_type| {
-                match decl_type.try_to_poly() {
-                    Some(poly_type) => {
-                        self.var_to_type.insert(var_id, VarType::Known(poly_type));
+                match decl_type {
+                    ty::Decl::Known(poly_type) => {
+                        self.var_to_type
+                            .insert(var_id, VarType::Known(poly_type.clone()));
                     }
-                    None => {
+                    ty::Decl::Free => {
                         // Record the definition ID so we can deal with forward type references
                         self.var_to_type.insert(var_id, VarType::Pending(def_id));
                     }
