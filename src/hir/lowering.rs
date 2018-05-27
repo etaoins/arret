@@ -451,11 +451,11 @@ impl<'ccx> LoweringContext<'ccx> {
 
         Ok(Expr::Let(
             span,
-            Let {
+            Box::new(Let {
                 destruc,
-                value_expr: Box::new(value_expr),
-                body_expr: Box::new(body_expr),
-            },
+                value_expr,
+                body_expr,
+            }),
         ))
     }
 
@@ -551,14 +551,14 @@ impl<'ccx> LoweringContext<'ccx> {
 
         Ok(Expr::Fun(
             span,
-            Fun {
+            Box::new(Fun {
                 pvar_ids,
                 tvar_ids,
                 purity,
                 params,
                 ret_ty,
-                body_expr: Box::new(body_expr),
-            },
+                body_expr,
+            }),
         ))
     }
 
@@ -662,17 +662,17 @@ impl<'ccx> LoweringContext<'ccx> {
             .collect::<Result<Vec<Expr<ty::Decl>>>>()?;
 
         let rest_arg_expr = match rest_arg_datum {
-            Some(rest_arg_datum) => Some(Box::new(self.lower_expr(scope, rest_arg_datum)?)),
+            Some(rest_arg_datum) => Some(self.lower_expr(scope, rest_arg_datum)?),
             None => None,
         };
 
         Ok(Expr::App(
             span,
-            App {
-                fun_expr: Box::new(fun_expr),
+            Box::new(App {
+                fun_expr,
                 fixed_arg_exprs,
                 rest_arg_expr,
-            },
+            }),
         ))
     }
 
@@ -1076,11 +1076,11 @@ mod test {
 
         let expected = Expr::Let(
             t2s(u),
-            Let {
+            Box::new(Let {
                 destruc,
-                value_expr: Box::new(Expr::Lit(Datum::Int(t2s(v), 1))),
-                body_expr: Box::new(Expr::Ref(t2s(w), VarId(0))),
-            },
+                value_expr: Expr::Lit(Datum::Int(t2s(v), 1)),
+                body_expr: Expr::Ref(t2s(w), VarId(0)),
+            }),
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());
@@ -1104,11 +1104,11 @@ mod test {
 
         let expected = Expr::Let(
             t2s(u),
-            Let {
+            Box::new(Let {
                 destruc,
-                value_expr: Box::new(Expr::Lit(Datum::Bool(t2s(v), true))),
-                body_expr: Box::new(Expr::Do(vec![])),
-            },
+                value_expr: Expr::Lit(Datum::Bool(t2s(v), true)),
+                body_expr: Expr::Do(vec![]),
+            }),
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());
@@ -1138,11 +1138,11 @@ mod test {
 
         let expected = Expr::Let(
             t2s(u),
-            Let {
+            Box::new(Let {
                 destruc,
-                value_expr: Box::new(Expr::Lit(Datum::Int(t2s(v), 1))),
-                body_expr: Box::new(Expr::Do(vec![])),
-            },
+                value_expr: Expr::Lit(Datum::Int(t2s(v), 1)),
+                body_expr: Expr::Do(vec![]),
+            }),
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());
@@ -1187,11 +1187,11 @@ mod test {
 
         let expected = Expr::Let(
             t2s(v),
-            Let {
+            Box::new(Let {
                 destruc,
-                value_expr: Box::new(Expr::Lit(Datum::List(t2s(w), vec![Datum::Int(t2s(x), 1)]))),
-                body_expr: Box::new(Expr::Ref(t2s(y), VarId(0))),
-            },
+                value_expr: Expr::Lit(Datum::List(t2s(w), vec![Datum::Int(t2s(x), 1)])),
+                body_expr: Expr::Ref(t2s(y), VarId(0)),
+            }),
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());
@@ -1280,14 +1280,14 @@ mod test {
 
         let expected = Expr::Fun(
             t2s(t),
-            Fun {
+            Box::new(Fun {
                 pvar_ids: ty::purity::PVarIds::monomorphic(),
                 tvar_ids: ty::TVarIds::monomorphic(),
                 purity: ty::purity::Decl::Free,
                 params: destruc::List::new(vec![], None),
                 ret_ty: ty::Decl::Free,
-                body_expr: Box::new(Expr::Do(vec![])),
-            },
+                body_expr: Expr::Do(vec![]),
+            }),
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());
@@ -1301,14 +1301,14 @@ mod test {
 
         let expected = Expr::Fun(
             t2s(t),
-            Fun {
+            Box::new(Fun {
                 pvar_ids: ty::purity::PVarIds::monomorphic(),
                 tvar_ids: ty::TVarIds::monomorphic(),
                 purity: Purity::Pure.into_decl(),
                 params: destruc::List::new(vec![], None),
                 ret_ty: ty::Ty::Int.into_decl(),
-                body_expr: Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
-            },
+                body_expr: Expr::Lit(Datum::Int(t2s(u), 1)),
+            }),
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());
@@ -1332,14 +1332,14 @@ mod test {
 
         let expected = Expr::Fun(
             t2s(u),
-            Fun {
+            Box::new(Fun {
                 pvar_ids: ty::purity::PVarIds::monomorphic(),
                 tvar_ids: ty::TVarIds::monomorphic(),
                 purity: ty::purity::Decl::Free,
                 params,
                 ret_ty: ty::Decl::Free,
-                body_expr: Box::new(Expr::Ref(t2s(v), param_var_id)),
-            },
+                body_expr: Expr::Ref(t2s(v), param_var_id),
+            }),
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());
@@ -1369,14 +1369,14 @@ mod test {
 
         let expected = Expr::Fun(
             t2s(u),
-            Fun {
+            Box::new(Fun {
                 pvar_ids: ty::purity::PVarId::new(0)..ty::purity::PVarId::new(1),
                 tvar_ids: ty::TVarId::new(0)..ty::TVarId::new(1),
                 purity: ty::purity::Poly::Var(ty::purity::PVarId::new(0)).into_decl(),
                 params,
                 ret_ty: ty::Poly::Var(tvar_id).into_decl(),
-                body_expr: Box::new(Expr::Ref(t2s(v), param_var_id)),
-            },
+                body_expr: Expr::Ref(t2s(v), param_var_id),
+            }),
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());
@@ -1399,21 +1399,21 @@ mod test {
 
         let expected = Expr::Let(
             t2s(u),
-            Let {
+            Box::new(Let {
                 destruc: outer_destruc,
-                value_expr: Box::new(Expr::Lit(Datum::Int(t2s(v), 1))),
-                body_expr: Box::new(Expr::Fun(
+                value_expr: Expr::Lit(Datum::Int(t2s(v), 1)),
+                body_expr: Expr::Fun(
                     t2s(w),
-                    Fun {
+                    Box::new(Fun {
                         pvar_ids: ty::purity::PVarIds::monomorphic(),
                         tvar_ids: ty::TVarIds::monomorphic(),
                         purity: ty::purity::Decl::Free,
                         params: destruc::List::new(vec![], None),
                         ret_ty: ty::Decl::Free,
-                        body_expr: Box::new(Expr::Ref(t2s(x), outer_var_id)),
-                    },
-                )),
-            },
+                        body_expr: Expr::Ref(t2s(x), outer_var_id),
+                    }),
+                ),
+            }),
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());
@@ -1446,21 +1446,21 @@ mod test {
 
         let expected = Expr::Let(
             t2s(w),
-            Let {
+            Box::new(Let {
                 destruc: outer_destruc,
-                value_expr: Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
-                body_expr: Box::new(Expr::Fun(
+                value_expr: Expr::Lit(Datum::Int(t2s(u), 1)),
+                body_expr: Expr::Fun(
                     t2s(x),
-                    Fun {
+                    Box::new(Fun {
                         pvar_ids: ty::purity::PVarIds::monomorphic(),
                         tvar_ids: ty::TVarIds::monomorphic(),
                         purity: ty::purity::Decl::Free,
                         params,
                         ret_ty: ty::Decl::Free,
-                        body_expr: Box::new(Expr::Ref(t2s(y), param_var_id)),
-                    },
-                )),
-            },
+                        body_expr: Expr::Ref(t2s(y), param_var_id),
+                    }),
+                ),
+            }),
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());
@@ -1476,14 +1476,14 @@ mod test {
 
         let expected = Expr::App(
             t2s(t),
-            App {
-                fun_expr: Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
+            Box::new(App {
+                fun_expr: Expr::Lit(Datum::Int(t2s(u), 1)),
                 fixed_arg_exprs: vec![
                     Expr::Lit(Datum::Int(t2s(v), 2)),
                     Expr::Lit(Datum::Int(t2s(w), 3)),
                 ],
                 rest_arg_expr: None,
-            },
+            }),
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());
@@ -1499,11 +1499,11 @@ mod test {
 
         let expected = Expr::App(
             t2s(t),
-            App {
-                fun_expr: Box::new(Expr::Lit(Datum::Int(t2s(u), 1))),
+            Box::new(App {
+                fun_expr: Expr::Lit(Datum::Int(t2s(u), 1)),
                 fixed_arg_exprs: vec![Expr::Lit(Datum::Int(t2s(v), 2))],
-                rest_arg_expr: Some(Box::new(Expr::Lit(Datum::Int(t2s(w), 3)))),
-            },
+                rest_arg_expr: Some(Expr::Lit(Datum::Int(t2s(w), 3))),
+            }),
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());
@@ -2089,11 +2089,11 @@ mod test {
 
         let expected = Expr::Let(
             t2s(u),
-            Let {
+            Box::new(Let {
                 destruc,
-                value_expr: Box::new(Expr::Lit(Datum::Bool(t2s(v), true))),
-                body_expr: Box::new(Expr::Do(vec![])),
-            },
+                value_expr: Expr::Lit(Datum::Bool(t2s(v), true)),
+                body_expr: Expr::Do(vec![]),
+            }),
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());

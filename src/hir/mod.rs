@@ -44,7 +44,7 @@ where
     pub params: destruc::List<T>,
     pub ret_ty: T,
 
-    pub body_expr: Box<Expr<T>>,
+    pub body_expr: Expr<T>,
 }
 
 #[derive(PartialEq, Debug)]
@@ -63,8 +63,8 @@ where
     T: HirType,
 {
     pub destruc: destruc::Destruc<T>,
-    pub value_expr: Box<Expr<T>>,
-    pub body_expr: Box<Expr<T>>,
+    pub value_expr: Expr<T>,
+    pub body_expr: Expr<T>,
 }
 
 #[derive(PartialEq, Debug)]
@@ -72,9 +72,9 @@ pub struct App<T>
 where
     T: HirType,
 {
-    pub fun_expr: Box<Expr<T>>,
+    pub fun_expr: Expr<T>,
     pub fixed_arg_exprs: Vec<Expr<T>>,
-    pub rest_arg_expr: Option<Box<Expr<T>>>,
+    pub rest_arg_expr: Option<Expr<T>>,
 }
 
 #[derive(PartialEq, Debug)]
@@ -83,9 +83,9 @@ where
     T: HirType,
 {
     Lit(Datum),
-    App(Span, App<T>),
-    Fun(Span, Fun<T>),
-    Let(Span, Let<T>),
+    App(Span, Box<App<T>>),
+    Fun(Span, Box<Fun<T>>),
+    Let(Span, Box<Let<T>>),
     Cond(Span, Box<Cond<T>>),
     Ref(Span, VarId),
     TyPred(Span, ty::Poly),

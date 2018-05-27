@@ -45,7 +45,7 @@ new_indexing_id_type!(InputDefId, u32);
 struct FunApp {
     fun_expr: hir::Expr<ty::Poly>,
     fixed_arg_exprs: Vec<hir::Expr<ty::Decl>>,
-    rest_arg_expr: Option<Box<hir::Expr<ty::Decl>>>,
+    rest_arg_expr: Option<hir::Expr<ty::Decl>>,
 }
 
 enum VarType {
@@ -188,7 +188,7 @@ impl<'a> InferCtx<'a> {
                     ty::Ty::LitBool(false).into_poly(),
                 )
             }
-            hir::Expr::App(span, app) => self.visit_app(fcx, &required_type, span, app)?,
+            hir::Expr::App(span, app) => self.visit_app(fcx, &required_type, span, *app)?,
             other_expr => self.visit_expr(fcx, &ty::Ty::Bool.into_poly(), other_expr)
                 .map(OccurrenceTypedNode::Other)?,
         };
@@ -465,7 +465,7 @@ impl<'a> InferCtx<'a> {
 
         let mut fun_fcx = FunCtx { purity: purity_var };
 
-        let body_node = self.visit_expr(&mut fun_fcx, &wanted_ret_type, *decl_fun.body_expr)?;
+        let body_node = self.visit_expr(&mut fun_fcx, &wanted_ret_type, decl_fun.body_expr)?;
         let revealed_ret_type = body_node.poly_type;
         let revealed_purity = fun_fcx.purity.into_poly();
 
@@ -488,13 +488,13 @@ impl<'a> InferCtx<'a> {
             purity: revealed_purity,
             params: revealed_param_destruc,
             ret_ty: revealed_ret_type,
-            body_expr: Box::new(body_node.expr),
+            body_expr: body_node.expr,
         };
 
         self.ensure_is_a(span, &revealed_type, required_type)?;
 
         Ok(InferredNode {
-            expr: hir::Expr::Fun(span, revealed_fun),
+            expr: hir::Expr::Fun(span, Box::new(revealed_fun)),
             poly_type: revealed_type,
         })
     }
@@ -553,10 +553,10 @@ impl<'a> InferCtx<'a> {
         let inferred_rest_arg_expr = if let Some(rest_arg_expr) = rest_arg_expr {
             let tail_type = ty::Ty::List(param_iter.tail_type()).into_poly();
             let wanted_tail_type = ty::subst::inst_ty_selection(&param_select_ctx, &tail_type);
-            let rest_arg_node = self.visit_expr(fcx, &wanted_tail_type, *rest_arg_expr)?;
+            let rest_arg_node = self.visit_expr(fcx, &wanted_tail_type, rest_arg_expr)?;
 
             ret_select_ctx.add_evidence(&tail_type, &rest_arg_node.poly_type);
-            Some(Box::new(rest_arg_node.expr))
+            Some(rest_arg_node.expr)
         } else if param_iter.next().is_some() && fun_type.params().rest().is_none() {
             // We wanted more args!
             return Err(Error::new(
@@ -578,11 +578,11 @@ impl<'a> InferCtx<'a> {
         Ok(InferredNode {
             expr: hir::Expr::App(
                 span,
-                hir::App {
-                    fun_expr: Box::new(fun_expr),
+                Box::new(hir::App {
+                    fun_expr,
                     fixed_arg_exprs: inferred_fixed_arg_exprs,
                     rest_arg_expr: inferred_rest_arg_expr,
-                },
+                }),
             ),
             poly_type: ret_type,
         })
@@ -616,7 +616,7 @@ impl<'a> InferCtx<'a> {
 
         let wanted_fun_type = ty::TopFun::new(wanted_purity, required_type.clone()).into_ty_ref();
 
-        let fun_node = self.visit_expr(fcx, &wanted_fun_type, *fun_expr)?;
+        let fun_node = self.visit_expr(fcx, &wanted_fun_type, fun_expr)?;
         let revealed_fun_type = fun_node.poly_type;
 
         match ty::resolve::resolve_poly_ty(self.tvars, &revealed_fun_type).as_ty() {
@@ -636,11 +636,11 @@ impl<'a> InferCtx<'a> {
                 let subject_node = self.visit_expr(fcx, &ty::Ty::Any.into_poly(), subject_expr)?;
                 let app_expr = hir::Expr::App(
                     span,
-                    hir::App {
-                        fun_expr: Box::new(fun_node.expr),
+                    Box::new(hir::App {
+                        fun_expr: fun_node.expr,
                         fixed_arg_exprs: vec![subject_node.expr],
                         rest_arg_expr: None,
-                    },
+                    }),
                 );
 
                 let pred_result =
@@ -718,12 +718,8 @@ impl<'a> InferCtx<'a> {
             self.var_to_type.insert(var_id, var_type);
         });
 
-        let value_node = self.visit_expr_with_self_var_id(
-            fcx,
-            &required_destruc_type,
-            *value_expr,
-            self_var_id,
-        )?;
+        let value_node =
+            self.visit_expr_with_self_var_id(fcx, &required_destruc_type, value_expr, self_var_id)?;
 
         let free_ty_offset = self.destruc_value(
             &destruc,
@@ -734,17 +730,17 @@ impl<'a> InferCtx<'a> {
             false,
         );
 
-        let body_node = self.visit_expr(fcx, required_type, *body_expr)?;
+        let body_node = self.visit_expr(fcx, required_type, body_expr)?;
         let mut inferred_free_types = self.free_ty_polys.split_off(free_ty_offset);
 
         Ok(InferredNode {
             expr: hir::Expr::Let(
                 span,
-                hir::Let {
+                Box::new(hir::Let {
                     destruc: destruc::subst_destruc(&mut inferred_free_types, destruc),
-                    value_expr: Box::new(value_node.expr),
-                    body_expr: Box::new(body_node.expr),
-                },
+                    value_expr: value_node.expr,
+                    body_expr: body_node.expr,
+                }),
             ),
             poly_type: body_node.poly_type,
         })
@@ -761,13 +757,13 @@ impl<'a> InferCtx<'a> {
             hir::Expr::Lit(datum) => self.visit_lit(required_type, datum),
             hir::Expr::Cond(span, cond) => self.visit_cond(fcx, required_type, span, *cond),
             hir::Expr::Do(exprs) => self.visit_do(fcx, required_type, exprs),
-            hir::Expr::Fun(span, fun) => self.visit_fun(required_type, span, fun, self_var_id),
+            hir::Expr::Fun(span, fun) => self.visit_fun(required_type, span, *fun, self_var_id),
             hir::Expr::TyPred(span, test_type) => {
                 self.visit_ty_pred(required_type, span, test_type)
             }
-            hir::Expr::Let(span, hir_let) => self.visit_let(fcx, required_type, span, hir_let),
+            hir::Expr::Let(span, hir_let) => self.visit_let(fcx, required_type, span, *hir_let),
             hir::Expr::Ref(span, var_id) => self.visit_ref(fcx, required_type, span, var_id),
-            hir::Expr::App(span, app) => self.visit_app(fcx, required_type, span, app)
+            hir::Expr::App(span, app) => self.visit_app(fcx, required_type, span, *app)
                 .map(|app_node| app_node.into_node()),
         }
     }
