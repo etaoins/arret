@@ -379,36 +379,36 @@ impl<'a> InferCtx<'a> {
         };
 
         let body_node = self.visit_expr(&mut fun_scx, &wanted_ret_type, *decl_fun.body_expr)?;
-        let actual_ret_type = body_node.poly_type;
-        let actual_purity = fun_scx.fun_purity.into_poly();
+        let revealed_ret_type = body_node.poly_type;
+        let revealed_purity = fun_scx.fun_purity.into_poly();
 
         let mut inferred_free_types = self.free_ty_polys.split_off(free_ty_offset);
 
-        let actual_param_destruc =
+        let revealed_param_destruc =
             destruc::subst_list_destruc(&mut inferred_free_types, decl_fun.params);
-        let actual_param_type = hir::destruc::poly_for_list_destruc(&actual_param_destruc);
+        let revealed_param_type = hir::destruc::poly_for_list_destruc(&revealed_param_destruc);
 
-        let found_type = ty::Fun::new(
+        let revealed_type = ty::Fun::new(
             decl_fun.pvar_ids.clone(),
             decl_fun.tvar_ids.clone(),
-            ty::TopFun::new(actual_purity.clone(), actual_ret_type.clone()),
-            actual_param_type,
+            ty::TopFun::new(revealed_purity.clone(), revealed_ret_type.clone()),
+            revealed_param_type,
         ).into_ref();
 
-        let found_fun = hir::Fun::<ty::Poly> {
+        let revealed_fun = hir::Fun::<ty::Poly> {
             pvar_ids: decl_fun.pvar_ids.clone(),
             tvar_ids: decl_fun.tvar_ids.clone(),
-            purity: actual_purity,
-            params: actual_param_destruc,
-            ret_ty: actual_ret_type,
+            purity: revealed_purity,
+            params: revealed_param_destruc,
+            ret_ty: revealed_ret_type,
             body_expr: Box::new(body_node.expr),
         };
 
-        self.ensure_is_a(span, &found_type, required_type)?;
+        self.ensure_is_a(span, &revealed_type, required_type)?;
 
         Ok(InferredNode {
-            expr: hir::Expr::Fun(span, found_fun),
-            poly_type: found_type,
+            expr: hir::Expr::Fun(span, revealed_fun),
+            poly_type: revealed_type,
         })
     }
 
@@ -532,12 +532,12 @@ impl<'a> InferCtx<'a> {
         let wanted_fun_type = ty::TopFun::new(wanted_purity, required_type.clone()).into_ref();
 
         let fun_node = self.visit_expr(scx, &wanted_fun_type, *fun_expr)?;
-        let actual_fun_type = fun_node.poly_type;
+        let revealed_fun_type = fun_node.poly_type;
 
-        match ty::resolve::resolve_poly_ty(self.tvars, &actual_fun_type).as_ty() {
+        match ty::resolve::resolve_poly_ty(self.tvars, &revealed_fun_type).as_ty() {
             ty::Ty::TopFun(_) => Err(Error::new(
                 span,
-                ErrorKind::TopFunApply(self.str_for_poly(&actual_fun_type)),
+                ErrorKind::TopFunApply(self.str_for_poly(&revealed_fun_type)),
             )),
             ty::Ty::TyPred(subject_poly) => {
                 // TODO: Arity
