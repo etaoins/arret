@@ -323,7 +323,11 @@ impl<'a> InferCtx<'a> {
         required_type: &ty::Poly,
         span: Span,
         decl_fun: hir::Fun<ty::Decl>,
+        self_var_id: Option<hir::VarId>,
     ) -> Result<InferredNode> {
+        // This is set to false if we encounter any free types in our params or ret
+        let mut decl_tys_are_known = true;
+
         // TODO: Union types
         let required_fun_type = match required_type {
             ty::Poly::Fixed(ty::Ty::Fun(fun)) => Some(fun),
@@ -353,8 +357,15 @@ impl<'a> InferCtx<'a> {
             true,
         )?;
 
+        if free_ty_offset != self.free_ty_polys.len() {
+            // We have free parameter types
+            decl_tys_are_known = false;
+        }
+
         // Use the declared return type if possible
         let wanted_ret_type = decl_fun.ret_ty.try_to_poly().unwrap_or_else(|| {
+            decl_tys_are_known = false;
+
             if let Some(ref required_top_fun_type) = required_top_fun_type {
                 // Fall back to the backwards type
                 required_top_fun_type.ret().clone()
@@ -373,6 +384,21 @@ impl<'a> InferCtx<'a> {
             })
             // Functions start pure until proven otherwise
             .unwrap_or_else(|| PurityVarType::Free(Purity::Pure.into_poly()));
+
+        if let (Some(self_var_id), true) = (self_var_id, decl_tys_are_known) {
+            if let PurityVarType::Known(ref poly_purty) = fun_purity_var {
+                let self_type = ty::Fun::new(
+                    decl_fun.pvar_ids.clone(),
+                    decl_fun.tvar_ids.clone(),
+                    ty::TopFun::new(poly_purty.clone(), wanted_ret_type.clone()),
+                    initial_param_type,
+                ).into_ref();
+
+                // We have a known type; allow recursive calls
+                self.var_to_type
+                    .insert(self_var_id, VarType::Known(self_type));
+            }
+        }
 
         let mut fun_scx = SubtreeCtx {
             fun_purity: fun_purity_var,
@@ -612,18 +638,24 @@ impl<'a> InferCtx<'a> {
             typeck::destruc::type_for_decl_destruc(self.tvars, &destruc, None);
 
         // Pre-bind our variables to deal with recursive definitions
-        typeck::destruc::visit_vars(&destruc, |var_id, decl_type| {
-            match decl_type.try_to_poly() {
+        let self_var_id = typeck::destruc::visit_vars(
+            &destruc,
+            |var_id, decl_type| match decl_type.try_to_poly() {
                 Some(poly_type) => {
                     self.var_to_type.insert(var_id, VarType::Known(poly_type));
                 }
                 None => {
                     self.var_to_type.insert(var_id, VarType::Recursive);
                 }
-            }
-        });
+            },
+        );
 
-        let value_node = self.visit_expr(scx, &required_destruc_type, *value_expr)?;
+        let value_node = self.visit_expr_with_self_var_id(
+            scx,
+            &required_destruc_type,
+            *value_expr,
+            self_var_id,
+        )?;
 
         let free_ty_offset = self.destruc_value(
             &destruc,
@@ -650,17 +682,18 @@ impl<'a> InferCtx<'a> {
         })
     }
 
-    fn visit_expr(
+    fn visit_expr_with_self_var_id(
         &mut self,
         scx: &mut SubtreeCtx,
         required_type: &ty::Poly,
         expr: hir::Expr<ty::Decl>,
+        self_var_id: Option<hir::VarId>,
     ) -> Result<InferredNode> {
         match expr {
             hir::Expr::Lit(datum) => self.visit_lit(required_type, datum),
             hir::Expr::Cond(span, cond) => self.visit_cond(scx, required_type, span, cond),
             hir::Expr::Do(exprs) => self.visit_do(scx, required_type, exprs),
-            hir::Expr::Fun(span, fun) => self.visit_fun(required_type, span, fun),
+            hir::Expr::Fun(span, fun) => self.visit_fun(required_type, span, fun, self_var_id),
             hir::Expr::TyPred(span, test_type) => {
                 self.visit_ty_pred(required_type, span, test_type)
             }
@@ -668,6 +701,15 @@ impl<'a> InferCtx<'a> {
             hir::Expr::Ref(span, var_id) => self.visit_ref(required_type, span, var_id),
             hir::Expr::App(span, app) => self.visit_app(scx, required_type, span, app),
         }
+    }
+
+    fn visit_expr(
+        &mut self,
+        scx: &mut SubtreeCtx,
+        required_type: &ty::Poly,
+        expr: hir::Expr<ty::Decl>,
+    ) -> Result<InferredNode> {
+        self.visit_expr_with_self_var_id(scx, required_type, expr, None)
     }
 
     fn destruc_scalar_value(
@@ -755,7 +797,7 @@ impl<'a> InferCtx<'a> {
         };
 
         // Mark all of our free typed variable as recursive
-        typeck::destruc::visit_vars(&destruc, |var_id, decl_type| {
+        let self_var_id = typeck::destruc::visit_vars(&destruc, |var_id, decl_type| {
             if *decl_type == ty::Decl::Free {
                 self.var_to_type.insert(var_id, VarType::Recursive);
             }
@@ -763,7 +805,8 @@ impl<'a> InferCtx<'a> {
 
         let required_type = typeck::destruc::type_for_decl_destruc(self.tvars, &destruc, None);
         let value_span = value_expr.span().unwrap_or(span);
-        let value_node = self.visit_expr(&mut scx, &required_type, value_expr)?;
+        let value_node =
+            self.visit_expr_with_self_var_id(&mut scx, &required_type, value_expr, self_var_id)?;
 
         let free_ty_offset = self.destruc_value(
             &destruc,
@@ -926,8 +969,18 @@ mod test {
         assert_guided_type_for_expr("(Symbol -> true)", "(fn (_) true)", "(Symbol -> true)");
         assert_guided_type_for_expr("(Symbol -> Symbol)", "(fn (x) x)", "(Symbol -> Any))");
 
+        // Function with free types being bound to an incompatible type
         let j = "(let [[f : (Symbol -> true)] (fn ([_ : String]) true)])";
         let t = "                             ^^^^^^^^^^^^^^^^^^^^^^^^  ";
+        let err = Error::new(
+            t2s(t),
+            ErrorKind::IsNotA("(String -> true)".to_owned(), "(Symbol -> true)".to_owned()),
+        );
+        assert_type_error(&err, j);
+
+        // Function with a known type being bound to an incompatible type
+        let j = "(let [[f : (Symbol -> true)] (fn ([_ : String]) -> true true)])";
+        let t = "                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ";
         let err = Error::new(
             t2s(t),
             ErrorKind::IsNotA("(String -> true)".to_owned(), "(Symbol -> true)".to_owned()),
@@ -966,10 +1019,24 @@ mod test {
             "(let [[recurse : (-> 'foo)] (fn () (recurse))] (recurse))",
         );
 
+        assert_type_for_expr(
+            "'foo",
+            "(let [recurse (fn ([x : Int]) -> 'foo (recurse x))] (recurse 1))",
+        );
+
         let j = "(let [recurse (fn () (recurse))] (recurse))";
         let t = "                     ^^^^^^^^^             ";
         let err = Error::new(t2s(t), ErrorKind::RecursiveType);
+        assert_type_error(&err, j);
 
+        let j = "(let [recurse (fn (x) -> 'foo (recurse x))] (recurse 1))";
+        let t = "                              ^^^^^^^^^^^               ";
+        let err = Error::new(t2s(t), ErrorKind::RecursiveType);
+        assert_type_error(&err, j);
+
+        let j = "(let [recurse (fn ([x : Int]) (recurse x))] (recurse 1))";
+        let t = "                              ^^^^^^^^^^^               ";
+        let err = Error::new(t2s(t), ErrorKind::RecursiveType);
         assert_type_error(&err, j);
     }
 

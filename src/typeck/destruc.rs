@@ -94,10 +94,19 @@ where
     }
 }
 
-pub fn visit_vars<F>(destruc: &destruc::Destruc<ty::Decl>, visitor: F)
+/// Visits the variables in the passed destruc with the given visitor function
+///
+/// If the root destruc is scalar its VarId will be returned, otherwise None
+pub fn visit_vars<F>(destruc: &destruc::Destruc<ty::Decl>, visitor: F) -> Option<hir::VarId>
 where
     F: FnMut(hir::VarId, &ty::Decl) -> (),
 {
     let mut vcx = VisitVarCtx { visitor };
-    vcx.visit_vars(destruc)
+    vcx.visit_vars(destruc);
+
+    if let destruc::Destruc::Scalar(_, scalar) = destruc {
+        *scalar.var_id()
+    } else {
+        None
+    }
 }
