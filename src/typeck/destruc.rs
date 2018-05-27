@@ -59,30 +59,6 @@ pub fn type_for_decl_destruc(
     }
 }
 
-pub fn type_for_poly_list_destruc(list: &destruc::List<ty::Poly>) -> ty::List<ty::Poly> {
-    let fixed_polys = list.fixed()
-        .iter()
-        .map(|fixed_destruc| type_for_poly_destruc(fixed_destruc))
-        .collect();
-
-    let rest_poly = match list.rest() {
-        Some(rest) => Some(rest.ty().clone()),
-        None => None,
-    };
-
-    ty::List::new(fixed_polys, rest_poly)
-}
-
-/// Returns the required type for a destruc
-pub fn type_for_poly_destruc(destruc: &destruc::Destruc<ty::Poly>) -> ty::Poly {
-    match *destruc {
-        destruc::Destruc::Scalar(_, ref scalar) => scalar.ty().clone(),
-        destruc::Destruc::List(_, ref list) => {
-            ty::Ty::List(type_for_poly_list_destruc(list)).into_poly()
-        }
-    }
-}
-
 struct VisitVarCtx<F>
 where
     F: FnMut(hir::VarId, &ty::Decl) -> (),

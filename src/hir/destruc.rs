@@ -119,3 +119,24 @@ pub fn subst_destruc(
         Destruc::List(span, list) => Destruc::List(span, subst_list_destruc(free_ty_polys, list)),
     }
 }
+
+pub fn poly_for_list_destruc(list: &List<ty::Poly>) -> ty::List<ty::Poly> {
+    let fixed_polys = list.fixed()
+        .iter()
+        .map(|fixed_destruc| poly_for_destruc(fixed_destruc))
+        .collect();
+
+    let rest_poly = match list.rest() {
+        Some(rest) => Some(rest.ty().clone()),
+        None => None,
+    };
+
+    ty::List::new(fixed_polys, rest_poly)
+}
+
+pub fn poly_for_destruc(destruc: &Destruc<ty::Poly>) -> ty::Poly {
+    match *destruc {
+        Destruc::Scalar(_, ref scalar) => scalar.ty().clone(),
+        Destruc::List(_, ref list) => ty::Ty::List(poly_for_list_destruc(list)).into_poly(),
+    }
+}

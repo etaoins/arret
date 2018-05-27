@@ -386,7 +386,7 @@ impl<'a> InferCtx<'a> {
 
         let actual_param_destruc =
             destruc::subst_list_destruc(&mut inferred_free_types, decl_fun.params);
-        let actual_param_type = typeck::destruc::type_for_poly_list_destruc(&actual_param_destruc);
+        let actual_param_type = hir::destruc::poly_for_list_destruc(&actual_param_destruc);
 
         let found_type = ty::Fun::new(
             decl_fun.pvar_ids.clone(),
