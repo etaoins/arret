@@ -420,7 +420,7 @@ impl<'a> InferCtx<'a> {
             ListIterator::new(&initial_param_type),
             // If a parameter has a free decl type then we can refine the type
             true,
-        )?;
+        );
 
         if free_ty_offset != self.free_ty_polys.len() {
             // We have free parameter types
@@ -740,7 +740,7 @@ impl<'a> InferCtx<'a> {
             // We know the exact type of these variables; do not infer further even if their type
             // wasn't declared
             false,
-        )?;
+        );
 
         let body_node = self.visit_expr(fcx, required_type, *body_expr)?;
         let mut inferred_free_types = self.free_ty_polys.split_off(free_ty_offset);
@@ -822,16 +822,15 @@ impl<'a> InferCtx<'a> {
         value_span: Span,
         mut value_type_iter: ListIterator<ty::Poly>,
         can_refine: bool,
-    ) -> Result<usize> {
+    ) -> usize {
         let start_offset = self.free_ty_polys.len();
 
         for fixed_destruc in list.fixed() {
-            let member_type = match value_type_iter.next() {
-                Some(member_type) => member_type,
-                None => panic!("Destructured value with unexpected type"),
-            };
+            let member_type = value_type_iter
+                .next()
+                .expect("Destructured value with unexpected type");
 
-            self.destruc_value(fixed_destruc, value_span, member_type, can_refine)?;
+            self.destruc_value(fixed_destruc, value_span, member_type, can_refine);
         }
 
         if let Some(scalar) = list.rest() {
@@ -839,7 +838,7 @@ impl<'a> InferCtx<'a> {
             self.destruc_scalar_value(scalar, &tail_type, can_refine);
         }
 
-        Ok(start_offset)
+        start_offset
     }
 
     fn destruc_value(
@@ -848,10 +847,10 @@ impl<'a> InferCtx<'a> {
         value_span: Span,
         value_type: &ty::Poly,
         can_refine: bool,
-    ) -> Result<usize> {
+    ) -> usize {
         match destruc {
             destruc::Destruc::Scalar(_, scalar) => {
-                Ok(self.destruc_scalar_value(scalar, value_type, can_refine))
+                self.destruc_scalar_value(scalar, value_type, can_refine)
             }
             destruc::Destruc::List(_, list) => {
                 let value_type_iter = ListIterator::try_new_from_ty_ref(value_type)
@@ -892,7 +891,7 @@ impl<'a> InferCtx<'a> {
             // We know the exact type of these variables; do not infer further even if their type
             // wasn't declared
             false,
-        )?;
+        );
 
         let mut inferred_free_types = self.free_ty_polys.split_off(free_ty_offset);
         Ok(hir::Def {
