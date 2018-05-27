@@ -109,6 +109,28 @@ where
                 ].iter(),
                 test_ref,
             ),
+            ty::Ty::List(list) => {
+                // Allow checking for a rest list. This is required for `(nil?)` to work correctly.
+                if let Some(rest) = list.rest() {
+                    // This is the list type if we have no rest elements
+                    let terminated_list = ty::List::new(list.fixed().clone(), None);
+
+                    // This is the list type if we have at least one rest element
+                    let mut continued_fixed = list.fixed().clone();
+                    continued_fixed.push(rest.clone());
+                    let continued_list = ty::List::new(continued_fixed, Some(rest.clone()));
+
+                    Ok(self.interpret_ref_iter(
+                        [
+                            ty::Ty::List(terminated_list).into_ref(),
+                            ty::Ty::List(continued_list).into_ref(),
+                        ].iter(),
+                        test_ref,
+                    )?)
+                } else {
+                    Err(Error::TypeErased(subject_ref.clone(), test_ref.clone()))
+                }
+            }
             ty::Ty::Union(members) => self.interpret_ref_iter(members.iter(), test_ref),
             _ => Err(Error::TypeErased(subject_ref.clone(), test_ref.clone())),
         }
@@ -213,6 +235,16 @@ mod test {
         );
 
         assert_erased("Any", "(Listof Int)")
+    }
+
+    #[test]
+    fn listof_type() {
+        assert_dynamic(("()", "(List Int Int ...)"), "(Listof Int)", "()");
+        assert_dynamic(
+            ("(List Float)", "(List Float Float Float ...)"),
+            "(List Float Float ...)",
+            "(List Float)",
+        );
     }
 
     #[test]
