@@ -716,16 +716,14 @@ impl<'a> InferCtx<'a> {
             typeck::destruc::type_for_decl_destruc(self.tvars, &destruc, None);
 
         // Pre-bind our variables to deal with recursive definitions
-        let self_var_id =
-            typeck::destruc::visit_vars(&destruc, |var_id, decl_type| match decl_type {
-                ty::Decl::Known(poly_type) => {
-                    self.var_to_type
-                        .insert(var_id, VarType::Known(poly_type.clone()));
-                }
-                ty::Decl::Free => {
-                    self.var_to_type.insert(var_id, VarType::Recursive);
-                }
-            });
+        let self_var_id = typeck::destruc::visit_vars(&destruc, |var_id, decl_type| {
+            let var_type = match decl_type {
+                ty::Decl::Known(poly_type) => VarType::Known(poly_type.clone()),
+                ty::Decl::Free => VarType::Recursive,
+            };
+
+            self.var_to_type.insert(var_id, var_type);
+        });
 
         let value_node = self.visit_expr_with_self_var_id(
             fcx,
@@ -929,16 +927,15 @@ impl<'a> InferCtx<'a> {
             let def_id = InputDefId::new(self.input_defs.len());
 
             typeck::destruc::visit_vars(&hir_def.destruc, |var_id, decl_type| {
-                match decl_type {
-                    ty::Decl::Known(poly_type) => {
-                        self.var_to_type
-                            .insert(var_id, VarType::Known(poly_type.clone()));
-                    }
+                let var_type = match decl_type {
+                    ty::Decl::Known(poly_type) => VarType::Known(poly_type.clone()),
                     ty::Decl::Free => {
                         // Record the definition ID so we can deal with forward type references
-                        self.var_to_type.insert(var_id, VarType::Pending(def_id));
+                        VarType::Pending(def_id)
                     }
-                }
+                };
+
+                self.var_to_type.insert(var_id, var_type);
             });
 
             self.input_defs.push(InputDef::Pending(hir_def));
