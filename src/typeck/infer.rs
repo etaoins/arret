@@ -451,7 +451,7 @@ impl<'a> InferCtx<'a> {
                         decl_fun.tvar_ids.clone(),
                         ty::TopFun::new(poly_purity.clone(), wanted_ret_type.clone()),
                         initial_param_type,
-                    ).into_ref();
+                    ).into_ty_ref();
 
                     // We have a fully known type; allow recursive calls
                     self.var_to_type
@@ -483,7 +483,7 @@ impl<'a> InferCtx<'a> {
             decl_fun.tvar_ids.clone(),
             ty::TopFun::new(revealed_purity.clone(), revealed_ret_type.clone()),
             revealed_param_type,
-        ).into_ref();
+        ).into_ty_ref();
 
         let revealed_fun = hir::Fun::<ty::Poly> {
             pvar_ids: decl_fun.pvar_ids.clone(),
@@ -617,7 +617,7 @@ impl<'a> InferCtx<'a> {
             }
         };
 
-        let wanted_fun_type = ty::TopFun::new(wanted_purity, required_type.clone()).into_ref();
+        let wanted_fun_type = ty::TopFun::new(wanted_purity, required_type.clone()).into_ty_ref();
 
         let fun_node = self.visit_expr(fcx, &wanted_fun_type, *fun_expr)?;
         let revealed_fun_type = fun_node.poly_type;

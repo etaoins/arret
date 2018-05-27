@@ -49,7 +49,7 @@ where
         match self.unify_ty_refs(ty_ref1, ty_ref2)? {
             UnifiedTy::Merged(ty_ref) => Ok(ty_ref),
             UnifiedTy::Discerned => {
-                Ok(ty::Ty::Union(vec![ty_ref1.clone(), ty_ref2.clone()]).into_ref())
+                Ok(ty::Ty::Union(vec![ty_ref1.clone(), ty_ref2.clone()]).into_ty_ref())
             }
         }
     }
@@ -138,7 +138,7 @@ where
         let unified_ret = self.unify_to_ty_ref(top_fun1.ret(), top_fun2.ret())?;
 
         Ok(UnifiedTy::Merged(
-            ty::TopFun::new(unified_purity, unified_ret).into_ref(),
+            ty::TopFun::new(unified_purity, unified_ret).into_ty_ref(),
         ))
     }
 
@@ -155,17 +155,17 @@ where
                         S::TVarIds::monomorphic(),
                         ty::TopFun::new(unified_purity, unified_ret),
                         unified_params,
-                    ).into_ref(),
+                    ).into_ty_ref(),
                 )),
                 Err(ty::intersect::Error::Disjoint) => Ok(UnifiedTy::Merged(
-                    ty::TopFun::new(unified_purity, unified_ret).into_ref(),
+                    ty::TopFun::new(unified_purity, unified_ret).into_ty_ref(),
                 )),
             }
         } else {
             // TODO: We could do better here by finding our upper bound and unifying them
             // Preserving the polymorphicness would be very complex
             Ok(UnifiedTy::Merged(
-                ty::TopFun::new(unified_purity, ty::Ty::Any.into_ref()).into_ref(),
+                ty::TopFun::new(unified_purity, ty::Ty::Any.into_ty_ref()).into_ty_ref(),
             ))
         }
     }
@@ -183,25 +183,25 @@ where
         }
         Ok(match (ty1, ty2) {
             // Handle supertype relationships
-            (_, ty::Ty::Any) | (ty::Ty::Any, _) => UnifiedTy::Merged(ty::Ty::Any.into_ref()),
+            (_, ty::Ty::Any) | (ty::Ty::Any, _) => UnifiedTy::Merged(ty::Ty::Any.into_ty_ref()),
             (ty::Ty::LitSym(_), ty::Ty::Sym) | (ty::Ty::Sym, ty::Ty::LitSym(_)) => {
-                UnifiedTy::Merged(ty::Ty::Sym.into_ref())
+                UnifiedTy::Merged(ty::Ty::Sym.into_ty_ref())
             }
             (ty::Ty::LitBool(_), ty::Ty::Bool) | (ty::Ty::Bool, ty::Ty::LitBool(_)) => {
-                UnifiedTy::Merged(ty::Ty::Bool.into_ref())
+                UnifiedTy::Merged(ty::Ty::Bool.into_ty_ref())
             }
 
             // Simplify (U true false) => Bool
             (ty::Ty::LitBool(true), ty::Ty::LitBool(false))
             | (ty::Ty::LitBool(false), ty::Ty::LitBool(true)) => {
-                UnifiedTy::Merged(ty::Ty::Bool.into_ref())
+                UnifiedTy::Merged(ty::Ty::Bool.into_ty_ref())
             }
 
             // Set type
             (ty::Ty::Set(ty_ref1), ty::Ty::Set(ty_ref2)) => {
                 let unified_ty_ref = self.unify_to_ty_ref(&ty_ref1, &ty_ref2)?;
 
-                UnifiedTy::Merged(ty::Ty::Set(Box::new(unified_ty_ref)).into_ref())
+                UnifiedTy::Merged(ty::Ty::Set(Box::new(unified_ty_ref)).into_ty_ref())
             }
 
             // Map type
@@ -210,7 +210,7 @@ where
                 let unified_val_ref = self.unify_to_ty_ref(&val_ref1, &val_ref2)?;
 
                 UnifiedTy::Merged(
-                    ty::Ty::Map(Box::new(unified_key_ref), Box::new(unified_val_ref)).into_ref(),
+                    ty::Ty::Map(Box::new(unified_key_ref), Box::new(unified_val_ref)).into_ty_ref(),
                 )
             }
 
@@ -226,18 +226,18 @@ where
                         .map(|(member1, member2)| self.unify_to_ty_ref(member1, member2))
                         .collect::<Result<Vec<S>, E>>()?;
 
-                    UnifiedTy::Merged(ty::Ty::Vec(unified_members).into_ref())
+                    UnifiedTy::Merged(ty::Ty::Vec(unified_members).into_ty_ref())
                 }
             }
             (ty::Ty::Vecof(member1), ty::Ty::Vecof(member2)) => UnifiedTy::Merged(
-                ty::Ty::Vecof(Box::new(self.unify_to_ty_ref(member1, member2)?)).into_ref(),
+                ty::Ty::Vecof(Box::new(self.unify_to_ty_ref(member1, member2)?)).into_ty_ref(),
             ),
             (ty::Ty::Vec(members1), ty::Ty::Vecof(member2))
             | (ty::Ty::Vecof(member2), ty::Ty::Vec(members1)) => {
                 let unified_member =
                     self.unify_ref_iter(vec![member2.as_ref().clone()], members1.iter().cloned())?;
 
-                UnifiedTy::Merged(ty::Ty::Vecof(Box::new(unified_member)).into_ref())
+                UnifiedTy::Merged(ty::Ty::Vecof(Box::new(unified_member)).into_ty_ref())
             }
 
             // Function types
@@ -259,7 +259,7 @@ where
             }
 
             (ty::Ty::TyPred(_), ty::Ty::TyPred(_)) => {
-                UnifiedTy::Merged(ty::Ty::Fun(Box::new(ty::Fun::new_for_ty_pred())).into_ref())
+                UnifiedTy::Merged(ty::Ty::Fun(Box::new(ty::Fun::new_for_ty_pred())).into_ty_ref())
             }
 
             // Union types
@@ -280,7 +280,7 @@ where
             (ty::Ty::List(list1), ty::Ty::List(list2)) => match self.unify_list(list1, list2)? {
                 UnifiedList::Discerned => UnifiedTy::Discerned,
                 UnifiedList::Merged(merged_list) => {
-                    UnifiedTy::Merged(ty::Ty::List(merged_list).into_ref())
+                    UnifiedTy::Merged(ty::Ty::List(merged_list).into_ty_ref())
                 }
             },
 
@@ -806,7 +806,7 @@ mod test {
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
             ty::List::new(vec![ptype1_unbounded.clone()], None),
-        ).into_ref();
+        ).into_ty_ref();
 
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Fun::new(
@@ -814,7 +814,7 @@ mod test {
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::TopFun::new(Purity::Impure.into_poly(), ptype2_string.clone()),
             ty::List::new(vec![ptype2_string.clone()], None),
-        ).into_ref();
+        ).into_ty_ref();
 
         assert_eq!(
             UnifiedTy::Merged(pidentity_fun.clone()),

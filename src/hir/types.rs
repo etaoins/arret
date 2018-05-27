@@ -131,7 +131,7 @@ impl<'a> LowerTyContext<'a> {
             && self.scope.get_datum(&arg_data[0]) == Some(Binding::Prim(Prim::Ellipsis))
         {
             // Top function type in the form `(... -> ReturnType)`
-            Ok(top_fun.into_ref())
+            Ok(top_fun.into_ty_ref())
         } else {
             let (fixed, rest) = split_into_fixed_and_rest(self.scope, arg_data);
 
@@ -151,7 +151,7 @@ impl<'a> LowerTyContext<'a> {
                 ty::TVarIds::monomorphic(),
                 top_fun,
                 params,
-            ).into_ref())
+            ).into_ty_ref())
         }
     }
 
@@ -749,7 +749,7 @@ mod test {
             ty::TVarIds::monomorphic(),
             ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
             ty::List::new(vec![], None),
-        ).into_ref();
+        ).into_ty_ref();
 
         assert_poly_for_str(&expected, j);
     }
@@ -766,7 +766,7 @@ mod test {
                 ty::Ty::LitBool(true).into_poly(),
             ),
             ty::List::new(vec![], None),
-        ).into_ref();
+        ).into_ty_ref();
 
         assert_poly_for_str(&expected, j);
     }
@@ -780,7 +780,7 @@ mod test {
             ty::TVarIds::monomorphic(),
             ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
             ty::List::new(vec![ty::Ty::LitBool(false).into_poly()], None),
-        ).into_ref();
+        ).into_ty_ref();
 
         assert_poly_for_str(&expected, j);
     }
@@ -797,7 +797,7 @@ mod test {
                 ty::Ty::LitBool(true).into_poly(),
             ),
             ty::List::new(vec![ty::Ty::Str.into_poly()], Some(ty::Ty::Sym.into_poly())),
-        ).into_ref();
+        ).into_ty_ref();
 
         assert_poly_for_str(&expected, j);
     }

@@ -87,8 +87,7 @@ impl<S> Ty<S>
 where
     S: TyRef,
 {
-    // TODO: Rename into_ty_ref
-    pub fn into_ref(self) -> S {
+    pub fn into_ty_ref(self) -> S {
         S::from_ty(self)
     }
 }
@@ -115,7 +114,7 @@ where
     pub fn new_for_ty_pred() -> TopFun<S> {
         Self::new(
             S::PRef::from_purity(purity::Purity::Pure),
-            Ty::Bool.into_ref(),
+            Ty::Bool.into_ty_ref(),
         )
     }
 
@@ -131,8 +130,8 @@ where
         Ty::TopFun(Box::new(self))
     }
 
-    pub fn into_ref(self) -> S {
-        self.into_ty().into_ref()
+    pub fn into_ty_ref(self) -> S {
+        self.into_ty().into_ty_ref()
     }
 }
 
@@ -221,7 +220,7 @@ where
             S::PVarIds::monomorphic(),
             S::TVarIds::monomorphic(),
             TopFun::new_for_ty_pred(),
-            List::new(vec![Ty::Any.into_ref()], None),
+            List::new(vec![Ty::Any.into_ty_ref()], None),
         )
     }
 
@@ -257,7 +256,7 @@ where
         Ty::Fun(Box::new(self))
     }
 
-    pub fn into_ref(self) -> S {
+    pub fn into_ty_ref(self) -> S {
         S::from_ty(self.into_ty())
     }
 }

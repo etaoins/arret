@@ -47,7 +47,7 @@ where
         match intersected_types.len() {
             0 => Err(Error::Disjoint),
             1 => Ok(intersected_types.pop().unwrap()),
-            _ => Ok(ty::Ty::Union(intersected_types).into_ref()),
+            _ => Ok(ty::Ty::Union(intersected_types).into_ty_ref()),
         }
     }
 
@@ -96,19 +96,19 @@ where
 
             // Set type
             (ty::Ty::Set(member1), ty::Ty::Set(member2)) => {
-                Ok(ty::Ty::Set(Box::new(self.intersect_ty_refs(member1, member2)?)).into_ref())
+                Ok(ty::Ty::Set(Box::new(self.intersect_ty_refs(member1, member2)?)).into_ty_ref())
             }
 
             // Map type
             (ty::Ty::Map(key1, value1), ty::Ty::Map(key2, value2)) => Ok(ty::Ty::Map(
                 Box::new(self.intersect_ty_refs(key1, key2)?),
                 Box::new(self.intersect_ty_refs(value1, value2)?),
-            ).into_ref()),
+            ).into_ty_ref()),
 
             // Vector types
-            (ty::Ty::Vecof(member1), ty::Ty::Vecof(member2)) => {
-                Ok(ty::Ty::Vecof(Box::new(self.intersect_ty_refs(member1, member2)?)).into_ref())
-            }
+            (ty::Ty::Vecof(member1), ty::Ty::Vecof(member2)) => Ok(ty::Ty::Vecof(Box::new(
+                self.intersect_ty_refs(member1, member2)?,
+            )).into_ty_ref()),
             (ty::Ty::Vec(members1), ty::Ty::Vec(members2)) => {
                 if members1.len() != members2.len() {
                     Err(Error::Disjoint)
@@ -119,7 +119,7 @@ where
                         .map(|(member1, member2)| self.intersect_ty_refs(member1, member2))
                         .collect::<Result<Vec<S>>>()?;
 
-                    Ok(ty::Ty::Vec(intersected_members).into_ref())
+                    Ok(ty::Ty::Vec(intersected_members).into_ty_ref())
                 }
             }
             (ty::Ty::Vecof(member1), ty::Ty::Vec(members2))
@@ -129,12 +129,12 @@ where
                     .map(|member2| self.intersect_ty_refs(member1, member2))
                     .collect::<Result<Vec<S>>>()?;
 
-                Ok(ty::Ty::Vec(intersected_members).into_ref())
+                Ok(ty::Ty::Vec(intersected_members).into_ty_ref())
             }
 
             // List types
             (ty::Ty::List(list1), ty::Ty::List(list2)) => {
-                Ok(ty::Ty::List(self.intersect_list(list1, list2)?).into_ref())
+                Ok(ty::Ty::List(self.intersect_list(list1, list2)?).into_ty_ref())
             }
 
             // Function types
@@ -143,7 +143,7 @@ where
                     self.intersect_purity_refs(top_fun1.purity(), top_fun2.purity());
                 let intersected_ret = self.intersect_ty_refs(top_fun1.ret(), top_fun2.ret())?;
 
-                Ok(ty::TopFun::new(intersected_purity, intersected_ret).into_ref())
+                Ok(ty::TopFun::new(intersected_purity, intersected_ret).into_ty_ref())
             }
             (ty::Ty::TopFun(top_fun), ty::Ty::Fun(fun))
             | (ty::Ty::Fun(fun), ty::Ty::TopFun(top_fun)) => {
@@ -162,7 +162,7 @@ where
                     S::TVarIds::monomorphic(),
                     ty::TopFun::new(intersected_purity, intersected_ret),
                     intersected_params,
-                ).into_ref())
+                ).into_ty_ref())
             }
             (ty::Ty::Fun(fun1), ty::Ty::Fun(fun2)) => {
                 if fun1.is_monomorphic() && fun2.is_monomorphic() {
@@ -176,7 +176,7 @@ where
                         S::TVarIds::monomorphic(),
                         ty::TopFun::new(intersected_purity, intersected_ret),
                         intersected_params,
-                    ).into_ref())
+                    ).into_ty_ref())
                 } else {
                     // TODO: Same issue as top functions
                     Err(Error::Disjoint)
@@ -446,7 +446,7 @@ mod test {
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
             ty::List::new(vec![ptype1_unbounded.clone()], None),
-        ).into_ref();
+        ).into_ty_ref();
 
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Fun::new(
@@ -454,7 +454,7 @@ mod test {
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::TopFun::new(Purity::Impure.into_poly(), ptype2_string.clone()),
             ty::List::new(vec![ptype2_string.clone()], None),
-        ).into_ref();
+        ).into_ty_ref();
 
         let top_pure_fun = poly_for_str("(... -> Any)");
 

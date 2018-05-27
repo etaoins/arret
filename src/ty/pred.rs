@@ -75,17 +75,21 @@ where
         use ty::Ty;
 
         [
-            Ty::Bool.into_ref(),
-            Ty::Char.into_ref(),
-            Ty::Float.into_ref(),
-            ty::TopFun::new(S::PRef::from_purity(Purity::Impure), Ty::Any.into_ref()).into_ref(),
-            Ty::Map(Box::new(Ty::Any.into_ref()), Box::new(Ty::Any.into_ref())).into_ref(),
-            Ty::Int.into_ref(),
-            Ty::Set(Box::new(Ty::Any.into_ref())).into_ref(),
-            Ty::Str.into_ref(),
-            Ty::Sym.into_ref(),
-            Ty::Vecof(Box::new(Ty::Any.into_ref())).into_ref(),
-            Ty::List(ty::List::new(vec![], Some(Ty::Any.into_ref()))).into_ref(),
+            Ty::Bool.into_ty_ref(),
+            Ty::Char.into_ty_ref(),
+            Ty::Float.into_ty_ref(),
+            ty::TopFun::new(S::PRef::from_purity(Purity::Impure), Ty::Any.into_ty_ref())
+                .into_ty_ref(),
+            Ty::Map(
+                Box::new(Ty::Any.into_ty_ref()),
+                Box::new(Ty::Any.into_ty_ref()),
+            ).into_ty_ref(),
+            Ty::Int.into_ty_ref(),
+            Ty::Set(Box::new(Ty::Any.into_ty_ref())).into_ty_ref(),
+            Ty::Str.into_ty_ref(),
+            Ty::Sym.into_ty_ref(),
+            Ty::Vecof(Box::new(Ty::Any.into_ty_ref())).into_ty_ref(),
+            Ty::List(ty::List::new(vec![], Some(Ty::Any.into_ty_ref()))).into_ty_ref(),
         ]
     }
 
@@ -104,8 +108,8 @@ where
             ty::Ty::Any => self.interpret_ref_iter(Self::any_union_members().iter(), test_ref),
             ty::Ty::Bool => self.interpret_ref_iter(
                 [
-                    ty::Ty::LitBool(true).into_ref(),
-                    ty::Ty::LitBool(false).into_ref(),
+                    ty::Ty::LitBool(true).into_ty_ref(),
+                    ty::Ty::LitBool(false).into_ty_ref(),
                 ].iter(),
                 test_ref,
             ),
@@ -122,8 +126,8 @@ where
 
                     Ok(self.interpret_ref_iter(
                         [
-                            ty::Ty::List(terminated_list).into_ref(),
-                            ty::Ty::List(continued_list).into_ref(),
+                            ty::Ty::List(terminated_list).into_ty_ref(),
+                            ty::Ty::List(continued_list).into_ty_ref(),
                         ].iter(),
                         test_ref,
                     )?)

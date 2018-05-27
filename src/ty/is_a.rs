@@ -706,7 +706,7 @@ mod test {
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
             ty::List::new(vec![ptype1_unbounded.clone()], None),
-        ).into_ref();
+        ).into_ty_ref();
 
         // (All [A : Symbol] (A -> A))
         let pidentity_sym_fun = ty::Fun::new(
@@ -714,7 +714,7 @@ mod test {
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype2_symbol.clone()),
             ty::List::new(vec![ptype2_symbol.clone()], None),
-        ).into_ref();
+        ).into_ty_ref();
 
         // (All [A : String] (A ->! A))
         let pidentity_impure_string_fun = ty::Fun::new(
@@ -722,7 +722,7 @@ mod test {
             ty::TVarId::new(2)..ty::TVarId::new(3),
             ty::TopFun::new(Purity::Impure.into_poly(), ptype3_string.clone()),
             ty::List::new(vec![ptype3_string.clone()], None),
-        ).into_ref();
+        ).into_ty_ref();
 
         // All functions should have the top function type
         let top_fun = poly_for_str("(... ->! Any)");

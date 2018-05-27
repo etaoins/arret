@@ -40,7 +40,7 @@ where
 
                 ty::Ty::Map(Box::new(unified_key), Box::new(unified_value))
             }
-        }).into_ref()
+        }).into_ty_ref()
     }
 }
 

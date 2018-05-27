@@ -184,13 +184,13 @@ mod test {
     fn poly_to_mono_pvar() {
         let pvar_id = ty::purity::PVarId::new(1);
         let purity_var = ty::purity::Poly::Var(pvar_id);
-        let poly_top_fun = ty::TopFun::new(purity_var, ty::Ty::Any.into_poly()).into_ref();
+        let poly_top_fun = ty::TopFun::new(purity_var, ty::Ty::Any.into_poly()).into_ty_ref();
         let mut pvars = HashMap::new();
         pvars.insert(pvar_id, Purity::Pure);
 
         let tvars = HashMap::new();
 
-        let expected = ty::TopFun::new(Purity::Pure, ty::Ty::Any.into_mono()).into_ref();
+        let expected = ty::TopFun::new(Purity::Pure, ty::Ty::Any.into_mono()).into_ty_ref();
         assert_eq!(
             expected,
             poly_to_mono(&pvars, &tvars, &poly_top_fun).unwrap()
@@ -201,7 +201,7 @@ mod test {
     fn poly_to_mono_pvar_unresolved() {
         let pvar_id = ty::purity::PVarId::new(1);
         let purity_var = ty::purity::Poly::Var(pvar_id);
-        let poly_top_fun = ty::TopFun::new(purity_var, ty::Ty::Any.into_poly()).into_ref();
+        let poly_top_fun = ty::TopFun::new(purity_var, ty::Ty::Any.into_poly()).into_ty_ref();
         let pvars = HashMap::new();
         // Don't include the pvar
 
