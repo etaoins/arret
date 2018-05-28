@@ -6,12 +6,12 @@ pub enum Datum {
     Char(Span, char),
     Int(Span, i64),
     Float(Span, f64),
-    List(Span, Vec<Datum>),
+    List(Span, Box<[Datum]>),
     Str(Span, Box<str>),
     Sym(Span, Box<str>),
-    Vec(Span, Vec<Datum>),
-    Map(Span, Vec<(Datum, Datum)>),
-    Set(Span, Vec<Datum>),
+    Vec(Span, Box<[Datum]>),
+    Map(Span, Box<[(Datum, Datum)]>),
+    Set(Span, Box<[Datum]>),
 }
 
 impl Datum {

@@ -115,7 +115,7 @@ pub fn lower_macro_rule(
     rule_datum: NsDatum,
 ) -> Result<Rule> {
     let (span, mut rule_values) = if let NsDatum::Vec(span, vs) = rule_datum {
-        (span, vs)
+        (span, vs.into_vec())
     } else {
         return Err(Error::new(
             rule_datum.span(),
@@ -131,10 +131,12 @@ pub fn lower_macro_rule(
     }
 
     let template = rule_values.pop().unwrap();
-    let pattern_data = rule_values.pop().unwrap();
+    let pattern_datum = rule_values.pop().unwrap();
 
-    let pattern = if let NsDatum::List(span, mut vs) = pattern_data {
-        if vs.len() < 1 {
+    let pattern = if let NsDatum::List(span, vs) = pattern_datum {
+        let mut pattern_data = vs.into_vec();
+
+        if pattern_data.len() < 1 {
             return Err(Error::new(
                 span,
                 ErrorKind::IllegalArg(
@@ -143,7 +145,7 @@ pub fn lower_macro_rule(
             ));
         }
 
-        match vs.remove(0) {
+        match pattern_data.remove(0) {
             NsDatum::Ident(_, ref ident) if ident.name() == self_ident.name() => {}
             other => {
                 return Err(Error::new(
@@ -155,10 +157,10 @@ pub fn lower_macro_rule(
             }
         }
 
-        vs
+        pattern_data
     } else {
         return Err(Error::new(
-            pattern_data.span(),
+            pattern_datum.span(),
             ErrorKind::IllegalArg("expected a macro rule pattern list"),
         ));
     };
@@ -217,6 +219,7 @@ pub fn lower_macro_rules(
     let special_vars = SpecialVars { literals };
 
     let rules = rules_values
+        .into_vec()
         .into_iter()
         .map(|rule_datum| lower_macro_rule(scope, self_ident, &special_vars, rule_datum))
         .collect::<Result<Vec<Rule>>>()?;

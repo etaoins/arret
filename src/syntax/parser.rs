@@ -270,7 +270,7 @@ impl<'de> Parser<'de> {
         }
     }
 
-    fn parse_seq<F>(&mut self, terminator: char, make_ec: F) -> Result<Vec<Datum>>
+    fn parse_seq<F>(&mut self, terminator: char, make_ec: F) -> Result<Box<[Datum]>>
     where
         F: FnOnce(Span) -> ExpectedContent,
     {
@@ -287,7 +287,7 @@ impl<'de> Parser<'de> {
             if self.skip_until_non_whitespace(ec)? == terminator {
                 // End of the sequence
                 self.eat_bytes(1);
-                return Ok(content);
+                return Ok(content.into_boxed_slice());
             } else {
                 content.push(self.parse_datum()?);
             }
@@ -318,10 +318,11 @@ impl<'de> Parser<'de> {
             return Err(Error::new(span, ErrorKind::UnevenMap));
         }
 
-        let contents: Vec<(Datum, Datum)> = unpaired_contents
+        let contents = unpaired_contents
             .chunks(2)
             .map(|chunk| (chunk[0].clone(), chunk[1].clone()))
-            .collect();
+            .collect::<Vec<(Datum, Datum)>>()
+            .into_boxed_slice();
 
         Ok(Datum::Map(span, contents))
     }
@@ -425,7 +426,7 @@ impl<'de> Parser<'de> {
         quoted_datum.map(|quoted_datum| {
             Datum::List(
                 outer_span,
-                vec![Datum::Sym(shorthand_span, expansion.into()), quoted_datum],
+                Box::new([Datum::Sym(shorthand_span, expansion.into()), quoted_datum]),
             )
         })
     }
@@ -524,7 +525,7 @@ mod test {
     fn list_datum() {
         let j = "() ; with a comment";
         let t = "^^                 ";
-        let expected = Datum::List(t2s(t), vec![]);
+        let expected = Datum::List(t2s(t), Box::new([]));
         assert_eq!(expected, datum_from_str(j).unwrap());
 
         let j = "( true   false )";
@@ -534,7 +535,7 @@ mod test {
 
         let expected = Datum::List(
             t2s(t),
-            vec![Datum::Bool(t2s(u), true), Datum::Bool(t2s(v), false)],
+            Box::new([Datum::Bool(t2s(u), true), Datum::Bool(t2s(v), false)]),
         );
         assert_eq!(expected, datum_from_str(j).unwrap());
 
@@ -547,11 +548,11 @@ mod test {
 
         let expected = Datum::List(
             t2s(t),
-            vec![
+            Box::new([
                 Datum::Int(t2s(u), 1),
                 Datum::Int(t2s(v), 2),
-                Datum::List(t2s(w), vec![Datum::Int(t2s(x), 3)]),
-            ],
+                Datum::List(t2s(w), Box::new([Datum::Int(t2s(x), 3)])),
+            ]),
         );
         assert_eq!(expected, datum_from_str(j).unwrap());
 
@@ -571,7 +572,7 @@ mod test {
     fn vector_datum() {
         let j = "  []";
         let t = "  ^^";
-        let expected = Datum::Vec(t2s(t), vec![]);
+        let expected = Datum::Vec(t2s(t), Box::new([]));
         assert_eq!(expected, datum_from_str(j).unwrap());
 
         let j = "[ true   (true false) ]";
@@ -583,13 +584,13 @@ mod test {
 
         let expected = Datum::Vec(
             t2s(t),
-            vec![
+            Box::new([
                 Datum::Bool(t2s(u), true),
                 Datum::List(
                     t2s(v),
-                    vec![Datum::Bool(t2s(w), true), Datum::Bool(t2s(x), false)],
+                    Box::new([Datum::Bool(t2s(w), true), Datum::Bool(t2s(x), false)]),
                 ),
-            ],
+            ]),
         );
         assert_eq!(expected, datum_from_str(j).unwrap());
 
@@ -743,7 +744,7 @@ mod test {
     fn map_datum() {
         let j = "{}";
         let t = "^^";
-        let expected = Datum::Map(t2s(t), vec![]);
+        let expected = Datum::Map(t2s(t), Box::new([]));
         assert_eq!(expected, datum_from_str(j).unwrap());
 
         let j = "{ 1,2 ,, 3  4}";
@@ -753,9 +754,10 @@ mod test {
         let w = "         ^    ";
         let x = "            ^ ";
 
-        let mut expected_contents = Vec::<(Datum, Datum)>::new();
-        expected_contents.push((Datum::Int(t2s(u), 1), Datum::Int(t2s(v), 2)));
-        expected_contents.push((Datum::Int(t2s(w), 3), Datum::Int(t2s(x), 4)));
+        let expected_contents = Box::new([
+            (Datum::Int(t2s(u), 1), Datum::Int(t2s(v), 2)),
+            (Datum::Int(t2s(w), 3), Datum::Int(t2s(x), 4)),
+        ]);
         let expected = Datum::Map(t2s(t), expected_contents);
 
         assert_eq!(expected, datum_from_str(j).unwrap());
@@ -767,12 +769,10 @@ mod test {
         let w = "    ^    ";
         let x = "      ^  ";
 
-        let mut inner_contents = Vec::<(Datum, Datum)>::new();
-        inner_contents.push((Datum::Int(t2s(w), 2), Datum::Int(t2s(x), 3)));
+        let inner_contents = Box::new([(Datum::Int(t2s(w), 2), Datum::Int(t2s(x), 3))]);
         let inner = Datum::Map(t2s(v), inner_contents);
 
-        let mut outer_contents = Vec::<(Datum, Datum)>::new();
-        outer_contents.push((Datum::Int(t2s(u), 1), inner));
+        let outer_contents = Box::new([(Datum::Int(t2s(u), 1), inner)]);
         let expected = Datum::Map(t2s(t), outer_contents);
 
         assert_eq!(expected, datum_from_str(j).unwrap());
@@ -787,7 +787,7 @@ mod test {
     fn set_datum() {
         let j = "#{}";
         let t = "^^^";
-        let expected = Datum::Set(t2s(t), Vec::new());
+        let expected = Datum::Set(t2s(t), Box::new([]));
         assert_eq!(expected, datum_from_str(j).unwrap());
 
         let j = "#{ 1 2  3 4}";
@@ -797,11 +797,12 @@ mod test {
         let w = "        ^   ";
         let x = "          ^ ";
 
-        let mut expected_contents = Vec::<Datum>::new();
-        expected_contents.push(Datum::Int(t2s(u), 1));
-        expected_contents.push(Datum::Int(t2s(v), 2));
-        expected_contents.push(Datum::Int(t2s(w), 3));
-        expected_contents.push(Datum::Int(t2s(x), 4));
+        let expected_contents = Box::new([
+            Datum::Int(t2s(u), 1),
+            Datum::Int(t2s(v), 2),
+            Datum::Int(t2s(w), 3),
+            Datum::Int(t2s(x), 4),
+        ]);
         let expected = Datum::Set(t2s(t), expected_contents);
 
         assert_eq!(expected, datum_from_str(j).unwrap());
@@ -813,14 +814,10 @@ mod test {
         let w = "      ^    ";
         let x = "        ^  ";
 
-        let mut inner_contents = Vec::<Datum>::new();
-        inner_contents.push(Datum::Int(t2s(w), 2));
-        inner_contents.push(Datum::Int(t2s(x), 3));
+        let inner_contents = Box::new([(Datum::Int(t2s(w), 2)), (Datum::Int(t2s(x), 3))]);
         let inner = Datum::Set(t2s(v), inner_contents);
 
-        let mut outer_contents = Vec::<Datum>::new();
-        outer_contents.push(Datum::Int(t2s(u), 1));
-        outer_contents.push(inner);
+        let outer_contents = Box::new([Datum::Int(t2s(u), 1), inner]);
         let expected = Datum::Set(t2s(t), outer_contents);
 
         assert_eq!(expected, datum_from_str(j).unwrap());
@@ -835,10 +832,10 @@ mod test {
 
         let expected = Datum::List(
             t2s(t),
-            vec![
+            Box::new([
                 Datum::Sym(t2s(u), "quote".into()),
                 Datum::Sym(t2s(v), "foo".into()),
-            ],
+            ]),
         );
         assert_eq!(expected, datum_from_str(j).unwrap());
 
@@ -852,17 +849,17 @@ mod test {
 
         let expected = Datum::List(
             t2s(t),
-            vec![
+            Box::new([
                 Datum::Sym(t2s(u), "quote".into()),
                 Datum::List(
                     t2s(v),
-                    vec![
+                    Box::new([
                         Datum::Int(t2s(w), 1),
                         Datum::Int(t2s(x), 2),
                         Datum::Int(t2s(y), 3),
-                    ],
+                    ]),
                 ),
-            ],
+            ]),
         );
         assert_eq!(expected, datum_from_str(j).unwrap());
 
@@ -893,7 +890,7 @@ mod test {
         let t = "^^^^^^^^^^^^^^^^^^^^";
         let u = " ^^^^^              ";
 
-        let expected = Datum::List(t2s(t), vec![Datum::Sym(t2s(u), "Hello".into())]);
+        let expected = Datum::List(t2s(t), Box::new([Datum::Sym(t2s(u), "Hello".into())]));
         assert_eq!(expected, datum_from_str(j).unwrap());
 
         let j = "(Hello #_  you jerk)";
@@ -903,10 +900,10 @@ mod test {
 
         let expected = Datum::List(
             t2s(t),
-            vec![
+            Box::new([
                 Datum::Sym(t2s(u), "Hello".into()),
                 Datum::Sym(t2s(v), "jerk".into()),
-            ],
+            ]),
         );
         assert_eq!(expected, datum_from_str(j).unwrap());
     }

@@ -79,7 +79,7 @@ impl<'a> ExpandContext<'a> {
         &mut self,
         cursor: &mut ExpandCursor,
         mut templates: &[NsDatum],
-    ) -> Vec<NsDatum> {
+    ) -> Box<[NsDatum]> {
         let mut result: Vec<NsDatum> = vec![];
 
         while !templates.is_empty() {
@@ -99,7 +99,7 @@ impl<'a> ExpandContext<'a> {
             }
         }
 
-        result
+        result.into_boxed_slice()
     }
 
     fn expand_list(

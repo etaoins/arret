@@ -137,8 +137,11 @@ impl<'ccx> LoweringContext<'ccx> {
     ) -> Result<()> {
         let self_ident = expect_ident(self_datum)?;
 
-        let macro_rules_data = if let NsDatum::List(span, mut vs) = transformer_spec {
-            if vs.first().and_then(|d| scope.get_datum(d)) != Some(Binding::Prim(Prim::MacroRules))
+        let macro_rules_data = if let NsDatum::List(span, vs) = transformer_spec {
+            let mut transformer_data = vs.into_vec();
+
+            if transformer_data.first().and_then(|d| scope.get_datum(d))
+                != Some(Binding::Prim(Prim::MacroRules))
             {
                 return Err(Error::new(
                     span,
@@ -146,8 +149,8 @@ impl<'ccx> LoweringContext<'ccx> {
                 ));
             }
 
-            vs.remove(0);
-            vs
+            transformer_data.remove(0);
+            transformer_data
         } else {
             return Err(Error::new(
                 transformer_spec.span(),
@@ -278,22 +281,24 @@ impl<'ccx> LoweringContext<'ccx> {
             NsDatum::Ident(span, ident) => {
                 self.lower_ident_destruc(scope, span, ident, ty::Decl::Free)
             }
-            NsDatum::Vec(span, mut vs) => {
-                if vs.len() != 3 {
+            NsDatum::Vec(span, vs) => {
+                let mut data = vs.into_vec();
+
+                if data.len() != 3 {
                     return Err(Error::new(span, ErrorKind::NoVecDestruc));
                 }
 
                 // Make sure the middle element is a type colon
-                if scope.get_datum(&vs[1]) != Some(Binding::Prim(Prim::TyColon)) {
+                if scope.get_datum(&data[1]) != Some(Binding::Prim(Prim::TyColon)) {
                     return Err(Error::new(span, ErrorKind::NoVecDestruc));
                 }
 
-                let ty = lower_poly(&self.pvars, &self.tvars, scope, vs.pop().unwrap())?;
+                let ty = lower_poly(&self.pvars, &self.tvars, scope, data.pop().unwrap())?;
 
                 // Discard the type colon
-                vs.pop();
+                data.pop();
 
-                let (ident, span) = expect_ident_and_span(vs.pop().unwrap())?;
+                let (ident, span) = expect_ident_and_span(data.pop().unwrap())?;
                 self.lower_ident_destruc(scope, span, ident, ty.into_decl())
             }
             _ => Err(Error::new(
@@ -333,7 +338,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 self.lower_scalar_destruc(scope, destruc_datum)
                     .map(|scalar| destruc::Destruc::Scalar(span, scalar))
             }
-            NsDatum::List(span, vs) => self.lower_list_destruc(scope, vs)
+            NsDatum::List(span, vs) => self.lower_list_destruc(scope, vs.into_vec())
                 .map(|list_destruc| destruc::Destruc::List(span, list_destruc)),
             _ => Err(Error::new(
                 destruc_datum.span(),
@@ -386,7 +391,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     ErrorKind::IllegalArg("[target initialiser] expected"),
                 ));
             }
-            vs
+            vs.into_vec()
         } else {
             return Err(Error::new(
                 bindings_datum.span(),
@@ -474,7 +479,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
         // We can either begin with a set of type variables or a list of parameters
         if let NsDatum::Set(_, vs) = next_datum {
-            for tvar_datum in vs {
+            for tvar_datum in vs.into_vec() {
                 let (ident, polymorphic_var) =
                     lower_polymorphic_var(&self.pvars, &self.tvars, scope, tvar_datum)?;
 
@@ -512,7 +517,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
         // Pull out our params
         let params = match next_datum {
-            NsDatum::List(_, vs) => self.lower_list_destruc(&mut fun_scope, vs)?,
+            NsDatum::List(_, vs) => self.lower_list_destruc(&mut fun_scope, vs.into_vec())?,
             _ => {
                 return Err(Error::new(
                     span,
@@ -684,13 +689,14 @@ impl<'ccx> LoweringContext<'ccx> {
                     ErrorKind::UnboundSymbol(ident.name().into()),
                 )),
             },
-            NsDatum::List(span, mut vs) => {
-                if vs.is_empty() {
-                    return Ok(Expr::Lit(Datum::List(span, vec![])));
+            NsDatum::List(span, vs) => {
+                let mut data = vs.into_vec();
+                if data.is_empty() {
+                    return Ok(Expr::Lit(Datum::List(span, Box::new([]))));
                 }
 
-                let arg_data = vs.split_off(1);
-                let fn_datum = vs.pop().unwrap();
+                let arg_data = data.split_off(1);
+                let fn_datum = data.pop().unwrap();
 
                 match fn_datum {
                     NsDatum::Ident(fn_span, ref ident) => match scope.get(ident) {
@@ -782,10 +788,12 @@ impl<'ccx> LoweringContext<'ccx> {
     ) -> Result<Vec<DeferredModulePrim>> {
         let span = datum.span();
 
-        if let NsDatum::List(span, mut vs) = datum {
-            if !vs.is_empty() {
-                let arg_data = vs.split_off(1);
-                let fn_datum = vs.pop().unwrap();
+        if let NsDatum::List(span, vs) = datum {
+            let mut data = vs.into_vec();
+
+            if !data.is_empty() {
+                let arg_data = data.split_off(1);
+                let fn_datum = data.pop().unwrap();
 
                 if let NsDatum::Ident(fn_span, ref ident) = fn_datum {
                     match scope.get(ident) {
@@ -924,16 +932,17 @@ pub fn lower_program(
 fn import_statement_for_module(names: &[&'static str]) -> Datum {
     Datum::List(
         EMPTY_SPAN,
-        vec![
+        Box::new([
             Datum::Sym(EMPTY_SPAN, "import".into()),
             Datum::Vec(
                 EMPTY_SPAN,
                 names
                     .iter()
                     .map(|&n| Datum::Sym(EMPTY_SPAN, n.into()))
-                    .collect(),
+                    .collect::<Vec<Datum>>()
+                    .into_boxed_slice(),
             ),
-        ],
+        ]),
     )
 }
 
@@ -1022,7 +1031,7 @@ mod test {
         let j = "()";
         let t = "^^";
 
-        let expected = Expr::Lit(Datum::List(t2s(t), vec![]));
+        let expected = Expr::Lit(Datum::List(t2s(t), Box::new([])));
         assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
@@ -1178,7 +1187,7 @@ mod test {
             t2s(v),
             Box::new(Let {
                 destruc,
-                value_expr: Expr::Lit(Datum::List(t2s(w), vec![Datum::Int(t2s(x), 1)])),
+                value_expr: Expr::Lit(Datum::List(t2s(w), Box::new([Datum::Int(t2s(x), 1)]))),
                 body_expr: Expr::Ref(t2s(y), VarId(0)),
             }),
         );
@@ -1672,7 +1681,7 @@ mod test {
 
         let expected = Expr::Lit(Datum::Vec(
             t2s(t),
-            vec![Datum::Int(t2s(u), 1), Datum::Int(t2s(v), 2)],
+            Box::new([Datum::Int(t2s(u), 1), Datum::Int(t2s(v), 2)]),
         ));
         assert_eq!(expected, expr_for_str(j).unwrap());
     }
@@ -1686,7 +1695,7 @@ mod test {
 
         let expected = Expr::Lit(Datum::Vec(
             t2s(t),
-            vec![Datum::Int(t2s(u), 1), Datum::Int(t2s(v), 2)],
+            Box::new([Datum::Int(t2s(u), 1), Datum::Int(t2s(v), 2)]),
         ));
         assert_eq!(expected, expr_for_str(j).unwrap());
     }
@@ -1828,11 +1837,11 @@ mod test {
 
         let expected = Expr::Lit(Datum::List(
             t2s(t),
-            vec![
+            Box::new([
                 Datum::Int(t2s(u), 1),
                 Datum::Int(t2s(v), 2),
                 Datum::Int(t2s(w), 3),
-            ],
+            ]),
         ));
         assert_eq!(expected, expr_for_str(j).unwrap());
     }
@@ -1886,11 +1895,11 @@ mod test {
 
         let expected = Expr::Lit(Datum::List(
             t2s(t),
-            vec![
+            Box::new([
                 Datum::Int(t2s(u), 1),
                 Datum::Int(t2s(v), 2),
                 Datum::Int(t2s(w), 3),
-            ],
+            ]),
         ));
         assert_eq!(expected, expr_for_str(j).unwrap());
     }
@@ -1916,12 +1925,12 @@ mod test {
 
         let expected = Expr::Lit(Datum::Vec(
             t2s(t),
-            vec![
+            Box::new([
                 Datum::Bool(t2s(u), true),
                 Datum::Int(t2s(w), 2),
                 Datum::Int(t2s(x), 3),
                 Datum::Bool(t2s(v), false),
-            ],
+            ]),
         ));
         assert_eq!(expected, expr_for_str(j).unwrap());
     }
@@ -1947,12 +1956,12 @@ mod test {
 
         let expected = Expr::Lit(Datum::Vec(
             t2s(t),
-            vec![
+            Box::new([
                 Datum::Int(t2s(w), 3),
                 Datum::Int(t2s(x), 4),
                 Datum::Int(t2s(u), 1),
                 Datum::Int(t2s(v), 2),
-            ],
+            ]),
         ));
         assert_eq!(expected, expr_for_str(j).unwrap());
     }
@@ -2027,18 +2036,21 @@ mod test {
 
         let expected = Expr::Lit(Datum::Vec(
             t2s(t),
-            vec![
+            Box::new([
                 Datum::List(
                     t2s(u),
-                    vec![
+                    Box::new([
                         Datum::Int(t2s(x), 3),
                         Datum::Int(t2s(y), 4),
                         Datum::Int(t2s(w), 2),
                         Datum::Int(t2s(v), 1),
-                    ],
+                    ]),
                 ),
-                Datum::List(t2s(u), vec![Datum::Int(t2s(a), 6), Datum::Int(t2s(z), 5)]),
-            ],
+                Datum::List(
+                    t2s(u),
+                    Box::new([Datum::Int(t2s(a), 6), Datum::Int(t2s(z), 5)]),
+                ),
+            ]),
         ));
         assert_eq!(expected, expr_for_str(j).unwrap());
     }

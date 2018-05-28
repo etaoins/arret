@@ -47,7 +47,9 @@ impl<'a> LowerTyContext<'a> {
                     PolymorphicVar::TVar(ty::TVar::new(source_name, ty::Ty::Any.into_poly())),
                 ));
             }
-            NsDatum::Vec(span, mut arg_data) => {
+            NsDatum::Vec(span, vs) => {
+                let mut arg_data = vs.into_vec();
+
                 if arg_data.len() == 3
                     && self.scope.get_datum(&arg_data[1]) == Some(Binding::Prim(Prim::TyColon))
                 {
@@ -262,21 +264,23 @@ impl<'a> LowerTyContext<'a> {
 
     fn lower_poly(&self, datum: NsDatum) -> Result<ty::Poly> {
         match datum {
-            NsDatum::List(span, mut vs) => {
-                if vs.is_empty() {
+            NsDatum::List(span, vs) => {
+                let mut data = vs.into_vec();
+
+                if data.is_empty() {
                     // This is by analogy with () being self-evaluating in expressions
                     return Ok(ty::Ty::List(ty::List::new(Box::new([]), None)).into_poly());
                 }
 
-                if vs.len() >= 2 {
-                    if let Some(purity) = try_lower_purity(self.scope, &vs[vs.len() - 2]) {
+                if data.len() >= 2 {
+                    if let Some(purity) = try_lower_purity(self.scope, &data[data.len() - 2]) {
                         // This is a function type
-                        return self.lower_fun_cons(purity, vs);
+                        return self.lower_fun_cons(purity, data);
                     };
                 }
 
-                let mut arg_data = vs.split_off(1);
-                let fn_datum = vs.pop().unwrap();
+                let mut arg_data = data.split_off(1);
+                let fn_datum = data.pop().unwrap();
 
                 if let NsDatum::Ident(ident_span, ref ident) = fn_datum {
                     match self.scope.get(ident) {

@@ -107,7 +107,7 @@ where
                 if let NsDatum::Map(_, vs) = arg_datum {
                     let mut rename_bindings = filter_input.bindings;
 
-                    for (from_datum, to_datum) in vs {
+                    for (from_datum, to_datum) in vs.into_vec() {
                         let (from_ident, from_span) = expect_ident_and_span(from_datum)?;
                         let to_ident = expect_ident(to_datum)?;
 
@@ -192,14 +192,16 @@ where
                     ));
                 }
 
-                return self.lower_module_import(span, vs);
+                return self.lower_module_import(span, vs.into_vec());
             }
-            NsDatum::List(_, mut vs) => {
+            NsDatum::List(_, vs) => {
+                let mut filter_data = vs.into_vec();
+
                 // Each filter requires a filter identifier and an inner import set
-                if vs.len() >= 2 {
-                    let arg_data = vs.split_off(2);
-                    let inner_import_datum = vs.pop().unwrap();
-                    let filter_ident = expect_ident(vs.pop().unwrap())?;
+                if filter_data.len() >= 2 {
+                    let arg_data = filter_data.split_off(2);
+                    let inner_import_datum = filter_data.pop().unwrap();
+                    let filter_ident = expect_ident(filter_data.pop().unwrap())?;
 
                     let filter_input = self.lower_import_set(inner_import_datum)?;
                     return self.lower_import_filter(

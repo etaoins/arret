@@ -40,19 +40,21 @@ pub enum NsDatum {
     Char(Span, char),
     Int(Span, i64),
     Float(Span, f64),
-    List(Span, Vec<NsDatum>),
+    List(Span, Box<[NsDatum]>),
     Str(Span, Box<str>),
     Ident(Span, Ident),
-    Vec(Span, Vec<NsDatum>),
-    Map(Span, Vec<(NsDatum, NsDatum)>),
-    Set(Span, Vec<NsDatum>),
+    Vec(Span, Box<[NsDatum]>),
+    Map(Span, Box<[(NsDatum, NsDatum)]>),
+    Set(Span, Box<[NsDatum]>),
 }
 
 impl NsDatum {
-    fn map_syntax_datum_vec(ns_id: NsId, vs: Vec<Datum>) -> Vec<NsDatum> {
-        vs.into_iter()
+    fn map_syntax_data(ns_id: NsId, vs: Box<[Datum]>) -> Box<[NsDatum]> {
+        vs.into_vec()
+            .into_iter()
             .map(|v| Self::from_syntax_datum(ns_id, v))
-            .collect()
+            .collect::<Vec<NsDatum>>()
+            .into_boxed_slice()
     }
 
     pub fn from_syntax_datum(ns_id: NsId, value: Datum) -> NsDatum {
@@ -63,25 +65,31 @@ impl NsDatum {
             Datum::Float(span, v) => NsDatum::Float(span, v),
             Datum::Str(span, v) => NsDatum::Str(span, v),
             Datum::Sym(span, v) => NsDatum::Ident(span, Ident::new(ns_id, v)),
-            Datum::List(span, vs) => NsDatum::List(span, Self::map_syntax_datum_vec(ns_id, vs)),
-            Datum::Vec(span, vs) => NsDatum::Vec(span, Self::map_syntax_datum_vec(ns_id, vs)),
-            Datum::Set(span, vs) => NsDatum::Set(span, Self::map_syntax_datum_vec(ns_id, vs)),
+            Datum::List(span, vs) => NsDatum::List(span, Self::map_syntax_data(ns_id, vs)),
+            Datum::Vec(span, vs) => NsDatum::Vec(span, Self::map_syntax_data(ns_id, vs)),
+            Datum::Set(span, vs) => NsDatum::Set(span, Self::map_syntax_data(ns_id, vs)),
             Datum::Map(span, vs) => NsDatum::Map(
                 span,
-                vs.into_iter()
+                vs.into_vec()
+                    .into_iter()
                     .map(|(k, v)| {
                         (
                             NsDatum::from_syntax_datum(ns_id, k),
                             NsDatum::from_syntax_datum(ns_id, v),
                         )
                     })
-                    .collect(),
+                    .collect::<Vec<(NsDatum, NsDatum)>>()
+                    .into_boxed_slice(),
             ),
         }
     }
 
-    fn map_nsdatum_vec(vs: Vec<NsDatum>) -> Vec<Datum> {
-        vs.into_iter().map(|v| v.into_syntax_datum()).collect()
+    fn map_nsdata(vs: Box<[NsDatum]>) -> Box<[Datum]> {
+        vs.into_vec()
+            .into_iter()
+            .map(|v| v.into_syntax_datum())
+            .collect::<Vec<Datum>>()
+            .into_boxed_slice()
     }
 
     pub fn into_syntax_datum(self) -> Datum {
@@ -92,14 +100,16 @@ impl NsDatum {
             NsDatum::Float(span, v) => Datum::Float(span, v),
             NsDatum::Str(span, v) => Datum::Str(span, v),
             NsDatum::Ident(span, v) => Datum::Sym(span, v.into_name()),
-            NsDatum::List(span, vs) => Datum::List(span, Self::map_nsdatum_vec(vs)),
-            NsDatum::Vec(span, vs) => Datum::Vec(span, Self::map_nsdatum_vec(vs)),
-            NsDatum::Set(span, vs) => Datum::Set(span, Self::map_nsdatum_vec(vs)),
+            NsDatum::List(span, vs) => Datum::List(span, Self::map_nsdata(vs)),
+            NsDatum::Vec(span, vs) => Datum::Vec(span, Self::map_nsdata(vs)),
+            NsDatum::Set(span, vs) => Datum::Set(span, Self::map_nsdata(vs)),
             NsDatum::Map(span, vs) => Datum::Map(
                 span,
-                vs.into_iter()
+                vs.into_vec()
+                    .into_iter()
                     .map(|(k, v)| (k.into_syntax_datum(), v.into_syntax_datum()))
-                    .collect(),
+                    .collect::<Vec<(Datum, Datum)>>()
+                    .into_boxed_slice(),
             ),
         }
     }
