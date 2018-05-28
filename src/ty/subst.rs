@@ -9,11 +9,12 @@ where
     fn subst_purity_ref(&self, input: &I::PRef) -> Result<O::PRef, E>;
     fn subst_ty_ref(&self, input: &I) -> Result<O, E>;
 
-    fn subst_ty_ref_slice(&self, inputs: &[I]) -> Result<Vec<O>, E> {
-        inputs
+    fn subst_ty_ref_slice(&self, inputs: &[I]) -> Result<Box<[O]>, E> {
+        Ok(inputs
             .iter()
             .map(|i| self.subst_ty_ref(i))
-            .collect::<Result<Vec<O>, E>>()
+            .collect::<Result<Vec<O>, E>>()?
+            .into_boxed_slice())
     }
 
     fn subst_ty_ref_option(&self, ty: Option<&I>) -> Result<Option<O>, E> {
@@ -53,10 +54,10 @@ where
                 self.subst_list(fun.params())?,
             ).into_ty(),
             ty::Ty::TyPred(test_ty) => ty::Ty::TyPred(Box::new(self.subst_ty_ref(test_ty)?)),
-            ty::Ty::Map(key, value) => ty::Ty::Map(
-                Box::new(self.subst_ty_ref(key)?),
-                Box::new(self.subst_ty_ref(value)?),
-            ),
+            ty::Ty::Map(map) => ty::Ty::Map(Box::new(ty::Map::new(
+                self.subst_ty_ref(map.key())?,
+                self.subst_ty_ref(map.value())?,
+            ))),
             ty::Ty::LitBool(val) => ty::Ty::LitBool(*val),
             ty::Ty::LitSym(val) => ty::Ty::LitSym(val.clone()),
             ty::Ty::Set(member) => ty::Ty::Set(Box::new(self.subst_ty_ref(&member)?)),

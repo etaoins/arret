@@ -202,9 +202,10 @@ where
             (ty::Ty::Set(sub), ty::Ty::Set(par)) => self.ty_ref_is_a(sub, par),
 
             // Maps
-            (ty::Ty::Map(sub_key, sub_value), ty::Ty::Map(par_key, par_value)) => self.ty_ref_is_a(
-                sub_key, par_key,
-            ).and_then(|| self.ty_ref_is_a(sub_value, par_value)),
+            (ty::Ty::Map(sub_map), ty::Ty::Map(par_map)) => {
+                self.ty_ref_is_a(sub_map.key(), par_map.key())
+                    .and_then(|| self.ty_ref_is_a(sub_map.value(), par_map.value()))
+            }
 
             // Vector types
             (ty::Ty::Vec(sub_members), ty::Ty::Vec(par_members)) => {
@@ -294,7 +295,7 @@ impl<'a> IsACtx<ty::Poly> for PolyIsACtx<'a> {
         }
 
         let sub_ty = ty::resolve::resolve_poly_ty(self.tvars, sub).as_ty();
-        if sub_ty == &ty::Ty::Union(vec![]) {
+        if sub_ty == &ty::Ty::Union(Box::new([])) {
             // (U) is a definite subtype of every type, regardless if the parent is bound. This is
             // important as (U) is used as a placeholder for parameters with unknown type. More
             // generally, it's the contravariant equivalent of Any.
@@ -404,11 +405,11 @@ mod test {
         let any_int = poly_for_str("Int");
 
         let int_to_any_sym =
-            ty::Ty::Map(Box::new(any_int.clone()), Box::new(any_sym.clone())).into_poly();
+            ty::Ty::Map(Box::new(ty::Map::new(any_int.clone(), any_sym.clone()))).into_poly();
         let int_to_foo_sym =
-            ty::Ty::Map(Box::new(any_int.clone()), foo_sym.clone().into()).into_poly();
+            ty::Ty::Map(Box::new(ty::Map::new(any_int.clone(), foo_sym.clone()))).into_poly();
         let any_sym_to_any_sym =
-            ty::Ty::Map(Box::new(any_sym.clone()), Box::new(any_sym.clone())).into_poly();
+            ty::Ty::Map(Box::new(ty::Map::new(any_sym.clone(), any_sym.clone()))).into_poly();
 
         assert_eq!(
             Result::Yes,
@@ -455,7 +456,7 @@ mod test {
     #[test]
     fn any_and_never_types() {
         let any = poly_for_str("Any");
-        let never = ty::Ty::Union(vec![]).into_poly();
+        let never = ty::Ty::Union(Box::new([])).into_poly();
         let foo_sym = poly_for_str("'foo");
 
         assert_eq!(Result::Yes, poly_is_a(&[], &foo_sym, &any));
@@ -705,7 +706,7 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
-            ty::List::new(vec![ptype1_unbounded.clone()], None),
+            ty::List::new(Box::new([ptype1_unbounded.clone()]), None),
         ).into_ty_ref();
 
         // (All [A : Symbol] (A -> A))
@@ -713,7 +714,7 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype2_symbol.clone()),
-            ty::List::new(vec![ptype2_symbol.clone()], None),
+            ty::List::new(Box::new([ptype2_symbol.clone()]), None),
         ).into_ty_ref();
 
         // (All [A : String] (A ->! A))
@@ -721,7 +722,7 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(2)..ty::TVarId::new(3),
             ty::TopFun::new(Purity::Impure.into_poly(), ptype3_string.clone()),
-            ty::List::new(vec![ptype3_string.clone()], None),
+            ty::List::new(Box::new([ptype3_string.clone()]), None),
         ).into_ty_ref();
 
         // All functions should have the top function type

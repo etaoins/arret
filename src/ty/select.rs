@@ -131,9 +131,9 @@ impl<'a> SelectContext<'a> {
             (ty::Ty::Set(target_member), ty::Ty::Set(evidence_member)) => {
                 self.add_evidence(target_member, evidence_member);
             }
-            (ty::Ty::Map(target_key, target_value), ty::Ty::Map(evidence_key, evidence_value)) => {
-                self.add_evidence(target_key, evidence_key);
-                self.add_evidence(target_value, evidence_value);
+            (ty::Ty::Map(target_map), ty::Ty::Map(evidence_map)) => {
+                self.add_evidence(target_map.key(), evidence_map.key());
+                self.add_evidence(target_map.value(), evidence_map.value());
             }
             (ty::Ty::List(target_list), ty::Ty::List(evidence_list)) => {
                 self.add_evidence_list(target_list, evidence_list);
@@ -149,7 +149,7 @@ impl<'a> SelectContext<'a> {
                 self.add_evidence(target_member, evidence_member);
             }
             (ty::Ty::Vecof(target_member), ty::Ty::Vec(evidence_members)) => {
-                for evidence_member in evidence_members {
+                for evidence_member in evidence_members.iter() {
                     self.add_evidence(target_member, evidence_member);
                 }
             }
@@ -172,7 +172,7 @@ impl<'a> SelectContext<'a> {
                 self.add_evidence(target_test, evidence_test);
             }
             (ty::Ty::Union(target_members), _) => {
-                for target_member in target_members {
+                for target_member in target_members.iter() {
                     self.add_evidence(target_member, evidence_poly);
                 }
             }

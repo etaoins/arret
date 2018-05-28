@@ -105,7 +105,8 @@ impl<'a> LowerTyContext<'a> {
         let fixed_polys = fixed
             .into_iter()
             .map(|fixed_datum| self.lower_poly(fixed_datum))
-            .collect::<Result<Vec<ty::Poly>>>()?;
+            .collect::<Result<Vec<ty::Poly>>>()?
+            .into_boxed_slice();
 
         let rest_poly = match rest {
             Some(rest_datum) => Some(self.lower_poly(rest_datum)?),
@@ -138,7 +139,8 @@ impl<'a> LowerTyContext<'a> {
             let fixed_polys = fixed
                 .into_iter()
                 .map(|fixed_datum| self.lower_poly(fixed_datum))
-                .collect::<Result<Vec<ty::Poly>>>()?;
+                .collect::<Result<Vec<ty::Poly>>>()?
+                .into_boxed_slice();
 
             let rest_poly = match rest {
                 Some(rest) => Some(self.lower_poly(rest)?),
@@ -166,7 +168,7 @@ impl<'a> LowerTyContext<'a> {
             TyCons::Listof => {
                 expect_arg_count(span, &arg_data, 1)?;
                 let rest_poly = self.lower_poly(arg_data.pop().unwrap())?;
-                let list_poly = ty::List::new(vec![], Some(rest_poly));
+                let list_poly = ty::List::new(Box::new([]), Some(rest_poly));
 
                 Ok(ty::Ty::List(list_poly).into_poly())
             }
@@ -174,7 +176,8 @@ impl<'a> LowerTyContext<'a> {
                 let member_tys = arg_data
                     .into_iter()
                     .map(|arg_datum| self.lower_poly(arg_datum))
-                    .collect::<Result<Vec<ty::Poly>>>()?;
+                    .collect::<Result<Vec<ty::Poly>>>()?
+                    .into_boxed_slice();
 
                 Ok(ty::Ty::Vec(member_tys).into_poly())
             }
@@ -197,7 +200,7 @@ impl<'a> LowerTyContext<'a> {
                 expect_arg_count(span, &arg_data, 2)?;
                 let value_ty = self.lower_poly(arg_data.pop().unwrap())?;
                 let key_ty = self.lower_poly(arg_data.pop().unwrap())?;
-                Ok(ty::Ty::Map(Box::new(key_ty), Box::new(value_ty)).into_poly())
+                Ok(ty::Ty::Map(Box::new(ty::Map::new(key_ty, value_ty))).into_poly())
             }
             TyCons::Union => {
                 let member_tys = arg_data
@@ -231,7 +234,7 @@ impl<'a> LowerTyContext<'a> {
                     .map(|arg_datum| self.lower_poly(arg_datum))
                     .collect::<Result<Vec<ty::Poly>>>()?;
 
-                Ok(ty::Ty::Union(member_tys).into_poly())
+                Ok(ty::Ty::Union(member_tys.into_boxed_slice()).into_poly())
             }
         }
     }
@@ -263,7 +266,7 @@ impl<'a> LowerTyContext<'a> {
             NsDatum::List(span, mut vs) => {
                 if vs.is_empty() {
                     // This is by analogy with () being self-evaluating in expressions
-                    return Ok(ty::Ty::List(ty::List::new(vec![], None)).into_poly());
+                    return Ok(ty::Ty::List(ty::List::new(Box::new([]), None)).into_poly());
                 }
 
                 if vs.len() >= 2 {
@@ -425,10 +428,10 @@ impl<'a> StrForPolyContext<'a> {
             ty::Ty::LitBool(false) => "false".to_owned(),
             ty::Ty::LitBool(true) => "true".to_owned(),
             ty::Ty::LitSym(name) => format!("'{}", name),
-            ty::Ty::Map(key, value) => format!(
+            ty::Ty::Map(map) => format!(
                 "(Map {} {})",
-                self.str_for_poly(key),
-                self.str_for_poly(value)
+                self.str_for_poly(map.key()),
+                self.str_for_poly(map.value())
             ),
             ty::Ty::Set(member) => format!("(Setof {})", self.str_for_poly(member)),
             ty::Ty::Vec(members) => {
@@ -618,7 +621,7 @@ mod test {
     fn empty_list_literal() {
         let j = "()";
 
-        let expected = ty::Ty::List(ty::List::new(vec![], None)).into_poly();
+        let expected = ty::Ty::List(ty::List::new(Box::new([]), None)).into_poly();
         assert_poly_for_str(&expected, j);
     }
 
@@ -674,7 +677,7 @@ mod test {
         let j = "(Listof true)";
 
         let inner_ty = ty::Ty::LitBool(true).into_poly();
-        let expected = ty::Ty::List(ty::List::new(vec![], Some(inner_ty))).into_poly();
+        let expected = ty::Ty::List(ty::List::new(Box::new([]), Some(inner_ty))).into_poly();
 
         assert_poly_for_str(&expected, j);
     }
@@ -684,10 +687,10 @@ mod test {
         let j = "(List true false)";
 
         let expected = ty::Ty::List(ty::List::new(
-            vec![
+            Box::new([
                 ty::Ty::LitBool(true).into_poly(),
                 ty::Ty::LitBool(false).into_poly(),
-            ],
+            ]),
             None,
         )).into_poly();
 
@@ -699,7 +702,7 @@ mod test {
         let j = "(List true false ...)";
 
         let expected = ty::Ty::List(ty::List::new(
-            vec![ty::Ty::LitBool(true).into_poly()],
+            Box::new([ty::Ty::LitBool(true).into_poly()]),
             Some(ty::Ty::LitBool(false).into_poly()),
         )).into_poly();
 
@@ -720,10 +723,10 @@ mod test {
     fn vector_cons() {
         let j = "(Vector true false)";
 
-        let expected = ty::Ty::Vec(vec![
+        let expected = ty::Ty::Vec(Box::new([
             ty::Ty::LitBool(true).into_poly(),
             ty::Ty::LitBool(false).into_poly(),
-        ]).into_poly();
+        ])).into_poly();
 
         assert_poly_for_str(&expected, j);
     }
@@ -748,7 +751,7 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarIds::monomorphic(),
             ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
-            ty::List::new(vec![], None),
+            ty::List::new(Box::new([]), None),
         ).into_ty_ref();
 
         assert_poly_for_str(&expected, j);
@@ -765,7 +768,7 @@ mod test {
                 Purity::Impure.into_poly(),
                 ty::Ty::LitBool(true).into_poly(),
             ),
-            ty::List::new(vec![], None),
+            ty::List::new(Box::new([]), None),
         ).into_ty_ref();
 
         assert_poly_for_str(&expected, j);
@@ -779,7 +782,7 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarIds::monomorphic(),
             ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
-            ty::List::new(vec![ty::Ty::LitBool(false).into_poly()], None),
+            ty::List::new(Box::new([ty::Ty::LitBool(false).into_poly()]), None),
         ).into_ty_ref();
 
         assert_poly_for_str(&expected, j);
@@ -796,7 +799,10 @@ mod test {
                 Purity::Impure.into_poly(),
                 ty::Ty::LitBool(true).into_poly(),
             ),
-            ty::List::new(vec![ty::Ty::Str.into_poly()], Some(ty::Ty::Sym.into_poly())),
+            ty::List::new(
+                Box::new([ty::Ty::Str.into_poly()]),
+                Some(ty::Ty::Sym.into_poly()),
+            ),
         ).into_ty_ref();
 
         assert_poly_for_str(&expected, j);
@@ -838,8 +844,10 @@ mod test {
 
         let key_ty = ty::Ty::LitBool(true);
         let value_ty = ty::Ty::LitBool(false);
-        let expected =
-            ty::Ty::Map(Box::new(key_ty.into_poly()), Box::new(value_ty.into_poly())).into_poly();
+        let expected = ty::Ty::Map(Box::new(ty::Map::new(
+            key_ty.into_poly(),
+            value_ty.into_poly(),
+        ))).into_poly();
 
         assert_poly_for_str(&expected, j);
     }

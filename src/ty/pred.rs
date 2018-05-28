@@ -77,16 +77,16 @@ where
             Ty::Float.into_ty_ref(),
             ty::TopFun::new(S::PRef::from_purity(Purity::Impure), Ty::Any.into_ty_ref())
                 .into_ty_ref(),
-            Ty::Map(
-                Box::new(Ty::Any.into_ty_ref()),
-                Box::new(Ty::Any.into_ty_ref()),
-            ).into_ty_ref(),
+            Ty::Map(Box::new(ty::Map::new(
+                Ty::Any.into_ty_ref(),
+                Ty::Any.into_ty_ref(),
+            ))).into_ty_ref(),
             Ty::Int.into_ty_ref(),
             Ty::Set(Box::new(Ty::Any.into_ty_ref())).into_ty_ref(),
             Ty::Str.into_ty_ref(),
             Ty::Sym.into_ty_ref(),
             Ty::Vecof(Box::new(Ty::Any.into_ty_ref())).into_ty_ref(),
-            Ty::List(ty::List::new(vec![], Some(Ty::Any.into_ty_ref()))).into_ty_ref(),
+            Ty::List(ty::List::new(Box::new([]), Some(Ty::Any.into_ty_ref()))).into_ty_ref(),
         ]
     }
 
@@ -114,12 +114,14 @@ where
                 // Allow checking for a rest list. This is required for `(nil?)` to work correctly.
                 if let Some(rest) = list.rest() {
                     // This is the list type if we have no rest elements
-                    let terminated_list = ty::List::new(list.fixed().clone(), None);
+                    let terminated_list =
+                        ty::List::new(list.fixed().to_vec().into_boxed_slice(), None);
 
                     // This is the list type if we have at least one rest element
-                    let mut continued_fixed = list.fixed().clone();
+                    let mut continued_fixed = list.fixed().to_vec();
                     continued_fixed.push(rest.clone());
-                    let continued_list = ty::List::new(continued_fixed, Some(rest.clone()));
+                    let continued_list =
+                        ty::List::new(continued_fixed.into_boxed_slice(), Some(rest.clone()));
 
                     Ok(self.interpret_ref_iter(
                         [

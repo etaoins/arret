@@ -102,7 +102,7 @@ struct FunCtx {
 }
 
 fn unit_type() -> ty::Poly {
-    ty::Ty::List(ty::List::new(vec![], None)).into_poly()
+    ty::Ty::List(ty::List::new(Box::new([]), None)).into_poly()
 }
 
 impl<'a> InferCtx<'a> {

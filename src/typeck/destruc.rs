@@ -30,7 +30,7 @@ pub fn type_for_decl_list_destruc(
         None => None,
     };
 
-    ty::List::new(fixed_polys, rest_poly)
+    ty::List::new(fixed_polys.into_boxed_slice(), rest_poly)
 }
 
 /// Returns the required type for a destruc

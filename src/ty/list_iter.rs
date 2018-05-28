@@ -42,7 +42,7 @@ where
     }
 
     pub fn tail_type(self) -> ty::List<S> {
-        ty::List::new(self.fixed.to_vec(), self.rest.cloned())
+        ty::List::new(self.fixed.to_vec().into_boxed_slice(), self.rest.cloned())
     }
 }
 

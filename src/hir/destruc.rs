@@ -123,7 +123,8 @@ pub fn poly_for_list_destruc(list: &List<ty::Poly>) -> ty::List<ty::Poly> {
     let fixed_polys = list.fixed()
         .iter()
         .map(|fixed_destruc| poly_for_destruc(fixed_destruc))
-        .collect();
+        .collect::<Vec<ty::Poly>>()
+        .into_boxed_slice();
 
     let rest_poly = match list.rest() {
         Some(rest) => Some(rest.ty().clone()),

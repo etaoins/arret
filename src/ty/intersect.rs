@@ -47,7 +47,7 @@ where
         match intersected_types.len() {
             0 => Err(Error::Disjoint),
             1 => Ok(intersected_types.pop().unwrap()),
-            _ => Ok(ty::Ty::Union(intersected_types).into_ty_ref()),
+            _ => Ok(ty::Ty::Union(intersected_types.into_boxed_slice()).into_ty_ref()),
         }
     }
 
@@ -75,7 +75,7 @@ where
             _ => None,
         };
 
-        Ok(ty::List::new(merged_fixed, merged_rest))
+        Ok(ty::List::new(merged_fixed.into_boxed_slice(), merged_rest))
     }
 
     /// Intersects two types under the assumption that they are not subtypes
@@ -100,10 +100,10 @@ where
             }
 
             // Map type
-            (ty::Ty::Map(key1, value1), ty::Ty::Map(key2, value2)) => Ok(ty::Ty::Map(
-                Box::new(self.intersect_ty_refs(key1, key2)?),
-                Box::new(self.intersect_ty_refs(value1, value2)?),
-            ).into_ty_ref()),
+            (ty::Ty::Map(map1), ty::Ty::Map(map2)) => Ok(ty::Ty::Map(Box::new(ty::Map::new(
+                self.intersect_ty_refs(map1.key(), map2.key())?,
+                self.intersect_ty_refs(map1.value(), map2.value())?,
+            ))).into_ty_ref()),
 
             // Vector types
             (ty::Ty::Vecof(member1), ty::Ty::Vecof(member2)) => Ok(ty::Ty::Vecof(Box::new(
@@ -119,7 +119,7 @@ where
                         .map(|(member1, member2)| self.intersect_ty_refs(member1, member2))
                         .collect::<Result<Vec<S>>>()?;
 
-                    Ok(ty::Ty::Vec(intersected_members).into_ty_ref())
+                    Ok(ty::Ty::Vec(intersected_members.into_boxed_slice()).into_ty_ref())
                 }
             }
             (ty::Ty::Vecof(member1), ty::Ty::Vec(members2))
@@ -129,7 +129,7 @@ where
                     .map(|member2| self.intersect_ty_refs(member1, member2))
                     .collect::<Result<Vec<S>>>()?;
 
-                Ok(ty::Ty::Vec(intersected_members).into_ty_ref())
+                Ok(ty::Ty::Vec(intersected_members.into_boxed_slice()).into_ty_ref())
             }
 
             // List types
@@ -445,7 +445,7 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
-            ty::List::new(vec![ptype1_unbounded.clone()], None),
+            ty::List::new(Box::new([ptype1_unbounded.clone()]), None),
         ).into_ty_ref();
 
         // (All [A : String] (A ->! A))
@@ -453,7 +453,7 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::TopFun::new(Purity::Impure.into_poly(), ptype2_string.clone()),
-            ty::List::new(vec![ptype2_string.clone()], None),
+            ty::List::new(Box::new([ptype2_string.clone()]), None),
         ).into_ty_ref();
 
         let top_pure_fun = poly_for_str("(... -> Any)");

@@ -21,10 +21,18 @@ where
             Datum::Float(_, _) => ty::Ty::Float,
             Datum::Str(_, _) => ty::Ty::Str,
             Datum::List(_, vs) => ty::Ty::List(ty::List::new(
-                vs.iter().map(|datum| self.ref_for_datum(datum)).collect(),
+                vs.iter()
+                    .map(|datum| self.ref_for_datum(datum))
+                    .collect::<Vec<S>>()
+                    .into_boxed_slice(),
                 None,
             )),
-            Datum::Vec(_, vs) => ty::Ty::Vec(vs.iter().map(|v| self.ref_for_datum(v)).collect()),
+            Datum::Vec(_, vs) => ty::Ty::Vec(
+                vs.iter()
+                    .map(|v| self.ref_for_datum(v))
+                    .collect::<Vec<S>>()
+                    .into_boxed_slice(),
+            ),
             Datum::Set(_, vs) => {
                 // Without function, begin or rest types we should never hit erasure
                 let unified_type = self.unify_ref_iter(vs.iter().map(|v| self.ref_for_datum(v)));
@@ -38,7 +46,7 @@ where
                 let unified_value =
                     self.unify_ref_iter(vs.iter().map(|(_, v)| self.ref_for_datum(v)));
 
-                ty::Ty::Map(Box::new(unified_key), Box::new(unified_value))
+                ty::Ty::Map(Box::new(ty::Map::new(unified_key, unified_value)))
             }
         }).into_ty_ref()
     }

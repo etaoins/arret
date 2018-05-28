@@ -49,7 +49,7 @@ where
         match self.unify_ty_refs(ty_ref1, ty_ref2)? {
             UnifiedTy::Merged(ty_ref) => Ok(ty_ref),
             UnifiedTy::Discerned => {
-                Ok(ty::Ty::Union(vec![ty_ref1.clone(), ty_ref2.clone()]).into_ty_ref())
+                Ok(ty::Ty::Union(Box::new([ty_ref1.clone(), ty_ref2.clone()])).into_ty_ref())
             }
         }
     }
@@ -85,7 +85,7 @@ where
         };
 
         Ok(UnifiedList::Merged(ty::List::new(
-            merged_fixed,
+            merged_fixed.into_boxed_slice(),
             merged_rest,
         )))
     }
@@ -205,12 +205,13 @@ where
             }
 
             // Map type
-            (ty::Ty::Map(key_ref1, val_ref1), ty::Ty::Map(key_ref2, val_ref2)) => {
-                let unified_key_ref = self.unify_to_ty_ref(&key_ref1, &key_ref2)?;
-                let unified_val_ref = self.unify_to_ty_ref(&val_ref1, &val_ref2)?;
+            (ty::Ty::Map(map1), ty::Ty::Map(map2)) => {
+                let unified_key_ref = self.unify_to_ty_ref(map1.key(), map2.key())?;
+                let unified_val_ref = self.unify_to_ty_ref(map1.value(), map2.value())?;
 
                 UnifiedTy::Merged(
-                    ty::Ty::Map(Box::new(unified_key_ref), Box::new(unified_val_ref)).into_ty_ref(),
+                    ty::Ty::Map(Box::new(ty::Map::new(unified_key_ref, unified_val_ref)))
+                        .into_ty_ref(),
                 )
             }
 
@@ -226,7 +227,7 @@ where
                         .map(|(member1, member2)| self.unify_to_ty_ref(member1, member2))
                         .collect::<Result<Vec<S>, E>>()?;
 
-                    UnifiedTy::Merged(ty::Ty::Vec(unified_members).into_ty_ref())
+                    UnifiedTy::Merged(ty::Ty::Vec(unified_members.into_boxed_slice()).into_ty_ref())
                 }
             }
             (ty::Ty::Vecof(member1), ty::Ty::Vecof(member2)) => UnifiedTy::Merged(
@@ -264,15 +265,15 @@ where
 
             // Union types
             (ty::Ty::Union(members1), ty::Ty::Union(members2)) => {
-                let new_union = self.unify_ref_iter(members1.clone(), members2.iter().cloned())?;
+                let new_union = self.unify_ref_iter(members1.to_vec(), members2.iter().cloned())?;
                 UnifiedTy::Merged(new_union)
             }
             (ty::Ty::Union(members1), _) => {
-                let new_union = self.unify_ref_iter(members1.clone(), iter::once(ref2).cloned())?;
+                let new_union = self.unify_ref_iter(members1.to_vec(), iter::once(ref2).cloned())?;
                 UnifiedTy::Merged(new_union)
             }
             (_, ty::Ty::Union(members2)) => {
-                let new_union = self.unify_ref_iter(members2.clone(), iter::once(ref1).cloned())?;
+                let new_union = self.unify_ref_iter(members2.to_vec(), iter::once(ref1).cloned())?;
                 UnifiedTy::Merged(new_union)
             }
 
@@ -355,7 +356,7 @@ impl<'a> PolyUnifyCtx<'a> {
             ty::Ty::TopFun(_)
             | ty::Ty::Fun(_)
             | ty::Ty::TyPred(_)
-            | ty::Ty::Map(_, _)
+            | ty::Ty::Map(_)
             | ty::Ty::Set(_)
             | ty::Ty::Vec(_)
             | ty::Ty::Vecof(_) => false,
@@ -809,7 +810,7 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
-            ty::List::new(vec![ptype1_unbounded.clone()], None),
+            ty::List::new(Box::new([ptype1_unbounded.clone()]), None),
         ).into_ty_ref();
 
         // (All [A : String] (A ->! A))
@@ -817,7 +818,7 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::TopFun::new(Purity::Impure.into_poly(), ptype2_string.clone()),
-            ty::List::new(vec![ptype2_string.clone()], None),
+            ty::List::new(Box::new([ptype2_string.clone()]), None),
         ).into_ty_ref();
 
         assert_eq!(

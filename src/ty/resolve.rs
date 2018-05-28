@@ -30,7 +30,7 @@ fn poly_ty_has_subtypes(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> bool 
                 || poly_has_subtypes(tvars, fun.ret())
         }
         ty::Ty::TyPred(_) => false,
-        ty::Ty::Map(key, value) => [key, value]
+        ty::Ty::Map(map) => [map.key(), map.value()]
             .iter()
             .any(|poly| poly_has_subtypes(tvars, poly)),
         ty::Ty::Set(member) => poly_has_subtypes(tvars, member),
@@ -128,7 +128,7 @@ mod test {
 
         assert_eq!(
             false,
-            poly_has_subtypes(&[], &ty::Ty::Union(vec![]).into_poly())
+            poly_has_subtypes(&[], &ty::Ty::Union(Box::new([])).into_poly())
         );
     }
 }

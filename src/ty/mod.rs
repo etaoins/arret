@@ -42,7 +42,7 @@ pub trait TyRef: PartialEq + Clone + Sized + fmt::Debug {
         if members.len() == 1 {
             members.pop().unwrap()
         } else {
-            Self::from_ty(Ty::Union(members))
+            Self::from_ty(Ty::Union(members.into_boxed_slice()))
         }
     }
 }
@@ -61,14 +61,14 @@ where
     Bool,
     Char,
     Float,
-    Map(Box<S>, Box<S>),
+    Map(Box<Map<S>>),
     Int,
     LitBool(bool),
     LitSym(String),
     Set(Box<S>),
     Str,
     Sym,
-    Union(Vec<S>),
+    Union(Box<[S]>),
 
     // Function types
     TopFun(Box<TopFun<S>>),
@@ -76,7 +76,7 @@ where
     TyPred(Box<S>),
 
     // Vector types
-    Vec(Vec<S>),
+    Vec(Box<[S]>),
     Vecof(Box<S>),
 
     // List types
@@ -89,6 +89,79 @@ where
 {
     pub fn into_ty_ref(self) -> S {
         S::from_ty(self)
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+pub struct Map<S>
+where
+    S: TyRef,
+{
+    key: S,
+    value: S,
+}
+
+impl<S> Map<S>
+where
+    S: TyRef,
+{
+    pub fn new(key: S, value: S) -> Map<S> {
+        Map { key, value }
+    }
+
+    pub fn key(&self) -> &S {
+        &self.key
+    }
+
+    pub fn value(&self) -> &S {
+        &self.value
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+pub struct List<S>
+where
+    S: TyRef,
+{
+    fixed: Box<[S]>,
+    rest: Option<Box<S>>,
+}
+
+impl<S> List<S>
+where
+    S: TyRef,
+{
+    pub fn new(fixed: Box<[S]>, rest: Option<S>) -> List<S> {
+        List {
+            fixed,
+            rest: rest.map(Box::new),
+        }
+    }
+
+    pub fn fixed(&self) -> &[S] {
+        &self.fixed
+    }
+
+    pub fn rest(&self) -> Option<&S> {
+        match self.rest {
+            Some(ref rest) => Some(rest.as_ref()),
+            None => None,
+        }
+    }
+
+    fn size_range(&self) -> Range<usize> {
+        if self.rest.is_some() {
+            (self.fixed.len()..usize::max_value())
+        } else {
+            (self.fixed.len()..self.fixed.len())
+        }
+    }
+
+    pub fn has_disjoint_arity(&self, other: &Self) -> bool {
+        let range1 = self.size_range();
+        let range2 = other.size_range();
+
+        range2.start > range1.end || range2.end < range1.start
     }
 }
 
@@ -136,53 +209,6 @@ where
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct List<S>
-where
-    S: TyRef,
-{
-    fixed: Vec<S>,
-    rest: Option<Box<S>>,
-}
-
-impl<S> List<S>
-where
-    S: TyRef,
-{
-    pub fn new(fixed: Vec<S>, rest: Option<S>) -> List<S> {
-        List {
-            fixed,
-            rest: rest.map(Box::new),
-        }
-    }
-
-    pub fn fixed(&self) -> &Vec<S> {
-        &self.fixed
-    }
-
-    pub fn rest(&self) -> Option<&S> {
-        match self.rest {
-            Some(ref rest) => Some(rest.as_ref()),
-            None => None,
-        }
-    }
-
-    fn size_range(&self) -> Range<usize> {
-        if self.rest.is_some() {
-            (self.fixed.len()..usize::max_value())
-        } else {
-            (self.fixed.len()..self.fixed.len())
-        }
-    }
-
-    pub fn has_disjoint_arity(&self, other: &Self) -> bool {
-        let range1 = self.size_range();
-        let range2 = other.size_range();
-
-        range2.start > range1.end || range2.end < range1.start
-    }
-}
-
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct Fun<S>
 where
     S: TyRef,
@@ -220,7 +246,7 @@ where
             S::PVarIds::monomorphic(),
             S::TVarIds::monomorphic(),
             TopFun::new_for_ty_pred(),
-            List::new(vec![Ty::Any.into_ty_ref()], None),
+            List::new(Box::new([Ty::Any.into_ty_ref()]), None),
         )
     }
 
