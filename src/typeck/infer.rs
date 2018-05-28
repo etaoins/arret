@@ -74,7 +74,6 @@ impl PurityVarType {
     }
 }
 
-#[allow(large_enum_variant)]
 enum InputDef {
     Pending(hir::Def<ty::Decl>),
     Complete,
