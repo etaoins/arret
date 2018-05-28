@@ -41,7 +41,7 @@ impl<'a> LowerTyContext<'a> {
 
         match tvar_datum {
             NsDatum::Ident(_, ident) => {
-                let source_name = ident.name().clone();
+                let source_name = ident.name().into();
                 return Ok((
                     ident,
                     PolymorphicVar::TVar(ty::TVar::new(source_name, ty::Ty::Any.into_poly())),
@@ -55,7 +55,7 @@ impl<'a> LowerTyContext<'a> {
                     arg_data.pop(); // Discard the : completely
                     let ident = expect_ident(arg_data.pop().unwrap())?;
 
-                    let source_name = ident.name().clone();
+                    let source_name = ident.name().into();
 
                     match try_lower_purity(self.scope, &bound_datum) {
                         Some(ty::purity::Poly::Fixed(Purity::Impure)) => {
@@ -73,7 +73,7 @@ impl<'a> LowerTyContext<'a> {
                             return Err(Error::new(
                                 span,
                                 ErrorKind::IllegalArg(
-                                    "Purity variables do not support variable bounds".to_owned(),
+                                    "Purity variables do not support variable bounds",
                                 ),
                             ))
                         }
@@ -93,8 +93,7 @@ impl<'a> LowerTyContext<'a> {
         Err(Error::new(
             span,
             ErrorKind::IllegalArg(
-                "polymorphic variables must be either an identifier or [identifier : Type]"
-                    .to_owned(),
+                "polymorphic variables must be either an identifier or [identifier : Type]",
             ),
         ))
     }
@@ -242,10 +241,10 @@ impl<'a> LowerTyContext<'a> {
     fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
         match datum {
             NsDatum::Bool(_, v) => Ok(ty::Ty::LitBool(v).into_poly()),
-            NsDatum::Ident(_, ident) => Ok(ty::Ty::LitSym(ident.name().clone()).into_poly()),
+            NsDatum::Ident(_, ident) => Ok(ty::Ty::LitSym(ident.name().into()).into_poly()),
             _ => Err(Error::new(
                 datum.span(),
-                ErrorKind::IllegalArg("only boolean and symbol literals are supported".to_owned()),
+                ErrorKind::IllegalArg("only boolean and symbol literals are supported"),
             )),
         }
     }
@@ -291,7 +290,7 @@ impl<'a> LowerTyContext<'a> {
                         None => {
                             return Err(Error::new(
                                 ident_span,
-                                ErrorKind::UnboundSymbol(ident.name().clone()),
+                                ErrorKind::UnboundSymbol(ident.name().into()),
                             ));
                         }
                         Some(_) => {}
@@ -300,7 +299,7 @@ impl<'a> LowerTyContext<'a> {
 
                 Err(Error::new(
                     fn_datum.span(),
-                    ErrorKind::IllegalArg("type constructor expected".to_owned()),
+                    ErrorKind::IllegalArg("type constructor expected"),
                 ))
             }
             NsDatum::Ident(span, ident) => self.lower_ident(span, ident),
@@ -344,22 +343,22 @@ pub fn try_lower_purity(scope: &Scope, datum: &NsDatum) -> Option<ty::purity::Po
     })
 }
 
-pub fn insert_ty_exports(exports: &mut HashMap<String, Binding>) {
+pub fn insert_ty_exports(exports: &mut HashMap<Box<str>, Binding>) {
     macro_rules! export_ty {
         ($name:expr, $type:expr) => {
-            exports.insert($name.to_owned(), Binding::Ty($type));
+            exports.insert($name.into(), Binding::Ty($type));
         };
     }
 
     macro_rules! export_ty_cons {
         ($name:expr, $ty_cons:expr) => {
-            exports.insert($name.to_owned(), Binding::TyCons($ty_cons));
+            exports.insert($name.into(), Binding::TyCons($ty_cons));
         };
     }
 
     macro_rules! export_purity {
         ($name:expr, $purity:expr) => {
-            exports.insert($name.to_owned(), Binding::Purity($purity));
+            exports.insert($name.into(), Binding::Purity($purity));
         };
     }
 
@@ -412,7 +411,7 @@ impl<'a> StrForPolyContext<'a> {
         match purity {
             ty::purity::Poly::Fixed(Purity::Pure) => "->".to_owned(),
             ty::purity::Poly::Fixed(Purity::Impure) => "->!".to_owned(),
-            ty::purity::Poly::Var(pvar_id) => self.pvars[pvar_id.to_usize()].source_name().clone(),
+            ty::purity::Poly::Var(pvar_id) => self.pvars[pvar_id.to_usize()].source_name().into(),
         }
     }
 
@@ -490,21 +489,21 @@ impl<'a> StrForPolyContext<'a> {
         match poly {
             ty::Poly::Var(tvar_id) => {
                 // TODO: It's possible to have tvars with overlapping source names
-                self.tvars[tvar_id.to_usize()].source_name().clone()
+                self.tvars[tvar_id.to_usize()].source_name().to_owned()
             }
             ty::Poly::Fixed(poly_ty) => self.str_for_poly_ty(poly_ty),
         }
     }
 }
 
-pub fn str_for_poly(pvars: &[ty::purity::PVar], tvars: &[ty::TVar], poly: &ty::Poly) -> String {
+pub fn str_for_poly(pvars: &[ty::purity::PVar], tvars: &[ty::TVar], poly: &ty::Poly) -> Box<str> {
     let ctx = StrForPolyContext { pvars, tvars };
-    ctx.str_for_poly(poly)
+    ctx.str_for_poly(poly).into_boxed_str()
 }
 
-pub fn str_for_purity(pvars: &[ty::purity::PVar], purity: &ty::purity::Poly) -> String {
+pub fn str_for_purity(pvars: &[ty::purity::PVar], purity: &ty::purity::Poly) -> Box<str> {
     let ctx = StrForPolyContext { pvars, tvars: &[] };
-    ctx.str_for_purity(purity)
+    ctx.str_for_purity(purity).into_boxed_str()
 }
 
 #[cfg(test)]
@@ -516,18 +515,18 @@ pub fn poly_for_str(datum_str: &str) -> Result<ty::Poly> {
     let test_ns_id = NsId::new(1);
 
     // Capture our exports
-    let mut exports = HashMap::<String, Binding>::new();
+    let mut exports = HashMap::<Box<str>, Binding>::new();
     insert_prim_exports(&mut exports);
     insert_ty_exports(&mut exports);
 
     // Place them on our scope
     let mut scope = Scope::new_empty();
     for (name, binding) in exports {
-        if name == "U" {
+        if *name == *"U" {
             // Using `U` in tests is very dubious as it invokes a lot of type system logic. It's
             // easy to write tautological tests due to `U` creating a simplified type. Rename to
             // `UnifyingU` so it's clear what's happening.
-            scope.insert_binding(Ident::new(test_ns_id, "UnifyingU".to_owned()), binding);
+            scope.insert_binding(Ident::new(test_ns_id, "UnifyingU".into()), binding);
         } else {
             scope.insert_binding(Ident::new(test_ns_id, name), binding);
         }
@@ -540,7 +539,7 @@ pub fn poly_for_str(datum_str: &str) -> Result<ty::Poly> {
         let poly = ty::Poly::Var(tvar_id);
 
         scope.insert_binding(
-            Ident::new(test_ns_id, var_name.to_string()),
+            Ident::new(test_ns_id, var_name.to_string().into_boxed_str()),
             Binding::Ty(poly),
         );
     }
@@ -551,7 +550,7 @@ pub fn poly_for_str(datum_str: &str) -> Result<ty::Poly> {
         let poly = ty::purity::Poly::Var(pvar_id);
 
         scope.insert_binding(
-            Ident::new(test_ns_id, var_name.to_string()),
+            Ident::new(test_ns_id, var_name.to_string().into_boxed_str()),
             Binding::Purity(poly),
         );
     }
@@ -589,7 +588,7 @@ mod test {
     fn assert_exact_str_repr(datum_str: &str) {
         assert_eq!(
             datum_str,
-            str_for_poly(&[], &[], &poly_for_str(datum_str).unwrap())
+            str_for_poly(&[], &[], &poly_for_str(datum_str).unwrap()).as_ref()
         );
     }
 
@@ -613,7 +612,7 @@ mod test {
     fn sym_literal() {
         let j = "'foo";
 
-        let expected = ty::Ty::LitSym("foo".to_owned()).into_poly();
+        let expected = ty::Ty::LitSym("foo".into()).into_poly();
         assert_poly_for_str(&expected, j);
     }
 
@@ -638,7 +637,7 @@ mod test {
         let j = "notbound";
         let t = "^^^^^^^^";
 
-        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("notbound".to_owned()));
+        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("notbound".into()));
         assert_err_for_str(&err, j);
     }
 
@@ -649,7 +648,7 @@ mod test {
 
         let err = Error::new(
             t2s(t),
-            ErrorKind::IllegalArg("only boolean and symbol literals are supported".to_owned()),
+            ErrorKind::IllegalArg("only boolean and symbol literals are supported"),
         );
         assert_err_for_str(&err, j);
     }
@@ -668,7 +667,7 @@ mod test {
         let j = "(notbound)";
         let t = " ^^^^^^^^ ";
 
-        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("notbound".to_owned()));
+        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("notbound".into()));
         assert_err_for_str(&err, j);
     }
 
@@ -736,10 +735,7 @@ mod test {
         let j = "(->)";
         let t = " ^^ ";
 
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg("type constructor expected".to_owned()),
-        );
+        let err = Error::new(t2s(t), ErrorKind::IllegalArg("type constructor expected"));
         assert_err_for_str(&err, j);
     }
 

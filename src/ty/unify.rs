@@ -573,8 +573,8 @@ mod test {
         let bound2 = poly_for_str(bound_str2);
 
         let tvars = vec![
-            ty::TVar::new("poly1".to_owned(), bound1),
-            ty::TVar::new("poly2".to_owned(), bound2),
+            ty::TVar::new("poly1".into(), bound1),
+            ty::TVar::new("poly2".into(), bound2),
         ];
 
         let poly1 = ty::Poly::Var(ty::TVarId::new(0));
@@ -801,8 +801,8 @@ mod test {
         let ptype2_string = ty::Poly::Var(ty::TVarId::new(1));
 
         let tvars = [
-            ty::TVar::new("PAny".to_owned(), poly_for_str("Any")),
-            ty::TVar::new("PString".to_owned(), poly_for_str("String")),
+            ty::TVar::new("PAny".into(), poly_for_str("Any")),
+            ty::TVar::new("PString".into(), poly_for_str("String")),
         ];
 
         // (All A (A -> A))

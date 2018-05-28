@@ -11,11 +11,11 @@ impl LoadedFile {
         }
     }
 
-    pub fn display_name(&self) -> &String {
+    pub fn display_name(&self) -> &str {
         &self.display_name
     }
 
-    pub fn source(&self) -> &String {
+    pub fn source(&self) -> &str {
         &self.source
     }
 }

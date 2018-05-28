@@ -6,11 +6,11 @@ new_counting_id_type!(NsIdCounter, NsId, u32);
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Ident {
     ns_id: NsId,
-    name: String,
+    name: Box<str>,
 }
 
 impl Ident {
-    pub fn new(ns_id: NsId, name: String) -> Ident {
+    pub fn new(ns_id: NsId, name: Box<str>) -> Ident {
         Ident { ns_id, name }
     }
 
@@ -18,11 +18,11 @@ impl Ident {
         self.ns_id
     }
 
-    pub fn name(&self) -> &String {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    pub fn into_name(self) -> String {
+    pub fn into_name(self) -> Box<str> {
         self.name
     }
 
@@ -41,7 +41,7 @@ pub enum NsDatum {
     Int(Span, i64),
     Float(Span, f64),
     List(Span, Vec<NsDatum>),
-    Str(Span, String),
+    Str(Span, Box<str>),
     Ident(Span, Ident),
     Vec(Span, Vec<NsDatum>),
     Map(Span, Vec<(NsDatum, NsDatum)>),

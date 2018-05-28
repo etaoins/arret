@@ -436,8 +436,8 @@ mod test {
         let ptype2_string = ty::Poly::Var(ty::TVarId::new(1));
 
         let tvars = [
-            ty::TVar::new("TAny".to_owned(), poly_for_str("Any")),
-            ty::TVar::new("TString".to_owned(), poly_for_str("String")),
+            ty::TVar::new("TAny".into(), poly_for_str("Any")),
+            ty::TVar::new("TString".into(), poly_for_str("String")),
         ];
 
         // (All A (A -> A))

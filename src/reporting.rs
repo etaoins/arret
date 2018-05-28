@@ -68,7 +68,7 @@ fn bytepos_to_human_pos(ccx: &CompileContext, bp: u32) -> HumanPos {
     }
 
     HumanPos {
-        display_name: loaded_file.display_name().clone(),
+        display_name: loaded_file.display_name().into(),
         line,
         column,
         snippet: remaining_source,
@@ -208,14 +208,8 @@ mod test {
         let first_contents = "12\n34\n";
         let second_contents = "☃6";
 
-        ccx.add_loaded_file(LoadedFile::new(
-            "<first>".to_owned(),
-            first_contents.to_owned(),
-        ));
-        ccx.add_loaded_file(LoadedFile::new(
-            "<second>".to_owned(),
-            second_contents.to_owned(),
-        ));
+        ccx.add_loaded_file(LoadedFile::new("<first>".into(), first_contents.into()));
+        ccx.add_loaded_file(LoadedFile::new("<second>".into(), second_contents.into()));
 
         let test_cases = vec![
             (

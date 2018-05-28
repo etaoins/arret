@@ -205,7 +205,10 @@ impl<'de> Parser<'de> {
                         hi: span.lo + (rest_of_symbol.len() as u32) + 1,
                     };
 
-                    Ok(Datum::Sym(span_with_symbol, format!("-{}", rest_of_symbol)))
+                    Ok(Datum::Sym(
+                        span_with_symbol,
+                        format!("-{}", rest_of_symbol).into_boxed_str(),
+                    ))
                 } else {
                     Err(err)
                 }
@@ -385,7 +388,7 @@ impl<'de> Parser<'de> {
                 }
             }
         });
-        contents.map(|contents| Datum::Str(span, contents))
+        contents.map(|contents| Datum::Str(span, contents.into_boxed_str()))
     }
 
     fn parse_identifier_content(&mut self) -> &str {
@@ -393,7 +396,8 @@ impl<'de> Parser<'de> {
     }
 
     fn parse_identifier(&mut self) -> Result<Datum> {
-        let (span, content) = self.capture_span(|s| s.parse_identifier_content().to_owned());
+        let (span, content): (Span, Box<str>) =
+            self.capture_span(|s| s.parse_identifier_content().into());
 
         if content.is_empty() {
             let (span, next_char) =
@@ -421,10 +425,7 @@ impl<'de> Parser<'de> {
         quoted_datum.map(|quoted_datum| {
             Datum::List(
                 outer_span,
-                vec![
-                    Datum::Sym(shorthand_span, expansion.to_owned()),
-                    quoted_datum,
-                ],
+                vec![Datum::Sym(shorthand_span, expansion.into()), quoted_datum],
             )
         })
     }
@@ -515,7 +516,7 @@ mod test {
 
         let j = " trueorfalse  ";
         let t = " ^^^^^^^^^^^  ";
-        let expected = Datum::Sym(t2s(t), "trueorfalse".to_owned());
+        let expected = Datum::Sym(t2s(t), "trueorfalse".into());
         assert_eq!(expected, datum_from_str(j).unwrap());
     }
 
@@ -617,7 +618,7 @@ mod test {
             "-",
         ] {
             let s = whole_str_span(test_symbol);
-            let expected = Datum::Sym(s, test_symbol.to_owned());
+            let expected = Datum::Sym(s, test_symbol.into());
 
             assert_eq!(expected, datum_from_str(test_symbol).unwrap());
         }
@@ -627,7 +628,7 @@ mod test {
     fn keyword_symbol_datum() {
         for &test_symbol in &[":HELLO", ":HELLO123", ":predicate?", ":mutate!"] {
             let s = whole_str_span(test_symbol);
-            let expected = Datum::Sym(s, test_symbol.to_owned());
+            let expected = Datum::Sym(s, test_symbol.into());
 
             assert_eq!(expected, datum_from_str(test_symbol).unwrap());
         }
@@ -654,7 +655,7 @@ mod test {
 
         for (test_string, expected_contents) in test_strings {
             let s = whole_str_span(test_string);
-            let expected = Datum::Str(s, expected_contents.to_owned());
+            let expected = Datum::Str(s, expected_contents.into());
 
             assert_eq!(expected, datum_from_str(test_string).unwrap());
         }
@@ -835,8 +836,8 @@ mod test {
         let expected = Datum::List(
             t2s(t),
             vec![
-                Datum::Sym(t2s(u), "quote".to_owned()),
-                Datum::Sym(t2s(v), "foo".to_owned()),
+                Datum::Sym(t2s(u), "quote".into()),
+                Datum::Sym(t2s(v), "foo".into()),
             ],
         );
         assert_eq!(expected, datum_from_str(j).unwrap());
@@ -852,7 +853,7 @@ mod test {
         let expected = Datum::List(
             t2s(t),
             vec![
-                Datum::Sym(t2s(u), "quote".to_owned()),
+                Datum::Sym(t2s(u), "quote".into()),
                 Datum::List(
                     t2s(v),
                     vec![
@@ -892,7 +893,7 @@ mod test {
         let t = "^^^^^^^^^^^^^^^^^^^^";
         let u = " ^^^^^              ";
 
-        let expected = Datum::List(t2s(t), vec![Datum::Sym(t2s(u), "Hello".to_owned())]);
+        let expected = Datum::List(t2s(t), vec![Datum::Sym(t2s(u), "Hello".into())]);
         assert_eq!(expected, datum_from_str(j).unwrap());
 
         let j = "(Hello #_  you jerk)";
@@ -903,8 +904,8 @@ mod test {
         let expected = Datum::List(
             t2s(t),
             vec![
-                Datum::Sym(t2s(u), "Hello".to_owned()),
-                Datum::Sym(t2s(v), "jerk".to_owned()),
+                Datum::Sym(t2s(u), "Hello".into()),
+                Datum::Sym(t2s(v), "jerk".into()),
             ],
         );
         assert_eq!(expected, datum_from_str(j).unwrap());

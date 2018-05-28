@@ -9,7 +9,7 @@ use hir::util::{expect_arg_count, expect_ident, expect_ident_and_span};
 use syntax::span::Span;
 
 type Result<T> = result::Result<T, Error>;
-type Bindings = HashMap<String, Binding>;
+type Bindings = HashMap<Box<str>, Binding>;
 
 /// Input to an (import) filter
 ///
@@ -21,7 +21,7 @@ struct FilterInput {
     ///
     /// This is to support `(prefixed)`. For example, the terminal name of `[scheme base]` would be
     /// `base` and if `(prefixed)` was used it would prepend `base/` to all of its identifiers.
-    terminal_name: String,
+    terminal_name: Box<str>,
 }
 
 struct LowerImportContext<F>
@@ -39,7 +39,7 @@ where
         let mut name_components = name_data
             .into_iter()
             .map(|datum| expect_ident(datum).map(|ident| ident.into_name()))
-            .collect::<Result<Vec<String>>>()?;
+            .collect::<Result<Vec<Box<str>>>>()?;
 
         let terminal_name = name_components.pop().unwrap();
         let module_name = ModuleName::new(name_components, terminal_name.clone());
@@ -132,7 +132,7 @@ where
                     Err(Error::new(
                         arg_datum.span(),
                         ErrorKind::IllegalArg(
-                            "(rename) expects a map of identifier renames".to_owned(),
+                            "(rename) expects a map of identifier renames",
                         ),
                     ))
                 }
@@ -144,7 +144,7 @@ where
                 let prefix_bindings = filter_input
                     .bindings
                     .into_iter()
-                    .map(|(name, binding)| (format!("{}{}", prefix_ident.name(), name), binding))
+                    .map(|(name, binding)| (format!("{}{}", prefix_ident.name(), name).into_boxed_str(), binding))
                     .collect();
 
                 Ok(FilterInput {
@@ -161,7 +161,7 @@ where
 
                 let prefixed_bindings = bindings
                     .into_iter()
-                    .map(|(name, binding)| (format!("{}/{}", &terminal_name, name), binding))
+                    .map(|(name, binding)| (format!("{}/{}", &terminal_name, name).into_boxed_str(), binding))
                     .collect();
 
                 Ok(FilterInput {
@@ -173,7 +173,6 @@ where
                 apply_span,
                 ErrorKind::IllegalArg(
                     "unknown import filter; must be `only`, `except`, `rename`, `prefix` or `prefixed`"
-                        .to_owned(),
                 ),
             )),
         }
@@ -189,9 +188,7 @@ where
                 if vs.is_empty() {
                     return Err(Error::new(
                         span,
-                        ErrorKind::IllegalArg(
-                            "module name requires a least one element".to_owned(),
-                        ),
+                        ErrorKind::IllegalArg("module name requires a least one element"),
                     ));
                 }
 
@@ -219,7 +216,7 @@ where
         Err(Error::new(
             span,
             ErrorKind::IllegalArg(
-                "import set must either be a module name vector or an applied filter".to_owned(),
+                "import set must either be a module name vector or an applied filter",
             ),
         ))
     }
@@ -242,10 +239,10 @@ mod test {
     use syntax::span::{t2s, EMPTY_SPAN};
 
     fn load_test_module(_: Span, module_name: &ModuleName) -> Result<Bindings> {
-        if module_name == &ModuleName::new(vec!["lib".to_owned()], "test".to_owned()) {
+        if module_name == &ModuleName::new(vec!["lib".into()], "test".into()) {
             let mut bindings = HashMap::new();
-            bindings.insert("quote".to_owned(), Binding::Prim(Prim::Quote));
-            bindings.insert("if".to_owned(), Binding::Prim(Prim::If));
+            bindings.insert("quote".into(), Binding::Prim(Prim::Quote));
+            bindings.insert("if".into(), Binding::Prim(Prim::If));
 
             Ok(bindings)
         } else {
@@ -253,7 +250,7 @@ mod test {
         }
     }
 
-    fn bindings_for_import_set(datum: &str) -> Result<HashMap<String, Binding>> {
+    fn bindings_for_import_set(datum: &str) -> Result<HashMap<Box<str>, Binding>> {
         use syntax::parser::datum_from_str;
 
         let test_ns_id = NsId::new(0);
@@ -291,7 +288,7 @@ mod test {
 
         let j = "(only [lib test] quote ifz)";
         let t = "                       ^^^ ";
-        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("ifz".to_owned()));
+        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("ifz".into()));
 
         assert_eq!(err, bindings_for_import_set(j).unwrap_err());
     }
@@ -306,7 +303,7 @@ mod test {
 
         let j = "(except [lib test] ifz)";
         let t = "                   ^^^ ";
-        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("ifz".to_owned()));
+        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("ifz".into()));
 
         assert_eq!(err, bindings_for_import_set(j).unwrap_err());
     }
@@ -321,7 +318,7 @@ mod test {
 
         let j = "(rename [lib test] {ifz new-ifz})";
         let t = "                    ^^^          ";
-        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("ifz".to_owned()));
+        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("ifz".into()));
 
         assert_eq!(err, bindings_for_import_set(j).unwrap_err());
     }

@@ -8,9 +8,9 @@ macro_rules! prims {
             $($i,)*
         }
 
-        pub fn insert_prim_exports(exports: &mut HashMap<String, Binding>) {
+        pub fn insert_prim_exports(exports: &mut HashMap<Box<str>, Binding>) {
             $(
-                exports.insert($n.to_owned(), Binding::Prim(Prim::$i));
+                exports.insert($n.into(), Binding::Prim(Prim::$i));
             )*
         }
     }

@@ -7,11 +7,11 @@ use syntax::span::Span;
 
 #[derive(PartialEq, Debug)]
 pub enum ErrorKind {
-    IsNotA(String, String),
-    VarHasEmptyType(String, String),
-    PolyUnionConflict(String, String),
-    PredTypeErased(String, String),
-    TopFunApply(String),
+    IsNotA(Box<str>, Box<str>),
+    VarHasEmptyType(Box<str>, Box<str>),
+    PolyUnionConflict(Box<str>, Box<str>),
+    PredTypeErased(Box<str>, Box<str>),
+    TopFunApply(Box<str>),
     RecursiveType,
     // Have, wanted
     TooManyArgs(usize, usize),

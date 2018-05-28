@@ -33,7 +33,7 @@ fn main() {
 
     let mut ccx = CompileContext::new();
 
-    let hir = match hir::lowering::lower_program(&mut ccx, input_path.to_owned(), &mut input_file) {
+    let hir = match hir::lowering::lower_program(&mut ccx, input_path.into(), &mut input_file) {
         Ok(hir) => hir,
         Err(errors) => {
             for err in errors {

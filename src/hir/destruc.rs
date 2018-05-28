@@ -45,7 +45,7 @@ where
 {
     /// ID of the variable. If this is None it's treated as a wildcard.
     var_id: Option<hir::VarId>,
-    source_name: String,
+    source_name: Box<str>,
     ty: T,
 }
 
@@ -53,7 +53,7 @@ impl<T> Scalar<T>
 where
     T: HirType,
 {
-    pub fn new(var_id: Option<hir::VarId>, source_name: String, ty: T) -> Scalar<T> {
+    pub fn new(var_id: Option<hir::VarId>, source_name: Box<str>, ty: T) -> Scalar<T> {
         Scalar {
             var_id,
             source_name,
@@ -69,7 +69,7 @@ where
         &self.ty
     }
 
-    pub fn into_source_name(self) -> String {
+    pub fn into_source_name(self) -> Box<str> {
         self.source_name
     }
 }

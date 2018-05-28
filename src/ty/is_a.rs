@@ -602,8 +602,8 @@ mod test {
         let poly_bool = poly_for_str("Bool");
 
         let tvars = [
-            ty::TVar::new("one".to_owned(), ty::Ty::Any.into_poly()),
-            ty::TVar::new("two".to_owned(), ty::Ty::Any.into_poly()),
+            ty::TVar::new("one".into(), ty::Ty::Any.into_poly()),
+            ty::TVar::new("two".into(), ty::Ty::Any.into_poly()),
         ];
 
         assert_eq!(Result::Yes, poly_is_a(&tvars, &ptype1, &ptype1));
@@ -618,9 +618,9 @@ mod test {
         let foo_sym_ptype = ty::Poly::Var(ty::TVarId::new(2));
 
         let tvars = [
-            ty::TVar::new("sym".to_owned(), poly_for_str("Symbol")),
-            ty::TVar::new("str".to_owned(), poly_for_str("String")),
-            ty::TVar::new("foo".to_owned(), poly_for_str("'foo")),
+            ty::TVar::new("sym".into(), poly_for_str("Symbol")),
+            ty::TVar::new("str".into(), poly_for_str("String")),
+            ty::TVar::new("foo".into(), poly_for_str("'foo")),
         ];
 
         let poly_foo_sym = poly_for_str("'foo");
@@ -660,9 +660,9 @@ mod test {
         let ptype3_bounded_by_2 = ty::Poly::Var(ty::TVarId::new(2));
 
         let tvars = [
-            ty::TVar::new("1".to_owned(), poly_for_str("Any")),
-            ty::TVar::new("2".to_owned(), ptype1_unbounded.clone()),
-            ty::TVar::new("3".to_owned(), ptype2_bounded_by_1.clone()),
+            ty::TVar::new("1".into(), poly_for_str("Any")),
+            ty::TVar::new("2".into(), ptype1_unbounded.clone()),
+            ty::TVar::new("3".into(), ptype2_bounded_by_1.clone()),
         ];
 
         // Direct bounding
@@ -696,9 +696,9 @@ mod test {
         let ptype3_string = ty::Poly::Var(ty::TVarId::new(2));
 
         let tvars = [
-            ty::TVar::new("TAny".to_owned(), poly_for_str("Any")),
-            ty::TVar::new("TSymbol".to_owned(), poly_for_str("Symbol")),
-            ty::TVar::new("TString".to_owned(), poly_for_str("String")),
+            ty::TVar::new("TAny".into(), poly_for_str("Any")),
+            ty::TVar::new("TSymbol".into(), poly_for_str("Symbol")),
+            ty::TVar::new("TString".into(), poly_for_str("String")),
         ];
 
         // (All A (A -> A))

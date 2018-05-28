@@ -10,12 +10,12 @@ use syntax::span::Span;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct ModuleName {
-    path: Vec<String>,
-    terminal_name: String,
+    path: Vec<Box<str>>,
+    terminal_name: Box<str>,
 }
 
 impl ModuleName {
-    pub fn new(path: Vec<String>, terminal_name: String) -> ModuleName {
+    pub fn new(path: Vec<Box<str>>, terminal_name: Box<str>) -> ModuleName {
         ModuleName {
             path,
             terminal_name,
@@ -33,9 +33,12 @@ pub fn load_module_data(
 
     let mut source = String::new();
 
-    input_reader
-        .read_to_string(&mut source)
-        .map_err(|_| Error::new(span, ErrorKind::ReadError(display_name.clone())))?;
+    input_reader.read_to_string(&mut source).map_err(|_| {
+        Error::new(
+            span,
+            ErrorKind::ReadError(display_name.clone().into_boxed_str()),
+        )
+    })?;
 
     let data = data_from_str_with_span_offset(&source, span_offset);
 
@@ -57,12 +60,12 @@ pub fn load_module_by_name(
 
     path_buf.push("stdlib");
     for path_component in &module_name.path {
-        path_buf.push(path_component);
+        path_buf.push(path_component.as_ref());
     }
 
     path_buf.push(format!("{}.rsp", module_name.terminal_name));
 
-    let display_name = path_buf.to_string_lossy().into_owned();
+    let display_name = path_buf.to_string_lossy().to_string();
     let mut source_file =
         File::open(path_buf).map_err(|_| Error::new(span, ErrorKind::ModuleNotFound))?;
 

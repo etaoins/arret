@@ -32,15 +32,15 @@ new_indexing_id_type!(PVarId, u32);
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct PVar {
-    source_name: String,
+    source_name: Box<str>,
 }
 
 impl PVar {
-    pub fn new(source_name: String) -> PVar {
+    pub fn new(source_name: Box<str>) -> PVar {
         PVar { source_name }
     }
 
-    pub fn source_name(&self) -> &String {
+    pub fn source_name(&self) -> &str {
         &self.source_name
     }
 }

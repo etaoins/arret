@@ -16,14 +16,14 @@ use syntax::span::Span;
 #[derive(PartialEq, Eq, Debug, Hash)]
 pub enum MacroVar {
     Bound(Binding),
-    Unbound(String),
+    Unbound(Box<str>),
 }
 
 impl MacroVar {
     fn from_ident(scope: &Scope, ident: &Ident) -> MacroVar {
         match scope.get(ident) {
             Some(binding) => MacroVar::Bound(binding),
-            None => MacroVar::Unbound(ident.name().clone()),
+            None => MacroVar::Unbound(ident.name().into()),
         }
     }
 }
@@ -119,14 +119,14 @@ pub fn lower_macro_rule(
     } else {
         return Err(Error::new(
             rule_datum.span(),
-            ErrorKind::IllegalArg("expected a macro rule vector".to_owned()),
+            ErrorKind::IllegalArg("expected a macro rule vector"),
         ));
     };
 
     if rule_values.len() != 2 {
         return Err(Error::new(
             span,
-            ErrorKind::IllegalArg("expected a macro rule vector with two elements".to_owned()),
+            ErrorKind::IllegalArg("expected a macro rule vector with two elements"),
         ));
     }
 
@@ -138,7 +138,7 @@ pub fn lower_macro_rule(
             return Err(Error::new(
                 span,
                 ErrorKind::IllegalArg(
-                    "macro rule patterns must contain at least the name of the macro".to_owned(),
+                    "macro rule patterns must contain at least the name of the macro",
                 ),
             ));
         }
@@ -149,7 +149,7 @@ pub fn lower_macro_rule(
                 return Err(Error::new(
                     other.span(),
                     ErrorKind::IllegalArg(
-                        "macro rule patterns must start with the name of the macro".to_owned(),
+                        "macro rule patterns must start with the name of the macro",
                     ),
                 ));
             }
@@ -159,7 +159,7 @@ pub fn lower_macro_rule(
     } else {
         return Err(Error::new(
             pattern_data.span(),
-            ErrorKind::IllegalArg("expected a macro rule pattern list".to_owned()),
+            ErrorKind::IllegalArg("expected a macro rule pattern list"),
         ));
     };
 
@@ -193,7 +193,7 @@ pub fn lower_macro_rules(
                 } else {
                     Err(Error::new(
                         v.span(),
-                        ErrorKind::IllegalArg("pattern literal must be a symbol".to_owned()),
+                        ErrorKind::IllegalArg("pattern literal must be a symbol"),
                     ))
                 }
             })
@@ -201,7 +201,7 @@ pub fn lower_macro_rules(
     } else {
         return Err(Error::new(
             literals_datum.span(),
-            ErrorKind::IllegalArg("expected set of pattern literals".to_owned()),
+            ErrorKind::IllegalArg("expected set of pattern literals"),
         ));
     };
 
@@ -210,7 +210,7 @@ pub fn lower_macro_rules(
     } else {
         return Err(Error::new(
             rules_datum.span(),
-            ErrorKind::IllegalArg("expected a vector of syntax rules".to_owned()),
+            ErrorKind::IllegalArg("expected a vector of syntax rules"),
         ));
     };
 
@@ -269,7 +269,7 @@ mod test {
             .map(|datum| NsDatum::from_syntax_datum(test_ns_id, datum))
             .collect::<Vec<NsDatum>>();
 
-        let self_ident = Ident::new(test_ns_id, "self".to_owned());
+        let self_ident = Ident::new(test_ns_id, "self".into());
         lower_macro_rules(&Scope::new_empty(), full_span, &self_ident, test_ns_data)
     }
 
@@ -289,7 +289,7 @@ mod test {
 
         let err = Error::new(
             t2s(t),
-            ErrorKind::IllegalArg("expected set of pattern literals".to_owned()),
+            ErrorKind::IllegalArg("expected set of pattern literals"),
         );
         assert_eq!(err, macro_rules_for_str(j).unwrap_err());
     }
@@ -301,7 +301,7 @@ mod test {
 
         let err = Error::new(
             t2s(t),
-            ErrorKind::IllegalArg("pattern literal must be a symbol".to_owned()),
+            ErrorKind::IllegalArg("pattern literal must be a symbol"),
         );
         assert_eq!(err, macro_rules_for_str(j).unwrap_err());
     }
@@ -325,7 +325,7 @@ mod test {
 
         let err = Error::new(
             t2s(t),
-            ErrorKind::IllegalArg("expected a macro rule vector".to_owned()),
+            ErrorKind::IllegalArg("expected a macro rule vector"),
         );
         assert_eq!(err, macro_rules_for_str(j).unwrap_err());
     }
@@ -337,7 +337,7 @@ mod test {
 
         let err = Error::new(
             t2s(t),
-            ErrorKind::IllegalArg("expected a macro rule vector with two elements".to_owned()),
+            ErrorKind::IllegalArg("expected a macro rule vector with two elements"),
         );
         assert_eq!(err, macro_rules_for_str(j).unwrap_err());
     }
@@ -349,7 +349,7 @@ mod test {
 
         let err = Error::new(
             t2s(t),
-            ErrorKind::IllegalArg("expected a macro rule pattern list".to_owned()),
+            ErrorKind::IllegalArg("expected a macro rule pattern list"),
         );
         assert_eq!(err, macro_rules_for_str(j).unwrap_err());
     }
@@ -362,7 +362,7 @@ mod test {
         let err = Error::new(
             t2s(t),
             ErrorKind::IllegalArg(
-                "macro rule patterns must contain at least the name of the macro".to_owned(),
+                "macro rule patterns must contain at least the name of the macro",
             ),
         );
         assert_eq!(err, macro_rules_for_str(j).unwrap_err());
@@ -375,9 +375,7 @@ mod test {
 
         let err = Error::new(
             t2s(t),
-            ErrorKind::IllegalArg(
-                "macro rule patterns must start with the name of the macro".to_owned(),
-            ),
+            ErrorKind::IllegalArg("macro rule patterns must start with the name of the macro"),
         );
         assert_eq!(err, macro_rules_for_str(j).unwrap_err());
     }

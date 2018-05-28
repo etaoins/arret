@@ -87,18 +87,12 @@ impl<'ccx> LoweringContext<'ccx> {
 
         // These modules are always loaded
         loaded_modules.insert(
-            ModuleName::new(
-                vec!["risp".to_owned(), "internal".to_owned()],
-                "primitives".to_owned(),
-            ),
+            ModuleName::new(vec!["risp".into(), "internal".into()], "primitives".into()),
             Module::prims_module(),
         );
 
         loaded_modules.insert(
-            ModuleName::new(
-                vec!["risp".to_owned(), "internal".to_owned()],
-                "types".to_owned(),
-            ),
+            ModuleName::new(vec!["risp".into(), "internal".into()], "types".into()),
             Module::tys_module(),
         );
 
@@ -129,7 +123,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 if let NsDatum::Str(_, user_message) = arg_data.pop().unwrap() {
                     Error::new(span, ErrorKind::UserError(user_message))
                 } else {
-                    Error::new(span, ErrorKind::IllegalArg("string expected".to_owned()))
+                    Error::new(span, ErrorKind::IllegalArg("string expected"))
                 }
             })
     }
@@ -148,7 +142,7 @@ impl<'ccx> LoweringContext<'ccx> {
             {
                 return Err(Error::new(
                     span,
-                    ErrorKind::IllegalArg("unsupported macro type".to_owned()),
+                    ErrorKind::IllegalArg("unsupported macro type"),
                 ));
             }
 
@@ -157,7 +151,7 @@ impl<'ccx> LoweringContext<'ccx> {
         } else {
             return Err(Error::new(
                 transformer_spec.span(),
-                ErrorKind::IllegalArg("macro specification must be a list".to_owned()),
+                ErrorKind::IllegalArg("macro specification must be a list"),
             ));
         };
 
@@ -261,12 +255,12 @@ impl<'ccx> LoweringContext<'ccx> {
             Some(Binding::Prim(Prim::Ellipsis)) => Err(Error::new(
                 span,
                 ErrorKind::IllegalArg(
-                    "ellipsis can only be used to destructure the rest of a list".to_owned(),
+                    "ellipsis can only be used to destructure the rest of a list",
                 ),
             )),
             _ => {
                 let var_id = self.var_id_counter.alloc();
-                let source_name = ident.name().clone();
+                let source_name = ident.name().into();
 
                 scope.insert_var(ident, var_id);
 
@@ -304,7 +298,7 @@ impl<'ccx> LoweringContext<'ccx> {
             }
             _ => Err(Error::new(
                 destruc_datum.span(),
-                ErrorKind::IllegalArg("expected a variable name or [name : Type]".to_owned()),
+                ErrorKind::IllegalArg("expected a variable name or [name : Type]"),
             )),
         }
     }
@@ -344,7 +338,7 @@ impl<'ccx> LoweringContext<'ccx> {
             _ => Err(Error::new(
                 destruc_datum.span(),
                 ErrorKind::IllegalArg(
-                    "values can only be bound to variables or destructured into lists".to_owned(),
+                    "values can only be bound to variables or destructured into lists",
                 ),
             )),
         }
@@ -380,7 +374,7 @@ impl<'ccx> LoweringContext<'ccx> {
         if arg_data.is_empty() {
             return Err(Error::new(
                 span,
-                ErrorKind::IllegalArg("bindings declaration missing".to_owned()),
+                ErrorKind::IllegalArg("bindings declaration missing"),
             ));
         }
 
@@ -389,14 +383,14 @@ impl<'ccx> LoweringContext<'ccx> {
             if vs.len() != 2 {
                 return Err(Error::new(
                     span,
-                    ErrorKind::IllegalArg("[target initialiser] expected".to_owned()),
+                    ErrorKind::IllegalArg("[target initialiser] expected"),
                 ));
             }
             vs
         } else {
             return Err(Error::new(
                 bindings_datum.span(),
-                ErrorKind::IllegalArg("binding vector expected".to_owned()),
+                ErrorKind::IllegalArg("binding vector expected"),
             ));
         };
 
@@ -468,7 +462,7 @@ impl<'ccx> LoweringContext<'ccx> {
         if arg_data.is_empty() {
             return Err(Error::new(
                 span,
-                ErrorKind::IllegalArg("parameter declaration missing".to_owned()),
+                ErrorKind::IllegalArg("parameter declaration missing"),
             ));
         }
 
@@ -503,9 +497,7 @@ impl<'ccx> LoweringContext<'ccx> {
             if tail_data.is_empty() {
                 return Err(Error::new(
                     span,
-                    ErrorKind::IllegalArg(
-                        "type variables should be followed by parameters".to_owned(),
-                    ),
+                    ErrorKind::IllegalArg("type variables should be followed by parameters"),
                 ));
             }
 
@@ -524,7 +516,7 @@ impl<'ccx> LoweringContext<'ccx> {
             _ => {
                 return Err(Error::new(
                     span,
-                    ErrorKind::IllegalArg("parameter list expected".to_owned()),
+                    ErrorKind::IllegalArg("parameter list expected"),
                 ));
             }
         };
@@ -685,11 +677,11 @@ impl<'ccx> LoweringContext<'ccx> {
                     Err(Error::new(span, ErrorKind::TyRef))
                 }
                 Some(Binding::Macro(_)) => {
-                    Err(Error::new(span, ErrorKind::MacroRef(ident.name().clone())))
+                    Err(Error::new(span, ErrorKind::MacroRef(ident.name().into())))
                 }
                 None => Err(Error::new(
                     span,
-                    ErrorKind::UnboundSymbol(ident.name().clone()),
+                    ErrorKind::UnboundSymbol(ident.name().into()),
                 )),
             },
             NsDatum::List(span, mut vs) => {
@@ -725,7 +717,7 @@ impl<'ccx> LoweringContext<'ccx> {
                         | Some(Binding::Purity(_)) => Err(Error::new(span, ErrorKind::TyRef)),
                         None => Err(Error::new(
                             fn_span,
-                            ErrorKind::UnboundSymbol(ident.name().clone()),
+                            ErrorKind::UnboundSymbol(ident.name().into()),
                         )),
                     },
                     _ => {
@@ -821,7 +813,7 @@ impl<'ccx> LoweringContext<'ccx> {
                         None => {
                             return Err(Error::new(
                                 fn_span,
-                                ErrorKind::UnboundSymbol(ident.name().clone()),
+                                ErrorKind::UnboundSymbol(ident.name().into()),
                             ));
                         }
                     }
@@ -837,7 +829,7 @@ impl<'ccx> LoweringContext<'ccx> {
 
         // The default scope only consists of (import)
         scope.insert_binding(
-            Ident::new(ns_id, "import".to_owned()),
+            Ident::new(ns_id, "import".into()),
             Binding::Prim(Prim::Import),
         );
 
@@ -867,7 +859,7 @@ impl<'ccx> LoweringContext<'ccx> {
         }
 
         // Process any exports at the end of the module
-        let mut exports = HashMap::<String, Binding>::new();
+        let mut exports = HashMap::<Box<str>, Binding>::new();
         for DeferredExport(span, ident) in deferred_exports {
             if let Some(binding) = scope.get(&ident) {
                 exports.insert(ident.into_name(), binding);
@@ -933,12 +925,12 @@ fn import_statement_for_module(names: &[&'static str]) -> Datum {
     Datum::List(
         EMPTY_SPAN,
         vec![
-            Datum::Sym(EMPTY_SPAN, "import".to_owned()),
+            Datum::Sym(EMPTY_SPAN, "import".into()),
             Datum::Vec(
                 EMPTY_SPAN,
                 names
                     .iter()
-                    .map(|n| Datum::Sym(EMPTY_SPAN, (*n).to_owned()))
+                    .map(|&n| Datum::Sym(EMPTY_SPAN, n.into()))
                     .collect(),
             ),
         ],
@@ -982,7 +974,7 @@ pub fn lowered_expr_for_str(data_str: &str) -> Result<LoweredTestExpr> {
     let mut ccx = CompileContext::new();
     let mut lcx = LoweringContext::new(&mut ccx);
 
-    let mut exports = HashMap::<String, Binding>::new();
+    let mut exports = HashMap::<Box<str>, Binding>::new();
     insert_prim_exports(&mut exports);
     insert_ty_exports(&mut exports);
 
@@ -1039,7 +1031,7 @@ mod test {
         let j = "'foo";
         let t = " ^^^";
 
-        let expected = Expr::Lit(Datum::Sym(t2s(t), "foo".to_owned()));
+        let expected = Expr::Lit(Datum::Sym(t2s(t), "foo".into()));
         assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
@@ -1048,7 +1040,7 @@ mod test {
         let j = "(quote foo)";
         let t = "       ^^^ ";
 
-        let expected = Expr::Lit(Datum::Sym(t2s(t), "foo".to_owned()));
+        let expected = Expr::Lit(Datum::Sym(t2s(t), "foo".into()));
         assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
@@ -1071,7 +1063,7 @@ mod test {
 
         let destruc = destruc::Destruc::Scalar(
             t2s(t),
-            destruc::Scalar::new(Some(VarId(0)), "x".to_owned(), ty::Decl::Free),
+            destruc::Scalar::new(Some(VarId(0)), "x".into(), ty::Decl::Free),
         );
 
         let expected = Expr::Let(
@@ -1097,7 +1089,7 @@ mod test {
             t2s(t),
             destruc::Scalar::new(
                 Some(VarId(0)),
-                "x".to_owned(),
+                "x".into(),
                 ty::Ty::LitBool(true).into_decl(),
             ),
         );
@@ -1133,7 +1125,7 @@ mod test {
 
         let destruc = destruc::Destruc::Scalar(
             t2s(t),
-            destruc::Scalar::new(None, "_".to_owned(), ty::Decl::Free),
+            destruc::Scalar::new(None, "_".into(), ty::Decl::Free),
         );
 
         let expected = Expr::Let(
@@ -1153,10 +1145,7 @@ mod test {
         let j = "(let foo 1)";
         let t = "     ^^^   ";
 
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg("binding vector expected".to_owned()),
-        );
+        let err = Error::new(t2s(t), ErrorKind::IllegalArg("binding vector expected"));
         assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
@@ -1175,11 +1164,11 @@ mod test {
             destruc::List::new(
                 vec![destruc::Destruc::Scalar(
                     t2s(u),
-                    destruc::Scalar::new(Some(VarId(0)), "x".to_owned(), ty::Decl::Free),
+                    destruc::Scalar::new(Some(VarId(0)), "x".into(), ty::Decl::Free),
                 )],
                 Some(Box::new(destruc::Scalar::new(
                     Some(VarId(1)),
-                    "rest".to_owned(),
+                    "rest".into(),
                     ty::Decl::Free,
                 ))),
             ),
@@ -1205,7 +1194,7 @@ mod test {
         let err = Error::new(
             t2s(t),
             ErrorKind::IllegalArg(
-                "values can only be bound to variables or destructured into lists".to_owned(),
+                "values can only be bound to variables or destructured into lists",
             ),
         );
         assert_eq!(err, expr_for_str(j).unwrap_err());
@@ -1243,7 +1232,7 @@ mod test {
         let j = "nopenopenope";
         let t = "^^^^^^^^^^^^";
 
-        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("nopenopenope".to_owned()));
+        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("nopenopenope".into()));
         assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
@@ -1254,7 +1243,7 @@ mod test {
 
         let err = Error::new(
             t2s(t),
-            ErrorKind::IllegalArg("parameter declaration missing".to_owned()),
+            ErrorKind::IllegalArg("parameter declaration missing"),
         );
         assert_eq!(err, expr_for_str(j).unwrap_err());
     }
@@ -1267,7 +1256,7 @@ mod test {
         let err = Error::new(
             t2s(t),
             ErrorKind::IllegalArg(
-                "values can only be bound to variables or destructured into lists".to_owned(),
+                "values can only be bound to variables or destructured into lists",
             ),
         );
         assert_eq!(err, expr_for_str(j).unwrap_err());
@@ -1325,7 +1314,7 @@ mod test {
         let params = destruc::List::new(
             vec![destruc::Destruc::Scalar(
                 t2s(t),
-                destruc::Scalar::new(Some(param_var_id), "x".to_owned(), ty::Decl::Free),
+                destruc::Scalar::new(Some(param_var_id), "x".into(), ty::Decl::Free),
             )],
             None,
         );
@@ -1360,7 +1349,7 @@ mod test {
                 t2s(t),
                 destruc::Scalar::new(
                     Some(param_var_id),
-                    "x".to_owned(),
+                    "x".into(),
                     ty::Poly::Var(tvar_id).into_decl(),
                 ),
             )],
@@ -1394,7 +1383,7 @@ mod test {
         let outer_var_id = VarId::new(0);
         let outer_destruc = destruc::Destruc::Scalar(
             t2s(t),
-            destruc::Scalar::new(Some(outer_var_id), "x".to_owned(), ty::Decl::Free),
+            destruc::Scalar::new(Some(outer_var_id), "x".into(), ty::Decl::Free),
         );
 
         let expected = Expr::Let(
@@ -1432,14 +1421,14 @@ mod test {
         let outer_var_id = VarId::new(0);
         let outer_destruc = destruc::Destruc::Scalar(
             t2s(t),
-            destruc::Scalar::new(Some(outer_var_id), "x".to_owned(), ty::Decl::Free),
+            destruc::Scalar::new(Some(outer_var_id), "x".into(), ty::Decl::Free),
         );
 
         let param_var_id = VarId::new(1);
         let params = destruc::List::new(
             vec![destruc::Destruc::Scalar(
                 t2s(v),
-                destruc::Scalar::new(Some(param_var_id), "x".to_owned(), ty::Decl::Free),
+                destruc::Scalar::new(Some(param_var_id), "x".into(), ty::Decl::Free),
             )],
             None,
         );
@@ -1562,7 +1551,7 @@ mod test {
 
         let var_id = VarId(0);
         let mut expected_exports = HashMap::new();
-        expected_exports.insert("x".to_owned(), Binding::Var(var_id));
+        expected_exports.insert("x".into(), Binding::Var(var_id));
 
         let expected = Module::new(expected_exports);
         assert_eq!(expected, module_for_str(j).unwrap());
@@ -1573,7 +1562,7 @@ mod test {
         let j = "(export x)";
         let t = "        ^ ";
 
-        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("x".to_owned()));
+        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("x".into()));
         assert_eq!(err, module_for_str(j).unwrap_err());
     }
 
@@ -1593,7 +1582,7 @@ mod test {
 
         let err = Error::new(
             t2s(t),
-            ErrorKind::IllegalArg("macro specification must be a list".to_owned()),
+            ErrorKind::IllegalArg("macro specification must be a list"),
         );
         assert_eq!(err, expr_for_str(j).unwrap_err());
     }
@@ -1603,10 +1592,7 @@ mod test {
         let j = "(letmacro [a (macro-fn #{})])";
         let t = "             ^^^^^^^^^^^^^^  ";
 
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg("unsupported macro type".to_owned()),
-        );
+        let err = Error::new(t2s(t), ErrorKind::IllegalArg("unsupported macro type"));
         assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
@@ -1616,7 +1602,7 @@ mod test {
         let t = "                                   ^          ";
         let u = "                                     ^        ";
 
-        let err = Error::new(t2s(u), ErrorKind::DuplicateMacroVar("x".to_owned(), t2s(t)));
+        let err = Error::new(t2s(u), ErrorKind::DuplicateMacroVar("x".into(), t2s(t)));
         assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
@@ -1627,9 +1613,7 @@ mod test {
 
         let err = Error::new(
             t2s(t),
-            ErrorKind::IllegalArg(
-                "ellipsis can only be used as part of a zero or more match".to_owned(),
-            ),
+            ErrorKind::IllegalArg("ellipsis can only be used as part of a zero or more match"),
         );
         assert_eq!(err, expr_for_str(j).unwrap_err());
     }
@@ -1717,7 +1701,7 @@ mod test {
         let j = &[j1, j2, j3].join("");
         let t = t1;
 
-        let expected = Expr::Lit(Datum::Sym(t2s(t), "...".to_owned()));
+        let expected = Expr::Lit(Datum::Sym(t2s(t), "...".into()));
         assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
@@ -1860,9 +1844,7 @@ mod test {
 
         let err = Error::new(
             t2s(t),
-            ErrorKind::IllegalArg(
-                "set patterns must either be empty or a zero or more match".to_owned(),
-            ),
+            ErrorKind::IllegalArg("set patterns must either be empty or a zero or more match"),
         );
         assert_eq!(err, expr_for_str(j).unwrap_err());
     }
@@ -1878,7 +1860,7 @@ mod test {
         let j = &[j1, j2, j3].join("");
         let t = &[t1, t2].join("");
 
-        let expected = Expr::Lit(Datum::Sym(t2s(t), "b".to_owned()));
+        let expected = Expr::Lit(Datum::Sym(t2s(t), "b".into()));
         assert_eq!(expected, expr_for_str(j).unwrap());
     }
 
@@ -1997,7 +1979,7 @@ mod test {
 
         let err = Error::new(
             t2s(t),
-            ErrorKind::IllegalArg("subtemplate does not include any macro variables".to_owned()),
+            ErrorKind::IllegalArg("subtemplate does not include any macro variables"),
         );
         assert_eq!(err, expr_for_str(j).unwrap_err());
     }
@@ -2012,7 +1994,7 @@ mod test {
         let err = Error::new(
             t2s(t),
             ErrorKind::IllegalArg(
-                "subtemplate references macro variables from multiple subpatterns".to_owned(),
+                "subtemplate references macro variables from multiple subpatterns",
             ),
         );
         assert_eq!(err, expr_for_str(j).unwrap_err());
@@ -2082,7 +2064,7 @@ mod test {
             t2s(t),
             destruc::Scalar::new(
                 Some(VarId(0)),
-                "x".to_owned(),
+                "x".into(),
                 ty::Ty::LitBool(true).into_decl(),
             ),
         );
@@ -2170,7 +2152,7 @@ mod test {
         let j = r#"(compile-error "Hello")"#;
         let t = r#"^^^^^^^^^^^^^^^^^^^^^^^"#;
 
-        let err = Error::new(t2s(t), ErrorKind::UserError("Hello".to_owned()));
+        let err = Error::new(t2s(t), ErrorKind::UserError("Hello".into()));
         assert_eq!(err, module_for_str(j).unwrap_err());
     }
 
@@ -2179,7 +2161,7 @@ mod test {
         let j = r#"(compile-error "Hello")"#;
         let t = r#"^^^^^^^^^^^^^^^^^^^^^^^"#;
 
-        let err = Error::new(t2s(t), ErrorKind::UserError("Hello".to_owned()));
+        let err = Error::new(t2s(t), ErrorKind::UserError("Hello".into()));
         assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 }

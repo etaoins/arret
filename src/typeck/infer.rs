@@ -121,8 +121,8 @@ impl<'a> InferCtx<'a> {
         FreeTyId::new_entry_id(&mut self.free_ty_polys, initial_type)
     }
 
-    fn str_for_poly(&self, poly: &ty::Poly) -> String {
-        hir::str_for_poly(self.pvars, self.tvars, poly)
+    fn str_for_poly(&self, poly: &ty::Poly) -> Box<str> {
+        hir::str_for_poly(self.pvars, self.tvars, poly).clone()
     }
 
     fn new_union_conflict_error(&self, span: Span, unify_err: &ty::unify::PolyError) -> Error {
@@ -1038,7 +1038,7 @@ mod test {
         let t = "                             ^^^^^^^^^^^^^^^^^^^^^^^^  ";
         let err = Error::new(
             t2s(t),
-            ErrorKind::IsNotA("(String -> true)".to_owned(), "(Symbol -> true)".to_owned()),
+            ErrorKind::IsNotA("(String -> true)".into(), "(Symbol -> true)".into()),
         );
         assert_type_error(&err, j);
 
@@ -1047,16 +1047,13 @@ mod test {
         let t = "                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ";
         let err = Error::new(
             t2s(t),
-            ErrorKind::IsNotA("(String -> true)".to_owned(), "(Symbol -> true)".to_owned()),
+            ErrorKind::IsNotA("(String -> true)".into(), "(Symbol -> true)".into()),
         );
         assert_type_error(&err, j);
 
         let j = "(fn ([x : String]) -> Symbol x)";
         let t = "                             ^ ";
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IsNotA("String".to_owned(), "Symbol".to_owned()),
-        );
+        let err = Error::new(t2s(t), ErrorKind::IsNotA("String".into(), "Symbol".into()));
         assert_type_error(&err, j);
     }
 
@@ -1125,7 +1122,7 @@ mod test {
         let err = Error::new(
             t2s(t),
             // TODO: This error is technically correct but a bit inscrutable
-            ErrorKind::IsNotA("(->! false)".to_owned(), "(... -> Bool)".to_owned()),
+            ErrorKind::IsNotA("(->! false)".into(), "(... -> Bool)".into()),
         );
         assert_type_error(&err, j);
     }

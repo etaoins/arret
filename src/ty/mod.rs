@@ -64,7 +64,7 @@ where
     Map(Box<Map<S>>),
     Int,
     LitBool(bool),
-    LitSym(String),
+    LitSym(Box<str>),
     Set(Box<S>),
     Str,
     Sym,
@@ -291,16 +291,16 @@ new_indexing_id_type!(TVarId, u32);
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct TVar {
-    source_name: String,
+    source_name: Box<str>,
     bound: Poly,
 }
 
 impl TVar {
-    pub fn new(source_name: String, bound: Poly) -> TVar {
+    pub fn new(source_name: Box<str>, bound: Poly) -> TVar {
         TVar { source_name, bound }
     }
 
-    pub fn source_name(&self) -> &String {
+    pub fn source_name(&self) -> &str {
         &self.source_name
     }
 

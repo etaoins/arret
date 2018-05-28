@@ -51,7 +51,7 @@ struct FindVarsContext<'a> {
     scope: &'a Scope,
     special_vars: &'a SpecialVars,
     input_type: FindVarsInputType,
-    unbound_var_spans: Option<HashMap<String, Span>>,
+    unbound_var_spans: Option<HashMap<Box<str>, Span>>,
 }
 
 type FindVarsResult = result::Result<(), Error>;
@@ -69,7 +69,7 @@ impl<'a> FindVarsContext<'a> {
         } else {
             // This tracks the name of unbound variables and where they were first used (for error
             // reporting)
-            Some(HashMap::<String, Span>::new())
+            Some(HashMap::<Box<str>, Span>::new())
         };
 
         FindVarsContext {
@@ -96,9 +96,7 @@ impl<'a> FindVarsContext<'a> {
         if self.special_vars.is_ellipsis(&macro_var) {
             return Err(Error::new(
                 span,
-                ErrorKind::IllegalArg(
-                    "ellipsis can only be used as part of a zero or more match".to_owned(),
-                ),
+                ErrorKind::IllegalArg("ellipsis can only be used as part of a zero or more match"),
             ));
         }
 
@@ -212,9 +210,7 @@ impl<'a> FindVarsContext<'a> {
             }
             _ => Err(Error::new(
                 span,
-                ErrorKind::IllegalArg(
-                    "set patterns must either be empty or a zero or more match".to_owned(),
-                ),
+                ErrorKind::IllegalArg("set patterns must either be empty or a zero or more match"),
             )),
         }
     }
@@ -233,9 +229,7 @@ fn link_found_vars(
             if subtemplate_vars.vars.is_empty() {
                 return Err(Error::new(
                     template_vars.span,
-                    ErrorKind::IllegalArg(
-                        "subtemplate does not include any macro variables".to_owned(),
-                    ),
+                    ErrorKind::IllegalArg("subtemplate does not include any macro variables"),
                 ));
             }
 
@@ -251,16 +245,14 @@ fn link_found_vars(
                 return Err(Error::new(
                     template_vars.span,
                     ErrorKind::IllegalArg(
-                        "subtemplate does not reference macro variables from any subpattern"
-                            .to_owned(),
+                        "subtemplate does not reference macro variables from any subpattern",
                     ),
                 ));
             } else if possible_indices.len() > 1 {
                 return Err(Error::new(
                     template_vars.span,
                     ErrorKind::IllegalArg(
-                        "subtemplate references macro variables from multiple subpatterns"
-                            .to_owned(),
+                        "subtemplate references macro variables from multiple subpatterns",
                     ),
                 ));
             }
