@@ -216,33 +216,40 @@ impl<'a> InferCtx<'a> {
                     false_result?,
                 )
             }
-            OccurrenceTypedNode::Other(other) => {
-                let true_node = self.visit_expr(fcx, required_type, true_expr)?;
-                let false_node = self.visit_expr(fcx, required_type, false_expr)?;
-                (other, true_node, false_node)
-            }
+            OccurrenceTypedNode::Other(other) => match other.poly_type {
+                ty::Poly::Fixed(ty::Ty::LitBool(true)) => {
+                    let true_node = self.visit_expr(fcx, required_type, true_expr)?;
+                    self.visit_expr(fcx, &ty::Ty::Any.into_poly(), false_expr)?;
+                    return Ok(true_node);
+                }
+                ty::Poly::Fixed(ty::Ty::LitBool(false)) => {
+                    self.visit_expr(fcx, &ty::Ty::Any.into_poly(), true_expr)?;
+                    let false_node = self.visit_expr(fcx, required_type, false_expr)?;
+                    return Ok(false_node);
+                }
+                _ => {
+                    let true_node = self.visit_expr(fcx, required_type, true_expr)?;
+                    let false_node = self.visit_expr(fcx, required_type, false_expr)?;
+                    (other, true_node, false_node)
+                }
+            },
         };
 
-        match test_node.poly_type {
-            ty::Poly::Fixed(ty::Ty::LitBool(true)) => Ok(true_node),
-            ty::Poly::Fixed(ty::Ty::LitBool(false)) => Ok(false_node),
-            _ => ty::unify::poly_unify_to_poly(
-                self.tvars,
-                &true_node.poly_type,
-                &false_node.poly_type,
-            ).map(|unified_type| InferredNode {
-                expr: hir::Expr::Cond(
-                    span,
-                    Box::new(hir::Cond {
-                        test_expr: test_node.expr,
-                        true_expr: true_node.expr,
-                        false_expr: false_node.expr,
-                    }),
-                ),
-                poly_type: unified_type,
-            })
-                .map_err(|unify_err| self.new_union_conflict_error(span, &unify_err)),
-        }
+        let unified_type =
+            ty::unify::poly_unify_to_poly(self.tvars, &true_node.poly_type, &false_node.poly_type)
+                .map_err(|unify_err| self.new_union_conflict_error(span, &unify_err))?;
+
+        Ok(InferredNode {
+            expr: hir::Expr::Cond(
+                span,
+                Box::new(hir::Cond {
+                    test_expr: test_node.expr,
+                    true_expr: true_node.expr,
+                    false_expr: false_node.expr,
+                }),
+            ),
+            poly_type: unified_type,
+        })
     }
 
     fn visit_ty_pred(
@@ -990,7 +997,7 @@ mod test {
         );
     }
 
-    fn assert_guided_type_for_expr(expected_ty_str: &str, expr_str: &str, guide_ty_str: &str) {
+    fn assert_constrained_type_for_expr(expected_ty_str: &str, expr_str: &str, guide_ty_str: &str) {
         let lowered_expr = lowered_expr_for_str(expr_str).unwrap();
         let expected_poly = hir::poly_for_str(expected_ty_str).unwrap();
         let guide_poly = hir::poly_for_str(guide_ty_str).unwrap();
@@ -1020,6 +1027,10 @@ mod test {
         assert_type_for_expr("'true-branch", "(if true 'true-branch 'false-branch)");
         assert_type_for_expr("'false-branch", "(if false 'true-branch 'false-branch)");
         assert_type_for_expr("(Bool -> Bool)", "(fn (x) (if x true false))");
+
+        // This is a reduced version of `(and)`
+        // We shouldn't complain about the type in the false branch because it's unreachable
+        assert_constrained_type_for_expr("true", "(if true true false)", "true");
     }
 
     #[test]
@@ -1029,8 +1040,8 @@ mod test {
         assert_type_for_expr("(String -> String)", "(fn ([x : String]) x)");
 
         // We should feed our wanted type in to the function type
-        assert_guided_type_for_expr("(Symbol -> true)", "(fn (_) true)", "(Symbol -> true)");
-        assert_guided_type_for_expr("(Symbol -> Symbol)", "(fn (x) x)", "(Symbol -> Any))");
+        assert_constrained_type_for_expr("(Symbol -> true)", "(fn (_) true)", "(Symbol -> true)");
+        assert_constrained_type_for_expr("(Symbol -> Symbol)", "(fn (x) x)", "(Symbol -> Any))");
 
         // Function with free types being bound to an incompatible type
         let j = "(let [[f : (Symbol -> true)] (fn ([_ : String]) true)])";
