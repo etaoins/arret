@@ -175,9 +175,10 @@ impl<'a> InferCtx<'a> {
             false_expr,
         } = cond;
 
+        let test_required_type = &ty::Ty::Bool.into_poly();
         let occurrence_test_node = match test_expr {
             hir::Expr::Ref(span, var_id) => {
-                let ref_node = self.visit_ref(fcx, &ty::Ty::Bool.into_poly(), span, var_id)?;
+                let ref_node = self.visit_ref(fcx, test_required_type, span, var_id)?;
 
                 // If we're testing a variable directly we know its type in the branches
                 OccurrenceTypedNode::VarTyCond(
@@ -187,8 +188,11 @@ impl<'a> InferCtx<'a> {
                     ty::Ty::LitBool(false).into_poly(),
                 )
             }
-            hir::Expr::App(span, app) => self.visit_app(fcx, &required_type, span, *app)?,
-            other_expr => self.visit_expr(fcx, &ty::Ty::Bool.into_poly(), other_expr)
+            hir::Expr::App(span, app) => {
+                // Visit the application directly so we don't lose the OccurrenceTypedNode
+                self.visit_app(fcx, test_required_type, span, *app)?
+            }
+            other_expr => self.visit_expr(fcx, test_required_type, other_expr)
                 .map(OccurrenceTypedNode::Other)?,
         };
 
@@ -1176,6 +1180,7 @@ mod test {
 
     #[test]
     fn occurrence_typing() {
+        // The type of x should be known in the branches
         let j = "(fn ([x : Bool])
                   (if x
                     (let [[_ : true] x])
@@ -1183,7 +1188,7 @@ mod test {
 
         assert_type_for_expr("(Bool -> ())", j);
 
-        let j = "(fn ([x : (RawU Symbol String)])
+        let j = "(fn ([x : (RawU Symbol String)]) -> ()
                   (if ((type-predicate Symbol) x)
                     (let [[_ : Symbol] x])
                     (let [[_ : String] x])))";
