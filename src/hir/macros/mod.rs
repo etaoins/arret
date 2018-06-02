@@ -136,7 +136,7 @@ pub fn lower_macro_rule(
     let pattern = if let NsDatum::List(span, vs) = pattern_datum {
         let mut pattern_data = vs.into_vec();
 
-        if pattern_data.len() < 1 {
+        if pattern_data.is_empty() {
             return Err(Error::new(
                 span,
                 ErrorKind::IllegalArg(
