@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Range;
 
 use hir::error::{Error, ErrorKind, Result};
 use hir::ns::{Ident, NsDatum};
@@ -392,6 +393,36 @@ impl<'a> StrForPolyContext<'a> {
         }
     }
 
+    fn str_for_bounds(
+        &self,
+        pvar_ids: &Range<ty::purity::PVarId>,
+        tvar_ids: &Range<ty::TVarId>,
+    ) -> String {
+        let pvar_ids_usize = pvar_ids.start.to_usize()..pvar_ids.end.to_usize();
+        let tvar_ids_usize = tvar_ids.start.to_usize()..tvar_ids.end.to_usize();
+
+        let pvar_parts = pvar_ids_usize
+            .into_iter()
+            .map(|pvar_id_usize| format!("[{} : ->!]", self.pvars[pvar_id_usize].source_name()));
+
+        let tvar_parts = tvar_ids_usize.into_iter().map(|tvar_id_usize| {
+            let tvar = &self.tvars[tvar_id_usize];
+
+            if tvar.bound() == &ty::Ty::Any.into_poly() {
+                return tvar.source_name().into();
+            }
+
+            format!(
+                "[{} : {}]",
+                tvar.source_name(),
+                self.str_for_poly(tvar.bound())
+            )
+        });
+
+        let all_parts = pvar_parts.chain(tvar_parts).collect::<Vec<String>>();
+        format!("#{{{}}}", all_parts.join(" "))
+    }
+
     fn str_for_poly_ty(&self, poly_ty: &ty::Ty<ty::Poly>) -> String {
         match poly_ty {
             ty::Ty::Any => "Any".to_owned(),
@@ -431,7 +462,15 @@ impl<'a> StrForPolyContext<'a> {
                 fun_parts.push(self.str_for_purity(fun.purity()));
                 fun_parts.push(self.str_for_poly(fun.ret()));
 
-                format!("({})", fun_parts.join(" "),)
+                if fun.is_monomorphic() {
+                    format!("({})", fun_parts.join(" "))
+                } else {
+                    format!(
+                        "{} ({})",
+                        self.str_for_bounds(fun.pvar_ids(), fun.tvar_ids()),
+                        fun_parts.join(" ")
+                    )
+                }
             }
             ty::Ty::TyPred(test) => format!("(Type? {})", self.str_for_poly(test)),
             ty::Ty::Union(members) => {
@@ -833,5 +872,38 @@ mod test {
         assert_exact_str_repr("(List Int Float ...)");
         assert_exact_str_repr("(Listof Float)");
         assert_exact_str_repr("(Float Int ... -> Symbol)");
+    }
+
+    #[test]
+    fn polymorphic_fun_str() {
+        // These have no constructors so they can't be round-tripped
+        let pfun = ty::Fun::new(
+            ty::purity::PVarId::new(0)..ty::purity::PVarId::new(1),
+            ty::TVarId::new(0)..ty::TVarId::new(2),
+            ty::TopFun::new(
+                ty::purity::Poly::Var(ty::purity::PVarId::new(0)),
+                ty::Poly::Var(ty::TVarId::new(0)),
+            ),
+            ty::List::new(
+                Box::new([
+                    ty::Poly::Var(ty::TVarId::new(1)),
+                    ty::Poly::Var(ty::TVarId::new(2)),
+                ]),
+                None,
+            ),
+        );
+
+        let pvars = &[ty::purity::PVar::new("->?".into())];
+        let tvars = &[
+            ty::TVar::new("A".into(), ty::Ty::Any.into_poly()),
+            ty::TVar::new("B".into(), ty::Ty::Int.into_poly()),
+            ty::TVar::new("C".into(), ty::Ty::Float.into_poly()),
+        ];
+
+        let actual_str = str_for_poly(pvars, tvars, &pfun.into_ty_ref());
+        assert_eq!(
+            "#{[->? : ->!] A [B : Int]} (B C ->? A)",
+            actual_str.as_ref()
+        );
     }
 }

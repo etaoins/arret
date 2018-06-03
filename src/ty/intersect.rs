@@ -440,7 +440,7 @@ mod test {
             ty::TVar::new("TString".into(), poly_for_str("String")),
         ];
 
-        // (All A (A -> A))
+        // #{A} (A -> A)
         let pidentity_fun = ty::Fun::new(
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(0)..ty::TVarId::new(1),
@@ -448,7 +448,7 @@ mod test {
             ty::List::new(Box::new([ptype1_unbounded.clone()]), None),
         ).into_ty_ref();
 
-        // (All [A : String] (A ->! A))
+        // #{[A : String]} (A ->! A)
         let pidentity_impure_string_fun = ty::Fun::new(
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(1)..ty::TVarId::new(2),
@@ -478,7 +478,7 @@ mod test {
         );
 
         // Pure and impure functions are disjoint
-        // TODO: There is a better answer here of `(All [A : String] (A ->! A))`. This is just
+        // TODO: There is a better answer here of `#{[A : String]} (A ->! A)`. This is just
         // checking we don't create a nonsense type.
         assert_eq!(
             Error::Disjoint,

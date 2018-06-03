@@ -202,10 +202,9 @@ where
             (ty::Ty::Set(sub), ty::Ty::Set(par)) => self.ty_ref_is_a(sub, par),
 
             // Maps
-            (ty::Ty::Map(sub_map), ty::Ty::Map(par_map)) => {
-                self.ty_ref_is_a(sub_map.key(), par_map.key())
-                    .and_then(|| self.ty_ref_is_a(sub_map.value(), par_map.value()))
-            }
+            (ty::Ty::Map(sub_map), ty::Ty::Map(par_map)) => self
+                .ty_ref_is_a(sub_map.key(), par_map.key())
+                .and_then(|| self.ty_ref_is_a(sub_map.value(), par_map.value())),
 
             // Vector types
             (ty::Ty::Vec(sub_members), ty::Ty::Vec(par_members)) => {
@@ -701,7 +700,7 @@ mod test {
             ty::TVar::new("TString".into(), poly_for_str("String")),
         ];
 
-        // (All A (A -> A))
+        // #{A} (A -> A)
         let pidentity_fun = ty::Fun::new(
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(0)..ty::TVarId::new(1),
@@ -709,7 +708,7 @@ mod test {
             ty::List::new(Box::new([ptype1_unbounded.clone()]), None),
         ).into_ty_ref();
 
-        // (All [A : Symbol] (A -> A))
+        // #{[A : Symbol]} (A -> A)
         let pidentity_sym_fun = ty::Fun::new(
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(1)..ty::TVarId::new(2),
@@ -717,7 +716,7 @@ mod test {
             ty::List::new(Box::new([ptype2_symbol.clone()]), None),
         ).into_ty_ref();
 
-        // (All [A : String] (A ->! A))
+        // #{[A : String]} (A ->! A)
         let pidentity_impure_string_fun = ty::Fun::new(
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(2)..ty::TVarId::new(3),
