@@ -218,6 +218,10 @@ mod test {
             "(RawU Symbol Int)",
         );
 
+        assert_dynamic(("'foo", "Symbol"), "Symbol", "'foo");
+        assert_dynamic(("(RawU 'foo 'bar)", "Symbol"), "Symbol", "(RawU 'foo 'bar)");
+        assert_dynamic(("'bar", "'foo"), "(RawU 'foo 'bar)", "(RawU 'bar 'baz)");
+
         assert_dynamic(
             ("(List Any)", "(List Any Any)"),
             "(RawU (List Any) (List Any Any))",
