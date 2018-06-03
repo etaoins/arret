@@ -124,22 +124,6 @@ impl<'a> InferCtx<'a> {
         hir::str_for_poly(self.pvars, self.tvars, poly).clone()
     }
 
-    fn new_union_conflict_error(&self, span: Span, unify_err: &ty::unify::PolyError) -> Error {
-        match unify_err {
-            ty::unify::PolyError::TyConflict(left, right) => Error::new(
-                span,
-                ErrorKind::PolyUnionConflict(self.str_for_poly(&left), self.str_for_poly(&right)),
-            ),
-            ty::unify::PolyError::PurityConflict(purity1, purity2) => Error::new(
-                span,
-                ErrorKind::PolyUnionConflict(
-                    hir::str_for_purity(self.pvars, &purity1),
-                    hir::str_for_purity(self.pvars, &purity2),
-                ),
-            ),
-        }
-    }
-
     /// Ensures `sub_poly` is a subtype of `parent_poly`
     fn ensure_is_a(&self, span: Span, sub_poly: &ty::Poly, parent_poly: &ty::Poly) -> Result<()> {
         if !ty::is_a::poly_is_a(self.tvars, sub_poly, parent_poly).to_bool() {
@@ -192,7 +176,8 @@ impl<'a> InferCtx<'a> {
                 // Visit the application directly so we don't lose the OccurrenceTypedNode
                 self.visit_app(fcx, test_required_type, span, *app)?
             }
-            other_expr => self.visit_expr(fcx, test_required_type, other_expr)
+            other_expr => self
+                .visit_expr(fcx, test_required_type, other_expr)
                 .map(OccurrenceTypedNode::Other)?,
         };
 
@@ -240,8 +225,7 @@ impl<'a> InferCtx<'a> {
         };
 
         let unified_type =
-            ty::unify::poly_unify_to_poly(self.tvars, &true_node.poly_type, &false_node.poly_type)
-                .map_err(|unify_err| self.new_union_conflict_error(span, &unify_err))?;
+            ty::unify::poly_unify_to_poly(self.tvars, &true_node.poly_type, &false_node.poly_type);
 
         Ok(InferredNode {
             expr: hir::Expr::Cond(
@@ -272,24 +256,10 @@ impl<'a> InferCtx<'a> {
         })
     }
 
-    fn unify_app_purity(
-        &self,
-        fcx: &mut FunCtx,
-        span: Span,
-        app_purity: &ty::purity::Poly,
-    ) -> Result<()> {
+    fn unify_app_purity(&self, fcx: &mut FunCtx, app_purity: &ty::purity::Poly) {
         if let PurityVarType::Free(ref mut free_purity) = fcx.purity {
-            match ty::unify::poly_unify_purity(free_purity, &app_purity) {
-                Ok(unified_purity) => {
-                    *free_purity = unified_purity;
-                }
-                Err(unify_err) => {
-                    return Err(self.new_union_conflict_error(span, &unify_err));
-                }
-            }
+            *free_purity = ty::unify::poly_unify_purity(free_purity, &app_purity)
         };
-
-        Ok(())
     }
 
     fn type_for_free_ref(
@@ -581,7 +551,7 @@ impl<'a> InferCtx<'a> {
 
         // Keep track of the purity from the application
         let app_purity = ty::subst::inst_purity_selection(&ret_select_ctx, fun_type.purity());
-        self.unify_app_purity(fcx, span, &app_purity)?;
+        self.unify_app_purity(fcx, &app_purity);
 
         self.ensure_is_a(span, &ret_type, required_type)?;
 
@@ -654,16 +624,7 @@ impl<'a> InferCtx<'a> {
                 );
 
                 let pred_result =
-                    ty::pred::interpret_poly_pred(self.tvars, &subject_node.poly_type, &test_poly)
-                        .map_err(|ty::pred::Error::TypeErased(subject, testing)| {
-                            Error::new(
-                                span,
-                                ErrorKind::PredTypeErased(
-                                    self.str_for_poly(&subject),
-                                    self.str_for_poly(&testing),
-                                ),
-                            )
-                        })?;
+                    ty::pred::interpret_poly_pred(self.tvars, &subject_node.poly_type, &test_poly);
 
                 use ty::pred::InterpretedPred;
                 let pred_result_type = match pred_result {
@@ -773,7 +734,8 @@ impl<'a> InferCtx<'a> {
             }
             hir::Expr::Let(span, hir_let) => self.visit_let(fcx, required_type, span, *hir_let),
             hir::Expr::Ref(span, var_id) => self.visit_ref(fcx, required_type, span, var_id),
-            hir::Expr::App(span, app) => self.visit_app(fcx, required_type, span, *app)
+            hir::Expr::App(span, app) => self
+                .visit_app(fcx, required_type, span, *app)
                 .map(|app_node| app_node.into_node()),
         }
     }

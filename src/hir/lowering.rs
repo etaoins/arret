@@ -205,7 +205,7 @@ impl<'ccx> LoweringContext<'ccx> {
         ty_datum: NsDatum,
     ) -> Result<()> {
         let ident = expect_ident(self_datum)?;
-        let ty = lower_poly(&self.pvars, &self.tvars, scope, ty_datum)?;
+        let ty = lower_poly(&self.tvars, scope, ty_datum)?;
 
         scope.insert_binding(ident, Binding::Ty(ty));
         Ok(())
@@ -293,7 +293,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     return Err(Error::new(span, ErrorKind::NoVecDestruc));
                 }
 
-                let ty = lower_poly(&self.pvars, &self.tvars, scope, data.pop().unwrap())?;
+                let ty = lower_poly(&self.tvars, scope, data.pop().unwrap())?;
 
                 // Discard the type colon
                 data.pop();
@@ -334,11 +334,11 @@ impl<'ccx> LoweringContext<'ccx> {
         destruc_datum: NsDatum,
     ) -> Result<destruc::Destruc<ty::Decl>> {
         match destruc_datum {
-            NsDatum::Ident(span, _) | NsDatum::Vec(span, _) => {
-                self.lower_scalar_destruc(scope, destruc_datum)
-                    .map(|scalar| destruc::Destruc::Scalar(span, scalar))
-            }
-            NsDatum::List(span, vs) => self.lower_list_destruc(scope, vs.into_vec())
+            NsDatum::Ident(span, _) | NsDatum::Vec(span, _) => self
+                .lower_scalar_destruc(scope, destruc_datum)
+                .map(|scalar| destruc::Destruc::Scalar(span, scalar)),
+            NsDatum::List(span, vs) => self
+                .lower_list_destruc(scope, vs.into_vec())
                 .map(|list_destruc| destruc::Destruc::List(span, list_destruc)),
             _ => Err(Error::new(
                 destruc_datum.span(),
@@ -358,7 +358,7 @@ impl<'ccx> LoweringContext<'ccx> {
             if let Some(purity) = try_lower_purity(fun_scope, &post_param_data[0]) {
                 let body_data = post_param_data.split_off(2);
                 let ret_datum = post_param_data.pop().unwrap();
-                let ret_ty = lower_poly(&self.pvars, &self.tvars, &fun_scope, ret_datum)?;
+                let ret_ty = lower_poly(&self.tvars, &fun_scope, ret_datum)?;
 
                 return Ok(LoweredFunRetDecl {
                     body_data,
@@ -481,7 +481,7 @@ impl<'ccx> LoweringContext<'ccx> {
         if let NsDatum::Set(_, vs) = next_datum {
             for tvar_datum in vs.into_vec() {
                 let (ident, polymorphic_var) =
-                    lower_polymorphic_var(&self.pvars, &self.tvars, scope, tvar_datum)?;
+                    lower_polymorphic_var(&self.tvars, scope, tvar_datum)?;
 
                 match polymorphic_var {
                     PolymorphicVar::TVar(tvar) => {
@@ -595,7 +595,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 expect_arg_count(span, &arg_data, 1)?;
                 Ok(Expr::TyPred(
                     span,
-                    lower_poly(&self.pvars, &self.tvars, scope, arg_data.pop().unwrap())?,
+                    lower_poly(&self.tvars, scope, arg_data.pop().unwrap())?,
                 ))
             }
             Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),
@@ -631,7 +631,8 @@ impl<'ccx> LoweringContext<'ccx> {
     ) -> Result<()> {
         for arg_datum in arg_data {
             let bindings = lower_import_set(arg_datum, |span, module_name| {
-                Ok(self.load_module(scope, span, module_name)?
+                Ok(self
+                    .load_module(scope, span, module_name)?
                     .exports()
                     .clone())
             })?;
@@ -812,7 +813,8 @@ impl<'ccx> LoweringContext<'ccx> {
                                 expand_macro(scope, span, mac, &arg_data)?
                             };
 
-                            return self.lower_module_def(scope, expanded_datum)
+                            return self
+                                .lower_module_def(scope, expanded_datum)
                                 .map_err(|e| e.with_macro_invocation_span(span));
                         }
                         Some(_) => {

@@ -233,8 +233,8 @@ impl<'a> IntersectCtx<ty::Poly> for PolyIntersectCtx<'a> {
         list2: &ty::List<ty::Poly>,
     ) -> Result<ty::List<ty::Poly>> {
         match ty::unify::poly_unify_list(self.tvars, list1, list2) {
-            Ok(ty::unify::UnifiedList::Merged(merged)) => Ok(merged),
-            _ => Err(Error::Disjoint),
+            ty::unify::UnifiedList::Merged(merged) => Ok(merged),
+            ty::unify::UnifiedList::Discerned => Err(Error::Disjoint),
         }
     }
 }
@@ -280,8 +280,8 @@ impl<'a> IntersectCtx<ty::Mono> for MonoIntersectCtx {
         list2: &ty::List<ty::Mono>,
     ) -> Result<ty::List<ty::Mono>> {
         match ty::unify::mono_unify_list(list1, list2) {
-            Ok(ty::unify::UnifiedList::Merged(merged)) => Ok(merged),
-            _ => Err(Error::Disjoint),
+            ty::unify::UnifiedList::Merged(merged) => Ok(merged),
+            ty::unify::UnifiedList::Discerned => Err(Error::Disjoint),
         }
     }
 }

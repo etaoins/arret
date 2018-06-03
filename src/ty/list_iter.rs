@@ -47,20 +47,17 @@ where
 }
 
 impl<'a> ListIterator<'a, ty::Poly> {
-    pub fn collect_rest(
-        self,
-        tvars: &[ty::TVar],
-    ) -> Result<Option<ty::Poly>, ty::unify::PolyError> {
+    pub fn collect_rest(self, tvars: &[ty::TVar]) -> Option<ty::Poly> {
         if self.fixed.is_empty() {
-            return Ok(self.rest.cloned());
+            return self.rest.cloned();
         }
 
-        Ok(Some(ty::unify::poly_unify_iter(
+        Some(ty::unify::poly_unify_iter(
             tvars,
             self.fixed
                 .into_iter()
                 .cloned()
                 .chain(self.rest.cloned().into_iter()),
-        )?))
+        ))
     }
 }

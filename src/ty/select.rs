@@ -2,7 +2,6 @@ use std::ops::Range;
 
 use ty;
 use ty::list_iter::ListIterator;
-use ty::purity::Purity;
 
 /// Selects a set of polymorphic variables for a function application
 ///
@@ -77,12 +76,7 @@ impl<'a> SelectContext<'a> {
 
         self.pvar_purities[pvar_idx] = Some(match self.pvar_purities[pvar_idx] {
             None => evidence_purity.clone(),
-            Some(ref existing) => {
-                // Much like the type case we default to the "bound" (impure) if we get a poly
-                // conflict
-                ty::unify::poly_unify_purity(existing, evidence_purity)
-                    .unwrap_or_else(|_| Purity::Impure.into_poly())
-            }
+            Some(ref existing) => ty::unify::poly_unify_purity(existing, evidence_purity),
         });
     }
 
@@ -115,7 +109,7 @@ impl<'a> SelectContext<'a> {
         }
 
         if let Some(target_rest) = target_iter.next() {
-            if let Ok(Some(evidence_rest)) = evidence_iter.collect_rest(self.tvars) {
+            if let Some(evidence_rest) = evidence_iter.collect_rest(self.tvars) {
                 self.add_evidence(target_rest, &evidence_rest);
             }
         }
@@ -196,15 +190,7 @@ impl<'a> SelectContext<'a> {
         self.tvar_types[tvar_idx] = Some(match self.tvar_types[tvar_idx] {
             None => evidence_poly.clone(),
             Some(ref existing) => {
-                match ty::unify::poly_unify_to_poly(self.tvars, existing, evidence_poly) {
-                    Ok(unified) => unified,
-                    Err(_) => {
-                        // We tried to build a union type with conflicting poly members. It isn't
-                        // the caller's fault we tried to build a union we can't represent;
-                        // silently fall back to the bound.
-                        var_bound.clone()
-                    }
-                }
+                ty::unify::poly_unify_to_poly(self.tvars, existing, evidence_poly)
             }
         });
     }
@@ -304,9 +290,8 @@ mod test {
         add_str_evidence(&mut ctx, "A", "B");
         assert_selected_type(&ctx, 'A', "B");
 
-        // However, these cannot be distinguished so need to fall back to our bound
         add_str_evidence(&mut ctx, "A", "C");
-        assert_selected_type(&ctx, 'A', "(... -> Any)");
+        assert_selected_type(&ctx, 'A', "(RawU B C)");
     }
 
     #[test]

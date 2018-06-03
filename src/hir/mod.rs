@@ -123,7 +123,7 @@ where
     pub value_expr: Expr<T>,
 }
 
-pub use self::types::{str_for_poly, str_for_purity};
+pub use self::types::str_for_poly;
 
 #[cfg(test)]
 pub use self::types::poly_for_str;

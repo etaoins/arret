@@ -24,7 +24,7 @@ pub fn type_for_decl_list_destruc(
         Some(rest) => Some(match rest.ty() {
             ty::Decl::Known(poly) => poly.clone(),
             ty::Decl::Free => guide_type_iter
-                .and_then(|guide_type_iter| guide_type_iter.collect_rest(tvars).unwrap_or(None))
+                .and_then(|guide_type_iter| guide_type_iter.collect_rest(tvars))
                 .unwrap_or_else(|| ty::Ty::Any.into_poly()),
         }),
         None => None,

@@ -59,7 +59,7 @@ impl DatumTyContext<ty::Poly> for PolyDatumTyContext {
     where
         I: Iterator<Item = ty::Poly>,
     {
-        ty::unify::poly_unify_iter(&[], iter).unwrap()
+        ty::unify::poly_unify_iter(&[], iter)
     }
 }
 

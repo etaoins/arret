@@ -9,8 +9,6 @@ use syntax::span::Span;
 pub enum ErrorKind {
     IsNotA(Box<str>, Box<str>),
     VarHasEmptyType(Box<str>, Box<str>),
-    PolyUnionConflict(Box<str>, Box<str>),
-    PredTypeErased(Box<str>, Box<str>),
     TopFunApply(Box<str>),
     RecursiveType,
     // Have, wanted
@@ -42,14 +40,6 @@ impl Reportable for Error {
             ErrorKind::VarHasEmptyType(ref left, ref right) => {
                 format!("inferred conflicting types `{}` and `{}`", left, right)
             }
-            ErrorKind::PolyUnionConflict(ref left, ref right) => format!(
-                "polymorphism prevents `{}` and `{}` from being members of the same union",
-                left, right,
-            ),
-            ErrorKind::PredTypeErased(ref subject, ref testing) => format!(
-                "`{}` cannot be tested to have the type `{}` at runtime due to type erasure",
-                subject, testing
-            ),
             ErrorKind::TopFunApply(ref top_fun) => format!(
                 "cannot determine parameter types for top function type `{}`",
                 top_fun

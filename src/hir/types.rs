@@ -30,7 +30,6 @@ pub enum PolymorphicVar {
 }
 
 struct LowerTyContext<'a> {
-    pvars: &'a [ty::purity::PVar],
     tvars: &'a [ty::TVar],
     scope: &'a Scope,
 }
@@ -209,22 +208,10 @@ impl<'a> LowerTyContext<'a> {
                     .map(|arg_datum| self.lower_poly(arg_datum))
                     .collect::<Result<Vec<ty::Poly>>>()?;
 
-                ty::unify::poly_unify_iter(self.tvars, member_tys.into_iter()).map_err(|err| {
-                    match err {
-                        ty::unify::PolyError::TyConflict(left, right) => {
-                            let left_str = str_for_poly(self.pvars, self.tvars, &left);
-                            let right_str = str_for_poly(self.pvars, self.tvars, &right);
-
-                            Error::new(span, ErrorKind::PolyUnionConflict(left_str, right_str))
-                        }
-                        ty::unify::PolyError::PurityConflict(left, right) => {
-                            let left_str = str_for_purity(self.pvars, &left);
-                            let right_str = str_for_purity(self.pvars, &right);
-
-                            Error::new(span, ErrorKind::PolyUnionConflict(left_str, right_str))
-                        }
-                    }
-                })
+                Ok(ty::unify::poly_unify_iter(
+                    self.tvars,
+                    member_tys.into_iter(),
+                ))
             }
             #[cfg(test)]
             TyCons::RawU => {
@@ -313,30 +300,16 @@ impl<'a> LowerTyContext<'a> {
 }
 
 pub fn lower_polymorphic_var(
-    pvars: &[ty::purity::PVar],
     tvars: &[ty::TVar],
     scope: &Scope,
     tvar_datum: NsDatum,
 ) -> Result<(Ident, PolymorphicVar)> {
-    let ctx = LowerTyContext {
-        pvars,
-        tvars,
-        scope,
-    };
+    let ctx = LowerTyContext { tvars, scope };
     ctx.lower_polymorphic_var(tvar_datum)
 }
 
-pub fn lower_poly(
-    pvars: &[ty::purity::PVar],
-    tvars: &[ty::TVar],
-    scope: &Scope,
-    datum: NsDatum,
-) -> Result<ty::Poly> {
-    let ctx = LowerTyContext {
-        pvars,
-        tvars,
-        scope,
-    };
+pub fn lower_poly(tvars: &[ty::TVar], scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
+    let ctx = LowerTyContext { tvars, scope };
     ctx.lower_poly(datum)
 }
 
@@ -505,11 +478,6 @@ pub fn str_for_poly(pvars: &[ty::purity::PVar], tvars: &[ty::TVar], poly: &ty::P
     ctx.str_for_poly(poly).into_boxed_str()
 }
 
-pub fn str_for_purity(pvars: &[ty::purity::PVar], purity: &ty::purity::Poly) -> Box<str> {
-    let ctx = StrForPolyContext { pvars, tvars: &[] };
-    ctx.str_for_purity(purity).into_boxed_str()
-}
-
 #[cfg(test)]
 pub fn poly_for_str(datum_str: &str) -> Result<ty::Poly> {
     use hir::ns::NsId;
@@ -562,7 +530,6 @@ pub fn poly_for_str(datum_str: &str) -> Result<ty::Poly> {
     let test_datum = datum_from_str(datum_str).unwrap();
 
     lower_poly(
-        &[],
         &[],
         &scope,
         NsDatum::from_syntax_datum(test_ns_id, test_datum),
