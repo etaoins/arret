@@ -45,6 +45,14 @@ pub trait TyRef: PartialEq + Clone + Sized + fmt::Debug {
             Self::from_ty(Ty::Union(members.into_boxed_slice()))
         }
     }
+
+    /// Tries to extract a literal boolean value
+    fn try_to_bool(&self) -> Option<bool> {
+        self.try_to_fixed().and_then(|fixed| match fixed {
+            Ty::LitBool(v) => Some(*v),
+            _ => None,
+        })
+    }
 }
 
 pub trait TVarIds: PartialEq + Eq + Clone + std::fmt::Debug + std::hash::Hash + Sized {
