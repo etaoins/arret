@@ -61,6 +61,7 @@ where
 {
     fn ty_ref_is_a(&self, &S, &S) -> Result;
     fn purity_ref_is_a(&self, &S::PRef, &S::PRef) -> Result;
+    fn polymorphic_fun_is_a(&self, sub_fun: &ty::Fun<S>, par_fun: &ty::Fun<S>) -> Result;
 
     fn top_fun_is_a(&self, sub_top_fun: &ty::TopFun<S>, par_top_fun: &ty::TopFun<S>) -> Result {
         self.purity_ref_is_a(sub_top_fun.purity(), par_top_fun.purity())
@@ -113,10 +114,18 @@ where
         }
     }
 
-    fn fun_is_a(&self, sub_fun: &ty::Fun<S>, par_fun: &ty::Fun<S>) -> Result {
+    fn monomorphic_fun_is_a(&self, sub_fun: &ty::Fun<S>, par_fun: &ty::Fun<S>) -> Result {
         self.top_fun_is_a(sub_fun.top_fun(), par_fun.top_fun())
             // Note that parameters are contravariant
             .and_then(|| self.list_is_a(par_fun.params(), sub_fun.params()))
+    }
+
+    fn fun_is_a(&self, sub_fun: &ty::Fun<S>, par_fun: &ty::Fun<S>) -> Result {
+        if sub_fun.is_monomorphic() {
+            self.monomorphic_fun_is_a(sub_fun, par_fun)
+        } else {
+            self.polymorphic_fun_is_a(sub_fun, par_fun)
+        }
     }
 
     fn ty_is_a(
@@ -330,6 +339,23 @@ impl<'a> IsACtx<ty::Poly> for PolyIsACtx<'a> {
             _ => Result::May,
         }
     }
+
+    fn polymorphic_fun_is_a(
+        &self,
+        sub_fun: &ty::Fun<ty::Poly>,
+        par_fun: &ty::Fun<ty::Poly>,
+    ) -> Result {
+        let mut select_ctx = ty::select::SelectContext::new(
+            sub_fun.pvar_ids().clone(),
+            sub_fun.tvar_ids().clone(),
+            self.tvars,
+        );
+
+        // Instantiate a monomorphic function based on the params from the parent function
+        select_ctx.add_evidence_list(sub_fun.params(), par_fun.params());
+        let mono_sub_fun = ty::subst::inst_fun_selection(&select_ctx, sub_fun);
+        self.monomorphic_fun_is_a(&mono_sub_fun, par_fun)
+    }
 }
 
 pub fn poly_is_a(tvars: &[ty::TVar], sub: &ty::Poly, parent: &ty::Poly) -> Result {
@@ -350,6 +376,14 @@ impl<'a> IsACtx<ty::Mono> for MonoIsACtx {
         } else {
             Result::Yes
         }
+    }
+
+    fn polymorphic_fun_is_a(
+        &self,
+        _sub_fun: &ty::Fun<ty::Mono>,
+        _par_fun: &ty::Fun<ty::Mono>,
+    ) -> Result {
+        unreachable!("Monomorphic types should not have polymorphic functions")
     }
 }
 
@@ -759,12 +793,39 @@ mod test {
             poly_is_a(&tvars, &pidentity_impure_string_fun, &top_one_param_fun)
         );
 
-        // The identity function is *not* (Any -> Any) as that would allow the types to be
-        // unrelated
+        // The identity function is (Any -> Any)
         let any_to_any_fun = poly_for_str("(Any ->! Any)");
         assert_eq!(
-            Result::May,
+            Result::Yes,
             poly_is_a(&tvars, &pidentity_fun, &any_to_any_fun)
+        );
+        // However, (Any -> Any) is not the identity function because it can take mismatched types
+        // (e.g. Int -> Float)
+        assert_eq!(
+            Result::No,
+            poly_is_a(&tvars, &any_to_any_fun, &pidentity_fun)
+        );
+
+        // The identity function is (true -> true)
+        let true_to_true_fun = poly_for_str("(true ->! true)");
+        assert_eq!(
+            Result::Yes,
+            poly_is_a(&tvars, &pidentity_fun, &true_to_true_fun)
+        );
+        assert_eq!(
+            Result::No,
+            poly_is_a(&tvars, &true_to_true_fun, &pidentity_fun)
+        );
+
+        // The identity function is not (true -> false)
+        let true_to_true_fun = poly_for_str("(true ->! false)");
+        assert_eq!(
+            Result::No,
+            poly_is_a(&tvars, &pidentity_fun, &true_to_true_fun)
+        );
+        assert_eq!(
+            Result::No,
+            poly_is_a(&tvars, &true_to_true_fun, &pidentity_fun)
         );
 
         // The symbol function satisfies ((U) -> Symbol) as all of its returns must be bounded by
@@ -779,10 +840,10 @@ mod test {
             poly_is_a(&tvars, &pidentity_sym_fun, &top_to_sym_fun)
         );
 
-        // The identity string function satisfies (String -> String) as it has no subtypes
+        // The identity string function satisfies (String -> String)
         let str_to_str_fun = poly_for_str("(String ->! String)");
         assert_eq!(
-            Result::May,
+            Result::Yes,
             poly_is_a(&tvars, &pidentity_fun, &str_to_str_fun)
         );
         assert_eq!(

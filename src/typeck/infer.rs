@@ -1031,6 +1031,21 @@ mod test {
         let t = "                             ^ ";
         let err = Error::new(t2s(t), ErrorKind::IsNotA("String".into(), "Symbol".into()));
         assert_type_error(&err, j);
+
+        // Instantiating a polymorphic function
+        // We can't name polymorphic types so we need the (let) hack
+        assert_type_for_expr(
+            "()",
+            "(let [[_ : (Symbol -> Symbol)] (fn #{T} ([x : T]) -> T x)])",
+        );
+
+        let j = "(let [[_ : (Symbol -> String)] (fn #{T} ([x : T]) -> T x)])";
+        let t = "                               ^^^^^^^^^^^^^^^^^^^^^^^^^^  ";
+        let err = Error::new(
+            t2s(t),
+            ErrorKind::IsNotA("#{T} (T -> T)".into(), "(Symbol -> String)".into()),
+        );
+        assert_type_error(&err, j);
     }
 
     #[test]

@@ -31,6 +31,18 @@ where
         ))
     }
 
+    fn subst_fun(&self, fun: &ty::Fun<I>) -> Result<ty::Fun<O>, E> {
+        Ok(ty::Fun::new(
+            ty::PVarIds::monomorphic(),
+            ty::TVarIds::monomorphic(),
+            ty::TopFun::new(
+                self.subst_purity_ref(fun.purity())?,
+                self.subst_ty_ref(fun.ret())?,
+            ),
+            self.subst_list(fun.params())?,
+        ))
+    }
+
     fn subst_ty(&self, ty: &ty::Ty<I>) -> Result<ty::Ty<O>, E> {
         Ok(match ty {
             ty::Ty::Any => ty::Ty::Any,
@@ -44,15 +56,7 @@ where
                 self.subst_purity_ref(top_fun.purity())?,
                 self.subst_ty_ref(top_fun.ret())?,
             ).into_ty(),
-            ty::Ty::Fun(fun) => ty::Fun::new(
-                ty::PVarIds::monomorphic(),
-                ty::TVarIds::monomorphic(),
-                ty::TopFun::new(
-                    self.subst_purity_ref(fun.purity())?,
-                    self.subst_ty_ref(fun.ret())?,
-                ),
-                self.subst_list(fun.params())?,
-            ).into_ty(),
+            ty::Ty::Fun(fun) => self.subst_fun(fun)?.into_ty(),
             ty::Ty::TyPred(test_ty) => ty::Ty::TyPred(Box::new(self.subst_ty_ref(test_ty)?)),
             ty::Ty::Map(map) => ty::Ty::Map(Box::new(ty::Map::new(
                 self.subst_ty_ref(map.key())?,
@@ -120,6 +124,14 @@ pub fn inst_ty_selection(select_ctx: &ty::select::SelectContext, poly: &ty::Poly
     ctx.subst_ty_ref(poly).unwrap()
 }
 
+pub fn inst_fun_selection(
+    select_ctx: &ty::select::SelectContext,
+    fun: &ty::Fun<ty::Poly>,
+) -> ty::Fun<ty::Poly> {
+    let ctx = InstPolySelectionCtx { select_ctx };
+    ctx.subst_fun(fun).unwrap()
+}
+
 pub fn inst_purity_selection(
     select_ctx: &ty::select::SelectContext,
     purity: &ty::purity::Poly,
@@ -148,7 +160,8 @@ mod test {
         fn subst_purity_ref(&self, poly: &ty::purity::Poly) -> Result<Purity, MonoToPolyError> {
             match poly {
                 ty::purity::Poly::Fixed(fixed) => Ok(*fixed),
-                ty::purity::Poly::Var(pvar_id) => self.pvar_purities
+                ty::purity::Poly::Var(pvar_id) => self
+                    .pvar_purities
                     .get(&pvar_id)
                     .cloned()
                     .ok_or_else(|| MonoToPolyError::UnresolvedPurity(*pvar_id)),
@@ -158,7 +171,8 @@ mod test {
         fn subst_ty_ref(&self, poly: &ty::Poly) -> Result<ty::Mono, MonoToPolyError> {
             match poly {
                 ty::Poly::Fixed(fixed) => self.subst_ty(fixed).map(|t| t.into_mono()),
-                ty::Poly::Var(tvar_id) => self.tvar_types
+                ty::Poly::Var(tvar_id) => self
+                    .tvar_types
                     .get(&tvar_id)
                     .cloned()
                     .ok_or_else(|| MonoToPolyError::UnresolvedType(*tvar_id)),

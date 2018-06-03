@@ -89,7 +89,7 @@ impl<'a> SelectContext<'a> {
         self.add_evidence(target_top_fun.ret(), evidence_top_fun.ret());
     }
 
-    fn add_evidence_list(
+    pub fn add_evidence_list(
         &mut self,
         target_list: &ty::List<ty::Poly>,
         evidence_list: &ty::List<ty::Poly>,
