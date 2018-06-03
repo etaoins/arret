@@ -44,10 +44,10 @@
   [(or) false]
   [(or test) test]
   [(or test1 test2 ...)
-    (let [x test1]
-      (if x x (or test2 ...)))]
+   (if test1 true (or test2 ...))]
 ]))
 
-; False is the only non-truthy value
 (export not)
-(def not (type-predicate false))
+(defmacro not (macro-rules #{} [
+  [(not test) (if test false true)]
+]))
