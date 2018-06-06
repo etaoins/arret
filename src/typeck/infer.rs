@@ -15,29 +15,60 @@ use typeck::error::{Error, ErrorKind};
 
 type Result<T> = result::Result<T, Error>;
 
+/// Result of inferring the type for a HIR expression
 struct InferredNode {
+    /// Expression with all free types replaced with poly types
     pub expr: hir::Expr<ty::Poly>,
+    /// Inferred type for the expression's value
     pub poly_type: ty::Poly,
+    /// Type condition depending the poly type of this node
+    type_cond: Option<Box<VarTypeCond>>,
 }
 
-enum OccurrenceTypedNode {
-    /// Expression with a boolean type based on a variable's type
-    ///
-    /// If the expression is true then `VarId` has the first type, otherwise the second type.
-    VarTyCond(hir::Expr<ty::Poly>, hir::VarId, ty::Poly, ty::Poly),
-    Other(InferredNode),
-}
-
-impl OccurrenceTypedNode {
-    fn into_node(self) -> InferredNode {
-        match self {
-            OccurrenceTypedNode::VarTyCond(expr, _, _, _) => InferredNode {
-                expr,
-                poly_type: ty::Ty::Bool.into_poly(),
-            },
-            OccurrenceTypedNode::Other(other) => other,
+impl InferredNode {
+    /// Create a node with a var type condition depending on its type
+    fn new_cond_type_node(
+        expr: hir::Expr<ty::Poly>,
+        var_id: hir::VarId,
+        type_if_true: ty::Poly,
+        type_if_false: ty::Poly,
+    ) -> InferredNode {
+        InferredNode {
+            expr,
+            poly_type: ty::Ty::Bool.into_poly(),
+            type_cond: Some(Box::new(VarTypeCond {
+                var_id,
+                type_if_true,
+                type_if_false,
+            })),
         }
     }
+
+    fn new_ref_node(span: Span, var_id: hir::VarId, poly_type: ty::Poly) -> InferredNode {
+        let type_cond = if poly_type == ty::Ty::Bool.into_poly() {
+            // This seems useless but it allows occurrence typing to work if this type
+            // flows through another node such as `(do)` or `(let)`
+            Some(Box::new(VarTypeCond {
+                var_id,
+                type_if_true: ty::Ty::LitBool(true).into_poly(),
+                type_if_false: ty::Ty::LitBool(false).into_poly(),
+            }))
+        } else {
+            None
+        };
+
+        InferredNode {
+            expr: hir::Expr::Ref(span, var_id),
+            poly_type,
+            type_cond,
+        }
+    }
+}
+
+struct VarTypeCond {
+    var_id: hir::VarId,
+    type_if_true: ty::Poly,
+    type_if_false: ty::Poly,
 }
 
 new_indexing_id_type!(FreeTyId, u32);
@@ -147,6 +178,7 @@ impl<'a> InferCtx<'a> {
         Ok(InferredNode {
             expr: hir::Expr::Lit(datum),
             poly_type: lit_type,
+            type_cond: None,
         })
     }
 
@@ -156,7 +188,7 @@ impl<'a> InferCtx<'a> {
         required_type: &ty::Poly,
         span: Span,
         cond: hir::Cond<ty::Decl>,
-    ) -> Result<OccurrenceTypedNode> {
+    ) -> Result<InferredNode> {
         let hir::Cond {
             test_expr,
             true_expr,
@@ -164,99 +196,86 @@ impl<'a> InferCtx<'a> {
         } = cond;
 
         let test_required_type = &ty::Ty::Bool.into_poly();
-        let occurrence_test_node = match test_expr {
-            hir::Expr::Ref(span, var_id) => {
-                let ref_node = self.visit_ref(fcx, test_required_type, span, var_id)?;
+        let test_node = self.visit_expr(fcx, test_required_type, test_expr)?;
 
-                // If we're testing a variable directly we know its type in the branches
-                OccurrenceTypedNode::VarTyCond(
-                    ref_node.expr,
-                    var_id,
-                    ty::Ty::LitBool(true).into_poly(),
-                    ty::Ty::LitBool(false).into_poly(),
-                )
-            }
-            other_expr => self.visit_occurrence_typed_expr(fcx, test_required_type, other_expr)?,
-        };
+        let (true_node, false_node) = if let Some(type_cond) = test_node.type_cond {
+            // TODO: This useless tuple a workaround for https://github.com/rust-lang/rust/issues/16223
+            let (VarTypeCond {
+                var_id,
+                type_if_true,
+                type_if_false,
+            },) = (*type_cond,);
 
-        let (test_expr, occurrence_true_node, false_node) = match occurrence_test_node {
-            OccurrenceTypedNode::VarTyCond(test_expr, var_id, true_type, false_type) => {
-                // Patch our occurrence types in to the `var_to_type` and restore it after. We
-                // avoid `?`ing our results until the end to make sure the original types are
-                // properly restored.
-                let original_var_type = self
-                    .var_to_type
-                    .insert(var_id, VarType::Known(true_type))
-                    .unwrap();
+            // Patch our occurrence types in to the `var_to_type` and restore it after. We
+            // avoid `?`ing our results until the end to make sure the original types are
+            // properly restored.
+            let original_var_type = self
+                .var_to_type
+                .insert(var_id, VarType::Known(type_if_true))
+                .unwrap();
 
-                let true_result = self.visit_occurrence_typed_expr(fcx, required_type, true_expr);
+            let true_result = self.visit_expr(fcx, required_type, true_expr);
 
-                self.var_to_type.insert(var_id, VarType::Known(false_type));
-                let false_result = self.visit_expr(fcx, required_type, false_expr);
+            self.var_to_type
+                .insert(var_id, VarType::Known(type_if_false));
+            let false_result = self.visit_expr(fcx, required_type, false_expr);
 
-                self.var_to_type.insert(var_id, original_var_type);
-                (test_expr, true_result?, false_result?)
-            }
-            OccurrenceTypedNode::Other(other) => match other.poly_type.try_to_bool() {
+            self.var_to_type.insert(var_id, original_var_type);
+            (true_result?, false_result?)
+        } else {
+            match test_node.poly_type.try_to_bool() {
                 Some(true) => {
-                    let true_node =
-                        self.visit_occurrence_typed_expr(fcx, required_type, true_expr)?;
+                    let true_node = self.visit_expr(fcx, required_type, true_expr)?;
                     self.visit_expr(fcx, &ty::Ty::Any.into_poly(), false_expr)?;
                     return Ok(true_node);
                 }
                 Some(false) => {
                     self.visit_expr(fcx, &ty::Ty::Any.into_poly(), true_expr)?;
-                    let false_node =
-                        self.visit_occurrence_typed_expr(fcx, required_type, false_expr)?;
+                    let false_node = self.visit_expr(fcx, required_type, false_expr)?;
                     return Ok(false_node);
                 }
                 None => {
-                    let true_node =
-                        self.visit_occurrence_typed_expr(fcx, required_type, true_expr)?;
+                    let true_node = self.visit_expr(fcx, required_type, true_expr)?;
                     let false_node = self.visit_expr(fcx, required_type, false_expr)?;
-                    (other.expr, true_node, false_node)
+                    (true_node, false_node)
                 }
-            },
+            }
         };
 
         // If the false branch is always false we can move an occurrence typing from the true
         // branch upwards.
         if false_node.poly_type.try_to_bool() == Some(false) {
-            if let OccurrenceTypedNode::VarTyCond(true_expr, var_id, true_type, false_type) =
-                occurrence_true_node
-            {
-                return Ok(OccurrenceTypedNode::VarTyCond(
-                    hir::Expr::Cond(
+            if let Some(true_type_cond) = true_node.type_cond {
+                return Ok(InferredNode {
+                    expr: hir::Expr::Cond(
                         span,
                         Box::new(hir::Cond {
-                            test_expr,
-                            true_expr,
+                            test_expr: test_node.expr,
+                            true_expr: true_node.expr,
                             false_expr: false_node.expr,
                         }),
                     ),
-                    var_id,
-                    true_type,
-                    false_type,
-                ));
+                    poly_type: true_node.poly_type,
+                    type_cond: Some(true_type_cond),
+                });
             }
         }
-
-        let true_node = occurrence_true_node.into_node();
 
         let unified_type =
             ty::unify::poly_unify_to_poly(self.tvars, &true_node.poly_type, &false_node.poly_type);
 
-        Ok(OccurrenceTypedNode::Other(InferredNode {
+        Ok(InferredNode {
             expr: hir::Expr::Cond(
                 span,
                 Box::new(hir::Cond {
-                    test_expr,
+                    test_expr: test_node.expr,
                     true_expr: true_node.expr,
                     false_expr: false_node.expr,
                 }),
             ),
             poly_type: unified_type,
-        }))
+            type_cond: None,
+        })
     }
 
     fn visit_ty_pred(
@@ -272,6 +291,7 @@ impl<'a> InferCtx<'a> {
         Ok(InferredNode {
             expr: hir::Expr::TyPred(span, test_type),
             poly_type: pred_type,
+            type_cond: None,
         })
     }
 
@@ -310,18 +330,12 @@ impl<'a> InferCtx<'a> {
         span: Span,
         var_id: hir::VarId,
     ) -> Result<InferredNode> {
-        let ref_expr = hir::Expr::Ref(span, var_id);
-
         let pending_def_id = match self.var_to_type[&var_id] {
             VarType::Pending(def_id) => def_id,
             VarType::Recursive => return Err(Error::new(span, ErrorKind::RecursiveType)),
             VarType::Known(ref known_type) => {
                 self.ensure_is_a(span, known_type, required_type)?;
-
-                return Ok(InferredNode {
-                    expr: ref_expr,
-                    poly_type: known_type.clone(),
-                });
+                return Ok(InferredNode::new_ref_node(span, var_id, known_type.clone()));
             }
             VarType::Free(free_ty_id) => {
                 let new_free_type = self.type_for_free_ref(required_type, span, free_ty_id)?;
@@ -329,10 +343,7 @@ impl<'a> InferCtx<'a> {
                 // Update the free var's type
                 self.free_ty_polys[free_ty_id.to_usize()] = new_free_type.clone();
 
-                return Ok(InferredNode {
-                    expr: ref_expr,
-                    poly_type: new_free_type,
-                });
+                return Ok(InferredNode::new_ref_node(span, var_id, new_free_type));
             }
         };
 
@@ -353,6 +364,7 @@ impl<'a> InferCtx<'a> {
             return Ok(InferredNode {
                 expr: hir::Expr::Do(vec![]),
                 poly_type: unit_type(),
+                type_cond: None,
             });
         };
 
@@ -371,6 +383,7 @@ impl<'a> InferCtx<'a> {
         Ok(InferredNode {
             expr: hir::Expr::Do(inferred_exprs),
             poly_type: terminal_node.poly_type,
+            type_cond: terminal_node.type_cond,
         })
     }
 
@@ -495,6 +508,7 @@ impl<'a> InferCtx<'a> {
         Ok(InferredNode {
             expr: hir::Expr::Fun(span, Box::new(revealed_fun)),
             poly_type: revealed_type,
+            type_cond: None,
         })
     }
 
@@ -584,6 +598,7 @@ impl<'a> InferCtx<'a> {
                 }),
             ),
             poly_type: ret_type,
+            type_cond: None,
         })
     }
 
@@ -593,7 +608,7 @@ impl<'a> InferCtx<'a> {
         required_type: &ty::Poly,
         span: Span,
         app: hir::App<ty::Decl>,
-    ) -> Result<OccurrenceTypedNode> {
+    ) -> Result<InferredNode> {
         let hir::App {
             fun_expr,
             mut fixed_arg_exprs,
@@ -648,13 +663,13 @@ impl<'a> InferCtx<'a> {
                 use ty::pred::InterpretedPred;
                 let pred_result_type = match pred_result {
                     InterpretedPred::Static(result) => ty::Ty::LitBool(result),
-                    InterpretedPred::Dynamic(true_type, false_type) => {
+                    InterpretedPred::Dynamic(type_if_true, type_if_false) => {
                         if let Some(subject_var_id) = subject_var_id {
-                            return Ok(OccurrenceTypedNode::VarTyCond(
+                            return Ok(InferredNode::new_cond_type_node(
                                 app_expr,
                                 subject_var_id,
-                                true_type,
-                                false_type,
+                                type_if_true,
+                                type_if_false,
                             ));
                         }
 
@@ -662,10 +677,11 @@ impl<'a> InferCtx<'a> {
                     }
                 }.into_poly();
 
-                Ok(OccurrenceTypedNode::Other(InferredNode {
+                Ok(InferredNode {
                     expr: app_expr,
                     poly_type: pred_result_type,
-                }))
+                    type_cond: None,
+                })
             }
             ty::Ty::Fun(fun_type) => {
                 let fun_app = FunApp {
@@ -675,7 +691,6 @@ impl<'a> InferCtx<'a> {
                 };
 
                 self.visit_fun_app(fcx, required_type, span, fun_type, fun_app)
-                    .map(OccurrenceTypedNode::Other)
             }
             _ => panic!("Unexpected type"),
         }
@@ -733,6 +748,7 @@ impl<'a> InferCtx<'a> {
                 }),
             ),
             poly_type: body_node.poly_type,
+            type_cond: body_node.type_cond,
         })
     }
 
@@ -745,9 +761,7 @@ impl<'a> InferCtx<'a> {
     ) -> Result<InferredNode> {
         match expr {
             hir::Expr::Lit(datum) => self.visit_lit(required_type, datum),
-            hir::Expr::Cond(span, cond) => self
-                .visit_cond(fcx, required_type, span, *cond)
-                .map(|cond_node| cond_node.into_node()),
+            hir::Expr::Cond(span, cond) => self.visit_cond(fcx, required_type, span, *cond),
             hir::Expr::Do(exprs) => self.visit_do(fcx, required_type, exprs),
             hir::Expr::Fun(span, fun) => self.visit_fun(required_type, span, *fun, self_var_id),
             hir::Expr::TyPred(span, test_type) => {
@@ -755,9 +769,7 @@ impl<'a> InferCtx<'a> {
             }
             hir::Expr::Let(span, hir_let) => self.visit_let(fcx, required_type, span, *hir_let),
             hir::Expr::Ref(span, var_id) => self.visit_ref(fcx, required_type, span, var_id),
-            hir::Expr::App(span, app) => self
-                .visit_app(fcx, required_type, span, *app)
-                .map(|app_node| app_node.into_node()),
+            hir::Expr::App(span, app) => self.visit_app(fcx, required_type, span, *app),
         }
     }
 
@@ -768,21 +780,6 @@ impl<'a> InferCtx<'a> {
         expr: hir::Expr<ty::Decl>,
     ) -> Result<InferredNode> {
         self.visit_expr_with_self_var_id(fcx, required_type, expr, None)
-    }
-
-    fn visit_occurrence_typed_expr(
-        &mut self,
-        fcx: &mut FunCtx,
-        required_type: &ty::Poly,
-        expr: hir::Expr<ty::Decl>,
-    ) -> Result<OccurrenceTypedNode> {
-        match expr {
-            hir::Expr::Cond(span, cond) => self.visit_cond(fcx, required_type, span, *cond),
-            hir::Expr::App(span, app) => self.visit_app(fcx, required_type, span, *app),
-            other_expr => self
-                .visit_expr(fcx, required_type, other_expr)
-                .map(OccurrenceTypedNode::Other),
-        }
     }
 
     fn destruc_scalar_value(
@@ -1207,6 +1204,14 @@ mod test {
                     (let [[_ : String] x])))";
 
         assert_type_for_expr("((RawU Symbol String) -> ())", j);
+
+        // (let) and (do) should preserve type conditions
+        let j = "(fn ([x : Bool])
+                  (if (let [_ false] false x)
+                    (let [[_ : true] x])
+                    (let [[_ : false] x])))";
+
+        assert_type_for_expr("(Bool -> ())", j);
 
         // This is an analog of (and)
         let j = "(fn ([s : Symbol])
