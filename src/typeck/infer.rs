@@ -221,7 +221,11 @@ impl<'a> InferCtx<'a> {
             let false_result = self.visit_expr(fcx, required_type, false_expr);
 
             self.var_to_type.insert(var_id, original_var_type);
-            (true_result?, false_result?)
+
+            let true_node = true_result?;
+            let false_node = false_result?;
+
+            (true_node, false_node)
         } else {
             match test_node.poly_type.try_to_bool() {
                 Some(true) => {
@@ -242,21 +246,31 @@ impl<'a> InferCtx<'a> {
             }
         };
 
+        let cond_expr = hir::Expr::Cond(
+            span,
+            Box::new(hir::Cond {
+                test_expr: test_node.expr,
+                true_expr: true_node.expr,
+                false_expr: false_node.expr,
+            }),
+        );
+
         // If the false branch is always false we can move an occurrence typing from the true
         // branch upwards.
         if false_node.poly_type.try_to_bool() == Some(false) {
             if let Some(true_type_cond) = true_node.type_cond {
                 return Ok(InferredNode {
-                    expr: hir::Expr::Cond(
-                        span,
-                        Box::new(hir::Cond {
-                            test_expr: test_node.expr,
-                            true_expr: true_node.expr,
-                            false_expr: false_node.expr,
-                        }),
-                    ),
+                    expr: cond_expr,
                     poly_type: true_node.poly_type,
                     type_cond: Some(true_type_cond),
+                });
+            }
+        } else if true_node.poly_type.try_to_bool() == Some(true) {
+            if let Some(false_type_cond) = false_node.type_cond {
+                return Ok(InferredNode {
+                    expr: cond_expr,
+                    poly_type: true_node.poly_type,
+                    type_cond: Some(false_type_cond),
                 });
             }
         }
@@ -265,14 +279,7 @@ impl<'a> InferCtx<'a> {
             ty::unify::poly_unify_to_poly(self.tvars, &true_node.poly_type, &false_node.poly_type);
 
         Ok(InferredNode {
-            expr: hir::Expr::Cond(
-                span,
-                Box::new(hir::Cond {
-                    test_expr: test_node.expr,
-                    true_expr: true_node.expr,
-                    false_expr: false_node.expr,
-                }),
-            ),
+            expr: cond_expr,
             poly_type: unified_type,
             type_cond: None,
         })
@@ -1198,7 +1205,7 @@ mod test {
 
         assert_type_for_expr("(Bool -> ())", j);
 
-        let j = "(fn ([x : (RawU Symbol String)]) -> ()
+        let j = "(fn ([x : (U Symbol String)]) -> ()
                   (if ((type-predicate Symbol) x)
                     (let [[_ : Symbol] x])
                     (let [[_ : String] x])))";
@@ -1217,6 +1224,14 @@ mod test {
         let j = "(fn ([s : Symbol])
                    (if (if ((type-predicate (U 'foo 'bar)) s) ((type-predicate (U 'bar 'baz)) s) false)
                      (let [[_ : 'bar] s])
+                     ()))";
+
+        assert_type_for_expr("(Symbol -> ())", j);
+
+        // This is an analog of (or)
+        let j = "(fn ([s : Symbol])
+                   (if (if ((type-predicate 'foo) s) true ((type-predicate 'bar) s))
+                     (let [[_ : (U 'foo 'bar)] s])
                      ()))";
 
         assert_type_for_expr("(Symbol -> ())", j);
