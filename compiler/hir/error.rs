@@ -110,7 +110,7 @@ impl Reportable for Error {
                 "multiple zero or more matches in the same sequence".to_owned()
             }
             ErrorKind::NoVecDestruc => {
-                "vectors can only be used for type ascription in the form [name : Type]".to_owned()
+                "vectors can only be used in a destructure for type ascription in the form [name : Type]".to_owned()
             }
             ErrorKind::ValueAsTy => "value cannot be used as a type".to_owned(),
             ErrorKind::PolyUnionConflict(ref left, ref right) => format!(

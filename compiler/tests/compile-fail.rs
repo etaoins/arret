@@ -1,15 +1,69 @@
 extern crate compiler;
+extern crate syntax;
 
-use compiler::reporting::{Level, Reportable};
 use std::io::{Read, Seek, SeekFrom};
 use std::ops::Range;
 use std::{fs, path};
+
+use compiler::reporting::{Level, Reportable};
+use syntax::span::Span;
+
+#[derive(Debug)]
+enum ExpectedSpan {
+    Exact(Span),
+    StartRange(Range<usize>),
+}
+
+impl ExpectedSpan {
+    fn matches(&self, actual_span: Span) -> bool {
+        match self {
+            ExpectedSpan::Exact(span) => *span == actual_span,
+            ExpectedSpan::StartRange(span_range) => {
+                let actual_span_start = actual_span.lo as usize;
+                actual_span_start >= span_range.start && actual_span_start < span_range.end
+            }
+        }
+    }
+}
 
 #[derive(Debug)]
 struct ExpectedReport {
     level: Level,
     message_prefix: String,
-    span_range: Range<usize>,
+    span: ExpectedSpan,
+}
+
+impl ExpectedReport {
+    fn matches(&self, actual_report: &Box<Reportable>) -> bool {
+        self.span.matches(actual_report.span())
+            && actual_report
+                .message()
+                .starts_with(&self.message_prefix[..])
+    }
+}
+
+impl Reportable for ExpectedReport {
+    fn span(&self) -> Span {
+        match self.span {
+            ExpectedSpan::Exact(span) => span,
+            ExpectedSpan::StartRange(ref span_range) => Span {
+                lo: span_range.start as u32,
+                hi: span_range.end as u32,
+            },
+        }
+    }
+
+    fn level(&self) -> Level {
+        Level::Help
+    }
+
+    fn message(&self) -> String {
+        format!(
+            "expected {} `{} ...`",
+            self.level.name(),
+            self.message_prefix
+        )
+    }
 }
 
 fn take_level(marker_string: &str) -> (Level, &str) {
@@ -30,7 +84,7 @@ fn extract_expected_reports(input_file: &mut fs::File) -> Vec<ExpectedReport> {
     let mut contents = String::new();
     input_file.read_to_string(&mut contents).unwrap();
 
-    let expected_errors = contents
+    let mut line_reports = contents
         .match_indices(";~")
         .map(|(index, _)| {
             let start_of_line_index = &contents[..index].rfind('\n').unwrap_or(0);
@@ -47,7 +101,44 @@ fn extract_expected_reports(input_file: &mut fs::File) -> Vec<ExpectedReport> {
             ExpectedReport {
                 level,
                 message_prefix: marker_string.into(),
-                span_range: *start_of_line_index..index,
+                span: ExpectedSpan::StartRange(*start_of_line_index..index),
+            }
+        })
+        .collect::<Vec<ExpectedReport>>();
+
+    let mut spanned_reports = contents
+        .match_indices(";^")
+        .map(|(index, _)| {
+            let span_length = contents[index..].find(' ').expect("Cannot find level") - 1;
+
+            let start_of_line_index = &contents[..index]
+                .rfind('\n')
+                .expect("Cannot have a spanned error on first line");
+
+            let start_of_previous_line_index =
+                &contents[..*start_of_line_index].rfind('\n').unwrap_or(0);
+
+            let end_of_line_index = &contents[index..]
+                .find('\n')
+                .map(|i| i + index)
+                .unwrap_or_else(|| contents.len());
+
+            let span_line_offset = index - start_of_line_index + 1;
+
+            let span_start = start_of_previous_line_index + span_line_offset;
+            let span_end = span_start + span_length;
+
+            // Take from after the ;^^ to the end of the line
+            let marker_string = &contents[index + span_length + 1..*end_of_line_index];
+            let (level, marker_string) = take_level(marker_string);
+
+            ExpectedReport {
+                level,
+                message_prefix: marker_string.into(),
+                span: ExpectedSpan::Exact(Span {
+                    lo: span_start as u32,
+                    hi: span_end as u32,
+                }),
             }
         })
         .collect();
@@ -55,7 +146,8 @@ fn extract_expected_reports(input_file: &mut fs::File) -> Vec<ExpectedReport> {
     // Rewind the file so the compiler can read it
     input_file.seek(SeekFrom::Start(0)).unwrap();
 
-    expected_errors
+    line_reports.append(&mut spanned_reports);
+    line_reports
 }
 
 fn collect_reports(
@@ -88,15 +180,6 @@ fn collect_reports(
     panic!("Compilation unexpectedly succeeded for {}", display_name)
 }
 
-fn expected_matches_report(expected: &ExpectedReport, actual: &Box<Reportable>) -> bool {
-    let actual_span_start = actual.span().lo as usize;
-
-    actual.level() == expected.level
-        && actual.message().starts_with(&expected.message_prefix[..])
-        && actual_span_start >= expected.span_range.start
-        && actual_span_start < expected.span_range.end
-}
-
 fn run_single_test(display_name: String, input_path: path::PathBuf) -> bool {
     let mut ccx = compiler::CompileContext::new();
     let mut input_file = fs::File::open(input_path).unwrap();
@@ -104,32 +187,37 @@ fn run_single_test(display_name: String, input_path: path::PathBuf) -> bool {
     let mut expected_reports = extract_expected_reports(&mut input_file);
     let mut actual_reports = collect_reports(&mut ccx, display_name.clone(), &mut input_file);
 
+    let mut unexpected_reports = vec![];
+
     while let Some(actual_report) = actual_reports.pop() {
         let expected_report_index = expected_reports
             .iter()
-            .position(|expected_report| expected_matches_report(expected_report, &actual_report));
+            .position(|expected_report| expected_report.matches(&actual_report));
 
         match expected_report_index {
             Some(index) => {
                 expected_reports.swap_remove(index);
             }
             None => {
-                eprintln!("Unexpected error:");
-                actual_report.report(&ccx);
-                return false;
+                unexpected_reports.push(actual_report);
             }
         }
     }
 
-    if let Some(expected_report) = expected_reports.pop() {
-        eprintln!(
-            "Expected error in {}: `{}`",
-            display_name, expected_report.message_prefix
-        );
-        return false;
+    if unexpected_reports.is_empty() && expected_reports.is_empty() {
+        return true;
     }
 
-    true
+    for unexpected_report in unexpected_reports {
+        eprintln!("Unexpected {}:", unexpected_report.level().name());
+        unexpected_report.report(&ccx);
+    }
+
+    for expected_report in expected_reports {
+        expected_report.report(&ccx);
+    }
+
+    false
 }
 
 #[test]

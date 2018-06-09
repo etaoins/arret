@@ -1135,16 +1135,6 @@ mod test {
     }
 
     #[test]
-    fn double_typed_var_def() {
-        // We should fail to annotate a variable a second time
-        let j = "(let [[[x : true] : false] 1])";
-        let t = "       ^^^^^^^^^^             ";
-
-        let err = Error::new(t2s(t), ErrorKind::ExpectedSymbol);
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
     fn wildcard_let() {
         let j = "(let [_ 1])";
         let t = "      ^    ";
@@ -1212,29 +1202,6 @@ mod test {
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());
-    }
-
-    #[test]
-    fn let_of_bad_destruc() {
-        let j = "(let [1 1])";
-        let t = "      ^    ";
-
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg(
-                "values can only be bound to variables or destructured into lists",
-            ),
-        );
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn let_of_vec_destruc() {
-        let j = "(let [[x y] [1 2]])";
-        let t = "      ^^^^^        ";
-
-        let err = Error::new(t2s(t), ErrorKind::NoVecDestruc);
-        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
@@ -1574,18 +1541,6 @@ mod test {
         let u = "                                     ^        ";
 
         let err = Error::new(t2s(u), ErrorKind::DuplicateMacroVar("x".into(), t2s(t)));
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn letmacro_with_bad_ellipsis() {
-        let j = "(letmacro [a (macro-rules #{} [[(a ...) false]])])";
-        let t = "                                   ^^^            ";
-
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg("ellipsis can only be used as part of a zero or more match"),
-        );
         assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
