@@ -58,6 +58,9 @@ pub fn load_module_by_name(
 ) -> Result<Vec<Datum>> {
     let mut path_buf = PathBuf::new();
 
+    // TODO: Properly handle paths to the stdlib
+    path_buf.push("..");
+
     path_buf.push("stdlib");
     for path_component in &module_name.path {
         path_buf.push(path_component.as_ref());

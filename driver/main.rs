@@ -1,21 +1,11 @@
 #![cfg_attr(feature = "cargo-clippy", warn(clippy))]
 
-extern crate ansi_term;
 extern crate clap;
-
-#[macro_use]
-mod id_type;
-
-mod ctx;
-mod hir;
-mod reporting;
-mod syntax;
-mod ty;
-mod typeck;
+extern crate compiler;
+extern crate syntax;
 
 use clap::{App, Arg};
-use ctx::CompileContext;
-use reporting::Reportable;
+use compiler::reporting::Reportable;
 use std::fs::File;
 
 fn main() {
@@ -31,9 +21,9 @@ fn main() {
     let input_path = matches.value_of("INPUT").unwrap();
     let mut input_file = File::open(input_path).expect("Unable to open input file");
 
-    let mut ccx = CompileContext::new();
+    let mut ccx = compiler::CompileContext::new();
 
-    let hir = match hir::lowering::lower_program(&mut ccx, input_path.into(), &mut input_file) {
+    let hir = match compiler::lower_program(&mut ccx, input_path.into(), &mut input_file) {
         Ok(hir) => hir,
         Err(errors) => {
             for err in errors {
@@ -43,7 +33,7 @@ fn main() {
         }
     };
 
-    match typeck::infer::infer_program(&hir.pvars, &hir.tvars, hir.defs) {
+    match compiler::infer_program(&hir.pvars, &hir.tvars, hir.defs) {
         Ok(inferred_defs) => {
             for inferred_def in inferred_defs {
                 println!("{:?}", inferred_def);

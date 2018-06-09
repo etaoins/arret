@@ -1,0 +1,13 @@
+[package]
+name = "risp"
+version = "0.1.0"
+authors = ["Ryan Cumming <etaoins@gmail.com>"]
+
+[[bin]]
+name = "risp"
+path = "main.rs"
+
+[dependencies]
+clap = "2.31"
+syntax = { path = "../syntax" }
+compiler = { path = "../compiler" }

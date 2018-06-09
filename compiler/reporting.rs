@@ -5,6 +5,7 @@ use ansi_term::Colour;
 use ansi_term::Style;
 
 use ctx::CompileContext;
+use syntax;
 use syntax::span::Span;
 
 #[derive(PartialEq, Debug)]
@@ -277,5 +278,64 @@ mod test {
         for (bp, expected) in test_cases {
             assert_eq!(expected, bytepos_to_human_pos(&ccx, bp));
         }
+    }
+}
+
+impl Reportable for syntax::error::Error {
+    fn message(&self) -> String {
+        use syntax::error::ErrorKind;
+
+        match self.kind() {
+            ErrorKind::Eof(ref ec) => {
+                format!("unexpected end of file while parsing {}", ec.description())
+            }
+            ErrorKind::UnsupportedDispatch => "unsupported dispatch".to_owned(),
+            ErrorKind::UnsupportedChar => "unsupported character".to_owned(),
+            ErrorKind::InvalidCodePoint => "invalid code point".to_owned(),
+            ErrorKind::UnsupportedStringEscape => "unsupported string escape".to_owned(),
+            ErrorKind::IntegerOverflow => "integer literal does not fit in i64".to_owned(),
+            ErrorKind::UnexpectedChar(c) => format!("unexpected `{}`", c),
+            ErrorKind::UnevenMap => "map literal must have an even number of values".to_owned(),
+        }
+    }
+
+    fn span(&self) -> Span {
+        self.span()
+    }
+
+    fn level(&self) -> Level {
+        Level::Error
+    }
+
+    fn associated_report(&self) -> Option<Box<Reportable>> {
+        if let syntax::error::ErrorKind::Eof(ref ec) = self.kind() {
+            if let Some(open_char_span) = ec.open_char_span() {
+                return Some(Box::new(ContentStartHelp {
+                    expected_content: *ec,
+                    open_char_span,
+                }));
+            }
+        }
+
+        None
+    }
+}
+
+struct ContentStartHelp {
+    expected_content: syntax::error::ExpectedContent,
+    open_char_span: Span,
+}
+
+impl Reportable for ContentStartHelp {
+    fn level(&self) -> Level {
+        Level::Help
+    }
+
+    fn span(&self) -> Span {
+        self.open_char_span
+    }
+
+    fn message(&self) -> String {
+        format!("{} starts here", self.expected_content.description())
     }
 }

@@ -1,7 +1,7 @@
+use datum::Datum;
+use error::{Error, ErrorKind, ExpectedContent, Result};
+use span::Span;
 use std;
-use syntax::datum::Datum;
-use syntax::error::{Error, ErrorKind, ExpectedContent, Result};
-use syntax::span::Span;
 
 pub fn data_from_str_with_span_offset(s: &str, span_offset: usize) -> Result<Vec<Datum>> {
     let mut parser = Parser::from_str(s, span_offset);
@@ -136,7 +136,8 @@ impl<'de> Parser<'de> {
         T: Fn(char) -> bool,
     {
         let lo = self.consumed_bytes as u32;
-        let last_index = self.input
+        let last_index = self
+            .input
             .find(predicate)
             .unwrap_or_else(|| self.input.len());
         let (consumed, remaining_input) = self.input.split_at(last_index);
@@ -470,13 +471,11 @@ impl<'de> Parser<'de> {
 
 /////////
 
-#[cfg(test)]
 pub fn datum_from_str(s: &str) -> Result<Datum> {
     let mut parser = Parser::from_str(s, 0);
     parser.parse_datum()
 }
 
-#[cfg(test)]
 pub fn data_from_str(s: &str) -> Result<Vec<Datum>> {
     data_from_str_with_span_offset(s, 0)
 }
@@ -484,7 +483,7 @@ pub fn data_from_str(s: &str) -> Result<Vec<Datum>> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use syntax::span::t2s;
+    use span::t2s;
 
     fn whole_str_span(v: &str) -> Span {
         Span {

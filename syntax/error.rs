@@ -3,8 +3,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::result;
 
-use reporting::{Level, Reportable};
-use syntax::span::Span;
+use span::Span;
 
 #[derive(Debug, PartialEq)]
 pub struct Error {
@@ -19,6 +18,10 @@ impl Error {
 
     pub fn kind(&self) -> &ErrorKind {
         &self.kind
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
     }
 }
 
@@ -35,44 +38,6 @@ pub enum ErrorKind {
 }
 
 pub type Result<T> = result::Result<T, Error>;
-
-impl Reportable for Error {
-    fn message(&self) -> String {
-        match self.kind {
-            ErrorKind::Eof(ref ec) => {
-                format!("unexpected end of file while parsing {}", ec.description())
-            }
-            ErrorKind::UnsupportedDispatch => "unsupported dispatch".to_owned(),
-            ErrorKind::UnsupportedChar => "unsupported character".to_owned(),
-            ErrorKind::InvalidCodePoint => "invalid code point".to_owned(),
-            ErrorKind::UnsupportedStringEscape => "unsupported string escape".to_owned(),
-            ErrorKind::IntegerOverflow => "integer literal does not fit in i64".to_owned(),
-            ErrorKind::UnexpectedChar(c) => format!("unexpected `{}`", c),
-            ErrorKind::UnevenMap => "map literal must have an even number of values".to_owned(),
-        }
-    }
-
-    fn span(&self) -> Span {
-        self.span
-    }
-
-    fn level(&self) -> Level {
-        Level::Error
-    }
-
-    fn associated_report(&self) -> Option<Box<Reportable>> {
-        if let ErrorKind::Eof(ref ec) = self.kind {
-            if let Some(open_char_span) = ec.open_char_span() {
-                return Some(Box::new(ContentStartHelp {
-                    expected_content: *ec,
-                    open_char_span,
-                }));
-            }
-        }
-
-        None
-    }
-}
 
 impl error::Error for Error {
     fn description(&self) -> &str {
@@ -101,7 +66,7 @@ pub enum ExpectedContent {
 }
 
 impl ExpectedContent {
-    fn description(&self) -> &'static str {
+    pub fn description(&self) -> &'static str {
         match self {
             ExpectedContent::List(_) => "list",
             ExpectedContent::Vector(_) => "vector",
@@ -116,7 +81,7 @@ impl ExpectedContent {
         }
     }
 
-    fn open_char_span(&self) -> Option<Span> {
+    pub fn open_char_span(&self) -> Option<Span> {
         match self {
             ExpectedContent::List(span)
             | ExpectedContent::Vector(span)
@@ -125,24 +90,5 @@ impl ExpectedContent {
             | ExpectedContent::String(span) => Some(*span),
             _ => None,
         }
-    }
-}
-
-struct ContentStartHelp {
-    expected_content: ExpectedContent,
-    open_char_span: Span,
-}
-
-impl Reportable for ContentStartHelp {
-    fn level(&self) -> Level {
-        Level::Help
-    }
-
-    fn span(&self) -> Span {
-        self.open_char_span
-    }
-
-    fn message(&self) -> String {
-        format!("{} starts here", self.expected_content.description())
     }
 }

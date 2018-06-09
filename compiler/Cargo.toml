@@ -1,0 +1,13 @@
+[package]
+name = "compiler"
+version = "0.1.0"
+authors = ["Ryan Cumming <etaoins@gmail.com>"]
+
+[lib]
+name = "compiler"
+path = "lib.rs"
+crate-type = ["dylib"]
+
+[dependencies]
+ansi_term = "0.11"
+syntax = { path = "../syntax" }

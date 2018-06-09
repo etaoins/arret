@@ -16,7 +16,7 @@ impl Span {
 
 pub const EMPTY_SPAN: Span = Span { lo: 0, hi: 0 };
 
-#[cfg(test)]
+// This isn't #[cfg(test)] because it's used in other crates
 pub fn t2s(v: &str) -> Span {
     if let Some(zero_size_off) = v.find('>') {
         let byte_pos = (zero_size_off + 1) as u32;
