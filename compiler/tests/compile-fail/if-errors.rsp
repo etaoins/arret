@@ -1,0 +1,5 @@
+(import [risp base])
+
+(def _ (if))            ;~ ERROR wrong arg count; expected 3
+(def _ (if true))       ;~ ERROR wrong arg count; expected 3
+(def _ (if true false)) ;~ ERROR wrong arg count; expected 3

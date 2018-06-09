@@ -1527,33 +1527,6 @@ mod test {
     }
 
     #[test]
-    fn empty_if() {
-        let j = "(if)";
-        let t = "^^^^";
-
-        let err = Error::new(t2s(t), ErrorKind::WrongArgCount(3));
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn if_without_test() {
-        let j = "(if true)";
-        let t = "^^^^^^^^^";
-
-        let err = Error::new(t2s(t), ErrorKind::WrongArgCount(3));
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn if_without_false_branch() {
-        let j = "(if true 1)";
-        let t = "^^^^^^^^^^^";
-
-        let err = Error::new(t2s(t), ErrorKind::WrongArgCount(3));
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
     fn if_expr() {
         let j = "(if true 1 2)";
         let t = "^^^^^^^^^^^^^";
