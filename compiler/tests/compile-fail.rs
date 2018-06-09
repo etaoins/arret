@@ -98,6 +98,10 @@ fn run_single_test(display_name: String, input_path: path::PathBuf) -> bool {
     let mut input_file = fs::File::open(input_path).unwrap();
 
     let mut expected_reports = extract_expected_reports(&mut input_file);
+    if expected_reports.is_empty() {
+        panic!("Unable to find an expected error in {}", display_name);
+    }
+
     let mut actual_reports = collect_reports(display_name.clone(), &mut input_file);
 
     while let Some(expected_report) = expected_reports.pop() {
@@ -125,6 +129,7 @@ fn run_single_test(display_name: String, input_path: path::PathBuf) -> bool {
             display_name,
             unexpected_report.message()
         );
+
         return false;
     }
 

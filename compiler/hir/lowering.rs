@@ -2160,22 +2160,4 @@ mod test {
         let expected = Expr::TyPred(t2s(t), ty::Ty::LitBool(true).into_poly());
         assert_eq!(expected, expr_for_str(j).unwrap());
     }
-
-    #[test]
-    fn module_user_compile_error() {
-        let j = r#"(compile-error "Hello")"#;
-        let t = r#"^^^^^^^^^^^^^^^^^^^^^^^"#;
-
-        let err = Error::new(t2s(t), ErrorKind::UserError("Hello".into()));
-        assert_eq!(err, module_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn body_expr_user_compile_error() {
-        let j = r#"(compile-error "Hello")"#;
-        let t = r#"^^^^^^^^^^^^^^^^^^^^^^^"#;
-
-        let err = Error::new(t2s(t), ErrorKind::UserError("Hello".into()));
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
 }
