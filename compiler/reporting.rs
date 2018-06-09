@@ -172,7 +172,7 @@ pub trait Reportable {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Level {
     Error,
     Note,
