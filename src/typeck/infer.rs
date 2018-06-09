@@ -211,19 +211,41 @@ impl<'a> InferCtx<'a> {
             // properly restored.
             let original_var_type = self
                 .var_to_type
-                .insert(var_id, VarType::Known(type_if_true))
+                .insert(var_id, VarType::Known(type_if_true.clone()))
                 .unwrap();
 
             let true_result = self.visit_expr(fcx, required_type, true_expr);
 
             self.var_to_type
-                .insert(var_id, VarType::Known(type_if_false));
+                .insert(var_id, VarType::Known(type_if_false.clone()));
             let false_result = self.visit_expr(fcx, required_type, false_expr);
 
             self.var_to_type.insert(var_id, original_var_type);
 
             let true_node = true_result?;
             let false_node = false_result?;
+
+            // This is an analog of (not). We can flip the test's type condition
+            if true_node.poly_type.try_to_bool() == Some(false)
+                && false_node.poly_type.try_to_bool() == Some(true)
+            {
+                return Ok(InferredNode {
+                    expr: hir::Expr::Cond(
+                        span,
+                        Box::new(hir::Cond {
+                            test_expr: test_node.expr,
+                            true_expr: true_node.expr,
+                            false_expr: false_node.expr,
+                        }),
+                    ),
+                    poly_type: test_node.poly_type,
+                    type_cond: Some(Box::new(VarTypeCond {
+                        var_id,
+                        type_if_true: type_if_false,
+                        type_if_false: type_if_true,
+                    })),
+                });
+            }
 
             (true_node, false_node)
         } else {
@@ -256,7 +278,7 @@ impl<'a> InferCtx<'a> {
         );
 
         // If the false branch is always false we can move an occurrence typing from the true
-        // branch upwards.
+        // branch upwards. The same reasoning applies for the true branch.
         if false_node.poly_type.try_to_bool() == Some(false) {
             if let Some(true_type_cond) = true_node.type_cond {
                 return Ok(InferredNode {
@@ -269,7 +291,7 @@ impl<'a> InferCtx<'a> {
             if let Some(false_type_cond) = false_node.type_cond {
                 return Ok(InferredNode {
                     expr: cond_expr,
-                    poly_type: true_node.poly_type,
+                    poly_type: false_node.poly_type,
                     type_cond: Some(false_type_cond),
                 });
             }
@@ -1227,6 +1249,14 @@ mod test {
                      ()))";
 
         assert_type_for_expr("(Symbol -> ())", j);
+
+        // This is an analog of (not)
+        let j = "(fn ([s : (U 'foo 'bar)])
+                   (if (if ((type-predicate 'foo) s) false true)
+                     (let [[_ : 'bar] s])
+                     ()))";
+
+        assert_type_for_expr("((RawU 'foo 'bar) -> ())", j);
 
         // This is an analog of (or)
         let j = "(fn ([s : Symbol])
