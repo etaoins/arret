@@ -50,3 +50,24 @@
 (defmacro ann (macro-rules [
   [(ann val Type) (let [[_ : Type] val] val)]
 ]))
+
+; Type predicates
+(defmacro deftypred (macro-rules [
+  [(deftypred name Type) (do
+    (export name)
+    (def name (type-predicate Type))
+  )]
+]))
+
+(deftypred symbol? Symbol)
+(deftypred string? String)
+(deftypred bool? Bool)
+(deftypred int? Int)
+(deftypred float? Float)
+(deftypred char? Char)
+(deftypred list? (Listof Any))
+(deftypred vector? (Vectorof Any))
+(deftypred set? (Setof Any))
+(deftypred map? (Map Any Any))
+(deftypred fn? (... ->! Any))
+(deftypred empty? ())
