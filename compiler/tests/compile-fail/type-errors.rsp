@@ -1,0 +1,33 @@
+(import [risp base])
+
+(def [wrong-ascription : Int] 'foo)
+                              ;^^^ ERROR `'foo` is not a `Int`
+
+(def ([one : 'one] [two : 'two]) '(two one))
+                                 ;^^^^^^^^^ ERROR `(List 'two 'one)` is not a `(List 'one 'two)`
+
+(defn wrong-ret () -> Str
+    'foo)
+    ;^^^ ERROR `'foo` is not a `Str`
+
+(def non-bool-if-test (if 'foo true false))
+                          ;^^^ ERROR `'foo` is not a `Bool`
+
+(defn wrong-if-branch-type ([test : Bool]) -> Sym
+    (if test
+        'foo
+        "foo"))
+       ;^^^^^ ERROR `Str` is not a `Sym`
+
+(def [wrong-do-type : Int]
+    (do 1 2 'three))
+            ;^^^^^ ERROR `'three` is not a `Int`
+
+(def wrong-arg-type
+    ((fn ([input : Str])) 'foo))
+                          ;^^^ ERROR `'foo` is not a `Str`
+
+(defn conflicting-free-type (free-input)
+    (ann free-input Str)
+    (ann free-input Sym))
+        ;^^^^^^^^^^ ERROR inferred conflicting types `Sym` and `Str`
