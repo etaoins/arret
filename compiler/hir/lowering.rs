@@ -898,11 +898,10 @@ pub fn lower_program(
     let mut lcx = LoweringContext::new(ccx);
     lcx.lower_module(&mut root_scope, data)?;
 
-    let mut deferred_defs: Vec<DeferredDef> = vec![];
+    let deferred_defs = std::mem::replace(&mut lcx.deferred_defs, vec![]);
     let mut defs: Vec<Def<ty::Decl>> = vec![];
     let mut errors: Vec<Error> = vec![];
 
-    std::mem::swap(&mut deferred_defs, &mut lcx.deferred_defs);
     for DeferredDef(span, destruc, value_datum) in deferred_defs {
         match lcx.lower_expr(&root_scope, value_datum) {
             Ok(value_expr) => {
