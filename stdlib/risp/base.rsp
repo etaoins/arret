@@ -51,3 +51,8 @@
 (defmacro not (macro-rules [
   [(not test) (if test false true)]
 ]))
+
+(export ann)
+(defmacro ann (macro-rules [
+  [(ann val Type) (let [[_ : Type] val] val)]
+]))
