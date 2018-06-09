@@ -1595,36 +1595,6 @@ mod test {
     }
 
     #[test]
-    fn letmacro_of_non_symbol() {
-        let j = "(letmacro [1 (macro-rules ${})])";
-        let t = "           ^                    ";
-
-        let err = Error::new(t2s(t), ErrorKind::ExpectedSymbol);
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn letmacro_of_non_list() {
-        let j = "(letmacro [a b])";
-        let t = "             ^  ";
-
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg("macro specification must be a list"),
-        );
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn letmacro_of_unsupported_type() {
-        let j = "(letmacro [a (macro-fn #{})])";
-        let t = "             ^^^^^^^^^^^^^^  ";
-
-        let err = Error::new(t2s(t), ErrorKind::IllegalArg("unsupported macro type"));
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
     fn letmacro_with_duplicate_vars() {
         let j = "(letmacro [a (macro-rules #{} [[(a x x) x]])])";
         let t = "                                   ^          ";
