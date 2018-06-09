@@ -180,31 +180,34 @@ pub fn lower_macro_rules(
     self_ident: &Ident,
     mut macro_rules_data: Vec<NsDatum>,
 ) -> Result<Macro> {
-    if macro_rules_data.len() != 2 {
+    if macro_rules_data.is_empty() || macro_rules_data.len() > 2 {
         return Err(Error::new(span, ErrorKind::WrongArgCount(2)));
     }
 
     let rules_datum = macro_rules_data.pop().unwrap();
-    let literals_datum = macro_rules_data.pop().unwrap();
 
-    let literals = if let NsDatum::Set(_, vs) = literals_datum {
-        vs.into_iter()
-            .map(|v| {
-                if let NsDatum::Ident(_, ref ident) = v {
-                    Ok(MacroVar::from_ident(scope, ident))
-                } else {
-                    Err(Error::new(
-                        v.span(),
-                        ErrorKind::IllegalArg("pattern literal must be a symbol"),
-                    ))
-                }
-            })
-            .collect::<Result<HashSet<MacroVar>>>()?
+    let literals = if let Some(literals_datum) = macro_rules_data.pop() {
+        if let NsDatum::Set(_, vs) = literals_datum {
+            vs.into_iter()
+                .map(|v| {
+                    if let NsDatum::Ident(_, ref ident) = v {
+                        Ok(MacroVar::from_ident(scope, ident))
+                    } else {
+                        Err(Error::new(
+                            v.span(),
+                            ErrorKind::IllegalArg("pattern literal must be a symbol"),
+                        ))
+                    }
+                })
+                .collect::<Result<HashSet<MacroVar>>>()?
+        } else {
+            return Err(Error::new(
+                literals_datum.span(),
+                ErrorKind::IllegalArg("expected set of pattern literals"),
+            ));
+        }
     } else {
-        return Err(Error::new(
-            literals_datum.span(),
-            ErrorKind::IllegalArg("expected set of pattern literals"),
-        ));
+        HashSet::new()
     };
 
     let rules_values = if let NsDatum::Vec(_, vs) = rules_datum {
@@ -311,7 +314,7 @@ mod test {
 
     #[test]
     fn empty_rules() {
-        let j = "#{} []";
+        let j = "[]";
 
         let special_vars = SpecialVars {
             literals: HashSet::new(),
@@ -323,8 +326,8 @@ mod test {
 
     #[test]
     fn rule_with_non_vector() {
-        let j = "#{} [1]";
-        let t = "     ^ ";
+        let j = "[1]";
+        let t = " ^ ";
 
         let err = Error::new(
             t2s(t),
@@ -335,8 +338,8 @@ mod test {
 
     #[test]
     fn rule_with_not_enough_elements() {
-        let j = "#{} [[(self)]]";
-        let t = "     ^^^^^^^^ ";
+        let j = "[[(self)]]";
+        let t = " ^^^^^^^^ ";
 
         let err = Error::new(
             t2s(t),
@@ -347,8 +350,8 @@ mod test {
 
     #[test]
     fn rule_with_non_list_pattern() {
-        let j = "#{} [[self 1]]";
-        let t = "      ^^^^    ";
+        let j = "[[self 1]]";
+        let t = "  ^^^^    ";
 
         let err = Error::new(
             t2s(t),
@@ -359,8 +362,8 @@ mod test {
 
     #[test]
     fn rule_with_empty_pattern_list() {
-        let j = "#{} [[() 1]]";
-        let t = "      ^^    ";
+        let j = "[[() 1]]";
+        let t = "  ^^    ";
 
         let err = Error::new(
             t2s(t),
@@ -373,8 +376,8 @@ mod test {
 
     #[test]
     fn rule_with_non_self_pattern() {
-        let j = "#{} [[(notself) 1]]";
-        let t = "       ^^^^^^^     ";
+        let j = "[[(notself) 1]]";
+        let t = "   ^^^^^^^     ";
 
         let err = Error::new(
             t2s(t),

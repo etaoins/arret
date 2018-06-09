@@ -1518,9 +1518,9 @@ mod test {
 
     #[test]
     fn letmacro_with_duplicate_vars() {
-        let j = "(letmacro [a (macro-rules #{} [[(a x x) x]])])";
-        let t = "                                   ^          ";
-        let u = "                                     ^        ";
+        let j = "(letmacro [a (macro-rules [[(a x x) x]])])";
+        let t = "                               ^          ";
+        let u = "                                 ^        ";
 
         let err = Error::new(t2s(u), ErrorKind::DuplicateMacroVar("x".into(), t2s(t)));
         assert_eq!(err, expr_for_str(j).unwrap_err());
@@ -1528,8 +1528,8 @@ mod test {
 
     #[test]
     fn expand_macro_without_matching_rule() {
-        let j1 = "(letmacro [one (macro-rules #{} [[(one) 1]])]";
-        let t1 = "                                             ";
+        let j1 = "(letmacro [one (macro-rules [[(one) 1]])]";
+        let t1 = "                                         ";
         let j2 = "(one extra-arg)";
         let t2 = "^^^^^^^^^^^^^^^";
         let j3 = ")";
@@ -1543,8 +1543,8 @@ mod test {
 
     #[test]
     fn expand_trivial_macro() {
-        let j1 = "(letmacro [one (macro-rules #{} [[(one) 1]])]";
-        let t1 = "                                        ^    ";
+        let j1 = "(letmacro [one (macro-rules [[(one) 1]])]";
+        let t1 = "                                    ^    ";
         let j2 = "(one)";
         let t2 = "     ";
         let j3 = ")";
@@ -1558,8 +1558,8 @@ mod test {
 
     #[test]
     fn expand_replacing_macro() {
-        let j1 = "(letmacro [identity (macro-rules #{} [[(identity x) x]])]";
-        let t1 = "                                                         ";
+        let j1 = "(letmacro [identity (macro-rules [[(identity x) x]])]";
+        let t1 = "                                                     ";
         let j2 = "(identity 1)";
         let t2 = "          ^ ";
         let j3 = ")";
@@ -1573,10 +1573,10 @@ mod test {
 
     #[test]
     fn expand_two_value_replacement() {
-        let j = "(letmacro [ret-two (macro-rules #{} [[(ret-two x y) [x y]]])] (ret-two 1 2))";
-        let t = "                                                    ^^^^^                   ";
-        let u = "                                                                       ^    ";
-        let v = "                                                                         ^  ";
+        let j = "(letmacro [ret-two (macro-rules [[(ret-two x y) [x y]]])] (ret-two 1 2))";
+        let t = "                                                ^^^^^                   ";
+        let u = "                                                                   ^    ";
+        let v = "                                                                     ^  ";
 
         let expected = Expr::Lit(Datum::Vec(
             t2s(t),
@@ -1601,8 +1601,8 @@ mod test {
 
     #[test]
     fn expand_with_escaped_ellipsis() {
-        let j1 = "(letmacro [m (macro-rules #{} [[(m) '(... ...)]])]";
-        let t1 = "                                          ^^^     ";
+        let j1 = "(letmacro [m (macro-rules [[(m) '(... ...)]])]";
+        let t1 = "                                      ^^^     ";
         let j2 = "(m)";
         let j3 = ")";
 
@@ -1645,8 +1645,8 @@ mod test {
 
     #[test]
     fn expand_with_wildcard() {
-        let j1 = "(letmacro [third (macro-rules #{} [[(third _ _ x) x]])]";
-        let t1 = "                                                       ";
+        let j1 = "(letmacro [third (macro-rules [[(third _ _ x) x]])]";
+        let t1 = "                                                   ";
         let j2 = "(third 1 2 3)";
         let t2 = "           ^ ";
         let j3 = ")";
@@ -1660,8 +1660,8 @@ mod test {
 
     #[test]
     fn expand_recursive() {
-        let j1 = "(letmacro [rec (macro-rules #{} [[(rec) 7] [(rec _) (rec)]])]";
-        let t1 = "                                        ^                    ";
+        let j1 = "(letmacro [rec (macro-rules [[(rec) 7] [(rec _) (rec)]])]";
+        let t1 = "                                    ^                    ";
         let j2 = "(rec)";
         let t2 = "     ";
         let j3 = ")";
@@ -1675,8 +1675,8 @@ mod test {
 
     #[test]
     fn expand_fixed_list_match() {
-        let j1 = "(letmacro [ret-second (macro-rules #{} [[(ret-second (_ second _)) second]])]";
-        let t1 = "                                                                             ";
+        let j1 = "(letmacro [ret-second (macro-rules [[(ret-second (_ second _)) second]])]";
+        let t1 = "                                                                         ";
         let j2 = "(ret-second (1 2 3))";
         let t2 = "               ^    ";
         let j3 = ")";
@@ -1690,8 +1690,8 @@ mod test {
 
     #[test]
     fn expand_fixed_vector_match() {
-        let j1 = "(letmacro [ret-third (macro-rules #{} [[(ret-third [_ _ third]) third]])]";
-        let t1 = "                                                                         ";
+        let j1 = "(letmacro [ret-third (macro-rules [[(ret-third [_ _ third]) third]])]";
+        let t1 = "                                                                     ";
         let j2 = "(ret-third [1 2 3])";
         let t2 = "                ^  ";
         let j3 = ")";
@@ -1705,8 +1705,8 @@ mod test {
 
     #[test]
     fn expand_empty_set_match() {
-        let j1 = "(letmacro [empty-set? (macro-rules #{} [[(empty-set? #{}) true]])]";
-        let t1 = "                                                          ^^^^    ";
+        let j1 = "(letmacro [empty-set? (macro-rules [[(empty-set? #{}) true]])]";
+        let t1 = "                                                      ^^^^    ";
         let j2 = "(empty-set? #{})";
         let j3 = ")";
 
@@ -1719,9 +1719,9 @@ mod test {
 
     #[test]
     fn expand_zero_or_more_set_match() {
-        let j1 = "(letmacro [set->list (macro-rules #{} [[(set->list #{v ...}) '(v ...)]])]";
-        let t1 = "                                                              ^^^^^^^    ";
-        let sp = "                                                                         ";
+        let j1 = "(letmacro [set->list (macro-rules [[(set->list #{v ...}) '(v ...)]])]";
+        let t1 = "                                                          ^^^^^^^    ";
+        let sp = "                                                                     ";
         let j2 = "(set->list #{1 2 3})";
         let u2 = "             ^      ";
         let v2 = "               ^    ";
@@ -1747,8 +1747,8 @@ mod test {
 
     #[test]
     fn expand_fixed_set_match() {
-        let j = "(letmacro [two-set? (macro-rules #{} [[(two-set? #{_ _}) false]])])";
-        let t = "                                                 ^^^^^^            ";
+        let j = "(letmacro [two-set? (macro-rules [[(two-set? #{_ _}) false]])])";
+        let t = "                                             ^^^^^^            ";
 
         let err = Error::new(
             t2s(t),
@@ -1759,8 +1759,8 @@ mod test {
 
     #[test]
     fn expand_constant_match() {
-        let j1 = "(letmacro [alph (macro-rules #{} [[(alph 1) 'a] [(alph 2) 'b] [(alph 3) 'c]])]";
-        let t1 = "                                                           ^                  ";
+        let j1 = "(letmacro [alph (macro-rules [[(alph 1) 'a] [(alph 2) 'b] [(alph 3) 'c]])]";
+        let t1 = "                                                       ^                  ";
         let j2 = "(alph 2)";
         let t2 = "        ";
         let j3 = ")";
@@ -1774,12 +1774,9 @@ mod test {
 
     #[test]
     fn expand_terminal_zero_or_more_match() {
-        let j1 =
-            "(letmacro [return-all (macro-rules #{} [[(return-all values ...) '(values ...)]])]";
-        let t1 =
-            "                                                                  ^^^^^^^^^^^^    ";
-        let sp =
-            "                                                                                  ";
+        let j1 = "(letmacro [return-all (macro-rules [[(return-all values ...) '(values ...)]])]";
+        let t1 = "                                                              ^^^^^^^^^^^^    ";
+        let sp = "                                                                              ";
         let j2 = "(return-all 1 2 3)";
         let u2 = "            ^     ";
         let v2 = "              ^   ";
@@ -1805,11 +1802,11 @@ mod test {
 
     #[test]
     fn expand_middle_zero_or_more_match() {
-        let j1 = "(letmacro [mid (macro-rules #{} [[(mid [_ vals ... _]) [true vals ... false]]])]";
-        let t1 = "                                                       ^^^^^^^^^^^^^^^^^^^^^    ";
-        let u1 = "                                                        ^^^^                    ";
-        let v1 = "                                                                      ^^^^^     ";
-        let sp = "                                                                                ";
+        let j1 = "(letmacro [mid (macro-rules [[(mid [_ vals ... _]) [true vals ... false]]])]";
+        let t1 = "                                                   ^^^^^^^^^^^^^^^^^^^^^    ";
+        let u1 = "                                                    ^^^^                    ";
+        let v1 = "                                                                  ^^^^^     ";
+        let sp = "                                                                            ";
         let j2 = "(mid [1 2 3 4])";
         let w2 = "        ^      ";
         let x2 = "          ^    ";
@@ -1836,9 +1833,9 @@ mod test {
 
     #[test]
     fn expand_multiple_zero_or_more() {
-        let j1 = "(letmacro [vm (macro-rules #{} [[(vm (l ...) (r ...)) [r ... l ...]]])]";
-        let t1 = "                                                      ^^^^^^^^^^^^^    ";
-        let sp = "                                                                       ";
+        let j1 = "(letmacro [vm (macro-rules [[(vm (l ...) (r ...)) [r ... l ...]]])]";
+        let t1 = "                                                  ^^^^^^^^^^^^^    ";
+        let sp = "                                                                   ";
         let j2 = "(vm (1 2) (3 4))";
         let u2 = "     ^          ";
         let v2 = "       ^        ";
@@ -1867,9 +1864,9 @@ mod test {
 
     #[test]
     fn expand_multiple_zero_or_more_in_same_pattern_seq() {
-        let j = "(letmacro [vm (macro-rules #{} [[(vm (l ... r ...)) true]])])";
-        let t = "                                      ^                      ";
-        let u = "                                            ^                ";
+        let j = "(letmacro [vm (macro-rules [[(vm (l ... r ...)) true]])])";
+        let t = "                                  ^                      ";
+        let u = "                                        ^                ";
 
         let err = Error::new(t2s(u), ErrorKind::MultipleZeroOrMoreMatch(t2s(t)));
         assert_eq!(err, expr_for_str(j).unwrap_err());
@@ -1877,8 +1874,8 @@ mod test {
 
     #[test]
     fn expand_subtemplate_without_matching_subpattern() {
-        let j1 = "(letmacro [m (macro-rules #{} [[(m expr ...) (5 ...)]])])";
-        let t1 = "                                             ^^^^^^^     ";
+        let j1 = "(letmacro [m (macro-rules [[(m expr ...) (5 ...)]])])";
+        let t1 = "                                         ^^^^^^^     ";
         let j2 = "(m 1 2 3 4)";
         let t2 = "           ";
 
@@ -1894,10 +1891,8 @@ mod test {
 
     #[test]
     fn expand_subtemplate_matching_multiple_subpatterns() {
-        let j =
-            "(letmacro [m (macro-rules #{} [[(m (list1 ...) (list2 ...)) ([list1 list2] ...)]])])";
-        let t =
-            "                                                            ^^^^^^^^^^^^^^^^^^^     ";
+        let j = "(letmacro [m (macro-rules [[(m (list1 ...) (list2 ...)) ([list1 list2] ...)]])])";
+        let t = "                                                        ^^^^^^^^^^^^^^^^^^^     ";
 
         let err = Error::new(
             t2s(t),
@@ -1910,10 +1905,10 @@ mod test {
 
     #[test]
     fn expand_nested_subpatterns() {
-        let j1 = "(letmacro [m (macro-rules #{} [[(m (a b rest ...) ...) [(rest ... b a) ...]]])]";
-        let t1 = "                                                       ^^^^^^^^^^^^^^^^^^^^    ";
-        let u1 = "                                                        ^^^^^^^^^^^^^^         ";
-        let sp = "                                                                               ";
+        let j1 = "(letmacro [m (macro-rules [[(m (a b rest ...) ...) [(rest ... b a) ...]]])]";
+        let t1 = "                                                   ^^^^^^^^^^^^^^^^^^^^    ";
+        let u1 = "                                                    ^^^^^^^^^^^^^^         ";
+        let sp = "                                                                           ";
         let j2 = "(m (1 2 3 4) (5 6))";
         let v2 = "    ^              ";
         let w2 = "      ^            ";

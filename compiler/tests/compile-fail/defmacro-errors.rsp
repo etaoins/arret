@@ -1,9 +1,11 @@
 (import [risp internal primitives])
 
-(defmacro 1 (macro-rules #{})) ;~ ERROR expected symbol
+(defmacro 1 (macro-rules))
+         ;^ ERROR expected symbol
+         
 (defmacro a b) ;~ ERROR illegal argument: macro specification must be a list
-(defmacro a (macro-fn #{})) ;~ ERROR illegal argument: unsupported macro type
-(defmacro a (macro-rules #{} [
+(defmacro a (macro-fn)) ;~ ERROR illegal argument: unsupported macro type
+(defmacro a (macro-rules [
     [(a ...) false]
        ;^^^ ERROR illegal argument: ellipsis can only be used as part of a zero or more match
  ]))

@@ -6,19 +6,19 @@
         -> ->!)
 
 (export defn)
-(defmacro defn (macro-rules #{} [
+(defmacro defn (macro-rules [
   [(defn destruc fn-data ...) (def destruc (fn fn-data ...))]
 ]))
 
 ; `do` becomes a self-executing function containing the inner statements
 (export do)
-(defmacro do (macro-rules #{} [
+(defmacro do (macro-rules [
   [(do expr-data ...) ((fn () expr-data ... ))]
 ]))
 
 ; emulates `apply` from R7RS and Clojure
 (export apply)
-(defmacro apply (macro-rules #{} [
+(defmacro apply (macro-rules [
  [(apply fun fixed ... rest) (fun fixed ... rest (... ...))]
 ]))
 
@@ -27,12 +27,12 @@
   l)
 
 (export when)
-(defmacro when (macro-rules #{} [
+(defmacro when (macro-rules [
   [(when test body-data ...) (if test (do body-data ...) false)]
 ]))
 
 (export and)
-(defmacro and (macro-rules #{} [
+(defmacro and (macro-rules [
   [(and) true]
   [(and test) test]
   [(and test1 test2 ...)
@@ -40,7 +40,7 @@
 ]))
 
 (export or)
-(defmacro or (macro-rules #{} [
+(defmacro or (macro-rules [
   [(or) false]
   [(or test) test]
   [(or test1 test2 ...)
@@ -48,6 +48,6 @@
 ]))
 
 (export not)
-(defmacro not (macro-rules #{} [
+(defmacro not (macro-rules [
   [(not test) (if test false true)]
 ]))
