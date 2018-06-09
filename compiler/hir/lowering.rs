@@ -1214,24 +1214,6 @@ mod test {
     }
 
     #[test]
-    fn reference_prim() {
-        let j = "def";
-        let t = "^^^";
-
-        let err = Error::new(t2s(t), ErrorKind::PrimRef);
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn reference_unbound() {
-        let j = "nopenopenope";
-        let t = "^^^^^^^^^^^^";
-
-        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("nopenopenope".into()));
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
     fn fn_without_param_decl() {
         let j = "(fn)";
         let t = "^^^^";
