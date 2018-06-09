@@ -4,11 +4,11 @@ use compiler::reporting::Reportable;
 use std::{fs, path};
 
 fn run_single_test(display_name: String, input_path: path::PathBuf) -> bool {
-    let mut input_file = fs::File::open(input_path).unwrap();
+    let source = fs::read_to_string(input_path).unwrap();
 
     let mut ccx = compiler::CompileContext::new();
 
-    let hir = match compiler::lower_program(&mut ccx, display_name, &mut input_file) {
+    let hir = match compiler::lower_program(&mut ccx, display_name, source) {
         Ok(hir) => hir,
         Err(errors) => {
             for err in errors {

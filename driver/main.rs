@@ -6,7 +6,7 @@ extern crate syntax;
 
 use clap::{App, Arg};
 use compiler::reporting::Reportable;
-use std::fs::File;
+use std::fs;
 
 fn main() {
     let matches = App::new("risp")
@@ -19,11 +19,11 @@ fn main() {
         .get_matches();
 
     let input_path = matches.value_of("INPUT").unwrap();
-    let mut input_file = File::open(input_path).expect("Unable to open input file");
+    let source = fs::read_to_string(input_path).expect("Unable to read input file");
 
     let mut ccx = compiler::CompileContext::new();
 
-    let hir = match compiler::lower_program(&mut ccx, input_path.into(), &mut input_file) {
+    let hir = match compiler::lower_program(&mut ccx, input_path.into(), source) {
         Ok(hir) => hir,
         Err(errors) => {
             for err in errors {

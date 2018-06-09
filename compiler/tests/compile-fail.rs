@@ -1,7 +1,6 @@
 extern crate compiler;
 extern crate syntax;
 
-use std::io::{Read, Seek, SeekFrom};
 use std::ops::Range;
 use std::{fs, path};
 
@@ -80,22 +79,19 @@ fn take_level(marker_string: &str) -> (Level, &str) {
     panic!("Unknown level prefix for `{}`", marker_string)
 }
 
-fn extract_expected_reports(input_file: &mut fs::File) -> Vec<ExpectedReport> {
-    let mut contents = String::new();
-    input_file.read_to_string(&mut contents).unwrap();
-
-    let mut line_reports = contents
+fn extract_expected_reports(source: &str) -> Vec<ExpectedReport> {
+    let mut line_reports = source
         .match_indices(";~")
         .map(|(index, _)| {
-            let start_of_line_index = &contents[..index].rfind('\n').unwrap_or(0);
+            let start_of_line_index = &source[..index].rfind('\n').unwrap_or(0);
 
-            let end_of_line_index = &contents[index..]
+            let end_of_line_index = &source[index..]
                 .find('\n')
                 .map(|i| i + index)
-                .unwrap_or_else(|| contents.len());
+                .unwrap_or_else(|| source.len());
 
             // Take from after the ;~ to the end of the line
-            let marker_string = &contents[index + 2..*end_of_line_index];
+            let marker_string = &source[index + 2..*end_of_line_index];
             let (level, marker_string) = take_level(marker_string);
 
             ExpectedReport {
@@ -106,22 +102,22 @@ fn extract_expected_reports(input_file: &mut fs::File) -> Vec<ExpectedReport> {
         })
         .collect::<Vec<ExpectedReport>>();
 
-    let mut spanned_reports = contents
+    let mut spanned_reports = source
         .match_indices(";^")
         .map(|(index, _)| {
-            let span_length = contents[index..].find(' ').expect("Cannot find level") - 1;
+            let span_length = source[index..].find(' ').expect("Cannot find level") - 1;
 
-            let start_of_line_index = &contents[..index]
+            let start_of_line_index = &source[..index]
                 .rfind('\n')
                 .expect("Cannot have a spanned error on first line");
 
             let start_of_previous_line_index =
-                &contents[..*start_of_line_index].rfind('\n').unwrap_or(0);
+                &source[..*start_of_line_index].rfind('\n').unwrap_or(0);
 
-            let end_of_line_index = &contents[index..]
+            let end_of_line_index = &source[index..]
                 .find('\n')
                 .map(|i| i + index)
-                .unwrap_or_else(|| contents.len());
+                .unwrap_or_else(|| source.len());
 
             let span_line_offset = index - start_of_line_index + 1;
 
@@ -129,7 +125,7 @@ fn extract_expected_reports(input_file: &mut fs::File) -> Vec<ExpectedReport> {
             let span_end = span_start + span_length;
 
             // Take from after the ;^^ to the end of the line
-            let marker_string = &contents[index + span_length + 1..*end_of_line_index];
+            let marker_string = &source[index + span_length + 1..*end_of_line_index];
             let (level, marker_string) = take_level(marker_string);
 
             ExpectedReport {
@@ -143,9 +139,6 @@ fn extract_expected_reports(input_file: &mut fs::File) -> Vec<ExpectedReport> {
         })
         .collect();
 
-    // Rewind the file so the compiler can read it
-    input_file.seek(SeekFrom::Start(0)).unwrap();
-
     line_reports.append(&mut spanned_reports);
     line_reports
 }
@@ -153,11 +146,11 @@ fn extract_expected_reports(input_file: &mut fs::File) -> Vec<ExpectedReport> {
 fn collect_reports(
     ccx: &mut compiler::CompileContext,
     display_name: String,
-    input_file: &mut fs::File,
+    source: String,
 ) -> Vec<Box<Reportable>> {
     let mut err_objects = Vec::<Box<Reportable>>::new();
 
-    let hir = match compiler::lower_program(ccx, display_name.clone(), input_file) {
+    let hir = match compiler::lower_program(ccx, display_name.clone(), source) {
         Ok(hir) => hir,
         Err(errs) => {
             for err in errs {
@@ -182,10 +175,10 @@ fn collect_reports(
 
 fn run_single_test(display_name: String, input_path: path::PathBuf) -> bool {
     let mut ccx = compiler::CompileContext::new();
-    let mut input_file = fs::File::open(input_path).unwrap();
+    let source = fs::read_to_string(input_path).unwrap();
 
-    let mut expected_reports = extract_expected_reports(&mut input_file);
-    let mut actual_reports = collect_reports(&mut ccx, display_name.clone(), &mut input_file);
+    let mut expected_reports = extract_expected_reports(&source);
+    let mut actual_reports = collect_reports(&mut ccx, display_name.clone(), source);
 
     let mut unexpected_reports = vec![];
 

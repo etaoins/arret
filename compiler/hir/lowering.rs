@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, HashMap};
-use std::io::Read;
 use std::result;
 
 use ctx::CompileContext;
@@ -18,7 +17,7 @@ use hir::util::{
 };
 use hir::{App, Cond, Def, Expr, Fun, Let, VarIdCounter};
 use syntax::datum::Datum;
-use syntax::span::{Span, EMPTY_SPAN};
+use syntax::span::Span;
 use ty;
 use ty::purity::Purity;
 
@@ -907,11 +906,11 @@ impl<'ccx> LoweringContext<'ccx> {
 pub fn lower_program(
     ccx: &mut CompileContext,
     display_name: String,
-    input_reader: &mut Read,
+    source: String,
 ) -> result::Result<LoweredProgram, Vec<Error>> {
     use std;
 
-    let data = load_module_data(ccx, EMPTY_SPAN, display_name, input_reader)?;
+    let data = load_module_data(ccx, display_name, source)?;
 
     let mut root_scope = Scope::new_empty();
     let mut lcx = LoweringContext::new(ccx);
@@ -948,6 +947,9 @@ pub fn lower_program(
 }
 
 ////
+#[cfg(test)]
+use syntax::span::EMPTY_SPAN;
+
 #[cfg(test)]
 fn import_statement_for_module(names: &[&'static str]) -> Datum {
     Datum::List(

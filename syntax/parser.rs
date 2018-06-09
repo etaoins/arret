@@ -370,6 +370,7 @@ impl<'de> Parser<'de> {
             }
         }
     }
+
     fn parse_string(&mut self) -> Result<Datum> {
         let (span, contents) = self.capture_span(|s| {
             let (open_quote_span, _) = s.capture_span(|s| {
