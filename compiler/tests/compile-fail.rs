@@ -58,11 +58,14 @@ fn extract_expected_reports(input_file: &mut fs::File) -> Vec<ExpectedReport> {
     expected_errors
 }
 
-fn collect_reports(display_name: String, input_file: &mut fs::File) -> Vec<Box<Reportable>> {
-    let mut ccx = compiler::CompileContext::new();
+fn collect_reports(
+    ccx: &mut compiler::CompileContext,
+    display_name: String,
+    input_file: &mut fs::File,
+) -> Vec<Box<Reportable>> {
     let mut err_objects = Vec::<Box<Reportable>>::new();
 
-    let hir = match compiler::lower_program(&mut ccx, display_name.clone(), input_file) {
+    let hir = match compiler::lower_program(ccx, display_name.clone(), input_file) {
         Ok(hir) => hir,
         Err(errs) => {
             for err in errs {
@@ -95,6 +98,7 @@ fn expected_matches_report(expected: &ExpectedReport, actual: &Box<Reportable>) 
 }
 
 fn run_single_test(display_name: String, input_path: path::PathBuf) -> bool {
+    let mut ccx = compiler::CompileContext::new();
     let mut input_file = fs::File::open(input_path).unwrap();
 
     let mut expected_reports = extract_expected_reports(&mut input_file);
@@ -102,34 +106,30 @@ fn run_single_test(display_name: String, input_path: path::PathBuf) -> bool {
         panic!("Unable to find an expected error in {}", display_name);
     }
 
-    let mut actual_reports = collect_reports(display_name.clone(), &mut input_file);
+    let mut actual_reports = collect_reports(&mut ccx, display_name.clone(), &mut input_file);
 
-    while let Some(expected_report) = expected_reports.pop() {
-        let actual_report_index = actual_reports
+    while let Some(actual_report) = actual_reports.pop() {
+        let expected_report_index = expected_reports
             .iter()
-            .position(|actual_report| expected_matches_report(&expected_report, actual_report));
+            .position(|expected_report| expected_matches_report(expected_report, &actual_report));
 
-        match actual_report_index {
+        match expected_report_index {
             Some(index) => {
-                actual_reports.swap_remove(index);
+                expected_reports.swap_remove(index);
             }
             None => {
-                eprintln!(
-                    "Expected error in {}: `{}`",
-                    display_name, expected_report.message_prefix
-                );
+                eprintln!("Unexpected error:");
+                actual_report.report(&ccx);
                 return false;
             }
         }
     }
 
-    if let Some(unexpected_report) = actual_reports.pop() {
+    if let Some(expected_report) = expected_reports.pop() {
         eprintln!(
-            "Unexpected error in {}: `{}`",
-            display_name,
-            unexpected_report.message()
+            "Expected error in {}: `{}`",
+            display_name, expected_report.message_prefix
         );
-
         return false;
     }
 

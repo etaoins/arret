@@ -610,7 +610,7 @@ impl<'ccx> LoweringContext<'ccx> {
         scope: &mut Scope,
         span: Span,
         module_name: &ModuleName,
-    ) -> Result<&Module> {
+    ) -> result::Result<&Module, Vec<Error>> {
         // TODO: This does a lot of hash lookups
         if !self.loaded_modules.contains_key(module_name) {
             let module_data = load_module_by_name(self.ccx, span, module_name)?;
@@ -631,8 +631,10 @@ impl<'ccx> LoweringContext<'ccx> {
     ) -> Result<()> {
         for arg_datum in arg_data {
             let bindings = lower_import_set(arg_datum, |span, module_name| {
+                // TODO: Allow multiple errors to pass through an import
                 Ok(self
-                    .load_module(scope, span, module_name)?
+                    .load_module(scope, span, module_name)
+                    .map_err(|mut errors| errors.remove(0))?
                     .exports()
                     .clone())
             })?;
@@ -834,8 +836,13 @@ impl<'ccx> LoweringContext<'ccx> {
         Err(Error::new(span, ErrorKind::NonDefInsideModule))
     }
 
-    fn lower_module(&mut self, scope: &mut Scope, data: Vec<Datum>) -> Result<Module> {
+    fn lower_module(
+        &mut self,
+        scope: &mut Scope,
+        data: Vec<Datum>,
+    ) -> result::Result<Module, Vec<Error>> {
         let ns_id = scope.alloc_ns_id();
+        let mut errors: Vec<Error> = vec![];
 
         // The default scope only consists of (import)
         scope.insert_binding(
@@ -854,18 +861,23 @@ impl<'ccx> LoweringContext<'ccx> {
         let mut deferred_exports = Vec::<DeferredExport>::new();
         for input_datum in data {
             let ns_datum = NsDatum::from_syntax_datum(ns_id, input_datum);
-            let mut new_deferred_prims = self.lower_module_def(scope, ns_datum)?;
-
-            for deferred_prim in new_deferred_prims {
-                match deferred_prim {
-                    DeferredModulePrim::Export(deferred_export) => {
-                        deferred_exports.push(deferred_export);
-                    }
-                    DeferredModulePrim::Def(deferred_def) => {
-                        self.deferred_defs.push(deferred_def);
+            match self.lower_module_def(scope, ns_datum) {
+                Ok(new_deferred_prims) => {
+                    for deferred_prim in new_deferred_prims {
+                        match deferred_prim {
+                            DeferredModulePrim::Export(deferred_export) => {
+                                deferred_exports.push(deferred_export);
+                            }
+                            DeferredModulePrim::Def(deferred_def) => {
+                                self.deferred_defs.push(deferred_def);
+                            }
+                        }
                     }
                 }
-            }
+                Err(error) => {
+                    errors.push(error);
+                }
+            };
         }
 
         // Process any exports at the end of the module
@@ -874,14 +886,18 @@ impl<'ccx> LoweringContext<'ccx> {
             if let Some(binding) = scope.get(&ident) {
                 exports.insert(ident.into_name(), binding);
             } else {
-                return Err(Error::new(
+                errors.push(Error::new(
                     span,
                     ErrorKind::UnboundSymbol(ident.into_name()),
                 ));
             }
         }
 
-        Ok(Module::new(exports))
+        if errors.is_empty() {
+            Ok(Module::new(exports))
+        } else {
+            Err(errors)
+        }
     }
 }
 
@@ -962,7 +978,9 @@ fn module_for_str(data_str: &str) -> Result<Module> {
 
     let mut ccx = CompileContext::new();
     let mut lcx = LoweringContext::new(&mut ccx);
+
     lcx.lower_module(&mut root_scope, program_data)
+        .map_err(|mut errors| errors.remove(0))
 }
 
 #[cfg(test)]
@@ -2092,51 +2110,6 @@ mod test {
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());
-    }
-
-    #[test]
-    fn literal_forbidden_in_module() {
-        let j = "1";
-        let t = "^";
-
-        let err = Error::new(t2s(t), ErrorKind::NonDefInsideModule);
-        assert_eq!(err, module_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn quote_forbidden_in_module() {
-        let j = "'foo";
-        let t = "^^^^";
-
-        let err = Error::new(t2s(t), ErrorKind::NonDefInsideModule);
-        assert_eq!(err, module_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn if_forbidden_in_module() {
-        let j = "(if true 1 2)";
-        let t = "^^^^^^^^^^^^^";
-
-        let err = Error::new(t2s(t), ErrorKind::NonDefInsideModule);
-        assert_eq!(err, module_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn fun_forbidden_in_module() {
-        let j = "(fn () 1)";
-        let t = "^^^^^^^^^";
-
-        let err = Error::new(t2s(t), ErrorKind::NonDefInsideModule);
-        assert_eq!(err, module_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn apply_forbidden_in_module() {
-        let j = "((fn () 1))";
-        let t = "^^^^^^^^^^^";
-
-        let err = Error::new(t2s(t), ErrorKind::NonDefInsideModule);
-        assert_eq!(err, module_for_str(j).unwrap_err());
     }
 
     #[test]

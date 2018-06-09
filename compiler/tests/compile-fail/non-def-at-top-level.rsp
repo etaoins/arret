@@ -1,0 +1,7 @@
+(import [risp base])
+
+1                    ;~ ERROR definition expected at the top-level of a module body
+'foo                 ;~ ERROR definition expected at the top-level of a module body
+(list)               ;~ ERROR definition expected at the top-level of a module body
+(if true true false) ;~ ERROR definition expected at the top-level of a module body
+(fn ())              ;~ ERROR definition expected at the top-level of a module body
