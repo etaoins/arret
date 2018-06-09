@@ -34,7 +34,7 @@ impl CompileContext {
     }
 
     pub fn add_loaded_file(&mut self, loaded_file: LoadedFile) {
-        self.next_span_offset = loaded_file.source.len();
+        self.next_span_offset += loaded_file.source.len();
         self.loaded_files.push(loaded_file);
     }
 
