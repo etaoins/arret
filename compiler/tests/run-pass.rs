@@ -32,7 +32,7 @@ fn run_single_test(display_name: String, input_path: path::PathBuf) -> bool {
 }
 
 #[test]
-fn run_all_tests() {
+fn run_pass() {
     let entries = fs::read_dir("./tests/run-pass").unwrap();
     let mut failed_tests = vec![];
 

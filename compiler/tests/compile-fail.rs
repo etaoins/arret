@@ -221,7 +221,7 @@ fn run_single_test(display_name: String, input_path: path::PathBuf) -> bool {
 }
 
 #[test]
-fn run_all_tests() {
+fn compile_fail() {
     let entries = fs::read_dir("./tests/compile-fail").unwrap();
     let mut failed_tests = vec![];
 
