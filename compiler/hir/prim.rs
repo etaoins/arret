@@ -21,6 +21,7 @@ prims!(
     ("let", Let),
     ("fn", Fun),
     ("if", If),
+    ("do", Do),
     ("quote", Quote),
     ("import", Import),
     ("export", Export),

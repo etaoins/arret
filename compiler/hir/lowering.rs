@@ -598,6 +598,7 @@ impl<'ccx> LoweringContext<'ccx> {
                     lower_poly(&self.tvars, scope, arg_data.pop().unwrap())?,
                 ))
             }
+            Prim::Do => self.lower_body(scope, arg_data),
             Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),
             Prim::Ellipsis | Prim::Wildcard | Prim::MacroRules | Prim::TyColon => {
                 Err(Error::new(span, ErrorKind::PrimRef))
@@ -779,6 +780,14 @@ impl<'ccx> LoweringContext<'ccx> {
             Prim::DefMacro => self.lower_defmacro(scope, span, arg_data).map(|_| vec![]),
             Prim::DefType => self.lower_deftype(scope, span, arg_data).map(|_| vec![]),
             Prim::Import => self.lower_import(scope, ns_id, arg_data).map(|_| vec![]),
+            Prim::Do => {
+                let mut deferred_prims = vec![];
+                for arg_datum in arg_data {
+                    deferred_prims.append(&mut self.lower_module_def(scope, arg_datum)?);
+                }
+
+                Ok(deferred_prims)
+            }
             Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),
             _ => Err(Error::new(span, ErrorKind::NonDefInsideModule)),
         }
@@ -1992,6 +2001,18 @@ mod test {
         let j1 = "(export x y)";
         let j2 = "(def x y)";
         let j3 = "(def y x)";
+
+        let j = &[j1, j2, j3].join("");
+
+        let module = module_for_str(j).unwrap();
+        assert_eq!(2, module.exports().len());
+    }
+
+    #[test]
+    fn module_top_level_do() {
+        let j1 = "(export x y)";
+        let j2 = "(do (def x 1)";
+        let j3 = "    (def y 2))";
 
         let j = &[j1, j2, j3].join("");
 

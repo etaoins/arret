@@ -1,5 +1,5 @@
 (import [risp internal primitives])
-(export def let fn if quote export ... _ defmacro macro-rules : type-predicate compile-error)
+(export def let fn if quote export ... _ defmacro macro-rules : type-predicate compile-error do)
 
 (import [risp internal types])
 (export Any Bool String Symbol Int Float Char List Listof Vector Vectorof Setof Map U Type?
@@ -8,12 +8,6 @@
 (export defn)
 (defmacro defn (macro-rules [
   [(defn destruc fn-data ...) (def destruc (fn fn-data ...))]
-]))
-
-; `do` becomes a self-executing function containing the inner statements
-(export do)
-(defmacro do (macro-rules [
-  [(do expr-data ...) ((fn () expr-data ... ))]
 ]))
 
 ; emulates `apply` from R7RS and Clojure
