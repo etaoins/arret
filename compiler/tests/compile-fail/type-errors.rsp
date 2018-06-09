@@ -7,44 +7,44 @@
                                  ;^^^^^^^^^ ERROR `(List 'two 'one)` is not a `(List 'one 'two)`
 
 (defn wrong-ret () -> Str
-    'foo)
-    ;^^^ ERROR `'foo` is not a `Str`
+  'foo)
+  ;^^^ ERROR `'foo` is not a `Str`
 
 (def non-bool-if-test (if 'foo true false))
                           ;^^^ ERROR `'foo` is not a `Bool`
 
 (defn wrong-if-branch-type ([test : Bool]) -> Sym
-    (if test
-        'foo
-        "foo"))
-       ;^^^^^ ERROR `Str` is not a `Sym`
+  (if test
+    'foo
+    "foo"))
+   ;^^^^^ ERROR `Str` is not a `Sym`
 
 (def [wrong-do-type : Int]
-    (do 1 2 'three))
-            ;^^^^^ ERROR `'three` is not a `Int`
+  (do 1 2 'three))
+          ;^^^^^ ERROR `'three` is not a `Int`
 
 (def wrong-arg-type
-    ((fn ([input : Str])) 'foo))
-                          ;^^^ ERROR `'foo` is not a `Str`
+  ((fn ([input : Str])) 'foo))
+                        ;^^^ ERROR `'foo` is not a `Str`
 
 (defn conflicting-free-type (free-input)
-    (ann free-input Str)
-    (ann free-input Sym))
-        ;^^^^^^^^^^ ERROR inferred conflicting types `Sym` and `Str`
+  (ann free-input Str)
+  (ann free-input Sym))
+      ;^^^^^^^^^^ ERROR inferred conflicting types `Sym` and `Str`
 
 ; `input` will gain type information from the function type annotation
 (def [conflicting-lambda-backwards-type : (Sym -> Str)]
-    (fn (input) (ann input Str)))
-                    ;^^^^^ ERROR inferred conflicting types `Str` and `Sym
+  (fn (input) (ann input Str)))
+                  ;^^^^^ ERROR inferred conflicting types `Str` and `Sym
 
 (defn impure-fun! () ->! ())
 (def impure-def (impure-fun!))
                ;^^^^^^^^^^^^^ ERROR function of type `(->! ())` is not pure
 
 (defn impure-app () -> ()
-    (impure-fun!))
-   ;^^^^^^^^^^^^^ ERROR function of type `(->! ())` is not pure
+  (impure-fun!))
+ ;^^^^^^^^^^^^^ ERROR function of type `(->! ())` is not pure
 
 (defn polymorphic-impure-app #{[->A : ->!]} () ->A ()
-    (impure-fun!))
-   ;^^^^^^^^^^^^^ ERROR function of type `(->! ())` is not `->A`
+  (impure-fun!))
+ ;^^^^^^^^^^^^^ ERROR function of type `(->! ())` is not `->A`
