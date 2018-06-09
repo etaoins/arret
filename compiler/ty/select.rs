@@ -278,7 +278,7 @@ mod test {
         let pvar_ids = ty::purity::PVarIds::monomorphic();
         let tvars = [
             ty::TVar::new("A".into(), poly_for_str("(... -> Any)").unwrap()),
-            ty::TVar::new("B".into(), poly_for_str("(... -> Symbol)").unwrap()),
+            ty::TVar::new("B".into(), poly_for_str("(... -> Sym)").unwrap()),
             ty::TVar::new("C".into(), poly_for_str("(... -> 'foo)").unwrap()),
         ];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
@@ -410,7 +410,7 @@ mod test {
 
         let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
 
-        add_str_evidence(&mut ctx, "(RawU A Symbol)", "true");
+        add_str_evidence(&mut ctx, "(RawU A Sym)", "true");
         assert_selected_type(&ctx, 'A', "true");
     }
 
@@ -488,7 +488,7 @@ mod test {
 
         let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
 
-        add_str_evidence(&mut ctx, "(... -> A)", "(Type? Symbol)");
+        add_str_evidence(&mut ctx, "(... -> A)", "(Type? Sym)");
         assert_selected_type(&ctx, 'A', "Bool");
     }
 
@@ -548,7 +548,7 @@ mod test {
 
         let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
 
-        add_str_evidence(&mut ctx, "(A -> B)", "(Type? Symbol)");
+        add_str_evidence(&mut ctx, "(A -> B)", "(Type? Sym)");
         assert_unselected_type(&ctx, 'A');
         assert_selected_type(&ctx, 'B', "Bool");
     }
@@ -574,7 +574,7 @@ mod test {
         let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &[]);
         assert_unselected_purity(&ctx, 'A');
 
-        add_str_evidence(&mut ctx, "(->A true)", "(Type? Symbol)");
+        add_str_evidence(&mut ctx, "(->A true)", "(Type? Sym)");
         assert_selected_purity(&ctx, 'A', Purity::Pure);
     }
 }

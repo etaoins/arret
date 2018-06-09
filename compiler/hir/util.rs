@@ -48,7 +48,7 @@ pub fn expect_ident_and_span(datum: NsDatum) -> Result<(Ident, Span)> {
     if let NsDatum::Ident(span, ident) = datum {
         Ok((ident, span))
     } else {
-        Err(Error::new(datum.span(), ErrorKind::ExpectedSymbol))
+        Err(Error::new(datum.span(), ErrorKind::ExpectedSym))
     }
 }
 

@@ -5,25 +5,25 @@
         (ann test true)
         (ann test false)))
 
-(defn trivial-type-predicate ([input : (U Symbol String)])
-    (if (symbol? input)
-        (ann input Symbol)
-        (ann input String)))
+(defn trivial-type-predicate ([input : (U Sym Str)])
+    (if (sym? input)
+        (ann input Sym)
+        (ann input Str)))
 
 (defn let-preserves-type-information ([input : Bool])
     (if (let [_ ()] 'foo input)
         (ann input true)
         (ann input false)))
 
-(defn and-typing ([input : Symbol])
+(defn and-typing ([input : Sym])
     (if (and (has-type? input (U 'foo 'bar)) (has-type? input (U 'bar 'baz)))
         (ann input 'bar)
-        (ann input Symbol)))
+        (ann input Sym)))
 
-(defn or-typing ([input : Symbol])
+(defn or-typing ([input : Sym])
     (if (or (has-type? input 'foo) (has-type? input 'bar))
         (ann input (U 'foo 'bar))
-        (ann input Symbol)))
+        (ann input Sym)))
 
 (defn not-typing ([input : (U 'foo 'bar)])
     (if (not (has-type? input 'foo))

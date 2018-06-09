@@ -1065,47 +1065,47 @@ mod test {
     fn fun_expr() {
         assert_type_for_expr("(-> ())", "(fn ())");
         assert_type_for_expr("(Any -> true)", "(fn (_) true)");
-        assert_type_for_expr("(String -> String)", "(fn ([x : String]) x)");
+        assert_type_for_expr("(Str -> Str)", "(fn ([x : Str]) x)");
 
         // We should feed our wanted type in to the function type
-        assert_constrained_type_for_expr("(Symbol -> true)", "(fn (_) true)", "(Symbol -> true)");
-        assert_constrained_type_for_expr("(Symbol -> Symbol)", "(fn (x) x)", "(Symbol -> Any))");
+        assert_constrained_type_for_expr("(Sym -> true)", "(fn (_) true)", "(Sym -> true)");
+        assert_constrained_type_for_expr("(Sym -> Sym)", "(fn (x) x)", "(Sym -> Any))");
 
         // Function with free types being bound to an incompatible type
-        let j = "(let [[f : (Symbol -> true)] (fn ([_ : String]) true)])";
-        let t = "                             ^^^^^^^^^^^^^^^^^^^^^^^^  ";
+        let j = "(let [[f : (Sym -> true)] (fn ([_ : Str]) true)])";
+        let t = "                          ^^^^^^^^^^^^^^^^^^^^^  ";
         let err = Error::new(
             t2s(t),
-            ErrorKind::IsNotA("(String -> true)".into(), "(Symbol -> true)".into()),
+            ErrorKind::IsNotA("(Str -> true)".into(), "(Sym -> true)".into()),
         );
         assert_type_error(&err, j);
 
         // Function with a known type being bound to an incompatible type
-        let j = "(let [[f : (Symbol -> true)] (fn ([_ : String]) -> true true)])";
-        let t = "                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ";
+        let j = "(let [[f : (Sym -> true)] (fn ([_ : Str]) -> true true)])";
+        let t = "                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ";
         let err = Error::new(
             t2s(t),
-            ErrorKind::IsNotA("(String -> true)".into(), "(Symbol -> true)".into()),
+            ErrorKind::IsNotA("(Str -> true)".into(), "(Sym -> true)".into()),
         );
         assert_type_error(&err, j);
 
-        let j = "(fn ([x : String]) -> Symbol x)";
-        let t = "                             ^ ";
-        let err = Error::new(t2s(t), ErrorKind::IsNotA("String".into(), "Symbol".into()));
+        let j = "(fn ([x : Str]) -> Sym x)";
+        let t = "                       ^ ";
+        let err = Error::new(t2s(t), ErrorKind::IsNotA("Str".into(), "Sym".into()));
         assert_type_error(&err, j);
 
         // Instantiating a polymorphic function
         // We can't name polymorphic types so we need the (let) hack
         assert_type_for_expr(
             "()",
-            "(let [[_ : (Symbol -> Symbol)] (fn #{T} ([x : T]) -> T x)])",
+            "(let [[_ : (Sym -> Sym)] (fn #{T} ([x : T]) -> T x)])",
         );
 
-        let j = "(let [[_ : (Symbol -> String)] (fn #{T} ([x : T]) -> T x)])";
-        let t = "                               ^^^^^^^^^^^^^^^^^^^^^^^^^^  ";
+        let j = "(let [[_ : (Sym -> Str)] (fn #{T} ([x : T]) -> T x)])";
+        let t = "                         ^^^^^^^^^^^^^^^^^^^^^^^^^^  ";
         let err = Error::new(
             t2s(t),
-            ErrorKind::IsNotA("#{T} (T -> T)".into(), "(Symbol -> String)".into()),
+            ErrorKind::IsNotA("#{T} (T -> T)".into(), "(Sym -> Str)".into()),
         );
         assert_type_error(&err, j);
     }
@@ -1214,6 +1214,6 @@ mod test {
 
     #[test]
     fn ty_pred() {
-        assert_type_for_expr("(Type? Symbol)", "(type-predicate Symbol)")
+        assert_type_for_expr("(Type? Sym)", "(type-predicate Sym)")
     }
 }

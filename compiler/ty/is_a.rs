@@ -199,7 +199,7 @@ where
             (_, ty::Ty::Any) => Result::Yes,
             (ty::Ty::Any, _) => Result::May,
 
-            // Symbol types
+            // Sym types
             (ty::Ty::LitSym(_), ty::Ty::Sym) => Result::Yes,
             (ty::Ty::Sym, ty::Ty::LitSym(_)) => Result::May,
 
@@ -405,7 +405,7 @@ mod test {
     fn sym_types() {
         let foo_sym = poly_for_str("'foo");
         let bar_sym = poly_for_str("'bar");
-        let any_sym = poly_for_str("Symbol");
+        let any_sym = poly_for_str("Sym");
         let any_int = poly_for_str("Int");
 
         assert_eq!(Result::Yes, poly_is_a(&[], &foo_sym, &foo_sym));
@@ -422,19 +422,19 @@ mod test {
     fn set_types() {
         let foo_set = poly_for_str("(Setof 'foo)");
         let bar_set = poly_for_str("(Setof 'bar)");
-        let any_set = poly_for_str("(Setof Symbol)");
+        let sym_set = poly_for_str("(Setof Sym)");
 
         assert_eq!(Result::Yes, poly_is_a(&[], &foo_set, &foo_set));
         assert_eq!(Result::No, poly_is_a(&[], &foo_set, &bar_set));
 
-        assert_eq!(Result::Yes, poly_is_a(&[], &foo_set, &any_set));
-        assert_eq!(Result::May, poly_is_a(&[], &any_set, &foo_set));
+        assert_eq!(Result::Yes, poly_is_a(&[], &foo_set, &sym_set));
+        assert_eq!(Result::May, poly_is_a(&[], &sym_set, &foo_set));
     }
 
     #[test]
     fn map_types() {
         let foo_sym = poly_for_str("'foo");
-        let any_sym = poly_for_str("Symbol");
+        let any_sym = poly_for_str("Sym");
         let any_int = poly_for_str("Int");
 
         let int_to_any_sym =
@@ -551,10 +551,10 @@ mod test {
 
     #[test]
     fn fun_types() {
-        let impure_any_to_sym = poly_for_str("(Any ->! Symbol)");
-        let impure_sym_to_any = poly_for_str("(Symbol ->! Any)");
-        let impure_sym_to_sym = poly_for_str("(Symbol ->! Symbol)");
-        let pure_sym_to_sym = poly_for_str("(Symbol -> Symbol)");
+        let impure_any_to_sym = poly_for_str("(Any ->! Sym)");
+        let impure_sym_to_any = poly_for_str("(Sym ->! Any)");
+        let impure_sym_to_sym = poly_for_str("(Sym ->! Sym)");
+        let pure_sym_to_sym = poly_for_str("(Sym -> Sym)");
 
         assert_eq!(
             Result::Yes,
@@ -581,7 +581,7 @@ mod test {
 
     #[test]
     fn ty_pred_types() {
-        let sym_ty_pred = poly_for_str("(Type? Symbol)");
+        let sym_ty_pred = poly_for_str("(Type? Sym)");
         let lit_sym_ty_pred = poly_for_str("(Type? 'foo)");
         let general_pred = poly_for_str("(Any -> Bool)");
         let pred_top_fun = poly_for_str("(... -> Bool)");
@@ -651,8 +651,8 @@ mod test {
         let foo_sym_ptype = ty::Poly::Var(ty::TVarId::new(2));
 
         let tvars = [
-            ty::TVar::new("sym".into(), poly_for_str("Symbol")),
-            ty::TVar::new("str".into(), poly_for_str("String")),
+            ty::TVar::new("sym".into(), poly_for_str("Sym")),
+            ty::TVar::new("str".into(), poly_for_str("Str")),
             ty::TVar::new("foo".into(), poly_for_str("'foo")),
         ];
 
@@ -672,7 +672,7 @@ mod test {
         assert_eq!(Result::No, poly_is_a(&tvars, &poly_foo_sym, &str_ptype));
 
         // The sub has a fixed type while the parent has a poly type. We can't ensure that 'foo
-        // satisfies all possible Symbol subtypes (such as 'bar)
+        // satisfies all possible Sym subtypes (such as 'bar)
         assert_eq!(Result::May, poly_is_a(&tvars, &poly_foo_sym, &sym_ptype));
 
         // Both the sub and parent have fixed types by virtue of having no subtypes
@@ -730,8 +730,8 @@ mod test {
 
         let tvars = [
             ty::TVar::new("TAny".into(), poly_for_str("Any")),
-            ty::TVar::new("TSymbol".into(), poly_for_str("Symbol")),
-            ty::TVar::new("TString".into(), poly_for_str("String")),
+            ty::TVar::new("TSym".into(), poly_for_str("Sym")),
+            ty::TVar::new("TStr".into(), poly_for_str("Str")),
         ];
 
         // #{A} (A -> A)
@@ -742,7 +742,7 @@ mod test {
             ty::List::new(Box::new([ptype1_unbounded.clone()]), None),
         ).into_ty_ref();
 
-        // #{[A : Symbol]} (A -> A)
+        // #{[A : Sym]} (A -> A)
         let pidentity_sym_fun = ty::Fun::new(
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(1)..ty::TVarId::new(2),
@@ -750,7 +750,7 @@ mod test {
             ty::List::new(Box::new([ptype2_symbol.clone()]), None),
         ).into_ty_ref();
 
-        // #{[A : String]} (A ->! A)
+        // #{[A : Str]} (A ->! A)
         let pidentity_impure_string_fun = ty::Fun::new(
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(2)..ty::TVarId::new(3),
@@ -828,9 +828,9 @@ mod test {
             poly_is_a(&tvars, &true_to_true_fun, &pidentity_fun)
         );
 
-        // The symbol function satisfies ((U) -> Symbol) as all of its returns must be bounded by
+        // The symbol function satisfies ((U) -> Sym) as all of its returns must be bounded by
         // that
-        let top_to_sym_fun = poly_for_str("(... ->! Symbol)");
+        let top_to_sym_fun = poly_for_str("(... ->! Sym)");
         assert_eq!(
             Result::May,
             poly_is_a(&tvars, &pidentity_fun, &top_to_sym_fun)
@@ -840,8 +840,8 @@ mod test {
             poly_is_a(&tvars, &pidentity_sym_fun, &top_to_sym_fun)
         );
 
-        // The identity string function satisfies (String -> String)
-        let str_to_str_fun = poly_for_str("(String ->! String)");
+        // The identity string function satisfies (Str -> Str)
+        let str_to_str_fun = poly_for_str("(Str ->! Str)");
         assert_eq!(
             Result::Yes,
             poly_is_a(&tvars, &pidentity_fun, &str_to_str_fun)

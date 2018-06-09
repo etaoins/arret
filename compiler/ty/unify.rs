@@ -494,7 +494,7 @@ mod test {
 
     #[test]
     fn disjoint_types() {
-        assert_discerned("String", "Symbol");
+        assert_discerned("Str", "Sym");
     }
 
     #[test]
@@ -504,7 +504,7 @@ mod test {
 
     #[test]
     fn literal_sym_and_any_sym() {
-        assert_merged("Symbol", "Symbol", "'foo");
+        assert_merged("Sym", "Sym", "'foo");
     }
 
     #[test]
@@ -539,20 +539,16 @@ mod test {
 
     #[test]
     fn ty_pred_types() {
-        assert_merged("(Type? String)", "(Type? String)", "(Type? String)");
-        assert_merged("(Any -> Bool)", "(Type? String)", "(Type? Symbol)");
-        assert_merged("(Int -> Any)", "(Int -> Any)", "(Type? Symbol)");
-        assert_merged("(... ->! Bool)", "(... ->! Bool)", "(Type? Symbol)");
+        assert_merged("(Type? Str)", "(Type? Str)", "(Type? Str)");
+        assert_merged("(Any -> Bool)", "(Type? Str)", "(Type? Sym)");
+        assert_merged("(Int -> Any)", "(Int -> Any)", "(Type? Sym)");
+        assert_merged("(... ->! Bool)", "(... ->! Bool)", "(Type? Sym)");
     }
 
     #[test]
     fn set_types() {
         assert_merged("(Setof Bool)", "(Setof true)", "(Setof false)");
-        assert_merged(
-            "(Setof (RawU String Symbol))",
-            "(Setof String)",
-            "(Setof Symbol)",
-        );
+        assert_merged("(Setof (RawU Str Sym))", "(Setof Str)", "(Setof Sym)");
     }
 
     #[test]
@@ -574,9 +570,9 @@ mod test {
             "(RawU false (-> Int))",
         );
         assert_merged(
-            "(RawU Char Int String Symbol)",
+            "(RawU Char Int Str Sym)",
             "(RawU Char Int)",
-            "(RawU String Symbol)",
+            "(RawU Str Sym)",
         );
         assert_merged(
             "(RawU true (... -> (RawU Float Int)))",
@@ -584,31 +580,31 @@ mod test {
             "(RawU true (Float -> Int))",
         );
         assert_merged("(RawU 'foo 'bar Bool)", "(RawU 'foo 'bar)", "Bool");
-        assert_merged("Symbol", "(RawU 'foo 'bar)", "Symbol");
-        assert_merged("(RawU Int Symbol)", "(RawU 'foo 'bar Int)", "Symbol");
-        assert_merged("Symbol", "(RawU)", "Symbol");
+        assert_merged("Sym", "(RawU 'foo 'bar)", "Sym");
+        assert_merged("(RawU Int Sym)", "(RawU 'foo 'bar Int)", "Sym");
+        assert_merged("Sym", "(RawU)", "Sym");
         assert_merged("(RawU)", "(RawU)", "(RawU)");
 
         assert_merged(
-            "(RawU Char Int String Symbol)",
+            "(RawU Char Int Str Sym)",
             "(RawU Char Int)",
-            "(RawU String Symbol)",
+            "(RawU Str Sym)",
         );
     }
 
     #[test]
     fn unify_iter() {
         assert_merged_iter("(RawU)", &[]);
-        assert_merged_iter("Symbol", &["Symbol"]);
+        assert_merged_iter("Sym", &["Sym"]);
         assert_merged_iter("Bool", &["true", "false"]);
         assert_merged_iter(
-            "(Setof (RawU String Symbol Int))",
-            &["(Setof String)", "(Setof Symbol)", "(Setof Int)"],
+            "(Setof (RawU Str Sym Int))",
+            &["(Setof Str)", "(Setof Sym)", "(Setof Int)"],
         );
 
         assert_merged_iter(
-            "(... -> (RawU Symbol String))",
-            &["(String -> Symbol)", "(RawU)", "(Symbol -> String)"],
+            "(... -> (RawU Sym Str))",
+            &["(Str -> Sym)", "(RawU)", "(Sym -> Str)"],
         );
     }
 
@@ -616,39 +612,35 @@ mod test {
     fn list_types() {
         assert_merged("(Listof Any)", "(List Any)", "(Listof Any)");
         assert_discerned("(List Any)", "(List Any Any)");
+        assert_merged("(List (RawU Sym Str))", "(List Sym)", "(List Str)");
+        assert_discerned("(List Str)", "(List Str Str Str ...)");
         assert_merged(
-            "(List (RawU Symbol String))",
-            "(List Symbol)",
-            "(List String)",
-        );
-        assert_discerned("(List String)", "(List String String String ...)");
-        assert_merged(
-            "(List Int (RawU Float Symbol String) ...)",
-            "(List Int Symbol ...)",
-            "(List Int Float String ...)",
+            "(List Int (RawU Float Sym Str) ...)",
+            "(List Int Sym ...)",
+            "(List Int Float Str ...)",
         );
     }
 
     #[test]
     fn vec_types() {
         assert_merged("(Vectorof Bool)", "(Vector true)", "(Vectorof false)");
-        assert_discerned("(Vector Int Symbol)", "(Vector 'bar Int String)");
+        assert_discerned("(Vector Int Sym)", "(Vector 'bar Int Str)");
     }
 
     #[test]
     fn poly_bounds() {
         assert_poly_bound_merged("Bool", "true", "false");
 
-        assert_poly_bound_discerned("Symbol", "String");
+        assert_poly_bound_discerned("Sym", "Str");
 
-        assert_poly_bound_discerned("Symbol", "Symbol");
-        assert_poly_bound_discerned("Symbol", "'foo");
+        assert_poly_bound_discerned("Sym", "Sym");
+        assert_poly_bound_discerned("Sym", "'foo");
 
         assert_poly_bound_discerned("(Int -> Float)", "(Int -> Float)");
         assert_poly_bound_discerned("Any", "(Int -> Float)");
-        assert_poly_bound_discerned("(Listof Symbol)", "(Listof Symbol)");
-        assert_poly_bound_discerned("(Listof Symbol)", "(Listof String)");
-        assert_poly_bound_discerned("(Setof Symbol)", "(Setof String)");
+        assert_poly_bound_discerned("(Listof Sym)", "(Listof Sym)");
+        assert_poly_bound_discerned("(Listof Sym)", "(Listof Str)");
+        assert_poly_bound_discerned("(Setof Sym)", "(Setof Str)");
 
         // This does not have subtypes; it can be unified
         assert_poly_bound_merged(
@@ -665,7 +657,7 @@ mod test {
 
         let tvars = [
             ty::TVar::new("PAny".into(), poly_for_str("Any")),
-            ty::TVar::new("PString".into(), poly_for_str("String")),
+            ty::TVar::new("PStr".into(), poly_for_str("Str")),
         ];
 
         // #{A} (A -> A)
@@ -676,7 +668,7 @@ mod test {
             ty::List::new(Box::new([ptype1_unbounded.clone()]), None),
         ).into_ty_ref();
 
-        // #{[A : String]} (A ->! A)
+        // #{[A : Str]} (A ->! A)
         let pidentity_impure_string_fun = ty::Fun::new(
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(1)..ty::TVarId::new(2),

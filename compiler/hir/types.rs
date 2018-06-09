@@ -243,10 +243,7 @@ impl<'a> LowerTyContext<'a> {
         match self.scope.get(&ident) {
             Some(Binding::Ty(ty)) => Ok(ty),
             Some(_) => Err(Error::new(span, ErrorKind::ValueAsTy)),
-            None => Err(Error::new(
-                span,
-                ErrorKind::UnboundSymbol(ident.into_name()),
-            )),
+            None => Err(Error::new(span, ErrorKind::UnboundSym(ident.into_name()))),
         }
     }
 
@@ -282,7 +279,7 @@ impl<'a> LowerTyContext<'a> {
                         None => {
                             return Err(Error::new(
                                 ident_span,
-                                ErrorKind::UnboundSymbol(ident.name().into()),
+                                ErrorKind::UnboundSym(ident.name().into()),
                             ));
                         }
                         Some(_) => {}
@@ -343,8 +340,8 @@ pub fn insert_ty_exports(exports: &mut HashMap<Box<str>, Binding>) {
     export_ty!("Any", ty::Ty::Any.into_poly());
 
     export_ty!("Bool", ty::Ty::Bool.into_poly());
-    export_ty!("Symbol", ty::Ty::Sym.into_poly());
-    export_ty!("String", ty::Ty::Str.into_poly());
+    export_ty!("Sym", ty::Ty::Sym.into_poly());
+    export_ty!("Str", ty::Ty::Str.into_poly());
     export_ty!("Int", ty::Ty::Int.into_poly());
     export_ty!("Float", ty::Ty::Float.into_poly());
     export_ty!("Char", ty::Ty::Char.into_poly());
@@ -429,8 +426,8 @@ impl<'a> StrForPolyContext<'a> {
             ty::Ty::Bool => "Bool".to_owned(),
             ty::Ty::Char => "Char".to_owned(),
             ty::Ty::Int => "Int".to_owned(),
-            ty::Ty::Sym => "Symbol".to_owned(),
-            ty::Ty::Str => "String".to_owned(),
+            ty::Ty::Sym => "Sym".to_owned(),
+            ty::Ty::Str => "Str".to_owned(),
             ty::Ty::Float => "Float".to_owned(),
             ty::Ty::LitBool(false) => "false".to_owned(),
             ty::Ty::LitBool(true) => "true".to_owned(),
@@ -636,7 +633,7 @@ mod test {
 
     #[test]
     fn ty_ref() {
-        let j = "Symbol";
+        let j = "Sym";
 
         let expected = ty::Ty::Sym.into_poly();
         assert_poly_for_str(&expected, j);
@@ -647,7 +644,7 @@ mod test {
         let j = "notbound";
         let t = "^^^^^^^^";
 
-        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("notbound".into()));
+        let err = Error::new(t2s(t), ErrorKind::UnboundSym("notbound".into()));
         assert_err_for_str(&err, j);
     }
 
@@ -677,7 +674,7 @@ mod test {
         let j = "(notbound)";
         let t = " ^^^^^^^^ ";
 
-        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("notbound".into()));
+        let err = Error::new(t2s(t), ErrorKind::UnboundSym("notbound".into()));
         assert_err_for_str(&err, j);
     }
 
@@ -796,7 +793,7 @@ mod test {
 
     #[test]
     fn rest_impure_fun() {
-        let j = "(String Symbol ... ->! true)";
+        let j = "(Str Sym ... ->! true)";
 
         let expected = ty::Fun::new(
             ty::purity::PVarIds::monomorphic(),
@@ -828,7 +825,7 @@ mod test {
 
     #[test]
     fn ty_predicate() {
-        let j = "(Type? String)";
+        let j = "(Type? Str)";
 
         let expected = ty::Ty::TyPred(Box::new(ty::Ty::Str.into_poly())).into_poly();
         assert_poly_for_str(&expected, j);
@@ -871,7 +868,7 @@ mod test {
         assert_exact_str_repr("(List Int Float)");
         assert_exact_str_repr("(List Int Float ...)");
         assert_exact_str_repr("(Listof Float)");
-        assert_exact_str_repr("(Float Int ... -> Symbol)");
+        assert_exact_str_repr("(Float Int ... -> Sym)");
     }
 
     #[test]

@@ -85,7 +85,7 @@ mod test {
         assert_poly_for_str("Int", "1");
         assert_poly_for_str("Int", "-51");
         assert_poly_for_str("Char", "\\newline");
-        assert_poly_for_str("String", r#""Test string""#);
+        assert_poly_for_str("Str", r#""Test string""#);
     }
 
     #[test]

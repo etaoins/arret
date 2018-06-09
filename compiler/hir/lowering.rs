@@ -688,10 +688,7 @@ impl<'ccx> LoweringContext<'ccx> {
                 Some(Binding::Macro(_)) => {
                     Err(Error::new(span, ErrorKind::MacroRef(ident.name().into())))
                 }
-                None => Err(Error::new(
-                    span,
-                    ErrorKind::UnboundSymbol(ident.name().into()),
-                )),
+                None => Err(Error::new(span, ErrorKind::UnboundSym(ident.name().into()))),
             },
             NsDatum::List(span, vs) => {
                 let mut data = vs.into_vec();
@@ -727,7 +724,7 @@ impl<'ccx> LoweringContext<'ccx> {
                         | Some(Binding::Purity(_)) => Err(Error::new(span, ErrorKind::TyRef)),
                         None => Err(Error::new(
                             fn_span,
-                            ErrorKind::UnboundSymbol(ident.name().into()),
+                            ErrorKind::UnboundSym(ident.name().into()),
                         )),
                     },
                     _ => {
@@ -756,7 +753,7 @@ impl<'ccx> LoweringContext<'ccx> {
                         if let NsDatum::Ident(span, ident) = datum {
                             Ok(DeferredModulePrim::Export(DeferredExport(span, ident)))
                         } else {
-                            Err(Error::new(datum.span(), ErrorKind::ExpectedSymbol))
+                            Err(Error::new(datum.span(), ErrorKind::ExpectedSym))
                         }
                     })
                     .collect::<Result<Vec<DeferredModulePrim>>>()?;
@@ -834,7 +831,7 @@ impl<'ccx> LoweringContext<'ccx> {
                         None => {
                             return Err(Error::new(
                                 fn_span,
-                                ErrorKind::UnboundSymbol(ident.name().into()),
+                                ErrorKind::UnboundSym(ident.name().into()),
                             ));
                         }
                     }
@@ -895,10 +892,7 @@ impl<'ccx> LoweringContext<'ccx> {
             if let Some(binding) = scope.get(&ident) {
                 exports.insert(ident.into_name(), binding);
             } else {
-                errors.push(Error::new(
-                    span,
-                    ErrorKind::UnboundSymbol(ident.into_name()),
-                ));
+                errors.push(Error::new(span, ErrorKind::UnboundSym(ident.into_name())));
             }
         }
 
@@ -1521,7 +1515,7 @@ mod test {
         let j = "(export x)";
         let t = "        ^ ";
 
-        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("x".into()));
+        let err = Error::new(t2s(t), ErrorKind::UnboundSym("x".into()));
         assert_eq!(err, module_for_str(j).unwrap_err());
     }
 

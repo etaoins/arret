@@ -336,7 +336,7 @@ mod test {
 
     #[test]
     fn disjoint_types() {
-        assert_disjoint("Symbol", "String");
+        assert_disjoint("Sym", "Str");
     }
 
     #[test]
@@ -368,7 +368,7 @@ mod test {
 
     #[test]
     fn set_types() {
-        assert_disjoint("(Setof Symbol)", "(Setof String)");
+        assert_disjoint("(Setof Sym)", "(Setof Str)");
         assert_merged(
             "(Setof 'foo)",
             "(Setof (RawU 'foo 'bar))",
@@ -378,19 +378,15 @@ mod test {
 
     #[test]
     fn list_types() {
-        assert_disjoint("(List Symbol)", "(List String)");
-        assert_merged(
-            "(List Symbol Symbol)",
-            "(List Any Symbol)",
-            "(List Symbol ...)",
-        );
+        assert_disjoint("(List Sym)", "(List Str)");
+        assert_merged("(List Sym Sym)", "(List Any Sym)", "(List Sym ...)");
         assert_merged(
             "(List false true)",
             "(List Bool true)",
             "(List false Bool Any ...)",
         );
 
-        assert_disjoint("(List Symbol Symbol)", "(List Symbol)");
+        assert_disjoint("(List Sym Sym)", "(List Sym)");
     }
 
     #[test]
@@ -413,21 +409,21 @@ mod test {
             "(Float -> Int)",
             "(Int -> Int)",
         );
-        assert_disjoint("(String -> Symbol)", "(String String -> Symbol)");
+        assert_disjoint("(Str -> Sym)", "(Str Str -> Sym)");
         assert_merged("(-> true)", "(-> Bool)", "(->! true)");
-        assert_merged("(Bool -> String)", "(true -> String)", "(false ->! String)");
+        assert_merged("(Bool -> Str)", "(true -> Str)", "(false ->! Str)");
 
         assert_merged("(->! true)", "(... ->! true)", "(->! Any)");
     }
 
     #[test]
     fn ty_pred_types() {
-        assert_disjoint("(Type? String)", "(Type? Symbol)");
-        assert_merged("(Type? String)", "(Type? String)", "(Type? String)");
+        assert_disjoint("(Type? Str)", "(Type? Sym)");
+        assert_merged("(Type? Str)", "(Type? Str)", "(Type? Str)");
 
-        assert_merged("(Type? String)", "(Type? String)", "(Any -> Bool)");
+        assert_merged("(Type? Str)", "(Type? Str)", "(Any -> Bool)");
 
-        assert_merged("(Type? String)", "(Type? String)", "(... -> Bool)");
+        assert_merged("(Type? Str)", "(Type? Str)", "(... -> Bool)");
     }
 
     #[test]
@@ -437,7 +433,7 @@ mod test {
 
         let tvars = [
             ty::TVar::new("TAny".into(), poly_for_str("Any")),
-            ty::TVar::new("TString".into(), poly_for_str("String")),
+            ty::TVar::new("TStr".into(), poly_for_str("Str")),
         ];
 
         // #{A} (A -> A)
@@ -448,7 +444,7 @@ mod test {
             ty::List::new(Box::new([ptype1_unbounded.clone()]), None),
         ).into_ty_ref();
 
-        // #{[A : String]} (A ->! A)
+        // #{[A : Str]} (A ->! A)
         let pidentity_impure_string_fun = ty::Fun::new(
             ty::purity::PVarIds::monomorphic(),
             ty::TVarId::new(1)..ty::TVarId::new(2),
@@ -473,14 +469,14 @@ mod test {
 
         // The intersection of the pure identity function and the impure string function is the
         // identity function
-        // TODO: This seems like it should be (String -> String)
+        // TODO: This seems like it should be (Str -> Str)
         assert_eq!(
             pidentity_fun.clone(),
             poly_intersect(&tvars, &pidentity_fun, &pidentity_impure_string_fun).unwrap()
         );
 
         // These have no subtype relationship
-        // TODO: This also seems like it should be (String -> String)
+        // TODO: This also seems like it should be (Str -> Str)
         assert_eq!(
             Error::Disjoint,
             poly_intersect(&tvars, &pidentity_impure_string_fun, &top_pure_fun).unwrap_err()

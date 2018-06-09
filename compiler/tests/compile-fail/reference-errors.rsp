@@ -3,8 +3,8 @@
 (def _ nopenopenope)
       ;^^^^^^^^^^^^ ERROR unable to resolve symbol
 
-(def _ String)
-      ;^^^^^^ ERROR cannot take the value of a type
+(def _ Str)
+      ;^^^ ERROR cannot take the value of a type
 
 (def _ Listof)
       ;^^^^^^ ERROR cannot take the value of a type

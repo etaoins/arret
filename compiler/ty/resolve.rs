@@ -25,7 +25,8 @@ fn poly_ty_has_subtypes(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> bool 
         | ty::Ty::LitSym(_)
         | ty::Ty::Str => false,
         ty::Ty::Fun(fun) => {
-            (fun.purity() != &Purity::Pure.into_poly()) || !fun.params().fixed().is_empty()
+            (fun.purity() != &Purity::Pure.into_poly())
+                || !fun.params().fixed().is_empty()
                 || fun.params().rest() != Some(&ty::Ty::Any.into_poly())
                 || poly_has_subtypes(tvars, fun.ret())
         }
@@ -41,7 +42,8 @@ fn poly_ty_has_subtypes(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> bool 
         ty::Ty::List(list) => {
             // Any arbitrary fixed length list is a subtype of a list with rest
             list.rest().is_some()
-                || list.fixed()
+                || list
+                    .fixed()
                     .iter()
                     .any(|fixed| poly_has_subtypes(tvars, fixed))
         }
@@ -104,8 +106,8 @@ mod test {
         assert_eq!(false, str_has_subtypes("true"));
         assert_eq!(false, str_has_subtypes("Char"));
         assert_eq!(false, str_has_subtypes("Float"));
-        assert_eq!(false, str_has_subtypes("String"));
-        assert_eq!(true, str_has_subtypes("Symbol"));
+        assert_eq!(false, str_has_subtypes("Str"));
+        assert_eq!(true, str_has_subtypes("Sym"));
 
         assert_eq!(false, str_has_subtypes("(Any ... -> true)"));
         assert_eq!(true, str_has_subtypes("(Any ... ->! true)"));
@@ -113,14 +115,14 @@ mod test {
         assert_eq!(true, str_has_subtypes("(Int ... -> true)"));
         assert_eq!(true, str_has_subtypes("(Any ... -> Any)"));
 
-        assert_eq!(true, str_has_subtypes("(Map Symbol Int)"));
+        assert_eq!(true, str_has_subtypes("(Map Sym Int)"));
         assert_eq!(false, str_has_subtypes("(Map Float Int)"));
 
-        assert_eq!(true, str_has_subtypes("(List Symbol Int)"));
-        assert_eq!(true, str_has_subtypes("(List String Int ...)"));
-        assert_eq!(false, str_has_subtypes("(List String Int)"));
+        assert_eq!(true, str_has_subtypes("(List Sym Int)"));
+        assert_eq!(true, str_has_subtypes("(List Str Int ...)"));
+        assert_eq!(false, str_has_subtypes("(List Str Int)"));
 
-        assert_eq!(true, str_has_subtypes("(Setof Symbol)"));
+        assert_eq!(true, str_has_subtypes("(Setof Sym)"));
         assert_eq!(false, str_has_subtypes("(Setof Float)"));
 
         assert_eq!(true, str_has_subtypes("(Vectorof false)"));

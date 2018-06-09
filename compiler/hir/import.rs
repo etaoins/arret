@@ -71,7 +71,7 @@ where
                         } else {
                             Err(Error::new(
                                 span,
-                                ErrorKind::UnboundSymbol(ident.into_name()),
+                                ErrorKind::UnboundSym(ident.into_name()),
                             ))
                         }
                     })
@@ -90,7 +90,7 @@ where
                     if except_bindings.remove(ident.name()).is_none() {
                         return Err(Error::new(
                             span,
-                            ErrorKind::UnboundSymbol(ident.into_name()),
+                            ErrorKind::UnboundSym(ident.into_name()),
                         ));
                     }
                 }
@@ -118,7 +118,7 @@ where
                             None => {
                                 return Err(Error::new(
                                     from_span,
-                                    ErrorKind::UnboundSymbol(from_ident.into_name()),
+                                    ErrorKind::UnboundSym(from_ident.into_name()),
                                 ));
                             }
                         }
@@ -290,7 +290,7 @@ mod test {
 
         let j = "(only [lib test] quote ifz)";
         let t = "                       ^^^ ";
-        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("ifz".into()));
+        let err = Error::new(t2s(t), ErrorKind::UnboundSym("ifz".into()));
 
         assert_eq!(err, bindings_for_import_set(j).unwrap_err());
     }
@@ -305,7 +305,7 @@ mod test {
 
         let j = "(except [lib test] ifz)";
         let t = "                   ^^^ ";
-        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("ifz".into()));
+        let err = Error::new(t2s(t), ErrorKind::UnboundSym("ifz".into()));
 
         assert_eq!(err, bindings_for_import_set(j).unwrap_err());
     }
@@ -320,7 +320,7 @@ mod test {
 
         let j = "(rename [lib test] {ifz new-ifz})";
         let t = "                    ^^^          ";
-        let err = Error::new(t2s(t), ErrorKind::UnboundSymbol("ifz".into()));
+        let err = Error::new(t2s(t), ErrorKind::UnboundSym("ifz".into()));
 
         assert_eq!(err, bindings_for_import_set(j).unwrap_err());
     }

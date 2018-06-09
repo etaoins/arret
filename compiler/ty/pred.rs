@@ -212,14 +212,10 @@ mod test {
 
     #[test]
     fn simple_unions() {
-        assert_dynamic(
-            ("Symbol", "String"),
-            "(RawU Symbol String)",
-            "(RawU Symbol Int)",
-        );
+        assert_dynamic(("Sym", "Str"), "(RawU Sym Str)", "(RawU Sym Int)");
 
-        assert_dynamic(("'foo", "Symbol"), "Symbol", "'foo");
-        assert_dynamic(("(RawU 'foo 'bar)", "Symbol"), "Symbol", "(RawU 'foo 'bar)");
+        assert_dynamic(("'foo", "Sym"), "Sym", "'foo");
+        assert_dynamic(("(RawU 'foo 'bar)", "Sym"), "Sym", "(RawU 'foo 'bar)");
         assert_dynamic(("'bar", "'foo"), "(RawU 'foo 'bar)", "(RawU 'bar 'baz)");
 
         assert_dynamic(

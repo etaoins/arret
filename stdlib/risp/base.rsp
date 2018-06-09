@@ -2,7 +2,7 @@
 (export def let fn if quote export ... _ defmacro macro-rules : type-predicate compile-error do)
 
 (import [risp internal types])
-(export Any Bool String Symbol Int Float Char List Listof Vector Vectorof Setof Map U Type?
+(export Any Bool Str Sym Int Float Char List Listof Vector Vectorof Setof Map U Type?
         -> ->!)
 
 (export defn)
@@ -64,8 +64,8 @@
   )]
 ]))
 
-(deftypred symbol? Symbol)
-(deftypred string? String)
+(deftypred sym? Sym)
+(deftypred str? Str)
 (deftypred bool? Bool)
 (deftypred int? Int)
 (deftypred float? Float)
