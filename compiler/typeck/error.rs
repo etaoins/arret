@@ -7,7 +7,8 @@ use syntax::span::Span;
 
 #[derive(PartialEq, Debug)]
 pub enum ErrorKind {
-    IsNotA(Box<str>, Box<str>),
+    IsNotTy(Box<str>, Box<str>),
+    IsNotPurity(Box<str>, Box<str>),
     VarHasEmptyType(Box<str>, Box<str>),
     TopFunApply(Box<str>),
     RecursiveType,
@@ -36,7 +37,10 @@ impl Reportable for Error {
 
     fn message(&self) -> String {
         match self.1 {
-            ErrorKind::IsNotA(ref sub, ref parent) => format!("`{}` is not a `{}`", sub, parent),
+            ErrorKind::IsNotTy(ref sub, ref parent) => format!("`{}` is not a `{}`", sub, parent),
+            ErrorKind::IsNotPurity(ref fun, ref purity) => {
+                format!("function of type `{}` is not {}", fun, purity)
+            }
             ErrorKind::VarHasEmptyType(ref left, ref right) => {
                 format!("inferred conflicting types `{}` and `{}`", left, right)
             }

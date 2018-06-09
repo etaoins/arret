@@ -514,6 +514,11 @@ pub fn str_for_poly(pvars: &[ty::purity::PVar], tvars: &[ty::TVar], poly: &ty::P
     ctx.str_for_poly(poly).into_boxed_str()
 }
 
+pub fn str_for_purity(pvars: &[ty::purity::PVar], purity: &ty::purity::Poly) -> Box<str> {
+    let ctx = StrForPolyContext { pvars, tvars: &[] };
+    ctx.str_for_purity(purity).into_boxed_str()
+}
+
 #[cfg(test)]
 pub fn poly_for_str(datum_str: &str) -> Result<ty::Poly> {
     use hir::ns::NsId;

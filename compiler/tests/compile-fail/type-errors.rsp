@@ -31,3 +31,15 @@
     (ann free-input Str)
     (ann free-input Sym))
         ;^^^^^^^^^^ ERROR inferred conflicting types `Sym` and `Str`
+
+(defn impure-fun! () ->! ())
+(def impure-def (impure-fun!))
+               ;^^^^^^^^^^^^^ ERROR function of type `(->! ())` is not pure
+
+(defn impure-app () -> ()
+    (impure-fun!))
+   ;^^^^^^^^^^^^^ ERROR function of type `(->! ())` is not pure
+
+(defn polymorphic-impure-app #{[->A : ->!]} () ->A ()
+    (impure-fun!))
+   ;^^^^^^^^^^^^^ ERROR function of type `(->! ())` is not `->A`

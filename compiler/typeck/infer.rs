@@ -156,19 +156,44 @@ impl<'a> InferCtx<'a> {
     }
 
     fn str_for_poly(&self, poly: &ty::Poly) -> Box<str> {
-        hir::str_for_poly(self.pvars, self.tvars, poly).clone()
+        hir::str_for_poly(self.pvars, self.tvars, poly)
     }
 
     /// Ensures `sub_poly` is a subtype of `parent_poly`
     fn ensure_is_a(&self, span: Span, sub_poly: &ty::Poly, parent_poly: &ty::Poly) -> Result<()> {
-        if !ty::is_a::poly_is_a(self.tvars, sub_poly, parent_poly).to_bool() {
-            Err(Error::new(
-                span,
-                ErrorKind::IsNotA(self.str_for_poly(&sub_poly), self.str_for_poly(parent_poly)),
-            ))
-        } else {
-            Ok(())
+        if ty::is_a::poly_is_a(self.tvars, sub_poly, parent_poly).to_bool() {
+            return Ok(());
         }
+
+        // Try to see if this type check would have passed if the parent was impure. This is purely
+        // a hack to catch applying impure functions in a pure context.
+        if let ty::Poly::Fixed(ty::Ty::TopFun(top_fun)) = parent_poly {
+            let impure_top_fun = ty::TopFun::new(Purity::Impure.into_poly(), top_fun.ret().clone());
+
+            if ty::is_a::poly_is_a(
+                self.tvars,
+                sub_poly,
+                &ty::Ty::TopFun(Box::new(impure_top_fun)).into_poly(),
+            ).to_bool()
+            {
+                let purity_str = if top_fun.purity() == &Purity::Pure.into_poly() {
+                    // `->` might be confusing here
+                    "pure".into()
+                } else {
+                    format!("`{}`", hir::str_for_purity(self.pvars, top_fun.purity())).into()
+                };
+
+                return Err(Error::new(
+                    span,
+                    ErrorKind::IsNotPurity(self.str_for_poly(&sub_poly), purity_str),
+                ));
+            }
+        }
+
+        Err(Error::new(
+            span,
+            ErrorKind::IsNotTy(self.str_for_poly(&sub_poly), self.str_for_poly(parent_poly)),
+        ))
     }
 
     fn visit_lit(&mut self, required_type: &ty::Poly, datum: Datum) -> Result<InferredNode> {
@@ -1076,7 +1101,7 @@ mod test {
         let t = "                          ^^^^^^^^^^^^^^^^^^^^^  ";
         let err = Error::new(
             t2s(t),
-            ErrorKind::IsNotA("(Str -> true)".into(), "(Sym -> true)".into()),
+            ErrorKind::IsNotTy("(Str -> true)".into(), "(Sym -> true)".into()),
         );
         assert_type_error(&err, j);
 
@@ -1085,13 +1110,13 @@ mod test {
         let t = "                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ";
         let err = Error::new(
             t2s(t),
-            ErrorKind::IsNotA("(Str -> true)".into(), "(Sym -> true)".into()),
+            ErrorKind::IsNotTy("(Str -> true)".into(), "(Sym -> true)".into()),
         );
         assert_type_error(&err, j);
 
         let j = "(fn ([x : Str]) -> Sym x)";
         let t = "                       ^ ";
-        let err = Error::new(t2s(t), ErrorKind::IsNotA("Str".into(), "Sym".into()));
+        let err = Error::new(t2s(t), ErrorKind::IsNotTy("Str".into(), "Sym".into()));
         assert_type_error(&err, j);
 
         // Instantiating a polymorphic function
@@ -1105,7 +1130,7 @@ mod test {
         let t = "                         ^^^^^^^^^^^^^^^^^^^^^^^^^^  ";
         let err = Error::new(
             t2s(t),
-            ErrorKind::IsNotA("#{T} (T -> T)".into(), "(Sym -> Str)".into()),
+            ErrorKind::IsNotTy("#{T} (T -> T)".into(), "(Sym -> Str)".into()),
         );
         assert_type_error(&err, j);
     }
@@ -1174,8 +1199,7 @@ mod test {
 
         let err = Error::new(
             t2s(t),
-            // TODO: This error is technically correct but a bit inscrutable
-            ErrorKind::IsNotA("(->! false)".into(), "(... -> Bool)".into()),
+            ErrorKind::IsNotPurity("(->! false)".into(), "pure".into()),
         );
         assert_type_error(&err, j);
     }
