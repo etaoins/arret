@@ -51,6 +51,11 @@
   [(ann val Type) (let [[_ : Type] val] val)]
 ]))
 
+(export has-type?)
+(defmacro has-type? (macro-rules [
+  [(has-type? val Type) ((type-predicate Type) val)]
+]))
+
 ; Type predicates
 (defmacro deftypred (macro-rules [
   [(deftypred name Type) (do

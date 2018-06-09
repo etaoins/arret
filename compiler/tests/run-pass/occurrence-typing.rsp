@@ -1,0 +1,31 @@
+(import [risp base])
+
+(defn test-type-in-branches ([test : Bool])
+    (if test
+        (ann test true)
+        (ann test false)))
+
+(defn trivial-type-predicate ([input : (U Symbol String)])
+    (if (symbol? input)
+        (ann input Symbol)
+        (ann input String)))
+
+(defn let-preserves-type-information ([input : Bool])
+    (if (let [_ ()] 'foo input)
+        (ann input true)
+        (ann input false)))
+
+(defn and-typing ([input : Symbol])
+    (if (and (has-type? input (U 'foo 'bar)) (has-type? input (U 'bar 'baz)))
+        (ann input 'bar)
+        (ann input Symbol)))
+
+(defn or-typing ([input : Symbol])
+    (if (or (has-type? input 'foo) (has-type? input 'bar))
+        (ann input (U 'foo 'bar))
+        (ann input Symbol)))
+
+(defn not-typing ([input : (U 'foo 'bar)])
+    (if (not (has-type? input 'foo))
+        (ann input 'bar)
+        (ann input 'foo)))
