@@ -1,5 +1,6 @@
 use std::fmt;
 use std::fmt::Display;
+use std::path;
 use std::{error, result};
 
 use reporting::{Level, Reportable};
@@ -54,7 +55,7 @@ pub enum ErrorKind {
     ValueAsTy,
     PolyUnionConflict(Box<str>, Box<str>),
     UserError(Box<str>),
-    ReadError(Box<str>),
+    ReadError(Box<path::PathBuf>),
     SyntaxError(SyntaxError),
 }
 
@@ -118,7 +119,7 @@ impl Reportable for Error {
                 left, right,
             ),
             ErrorKind::UserError(ref message) => message.clone().into_string(),
-            ErrorKind::ReadError(ref filename) => format!("error reading `{}`", filename),
+            ErrorKind::ReadError(ref filename) => format!("error reading `{}`", filename.to_string_lossy()),
             ErrorKind::SyntaxError(ref err) => err.message(),
         }
     }

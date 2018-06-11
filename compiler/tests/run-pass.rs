@@ -3,16 +3,14 @@ extern crate compiler;
 use compiler::reporting::Reportable;
 use std::{fs, path};
 
-fn run_single_test(display_name: String, input_path: path::PathBuf) -> bool {
-    let source = fs::read_to_string(input_path).unwrap();
+fn run_single_test(source_loader: &mut compiler::SourceLoader, input_path: path::PathBuf) -> bool {
+    let source_file_id = source_loader.load_path(input_path).unwrap();
 
-    let mut ccx = compiler::CompileContext::new();
-
-    let hir = match compiler::lower_program(&mut ccx, display_name, source) {
+    let hir = match compiler::lower_program(source_loader, source_file_id) {
         Ok(hir) => hir,
         Err(errors) => {
             for err in errors {
-                err.report(&ccx);
+                err.report(source_loader);
             }
             return false;
         }
@@ -22,7 +20,7 @@ fn run_single_test(display_name: String, input_path: path::PathBuf) -> bool {
         Ok(_) => {}
         Err(errs) => {
             for err in errs {
-                err.report(&ccx);
+                err.report(source_loader);
             }
             return false;
         }
@@ -36,12 +34,12 @@ fn run_pass() {
     let entries = fs::read_dir("./tests/run-pass").unwrap();
     let mut failed_tests = vec![];
 
+    let mut source_loader = compiler::SourceLoader::new();
     for entry in entries {
         let input_path = entry.unwrap().path();
-        let display_name = input_path.to_string_lossy().to_string();
 
-        if !run_single_test(display_name.clone(), input_path) {
-            failed_tests.push(display_name);
+        if !run_single_test(&mut source_loader, input_path.clone()) {
+            failed_tests.push(input_path.to_string_lossy().to_string());
         }
     }
 

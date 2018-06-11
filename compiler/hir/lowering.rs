@@ -1,11 +1,10 @@
 use std::collections::{BTreeMap, HashMap};
 use std::result;
 
-use ctx::CompileContext;
 use hir::destruc;
 use hir::error::{Error, ErrorKind, Result};
 use hir::import::lower_import_set;
-use hir::loader::{load_module_by_name, load_module_data, ModuleName};
+use hir::loader::{load_module_by_name, parse_module_data, ModuleName};
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::module::Module;
 use hir::ns::{Ident, NsDatum, NsId};
@@ -16,12 +15,13 @@ use hir::util::{
     expect_arg_count, expect_ident, expect_ident_and_span, pop_vec_front, split_into_fixed_and_rest,
 };
 use hir::{App, Cond, Def, Expr, Fun, Let, VarIdCounter};
+use source::{SourceFileId, SourceLoader};
 use syntax::datum::Datum;
 use syntax::span::Span;
 use ty;
 use ty::purity::Purity;
 
-pub struct LoweringContext<'ccx> {
+pub struct LoweringContext<'sl> {
     deferred_defs: Vec<DeferredDef>,
 
     var_id_counter: VarIdCounter,
@@ -31,7 +31,7 @@ pub struct LoweringContext<'ccx> {
     pvars: Vec<ty::purity::PVar>,
     tvars: Vec<ty::TVar>,
 
-    ccx: &'ccx mut CompileContext,
+    source_loader: &'sl mut SourceLoader,
 }
 
 pub struct LoweredProgram {
@@ -80,8 +80,8 @@ struct LetArgs {
     body_data: Vec<NsDatum>,
 }
 
-impl<'ccx> LoweringContext<'ccx> {
-    pub fn new(ccx: &'ccx mut CompileContext) -> LoweringContext {
+impl<'sl> LoweringContext<'sl> {
+    pub fn new(source_loader: &'sl mut SourceLoader) -> LoweringContext {
         let mut loaded_modules = BTreeMap::new();
 
         // These modules are always loaded
@@ -102,7 +102,7 @@ impl<'ccx> LoweringContext<'ccx> {
             macros: vec![],
             pvars: vec![],
             tvars: vec![],
-            ccx,
+            source_loader,
         }
     }
 
@@ -612,7 +612,7 @@ impl<'ccx> LoweringContext<'ccx> {
     ) -> result::Result<&Module, Vec<Error>> {
         // TODO: This does a lot of hash lookups
         if !self.loaded_modules.contains_key(module_name) {
-            let module_data = load_module_by_name(self.ccx, span, module_name)?;
+            let module_data = load_module_by_name(self.source_loader, span, module_name)?;
             let loaded_module = self.lower_module(scope, module_data)?;
 
             self.loaded_modules
@@ -903,16 +903,15 @@ impl<'ccx> LoweringContext<'ccx> {
 }
 
 pub fn lower_program(
-    ccx: &mut CompileContext,
-    display_name: String,
-    source: String,
+    source_loader: &mut SourceLoader,
+    source_file_id: SourceFileId,
 ) -> result::Result<LoweredProgram, Vec<Error>> {
     use std;
 
-    let data = load_module_data(ccx, display_name, source)?;
+    let data = parse_module_data(source_loader.source_file(source_file_id))?;
 
     let mut root_scope = Scope::new_empty();
-    let mut lcx = LoweringContext::new(ccx);
+    let mut lcx = LoweringContext::new(source_loader);
     lcx.lower_module(&mut root_scope, data)?;
 
     let deferred_defs = std::mem::replace(&mut lcx.deferred_defs, vec![]);
@@ -980,8 +979,8 @@ fn module_for_str(data_str: &str) -> Result<Module> {
     ];
     program_data.append(&mut test_data);
 
-    let mut ccx = CompileContext::new();
-    let mut lcx = LoweringContext::new(&mut ccx);
+    let mut source_loader = SourceLoader::new();
+    let mut lcx = LoweringContext::new(&mut source_loader);
 
     lcx.lower_module(&mut root_scope, program_data)
         .map_err(|mut errors| errors.remove(0))
@@ -1003,7 +1002,7 @@ pub fn lowered_expr_for_str(data_str: &str) -> LoweredTestExpr {
     let test_ns_id = NsId::new(1);
     let mut scope = Scope::new_empty();
 
-    let mut ccx = CompileContext::new();
+    let mut ccx = SourceLoader::new();
     let mut lcx = LoweringContext::new(&mut ccx);
 
     let mut exports = HashMap::<Box<str>, Binding>::new();

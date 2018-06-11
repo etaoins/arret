@@ -79,7 +79,10 @@ fn take_level(marker_string: &str) -> (Level, &str) {
     panic!("Unknown level prefix for `{}`", marker_string)
 }
 
-fn extract_expected_reports(source: &str) -> Vec<ExpectedReport> {
+fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedReport> {
+    let source = source_file.source();
+    let span_offset = source_file.span_offset();
+
     let mut line_reports = source
         .match_indices(";~")
         .map(|(index, _)| {
@@ -97,7 +100,9 @@ fn extract_expected_reports(source: &str) -> Vec<ExpectedReport> {
             ExpectedReport {
                 level,
                 message_prefix: marker_string.into(),
-                span: ExpectedSpan::StartRange(*start_of_line_index..index),
+                span: ExpectedSpan::StartRange(
+                    span_offset + start_of_line_index..span_offset + index,
+                ),
             }
         })
         .collect::<Vec<ExpectedReport>>();
@@ -132,8 +137,8 @@ fn extract_expected_reports(source: &str) -> Vec<ExpectedReport> {
                 level,
                 message_prefix: marker_string.into(),
                 span: ExpectedSpan::Exact(Span {
-                    lo: span_start as u32,
-                    hi: span_end as u32,
+                    lo: (span_offset + span_start) as u32,
+                    hi: (span_offset + span_end) as u32,
                 }),
             }
         })
@@ -144,13 +149,12 @@ fn extract_expected_reports(source: &str) -> Vec<ExpectedReport> {
 }
 
 fn collect_reports(
-    ccx: &mut compiler::CompileContext,
-    display_name: String,
-    source: String,
+    source_loader: &mut compiler::SourceLoader,
+    source_file_id: compiler::SourceFileId,
 ) -> Vec<Box<Reportable>> {
     let mut err_objects = Vec::<Box<Reportable>>::new();
 
-    let hir = match compiler::lower_program(ccx, display_name.clone(), source) {
+    let hir = match compiler::lower_program(source_loader, source_file_id) {
         Ok(hir) => hir,
         Err(errs) => {
             for err in errs {
@@ -170,15 +174,17 @@ fn collect_reports(
         }
     }
 
-    panic!("Compilation unexpectedly succeeded for {}", display_name)
+    panic!(
+        "Compilation unexpectedly succeeded for {}",
+        source_loader.source_file(source_file_id).display_name()
+    )
 }
 
-fn run_single_test(display_name: String, input_path: path::PathBuf) -> bool {
-    let mut ccx = compiler::CompileContext::new();
-    let source = fs::read_to_string(input_path).unwrap();
+fn run_single_test(source_loader: &mut compiler::SourceLoader, input_path: path::PathBuf) -> bool {
+    let source_file_id = source_loader.load_path(input_path).unwrap();
 
-    let mut expected_reports = extract_expected_reports(&source);
-    let mut actual_reports = collect_reports(&mut ccx, display_name.clone(), source);
+    let mut expected_reports = extract_expected_reports(source_loader.source_file(source_file_id));
+    let mut actual_reports = collect_reports(source_loader, source_file_id);
 
     let mut unexpected_reports = vec![];
 
@@ -203,11 +209,11 @@ fn run_single_test(display_name: String, input_path: path::PathBuf) -> bool {
 
     for unexpected_report in unexpected_reports {
         eprintln!("Unexpected {}:", unexpected_report.level().name());
-        unexpected_report.report(&ccx);
+        unexpected_report.report(&source_loader);
     }
 
     for expected_report in expected_reports {
-        expected_report.report(&ccx);
+        expected_report.report(&source_loader);
     }
 
     false
@@ -218,12 +224,12 @@ fn compile_fail() {
     let entries = fs::read_dir("./tests/compile-fail").unwrap();
     let mut failed_tests = vec![];
 
+    let mut source_loader = compiler::SourceLoader::new();
     for entry in entries {
         let input_path = entry.unwrap().path();
-        let display_name = input_path.to_string_lossy().to_string();
 
-        if !run_single_test(display_name.clone(), input_path) {
-            failed_tests.push(display_name);
+        if !run_single_test(&mut source_loader, input_path.clone()) {
+            failed_tests.push(input_path.to_string_lossy().to_string());
         }
     }
 

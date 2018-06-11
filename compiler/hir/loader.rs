@@ -1,8 +1,8 @@
+use std::io;
 use std::path::PathBuf;
-use std::{fs, io};
 
-use ctx::{CompileContext, LoadedFile};
 use hir::error::{Error, ErrorKind, Result};
+use source::{SourceFile, SourceLoader};
 use syntax::datum::Datum;
 use syntax::parser::data_from_str_with_span_offset;
 use syntax::span::Span;
@@ -22,22 +22,15 @@ impl ModuleName {
     }
 }
 
-pub fn load_module_data(
-    ccx: &mut CompileContext,
-    display_name: String,
-    source: String,
-) -> Result<Vec<Datum>> {
-    let span_offset = ccx.next_span_offset();
-    let data = data_from_str_with_span_offset(&source, span_offset);
-
-    // Track this file for diagnostic reporting
-    ccx.add_loaded_file(LoadedFile::new(display_name, source));
-
-    Ok(data?)
+pub fn parse_module_data(source_file: &SourceFile) -> Result<Vec<Datum>> {
+    Ok(data_from_str_with_span_offset(
+        source_file.source(),
+        source_file.span_offset(),
+    )?)
 }
 
 pub fn load_module_by_name(
-    ccx: &mut CompileContext,
+    source_loader: &mut SourceLoader,
     span: Span,
     module_name: &ModuleName,
 ) -> Result<Vec<Datum>> {
@@ -53,14 +46,12 @@ pub fn load_module_by_name(
 
     path_buf.push(format!("{}.rsp", module_name.terminal_name));
 
-    let display_name = path_buf.to_string_lossy().to_string();
-    let source = fs::read_to_string(path_buf).map_err(|err| match err.kind() {
-        io::ErrorKind::NotFound => Error::new(span, ErrorKind::ModuleNotFound),
-        _ => Error::new(
-            span,
-            ErrorKind::ReadError(display_name.clone().into_boxed_str()),
-        ),
+    let source_file_id = source_loader.load_path(path_buf.clone()).map_err(|err| {
+        match err.kind() {
+            io::ErrorKind::NotFound => Error::new(span, ErrorKind::ModuleNotFound),
+            _ => Error::new(span, ErrorKind::ReadError(Box::new(path_buf))),
+        }
     })?;
 
-    load_module_data(ccx, display_name, source)
+    parse_module_data(source_loader.source_file(source_file_id))
 }

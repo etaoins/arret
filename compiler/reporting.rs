@@ -4,7 +4,7 @@ use std::iter;
 use ansi_term::Colour;
 use ansi_term::Style;
 
-use ctx::CompileContext;
+use source::SourceLoader;
 use syntax;
 use syntax::span::Span;
 
@@ -17,15 +17,15 @@ struct HumanPos<'a> {
     snippet_byte_off: usize,
 }
 
-fn bytepos_to_human_pos(ccx: &CompileContext, bp: u32) -> HumanPos {
-    let loaded_files = ccx.loaded_files();
+fn bytepos_to_human_pos(source_loader: &SourceLoader, bp: u32) -> HumanPos {
+    let source_files = source_loader.source_files();
 
     // Find the file we landed on
     let mut remaining_bytes = bp as usize;
-    let mut loaded_files_iter = loaded_files.iter();
+    let mut source_files_iter = source_files.iter();
 
-    let loaded_file = loop {
-        let next_file = loaded_files_iter.next().unwrap();
+    let source_file = loop {
+        let next_file = source_files_iter.next().unwrap();
         let next_file_size = next_file.source().len();
 
         if remaining_bytes < next_file_size {
@@ -35,7 +35,7 @@ fn bytepos_to_human_pos(ccx: &CompileContext, bp: u32) -> HumanPos {
         remaining_bytes -= next_file_size;
     };
 
-    let mut remaining_source = &loaded_file.source()[..];
+    let mut remaining_source = &source_file.source()[..];
 
     let mut line = 1;
     loop {
@@ -69,7 +69,7 @@ fn bytepos_to_human_pos(ccx: &CompileContext, bp: u32) -> HumanPos {
     }
 
     HumanPos {
-        display_name: loaded_file.display_name().into(),
+        display_name: source_file.display_name().into(),
         line,
         column,
         snippet: remaining_source,
@@ -77,11 +77,11 @@ fn bytepos_to_human_pos(ccx: &CompileContext, bp: u32) -> HumanPos {
     }
 }
 
-fn print_snippet(ccx: &CompileContext, level: Level, span: Span) {
+fn print_snippet(source_loader: &SourceLoader, level: Level, span: Span) {
     let border_style = Colour::Blue.bold();
     let marker_style = level.colour().bold();
 
-    let hp = bytepos_to_human_pos(ccx, span.lo);
+    let hp = bytepos_to_human_pos(source_loader, span.lo);
 
     eprintln!(
         "  {} {}:{}:{}",
@@ -139,7 +139,7 @@ pub trait Reportable {
         None
     }
 
-    fn report(&self, ccx: &CompileContext) {
+    fn report(&self, source_loader: &SourceLoader) {
         let default_bold = Style::new().bold();
         let level = self.level();
 
@@ -151,17 +151,17 @@ pub trait Reportable {
 
         let span = self.span();
         if !span.is_empty() {
-            print_snippet(ccx, self.level(), span);
+            print_snippet(source_loader, self.level(), span);
         }
 
         if let Some(macro_invocation_span) = self.macro_invocation_span() {
             eprintln!("{}", default_bold.paint("in this macro invocation"));
-            print_snippet(ccx, Level::Note, macro_invocation_span);
+            print_snippet(source_loader, Level::Note, macro_invocation_span);
         }
 
         if let Some(associated_report) = self.associated_report() {
             // Skip the newline so the reports are visually grouped
-            associated_report.report(ccx);
+            associated_report.report(source_loader);
         } else {
             eprintln!("");
         }
@@ -200,17 +200,16 @@ impl Level {
 #[cfg(test)]
 mod test {
     use super::*;
-    use ctx::LoadedFile;
 
     #[test]
     fn bytepos_to_human_pos_tests() {
-        let mut ccx = CompileContext::new();
+        let mut source_loader = SourceLoader::new();
 
         let first_contents = "12\n34\n";
         let second_contents = "☃6";
 
-        ccx.add_loaded_file(LoadedFile::new("<first>".into(), first_contents.into()));
-        ccx.add_loaded_file(LoadedFile::new("<second>".into(), second_contents.into()));
+        source_loader.load_string("<first>".into(), first_contents.into());
+        source_loader.load_string("<second>".into(), second_contents.into());
 
         let test_cases = vec![
             (
@@ -276,7 +275,7 @@ mod test {
         ];
 
         for (bp, expected) in test_cases {
-            assert_eq!(expected, bytepos_to_human_pos(&ccx, bp));
+            assert_eq!(expected, bytepos_to_human_pos(&source_loader, bp));
         }
     }
 }

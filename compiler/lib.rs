@@ -6,12 +6,12 @@ extern crate syntax;
 #[macro_use]
 mod id_type;
 
-mod ctx;
 mod hir;
 pub mod reporting;
+mod source;
 mod ty;
 mod typeck;
 
-pub use ctx::CompileContext;
 pub use hir::lowering::lower_program;
+pub use source::{SourceFile, SourceFileId, SourceLoader};
 pub use typeck::infer::infer_program;
