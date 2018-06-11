@@ -94,7 +94,7 @@ impl Reportable for Error {
             ErrorKind::MacroRef(ref sym) => format!("cannot take the value of macro: `{}`", sym),
             ErrorKind::UnboundSym(ref sym) => format!("unable to resolve symbol: `{}`", sym),
             ErrorKind::WrongArgCount(expected) => format!("wrong arg count; expected {}", expected),
-            ErrorKind::IllegalArg(ref description) => format!("illegal argument: {}", description),
+            ErrorKind::IllegalArg(description) => description.to_owned(),
             ErrorKind::ExpectedSym => "expected symbol".to_owned(),
             ErrorKind::DefOutsideBody => "(def) outside module body".to_owned(),
             ErrorKind::ExportOutsideModule => "(export) outside of module body".to_owned(),

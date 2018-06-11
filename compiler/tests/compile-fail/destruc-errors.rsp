@@ -4,7 +4,7 @@
     ;^^^^^ ERROR vectors can only be used in a destructure for type ascription in the form [name : Type]
 
 (def 1 1)
-    ;^ ERROR illegal argument: values can only be bound to variables or destructured into lists
+    ;^ ERROR values can only be bound to variables or destructured into lists
 
 ; Double type annotation
 (def [[x : Int] : Int] 1)

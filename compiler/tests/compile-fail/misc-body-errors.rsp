@@ -10,15 +10,15 @@
 
 (defn let-without-binding-vector ()
   (let x 1))
-      ;^ ERROR illegal argument: binding vector expected
+      ;^ ERROR binding vector expected
 
 (def missing-param-list
   (fn))
- ;^^^^ ERROR illegal argument: parameter declaration missing
+ ;^^^^ ERROR parameter declaration missing
 
 (def bad-param-destruc
   (fn (1)))
-      ;^ ERROR illegal argument: values can only be bound to variables or destructured into lists
+      ;^ ERROR values can only be bound to variables or destructured into lists
 
 (def user-compile-error
   (compile-error "Some message")) ;~ ERROR Some message

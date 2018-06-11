@@ -10,7 +10,7 @@
           ;^^^^^ ERROR value cannot be used as a type
 
 (deftype _ 1)
-          ;^ ERROR illegal argument: only boolean and symbol literals are supported
+          ;^ ERROR only boolean and symbol literals are supported
 
 (deftype _ (->))
-           ;^^ ERROR illegal argument: type constructor expected
+           ;^^ ERROR type constructor expected
