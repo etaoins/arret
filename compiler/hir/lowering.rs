@@ -1077,15 +1077,6 @@ mod test {
     }
 
     #[test]
-    fn quoted_multiple_data() {
-        let j = "(quote 1 2 3)";
-        let t = "^^^^^^^^^^^^^";
-
-        let err = Error::new(t2s(t), ErrorKind::WrongArgCount(1));
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
     fn basic_untyped_scalar_let() {
         let j = "(let [x 1] x)";
         let t = "      ^      ";
@@ -1163,15 +1154,6 @@ mod test {
     }
 
     #[test]
-    fn bad_binding_let() {
-        let j = "(let foo 1)";
-        let t = "     ^^^   ";
-
-        let err = Error::new(t2s(t), ErrorKind::IllegalArg("binding vector expected"));
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
     fn list_destruc_let() {
         let j = "(let [(x rest ...) '(1)] x)";
         let t = "      ^^^^^^^^^^^^         ";
@@ -1206,41 +1188,6 @@ mod test {
         );
 
         assert_eq!(expected, expr_for_str(j).unwrap());
-    }
-
-    #[test]
-    fn def_outside_module_body() {
-        let j = "(def x 1)";
-        let t = "^^^^^^^^^";
-
-        let err = Error::new(t2s(t), ErrorKind::DefOutsideBody);
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn fn_without_param_decl() {
-        let j = "(fn)";
-        let t = "^^^^";
-
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg("parameter declaration missing"),
-        );
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn fn_with_bad_destruc_param() {
-        let j = "(fn (1))";
-        let t = "     ^  ";
-
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg(
-                "values can only be bound to variables or destructured into lists",
-            ),
-        );
-        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
@@ -1509,15 +1456,6 @@ mod test {
 
         let expected = Module::new(expected_exports);
         assert_eq!(expected, module_for_str(j).unwrap());
-    }
-
-    #[test]
-    fn export_unbound() {
-        let j = "(export x)";
-        let t = "        ^ ";
-
-        let err = Error::new(t2s(t), ErrorKind::UnboundSym("x".into()));
-        assert_eq!(err, module_for_str(j).unwrap_err());
     }
 
     #[test]

@@ -1,2 +1,0 @@
-(import [risp base])
-(compile-error "Some message") ;~ ERROR Some message
