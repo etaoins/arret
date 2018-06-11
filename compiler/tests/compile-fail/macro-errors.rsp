@@ -10,14 +10,38 @@
    ;^^^ ERROR illegal argument: ellipsis can only be used as part of a zero or more match
 ))
 
+(defmacro no-rules (macro-rules))
+(no-rules) ;~ ERROR no matching macro rule
+
+(defmacro _ (macro-rules #{a 1}))
+                            ;^ ERROR illegal argument: pattern literal must be a symbol
+
+(defmacro _ (macro-rules 1))
+                        ;^ ERROR illegal argument: expected a macro rule vector
+                    
+(defmacro no-template-datum (macro-rules
+  [()]
+ ;^^^^ ERROR illegal argument: expected a macro rule vector with two elements
+))
+
+(defmacro more-than-one-template-datum (macro-rules
+  [() 1 2]
+ ;^^^^^^^^ ERROR illegal argument: expected a macro rule vector with two elements
+))
+
+(defmacro non-list-pattern (macro-rules
+  [self 1]
+  ;^^^^ ERROR illegal argument: expected a macro rule pattern list
+))
+
 (defmacro m (macro-rules
   [((list1 ...) (list2 ...)) ([list1 list2] ...)]
                             ;^^^^^^^^^^^^^^^^^^^ ERROR illegal argument: subtemplate references macro variables from multiple subpatterns
 ))
 
-(defmacro m (macro-rules [
-  (expr ...) (5 ...)]
-            ;^^^^^^^ ERROR illegal argument: subtemplate does not include any macro variables
+(defmacro m (macro-rules
+  [(expr ...) (5 ...)]
+             ;^^^^^^^ ERROR illegal argument: subtemplate does not include any macro variables
 ))
 
 (defmacro vm (macro-rules [((l ... r ...)) true]))
