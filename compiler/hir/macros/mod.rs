@@ -11,6 +11,7 @@ use hir::macros::matcher::match_rule;
 use hir::ns::{Ident, NsDatum};
 use hir::prim::Prim;
 use hir::scope::{Binding, Scope};
+use hir::util::pop_vec_front;
 use syntax::span::Span;
 
 #[derive(PartialEq, Eq, Debug, Hash)]
@@ -108,9 +109,8 @@ impl Macro {
     }
 }
 
-pub fn lower_macro_rule(
+fn lower_macro_rule_datum(
     scope: &Scope,
-    self_ident: &Ident,
     special_vars: &SpecialVars,
     rule_datum: NsDatum,
 ) -> Result<Rule> {
@@ -133,31 +133,8 @@ pub fn lower_macro_rule(
     let template = rule_values.pop().unwrap();
     let pattern_datum = rule_values.pop().unwrap();
 
-    let pattern = if let NsDatum::List(span, vs) = pattern_datum {
-        let mut pattern_data = vs.into_vec();
-
-        if pattern_data.is_empty() {
-            return Err(Error::new(
-                span,
-                ErrorKind::IllegalArg(
-                    "macro rule patterns must contain at least the name of the macro",
-                ),
-            ));
-        }
-
-        match pattern_data.remove(0) {
-            NsDatum::Ident(_, ref ident) if ident.name() == self_ident.name() => {}
-            other => {
-                return Err(Error::new(
-                    other.span(),
-                    ErrorKind::IllegalArg(
-                        "macro rule patterns must start with the name of the macro",
-                    ),
-                ));
-            }
-        }
-
-        pattern_data
+    let pattern = if let NsDatum::List(_, vs) = pattern_datum {
+        vs.into_vec()
     } else {
         return Err(Error::new(
             pattern_datum.span(),
@@ -174,19 +151,12 @@ pub fn lower_macro_rule(
     })
 }
 
-pub fn lower_macro_rules(
-    scope: &Scope,
-    span: Span,
-    self_ident: &Ident,
-    mut macro_rules_data: Vec<NsDatum>,
-) -> Result<Macro> {
-    if macro_rules_data.is_empty() || macro_rules_data.len() > 2 {
-        return Err(Error::new(span, ErrorKind::WrongArgCount(2)));
-    }
+pub fn lower_macro_rules(scope: &Scope, mut macro_rules_data: Vec<NsDatum>) -> Result<Macro> {
+    // If our first datum is a set then use it as literals
+    let literals = if let Some(NsDatum::Set(_, _)) = macro_rules_data.get(0) {
+        let (literals_datum, rest) = pop_vec_front(macro_rules_data);
+        macro_rules_data = rest;
 
-    let rules_datum = macro_rules_data.pop().unwrap();
-
-    let literals = if let Some(literals_datum) = macro_rules_data.pop() {
         if let NsDatum::Set(_, vs) = literals_datum {
             vs.into_iter()
                 .map(|v| {
@@ -201,30 +171,17 @@ pub fn lower_macro_rules(
                 })
                 .collect::<Result<HashSet<MacroVar>>>()?
         } else {
-            return Err(Error::new(
-                literals_datum.span(),
-                ErrorKind::IllegalArg("expected set of pattern literals"),
-            ));
+            panic!("Shouldn't be here")
         }
     } else {
         HashSet::new()
     };
 
-    let rules_values = if let NsDatum::Vec(_, vs) = rules_datum {
-        vs
-    } else {
-        return Err(Error::new(
-            rules_datum.span(),
-            ErrorKind::IllegalArg("expected a vector of syntax rules"),
-        ));
-    };
-
     let special_vars = SpecialVars { literals };
 
-    let rules = rules_values
-        .into_vec()
+    let rules = macro_rules_data
         .into_iter()
-        .map(|rule_datum| lower_macro_rule(scope, self_ident, &special_vars, rule_datum))
+        .map(|rule_datum| lower_macro_rule_datum(scope, &special_vars, rule_datum))
         .collect::<Result<Vec<Rule>>>()?;
 
     Ok(Macro::new(special_vars, rules))
@@ -264,46 +221,19 @@ mod test {
 
         let test_data = data_from_str(data_str).unwrap();
 
-        let full_span = Span {
-            lo: 0,
-            hi: data_str.len() as u32,
-        };
-
         let test_ns_id = NsId::new(0);
         let test_ns_data = test_data
             .into_iter()
             .map(|datum| NsDatum::from_syntax_datum(test_ns_id, datum))
             .collect::<Vec<NsDatum>>();
 
-        let self_ident = Ident::new(test_ns_id, "self".into());
-        lower_macro_rules(&Scope::new_empty(), full_span, &self_ident, test_ns_data)
-    }
-
-    #[test]
-    fn wrong_arg_count() {
-        let j = "#{} [] []";
-        let t = "^^^^^^^^^";
-
-        let err = Error::new(t2s(t), ErrorKind::WrongArgCount(2));
-        assert_eq!(err, macro_rules_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn non_set_literals() {
-        let j = "[] []";
-        let t = "^^   ";
-
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg("expected set of pattern literals"),
-        );
-        assert_eq!(err, macro_rules_for_str(j).unwrap_err());
+        lower_macro_rules(&Scope::new_empty(), test_ns_data)
     }
 
     #[test]
     fn non_symbol_literal() {
-        let j = "#{one 2} []";
-        let t = "      ^    ";
+        let j = "#{one 2}";
+        let t = "      ^ ";
 
         let err = Error::new(
             t2s(t),
@@ -314,7 +244,7 @@ mod test {
 
     #[test]
     fn empty_rules() {
-        let j = "[]";
+        let j = "";
 
         let special_vars = SpecialVars {
             literals: HashSet::new(),
@@ -326,8 +256,8 @@ mod test {
 
     #[test]
     fn rule_with_non_vector() {
-        let j = "[1]";
-        let t = " ^ ";
+        let j = "1";
+        let t = "^";
 
         let err = Error::new(
             t2s(t),
@@ -338,8 +268,8 @@ mod test {
 
     #[test]
     fn rule_with_not_enough_elements() {
-        let j = "[[(self)]]";
-        let t = " ^^^^^^^^ ";
+        let j = "[()]";
+        let t = "^^^^";
 
         let err = Error::new(
             t2s(t),
@@ -350,38 +280,12 @@ mod test {
 
     #[test]
     fn rule_with_non_list_pattern() {
-        let j = "[[self 1]]";
-        let t = "  ^^^^    ";
+        let j = "[self 1]";
+        let t = " ^^^^   ";
 
         let err = Error::new(
             t2s(t),
             ErrorKind::IllegalArg("expected a macro rule pattern list"),
-        );
-        assert_eq!(err, macro_rules_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn rule_with_empty_pattern_list() {
-        let j = "[[() 1]]";
-        let t = "  ^^    ";
-
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg(
-                "macro rule patterns must contain at least the name of the macro",
-            ),
-        );
-        assert_eq!(err, macro_rules_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn rule_with_non_self_pattern() {
-        let j = "[[(notself) 1]]";
-        let t = "   ^^^^^^^     ";
-
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg("macro rule patterns must start with the name of the macro"),
         );
         assert_eq!(err, macro_rules_for_str(j).unwrap_err());
     }

@@ -1,4 +1,4 @@
 (import [risp base])
 
 (defn main! ()
-    (compile-error "Some message")) ;~ ERROR Some message
+  (compile-error "Some message")) ;~ ERROR Some message
