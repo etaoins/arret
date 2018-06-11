@@ -1,0 +1,39 @@
+(import [risp internal primitives])
+
+(defmacro 1 (macro-rules))
+         ;^ ERROR expected symbol
+         
+(defmacro a b) ;~ ERROR illegal argument: macro specification must be a list
+(defmacro a (macro-fn)) ;~ ERROR illegal argument: unsupported macro type
+(defmacro a (macro-rules
+  [(...) false]
+   ;^^^ ERROR illegal argument: ellipsis can only be used as part of a zero or more match
+))
+
+(defmacro m (macro-rules
+  [((list1 ...) (list2 ...)) ([list1 list2] ...)]
+                            ;^^^^^^^^^^^^^^^^^^^ ERROR illegal argument: subtemplate references macro variables from multiple subpatterns
+))
+
+(defmacro m (macro-rules [
+  (expr ...) (5 ...)]
+            ;^^^^^^^ ERROR illegal argument: subtemplate does not include any macro variables
+))
+
+(defmacro vm (macro-rules [((l ... r ...)) true]))
+                                  ;^ ERROR multiple zero or more matches in the same sequence
+
+(defmacro a (macro-rules [(x x) x]))
+                            ;^ ERROR duplicate macro variable: `x`
+
+(defmacro return-one (macro-rules [() 1]))
+(return-one extra-arg) ;~ ERROR no matching macro rule
+
+; Literal doesn't match
+(defmacro for (macro-rules #{in} [(x in y) [x y]]))
+(for 1 for 2) ;~ ERROR no matching macro rule
+
+(defmacro two-set? (macro-rules
+  [(#{_ _}) false]
+   ;^^^^^^ ERROR illegal argument: set patterns must either be empty or a zero or more match
+))

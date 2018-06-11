@@ -1521,31 +1521,6 @@ mod test {
     }
 
     #[test]
-    fn letmacro_with_duplicate_vars() {
-        let j = "(letmacro [a (macro-rules [(x x) x])])";
-        let t = "                            ^         ";
-        let u = "                              ^       ";
-
-        let err = Error::new(t2s(u), ErrorKind::DuplicateMacroVar("x".into(), t2s(t)));
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn expand_macro_without_matching_rule() {
-        let j1 = "(letmacro [one (macro-rules [() 1])]";
-        let t1 = "                                    ";
-        let j2 = "(one extra-arg)";
-        let t2 = "^^^^^^^^^^^^^^^";
-        let j3 = ")";
-
-        let j = &[j1, j2, j3].join("");
-        let t = &[t1, t2].join("");
-
-        let err = Error::new(t2s(t), ErrorKind::NoMacroRule);
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
     fn expand_trivial_macro() {
         let j1 = "(letmacro [one (macro-rules [() 1])]";
         let t1 = "                                ^   ";
@@ -1630,21 +1605,6 @@ mod test {
 
         let expected = Expr::Lit(Datum::Int(t2s(t), 2));
         assert_eq!(expected, expr_for_str(j).unwrap());
-    }
-
-    #[test]
-    fn expand_with_non_matching_literals() {
-        let j1 = "(letmacro [for (macro-rules #{in} [(x in y) [x y]])]";
-        let t1 = "                                                    ";
-        let j2 = "(for 1 foo 2)";
-        let t2 = "^^^^^^^^^^^^^";
-        let j3 = ")";
-
-        let j = &[j1, j2, j3].join("");
-        let t = &[t1, t2].join("");
-
-        let err = Error::new(t2s(t), ErrorKind::NoMacroRule);
-        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
@@ -1750,18 +1710,6 @@ mod test {
     }
 
     #[test]
-    fn expand_fixed_set_match() {
-        let j = "(letmacro [two-set? (macro-rules [(#{_ _}) false])])";
-        let t = "                                   ^^^^^^           ";
-
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg("set patterns must either be empty or a zero or more match"),
-        );
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
     fn expand_constant_match() {
         let j1 = "(letmacro [alph (macro-rules [(1) 'a] [(2) 'b] [(3) 'c])]";
         let t1 = "                                            ^            ";
@@ -1864,47 +1812,6 @@ mod test {
             ]),
         ));
         assert_eq!(expected, expr_for_str(j).unwrap());
-    }
-
-    #[test]
-    fn expand_multiple_zero_or_more_in_same_pattern_seq() {
-        let j = "(letmacro [vm (macro-rules [((l ... r ...)) true])])";
-        let t = "                              ^                     ";
-        let u = "                                    ^               ";
-
-        let err = Error::new(t2s(u), ErrorKind::MultipleZeroOrMoreMatch(t2s(t)));
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn expand_subtemplate_without_matching_subpattern() {
-        let j1 = "(letmacro [m (macro-rules [(expr ...) (5 ...)])])";
-        let t1 = "                                      ^^^^^^^    ";
-        let j2 = "(m 1 2 3 4)";
-        let t2 = "           ";
-
-        let j = &[j1, j2].join("");
-        let t = &[t1, t2].join("");
-
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg("subtemplate does not include any macro variables"),
-        );
-        assert_eq!(err, expr_for_str(j).unwrap_err());
-    }
-
-    #[test]
-    fn expand_subtemplate_matching_multiple_subpatterns() {
-        let j = "(letmacro [m (macro-rules [((list1 ...) (list2 ...)) ([list1 list2] ...)])])";
-        let t = "                                                     ^^^^^^^^^^^^^^^^^^^    ";
-
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg(
-                "subtemplate references macro variables from multiple subpatterns",
-            ),
-        );
-        assert_eq!(err, expr_for_str(j).unwrap_err());
     }
 
     #[test]
