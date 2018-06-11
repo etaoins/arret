@@ -228,10 +228,25 @@ impl<'a> LowerTyContext<'a> {
         }
     }
 
+    fn lower_literal_vec(literal_data: Vec<NsDatum>) -> Result<Vec<ty::Poly>> {
+        literal_data.into_iter().map(Self::lower_literal).collect()
+    }
+
     fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
         match datum {
             NsDatum::Bool(_, v) => Ok(ty::Ty::LitBool(v).into_poly()),
             NsDatum::Ident(_, ident) => Ok(ty::Ty::LitSym(ident.name().into()).into_poly()),
+            NsDatum::List(_, vs) => {
+                let fixed_literals = Self::lower_literal_vec(vs.into_vec())?;
+                Ok(
+                    ty::Ty::List(ty::List::new(fixed_literals.into_boxed_slice(), None))
+                        .into_poly(),
+                )
+            }
+            NsDatum::Vec(_, vs) => {
+                let fixed_literals = Self::lower_literal_vec(vs.into_vec())?;
+                Ok(ty::Ty::Vec(fixed_literals.into_boxed_slice()).into_poly())
+            }
             _ => Err(Error::new(
                 datum.span(),
                 ErrorKind::IllegalArg("only boolean and symbol literals are supported"),
@@ -628,6 +643,39 @@ mod test {
         let j = "()";
 
         let expected = ty::Ty::List(ty::List::new(Box::new([]), None)).into_poly();
+        assert_poly_for_str(&expected, j);
+    }
+
+    #[test]
+    fn quoted_list_literal() {
+        let j = "'(true false)";
+
+        let expected = ty::Ty::List(ty::List::new(
+            Box::new([
+                ty::Ty::LitBool(true).into_poly(),
+                ty::Ty::LitBool(false).into_poly(),
+            ]),
+            None,
+        )).into_poly();
+        assert_poly_for_str(&expected, j);
+    }
+
+    #[test]
+    fn empty_vector_literal() {
+        let j = "[]";
+
+        let expected = ty::Ty::Vec(Box::new([])).into_poly();
+        assert_poly_for_str(&expected, j);
+    }
+
+    #[test]
+    fn vector_literal() {
+        let j = "[true false]";
+
+        let expected = ty::Ty::Vec(Box::new([
+            ty::Ty::LitBool(true).into_poly(),
+            ty::Ty::LitBool(false).into_poly(),
+        ])).into_poly();
         assert_poly_for_str(&expected, j);
     }
 

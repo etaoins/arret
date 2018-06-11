@@ -8,10 +8,10 @@
     (ann (identity 'one) 'one))
 
   (letmacro [swap (macro-rules [(x y) '(y x)])]
-    (ann (swap one two) (List 'two 'one)))
+    (ann (swap one two) '(two one)))
 
   (letmacro [for (macro-rules #{in} [(x in y) [x y]])]
-    (ann (for two in one) (Vector 'two 'one)))
+    (ann (for two in one) [two one]))
 
   (letmacro [return-ellipsis (macro-rules [() '(... ...)])]
     (ann (return-ellipsis) '...))
@@ -34,7 +34,7 @@
     (ann (empty-set? #{one}) false))
 
   (letmacro [set->list (macro-rules [(#{v ...}) '(v ...)])]
-    (ann (set->list #{one two three}) (List 'one 'two 'three)))
+    (ann (set->list #{one two three}) '(one two three)))
 
   (letmacro [num->name (macro-rules [(1) 'one] [(2) 'two] [(3) 'three])]
     (ann (num->name 1) 'one)
@@ -42,16 +42,15 @@
     (ann (num->name 3) 'three))
 
   (letmacro [return-all (macro-rules [(values ...) '(values ...)])]
-    (ann (return-all one two three) (List 'one 'two 'three)))
+    (ann (return-all one two three) '(one two three)))
 
   (letmacro [mid (macro-rules [([_ vals ... _]) [true vals ... false]])]
-    (ann (mid [one two three four]) (Vector true 'two 'three false)))
+    (ann (mid [one two three four]) [true two three false]))
 
   (letmacro [combine-lists (macro-rules [((l ...) (r ...)) [r ... l ...]])]
-    (ann (combine-lists (one two) (three four)) (Vector 'three 'four 'one 'two)))
-
+    (ann (combine-lists (one two) (three four)) [three four one two]))
 
   (letmacro [nested-patterns (macro-rules [((a b rest ...) ...) [(rest ... b a) ...]])]
     (ann
       (nested-patterns (one two three four) (five six))
-      (Vector (List 'three 'four 'two 'one) (List 'six 'five)))))
+      [(three four two one) (six five)])))

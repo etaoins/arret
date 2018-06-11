@@ -12,5 +12,11 @@
 (deftype _ 1)
           ;^ ERROR only boolean and symbol literals are supported
 
+(deftype _ '(1))
+            ;^ ERROR only boolean and symbol literals are supported
+
+(deftype _ [1])
+           ;^ ERROR only boolean and symbol literals are supported
+
 (deftype _ (->))
            ;^^ ERROR type constructor expected

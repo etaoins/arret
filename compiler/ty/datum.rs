@@ -101,13 +101,13 @@ mod test {
 
     #[test]
     fn fixed_list() {
-        assert_poly_for_str("(List)", "()");
+        assert_poly_for_str("()", "()");
         assert_poly_for_str("(List Int Int 'foo)", "(1 2 foo)");
     }
 
     #[test]
     fn fixed_vec() {
-        assert_poly_for_str("(Vector)", "[]");
+        assert_poly_for_str("[]", "[]");
         assert_poly_for_str("(Vector false Int 'foo)", "[false 2 foo]");
     }
 
