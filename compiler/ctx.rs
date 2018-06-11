@@ -20,6 +20,7 @@ impl LoadedFile {
     }
 }
 
+#[derive(Default)]
 pub struct CompileContext {
     loaded_files: Vec<LoadedFile>,
     next_span_offset: usize,
@@ -27,10 +28,7 @@ pub struct CompileContext {
 
 impl CompileContext {
     pub fn new() -> CompileContext {
-        CompileContext {
-            loaded_files: vec![],
-            next_span_offset: 0,
-        }
+        Self::default()
     }
 
     pub fn add_loaded_file(&mut self, loaded_file: LoadedFile) {
