@@ -225,10 +225,7 @@ mod test {
     use ty::purity::Purity;
 
     fn add_str_evidence(ctx: &mut SelectContext, target_str: &str, evidence_str: &str) {
-        ctx.add_evidence(
-            &poly_for_str(target_str).unwrap(),
-            &poly_for_str(evidence_str).unwrap(),
-        );
+        ctx.add_evidence(&poly_for_str(target_str), &poly_for_str(evidence_str));
     }
 
     fn assert_unselected_type(ctx: &SelectContext, name: char) {
@@ -238,10 +235,7 @@ mod test {
 
     fn assert_selected_type(ctx: &SelectContext, name: char, selected_str: &str) {
         let idx = (name as usize) - ('A' as usize);
-        assert_eq!(
-            &Some(poly_for_str(selected_str).unwrap()),
-            &ctx.tvar_types()[idx]
-        );
+        assert_eq!(&Some(poly_for_str(selected_str)), &ctx.tvar_types()[idx]);
     }
 
     fn assert_unselected_purity(ctx: &SelectContext, name: char) {
@@ -277,9 +271,9 @@ mod test {
     fn poly_conflicing_tvar() {
         let pvar_ids = ty::purity::PVarIds::monomorphic();
         let tvars = [
-            ty::TVar::new("A".into(), poly_for_str("(... -> Any)").unwrap()),
-            ty::TVar::new("B".into(), poly_for_str("(... -> Sym)").unwrap()),
-            ty::TVar::new("C".into(), poly_for_str("(... -> 'foo)").unwrap()),
+            ty::TVar::new("A".into(), poly_for_str("(... -> Any)")),
+            ty::TVar::new("B".into(), poly_for_str("(... -> Sym)")),
+            ty::TVar::new("C".into(), poly_for_str("(... -> 'foo)")),
         ];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 

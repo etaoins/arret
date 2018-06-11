@@ -520,7 +520,7 @@ pub fn str_for_purity(pvars: &[ty::purity::PVar], purity: &ty::purity::Poly) -> 
 }
 
 #[cfg(test)]
-pub fn poly_for_str(datum_str: &str) -> Result<ty::Poly> {
+pub fn poly_for_str(datum_str: &str) -> ty::Poly {
     use hir::ns::NsId;
     use hir::prim::insert_prim_exports;
     use syntax::parser::datum_from_str;
@@ -574,24 +574,19 @@ pub fn poly_for_str(datum_str: &str) -> Result<ty::Poly> {
         &[],
         &scope,
         NsDatum::from_syntax_datum(test_ns_id, test_datum),
-    )
+    ).unwrap()
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use syntax::span::t2s;
 
     fn assert_poly_for_str(expected: &ty::Poly, datum_str: &str) {
-        assert_eq!(*expected, poly_for_str(datum_str).unwrap());
+        assert_eq!(*expected, poly_for_str(datum_str));
 
         // Try to round trip this to make sure str_for_poly works
         let recovered_str = str_for_poly(&[], &[], &expected);
-        assert_eq!(*expected, poly_for_str(&recovered_str).unwrap());
-    }
-
-    fn assert_err_for_str(err: &Error, datum_str: &str) {
-        assert_eq!(*err, poly_for_str(datum_str).unwrap_err());
+        assert_eq!(*expected, poly_for_str(&recovered_str));
     }
 
     /// This asserts that a type uses an exact string in str_for_poly
@@ -600,7 +595,7 @@ mod test {
     fn assert_exact_str_repr(datum_str: &str) {
         assert_eq!(
             datum_str,
-            str_for_poly(&[], &[], &poly_for_str(datum_str).unwrap()).as_ref()
+            str_for_poly(&[], &[], &poly_for_str(datum_str)).as_ref()
         );
     }
 
@@ -642,45 +637,6 @@ mod test {
 
         let expected = ty::Ty::Sym.into_poly();
         assert_poly_for_str(&expected, j);
-    }
-
-    #[test]
-    fn unbound_symbol() {
-        let j = "notbound";
-        let t = "^^^^^^^^";
-
-        let err = Error::new(t2s(t), ErrorKind::UnboundSym("notbound".into()));
-        assert_err_for_str(&err, j);
-    }
-
-    #[test]
-    fn unsupported_int_literal() {
-        let j = "1";
-        let t = "^";
-
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::IllegalArg("only boolean and symbol literals are supported"),
-        );
-        assert_err_for_str(&err, j);
-    }
-
-    #[test]
-    fn non_literal_value_ref() {
-        let j = "quote";
-        let t = "^^^^^";
-
-        let err = Error::new(t2s(t), ErrorKind::ValueAsTy);
-        assert_err_for_str(&err, j);
-    }
-
-    #[test]
-    fn unbound_cons() {
-        let j = "(notbound)";
-        let t = " ^^^^^^^^ ";
-
-        let err = Error::new(t2s(t), ErrorKind::UnboundSym("notbound".into()));
-        assert_err_for_str(&err, j);
     }
 
     #[test]
@@ -740,15 +696,6 @@ mod test {
         ])).into_poly();
 
         assert_poly_for_str(&expected, j);
-    }
-
-    #[test]
-    fn empty_fun() {
-        let j = "(->)";
-        let t = " ^^ ";
-
-        let err = Error::new(t2s(t), ErrorKind::IllegalArg("type constructor expected"));
-        assert_err_for_str(&err, j);
     }
 
     #[test]

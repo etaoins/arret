@@ -398,7 +398,7 @@ mod test {
 
     fn poly_for_str(datum_str: &str) -> ty::Poly {
         use hir;
-        hir::poly_for_str(datum_str).unwrap()
+        hir::poly_for_str(datum_str)
     }
 
     #[test]

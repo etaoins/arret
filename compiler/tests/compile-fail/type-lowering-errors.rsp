@@ -1,0 +1,16 @@
+(import [risp base])
+
+(deftype _ unbound)
+          ;^^^^^^^ ERROR unable to resolve symbol: `unbound`
+
+(deftype _ (unbound))
+           ;^^^^^^^ ERROR unable to resolve symbol: `unbound`
+
+(deftype _ quote)
+          ;^^^^^ ERROR value cannot be used as a type
+
+(deftype _ 1)
+          ;^ ERROR illegal argument: only boolean and symbol literals are supported
+
+(deftype _ (->))
+           ;^^ ERROR illegal argument: type constructor expected

@@ -77,7 +77,7 @@ mod test {
         use syntax::parser::datum_from_str;
         let datum = datum_from_str(datum_str).unwrap();
 
-        assert_eq!(poly_for_str(ty_str).unwrap(), poly_for_datum(&datum));
+        assert_eq!(poly_for_str(ty_str), poly_for_datum(&datum));
     }
 
     #[test]

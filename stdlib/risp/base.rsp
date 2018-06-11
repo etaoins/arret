@@ -1,6 +1,6 @@
 (import [risp internal primitives])
 (export def let fn if quote export ... _ defmacro letmacro macro-rules : type-predicate
-        compile-error do)
+        deftype compile-error do)
 
 (import [risp internal types])
 (export Any Bool Str Sym Int Float Char List Listof Vector Vectorof Setof Map U Type?
