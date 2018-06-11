@@ -995,7 +995,7 @@ pub struct LoweredTestExpr {
 }
 
 #[cfg(test)]
-pub fn lowered_expr_for_str(data_str: &str) -> Result<LoweredTestExpr> {
+pub fn lowered_expr_for_str(data_str: &str) -> LoweredTestExpr {
     use hir::prim::insert_prim_exports;
     use hir::types::insert_ty_exports;
     use syntax::parser::datum_from_str;
@@ -1019,18 +1019,18 @@ pub fn lowered_expr_for_str(data_str: &str) -> Result<LoweredTestExpr> {
     let test_datum = datum_from_str(data_str).unwrap();
     let test_nsdatum = NsDatum::from_syntax_datum(test_ns_id, test_datum);
 
-    let expr = lcx.lower_expr(&scope, test_nsdatum)?;
+    let expr = lcx.lower_expr(&scope, test_nsdatum).unwrap();
 
-    Ok(LoweredTestExpr {
+    LoweredTestExpr {
         pvars: lcx.pvars,
         tvars: lcx.tvars,
         expr,
-    })
+    }
 }
 
 #[cfg(test)]
-pub fn expr_for_str(data_str: &str) -> Result<Expr<ty::Decl>> {
-    lowered_expr_for_str(data_str).map(|body| body.expr)
+pub fn expr_for_str(data_str: &str) -> Expr<ty::Decl> {
+    lowered_expr_for_str(data_str).expr
 }
 
 #[cfg(test)]
@@ -1046,7 +1046,7 @@ mod test {
         let t = "^^^^^";
 
         let expected = Expr::Lit(Datum::Bool(t2s(t), false));
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1055,7 +1055,7 @@ mod test {
         let t = "^^";
 
         let expected = Expr::Lit(Datum::List(t2s(t), Box::new([])));
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1064,7 +1064,7 @@ mod test {
         let t = " ^^^";
 
         let expected = Expr::Lit(Datum::Sym(t2s(t), "foo".into()));
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1073,7 +1073,7 @@ mod test {
         let t = "       ^^^ ";
 
         let expected = Expr::Lit(Datum::Sym(t2s(t), "foo".into()));
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1098,7 +1098,7 @@ mod test {
             }),
         );
 
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1126,7 +1126,7 @@ mod test {
             }),
         );
 
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1150,7 +1150,7 @@ mod test {
             }),
         );
 
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1187,7 +1187,7 @@ mod test {
             }),
         );
 
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1207,7 +1207,7 @@ mod test {
             }),
         );
 
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1228,7 +1228,7 @@ mod test {
             }),
         );
 
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1259,7 +1259,7 @@ mod test {
             }),
         );
 
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1296,7 +1296,7 @@ mod test {
             }),
         );
 
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1333,7 +1333,7 @@ mod test {
             }),
         );
 
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1380,7 +1380,7 @@ mod test {
             }),
         );
 
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1403,7 +1403,7 @@ mod test {
             }),
         );
 
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1423,7 +1423,7 @@ mod test {
             }),
         );
 
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1443,7 +1443,7 @@ mod test {
             }),
         );
 
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1470,7 +1470,7 @@ mod test {
         let t = &[t1, t2].join("");
 
         let expected = Expr::Lit(Datum::Int(t2s(t), 1));
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1508,7 +1508,7 @@ mod test {
             }),
         );
 
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 
     #[test]
@@ -1541,6 +1541,6 @@ mod test {
         let t = "^^^^^^^^^^^^^^^^^^^^^";
 
         let expected = Expr::TyPred(t2s(t), ty::Ty::LitBool(true).into_poly());
-        assert_eq!(expected, expr_for_str(j).unwrap());
+        assert_eq!(expected, expr_for_str(j));
     }
 }

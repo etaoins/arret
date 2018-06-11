@@ -1041,7 +1041,7 @@ mod test {
     }
 
     fn assert_type_for_expr(ty_str: &str, expr_str: &str) {
-        let lowered_expr = lowered_expr_for_str(expr_str).unwrap();
+        let lowered_expr = lowered_expr_for_str(expr_str);
         let poly = hir::poly_for_str(ty_str).unwrap();
 
         assert_eq!(
@@ -1051,7 +1051,7 @@ mod test {
     }
 
     fn assert_constrained_type_for_expr(expected_ty_str: &str, expr_str: &str, guide_ty_str: &str) {
-        let lowered_expr = lowered_expr_for_str(expr_str).unwrap();
+        let lowered_expr = lowered_expr_for_str(expr_str);
         let expected_poly = hir::poly_for_str(expected_ty_str).unwrap();
         let guide_poly = hir::poly_for_str(guide_ty_str).unwrap();
 
@@ -1062,7 +1062,7 @@ mod test {
     }
 
     fn assert_type_error(err: &Error, expr_str: &str) {
-        let lowered_expr = lowered_expr_for_str(expr_str).unwrap();
+        let lowered_expr = lowered_expr_for_str(expr_str);
 
         assert_eq!(
             err,
