@@ -17,24 +17,25 @@ struct HumanPos<'a> {
     snippet_byte_off: usize,
 }
 
-fn bytepos_to_human_pos(source_loader: &SourceLoader, bp: u32) -> HumanPos {
+fn bytepos_to_human_pos(source_loader: &SourceLoader, bp: usize) -> HumanPos {
     let source_files = source_loader.source_files();
 
     // Find the file we landed on
-    let mut remaining_bytes = bp as usize;
-    let mut source_files_iter = source_files.iter();
+    let source_file_index = source_files
+        .binary_search_by(|candidate_file| {
+            if bp < candidate_file.span_offset() {
+                cmp::Ordering::Greater
+            } else if bp > (candidate_file.span_offset() + candidate_file.source().len()) {
+                cmp::Ordering::Less
+            } else {
+                cmp::Ordering::Equal
+            }
+        })
+        .unwrap();
 
-    let source_file = loop {
-        let next_file = source_files_iter.next().unwrap();
-        let next_file_size = next_file.source().len();
+    let source_file = &source_files[source_file_index];
 
-        if remaining_bytes < next_file_size {
-            break next_file;
-        }
-
-        remaining_bytes -= next_file_size;
-    };
-
+    let mut remaining_bytes = bp - source_file.span_offset();
     let mut remaining_source = &source_file.source()[..];
 
     let mut line = 1;
@@ -81,7 +82,7 @@ fn print_snippet(source_loader: &SourceLoader, level: Level, span: Span) {
     let border_style = Colour::Blue.bold();
     let marker_style = level.colour().bold();
 
-    let hp = bytepos_to_human_pos(source_loader, span.lo);
+    let hp = bytepos_to_human_pos(source_loader, span.lo as usize);
 
     eprintln!(
         "  {} {}:{}:{}",
