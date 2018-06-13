@@ -75,12 +75,6 @@ struct LoweredFunRetDecl {
     ret_ty: Option<ty::Poly>,
 }
 
-struct LetArgs {
-    target_datum: NsDatum,
-    value_datum: NsDatum,
-    body_data: Vec<NsDatum>,
-}
-
 impl<'sl> LoweringContext<'sl> {
     pub fn new(source_loader: &'sl mut SourceLoader) -> LoweringContext {
         let mut loaded_modules = BTreeMap::new();
@@ -187,16 +181,7 @@ impl<'sl> LoweringContext<'sl> {
         span: Span,
         arg_data: Vec<NsDatum>,
     ) -> Result<Expr<ty::Decl>> {
-        let LetArgs {
-            target_datum,
-            value_datum,
-            body_data,
-        } = Self::expect_let_args(span, arg_data)?;
-
-        let mut macro_scope = Scope::new_child(scope);
-        self.lower_macro(&mut macro_scope, target_datum, value_datum)?;
-
-        self.lower_body(&macro_scope, body_data)
+        self.lower_let_like(scope, span, arg_data, Self::lower_macro, |expr, _| expr)
     }
 
     fn lower_type(
@@ -235,16 +220,7 @@ impl<'sl> LoweringContext<'sl> {
         span: Span,
         arg_data: Vec<NsDatum>,
     ) -> Result<Expr<ty::Decl>> {
-        let LetArgs {
-            target_datum,
-            value_datum,
-            body_data,
-        } = Self::expect_let_args(span, arg_data)?;
-
-        let mut type_scope = Scope::new_child(scope);
-        self.lower_type(&mut type_scope, target_datum, value_datum)?;
-
-        self.lower_body(&type_scope, body_data)
+        self.lower_let_like(scope, span, arg_data, Self::lower_type, |expr, _| expr)
     }
 
     /// Lowers an identifier in to a scalar destruc with the passed type
@@ -338,11 +314,11 @@ impl<'sl> LoweringContext<'sl> {
         destruc_datum: NsDatum,
     ) -> Result<destruc::Destruc<ty::Decl>> {
         match destruc_datum {
-            NsDatum::Ident(span, _) | NsDatum::Vec(span, _) => {
-                self.lower_scalar_destruc(scope, destruc_datum)
-                    .map(|scalar| destruc::Destruc::Scalar(span, scalar))
-            }
-            NsDatum::List(span, vs) => self.lower_list_destruc(scope, vs.into_vec())
+            NsDatum::Ident(span, _) | NsDatum::Vec(span, _) => self
+                .lower_scalar_destruc(scope, destruc_datum)
+                .map(|scalar| destruc::Destruc::Scalar(span, scalar)),
+            NsDatum::List(span, vs) => self
+                .lower_list_destruc(scope, vs.into_vec())
                 .map(|list_destruc| destruc::Destruc::List(span, list_destruc)),
             _ => Err(Error::new(
                 destruc_datum.span(),
@@ -379,22 +355,24 @@ impl<'sl> LoweringContext<'sl> {
         })
     }
 
-    fn expect_let_args(span: Span, arg_data: Vec<NsDatum>) -> Result<LetArgs> {
-        if arg_data.is_empty() {
-            return Err(Error::new(
-                span,
-                ErrorKind::IllegalArg("bindings declaration missing"),
-            ));
-        }
+    fn lower_let_like<B, C, O>(
+        &mut self,
+        outer_scope: &Scope,
+        span: Span,
+        arg_data: Vec<NsDatum>,
+        binder: B,
+        fold_output: C,
+    ) -> Result<Expr<ty::Decl>>
+    where
+        B: Fn(&mut Self, &mut Scope, NsDatum, NsDatum) -> Result<O>,
+        C: Fn(Expr<ty::Decl>, O) -> Expr<ty::Decl>,
+    {
+        let mut arg_iter = arg_data.into_iter();
+        let bindings_datum = arg_iter.next().ok_or_else(|| {
+            Error::new(span, ErrorKind::IllegalArg("bindings declaration missing"))
+        })?;
 
-        let (bindings_datum, body_data) = pop_vec_front(arg_data);
-        let mut bindings_data = if let NsDatum::Vec(span, vs) = bindings_datum {
-            if vs.len() != 2 {
-                return Err(Error::new(
-                    span,
-                    ErrorKind::IllegalArg("[target initialiser] expected"),
-                ));
-            }
+        let bindings_data = if let NsDatum::Vec(_, vs) = bindings_datum {
             vs.into_vec()
         } else {
             return Err(Error::new(
@@ -403,17 +381,31 @@ impl<'sl> LoweringContext<'sl> {
             ));
         };
 
-        let value_datum = bindings_data.pop().unwrap();
-        let target_datum = bindings_data.pop().unwrap();
+        let mut scope = Scope::new_child(outer_scope);
+        let mut outputs = Vec::<O>::with_capacity(bindings_data.len() / 2);
 
-        Ok(LetArgs {
-            target_datum,
-            value_datum,
-            body_data,
-        })
+        let mut bindings_iter = bindings_data.into_iter();
+        while let Some(target_datum) = bindings_iter.next() {
+            let value_datum = bindings_iter.next().ok_or_else(|| {
+                Error::new(
+                    target_datum.span(),
+                    ErrorKind::IllegalArg("binding vector must have an even number of forms"),
+                )
+            })?;
+
+            outputs.push(binder(self, &mut scope, target_datum, value_datum)?);
+        }
+
+        let body_expr = self.lower_body(&scope, arg_iter)?;
+
+        // This is to build nested `Let` expressions. Types/macros don't need this
+        Ok(outputs.into_iter().rev().fold(body_expr, fold_output))
     }
 
-    fn lower_body(&mut self, scope: &Scope, body_data: Vec<NsDatum>) -> Result<Expr<ty::Decl>> {
+    fn lower_body<I>(&mut self, scope: &Scope, body_data: I) -> Result<Expr<ty::Decl>>
+    where
+        I: IntoIterator<Item = NsDatum>,
+    {
         let mut flattened_exprs = vec![];
 
         for body_datum in body_data {
@@ -440,26 +432,26 @@ impl<'sl> LoweringContext<'sl> {
         span: Span,
         arg_data: Vec<NsDatum>,
     ) -> Result<Expr<ty::Decl>> {
-        let LetArgs {
-            target_datum,
-            value_datum,
-            body_data,
-        } = Self::expect_let_args(span, arg_data)?;
-
-        let mut let_scope = Scope::new_child(scope);
-
-        let destruc = self.lower_destruc(&mut let_scope, target_datum)?;
-        let value_expr = self.lower_expr(&let_scope, value_datum)?;
-        let body_expr = self.lower_body(&let_scope, body_data)?;
-
-        Ok(Expr::Let(
+        self.lower_let_like(
+            scope,
             span,
-            Box::new(Let {
-                destruc,
-                value_expr,
-                body_expr,
-            }),
-        ))
+            arg_data,
+            |inner_self, scope, target_datum, value_datum| {
+                let destruc = inner_self.lower_destruc(scope, target_datum)?;
+                let value_expr = inner_self.lower_expr(scope, value_datum)?;
+                Ok((destruc, value_expr))
+            },
+            |body_expr, (destruc, value_expr)| {
+                Expr::Let(
+                    span,
+                    Box::new(Let {
+                        destruc,
+                        value_expr,
+                        body_expr,
+                    }),
+                )
+            },
+        )
     }
 
     fn lower_fun(
@@ -637,7 +629,8 @@ impl<'sl> LoweringContext<'sl> {
             let span = arg_datum.span();
             let bindings = lower_import_set(arg_datum, |span, module_name| {
                 // TODO: Allow multiple errors to pass through an import
-                Ok(self.load_module(scope, span, module_name)
+                Ok(self
+                    .load_module(scope, span, module_name)
                     .map_err(|mut errors| errors.remove(0))?
                     .exports()
                     .clone())
@@ -824,7 +817,8 @@ impl<'sl> LoweringContext<'sl> {
                                 expand_macro(scope, span, mac, &arg_data)?
                             };
 
-                            return self.lower_module_def(scope, expanded_datum)
+                            return self
+                                .lower_module_def(scope, expanded_datum)
                                 .map_err(|e| e.with_macro_invocation_span(span));
                         }
                         Some(_) => {
@@ -1152,6 +1146,44 @@ mod test {
                 destruc,
                 value_expr: Expr::Lit(Datum::Int(t2s(v), 1)),
                 body_expr: Expr::Do(vec![]),
+            }),
+        );
+
+        assert_eq!(expected, expr_for_str(j));
+    }
+
+    #[test]
+    fn multi_let() {
+        let j = "(let [x 1 y x])";
+        let t = "      ^        ";
+        let u = "          ^    ";
+        let v = "^^^^^^^^^^^^^^^";
+        let w = "        ^      ";
+        let x = "            ^  ";
+
+        let destruc_x = destruc::Destruc::Scalar(
+            t2s(t),
+            destruc::Scalar::new(Some(VarId(0)), "x".into(), ty::Decl::Free),
+        );
+
+        let destruc_y = destruc::Destruc::Scalar(
+            t2s(u),
+            destruc::Scalar::new(Some(VarId(1)), "y".into(), ty::Decl::Free),
+        );
+
+        let expected = Expr::Let(
+            t2s(v),
+            Box::new(Let {
+                destruc: destruc_x,
+                value_expr: Expr::Lit(Datum::Int(t2s(w), 1)),
+                body_expr: Expr::Let(
+                    t2s(v),
+                    Box::new(Let {
+                        destruc: destruc_y,
+                        value_expr: Expr::Ref(t2s(x), VarId(0)),
+                        body_expr: Expr::Do(vec![]),
+                    }),
+                ),
             }),
         );
 

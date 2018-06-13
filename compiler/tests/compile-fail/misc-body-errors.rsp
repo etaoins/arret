@@ -26,3 +26,6 @@
 
 (def user-compile-error
   (compile-error "Some message")) ;~ ERROR Some message
+
+(def uneven-let (let [x 1 y]))
+                         ;^ ERROR binding vector must have an even number of forms
