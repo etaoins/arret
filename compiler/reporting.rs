@@ -121,8 +121,8 @@ fn print_snippet(source_loader: &SourceLoader, level: Level, span: Span) {
 
     let marker_bytes = (span.hi - span.lo) as usize;
     let marker_lo = hp.snippet_byte_off;
-    let marker_hi = marker_lo + marker_bytes;
-    let marker_chars = cmp::max(1, hp.snippet[marker_lo..marker_hi].chars().count());
+    let marker_hi = cmp::min(marker_lo + marker_bytes, snippet_first_line.len());
+    let marker_chars = cmp::max(1, snippet_first_line[marker_lo..marker_hi].chars().count());
 
     eprintln!(
         " {: <1$}{2}",
