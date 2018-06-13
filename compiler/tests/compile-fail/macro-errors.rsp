@@ -14,7 +14,7 @@
 (no-rules) ;~ ERROR no matching macro rule
 
 (defmacro _ (macro-rules #{a 1}))
-                            ;^ ERROR pattern literal must be a symbol
+                            ;^ ERROR expected symbol
 
 (defmacro _ (macro-rules 1))
                         ;^ ERROR expected a macro rule vector

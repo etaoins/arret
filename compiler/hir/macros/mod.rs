@@ -11,7 +11,7 @@ use hir::macros::matcher::match_rule;
 use hir::ns::{Ident, NsDatum};
 use hir::prim::Prim;
 use hir::scope::{Binding, Scope};
-use hir::util::pop_vec_front;
+use hir::util::expect_ident;
 use syntax::span::Span;
 
 #[derive(PartialEq, Eq, Debug, Hash)]
@@ -25,6 +25,13 @@ impl MacroVar {
         match scope.get(ident) {
             Some(binding) => MacroVar::Bound(binding),
             None => MacroVar::Unbound(ident.name().into()),
+        }
+    }
+
+    fn from_owned_ident(scope: &Scope, ident: Ident) -> MacroVar {
+        match scope.get(&ident) {
+            Some(binding) => MacroVar::Bound(binding),
+            None => MacroVar::Unbound(ident.into_name()),
         }
     }
 }
@@ -151,36 +158,28 @@ fn lower_macro_rule_datum(
     })
 }
 
-pub fn lower_macro_rules(scope: &Scope, mut macro_rules_data: Vec<NsDatum>) -> Result<Macro> {
-    // If our first datum is a set then use it as literals
-    let literals = if let Some(NsDatum::Set(_, _)) = macro_rules_data.get(0) {
-        let (literals_datum, rest) = pop_vec_front(macro_rules_data);
-        macro_rules_data = rest;
+pub fn lower_macro_rules(scope: &Scope, macro_rules_data: Vec<NsDatum>) -> Result<Macro> {
+    let literals;
+    let mut macro_rules_iter;
 
-        if let NsDatum::Set(_, vs) = literals_datum {
-            vs.into_iter()
-                .map(|v| {
-                    if let NsDatum::Ident(_, ref ident) = v {
-                        Ok(MacroVar::from_ident(scope, ident))
-                    } else {
-                        Err(Error::new(
-                            v.span(),
-                            ErrorKind::IllegalArg("pattern literal must be a symbol"),
-                        ))
-                    }
-                })
+    // Peak at our first datum to see if it's a Set
+    if let Some(NsDatum::Set(_, _)) = macro_rules_data.get(0) {
+        macro_rules_iter = macro_rules_data.into_iter();
+        literals = if let NsDatum::Set(_, vs) = macro_rules_iter.next().unwrap() {
+            vs.into_vec()
+                .into_iter()
+                .map(|v| Ok(MacroVar::from_owned_ident(scope, expect_ident(v)?)))
                 .collect::<Result<HashSet<MacroVar>>>()?
         } else {
-            panic!("Shouldn't be here")
-        }
+            unreachable!("Shouldn't be here")
+        };
     } else {
-        HashSet::new()
+        macro_rules_iter = macro_rules_data.into_iter();
+        literals = HashSet::new()
     };
 
     let special_vars = SpecialVars { literals };
-
-    let rules = macro_rules_data
-        .into_iter()
+    let rules = macro_rules_iter
         .map(|rule_datum| lower_macro_rule_datum(scope, &special_vars, rule_datum))
         .collect::<Result<Vec<Rule>>>()?;
 
