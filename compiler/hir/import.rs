@@ -51,18 +51,20 @@ where
         })
     }
 
-    fn lower_import_filter(
+    fn lower_import_filter<I>(
         &mut self,
         apply_span: Span,
         filter_name: &str,
         filter_input: FilterInput,
-        mut arg_data: Vec<NsDatum>,
-    ) -> Result<FilterInput> {
+        mut arg_iter: I,
+    ) -> Result<FilterInput>
+    where
+        I: ExactSizeIterator<Item = NsDatum>,
+    {
         match filter_name {
             "only" => {
                 let inner_bindings = filter_input.bindings;
-                let only_bindings = arg_data
-                    .into_iter()
+                let only_bindings = arg_iter
                     .map(|arg_datum| {
                         let (ident, span) = expect_ident_and_span(arg_datum)?;
 
@@ -84,7 +86,7 @@ where
             }
             "except" => {
                 let mut except_bindings = filter_input.bindings;
-                for arg_datum in arg_data {
+                for arg_datum in arg_iter {
                     let (ident, span) = expect_ident_and_span(arg_datum)?;
 
                     if except_bindings.remove(ident.name()).is_none() {
@@ -101,8 +103,8 @@ where
                 })
             }
             "rename" => {
-                expect_arg_count(apply_span, &arg_data, 1)?;
-                let arg_datum = arg_data.pop().unwrap();
+                expect_arg_count(apply_span, 1, arg_iter.len())?;
+                let arg_datum = arg_iter.next().unwrap();
 
                 if let NsDatum::Map(_, vs) = arg_datum {
                     let mut rename_bindings = filter_input.bindings;
@@ -138,8 +140,8 @@ where
                 }
             }
             "prefix" => {
-                expect_arg_count(apply_span, &arg_data, 1)?;
-                let prefix_ident = expect_ident(arg_data.pop().unwrap())?;
+                expect_arg_count(apply_span, 1, arg_iter.len())?;
+                let prefix_ident = expect_ident(arg_iter.next().unwrap())?;
 
                 let prefix_bindings = filter_input
                     .bindings
@@ -153,7 +155,7 @@ where
                 })
             }
             "prefixed" => {
-                expect_arg_count(apply_span, &arg_data, 0)?;
+                expect_arg_count(apply_span, 0, arg_iter.len())?;
                 let FilterInput {
                     bindings,
                     terminal_name,
@@ -195,20 +197,19 @@ where
                 return self.lower_module_import(span, vs.into_vec());
             }
             NsDatum::List(_, vs) => {
-                let mut filter_data = vs.into_vec();
+                let mut filter_iter = vs.into_vec().into_iter();
 
                 // Each filter requires a filter identifier and an inner import set
-                if filter_data.len() >= 2 {
-                    let arg_data = filter_data.split_off(2);
-                    let inner_import_datum = filter_data.pop().unwrap();
-                    let filter_ident = expect_ident(filter_data.pop().unwrap())?;
+                if filter_iter.len() >= 2 {
+                    let filter_ident = expect_ident(filter_iter.next().unwrap())?;
+                    let inner_import_datum = filter_iter.next().unwrap();
 
                     let filter_input = self.lower_import_set(inner_import_datum)?;
                     return self.lower_import_filter(
                         span,
                         filter_ident.name(),
                         filter_input,
-                        arg_data,
+                        filter_iter,
                     );
                 }
             }

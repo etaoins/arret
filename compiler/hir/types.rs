@@ -186,7 +186,7 @@ impl<'a> LowerTyContext<'a> {
         match ty_cons {
             TyCons::List => self.lower_list_cons(arg_data),
             TyCons::Listof => {
-                expect_arg_count(span, &arg_data, 1)?;
+                expect_arg_count(span, 1, arg_data.len())?;
                 let rest_poly = self.lower_poly(arg_data.pop().unwrap())?;
                 let list_poly = ty::List::new(Box::new([]), Some(rest_poly));
 
@@ -202,22 +202,22 @@ impl<'a> LowerTyContext<'a> {
                 Ok(ty::Ty::Vec(member_tys).into_poly())
             }
             TyCons::Vectorof => {
-                expect_arg_count(span, &arg_data, 1)?;
+                expect_arg_count(span, 1, arg_data.len())?;
                 let start_ty = self.lower_poly(arg_data.pop().unwrap())?;
                 Ok(ty::Ty::Vecof(Box::new(start_ty)).into_poly())
             }
             TyCons::TyPred => {
-                expect_arg_count(span, &arg_data, 1)?;
+                expect_arg_count(span, 1, arg_data.len())?;
                 let test_ty = self.lower_poly(arg_data.pop().unwrap())?;
                 Ok(ty::Ty::TyPred(Box::new(test_ty)).into_poly())
             }
             TyCons::Set => {
-                expect_arg_count(span, &arg_data, 1)?;
+                expect_arg_count(span, 1, arg_data.len())?;
                 let member_ty = self.lower_poly(arg_data.pop().unwrap())?;
                 Ok(ty::Ty::Set(Box::new(member_ty)).into_poly())
             }
             TyCons::Map => {
-                expect_arg_count(span, &arg_data, 2)?;
+                expect_arg_count(span, 2, arg_data.len())?;
                 let value_ty = self.lower_poly(arg_data.pop().unwrap())?;
                 let key_ty = self.lower_poly(arg_data.pop().unwrap())?;
                 Ok(ty::Ty::Map(Box::new(ty::Map::new(key_ty, value_ty))).into_poly())
@@ -304,7 +304,7 @@ impl<'a> LowerTyContext<'a> {
                 if let NsDatum::Ident(ident_span, ref ident) = fn_datum {
                     match self.scope.get(ident) {
                         Some(Binding::Prim(Prim::Quote)) => {
-                            expect_arg_count(span, &arg_data, 1)?;
+                            expect_arg_count(span, 1, arg_data.len())?;
                             return Self::lower_literal(arg_data.pop().unwrap());
                         }
                         Some(Binding::TyCons(ty_cons)) => {

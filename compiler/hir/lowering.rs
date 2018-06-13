@@ -103,7 +103,7 @@ impl<'sl> LoweringContext<'sl> {
 
     // This would be less ugly as Result<!> once it's stabilised
     fn lower_user_compile_error(span: Span, mut arg_data: Vec<NsDatum>) -> Error {
-        expect_arg_count(span, &arg_data, 1)
+        expect_arg_count(span, 1, arg_data.len())
             .err()
             .unwrap_or_else(|| {
                 if let NsDatum::Str(_, user_message) = arg_data.pop().unwrap() {
@@ -159,7 +159,7 @@ impl<'sl> LoweringContext<'sl> {
         span: Span,
         mut arg_data: Vec<NsDatum>,
     ) -> Result<()> {
-        expect_arg_count(span, &arg_data, 2)?;
+        expect_arg_count(span, 2, arg_data.len())?;
 
         let transformer_spec = arg_data.pop().unwrap();
         let self_datum = arg_data.pop().unwrap();
@@ -198,7 +198,7 @@ impl<'sl> LoweringContext<'sl> {
         span: Span,
         mut arg_data: Vec<NsDatum>,
     ) -> Result<()> {
-        expect_arg_count(span, &arg_data, 2)?;
+        expect_arg_count(span, 2, arg_data.len())?;
 
         let ty_datum = arg_data.pop().unwrap();
         let self_datum = arg_data.pop().unwrap();
@@ -526,12 +526,12 @@ impl<'sl> LoweringContext<'sl> {
             Prim::LetType => self.lower_lettype(scope, span, arg_data),
             Prim::Export => Err(Error::new(span, ErrorKind::ExportOutsideModule)),
             Prim::Quote => {
-                expect_arg_count(span, &arg_data, 1)?;
+                expect_arg_count(span, 1, arg_data.len())?;
                 Ok(Expr::Lit(arg_data.pop().unwrap().into_syntax_datum()))
             }
             Prim::Fun => self.lower_fun(scope, span, arg_data),
             Prim::If => {
-                expect_arg_count(span, &arg_data, 3)?;
+                expect_arg_count(span, 3, arg_data.len())?;
 
                 Ok(Expr::Cond(
                     span,
@@ -543,7 +543,7 @@ impl<'sl> LoweringContext<'sl> {
                 ))
             }
             Prim::TyPred => {
-                expect_arg_count(span, &arg_data, 1)?;
+                expect_arg_count(span, 1, arg_data.len())?;
                 Ok(Expr::TyPred(
                     span,
                     lower_poly(&self.tvars, scope, arg_data.pop().unwrap())?,
@@ -713,7 +713,7 @@ impl<'sl> LoweringContext<'sl> {
                 Ok(deferred_exports)
             }
             Prim::Def => {
-                expect_arg_count(span, &arg_data, 2)?;
+                expect_arg_count(span, 2, arg_data.len())?;
 
                 let value_datum = arg_data.pop().unwrap();
 

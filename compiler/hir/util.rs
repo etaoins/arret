@@ -28,8 +28,12 @@ pub fn split_into_fixed_and_rest(
     (vs, rest_datum)
 }
 
-pub fn expect_arg_count(span: Span, vs: &[NsDatum], expected_arg_count: usize) -> Result<()> {
-    if vs.len() != expected_arg_count {
+pub fn expect_arg_count(
+    span: Span,
+    expected_arg_count: usize,
+    actual_arg_count: usize,
+) -> Result<()> {
+    if actual_arg_count != expected_arg_count {
         Err(Error::new(
             span,
             ErrorKind::WrongArgCount(expected_arg_count),
