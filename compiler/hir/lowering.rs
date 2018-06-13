@@ -12,9 +12,7 @@ use hir::prim::Prim;
 use hir::scope::{Binding, MacroId, Scope};
 use hir::types::{lower_poly, try_lower_purity};
 use hir::types::{lower_polymorphic_var, PolymorphicVar, PolymorphicVarKind};
-use hir::util::{
-    expect_arg_count, expect_ident_and_span, pop_vec_front, split_into_fixed_and_rest,
-};
+use hir::util::{expect_arg_count, expect_ident_and_span, split_into_fixed_and_rest};
 use hir::{App, Cond, Def, Expr, Fun, Let, VarIdCounter};
 use source::{SourceFileId, SourceLoader};
 use syntax::datum::Datum;
@@ -67,12 +65,6 @@ struct AppliedPrim {
 
     /// Span of the entire application
     span: Span,
-}
-
-struct LoweredFunRetDecl {
-    body_data: Vec<NsDatum>,
-    purity: Option<ty::purity::Poly>,
-    ret_ty: Option<ty::Poly>,
 }
 
 impl<'sl> LoweringContext<'sl> {
@@ -329,32 +321,6 @@ impl<'sl> LoweringContext<'sl> {
         }
     }
 
-    fn lower_fun_ret_decl(
-        &mut self,
-        fun_scope: &Scope,
-        mut post_param_data: Vec<NsDatum>,
-    ) -> Result<LoweredFunRetDecl> {
-        if post_param_data.len() >= 2 {
-            if let Some(purity) = try_lower_purity(fun_scope, &post_param_data[0]) {
-                let body_data = post_param_data.split_off(2);
-                let ret_datum = post_param_data.pop().unwrap();
-                let ret_ty = lower_poly(&self.tvars, &fun_scope, ret_datum)?;
-
-                return Ok(LoweredFunRetDecl {
-                    body_data,
-                    purity: Some(purity),
-                    ret_ty: Some(ret_ty),
-                });
-            }
-        }
-
-        Ok(LoweredFunRetDecl {
-            body_data: post_param_data,
-            purity: None,
-            ret_ty: None,
-        })
-    }
-
     fn lower_let_like<B, C, O>(
         &mut self,
         outer_scope: &Scope,
@@ -456,28 +422,25 @@ impl<'sl> LoweringContext<'sl> {
 
     fn lower_fun(
         &mut self,
-        scope: &Scope,
+        outer_scope: &Scope,
         span: Span,
         arg_data: Vec<NsDatum>,
     ) -> Result<Expr<ty::Decl>> {
-        if arg_data.is_empty() {
-            return Err(Error::new(
-                span,
-                ErrorKind::IllegalArg("parameter declaration missing"),
-            ));
-        }
+        let mut arg_iter = arg_data.into_iter();
 
-        let mut fun_scope = Scope::new_child(scope);
-
-        let (mut next_datum, mut tail_data) = pop_vec_front(arg_data);
+        let mut fun_scope = Scope::new_child(outer_scope);
         let pvar_id_start = ty::purity::PVarId::new(self.pvars.len());
         let tvar_id_start = ty::TVarId::new(self.tvars.len());
+
+        let mut next_datum = arg_iter.next().ok_or_else(|| {
+            Error::new(span, ErrorKind::IllegalArg("parameter declaration missing"))
+        })?;
 
         // We can either begin with a set of type variables or a list of parameters
         if let NsDatum::Set(_, vs) = next_datum {
             for tvar_datum in vs.into_vec() {
                 let PolymorphicVar { span, ident, kind } =
-                    lower_polymorphic_var(&self.tvars, scope, tvar_datum)?;
+                    lower_polymorphic_var(&self.tvars, outer_scope, tvar_datum)?;
 
                 let binding = match kind {
                     PolymorphicVarKind::TVar(tvar) => {
@@ -494,16 +457,12 @@ impl<'sl> LoweringContext<'sl> {
                 fun_scope.insert_binding(span, ident, binding)?;
             }
 
-            if tail_data.is_empty() {
-                return Err(Error::new(
+            next_datum = arg_iter.next().ok_or_else(|| {
+                Error::new(
                     span,
                     ErrorKind::IllegalArg("type variables should be followed by parameters"),
-                ));
-            }
-
-            let (new_next_datum, new_tail_data) = pop_vec_front(tail_data);
-            next_datum = new_next_datum;
-            tail_data = new_tail_data;
+                )
+            })?;
         };
 
         // We allocate tvar IDs sequentially so we can use a simple range to track them
@@ -522,24 +481,21 @@ impl<'sl> LoweringContext<'sl> {
         };
 
         // Determine if we have a purity and return type after the parameters, eg (param) -> RetTy
-        let LoweredFunRetDecl {
-            body_data,
-            purity,
-            ret_ty,
-        } = self.lower_fun_ret_decl(&fun_scope, tail_data)?;
+        let mut purity = ty::purity::Decl::Free;
+        let mut ret_ty = ty::Decl::Free;
+
+        if arg_iter.len() >= 2 {
+            if let Some(poly_purity) = try_lower_purity(&fun_scope, &arg_iter.as_slice()[0]) {
+                arg_iter.next();
+                purity = poly_purity.into_decl();
+
+                let ret_datum = arg_iter.next().unwrap();
+                ret_ty = lower_poly(&self.tvars, &fun_scope, ret_datum)?.into_decl();
+            }
+        }
 
         // Extract the body
-        let body_expr = self.lower_body(&fun_scope, body_data)?;
-
-        let purity = purity
-            .map(ty::purity::Poly::into_decl)
-            .unwrap_or(ty::purity::Decl::Free);
-
-        // If we don't have a return type try to guess a span for the last expression so we can
-        // locate inference errors
-        let ret_ty = ret_ty
-            .map(|ret_ty| ret_ty.into_decl())
-            .unwrap_or(ty::Decl::Free);
+        let body_expr = self.lower_body(&fun_scope, arg_iter)?;
 
         Ok(Expr::Fun(
             span,
@@ -1003,6 +959,7 @@ pub fn lowered_expr_for_str(data_str: &str) -> LoweredTestExpr {
     let mut ccx = SourceLoader::new();
     let mut lcx = LoweringContext::new(&mut ccx);
 
+    // Extract our builtin exports
     let mut exports = HashMap::<Box<str>, Binding>::new();
     insert_prim_exports(&mut exports);
     insert_ty_exports(&mut exports);
@@ -1014,7 +971,6 @@ pub fn lowered_expr_for_str(data_str: &str) -> LoweredTestExpr {
             .unwrap();
     }
 
-    // Wrap the test data in a function definition
     let test_datum = datum_from_str(data_str).unwrap();
     let test_nsdatum = NsDatum::from_syntax_datum(test_ns_id, test_datum);
 
