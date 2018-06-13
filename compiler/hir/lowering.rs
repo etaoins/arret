@@ -159,8 +159,12 @@ impl<'sl> LoweringContext<'sl> {
 
         let mac = lower_macro_rules(scope, macro_rules_data)?;
 
-        let macro_id = MacroId::new_entry_id(&mut self.macros, mac);
-        scope.insert_binding(self_span, self_ident, Binding::Macro(macro_id))
+        if scope.get(&self_ident) != Some(Binding::Prim(Prim::Wildcard)) {
+            let macro_id = MacroId::new_entry_id(&mut self.macros, mac);
+            scope.insert_binding(self_span, self_ident, Binding::Macro(macro_id))?;
+        }
+
+        Ok(())
     }
 
     fn lower_defmacro(
@@ -204,7 +208,11 @@ impl<'sl> LoweringContext<'sl> {
         let (ident, span) = expect_ident_and_span(self_datum)?;
         let ty = lower_poly(&self.tvars, scope, ty_datum)?;
 
-        scope.insert_binding(span, ident, Binding::Ty(ty))
+        if scope.get(&ident) != Some(Binding::Prim(Prim::Wildcard)) {
+            scope.insert_binding(span, ident, Binding::Ty(ty))?;
+        }
+
+        Ok(())
     }
 
     fn lower_deftype(
