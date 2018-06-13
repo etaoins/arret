@@ -103,10 +103,7 @@ impl<'a> FindVarsContext<'a> {
         if let Some(ref mut unbound_var_spans) = self.unbound_var_spans {
             if let MacroVar::Unbound(ref name) = macro_var {
                 if let Some(old_span) = unbound_var_spans.insert(name.clone(), span) {
-                    return Err(Error::new(
-                        span,
-                        ErrorKind::DuplicateMacroVar(name.clone(), old_span),
-                    ));
+                    return Err(Error::new(span, ErrorKind::DuplicateDef(old_span)));
                 }
             }
         }

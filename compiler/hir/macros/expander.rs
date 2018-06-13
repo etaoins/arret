@@ -42,7 +42,8 @@ impl<'a> ExpandContext<'a> {
             .or_insert_with(|| scope.alloc_ns_id());
 
         let new_ident = ident.with_ns_id(*new_ns_id);
-        scope.rebind(ident, &new_ident);
+        // This should succeed because we should only map each ident once
+        scope.rebind(span, ident, &new_ident).unwrap();
 
         NsDatum::Ident(span, new_ident)
     }

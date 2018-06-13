@@ -5,7 +5,7 @@ use hir::error::{Error, ErrorKind, Result};
 use hir::ns::{Ident, NsDatum};
 use hir::prim::Prim;
 use hir::scope::{Binding, Scope};
-use hir::util::{expect_arg_count, expect_ident, split_into_fixed_and_rest};
+use hir::util::{expect_arg_count, expect_ident_and_span, split_into_fixed_and_rest};
 use syntax::span::Span;
 use ty;
 use ty::purity::Purity;
@@ -24,10 +24,16 @@ pub enum TyCons {
     RawU,
 }
 
-pub enum PolymorphicVar {
+pub enum PolymorphicVarKind {
     TVar(ty::TVar),
     PVar(ty::purity::PVar),
     Pure,
+}
+
+pub struct PolymorphicVar {
+    pub span: Span,
+    pub ident: Ident,
+    pub kind: PolymorphicVarKind,
 }
 
 struct LowerTyContext<'a> {
@@ -36,18 +42,22 @@ struct LowerTyContext<'a> {
 }
 
 impl<'a> LowerTyContext<'a> {
-    fn lower_polymorphic_var(&self, tvar_datum: NsDatum) -> Result<(Ident, PolymorphicVar)> {
+    fn lower_polymorphic_var(&self, tvar_datum: NsDatum) -> Result<PolymorphicVar> {
         let span = tvar_datum.span();
 
         match tvar_datum {
-            NsDatum::Ident(_, ident) => {
+            NsDatum::Ident(span, ident) => {
                 let source_name = ident.name().into();
-                return Ok((
+                return Ok(PolymorphicVar {
+                    span,
                     ident,
-                    PolymorphicVar::TVar(ty::TVar::new(source_name, ty::Ty::Any.into_poly())),
-                ));
+                    kind: PolymorphicVarKind::TVar(ty::TVar::new(
+                        source_name,
+                        ty::Ty::Any.into_poly(),
+                    )),
+                });
             }
-            NsDatum::Vec(span, vs) => {
+            NsDatum::Vec(vector_span, vs) => {
                 let mut arg_data = vs.into_vec();
 
                 if arg_data.len() == 3
@@ -55,25 +65,30 @@ impl<'a> LowerTyContext<'a> {
                 {
                     let bound_datum = arg_data.pop().unwrap();
                     arg_data.pop(); // Discard the : completely
-                    let ident = expect_ident(arg_data.pop().unwrap())?;
+                    let (ident, span) = expect_ident_and_span(arg_data.pop().unwrap())?;
 
                     let source_name = ident.name().into();
 
                     match try_lower_purity(self.scope, &bound_datum) {
                         Some(ty::purity::Poly::Fixed(Purity::Impure)) => {
-                            return Ok((
+                            return Ok(PolymorphicVar {
+                                span,
                                 ident,
-                                PolymorphicVar::PVar(ty::purity::PVar::new(source_name)),
-                            ));
+                                kind: PolymorphicVarKind::PVar(ty::purity::PVar::new(source_name)),
+                            });
                         }
                         Some(ty::purity::Poly::Fixed(Purity::Pure)) => {
                             // Emulate bounding to pure in case the purity comes from e.g. a macro
                             // expansion
-                            return Ok((ident, PolymorphicVar::Pure));
+                            return Ok(PolymorphicVar {
+                                span,
+                                ident,
+                                kind: PolymorphicVarKind::Pure,
+                            });
                         }
                         Some(_) => {
                             return Err(Error::new(
-                                span,
+                                vector_span,
                                 ErrorKind::IllegalArg(
                                     "Purity variables do not support variable bounds",
                                 ),
@@ -81,10 +96,14 @@ impl<'a> LowerTyContext<'a> {
                         }
                         None => {
                             let bound_ty = self.lower_poly(bound_datum)?;
-                            return Ok((
+                            return Ok(PolymorphicVar {
+                                span,
                                 ident,
-                                PolymorphicVar::TVar(ty::TVar::new(source_name, bound_ty)),
-                            ));
+                                kind: PolymorphicVarKind::TVar(ty::TVar::new(
+                                    source_name,
+                                    bound_ty,
+                                )),
+                            });
                         }
                     }
                 }
@@ -316,7 +335,7 @@ pub fn lower_polymorphic_var(
     tvars: &[ty::TVar],
     scope: &Scope,
     tvar_datum: NsDatum,
-) -> Result<(Ident, PolymorphicVar)> {
+) -> Result<PolymorphicVar> {
     let ctx = LowerTyContext { tvars, scope };
     ctx.lower_polymorphic_var(tvar_datum)
 }
@@ -539,6 +558,7 @@ pub fn poly_for_str(datum_str: &str) -> ty::Poly {
     use hir::ns::NsId;
     use hir::prim::insert_prim_exports;
     use syntax::parser::datum_from_str;
+    use syntax::span::EMPTY_SPAN;
 
     let test_ns_id = NsId::new(1);
 
@@ -554,9 +574,17 @@ pub fn poly_for_str(datum_str: &str) -> ty::Poly {
             // Using `U` in tests is very dubious as it invokes a lot of type system logic. It's
             // easy to write tautological tests due to `U` creating a simplified type. Rename to
             // `UnifyingU` so it's clear what's happening.
-            scope.insert_binding(Ident::new(test_ns_id, "UnifyingU".into()), binding);
+            scope
+                .insert_binding(
+                    EMPTY_SPAN,
+                    Ident::new(test_ns_id, "UnifyingU".into()),
+                    binding,
+                )
+                .unwrap();
         } else {
-            scope.insert_binding(Ident::new(test_ns_id, name), binding);
+            scope
+                .insert_binding(EMPTY_SPAN, Ident::new(test_ns_id, name), binding)
+                .unwrap();
         }
     }
 
@@ -566,10 +594,13 @@ pub fn poly_for_str(datum_str: &str) -> ty::Poly {
         let tvar_id = ty::TVarId::new(var_idx as usize);
         let poly = ty::Poly::Var(tvar_id);
 
-        scope.insert_binding(
-            Ident::new(test_ns_id, var_name.to_string().into_boxed_str()),
-            Binding::Ty(poly),
-        );
+        scope
+            .insert_binding(
+                EMPTY_SPAN,
+                Ident::new(test_ns_id, var_name.to_string().into_boxed_str()),
+                Binding::Ty(poly),
+            )
+            .unwrap();
     }
 
     for var_idx in 0..26 {
@@ -577,10 +608,13 @@ pub fn poly_for_str(datum_str: &str) -> ty::Poly {
         let pvar_id = ty::purity::PVarId::new(var_idx as usize);
         let poly = ty::purity::Poly::Var(pvar_id);
 
-        scope.insert_binding(
-            Ident::new(test_ns_id, var_name.to_string().into_boxed_str()),
-            Binding::Purity(poly),
-        );
+        scope
+            .insert_binding(
+                EMPTY_SPAN,
+                Ident::new(test_ns_id, var_name.to_string().into_boxed_str()),
+                Binding::Purity(poly),
+            )
+            .unwrap();
     }
 
     let test_datum = datum_from_str(datum_str).unwrap();

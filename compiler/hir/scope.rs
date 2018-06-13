@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use hir::error::{Error, ErrorKind};
 use hir::ns::{Ident, NsDatum, NsId, NsIdCounter};
 use hir::prim::Prim;
 use hir::{types, VarId};
+use syntax::span::Span;
 use ty;
 
 new_indexing_id_type!(MacroId, u32);
@@ -18,21 +20,28 @@ pub enum Binding {
     Purity(ty::purity::Poly),
 }
 
-pub struct ScopeData {
-    bindings: HashMap<Ident, Binding>,
+struct ScopeEntry {
+    span: Span,
+    binding: Binding,
+}
+
+struct ScopeData {
+    entries: HashMap<Ident, ScopeEntry>,
     parent: Option<Rc<ScopeData>>,
     ns_id_counter: NsIdCounter,
 }
 
 impl ScopeData {
     fn get(&self, ident: &Ident) -> Option<Binding> {
-        match self.bindings.get(ident) {
-            Some(b) => Some(b.clone()),
-            None => if let Some(ref parent) = self.parent {
-                parent.get(ident)
-            } else {
-                None
-            },
+        match self.entries.get(ident) {
+            Some(e) => Some(e.binding.clone()),
+            None => {
+                if let Some(ref parent) = self.parent {
+                    parent.get(ident)
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -43,7 +52,7 @@ pub struct Scope(Rc<ScopeData>);
 impl Scope {
     pub fn new_empty() -> Scope {
         Scope(Rc::new(ScopeData {
-            bindings: HashMap::new(),
+            entries: HashMap::new(),
             ns_id_counter: NsIdCounter::new(),
             parent: None,
         }))
@@ -51,7 +60,7 @@ impl Scope {
 
     pub fn new_child(parent: &Scope) -> Scope {
         Scope(Rc::new(ScopeData {
-            bindings: HashMap::new(),
+            entries: HashMap::new(),
             ns_id_counter: parent.data().ns_id_counter.clone(),
             parent: Some(parent.0.clone()),
         }))
@@ -73,25 +82,38 @@ impl Scope {
         self.data().get(ident)
     }
 
-    pub fn insert_binding(&mut self, ident: Ident, binding: Binding) {
-        self.mut_data().bindings.insert(ident, binding);
+    pub fn insert_binding(
+        &mut self,
+        span: Span,
+        ident: Ident,
+        binding: Binding,
+    ) -> Result<(), Error> {
+        let new_entry = ScopeEntry { span, binding };
+
+        if let Some(old_entry) = self.mut_data().entries.insert(ident, new_entry) {
+            Err(Error::new(span, ErrorKind::DuplicateDef(old_entry.span)))
+        } else {
+            Ok(())
+        }
     }
 
-    pub fn insert_var(&mut self, ident: Ident, var_id: VarId) {
-        self.insert_binding(ident, Binding::Var(var_id));
+    pub fn insert_var(&mut self, span: Span, ident: Ident, var_id: VarId) -> Result<(), Error> {
+        self.insert_binding(span, ident, Binding::Var(var_id))
     }
 
     // This is used to rebind variables to fresh locations when expanding macros
-    pub fn rebind(&mut self, old_ident: &Ident, new_ident: &Ident) {
-        let new_binding = if let Some(old_binding) = self.get(old_ident) {
-            old_binding.clone()
+    pub fn rebind(
+        &mut self,
+        span: Span,
+        old_ident: &Ident,
+        new_ident: &Ident,
+    ) -> Result<(), Error> {
+        if let Some(old_binding) = self.get(old_ident) {
+            let new_binding = old_binding.clone();
+            self.insert_binding(span, new_ident.clone(), new_binding)
         } else {
-            return;
-        };
-
-        self.mut_data()
-            .bindings
-            .insert(new_ident.clone(), new_binding);
+            Ok(())
+        }
     }
 
     /// Allocates a new ns_id

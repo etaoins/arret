@@ -48,7 +48,7 @@
                                   ;^ ERROR multiple zero or more matches in the same sequence
 
 (defmacro a (macro-rules [(x x) x]))
-                            ;^ ERROR duplicate macro variable: `x`
+                            ;^ ERROR duplicate definition
 
 (defmacro return-one (macro-rules [() 1]))
 (return-one extra-arg) ;~ ERROR no matching macro rule

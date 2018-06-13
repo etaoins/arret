@@ -10,14 +10,15 @@ use hir::module::Module;
 use hir::ns::{Ident, NsDatum, NsId};
 use hir::prim::Prim;
 use hir::scope::{Binding, MacroId, Scope};
-use hir::types::{lower_poly, lower_polymorphic_var, try_lower_purity, PolymorphicVar};
+use hir::types::{lower_poly, try_lower_purity};
+use hir::types::{lower_polymorphic_var, PolymorphicVar, PolymorphicVarKind};
 use hir::util::{
-    expect_arg_count, expect_ident, expect_ident_and_span, pop_vec_front, split_into_fixed_and_rest,
+    expect_arg_count, expect_ident_and_span, pop_vec_front, split_into_fixed_and_rest,
 };
 use hir::{App, Cond, Def, Expr, Fun, Let, VarIdCounter};
 use source::{SourceFileId, SourceLoader};
 use syntax::datum::Datum;
-use syntax::span::Span;
+use syntax::span::{Span, EMPTY_SPAN};
 use ty;
 use ty::purity::Purity;
 
@@ -133,7 +134,7 @@ impl<'sl> LoweringContext<'sl> {
         self_datum: NsDatum,
         transformer_spec: NsDatum,
     ) -> Result<()> {
-        let self_ident = expect_ident(self_datum)?;
+        let (self_ident, self_span) = expect_ident_and_span(self_datum)?;
 
         let macro_rules_data = if let NsDatum::List(span, vs) = transformer_spec {
             let mut transformer_data = vs.into_vec();
@@ -159,9 +160,7 @@ impl<'sl> LoweringContext<'sl> {
         let mac = lower_macro_rules(scope, macro_rules_data)?;
 
         let macro_id = MacroId::new_entry_id(&mut self.macros, mac);
-        scope.insert_binding(self_ident, Binding::Macro(macro_id));
-
-        Ok(())
+        scope.insert_binding(self_span, self_ident, Binding::Macro(macro_id))
     }
 
     fn lower_defmacro(
@@ -202,11 +201,10 @@ impl<'sl> LoweringContext<'sl> {
         self_datum: NsDatum,
         ty_datum: NsDatum,
     ) -> Result<()> {
-        let ident = expect_ident(self_datum)?;
+        let (ident, span) = expect_ident_and_span(self_datum)?;
         let ty = lower_poly(&self.tvars, scope, ty_datum)?;
 
-        scope.insert_binding(ident, Binding::Ty(ty));
-        Ok(())
+        scope.insert_binding(span, ident, Binding::Ty(ty))
     }
 
     fn lower_deftype(
@@ -263,7 +261,7 @@ impl<'sl> LoweringContext<'sl> {
                 let var_id = self.var_id_counter.alloc();
                 let source_name = ident.name().into();
 
-                scope.insert_var(ident, var_id);
+                scope.insert_var(span, ident, var_id)?;
 
                 Ok(destruc::Scalar::new(Some(var_id), source_name, decl_ty))
             }
@@ -332,11 +330,11 @@ impl<'sl> LoweringContext<'sl> {
         destruc_datum: NsDatum,
     ) -> Result<destruc::Destruc<ty::Decl>> {
         match destruc_datum {
-            NsDatum::Ident(span, _) | NsDatum::Vec(span, _) => self
-                .lower_scalar_destruc(scope, destruc_datum)
-                .map(|scalar| destruc::Destruc::Scalar(span, scalar)),
-            NsDatum::List(span, vs) => self
-                .lower_list_destruc(scope, vs.into_vec())
+            NsDatum::Ident(span, _) | NsDatum::Vec(span, _) => {
+                self.lower_scalar_destruc(scope, destruc_datum)
+                    .map(|scalar| destruc::Destruc::Scalar(span, scalar))
+            }
+            NsDatum::List(span, vs) => self.lower_list_destruc(scope, vs.into_vec())
                 .map(|list_destruc| destruc::Destruc::List(span, list_destruc)),
             _ => Err(Error::new(
                 destruc_datum.span(),
@@ -478,23 +476,22 @@ impl<'sl> LoweringContext<'sl> {
         // We can either begin with a set of type variables or a list of parameters
         if let NsDatum::Set(_, vs) = next_datum {
             for tvar_datum in vs.into_vec() {
-                let (ident, polymorphic_var) =
+                let PolymorphicVar { span, ident, kind } =
                     lower_polymorphic_var(&self.tvars, scope, tvar_datum)?;
 
-                match polymorphic_var {
-                    PolymorphicVar::TVar(tvar) => {
+                let binding = match kind {
+                    PolymorphicVarKind::TVar(tvar) => {
                         let tvar_id = self.insert_tvar(tvar);
-                        fun_scope.insert_binding(ident, Binding::Ty(ty::Poly::Var(tvar_id)));
+                        Binding::Ty(ty::Poly::Var(tvar_id))
                     }
-                    PolymorphicVar::PVar(pvar) => {
+                    PolymorphicVarKind::PVar(pvar) => {
                         let pvar_id = self.insert_pvar(pvar);
-                        fun_scope
-                            .insert_binding(ident, Binding::Purity(ty::purity::Poly::Var(pvar_id)));
+                        Binding::Purity(ty::purity::Poly::Var(pvar_id))
                     }
-                    PolymorphicVar::Pure => {
-                        fun_scope.insert_binding(ident, Binding::Purity(Purity::Pure.into_poly()));
-                    }
-                }
+                    PolymorphicVarKind::Pure => Binding::Purity(Purity::Pure.into_poly()),
+                };
+
+                fun_scope.insert_binding(span, ident, binding)?;
             }
 
             if tail_data.is_empty() {
@@ -629,17 +626,17 @@ impl<'sl> LoweringContext<'sl> {
         arg_data: Vec<NsDatum>,
     ) -> Result<()> {
         for arg_datum in arg_data {
+            let span = arg_datum.span();
             let bindings = lower_import_set(arg_datum, |span, module_name| {
                 // TODO: Allow multiple errors to pass through an import
-                Ok(self
-                    .load_module(scope, span, module_name)
+                Ok(self.load_module(scope, span, module_name)
                     .map_err(|mut errors| errors.remove(0))?
                     .exports()
                     .clone())
             })?;
 
             for (name, binding) in bindings {
-                scope.insert_binding(Ident::new(ns_id, name), binding);
+                scope.insert_binding(span, Ident::new(ns_id, name), binding)?;
             }
         }
 
@@ -819,8 +816,7 @@ impl<'sl> LoweringContext<'sl> {
                                 expand_macro(scope, span, mac, &arg_data)?
                             };
 
-                            return self
-                                .lower_module_def(scope, expanded_datum)
+                            return self.lower_module_def(scope, expanded_datum)
                                 .map_err(|e| e.with_macro_invocation_span(span));
                         }
                         Some(_) => {
@@ -849,10 +845,13 @@ impl<'sl> LoweringContext<'sl> {
         let mut errors: Vec<Error> = vec![];
 
         // The default scope only consists of (import)
-        scope.insert_binding(
-            Ident::new(ns_id, "import".into()),
-            Binding::Prim(Prim::Import),
-        );
+        scope
+            .insert_binding(
+                EMPTY_SPAN,
+                Ident::new(ns_id, "import".into()),
+                Binding::Prim(Prim::Import),
+            )
+            .unwrap();
 
         // Extract all of our definitions.
         //
@@ -946,9 +945,6 @@ pub fn lower_program(
 
 ////
 #[cfg(test)]
-use syntax::span::EMPTY_SPAN;
-
-#[cfg(test)]
 fn import_statement_for_module(names: &[&'static str]) -> Datum {
     Datum::List(
         EMPTY_SPAN,
@@ -1011,7 +1007,9 @@ pub fn lowered_expr_for_str(data_str: &str) -> LoweredTestExpr {
 
     // Place them on our scope
     for (name, binding) in exports {
-        scope.insert_binding(Ident::new(test_ns_id, name), binding);
+        scope
+            .insert_binding(EMPTY_SPAN, Ident::new(test_ns_id, name), binding)
+            .unwrap();
     }
 
     // Wrap the test data in a function definition

@@ -5,7 +5,7 @@ use std::{error, result};
 
 use reporting::{Level, Reportable};
 use syntax::error::Error as SyntaxError;
-use syntax::span::Span;
+use syntax::span::{Span, EMPTY_SPAN};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ErrorLoc {
@@ -49,7 +49,7 @@ pub enum ErrorKind {
     NonDefInsideModule,
     ModuleNotFound,
     NoMacroRule,
-    DuplicateMacroVar(Box<str>, Span),
+    DuplicateDef(Span),
     MultipleZeroOrMoreMatch(Span),
     NoVecDestruc,
     ValueAsTy,
@@ -98,15 +98,13 @@ impl Reportable for Error {
             ErrorKind::IllegalArg(description) => description.to_owned(),
             ErrorKind::ExpectedSym => "expected symbol".to_owned(),
             ErrorKind::DefOutsideBody => "(def) outside module body".to_owned(),
+            ErrorKind::DuplicateDef(_) => "duplicate definition".to_owned(),
             ErrorKind::ExportOutsideModule => "(export) outside of module body".to_owned(),
             ErrorKind::NonDefInsideModule => {
                 "definition expected at the top-level of a module body".to_owned()
             }
             ErrorKind::ModuleNotFound => "module not found".to_owned(),
             ErrorKind::NoMacroRule => "no matching macro rule".to_owned(),
-            ErrorKind::DuplicateMacroVar(ref sym, _) => {
-                format!("duplicate macro variable: `{}`", sym)
-            }
             ErrorKind::MultipleZeroOrMoreMatch(_) => {
                 "multiple zero or more matches in the same sequence".to_owned()
             }
@@ -134,7 +132,13 @@ impl Reportable for Error {
 
     fn associated_report(&self) -> Option<Box<Reportable>> {
         match self.kind {
-            ErrorKind::DuplicateMacroVar(_, span) => Some(Box::new(FirstDefHelp { span })),
+            ErrorKind::DuplicateDef(span) => if span == EMPTY_SPAN {
+                // Some definitions (e.g. `import`) are magically inserted in to the scope. They
+                // won't have a span.
+                None
+            } else {
+                Some(Box::new(FirstDefHelp { span }))
+            },
             ErrorKind::MultipleZeroOrMoreMatch(span) => Some(Box::new(FirstDefHelp { span })),
             ErrorKind::SyntaxError(ref err) => err.associated_report(),
             _ => None,
