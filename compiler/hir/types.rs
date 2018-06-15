@@ -119,7 +119,7 @@ impl<'a> LowerTyContext<'a> {
         ))
     }
 
-    fn lower_list_cons(&self, mut arg_iter: NsDataIter) -> Result<ty::Poly> {
+    fn lower_list_cons(&self, mut arg_iter: NsDataIter) -> Result<ty::List<ty::Poly>> {
         let rest = try_take_rest_arg(self.scope, &mut arg_iter);
 
         let fixed_polys = arg_iter
@@ -132,7 +132,7 @@ impl<'a> LowerTyContext<'a> {
             None => None,
         };
 
-        Ok(ty::Ty::List(ty::List::new(fixed_polys, rest_poly)).into_poly())
+        Ok(ty::List::new(fixed_polys, rest_poly))
     }
 
     fn lower_fun_cons(
@@ -153,19 +153,8 @@ impl<'a> LowerTyContext<'a> {
             // Top function type in the form `(... -> ReturnType)`
             Ok(top_fun.into_ty_ref())
         } else {
-            let rest = try_take_rest_arg(self.scope, &mut arg_iter);
+            let params = self.lower_list_cons(arg_iter)?;
 
-            let fixed_polys = arg_iter
-                .map(|fixed_datum| self.lower_poly(fixed_datum))
-                .collect::<Result<Vec<ty::Poly>>>()?
-                .into_boxed_slice();
-
-            let rest_poly = match rest {
-                Some(rest) => Some(self.lower_poly(rest)?),
-                None => None,
-            };
-
-            let params = ty::List::new(fixed_polys, rest_poly);
             Ok(ty::Fun::new(
                 ty::purity::PVarIds::monomorphic(),
                 ty::TVarIds::monomorphic(),
@@ -182,7 +171,7 @@ impl<'a> LowerTyContext<'a> {
         mut arg_iter: NsDataIter,
     ) -> Result<ty::Poly> {
         match ty_cons {
-            TyCons::List => self.lower_list_cons(arg_iter),
+            TyCons::List => Ok(ty::Ty::List(self.lower_list_cons(arg_iter)?).into_poly()),
             TyCons::Listof => {
                 expect_arg_count(span, 1, arg_iter.len())?;
                 let rest_poly = self.lower_poly(arg_iter.next().unwrap())?;
