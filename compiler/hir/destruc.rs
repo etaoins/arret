@@ -75,29 +75,30 @@ where
 }
 
 pub fn subst_list_destruc(
-    free_ty_polys: &mut Vec<ty::Poly>,
+    free_ty_polys: &mut impl Iterator<Item = ty::Poly>,
     list: List<ty::Decl>,
 ) -> List<ty::Poly> {
-    let rest = list.rest
-        .map(|rest_destruc| Box::new(subst_scalar_destruc(free_ty_polys, *rest_destruc)));
-
-    let fixed = list.fixed
+    let fixed = list
+        .fixed
         .into_iter()
-        .rev()
         .map(|fixed_destruc| subst_destruc(free_ty_polys, fixed_destruc))
         .collect();
+
+    let rest = list
+        .rest
+        .map(|rest_destruc| Box::new(subst_scalar_destruc(free_ty_polys, *rest_destruc)));
 
     List::new(fixed, rest)
 }
 
 pub fn subst_scalar_destruc(
-    free_ty_polys: &mut Vec<ty::Poly>,
+    free_ty_polys: &mut impl Iterator<Item = ty::Poly>,
     scalar: Scalar<ty::Decl>,
 ) -> Scalar<ty::Poly> {
     let var_id = *scalar.var_id();
     let poly_type = match scalar.ty() {
         ty::Decl::Known(poly) => poly.clone(),
-        ty::Decl::Free => free_ty_polys.pop().unwrap(),
+        ty::Decl::Free => free_ty_polys.next().unwrap(),
     };
 
     Scalar::new(var_id, scalar.into_source_name(), poly_type)
@@ -108,7 +109,7 @@ pub fn subst_scalar_destruc(
 /// `free_ty_polys` must be ordered in the same way the types appear in the destruc type in
 /// depth-first order
 pub fn subst_destruc(
-    free_ty_polys: &mut Vec<ty::Poly>,
+    free_ty_polys: &mut impl Iterator<Item = ty::Poly>,
     destruc: Destruc<ty::Decl>,
 ) -> Destruc<ty::Poly> {
     match destruc {
@@ -120,7 +121,8 @@ pub fn subst_destruc(
 }
 
 pub fn poly_for_list_destruc(list: &List<ty::Poly>) -> ty::List<ty::Poly> {
-    let fixed_polys = list.fixed()
+    let fixed_polys = list
+        .fixed()
         .iter()
         .map(|fixed_destruc| poly_for_destruc(fixed_destruc))
         .collect::<Vec<ty::Poly>>()

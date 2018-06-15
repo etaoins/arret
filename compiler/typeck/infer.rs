@@ -535,10 +535,10 @@ impl<'a> InferCtx<'a> {
         let revealed_ret_type = body_node.poly_type;
         let revealed_purity = fun_fcx.purity.into_poly();
 
-        let mut inferred_free_types = self.free_ty_polys.split_off(free_ty_offset);
-
-        let revealed_param_destruc =
-            destruc::subst_list_destruc(&mut inferred_free_types, decl_fun.params);
+        let revealed_param_destruc = {
+            let mut inferred_free_types = self.free_ty_polys.drain(free_ty_offset..);
+            destruc::subst_list_destruc(&mut inferred_free_types, decl_fun.params)
+        };
         let revealed_param_type = hir::destruc::poly_for_list_destruc(&revealed_param_destruc);
 
         let revealed_type = ty::Fun::new(
@@ -790,7 +790,7 @@ impl<'a> InferCtx<'a> {
         );
 
         let body_node = self.visit_expr(fcx, required_type, body_expr)?;
-        let mut inferred_free_types = self.free_ty_polys.split_off(free_ty_offset);
+        let mut inferred_free_types = self.free_ty_polys.drain(free_ty_offset..);
 
         Ok(InferredNode {
             expr: hir::Expr::Let(
@@ -940,7 +940,7 @@ impl<'a> InferCtx<'a> {
             false,
         );
 
-        let mut inferred_free_types = self.free_ty_polys.split_off(free_ty_offset);
+        let mut inferred_free_types = self.free_ty_polys.drain(free_ty_offset..);
         Ok(hir::Def {
             span,
             destruc: destruc::subst_destruc(&mut inferred_free_types, destruc),
