@@ -12,7 +12,7 @@ use hir::prim::Prim;
 use hir::scope::{Binding, MacroId, Scope};
 use hir::types::{lower_poly, try_lower_purity};
 use hir::types::{lower_polymorphic_var, PolymorphicVar, PolymorphicVarKind};
-use hir::util::{expect_arg_count, expect_ident_and_span, try_take_rest_arg};
+use hir::util::{expect_arg_count, expect_ident_and_span, expect_one_arg, try_take_rest_arg};
 use hir::{App, Cond, Def, Expr, Fun, Let, VarIdCounter};
 use source::{SourceFileId, SourceLoader};
 use syntax::datum::Datum;
@@ -102,16 +102,14 @@ impl<'sl> LoweringContext<'sl> {
     }
 
     // This would be less ugly as Result<!> once it's stabilised
-    fn lower_user_compile_error(span: Span, mut arg_iter: NsDataIter) -> Error {
-        expect_arg_count(span, 1, arg_iter.len())
-            .err()
-            .unwrap_or_else(|| {
-                if let NsDatum::Str(_, user_message) = arg_iter.next().unwrap() {
-                    Error::new(span, ErrorKind::UserError(user_message))
-                } else {
-                    Error::new(span, ErrorKind::IllegalArg("string expected"))
-                }
-            })
+    fn lower_user_compile_error(span: Span, arg_iter: NsDataIter) -> Error {
+        match expect_one_arg(span, arg_iter) {
+            Ok(NsDatum::Str(_, user_message)) => {
+                Error::new(span, ErrorKind::UserError(user_message))
+            }
+            Ok(_) => Error::new(span, ErrorKind::IllegalArg("string expected")),
+            Err(error) => error,
+        }
     }
 
     fn lower_macro(
@@ -521,8 +519,8 @@ impl<'sl> LoweringContext<'sl> {
             Prim::LetType => self.lower_lettype(scope, span, arg_iter),
             Prim::Export => Err(Error::new(span, ErrorKind::ExportOutsideModule)),
             Prim::Quote => {
-                expect_arg_count(span, 1, arg_iter.len())?;
-                Ok(Expr::Lit(arg_iter.next().unwrap().into_syntax_datum()))
+                let literal_datum = expect_one_arg(span, arg_iter)?;
+                Ok(Expr::Lit(literal_datum.into_syntax_datum()))
             }
             Prim::Fun => self.lower_fun(scope, span, arg_iter),
             Prim::If => {
@@ -537,13 +535,10 @@ impl<'sl> LoweringContext<'sl> {
                     }),
                 ))
             }
-            Prim::TyPred => {
-                expect_arg_count(span, 1, arg_iter.len())?;
-                Ok(Expr::TyPred(
-                    span,
-                    lower_poly(&self.tvars, scope, arg_iter.next().unwrap())?,
-                ))
-            }
+            Prim::TyPred => Ok(Expr::TyPred(
+                span,
+                lower_poly(&self.tvars, scope, expect_one_arg(span, arg_iter)?)?,
+            )),
             Prim::Do => self.lower_body(scope, arg_iter),
             Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_iter)),
             Prim::Ellipsis | Prim::Wildcard | Prim::MacroRules | Prim::TyColon => {

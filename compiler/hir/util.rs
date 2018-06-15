@@ -39,6 +39,11 @@ pub fn expect_arg_count(
     }
 }
 
+pub fn expect_one_arg(span: Span, mut iter: NsDataIter) -> Result<NsDatum> {
+    expect_arg_count(span, 1, iter.len())?;
+    Ok(iter.next().unwrap())
+}
+
 pub fn expect_ident_and_span(datum: NsDatum) -> Result<(Ident, Span)> {
     if let NsDatum::Ident(span, ident) = datum {
         Ok((ident, span))

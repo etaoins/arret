@@ -5,7 +5,7 @@ use hir::error::{Error, ErrorKind};
 use hir::loader::ModuleName;
 use hir::ns::{NsDataIter, NsDatum};
 use hir::scope::Binding;
-use hir::util::{expect_arg_count, expect_ident, expect_ident_and_span};
+use hir::util::{expect_arg_count, expect_ident, expect_ident_and_span, expect_one_arg};
 use syntax::span::Span;
 
 type Result<T> = result::Result<T, Error>;
@@ -56,7 +56,7 @@ where
         apply_span: Span,
         filter_name: &str,
         filter_input: FilterInput,
-        mut arg_iter: NsDataIter,
+        arg_iter: NsDataIter,
     ) -> Result<FilterInput> {
         match filter_name {
             "only" => {
@@ -100,8 +100,7 @@ where
                 })
             }
             "rename" => {
-                expect_arg_count(apply_span, 1, arg_iter.len())?;
-                let arg_datum = arg_iter.next().unwrap();
+                let arg_datum = expect_one_arg(apply_span, arg_iter)?;
 
                 if let NsDatum::Map(_, vs) = arg_datum {
                     let mut rename_bindings = filter_input.bindings;
@@ -137,8 +136,8 @@ where
                 }
             }
             "prefix" => {
-                expect_arg_count(apply_span, 1, arg_iter.len())?;
-                let prefix_ident = expect_ident(arg_iter.next().unwrap())?;
+                let prefix_datum = expect_one_arg(apply_span, arg_iter)?;
+                let prefix_ident = expect_ident(prefix_datum)?;
 
                 let prefix_bindings = filter_input
                     .bindings

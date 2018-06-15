@@ -5,7 +5,7 @@ use hir::error::{Error, ErrorKind, Result};
 use hir::ns::{Ident, NsDataIter, NsDatum};
 use hir::prim::Prim;
 use hir::scope::{Binding, Scope};
-use hir::util::{expect_arg_count, expect_ident_and_span, try_take_rest_arg};
+use hir::util::{expect_arg_count, expect_ident_and_span, expect_one_arg, try_take_rest_arg};
 use syntax::span::Span;
 use ty;
 use ty::purity::Purity;
@@ -173,8 +173,8 @@ impl<'a> LowerTyContext<'a> {
         match ty_cons {
             TyCons::List => Ok(ty::Ty::List(self.lower_list_cons(arg_iter)?).into_poly()),
             TyCons::Listof => {
-                expect_arg_count(span, 1, arg_iter.len())?;
-                let rest_poly = self.lower_poly(arg_iter.next().unwrap())?;
+                let rest_datum = expect_one_arg(span, arg_iter)?;
+                let rest_poly = self.lower_poly(rest_datum)?;
                 let list_poly = ty::List::new(Box::new([]), Some(rest_poly));
 
                 Ok(ty::Ty::List(list_poly).into_poly())
@@ -188,18 +188,18 @@ impl<'a> LowerTyContext<'a> {
                 Ok(ty::Ty::Vec(member_tys).into_poly())
             }
             TyCons::Vectorof => {
-                expect_arg_count(span, 1, arg_iter.len())?;
-                let start_ty = self.lower_poly(arg_iter.next().unwrap())?;
+                let start_datum = expect_one_arg(span, arg_iter)?;
+                let start_ty = self.lower_poly(start_datum)?;
                 Ok(ty::Ty::Vecof(Box::new(start_ty)).into_poly())
             }
             TyCons::TyPred => {
-                expect_arg_count(span, 1, arg_iter.len())?;
-                let test_ty = self.lower_poly(arg_iter.next().unwrap())?;
+                let test_datum = expect_one_arg(span, arg_iter)?;
+                let test_ty = self.lower_poly(test_datum)?;
                 Ok(ty::Ty::TyPred(Box::new(test_ty)).into_poly())
             }
             TyCons::Set => {
-                expect_arg_count(span, 1, arg_iter.len())?;
-                let member_ty = self.lower_poly(arg_iter.next().unwrap())?;
+                let member_datum = expect_one_arg(span, arg_iter)?;
+                let member_ty = self.lower_poly(member_datum)?;
                 Ok(ty::Ty::Set(Box::new(member_ty)).into_poly())
             }
             TyCons::Map => {
@@ -290,8 +290,8 @@ impl<'a> LowerTyContext<'a> {
                 if let NsDatum::Ident(ident_span, ref ident) = fn_datum {
                     match self.scope.get(ident) {
                         Some(Binding::Prim(Prim::Quote)) => {
-                            expect_arg_count(span, 1, data_iter.len())?;
-                            return Self::lower_literal(data_iter.next().unwrap());
+                            let literal_datum = expect_one_arg(span, data_iter)?;
+                            return Self::lower_literal(literal_datum);
                         }
                         Some(Binding::TyCons(ty_cons)) => {
                             return self.lower_ty_cons_apply(span, ty_cons, data_iter);
