@@ -7,12 +7,12 @@ use hir::import::lower_import_set;
 use hir::loader::{load_module_by_name, parse_module_data, ModuleName};
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::module::Module;
-use hir::ns::{Ident, NsDatum, NsId};
+use hir::ns::{Ident, NsDataIter, NsDatum, NsId};
 use hir::prim::Prim;
 use hir::scope::{Binding, MacroId, Scope};
 use hir::types::{lower_poly, try_lower_purity};
 use hir::types::{lower_polymorphic_var, PolymorphicVar, PolymorphicVarKind};
-use hir::util::{expect_arg_count, expect_ident_and_span, split_into_fixed_and_rest};
+use hir::util::{expect_arg_count, expect_ident_and_span, try_take_rest_arg};
 use hir::{App, Cond, Def, Expr, Fun, Let, VarIdCounter};
 use source::{SourceFileId, SourceLoader};
 use syntax::datum::Datum;
@@ -102,11 +102,11 @@ impl<'sl> LoweringContext<'sl> {
     }
 
     // This would be less ugly as Result<!> once it's stabilised
-    fn lower_user_compile_error(span: Span, mut arg_data: Vec<NsDatum>) -> Error {
-        expect_arg_count(span, 1, arg_data.len())
+    fn lower_user_compile_error(span: Span, mut arg_iter: NsDataIter) -> Error {
+        expect_arg_count(span, 1, arg_iter.len())
             .err()
             .unwrap_or_else(|| {
-                if let NsDatum::Str(_, user_message) = arg_data.pop().unwrap() {
+                if let NsDatum::Str(_, user_message) = arg_iter.next().unwrap() {
                     Error::new(span, ErrorKind::UserError(user_message))
                 } else {
                     Error::new(span, ErrorKind::IllegalArg("string expected"))
@@ -157,12 +157,12 @@ impl<'sl> LoweringContext<'sl> {
         &mut self,
         scope: &mut Scope,
         span: Span,
-        mut arg_data: Vec<NsDatum>,
+        mut arg_iter: NsDataIter,
     ) -> Result<()> {
-        expect_arg_count(span, 2, arg_data.len())?;
+        expect_arg_count(span, 2, arg_iter.len())?;
 
-        let transformer_spec = arg_data.pop().unwrap();
-        let self_datum = arg_data.pop().unwrap();
+        let self_datum = arg_iter.next().unwrap();
+        let transformer_spec = arg_iter.next().unwrap();
 
         self.lower_macro(scope, self_datum, transformer_spec)
     }
@@ -171,9 +171,9 @@ impl<'sl> LoweringContext<'sl> {
         &mut self,
         scope: &Scope,
         span: Span,
-        arg_data: Vec<NsDatum>,
+        arg_iter: NsDataIter,
     ) -> Result<Expr<ty::Decl>> {
-        self.lower_let_like(scope, span, arg_data, Self::lower_macro, |expr, _| expr)
+        self.lower_let_like(scope, span, arg_iter, Self::lower_macro, |expr, _| expr)
     }
 
     fn lower_type(
@@ -196,12 +196,12 @@ impl<'sl> LoweringContext<'sl> {
         &mut self,
         scope: &mut Scope,
         span: Span,
-        mut arg_data: Vec<NsDatum>,
+        mut arg_iter: NsDataIter,
     ) -> Result<()> {
-        expect_arg_count(span, 2, arg_data.len())?;
+        expect_arg_count(span, 2, arg_iter.len())?;
 
-        let ty_datum = arg_data.pop().unwrap();
-        let self_datum = arg_data.pop().unwrap();
+        let self_datum = arg_iter.next().unwrap();
+        let ty_datum = arg_iter.next().unwrap();
 
         self.lower_type(scope, self_datum, ty_datum)
     }
@@ -210,9 +210,9 @@ impl<'sl> LoweringContext<'sl> {
         &mut self,
         scope: &Scope,
         span: Span,
-        arg_data: Vec<NsDatum>,
+        arg_iter: NsDataIter,
     ) -> Result<Expr<ty::Decl>> {
-        self.lower_let_like(scope, span, arg_data, Self::lower_type, |expr, _| expr)
+        self.lower_let_like(scope, span, arg_iter, Self::lower_type, |expr, _| expr)
     }
 
     /// Lowers an identifier in to a scalar destruc with the passed type
@@ -283,12 +283,11 @@ impl<'sl> LoweringContext<'sl> {
     fn lower_list_destruc(
         &mut self,
         scope: &mut Scope,
-        vs: Vec<NsDatum>,
+        mut data_iter: NsDataIter,
     ) -> Result<destruc::List<ty::Decl>> {
-        let (fixed, rest) = split_into_fixed_and_rest(scope, vs);
+        let rest = try_take_rest_arg(scope, &mut data_iter);
 
-        let fixed_destrucs = fixed
-            .into_iter()
+        let fixed_destrucs = data_iter
             .map(|v| self.lower_destruc(scope, v))
             .collect::<Result<Vec<destruc::Destruc<ty::Decl>>>>()?;
 
@@ -310,7 +309,7 @@ impl<'sl> LoweringContext<'sl> {
                 .lower_scalar_destruc(scope, destruc_datum)
                 .map(|scalar| destruc::Destruc::Scalar(span, scalar)),
             NsDatum::List(span, vs) => self
-                .lower_list_destruc(scope, vs.into_vec())
+                .lower_list_destruc(scope, vs.into_vec().into_iter())
                 .map(|list_destruc| destruc::Destruc::List(span, list_destruc)),
             _ => Err(Error::new(
                 destruc_datum.span(),
@@ -325,7 +324,7 @@ impl<'sl> LoweringContext<'sl> {
         &mut self,
         outer_scope: &Scope,
         span: Span,
-        arg_data: Vec<NsDatum>,
+        mut arg_iter: NsDataIter,
         binder: B,
         fold_output: C,
     ) -> Result<Expr<ty::Decl>>
@@ -333,7 +332,6 @@ impl<'sl> LoweringContext<'sl> {
         B: Fn(&mut Self, &mut Scope, NsDatum, NsDatum) -> Result<O>,
         C: Fn(Expr<ty::Decl>, O) -> Expr<ty::Decl>,
     {
-        let mut arg_iter = arg_data.into_iter();
         let bindings_datum = arg_iter.next().ok_or_else(|| {
             Error::new(span, ErrorKind::IllegalArg("bindings declaration missing"))
         })?;
@@ -368,10 +366,7 @@ impl<'sl> LoweringContext<'sl> {
         Ok(outputs.into_iter().rev().fold(body_expr, fold_output))
     }
 
-    fn lower_body<I>(&mut self, scope: &Scope, body_data: I) -> Result<Expr<ty::Decl>>
-    where
-        I: IntoIterator<Item = NsDatum>,
-    {
+    fn lower_body(&mut self, scope: &Scope, body_data: NsDataIter) -> Result<Expr<ty::Decl>> {
         let mut flattened_exprs = vec![];
 
         for body_datum in body_data {
@@ -396,12 +391,12 @@ impl<'sl> LoweringContext<'sl> {
         &mut self,
         scope: &Scope,
         span: Span,
-        arg_data: Vec<NsDatum>,
+        arg_iter: NsDataIter,
     ) -> Result<Expr<ty::Decl>> {
         self.lower_let_like(
             scope,
             span,
-            arg_data,
+            arg_iter,
             |inner_self, scope, target_datum, value_datum| {
                 let destruc = inner_self.lower_destruc(scope, target_datum)?;
                 let value_expr = inner_self.lower_expr(scope, value_datum)?;
@@ -424,10 +419,8 @@ impl<'sl> LoweringContext<'sl> {
         &mut self,
         outer_scope: &Scope,
         span: Span,
-        arg_data: Vec<NsDatum>,
+        mut arg_iter: NsDataIter,
     ) -> Result<Expr<ty::Decl>> {
-        let mut arg_iter = arg_data.into_iter();
-
         let mut fun_scope = Scope::new_child(outer_scope);
         let pvar_id_start = ty::purity::PVarId::new(self.pvars.len());
         let tvar_id_start = ty::TVarId::new(self.tvars.len());
@@ -471,7 +464,9 @@ impl<'sl> LoweringContext<'sl> {
 
         // Pull out our params
         let params = match next_datum {
-            NsDatum::List(_, vs) => self.lower_list_destruc(&mut fun_scope, vs.into_vec())?,
+            NsDatum::List(_, vs) => {
+                self.lower_list_destruc(&mut fun_scope, vs.into_vec().into_iter())?
+            }
             _ => {
                 return Err(Error::new(
                     span,
@@ -515,42 +510,42 @@ impl<'sl> LoweringContext<'sl> {
         scope: &Scope,
         span: Span,
         prim: Prim,
-        mut arg_data: Vec<NsDatum>,
+        mut arg_iter: NsDataIter,
     ) -> Result<Expr<ty::Decl>> {
         match prim {
             Prim::Def | Prim::DefMacro | Prim::DefType | Prim::Import => {
                 Err(Error::new(span, ErrorKind::DefOutsideBody))
             }
-            Prim::Let => self.lower_let(scope, span, arg_data),
-            Prim::LetMacro => self.lower_letmacro(scope, span, arg_data),
-            Prim::LetType => self.lower_lettype(scope, span, arg_data),
+            Prim::Let => self.lower_let(scope, span, arg_iter),
+            Prim::LetMacro => self.lower_letmacro(scope, span, arg_iter),
+            Prim::LetType => self.lower_lettype(scope, span, arg_iter),
             Prim::Export => Err(Error::new(span, ErrorKind::ExportOutsideModule)),
             Prim::Quote => {
-                expect_arg_count(span, 1, arg_data.len())?;
-                Ok(Expr::Lit(arg_data.pop().unwrap().into_syntax_datum()))
+                expect_arg_count(span, 1, arg_iter.len())?;
+                Ok(Expr::Lit(arg_iter.next().unwrap().into_syntax_datum()))
             }
-            Prim::Fun => self.lower_fun(scope, span, arg_data),
+            Prim::Fun => self.lower_fun(scope, span, arg_iter),
             Prim::If => {
-                expect_arg_count(span, 3, arg_data.len())?;
+                expect_arg_count(span, 3, arg_iter.len())?;
 
                 Ok(Expr::Cond(
                     span,
                     Box::new(Cond {
-                        false_expr: self.lower_expr(scope, arg_data.pop().unwrap())?,
-                        true_expr: self.lower_expr(scope, arg_data.pop().unwrap())?,
-                        test_expr: self.lower_expr(scope, arg_data.pop().unwrap())?,
+                        test_expr: self.lower_expr(scope, arg_iter.next().unwrap())?,
+                        true_expr: self.lower_expr(scope, arg_iter.next().unwrap())?,
+                        false_expr: self.lower_expr(scope, arg_iter.next().unwrap())?,
                     }),
                 ))
             }
             Prim::TyPred => {
-                expect_arg_count(span, 1, arg_data.len())?;
+                expect_arg_count(span, 1, arg_iter.len())?;
                 Ok(Expr::TyPred(
                     span,
-                    lower_poly(&self.tvars, scope, arg_data.pop().unwrap())?,
+                    lower_poly(&self.tvars, scope, arg_iter.next().unwrap())?,
                 ))
             }
-            Prim::Do => self.lower_body(scope, arg_data),
-            Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),
+            Prim::Do => self.lower_body(scope, arg_iter),
+            Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_iter)),
             Prim::Ellipsis | Prim::Wildcard | Prim::MacroRules | Prim::TyColon => {
                 Err(Error::new(span, ErrorKind::PrimRef))
             }
@@ -575,13 +570,8 @@ impl<'sl> LoweringContext<'sl> {
         Ok(&self.loaded_modules[module_name])
     }
 
-    fn lower_import(
-        &mut self,
-        scope: &mut Scope,
-        ns_id: NsId,
-        arg_data: Vec<NsDatum>,
-    ) -> Result<()> {
-        for arg_datum in arg_data {
+    fn lower_import(&mut self, scope: &mut Scope, ns_id: NsId, arg_iter: NsDataIter) -> Result<()> {
+        for arg_datum in arg_iter {
             let span = arg_datum.span();
             let bindings = lower_import_set(arg_datum, |span, module_name| {
                 // TODO: Allow multiple errors to pass through an import
@@ -605,12 +595,11 @@ impl<'sl> LoweringContext<'sl> {
         scope: &Scope,
         span: Span,
         fun_expr: Expr<ty::Decl>,
-        arg_data: Vec<NsDatum>,
+        mut arg_iter: NsDataIter,
     ) -> Result<Expr<ty::Decl>> {
-        let (fixed_arg_data, rest_arg_datum) = split_into_fixed_and_rest(scope, arg_data);
+        let rest_arg_datum = try_take_rest_arg(scope, &mut arg_iter);
 
-        let fixed_arg_exprs = fixed_arg_data
-            .into_iter()
+        let fixed_arg_exprs = arg_iter
             .map(|arg_datum| self.lower_expr(scope, arg_datum))
             .collect::<Result<Vec<Expr<ty::Decl>>>>()?;
 
@@ -643,18 +632,16 @@ impl<'sl> LoweringContext<'sl> {
                 None => Err(Error::new(span, ErrorKind::UnboundSym(ident.name().into()))),
             },
             NsDatum::List(span, vs) => {
-                let mut data = vs.into_vec();
-                if data.is_empty() {
+                let mut data_iter = vs.into_vec().into_iter();
+                if data_iter.len() == 0 {
                     return Ok(Expr::Lit(Datum::List(span, Box::new([]))));
                 }
 
-                let arg_data = data.split_off(1);
-                let fn_datum = data.pop().unwrap();
-
+                let fn_datum = data_iter.next().unwrap();
                 match fn_datum {
                     NsDatum::Ident(fn_span, ref ident) => match scope.get(ident) {
                         Some(Binding::Prim(prim)) => {
-                            self.lower_expr_prim_apply(scope, span, prim, arg_data)
+                            self.lower_expr_prim_apply(scope, span, prim, data_iter)
                         }
                         Some(Binding::Macro(macro_id)) => {
                             let mut macro_scope = Scope::new_child(scope);
@@ -662,14 +649,14 @@ impl<'sl> LoweringContext<'sl> {
                             let expanded_datum = {
                                 let mac = &self.macros[macro_id.to_usize()];
 
-                                expand_macro(&mut macro_scope, span, mac, &arg_data)?
+                                expand_macro(&mut macro_scope, span, mac, data_iter.as_slice())?
                             };
 
                             self.lower_expr(&macro_scope, expanded_datum)
                                 .map_err(|e| e.with_macro_invocation_span(span))
                         }
                         Some(Binding::Var(id)) => {
-                            self.lower_expr_apply(scope, span, Expr::Ref(span, id), arg_data)
+                            self.lower_expr_apply(scope, span, Expr::Ref(span, id), data_iter)
                         }
                         Some(Binding::Ty(_))
                         | Some(Binding::TyCons(_))
@@ -681,7 +668,7 @@ impl<'sl> LoweringContext<'sl> {
                     },
                     _ => {
                         let fn_expr = self.lower_expr(scope, fn_datum)?;
-                        self.lower_expr_apply(scope, span, fn_expr, arg_data)
+                        self.lower_expr_apply(scope, span, fn_expr, data_iter)
                     }
                 }
             }
@@ -693,14 +680,13 @@ impl<'sl> LoweringContext<'sl> {
         &mut self,
         scope: &mut Scope,
         applied_prim: AppliedPrim,
-        mut arg_data: Vec<NsDatum>,
+        mut arg_iter: NsDataIter,
     ) -> Result<Vec<DeferredModulePrim>> {
         let AppliedPrim { prim, ns_id, span } = applied_prim;
 
         match prim {
             Prim::Export => {
-                let deferred_exports = arg_data
-                    .into_iter()
+                let deferred_exports = arg_iter
                     .map(|datum| {
                         if let NsDatum::Ident(span, ident) = datum {
                             Ok(DeferredModulePrim::Export(DeferredExport(span, ident)))
@@ -713,12 +699,12 @@ impl<'sl> LoweringContext<'sl> {
                 Ok(deferred_exports)
             }
             Prim::Def => {
-                expect_arg_count(span, 2, arg_data.len())?;
+                expect_arg_count(span, 2, arg_iter.len())?;
 
-                let value_datum = arg_data.pop().unwrap();
-
-                let destruc_datum = arg_data.pop().unwrap();
+                let destruc_datum = arg_iter.next().unwrap();
                 let destruc = self.lower_destruc(scope, destruc_datum)?;
+
+                let value_datum = arg_iter.next().unwrap();
 
                 Ok(vec![DeferredModulePrim::Def(DeferredDef(
                     span,
@@ -726,18 +712,18 @@ impl<'sl> LoweringContext<'sl> {
                     value_datum,
                 ))])
             }
-            Prim::DefMacro => self.lower_defmacro(scope, span, arg_data).map(|_| vec![]),
-            Prim::DefType => self.lower_deftype(scope, span, arg_data).map(|_| vec![]),
-            Prim::Import => self.lower_import(scope, ns_id, arg_data).map(|_| vec![]),
+            Prim::DefMacro => self.lower_defmacro(scope, span, arg_iter).map(|_| vec![]),
+            Prim::DefType => self.lower_deftype(scope, span, arg_iter).map(|_| vec![]),
+            Prim::Import => self.lower_import(scope, ns_id, arg_iter).map(|_| vec![]),
             Prim::Do => {
                 let mut deferred_prims = vec![];
-                for arg_datum in arg_data {
+                for arg_datum in arg_iter {
                     deferred_prims.append(&mut self.lower_module_def(scope, arg_datum)?);
                 }
 
                 Ok(deferred_prims)
             }
-            Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_data)),
+            Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_iter)),
             _ => Err(Error::new(span, ErrorKind::NonDefInsideModule)),
         }
     }
@@ -750,11 +736,10 @@ impl<'sl> LoweringContext<'sl> {
         let span = datum.span();
 
         if let NsDatum::List(span, vs) = datum {
-            let mut data = vs.into_vec();
+            let mut data_iter = vs.into_vec().into_iter();
 
-            if !data.is_empty() {
-                let arg_data = data.split_off(1);
-                let fn_datum = data.pop().unwrap();
+            if data_iter.len() > 0 {
+                let fn_datum = data_iter.next().unwrap();
 
                 if let NsDatum::Ident(fn_span, ref ident) = fn_datum {
                     match scope.get(ident) {
@@ -765,12 +750,12 @@ impl<'sl> LoweringContext<'sl> {
                                 span,
                             };
 
-                            return self.lower_module_prim_apply(scope, applied_prim, arg_data);
+                            return self.lower_module_prim_apply(scope, applied_prim, data_iter);
                         }
                         Some(Binding::Macro(macro_id)) => {
                             let expanded_datum = {
                                 let mac = &self.macros[macro_id.to_usize()];
-                                expand_macro(scope, span, mac, &arg_data)?
+                                expand_macro(scope, span, mac, data_iter.as_slice())?
                             };
 
                             return self

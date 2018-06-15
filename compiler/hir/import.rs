@@ -3,7 +3,7 @@ use std::result;
 
 use hir::error::{Error, ErrorKind};
 use hir::loader::ModuleName;
-use hir::ns::NsDatum;
+use hir::ns::{NsDataIter, NsDatum};
 use hir::scope::Binding;
 use hir::util::{expect_arg_count, expect_ident, expect_ident_and_span};
 use syntax::span::Span;
@@ -51,16 +51,13 @@ where
         })
     }
 
-    fn lower_import_filter<I>(
+    fn lower_import_filter(
         &mut self,
         apply_span: Span,
         filter_name: &str,
         filter_input: FilterInput,
-        mut arg_iter: I,
-    ) -> Result<FilterInput>
-    where
-        I: ExactSizeIterator<Item = NsDatum>,
-    {
+        mut arg_iter: NsDataIter,
+    ) -> Result<FilterInput> {
         match filter_name {
             "only" => {
                 let inner_bindings = filter_input.bindings;

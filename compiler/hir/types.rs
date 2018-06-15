@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::ops::Range;
 
 use hir::error::{Error, ErrorKind, Result};
-use hir::ns::{Ident, NsDatum};
+use hir::ns::{Ident, NsDataIter, NsDatum};
 use hir::prim::Prim;
 use hir::scope::{Binding, Scope};
-use hir::util::{expect_arg_count, expect_ident_and_span, split_into_fixed_and_rest};
+use hir::util::{expect_arg_count, expect_ident_and_span, try_take_rest_arg};
 use syntax::span::Span;
 use ty;
 use ty::purity::Purity;
@@ -119,11 +119,10 @@ impl<'a> LowerTyContext<'a> {
         ))
     }
 
-    fn lower_list_cons(&self, arg_data: Vec<NsDatum>) -> Result<ty::Poly> {
-        let (fixed, rest) = split_into_fixed_and_rest(self.scope, arg_data);
+    fn lower_list_cons(&self, mut arg_iter: NsDataIter) -> Result<ty::Poly> {
+        let rest = try_take_rest_arg(self.scope, &mut arg_iter);
 
-        let fixed_polys = fixed
-            .into_iter()
+        let fixed_polys = arg_iter
             .map(|fixed_datum| self.lower_poly(fixed_datum))
             .collect::<Result<Vec<ty::Poly>>>()?
             .into_boxed_slice();
@@ -139,25 +138,24 @@ impl<'a> LowerTyContext<'a> {
     fn lower_fun_cons(
         &self,
         purity: ty::purity::Poly,
-        mut arg_data: Vec<NsDatum>,
+        mut arg_iter: NsDataIter,
     ) -> Result<ty::Poly> {
-        let ret_ty = self.lower_poly(arg_data.pop().unwrap())?;
+        let ret_ty = self.lower_poly(arg_iter.next_back().unwrap())?;
 
-        // Discard the constructor
-        arg_data.pop();
+        // Discard the purity
+        arg_iter.next_back();
 
         let top_fun = ty::TopFun::new(purity, ret_ty);
 
-        if arg_data.len() == 1
-            && self.scope.get_datum(&arg_data[0]) == Some(Binding::Prim(Prim::Ellipsis))
+        if arg_iter.len() == 1
+            && self.scope.get_datum(&arg_iter.as_slice()[0]) == Some(Binding::Prim(Prim::Ellipsis))
         {
             // Top function type in the form `(... -> ReturnType)`
             Ok(top_fun.into_ty_ref())
         } else {
-            let (fixed, rest) = split_into_fixed_and_rest(self.scope, arg_data);
+            let rest = try_take_rest_arg(self.scope, &mut arg_iter);
 
-            let fixed_polys = fixed
-                .into_iter()
+            let fixed_polys = arg_iter
                 .map(|fixed_datum| self.lower_poly(fixed_datum))
                 .collect::<Result<Vec<ty::Poly>>>()?
                 .into_boxed_slice();
@@ -181,20 +179,19 @@ impl<'a> LowerTyContext<'a> {
         &self,
         span: Span,
         ty_cons: TyCons,
-        mut arg_data: Vec<NsDatum>,
+        mut arg_iter: NsDataIter,
     ) -> Result<ty::Poly> {
         match ty_cons {
-            TyCons::List => self.lower_list_cons(arg_data),
+            TyCons::List => self.lower_list_cons(arg_iter),
             TyCons::Listof => {
-                expect_arg_count(span, 1, arg_data.len())?;
-                let rest_poly = self.lower_poly(arg_data.pop().unwrap())?;
+                expect_arg_count(span, 1, arg_iter.len())?;
+                let rest_poly = self.lower_poly(arg_iter.next().unwrap())?;
                 let list_poly = ty::List::new(Box::new([]), Some(rest_poly));
 
                 Ok(ty::Ty::List(list_poly).into_poly())
             }
             TyCons::Vector => {
-                let member_tys = arg_data
-                    .into_iter()
+                let member_tys = arg_iter
                     .map(|arg_datum| self.lower_poly(arg_datum))
                     .collect::<Result<Vec<ty::Poly>>>()?
                     .into_boxed_slice();
@@ -202,29 +199,28 @@ impl<'a> LowerTyContext<'a> {
                 Ok(ty::Ty::Vec(member_tys).into_poly())
             }
             TyCons::Vectorof => {
-                expect_arg_count(span, 1, arg_data.len())?;
-                let start_ty = self.lower_poly(arg_data.pop().unwrap())?;
+                expect_arg_count(span, 1, arg_iter.len())?;
+                let start_ty = self.lower_poly(arg_iter.next().unwrap())?;
                 Ok(ty::Ty::Vecof(Box::new(start_ty)).into_poly())
             }
             TyCons::TyPred => {
-                expect_arg_count(span, 1, arg_data.len())?;
-                let test_ty = self.lower_poly(arg_data.pop().unwrap())?;
+                expect_arg_count(span, 1, arg_iter.len())?;
+                let test_ty = self.lower_poly(arg_iter.next().unwrap())?;
                 Ok(ty::Ty::TyPred(Box::new(test_ty)).into_poly())
             }
             TyCons::Set => {
-                expect_arg_count(span, 1, arg_data.len())?;
-                let member_ty = self.lower_poly(arg_data.pop().unwrap())?;
+                expect_arg_count(span, 1, arg_iter.len())?;
+                let member_ty = self.lower_poly(arg_iter.next().unwrap())?;
                 Ok(ty::Ty::Set(Box::new(member_ty)).into_poly())
             }
             TyCons::Map => {
-                expect_arg_count(span, 2, arg_data.len())?;
-                let value_ty = self.lower_poly(arg_data.pop().unwrap())?;
-                let key_ty = self.lower_poly(arg_data.pop().unwrap())?;
+                expect_arg_count(span, 2, arg_iter.len())?;
+                let key_ty = self.lower_poly(arg_iter.next().unwrap())?;
+                let value_ty = self.lower_poly(arg_iter.next().unwrap())?;
                 Ok(ty::Ty::Map(Box::new(ty::Map::new(key_ty, value_ty))).into_poly())
             }
             TyCons::Union => {
-                let member_tys = arg_data
-                    .into_iter()
+                let member_tys = arg_iter
                     .map(|arg_datum| self.lower_poly(arg_datum))
                     .collect::<Result<Vec<ty::Poly>>>()?;
 
@@ -237,8 +233,7 @@ impl<'a> LowerTyContext<'a> {
             TyCons::RawU => {
                 // This performs a union *without* unifying the types. This is used when testing the
                 // union code itself
-                let member_tys = arg_data
-                    .into_iter()
+                let member_tys = arg_iter
                     .map(|arg_datum| self.lower_poly(arg_datum))
                     .collect::<Result<Vec<ty::Poly>>>()?;
 
@@ -284,31 +279,33 @@ impl<'a> LowerTyContext<'a> {
     fn lower_poly(&self, datum: NsDatum) -> Result<ty::Poly> {
         match datum {
             NsDatum::List(span, vs) => {
-                let mut data = vs.into_vec();
+                let mut data_iter = vs.into_vec().into_iter();
+                let data_len = data_iter.len();
 
-                if data.is_empty() {
+                if data_len == 0 {
                     // This is by analogy with () being self-evaluating in expressions
                     return Ok(ty::Ty::List(ty::List::new(Box::new([]), None)).into_poly());
                 }
 
-                if data.len() >= 2 {
-                    if let Some(purity) = try_lower_purity(self.scope, &data[data.len() - 2]) {
+                if data_len >= 2 {
+                    if let Some(purity) =
+                        try_lower_purity(self.scope, &data_iter.as_slice()[data_len - 2])
+                    {
                         // This is a function type
-                        return self.lower_fun_cons(purity, data);
+                        return self.lower_fun_cons(purity, data_iter);
                     };
                 }
 
-                let mut arg_data = data.split_off(1);
-                let fn_datum = data.pop().unwrap();
+                let fn_datum = data_iter.next().unwrap();
 
                 if let NsDatum::Ident(ident_span, ref ident) = fn_datum {
                     match self.scope.get(ident) {
                         Some(Binding::Prim(Prim::Quote)) => {
-                            expect_arg_count(span, 1, arg_data.len())?;
-                            return Self::lower_literal(arg_data.pop().unwrap());
+                            expect_arg_count(span, 1, data_iter.len())?;
+                            return Self::lower_literal(data_iter.next().unwrap());
                         }
                         Some(Binding::TyCons(ty_cons)) => {
-                            return self.lower_ty_cons_apply(span, ty_cons, arg_data);
+                            return self.lower_ty_cons_apply(span, ty_cons, data_iter);
                         }
                         None => {
                             return Err(Error::new(

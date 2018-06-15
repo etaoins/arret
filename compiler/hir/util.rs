@@ -1,31 +1,27 @@
 use hir::error::{Error, ErrorKind, Result};
-use hir::ns::{Ident, NsDatum};
+use hir::ns::{Ident, NsDataIter, NsDatum};
 use hir::prim::Prim;
 use hir::scope::{Binding, Scope};
 use syntax::span::Span;
 
-/// Splits data in to fixed arguments and an optional rest argument
+/// Removes the rest argument from the passed iterator and returns it
 ///
 /// The rest argument is denoted by using `...` at the end of the data
-pub fn split_into_fixed_and_rest(
-    scope: &Scope,
-    mut vs: Vec<NsDatum>,
-) -> (Vec<NsDatum>, Option<NsDatum>) {
-    let has_rest = if vs.len() >= 2 {
-        scope.get_datum(&vs[vs.len() - 1]) == Some(Binding::Prim(Prim::Ellipsis))
-    } else {
-        false
-    };
+pub fn try_take_rest_arg(scope: &Scope, data_iter: &mut NsDataIter) -> Option<NsDatum> {
+    let data_len = data_iter.len();
 
-    let rest_datum = if has_rest {
+    // This is gross becase we need to "peek" at the end of the iterator
+    let has_rest = data_len >= 2
+        && scope.get_datum(&data_iter.as_slice()[data_len - 1])
+            == Some(Binding::Prim(Prim::Ellipsis));
+
+    if has_rest {
         // Remove the ellipsis completely
-        vs.pop();
-        Some(vs.pop().unwrap())
+        data_iter.next_back();
+        Some(data_iter.next_back().unwrap())
     } else {
         None
-    };
-
-    (vs, rest_datum)
+    }
 }
 
 pub fn expect_arg_count(

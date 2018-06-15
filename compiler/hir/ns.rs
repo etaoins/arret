@@ -1,3 +1,4 @@
+use std::vec;
 use syntax::datum::Datum;
 use syntax::span::Span;
 
@@ -129,3 +130,9 @@ impl NsDatum {
         }
     }
 }
+
+/// Iterator for NsDatum used inside the HIR
+///
+/// This is a specific type as we use .as_slice() to peek at data in certain places for
+/// context-sensitive parsing.
+pub type NsDataIter = vec::IntoIter<NsDatum>;
