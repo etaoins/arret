@@ -731,8 +731,20 @@ impl<'a> InferCtx<'a> {
                 ErrorKind::TopFunApply(self.str_for_poly(&revealed_fun_type)),
             )),
             ty::Ty::TyPred(test_poly) => {
-                // TODO: Arity
-                let subject_expr = fixed_arg_exprs.pop().unwrap();
+                let supplied_arg_count = fixed_arg_exprs.len();
+                let wanted_arity = WantedArity::new(1, false);
+
+                if supplied_arg_count > 1 {
+                    return Err(Error::new(
+                        span,
+                        ErrorKind::TooManyArgs(supplied_arg_count, wanted_arity),
+                    ));
+                }
+
+                let subject_expr = fixed_arg_exprs
+                    .pop()
+                    .ok_or_else(|| Error::new(span, ErrorKind::InsufficientArgs(0, wanted_arity)))?;
+
                 let subject_var_id = if let hir::Expr::Ref(_, var_id) = subject_expr {
                     Some(var_id)
                 } else {
