@@ -634,10 +634,9 @@ impl<'a> InferCtx<'a> {
 
         // Iterate over our parameter type to feed type information in to the arguments
         let mut param_iter = ListIterator::new(fun_type.params());
-        let wanted_arity = WantedArity::new(param_iter.fixed_len(), param_iter.has_rest());
 
-        // TODO: Better arity messages
         let supplied_arg_count = fixed_arg_exprs.len();
+        let wanted_arity = WantedArity::new(param_iter.fixed_len(), param_iter.has_rest());
 
         let mut inferred_fixed_arg_exprs = vec![];
         for fixed_arg_expr in fixed_arg_exprs {
