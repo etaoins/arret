@@ -37,7 +37,7 @@ pub enum ErrorKind {
     VarHasEmptyType(Box<str>, Box<str>),
     TopFunApply(Box<str>),
     RecursiveType,
-    // Have, wanted
+    DependsOnError,
     TooManyArgs(usize, WantedArity),
     InsufficientArgs(usize, WantedArity),
 }
@@ -52,6 +52,10 @@ impl Error {
 
     pub fn span(&self) -> Span {
         self.0
+    }
+
+    pub fn kind(&self) -> &ErrorKind {
+        &self.1
     }
 }
 
@@ -81,6 +85,9 @@ impl Reportable for Error {
             }
             ErrorKind::RecursiveType => {
                 "recursive usage requires explicit type annotation".to_owned()
+            }
+            ErrorKind::DependsOnError => {
+                "type cannot be determined due to previous error".to_owned()
             }
         }
     }

@@ -89,6 +89,9 @@ enum VarType {
     // (def) currently having its type inferred
     Recursive,
 
+    /// Type depends on a value that failed to type check
+    Error,
+
     /// Scalar value being inferred
     ParamScalar(FreeTyId),
 
@@ -407,6 +410,7 @@ impl<'a> InferCtx<'a> {
         let pending_def_id = match self.var_to_type[&var_id] {
             VarType::Pending(def_id) => def_id,
             VarType::Recursive => return Err(Error::new(span, ErrorKind::RecursiveType)),
+            VarType::Error => return Err(Error::new(span, ErrorKind::DependsOnError)),
             VarType::Known(ref known_type) => {
                 self.ensure_is_a(span, known_type, required_type)?;
                 return Ok(InferredNode::new_ref_node(span, var_id, known_type.clone()));
@@ -1002,8 +1006,21 @@ impl<'a> InferCtx<'a> {
         });
 
         let required_type = typeck::destruc::type_for_decl_destruc(self.tvars, &destruc, None);
-        let value_node =
-            self.visit_expr_with_self_var_id(&mut fcx, &required_type, value_expr, self_var_id)?;
+        let value_node = match self.visit_expr_with_self_var_id(
+            &mut fcx,
+            &required_type,
+            value_expr,
+            self_var_id,
+        ) {
+            Ok(value_node) => value_node,
+            Err(error) => {
+                // Mark this def as an error so we can suppress cascade errors
+                typeck::destruc::visit_vars(&destruc, |var_id, _| {
+                    self.var_to_type.insert(var_id, VarType::Error);
+                });
+                return Err(error);
+            }
+        };
 
         let free_ty_offset = self.destruc_value(&destruc, &value_node.poly_type, false);
         let mut inferred_free_types = self.free_ty_polys.drain(free_ty_offset..);
@@ -1064,7 +1081,10 @@ impl<'a> InferCtx<'a> {
                         self.complete_defs.push(inferred_def);
                     }
                     Err(err) => {
-                        errs.push(err);
+                        // If this is due to a previous error it's just noise to report it
+                        if err.kind() != &ErrorKind::DependsOnError {
+                            errs.push(err);
+                        }
                     }
                 },
                 InputDef::Complete => {}
