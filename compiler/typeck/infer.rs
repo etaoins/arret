@@ -517,7 +517,6 @@ impl<'a> InferCtx<'a> {
         // Bind all of our parameter variables
         let free_ty_offset = self.destruc_list_value(
             &decl_fun.params,
-            span,
             ListIterator::new(&initial_param_type),
             // If a parameter has a free decl type then we can refine the type
             true,
@@ -802,7 +801,6 @@ impl<'a> InferCtx<'a> {
             body_expr,
         } = hir_let;
 
-        let value_span = value_expr.span().unwrap_or(span);
         let required_destruc_type =
             typeck::destruc::type_for_decl_destruc(self.tvars, &destruc, None);
 
@@ -819,7 +817,7 @@ impl<'a> InferCtx<'a> {
         let value_node =
             self.visit_expr_with_self_var_id(fcx, &required_destruc_type, value_expr, self_var_id)?;
 
-        let free_ty_offset = self.destruc_value(&destruc, value_span, &value_node.poly_type, false);
+        let free_ty_offset = self.destruc_value(&destruc, &value_node.poly_type, false);
 
         let body_node = self.visit_expr(fcx, required_type, body_expr)?;
         let mut inferred_free_types = self.free_ty_polys.drain(free_ty_offset..);
@@ -935,7 +933,6 @@ impl<'a> InferCtx<'a> {
     fn destruc_list_value(
         &mut self,
         list: &destruc::List<ty::Decl>,
-        value_span: Span,
         mut value_type_iter: ListIterator<ty::Poly>,
         is_param: bool,
     ) -> usize {
@@ -946,7 +943,7 @@ impl<'a> InferCtx<'a> {
                 .next()
                 .expect("Destructured value with unexpected type");
 
-            self.destruc_value(fixed_destruc, value_span, member_type, is_param);
+            self.destruc_value(fixed_destruc, member_type, is_param);
         }
 
         if let Some(rest) = list.rest() {
@@ -959,7 +956,6 @@ impl<'a> InferCtx<'a> {
     fn destruc_value(
         &mut self,
         destruc: &destruc::Destruc<ty::Decl>,
-        value_span: Span,
         value_type: &ty::Poly,
         is_param: bool,
     ) -> usize {
@@ -970,7 +966,7 @@ impl<'a> InferCtx<'a> {
             destruc::Destruc::List(_, list) => {
                 let value_type_iter = ListIterator::try_new_from_ty_ref(value_type)
                     .expect("Tried to destruc non-list");
-                self.destruc_list_value(list, value_span, value_type_iter, is_param)
+                self.destruc_list_value(list, value_type_iter, is_param)
             }
         }
     }
@@ -995,11 +991,10 @@ impl<'a> InferCtx<'a> {
         });
 
         let required_type = typeck::destruc::type_for_decl_destruc(self.tvars, &destruc, None);
-        let value_span = value_expr.span().unwrap_or(span);
         let value_node =
             self.visit_expr_with_self_var_id(&mut fcx, &required_type, value_expr, self_var_id)?;
 
-        let free_ty_offset = self.destruc_value(&destruc, value_span, &value_node.poly_type, false);
+        let free_ty_offset = self.destruc_value(&destruc, &value_node.poly_type, false);
         let mut inferred_free_types = self.free_ty_polys.drain(free_ty_offset..);
 
         Ok(hir::Def {

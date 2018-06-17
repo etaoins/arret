@@ -92,27 +92,6 @@ where
     Do(Vec<Expr<T>>),
 }
 
-impl<T> Expr<T>
-where
-    T: HirType,
-{
-    /// Returns the span for the expression
-    ///
-    /// This will return None for `Expr::Do` as it may not have a single contiguous span
-    pub fn span(&self) -> Option<Span> {
-        match self {
-            Expr::Lit(datum) => Some(datum.span()),
-            Expr::App(span, _)
-            | Expr::Fun(span, _)
-            | Expr::Let(span, _)
-            | Expr::Cond(span, _)
-            | Expr::Ref(span, _)
-            | Expr::TyPred(span, _) => Some(*span),
-            Expr::Do(_) => None,
-        }
-    }
-}
-
 #[derive(PartialEq, Debug)]
 pub struct Def<T>
 where
