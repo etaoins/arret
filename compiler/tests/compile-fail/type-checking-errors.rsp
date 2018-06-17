@@ -51,4 +51,8 @@
 
 (defn non-list-rest-type (x ...)
   (ann x (Vector Any)))
-      ;^ ERROR inferred conflicting types `(Vector Any)` and `(Listof Any)`
+      ;^ ERROR `(Vector Any)` is not a `(Listof Any)`
+
+(defn specific-rest-list-type-fails (x ...)
+  (ann x (List Int Int Int)))
+      ;^ ERROR `(Listof Int)` is not a `(List Int Int Int)`

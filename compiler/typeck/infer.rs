@@ -88,8 +88,15 @@ enum VarType {
     Pending(InputDefId),
     // (def) currently having its type inferred
     Recursive,
-    // non-(def) free type being inferred
-    Free(FreeTyId),
+
+    /// Scalar value being inferred
+    ParamScalar(FreeTyId),
+
+    /// Rest list being inferred
+    ///
+    /// The referenced free type is the member type of the uniform rest list.
+    ParamRest(FreeTyId),
+
     // Declared or previously inferred type
     Known(ty::Poly),
 }
@@ -359,10 +366,8 @@ impl<'a> InferCtx<'a> {
         &self,
         required_type: &ty::Poly,
         span: Span,
-        free_ty_id: FreeTyId,
+        current_type: &ty::Poly,
     ) -> Result<ty::Poly> {
-        let current_type = &self.free_ty_polys[free_ty_id.to_usize()];
-
         // Unlike references to known variables the `current_type` and `required_type` have equal
         // footing. We intersect here to find the commonality between the two types. This will
         // become the new type of the variable.
@@ -375,6 +380,21 @@ impl<'a> InferCtx<'a> {
                 ),
             )
         })
+    }
+
+    fn member_type_for_poly_list(&self, span: Span, poly_type: &ty::Poly) -> Result<ty::Poly> {
+        if poly_type == &ty::Ty::Any.into_poly() {
+            Ok(ty::Ty::Any.into_poly())
+        } else if let ty::Poly::Fixed(ty::Ty::List(list)) = poly_type {
+            Ok(ListIterator::new(list)
+                .collect_rest(self.tvars)
+                .unwrap_or_else(|| ty::Ty::Any.into_poly()))
+        } else {
+            Err(Error::new(
+                span,
+                ErrorKind::IsNotTy(self.str_for_poly(&poly_type), "(Listof Any)".into()),
+            ))
+        }
     }
 
     fn visit_ref(
@@ -391,13 +411,31 @@ impl<'a> InferCtx<'a> {
                 self.ensure_is_a(span, known_type, required_type)?;
                 return Ok(InferredNode::new_ref_node(span, var_id, known_type.clone()));
             }
-            VarType::Free(free_ty_id) => {
-                let new_free_type = self.type_for_free_ref(required_type, span, free_ty_id)?;
+            VarType::ParamScalar(free_ty_id) => {
+                let new_free_type = {
+                    let current_type = &self.free_ty_polys[free_ty_id.to_usize()];
+                    self.type_for_free_ref(required_type, span, current_type)?
+                };
 
-                // Update the free var's type
                 self.free_ty_polys[free_ty_id.to_usize()] = new_free_type.clone();
-
                 return Ok(InferredNode::new_ref_node(span, var_id, new_free_type));
+            }
+            VarType::ParamRest(free_ty_id) => {
+                let new_free_type = {
+                    let current_member_type = &self.free_ty_polys[free_ty_id.to_usize()];
+                    let required_member_type = self.member_type_for_poly_list(span, required_type)?;
+
+                    self.type_for_free_ref(&required_member_type, span, current_member_type)?
+                };
+
+                self.free_ty_polys[free_ty_id.to_usize()] = new_free_type.clone();
+                let rest_list_type =
+                    ty::Ty::List(ty::List::new(Box::new([]), Some(new_free_type))).into_poly();
+
+                // Make sure we didn't require a specific list type e.g. `(List Int Int Int)`
+                self.ensure_is_a(span, &rest_list_type, required_type)?;
+
+                return Ok(InferredNode::new_ref_node(span, var_id, rest_list_type));
             }
         };
 
@@ -781,14 +819,7 @@ impl<'a> InferCtx<'a> {
         let value_node =
             self.visit_expr_with_self_var_id(fcx, &required_destruc_type, value_expr, self_var_id)?;
 
-        let free_ty_offset = self.destruc_value(
-            &destruc,
-            value_span,
-            &value_node.poly_type,
-            // We know the exact type of these variables; do not infer further even if their type
-            // wasn't declared
-            false,
-        );
+        let free_ty_offset = self.destruc_value(&destruc, value_span, &value_node.poly_type, false);
 
         let body_node = self.visit_expr(fcx, required_type, body_expr)?;
         let mut inferred_free_types = self.free_ty_polys.drain(free_ty_offset..);
@@ -841,7 +872,7 @@ impl<'a> InferCtx<'a> {
         &mut self,
         scalar: &destruc::Scalar<ty::Decl>,
         value_type: &ty::Poly,
-        can_refine: bool,
+        is_param: bool,
     ) -> usize {
         let start_offset = self.free_ty_polys.len();
 
@@ -852,8 +883,8 @@ impl<'a> InferCtx<'a> {
         };
 
         if let Some(var_id) = *scalar.var_id() {
-            let var_type = if let (Some(free_ty_id), true) = (free_ty_id, can_refine) {
-                VarType::Free(free_ty_id)
+            let var_type = if let (Some(free_ty_id), true) = (free_ty_id, is_param) {
+                VarType::ParamScalar(free_ty_id)
             } else {
                 VarType::Known(value_type.clone())
             };
@@ -864,12 +895,49 @@ impl<'a> InferCtx<'a> {
         start_offset
     }
 
+    fn destruc_rest_value(
+        &mut self,
+        rest: &destruc::Scalar<ty::Decl>,
+        value_type_iter: ListIterator<ty::Poly>,
+        is_param: bool,
+    ) {
+        let param_free_ty_id = if *rest.ty() == ty::Decl::Free {
+            // Start with member type as a guide
+            let member_type = value_type_iter
+                .clone()
+                .collect_rest(self.tvars)
+                .unwrap_or_else(|| ty::Ty::Any.into_poly());
+
+            let free_ty_id = self.insert_free_ty(member_type);
+            if is_param {
+                Some(free_ty_id)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if let Some(var_id) = *rest.var_id() {
+            let var_type = if let Some(param_free_ty_id) = param_free_ty_id {
+                VarType::ParamRest(param_free_ty_id)
+            } else {
+                // If we're not a rest parameter we know our exact tail type. We can't subst
+                // the tail type in to the destruc because it only takes a member type.
+                // However, we can use the exact tail type whenever we reference the var.
+                VarType::Known(ty::Ty::List(value_type_iter.tail_type()).into_poly())
+            };
+
+            self.var_to_type.insert(var_id, var_type);
+        }
+    }
+
     fn destruc_list_value(
         &mut self,
         list: &destruc::List<ty::Decl>,
         value_span: Span,
         mut value_type_iter: ListIterator<ty::Poly>,
-        can_refine: bool,
+        is_param: bool,
     ) -> usize {
         let start_offset = self.free_ty_polys.len();
 
@@ -878,12 +946,11 @@ impl<'a> InferCtx<'a> {
                 .next()
                 .expect("Destructured value with unexpected type");
 
-            self.destruc_value(fixed_destruc, value_span, member_type, can_refine);
+            self.destruc_value(fixed_destruc, value_span, member_type, is_param);
         }
 
-        if let Some(scalar) = list.rest() {
-            let tail_type = ty::Ty::List(value_type_iter.tail_type()).into_poly();
-            self.destruc_scalar_value(scalar, &tail_type, can_refine);
+        if let Some(rest) = list.rest() {
+            self.destruc_rest_value(rest, value_type_iter, is_param);
         }
 
         start_offset
@@ -894,16 +961,16 @@ impl<'a> InferCtx<'a> {
         destruc: &destruc::Destruc<ty::Decl>,
         value_span: Span,
         value_type: &ty::Poly,
-        can_refine: bool,
+        is_param: bool,
     ) -> usize {
         match destruc {
             destruc::Destruc::Scalar(_, scalar) => {
-                self.destruc_scalar_value(scalar, value_type, can_refine)
+                self.destruc_scalar_value(scalar, value_type, is_param)
             }
             destruc::Destruc::List(_, list) => {
                 let value_type_iter = ListIterator::try_new_from_ty_ref(value_type)
                     .expect("Tried to destruc non-list");
-                self.destruc_list_value(list, value_span, value_type_iter, can_refine)
+                self.destruc_list_value(list, value_span, value_type_iter, is_param)
             }
         }
     }
@@ -932,15 +999,7 @@ impl<'a> InferCtx<'a> {
         let value_node =
             self.visit_expr_with_self_var_id(&mut fcx, &required_type, value_expr, self_var_id)?;
 
-        let free_ty_offset = self.destruc_value(
-            &destruc,
-            value_span,
-            &value_node.poly_type,
-            // We know the exact type of these variables; do not infer further even if their type
-            // wasn't declared
-            false,
-        );
-
+        let free_ty_offset = self.destruc_value(&destruc, value_span, &value_node.poly_type, false);
         let mut inferred_free_types = self.free_ty_polys.drain(free_ty_offset..);
 
         Ok(hir::Def {

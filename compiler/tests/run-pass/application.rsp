@@ -1,0 +1,4 @@
+(import [risp base])
+
+(defn return-rest (x ...) x)
+(def [_ : (Listof Any)] (return-rest 1 2 3))

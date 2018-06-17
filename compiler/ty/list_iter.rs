@@ -1,6 +1,7 @@
 use ty;
 
 /// Iterates through the member types of a list
+#[derive(Clone)]
 pub struct ListIterator<'a, S>
 where
     S: ty::TyRef + 'a,
