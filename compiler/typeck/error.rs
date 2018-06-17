@@ -5,6 +5,31 @@ use std::fmt::Display;
 use reporting::{Level, Reportable};
 use syntax::span::Span;
 
+#[derive(PartialEq, Debug, Copy, Clone)]
+pub struct WantedArity {
+    fixed_len: usize,
+    has_rest: bool,
+}
+
+impl WantedArity {
+    pub fn new(fixed_len: usize, has_rest: bool) -> WantedArity {
+        WantedArity {
+            fixed_len,
+            has_rest,
+        }
+    }
+}
+
+impl fmt::Display for WantedArity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.has_rest {
+            write!(f, "at least {}", self.fixed_len)
+        } else {
+            write!(f, "{}", self.fixed_len)
+        }
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub enum ErrorKind {
     IsNotTy(Box<str>, Box<str>),
@@ -13,8 +38,8 @@ pub enum ErrorKind {
     TopFunApply(Box<str>),
     RecursiveType,
     // Have, wanted
-    TooManyArgs(usize, usize),
-    InsufficientArgs(usize, usize),
+    TooManyArgs(usize, WantedArity),
+    InsufficientArgs(usize, WantedArity),
 }
 
 #[derive(PartialEq, Debug)]
@@ -48,7 +73,7 @@ impl Reportable for Error {
                 "cannot determine parameter types for top function type `{}`",
                 top_fun
             ),
-            ErrorKind::TooManyArgs(have, wanted) => {
+            ErrorKind::TooManyArgs(have, ref wanted) => {
                 format!("too many arguments; wanted {}, have {}", wanted, have)
             }
             ErrorKind::InsufficientArgs(have, wanted) => {

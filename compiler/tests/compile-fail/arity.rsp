@@ -1,0 +1,13 @@
+(import [risp base])
+
+(defn not-enough-fixed (_) ())
+(def _ (not-enough-fixed))
+      ;^^^^^^^^^^^^^^^^^^ ERROR insufficient arguments; wanted 1, have 0
+
+(defn not-enough-fixed-and-rest (_ _ ...) ())
+(def _ (not-enough-fixed-and-rest))
+      ;^^^^^^^^^^^^^^^^^^^^^^^^^^^ ERROR insufficient arguments; wanted at least 1, have 0
+
+(defn too-many-fixed (_) ())
+(def _ (too-many-fixed 1 2 3))
+      ;^^^^^^^^^^^^^^^^^^^^^^ ERROR too many arguments; wanted 1, have 3

@@ -1,9 +1,12 @@
 (import [risp base])
 
-; Make sure values can be passed through a multi-binding let
+; Ensure values can be passed through a multi-binding let
 (def [_ : 'original]
   (let [x 'original
         y x
         z y]
     z))
-    
+
+; We should be able to infer the type for rest bindings
+(def (x ...) '(1 2 3))
+(def [_ : (Listof Int)] x)

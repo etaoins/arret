@@ -11,7 +11,7 @@ use ty::list_iter::ListIterator;
 use ty::purity::Purity;
 use ty::TyRef;
 use typeck;
-use typeck::error::{Error, ErrorKind};
+use typeck::error::{Error, ErrorKind, WantedArity};
 
 type Result<T> = result::Result<T, Error>;
 
@@ -597,6 +597,7 @@ impl<'a> InferCtx<'a> {
 
         // Iterate over our parameter type to feed type information in to the arguments
         let mut param_iter = ListIterator::new(fun_type.params());
+        let wanted_arity = WantedArity::new(param_iter.fixed_len(), param_iter.has_rest());
 
         // TODO: Better arity messages
         let supplied_arg_count = fixed_arg_exprs.len();
@@ -606,7 +607,7 @@ impl<'a> InferCtx<'a> {
             let param_type = param_iter.next().ok_or_else(|| {
                 Error::new(
                     span,
-                    ErrorKind::TooManyArgs(supplied_arg_count, fun_type.params().fixed().len()),
+                    ErrorKind::TooManyArgs(supplied_arg_count, wanted_arity),
                 )
             })?;
 
@@ -624,11 +625,11 @@ impl<'a> InferCtx<'a> {
 
             ret_select_ctx.add_evidence(&tail_type, &rest_arg_node.poly_type);
             Some(rest_arg_node.expr)
-        } else if param_iter.next().is_some() && fun_type.params().rest().is_none() {
+        } else if param_iter.fixed_len() > 0 {
             // We wanted more args!
             return Err(Error::new(
                 span,
-                ErrorKind::InsufficientArgs(supplied_arg_count, fun_type.params().fixed().len()),
+                ErrorKind::InsufficientArgs(supplied_arg_count, wanted_arity),
             ));
         } else {
             None
@@ -941,6 +942,7 @@ impl<'a> InferCtx<'a> {
         );
 
         let mut inferred_free_types = self.free_ty_polys.drain(free_ty_offset..);
+
         Ok(hir::Def {
             span,
             destruc: destruc::subst_destruc(&mut inferred_free_types, destruc),
@@ -1209,7 +1211,8 @@ mod test {
         let j = "((fn ()) 1)";
         let t = "^^^^^^^^^^^";
 
-        let err = Error::new(t2s(t), ErrorKind::TooManyArgs(1, 0));
+        let wanted_arity = WantedArity::new(0, false);
+        let err = Error::new(t2s(t), ErrorKind::TooManyArgs(1, wanted_arity));
         assert_type_error(&err, j);
     }
 
@@ -1218,7 +1221,8 @@ mod test {
         let j = "((fn (_ _)) 1)";
         let t = "^^^^^^^^^^^^^^";
 
-        let err = Error::new(t2s(t), ErrorKind::InsufficientArgs(1, 2));
+        let wanted_arity = WantedArity::new(2, false);
+        let err = Error::new(t2s(t), ErrorKind::InsufficientArgs(1, wanted_arity));
         assert_type_error(&err, j);
     }
 

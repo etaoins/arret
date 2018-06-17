@@ -48,3 +48,7 @@
 (defn polymorphic-impure-app #{[->A : ->!]} () ->A ()
   (impure-fun!))
  ;^^^^^^^^^^^^^ ERROR function of type `(->! ())` is not `->A`
+
+(defn non-list-rest-type (x ...)
+  (ann x (Vector Any)))
+      ;^ ERROR inferred conflicting types `(Vector Any)` and `(Listof Any)`

@@ -31,6 +31,10 @@ where
         self.fixed.len()
     }
 
+    pub fn has_rest(&self) -> bool {
+        self.rest.is_some()
+    }
+
     pub fn next(&mut self) -> Option<&'a S> {
         if self.fixed.is_empty() {
             self.rest
