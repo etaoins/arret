@@ -21,3 +21,9 @@
 (defn apply-top-fun ([x : (... -> Bool)])
   (x 5))
  ;^^^^^ ERROR cannot determine parameter types for top function type `(... -> Bool)`
+
+ (defn apply-with-spread (_ [_ : Int] _))
+ (def _ (apply-with-spread '(1 2) ...))
+                           ;^^^^^ ERROR `(List Int Int)` is not a `(List Any Int Any)`
+ (def _ (apply-with-spread '(1 2 3 4) ...))
+                           ;^^^^^^^^^ ERROR `(List Int Int Int Int)` is not a `(List Any Int Any)`

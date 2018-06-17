@@ -2,3 +2,7 @@
 
 (defn return-rest (x ...) x)
 (def [_ : (Listof Any)] (return-rest 1 2 3))
+
+(defn take-exactly-three (_ _ _) false)
+(def [_ : false] (take-exactly-three 1 2 3))
+(def [_ : false] (take-exactly-three '(1 2 3) ...))
