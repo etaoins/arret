@@ -33,7 +33,7 @@
       ;^^^^^^^^^^ ERROR inferred conflicting types `Sym` and `Str`
 
 ; `input` will gain type information from the function type annotation
-(def [conflicting-lambda-backwards-type : (Sym -> Str)]
+(def [conflicting-closure-type : (Sym -> Str)]
   (fn (input) (ann input Str)))
                   ;^^^^^ ERROR inferred conflicting types `Str` and `Sym
 
