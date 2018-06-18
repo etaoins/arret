@@ -59,3 +59,9 @@
 
 ; The compiler should suppress this error as it's a cascade error
 (def depends-on-type-error specific-rest-list-type-fails)
+
+; This generic parameter isn't sufficiently bound
+(defn takes-symbol ([x : Sym]))
+(defn takes-generic #{T} ([x : T])
+  (takes-symbol x))
+               ;^ ERROR `T` is not a `Sym`
