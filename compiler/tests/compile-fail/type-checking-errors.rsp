@@ -53,12 +53,12 @@
   (ann x (Vector Any)))
       ;^ ERROR `(Vector Any)` is not a `(Listof Any)`
 
-(defn specific-rest-list-type-fails (x ...)
+(defn specific-rest-list-type (x ...)
   (ann x (List Int Int Int)))
       ;^ ERROR `(Listof Int)` is not a `(List Int Int Int)`
 
 ; The compiler should suppress this error as it's a cascade error
-(def depends-on-type-error specific-rest-list-type-fails)
+(def depends-on-type-error specific-rest-list-type)
 
 ; This generic parameter isn't sufficiently bound
 (defn takes-symbol ([x : Sym]))
