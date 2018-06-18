@@ -53,6 +53,28 @@ pub trait TyRef: PartialEq + Clone + Sized + fmt::Debug {
             _ => None,
         })
     }
+
+    /// Combination of find + map looking for a particular fixed type
+    ///
+    /// This is identical to `try_to_fixed().and_then(pred)` except it iterates inside unions.
+    fn find_member<'a, F, T>(&'a self, try_map: F) -> Option<T>
+    where
+        F: Fn(&'a Ty<Self>) -> Option<T> + Copy,
+        T: 'a,
+    {
+        match self.try_to_fixed() {
+            Some(Ty::Union(members)) => {
+                for member in members.iter() {
+                    if let Some(result) = member.find_member(try_map) {
+                        return Some(result);
+                    }
+                }
+                None
+            }
+            Some(other) => try_map(other),
+            None => None,
+        }
+    }
 }
 
 pub trait TVarIds: PartialEq + Eq + Clone + std::fmt::Debug + std::hash::Hash + Sized {

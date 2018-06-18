@@ -1,0 +1,9 @@
+(import [risp base])
+
+(defn direct-required-type ()
+  (let [[closure : (Sym -> Sym)] (fn (x) x)]
+    (ann closure (Sym -> Sym))))
+
+(defn union-required-type ()
+  (let [[closure : (U false (Sym -> Sym))] (fn (x) x)]
+    (ann closure (Sym -> Sym))))

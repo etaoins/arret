@@ -244,8 +244,7 @@ impl<'a> InferCtx<'a> {
             // Patch our occurrence types in to the `var_to_type` and restore it after. We
             // avoid `?`ing our results until the end to make sure the original types are
             // properly restored.
-            let original_var_type = self
-                .var_to_type
+            let original_var_type = self.var_to_type
                 .insert(var_id, VarType::Known(type_if_true.clone()))
                 .unwrap();
 
@@ -387,17 +386,27 @@ impl<'a> InferCtx<'a> {
 
     fn member_type_for_poly_list(&self, span: Span, poly_type: &ty::Poly) -> Result<ty::Poly> {
         if poly_type == &ty::Ty::Any.into_poly() {
-            Ok(ty::Ty::Any.into_poly())
-        } else if let ty::Poly::Fixed(ty::Ty::List(list)) = poly_type {
-            Ok(ListIterator::new(list)
-                .collect_rest(self.tvars)
-                .unwrap_or_else(|| ty::Ty::Any.into_poly()))
-        } else {
-            Err(Error::new(
-                span,
-                ErrorKind::IsNotTy(self.str_for_poly(&poly_type), "(Listof Any)".into()),
-            ))
+            return Ok(ty::Ty::Any.into_poly());
         }
+
+        let list = poly_type
+            .find_member(|t| {
+                if let ty::Ty::List(list) = t {
+                    Some(list)
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| {
+                Error::new(
+                    span,
+                    ErrorKind::IsNotTy(self.str_for_poly(&poly_type), "(Listof Any)".into()),
+                )
+            })?;
+
+        Ok(ListIterator::new(list)
+            .collect_rest(self.tvars)
+            .unwrap_or_else(|| ty::Ty::Any.into_poly()))
     }
 
     fn visit_ref(
@@ -498,17 +507,24 @@ impl<'a> InferCtx<'a> {
         // This is set to false if we encounter any free types in our params or ret
         let mut decl_tys_are_known = true;
 
-        // TODO: Union types
-        let required_fun_type = match required_type {
-            ty::Poly::Fixed(ty::Ty::Fun(fun)) => Some(fun),
-            _ => None,
-        };
+        let required_fun_type = required_type.find_member(|t| {
+            if let ty::Ty::Fun(fun) = t {
+                Some(fun.as_ref())
+            } else {
+                None
+            }
+        });
 
         let required_top_fun_type = required_fun_type
             .map(|fun_type| fun_type.top_fun())
-            .or_else(|| match required_type {
-                ty::Poly::Fixed(ty::Ty::TopFun(top_fun)) => Some(top_fun),
-                _ => None,
+            .or_else(|| {
+                required_type.find_member(|t| {
+                    if let ty::Ty::TopFun(top_fun) = t {
+                        Some(top_fun.as_ref())
+                    } else {
+                        None
+                    }
+                })
             });
 
         let initial_param_type: ty::List<ty::Poly> = typeck::destruc::type_for_decl_list_destruc(
