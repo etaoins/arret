@@ -61,7 +61,8 @@ where
 {
     fn ty_ref_is_a(&self, &S, &S) -> Result;
     fn purity_ref_is_a(&self, &S::PRef, &S::PRef) -> Result;
-    fn polymorphic_fun_is_a(&self, sub_fun: &ty::Fun<S>, par_fun: &ty::Fun<S>) -> Result;
+    fn polymorphic_fun_is_a(&self, &ty::Fun<S>, &ty::Fun<S>) -> Result;
+    fn polymorphic_fun_is_a_top(&self, &ty::Fun<S>, &ty::TopFun<S>) -> Result;
 
     fn top_fun_is_a(&self, sub_top_fun: &ty::TopFun<S>, par_top_fun: &ty::TopFun<S>) -> Result {
         self.purity_ref_is_a(sub_top_fun.purity(), par_top_fun.purity())
@@ -248,7 +249,11 @@ where
                 self.top_fun_is_a(sub_top_fun, par_top_fun)
             }
             (ty::Ty::Fun(sub_fun), ty::Ty::TopFun(par_top_fun)) => {
-                self.top_fun_is_a(sub_fun.top_fun(), par_top_fun)
+                if sub_fun.is_monomorphic() {
+                    self.top_fun_is_a(sub_fun.top_fun(), par_top_fun)
+                } else {
+                    self.polymorphic_fun_is_a_top(sub_fun, par_top_fun)
+                }
             }
             (ty::Ty::TopFun(sub_top_fun), ty::Ty::Fun(par_fun)) => {
                 Result::May.and_then(|| self.top_fun_is_a(sub_top_fun, par_fun.top_fun()))
@@ -351,10 +356,25 @@ impl<'a> IsACtx<ty::Poly> for PolyIsACtx<'a> {
             self.tvars,
         );
 
-        // Instantiate a monomorphic function based on the params from the parent function
-        select_ctx.add_evidence_list(sub_fun.params(), par_fun.params());
+        select_ctx.add_evidence(sub_fun.ret(), par_fun.ret());
         let mono_sub_fun = ty::subst::inst_fun_selection(&select_ctx, sub_fun);
         self.monomorphic_fun_is_a(&mono_sub_fun, par_fun)
+    }
+
+    fn polymorphic_fun_is_a_top(
+        &self,
+        sub_fun: &ty::Fun<ty::Poly>,
+        par_top_fun: &ty::TopFun<ty::Poly>,
+    ) -> Result {
+        let mut select_ctx = ty::select::SelectContext::new(
+            sub_fun.pvar_ids().clone(),
+            sub_fun.tvar_ids().clone(),
+            self.tvars,
+        );
+
+        select_ctx.add_evidence(sub_fun.ret(), par_top_fun.ret());
+        let mono_sub_fun = ty::subst::inst_fun_selection(&select_ctx, sub_fun);
+        self.top_fun_is_a(mono_sub_fun.top_fun(), par_top_fun)
     }
 }
 
@@ -382,6 +402,14 @@ impl<'a> IsACtx<ty::Mono> for MonoIsACtx {
         &self,
         _sub_fun: &ty::Fun<ty::Mono>,
         _par_fun: &ty::Fun<ty::Mono>,
+    ) -> Result {
+        unreachable!("Monomorphic types should not have polymorphic functions")
+    }
+
+    fn polymorphic_fun_is_a_top(
+        &self,
+        _sub_fun: &ty::Fun<ty::Mono>,
+        _par_top_fun: &ty::TopFun<ty::Mono>,
     ) -> Result {
         unreachable!("Monomorphic types should not have polymorphic functions")
     }
@@ -832,7 +860,7 @@ mod test {
         // that
         let top_to_sym_fun = poly_for_str("(... ->! Sym)");
         assert_eq!(
-            Result::May,
+            Result::Yes,
             poly_is_a(&tvars, &pidentity_fun, &top_to_sym_fun)
         );
         assert_eq!(
@@ -853,6 +881,25 @@ mod test {
         assert_eq!(
             Result::Yes,
             poly_is_a(&tvars, &pidentity_impure_string_fun, &str_to_str_fun)
+        );
+
+        // The polymorphic identity string function satisfies (... ->! Str)
+        let top_impure_str_fun = poly_for_str("(... ->! Str)");
+        assert_eq!(
+            Result::Yes,
+            poly_is_a(&tvars, &pidentity_impure_string_fun, &top_impure_str_fun)
+        );
+
+        // As does the unbounded identity function
+        assert_eq!(
+            Result::Yes,
+            poly_is_a(&tvars, &pidentity_fun, &top_impure_str_fun)
+        );
+
+        // But not the polymorphic symbol function
+        assert_eq!(
+            Result::No,
+            poly_is_a(&tvars, &pidentity_sym_fun, &top_impure_str_fun)
         );
     }
 }
