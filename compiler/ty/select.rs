@@ -10,22 +10,22 @@ use ty::list_iter::ListIterator;
 /// the context. The calculated polymorphic types and purities can be retrieved from the
 /// `pvar_purities` and `tvar_types` methods.
 #[derive(Clone, Debug)]
-pub struct SelectContext<'a> {
+pub struct SelectContext<'tvars> {
     pvar_ids: Range<ty::purity::PVarId>,
     tvar_ids: Range<ty::TVarId>,
 
-    tvars: &'a [ty::TVar],
+    tvars: &'tvars [ty::TVar],
 
     pvar_purities: Vec<Option<ty::purity::Poly>>,
     tvar_types: Vec<Option<ty::Poly>>,
 }
 
-impl<'a> SelectContext<'a> {
+impl<'tvars> SelectContext<'tvars> {
     pub fn new(
         pvar_ids: Range<ty::purity::PVarId>,
         tvar_ids: Range<ty::TVarId>,
-        tvars: &[ty::TVar],
-    ) -> SelectContext {
+        tvars: &'tvars [ty::TVar],
+    ) -> SelectContext<'tvars> {
         let pvar_ids_usize = pvar_ids.start.to_usize()..pvar_ids.end.to_usize();
         let tvar_ids_usize = tvar_ids.start.to_usize()..tvar_ids.end.to_usize();
 
