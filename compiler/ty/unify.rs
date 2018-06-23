@@ -285,11 +285,11 @@ where
     }
 }
 
-struct PolyUnifyCtx<'a> {
-    tvars: &'a [ty::TVar],
+struct PolyUnifyCtx<'tvars> {
+    tvars: &'tvars [ty::TVar],
 }
 
-impl<'a> UnifyCtx<ty::Poly> for PolyUnifyCtx<'a> {
+impl<'tvars> UnifyCtx<ty::Poly> for PolyUnifyCtx<'tvars> {
     fn unify_ty_refs(&self, poly1: &ty::Poly, poly2: &ty::Poly) -> UnifiedTy<ty::Poly> {
         use ty::resolve;
 
@@ -324,11 +324,7 @@ impl<'a> UnifyCtx<ty::Poly> for PolyUnifyCtx<'a> {
     }
 }
 
-pub fn poly_unify_to_poly<'a>(
-    tvars: &'a [ty::TVar],
-    poly1: &'a ty::Poly,
-    poly2: &'a ty::Poly,
-) -> ty::Poly {
+pub fn poly_unify_to_poly(tvars: &[ty::TVar], poly1: &ty::Poly, poly2: &ty::Poly) -> ty::Poly {
     let ctx = PolyUnifyCtx { tvars };
     ctx.unify_to_ty_ref(poly1, poly2)
 }
@@ -372,7 +368,7 @@ pub fn poly_unify_list(
 
 struct MonoUnifyCtx {}
 
-impl<'a> UnifyCtx<ty::Mono> for MonoUnifyCtx {
+impl UnifyCtx<ty::Mono> for MonoUnifyCtx {
     fn unify_ty_refs(&self, mono1: &ty::Mono, mono2: &ty::Mono) -> UnifiedTy<ty::Mono> {
         self.unify_ty(mono1, mono1.as_ty(), mono2, mono2.as_ty())
     }
@@ -411,11 +407,7 @@ mod test {
         hir::poly_for_str(datum_str)
     }
 
-    fn poly_unify<'a>(
-        tvars: &'a [ty::TVar],
-        poly1: &'a ty::Poly,
-        poly2: &'a ty::Poly,
-    ) -> UnifiedTy<ty::Poly> {
+    fn poly_unify(tvars: &[ty::TVar], poly1: &ty::Poly, poly2: &ty::Poly) -> UnifiedTy<ty::Poly> {
         let ctx = PolyUnifyCtx { tvars };
         ctx.unify_ty_refs(poly1, poly2)
     }
