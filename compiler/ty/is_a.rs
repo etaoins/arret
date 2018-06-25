@@ -17,7 +17,7 @@ impl Result {
         self == Result::Yes
     }
 
-    fn and_then<F>(&self, op: F) -> Result
+    fn and_then<F>(self, op: F) -> Result
     where
         F: FnOnce() -> Result,
     {

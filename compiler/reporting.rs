@@ -181,7 +181,7 @@ pub enum Level {
 }
 
 impl Level {
-    pub fn name(&self) -> &'static str {
+    pub fn name(self) -> &'static str {
         match self {
             Level::Error => "error",
             Level::Note => "note",
@@ -189,7 +189,7 @@ impl Level {
         }
     }
 
-    fn colour(&self) -> Colour {
+    fn colour(self) -> Colour {
         match self {
             Level::Error => Colour::Red,
             Level::Note => Colour::Blue,

@@ -5,11 +5,11 @@ pub struct Span {
 }
 
 impl Span {
-    pub fn with_lo(&self, lo: u32) -> Span {
+    pub fn with_lo(self, lo: u32) -> Span {
         Span { lo, hi: self.hi }
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub fn is_empty(self) -> bool {
         self.lo == self.hi
     }
 }
