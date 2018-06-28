@@ -65,7 +65,7 @@ pub struct Error {
     kind: ErrorKind,
 }
 
-pub type Result<T> = result::Result<T, Error>;
+pub type Result<T, E = Error> = result::Result<T, E>;
 
 impl Error {
     pub fn new(span: Span, kind: ErrorKind) -> Error {
@@ -161,6 +161,12 @@ impl Display for Error {
 impl From<SyntaxError> for Error {
     fn from(err: SyntaxError) -> Error {
         Error::new(err.span(), ErrorKind::SyntaxError(err))
+    }
+}
+
+impl From<Error> for Vec<Error> {
+    fn from(error: Error) -> Vec<Error> {
+        vec![error]
     }
 }
 

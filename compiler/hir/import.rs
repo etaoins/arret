@@ -8,7 +8,7 @@ use hir::scope::Binding;
 use hir::util::{expect_arg_count, expect_ident, expect_ident_and_span, expect_one_arg};
 use syntax::span::Span;
 
-type Result<T> = result::Result<T, Error>;
+type Result<T> = result::Result<T, Vec<Error>>;
 type Bindings = HashMap<Box<str>, Binding>;
 
 /// Input to an (import) filter
@@ -39,7 +39,7 @@ where
         let mut name_components = name_data
             .into_iter()
             .map(|datum| expect_ident(datum).map(|ident| ident.into_name()))
-            .collect::<Result<Vec<Box<str>>>>()?;
+            .collect::<result::Result<Vec<Box<str>>, Error>>()?;
 
         let terminal_name = name_components.pop().unwrap();
         let module_name = ModuleName::new(name_components, terminal_name.clone());
@@ -74,7 +74,7 @@ where
                             ))
                         }
                     })
-                    .collect::<Result<Bindings>>()?;
+                    .collect::<result::Result<Bindings, Error>>()?;
 
                 Ok(FilterInput {
                     bindings: only_bindings,
@@ -83,27 +83,34 @@ where
             }
             "except" => {
                 let mut except_bindings = filter_input.bindings;
+                let mut errors = vec![];
+
                 for arg_datum in arg_iter {
                     let (ident, span) = expect_ident_and_span(arg_datum)?;
 
                     if except_bindings.remove(ident.name()).is_none() {
-                        return Err(Error::new(
+                        errors.push(Error::new(
                             span,
                             ErrorKind::UnboundSym(ident.into_name()),
                         ));
                     }
                 }
 
-                Ok(FilterInput {
-                    bindings: except_bindings,
-                    terminal_name: filter_input.terminal_name,
-                })
+                if errors.is_empty() {
+                    Ok(FilterInput {
+                        bindings: except_bindings,
+                        terminal_name: filter_input.terminal_name,
+                    })
+                } else {
+                    Err(errors)
+                }
             }
             "rename" => {
                 let arg_datum = expect_one_arg(apply_span, arg_iter)?;
 
                 if let NsDatum::Map(_, vs) = arg_datum {
                     let mut rename_bindings = filter_input.bindings;
+                    let mut errors = vec![];
 
                     for (from_datum, to_datum) in vs.into_vec() {
                         let (from_ident, from_span) = expect_ident_and_span(from_datum)?;
@@ -114,7 +121,7 @@ where
                                 rename_bindings.insert(to_ident.into_name(), binding);
                             }
                             None => {
-                                return Err(Error::new(
+                                errors.push(Error::new(
                                     from_span,
                                     ErrorKind::UnboundSym(from_ident.into_name()),
                                 ));
@@ -122,17 +129,21 @@ where
                         }
                     }
 
-                    Ok(FilterInput {
-                        bindings: rename_bindings,
-                        terminal_name: filter_input.terminal_name,
-                    })
+                    if errors.is_empty() {
+                        Ok(FilterInput {
+                            bindings: rename_bindings,
+                            terminal_name: filter_input.terminal_name,
+                        })
+                    } else {
+                        Err(errors)
+                    }
                 } else {
-                    Err(Error::new(
+                    Err(vec![Error::new(
                         arg_datum.span(),
                         ErrorKind::IllegalArg(
                             "(rename) expects a map of identifier renames",
                         ),
-                    ))
+                    )])
                 }
             }
             "prefix" => {
@@ -167,12 +178,12 @@ where
                     terminal_name,
                 })
             }
-            _ => Err(Error::new(
+            _ => Err(vec![Error::new(
                 apply_span,
                 ErrorKind::IllegalArg(
                     "unknown import filter; must be `only`, `except`, `rename`, `prefix` or `prefixed`"
                 ),
-            )),
+            )]),
         }
     }
 
@@ -184,10 +195,10 @@ where
         match import_set_datum {
             NsDatum::Vec(_, vs) => {
                 if vs.is_empty() {
-                    return Err(Error::new(
+                    return Err(vec![Error::new(
                         span,
                         ErrorKind::IllegalArg("module name requires a least one element"),
-                    ));
+                    )]);
                 }
 
                 return self.lower_module_import(span, vs.into_vec());
@@ -212,12 +223,12 @@ where
             _ => {}
         }
 
-        Err(Error::new(
+        Err(vec![Error::new(
             span,
             ErrorKind::IllegalArg(
                 "import set must either be a module name vector or an applied filter",
             ),
-        ))
+        )])
     }
 }
 
@@ -245,7 +256,7 @@ mod test {
 
             Ok(bindings)
         } else {
-            Err(Error::new(EMPTY_SPAN, ErrorKind::ModuleNotFound))
+            Err(vec![Error::new(EMPTY_SPAN, ErrorKind::ModuleNotFound)])
         }
     }
 
@@ -272,7 +283,7 @@ mod test {
     #[test]
     fn module_not_found() {
         let j = "[not found]";
-        let err = Error::new(EMPTY_SPAN, ErrorKind::ModuleNotFound);
+        let err = vec![Error::new(EMPTY_SPAN, ErrorKind::ModuleNotFound)];
 
         assert_eq!(err, bindings_for_import_set(j).unwrap_err());
     }
@@ -287,7 +298,7 @@ mod test {
 
         let j = "(only [lib test] quote ifz)";
         let t = "                       ^^^ ";
-        let err = Error::new(t2s(t), ErrorKind::UnboundSym("ifz".into()));
+        let err = vec![Error::new(t2s(t), ErrorKind::UnboundSym("ifz".into()))];
 
         assert_eq!(err, bindings_for_import_set(j).unwrap_err());
     }
@@ -302,7 +313,7 @@ mod test {
 
         let j = "(except [lib test] ifz)";
         let t = "                   ^^^ ";
-        let err = Error::new(t2s(t), ErrorKind::UnboundSym("ifz".into()));
+        let err = vec![Error::new(t2s(t), ErrorKind::UnboundSym("ifz".into()))];
 
         assert_eq!(err, bindings_for_import_set(j).unwrap_err());
     }
@@ -317,7 +328,7 @@ mod test {
 
         let j = "(rename [lib test] {ifz new-ifz})";
         let t = "                    ^^^          ";
-        let err = Error::new(t2s(t), ErrorKind::UnboundSym("ifz".into()));
+        let err = vec![Error::new(t2s(t), ErrorKind::UnboundSym("ifz".into()))];
 
         assert_eq!(err, bindings_for_import_set(j).unwrap_err());
     }

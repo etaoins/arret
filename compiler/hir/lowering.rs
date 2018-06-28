@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, HashMap};
-use std::result;
 
 use hir::destruc;
 use hir::error::{Error, ErrorKind, Result};
@@ -37,12 +36,6 @@ pub struct LoweredProgram {
     pub defs: Vec<Def<ty::Decl>>,
     pub pvars: Vec<ty::purity::PVar>,
     pub tvars: Vec<ty::TVar>,
-}
-
-impl From<Error> for Vec<Error> {
-    fn from(error: Error) -> Vec<Error> {
-        vec![error]
-    }
 }
 
 struct DeferredDef(Span, destruc::Destruc<ty::Decl>, NsDatum);
@@ -552,7 +545,7 @@ impl<'sl> LoweringContext<'sl> {
         scope: &mut Scope,
         span: Span,
         module_name: &ModuleName,
-    ) -> result::Result<&Module, Vec<Error>> {
+    ) -> Result<&Module, Vec<Error>> {
         // TODO: This does a lot of hash lookups
         if !self.loaded_modules.contains_key(module_name) {
             let module_data = load_module_by_name(self.source_loader, span, module_name)?;
@@ -565,14 +558,17 @@ impl<'sl> LoweringContext<'sl> {
         Ok(&self.loaded_modules[module_name])
     }
 
-    fn lower_import(&mut self, scope: &mut Scope, ns_id: NsId, arg_iter: NsDataIter) -> Result<()> {
+    fn lower_import(
+        &mut self,
+        scope: &mut Scope,
+        ns_id: NsId,
+        arg_iter: NsDataIter,
+    ) -> Result<(), Vec<Error>> {
         for arg_datum in arg_iter {
             let span = arg_datum.span();
             let bindings = lower_import_set(arg_datum, |span, module_name| {
-                // TODO: Allow multiple errors to pass through an import
                 Ok(self
-                    .load_module(scope, span, module_name)
-                    .map_err(|mut errors| errors.remove(0))?
+                    .load_module(scope, span, module_name)?
                     .exports()
                     .clone())
             })?;
@@ -676,7 +672,7 @@ impl<'sl> LoweringContext<'sl> {
         scope: &mut Scope,
         applied_prim: AppliedPrim,
         mut arg_iter: NsDataIter,
-    ) -> Result<Vec<DeferredModulePrim>> {
+    ) -> Result<Vec<DeferredModulePrim>, Vec<Error>> {
         let AppliedPrim { prim, ns_id, span } = applied_prim;
 
         match prim {
@@ -707,19 +703,30 @@ impl<'sl> LoweringContext<'sl> {
                     value_datum,
                 ))])
             }
-            Prim::DefMacro => self.lower_defmacro(scope, span, arg_iter).map(|_| vec![]),
-            Prim::DefType => self.lower_deftype(scope, span, arg_iter).map(|_| vec![]),
+            Prim::DefMacro => Ok(self.lower_defmacro(scope, span, arg_iter).map(|_| vec![])?),
+            Prim::DefType => Ok(self.lower_deftype(scope, span, arg_iter).map(|_| vec![])?),
             Prim::Import => self.lower_import(scope, ns_id, arg_iter).map(|_| vec![]),
             Prim::Do => {
                 let mut deferred_prims = vec![];
+                let mut errors = vec![];
+
                 for arg_datum in arg_iter {
-                    deferred_prims.append(&mut self.lower_module_def(scope, arg_datum)?);
+                    match self.lower_module_def(scope, arg_datum) {
+                        Ok(mut new_deferred_prims) => {
+                            deferred_prims.append(&mut new_deferred_prims)
+                        }
+                        Err(mut new_errors) => errors.append(&mut new_errors),
+                    }
                 }
 
-                Ok(deferred_prims)
+                if errors.is_empty() {
+                    Ok(deferred_prims)
+                } else {
+                    Err(errors)
+                }
             }
-            Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_iter)),
-            _ => Err(Error::new(span, ErrorKind::NonDefInsideModule)),
+            Prim::CompileError => Err(vec![Self::lower_user_compile_error(span, arg_iter)]),
+            _ => Err(vec![Error::new(span, ErrorKind::NonDefInsideModule)]),
         }
     }
 
@@ -727,7 +734,7 @@ impl<'sl> LoweringContext<'sl> {
         &mut self,
         scope: &mut Scope,
         datum: NsDatum,
-    ) -> Result<Vec<DeferredModulePrim>> {
+    ) -> Result<Vec<DeferredModulePrim>, Vec<Error>> {
         let span = datum.span();
 
         if let NsDatum::List(span, vs) = datum {
@@ -755,30 +762,30 @@ impl<'sl> LoweringContext<'sl> {
 
                             return self
                                 .lower_module_def(scope, expanded_datum)
-                                .map_err(|e| e.with_macro_invocation_span(span));
+                                .map_err(|errs| {
+                                    errs.into_iter()
+                                        .map(|e| e.with_macro_invocation_span(span))
+                                        .collect()
+                                });
                         }
                         Some(_) => {
                             // Non-def
                         }
                         None => {
-                            return Err(Error::new(
+                            return Err(vec![Error::new(
                                 fn_span,
                                 ErrorKind::UnboundSym(ident.name().into()),
-                            ));
+                            )]);
                         }
                     }
                 }
             }
         }
 
-        Err(Error::new(span, ErrorKind::NonDefInsideModule))
+        Err(vec![Error::new(span, ErrorKind::NonDefInsideModule)])
     }
 
-    fn lower_module(
-        &mut self,
-        scope: &mut Scope,
-        data: Vec<Datum>,
-    ) -> result::Result<Module, Vec<Error>> {
+    fn lower_module(&mut self, scope: &mut Scope, data: Vec<Datum>) -> Result<Module, Vec<Error>> {
         let ns_id = scope.alloc_ns_id();
         let mut errors: Vec<Error> = vec![];
 
@@ -815,8 +822,8 @@ impl<'sl> LoweringContext<'sl> {
                         }
                     }
                 }
-                Err(error) => {
-                    errors.push(error);
+                Err(mut new_errors) => {
+                    errors.append(&mut new_errors);
                 }
             };
         }
@@ -842,7 +849,7 @@ impl<'sl> LoweringContext<'sl> {
 pub fn lower_program(
     source_loader: &mut SourceLoader,
     source_file_id: SourceFileId,
-) -> result::Result<LoweredProgram, Vec<Error>> {
+) -> Result<LoweredProgram, Vec<Error>> {
     use std;
 
     let data = parse_module_data(source_loader.source_file(source_file_id))?;
