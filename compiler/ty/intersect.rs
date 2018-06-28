@@ -187,11 +187,11 @@ where
     }
 }
 
-struct PolyIntersectCtx<'a> {
-    tvars: &'a [ty::TVar],
+struct PolyIntersectCtx<'tvars> {
+    tvars: &'tvars [ty::TVar],
 }
 
-impl<'a> IntersectCtx<ty::Poly> for PolyIntersectCtx<'a> {
+impl<'tvars> IntersectCtx<ty::Poly> for PolyIntersectCtx<'tvars> {
     fn intersect_ty_refs(&self, poly1: &ty::Poly, poly2: &ty::Poly) -> Result<ty::Poly> {
         if ty::is_a::poly_is_a(self.tvars, poly1, poly2).to_bool() {
             return Ok(poly1.clone());
@@ -255,7 +255,7 @@ pub fn poly_intersect_list(
 
 struct MonoIntersectCtx {}
 
-impl<'a> IntersectCtx<ty::Mono> for MonoIntersectCtx {
+impl IntersectCtx<ty::Mono> for MonoIntersectCtx {
     fn intersect_ty_refs(&self, mono1: &ty::Mono, mono2: &ty::Mono) -> Result<ty::Mono> {
         if ty::is_a::mono_is_a(mono1, mono2).to_bool() {
             return Ok(mono1.clone());

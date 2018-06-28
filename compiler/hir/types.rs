@@ -383,12 +383,12 @@ pub fn insert_ty_exports(exports: &mut HashMap<Box<str>, Binding>) {
     export_ty_cons!("RawU", TyCons::RawU);
 }
 
-struct StrForPolyContext<'a> {
-    pvars: &'a [ty::purity::PVar],
-    tvars: &'a [ty::TVar],
+struct StrForPolyContext<'vars> {
+    pvars: &'vars [ty::purity::PVar],
+    tvars: &'vars [ty::TVar],
 }
 
-impl<'a> StrForPolyContext<'a> {
+impl<'vars> StrForPolyContext<'vars> {
     /// Pushes the arguments for a list constructor on to the passed Vec
     ///
     /// This is used to share code between list and function types

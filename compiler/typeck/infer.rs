@@ -124,12 +124,12 @@ enum InputDef {
     Complete,
 }
 
-struct InferCtx<'a> {
+struct InferCtx<'vars> {
     input_defs: Vec<InputDef>,
     complete_defs: Vec<hir::Def<ty::Poly>>,
 
-    pvars: &'a [ty::purity::PVar],
-    tvars: &'a [ty::TVar],
+    pvars: &'vars [ty::purity::PVar],
+    tvars: &'vars [ty::TVar],
 
     // The inferred types for free types in the order they're encountered
     //
@@ -149,8 +149,8 @@ fn unit_type() -> ty::Poly {
     ty::Ty::List(ty::List::new(Box::new([]), None)).into_poly()
 }
 
-impl<'a> InferCtx<'a> {
-    fn new(pvars: &'a [ty::purity::PVar], tvars: &'a [ty::TVar]) -> InferCtx<'a> {
+impl<'vars> InferCtx<'vars> {
+    fn new(pvars: &'vars [ty::purity::PVar], tvars: &'vars [ty::TVar]) -> InferCtx<'vars> {
         InferCtx {
             input_defs: vec![],
             complete_defs: vec![],
@@ -244,7 +244,8 @@ impl<'a> InferCtx<'a> {
             // Patch our occurrence types in to the `var_to_type` and restore it after. We
             // avoid `?`ing our results until the end to make sure the original types are
             // properly restored.
-            let original_var_type = self.var_to_type
+            let original_var_type = self
+                .var_to_type
                 .insert(var_id, VarType::Known(type_if_true.clone()))
                 .unwrap();
 

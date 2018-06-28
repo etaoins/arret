@@ -1,13 +1,13 @@
 use ty;
 use ty::purity::Purity;
 
-pub enum Result<'a> {
-    Fixed(&'a ty::Ty<ty::Poly>),
-    Bound(&'a ty::Ty<ty::Poly>),
+pub enum Result<'ty> {
+    Fixed(&'ty ty::Ty<ty::Poly>),
+    Bound(&'ty ty::Ty<ty::Poly>),
 }
 
-impl<'a> Result<'a> {
-    pub fn as_ty(&self) -> &'a ty::Ty<ty::Poly> {
+impl<'ty> Result<'ty> {
+    pub fn as_ty(&self) -> &'ty ty::Ty<ty::Poly> {
         match self {
             Result::Fixed(ty) => ty,
             Result::Bound(ty) => ty,
@@ -70,7 +70,7 @@ fn resolve_tvar_id_bound(tvars: &[ty::TVar], tvar_id: ty::TVarId) -> &ty::Ty<ty:
 ///
 /// If a type variable is bounded by a type with no subtypes (e.g. Str or LitBool) then it's treated
 /// as fixed.
-pub fn resolve_poly_ty<'a>(tvars: &'a [ty::TVar], poly: &'a ty::Poly) -> Result<'a> {
+pub fn resolve_poly_ty<'ty>(tvars: &'ty [ty::TVar], poly: &'ty ty::Poly) -> Result<'ty> {
     match poly {
         ty::Poly::Fixed(ty) => Result::Fixed(ty),
         ty::Poly::Var(tvar_id) => {

@@ -2,26 +2,26 @@ use ty;
 
 /// Iterates through the member types of a list
 #[derive(Clone)]
-pub struct ListIterator<'a, S>
+pub struct ListIterator<'list, S>
 where
-    S: ty::TyRef + 'a,
+    S: ty::TyRef + 'list,
 {
-    fixed: &'a [S],
-    rest: Option<&'a S>,
+    fixed: &'list [S],
+    rest: Option<&'list S>,
 }
 
-impl<'a, S> ListIterator<'a, S>
+impl<'list, S> ListIterator<'list, S>
 where
-    S: ty::TyRef + 'a,
+    S: ty::TyRef + 'list,
 {
-    pub fn new(list: &'a ty::List<S>) -> ListIterator<'a, S> {
+    pub fn new(list: &'list ty::List<S>) -> ListIterator<'list, S> {
         ListIterator {
             fixed: list.fixed(),
             rest: list.rest(),
         }
     }
 
-    pub fn try_new_from_ty_ref(ty_ref: &'a S) -> Option<ListIterator<'a, S>> {
+    pub fn try_new_from_ty_ref(ty_ref: &'list S) -> Option<ListIterator<'list, S>> {
         match ty_ref.try_to_fixed() {
             Some(ty::Ty::List(list)) => Some(Self::new(list)),
             _ => None,
@@ -36,7 +36,7 @@ where
         self.rest.is_some()
     }
 
-    pub fn next(&mut self) -> Option<&'a S> {
+    pub fn next(&mut self) -> Option<&'list S> {
         if self.fixed.is_empty() {
             self.rest
         } else {
@@ -51,7 +51,7 @@ where
     }
 }
 
-impl<'a> ListIterator<'a, ty::Poly> {
+impl<'list> ListIterator<'list, ty::Poly> {
     pub fn collect_rest(self, tvars: &[ty::TVar]) -> Option<ty::Poly> {
         if self.fixed.is_empty() {
             return self.rest.cloned();

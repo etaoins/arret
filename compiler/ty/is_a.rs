@@ -280,11 +280,11 @@ where
     }
 }
 
-struct PolyIsACtx<'a> {
-    tvars: &'a [ty::TVar],
+struct PolyIsACtx<'tvars> {
+    tvars: &'tvars [ty::TVar],
 }
 
-impl<'a> PolyIsACtx<'a> {
+impl<'tvars> PolyIsACtx<'tvars> {
     fn tvar_id_is_bounded_by(&self, sub_tvar_id: ty::TVarId, parent_tvar_id: ty::TVarId) -> bool {
         if sub_tvar_id == parent_tvar_id {
             return true;
@@ -297,7 +297,7 @@ impl<'a> PolyIsACtx<'a> {
     }
 }
 
-impl<'a> IsACtx<ty::Poly> for PolyIsACtx<'a> {
+impl<'tvars> IsACtx<ty::Poly> for PolyIsACtx<'tvars> {
     fn ty_ref_is_a(&self, sub: &ty::Poly, parent: &ty::Poly) -> Result {
         if let ty::Poly::Var(parent_tvar_id) = *parent {
             if let ty::Poly::Var(sub_tvar_id) = *sub {
@@ -385,7 +385,7 @@ pub fn poly_is_a(tvars: &[ty::TVar], sub: &ty::Poly, parent: &ty::Poly) -> Resul
 
 struct MonoIsACtx {}
 
-impl<'a> IsACtx<ty::Mono> for MonoIsACtx {
+impl IsACtx<ty::Mono> for MonoIsACtx {
     fn ty_ref_is_a(&self, sub: &ty::Mono, parent: &ty::Mono) -> Result {
         self.ty_is_a(sub, sub.as_ty(), parent, parent.as_ty())
     }

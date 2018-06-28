@@ -99,11 +99,11 @@ where
     }
 }
 
-struct InterpretPolyPredCtx<'a> {
-    tvars: &'a [ty::TVar],
+struct InterpretPolyPredCtx<'tvars> {
+    tvars: &'tvars [ty::TVar],
 }
 
-impl<'a> InterpretPredCtx<ty::Poly> for InterpretPolyPredCtx<'a> {
+impl<'tvars> InterpretPredCtx<ty::Poly> for InterpretPolyPredCtx<'tvars> {
     fn interpret_refs(
         &self,
         subject_ref: &ty::Poly,
@@ -131,8 +131,8 @@ impl<'a> InterpretPredCtx<ty::Poly> for InterpretPolyPredCtx<'a> {
 
 /// Performs abstract interpretation of applying a type predicate for `test` type on a `subject`
 /// value
-pub fn interpret_poly_pred<'a>(
-    tvars: &'a [ty::TVar],
+pub fn interpret_poly_pred(
+    tvars: &[ty::TVar],
     subject: &ty::Poly,
     test: &ty::Poly,
 ) -> InterpretedPred<ty::Poly> {

@@ -9,11 +9,11 @@ use syntax;
 use syntax::span::Span;
 
 #[derive(PartialEq, Debug)]
-struct HumanPos<'a> {
+struct HumanPos<'snippet> {
     display_name: String,
     line: usize,
     column: usize,
-    snippet: &'a str,
+    snippet: &'snippet str,
     snippet_byte_off: usize,
 }
 

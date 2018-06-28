@@ -73,15 +73,15 @@ where
     }
 }
 
-struct InstPolySelectionCtx<'a> {
-    select_ctx: &'a ty::select::SelectContext<'a>,
+struct InstPolySelectionCtx<'scx> {
+    select_ctx: &'scx ty::select::SelectContext<'scx>,
 }
 
 // TODO: Replace with bang type once it's stable
 #[derive(Debug, PartialEq)]
 pub enum InstPolySelectionError {}
 
-impl<'a> SubstContext<ty::Poly, ty::Poly, InstPolySelectionError> for InstPolySelectionCtx<'a> {
+impl<'scx> SubstContext<ty::Poly, ty::Poly, InstPolySelectionError> for InstPolySelectionCtx<'scx> {
     fn subst_purity_ref(
         &self,
         poly: &ty::purity::Poly,
@@ -145,9 +145,9 @@ mod test {
     use super::*;
     use std::collections::HashMap;
 
-    struct PolyToMonoCtx<'a> {
-        pvar_purities: &'a HashMap<ty::purity::PVarId, Purity>,
-        tvar_types: &'a HashMap<ty::TVarId, ty::Mono>,
+    struct PolyToMonoCtx<'vars> {
+        pvar_purities: &'vars HashMap<ty::purity::PVarId, Purity>,
+        tvar_types: &'vars HashMap<ty::TVarId, ty::Mono>,
     }
 
     #[derive(Debug, PartialEq)]
@@ -156,7 +156,7 @@ mod test {
         UnresolvedType(ty::TVarId),
     }
 
-    impl<'a> SubstContext<ty::Poly, ty::Mono, MonoToPolyError> for PolyToMonoCtx<'a> {
+    impl<'vars> SubstContext<ty::Poly, ty::Mono, MonoToPolyError> for PolyToMonoCtx<'vars> {
         fn subst_purity_ref(&self, poly: &ty::purity::Poly) -> Result<Purity, MonoToPolyError> {
             match poly {
                 ty::purity::Poly::Fixed(fixed) => Ok(*fixed),
