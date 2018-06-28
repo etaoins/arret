@@ -168,7 +168,7 @@ pub trait Reportable {
         }
     }
 
-    fn associated_report(&self) -> Option<Box<Reportable>> {
+    fn associated_report(&self) -> Option<Box<dyn Reportable>> {
         None
     }
 }
@@ -307,7 +307,7 @@ impl Reportable for syntax::error::Error {
         Level::Error
     }
 
-    fn associated_report(&self) -> Option<Box<Reportable>> {
+    fn associated_report(&self) -> Option<Box<dyn Reportable>> {
         if let syntax::error::ErrorKind::Eof(ref ec) = self.kind() {
             if let Some(open_char_span) = ec.open_char_span() {
                 return Some(Box::new(ContentStartHelp {

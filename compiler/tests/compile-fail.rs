@@ -151,8 +151,8 @@ fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedR
 fn collect_reports(
     source_loader: &mut compiler::SourceLoader,
     source_file_id: compiler::SourceFileId,
-) -> Vec<Box<Reportable>> {
-    let mut err_objects = Vec::<Box<Reportable>>::new();
+) -> Vec<Box<dyn Reportable>> {
+    let mut err_objects = Vec::<Box<dyn Reportable>>::new();
 
     let hir = match compiler::lower_program(source_loader, source_file_id) {
         Ok(hir) => hir,
