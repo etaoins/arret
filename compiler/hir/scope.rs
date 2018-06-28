@@ -88,12 +88,17 @@ impl Scope {
         ident: Ident,
         binding: Binding,
     ) -> Result<(), Error> {
-        let new_entry = ScopeEntry { span, binding };
+        use std::collections::hash_map::Entry;
 
-        if let Some(old_entry) = self.mut_data().entries.insert(ident, new_entry) {
-            Err(Error::new(span, ErrorKind::DuplicateDef(old_entry.span)))
-        } else {
-            Ok(())
+        match self.mut_data().entries.entry(ident) {
+            Entry::Occupied(occupied) => Err(Error::new(
+                span,
+                ErrorKind::DuplicateDef(occupied.get().span),
+            )),
+            Entry::Vacant(vacant) => {
+                vacant.insert(ScopeEntry { span, binding });
+                Ok(())
+            }
         }
     }
 
