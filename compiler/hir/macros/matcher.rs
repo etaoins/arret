@@ -4,17 +4,20 @@ use hir::macros::{MacroVar, MatchData, Rule, SpecialVars};
 use hir::ns::{Ident, NsDatum};
 use hir::scope::Scope;
 
-struct MatchContext<'a> {
-    scope: &'a Scope,
-    special_vars: &'a SpecialVars,
+struct MatchContext<'scope, 'svars> {
+    scope: &'scope Scope,
+    special_vars: &'svars SpecialVars,
     match_data: MatchData,
 }
 
 type Result<T> = result::Result<T, ()>;
 type MatchVisitResult = result::Result<(), ()>;
 
-impl<'a> MatchContext<'a> {
-    fn new(scope: &'a Scope, special_vars: &'a SpecialVars) -> MatchContext<'a> {
+impl<'scope, 'svars> MatchContext<'scope, 'svars> {
+    fn new(
+        scope: &'scope Scope,
+        special_vars: &'svars SpecialVars,
+    ) -> MatchContext<'scope, 'svars> {
         MatchContext {
             scope,
             special_vars,
@@ -59,7 +62,8 @@ impl<'a> MatchContext<'a> {
     }
 
     fn visit_zero_or_more(&mut self, pattern: &NsDatum, args: &[NsDatum]) -> MatchVisitResult {
-        let submatch_data = args.iter()
+        let submatch_data = args
+            .iter()
             .map(|arg| {
                 let mut subcontext = MatchContext {
                     scope: self.scope,
@@ -78,7 +82,8 @@ impl<'a> MatchContext<'a> {
 
     fn visit_slice(&mut self, mut patterns: &[NsDatum], mut args: &[NsDatum]) -> MatchVisitResult {
         loop {
-            if self.special_vars
+            if self
+                .special_vars
                 .starts_with_zero_or_more(self.scope, patterns)
             {
                 let rest_patterns_len = patterns.len() - 2;

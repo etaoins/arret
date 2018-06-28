@@ -5,20 +5,23 @@ use hir::scope::Scope;
 use std::collections::HashMap;
 use syntax::span::Span;
 
-struct ExpandCursor<'a> {
-    match_data: &'a MatchData,
-    var_links: &'a VarLinks,
+struct ExpandCursor<'data, 'links> {
+    match_data: &'data MatchData,
+    var_links: &'links VarLinks,
     subtemplate_idx: usize,
 }
 
-struct ExpandContext<'a> {
-    scope: &'a mut Scope,
-    special_vars: &'a SpecialVars,
+struct ExpandContext<'scope, 'svars> {
+    scope: &'scope mut Scope,
+    special_vars: &'svars SpecialVars,
     ns_mapping: HashMap<NsId, NsId>,
 }
 
-impl<'a> ExpandContext<'a> {
-    fn new(scope: &'a mut Scope, special_vars: &'a SpecialVars) -> ExpandContext<'a> {
+impl<'scope, 'svars> ExpandContext<'scope, 'svars> {
+    fn new(
+        scope: &'scope mut Scope,
+        special_vars: &'svars SpecialVars,
+    ) -> ExpandContext<'scope, 'svars> {
         ExpandContext {
             scope,
             special_vars,
@@ -37,7 +40,8 @@ impl<'a> ExpandContext<'a> {
         let old_ns_id = ident.ns_id();
 
         let scope = &mut self.scope;
-        let new_ns_id = self.ns_mapping
+        let new_ns_id = self
+            .ns_mapping
             .entry(old_ns_id)
             .or_insert_with(|| scope.alloc_ns_id());
 
@@ -84,7 +88,8 @@ impl<'a> ExpandContext<'a> {
         let mut result: Vec<NsDatum> = vec![];
 
         while !templates.is_empty() {
-            if self.special_vars
+            if self
+                .special_vars
                 .starts_with_zero_or_more(self.scope, templates)
             {
                 let mut expanded = self.expand_zero_or_more(cursor, &templates[0]);

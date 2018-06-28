@@ -47,21 +47,21 @@ enum FindVarsInputType {
     Template,
 }
 
-struct FindVarsContext<'a> {
-    scope: &'a Scope,
-    special_vars: &'a SpecialVars,
+struct FindVarsContext<'scope, 'svars> {
+    scope: &'scope Scope,
+    special_vars: &'svars SpecialVars,
     input_type: FindVarsInputType,
     unbound_var_spans: Option<HashMap<Box<str>, Span>>,
 }
 
 type FindVarsResult = result::Result<(), Error>;
 
-impl<'a> FindVarsContext<'a> {
+impl<'scope, 'svars> FindVarsContext<'scope, 'svars> {
     fn new(
-        scope: &'a Scope,
-        special_vars: &'a SpecialVars,
+        scope: &'scope Scope,
+        special_vars: &'svars SpecialVars,
         input_type: FindVarsInputType,
-    ) -> FindVarsContext<'a> {
+    ) -> FindVarsContext<'scope, 'svars> {
         let unbound_var_spans = if input_type == FindVarsInputType::Template {
             // Duplicate bound vars are allowed in the template as they must all resolve to the
             // same value.
@@ -145,7 +145,8 @@ impl<'a> FindVarsContext<'a> {
         let mut zero_or_more_span: Option<Span> = None;
 
         while !patterns.is_empty() {
-            if self.special_vars
+            if self
+                .special_vars
                 .starts_with_zero_or_more(self.scope, patterns)
             {
                 let pattern = &patterns[0];
@@ -200,7 +201,8 @@ impl<'a> FindVarsContext<'a> {
 
         match patterns.len() {
             0 => Ok(()),
-            2 if self.special_vars
+            2 if self
+                .special_vars
                 .starts_with_zero_or_more(self.scope, patterns) =>
             {
                 self.visit_zero_or_more(pattern_vars, &patterns[0])

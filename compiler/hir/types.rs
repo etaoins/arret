@@ -36,12 +36,12 @@ pub struct PolymorphicVar {
     pub kind: PolymorphicVarKind,
 }
 
-struct LowerTyContext<'a> {
-    tvars: &'a [ty::TVar],
-    scope: &'a Scope,
+struct LowerTyContext<'tvars, 'scope> {
+    tvars: &'tvars [ty::TVar],
+    scope: &'scope Scope,
 }
 
-impl<'a> LowerTyContext<'a> {
+impl<'tvars, 'scope> LowerTyContext<'tvars, 'scope> {
     fn lower_polymorphic_var(&self, tvar_datum: NsDatum) -> Result<PolymorphicVar> {
         let span = tvar_datum.span();
 
