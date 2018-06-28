@@ -78,10 +78,10 @@ impl Reportable for Error {
                 top_fun
             ),
             ErrorKind::TooManyArgs(have, ref wanted) => {
-                format!("too many arguments; wanted {}, have {}", wanted, have)
+                format!("too many arguments: wanted {}, have {}", wanted, have)
             }
             ErrorKind::InsufficientArgs(have, wanted) => {
-                format!("insufficient arguments; wanted {}, have {}", wanted, have)
+                format!("insufficient arguments: wanted {}, have {}", wanted, have)
             }
             ErrorKind::RecursiveType => {
                 "recursive usage requires explicit type annotation".to_owned()
