@@ -939,11 +939,7 @@ impl<'vars> InferCtx<'vars> {
                 .unwrap_or_else(|| ty::Ty::Any.into_poly());
 
             let free_ty_id = self.insert_free_ty(member_type);
-            if is_param {
-                Some(free_ty_id)
-            } else {
-                None
-            }
+            Some(free_ty_id).filter(|_| is_param)
         } else {
             None
         };
