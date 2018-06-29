@@ -354,7 +354,7 @@ impl<'sl> LoweringCtx<'sl> {
         let body_expr = self.lower_body(&scope, arg_iter)?;
 
         // This is to build nested `Let` expressions. Types/macros don't need this
-        Ok(outputs.into_iter().rev().fold(body_expr, fold_output))
+        Ok(outputs.into_iter().rfold(body_expr, fold_output))
     }
 
     fn lower_body(&mut self, scope: &Scope, body_data: NsDataIter) -> Result<Expr<ty::Decl>> {
