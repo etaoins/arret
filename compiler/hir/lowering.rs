@@ -544,18 +544,22 @@ impl<'sl> LoweringCtx<'sl> {
         &mut self,
         scope: &mut Scope,
         span: Span,
-        module_name: &ModuleName,
+        module_name: ModuleName,
     ) -> Result<&Module, Vec<Error>> {
-        // TODO: This does a lot of hash lookups
-        if !self.loaded_modules.contains_key(module_name) {
-            let module_data = load_module_by_name(self.source_loader, span, module_name)?;
-            let loaded_module = self.lower_module(scope, module_data)?;
-
-            self.loaded_modules
-                .insert(module_name.clone(), loaded_module);
+        // TODO: An if-let or match here will cause the borrow to live past the return. This
+        // prevents us from doing the insert below. We need to do a two-phase check instead.
+        // This is hopefully fixed by NLL.
+        if self.loaded_modules.contains_key(&module_name) {
+            return Ok(&self.loaded_modules[&module_name]);
         }
 
-        Ok(&self.loaded_modules[module_name])
+        let module_data = load_module_by_name(self.source_loader, span, &module_name)?;
+        let loaded_module = self.lower_module(scope, module_data)?;
+
+        Ok(self
+            .loaded_modules
+            .entry(module_name)
+            .or_insert(loaded_module))
     }
 
     fn lower_import(

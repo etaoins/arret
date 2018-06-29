@@ -26,14 +26,14 @@ struct FilterInput {
 
 struct LowerImportCtx<F>
 where
-    F: FnMut(Span, &ModuleName) -> Result<Bindings>,
+    F: FnMut(Span, ModuleName) -> Result<Bindings>,
 {
     load_module: F,
 }
 
 impl<F> LowerImportCtx<F>
 where
-    F: FnMut(Span, &ModuleName) -> Result<Bindings>,
+    F: FnMut(Span, ModuleName) -> Result<Bindings>,
 {
     fn lower_module_import(&mut self, span: Span, name_data: Vec<NsDatum>) -> Result<FilterInput> {
         let mut name_components = name_data
@@ -43,7 +43,7 @@ where
 
         let terminal_name = name_components.pop().unwrap();
         let module_name = ModuleName::new(name_components, terminal_name.clone());
-        let bindings = (self.load_module)(span, &module_name)?;
+        let bindings = (self.load_module)(span, module_name)?;
 
         Ok(FilterInput {
             bindings,
@@ -187,10 +187,7 @@ where
         }
     }
 
-    fn lower_import_set(&mut self, import_set_datum: NsDatum) -> Result<FilterInput>
-    where
-        F: FnMut(Span, &ModuleName) -> Result<Bindings>,
-    {
+    fn lower_import_set(&mut self, import_set_datum: NsDatum) -> Result<FilterInput> {
         let span = import_set_datum.span();
         match import_set_datum {
             NsDatum::Vec(_, vs) => {
@@ -234,7 +231,7 @@ where
 
 pub fn lower_import_set<F>(import_set_datum: NsDatum, load_module: F) -> Result<Bindings>
 where
-    F: FnMut(Span, &ModuleName) -> Result<Bindings>,
+    F: FnMut(Span, ModuleName) -> Result<Bindings>,
 {
     let mut lic = LowerImportCtx { load_module };
     lic.lower_import_set(import_set_datum)
@@ -248,8 +245,8 @@ mod test {
     use hir::prim::Prim;
     use syntax::span::{t2s, EMPTY_SPAN};
 
-    fn load_test_module(_: Span, module_name: &ModuleName) -> Result<Bindings> {
-        if module_name == &ModuleName::new(vec!["lib".into()], "test".into()) {
+    fn load_test_module(_: Span, module_name: ModuleName) -> Result<Bindings> {
+        if module_name == ModuleName::new(vec!["lib".into()], "test".into()) {
             let mut bindings = HashMap::new();
             bindings.insert("quote".into(), Binding::Prim(Prim::Quote));
             bindings.insert("if".into(), Binding::Prim(Prim::If));
