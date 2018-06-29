@@ -980,7 +980,6 @@ mod test {
     use super::*;
     use hir::VarId;
     use syntax::span::t2s;
-    use ty;
 
     #[test]
     fn self_quoting_bool() {
