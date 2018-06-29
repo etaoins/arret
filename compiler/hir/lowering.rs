@@ -628,11 +628,13 @@ impl<'sl> LoweringCtx<'sl> {
             },
             NsDatum::List(span, vs) => {
                 let mut data_iter = vs.into_vec().into_iter();
-                if data_iter.len() == 0 {
-                    return Ok(Expr::Lit(Datum::List(span, Box::new([]))));
-                }
 
-                let fn_datum = data_iter.next().unwrap();
+                let fn_datum = if let Some(fn_datum) = data_iter.next() {
+                    fn_datum
+                } else {
+                    return Ok(Expr::Lit(Datum::List(span, Box::new([]))));
+                };
+
                 match fn_datum {
                     NsDatum::Ident(fn_span, ref ident) => match scope.get(ident) {
                         Some(Binding::Prim(prim)) => {
@@ -744,43 +746,39 @@ impl<'sl> LoweringCtx<'sl> {
         if let NsDatum::List(span, vs) = datum {
             let mut data_iter = vs.into_vec().into_iter();
 
-            if data_iter.len() > 0 {
-                let fn_datum = data_iter.next().unwrap();
+            if let Some(NsDatum::Ident(fn_span, ref ident)) = data_iter.next() {
+                match scope.get(ident) {
+                    Some(Binding::Prim(prim)) => {
+                        let applied_prim = AppliedPrim {
+                            prim,
+                            ns_id: ident.ns_id(),
+                            span,
+                        };
 
-                if let NsDatum::Ident(fn_span, ref ident) = fn_datum {
-                    match scope.get(ident) {
-                        Some(Binding::Prim(prim)) => {
-                            let applied_prim = AppliedPrim {
-                                prim,
-                                ns_id: ident.ns_id(),
-                                span,
-                            };
+                        return self.lower_module_prim_apply(scope, applied_prim, data_iter);
+                    }
+                    Some(Binding::Macro(macro_id)) => {
+                        let expanded_datum = {
+                            let mac = &self.macros[macro_id.to_usize()];
+                            expand_macro(scope, span, mac, data_iter.as_slice())?
+                        };
 
-                            return self.lower_module_prim_apply(scope, applied_prim, data_iter);
-                        }
-                        Some(Binding::Macro(macro_id)) => {
-                            let expanded_datum = {
-                                let mac = &self.macros[macro_id.to_usize()];
-                                expand_macro(scope, span, mac, data_iter.as_slice())?
-                            };
-
-                            return self
-                                .lower_module_def(scope, expanded_datum)
-                                .map_err(|errs| {
-                                    errs.into_iter()
-                                        .map(|e| e.with_macro_invocation_span(span))
-                                        .collect()
-                                });
-                        }
-                        Some(_) => {
-                            // Non-def
-                        }
-                        None => {
-                            return Err(vec![Error::new(
-                                fn_span,
-                                ErrorKind::UnboundSym(ident.name().into()),
-                            )]);
-                        }
+                        return self
+                            .lower_module_def(scope, expanded_datum)
+                            .map_err(|errs| {
+                                errs.into_iter()
+                                    .map(|e| e.with_macro_invocation_span(span))
+                                    .collect()
+                            });
+                    }
+                    Some(_) => {
+                        // Non-def
+                    }
+                    None => {
+                        return Err(vec![Error::new(
+                            fn_span,
+                            ErrorKind::UnboundSym(ident.name().into()),
+                        )]);
                     }
                 }
             }
