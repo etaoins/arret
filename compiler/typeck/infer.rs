@@ -675,7 +675,7 @@ impl<'vars> InferCtx<'vars> {
 
         // The context used to select the types for our parameters. It's only evidence is the
         // wanted return type which is used for backwards type propagation.
-        let mut param_select_ctx = ty::select::SelectContext::new(
+        let mut param_select_ctx = ty::select::SelectCtx::new(
             fun_type.pvar_ids().clone(),
             fun_type.tvar_ids().clone(),
             self.tvars,

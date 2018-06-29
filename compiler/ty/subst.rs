@@ -1,7 +1,7 @@
 use ty;
 use ty::purity::Purity;
 
-trait SubstContext<I, O, E>
+trait SubstCtx<I, O, E>
 where
     I: ty::TyRef,
     O: ty::TyRef,
@@ -74,14 +74,14 @@ where
 }
 
 struct InstPolySelectionCtx<'scx> {
-    select_ctx: &'scx ty::select::SelectContext<'scx>,
+    select_ctx: &'scx ty::select::SelectCtx<'scx>,
 }
 
 // TODO: Replace with bang type once it's stable
 #[derive(Debug, PartialEq)]
 pub enum InstPolySelectionError {}
 
-impl<'scx> SubstContext<ty::Poly, ty::Poly, InstPolySelectionError> for InstPolySelectionCtx<'scx> {
+impl<'scx> SubstCtx<ty::Poly, ty::Poly, InstPolySelectionError> for InstPolySelectionCtx<'scx> {
     fn subst_purity_ref(
         &self,
         poly: &ty::purity::Poly,
@@ -119,13 +119,13 @@ impl<'scx> SubstContext<ty::Poly, ty::Poly, InstPolySelectionError> for InstPoly
     }
 }
 
-pub fn inst_ty_selection(select_ctx: &ty::select::SelectContext, poly: &ty::Poly) -> ty::Poly {
+pub fn inst_ty_selection(select_ctx: &ty::select::SelectCtx, poly: &ty::Poly) -> ty::Poly {
     let ctx = InstPolySelectionCtx { select_ctx };
     ctx.subst_ty_ref(poly).unwrap()
 }
 
 pub fn inst_fun_selection(
-    select_ctx: &ty::select::SelectContext,
+    select_ctx: &ty::select::SelectCtx,
     fun: &ty::Fun<ty::Poly>,
 ) -> ty::Fun<ty::Poly> {
     let ctx = InstPolySelectionCtx { select_ctx };
@@ -133,7 +133,7 @@ pub fn inst_fun_selection(
 }
 
 pub fn inst_purity_selection(
-    select_ctx: &ty::select::SelectContext,
+    select_ctx: &ty::select::SelectCtx,
     purity: &ty::purity::Poly,
 ) -> ty::purity::Poly {
     let ctx = InstPolySelectionCtx { select_ctx };
@@ -156,7 +156,7 @@ mod test {
         UnresolvedType(ty::TVarId),
     }
 
-    impl<'vars> SubstContext<ty::Poly, ty::Mono, MonoToPolyError> for PolyToMonoCtx<'vars> {
+    impl<'vars> SubstCtx<ty::Poly, ty::Mono, MonoToPolyError> for PolyToMonoCtx<'vars> {
         fn subst_purity_ref(&self, poly: &ty::purity::Poly) -> Result<Purity, MonoToPolyError> {
             match poly {
                 ty::purity::Poly::Fixed(fixed) => Ok(*fixed),

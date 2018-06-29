@@ -24,14 +24,14 @@ struct FilterInput {
     terminal_name: Box<str>,
 }
 
-struct LowerImportContext<F>
+struct LowerImportCtx<F>
 where
     F: FnMut(Span, &ModuleName) -> Result<Bindings>,
 {
     load_module: F,
 }
 
-impl<F> LowerImportContext<F>
+impl<F> LowerImportCtx<F>
 where
     F: FnMut(Span, &ModuleName) -> Result<Bindings>,
 {
@@ -236,7 +236,7 @@ pub fn lower_import_set<F>(import_set_datum: NsDatum, load_module: F) -> Result<
 where
     F: FnMut(Span, &ModuleName) -> Result<Bindings>,
 {
-    let mut lic = LowerImportContext { load_module };
+    let mut lic = LowerImportCtx { load_module };
     lic.lower_import_set(import_set_datum)
         .map(|filter_input| filter_input.bindings)
 }

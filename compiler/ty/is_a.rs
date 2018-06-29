@@ -350,7 +350,7 @@ impl<'tvars> IsACtx<ty::Poly> for PolyIsACtx<'tvars> {
         sub_fun: &ty::Fun<ty::Poly>,
         par_fun: &ty::Fun<ty::Poly>,
     ) -> Result {
-        let mut select_ctx = ty::select::SelectContext::new(
+        let mut select_ctx = ty::select::SelectCtx::new(
             sub_fun.pvar_ids().clone(),
             sub_fun.tvar_ids().clone(),
             self.tvars,
@@ -366,7 +366,7 @@ impl<'tvars> IsACtx<ty::Poly> for PolyIsACtx<'tvars> {
         sub_fun: &ty::Fun<ty::Poly>,
         par_top_fun: &ty::TopFun<ty::Poly>,
     ) -> Result {
-        let mut select_ctx = ty::select::SelectContext::new(
+        let mut select_ctx = ty::select::SelectCtx::new(
             sub_fun.pvar_ids().clone(),
             sub_fun.tvar_ids().clone(),
             self.tvars,

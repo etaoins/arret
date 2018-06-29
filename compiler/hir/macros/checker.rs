@@ -40,14 +40,14 @@ impl FoundVars {
     }
 }
 
-/// Tracks which type of input is being provided to `FindVarsContext`
+/// Tracks which type of input is being provided to `FindVarsCtx`
 #[derive(Clone, Copy, PartialEq)]
 enum FindVarsInputType {
     Pattern,
     Template,
 }
 
-struct FindVarsContext<'scope, 'svars> {
+struct FindVarsCtx<'scope, 'svars> {
     scope: &'scope Scope,
     special_vars: &'svars SpecialVars,
     input_type: FindVarsInputType,
@@ -56,12 +56,12 @@ struct FindVarsContext<'scope, 'svars> {
 
 type FindVarsResult = result::Result<(), Error>;
 
-impl<'scope, 'svars> FindVarsContext<'scope, 'svars> {
+impl<'scope, 'svars> FindVarsCtx<'scope, 'svars> {
     fn new(
         scope: &'scope Scope,
         special_vars: &'svars SpecialVars,
         input_type: FindVarsInputType,
-    ) -> FindVarsContext<'scope, 'svars> {
+    ) -> FindVarsCtx<'scope, 'svars> {
         let unbound_var_spans = if input_type == FindVarsInputType::Template {
             // Duplicate bound vars are allowed in the template as they must all resolve to the
             // same value.
@@ -72,7 +72,7 @@ impl<'scope, 'svars> FindVarsContext<'scope, 'svars> {
             Some(HashMap::<Box<str>, Span>::new())
         };
 
-        FindVarsContext {
+        FindVarsCtx {
             scope,
             special_vars,
             input_type,
@@ -274,12 +274,12 @@ pub fn check_rule(
     patterns: &[NsDatum],
     template: &NsDatum,
 ) -> Result<VarLinks> {
-    let mut fpvcx = FindVarsContext::new(scope, special_vars, FindVarsInputType::Pattern);
+    let mut fpvcx = FindVarsCtx::new(scope, special_vars, FindVarsInputType::Pattern);
     // We don't need to report the root span for the pattern
     let mut pattern_vars = FoundVars::new(EMPTY_SPAN);
     fpvcx.visit_seq(&mut pattern_vars, patterns)?;
 
-    let mut ftvcx = FindVarsContext::new(scope, special_vars, FindVarsInputType::Template);
+    let mut ftvcx = FindVarsCtx::new(scope, special_vars, FindVarsInputType::Template);
     let mut template_vars = FoundVars::new(template.span());
     ftvcx.visit_datum(&mut template_vars, template)?;
 

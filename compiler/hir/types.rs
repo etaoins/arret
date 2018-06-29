@@ -36,12 +36,12 @@ pub struct PolymorphicVar {
     pub kind: PolymorphicVarKind,
 }
 
-struct LowerTyContext<'tvars, 'scope> {
+struct LowerTyCtx<'tvars, 'scope> {
     tvars: &'tvars [ty::TVar],
     scope: &'scope Scope,
 }
 
-impl<'tvars, 'scope> LowerTyContext<'tvars, 'scope> {
+impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
     fn lower_polymorphic_var(&self, tvar_datum: NsDatum) -> Result<PolymorphicVar> {
         let span = tvar_datum.span();
 
@@ -322,12 +322,12 @@ pub fn lower_polymorphic_var(
     scope: &Scope,
     tvar_datum: NsDatum,
 ) -> Result<PolymorphicVar> {
-    let ctx = LowerTyContext { tvars, scope };
+    let ctx = LowerTyCtx { tvars, scope };
     ctx.lower_polymorphic_var(tvar_datum)
 }
 
 pub fn lower_poly(tvars: &[ty::TVar], scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
-    let ctx = LowerTyContext { tvars, scope };
+    let ctx = LowerTyCtx { tvars, scope };
     ctx.lower_poly(datum)
 }
 
@@ -383,12 +383,12 @@ pub fn insert_ty_exports(exports: &mut HashMap<Box<str>, Binding>) {
     export_ty_cons!("RawU", TyCons::RawU);
 }
 
-struct StrForPolyContext<'vars> {
+struct StrForPolyCtx<'vars> {
     pvars: &'vars [ty::purity::PVar],
     tvars: &'vars [ty::TVar],
 }
 
-impl<'vars> StrForPolyContext<'vars> {
+impl<'vars> StrForPolyCtx<'vars> {
     /// Pushes the arguments for a list constructor on to the passed Vec
     ///
     /// This is used to share code between list and function types
@@ -530,12 +530,12 @@ impl<'vars> StrForPolyContext<'vars> {
 }
 
 pub fn str_for_poly(pvars: &[ty::purity::PVar], tvars: &[ty::TVar], poly: &ty::Poly) -> Box<str> {
-    let ctx = StrForPolyContext { pvars, tvars };
+    let ctx = StrForPolyCtx { pvars, tvars };
     ctx.str_for_poly(poly).into_boxed_str()
 }
 
 pub fn str_for_purity(pvars: &[ty::purity::PVar], purity: &ty::purity::Poly) -> Box<str> {
-    let ctx = StrForPolyContext { pvars, tvars: &[] };
+    let ctx = StrForPolyCtx { pvars, tvars: &[] };
     ctx.str_for_purity(purity).into_boxed_str()
 }
 

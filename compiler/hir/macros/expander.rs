@@ -11,18 +11,18 @@ struct ExpandCursor<'data, 'links> {
     subtemplate_idx: usize,
 }
 
-struct ExpandContext<'scope, 'svars> {
+struct ExpandCtx<'scope, 'svars> {
     scope: &'scope mut Scope,
     special_vars: &'svars SpecialVars,
     ns_mapping: HashMap<NsId, NsId>,
 }
 
-impl<'scope, 'svars> ExpandContext<'scope, 'svars> {
+impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
     fn new(
         scope: &'scope mut Scope,
         special_vars: &'svars SpecialVars,
-    ) -> ExpandContext<'scope, 'svars> {
-        ExpandContext {
+    ) -> ExpandCtx<'scope, 'svars> {
+        ExpandCtx {
             scope,
             special_vars,
             ns_mapping: HashMap::new(),
@@ -139,7 +139,7 @@ pub fn expand_rule(
     var_links: &VarLinks,
     template: &NsDatum,
 ) -> NsDatum {
-    let mut mcx = ExpandContext::new(scope, special_vars);
+    let mut mcx = ExpandCtx::new(scope, special_vars);
 
     let mut cursor = ExpandCursor {
         match_data,

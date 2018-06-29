@@ -1,7 +1,7 @@
 use syntax::datum::Datum;
 use ty;
 
-trait DatumTyContext<S>
+trait DatumTyCtx<S>
 where
     S: ty::TyRef,
 {
@@ -52,9 +52,9 @@ where
     }
 }
 
-struct PolyDatumTyContext {}
+struct PolyDatumTyCtx {}
 
-impl DatumTyContext<ty::Poly> for PolyDatumTyContext {
+impl DatumTyCtx<ty::Poly> for PolyDatumTyCtx {
     fn unify_ref_iter<I>(&self, iter: I) -> ty::Poly
     where
         I: Iterator<Item = ty::Poly>,
@@ -64,7 +64,7 @@ impl DatumTyContext<ty::Poly> for PolyDatumTyContext {
 }
 
 pub fn poly_for_datum(datum: &Datum) -> ty::Poly {
-    let ctx = PolyDatumTyContext {};
+    let ctx = PolyDatumTyCtx {};
     ctx.ref_for_datum(datum)
 }
 

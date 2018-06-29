@@ -19,7 +19,7 @@ use syntax::span::{Span, EMPTY_SPAN};
 use ty;
 use ty::purity::Purity;
 
-pub struct LoweringContext<'sl> {
+pub struct LoweringCtx<'sl> {
     deferred_defs: Vec<DeferredDef>,
 
     var_id_counter: VarIdCounter,
@@ -60,8 +60,8 @@ struct AppliedPrim {
     span: Span,
 }
 
-impl<'sl> LoweringContext<'sl> {
-    pub fn new(source_loader: &'sl mut SourceLoader) -> LoweringContext {
+impl<'sl> LoweringCtx<'sl> {
+    pub fn new(source_loader: &'sl mut SourceLoader) -> LoweringCtx {
         let mut loaded_modules = BTreeMap::new();
 
         // These modules are always loaded
@@ -75,7 +75,7 @@ impl<'sl> LoweringContext<'sl> {
             Module::tys_module(),
         );
 
-        LoweringContext {
+        LoweringCtx {
             deferred_defs: vec![],
             var_id_counter: VarIdCounter::new(),
             loaded_modules,
@@ -855,7 +855,7 @@ pub fn lower_program(
     let data = parse_module_data(source_loader.source_file(source_file_id))?;
 
     let mut root_scope = Scope::new_empty();
-    let mut lcx = LoweringContext::new(source_loader);
+    let mut lcx = LoweringCtx::new(source_loader);
     lcx.lower_module(&mut root_scope, data)?;
 
     let deferred_defs = std::mem::replace(&mut lcx.deferred_defs, vec![]);
@@ -921,7 +921,7 @@ fn module_for_str(data_str: &str) -> Result<Module> {
     program_data.append(&mut test_data);
 
     let mut source_loader = SourceLoader::new();
-    let mut lcx = LoweringContext::new(&mut source_loader);
+    let mut lcx = LoweringCtx::new(&mut source_loader);
 
     lcx.lower_module(&mut root_scope, program_data)
         .map_err(|mut errors| errors.remove(0))
@@ -944,7 +944,7 @@ pub fn lowered_expr_for_str(data_str: &str) -> LoweredTestExpr {
     let mut scope = Scope::new_empty();
 
     let mut ccx = SourceLoader::new();
-    let mut lcx = LoweringContext::new(&mut ccx);
+    let mut lcx = LoweringCtx::new(&mut ccx);
 
     // Extract our builtin exports
     let mut exports = HashMap::<Box<str>, Binding>::new();

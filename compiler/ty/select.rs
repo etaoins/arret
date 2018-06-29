@@ -10,7 +10,7 @@ use ty::list_iter::ListIterator;
 /// the context. The calculated polymorphic types and purities can be retrieved from the
 /// `pvar_purities` and `tvar_types` methods.
 #[derive(Clone, Debug)]
-pub struct SelectContext<'tvars> {
+pub struct SelectCtx<'tvars> {
     pvar_ids: Range<ty::purity::PVarId>,
     tvar_ids: Range<ty::TVarId>,
 
@@ -20,19 +20,19 @@ pub struct SelectContext<'tvars> {
     tvar_types: Vec<Option<ty::Poly>>,
 }
 
-impl<'tvars> SelectContext<'tvars> {
+impl<'tvars> SelectCtx<'tvars> {
     pub fn new(
         pvar_ids: Range<ty::purity::PVarId>,
         tvar_ids: Range<ty::TVarId>,
         tvars: &'tvars [ty::TVar],
-    ) -> SelectContext<'tvars> {
+    ) -> SelectCtx<'tvars> {
         let pvar_ids_usize = pvar_ids.start.to_usize()..pvar_ids.end.to_usize();
         let tvar_ids_usize = tvar_ids.start.to_usize()..tvar_ids.end.to_usize();
 
         let pvar_purities = vec![None; pvar_ids_usize.len()];
         let tvar_types = vec![None; tvar_ids_usize.len()];
 
-        SelectContext {
+        SelectCtx {
             pvar_ids,
             tvar_ids,
             tvars,
@@ -224,26 +224,26 @@ mod test {
     use hir::poly_for_str;
     use ty::purity::Purity;
 
-    fn add_str_evidence(ctx: &mut SelectContext, target_str: &str, evidence_str: &str) {
+    fn add_str_evidence(ctx: &mut SelectCtx, target_str: &str, evidence_str: &str) {
         ctx.add_evidence(&poly_for_str(target_str), &poly_for_str(evidence_str));
     }
 
-    fn assert_unselected_type(ctx: &SelectContext, name: char) {
+    fn assert_unselected_type(ctx: &SelectCtx, name: char) {
         let idx = (name as usize) - ('A' as usize);
         assert_eq!(&ctx.tvar_types()[idx], &None);
     }
 
-    fn assert_selected_type(ctx: &SelectContext, name: char, selected_str: &str) {
+    fn assert_selected_type(ctx: &SelectCtx, name: char, selected_str: &str) {
         let idx = (name as usize) - ('A' as usize);
         assert_eq!(&Some(poly_for_str(selected_str)), &ctx.tvar_types()[idx]);
     }
 
-    fn assert_unselected_purity(ctx: &SelectContext, name: char) {
+    fn assert_unselected_purity(ctx: &SelectCtx, name: char) {
         let idx = (name as usize) - ('A' as usize);
         assert_eq!(&None, &ctx.pvar_purities()[idx]);
     }
 
-    fn assert_selected_purity(ctx: &SelectContext, name: char, selected_purity: Purity) {
+    fn assert_selected_purity(ctx: &SelectCtx, name: char, selected_purity: Purity) {
         let idx = (name as usize) - ('A' as usize);
         assert_eq!(
             &Some(ty::purity::Poly::Fixed(selected_purity)),
@@ -257,7 +257,7 @@ mod test {
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
         assert_unselected_type(&ctx, 'A');
 
         add_str_evidence(&mut ctx, "A", "true");
@@ -277,7 +277,7 @@ mod test {
         ];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
         assert_unselected_type(&ctx, 'A');
 
         // We can handle one tvar as evidence
@@ -294,7 +294,7 @@ mod test {
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
 
         add_str_evidence(&mut ctx, "(Setof A)", "(Setof Bool)");
         assert_selected_type(&ctx, 'A', "Bool");
@@ -309,7 +309,7 @@ mod test {
         ];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
 
         add_str_evidence(&mut ctx, "(Map A B)", "(Map true false)");
         assert_selected_type(&ctx, 'A', "true");
@@ -325,7 +325,7 @@ mod test {
         ];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
 
         add_str_evidence(&mut ctx, "(List A B)", "(List true false)");
         assert_selected_type(&ctx, 'A', "true");
@@ -338,7 +338,7 @@ mod test {
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
 
         add_str_evidence(&mut ctx, "(Listof A)", "(Listof true)");
         assert_selected_type(&ctx, 'A', "true");
@@ -350,7 +350,7 @@ mod test {
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
 
         add_str_evidence(&mut ctx, "(Listof A)", "(List true false)");
         assert_selected_type(&ctx, 'A', "Bool");
@@ -365,7 +365,7 @@ mod test {
         ];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
 
         add_str_evidence(&mut ctx, "(Vector A B)", "(Vector true false)");
         assert_selected_type(&ctx, 'A', "true");
@@ -378,7 +378,7 @@ mod test {
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
 
         add_str_evidence(&mut ctx, "(Vectorof A)", "(Vectorof true)");
         assert_selected_type(&ctx, 'A', "true");
@@ -390,7 +390,7 @@ mod test {
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
 
         add_str_evidence(&mut ctx, "(Vectorof A)", "(Vector true false)");
         assert_selected_type(&ctx, 'A', "Bool");
@@ -402,7 +402,7 @@ mod test {
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
 
         add_str_evidence(&mut ctx, "(RawU A Sym)", "true");
         assert_selected_type(&ctx, 'A', "true");
@@ -417,7 +417,7 @@ mod test {
         ];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
 
         // A and B are bounded. We should ensure we only use evidence on the members with satisfied
         // bounds.
@@ -440,7 +440,7 @@ mod test {
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
 
         add_str_evidence(&mut ctx, "(... -> A)", "(... -> true)");
         assert_selected_type(&ctx, 'A', "true");
@@ -452,7 +452,7 @@ mod test {
         let pvar_ids = ty::purity::PVarId::new(0)..ty::purity::PVarId::new(pvars.len());
         let tvar_ids = ty::TVarIds::monomorphic();
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &[]);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &[]);
         assert_unselected_purity(&ctx, 'A');
 
         add_str_evidence(&mut ctx, "(... ->A true)", "(... -> true)");
@@ -468,7 +468,7 @@ mod test {
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
 
         add_str_evidence(&mut ctx, "(... -> A)", "(false -> true)");
         assert_selected_type(&ctx, 'A', "true");
@@ -480,7 +480,7 @@ mod test {
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
 
         add_str_evidence(&mut ctx, "(... -> A)", "(Type? Sym)");
         assert_selected_type(&ctx, 'A', "Bool");
@@ -495,7 +495,7 @@ mod test {
         ];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
 
         add_str_evidence(&mut ctx, "(A -> B)", "(true -> false)");
         // We intentionally do not use function type params as evidence
@@ -509,7 +509,7 @@ mod test {
         let pvar_ids = ty::purity::PVarId::new(0)..ty::purity::PVarId::new(pvars.len());
         let tvar_ids = ty::TVarIds::monomorphic();
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &[]);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &[]);
         assert_unselected_purity(&ctx, 'A');
 
         add_str_evidence(&mut ctx, "(->A true)", "(->! true)");
@@ -522,7 +522,7 @@ mod test {
         let pvar_ids = ty::purity::PVarId::new(0)..ty::purity::PVarId::new(pvars.len());
         let tvar_ids = ty::TVarIds::monomorphic();
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &[]);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &[]);
         assert_unselected_purity(&ctx, 'A');
 
         add_str_evidence(&mut ctx, "(->A true)", "(->B true)");
@@ -540,7 +540,7 @@ mod test {
         ];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
 
         add_str_evidence(&mut ctx, "(A -> B)", "(Type? Sym)");
         assert_unselected_type(&ctx, 'A');
@@ -553,7 +553,7 @@ mod test {
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &tvars);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
 
         add_str_evidence(&mut ctx, "(Type? A)", "(Type? true)");
         assert_selected_type(&ctx, 'A', "true");
@@ -565,7 +565,7 @@ mod test {
         let pvar_ids = ty::purity::PVarId::new(0)..ty::purity::PVarId::new(pvars.len());
         let tvar_ids = ty::TVarIds::monomorphic();
 
-        let mut ctx = SelectContext::new(pvar_ids, tvar_ids, &[]);
+        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &[]);
         assert_unselected_purity(&ctx, 'A');
 
         add_str_evidence(&mut ctx, "(->A true)", "(Type? Sym)");

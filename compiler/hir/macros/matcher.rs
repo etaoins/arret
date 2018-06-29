@@ -4,7 +4,7 @@ use hir::macros::{MacroVar, MatchData, Rule, SpecialVars};
 use hir::ns::{Ident, NsDatum};
 use hir::scope::Scope;
 
-struct MatchContext<'scope, 'svars> {
+struct MatchCtx<'scope, 'svars> {
     scope: &'scope Scope,
     special_vars: &'svars SpecialVars,
     match_data: MatchData,
@@ -13,12 +13,9 @@ struct MatchContext<'scope, 'svars> {
 type Result<T> = result::Result<T, ()>;
 type MatchVisitResult = result::Result<(), ()>;
 
-impl<'scope, 'svars> MatchContext<'scope, 'svars> {
-    fn new(
-        scope: &'scope Scope,
-        special_vars: &'svars SpecialVars,
-    ) -> MatchContext<'scope, 'svars> {
-        MatchContext {
+impl<'scope, 'svars> MatchCtx<'scope, 'svars> {
+    fn new(scope: &'scope Scope, special_vars: &'svars SpecialVars) -> MatchCtx<'scope, 'svars> {
+        MatchCtx {
             scope,
             special_vars,
             match_data: MatchData::new(),
@@ -65,7 +62,7 @@ impl<'scope, 'svars> MatchContext<'scope, 'svars> {
         let submatch_data = args
             .iter()
             .map(|arg| {
-                let mut subcontext = MatchContext {
+                let mut subcontext = MatchCtx {
                     scope: self.scope,
                     special_vars: self.special_vars,
                     match_data: MatchData::new(),
@@ -131,6 +128,6 @@ pub fn match_rule(
     rule: &Rule,
     arg_data: &[NsDatum],
 ) -> Result<MatchData> {
-    let mcx = MatchContext::new(scope, special_vars);
+    let mcx = MatchCtx::new(scope, special_vars);
     mcx.visit_rule(rule, arg_data)
 }
