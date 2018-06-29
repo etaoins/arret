@@ -615,16 +615,15 @@ impl<'sl> LoweringCtx<'sl> {
 
     fn lower_expr(&mut self, scope: &Scope, datum: NsDatum) -> Result<Expr<ty::Decl>> {
         match datum {
-            NsDatum::Ident(span, ref ident) => match scope.get(ident) {
-                Some(Binding::Var(id)) => Ok(Expr::Ref(span, id)),
-                Some(Binding::Prim(_)) => Err(Error::new(span, ErrorKind::PrimRef)),
-                Some(Binding::Ty(_)) | Some(Binding::TyCons(_)) | Some(Binding::Purity(_)) => {
+            NsDatum::Ident(span, ref ident) => match scope.get_or_err(span, ident)? {
+                Binding::Var(id) => Ok(Expr::Ref(span, id)),
+                Binding::Prim(_) => Err(Error::new(span, ErrorKind::PrimRef)),
+                Binding::Ty(_) | Binding::TyCons(_) | Binding::Purity(_) => {
                     Err(Error::new(span, ErrorKind::TyRef))
                 }
-                Some(Binding::Macro(_)) => {
+                Binding::Macro(_) => {
                     Err(Error::new(span, ErrorKind::MacroRef(ident.name().into())))
                 }
-                None => Err(Error::new(span, ErrorKind::UnboundSym(ident.name().into()))),
             },
             NsDatum::List(span, vs) => {
                 let mut data_iter = vs.into_vec().into_iter();
@@ -636,32 +635,27 @@ impl<'sl> LoweringCtx<'sl> {
                 };
 
                 match fn_datum {
-                    NsDatum::Ident(fn_span, ref ident) => match scope.get(ident) {
-                        Some(Binding::Prim(prim)) => {
+                    NsDatum::Ident(fn_span, ref ident) => match scope.get_or_err(fn_span, ident)? {
+                        Binding::Prim(prim) => {
                             self.lower_expr_prim_apply(scope, span, prim, data_iter)
                         }
-                        Some(Binding::Macro(macro_id)) => {
+                        Binding::Macro(macro_id) => {
                             let mut macro_scope = Scope::new_child(scope);
 
                             let expanded_datum = {
                                 let mac = &self.macros[macro_id.to_usize()];
-
                                 expand_macro(&mut macro_scope, span, mac, data_iter.as_slice())?
                             };
 
                             self.lower_expr(&macro_scope, expanded_datum)
                                 .map_err(|e| e.with_macro_invocation_span(span))
                         }
-                        Some(Binding::Var(id)) => {
+                        Binding::Var(id) => {
                             self.lower_expr_apply(scope, span, Expr::Ref(span, id), data_iter)
                         }
-                        Some(Binding::Ty(_))
-                        | Some(Binding::TyCons(_))
-                        | Some(Binding::Purity(_)) => Err(Error::new(span, ErrorKind::TyRef)),
-                        None => Err(Error::new(
-                            fn_span,
-                            ErrorKind::UnboundSym(ident.name().into()),
-                        )),
+                        Binding::Ty(_) | Binding::TyCons(_) | Binding::Purity(_) => {
+                            Err(Error::new(span, ErrorKind::TyRef))
+                        }
                     },
                     _ => {
                         let fn_expr = self.lower_expr(scope, fn_datum)?;
@@ -747,8 +741,8 @@ impl<'sl> LoweringCtx<'sl> {
             let mut data_iter = vs.into_vec().into_iter();
 
             if let Some(NsDatum::Ident(fn_span, ref ident)) = data_iter.next() {
-                match scope.get(ident) {
-                    Some(Binding::Prim(prim)) => {
+                match scope.get_or_err(fn_span, ident)? {
+                    Binding::Prim(prim) => {
                         let applied_prim = AppliedPrim {
                             prim,
                             ns_id: ident.ns_id(),
@@ -757,7 +751,7 @@ impl<'sl> LoweringCtx<'sl> {
 
                         return self.lower_module_prim_apply(scope, applied_prim, data_iter);
                     }
-                    Some(Binding::Macro(macro_id)) => {
+                    Binding::Macro(macro_id) => {
                         let expanded_datum = {
                             let mac = &self.macros[macro_id.to_usize()];
                             expand_macro(scope, span, mac, data_iter.as_slice())?
@@ -771,14 +765,8 @@ impl<'sl> LoweringCtx<'sl> {
                                     .collect()
                             });
                     }
-                    Some(_) => {
+                    _ => {
                         // Non-def
-                    }
-                    None => {
-                        return Err(vec![Error::new(
-                            fn_span,
-                            ErrorKind::UnboundSym(ident.name().into()),
-                        )]);
                     }
                 }
             }
@@ -833,10 +821,13 @@ impl<'sl> LoweringCtx<'sl> {
         // Process any exports at the end of the module
         let mut exports = HashMap::with_capacity(deferred_exports.len());
         for DeferredExport(span, ident) in deferred_exports {
-            if let Some(binding) = scope.get(&ident) {
-                exports.insert(ident.into_name(), binding);
-            } else {
-                errors.push(Error::new(span, ErrorKind::UnboundSym(ident.into_name())));
+            match scope.get_or_err(span, &ident) {
+                Ok(binding) => {
+                    exports.insert(ident.into_name(), binding);
+                }
+                Err(err) => {
+                    errors.push(err);
+                }
             }
         }
 

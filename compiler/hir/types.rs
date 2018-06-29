@@ -257,11 +257,10 @@ impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
         }
     }
 
-    fn lower_ident(&self, span: Span, ident: Ident) -> Result<ty::Poly> {
-        match self.scope.get(&ident) {
-            Some(Binding::Ty(ty)) => Ok(ty),
-            Some(_) => Err(Error::new(span, ErrorKind::ValueAsTy)),
-            None => Err(Error::new(span, ErrorKind::UnboundSym(ident.into_name()))),
+    fn lower_ident(&self, span: Span, ident: &Ident) -> Result<ty::Poly> {
+        match self.scope.get_or_err(span, ident)? {
+            Binding::Ty(ty) => Ok(ty),
+            _ => Err(Error::new(span, ErrorKind::ValueAsTy)),
         }
     }
 
@@ -288,21 +287,15 @@ impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
                 let fn_datum = data_iter.next().unwrap();
 
                 if let NsDatum::Ident(ident_span, ref ident) = fn_datum {
-                    match self.scope.get(ident) {
-                        Some(Binding::Prim(Prim::Quote)) => {
+                    match self.scope.get_or_err(ident_span, ident)? {
+                        Binding::Prim(Prim::Quote) => {
                             let literal_datum = expect_one_arg(span, data_iter)?;
                             return Self::lower_literal(literal_datum);
                         }
-                        Some(Binding::TyCons(ty_cons)) => {
+                        Binding::TyCons(ty_cons) => {
                             return self.lower_ty_cons_apply(span, ty_cons, data_iter);
                         }
-                        None => {
-                            return Err(Error::new(
-                                ident_span,
-                                ErrorKind::UnboundSym(ident.name().into()),
-                            ));
-                        }
-                        Some(_) => {}
+                        _ => {}
                     }
                 }
 
@@ -311,7 +304,7 @@ impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
                     ErrorKind::IllegalArg("type constructor expected"),
                 ))
             }
-            NsDatum::Ident(span, ident) => self.lower_ident(span, ident),
+            NsDatum::Ident(span, ident) => self.lower_ident(span, &ident),
             _ => Self::lower_literal(datum),
         }
     }

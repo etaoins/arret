@@ -82,6 +82,13 @@ impl Scope {
         self.data().get(ident)
     }
 
+    /// Returns the binding for a given ident if it exists, otherwise returns an error
+    pub fn get_or_err(&self, span: Span, ident: &Ident) -> Result<Binding, Error> {
+        self.data()
+            .get(ident)
+            .ok_or_else(|| Error::new(span, ErrorKind::UnboundSym(ident.name().into())))
+    }
+
     pub fn insert_binding(
         &mut self,
         span: Span,
