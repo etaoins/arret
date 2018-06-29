@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use hir::destruc;
 use hir::error::{Error, ErrorKind, Result};
@@ -23,7 +23,7 @@ pub struct LoweringCtx<'sl> {
     deferred_defs: Vec<DeferredDef>,
 
     var_id_counter: VarIdCounter,
-    loaded_modules: BTreeMap<ModuleName, Module>,
+    loaded_modules: HashMap<ModuleName, Module>,
     macros: Vec<Macro>,
 
     pvars: Vec<ty::purity::PVar>,
@@ -62,7 +62,7 @@ struct AppliedPrim {
 
 impl<'sl> LoweringCtx<'sl> {
     pub fn new(source_loader: &'sl mut SourceLoader) -> LoweringCtx {
-        let mut loaded_modules = BTreeMap::new();
+        let mut loaded_modules = HashMap::new();
 
         // These modules are always loaded
         loaded_modules.insert(

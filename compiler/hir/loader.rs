@@ -7,7 +7,7 @@ use syntax::datum::Datum;
 use syntax::parser::data_from_str_with_span_offset;
 use syntax::span::Span;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct ModuleName {
     path: Vec<Box<str>>,
     terminal_name: Box<str>,
