@@ -829,7 +829,7 @@ impl<'sl> LoweringCtx<'sl> {
         }
 
         // Process any exports at the end of the module
-        let mut exports = HashMap::<Box<str>, Binding>::new();
+        let mut exports = HashMap::with_capacity(deferred_exports.len());
         for DeferredExport(span, ident) in deferred_exports {
             if let Some(binding) = scope.get(&ident) {
                 exports.insert(ident.into_name(), binding);
