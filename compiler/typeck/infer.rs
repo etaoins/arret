@@ -150,14 +150,49 @@ fn unit_type() -> ty::Poly {
 }
 
 impl<'vars> InferCtx<'vars> {
-    fn new(pvars: &'vars [ty::purity::PVar], tvars: &'vars [ty::TVar]) -> InferCtx<'vars> {
+    fn new(
+        pvars: &'vars [ty::purity::PVar],
+        tvars: &'vars [ty::TVar],
+        defs: Vec<hir::Def<ty::Decl>>,
+    ) -> InferCtx<'vars> {
+        // Typical code should have at least one var per def
+        let mut var_to_type = HashMap::with_capacity(defs.len());
+
+        // We do this in reverse order because we infer our defs in reverse order. This doesn't
+        // matter for correctness. However, presumably most definitions have more depedencies
+        // before them than after them. Visiting them in forward order should cause less
+        // recursive resolution.
+        let input_defs = defs
+            .into_iter()
+            .rev()
+            .enumerate()
+            .map(|(idx, hir_def)| {
+                let def_id = InputDefId::new(idx);
+
+                typeck::destruc::visit_vars(&hir_def.destruc, |var_id, decl_type| {
+                    let var_type = match decl_type {
+                        ty::Decl::Known(poly_type) => VarType::Known(poly_type.clone()),
+                        ty::Decl::Free => {
+                            // Record the definition ID so we can deal with forward type references
+                            VarType::Pending(def_id)
+                        }
+                    };
+
+                    var_to_type.insert(var_id, var_type);
+                });
+
+                InputDef::Pending(hir_def)
+            })
+            .collect::<Vec<InputDef>>();
+
+        let complete_defs = Vec::with_capacity(input_defs.len());
         InferCtx {
-            input_defs: vec![],
-            complete_defs: vec![],
+            input_defs,
+            complete_defs,
             pvars,
             tvars,
             free_ty_polys: vec![],
-            var_to_type: HashMap::new(),
+            var_to_type,
         }
     }
 
@@ -1060,32 +1095,7 @@ impl<'vars> InferCtx<'vars> {
         Ok(())
     }
 
-    fn infer_program(
-        mut self,
-        defs: Vec<hir::Def<ty::Decl>>,
-    ) -> result::Result<Vec<hir::Def<ty::Poly>>, Vec<Error>> {
-        // First, visit all definitions to bind their variables
-
-        // We do this in reverse order because we infer our defs in reverse order. This doesn't
-        // stricly matter but it should require less recursive resolution in the forward direction.
-        for hir_def in defs.into_iter().rev() {
-            let def_id = InputDefId::new(self.input_defs.len());
-
-            typeck::destruc::visit_vars(&hir_def.destruc, |var_id, decl_type| {
-                let var_type = match decl_type {
-                    ty::Decl::Known(poly_type) => VarType::Known(poly_type.clone()),
-                    ty::Decl::Free => {
-                        // Record the definition ID so we can deal with forward type references
-                        VarType::Pending(def_id)
-                    }
-                };
-
-                self.var_to_type.insert(var_id, var_type);
-            });
-
-            self.input_defs.push(InputDef::Pending(hir_def));
-        }
-
+    fn into_inferred(mut self) -> result::Result<Vec<hir::Def<ty::Poly>>, Vec<Error>> {
         let mut errs = vec![];
         while let Some(def_state) = self.input_defs.pop() {
             match def_state {
@@ -1117,8 +1127,8 @@ pub fn infer_program(
     tvars: &[ty::TVar],
     defs: Vec<hir::Def<ty::Decl>>,
 ) -> result::Result<Vec<hir::Def<ty::Poly>>, Vec<Error>> {
-    let icx = InferCtx::new(pvars, tvars);
-    icx.infer_program(defs)
+    let icx = InferCtx::new(pvars, tvars, defs);
+    icx.into_inferred()
 }
 
 #[cfg(test)]
@@ -1131,7 +1141,7 @@ mod test {
         required_type: &ty::Poly,
         lowered_expr: hir::lowering::LoweredTestExpr,
     ) -> Result<ty::Poly> {
-        let mut icx = InferCtx::new(&lowered_expr.pvars, &lowered_expr.tvars);
+        let mut icx = InferCtx::new(&lowered_expr.pvars, &lowered_expr.tvars, vec![]);
         let mut fcx = FunCtx {
             purity: PurityVarType::Known(Purity::Pure.into_poly()),
         };
