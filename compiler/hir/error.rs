@@ -53,7 +53,6 @@ pub enum ErrorKind {
     MultipleZeroOrMoreMatch(Span),
     NoVecDestruc,
     ValueAsTy,
-    PolyUnionConflict(Box<str>, Box<str>),
     UserError(Box<str>),
     ReadError(Box<path::PathBuf>),
     SyntaxError(SyntaxError),
@@ -112,10 +111,6 @@ impl Reportable for Error {
                 "vectors can only be used in a destructure for type ascription in the form [name : Type]".to_owned()
             }
             ErrorKind::ValueAsTy => "value cannot be used as a type".to_owned(),
-            ErrorKind::PolyUnionConflict(ref left, ref right) => format!(
-                "polymorphism prevents `{}` and `{}` from being members of the same union",
-                left, right,
-            ),
             ErrorKind::UserError(ref message) => message.clone().into_string(),
             ErrorKind::ReadError(ref filename) => format!("error reading `{}`", filename.to_string_lossy()),
             ErrorKind::SyntaxError(ref err) => err.message(),
