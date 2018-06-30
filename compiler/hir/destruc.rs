@@ -137,8 +137,8 @@ pub fn poly_for_list_destruc(list: &List<ty::Poly>) -> ty::List<ty::Poly> {
 }
 
 pub fn poly_for_destruc(destruc: &Destruc<ty::Poly>) -> ty::Poly {
-    match *destruc {
-        Destruc::Scalar(_, ref scalar) => scalar.ty().clone(),
-        Destruc::List(_, ref list) => ty::Ty::List(poly_for_list_destruc(list)).into_poly(),
+    match destruc {
+        Destruc::Scalar(_, scalar) => scalar.ty().clone(),
+        Destruc::List(_, list) => ty::Ty::List(poly_for_list_destruc(list)).into_poly(),
     }
 }
