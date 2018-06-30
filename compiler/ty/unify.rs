@@ -337,11 +337,10 @@ pub fn poly_unify_purity(
         return purity1.clone();
     }
 
-    match (purity1, purity1) {
+    match (purity1, purity2) {
         // Pure is the "empty type" so this is a no-op
-        // TODO: Replacing `_` and `purity2` with `other` doesn't work
-        (ty::purity::Poly::Fixed(Purity::Pure), _) => purity2.clone(),
-        (_, ty::purity::Poly::Fixed(Purity::Pure)) => purity1.clone(),
+        (ty::purity::Poly::Fixed(Purity::Pure), other)
+        | (other, ty::purity::Poly::Fixed(Purity::Pure)) => other.clone(),
         _ => {
             // Impure is the "top type" so this becomes impure
             Purity::Impure.into_poly()
