@@ -34,9 +34,7 @@ where
                     .into_boxed_slice(),
             ),
             Datum::Set(_, vs) => {
-                // Without function, begin or rest types we should never hit erasure
                 let unified_type = self.unify_ref_iter(vs.iter().map(|v| self.ref_for_datum(v)));
-
                 ty::Ty::Set(Box::new(unified_type))
             }
             Datum::Map(_, vs) => {
