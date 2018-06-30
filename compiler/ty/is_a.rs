@@ -61,8 +61,7 @@ where
 {
     fn ty_ref_is_a(&self, &S, &S) -> Result;
     fn purity_ref_is_a(&self, &S::PRef, &S::PRef) -> Result;
-    fn polymorphic_fun_is_a(&self, &ty::Fun<S>, &ty::Fun<S>) -> Result;
-    fn polymorphic_fun_is_a_top(&self, &ty::Fun<S>, &ty::TopFun<S>) -> Result;
+    fn inst_polymorphic_fun(&self, sub_fun: &ty::Fun<S>, par_ret: &S) -> ty::Fun<S>;
 
     fn top_fun_is_a(&self, sub_top_fun: &ty::TopFun<S>, par_top_fun: &ty::TopFun<S>) -> Result {
         self.purity_ref_is_a(sub_top_fun.purity(), par_top_fun.purity())
@@ -125,7 +124,8 @@ where
         if sub_fun.is_monomorphic() {
             self.monomorphic_fun_is_a(sub_fun, par_fun)
         } else {
-            self.polymorphic_fun_is_a(sub_fun, par_fun)
+            let sub_mono = self.inst_polymorphic_fun(sub_fun, par_fun.ret());
+            self.monomorphic_fun_is_a(&sub_mono, par_fun)
         }
     }
 
@@ -252,7 +252,8 @@ where
                 if sub_fun.is_monomorphic() {
                     self.top_fun_is_a(sub_fun.top_fun(), par_top_fun)
                 } else {
-                    self.polymorphic_fun_is_a_top(sub_fun, par_top_fun)
+                    let sub_mono = self.inst_polymorphic_fun(sub_fun, par_top_fun.ret());
+                    self.top_fun_is_a(sub_mono.top_fun(), par_top_fun)
                 }
             }
             (ty::Ty::TopFun(sub_top_fun), ty::Ty::Fun(par_fun)) => {
@@ -345,36 +346,19 @@ impl<'tvars> IsACtx<ty::Poly> for PolyIsACtx<'tvars> {
         }
     }
 
-    fn polymorphic_fun_is_a(
+    fn inst_polymorphic_fun(
         &self,
         sub_fun: &ty::Fun<ty::Poly>,
-        par_fun: &ty::Fun<ty::Poly>,
-    ) -> Result {
+        par_ret: &ty::Poly,
+    ) -> ty::Fun<ty::Poly> {
         let mut select_ctx = ty::select::SelectCtx::new(
             sub_fun.pvar_ids().clone(),
             sub_fun.tvar_ids().clone(),
             self.tvars,
         );
 
-        select_ctx.add_evidence(sub_fun.ret(), par_fun.ret());
-        let mono_sub_fun = ty::subst::inst_fun_selection(&select_ctx, sub_fun);
-        self.monomorphic_fun_is_a(&mono_sub_fun, par_fun)
-    }
-
-    fn polymorphic_fun_is_a_top(
-        &self,
-        sub_fun: &ty::Fun<ty::Poly>,
-        par_top_fun: &ty::TopFun<ty::Poly>,
-    ) -> Result {
-        let mut select_ctx = ty::select::SelectCtx::new(
-            sub_fun.pvar_ids().clone(),
-            sub_fun.tvar_ids().clone(),
-            self.tvars,
-        );
-
-        select_ctx.add_evidence(sub_fun.ret(), par_top_fun.ret());
-        let mono_sub_fun = ty::subst::inst_fun_selection(&select_ctx, sub_fun);
-        self.top_fun_is_a(mono_sub_fun.top_fun(), par_top_fun)
+        select_ctx.add_evidence(sub_fun.ret(), par_ret);
+        ty::subst::inst_fun_selection(&select_ctx, sub_fun)
     }
 }
 
@@ -398,19 +382,11 @@ impl IsACtx<ty::Mono> for MonoIsACtx {
         }
     }
 
-    fn polymorphic_fun_is_a(
+    fn inst_polymorphic_fun(
         &self,
         _sub_fun: &ty::Fun<ty::Mono>,
-        _par_fun: &ty::Fun<ty::Mono>,
-    ) -> Result {
-        unreachable!("Monomorphic types should not have polymorphic functions")
-    }
-
-    fn polymorphic_fun_is_a_top(
-        &self,
-        _sub_fun: &ty::Fun<ty::Mono>,
-        _par_top_fun: &ty::TopFun<ty::Mono>,
-    ) -> Result {
+        _par_ret: &ty::Mono,
+    ) -> ty::Fun<ty::Mono> {
         unreachable!("Monomorphic types should not have polymorphic functions")
     }
 }
