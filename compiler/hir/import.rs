@@ -245,18 +245,6 @@ mod test {
     use hir::prim::Prim;
     use syntax::span::{t2s, EMPTY_SPAN};
 
-    fn load_test_module(_: Span, module_name: ModuleName) -> Result<Bindings> {
-        if module_name == ModuleName::new(vec!["lib".into()], "test".into()) {
-            let mut bindings = HashMap::new();
-            bindings.insert("quote".into(), Binding::Prim(Prim::Quote));
-            bindings.insert("if".into(), Binding::Prim(Prim::If));
-
-            Ok(bindings)
-        } else {
-            Err(vec![Error::new(EMPTY_SPAN, ErrorKind::ModuleNotFound)])
-        }
-    }
-
     fn bindings_for_import_set(datum: &str) -> Result<HashMap<Box<str>, Binding>> {
         use syntax::parser::datum_from_str;
 
@@ -265,7 +253,17 @@ mod test {
         let import_set_datum =
             NsDatum::from_syntax_datum(test_ns_id, datum_from_str(datum).unwrap());
 
-        lower_import_set(import_set_datum, load_test_module)
+        lower_import_set(import_set_datum, |_, module_name| {
+            if module_name == ModuleName::new(vec!["lib".into()], "test".into()) {
+                let mut bindings = HashMap::new();
+                bindings.insert("quote".into(), Binding::Prim(Prim::Quote));
+                bindings.insert("if".into(), Binding::Prim(Prim::If));
+
+                Ok(bindings)
+            } else {
+                Err(vec![Error::new(EMPTY_SPAN, ErrorKind::ModuleNotFound)])
+            }
+        })
     }
 
     #[test]

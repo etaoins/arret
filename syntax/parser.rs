@@ -705,6 +705,7 @@ mod test {
         assert_eq!(err, datum_from_str(j).unwrap_err());
     }
 
+    #[cfg_attr(feature = "cargo-clippy", allow(unreadable_literal))]
     #[test]
     fn int_datum() {
         let test_ints = [
