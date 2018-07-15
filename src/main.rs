@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 
 mod boxed;
+use boxed::Gc;
 
 #[derive(Debug)]
 pub enum ABIType {
@@ -11,14 +12,25 @@ pub enum ABIType {
     Char,
     Float,
     Int,
+    Void,
     Boxed(boxed::TypeTag),
 }
 
-pub struct Task {}
+pub struct Task {
+    heap: boxed::Heap,
+}
 
 impl Task {
-    fn alloc_boxed_float(&mut self, _value: f64) -> &boxed::Float {
-        unimplemented!("PLACEHOLDER");
+    pub fn heap(&mut self) -> &mut boxed::Heap {
+        &mut self.heap
+    }
+}
+
+impl Default for Task {
+    fn default() -> Task {
+        Task {
+            heap: boxed::Heap::with_capacity(32),
+        }
     }
 }
 
@@ -42,20 +54,19 @@ impl EncodeABIType for i64 {
     const ABI_TYPE: ABIType = ABIType::Int;
 }
 
+impl EncodeABIType for char {
+    const ABI_TYPE: ABIType = ABIType::Char;
+}
+
 impl EncodeABIType for () {
-    const ABI_TYPE: ABIType = ABIType::Boxed(boxed::TypeTag::Nil);
+    const ABI_TYPE: ABIType = ABIType::Void;
 }
 
-impl<'a> EncodeABIType for &'a str {
-    const ABI_TYPE: ABIType = ABIType::Boxed(boxed::TypeTag::Str);
-}
-
-impl<'a> EncodeABIType for &'a boxed::Float {
-    const ABI_TYPE: ABIType = ABIType::Boxed(boxed::TypeTag::Float);
-}
-
-impl<'a> EncodeABIType for &'a boxed::Int {
-    const ABI_TYPE: ABIType = ABIType::Boxed(boxed::TypeTag::Int);
+impl<T> EncodeABIType for Gc<T>
+where
+    T: boxed::DirectTagged,
+{
+    const ABI_TYPE: ABIType = ABIType::Boxed(T::TYPE_TAG);
 }
 
 macro_rules! define_extern_fn {
@@ -93,15 +104,15 @@ macro_rules! define_extern_fn {
 }
 
 define_extern_fn! {
-    HELLO_WORLD = hello_world(param1: &str) -> i64 {
-        println!("Hello, {}!", param1);
+    HELLO_WORLD = hello_world(param1: Gc<boxed::Str>) -> i64 {
+        println!("Hello, {}!", param1.as_str());
         42
     }
 }
 
 define_extern_fn! {
-    TAKES_TASK = takes_task(task: &mut Task, _param1: &boxed::Int) -> &'static boxed::Float {
-        task.alloc_boxed_float(64.0)
+    TAKES_TASK = takes_task(task: &mut Task, _param1: Gc<boxed::Int>) -> Gc<boxed::Float> {
+        task.heap().new_box(64.0)
     }
 }
 
@@ -112,7 +123,10 @@ define_extern_fn! {
 }
 
 fn main() {
-    let number = hello_world("sailor");
+    let mut task = Task::default();
+
+    let sailor_str = task.heap().new_box::<boxed::Str, _>("sailorr");
+    let number = hello_world(sailor_str);
     print_num(number);
 
     println!("Number entry point: '{}'", PRINT_NUM.entry_point);

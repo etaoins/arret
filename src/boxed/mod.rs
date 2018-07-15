@@ -8,6 +8,8 @@ pub use boxed::types::nil::Nil;
 pub use boxed::types::pair::Pair;
 pub use boxed::types::str::Str;
 
+pub use boxed::heap::Heap;
+
 pub use boxed::gcref::Gc;
 
 #[derive(Copy, Clone)]
@@ -204,7 +206,7 @@ define_tagged_union!(List, ListSubtype, ListDowncastable, {
 });
 
 impl List {
-    fn list_length(&self) -> usize {
+    pub fn list_length(&self) -> usize {
         match self.as_subtype() {
             ListSubtype::Pair(pair) => pair.list_length,
             ListSubtype::Nil(_) => 0,

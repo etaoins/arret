@@ -14,7 +14,7 @@ pub struct Heap {
 }
 
 impl Heap {
-    fn with_capacity(count: usize) -> Heap {
+    pub fn with_capacity(count: usize) -> Heap {
         let mut backing_vec = Vec::with_capacity(count);
         let start: *mut Any = backing_vec.as_mut_ptr();
 
@@ -25,7 +25,7 @@ impl Heap {
         }
     }
 
-    fn new_box<B, V>(&mut self, value: V) -> Gc<B>
+    pub fn new_box<B, V>(&mut self, value: V) -> Gc<B>
     where
         B: ConstructableFrom<V>,
     {
