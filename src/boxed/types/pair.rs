@@ -1,14 +1,14 @@
-use boxed::{Any, ConstructableFrom, Header, HeapSize, List};
+use boxed::{Any, ConstructableFrom, Gc, Header, HeapSize, List};
 
 #[repr(C, align(16))]
 pub struct Pair {
     pub header: Header,
-    pub car: &'static Any,
-    pub cdr: &'static List,
+    pub car: Gc<Any>,
+    pub cdr: Gc<List>,
     pub list_length: usize,
 }
 
-type PairInput = (&'static Any, &'static List);
+type PairInput = (Gc<Any>, Gc<List>);
 
 impl<'elems> ConstructableFrom<PairInput> for Pair {
     fn heap_size_for_value(_: &PairInput) -> HeapSize {

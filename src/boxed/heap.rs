@@ -1,6 +1,6 @@
 use std::{mem, ptr};
 
-use boxed::{Any, ConstructableFrom, Header};
+use boxed::{Any, ConstructableFrom, Gc, Header};
 
 /// Represents a garbage collected Heap
 ///
@@ -25,7 +25,7 @@ impl Heap {
         }
     }
 
-    fn new_box<B, V>(&mut self, value: V) -> &'static B
+    fn new_box<B, V>(&mut self, value: V) -> Gc<B>
     where
         B: ConstructableFrom<V>,
     {
@@ -54,7 +54,7 @@ impl Heap {
 
         // Make sure we don't drop the stack version
         mem::forget(stack_box);
-        unsafe { &*(insert_at as *const B) }
+        unsafe { Gc::new(insert_at as *const B) }
     }
 }
 

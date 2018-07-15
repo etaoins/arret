@@ -1,3 +1,4 @@
+mod gcref;
 mod heap;
 mod types;
 
@@ -6,6 +7,8 @@ pub use boxed::types::int::Int;
 pub use boxed::types::nil::Nil;
 pub use boxed::types::pair::Pair;
 pub use boxed::types::str::Str;
+
+pub use boxed::gcref::Gc;
 
 #[derive(Copy, Clone)]
 pub enum HeapSize {
