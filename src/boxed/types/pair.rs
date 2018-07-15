@@ -10,7 +10,7 @@ pub struct Pair {
 
 type PairInput = (Gc<Any>, Gc<List>);
 
-impl<'elems> ConstructableFrom<PairInput> for Pair {
+impl ConstructableFrom<PairInput> for Pair {
     fn heap_size_for_value(_: &PairInput) -> HeapSize {
         HeapSize::Size32
     }
