@@ -58,7 +58,7 @@ pub struct Any {
 impl Any {
     pub fn downcast_ref<T>(&self) -> Option<&T>
     where
-        T: AnyDowncastable,
+        T: Downcastable,
     {
         if T::has_tag(self.header.type_tag) {
             Some(unsafe { &*(self as *const Any as *const T) })
@@ -68,8 +68,12 @@ impl Any {
     }
 }
 
-pub trait AnyDowncastable {
+pub trait Downcastable {
     fn has_tag(type_tag: TypeTag) -> bool;
+
+    fn as_any_ref(&self) -> &Any {
+        unsafe { &*(self as *const Self as *const Any) }
+    }
 }
 
 pub trait TypeTagged {
@@ -78,7 +82,7 @@ pub trait TypeTagged {
 
 pub trait DirectTagged: TypeTagged {}
 
-impl<T> AnyDowncastable for T
+impl<T> Downcastable for T
 where
     T: DirectTagged,
 {
@@ -155,7 +159,7 @@ macro_rules! define_singleton_box {
 }
 
 macro_rules! define_tagged_union {
-    ($name:ident, $subtype_enum:ident, $downcastable_trait:ident, { $($member:ident),* }) => {
+    ($name:ident, $subtype_enum:ident, $member_trait:ident, $as_enum_ref:ident, { $($member:ident),* }) => {
         #[repr(C, align(16))]
         pub struct $name {
             pub header: Header,
@@ -164,7 +168,7 @@ macro_rules! define_tagged_union {
         impl $name {
             pub fn downcast_ref<T>(&self) -> Option<&T>
             where
-                T: $downcastable_trait,
+                T: $member_trait,
             {
                 if T::has_tag(self.header.type_tag) {
                     Some(unsafe { &*(self as *const $name as *const T) })
@@ -189,17 +193,21 @@ macro_rules! define_tagged_union {
             }
         }
 
-        pub trait $downcastable_trait : AnyDowncastable {}
+        pub trait $member_trait : Downcastable {
+            fn $as_enum_ref(&self) -> &$name {
+                unsafe { &*(self as *const Self as *const $name) }
+            }
+        }
 
-        $(
-            impl $downcastable_trait for $member {}
-        )*
-
-        impl AnyDowncastable for $name {
+        impl Downcastable for $name {
             fn has_tag(type_tag: TypeTag) -> bool {
                 [$(TypeTag::$member),*].contains(&type_tag)
             }
         }
+
+        $(
+            impl $member_trait for $member {}
+        )*
 
         pub enum $subtype_enum<'a> {
             $($member(&'a $member)),*
@@ -222,17 +230,14 @@ define_singleton_box!(Nil, NIL_INSTANCE);
 define_singleton_box!(True, TRUE_INSTANCE);
 define_singleton_box!(False, FALSE_INSTANCE);
 
-define_tagged_union!(Num, NumSubtype, NumDowncastable, {
+define_tagged_union!(Num, NumSubtype, NumMember, as_num_ref, {
     Int,
     Float
 });
 
-define_tagged_union!(Bool, BoolSubtype, BoolDowncastable, {
-    True,
-    False
-});
+define_tagged_union!(Bool, BoolSubtype, BoolMember, as_bool_ref, { True, False });
 
-define_tagged_union!(List, ListSubtype, ListDowncastable, {
+define_tagged_union!(List, ListSubtype, ListMember, as_list_ref, {
     Pair,
     Nil
 });
@@ -259,7 +264,7 @@ mod test {
     #[test]
     fn downcast_ref() {
         let stack_float = Float::new(2.0);
-        let stack_float_as_any: &Any = unsafe { &*(&stack_float as *const Float as *const Any) };
+        let stack_float_as_any = stack_float.as_any_ref();
 
         assert_eq!(false, stack_float_as_any.downcast_ref::<Int>().is_some());
         assert_eq!(true, stack_float_as_any.downcast_ref::<Float>().is_some());
