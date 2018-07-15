@@ -6,6 +6,7 @@ mod types;
 pub use boxed::types::float::Float;
 pub use boxed::types::int::Int;
 pub use boxed::types::nil::Nil;
+pub use boxed::types::pair::Pair;
 pub use boxed::types::str::Str;
 
 #[derive(Copy, Clone)]
@@ -187,6 +188,7 @@ define_tagged_boxes! {
     Float,
     Int,
     Str,
+    Pair,
     Nil
 }
 
@@ -194,6 +196,20 @@ define_tagged_union!(Num, NumSubtype, NumDowncastable, {
     Int,
     Float
 });
+
+define_tagged_union!(List, ListSubtype, ListDowncastable, {
+    Pair,
+    Nil
+});
+
+impl List {
+    fn list_length(&self) -> usize {
+        match self.as_subtype() {
+            ListSubtype::Pair(pair) => pair.list_length,
+            ListSubtype::Nil(_) => 0,
+        }
+    }
+}
 
 #[cfg(test)]
 mod test {
