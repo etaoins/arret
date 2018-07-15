@@ -1,5 +1,3 @@
-use std::mem;
-
 mod heap;
 mod types;
 
@@ -58,7 +56,7 @@ impl Any {
         T: AnyDowncastable,
     {
         if T::has_tag(self.header.type_tag) {
-            Some(unsafe { mem::transmute(self) })
+            Some(unsafe { &*(self as *const Any as *const T) })
         } else {
             None
         }
@@ -121,7 +119,7 @@ macro_rules! define_tagged_boxes {
                     $(
                         TypeTag::$name => {
                             AnySubtype::$name(unsafe {
-                                mem::transmute(self)
+                                &*(self as *const Any as *const $name)
                             })
                         }
                     )*
@@ -144,7 +142,7 @@ macro_rules! define_tagged_union {
                 T: $downcastable_trait,
             {
                 if T::has_tag(self.header.type_tag) {
-                    Some(unsafe { mem::transmute(self) })
+                    Some(unsafe { &*(self as *const $name as *const T) })
                 } else {
                     None
                 }
@@ -155,7 +153,7 @@ macro_rules! define_tagged_union {
                     $(
                         TypeTag::$member => {
                             $subtype_enum::$member(unsafe {
-                                mem::transmute(self)
+                                &*(self as *const $name as *const $member)
                             })
                         }
                     )*
@@ -214,6 +212,7 @@ impl List {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::mem;
 
     #[test]
     fn sizes() {
@@ -223,7 +222,7 @@ mod test {
     #[test]
     fn downcast_ref() {
         let stack_float = Float::new(2.0);
-        let stack_float_as_any: &Any = unsafe { mem::transmute(&stack_float) };
+        let stack_float_as_any: &Any = unsafe { &*(&stack_float as *const Float as *const Any) };
 
         assert_eq!(false, stack_float_as_any.downcast_ref::<Int>().is_some());
         assert_eq!(true, stack_float_as_any.downcast_ref::<Float>().is_some());
@@ -232,7 +231,7 @@ mod test {
     #[test]
     fn as_tagged() {
         let stack_float = Float::new(2.0);
-        let stack_float_as_any: &Any = unsafe { mem::transmute(&stack_float) };
+        let stack_float_as_any: &Any = unsafe { &*(&stack_float as *const Float as *const Any) };
 
         if let AnySubtype::Float(_) = stack_float_as_any.as_subtype() {
         } else {
@@ -243,7 +242,7 @@ mod test {
     #[test]
     fn union_types() {
         let stack_float = Float::new(2.0);
-        let stack_float_as_any: &Any = unsafe { mem::transmute(&stack_float) };
+        let stack_float_as_any: &Any = unsafe { &*(&stack_float as *const Float as *const Any) };
 
         if let Some(stack_num) = stack_float_as_any.downcast_ref::<Num>() {
             if let NumSubtype::Float(_) = stack_num.as_subtype() {
@@ -258,10 +257,8 @@ mod test {
         }
 
         let stack_str = Str::new("Test!");
-        let stack_str_as_any: &Any = unsafe { mem::transmute(&stack_str) };
+        let stack_str_as_any: &Any = unsafe { &*(&stack_str as *const Str as *const Any) };
 
-        if let Some(_) = stack_str_as_any.downcast_ref::<Num>() {
-            panic!("Got a Num from a Str");
-        }
+        assert_eq!(false, stack_str_as_any.downcast_ref::<Num>().is_some());
     }
 }

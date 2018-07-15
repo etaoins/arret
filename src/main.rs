@@ -1,4 +1,5 @@
-#![allow(unused)]
+#![allow(dead_code)]
+#![cfg_attr(feature = "cargo-clippy", warn(clippy))]
 
 use std::collections::HashMap;
 
@@ -16,7 +17,7 @@ pub enum ABIType {
 pub struct Task {}
 
 impl Task {
-    fn alloc_boxed_float<'a>(&'a mut self, _value: f64) -> &'a boxed::Float {
+    fn alloc_boxed_float(&mut self, _value: f64) -> &boxed::Float {
         unimplemented!("PLACEHOLDER");
     }
 }

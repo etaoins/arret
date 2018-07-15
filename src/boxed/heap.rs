@@ -1,6 +1,6 @@
 use std::{mem, ptr};
 
-use boxed::{Any, ConstructableFrom, Header, HeapSize, Str};
+use boxed::{Any, ConstructableFrom, Header};
 
 /// Represents a garbage collected Heap
 ///
@@ -54,7 +54,7 @@ impl Heap {
 
         // Make sure we don't drop the stack version
         mem::forget(stack_box);
-        unsafe { mem::transmute(insert_at) }
+        unsafe { &*(insert_at as *const B) }
     }
 }
 
@@ -64,6 +64,8 @@ mod test {
 
     #[test]
     fn basic_alloc() {
+        use boxed::Str;
+
         let mut heap = Heap::with_capacity(5);
 
         let string1 = heap.new_box::<Str, _>("HELLO");

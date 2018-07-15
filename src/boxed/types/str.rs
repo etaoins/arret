@@ -19,9 +19,9 @@ impl Str {
 
     fn as_repr(&self) -> Repr {
         if self.is_inline() {
-            Repr::Inline(unsafe { mem::transmute(self) })
+            Repr::Inline(unsafe { &*(self as *const Str as *const InlineStr) })
         } else {
-            Repr::Shared(unsafe { mem::transmute(self) })
+            Repr::Shared(unsafe { &*(self as *const Str as *const SharedStr) })
         }
     }
 
@@ -140,14 +140,13 @@ mod test {
 
     #[test]
     fn round_trip() {
-        for &test_str in [
+        for &test_str in &[
             "",
             "1",
             "smallinline",
             "largerinlinethattakes32bytes",
             "This definitely will not fit in any inline string",
-        ].iter()
-        {
+        ] {
             let boxed_string = Str::new(test_str);
             assert_eq!(test_str, boxed_string.as_str());
         }
