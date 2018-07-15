@@ -4,7 +4,6 @@ mod types;
 
 pub use boxed::types::float::Float;
 pub use boxed::types::int::Int;
-pub use boxed::types::nil::Nil;
 pub use boxed::types::pair::Pair;
 pub use boxed::types::str::Str;
 
@@ -134,6 +133,22 @@ macro_rules! define_tagged_boxes {
     }
 }
 
+macro_rules! define_singleton_box {
+    ($type_name:ident, $static_name:ident) => {
+        #[repr(C, align(16))]
+        pub struct $type_name {
+            pub header: Header,
+        }
+
+        pub static $static_name: $type_name = $type_name {
+            header: Header {
+                type_tag: $type_name::TYPE_TAG,
+                alloc_type: AllocType::Const,
+            },
+        };
+    };
+}
+
 macro_rules! define_tagged_union {
     ($name:ident, $subtype_enum:ident, $downcastable_trait:ident, { $($member:ident),* }) => {
         #[repr(C, align(16))]
@@ -192,12 +207,23 @@ define_tagged_boxes! {
     Int,
     Str,
     Pair,
-    Nil
+    Nil,
+    True,
+    False
 }
+
+define_singleton_box!(Nil, NIL_INSTANCE);
+define_singleton_box!(True, TRUE_INSTANCE);
+define_singleton_box!(False, FALSE_INSTANCE);
 
 define_tagged_union!(Num, NumSubtype, NumDowncastable, {
     Int,
     Float
+});
+
+define_tagged_union!(Bool, BoolSubtype, BoolDowncastable, {
+    True,
+    False
 });
 
 define_tagged_union!(List, ListSubtype, ListDowncastable, {
