@@ -7,13 +7,19 @@ mod boxed;
 use boxed::Gc;
 
 #[derive(Debug)]
+pub enum BoxedABIType {
+    Direct(boxed::TypeTag),
+    Vector(&'static BoxedABIType),
+}
+
+#[derive(Debug)]
 pub enum ABIType {
     Bool,
     Char,
     Float,
     Int,
     Void,
-    Boxed(boxed::TypeTag),
+    Boxed(BoxedABIType),
 }
 
 pub struct Task {
@@ -46,6 +52,10 @@ trait EncodeABIType {
     const ABI_TYPE: ABIType;
 }
 
+trait EncodeBoxedABIType {
+    const BOXED_ABI_TYPE: BoxedABIType;
+}
+
 impl EncodeABIType for f64 {
     const ABI_TYPE: ABIType = ABIType::Float;
 }
@@ -64,9 +74,23 @@ impl EncodeABIType for () {
 
 impl<T> EncodeABIType for Gc<T>
 where
+    T: EncodeBoxedABIType,
+{
+    const ABI_TYPE: ABIType = ABIType::Boxed(T::BOXED_ABI_TYPE);
+}
+
+impl<T> EncodeBoxedABIType for T
+where
     T: boxed::DirectTagged,
 {
-    const ABI_TYPE: ABIType = ABIType::Boxed(T::TYPE_TAG);
+    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Direct(T::TYPE_TAG);
+}
+
+impl<T> EncodeBoxedABIType for boxed::Vector<T>
+where
+    T: EncodeBoxedABIType,
+{
+    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Vector(&T::BOXED_ABI_TYPE);
 }
 
 macro_rules! define_extern_fn {
@@ -111,7 +135,7 @@ define_extern_fn! {
 }
 
 define_extern_fn! {
-    TAKES_TASK = takes_task(task: &mut Task, _param1: Gc<boxed::Int>) -> Gc<boxed::Float> {
+    TAKES_TASK = takes_task(task: &mut Task, _param1: Gc<boxed::Vector<boxed::Int>>) -> Gc<boxed::Float> {
         task.heap().new_box(64.0)
     }
 }

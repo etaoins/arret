@@ -6,6 +6,7 @@ pub use boxed::types::float::Float;
 pub use boxed::types::int::Int;
 pub use boxed::types::pair::Pair;
 pub use boxed::types::str::Str;
+pub use boxed::types::vector::{TopVector, Vector};
 
 pub use boxed::heap::Heap;
 
@@ -71,9 +72,11 @@ pub trait AnyDowncastable {
     fn has_tag(type_tag: TypeTag) -> bool;
 }
 
-pub trait DirectTagged {
+pub trait TypeTagged {
     const TYPE_TAG: TypeTag;
 }
+
+pub trait DirectTagged: TypeTagged {}
 
 impl<T> AnyDowncastable for T
 where
@@ -84,7 +87,7 @@ where
     }
 }
 
-pub trait ConstructableFrom<T>: DirectTagged + Sized {
+pub trait ConstructableFrom<T>: TypeTagged + Sized {
     fn heap_size_for_value(value: &T) -> HeapSize;
     fn new_with_header(value: T, header: Header) -> Self;
 
@@ -112,9 +115,11 @@ macro_rules! define_tagged_boxes {
         }
 
         $(
-            impl DirectTagged for $name {
+            impl TypeTagged for $name {
                 const TYPE_TAG: TypeTag = TypeTag::$name;
             }
+
+            impl DirectTagged for $name {}
         )*
 
         impl Any {
@@ -209,7 +214,8 @@ define_tagged_boxes! {
     Pair,
     Nil,
     True,
-    False
+    False,
+    TopVector
 }
 
 define_singleton_box!(Nil, NIL_INSTANCE);
