@@ -3,7 +3,7 @@ use std::ptr;
 
 /// Reference to a garbage collected value
 ///
-/// This is not memory safe at all; it's just sugar for a raw pointer.
+/// This is not memory safe and does not GC root; it's just sugar for a raw pointer.
 pub struct Gc<T> {
     pub inner: ptr::NonNull<T>,
 }
@@ -31,3 +31,12 @@ impl<T> Gc<T> {
         }
     }
 }
+
+/// Reference to a boxed value
+///
+/// This is used to abstract over both GC managed values and vanilla Rust references.
+pub trait BoxRef: Clone + Deref {}
+
+impl<T> BoxRef for Gc<T> {}
+
+impl<'a, T> BoxRef for &'a T {}

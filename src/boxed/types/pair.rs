@@ -1,4 +1,5 @@
-use boxed::{Any, ConstructableFrom, Gc, Header, HeapSize, List};
+use boxed::refs::Gc;
+use boxed::{Any, ConstructableFrom, Header, HeapSize, List};
 
 #[repr(C, align(16))]
 pub struct Pair {

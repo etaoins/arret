@@ -1,5 +1,5 @@
-mod gcref;
 mod heap;
+pub mod refs;
 mod types;
 
 pub use boxed::types::float::Float;
@@ -9,8 +9,6 @@ pub use boxed::types::str::Str;
 pub use boxed::types::vector::{TopVector, Vector};
 
 pub use boxed::heap::Heap;
-
-pub use boxed::gcref::Gc;
 
 #[derive(Copy, Clone)]
 pub enum HeapSize {

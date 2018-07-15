@@ -1,6 +1,7 @@
 use std::{mem, ptr};
 
-use boxed::{Any, ConstructableFrom, Gc, Header};
+use boxed::refs::Gc;
+use boxed::{Any, ConstructableFrom, Header};
 
 /// Represents a garbage collected Heap
 ///
