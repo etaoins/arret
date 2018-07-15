@@ -25,6 +25,20 @@ impl Heap {
         }
     }
 
+    /// Returns contiguous memory for holding `count` cells
+    fn alloc_cells(&mut self, count: usize) -> *mut Any {
+        let current_start = self.start;
+        let new_start = unsafe { self.start.offset(count as isize) };
+
+        if (new_start as *const Any) > self.end {
+            unimplemented!("Allocate more memory")
+        } else {
+            self.start = new_start;
+        }
+
+        current_start
+    }
+
     pub fn new_box<B, V>(&mut self, value: V) -> Gc<B>
     where
         B: ConstructableFrom<V>,
@@ -32,14 +46,7 @@ impl Heap {
         let heap_size = B::heap_size_for_value(&value);
         let needed_cells = heap_size.cell_count();
 
-        let insert_at = self.start;
-        let new_start = unsafe { self.start.offset(needed_cells as isize) };
-
-        if (new_start as *const Any) > self.end {
-            unimplemented!("Allocate more memory")
-        } else {
-            self.start = new_start;
-        }
+        let insert_at = self.alloc_cells(needed_cells);
 
         let header = Header {
             type_tag: B::TYPE_TAG,
