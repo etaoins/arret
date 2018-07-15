@@ -8,9 +8,26 @@ pub use boxed::types::int::Int;
 pub use boxed::types::nil::Nil;
 pub use boxed::types::str::Str;
 
+#[derive(Copy, Clone)]
 pub enum HeapSize {
     Size16,
     Size32,
+}
+
+impl HeapSize {
+    fn cell_count(self) -> usize {
+        match self {
+            HeapSize::Size16 => 1,
+            HeapSize::Size32 => 2,
+        }
+    }
+
+    fn to_alloc_type(self) -> AllocType {
+        match self {
+            HeapSize::Size16 => AllocType::Heap16,
+            HeapSize::Size32 => AllocType::Heap32,
+        }
+    }
 }
 
 #[repr(u8)]
@@ -65,7 +82,7 @@ where
 }
 
 pub trait ConstructableFrom<T>: DirectTagged + Sized {
-    fn heap_size_for_value(value: T) -> HeapSize;
+    fn heap_size_for_value(value: &T) -> HeapSize;
     fn new_with_header(value: T, header: Header) -> Self;
 
     fn new(value: T) -> Self {

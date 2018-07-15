@@ -34,7 +34,7 @@ impl Str {
 }
 
 impl<'a> ConstructableFrom<&'a str> for Str {
-    fn heap_size_for_value(value: &str) -> HeapSize {
+    fn heap_size_for_value(value: &&str) -> HeapSize {
         match value.len() {
             0..=13 => HeapSize::Size16,
             14..=Str::MAX_INLINE_BYTES => HeapSize::Size32,

@@ -7,7 +7,7 @@ pub struct Float {
 }
 
 impl ConstructableFrom<f64> for Float {
-    fn heap_size_for_value(_: f64) -> HeapSize {
+    fn heap_size_for_value(_: &f64) -> HeapSize {
         HeapSize::Size16
     }
 

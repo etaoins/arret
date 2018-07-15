@@ -7,7 +7,7 @@ pub struct Int {
 }
 
 impl ConstructableFrom<i64> for Int {
-    fn heap_size_for_value(_: i64) -> HeapSize {
+    fn heap_size_for_value(_: &i64) -> HeapSize {
         HeapSize::Size16
     }
 
