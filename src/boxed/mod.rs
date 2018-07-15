@@ -1,5 +1,6 @@
 use std::mem;
 
+mod heap;
 mod types;
 
 pub use boxed::types::float::Float;
@@ -28,7 +29,7 @@ pub struct Header {
     pub alloc_type: AllocType,
 }
 
-#[repr(C)]
+#[repr(C, align(16))]
 pub struct Any {
     pub header: Header,
 }
@@ -114,7 +115,7 @@ macro_rules! define_tagged_boxes {
 
 macro_rules! define_tagged_union {
     ($name:ident, $subtype_enum:ident, $downcastable_trait:ident, { $($member:ident),* }) => {
-        #[repr(C)]
+        #[repr(C, align(16))]
         pub struct $name {
             pub header: Header,
         }

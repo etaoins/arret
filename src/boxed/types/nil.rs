@@ -1,6 +1,6 @@
 use boxed::Header;
 
-#[repr(C)]
+#[repr(C, align(16))]
 pub struct Nil {
     pub header: Header,
 }

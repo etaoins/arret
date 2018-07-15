@@ -3,7 +3,7 @@ use std::{mem, ptr};
 
 use boxed::{ConstructableFrom, Header, HeapSize};
 
-#[repr(C)]
+#[repr(C, align(16))]
 pub struct Str {
     pub header: Header,
     pub inline_byte_length: u8,
@@ -88,7 +88,7 @@ impl Drop for Str {
     }
 }
 
-#[repr(C)]
+#[repr(C, align(16))]
 struct InlineStr {
     pub header: Header,
     pub inline_byte_length: u8,
@@ -112,7 +112,7 @@ impl InlineStr {
     }
 }
 
-#[repr(C)]
+#[repr(C, align(16))]
 struct SharedStr {
     pub header: Header,
     // Once we've determined we're not inline this has no useful value

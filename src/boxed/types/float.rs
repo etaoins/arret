@@ -1,6 +1,6 @@
 use boxed::{ConstructableFrom, Header, HeapSize};
 
-#[repr(C)]
+#[repr(C, align(16))]
 pub struct Float {
     pub header: Header,
     pub value: f64,
