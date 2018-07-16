@@ -31,12 +31,3 @@ impl<T> Gc<T> {
         }
     }
 }
-
-/// Reference to a boxed value
-///
-/// This is used to abstract over both GC managed values and vanilla Rust references.
-pub trait BoxRef: Clone + Deref {}
-
-impl<T> BoxRef for Gc<T> {}
-
-impl<'a, T> BoxRef for &'a T {}

@@ -1,31 +1,22 @@
-use boxed::refs::BoxRef;
+use boxed::refs::Gc;
 use boxed::{Any, BoxSize, ConstructableFrom, Header, TypeTag, TypeTagged};
 
 #[repr(C, align(16))]
-pub struct Vector<T>
-where
-    T: BoxRef,
-{
+pub struct Vector<T> {
     pub header: Header,
-    pub values: Vec<T>,
+    pub values: Vec<Gc<T>>,
 }
 
-impl<T> TypeTagged for Vector<T>
-where
-    T: BoxRef,
-{
+impl<T> TypeTagged for Vector<T> {
     const TYPE_TAG: TypeTag = TypeTag::TopVector;
 }
 
-impl<'a, T> ConstructableFrom<&'a [T]> for Vector<T>
-where
-    T: BoxRef,
-{
-    fn size_for_value(_: &&[T]) -> BoxSize {
+impl<'a, T> ConstructableFrom<&'a [Gc<T>]> for Vector<T> {
+    fn size_for_value(_: &&[Gc<T>]) -> BoxSize {
         BoxSize::Size32
     }
 
-    fn new_with_header(values: &[T], header: Header) -> Vector<T> {
+    fn new_with_header(values: &[Gc<T>], header: Header) -> Vector<T> {
         Vector {
             header,
             values: values.into(),
@@ -39,22 +30,18 @@ pub struct TopVector {
 }
 
 impl TopVector {
-    fn as_vector<T>(&self) -> &Vector<T>
-    where
-        T: BoxRef<Target = Any>,
-    {
-        unsafe { &*(self as *const TopVector as *const Vector<T>) }
+    fn as_vector(&self) -> &Vector<Gc<Any>> {
+        unsafe { &*(self as *const TopVector as *const Vector<Gc<Any>>) }
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use boxed::refs::Gc;
     use std::mem;
 
     #[test]
     fn sizes() {
-        assert_eq!(32, mem::size_of::<Vector<Gc<Any>>>());
+        assert_eq!(32, mem::size_of::<Vector<Any>>());
     }
 }

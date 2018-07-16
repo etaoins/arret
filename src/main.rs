@@ -86,7 +86,7 @@ where
     const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Direct(T::TYPE_TAG);
 }
 
-impl<T> EncodeBoxedABIType for boxed::Vector<Gc<T>>
+impl<T> EncodeBoxedABIType for boxed::Vector<T>
 where
     T: EncodeBoxedABIType,
 {
@@ -135,7 +135,7 @@ define_extern_fn! {
 }
 
 define_extern_fn! {
-    TAKES_TASK = takes_task(task: &mut Task, _param1: Gc<boxed::Vector<Gc<boxed::Int>>>) -> Gc<boxed::Float> {
+    TAKES_TASK = takes_task(task: &mut Task, _param1: Gc<boxed::Vector<boxed::Int>>) -> Gc<boxed::Float> {
         task.heap().new_box(64.0)
     }
 }
