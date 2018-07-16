@@ -7,7 +7,7 @@ use boxed::refs::Gc;
 
 pub use boxed::types::float::Float;
 pub use boxed::types::int::Int;
-pub use boxed::types::pair::Pair;
+pub use boxed::types::list::{List, Pair, TopPair};
 pub use boxed::types::str::Str;
 pub use boxed::types::vector::{TopVector, Vector};
 
@@ -251,7 +251,7 @@ define_direct_tagged_boxes! {
     Float,
     Int,
     Str,
-    Pair,
+    TopPair,
     Nil,
     True,
     False,
@@ -269,19 +269,10 @@ define_tagged_union!(Num, NumSubtype, NumMember, as_num_ref, {
 
 define_tagged_union!(Bool, BoolSubtype, BoolMember, as_bool_ref, { True, False });
 
-define_tagged_union!(List, ListSubtype, ListMember, as_list_ref, {
-    Pair,
+define_tagged_union!(TopList, TopListSubtype, TopListMember, as_top_list_ref, {
+    TopPair,
     Nil
 });
-
-impl List {
-    pub fn list_length(&self) -> usize {
-        match self.as_subtype() {
-            ListSubtype::Pair(pair) => pair.list_length,
-            ListSubtype::Nil(_) => 0,
-        }
-    }
-}
 
 #[cfg(test)]
 mod test {

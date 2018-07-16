@@ -6,6 +6,8 @@ pub enum BoxedABIType {
     Direct(boxed::TypeTag),
     Union(&'static [boxed::TypeTag]),
     Vector(&'static BoxedABIType),
+    List(&'static BoxedABIType),
+    Pair(&'static BoxedABIType),
 }
 
 #[derive(Debug)]
