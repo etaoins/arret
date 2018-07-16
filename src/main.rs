@@ -88,6 +88,12 @@ define_extern_fn! {
      }
 }
 
+define_extern_fn! {
+    LENGTH = length(input: Gc<boxed::List<boxed::Any>>) -> i64 {
+        input.len() as i64
+    }
+}
+
 fn main() {
     let mut task = Task::default();
 

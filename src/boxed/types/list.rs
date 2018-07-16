@@ -46,7 +46,7 @@ where
             header,
             head: value.0,
             rest: value.1,
-            list_length: value.1.list_length() + 1,
+            list_length: value.1.len() + 1,
         }
     }
 }
@@ -84,7 +84,7 @@ where
         }
     }
 
-    pub fn list_length(&self) -> usize {
+    pub fn len(&self) -> usize {
         match self.as_subtype() {
             ListSubtype::Pair(pair) => pair.list_length,
             ListSubtype::Nil => 0,
