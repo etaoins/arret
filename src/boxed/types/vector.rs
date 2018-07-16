@@ -1,3 +1,4 @@
+use abitype::{BoxedABIType, EncodeBoxedABIType};
 use boxed::refs::Gc;
 use boxed::{Any, BoxSize, Boxed, ConstructableFrom, Header, TypeTag, TypeTagged};
 
@@ -35,14 +36,21 @@ where
     }
 }
 
+impl<T> EncodeBoxedABIType for Vector<T>
+where
+    T: EncodeBoxedABIType + Boxed,
+{
+    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Vector(&T::BOXED_ABI_TYPE);
+}
+
 #[repr(C, align(16))]
 pub struct TopVector {
     pub header: Header,
 }
 
 impl TopVector {
-    fn as_vector(&self) -> &Vector<Any> {
-        unsafe { &*(self as *const TopVector as *const Vector<Any>) }
+    fn as_vector(&self) -> Gc<Vector<Any>> {
+        unsafe { Gc::new(&*(self as *const TopVector as *const Vector<Any>)) }
     }
 }
 

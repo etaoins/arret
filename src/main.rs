@@ -77,8 +77,8 @@ define_extern_fn! {
 }
 
 define_extern_fn! {
-    TAKES_TASK = takes_task(task: &mut Task, _param1: Gc<boxed::Vector<boxed::Int>>) -> Gc<boxed::Float> {
-        task.heap().new_box(64.0)
+    TAKES_TASK = takes_task(task: &mut Task, _param1: Gc<boxed::Vector<boxed::Int>>) -> Gc<boxed::Num> {
+        task.heap().new_box::<boxed::Float, _>(64.0).as_num_ref()
     }
 }
 

@@ -4,6 +4,7 @@ use boxed::refs::Gc;
 #[derive(Debug)]
 pub enum BoxedABIType {
     Direct(boxed::TypeTag),
+    Union(&'static [boxed::TypeTag]),
     Vector(&'static BoxedABIType),
 }
 
@@ -19,10 +20,6 @@ pub enum ABIType {
 
 pub trait EncodeABIType {
     const ABI_TYPE: ABIType;
-}
-
-pub trait EncodeBoxedABIType {
-    const BOXED_ABI_TYPE: BoxedABIType;
 }
 
 impl EncodeABIType for f64 {
@@ -48,16 +45,6 @@ where
     const ABI_TYPE: ABIType = ABIType::Boxed(T::BOXED_ABI_TYPE);
 }
 
-impl<T> EncodeBoxedABIType for T
-where
-    T: boxed::DirectTagged,
-{
-    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Direct(T::TYPE_TAG);
-}
-
-impl<T> EncodeBoxedABIType for boxed::Vector<T>
-where
-    T: EncodeBoxedABIType + boxed::Boxed,
-{
-    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Vector(&T::BOXED_ABI_TYPE);
+pub trait EncodeBoxedABIType {
+    const BOXED_ABI_TYPE: BoxedABIType;
 }

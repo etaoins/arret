@@ -2,6 +2,9 @@ mod heap;
 pub mod refs;
 mod types;
 
+use abitype::{BoxedABIType, EncodeBoxedABIType};
+use boxed::refs::Gc;
+
 pub use boxed::types::float::Float;
 pub use boxed::types::int::Int;
 pub use boxed::types::pair::Pair;
@@ -56,24 +59,25 @@ pub struct Any {
 }
 
 impl Any {
-    pub fn downcast_ref<T>(&self) -> Option<&T>
+    pub fn downcast_ref<T>(&self) -> Option<Gc<T>>
     where
         T: Downcastable,
     {
         if T::has_tag(self.header.type_tag) {
-            Some(unsafe { &*(self as *const Any as *const T) })
+            Some(unsafe { Gc::new(&*(self as *const Any as *const T)) })
         } else {
             None
         }
     }
 }
+
 impl Boxed for Any {}
 
 pub trait Downcastable: Boxed {
     fn has_tag(type_tag: TypeTag) -> bool;
 
-    fn as_any_ref(&self) -> &Any {
-        unsafe { &*(self as *const Self as *const Any) }
+    fn as_any_ref(&self) -> Gc<Any> {
+        unsafe { Gc::new(&*(self as *const Self as *const Any)) }
     }
 }
 
@@ -82,6 +86,13 @@ pub trait TypeTagged: Boxed {
 }
 
 pub trait DirectTagged: TypeTagged {}
+
+impl<T> EncodeBoxedABIType for T
+where
+    T: DirectTagged,
+{
+    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Direct(T::TYPE_TAG);
+}
 
 impl<T> Downcastable for T
 where
@@ -120,11 +131,11 @@ macro_rules! define_direct_tagged_boxes {
         #[repr(u8)]
         #[derive(Debug, PartialEq, Eq, Copy, Clone)]
         pub enum TypeTag {
-            $($name),*
+            $( $name ),*
         }
 
         pub enum AnySubtype<'a> {
-            $($name(&'a $name)),*
+            $( $name(&'a $name) ),*
         }
 
         $(
@@ -177,12 +188,12 @@ macro_rules! define_tagged_union {
         }
 
         impl $name {
-            pub fn downcast_ref<T>(&self) -> Option<&T>
+            pub fn downcast_ref<T>(&self) -> Option<Gc<T>>
             where
                 T: $member_trait,
             {
                 if T::has_tag(self.header.type_tag) {
-                    Some(unsafe { &*(self as *const $name as *const T) })
+                    Some(unsafe { Gc::new(&*(self as *const $name as *const T)) })
                 } else {
                     None
                 }
@@ -206,24 +217,32 @@ macro_rules! define_tagged_union {
 
         impl Boxed for $name {}
 
-        pub trait $member_trait : Downcastable {
-            fn $as_enum_ref(&self) -> &$name {
-                unsafe { &*(self as *const Self as *const $name) }
-            }
+        impl EncodeBoxedABIType for $name {
+            const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Union(&[
+                $( $member::TYPE_TAG ),*
+            ]);
         }
+
+        pub trait $member_trait : Downcastable {}
 
         impl Downcastable for $name {
             fn has_tag(type_tag: TypeTag) -> bool {
-                [$(TypeTag::$member),*].contains(&type_tag)
+                [$( TypeTag::$member ),*].contains(&type_tag)
             }
         }
 
         $(
             impl $member_trait for $member {}
+
+            impl $member {
+                pub fn $as_enum_ref(&self) -> Gc<$name> {
+                    unsafe { Gc::new(&*(self as *const Self as *const $name)) }
+                }
+            }
         )*
 
         pub enum $subtype_enum<'a> {
-            $($member(&'a $member)),*
+            $( $member(&'a $member) ),*
         }
     };
 }
