@@ -1,17 +1,28 @@
 use boxed::refs::Gc;
-use boxed::{Any, BoxSize, ConstructableFrom, Header, TypeTag, TypeTagged};
+use boxed::{Any, BoxSize, Boxed, ConstructableFrom, Header, TypeTag, TypeTagged};
 
 #[repr(C, align(16))]
-pub struct Vector<T> {
+pub struct Vector<T>
+where
+    T: Boxed,
+{
     pub header: Header,
     pub values: Vec<Gc<T>>,
 }
 
-impl<T> TypeTagged for Vector<T> {
+impl<T> Boxed for Vector<T> where T: Boxed {}
+
+impl<T> TypeTagged for Vector<T>
+where
+    T: Boxed,
+{
     const TYPE_TAG: TypeTag = TypeTag::TopVector;
 }
 
-impl<'a, T> ConstructableFrom<&'a [Gc<T>]> for Vector<T> {
+impl<'a, T> ConstructableFrom<&'a [Gc<T>]> for Vector<T>
+where
+    T: Boxed,
+{
     fn size_for_value(_: &&[Gc<T>]) -> BoxSize {
         BoxSize::Size32
     }
@@ -30,8 +41,8 @@ pub struct TopVector {
 }
 
 impl TopVector {
-    fn as_vector(&self) -> &Vector<Gc<Any>> {
-        unsafe { &*(self as *const TopVector as *const Vector<Gc<Any>>) }
+    fn as_vector(&self) -> &Vector<Any> {
+        unsafe { &*(self as *const TopVector as *const Vector<Any>) }
     }
 }
 

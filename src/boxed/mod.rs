@@ -10,6 +10,8 @@ pub use boxed::types::vector::{TopVector, Vector};
 
 pub use boxed::heap::Heap;
 
+pub trait Boxed: Sized {}
+
 #[derive(Copy, Clone)]
 pub enum BoxSize {
     Size16,
@@ -65,8 +67,9 @@ impl Any {
         }
     }
 }
+impl Boxed for Any {}
 
-pub trait Downcastable {
+pub trait Downcastable: Boxed {
     fn has_tag(type_tag: TypeTag) -> bool;
 
     fn as_any_ref(&self) -> &Any {
@@ -74,7 +77,7 @@ pub trait Downcastable {
     }
 }
 
-pub trait TypeTagged {
+pub trait TypeTagged: Boxed {
     const TYPE_TAG: TypeTag;
 }
 
@@ -89,7 +92,7 @@ where
     }
 }
 
-pub trait ConstructableFrom<T>: TypeTagged + Sized {
+pub trait ConstructableFrom<T>: TypeTagged {
     /// Returns the size of the box required to hold the specific value
     ///
     /// This is used to more tightly pack boxes on the heap. It is always safe to return a larger
@@ -125,6 +128,8 @@ macro_rules! define_direct_tagged_boxes {
         }
 
         $(
+            impl Boxed for $name {}
+
             impl TypeTagged for $name {
                 const TYPE_TAG: TypeTag = TypeTag::$name;
             }
@@ -198,6 +203,8 @@ macro_rules! define_tagged_union {
                 }
             }
         }
+
+        impl Boxed for $name {}
 
         pub trait $member_trait : Downcastable {
             fn $as_enum_ref(&self) -> &$name {

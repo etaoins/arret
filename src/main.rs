@@ -74,7 +74,7 @@ impl EncodeABIType for () {
 
 impl<T> EncodeABIType for Gc<T>
 where
-    T: EncodeBoxedABIType,
+    T: EncodeBoxedABIType + boxed::Boxed,
 {
     const ABI_TYPE: ABIType = ABIType::Boxed(T::BOXED_ABI_TYPE);
 }
@@ -88,7 +88,7 @@ where
 
 impl<T> EncodeBoxedABIType for boxed::Vector<T>
 where
-    T: EncodeBoxedABIType,
+    T: EncodeBoxedABIType + boxed::Boxed,
 {
     const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Vector(&T::BOXED_ABI_TYPE);
 }
