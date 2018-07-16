@@ -44,14 +44,14 @@ impl Heap {
     where
         B: ConstructableFrom<V>,
     {
-        let heap_size = B::heap_size_for_value(&value);
+        let heap_size = B::size_for_value(&value);
         let needed_cells = heap_size.cell_count();
 
         let insert_at = self.alloc_cells(needed_cells);
 
         let header = Header {
             type_tag: B::TYPE_TAG,
-            alloc_type: heap_size.to_alloc_type(),
+            alloc_type: heap_size.to_heap_alloc_type(),
         };
 
         let stack_box = B::new_with_header(value, header);

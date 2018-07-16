@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::{mem, ptr};
 
-use boxed::{ConstructableFrom, Header, HeapSize};
+use boxed::{BoxSize, ConstructableFrom, Header};
 
 #[repr(C, align(16))]
 pub struct Str {
@@ -34,13 +34,13 @@ impl Str {
 }
 
 impl<'a> ConstructableFrom<&'a str> for Str {
-    fn heap_size_for_value(value: &&str) -> HeapSize {
+    fn size_for_value(value: &&str) -> BoxSize {
         match value.len() {
-            0..=13 => HeapSize::Size16,
-            14..=Str::MAX_INLINE_BYTES => HeapSize::Size32,
+            0..=13 => BoxSize::Size16,
+            14..=Str::MAX_INLINE_BYTES => BoxSize::Size32,
             _ => {
-                // Too big for the heap; this needs to be shared
-                HeapSize::Size32
+                // Too big to fit inline; this needs to be shared
+                BoxSize::Size32
             }
         }
     }

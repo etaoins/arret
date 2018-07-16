@@ -11,23 +11,23 @@ pub use boxed::types::vector::{TopVector, Vector};
 pub use boxed::heap::Heap;
 
 #[derive(Copy, Clone)]
-pub enum HeapSize {
+pub enum BoxSize {
     Size16,
     Size32,
 }
 
-impl HeapSize {
+impl BoxSize {
     fn cell_count(self) -> usize {
         match self {
-            HeapSize::Size16 => 1,
-            HeapSize::Size32 => 2,
+            BoxSize::Size16 => 1,
+            BoxSize::Size32 => 2,
         }
     }
 
-    fn to_alloc_type(self) -> AllocType {
+    fn to_heap_alloc_type(self) -> AllocType {
         match self {
-            HeapSize::Size16 => AllocType::Heap16,
-            HeapSize::Size32 => AllocType::Heap32,
+            BoxSize::Size16 => AllocType::Heap16,
+            BoxSize::Size32 => AllocType::Heap32,
         }
     }
 }
@@ -90,9 +90,17 @@ where
 }
 
 pub trait ConstructableFrom<T>: TypeTagged + Sized {
-    fn heap_size_for_value(value: &T) -> HeapSize;
+    /// Returns the size of the box required to hold the specific value
+    ///
+    /// This is used to more tightly pack boxes on the heap. It is always safe to return a larger
+    /// value than required.
+    fn size_for_value(value: &T) -> BoxSize;
+
+    /// Creates a new instance for the given value and box header
     fn new_with_header(value: T, header: Header) -> Self;
 
+    /// Builds a new value on the stack for testing
+    #[cfg(test)]
     fn new(value: T) -> Self {
         Self::new_with_header(
             value,
@@ -104,7 +112,7 @@ pub trait ConstructableFrom<T>: TypeTagged + Sized {
     }
 }
 
-macro_rules! define_tagged_boxes {
+macro_rules! define_direct_tagged_boxes {
     ($($name:ident),*) => {
         #[repr(u8)]
         #[derive(Debug, PartialEq, Eq, Copy, Clone)]
@@ -213,7 +221,7 @@ macro_rules! define_tagged_union {
     };
 }
 
-define_tagged_boxes! {
+define_direct_tagged_boxes! {
     Float,
     Int,
     Str,

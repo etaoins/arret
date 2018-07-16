@@ -1,5 +1,5 @@
 use boxed::refs::Gc;
-use boxed::{Any, ConstructableFrom, Header, HeapSize, List};
+use boxed::{Any, BoxSize, ConstructableFrom, Header, List};
 
 #[repr(C, align(16))]
 pub struct Pair {
@@ -12,8 +12,8 @@ pub struct Pair {
 type PairInput = (Gc<Any>, Gc<List>);
 
 impl ConstructableFrom<PairInput> for Pair {
-    fn heap_size_for_value(_: &PairInput) -> HeapSize {
-        HeapSize::Size32
+    fn size_for_value(_: &PairInput) -> BoxSize {
+        BoxSize::Size32
     }
 
     fn new_with_header(value: PairInput, header: Header) -> Pair {

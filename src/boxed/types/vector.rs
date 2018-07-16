@@ -1,5 +1,5 @@
 use boxed::refs::BoxRef;
-use boxed::{Any, ConstructableFrom, Header, HeapSize, TypeTag, TypeTagged};
+use boxed::{Any, BoxSize, ConstructableFrom, Header, TypeTag, TypeTagged};
 
 #[repr(C, align(16))]
 pub struct Vector<T>
@@ -21,8 +21,8 @@ impl<'a, T> ConstructableFrom<&'a [T]> for Vector<T>
 where
     T: BoxRef,
 {
-    fn heap_size_for_value(_: &&[T]) -> HeapSize {
-        HeapSize::Size32
+    fn size_for_value(_: &&[T]) -> BoxSize {
+        BoxSize::Size32
     }
 
     fn new_with_header(values: &[T], header: Header) -> Vector<T> {

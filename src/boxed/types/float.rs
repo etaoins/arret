@@ -1,4 +1,4 @@
-use boxed::{ConstructableFrom, Header, HeapSize};
+use boxed::{BoxSize, ConstructableFrom, Header};
 
 #[repr(C, align(16))]
 pub struct Float {
@@ -7,8 +7,8 @@ pub struct Float {
 }
 
 impl ConstructableFrom<f64> for Float {
-    fn heap_size_for_value(_: &f64) -> HeapSize {
-        HeapSize::Size16
+    fn size_for_value(_: &f64) -> BoxSize {
+        BoxSize::Size16
     }
 
     fn new_with_header(value: f64, header: Header) -> Float {
