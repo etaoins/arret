@@ -73,6 +73,10 @@ impl Any {
 
 impl Boxed for Any {}
 
+impl EncodeBoxedABIType for Any {
+    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Any;
+}
+
 pub trait Downcastable: Boxed {
     fn has_tag(type_tag: TypeTag) -> bool;
 
@@ -91,7 +95,7 @@ impl<T> EncodeBoxedABIType for T
 where
     T: DirectTagged,
 {
-    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Direct(T::TYPE_TAG);
+    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::DirectTagged(T::TYPE_TAG);
 }
 
 impl<T> Downcastable for T

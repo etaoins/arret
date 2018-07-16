@@ -3,7 +3,8 @@ use boxed::refs::Gc;
 
 #[derive(Debug)]
 pub enum BoxedABIType {
-    Direct(boxed::TypeTag),
+    Any,
+    DirectTagged(boxed::TypeTag),
     Union(&'static [boxed::TypeTag]),
     Vector(&'static BoxedABIType),
     List(&'static BoxedABIType),
