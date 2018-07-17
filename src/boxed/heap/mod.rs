@@ -1,3 +1,5 @@
+mod collect;
+
 use std::{cmp, mem, ptr};
 
 use boxed::refs::Gc;
@@ -9,26 +11,26 @@ use boxed::{Any, ConstructableFrom, Header};
 /// native code.
 #[repr(C)]
 pub struct Segment {
-    start: *mut Any,
+    next: *mut Any,
     end: *const Any,
     backing_vec: Vec<Any>,
 }
 
 #[repr(C)]
 pub struct Heap {
-    pub current_segment: Segment,
-    pub full_segments: Vec<Segment>,
+    current_segment: Segment,
+    full_segments: Vec<Segment>,
 }
 
 impl Segment {
     /// Creates a new segment with capacity for `count` cells
     fn with_capacity(count: usize) -> Segment {
         let mut backing_vec = Vec::with_capacity(count);
-        let start: *mut Any = backing_vec.as_mut_ptr();
+        let next: *mut Any = backing_vec.as_mut_ptr();
 
         Segment {
-            start,
-            end: unsafe { start.offset(count as isize) },
+            next,
+            end: unsafe { next.add(count) },
             backing_vec,
         }
     }
@@ -37,15 +39,21 @@ impl Segment {
     ///
     /// If the segment is full this will return None
     fn alloc_cells(&mut self, count: usize) -> Option<*mut Any> {
-        let current_start = self.start;
-        let new_start = unsafe { self.start.offset(count as isize) };
+        let current_next = self.next;
+        let new_next = unsafe { self.next.add(count) };
 
-        if (new_start as *const Any) > self.end {
+        if (new_next as *const Any) > self.end {
             None
         } else {
-            self.start = new_start;
-            Some(current_start)
+            self.next = new_next;
+            Some(current_next)
         }
+    }
+
+    /// Returns the number of allocated cells
+    fn len(&self) -> usize {
+        // TODO: Replace with `offset_from` once its stable
+        (self.next as usize - self.backing_vec.as_ptr() as usize) / mem::size_of::<Any>()
     }
 }
 
@@ -64,7 +72,8 @@ impl Heap {
         }
     }
 
-    fn alloc_cells(&mut self, count: usize) -> *mut Any {
+    /// Allocates space for contiguous `count` cells
+    pub fn alloc_cells(&mut self, count: usize) -> *mut Any {
         if let Some(alloc) = self.current_segment.alloc_cells(count) {
             return alloc;
         }
@@ -83,6 +92,13 @@ impl Heap {
         alloc
     }
 
+    /// Returns the number of allocated cells
+    fn len(&self) -> usize {
+        let full_len: usize = self.full_segments.iter().map(|s| s.len()).sum();
+        self.current_segment.len() + full_len
+    }
+
+    /// Constructs a new boxed value on the heap
     pub fn new_box<B, V>(&mut self, value: V) -> Gc<B>
     where
         B: ConstructableFrom<V>,

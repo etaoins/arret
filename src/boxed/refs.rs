@@ -44,4 +44,13 @@ where
             inner: ptr::NonNull::new_unchecked(ptr as *mut T),
         }
     }
+
+    pub unsafe fn cast<U>(self) -> Gc<U>
+    where
+        U: Boxed,
+    {
+        Gc {
+            inner: self.inner.cast::<U>(),
+        }
+    }
 }

@@ -38,12 +38,13 @@ impl BoxSize {
 }
 
 #[repr(u8)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum AllocType {
     Const,
     Stack,
     Heap16,
     Heap32,
+    HeapForward,
 }
 
 #[repr(C)]
