@@ -1,25 +1,32 @@
-use std::{mem, ptr};
+use std::{cmp, mem, ptr};
 
 use boxed::refs::Gc;
 use boxed::{Any, ConstructableFrom, Header};
 
-/// Represents a garbage collected Heap
+/// Represents an allocated segement of garbage collected memory
 ///
 /// This has a gross pointer-based representation to allow use as a bump allocator from generated
 /// native code.
 #[repr(C)]
-pub struct Heap {
+pub struct Segment {
     start: *mut Any,
     end: *const Any,
     backing_vec: Vec<Any>,
 }
 
-impl Heap {
-    pub fn with_capacity(count: usize) -> Heap {
+#[repr(C)]
+pub struct Heap {
+    pub current_segment: Segment,
+    pub full_segments: Vec<Segment>,
+}
+
+impl Segment {
+    /// Creates a new segment with capacity for `count` cells
+    fn with_capacity(count: usize) -> Segment {
         let mut backing_vec = Vec::with_capacity(count);
         let start: *mut Any = backing_vec.as_mut_ptr();
 
-        Heap {
+        Segment {
             start,
             end: unsafe { start.offset(count as isize) },
             backing_vec,
@@ -27,17 +34,53 @@ impl Heap {
     }
 
     /// Returns contiguous memory for holding `count` cells
-    fn alloc_cells(&mut self, count: usize) -> *mut Any {
+    ///
+    /// If the segment is full this will return None
+    fn alloc_cells(&mut self, count: usize) -> Option<*mut Any> {
         let current_start = self.start;
         let new_start = unsafe { self.start.offset(count as isize) };
 
         if (new_start as *const Any) > self.end {
-            unimplemented!("Allocate more memory")
+            None
         } else {
             self.start = new_start;
+            Some(current_start)
+        }
+    }
+}
+
+impl Heap {
+    /// Capacity of the initial segment and all overflow segments
+    const DEFAULT_SEGMENT_CAPACITY: usize = 1024;
+
+    pub fn new() -> Heap {
+        Self::with_capacity(Self::DEFAULT_SEGMENT_CAPACITY)
+    }
+
+    pub fn with_capacity(count: usize) -> Heap {
+        Heap {
+            current_segment: Segment::with_capacity(count),
+            full_segments: vec![],
+        }
+    }
+
+    fn alloc_cells(&mut self, count: usize) -> *mut Any {
+        if let Some(alloc) = self.current_segment.alloc_cells(count) {
+            return alloc;
         }
 
-        current_start
+        // Make sure we allocate enough to satisfy the request
+        let capacity = cmp::max(count, Self::DEFAULT_SEGMENT_CAPACITY);
+
+        // Build a new segment and allocate from it
+        let mut new_segment = Segment::with_capacity(capacity);
+        let alloc = new_segment.alloc_cells(count).unwrap();
+
+        // Switch the segment and track the old one for finalisation
+        let previous_segment = mem::replace(&mut self.current_segment, new_segment);
+        self.full_segments.push(previous_segment);
+
+        alloc
     }
 
     pub fn new_box<B, V>(&mut self, value: V) -> Gc<B>
@@ -66,6 +109,12 @@ impl Heap {
     }
 }
 
+impl Default for Heap {
+    fn default() -> Heap {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -74,7 +123,7 @@ mod test {
     fn basic_alloc() {
         use boxed::Str;
 
-        let mut heap = Heap::with_capacity(5);
+        let mut heap = Heap::with_capacity(1);
 
         let string1 = heap.new_box::<Str, _>("HELLO");
         let string2 = heap.new_box::<Str, _>("WORLD");
