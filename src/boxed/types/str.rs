@@ -134,6 +134,7 @@ enum Repr<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use boxed::heap::Heap;
     use std::mem;
 
     #[test]
@@ -145,6 +146,8 @@ mod test {
 
     #[test]
     fn round_trip() {
+        let mut heap = Heap::new();
+
         for &test_str in &[
             "",
             "1",
@@ -152,7 +155,7 @@ mod test {
             "largerinlinethattakes32bytes",
             "This definitely will not fit in any inline string",
         ] {
-            let boxed_string = Str::new(test_str);
+            let boxed_string = Str::new(&mut heap, test_str);
             assert_eq!(test_str, boxed_string.as_str());
         }
     }

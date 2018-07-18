@@ -116,10 +116,8 @@ pub trait ConstructableFrom<T>: Boxed {
     /// Creates a new instance for the given value and box header
     fn new_with_alloc_type(value: T, alloc_type: AllocType) -> Self;
 
-    /// Builds a new value on the stack for testing
-    #[cfg(test)]
-    fn new(value: T) -> Self {
-        Self::new_with_alloc_type(value, AllocType::Stack)
+    fn new(heap: &mut Heap, value: T) -> Gc<Self> {
+        heap.new_box::<Self, T>(value)
     }
 }
 
@@ -281,19 +279,23 @@ mod test {
 
     #[test]
     fn downcast_ref() {
-        let stack_float = Float::new(2.0);
-        let stack_float_as_any = stack_float.as_any_ref();
+        let mut heap = Heap::new();
 
-        assert_eq!(false, stack_float_as_any.downcast_ref::<Int>().is_some());
-        assert_eq!(true, stack_float_as_any.downcast_ref::<Float>().is_some());
+        let box_float = Float::new(&mut heap, 2.0);
+        let box_float_as_any = box_float.as_any_ref();
+
+        assert_eq!(false, box_float_as_any.downcast_ref::<Int>().is_some());
+        assert_eq!(true, box_float_as_any.downcast_ref::<Float>().is_some());
     }
 
     #[test]
     fn as_tagged() {
-        let stack_float = Float::new(2.0);
-        let stack_float_as_any: &Any = unsafe { &*(&stack_float as *const Float as *const Any) };
+        let mut heap = Heap::new();
 
-        if let AnySubtype::Float(_) = stack_float_as_any.as_subtype() {
+        let box_float = Float::new(&mut heap, 2.0);
+        let box_float_as_any = box_float.as_any_ref();
+
+        if let AnySubtype::Float(_) = box_float_as_any.as_subtype() {
         } else {
             panic!("Failed to get tagged representation")
         }
@@ -301,10 +303,12 @@ mod test {
 
     #[test]
     fn union_types() {
-        let stack_float = Float::new(2.0);
-        let stack_float_as_any: &Any = unsafe { &*(&stack_float as *const Float as *const Any) };
+        let mut heap = Heap::new();
 
-        if let Some(stack_num) = stack_float_as_any.downcast_ref::<Num>() {
+        let box_float = Float::new(&mut heap, 2.0);
+        let box_float_as_any = box_float.as_any_ref();
+
+        if let Some(stack_num) = box_float_as_any.downcast_ref::<Num>() {
             if let NumSubtype::Float(_) = stack_num.as_subtype() {
             } else {
                 panic!("Couldn't get tagged Float from Num");
@@ -316,9 +320,9 @@ mod test {
             panic!("Float was not a Num");
         }
 
-        let stack_str = Str::new("Test!");
-        let stack_str_as_any: &Any = unsafe { &*(&stack_str as *const Str as *const Any) };
+        let box_str = Str::new(&mut heap, "Test!");
+        let box_str_as_any = box_str.as_any_ref();
 
-        assert_eq!(false, stack_str_as_any.downcast_ref::<Num>().is_some());
+        assert_eq!(false, box_str_as_any.downcast_ref::<Num>().is_some());
     }
 }

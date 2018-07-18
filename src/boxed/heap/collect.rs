@@ -82,13 +82,13 @@ mod test {
 
     #[test]
     fn simple_collect() {
-        use boxed::Str;
+        use boxed::{ConstructableFrom, Str};
 
         let mut old_heap = Heap::new();
 
         unsafe {
-            let mut hello = old_heap.new_box::<Str, _>("HELLO").cast::<Any>();
-            let mut world = old_heap.new_box::<Str, _>("WORLD").cast::<Any>();
+            let mut hello = Str::new(&mut old_heap, "HELLO").cast::<Any>();
+            let mut world = Str::new(&mut old_heap, "WORLD").cast::<Any>();
 
             assert_eq!("HELLO", hello.cast::<Str>().as_str());
             assert_eq!("WORLD", world.cast::<Str>().as_str());

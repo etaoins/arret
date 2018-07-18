@@ -137,8 +137,8 @@ mod test {
 
         let mut heap = Heap::with_capacity(1);
 
-        let string1 = heap.new_box::<Str, _>("HELLO");
-        let string2 = heap.new_box::<Str, _>("WORLD");
+        let string1 = Str::new(&mut heap, "HELLO");
+        let string2 = Str::new(&mut heap, "WORLD");
 
         assert_eq!("HELLO", string1.as_str());
         assert_eq!("WORLD", string2.as_str());

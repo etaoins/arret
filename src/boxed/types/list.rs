@@ -85,7 +85,7 @@ where
 
         // TODO: This is naive; we could use a single multi-cell allocation instead
         elems.rfold(initial_tail, |tail, elem| {
-            heap.new_box::<Pair<T>, _>((elem, tail)).as_list_ref()
+            Pair::new(heap, (elem, tail)).as_list_ref()
         })
     }
 
@@ -189,7 +189,7 @@ mod test {
 
         let boxed_ints = [1, 2, 3]
             .iter()
-            .map(|num| heap.new_box::<Int, _>(*num))
+            .map(|num| Int::new(&mut heap, *num))
             .collect::<Vec<Gc<Int>>>();
 
         let boxed_list = List::new(&mut heap, boxed_ints.into_iter());
