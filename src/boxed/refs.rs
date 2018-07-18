@@ -10,7 +10,7 @@ pub struct Gc<T>
 where
     T: Boxed,
 {
-    pub inner: ptr::NonNull<T>,
+    inner: ptr::NonNull<T>,
 }
 
 /// Manual Clone implementation to work around Rust issue #26925
@@ -52,5 +52,9 @@ where
         Gc {
             inner: self.inner.cast::<U>(),
         }
+    }
+
+    pub fn as_ptr(self) -> *const T {
+        self.inner.as_ptr()
     }
 }

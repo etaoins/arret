@@ -14,7 +14,7 @@ fn move_cell_to_new_heap(cell_ref: &mut Gc<Any>, new_heap: &mut Heap, count: usi
     // Allocate and copy to the new heap
     let dest_location = new_heap.alloc_cells(count);
     unsafe {
-        ptr::copy_nonoverlapping(cell_ref.inner.as_ptr(), dest_location, count);
+        ptr::copy_nonoverlapping(cell_ref.as_ptr(), dest_location, count);
     }
 
     // Create a forwarding cell
@@ -31,7 +31,7 @@ fn move_cell_to_new_heap(cell_ref: &mut Gc<Any>, new_heap: &mut Heap, count: usi
     unsafe {
         ptr::copy_nonoverlapping(
             &forwarding_cell as *const ForwardingCell as *const Any,
-            cell_ref.inner.as_ptr(),
+            cell_ref.as_ptr() as *mut Any,
             1,
         );
     }
@@ -48,7 +48,7 @@ fn visit_cell(cell_ref: &mut Gc<Any>, new_heap: &mut Heap) {
         }
         AllocType::HeapForward => {
             // This has already been moved to a new location
-            let forwarding_cell = unsafe { &*(cell_ref.inner.as_ptr() as *const ForwardingCell) };
+            let forwarding_cell = unsafe { &*(cell_ref.as_ptr() as *const ForwardingCell) };
             *cell_ref = forwarding_cell.new_location;
             return;
         }

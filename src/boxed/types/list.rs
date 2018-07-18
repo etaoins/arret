@@ -1,8 +1,11 @@
 use std::marker::PhantomData;
 
 use abitype::{BoxedABIType, EncodeBoxedABIType};
+use boxed::heap::Heap;
 use boxed::refs::Gc;
-use boxed::{AllocType, Any, BoxSize, Boxed, ConstructableFrom, Header, TypeTag};
+use boxed::{
+    AllocType, Any, BoxSize, Boxed, ConstructableFrom, Header, Nil, TypeTag, NIL_INSTANCE,
+};
 
 #[repr(C, align(16))]
 pub struct Pair<T>
@@ -22,6 +25,15 @@ where
     T: EncodeBoxedABIType + Boxed,
 {
     const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Pair(&T::BOXED_ABI_TYPE);
+}
+
+impl<T> Pair<T>
+where
+    T: Boxed,
+{
+    fn as_list_ref(&self) -> Gc<List<T>> {
+        unsafe { Gc::new(self as *const Self as *const List<T>) }
+    }
 }
 
 type PairInput<T> = (Gc<T>, Gc<List<T>>);
@@ -68,6 +80,19 @@ impl<T> List<T>
 where
     T: Boxed,
 {
+    pub fn new(heap: &mut Heap, elems: impl DoubleEndedIterator<Item = Gc<T>>) -> Gc<List<T>> {
+        let initial_tail = Self::empty();
+
+        // TODO: This is naive; we could use a single multi-cell allocation instead
+        elems.rfold(initial_tail, |tail, elem| {
+            heap.new_box::<Pair<T>, _>((elem, tail)).as_list_ref()
+        })
+    }
+
+    pub fn empty() -> Gc<List<T>> {
+        unsafe { Gc::new(&NIL_INSTANCE as *const Nil as *const List<T>) }
+    }
+
     pub fn as_subtype(&self) -> ListSubtype<T> {
         match self.header.type_tag {
             TypeTag::TopPair => {
@@ -86,6 +111,12 @@ where
             ListSubtype::Nil => 0,
         }
     }
+
+    pub fn iter(&self) -> ListIterator<T> {
+        ListIterator {
+            head: unsafe { Gc::new(self as *const Self) },
+        }
+    }
 }
 
 impl<T> Boxed for List<T> where T: Boxed {}
@@ -96,6 +127,39 @@ where
 {
     const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::List(&T::BOXED_ABI_TYPE);
 }
+
+pub struct ListIterator<T>
+where
+    T: Boxed,
+{
+    head: Gc<List<T>>,
+}
+
+impl<T> Iterator for ListIterator<T>
+where
+    T: Boxed,
+{
+    type Item = Gc<T>;
+
+    fn next(&mut self) -> Option<Gc<T>> {
+        // If we use `head` directy the borrow checker gets suspicious
+        let head = unsafe { &*(self.head.as_ptr()) };
+
+        match head.as_subtype() {
+            ListSubtype::Pair(pair) => {
+                self.head = pair.rest;
+                Some(pair.head)
+            }
+            ListSubtype::Nil => None,
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.head.len(), Some(self.head.len()))
+    }
+}
+
+impl<T> ExactSizeIterator for ListIterator<T> where T: Boxed {}
 
 #[repr(C, align(16))]
 pub struct TopPair {
@@ -111,10 +175,37 @@ impl TopPair {
 #[cfg(test)]
 mod test {
     use super::*;
+    use boxed::Int;
     use std::mem;
 
     #[test]
     fn sizes() {
         assert_eq!(32, mem::size_of::<Pair<Any>>());
+    }
+
+    #[test]
+    fn construct_and_iter() {
+        let mut heap = Heap::new();
+
+        let boxed_ints = [1, 2, 3]
+            .iter()
+            .map(|num| heap.new_box::<Int, _>(*num))
+            .collect::<Vec<Gc<Int>>>();
+
+        let boxed_list = List::new(&mut heap, boxed_ints.into_iter());
+
+        let mut boxed_list_iter = boxed_list.iter();
+        assert_eq!(3, boxed_list_iter.len());
+
+        for expected_num in &[1, 2, 3] {
+            if let Some(boxed_int) = boxed_list_iter.next() {
+                assert_eq!(*expected_num, boxed_int.value);
+            } else {
+                panic!("Iterator unexpectedly ended");
+            }
+        }
+
+        assert_eq!(0, boxed_list_iter.len());
+        assert_eq!(false, boxed_list_iter.next().is_some());
     }
 }
