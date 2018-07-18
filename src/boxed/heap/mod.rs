@@ -3,7 +3,7 @@ mod collect;
 use std::{cmp, mem, ptr};
 
 use boxed::refs::Gc;
-use boxed::{Any, ConstructableFrom, Header};
+use boxed::{Any, ConstructableFrom};
 
 /// Represents an allocated segement of garbage collected memory
 ///
@@ -107,13 +107,9 @@ impl Heap {
         let needed_cells = heap_size.cell_count();
 
         let insert_at = self.alloc_cells(needed_cells);
+        let alloc_type = heap_size.to_heap_alloc_type();
 
-        let header = Header {
-            type_tag: B::TYPE_TAG,
-            alloc_type: heap_size.to_heap_alloc_type(),
-        };
-
-        let stack_box = B::new_with_header(value, header);
+        let stack_box = B::new_with_alloc_type(value, alloc_type);
 
         unsafe {
             ptr::copy_nonoverlapping(&stack_box, insert_at as *mut B, needed_cells);

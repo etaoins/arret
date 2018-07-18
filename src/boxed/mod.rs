@@ -86,11 +86,9 @@ pub trait Downcastable: Boxed {
     }
 }
 
-pub trait TypeTagged: Boxed {
+pub trait DirectTagged: Boxed {
     const TYPE_TAG: TypeTag;
 }
-
-pub trait DirectTagged: TypeTagged {}
 
 impl<T> EncodeBoxedABIType for T
 where
@@ -108,7 +106,7 @@ where
     }
 }
 
-pub trait ConstructableFrom<T>: TypeTagged {
+pub trait ConstructableFrom<T>: Boxed {
     /// Returns the size of the box required to hold the specific value
     ///
     /// This is used to more tightly pack boxes on the heap. It is always safe to return a larger
@@ -116,18 +114,12 @@ pub trait ConstructableFrom<T>: TypeTagged {
     fn size_for_value(value: &T) -> BoxSize;
 
     /// Creates a new instance for the given value and box header
-    fn new_with_header(value: T, header: Header) -> Self;
+    fn new_with_alloc_type(value: T, alloc_type: AllocType) -> Self;
 
     /// Builds a new value on the stack for testing
     #[cfg(test)]
     fn new(value: T) -> Self {
-        Self::new_with_header(
-            value,
-            Header {
-                type_tag: Self::TYPE_TAG,
-                alloc_type: AllocType::Stack,
-            },
-        )
+        Self::new_with_alloc_type(value, AllocType::Stack)
     }
 }
 
@@ -146,11 +138,9 @@ macro_rules! define_direct_tagged_boxes {
         $(
             impl Boxed for $name {}
 
-            impl TypeTagged for $name {
+            impl DirectTagged for $name {
                 const TYPE_TAG: TypeTag = TypeTag::$name;
             }
-
-            impl DirectTagged for $name {}
         )*
 
         impl Any {

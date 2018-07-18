@@ -1,6 +1,6 @@
 use abitype::{BoxedABIType, EncodeBoxedABIType};
 use boxed::refs::Gc;
-use boxed::{Any, BoxSize, Boxed, ConstructableFrom, Header, TypeTag, TypeTagged};
+use boxed::{AllocType, Any, BoxSize, Boxed, ConstructableFrom, Header, TypeTag};
 
 #[repr(C, align(16))]
 pub struct Vector<T>
@@ -13,13 +13,6 @@ where
 
 impl<T> Boxed for Vector<T> where T: Boxed {}
 
-impl<T> TypeTagged for Vector<T>
-where
-    T: Boxed,
-{
-    const TYPE_TAG: TypeTag = TypeTag::TopVector;
-}
-
 impl<'a, T> ConstructableFrom<&'a [Gc<T>]> for Vector<T>
 where
     T: Boxed,
@@ -28,9 +21,12 @@ where
         BoxSize::Size32
     }
 
-    fn new_with_header(values: &[Gc<T>], header: Header) -> Vector<T> {
+    fn new_with_alloc_type(values: &[Gc<T>], alloc_type: AllocType) -> Vector<T> {
         Vector {
-            header,
+            header: Header {
+                type_tag: TypeTag::TopVector,
+                alloc_type,
+            },
             values: values.into(),
         }
     }

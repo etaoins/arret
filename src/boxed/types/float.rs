@@ -1,4 +1,4 @@
-use boxed::{BoxSize, ConstructableFrom, Header};
+use boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
 
 #[repr(C, align(16))]
 pub struct Float {
@@ -11,8 +11,14 @@ impl ConstructableFrom<f64> for Float {
         BoxSize::Size16
     }
 
-    fn new_with_header(value: f64, header: Header) -> Float {
-        Float { header, value }
+    fn new_with_alloc_type(value: f64, alloc_type: AllocType) -> Float {
+        Float {
+            header: Header {
+                type_tag: Self::TYPE_TAG,
+                alloc_type,
+            },
+            value,
+        }
     }
 }
 

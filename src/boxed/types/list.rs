@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use abitype::{BoxedABIType, EncodeBoxedABIType};
 use boxed::refs::Gc;
-use boxed::{Any, BoxSize, Boxed, ConstructableFrom, Header, TypeTag, TypeTagged};
+use boxed::{AllocType, Any, BoxSize, Boxed, ConstructableFrom, Header, TypeTag};
 
 #[repr(C, align(16))]
 pub struct Pair<T>
@@ -16,13 +16,6 @@ where
 }
 
 impl<T> Boxed for Pair<T> where T: Boxed {}
-
-impl<T> TypeTagged for Pair<T>
-where
-    T: Boxed,
-{
-    const TYPE_TAG: TypeTag = TypeTag::TopPair;
-}
 
 impl<T> EncodeBoxedABIType for Pair<T>
 where
@@ -41,9 +34,12 @@ where
         BoxSize::Size32
     }
 
-    fn new_with_header(value: PairInput<T>, header: Header) -> Pair<T> {
+    fn new_with_alloc_type(value: PairInput<T>, alloc_type: AllocType) -> Pair<T> {
         Pair {
-            header,
+            header: Header {
+                type_tag: TypeTag::TopPair,
+                alloc_type,
+            },
             head: value.0,
             rest: value.1,
             list_length: value.1.len() + 1,

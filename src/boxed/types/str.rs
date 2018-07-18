@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::{mem, ptr};
 
-use boxed::{BoxSize, ConstructableFrom, Header};
+use boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
 
 #[repr(C, align(16))]
 pub struct Str {
@@ -45,7 +45,12 @@ impl<'a> ConstructableFrom<&'a str> for Str {
         }
     }
 
-    fn new_with_header(value: &str, header: Header) -> Str {
+    fn new_with_alloc_type(value: &str, alloc_type: AllocType) -> Str {
+        let header = Header {
+            type_tag: Self::TYPE_TAG,
+            alloc_type,
+        };
+
         unsafe {
             if value.len() > Str::MAX_INLINE_BYTES {
                 let shared_str = SharedStr {
