@@ -4,8 +4,8 @@
 use std::collections::HashMap;
 
 mod boxed;
+use boxed::prelude::*;
 use boxed::refs::Gc;
-use boxed::ConstructableFrom;
 
 mod abitype;
 use abitype::{ABIType, EncodeABIType};
@@ -25,6 +25,12 @@ impl Default for Task {
         Task {
             heap: boxed::Heap::with_capacity(32),
         }
+    }
+}
+
+impl AsHeap for Task {
+    fn as_heap(&mut self) -> &mut boxed::Heap {
+        &mut self.heap
     }
 }
 
@@ -84,7 +90,7 @@ define_extern_fn! {
 define_extern_fn! {
     #[risp-type="((Vector Int) -> Num)"]
     TAKES_TASK = takes_task(task: &mut Task, _param1: Gc<boxed::Vector<boxed::Int>>) -> Gc<boxed::Num> {
-        boxed::Float::new(task.heap(), 64.0).as_num_ref()
+        boxed::Float::new(task, 64.0).as_num_ref()
     }
 }
 
@@ -105,7 +111,7 @@ define_extern_fn! {
 fn main() {
     let mut task = Task::default();
 
-    let sailor_str = boxed::Str::new(task.heap(), "sailor");
+    let sailor_str = boxed::Str::new(&mut task, "sailor");
     let number = hello_world(sailor_str);
     print_num(number);
 

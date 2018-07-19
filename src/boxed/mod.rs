@@ -13,6 +13,11 @@ pub use boxed::types::vector::{TopVector, Vector};
 
 pub use boxed::heap::Heap;
 
+pub mod prelude {
+    pub use super::AsHeap;
+    pub use super::ConstructableFrom;
+}
+
 pub trait Boxed: Sized {}
 
 #[derive(Copy, Clone)]
@@ -106,6 +111,16 @@ where
     }
 }
 
+pub trait AsHeap {
+    fn as_heap(&mut self) -> &mut Heap;
+}
+
+impl AsHeap for Heap {
+    fn as_heap(&mut self) -> &mut Heap {
+        self
+    }
+}
+
 pub trait ConstructableFrom<T>: Boxed {
     /// Returns the size of the box required to hold the specific value
     ///
@@ -116,8 +131,8 @@ pub trait ConstructableFrom<T>: Boxed {
     /// Creates a new instance for the given value and box header
     fn new_with_alloc_type(value: T, alloc_type: AllocType) -> Self;
 
-    fn new(heap: &mut Heap, value: T) -> Gc<Self> {
-        heap.new_box::<Self, T>(value)
+    fn new(heap: &mut impl AsHeap, value: T) -> Gc<Self> {
+        heap.as_heap().new_box::<Self, T>(value)
     }
 }
 
