@@ -57,4 +57,8 @@ where
     pub fn as_ptr(self) -> *const T {
         self.inner.as_ptr()
     }
+
+    pub(super) fn as_mut_ptr(self) -> *mut T {
+        self.inner.as_ptr()
+    }
 }

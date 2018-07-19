@@ -112,6 +112,10 @@ where
         }
     }
 
+    pub fn as_any_ref(&self) -> Gc<Any> {
+        unsafe { Gc::new(&*(self as *const Self as *const Any)) }
+    }
+
     pub fn iter(&self) -> ListIterator<T> {
         ListIterator {
             head: unsafe { Gc::new(self as *const Self) },

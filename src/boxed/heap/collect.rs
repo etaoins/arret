@@ -2,7 +2,7 @@ use std::ptr;
 
 use boxed::heap::Heap;
 use boxed::refs::Gc;
-use boxed::{AllocType, Any, Header};
+use boxed::{AllocType, Any, Header, List, Pair, TypeTag, Vector};
 
 #[repr(C, align(16))]
 pub struct ForwardingCell {
@@ -40,30 +40,55 @@ fn move_cell_to_new_heap(cell_ref: &mut Gc<Any>, new_heap: &mut Heap, count: usi
     *cell_ref = unsafe { Gc::new(dest_location) };
 }
 
-fn visit_cell(cell_ref: &mut Gc<Any>, new_heap: &mut Heap) {
-    match cell_ref.header.alloc_type {
-        AllocType::Const => {
-            // Return when encountering a const cell; they cannot move and cannot refer to the heap
-            return;
+fn visit_cell(mut cell_ref: &mut Gc<Any>, new_heap: &mut Heap) {
+    // This loop is used for ad-hoc tail recursion when visiting Pairs
+    // Everything else will return at the bottom of the loop
+    loop {
+        match cell_ref.header.alloc_type {
+            AllocType::Const => {
+                // Return when encountering a const cell; they cannot move and cannot refer to the heap
+                return;
+            }
+            AllocType::HeapForward => {
+                // This has already been moved to a new location
+                let forwarding_cell = unsafe { &*(cell_ref.as_ptr() as *const ForwardingCell) };
+                *cell_ref = forwarding_cell.new_location;
+                return;
+            }
+            AllocType::Heap16 => {
+                move_cell_to_new_heap(cell_ref, new_heap, 1);
+            }
+            AllocType::Heap32 => {
+                move_cell_to_new_heap(cell_ref, new_heap, 2);
+            }
+            AllocType::Stack => {
+                // Stack cells cannot move but they may point to heap cells
+            }
         }
-        AllocType::HeapForward => {
-            // This has already been moved to a new location
-            let forwarding_cell = unsafe { &*(cell_ref.as_ptr() as *const ForwardingCell) };
-            *cell_ref = forwarding_cell.new_location;
-            return;
-        }
-        AllocType::Heap16 => {
-            move_cell_to_new_heap(cell_ref, new_heap, 1);
-        }
-        AllocType::Heap32 => {
-            move_cell_to_new_heap(cell_ref, new_heap, 2);
-        }
-        AllocType::Stack => {
-            // Stack cells cannot move but they may point to heap cells
-        }
-    }
 
-    // TODO: Visit nested cell references
+        match cell_ref.header.type_tag {
+            TypeTag::TopPair => {
+                let mut pair_ref = unsafe { &mut *(cell_ref.as_mut_ptr() as *mut Pair<Any>) };
+
+                visit_cell(&mut pair_ref.head, new_heap);
+
+                // Start again with the tail of the list
+                cell_ref =
+                    unsafe { &mut *(&mut pair_ref.rest as *mut Gc<List<Any>> as *mut Gc<Any>) };
+                continue;
+            }
+            TypeTag::TopVector => {
+                let mut vec_ref = unsafe { &mut *(cell_ref.as_mut_ptr() as *mut Vector<Any>) };
+
+                for elem_ref in &mut vec_ref.values {
+                    visit_cell(elem_ref, new_heap);
+                }
+            }
+            _ => {}
+        }
+
+        return;
+    }
 }
 
 pub fn collect_roots(roots: Vec<&mut Gc<Any>>) -> Heap {
@@ -79,6 +104,8 @@ pub fn collect_roots(roots: Vec<&mut Gc<Any>>) -> Heap {
 #[cfg(test)]
 mod test {
     use super::*;
+    use boxed::prelude::*;
+    use boxed::{Int, List};
 
     #[test]
     fn simple_collect() {
@@ -119,4 +146,68 @@ mod test {
         }
     }
 
+    #[test]
+    fn list_collect() {
+        // Three 1 cell integers + three 2 cell pair
+        const EXPECTED_HEAP_SIZE: usize = 3 + (3 * 2);
+        let mut heap = Heap::new();
+
+        let boxed_ints = [1, 2, 3]
+            .iter()
+            .map(|num| Int::new(&mut heap, *num))
+            .collect::<Vec<Gc<Int>>>();
+        assert_eq!(3, heap.len());
+
+        let mut boxed_list = List::new(&mut heap, boxed_ints.into_iter());
+        assert_eq!(EXPECTED_HEAP_SIZE, heap.len());
+
+        assert_eq!(3, boxed_list.len());
+
+        let new_heap = collect_roots(vec![unsafe {
+            &mut *(&mut boxed_list as *mut Gc<List<Int>> as *mut Gc<Any>)
+        }]);
+
+        assert_eq!(3, boxed_list.len());
+        assert_eq!(EXPECTED_HEAP_SIZE, new_heap.len());
+
+        let mut boxed_list_iter = boxed_list.iter();
+        for expected_num in &[1, 2, 3] {
+            if let Some(boxed_int) = boxed_list_iter.next() {
+                assert_eq!(*expected_num, boxed_int.value);
+            } else {
+                panic!("Iterator unexpectedly ended");
+            }
+        }
+    }
+
+    #[test]
+    fn vector_collect() {
+        // Three 1 cell integers + one 2 cell vector
+        const EXPECTED_HEAP_SIZE: usize = 3 + 2;
+        let mut heap = Heap::new();
+
+        let boxed_ints = [1, 2, 3]
+            .iter()
+            .map(|num| Int::new(&mut heap, *num))
+            .collect::<Vec<Gc<Int>>>();
+        assert_eq!(3, heap.len());
+
+        let mut boxed_vector = Vector::new(&mut heap, boxed_ints.as_slice());
+        assert_eq!(EXPECTED_HEAP_SIZE, heap.len());
+
+        let new_heap = collect_roots(vec![unsafe {
+            &mut *(&mut boxed_vector as *mut Gc<Vector<Int>> as *mut Gc<Any>)
+        }]);
+
+        assert_eq!(EXPECTED_HEAP_SIZE, new_heap.len());
+
+        let mut boxed_list_iter = boxed_vector.values.iter();
+        for expected_num in &[1, 2, 3] {
+            if let Some(boxed_int) = boxed_list_iter.next() {
+                assert_eq!(*expected_num, boxed_int.value);
+            } else {
+                panic!("Iterator unexpectedly ended");
+            }
+        }
+    }
 }
