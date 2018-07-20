@@ -2,7 +2,7 @@ use std::ptr;
 
 use boxed::heap::Heap;
 use boxed::refs::Gc;
-use boxed::{AllocType, Any, Header, List, Pair, TypeTag, Vector};
+use boxed::{AllocType, Any, BoxSize, Header, List, Pair, TypeTag, Vector};
 
 #[repr(C, align(16))]
 pub struct ForwardingCell {
@@ -10,19 +10,24 @@ pub struct ForwardingCell {
     pub new_location: Gc<Any>,
 }
 
-fn move_cell_to_new_heap(cell_ref: &mut Gc<Any>, new_heap: &mut Heap, count: usize) {
+fn move_cell_to_new_heap(cell_ref: &mut Gc<Any>, new_heap: &mut Heap, size: BoxSize) {
     // Allocate and copy to the new heap
-    let dest_location = new_heap.alloc_cells(count);
+    let dest_location = new_heap.alloc_cells(size.cell_count());
     unsafe {
-        ptr::copy_nonoverlapping(cell_ref.as_ptr(), dest_location, count);
+        ptr::copy_nonoverlapping(cell_ref.as_ptr(), dest_location, size.cell_count());
     }
+
+    let forward_alloc_type = match size {
+        BoxSize::Size16 => AllocType::HeapForward16,
+        BoxSize::Size32 => AllocType::HeapForward32,
+    };
 
     // Create a forwarding cell
     let forwarding_cell = ForwardingCell {
         header: Header {
             // This is arbitrary but could be useful for debugging
             type_tag: cell_ref.header.type_tag,
-            alloc_type: AllocType::HeapForward,
+            alloc_type: forward_alloc_type,
         },
         new_location: unsafe { Gc::new(dest_location) },
     };
@@ -49,17 +54,17 @@ fn visit_cell(mut cell_ref: &mut Gc<Any>, new_heap: &mut Heap) {
                 // Return when encountering a const cell; they cannot move and cannot refer to the heap
                 return;
             }
-            AllocType::HeapForward => {
+            AllocType::HeapForward16 | AllocType::HeapForward32 => {
                 // This has already been moved to a new location
                 let forwarding_cell = unsafe { &*(cell_ref.as_ptr() as *const ForwardingCell) };
                 *cell_ref = forwarding_cell.new_location;
                 return;
             }
             AllocType::Heap16 => {
-                move_cell_to_new_heap(cell_ref, new_heap, 1);
+                move_cell_to_new_heap(cell_ref, new_heap, BoxSize::Size16);
             }
             AllocType::Heap32 => {
-                move_cell_to_new_heap(cell_ref, new_heap, 2);
+                move_cell_to_new_heap(cell_ref, new_heap, BoxSize::Size32);
             }
             AllocType::Stack => {
                 // Stack cells cannot move but they may point to heap cells

@@ -49,7 +49,8 @@ pub enum AllocType {
     Stack,
     Heap16,
     Heap32,
-    HeapForward,
+    HeapForward16,
+    HeapForward32,
 }
 
 #[repr(C)]
