@@ -10,11 +10,11 @@ pub struct ForwardingCell {
     pub new_location: Gc<Any>,
 }
 
-fn move_cell_to_new_heap(cell_ref: &mut Gc<Any>, new_heap: &mut Heap, size: BoxSize) {
+fn move_box_to_new_heap(box_ref: &mut Gc<Any>, new_heap: &mut Heap, size: BoxSize) {
     // Allocate and copy to the new heap
     let dest_location = new_heap.alloc_cells(size.cell_count());
     unsafe {
-        ptr::copy_nonoverlapping(cell_ref.as_ptr(), dest_location, size.cell_count());
+        ptr::copy_nonoverlapping(box_ref.as_ptr(), dest_location, size.cell_count());
     }
 
     let forward_alloc_type = match size {
@@ -26,67 +26,67 @@ fn move_cell_to_new_heap(cell_ref: &mut Gc<Any>, new_heap: &mut Heap, size: BoxS
     let forwarding_cell = ForwardingCell {
         header: Header {
             // This is arbitrary but could be useful for debugging
-            type_tag: cell_ref.header.type_tag,
+            type_tag: box_ref.header.type_tag,
             alloc_type: forward_alloc_type,
         },
         new_location: unsafe { Gc::new(dest_location) },
     };
 
-    // Overwrite the previous cell location
+    // Overwrite the previous box location
     unsafe {
         ptr::copy_nonoverlapping(
             &forwarding_cell as *const ForwardingCell as *const Any,
-            cell_ref.as_ptr() as *mut Any,
+            box_ref.as_ptr() as *mut Any,
             1,
         );
     }
 
-    // Update the cell_ref
-    *cell_ref = unsafe { Gc::new(dest_location) };
+    // Update the box_ref
+    *box_ref = unsafe { Gc::new(dest_location) };
 }
 
-fn visit_cell(mut cell_ref: &mut Gc<Any>, new_heap: &mut Heap) {
+fn visit_box(mut box_ref: &mut Gc<Any>, new_heap: &mut Heap) {
     // This loop is used for ad-hoc tail recursion when visiting Pairs
     // Everything else will return at the bottom of the loop
     loop {
-        match cell_ref.header.alloc_type {
+        match box_ref.header.alloc_type {
             AllocType::Const => {
-                // Return when encountering a const cell; they cannot move and cannot refer to the heap
+                // Return when encountering a const box; they cannot move and cannot refer to the heap
                 return;
             }
             AllocType::HeapForward16 | AllocType::HeapForward32 => {
                 // This has already been moved to a new location
-                let forwarding_cell = unsafe { &*(cell_ref.as_ptr() as *const ForwardingCell) };
-                *cell_ref = forwarding_cell.new_location;
+                let forwarding_cell = unsafe { &*(box_ref.as_ptr() as *const ForwardingCell) };
+                *box_ref = forwarding_cell.new_location;
                 return;
             }
             AllocType::Heap16 => {
-                move_cell_to_new_heap(cell_ref, new_heap, BoxSize::Size16);
+                move_box_to_new_heap(box_ref, new_heap, BoxSize::Size16);
             }
             AllocType::Heap32 => {
-                move_cell_to_new_heap(cell_ref, new_heap, BoxSize::Size32);
+                move_box_to_new_heap(box_ref, new_heap, BoxSize::Size32);
             }
             AllocType::Stack => {
-                // Stack cells cannot move but they may point to heap cells
+                // Stack boxes cannot move but they may point to heap boxes
             }
         }
 
-        match cell_ref.header.type_tag {
+        match box_ref.header.type_tag {
             TypeTag::TopPair => {
-                let mut pair_ref = unsafe { &mut *(cell_ref.as_mut_ptr() as *mut Pair<Any>) };
+                let mut pair_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Pair<Any>) };
 
-                visit_cell(&mut pair_ref.head, new_heap);
+                visit_box(&mut pair_ref.head, new_heap);
 
                 // Start again with the tail of the list
-                cell_ref =
+                box_ref =
                     unsafe { &mut *(&mut pair_ref.rest as *mut Gc<List<Any>> as *mut Gc<Any>) };
                 continue;
             }
             TypeTag::TopVector => {
-                let mut vec_ref = unsafe { &mut *(cell_ref.as_mut_ptr() as *mut Vector<Any>) };
+                let mut vec_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Vector<Any>) };
 
                 for elem_ref in &mut vec_ref.values {
-                    visit_cell(elem_ref, new_heap);
+                    visit_box(elem_ref, new_heap);
                 }
             }
             _ => {}
@@ -100,7 +100,7 @@ pub fn collect_roots(roots: Vec<&mut Gc<Any>>) -> Heap {
     let mut new_heap = Heap::new();
 
     for root in roots {
-        visit_cell(root, &mut new_heap);
+        visit_box(root, &mut new_heap);
     }
 
     new_heap
