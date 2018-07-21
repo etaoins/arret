@@ -2,6 +2,8 @@ mod heap;
 pub mod refs;
 mod types;
 
+use std::ptr;
+
 use abitype::{BoxedABIType, EncodeBoxedABIType};
 use boxed::refs::Gc;
 
@@ -149,6 +151,10 @@ macro_rules! define_direct_tagged_boxes {
             $( $name(&'a $name) ),*
         }
 
+        enum ReadSubtype {
+            $( $name($name) ),*
+        }
+
         $(
             impl Boxed for $name {}
 
@@ -158,13 +164,25 @@ macro_rules! define_direct_tagged_boxes {
         )*
 
         impl Any {
-            fn as_subtype(&self) -> AnySubtype {
+            pub fn as_subtype(&self) -> AnySubtype {
                 match self.header.type_tag {
                     $(
                         TypeTag::$name => {
                             AnySubtype::$name(unsafe {
                                 &*(self as *const Any as *const $name)
                             })
+                        }
+                    )*
+                }
+            }
+
+            unsafe fn read_subtype(&self) -> ReadSubtype {
+                match self.header.type_tag {
+                    $(
+                        TypeTag::$name => {
+                            ReadSubtype::$name(
+                                ptr::read(self as *const Any as *const $name)
+                            )
                         }
                     )*
                 }

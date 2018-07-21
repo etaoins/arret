@@ -3,7 +3,7 @@ mod collect;
 use std::{cmp, mem, ptr};
 
 use boxed::refs::Gc;
-use boxed::{Any, ConstructableFrom};
+use boxed::{AllocType, Any, ConstructableFrom};
 
 /// Represents an allocated segement of garbage collected memory
 ///
@@ -54,6 +54,40 @@ impl Segment {
     fn len(&self) -> usize {
         // TODO: Replace with `offset_from` once its stable
         (self.next as usize - self.backing_vec.as_ptr() as usize) / mem::size_of::<Any>()
+    }
+}
+
+impl Drop for Segment {
+    fn drop(&mut self) {
+        let mut current = self.backing_vec.as_mut_ptr();
+        while current < self.next as *mut Any {
+            unsafe {
+                match (*current).header.alloc_type {
+                    AllocType::Heap16 | AllocType::Heap32 => {
+                        // We can't read `Any` directly because it's only 16 bytes. Reading
+                        // as the correct subtype will copy the appropriate number of bytes and run
+                        // `drop`
+                        (*current).read_subtype();
+                    }
+                    AllocType::HeapForward16 | AllocType::HeapForward32 => {}
+                    AllocType::Const | AllocType::Stack => {
+                        unreachable!("Unexpected alloc type in heap")
+                    }
+                }
+
+                match (*current).header.alloc_type {
+                    AllocType::Heap16 | AllocType::HeapForward16 => {
+                        current = current.add(1);
+                    }
+                    AllocType::Heap32 | AllocType::HeapForward32 => {
+                        current = current.add(2);
+                    }
+                    AllocType::Const | AllocType::Stack => {
+                        unreachable!("Unexpected alloc type in heap")
+                    }
+                }
+            }
+        }
     }
 }
 
