@@ -63,12 +63,7 @@ impl Drop for Segment {
         while current < self.next as *mut Any {
             unsafe {
                 match (*current).header.alloc_type {
-                    AllocType::Heap16 | AllocType::Heap32 => {
-                        // We can't read `Any` directly because it's only 16 bytes. Reading
-                        // as the correct subtype will copy the appropriate number of bytes and run
-                        // `drop`
-                        (*current).read_subtype();
-                    }
+                    AllocType::Heap16 | AllocType::Heap32 => ptr::drop_in_place(current),
                     AllocType::HeapForward16 | AllocType::HeapForward32 => {}
                     AllocType::Const | AllocType::Stack => {
                         unreachable!("Unexpected alloc type in heap")

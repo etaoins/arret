@@ -151,10 +151,6 @@ macro_rules! define_direct_tagged_boxes {
             $( $name(&'a $name) ),*
         }
 
-        enum ReadSubtype {
-            $( $name($name) ),*
-        }
-
         $(
             impl Boxed for $name {}
 
@@ -175,17 +171,21 @@ macro_rules! define_direct_tagged_boxes {
                     )*
                 }
             }
+        }
 
-            unsafe fn read_subtype(&self) -> ReadSubtype {
+        impl Drop for Any {
+            fn drop(&mut self) {
+                // Cast to the correct type so Rust knows which Drop implementation to call
                 match self.header.type_tag {
                     $(
                         TypeTag::$name => {
-                            ReadSubtype::$name(
-                                ptr::read(self as *const Any as *const $name)
-                            )
+                            unsafe {
+                                ptr::drop_in_place(self as *mut Any as *mut $name);
+                            }
                         }
                     )*
                 }
+
             }
         }
     }
