@@ -1,4 +1,5 @@
 use std::marker::PhantomData;
+use std::mem;
 
 use abitype::{BoxedABIType, EncodeBoxedABIType};
 use boxed::heap::Heap;
@@ -44,7 +45,15 @@ where
     T: Boxed,
 {
     fn size_for_value(_: &PairInput<T>) -> BoxSize {
-        BoxSize::Size32
+        // TODO: It'd be nice to expose this as const BOX_SIZE: BoxSize once `if` is allowed in
+        // const contexts
+        if mem::size_of::<Self>() == 16 {
+            BoxSize::Size16
+        } else if mem::size_of::<Self>() == 32 {
+            BoxSize::Size32
+        } else {
+            unreachable!("Unsupported pair size!")
+        }
     }
 
     fn construct(value: PairInput<T>, alloc_type: AllocType, _: &mut Interner) -> Pair<T> {
@@ -185,7 +194,7 @@ mod test {
 
     #[test]
     fn sizes() {
-        assert_eq!(32, mem::size_of::<Pair<Any>>());
+        assert!([16, 32].contains(&mem::size_of::<Pair<Any>>()));
     }
 
     #[test]

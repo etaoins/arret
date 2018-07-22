@@ -191,8 +191,12 @@ mod test {
 
     #[test]
     fn list_collect() {
-        // Three 1 cell integers + three 2 cell pair
-        const EXPECTED_HEAP_SIZE: usize = 3 + (3 * 2);
+        use std::mem;
+
+        // Three 1 cell integers + three pairs
+        const PAIR_CELLS: usize = mem::size_of::<Pair<Any>>() / mem::size_of::<Any>();
+        const EXPECTED_HEAP_SIZE: usize = 3 + (3 * PAIR_CELLS);
+
         let mut heap = Heap::new();
 
         let boxed_ints = [1, 2, 3]
