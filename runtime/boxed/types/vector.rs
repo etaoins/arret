@@ -90,10 +90,10 @@ where
         self.length == 0
     }
 
-    pub fn values(&self) -> &[Gc<T>] {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &Gc<T>> {
         match self.as_repr() {
-            Repr::Inline(inline) => &inline.values[0..self.len()],
-            Repr::Large(large) => &large.values,
+            Repr::Inline(inline) => inline.values[0..self.len()].iter(),
+            Repr::Large(large) => large.values.iter(),
         }
     }
 

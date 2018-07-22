@@ -248,7 +248,7 @@ mod test {
                 vec![unsafe { &mut *(&mut boxed_vector as *mut Gc<Vector<Int>> as *mut Gc<Any>) }],
             );
 
-            let mut boxed_list_iter = boxed_vector.values().iter();
+            let mut boxed_list_iter = boxed_vector.iter();
             assert_eq!(test_content.len(), boxed_list_iter.len());
 
             for expected_num in test_content {
