@@ -1,5 +1,6 @@
 use boxed;
 use boxed::refs::Gc;
+use intern::InternedSym;
 
 #[derive(Debug)]
 pub enum BoxedABIType {
@@ -17,6 +18,7 @@ pub enum ABIType {
     Char,
     Float,
     Int,
+    InternedSym,
     Void,
     Boxed(BoxedABIType),
 }
@@ -39,6 +41,10 @@ impl EncodeABIType for char {
 
 impl EncodeABIType for () {
     const ABI_TYPE: ABIType = ABIType::Void;
+}
+
+impl EncodeABIType for InternedSym {
+    const ABI_TYPE: ABIType = ABIType::InternedSym;
 }
 
 impl<T> EncodeABIType for Gc<T>

@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 
 mod boxed;
+mod intern;
 use boxed::prelude::*;
 use boxed::refs::Gc;
 

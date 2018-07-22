@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::{mem, ptr};
 
 use boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
+use intern::Interner;
 
 #[repr(C, align(16))]
 pub struct Str {
@@ -45,7 +46,7 @@ impl<'a> ConstructableFrom<&'a str> for Str {
         }
     }
 
-    fn new_with_alloc_type(value: &str, alloc_type: AllocType) -> Str {
+    fn construct(value: &str, alloc_type: AllocType, _: &mut Interner) -> Str {
         let header = Header {
             type_tag: Self::TYPE_TAG,
             alloc_type,

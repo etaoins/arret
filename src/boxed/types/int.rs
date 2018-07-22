@@ -1,4 +1,5 @@
 use boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
+use intern::Interner;
 
 #[repr(C, align(16))]
 pub struct Int {
@@ -11,7 +12,7 @@ impl ConstructableFrom<i64> for Int {
         BoxSize::Size16
     }
 
-    fn new_with_alloc_type(value: i64, alloc_type: AllocType) -> Int {
+    fn construct(value: i64, alloc_type: AllocType, _: &mut Interner) -> Int {
         Int {
             header: Header {
                 type_tag: Self::TYPE_TAG,

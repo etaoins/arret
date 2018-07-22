@@ -6,6 +6,7 @@ use boxed::refs::Gc;
 use boxed::{
     AllocType, Any, BoxSize, Boxed, ConstructableFrom, Header, Nil, TypeTag, NIL_INSTANCE,
 };
+use intern::Interner;
 
 #[repr(C, align(16))]
 pub struct Pair<T>
@@ -46,7 +47,7 @@ where
         BoxSize::Size32
     }
 
-    fn new_with_alloc_type(value: PairInput<T>, alloc_type: AllocType) -> Pair<T> {
+    fn construct(value: PairInput<T>, alloc_type: AllocType, _: &mut Interner) -> Pair<T> {
         Pair {
             header: Header {
                 type_tag: TypeTag::TopPair,

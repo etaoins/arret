@@ -2,7 +2,7 @@ use std::ptr;
 
 use boxed::heap::Heap;
 use boxed::refs::Gc;
-use boxed::{AllocType, Any, BoxSize, Header, List, Pair, TypeTag, Vector};
+use boxed::{AllocType, Any, BoxSize, Header, List, Pair, Sym, TypeTag, Vector};
 
 #[repr(C, align(16))]
 pub struct ForwardingCell {
@@ -45,7 +45,7 @@ fn move_box_to_new_heap(box_ref: &mut Gc<Any>, new_heap: &mut Heap, size: BoxSiz
     *box_ref = unsafe { Gc::new(dest_location) };
 }
 
-fn visit_box(mut box_ref: &mut Gc<Any>, new_heap: &mut Heap) {
+fn visit_box(mut box_ref: &mut Gc<Any>, old_heap: &Heap, new_heap: &mut Heap) {
     // This loop is used for ad-hoc tail recursion when visiting Pairs
     // Everything else will return at the bottom of the loop
     loop {
@@ -72,10 +72,20 @@ fn visit_box(mut box_ref: &mut Gc<Any>, new_heap: &mut Heap) {
         }
 
         match box_ref.header.type_tag {
+            TypeTag::Sym => {
+                let mut sym_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Sym) };
+
+                // If this symbol is heap indexed we need to reintern it on the new heap
+                let new_interned_name = {
+                    let sym_name = sym_ref.name(&old_heap.interner);
+                    new_heap.interner.intern(sym_name)
+                };
+                sym_ref.interned = new_interned_name;
+            }
             TypeTag::TopPair => {
                 let mut pair_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Pair<Any>) };
 
-                visit_box(&mut pair_ref.head, new_heap);
+                visit_box(&mut pair_ref.head, old_heap, new_heap);
 
                 // Start again with the tail of the list
                 box_ref =
@@ -86,7 +96,7 @@ fn visit_box(mut box_ref: &mut Gc<Any>, new_heap: &mut Heap) {
                 let mut vec_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Vector<Any>) };
 
                 for elem_ref in &mut vec_ref.values {
-                    visit_box(elem_ref, new_heap);
+                    visit_box(elem_ref, old_heap, new_heap);
                 }
             }
             _ => {}
@@ -96,11 +106,14 @@ fn visit_box(mut box_ref: &mut Gc<Any>, new_heap: &mut Heap) {
     }
 }
 
-pub fn collect_roots(roots: Vec<&mut Gc<Any>>) -> Heap {
+// We could take `Heap` by reference but after we collect the old heap is unusable. Taking it by
+// value lets us use Rust's ownership system to express that.
+#[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
+pub fn collect_roots(old_heap: Heap, roots: Vec<&mut Gc<Any>>) -> Heap {
     let mut new_heap = Heap::new();
 
     for root in roots {
-        visit_box(root, &mut new_heap);
+        visit_box(root, &old_heap, &mut new_heap);
     }
 
     new_heap
@@ -129,7 +142,7 @@ mod test {
             // Root everything
             let all_heap = {
                 let all_roots = vec![&mut hello, &mut world];
-                collect_roots(all_roots)
+                collect_roots(old_heap, all_roots)
             };
 
             assert_eq!("HELLO", hello.cast::<Str>().as_str());
@@ -139,15 +152,40 @@ mod test {
             // Root just one string
             let one_heap = {
                 let one_roots = vec![&mut hello];
-                collect_roots(one_roots)
+                collect_roots(all_heap, one_roots)
             };
 
             assert_eq!("HELLO", hello.cast::<Str>().as_str());
             assert_eq!(1, one_heap.len());
 
             // Root nothing
-            let zero_heap = collect_roots(vec![]);
+            let zero_heap = collect_roots(one_heap, vec![]);
             assert_eq!(0, zero_heap.len());
+        }
+    }
+
+    #[test]
+    fn sym_collect() {
+        use boxed::{ConstructableFrom, Sym};
+
+        let mut old_heap = Heap::new();
+
+        unsafe {
+            let inline_name = "Hello";
+            let indexed_name = "This is too long; it will be indexed to the heap's intern table";
+
+            let mut inline = Sym::new(&mut old_heap, inline_name).cast::<Any>();
+            let mut indexed = Sym::new(&mut old_heap, indexed_name).cast::<Any>();
+            assert_eq!(2, old_heap.len());
+
+            let new_heap = {
+                let all_roots = vec![&mut inline, &mut indexed];
+                collect_roots(old_heap, all_roots)
+            };
+
+            assert_eq!(inline_name, inline.cast::<Sym>().name(&new_heap.interner));
+            assert_eq!(indexed_name, indexed.cast::<Sym>().name(&new_heap.interner));
+            assert_eq!(2, new_heap.len());
         }
     }
 
@@ -168,9 +206,10 @@ mod test {
 
         assert_eq!(3, boxed_list.len());
 
-        let new_heap = collect_roots(vec![unsafe {
-            &mut *(&mut boxed_list as *mut Gc<List<Int>> as *mut Gc<Any>)
-        }]);
+        let new_heap = collect_roots(
+            heap,
+            vec![unsafe { &mut *(&mut boxed_list as *mut Gc<List<Int>> as *mut Gc<Any>) }],
+        );
 
         assert_eq!(3, boxed_list.len());
         assert_eq!(EXPECTED_HEAP_SIZE, new_heap.len());
@@ -200,9 +239,10 @@ mod test {
         let mut boxed_vector = Vector::new(&mut heap, boxed_ints.as_slice());
         assert_eq!(EXPECTED_HEAP_SIZE, heap.len());
 
-        let new_heap = collect_roots(vec![unsafe {
-            &mut *(&mut boxed_vector as *mut Gc<Vector<Int>> as *mut Gc<Any>)
-        }]);
+        let new_heap = collect_roots(
+            heap,
+            vec![unsafe { &mut *(&mut boxed_vector as *mut Gc<Vector<Int>> as *mut Gc<Any>) }],
+        );
 
         assert_eq!(EXPECTED_HEAP_SIZE, new_heap.len());
 

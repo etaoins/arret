@@ -11,7 +11,9 @@ pub use boxed::types::float::Float;
 pub use boxed::types::int::Int;
 pub use boxed::types::list::{List, Pair, TopPair};
 pub use boxed::types::str::Str;
+pub use boxed::types::sym::Sym;
 pub use boxed::types::vector::{TopVector, Vector};
+pub use intern::Interner;
 
 pub use boxed::heap::Heap;
 
@@ -132,7 +134,7 @@ pub trait ConstructableFrom<T>: Boxed {
     fn size_for_value(value: &T) -> BoxSize;
 
     /// Creates a new instance for the given value and box header
-    fn new_with_alloc_type(value: T, alloc_type: AllocType) -> Self;
+    fn construct(value: T, alloc_type: AllocType, interner: &mut Interner) -> Self;
 
     fn new(heap: &mut impl AsHeap, value: T) -> Gc<Self> {
         heap.as_heap().new_box::<Self, T>(value)
@@ -278,6 +280,7 @@ define_direct_tagged_boxes! {
     Float,
     Int,
     Str,
+    Sym,
     TopPair,
     Nil,
     True,

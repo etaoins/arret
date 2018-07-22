@@ -4,6 +4,7 @@ use std::{cmp, mem, ptr};
 
 use boxed::refs::Gc;
 use boxed::{AllocType, Any, ConstructableFrom};
+use intern::Interner;
 
 /// Represents an allocated segement of garbage collected memory
 ///
@@ -20,6 +21,7 @@ pub struct Segment {
 pub struct Heap {
     current_segment: Segment,
     full_segments: Vec<Segment>,
+    interner: Interner,
 }
 
 impl Segment {
@@ -98,6 +100,7 @@ impl Heap {
         Heap {
             current_segment: Segment::with_capacity(count),
             full_segments: vec![],
+            interner: Interner::new(),
         }
     }
 
@@ -138,7 +141,7 @@ impl Heap {
         let insert_at = self.alloc_cells(needed_cells);
         let alloc_type = heap_size.to_heap_alloc_type();
 
-        let stack_box = B::new_with_alloc_type(value, alloc_type);
+        let stack_box = B::construct(value, alloc_type, &mut self.interner);
 
         unsafe {
             ptr::copy_nonoverlapping(&stack_box, insert_at as *mut B, needed_cells);

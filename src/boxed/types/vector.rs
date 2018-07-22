@@ -1,6 +1,7 @@
 use abitype::{BoxedABIType, EncodeBoxedABIType};
 use boxed::refs::Gc;
 use boxed::{AllocType, Any, BoxSize, Boxed, ConstructableFrom, Header, TypeTag};
+use intern::Interner;
 
 #[repr(C, align(16))]
 pub struct Vector<T>
@@ -21,7 +22,7 @@ where
         BoxSize::Size32
     }
 
-    fn new_with_alloc_type(values: &[Gc<T>], alloc_type: AllocType) -> Vector<T> {
+    fn construct(values: &[Gc<T>], alloc_type: AllocType, _: &mut Interner) -> Vector<T> {
         Vector {
             header: Header {
                 type_tag: TypeTag::TopVector,
