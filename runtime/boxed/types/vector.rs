@@ -5,10 +5,10 @@ use boxed::refs::Gc;
 use boxed::{AllocType, Any, BoxSize, Boxed, ConstructableFrom, Header, TypeTag};
 use intern::Interner;
 
-const MAX_16BYTE_INLINE_SIZE: usize = ((16 - 8) / mem::size_of::<Gc<Any>>());
-const MAX_32BYTE_INLINE_SIZE: usize = ((32 - 8) / mem::size_of::<Gc<Any>>());
+const MAX_16BYTE_INLINE_LENGTH: usize = ((16 - 8) / mem::size_of::<Gc<Any>>());
+const MAX_32BYTE_INLINE_LENGTH: usize = ((32 - 8) / mem::size_of::<Gc<Any>>());
 
-const MAX_INLINE_SIZE: usize = MAX_32BYTE_INLINE_SIZE;
+const MAX_INLINE_LENGTH: usize = MAX_32BYTE_INLINE_LENGTH;
 
 #[repr(C, align(16))]
 pub struct Vector<T>
@@ -16,7 +16,7 @@ where
     T: Boxed,
 {
     header: Header,
-    length: u32,
+    inline_length: u32,
     padding: [u8; 24],
     phantom: marker::PhantomData<T>,
 }
@@ -28,7 +28,7 @@ where
     T: Boxed,
 {
     fn size_for_value(values: &&[Gc<T>]) -> BoxSize {
-        if values.len() <= MAX_16BYTE_INLINE_SIZE {
+        if values.len() <= MAX_16BYTE_INLINE_LENGTH {
             // 1 cell inline
             BoxSize::Size16
         } else {
@@ -44,10 +44,10 @@ where
         };
 
         unsafe {
-            if values.len() <= MAX_INLINE_SIZE {
+            if values.len() <= MAX_INLINE_LENGTH {
                 let mut inline_vec: InlineVector<T> = InlineVector {
                     header,
-                    length: values.len() as u32,
+                    inline_length: values.len() as u32,
                     values: mem::uninitialized(),
                 };
                 inline_vec.values[0..values.len()].copy_from_slice(values);
@@ -56,7 +56,7 @@ where
             } else {
                 let large_vec = LargeVector {
                     header,
-                    length: values.len() as u32,
+                    inline_length: (MAX_INLINE_LENGTH + 1) as u32,
                     values: values.into(),
                 };
 
@@ -71,7 +71,7 @@ where
     T: Boxed,
 {
     fn is_inline(&self) -> bool {
-        self.length <= (MAX_INLINE_SIZE as u32)
+        self.inline_length <= (MAX_INLINE_LENGTH as u32)
     }
 
     fn as_repr(&self) -> Repr<T> {
@@ -83,11 +83,14 @@ where
     }
 
     pub fn len(&self) -> usize {
-        self.length as usize
+        match self.as_repr() {
+            Repr::Inline(inline) => inline.inline_length as usize,
+            Repr::Large(large) => large.values.len(),
+        }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.length == 0
+        self.inline_length == 0
     }
 
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &Gc<T>> {
@@ -121,8 +124,8 @@ where
     T: Boxed,
 {
     header: Header,
-    length: u32,
-    values: [Gc<T>; MAX_INLINE_SIZE],
+    inline_length: u32,
+    values: [Gc<T>; MAX_INLINE_LENGTH],
 }
 
 #[repr(C, align(16))]
@@ -131,7 +134,7 @@ where
     T: Boxed,
 {
     header: Header,
-    length: u32,
+    inline_length: u32,
     values: Vec<Gc<T>>,
 }
 
