@@ -86,6 +86,10 @@ where
         self.length as usize
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.length == 0
+    }
+
     pub fn values(&self) -> &[Gc<T>] {
         match self.as_repr() {
             Repr::Inline(inline) => &inline.values[0..self.len()],
@@ -145,7 +149,7 @@ pub struct TopVector {
 }
 
 impl TopVector {
-    fn as_vector(&self) -> Gc<Vector<Any>> {
+    pub fn as_vector(&self) -> Gc<Vector<Any>> {
         unsafe { Gc::new(&*(self as *const TopVector as *const Vector<Any>)) }
     }
 }

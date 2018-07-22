@@ -2,10 +2,9 @@ use std::marker::PhantomData;
 use std::mem;
 
 use abitype::{BoxedABIType, EncodeBoxedABIType};
-use boxed::heap::Heap;
 use boxed::refs::Gc;
 use boxed::{
-    AllocType, Any, BoxSize, Boxed, ConstructableFrom, Header, Nil, TypeTag, NIL_INSTANCE,
+    AllocType, Any, AsHeap, BoxSize, Boxed, ConstructableFrom, Header, Nil, TypeTag, NIL_INSTANCE,
 };
 use intern::Interner;
 
@@ -90,7 +89,10 @@ impl<T> List<T>
 where
     T: Boxed,
 {
-    pub fn new(heap: &mut Heap, elems: impl DoubleEndedIterator<Item = Gc<T>>) -> Gc<List<T>> {
+    pub fn new(
+        heap: &mut impl AsHeap,
+        elems: impl DoubleEndedIterator<Item = Gc<T>>,
+    ) -> Gc<List<T>> {
         let initial_tail = Self::empty();
 
         // TODO: This is naive; we could use a single multi-cell allocation instead
@@ -120,6 +122,10 @@ where
             ListSubtype::Pair(pair) => pair.list_length,
             ListSubtype::Nil => 0,
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.header.type_tag == TypeTag::Nil
     }
 
     pub fn as_any_ref(&self) -> Gc<Any> {
@@ -181,7 +187,7 @@ pub struct TopPair {
 }
 
 impl TopPair {
-    fn as_pair(&self) -> Gc<Pair<Any>> {
+    pub fn as_pair(&self) -> Gc<Pair<Any>> {
         unsafe { Gc::new(&*(self as *const TopPair as *const Pair<Any>)) }
     }
 }
@@ -189,6 +195,7 @@ impl TopPair {
 #[cfg(test)]
 mod test {
     use super::*;
+    use boxed::heap::Heap;
     use boxed::Int;
     use std::mem;
 

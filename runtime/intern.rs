@@ -28,7 +28,7 @@ const INLINE_SIZE: usize = 8;
 #[derive(Copy, Clone)]
 struct InternedIndexed {
     flag_byte: u8,
-    padding: [u8; 3],
+    _padding: [u8; 3],
     name_idx: u32,
 }
 
@@ -99,7 +99,7 @@ impl Interner {
             InternedSym {
                 indexed: InternedIndexed {
                     flag_byte: INDEXED_FLAG,
-                    padding: [0; 3],
+                    _padding: [0; 3],
                     name_idx: index as u32,
                 },
             }

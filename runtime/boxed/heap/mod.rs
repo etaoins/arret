@@ -53,6 +53,7 @@ impl Segment {
     }
 
     /// Returns the number of allocated cells
+    #[cfg(test)]
     fn len(&self) -> usize {
         // TODO: Replace with `offset_from` once its stable
         (self.next as usize - self.backing_vec.as_ptr() as usize) / mem::size_of::<Any>()
@@ -96,6 +97,10 @@ impl Heap {
         Self::with_capacity(Self::DEFAULT_SEGMENT_CAPACITY)
     }
 
+    pub fn collect(self, roots: Vec<&mut Gc<Any>>) -> Heap {
+        collect::collect_roots(self, roots)
+    }
+
     pub fn with_capacity(count: usize) -> Heap {
         Heap {
             current_segment: Segment::with_capacity(count),
@@ -125,6 +130,7 @@ impl Heap {
     }
 
     /// Returns the number of allocated cells
+    #[cfg(test)]
     fn len(&self) -> usize {
         let full_len: usize = self.full_segments.iter().map(|s| s.len()).sum();
         self.current_segment.len() + full_len

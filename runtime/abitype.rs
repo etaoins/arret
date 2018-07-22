@@ -2,7 +2,7 @@ use boxed;
 use boxed::refs::Gc;
 use intern::InternedSym;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum BoxedABIType {
     Any,
     DirectTagged(boxed::TypeTag),
@@ -12,7 +12,7 @@ pub enum BoxedABIType {
     Pair(&'static BoxedABIType),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ABIType {
     Bool,
     Char,

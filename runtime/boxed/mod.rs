@@ -1,11 +1,13 @@
-mod heap;
+pub mod heap;
 pub mod refs;
 mod types;
 
 use std::ptr;
 
 use abitype::{BoxedABIType, EncodeBoxedABIType};
+use boxed::heap::Heap;
 use boxed::refs::Gc;
+use intern::Interner;
 
 pub use boxed::types::char::Char;
 pub use boxed::types::float::Float;
@@ -14,13 +16,11 @@ pub use boxed::types::list::{List, Pair, TopPair};
 pub use boxed::types::str::Str;
 pub use boxed::types::sym::Sym;
 pub use boxed::types::vector::{TopVector, Vector};
-pub use intern::Interner;
-
-pub use boxed::heap::Heap;
 
 pub mod prelude {
     pub use super::AsHeap;
     pub use super::ConstructableFrom;
+    pub use super::Downcastable;
 }
 
 pub trait Boxed: Sized {}
@@ -229,7 +229,7 @@ macro_rules! define_tagged_union {
                 }
             }
 
-            fn as_subtype(&self) -> $subtype_enum {
+            pub fn as_subtype(&self) -> $subtype_enum {
                 match self.header.type_tag {
                     $(
                         TypeTag::$member => {
