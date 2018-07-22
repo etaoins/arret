@@ -95,7 +95,7 @@ fn visit_box(mut box_ref: &mut Gc<Any>, old_heap: &Heap, new_heap: &mut Heap) {
             TypeTag::TopVector => {
                 let mut vec_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Vector<Any>) };
 
-                for elem_ref in &mut vec_ref.values {
+                for elem_ref in vec_ref.values_mut() {
                     visit_box(elem_ref, old_heap, new_heap);
                 }
             }
@@ -226,32 +226,33 @@ mod test {
 
     #[test]
     fn vector_collect() {
-        // Three 1 cell integers + one 2 cell vector
-        const EXPECTED_HEAP_SIZE: usize = 3 + 2;
-        let mut heap = Heap::new();
+        // Try empty, 1 cell inline, 2 cell inline, and large vectors
+        let test_contents: [&[i64]; 4] = [&[], &[1], &[1, 2, 3], &[9, 8, 7, 6, 5, 4, 3, 2, 1, 0]];
 
-        let boxed_ints = [1, 2, 3]
-            .iter()
-            .map(|num| Int::new(&mut heap, *num))
-            .collect::<Vec<Gc<Int>>>();
-        assert_eq!(3, heap.len());
+        for &test_content in &test_contents {
+            let mut heap = Heap::new();
 
-        let mut boxed_vector = Vector::new(&mut heap, boxed_ints.as_slice());
-        assert_eq!(EXPECTED_HEAP_SIZE, heap.len());
+            let boxed_ints = test_content
+                .iter()
+                .map(|num| Int::new(&mut heap, *num))
+                .collect::<Vec<Gc<Int>>>();
+            assert_eq!(test_content.len(), heap.len());
+            let mut boxed_vector = Vector::new(&mut heap, boxed_ints.as_slice());
 
-        let new_heap = collect_roots(
-            heap,
-            vec![unsafe { &mut *(&mut boxed_vector as *mut Gc<Vector<Int>> as *mut Gc<Any>) }],
-        );
+            let _new_heap = collect_roots(
+                heap,
+                vec![unsafe { &mut *(&mut boxed_vector as *mut Gc<Vector<Int>> as *mut Gc<Any>) }],
+            );
 
-        assert_eq!(EXPECTED_HEAP_SIZE, new_heap.len());
+            let mut boxed_list_iter = boxed_vector.values().iter();
+            assert_eq!(test_content.len(), boxed_list_iter.len());
 
-        let mut boxed_list_iter = boxed_vector.values.iter();
-        for expected_num in &[1, 2, 3] {
-            if let Some(boxed_int) = boxed_list_iter.next() {
-                assert_eq!(*expected_num, boxed_int.value);
-            } else {
-                panic!("Iterator unexpectedly ended");
+            for expected_num in test_content {
+                if let Some(boxed_int) = boxed_list_iter.next() {
+                    assert_eq!(*expected_num, boxed_int.value);
+                } else {
+                    panic!("Iterator unexpectedly ended");
+                }
             }
         }
     }
