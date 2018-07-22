@@ -15,10 +15,10 @@ pub struct Vector<T>
 where
     T: Boxed,
 {
-    pub header: Header,
-    pub length: u32,
-    pub padding: [u8; 24],
-    pub phantom: marker::PhantomData<T>,
+    header: Header,
+    length: u32,
+    padding: [u8; 24],
+    phantom: marker::PhantomData<T>,
 }
 
 impl<T> Boxed for Vector<T> where T: Boxed {}
@@ -120,9 +120,9 @@ pub struct InlineVector<T>
 where
     T: Boxed,
 {
-    pub header: Header,
-    pub length: u32,
-    pub values: [Gc<T>; MAX_INLINE_SIZE],
+    header: Header,
+    length: u32,
+    values: [Gc<T>; MAX_INLINE_SIZE],
 }
 
 #[repr(C, align(16))]
@@ -130,9 +130,9 @@ pub struct LargeVector<T>
 where
     T: Boxed,
 {
-    pub header: Header,
-    pub length: u32,
-    pub values: Vec<Gc<T>>,
+    header: Header,
+    length: u32,
+    values: Vec<Gc<T>>,
 }
 
 enum Repr<'a, T>
@@ -145,7 +145,7 @@ where
 
 #[repr(C, align(16))]
 pub struct TopVector {
-    pub header: Header,
+    header: Header,
 }
 
 impl TopVector {

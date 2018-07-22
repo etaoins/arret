@@ -3,10 +3,10 @@ use intern::{InternedSym, Interner};
 
 #[repr(C, align(16))]
 pub struct Sym {
-    pub header: Header,
+    header: Header,
     // TODO: We have room to fit a u32 hash value here which should help with re-interning heap
     // indexed symbols in new heaps
-    pub interned: InternedSym,
+    pub(crate) interned: InternedSym,
 }
 
 impl<'a> ConstructableFrom<&'a str> for Sym {

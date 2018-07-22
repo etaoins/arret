@@ -81,7 +81,7 @@ pub mod test {
     define_extern_fn! {
         #[arret-type="(Int Float -> Num)"]
         ADD_INT_FLOAT = add_int_float(task: &mut Task, int_box: Gc<boxed::Int>, native_float: f64) -> Gc<boxed::Num> {
-            boxed::Int::new(task, int_box.value + native_float as i64).as_num_ref()
+            boxed::Int::new(task, int_box.value() + native_float as i64).as_num_ref()
         }
     }
 
@@ -112,7 +112,7 @@ pub mod test {
         let twenty_num = add_int_float(&mut task, fourteen_int, 6.0);
 
         let twenty_int = twenty_num.downcast_ref::<boxed::Int>().unwrap();
-        assert_eq!(20, twenty_int.value);
+        assert_eq!(20, twenty_int.value());
     }
 
     define_extern_fn! {

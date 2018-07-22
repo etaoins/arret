@@ -3,8 +3,8 @@ use intern::Interner;
 
 #[repr(C, align(16))]
 pub struct Int {
-    pub header: Header,
-    pub value: i64,
+    header: Header,
+    value: i64,
 }
 
 impl ConstructableFrom<i64> for Int {
@@ -20,6 +20,12 @@ impl ConstructableFrom<i64> for Int {
             },
             value,
         }
+    }
+}
+
+impl Int {
+    pub fn value(&self) -> i64 {
+        self.value
     }
 }
 

@@ -6,9 +6,9 @@ use intern::Interner;
 
 #[repr(C, align(16))]
 pub struct Str {
-    pub header: Header,
-    pub inline_byte_length: u8,
-    pub padding: [u8; Str::MAX_INLINE_BYTES],
+    header: Header,
+    inline_byte_length: u8,
+    padding: [u8; Str::MAX_INLINE_BYTES],
 }
 
 impl Str {
@@ -100,9 +100,9 @@ impl Drop for Str {
 
 #[repr(C, align(16))]
 struct InlineStr {
-    pub header: Header,
-    pub inline_byte_length: u8,
-    pub inline_bytes: [u8; Str::MAX_INLINE_BYTES],
+    header: Header,
+    inline_byte_length: u8,
+    inline_bytes: [u8; Str::MAX_INLINE_BYTES],
 }
 
 impl InlineStr {
@@ -124,11 +124,11 @@ impl InlineStr {
 
 #[repr(C, align(16))]
 struct SharedStr {
-    pub header: Header,
+    header: Header,
     // Once we've determined we're not inline this has no useful value
-    pub inline_byte_length: u8,
-    pub shared_str: Arc<str>,
-    pub padding: [u64; 1],
+    inline_byte_length: u8,
+    shared_str: Arc<str>,
+    padding: [u64; 1],
 }
 
 enum Repr<'a> {

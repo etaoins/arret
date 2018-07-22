@@ -6,8 +6,8 @@ use boxed::{AllocType, Any, BoxSize, Header, List, Pair, Sym, TypeTag, Vector};
 
 #[repr(C, align(16))]
 pub struct ForwardingCell {
-    pub header: Header,
-    pub new_location: Gc<Any>,
+    header: Header,
+    new_location: Gc<Any>,
 }
 
 fn move_box_to_new_heap(box_ref: &mut Gc<Any>, new_heap: &mut Heap, size: BoxSize) {
@@ -221,7 +221,7 @@ mod test {
         let mut boxed_list_iter = boxed_list.iter();
         for expected_num in &[1, 2, 3] {
             if let Some(boxed_int) = boxed_list_iter.next() {
-                assert_eq!(*expected_num, boxed_int.value);
+                assert_eq!(*expected_num, boxed_int.value());
             } else {
                 panic!("Iterator unexpectedly ended");
             }
@@ -253,7 +253,7 @@ mod test {
 
             for expected_num in test_content {
                 if let Some(boxed_int) = boxed_list_iter.next() {
-                    assert_eq!(*expected_num, boxed_int.value);
+                    assert_eq!(*expected_num, boxed_int.value());
                 } else {
                     panic!("Iterator unexpectedly ended");
                 }

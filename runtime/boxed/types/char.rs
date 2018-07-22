@@ -3,8 +3,8 @@ use intern::Interner;
 
 #[repr(C, align(16))]
 pub struct Char {
-    pub header: Header,
-    pub value: char,
+    header: Header,
+    value: char,
 }
 
 impl ConstructableFrom<char> for Char {
@@ -20,6 +20,12 @@ impl ConstructableFrom<char> for Char {
             },
             value,
         }
+    }
+}
+
+impl Char {
+    pub fn value(&self) -> char {
+        self.value
     }
 }
 

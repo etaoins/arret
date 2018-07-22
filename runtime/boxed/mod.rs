@@ -61,13 +61,13 @@ pub enum AllocType {
 #[repr(C)]
 #[derive(Debug)]
 pub struct Header {
-    pub type_tag: TypeTag,
-    pub alloc_type: AllocType,
+    type_tag: TypeTag,
+    alloc_type: AllocType,
 }
 
 #[repr(C, align(16))]
 pub struct Any {
-    pub header: Header,
+    header: Header,
 }
 
 impl Any {
@@ -198,7 +198,7 @@ macro_rules! define_singleton_box {
     ($type_name:ident, $static_name:ident) => {
         #[repr(C, align(16))]
         pub struct $type_name {
-            pub header: Header,
+            header: Header,
         }
 
         pub static $static_name: $type_name = $type_name {
@@ -214,7 +214,7 @@ macro_rules! define_tagged_union {
     ($name:ident, $subtype_enum:ident, $member_trait:ident, $as_enum_ref:ident, { $($member:ident),* }) => {
         #[repr(C, align(16))]
         pub struct $name {
-            pub header: Header,
+            header: Header,
         }
 
         impl $name {

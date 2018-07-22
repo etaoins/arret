@@ -13,10 +13,10 @@ pub struct Pair<T>
 where
     T: Boxed,
 {
-    pub header: Header,
-    pub head: Gc<T>,
-    pub rest: Gc<List<T>>,
-    pub list_length: usize,
+    header: Header,
+    pub(crate) head: Gc<T>,
+    pub(crate) rest: Gc<List<T>>,
+    list_length: usize,
 }
 
 impl<T> Boxed for Pair<T> where T: Boxed {}
@@ -73,7 +73,7 @@ pub struct List<T>
 where
     T: Boxed,
 {
-    pub header: Header,
+    header: Header,
     phantom: PhantomData<T>,
 }
 
@@ -183,7 +183,7 @@ impl<T> ExactSizeIterator for ListIterator<T> where T: Boxed {}
 
 #[repr(C, align(16))]
 pub struct TopPair {
-    pub header: Header,
+    header: Header,
 }
 
 impl TopPair {
@@ -220,7 +220,7 @@ mod test {
 
         for expected_num in &[1, 2, 3] {
             if let Some(boxed_int) = boxed_list_iter.next() {
-                assert_eq!(*expected_num, boxed_int.value);
+                assert_eq!(*expected_num, boxed_int.value());
             } else {
                 panic!("Iterator unexpectedly ended");
             }
