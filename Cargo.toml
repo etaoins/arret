@@ -2,5 +2,6 @@
 members = [
 	"syntax",
 	"compiler",
-	"driver"
+	"driver",
+	"runtime"
 ]

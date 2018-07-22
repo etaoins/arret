@@ -1,6 +1,9 @@
 [package]
-name = "ffi-test"
+name = "runtime"
 version = "0.1.0"
 authors = ["Ryan Cumming <etaoins@gmail.com>"]
 
-[dependencies]
+[lib]
+name = "runtime"
+path = "lib.rs"
+crate-type = ["dylib"]
