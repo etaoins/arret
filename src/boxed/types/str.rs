@@ -41,7 +41,11 @@ impl<'a> ConstructableFrom<&'a str> for Str {
             14..=Str::MAX_INLINE_BYTES => BoxSize::Size32,
             _ => {
                 // Too big to fit inline; this needs to be shared
-                BoxSize::Size32
+                if mem::size_of::<Arc<str>>() <= 8 {
+                    BoxSize::Size16
+                } else {
+                    BoxSize::Size32
+                }
             }
         }
     }
