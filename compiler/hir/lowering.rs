@@ -66,12 +66,12 @@ impl<'sl> LoweringCtx<'sl> {
 
         // These modules are always loaded
         loaded_modules.insert(
-            ModuleName::new(vec!["risp".into(), "internal".into()], "primitives".into()),
+            ModuleName::new(vec!["arret".into(), "internal".into()], "primitives".into()),
             Module::prims_module(),
         );
 
         loaded_modules.insert(
-            ModuleName::new(vec!["risp".into(), "internal".into()], "types".into()),
+            ModuleName::new(vec!["arret".into(), "internal".into()], "types".into()),
             Module::tys_module(),
         );
 
@@ -906,8 +906,8 @@ fn module_for_str(data_str: &str) -> Result<Module> {
 
     let mut test_data = data_from_str(data_str).unwrap();
     let mut program_data = vec![
-        import_statement_for_module(&["risp", "internal", "primitives"]),
-        import_statement_for_module(&["risp", "internal", "types"]),
+        import_statement_for_module(&["arret", "internal", "primitives"]),
+        import_statement_for_module(&["arret", "internal", "types"]),
     ];
     program_data.append(&mut test_data);
 

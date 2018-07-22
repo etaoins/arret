@@ -1,10 +1,10 @@
 [package]
-name = "risp"
+name = "arret"
 version = "0.1.0"
 authors = ["Ryan Cumming <etaoins@gmail.com>"]
 
 [[bin]]
-name = "risp"
+name = "arret"
 path = "main.rs"
 
 [dependencies]

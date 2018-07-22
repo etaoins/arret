@@ -1,4 +1,4 @@
-(import [risp base])
+(import [arret base])
 
 ; Make sure _ eats the type
 (deftype _ Int)

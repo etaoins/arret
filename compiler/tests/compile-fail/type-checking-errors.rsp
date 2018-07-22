@@ -1,4 +1,4 @@
-(import [risp base])
+(import [arret base])
 
 (def [wrong-ascription : Int] 'foo)
                               ;^^^ ERROR `'foo` is not a `Int`

@@ -8,7 +8,7 @@ use clap::{App, Arg};
 use compiler::reporting::Reportable;
 
 fn main() {
-    let matches = App::new("risp")
+    let matches = App::new("arret")
         .arg(
             Arg::with_name("INPUT")
                 .help("Input source file")

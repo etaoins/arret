@@ -1,4 +1,4 @@
-(import [risp base])
+(import [arret base])
 
 (defn too-many-quote-args ()
   (quote 1 2 3))

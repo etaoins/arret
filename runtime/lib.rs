@@ -37,7 +37,7 @@ impl AsHeap for Task {
 
 #[derive(Debug)]
 pub struct ExternFun {
-    risp_type: &'static str,
+    arret_type: &'static str,
     takes_task: bool,
     params: &'static [ABIType],
     ret: ABIType,
@@ -45,14 +45,14 @@ pub struct ExternFun {
 }
 
 macro_rules! define_extern_fn {
-    (#[risp-type=$type:expr] $desc_name:ident = $func_name:ident($task_name:ident : &mut Task, $($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
+    (#[arret-type=$type:expr] $desc_name:ident = $func_name:ident($task_name:ident : &mut Task, $($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
         #[no_mangle]
         pub extern "C" fn $func_name($task_name: &'static mut Task, $($param_name: $rust_ty),*) -> $ret {
             $body
         }
 
         const $desc_name: ExternFun = ExternFun {
-            risp_type: $type,
+            arret_type: $type,
             takes_task: true,
             params: &[
                 $(<$rust_ty>::ABI_TYPE),*
@@ -62,14 +62,14 @@ macro_rules! define_extern_fn {
         };
     };
 
-    (#[risp-type=$type:expr] $desc_name:ident = $func_name:ident($($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
+    (#[arret-type=$type:expr] $desc_name:ident = $func_name:ident($($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
         #[no_mangle]
         pub extern "C" fn $func_name($($param_name: $rust_ty),*) -> $ret {
             $body
         }
 
         const $desc_name: ExternFun = ExternFun {
-            risp_type: $type,
+            arret_type: $type,
             takes_task: false,
             params: &[
                 $(<$rust_ty>::ABI_TYPE),*
@@ -81,7 +81,7 @@ macro_rules! define_extern_fn {
 }
 
 define_extern_fn! {
-    #[risp-type="(String -> Int)"]
+    #[arret-type="(String -> Int)"]
     HELLO_WORLD = hello_world(param1: Gc<boxed::Str>) -> i64 {
         println!("Hello, {}!", param1.as_str());
         42
@@ -89,21 +89,21 @@ define_extern_fn! {
 }
 
 define_extern_fn! {
-    #[risp-type="((Vector Int) -> Num)"]
+    #[arret-type="((Vector Int) -> Num)"]
     TAKES_TASK = takes_task(task: &mut Task, _param1: Gc<boxed::Vector<boxed::Int>>) -> Gc<boxed::Num> {
         boxed::Float::new(task, 64.0).as_num_ref()
     }
 }
 
 define_extern_fn! {
-     #[risp-type="(Num -> ())"]
+     #[arret-type="(Num -> ())"]
      PRINT_NUM = print_num(number: i64) -> () {
          println!("Number is {}", number)
      }
 }
 
 define_extern_fn! {
-    #[risp-type="((Listof Any) -> Int)"]
+    #[arret-type="((Listof Any) -> Int)"]
     LENGTH = length(input: Gc<boxed::List<boxed::Any>>) -> i64 {
         input.len() as i64
     }

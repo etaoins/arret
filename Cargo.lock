@@ -7,6 +7,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "arret"
+version = "0.1.0"
+dependencies = [
+ "clap 2.31.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "compiler 0.1.0",
+ "syntax 0.1.0",
+]
+
+[[package]]
 name = "atty"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -59,15 +68,6 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "redox_syscall 0.1.37 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "risp"
-version = "0.1.0"
-dependencies = [
- "clap 2.31.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "compiler 0.1.0",
- "syntax 0.1.0",
 ]
 
 [[package]]

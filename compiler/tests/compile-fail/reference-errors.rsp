@@ -1,4 +1,4 @@
-(import [risp base])
+(import [arret base])
 
 (def _ nopenopenope)
       ;^^^^^^^^^^^^ ERROR unable to resolve symbol

@@ -1,8 +1,8 @@
-(import [risp internal primitives])
+(import [arret internal primitives])
 
 (defmacro 1 (macro-rules))
          ;^ ERROR expected symbol
-         
+
 (defmacro a b) ;~ ERROR macro specification must be a list
 (defmacro a (macro-fn)) ;~ ERROR unsupported macro type
 (defmacro a (macro-rules
@@ -18,7 +18,7 @@
 
 (defmacro _ (macro-rules 1))
                         ;^ ERROR expected a macro rule vector
-                    
+
 (defmacro no-template-datum (macro-rules
   [()]
  ;^^^^ ERROR expected a macro rule vector with two elements

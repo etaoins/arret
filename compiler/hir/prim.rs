@@ -11,7 +11,7 @@ macro_rules! prims {
         pub fn insert_prim_exports(exports: &mut HashMap<Box<str>, Binding>) {
             $(
                 // `(import)` is magically added to every scope. If we add it again we will trigger
-                // duplicate definition errors if someone imports `[risp internal primitives]`.
+                // duplicate definition errors if someone imports `[arret internal primitives]`.
                 if $n != "import" {
                     exports.insert($n.into(), Binding::Prim(Prim::$i));
                 }
