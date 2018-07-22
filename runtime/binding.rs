@@ -11,7 +11,7 @@ pub struct ExternFun {
 
 #[macro_export]
 macro_rules! define_extern_fn {
-    (#[arret-type=$type:expr] $desc_name:ident = $func_name:ident($task_name:ident : &mut Task, $($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
+    (#[arret-type=$type:expr] $desc_name:ident = fn $func_name:ident($task_name:ident : &mut Task, $($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
         use abitype::{EncodeABIType, EncodeRetABIType};
 
         #[no_mangle]
@@ -30,7 +30,7 @@ macro_rules! define_extern_fn {
         };
     };
 
-    (#[arret-type=$type:expr] $desc_name:ident = $func_name:ident($($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
+    (#[arret-type=$type:expr] $desc_name:ident = fn $func_name:ident($($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
         #[no_mangle]
         pub extern "C" fn $func_name($($param_name: $rust_ty),*) -> $ret {
             $body
@@ -61,7 +61,7 @@ pub mod test {
 
     define_extern_fn! {
         #[arret-type="(-> Int)"]
-        RETURN_42 = return_42() -> i64 {
+        RETURN_42 = fn return_42() -> i64 {
             42
         }
     }
@@ -79,8 +79,12 @@ pub mod test {
     }
 
     define_extern_fn! {
-        #[arret-type="(Int Float -> Num)"]
-        ADD_INT_FLOAT = add_int_float(task: &mut Task, int_box: Gc<boxed::Int>, native_float: f64) -> Gc<boxed::Num> {
+    #[arret-type="(Int Float -> Num)"]
+        ADD_INT_FLOAT = fn add_int_float(
+            task: &mut Task,
+            int_box: Gc<boxed::Int>,
+            native_float: f64
+        ) -> Gc<boxed::Num> {
             boxed::Int::new(task, int_box.value() + native_float as i64).as_num_ref()
         }
     }
@@ -117,7 +121,7 @@ pub mod test {
 
     define_extern_fn! {
         #[arret-type="((Listof Any) -> Int)"]
-        LENGTH = length(input: Gc<boxed::List<boxed::Any>>) -> i64 {
+        LENGTH = fn length(input: Gc<boxed::List<boxed::Any>>) -> i64 {
             input.len() as i64
         }
     }
@@ -147,7 +151,7 @@ pub mod test {
 
     define_extern_fn! {
         #[arret-type="(->! ())"]
-        EMPTY_IMPURE = empty_impure() -> () {}
+        EMPTY_IMPURE = fn empty_impure() -> () {}
     }
 
     #[test]
