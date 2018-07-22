@@ -98,7 +98,7 @@ impl Drop for Str {
 struct InlineStr {
     pub header: Header,
     pub inline_byte_length: u8,
-    pub inline_bytes: [u8; 29],
+    pub inline_bytes: [u8; Str::MAX_INLINE_BYTES],
 }
 
 impl InlineStr {
