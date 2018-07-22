@@ -7,6 +7,7 @@ use std::ptr;
 use abitype::{BoxedABIType, EncodeBoxedABIType};
 use boxed::refs::Gc;
 
+pub use boxed::types::char::Char;
 pub use boxed::types::float::Float;
 pub use boxed::types::int::Int;
 pub use boxed::types::list::{List, Pair, TopPair};
@@ -279,6 +280,7 @@ macro_rules! define_tagged_union {
 define_direct_tagged_boxes! {
     Float,
     Int,
+    Char,
     Str,
     Sym,
     TopPair,
