@@ -16,7 +16,7 @@ where
     T: Boxed,
 {
     pub header: Header,
-    pub size: u32,
+    pub length: u32,
     pub padding: [u8; 24],
     pub phantom: marker::PhantomData<T>,
 }
@@ -47,7 +47,7 @@ where
             if values.len() <= MAX_INLINE_SIZE {
                 let mut inline_vec: InlineVector<T> = InlineVector {
                     header,
-                    size: values.len() as u32,
+                    length: values.len() as u32,
                     values: mem::uninitialized(),
                 };
                 inline_vec.values[0..values.len()].copy_from_slice(values);
@@ -56,7 +56,7 @@ where
             } else {
                 let large_vec = LargeVector {
                     header,
-                    size: values.len() as u32,
+                    length: values.len() as u32,
                     values: values.into(),
                 };
 
@@ -71,7 +71,7 @@ where
     T: Boxed,
 {
     fn is_inline(&self) -> bool {
-        self.size <= (MAX_INLINE_SIZE as u32)
+        self.length <= (MAX_INLINE_SIZE as u32)
     }
 
     fn as_repr(&self) -> Repr<T> {
@@ -83,7 +83,7 @@ where
     }
 
     pub fn len(&self) -> usize {
-        self.size as usize
+        self.length as usize
     }
 
     pub fn values(&self) -> &[Gc<T>] {
@@ -117,7 +117,7 @@ where
     T: Boxed,
 {
     pub header: Header,
-    pub size: u32,
+    pub length: u32,
     pub values: [Gc<T>; MAX_INLINE_SIZE],
 }
 
@@ -127,7 +127,7 @@ where
     T: Boxed,
 {
     pub header: Header,
-    pub size: u32,
+    pub length: u32,
     pub values: Vec<Gc<T>>,
 }
 
