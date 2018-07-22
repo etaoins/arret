@@ -1,22 +1,21 @@
-use abitype::ABIType;
+use abitype::{ABIType, RetABIType};
 
 #[derive(Debug)]
 pub struct ExternFun {
     arret_type: &'static str,
     takes_task: bool,
     params: &'static [ABIType],
-    ret: ABIType,
+    ret: RetABIType,
     entry_point: &'static str,
 }
 
 #[macro_export]
 macro_rules! define_extern_fn {
     (#[arret-type=$type:expr] $desc_name:ident = $func_name:ident($task_name:ident : &mut Task, $($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
-        use abitype::EncodeABIType;
+        use abitype::{EncodeABIType, EncodeRetABIType};
 
         #[no_mangle]
-        pub extern "C" fn $func_name($task_name: &
-        mut Task, $($param_name: $rust_ty),*) -> $ret {
+        pub extern "C" fn $func_name($task_name: &mut Task, $($param_name: $rust_ty),*) -> $ret {
             $body
         }
 
@@ -26,7 +25,7 @@ macro_rules! define_extern_fn {
             params: &[
                 $(<$rust_ty>::ABI_TYPE),*
             ],
-            ret: <$ret>::ABI_TYPE,
+            ret: <$ret>::RET_ABI_TYPE,
             entry_point: stringify!($func_name),
         };
     };
@@ -43,7 +42,7 @@ macro_rules! define_extern_fn {
             params: &[
                 $(<$rust_ty>::ABI_TYPE),*
             ],
-            ret: <$ret>::ABI_TYPE,
+            ret: <$ret>::RET_ABI_TYPE,
             entry_point: stringify!($func_name),
         };
     };
@@ -73,7 +72,7 @@ pub mod test {
         assert_eq!(false, RETURN_42.takes_task);
 
         assert_eq!(true, RETURN_42.params.is_empty());
-        assert_eq!(ABIType::Int, RETURN_42.ret);
+        assert_eq!(RetABIType::Inhabited(ABIType::Int), RETURN_42.ret);
 
         let number = return_42();
         assert_eq!(42, number);
@@ -102,10 +101,10 @@ pub mod test {
             ADD_INT_FLOAT.params
         );
         assert_eq!(
-            ABIType::Boxed(BoxedABIType::Union(&[
+            RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::Union(&[
                 boxed::TypeTag::Int,
                 boxed::TypeTag::Float,
-            ])),
+            ]))),
             ADD_INT_FLOAT.ret
         );
 
@@ -137,7 +136,7 @@ pub mod test {
             vec![ABIType::Boxed(BoxedABIType::List(&BoxedABIType::Any))],
             LENGTH.params
         );
-        assert_eq!(ABIType::Int, LENGTH.ret);
+        assert_eq!(RetABIType::Inhabited(ABIType::Int), LENGTH.ret);
 
         let boxed_ints = [1, 2, 3]
             .iter()
@@ -146,5 +145,24 @@ pub mod test {
 
         let boxed_list = boxed::List::new(&mut task, boxed_ints.into_iter());
         assert_eq!(3, length(boxed_list));
+    }
+
+    define_extern_fn! {
+        #[arret-type="(->! ())"]
+        EMPTY_IMPURE = empty_impure() -> () {}
+    }
+
+    #[test]
+    fn empty_impure_fn() {
+        let mut task = Task::new();
+
+        assert_eq!("empty_impure", EMPTY_IMPURE.entry_point);
+        assert_eq!(false, EMPTY_IMPURE.takes_task);
+        assert_eq!("(->! ())", EMPTY_IMPURE.arret_type);
+
+        assert_eq!(true, EMPTY_IMPURE.params.is_empty());
+        assert_eq!(RetABIType::Void, EMPTY_IMPURE.ret);
+
+        empty_impure();
     }
 }

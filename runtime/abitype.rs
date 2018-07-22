@@ -19,8 +19,13 @@ pub enum ABIType {
     Float,
     Int,
     InternedSym,
-    Void,
     Boxed(BoxedABIType),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum RetABIType {
+    Void,
+    Inhabited(ABIType),
 }
 
 pub trait EncodeABIType {
@@ -39,10 +44,6 @@ impl EncodeABIType for char {
     const ABI_TYPE: ABIType = ABIType::Char;
 }
 
-impl EncodeABIType for () {
-    const ABI_TYPE: ABIType = ABIType::Void;
-}
-
 impl EncodeABIType for InternedSym {
     const ABI_TYPE: ABIType = ABIType::InternedSym;
 }
@@ -56,4 +57,19 @@ where
 
 pub trait EncodeBoxedABIType {
     const BOXED_ABI_TYPE: BoxedABIType;
+}
+
+pub trait EncodeRetABIType {
+    const RET_ABI_TYPE: RetABIType;
+}
+
+impl<T> EncodeRetABIType for T
+where
+    T: EncodeABIType,
+{
+    const RET_ABI_TYPE: RetABIType = RetABIType::Inhabited(Self::ABI_TYPE);
+}
+
+impl EncodeRetABIType for () {
+    const RET_ABI_TYPE: RetABIType = RetABIType::Void;
 }
