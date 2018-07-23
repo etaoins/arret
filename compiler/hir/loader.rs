@@ -44,7 +44,7 @@ pub fn load_module_by_name(
         path_buf.push(path_component.as_ref());
     }
 
-    path_buf.push(format!("{}.rsp", module_name.terminal_name));
+    path_buf.push(format!("{}.arret", module_name.terminal_name));
 
     let source_file_id = source_loader.load_path(path_buf.clone()).map_err(|err| {
         match err.kind() {
