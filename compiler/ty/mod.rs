@@ -79,10 +79,7 @@ pub trait TVarIds: PartialEq + Eq + Clone + std::fmt::Debug + std::hash::Hash + 
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub enum Ty<S>
-where
-    S: TyRef,
-{
+pub enum Ty<S: TyRef> {
     Any,
     Bool,
     Char,
@@ -109,28 +106,19 @@ where
     List(List<S>),
 }
 
-impl<S> Ty<S>
-where
-    S: TyRef,
-{
+impl<S: TyRef> Ty<S> {
     pub fn into_ty_ref(self) -> S {
         S::from_ty(self)
     }
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct Map<S>
-where
-    S: TyRef,
-{
+pub struct Map<S: TyRef> {
     key: S,
     value: S,
 }
 
-impl<S> Map<S>
-where
-    S: TyRef,
-{
+impl<S: TyRef> Map<S> {
     pub fn new(key: S, value: S) -> Map<S> {
         Map { key, value }
     }
@@ -145,18 +133,12 @@ where
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct List<S>
-where
-    S: TyRef,
-{
+pub struct List<S: TyRef> {
     fixed: Box<[S]>,
     rest: Option<Box<S>>,
 }
 
-impl<S> List<S>
-where
-    S: TyRef,
-{
+impl<S: TyRef> List<S> {
     pub fn new(fixed: Box<[S]>, rest: Option<S>) -> List<S> {
         List {
             fixed,
@@ -192,18 +174,12 @@ where
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct TopFun<S>
-where
-    S: TyRef,
-{
+pub struct TopFun<S: TyRef> {
     purity: S::PRef,
     ret: S,
 }
 
-impl<S> TopFun<S>
-where
-    S: TyRef,
-{
+impl<S: TyRef> TopFun<S> {
     /// Returns a top function type
     pub fn new(purity: S::PRef, ret: S) -> TopFun<S> {
         TopFun { purity, ret }
@@ -235,20 +211,14 @@ where
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct Fun<S>
-where
-    S: TyRef,
-{
+pub struct Fun<S: TyRef> {
     pvar_ids: S::PVarIds,
     tvar_ids: S::TVarIds,
     top_fun: TopFun<S>,
     params: List<S>,
 }
 
-impl<S> Fun<S>
-where
-    S: TyRef,
-{
+impl<S: TyRef> Fun<S> {
     pub fn new(
         pvar_ids: S::PVarIds,
         tvar_ids: S::TVarIds,

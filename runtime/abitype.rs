@@ -48,9 +48,9 @@ impl EncodeABIType for InternedSym {
     const ABI_TYPE: ABIType = ABIType::InternedSym;
 }
 
-impl<T> EncodeABIType for Gc<T>
+impl<T: boxed::Boxed> EncodeABIType for Gc<T>
 where
-    T: EncodeBoxedABIType + boxed::Boxed,
+    T: EncodeBoxedABIType,
 {
     const ABI_TYPE: ABIType = ABIType::Boxed(T::BOXED_ABI_TYPE);
 }
@@ -63,10 +63,7 @@ pub trait EncodeRetABIType {
     const RET_ABI_TYPE: RetABIType;
 }
 
-impl<T> EncodeRetABIType for T
-where
-    T: EncodeABIType,
-{
+impl<T: EncodeABIType> EncodeRetABIType for T {
     const RET_ABI_TYPE: RetABIType = RetABIType::Inhabited(Self::ABI_TYPE);
 }
 

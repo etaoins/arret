@@ -33,10 +33,7 @@ impl HirType for ty::Decl {
 new_counting_id_type!(VarIdCounter, VarId, u32);
 
 #[derive(PartialEq, Debug)]
-pub struct Fun<T>
-where
-    T: HirType,
-{
+pub struct Fun<T: HirType> {
     pub pvar_ids: Range<ty::purity::PVarId>,
     pub tvar_ids: Range<ty::TVarId>,
 
@@ -48,40 +45,28 @@ where
 }
 
 #[derive(PartialEq, Debug)]
-pub struct Cond<T>
-where
-    T: HirType,
-{
+pub struct Cond<T: HirType> {
     pub test_expr: Expr<T>,
     pub true_expr: Expr<T>,
     pub false_expr: Expr<T>,
 }
 
 #[derive(PartialEq, Debug)]
-pub struct Let<T>
-where
-    T: HirType,
-{
+pub struct Let<T: HirType> {
     pub destruc: destruc::Destruc<T>,
     pub value_expr: Expr<T>,
     pub body_expr: Expr<T>,
 }
 
 #[derive(PartialEq, Debug)]
-pub struct App<T>
-where
-    T: HirType,
-{
+pub struct App<T: HirType> {
     pub fun_expr: Expr<T>,
     pub fixed_arg_exprs: Vec<Expr<T>>,
     pub rest_arg_expr: Option<Expr<T>>,
 }
 
 #[derive(PartialEq, Debug)]
-pub enum Expr<T>
-where
-    T: HirType,
-{
+pub enum Expr<T: HirType> {
     Lit(Datum),
     App(Span, Box<App<T>>),
     Fun(Span, Box<Fun<T>>),
@@ -93,10 +78,7 @@ where
 }
 
 #[derive(PartialEq, Debug)]
-pub struct Def<T>
-where
-    T: HirType,
-{
+pub struct Def<T: HirType> {
     pub span: Span,
     pub destruc: destruc::Destruc<T>,
     pub value_expr: Expr<T>,

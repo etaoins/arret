@@ -2,17 +2,17 @@ use ty;
 
 /// Iterates through the member types of a list
 #[derive(Clone)]
-pub struct ListIterator<'list, S>
+pub struct ListIterator<'list, S: ty::TyRef>
 where
-    S: ty::TyRef + 'list,
+    S: 'list,
 {
     fixed: &'list [S],
     rest: Option<&'list S>,
 }
 
-impl<'list, S> ListIterator<'list, S>
+impl<'list, S: ty::TyRef> ListIterator<'list, S>
 where
-    S: ty::TyRef + 'list,
+    S: 'list,
 {
     pub fn new(list: &'list ty::List<S>) -> ListIterator<'list, S> {
         ListIterator {

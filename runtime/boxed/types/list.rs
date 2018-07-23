@@ -9,29 +9,23 @@ use boxed::{
 use intern::Interner;
 
 #[repr(C, align(16))]
-pub struct Pair<T>
-where
-    T: Boxed,
-{
+pub struct Pair<T: Boxed> {
     header: Header,
     pub(crate) head: Gc<T>,
     pub(crate) rest: Gc<List<T>>,
     list_length: usize,
 }
 
-impl<T> Boxed for Pair<T> where T: Boxed {}
+impl<T: Boxed> Boxed for Pair<T> {}
 
-impl<T> EncodeBoxedABIType for Pair<T>
+impl<T: Boxed> EncodeBoxedABIType for Pair<T>
 where
-    T: EncodeBoxedABIType + Boxed,
+    T: EncodeBoxedABIType,
 {
     const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Pair(&T::BOXED_ABI_TYPE);
 }
 
-impl<T> Pair<T>
-where
-    T: Boxed,
-{
+impl<T: Boxed> Pair<T> {
     fn as_list_ref(&self) -> Gc<List<T>> {
         unsafe { Gc::new(self as *const Self as *const List<T>) }
     }
@@ -39,10 +33,7 @@ where
 
 type PairInput<T> = (Gc<T>, Gc<List<T>>);
 
-impl<T> ConstructableFrom<PairInput<T>> for Pair<T>
-where
-    T: Boxed,
-{
+impl<T: Boxed> ConstructableFrom<PairInput<T>> for Pair<T> {
     fn size_for_value(_: &PairInput<T>) -> BoxSize {
         // TODO: It'd be nice to expose this as const BOX_SIZE: BoxSize once `if` is allowed in
         // const contexts
@@ -69,26 +60,20 @@ where
 }
 
 #[repr(C, align(16))]
-pub struct List<T>
-where
-    T: Boxed,
-{
+pub struct List<T: Boxed> {
     header: Header,
     phantom: PhantomData<T>,
 }
 
-pub enum ListSubtype<'a, T>
+pub enum ListSubtype<'a, T: Boxed>
 where
-    T: Boxed + 'a,
+    T: 'a,
 {
     Pair(&'a Pair<T>),
     Nil,
 }
 
-impl<T> List<T>
-where
-    T: Boxed,
-{
+impl<T: Boxed> List<T> {
     pub fn new(
         heap: &mut impl AsHeap,
         elems: impl DoubleEndedIterator<Item = Gc<T>>,
@@ -139,26 +124,20 @@ where
     }
 }
 
-impl<T> Boxed for List<T> where T: Boxed {}
+impl<T: Boxed> Boxed for List<T> {}
 
-impl<T> EncodeBoxedABIType for List<T>
+impl<T: Boxed> EncodeBoxedABIType for List<T>
 where
-    T: EncodeBoxedABIType + Boxed,
+    T: EncodeBoxedABIType,
 {
     const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::List(&T::BOXED_ABI_TYPE);
 }
 
-pub struct ListIterator<T>
-where
-    T: Boxed,
-{
+pub struct ListIterator<T: Boxed> {
     head: Gc<List<T>>,
 }
 
-impl<T> Iterator for ListIterator<T>
-where
-    T: Boxed,
-{
+impl<T: Boxed> Iterator for ListIterator<T> {
     type Item = Gc<T>;
 
     fn next(&mut self) -> Option<Gc<T>> {
@@ -179,7 +158,7 @@ where
     }
 }
 
-impl<T> ExactSizeIterator for ListIterator<T> where T: Boxed {}
+impl<T: Boxed> ExactSizeIterator for ListIterator<T> {}
 
 #[repr(C, align(16))]
 pub struct TopPair {

@@ -11,22 +11,16 @@ const MAX_32BYTE_INLINE_LENGTH: usize = ((32 - 8) / mem::size_of::<Gc<Any>>());
 const MAX_INLINE_LENGTH: usize = MAX_32BYTE_INLINE_LENGTH;
 
 #[repr(C, align(16))]
-pub struct Vector<T>
-where
-    T: Boxed,
-{
+pub struct Vector<T: Boxed> {
     header: Header,
     inline_length: u32,
     padding: [u8; 24],
     phantom: marker::PhantomData<T>,
 }
 
-impl<T> Boxed for Vector<T> where T: Boxed {}
+impl<T: Boxed> Boxed for Vector<T> {}
 
-impl<'a, T> ConstructableFrom<&'a [Gc<T>]> for Vector<T>
-where
-    T: Boxed,
-{
+impl<'a, T: Boxed> ConstructableFrom<&'a [Gc<T>]> for Vector<T> {
     fn size_for_value(values: &&[Gc<T>]) -> BoxSize {
         if values.len() <= MAX_16BYTE_INLINE_LENGTH {
             // 1 cell inline
@@ -66,10 +60,7 @@ where
     }
 }
 
-impl<T> Vector<T>
-where
-    T: Boxed,
-{
+impl<T: Boxed> Vector<T> {
     fn is_inline(&self) -> bool {
         self.inline_length <= (MAX_INLINE_LENGTH as u32)
     }
@@ -111,36 +102,30 @@ where
     }
 }
 
-impl<T> EncodeBoxedABIType for Vector<T>
+impl<T: Boxed> EncodeBoxedABIType for Vector<T>
 where
-    T: EncodeBoxedABIType + Boxed,
+    T: EncodeBoxedABIType,
 {
     const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Vector(&T::BOXED_ABI_TYPE);
 }
 
 #[repr(C, align(16))]
-pub struct InlineVector<T>
-where
-    T: Boxed,
-{
+pub struct InlineVector<T: Boxed> {
     header: Header,
     inline_length: u32,
     values: [Gc<T>; MAX_INLINE_LENGTH],
 }
 
 #[repr(C, align(16))]
-pub struct LargeVector<T>
-where
-    T: Boxed,
-{
+pub struct LargeVector<T: Boxed> {
     header: Header,
     inline_length: u32,
     values: Vec<Gc<T>>,
 }
 
-enum Repr<'a, T>
+enum Repr<'a, T: Boxed>
 where
-    T: Boxed + 'a,
+    T: 'a,
 {
     Inline(&'a InlineVector<T>),
     Large(&'a LargeVector<T>),

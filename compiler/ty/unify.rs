@@ -17,10 +17,7 @@ use ty::purity::Purity;
 use ty::TVarIds;
 
 #[derive(Debug, PartialEq)]
-enum UnifiedTy<S>
-where
-    S: ty::TyRef,
-{
+enum UnifiedTy<S: ty::TyRef> {
     /// The types are distinct and have no clean simplification
     ///
     /// An example would be Str and Sym.
@@ -34,18 +31,12 @@ where
 }
 
 #[derive(Debug, PartialEq)]
-pub enum UnifiedList<S>
-where
-    S: ty::TyRef,
-{
+pub enum UnifiedList<S: ty::TyRef> {
     Discerned,
     Merged(ty::List<S>),
 }
 
-trait UnifyCtx<S>
-where
-    S: ty::TyRef,
-{
+trait UnifyCtx<S: ty::TyRef> {
     fn unify_ty_refs(&self, &S, &S) -> UnifiedTy<S>;
     fn unify_purity_refs(&self, &S::PRef, &S::PRef) -> S::PRef;
     fn intersect_list(

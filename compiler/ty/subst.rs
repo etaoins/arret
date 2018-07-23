@@ -1,11 +1,7 @@
 use ty;
 use ty::purity::Purity;
 
-trait SubstCtx<I, O, E>
-where
-    I: ty::TyRef,
-    O: ty::TyRef,
-{
+trait SubstCtx<I: ty::TyRef, O: ty::TyRef, E> {
     fn subst_purity_ref(&self, input: &I::PRef) -> Result<O::PRef, E>;
     fn subst_ty_ref(&self, input: &I) -> Result<O, E>;
 

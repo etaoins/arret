@@ -55,10 +55,7 @@ impl Result {
     }
 }
 
-trait IsACtx<S>
-where
-    S: ty::TyRef,
-{
+trait IsACtx<S: ty::TyRef> {
     fn ty_ref_is_a(&self, &S, &S) -> Result;
     fn purity_ref_is_a(&self, &S::PRef, &S::PRef) -> Result;
     fn inst_polymorphic_fun(&self, sub_fun: &ty::Fun<S>, par_ret: &S) -> ty::Fun<S>;

@@ -6,49 +6,34 @@ use boxed::Boxed;
 /// Reference to a garbage collected value
 ///
 /// This is not memory safe and does not GC root; it's just sugar for a raw pointer.
-pub struct Gc<T>
-where
-    T: Boxed,
-{
+pub struct Gc<T: Boxed> {
     inner: ptr::NonNull<T>,
 }
 
 /// Manual Clone implementation to work around Rust issue #26925
-impl<T> Clone for Gc<T>
-where
-    T: Boxed,
-{
+impl<T: Boxed> Clone for Gc<T> {
     fn clone(&self) -> Self {
         Gc { inner: self.inner }
     }
 }
 
-impl<T> Copy for Gc<T> where T: Boxed {}
+impl<T: Boxed> Copy for Gc<T> {}
 
-impl<T> Deref for Gc<T>
-where
-    T: Boxed,
-{
+impl<T: Boxed> Deref for Gc<T> {
     type Target = T;
     fn deref(&self) -> &T {
         unsafe { self.inner.as_ref() }
     }
 }
 
-impl<T> Gc<T>
-where
-    T: Boxed,
-{
+impl<T: Boxed> Gc<T> {
     pub unsafe fn new(ptr: *const T) -> Gc<T> {
         Gc {
             inner: ptr::NonNull::new_unchecked(ptr as *mut T),
         }
     }
 
-    pub unsafe fn cast<U>(self) -> Gc<U>
-    where
-        U: Boxed,
-    {
+    pub unsafe fn cast<U: Boxed>(self) -> Gc<U> {
         Gc {
             inner: self.inner.cast::<U>(),
         }

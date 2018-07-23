@@ -1,18 +1,12 @@
 use syntax::datum::Datum;
 use ty;
 
-trait DatumTyCtx<S>
-where
-    S: ty::TyRef,
-{
+trait DatumTyCtx<S: ty::TyRef> {
     fn unify_ref_iter<I>(&self, members: I) -> S
     where
         I: Iterator<Item = S>;
 
-    fn ref_for_datum(&self, datum: &Datum) -> S
-    where
-        S: ty::TyRef,
-    {
+    fn ref_for_datum(&self, datum: &Datum) -> S {
         (match datum {
             Datum::Bool(_, val) => ty::Ty::LitBool(*val),
             Datum::Sym(_, val) => ty::Ty::LitSym(val.clone()),

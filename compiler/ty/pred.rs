@@ -1,10 +1,7 @@
 use ty;
 
 #[derive(Debug, PartialEq)]
-pub enum InterpretedPred<S>
-where
-    S: ty::TyRef,
-{
+pub enum InterpretedPred<S: ty::TyRef> {
     /// Statically known if the subject type satisfies the testing type
     Static(bool),
 
@@ -15,10 +12,7 @@ where
     Dynamic(S, S),
 }
 
-trait InterpretPredCtx<S>
-where
-    S: ty::TyRef,
-{
+trait InterpretPredCtx<S: ty::TyRef> {
     fn interpret_refs(&self, &S, &S) -> InterpretedPred<S>;
 
     fn interpret_ref_iter<'a, I>(&self, subject_refs: I, test_ref: &'a S) -> InterpretedPred<S>

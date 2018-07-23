@@ -14,10 +14,7 @@ pub enum Error {
 
 type Result<S> = result::Result<S, Error>;
 
-trait IntersectCtx<S>
-where
-    S: ty::TyRef,
-{
+trait IntersectCtx<S: ty::TyRef> {
     fn intersect_ty_refs(&self, &S, &S) -> Result<S>;
     fn intersect_purity_refs(&self, &S::PRef, &S::PRef) -> S::PRef;
     fn unify_list(&self, &ty::List<S>, &ty::List<S>) -> Result<ty::List<S>>;

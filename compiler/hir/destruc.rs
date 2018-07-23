@@ -4,27 +4,18 @@ use syntax::span::Span;
 use ty;
 
 #[derive(Debug, PartialEq)]
-pub enum Destruc<T>
-where
-    T: HirType,
-{
+pub enum Destruc<T: HirType> {
     Scalar(Span, Scalar<T>),
     List(Span, List<T>),
 }
 
 #[derive(Debug, PartialEq)]
-pub struct List<T>
-where
-    T: HirType,
-{
+pub struct List<T: HirType> {
     fixed: Vec<Destruc<T>>,
     rest: Option<Box<Scalar<T>>>,
 }
 
-impl<T> List<T>
-where
-    T: HirType,
-{
+impl<T: HirType> List<T> {
     pub fn new(fixed: Vec<Destruc<T>>, rest: Option<Box<Scalar<T>>>) -> List<T> {
         List { fixed, rest }
     }
@@ -39,20 +30,14 @@ where
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Scalar<T>
-where
-    T: HirType,
-{
+pub struct Scalar<T: HirType> {
     /// ID of the variable. If this is None it's treated as a wildcard.
     var_id: Option<hir::VarId>,
     source_name: Box<str>,
     ty: T,
 }
 
-impl<T> Scalar<T>
-where
-    T: HirType,
-{
+impl<T: HirType> Scalar<T> {
     pub fn new(var_id: Option<hir::VarId>, source_name: Box<str>, ty: T) -> Scalar<T> {
         Scalar {
             var_id,

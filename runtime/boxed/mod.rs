@@ -71,10 +71,7 @@ pub struct Any {
 }
 
 impl Any {
-    pub fn downcast_ref<T>(&self) -> Option<Gc<T>>
-    where
-        T: Downcastable,
-    {
+    pub fn downcast_ref<T: Downcastable>(&self) -> Option<Gc<T>> {
         if T::has_tag(self.header.type_tag) {
             Some(unsafe { Gc::new(&*(self as *const Any as *const T)) })
         } else {
@@ -101,17 +98,11 @@ pub trait DirectTagged: Boxed {
     const TYPE_TAG: TypeTag;
 }
 
-impl<T> EncodeBoxedABIType for T
-where
-    T: DirectTagged,
-{
+impl<T: DirectTagged> EncodeBoxedABIType for T {
     const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::DirectTagged(T::TYPE_TAG);
 }
 
-impl<T> Downcastable for T
-where
-    T: DirectTagged,
-{
+impl<T: DirectTagged> Downcastable for T {
     fn has_tag(type_tag: TypeTag) -> bool {
         Self::TYPE_TAG == type_tag
     }
@@ -218,10 +209,7 @@ macro_rules! define_tagged_union {
         }
 
         impl $name {
-            pub fn downcast_ref<T>(&self) -> Option<Gc<T>>
-            where
-                T: $member_trait,
-            {
+            pub fn downcast_ref<T: $member_trait>(&self) -> Option<Gc<T>> {
                 if T::has_tag(self.header.type_tag) {
                     Some(unsafe { Gc::new(&*(self as *const $name as *const T)) })
                 } else {
