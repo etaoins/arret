@@ -1,4 +1,4 @@
-use std::{marker, mem};
+use std::{fmt, marker, mem};
 
 use abitype::{BoxedABIType, EncodeBoxedABIType};
 use boxed::refs::Gc;
@@ -102,6 +102,26 @@ impl<T: Boxed> Vector<T> {
     }
 }
 
+impl<T: Boxed> PartialEq for Vector<T>
+where
+    T: PartialEq,
+{
+    fn eq(&self, other: &Vector<T>) -> bool {
+        self.iter().eq(other.iter())
+    }
+}
+
+impl<T: Boxed> fmt::Debug for Vector<T>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        formatter.write_str("Vector(")?;
+        formatter.debug_list().entries(self.iter()).finish()?;
+        formatter.write_str(")")
+    }
+}
+
 impl<T: Boxed> EncodeBoxedABIType for Vector<T>
 where
     T: EncodeBoxedABIType,
@@ -145,6 +165,7 @@ impl TopVector {
 #[cfg(test)]
 mod test {
     use super::*;
+    use boxed::heap::Heap;
     use std::mem;
 
     #[test]
@@ -152,5 +173,41 @@ mod test {
         assert_eq!(32, mem::size_of::<Vector<Any>>());
         assert_eq!(32, mem::size_of::<InlineVector<Any>>());
         assert_eq!(32, mem::size_of::<LargeVector<Any>>());
+    }
+
+    #[test]
+    fn equality() {
+        use boxed::Int;
+
+        let mut heap = Heap::new();
+
+        let boxed1 = Int::new(&mut heap, 1);
+        let boxed2 = Int::new(&mut heap, 2);
+        let boxed3 = Int::new(&mut heap, 3);
+
+        let forward_vec1 = Vector::new(&mut heap, &[boxed1, boxed2, boxed3]);
+        let forward_vec2 = Vector::new(&mut heap, &[boxed1, boxed2, boxed3]);
+        let reverse_vec = Vector::new(&mut heap, &[boxed3, boxed2, boxed1]);
+
+        assert_ne!(forward_vec1, reverse_vec);
+        assert_eq!(forward_vec1, forward_vec2);
+    }
+
+    #[test]
+    fn fmt_debug() {
+        use boxed::Int;
+
+        let mut heap = Heap::new();
+
+        let boxed1 = Int::new(&mut heap, 1);
+        let boxed2 = Int::new(&mut heap, 2);
+        let boxed3 = Int::new(&mut heap, 3);
+
+        let forward_vec = Vector::new(&mut heap, &[boxed1, boxed2, boxed3]);
+
+        assert_eq!(
+            "Vector([Int(1), Int(2), Int(3)])",
+            format!("{:?}", forward_vec)
+        );
     }
 }

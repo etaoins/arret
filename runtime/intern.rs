@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::{ptr, str};
+use std::{fmt, ptr, str};
 
 ///! Interned symbols
 ///!
@@ -38,11 +38,45 @@ struct InternedInline {
     name_bytes: [u8; INLINE_SIZE],
 }
 
+impl InternedInline {
+    // We need to take a reference so we can return a reference
+    // See rust-lang-nursery/rust-clippy#2946C
+    #![cfg_attr(feature = "cargo-clippy", allow(trivially_copy_pass_by_ref))]
+    fn as_str(&self) -> &str {
+        // Find the first fill byte. If none is found assume our full inline size.
+        let length = self
+            .name_bytes
+            .iter()
+            .position(|byte| *byte == INLINE_FILL_BYTE)
+            .unwrap_or(INLINE_SIZE);
+
+        unsafe { str::from_utf8_unchecked(&self.name_bytes[0..length]) }
+    }
+}
+
 #[repr(align(8))]
 #[derive(Copy, Clone)]
 pub union InternedSym {
     indexed: InternedIndexed,
     inline: InternedInline,
+}
+
+enum InternedRepr<'a> {
+    Inline(&'a InternedInline),
+    Indexed(&'a InternedIndexed),
+}
+
+impl InternedSym {
+    #![cfg_attr(feature = "cargo-clippy", allow(trivially_copy_pass_by_ref))]
+    fn repr(&self) -> InternedRepr {
+        unsafe {
+            if self.indexed.flag_byte == INDEXED_FLAG {
+                InternedRepr::Indexed(&self.indexed)
+            } else {
+                InternedRepr::Inline(&self.inline)
+            }
+        }
+    }
 }
 
 impl PartialEq for InternedSym {
@@ -54,6 +88,18 @@ impl PartialEq for InternedSym {
 }
 
 impl Eq for InternedSym {}
+
+impl fmt::Debug for InternedSym {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self.repr() {
+            InternedRepr::Indexed(indexed) => {
+                // We don't have access to the `Interner` so we can't print our interned value
+                write!(formatter, "`{:x}", indexed.name_idx)
+            }
+            InternedRepr::Inline(inline) => write!(formatter, "'{}", inline.as_str()),
+        }
+    }
+}
 
 // TODO: This keeps two copies of the name. We can't simply keep a pointer to inside the `Vec`
 // or `HashMap` as they might reallocate. We can fix this later.
@@ -106,25 +152,11 @@ impl Interner {
         }
     }
 
-    // We need to take a reference so we can return a reference
-    // See rust-lang-nursery/rust-clippy#2946C
     #[cfg_attr(feature = "cargo-clippy", allow(trivially_copy_pass_by_ref))]
     pub fn unintern<'a>(&'a self, interned: &'a InternedSym) -> &'a str {
-        unsafe {
-            if interned.indexed.flag_byte == INDEXED_FLAG {
-                // This is indexed
-                &self.names[interned.indexed.name_idx as usize]
-            } else {
-                // Find the first fill byte. If none is found assume our full inline size.
-                let length = interned
-                    .inline
-                    .name_bytes
-                    .iter()
-                    .position(|byte| *byte == INLINE_FILL_BYTE)
-                    .unwrap_or(INLINE_SIZE);
-
-                str::from_utf8_unchecked(&interned.inline.name_bytes[0..length])
-            }
+        match interned.repr() {
+            InternedRepr::Indexed(indexed) => &self.names[indexed.name_idx as usize],
+            InternedRepr::Inline(inline) => inline.as_str(),
         }
     }
 }
@@ -156,14 +188,25 @@ mod test {
 
         let intern_inline1 = interner.intern(inline_name);
         let intern_inline2 = interner.intern(inline_name);
-        assert!(intern_inline1 == intern_inline2);
+        assert_eq!(intern_inline1, intern_inline2);
 
         let intern_index1 = interner.intern(index_name);
         let intern_index2 = interner.intern(index_name);
-        assert!(intern_index1 == intern_index2);
+        assert_eq!(intern_index1, intern_index2);
 
         // These should not be equal
-        assert!(intern_inline1 != intern_index1);
+        assert_ne!(intern_inline1, intern_index1);
+    }
+
+    #[test]
+    fn fmt_debug() {
+        let mut interner = Interner::new();
+
+        let intern_inline = interner.intern("inline");
+        assert_eq!("'inline", format!("{:?}", intern_inline));
+
+        let intern_indexed = interner.intern("This is very long and can't be stored inline");
+        assert_eq!("`0", format!("{:?}", intern_indexed));
     }
 
     #[test]

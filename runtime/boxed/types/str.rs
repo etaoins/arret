@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::{mem, ptr};
+use std::{fmt, mem, ptr};
 
 use boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
 use intern::Interner;
@@ -84,6 +84,18 @@ impl<'a> ConstructableFrom<&'a str> for Str {
     }
 }
 
+impl PartialEq for Str {
+    fn eq(&self, other: &Str) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl fmt::Debug for Str {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(formatter, "Str({:?})", self.as_str())
+    }
+}
+
 impl Drop for Str {
     fn drop(&mut self) {
         // ptr::read will properly drop our specific representations
@@ -147,6 +159,26 @@ mod test {
         assert_eq!(32, mem::size_of::<SharedStr>());
         assert_eq!(32, mem::size_of::<InlineStr>());
         assert_eq!(32, mem::size_of::<Str>());
+    }
+
+    #[test]
+    fn equality() {
+        let mut heap = Heap::new();
+
+        let boxed_one1 = Str::new(&mut heap, "one");
+        let boxed_one2 = Str::new(&mut heap, "one");
+        let boxed_two = Str::new(&mut heap, "two");
+
+        assert_ne!(boxed_one1, boxed_two);
+        assert_eq!(boxed_one1, boxed_one2);
+    }
+
+    #[test]
+    fn fmt_debug() {
+        let mut heap = Heap::new();
+
+        let boxed_one = Str::new(&mut heap, "one");
+        assert_eq!(r#"Str("one")"#, format!("{:?}", boxed_one));
     }
 
     #[test]

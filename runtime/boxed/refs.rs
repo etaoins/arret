@@ -1,3 +1,4 @@
+use std::fmt;
 use std::ops::Deref;
 use std::ptr;
 
@@ -45,5 +46,23 @@ impl<T: Boxed> Gc<T> {
 
     pub(super) fn as_mut_ptr(self) -> *mut T {
         self.inner.as_ptr()
+    }
+}
+
+impl<T> PartialEq for Gc<T>
+where
+    T: Boxed + PartialEq,
+{
+    fn eq(&self, other: &Gc<T>) -> bool {
+        unsafe { *self.as_ptr() == *other.as_ptr() }
+    }
+}
+
+impl<T: Boxed> fmt::Debug for Gc<T>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        unsafe { (*self.as_ptr()).fmt(formatter) }
     }
 }

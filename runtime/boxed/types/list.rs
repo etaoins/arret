@@ -1,5 +1,5 @@
 use std::marker::PhantomData;
-use std::mem;
+use std::{fmt, mem};
 
 use abitype::{BoxedABIType, EncodeBoxedABIType};
 use boxed::refs::Gc;
@@ -124,6 +124,26 @@ impl<T: Boxed> List<T> {
     }
 }
 
+impl<T: Boxed> PartialEq for List<T>
+where
+    T: PartialEq,
+{
+    fn eq(&self, other: &List<T>) -> bool {
+        self.iter().eq(other.iter())
+    }
+}
+
+impl<T: Boxed> fmt::Debug for List<T>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        formatter.write_str("List(")?;
+        formatter.debug_list().entries(self.iter()).finish()?;
+        formatter.write_str(")")
+    }
+}
+
 impl<T: Boxed> Boxed for List<T> {}
 
 impl<T: Boxed> EncodeBoxedABIType for List<T>
@@ -181,6 +201,42 @@ mod test {
     #[test]
     fn sizes() {
         assert!([16, 32].contains(&mem::size_of::<Pair<Any>>()));
+    }
+
+    #[test]
+    fn equality() {
+        use boxed::Int;
+
+        let mut heap = Heap::new();
+
+        let boxed1 = Int::new(&mut heap, 1);
+        let boxed2 = Int::new(&mut heap, 2);
+        let boxed3 = Int::new(&mut heap, 3);
+
+        let forward_list1 = List::new(&mut heap, vec![boxed1, boxed2, boxed3].into_iter());
+        let forward_list2 = List::new(&mut heap, vec![boxed1, boxed2, boxed3].into_iter());
+        let reverse_list = List::new(&mut heap, vec![boxed3, boxed2, boxed1].into_iter());
+
+        assert_ne!(forward_list1, reverse_list);
+        assert_eq!(forward_list1, forward_list2);
+    }
+
+    #[test]
+    fn fmt_debug() {
+        use boxed::Int;
+
+        let mut heap = Heap::new();
+
+        let boxed1 = Int::new(&mut heap, 1);
+        let boxed2 = Int::new(&mut heap, 2);
+        let boxed3 = Int::new(&mut heap, 3);
+
+        let forward_list = List::new(&mut heap, vec![boxed1, boxed2, boxed3].into_iter());
+
+        assert_eq!(
+            "List([Int(1), Int(2), Int(3)])",
+            format!("{:?}", forward_list)
+        );
     }
 
     #[test]

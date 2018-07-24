@@ -1,3 +1,5 @@
+use std::fmt;
+
 use boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
 use intern::Interner;
 
@@ -29,13 +31,46 @@ impl Char {
     }
 }
 
+impl PartialEq for Char {
+    fn eq(&self, other: &Char) -> bool {
+        self.value == other.value
+    }
+}
+
+impl fmt::Debug for Char {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(formatter, "Char({:?})", self.value)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use boxed::heap::Heap;
     use std::mem;
 
     #[test]
     fn sizes() {
         assert_eq!(16, mem::size_of::<Char>());
+    }
+
+    #[test]
+    fn equality() {
+        let mut heap = Heap::new();
+
+        let boxed_a1 = Char::new(&mut heap, 'a');
+        let boxed_a2 = Char::new(&mut heap, 'a');
+        let boxed_b = Char::new(&mut heap, 'b');
+
+        assert_ne!(boxed_a1, boxed_b);
+        assert_eq!(boxed_a1, boxed_a2);
+    }
+
+    #[test]
+    fn fmt_debug() {
+        let mut heap = Heap::new();
+
+        let boxed_a = Char::new(&mut heap, 'a');
+        assert_eq!("Char('a')", format!("{:?}", boxed_a));
     }
 }

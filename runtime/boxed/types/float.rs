@@ -1,3 +1,5 @@
+use std::fmt;
+
 use boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
 use intern::Interner;
 
@@ -29,13 +31,46 @@ impl Float {
     }
 }
 
+impl PartialEq for Float {
+    fn eq(&self, other: &Float) -> bool {
+        self.value() == other.value()
+    }
+}
+
+impl fmt::Debug for Float {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(formatter, "Float({:?})", self.value)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use boxed::heap::Heap;
     use std::mem;
 
     #[test]
     fn sizes() {
         assert_eq!(16, mem::size_of::<Float>());
+    }
+
+    #[test]
+    fn equality() {
+        let mut heap = Heap::new();
+
+        let boxed_one1 = Float::new(&mut heap, 1.0);
+        let boxed_one2 = Float::new(&mut heap, 1.0);
+        let boxed_two = Float::new(&mut heap, 2.0);
+
+        assert_ne!(boxed_one1, boxed_two);
+        assert_eq!(boxed_one1, boxed_one2);
+    }
+
+    #[test]
+    fn fmt_debug() {
+        let mut heap = Heap::new();
+
+        let boxed_one = Float::new(&mut heap, 1.0);
+        assert_eq!("Float(1.0)", format!("{:?}", boxed_one));
     }
 }

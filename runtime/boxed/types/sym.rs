@@ -1,3 +1,5 @@
+use std::fmt;
+
 use boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
 use intern::{InternedSym, Interner};
 
@@ -31,13 +33,46 @@ impl Sym {
     }
 }
 
+impl PartialEq for Sym {
+    fn eq(&self, other: &Sym) -> bool {
+        self.interned == other.interned
+    }
+}
+
+impl fmt::Debug for Sym {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(formatter, "Sym({:?})", self.interned)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use boxed::heap::Heap;
     use std::mem;
 
     #[test]
     fn sizes() {
         assert_eq!(16, mem::size_of::<Sym>());
+    }
+
+    #[test]
+    fn equality() {
+        let mut heap = Heap::new();
+
+        let boxed_one1 = Sym::new(&mut heap, "one");
+        let boxed_one2 = Sym::new(&mut heap, "one");
+        let boxed_two = Sym::new(&mut heap, "two");
+
+        assert_ne!(boxed_one1, boxed_two);
+        assert_eq!(boxed_one1, boxed_one2);
+    }
+
+    #[test]
+    fn fmt_debug() {
+        let mut heap = Heap::new();
+
+        let boxed_one = Sym::new(&mut heap, "one");
+        assert_eq!(r#"Sym('one)"#, format!("{:?}", boxed_one));
     }
 }
