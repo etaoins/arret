@@ -1,3 +1,4 @@
+use std::iter::FusedIterator;
 use std::marker::PhantomData;
 use std::{fmt, mem};
 
@@ -187,6 +188,7 @@ impl<T: Boxed> Iterator for ListIterator<T> {
 }
 
 impl<T: Boxed> ExactSizeIterator for ListIterator<T> {}
+impl<T: Boxed> FusedIterator for ListIterator<T> {}
 
 #[repr(C, align(16))]
 pub struct TopPair {
