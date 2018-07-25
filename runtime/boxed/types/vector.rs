@@ -2,7 +2,7 @@ use std::{fmt, marker, mem};
 
 use abitype::{BoxedABIType, EncodeBoxedABIType};
 use boxed::refs::Gc;
-use boxed::{AllocType, Any, BoxSize, Boxed, ConstructableFrom, Header, TypeTag};
+use boxed::{AllocType, Any, AsHeap, BoxSize, Boxed, ConstructableFrom, Header, TypeTag};
 use intern::Interner;
 
 const MAX_16BYTE_INLINE_LENGTH: usize = ((16 - 8) / mem::size_of::<Gc<Any>>());
@@ -61,6 +61,14 @@ impl<'a, T: Boxed> ConstructableFrom<&'a [Gc<T>]> for Vector<T> {
 }
 
 impl<T: Boxed> Vector<T> {
+    pub fn from_values<V>(heap: &mut impl AsHeap, values: impl Iterator<Item = V>) -> Gc<Vector<T>>
+    where
+        T: ConstructableFrom<V>,
+    {
+        let elems = values.map(|v| T::new(heap, v)).collect::<Vec<Gc<T>>>();
+        Self::new(heap, elems.as_slice())
+    }
+
     fn is_inline(&self) -> bool {
         self.inline_length <= (MAX_INLINE_LENGTH as u32)
     }
@@ -199,11 +207,7 @@ mod test {
 
         let mut heap = Heap::new();
 
-        let boxed1 = Int::new(&mut heap, 1);
-        let boxed2 = Int::new(&mut heap, 2);
-        let boxed3 = Int::new(&mut heap, 3);
-
-        let forward_vec = Vector::new(&mut heap, &[boxed1, boxed2, boxed3]);
+        let forward_vec = Vector::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
 
         assert_eq!(
             "Vector([Int(1), Int(2), Int(3)])",

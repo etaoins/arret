@@ -86,6 +86,14 @@ impl<T: Boxed> List<T> {
         })
     }
 
+    pub fn from_values<V>(heap: &mut impl AsHeap, values: impl Iterator<Item = V>) -> Gc<List<T>>
+    where
+        T: ConstructableFrom<V>,
+    {
+        let elems = values.map(|v| T::new(heap, v)).collect::<Vec<Gc<T>>>();
+        Self::new(heap, elems.into_iter())
+    }
+
     pub fn empty() -> Gc<List<T>> {
         unsafe { Gc::new(&NIL_INSTANCE as *const Nil as *const List<T>) }
     }
@@ -209,13 +217,9 @@ mod test {
 
         let mut heap = Heap::new();
 
-        let boxed1 = Int::new(&mut heap, 1);
-        let boxed2 = Int::new(&mut heap, 2);
-        let boxed3 = Int::new(&mut heap, 3);
-
-        let forward_list1 = List::new(&mut heap, vec![boxed1, boxed2, boxed3].into_iter());
-        let forward_list2 = List::new(&mut heap, vec![boxed1, boxed2, boxed3].into_iter());
-        let reverse_list = List::new(&mut heap, vec![boxed3, boxed2, boxed1].into_iter());
+        let forward_list1 = List::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
+        let forward_list2 = List::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
+        let reverse_list = List::<Int>::from_values(&mut heap, [3, 2, 1].iter().cloned());
 
         assert_ne!(forward_list1, reverse_list);
         assert_eq!(forward_list1, forward_list2);
@@ -223,15 +227,8 @@ mod test {
 
     #[test]
     fn fmt_debug() {
-        use boxed::Int;
-
         let mut heap = Heap::new();
-
-        let boxed1 = Int::new(&mut heap, 1);
-        let boxed2 = Int::new(&mut heap, 2);
-        let boxed3 = Int::new(&mut heap, 3);
-
-        let forward_list = List::new(&mut heap, vec![boxed1, boxed2, boxed3].into_iter());
+        let forward_list = List::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
 
         assert_eq!(
             "List([Int(1), Int(2), Int(3)])",
@@ -243,12 +240,7 @@ mod test {
     fn construct_and_iter() {
         let mut heap = Heap::new();
 
-        let boxed_ints = [1, 2, 3]
-            .iter()
-            .map(|num| Int::new(&mut heap, *num))
-            .collect::<Vec<Gc<Int>>>();
-
-        let boxed_list = List::new(&mut heap, boxed_ints.into_iter());
+        let boxed_list = List::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
 
         let mut boxed_list_iter = boxed_list.iter();
         assert_eq!(3, boxed_list_iter.len());

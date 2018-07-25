@@ -122,7 +122,6 @@ pub fn collect_roots(old_heap: Heap, roots: Vec<&mut Gc<Any>>) -> Heap {
 #[cfg(test)]
 mod test {
     use super::*;
-    use boxed::prelude::*;
     use boxed::{Int, List};
 
     #[test]
@@ -199,13 +198,7 @@ mod test {
 
         let mut heap = Heap::new();
 
-        let boxed_ints = [1, 2, 3]
-            .iter()
-            .map(|num| Int::new(&mut heap, *num))
-            .collect::<Vec<Gc<Int>>>();
-        assert_eq!(3, heap.len());
-
-        let mut boxed_list = List::new(&mut heap, boxed_ints.into_iter());
+        let mut boxed_list = List::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
         assert_eq!(EXPECTED_HEAP_SIZE, heap.len());
 
         assert_eq!(3, boxed_list.len());
@@ -235,20 +228,14 @@ mod test {
 
         for &test_content in &test_contents {
             let mut heap = Heap::new();
-
-            let boxed_ints = test_content
-                .iter()
-                .map(|num| Int::new(&mut heap, *num))
-                .collect::<Vec<Gc<Int>>>();
-            assert_eq!(test_content.len(), heap.len());
-            let mut boxed_vector = Vector::new(&mut heap, boxed_ints.as_slice());
+            let mut boxed_vec = Vector::<Int>::from_values(&mut heap, test_content.iter().cloned());
 
             let _new_heap = collect_roots(
                 heap,
-                vec![unsafe { &mut *(&mut boxed_vector as *mut Gc<Vector<Int>> as *mut Gc<Any>) }],
+                vec![unsafe { &mut *(&mut boxed_vec as *mut Gc<Vector<Int>> as *mut Gc<Any>) }],
             );
 
-            let mut boxed_list_iter = boxed_vector.iter();
+            let mut boxed_list_iter = boxed_vec.iter();
             assert_eq!(test_content.len(), boxed_list_iter.len());
 
             for expected_num in test_content {
