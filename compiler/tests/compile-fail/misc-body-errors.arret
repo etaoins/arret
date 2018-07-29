@@ -1,4 +1,4 @@
-(import [arret base])
+(import [stdlib base])
 
 (defn too-many-quote-args ()
   (quote 1 2 3))

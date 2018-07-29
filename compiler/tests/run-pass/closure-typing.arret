@@ -1,4 +1,4 @@
-(import [arret base])
+(import [stdlib base])
 
 (defn direct-required-type ()
   (let [[closure : (Sym -> Sym)] (fn (x) x)]

@@ -3,5 +3,6 @@ members = [
 	"syntax",
 	"compiler",
 	"driver",
-	"runtime"
+	"runtime",
+	"stdlib/rust"
 ]

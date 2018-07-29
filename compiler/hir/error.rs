@@ -1,7 +1,5 @@
-use std::fmt;
 use std::fmt::Display;
-use std::path;
-use std::{error, result};
+use std::{error, fmt, io, path, result};
 
 use reporting::{Level, Reportable};
 use syntax::error::Error as SyntaxError;
@@ -47,14 +45,15 @@ pub enum ErrorKind {
     DefOutsideBody,
     ExportOutsideModule,
     NonDefInsideModule,
-    ModuleNotFound,
+    PackageNotFound,
+    ModuleNotFound(Box<path::Path>),
     NoMacroRule,
     DuplicateDef(Span),
     MultipleZeroOrMoreMatch(Span),
     NoVecDestruc,
     ValueAsTy,
     UserError(Box<str>),
-    ReadError(Box<path::PathBuf>),
+    ReadError(Box<path::Path>),
     SyntaxError(SyntaxError),
 }
 
@@ -71,6 +70,13 @@ impl Error {
         Error {
             error_loc: span.into(),
             kind,
+        }
+    }
+
+    pub fn from_module_io(span: Span, path: &path::Path, error: &io::Error) -> Error {
+        match error.kind() {
+            io::ErrorKind::NotFound => Error::new(span, ErrorKind::ModuleNotFound(path.into())),
+            _ => Error::new(span, ErrorKind::ReadError(path.into())),
         }
     }
 
@@ -102,7 +108,8 @@ impl Reportable for Error {
             ErrorKind::NonDefInsideModule => {
                 "definition expected at the top-level of a module body".to_owned()
             }
-            ErrorKind::ModuleNotFound => "module not found".to_owned(),
+            ErrorKind::PackageNotFound => "package not found".to_owned(),
+            ErrorKind::ModuleNotFound(ref filename) => format!("module not found at `{}`", filename.to_string_lossy()).to_owned(),
             ErrorKind::NoMacroRule => "no matching macro rule".to_owned(),
             ErrorKind::MultipleZeroOrMoreMatch(_) => {
                 "multiple zero or more matches in the same sequence".to_owned()

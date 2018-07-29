@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use hir::destruc;
 use hir::error::{Error, ErrorKind, Result};
 use hir::import::lower_import_set;
-use hir::loader::{load_module_by_name, parse_module_data, ModuleName};
+use hir::loader::{load_module_by_name, parse_module_data, LoadedModule, ModuleName, PackagePaths};
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::module::Module;
 use hir::ns::{Ident, NsDataIter, NsDatum, NsId};
@@ -19,7 +19,10 @@ use syntax::span::{Span, EMPTY_SPAN};
 use ty;
 use ty::purity::Purity;
 
-pub struct LoweringCtx<'sl> {
+pub struct LoweringCtx<'pp, 'sl> {
+    package_paths: &'pp PackagePaths,
+    source_loader: &'sl mut SourceLoader,
+
     deferred_defs: Vec<DeferredDef>,
 
     var_id_counter: VarIdCounter,
@@ -28,8 +31,6 @@ pub struct LoweringCtx<'sl> {
 
     pvars: Vec<ty::purity::PVar>,
     tvars: Vec<ty::TVar>,
-
-    source_loader: &'sl mut SourceLoader,
 }
 
 pub struct LoweredProgram {
@@ -60,29 +61,33 @@ struct AppliedPrim {
     span: Span,
 }
 
-impl<'sl> LoweringCtx<'sl> {
-    pub fn new(source_loader: &'sl mut SourceLoader) -> LoweringCtx {
+impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
+    pub fn new(
+        package_paths: &'pp PackagePaths,
+        source_loader: &'sl mut SourceLoader,
+    ) -> LoweringCtx<'pp, 'sl> {
         let mut loaded_modules = HashMap::new();
 
         // These modules are always loaded
         loaded_modules.insert(
-            ModuleName::new(vec!["arret".into(), "internal".into()], "primitives".into()),
+            ModuleName::new("arret".into(), vec!["internal".into()], "primitives".into()),
             Module::prims_module(),
         );
 
         loaded_modules.insert(
-            ModuleName::new(vec!["arret".into(), "internal".into()], "types".into()),
+            ModuleName::new("arret".into(), vec!["internal".into()], "types".into()),
             Module::tys_module(),
         );
 
         LoweringCtx {
+            package_paths,
+            source_loader,
             deferred_defs: vec![],
             var_id_counter: VarIdCounter::new(),
             loaded_modules,
             macros: vec![],
             pvars: vec![],
             tvars: vec![],
-            source_loader,
         }
     }
 
@@ -553,8 +558,12 @@ impl<'sl> LoweringCtx<'sl> {
             return Ok(&self.loaded_modules[&module_name]);
         }
 
-        let module_data = load_module_by_name(self.source_loader, span, &module_name)?;
-        let loaded_module = self.lower_module(scope, module_data)?;
+        let loaded_module = {
+            match load_module_by_name(self.source_loader, span, self.package_paths, &module_name)? {
+                LoadedModule::Source(module_data) => self.lower_module(scope, module_data)?,
+                LoadedModule::Rust(module) => module,
+            }
+        };
 
         Ok(self
             .loaded_modules
@@ -838,6 +847,7 @@ impl<'sl> LoweringCtx<'sl> {
 }
 
 pub fn lower_program(
+    package_paths: &PackagePaths,
     source_loader: &mut SourceLoader,
     source_file_id: SourceFileId,
 ) -> Result<LoweredProgram, Vec<Error>> {
@@ -846,7 +856,7 @@ pub fn lower_program(
     let data = parse_module_data(source_loader.source_file(source_file_id))?;
 
     let mut root_scope = Scope::new_empty();
-    let mut lcx = LoweringCtx::new(source_loader);
+    let mut lcx = LoweringCtx::new(package_paths, source_loader);
     lcx.lower_module(&mut root_scope, data)?;
 
     let deferred_defs = std::mem::replace(&mut lcx.deferred_defs, vec![]);
@@ -911,8 +921,9 @@ fn module_for_str(data_str: &str) -> Result<Module> {
     ];
     program_data.append(&mut test_data);
 
+    let package_paths = PackagePaths::default();
     let mut source_loader = SourceLoader::new();
-    let mut lcx = LoweringCtx::new(&mut source_loader);
+    let mut lcx = LoweringCtx::new(&package_paths, &mut source_loader);
 
     lcx.lower_module(&mut root_scope, program_data)
         .map_err(|mut errors| errors.remove(0))
@@ -934,8 +945,9 @@ pub fn lowered_expr_for_str(data_str: &str) -> LoweredTestExpr {
     let test_ns_id = NsId::new(1);
     let mut scope = Scope::new_empty();
 
-    let mut ccx = SourceLoader::new();
-    let mut lcx = LoweringCtx::new(&mut ccx);
+    let package_paths = PackagePaths::default();
+    let mut source_loader = SourceLoader::new();
+    let mut lcx = LoweringCtx::new(&package_paths, &mut source_loader);
 
     // Extract our builtin exports
     let mut exports = HashMap::<Box<str>, Binding>::new();

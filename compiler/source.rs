@@ -26,7 +26,7 @@ impl SourceFile {
 #[derive(Default)]
 pub struct SourceLoader {
     source_files: Vec<SourceFile>,
-    loaded_paths: HashMap<path::PathBuf, SourceFileId>,
+    loaded_paths: HashMap<Box<path::Path>, SourceFileId>,
     next_span_offset: usize,
 }
 
@@ -35,16 +35,16 @@ impl SourceLoader {
         Self::default()
     }
 
-    pub fn load_path(&mut self, path_buf: path::PathBuf) -> Result<SourceFileId, io::Error> {
-        if let Some(source_file_id) = self.loaded_paths.get(&path_buf) {
+    pub fn load_path(&mut self, path: &path::Path) -> Result<SourceFileId, io::Error> {
+        if let Some(source_file_id) = self.loaded_paths.get(path) {
             return Ok(*source_file_id);
         }
 
-        let display_name = path_buf.to_string_lossy().to_string();
-        let source = fs::read_to_string(path_buf.clone())?;
+        let display_name = path.to_string_lossy().to_string();
+        let source = fs::read_to_string(path)?;
 
         let source_file_id = self.load_string(display_name, source);
-        self.loaded_paths.insert(path_buf, source_file_id);
+        self.loaded_paths.insert(path.into(), source_file_id);
 
         Ok(source_file_id)
     }

@@ -1,4 +1,4 @@
-(import [arret base])
+(import [stdlib base])
 
 (deftype _ unbound)
           ;^^^^^^^ ERROR unable to resolve symbol: `unbound`

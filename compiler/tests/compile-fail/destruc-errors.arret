@@ -1,4 +1,4 @@
-(import [arret base])
+(import [stdlib base])
 
 (def [x y] [1 2])
     ;^^^^^ ERROR vectors can only be used in a destructure for type ascription in the form [name : Type]

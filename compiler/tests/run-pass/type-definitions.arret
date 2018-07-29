@@ -1,4 +1,4 @@
-(import [arret base])
+(import [stdlib base])
 
 ; Make sure _ eats the type
 (deftype _ Int)

@@ -1,16 +1,18 @@
 use abitype::{ABIType, RetABIType};
 
 #[derive(Debug)]
-pub struct ExternFun {
-    arret_type: &'static str,
-    takes_task: bool,
-    params: &'static [ABIType],
-    ret: RetABIType,
-    entry_point: &'static str,
+pub struct RustFun {
+    pub arret_type: &'static str,
+    pub takes_task: bool,
+    pub params: &'static [ABIType],
+    pub ret: RetABIType,
+    pub entry_point: &'static str,
 }
 
+pub type RustExports = &'static [(&'static str, &'static RustFun)];
+
 #[macro_export]
-macro_rules! define_extern_fn {
+macro_rules! define_rust_fn {
     (#[arret-type=$type:expr] $desc_name:ident = fn $func_name:ident($task_name:ident : &mut Task, $($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
         use abitype::{EncodeABIType, EncodeRetABIType};
 
@@ -19,7 +21,7 @@ macro_rules! define_extern_fn {
             $body
         }
 
-        const $desc_name: ExternFun = ExternFun {
+        const $desc_name: RustFun = RustFun {
             arret_type: $type,
             takes_task: true,
             params: &[
@@ -36,7 +38,7 @@ macro_rules! define_extern_fn {
             $body
         }
 
-        const $desc_name: ExternFun = ExternFun {
+        const $desc_name: RustFun = RustFun {
             arret_type: $type,
             takes_task: false,
             params: &[
@@ -45,6 +47,21 @@ macro_rules! define_extern_fn {
             ret: <$ret>::RET_ABI_TYPE,
             entry_point: stringify!($func_name),
         };
+    };
+}
+
+#[macro_export]
+macro_rules! define_rust_module {
+    ($($export_name:expr => $desc_name:ident),*) => {
+        #[no_mangle]
+        pub static ARRET_ABI_VERSION: u32 = 1;
+
+        #[no_mangle]
+        pub static ARRET_RUST_EXPORTS: RustExports = &[
+            $(
+                ($export_name, &$desc_name)
+            ),*
+        ];
     };
 }
 
@@ -59,7 +76,7 @@ pub mod test {
 
     use super::*;
 
-    define_extern_fn! {
+    define_rust_fn! {
         #[arret-type="(-> Int)"]
         RETURN_42 = fn return_42() -> i64 {
             42
@@ -78,7 +95,7 @@ pub mod test {
         assert_eq!(42, number);
     }
 
-    define_extern_fn! {
+    define_rust_fn! {
     #[arret-type="(Int Float -> Num)"]
         ADD_INT_FLOAT = fn add_int_float(
             task: &mut Task,
@@ -87,6 +104,11 @@ pub mod test {
         ) -> Gc<boxed::Num> {
             boxed::Int::new(task, int_box.value() + native_float as i64).as_num_ref()
         }
+    }
+
+    define_rust_module! {
+        "length" => LENGTH,
+        "return-42" => RETURN_42
     }
 
     #[test]
@@ -119,7 +141,7 @@ pub mod test {
         assert_eq!(20, twenty_int.value());
     }
 
-    define_extern_fn! {
+    define_rust_fn! {
         #[arret-type="((Listof Any) -> Int)"]
         LENGTH = fn length(input: Gc<boxed::List<boxed::Any>>) -> i64 {
             input.len() as i64
@@ -149,7 +171,7 @@ pub mod test {
         assert_eq!(3, length(boxed_list));
     }
 
-    define_extern_fn! {
+    define_rust_fn! {
         #[arret-type="(->! ())"]
         EMPTY_IMPURE = fn empty_impure() -> () {}
     }
@@ -164,5 +186,10 @@ pub mod test {
         assert_eq!(RetABIType::Void, EMPTY_IMPURE.ret);
 
         empty_impure();
+    }
+
+    #[test]
+    fn rust_module() {
+        assert_eq!(2, ARRET_RUST_EXPORTS.len());
     }
 }

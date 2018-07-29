@@ -3,10 +3,11 @@ extern crate compiler;
 use compiler::reporting::Reportable;
 use std::{fs, path};
 
-fn run_single_test(source_loader: &mut compiler::SourceLoader, input_path: path::PathBuf) -> bool {
+fn run_single_test(source_loader: &mut compiler::SourceLoader, input_path: &path::Path) -> bool {
     let source_file_id = source_loader.load_path(input_path).unwrap();
+    let package_paths = compiler::PackagePaths::default();
 
-    let hir = match compiler::lower_program(source_loader, source_file_id) {
+    let hir = match compiler::lower_program(&package_paths, source_loader, source_file_id) {
         Ok(hir) => hir,
         Err(errors) => {
             for err in errors {
@@ -38,7 +39,7 @@ fn run_pass() {
     for entry in entries {
         let input_path = entry.unwrap().path();
 
-        if !run_single_test(&mut source_loader, input_path.clone()) {
+        if !run_single_test(&mut source_loader, input_path.as_path()) {
             failed_tests.push(input_path.to_string_lossy().to_string());
         }
     }

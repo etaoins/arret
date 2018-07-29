@@ -1,4 +1,4 @@
-(import [arret base])
+(import [stdlib base])
 
 (defn not-enough-fixed (_) ())
 (def _ (not-enough-fixed))

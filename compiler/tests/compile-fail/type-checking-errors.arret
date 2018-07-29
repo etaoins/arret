@@ -1,4 +1,4 @@
-(import [arret base])
+(import [stdlib base])
 
 (def [wrong-ascription : Int] 'foo)
                               ;^^^ ERROR `'foo` is not a `Int`

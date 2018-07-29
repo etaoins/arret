@@ -4,6 +4,8 @@ extern crate clap;
 extern crate compiler;
 extern crate syntax;
 
+use std::path;
+
 use clap::{App, Arg};
 use compiler::reporting::Reportable;
 
@@ -17,14 +19,16 @@ fn main() {
         )
         .get_matches();
 
-    let input_path = matches.value_of("INPUT").unwrap();
+    let input_path = path::Path::new(matches.value_of("INPUT").unwrap());
+
+    let package_paths = compiler::PackagePaths::default();
 
     let mut source_loader = compiler::SourceLoader::new();
     let source_file_id = source_loader
-        .load_path(input_path.into())
+        .load_path(input_path)
         .expect("Unable to read input file");
 
-    let hir = match compiler::lower_program(&mut source_loader, source_file_id) {
+    let hir = match compiler::lower_program(&package_paths, &mut source_loader, source_file_id) {
         Ok(hir) => hir,
         Err(errors) => {
             for err in errors {

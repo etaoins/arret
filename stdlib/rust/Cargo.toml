@@ -1,0 +1,12 @@
+[package]
+name = "stdlib"
+version = "0.1.0"
+authors = ["Ryan Cumming <etaoins@gmail.com>"]
+
+[lib]
+name = "stdlib"
+path = "lib.rs"
+crate-type = ["dylib"]
+
+[dependencies]
+runtime = { path = "../../runtime" }

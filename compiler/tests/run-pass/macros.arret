@@ -1,4 +1,4 @@
-(import [arret base])
+(import [stdlib base])
 
 ; Make sure _ discards the macro
 (defmacro _ (macro-rules))

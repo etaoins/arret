@@ -7,6 +7,7 @@ mod macros;
 pub mod module;
 mod ns;
 mod prim;
+mod rfi;
 mod scope;
 mod types;
 mod util;
@@ -84,6 +85,7 @@ pub struct Def<T: HirType> {
     pub value_expr: Expr<T>,
 }
 
+pub use self::loader::PackagePaths;
 pub use self::types::str_for_poly;
 pub use self::types::str_for_purity;
 

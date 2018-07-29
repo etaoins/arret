@@ -10,4 +10,6 @@ crate-type = ["dylib"]
 
 [dependencies]
 ansi_term = "0.11"
+libloading = "0.5"
 syntax = { path = "../syntax" }
+runtime = { path = "../runtime" }

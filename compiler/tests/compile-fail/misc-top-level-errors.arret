@@ -1,7 +1,7 @@
-(import [arret base])
+(import [stdlib base])
 
-(import (only [arret base] do))
-       ;^^^^^^^^^^^^^^^^^^^^^^ ERROR duplicate definition
+(import (only [stdlib base] do))
+       ;^^^^^^^^^^^^^^^^^^^^^^^ ERROR duplicate definition
 
 1                    ;~ ERROR definition expected at the top-level of a module body
 'foo                 ;~ ERROR definition expected at the top-level of a module body

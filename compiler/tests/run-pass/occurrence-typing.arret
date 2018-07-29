@@ -1,4 +1,4 @@
-(import [arret base])
+(import [stdlib base])
 
 (defn test-type-in-branches ([test : Bool])
   (if test

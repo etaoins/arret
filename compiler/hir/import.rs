@@ -36,13 +36,15 @@ where
     F: FnMut(Span, ModuleName) -> Result<Bindings>,
 {
     fn lower_module_import(&mut self, span: Span, name_data: Vec<NsDatum>) -> Result<FilterInput> {
-        let mut name_components = name_data
+        let mut name_idents = name_data
             .into_iter()
-            .map(|datum| expect_ident(datum).map(|ident| ident.into_name()))
-            .collect::<result::Result<Vec<Box<str>>, Error>>()?;
+            .map(|datum| expect_ident(datum).map(|ident| ident.into_name()));
 
-        let terminal_name = name_components.pop().unwrap();
-        let module_name = ModuleName::new(name_components, terminal_name.clone());
+        let package_name = name_idents.next().unwrap()?;
+        let terminal_name = name_idents.next_back().unwrap()?;
+        let name_components = name_idents.collect::<result::Result<Vec<Box<str>>, Error>>()?;
+
+        let module_name = ModuleName::new(package_name, name_components, terminal_name.clone());
         let bindings = (self.load_module)(span, module_name)?;
 
         Ok(FilterInput {
@@ -191,10 +193,10 @@ where
         let span = import_set_datum.span();
         match import_set_datum {
             NsDatum::Vec(_, vs) => {
-                if vs.is_empty() {
+                if vs.len() < 2 {
                     return Err(vec![Error::new(
                         span,
-                        ErrorKind::IllegalArg("module name requires a least one element"),
+                        ErrorKind::IllegalArg("module name requires a least two elements"),
                     )]);
                 }
 
@@ -254,14 +256,14 @@ mod test {
             NsDatum::from_syntax_datum(test_ns_id, datum_from_str(datum).unwrap());
 
         lower_import_set(import_set_datum, |_, module_name| {
-            if module_name == ModuleName::new(vec!["lib".into()], "test".into()) {
+            if module_name == ModuleName::new("lib".into(), vec![], "test".into()) {
                 let mut bindings = HashMap::new();
                 bindings.insert("quote".into(), Binding::Prim(Prim::Quote));
                 bindings.insert("if".into(), Binding::Prim(Prim::If));
 
                 Ok(bindings)
             } else {
-                Err(vec![Error::new(EMPTY_SPAN, ErrorKind::ModuleNotFound)])
+                Err(vec![Error::new(EMPTY_SPAN, ErrorKind::PackageNotFound)])
             }
         })
     }
@@ -276,9 +278,9 @@ mod test {
     }
 
     #[test]
-    fn module_not_found() {
+    fn package_not_found() {
         let j = "[not found]";
-        let err = vec![Error::new(EMPTY_SPAN, ErrorKind::ModuleNotFound)];
+        let err = vec![Error::new(EMPTY_SPAN, ErrorKind::PackageNotFound)];
 
         assert_eq!(err, bindings_for_import_set(j).unwrap_err());
     }
