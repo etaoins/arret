@@ -13,7 +13,7 @@ fn type_tag_to_poly_ty(type_tag: boxed::TypeTag) -> ty::Ty<ty::Poly> {
         TypeTag::True => ty::Ty::LitBool(true),
         TypeTag::False => ty::Ty::LitBool(true),
         TypeTag::Int => ty::Ty::Int,
-        TypeTag::TopVector => ty::Ty::Vecof(Box::new(ty::Ty::Any.into_poly())),
+        TypeTag::TopVector => ty::Ty::Vectorof(Box::new(ty::Ty::Any.into_poly())),
         TypeTag::Nil => {
             let list = ty::List::new(Box::new([]), None);
             ty::Ty::List(list)
@@ -67,7 +67,9 @@ impl ConvertableABIType for abitype::BoxedABIType {
 
         match self {
             BoxedABIType::Any => ty::Ty::Any.into_poly(),
-            BoxedABIType::Vector(member) => ty::Ty::Vecof(Box::new(member.to_poly())).into_poly(),
+            BoxedABIType::Vector(member) => {
+                ty::Ty::Vectorof(Box::new(member.to_poly())).into_poly()
+            }
             BoxedABIType::List(member) => {
                 let list = ty::List::new(Box::new([]), Some(member.to_poly()));
                 ty::Ty::List(list).into_poly()

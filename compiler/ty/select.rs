@@ -132,17 +132,17 @@ impl<'tvars> SelectCtx<'tvars> {
             (ty::Ty::List(target_list), ty::Ty::List(evidence_list)) => {
                 self.add_evidence_list(target_list, evidence_list);
             }
-            (ty::Ty::Vec(target_members), ty::Ty::Vec(evidence_members)) => {
+            (ty::Ty::Vector(target_members), ty::Ty::Vector(evidence_members)) => {
                 for (target_member, evidence_member) in
                     target_members.iter().zip(evidence_members.iter())
                 {
                     self.add_evidence(target_member, evidence_member);
                 }
             }
-            (ty::Ty::Vecof(target_member), ty::Ty::Vecof(evidence_member)) => {
+            (ty::Ty::Vectorof(target_member), ty::Ty::Vectorof(evidence_member)) => {
                 self.add_evidence(target_member, evidence_member);
             }
-            (ty::Ty::Vecof(target_member), ty::Ty::Vec(evidence_members)) => {
+            (ty::Ty::Vectorof(target_member), ty::Ty::Vector(evidence_members)) => {
                 for evidence_member in evidence_members.iter() {
                     self.add_evidence(target_member, evidence_member);
                 }

@@ -103,10 +103,10 @@ trait IntersectCtx<S: ty::TyRef> {
             ))).into_ty_ref()),
 
             // Vector types
-            (ty::Ty::Vecof(member1), ty::Ty::Vecof(member2)) => Ok(ty::Ty::Vecof(Box::new(
-                self.intersect_ty_refs(member1, member2)?,
-            )).into_ty_ref()),
-            (ty::Ty::Vec(members1), ty::Ty::Vec(members2)) => {
+            (ty::Ty::Vectorof(member1), ty::Ty::Vectorof(member2)) => Ok(ty::Ty::Vectorof(
+                Box::new(self.intersect_ty_refs(member1, member2)?),
+            ).into_ty_ref()),
+            (ty::Ty::Vector(members1), ty::Ty::Vector(members2)) => {
                 if members1.len() != members2.len() {
                     Err(Error::Disjoint)
                 } else {
@@ -116,17 +116,17 @@ trait IntersectCtx<S: ty::TyRef> {
                         .map(|(member1, member2)| self.intersect_ty_refs(member1, member2))
                         .collect::<Result<Vec<S>>>()?;
 
-                    Ok(ty::Ty::Vec(intersected_members.into_boxed_slice()).into_ty_ref())
+                    Ok(ty::Ty::Vector(intersected_members.into_boxed_slice()).into_ty_ref())
                 }
             }
-            (ty::Ty::Vecof(member1), ty::Ty::Vec(members2))
-            | (ty::Ty::Vec(members2), ty::Ty::Vecof(member1)) => {
+            (ty::Ty::Vectorof(member1), ty::Ty::Vector(members2))
+            | (ty::Ty::Vector(members2), ty::Ty::Vectorof(member1)) => {
                 let intersected_members = members2
                     .iter()
                     .map(|member2| self.intersect_ty_refs(member1, member2))
                     .collect::<Result<Vec<S>>>()?;
 
-                Ok(ty::Ty::Vec(intersected_members.into_boxed_slice()).into_ty_ref())
+                Ok(ty::Ty::Vector(intersected_members.into_boxed_slice()).into_ty_ref())
             }
 
             // List types

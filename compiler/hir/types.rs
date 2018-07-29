@@ -185,12 +185,12 @@ impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
                     .collect::<Result<Vec<ty::Poly>>>()?
                     .into_boxed_slice();
 
-                Ok(ty::Ty::Vec(member_tys).into_poly())
+                Ok(ty::Ty::Vector(member_tys).into_poly())
             }
             TyCons::Vectorof => {
                 let start_datum = expect_one_arg(span, arg_iter)?;
                 let start_ty = self.lower_poly(start_datum)?;
-                Ok(ty::Ty::Vecof(Box::new(start_ty)).into_poly())
+                Ok(ty::Ty::Vectorof(Box::new(start_ty)).into_poly())
             }
             TyCons::TyPred => {
                 let test_datum = expect_one_arg(span, arg_iter)?;
@@ -248,7 +248,7 @@ impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
             }
             NsDatum::Vec(_, vs) => {
                 let fixed_literals = Self::lower_literal_vec(vs.into_vec())?;
-                Ok(ty::Ty::Vec(fixed_literals.into_boxed_slice()).into_poly())
+                Ok(ty::Ty::Vector(fixed_literals.into_boxed_slice()).into_poly())
             }
             _ => Err(Error::new(
                 datum.span(),
@@ -451,7 +451,7 @@ impl<'vars> StrForPolyCtx<'vars> {
                 self.str_for_poly(map.value())
             ),
             ty::Ty::Set(member) => format!("(Setof {})", self.str_for_poly(member)),
-            ty::Ty::Vec(members) => {
+            ty::Ty::Vector(members) => {
                 let mut result_parts: Vec<String> = members
                     .iter()
                     .map(|member| format!(" {}", self.str_for_poly(member)))
@@ -459,7 +459,7 @@ impl<'vars> StrForPolyCtx<'vars> {
 
                 format!("(Vector{})", result_parts.join(""))
             }
-            ty::Ty::Vecof(member) => format!("(Vectorof {})", self.str_for_poly(member)),
+            ty::Ty::Vectorof(member) => format!("(Vectorof {})", self.str_for_poly(member)),
             ty::Ty::TopFun(top_fun) => format!(
                 "(... {} {})",
                 self.str_for_purity(top_fun.purity()),
@@ -677,7 +677,7 @@ mod test {
     fn empty_vector_literal() {
         let j = "[]";
 
-        let expected = ty::Ty::Vec(Box::new([])).into_poly();
+        let expected = ty::Ty::Vector(Box::new([])).into_poly();
         assert_poly_for_str(&expected, j);
     }
 
@@ -685,7 +685,7 @@ mod test {
     fn vector_literal() {
         let j = "[true false]";
 
-        let expected = ty::Ty::Vec(Box::new([
+        let expected = ty::Ty::Vector(Box::new([
             ty::Ty::LitBool(true).into_poly(),
             ty::Ty::LitBool(false).into_poly(),
         ])).into_poly();
@@ -742,7 +742,7 @@ mod test {
         let j = "(Vectorof true)";
 
         let inner_ty = ty::Ty::LitBool(true).into_poly();
-        let expected = ty::Ty::Vecof(Box::new(inner_ty)).into_poly();
+        let expected = ty::Ty::Vectorof(Box::new(inner_ty)).into_poly();
 
         assert_poly_for_str(&expected, j);
     }
@@ -751,7 +751,7 @@ mod test {
     fn vector_cons() {
         let j = "(Vector true false)";
 
-        let expected = ty::Ty::Vec(Box::new([
+        let expected = ty::Ty::Vector(Box::new([
             ty::Ty::LitBool(true).into_poly(),
             ty::Ty::LitBool(false).into_poly(),
         ])).into_poly();

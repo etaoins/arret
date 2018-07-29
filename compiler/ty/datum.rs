@@ -21,7 +21,7 @@ trait DatumTyCtx<S: ty::TyRef> {
                     .into_boxed_slice(),
                 None,
             )),
-            Datum::Vec(_, vs) => ty::Ty::Vec(
+            Datum::Vec(_, vs) => ty::Ty::Vector(
                 vs.iter()
                     .map(|v| self.ref_for_datum(v))
                     .collect::<Vec<S>>()

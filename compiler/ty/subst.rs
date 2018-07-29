@@ -62,8 +62,8 @@ trait SubstCtx<I: ty::TyRef, O: ty::TyRef, E> {
             ty::Ty::LitSym(val) => ty::Ty::LitSym(val.clone()),
             ty::Ty::Set(member) => ty::Ty::Set(Box::new(self.subst_ty_ref(&member)?)),
             ty::Ty::Union(members) => ty::Ty::Union(self.subst_ty_ref_slice(members)?),
-            ty::Ty::Vec(members) => ty::Ty::Vec(self.subst_ty_ref_slice(members)?),
-            ty::Ty::Vecof(member) => ty::Ty::Vecof(Box::new(self.subst_ty_ref(member)?)),
+            ty::Ty::Vector(members) => ty::Ty::Vector(self.subst_ty_ref_slice(members)?),
+            ty::Ty::Vectorof(member) => ty::Ty::Vectorof(Box::new(self.subst_ty_ref(member)?)),
             ty::Ty::List(list) => ty::Ty::List(self.subst_list(list)?),
         })
     }

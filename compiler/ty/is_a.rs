@@ -214,7 +214,7 @@ trait IsACtx<S: ty::TyRef> {
                 .and_then(|| self.ty_ref_is_a(sub_map.value(), par_map.value())),
 
             // Vector types
-            (ty::Ty::Vec(sub_members), ty::Ty::Vec(par_members)) => {
+            (ty::Ty::Vector(sub_members), ty::Ty::Vector(par_members)) => {
                 if sub_members.len() != par_members.len() {
                     Result::No
                 } else {
@@ -225,21 +225,23 @@ trait IsACtx<S: ty::TyRef> {
                     )
                 }
             }
-            (ty::Ty::Vecof(sub_member), ty::Ty::Vecof(par_member)) => {
+            (ty::Ty::Vectorof(sub_member), ty::Ty::Vectorof(par_member)) => {
                 self.ty_ref_is_a(sub_member, par_member)
             }
-            (ty::Ty::Vec(sub_members), ty::Ty::Vecof(par_member)) => Result::from_iter(
+            (ty::Ty::Vector(sub_members), ty::Ty::Vectorof(par_member)) => Result::from_iter(
                 sub_members
                     .iter()
                     .map(|sub_member| self.ty_ref_is_a(sub_member, par_member)),
             ),
-            (ty::Ty::Vecof(sub_member), ty::Ty::Vec(par_members)) => Result::May.and_then(|| {
-                Result::from_iter(
-                    par_members
-                        .iter()
-                        .map(|par_member| self.ty_ref_is_a(sub_member, par_member)),
-                )
-            }),
+            (ty::Ty::Vectorof(sub_member), ty::Ty::Vector(par_members)) => {
+                Result::May.and_then(|| {
+                    Result::from_iter(
+                        par_members
+                            .iter()
+                            .map(|par_member| self.ty_ref_is_a(sub_member, par_member)),
+                    )
+                })
+            }
 
             // Functions
             (ty::Ty::TopFun(sub_top_fun), ty::Ty::TopFun(par_top_fun)) => {

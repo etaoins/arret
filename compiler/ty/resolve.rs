@@ -35,7 +35,7 @@ fn poly_ty_has_subtypes(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> bool 
             .iter()
             .any(|poly| poly_has_subtypes(tvars, poly)),
         ty::Ty::Set(member) => poly_has_subtypes(tvars, member),
-        ty::Ty::Vec(members) => members
+        ty::Ty::Vector(members) => members
             .iter()
             .any(|member| poly_has_subtypes(tvars, member)),
         ty::Ty::Union(members) => !members.is_empty(),
@@ -47,7 +47,7 @@ fn poly_ty_has_subtypes(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> bool 
                     .iter()
                     .any(|fixed| poly_has_subtypes(tvars, fixed))
         }
-        ty::Ty::Vecof(_) => {
+        ty::Ty::Vectorof(_) => {
             // Any arbitrary fixed length vector is a subtype of this vector
             true
         }

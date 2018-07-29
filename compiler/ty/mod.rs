@@ -99,8 +99,8 @@ pub enum Ty<S: TyRef> {
     TyPred(Box<S>),
 
     // Vector types
-    Vec(Box<[S]>),
-    Vecof(Box<S>),
+    Vector(Box<[S]>),
+    Vectorof(Box<S>),
 
     // List types
     List(List<S>),

@@ -222,7 +222,7 @@ trait UnifyCtx<S: ty::TyRef> {
             }
 
             // Vector types
-            (ty::Ty::Vec(members1), ty::Ty::Vec(members2)) => {
+            (ty::Ty::Vector(members1), ty::Ty::Vector(members2)) => {
                 if members1.len() != members2.len() {
                     // We can quickly check vector lengths at runtime
                     UnifiedTy::Discerned
@@ -233,18 +233,20 @@ trait UnifyCtx<S: ty::TyRef> {
                         .map(|(member1, member2)| self.unify_to_ty_ref(member1, member2))
                         .collect::<Vec<S>>();
 
-                    UnifiedTy::Merged(ty::Ty::Vec(unified_members.into_boxed_slice()).into_ty_ref())
+                    UnifiedTy::Merged(
+                        ty::Ty::Vector(unified_members.into_boxed_slice()).into_ty_ref(),
+                    )
                 }
             }
-            (ty::Ty::Vecof(member1), ty::Ty::Vecof(member2)) => UnifiedTy::Merged(
-                ty::Ty::Vecof(Box::new(self.unify_to_ty_ref(member1, member2))).into_ty_ref(),
+            (ty::Ty::Vectorof(member1), ty::Ty::Vectorof(member2)) => UnifiedTy::Merged(
+                ty::Ty::Vectorof(Box::new(self.unify_to_ty_ref(member1, member2))).into_ty_ref(),
             ),
-            (ty::Ty::Vec(members1), ty::Ty::Vecof(member2))
-            | (ty::Ty::Vecof(member2), ty::Ty::Vec(members1)) => {
+            (ty::Ty::Vector(members1), ty::Ty::Vectorof(member2))
+            | (ty::Ty::Vectorof(member2), ty::Ty::Vector(members1)) => {
                 let unified_member =
                     self.unify_ref_iter(vec![member2.as_ref().clone()], members1.iter().cloned());
 
-                UnifiedTy::Merged(ty::Ty::Vecof(Box::new(unified_member)).into_ty_ref())
+                UnifiedTy::Merged(ty::Ty::Vectorof(Box::new(unified_member)).into_ty_ref())
             }
 
             // Function types
