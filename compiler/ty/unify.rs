@@ -54,7 +54,27 @@ trait UnifyCtx<S: ty::TyRef> {
         }
     }
 
+    fn try_list_to_exact_pair(list: &ty::List<S>) -> Option<&S> {
+        if let Some(ref rest) = list.rest {
+            if list.fixed.len() == 1 && &list.fixed[0] == rest.as_ref() {
+                return Some(rest);
+            }
+        }
+
+        None
+    }
+
     fn unify_list(&self, list1: &ty::List<S>, list2: &ty::List<S>) -> UnifiedList<S> {
+        if list1.is_empty() {
+            if let Some(member) = Self::try_list_to_exact_pair(list2) {
+                return UnifiedList::Merged(ty::List::new(Box::new([]), Some(member.clone())));
+            }
+        } else if list2.is_empty() {
+            if let Some(member) = Self::try_list_to_exact_pair(list1) {
+                return UnifiedList::Merged(ty::List::new(Box::new([]), Some(member.clone())));
+            }
+        }
+
         if list1.has_disjoint_arity(list2) {
             // We can quickly check list lengths at runtime
             return UnifiedList::Discerned;
@@ -601,6 +621,9 @@ mod test {
             "(List Int Sym ...)",
             "(List Int Float Str ...)",
         );
+
+        assert_merged("(Listof Int)", "(List Int Int ...)", "(List)");
+        assert_merged("(Listof Sym)", "(List)", "(List Sym Sym ...)");
     }
 
     #[test]

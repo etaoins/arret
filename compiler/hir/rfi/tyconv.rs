@@ -136,12 +136,10 @@ mod test {
 
         assert_eq!("boxed::TopList", boxed_abi_type.to_rust_str());
 
-        /* TODO: This is broken! We don't simplify back to a non-union type
         let top_list_poly =
             ty::Ty::List(ty::List::new(Box::new([]), Some(ty::Ty::Any.into_poly()))).into_poly();
 
         assert_eq!(top_list_poly, boxed_abi_type.to_poly());
-        */
     }
 
     #[test]

@@ -171,6 +171,10 @@ impl<S: TyRef> List<S> {
 
         range2.start > range1.end || range2.end < range1.start
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.fixed.is_empty() && self.rest.is_none()
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
