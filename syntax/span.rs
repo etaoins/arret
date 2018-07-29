@@ -12,6 +12,13 @@ impl Span {
     pub fn is_empty(self) -> bool {
         self.lo == self.hi
     }
+
+    pub fn with_offset(self, offset: usize) -> Span {
+        Span {
+            lo: ((self.lo as usize) + offset) as u32,
+            hi: ((self.hi as usize) + offset) as u32,
+        }
+    }
 }
 
 pub const EMPTY_SPAN: Span = Span { lo: 0, hi: 0 };

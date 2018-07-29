@@ -141,6 +141,18 @@ macro_rules! define_direct_tagged_boxes {
             $( $name ),*
         }
 
+        impl TypeTag {
+            pub fn to_str(&self) -> &'static str {
+                match self {
+                    $(
+                        TypeTag::$name => {
+                            stringify!($name)
+                        }
+                    )*
+                }
+            }
+        }
+
         pub enum AnySubtype<'a> {
             $( $name(&'a $name) ),*
         }
@@ -236,7 +248,7 @@ macro_rules! define_tagged_union {
         impl Boxed for $name {}
 
         impl EncodeBoxedABIType for $name {
-            const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Union(&[
+            const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Union(stringify!($name), &[
                 $( $member::TYPE_TAG ),*
             ]);
         }

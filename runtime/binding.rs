@@ -25,9 +25,9 @@ macro_rules! define_rust_fn {
             arret_type: $type,
             takes_task: true,
             params: &[
-                $(<$rust_ty>::ABI_TYPE),*
+                $(<$rust_ty as EncodeABIType>::ABI_TYPE),*
             ],
-            ret: <$ret>::RET_ABI_TYPE,
+            ret: <$ret as EncodeRetABIType>::RET_ABI_TYPE,
             entry_point: stringify!($func_name),
         };
     };
@@ -42,9 +42,9 @@ macro_rules! define_rust_fn {
             arret_type: $type,
             takes_task: false,
             params: &[
-                $(<$rust_ty>::ABI_TYPE),*
+                $(<$rust_ty as EncodeABIType>::ABI_TYPE),*
             ],
-            ret: <$ret>::RET_ABI_TYPE,
+            ret: <$ret as EncodeRetABIType>::RET_ABI_TYPE,
             entry_point: stringify!($func_name),
         };
     };
@@ -127,10 +127,10 @@ pub mod test {
             ADD_INT_FLOAT.params
         );
         assert_eq!(
-            RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::Union(&[
-                boxed::TypeTag::Int,
-                boxed::TypeTag::Float,
-            ]))),
+            RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::Union(
+                "Num",
+                &[boxed::TypeTag::Int, boxed::TypeTag::Float,]
+            ))),
             ADD_INT_FLOAT.ret
         );
 

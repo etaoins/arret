@@ -55,6 +55,7 @@ pub enum ErrorKind {
     UserError(Box<str>),
     ReadError(Box<path::Path>),
     SyntaxError(SyntaxError),
+    RustFunError(Box<str>),
 }
 
 #[derive(Debug, PartialEq)]
@@ -73,6 +74,10 @@ impl Error {
         }
     }
 
+    pub fn kind(&self) -> &ErrorKind {
+        &self.kind
+    }
+
     pub fn from_module_io(span: Span, path: &path::Path, error: &io::Error) -> Error {
         match error.kind() {
             io::ErrorKind::NotFound => Error::new(span, ErrorKind::ModuleNotFound(path.into())),
@@ -83,6 +88,16 @@ impl Error {
     pub fn with_macro_invocation_span(self, span: Span) -> Error {
         Error {
             error_loc: self.error_loc.with_macro_invocation_span(span),
+            kind: self.kind,
+        }
+    }
+
+    pub(super) fn with_span_offset(self, offset: usize) -> Error {
+        Error {
+            error_loc: ErrorLoc {
+                span: self.error_loc.span.with_offset(offset),
+                macro_invocation_span: None,
+            },
             kind: self.kind,
         }
     }
@@ -121,6 +136,7 @@ impl Reportable for Error {
             ErrorKind::UserError(ref message) => message.clone().into_string(),
             ErrorKind::ReadError(ref filename) => format!("error reading `{}`", filename.to_string_lossy()),
             ErrorKind::SyntaxError(ref err) => err.message(),
+            ErrorKind::RustFunError(ref message) => message.clone().into_string(),
         }
     }
 

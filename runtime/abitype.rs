@@ -6,7 +6,7 @@ use intern::InternedSym;
 pub enum BoxedABIType {
     Any,
     DirectTagged(boxed::TypeTag),
-    Union(&'static [boxed::TypeTag]),
+    Union(&'static str, &'static [boxed::TypeTag]),
     Vector(&'static BoxedABIType),
     List(&'static BoxedABIType),
     Pair(&'static BoxedABIType),

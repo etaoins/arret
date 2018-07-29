@@ -8,6 +8,7 @@ use hir::macros::{expand_macro, lower_macro_rules, Macro};
 use hir::module::Module;
 use hir::ns::{Ident, NsDataIter, NsDatum, NsId};
 use hir::prim::Prim;
+use hir::rfi::RfiLoader;
 use hir::scope::{Binding, MacroId, Scope};
 use hir::types::{lower_poly, try_lower_purity};
 use hir::types::{lower_polymorphic_var, PolymorphicVar, PolymorphicVarKind};
@@ -27,6 +28,7 @@ pub struct LoweringCtx<'pp, 'sl> {
 
     var_id_counter: VarIdCounter,
     loaded_modules: HashMap<ModuleName, Module>,
+    rfi_loader: RfiLoader,
     macros: Vec<Macro>,
 
     pvars: Vec<ty::purity::PVar>,
@@ -85,6 +87,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             deferred_defs: vec![],
             var_id_counter: VarIdCounter::new(),
             loaded_modules,
+            rfi_loader: RfiLoader::new(),
             macros: vec![],
             pvars: vec![],
             tvars: vec![],
@@ -559,7 +562,13 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         }
 
         let loaded_module = {
-            match load_module_by_name(self.source_loader, span, self.package_paths, &module_name)? {
+            match load_module_by_name(
+                self.source_loader,
+                &mut self.rfi_loader,
+                span,
+                self.package_paths,
+                &module_name,
+            )? {
                 LoadedModule::Source(module_data) => self.lower_module(scope, module_data)?,
                 LoadedModule::Rust(module) => module,
             }

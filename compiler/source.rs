@@ -27,7 +27,7 @@ impl SourceFile {
 pub struct SourceLoader {
     source_files: Vec<SourceFile>,
     loaded_paths: HashMap<Box<path::Path>, SourceFileId>,
-    next_span_offset: usize,
+    pub(crate) next_span_offset: usize,
 }
 
 impl SourceLoader {

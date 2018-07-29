@@ -20,6 +20,7 @@ macro_rules! new_indexing_id_type {
                 id
             }
 
+            #[allow(unused)]
             pub fn to_usize(&self) -> usize {
                 self.0 as usize
             }
