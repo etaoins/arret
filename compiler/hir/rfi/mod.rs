@@ -1,6 +1,5 @@
 mod tyconv;
 
-use std::collections::HashMap;
 use std::os::raw::c_void;
 use std::path;
 
@@ -85,15 +84,12 @@ fn push_rfi_lib_path(path_buf: &mut path::PathBuf, package_name: &str) {
 
 impl RfiLoader {
     pub fn new() -> RfiLoader {
-        let mut type_bindings = HashMap::new();
-        prim::insert_prim_exports(&mut type_bindings);
-        types::insert_ty_exports(&mut type_bindings);
-
         let mut type_scope = Scope::new_empty();
-        for (name, binding) in type_bindings {
-            let ident = Ident::new(Self::type_ns_id(), name);
+
+        for (name, binding) in prim::PRIM_EXPORTS.iter().chain(types::TY_EXPORTS.iter()) {
+            let ident = Ident::new(Self::type_ns_id(), (*name).into());
             type_scope
-                .insert_binding(EMPTY_SPAN, ident, binding)
+                .insert_binding(EMPTY_SPAN, ident, binding.clone())
                 .unwrap();
         }
 

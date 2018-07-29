@@ -947,8 +947,8 @@ pub struct LoweredTestExpr {
 
 #[cfg(test)]
 pub fn lowered_expr_for_str(data_str: &str) -> LoweredTestExpr {
-    use hir::prim::insert_prim_exports;
-    use hir::types::insert_ty_exports;
+    use hir::prim::PRIM_EXPORTS;
+    use hir::types::TY_EXPORTS;
     use syntax::parser::datum_from_str;
 
     let test_ns_id = NsId::new(1);
@@ -958,15 +958,14 @@ pub fn lowered_expr_for_str(data_str: &str) -> LoweredTestExpr {
     let mut source_loader = SourceLoader::new();
     let mut lcx = LoweringCtx::new(&package_paths, &mut source_loader);
 
-    // Extract our builtin exports
-    let mut exports = HashMap::<Box<str>, Binding>::new();
-    insert_prim_exports(&mut exports);
-    insert_ty_exports(&mut exports);
-
-    // Place them on our scope
-    for (name, binding) in exports {
+    // Create a basic scope
+    for (name, binding) in PRIM_EXPORTS.iter().chain(TY_EXPORTS.iter()) {
         scope
-            .insert_binding(EMPTY_SPAN, Ident::new(test_ns_id, name), binding)
+            .insert_binding(
+                EMPTY_SPAN,
+                Ident::new(test_ns_id, (*name).into()),
+                binding.clone(),
+            )
             .unwrap();
     }
 

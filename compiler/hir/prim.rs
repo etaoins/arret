@@ -1,33 +1,30 @@
 use hir::scope::Binding;
-use std::collections::HashMap;
 
-macro_rules! prims {
+macro_rules! export_prims {
     ( $( ($n:expr, $i:ident) ),* ) => {
         #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
         pub enum Prim {
+            // `(import)` is magically added to every scope. If we add it again in `PRIM_EXPORTS`
+            // we will trigger duplicate definition errors if someone imports the prim modules.
+            Import,
             $($i,)*
         }
 
-        pub fn insert_prim_exports(exports: &mut HashMap<Box<str>, Binding>) {
+        pub const PRIM_EXPORTS: &[(&str, Binding)] = &[
             $(
-                // `(import)` is magically added to every scope. If we add it again we will trigger
-                // duplicate definition errors if someone imports `[arret internal primitives]`.
-                if $n != "import" {
-                    exports.insert($n.into(), Binding::Prim(Prim::$i));
-                }
-            )*
-        }
+                ($n, Binding::Prim(Prim::$i))
+            ),*
+        ];
     }
 }
 
-prims!(
+export_prims!(
     ("def", Def),
     ("let", Let),
     ("fn", Fun),
     ("if", If),
     ("do", Do),
     ("quote", Quote),
-    ("import", Import),
     ("export", Export),
     ("defmacro", DefMacro),
     ("letmacro", LetMacro),

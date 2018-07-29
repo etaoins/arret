@@ -1,7 +1,8 @@
-use hir::prim::insert_prim_exports;
 use hir::scope::Binding;
-use hir::types::insert_ty_exports;
 use std::collections::HashMap;
+
+use hir::prim::PRIM_EXPORTS;
+use hir::types::TY_EXPORTS;
 
 #[derive(PartialEq, Debug)]
 pub struct Module {
@@ -14,17 +15,21 @@ impl Module {
     }
 
     pub fn prims_module() -> Module {
-        let mut prim_exports = HashMap::<Box<str>, Binding>::new();
-        insert_prim_exports(&mut prim_exports);
-
-        Module::new(prim_exports)
+        Module::new(
+            PRIM_EXPORTS
+                .iter()
+                .map(|(name, binding)| ((*name).into(), binding.clone()))
+                .collect(),
+        )
     }
 
     pub fn tys_module() -> Module {
-        let mut type_exports = HashMap::<Box<str>, Binding>::new();
-        insert_ty_exports(&mut type_exports);
-
-        Module::new(type_exports)
+        Module::new(
+            TY_EXPORTS
+                .iter()
+                .map(|(name, binding)| ((*name).into(), binding.clone()))
+                .collect(),
+        )
     }
 
     pub fn exports(&self) -> &HashMap<Box<str>, Binding> {

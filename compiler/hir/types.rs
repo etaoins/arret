@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::ops::Range;
 
 use hir::error::{Error, ErrorKind, Result};
@@ -331,50 +330,45 @@ pub fn try_lower_purity(scope: &Scope, datum: &NsDatum) -> Option<ty::purity::Po
     })
 }
 
-pub fn insert_ty_exports(exports: &mut HashMap<Box<str>, Binding>) {
-    macro_rules! export_ty {
-        ($name:expr, $type:expr) => {
-            exports.insert($name.into(), Binding::Ty($type));
-        };
-    }
-
-    macro_rules! export_ty_cons {
-        ($name:expr, $ty_cons:expr) => {
-            exports.insert($name.into(), Binding::TyCons($ty_cons));
-        };
-    }
-
-    macro_rules! export_purity {
-        ($name:expr, $purity:expr) => {
-            exports.insert($name.into(), Binding::Purity($purity));
-        };
-    }
-
-    export_ty!("Any", ty::Ty::Any.into_poly());
-
-    export_ty!("Bool", ty::Ty::Bool.into_poly());
-    export_ty!("Sym", ty::Ty::Sym.into_poly());
-    export_ty!("Str", ty::Ty::Str.into_poly());
-    export_ty!("Int", ty::Ty::Int.into_poly());
-    export_ty!("Float", ty::Ty::Float.into_poly());
-    export_ty!("Char", ty::Ty::Char.into_poly());
-
-    export_ty_cons!("List", TyCons::List);
-    export_ty_cons!("Listof", TyCons::Listof);
-    export_ty_cons!("Vector", TyCons::Vector);
-    export_ty_cons!("Vectorof", TyCons::Vectorof);
-    export_ty_cons!("Setof", TyCons::Set);
-    export_ty_cons!("Map", TyCons::Map);
-    export_ty_cons!("U", TyCons::Union);
-
-    export_ty_cons!("Type?", TyCons::TyPred);
-
-    export_purity!("->", Purity::Pure.into_poly());
-    export_purity!("->!", Purity::Impure.into_poly());
-
-    #[cfg(test)]
-    export_ty_cons!("RawU", TyCons::RawU);
+macro_rules! export_ty {
+    ($name:expr, $type:expr) => {
+        ($name, Binding::Ty(ty::Poly::Fixed($type)))
+    };
 }
+
+macro_rules! export_ty_cons {
+    ($name:expr, $ty_cons:expr) => {
+        ($name, Binding::TyCons($ty_cons))
+    };
+}
+
+macro_rules! export_purity {
+    ($name:expr, $purity:expr) => {
+        ($name, Binding::Purity(ty::purity::Poly::Fixed($purity)))
+    };
+}
+
+pub const TY_EXPORTS: &[(&str, Binding)] = &[
+    export_ty!("Any", ty::Ty::Any),
+    export_ty!("Bool", ty::Ty::Bool),
+    export_ty!("Sym", ty::Ty::Sym),
+    export_ty!("Str", ty::Ty::Str),
+    export_ty!("Int", ty::Ty::Int),
+    export_ty!("Float", ty::Ty::Float),
+    export_ty!("Char", ty::Ty::Char),
+    export_ty_cons!("List", TyCons::List),
+    export_ty_cons!("Listof", TyCons::Listof),
+    export_ty_cons!("Vector", TyCons::Vector),
+    export_ty_cons!("Vectorof", TyCons::Vectorof),
+    export_ty_cons!("Setof", TyCons::Set),
+    export_ty_cons!("Map", TyCons::Map),
+    export_ty_cons!("U", TyCons::Union),
+    export_ty_cons!("Type?", TyCons::TyPred),
+    export_purity!("->", Purity::Pure),
+    export_purity!("->!", Purity::Impure),
+    #[cfg(test)]
+    export_ty_cons!("RawU", TyCons::RawU),
+];
 
 struct StrForPolyCtx<'vars> {
     pvars: &'vars [ty::purity::PVar],
@@ -535,21 +529,17 @@ pub fn str_for_purity(pvars: &[ty::purity::PVar], purity: &ty::purity::Poly) -> 
 #[cfg(test)]
 pub fn poly_for_str(datum_str: &str) -> ty::Poly {
     use hir::ns::NsId;
-    use hir::prim::insert_prim_exports;
+    use hir::prim::PRIM_EXPORTS;
     use syntax::parser::datum_from_str;
     use syntax::span::EMPTY_SPAN;
 
     let test_ns_id = NsId::new(1);
 
     // Capture our exports
-    let mut exports = HashMap::<Box<str>, Binding>::new();
-    insert_prim_exports(&mut exports);
-    insert_ty_exports(&mut exports);
-
     // Place them on our scope
     let mut scope = Scope::new_empty();
-    for (name, binding) in exports {
-        if *name == *"U" {
+    for (name, binding) in PRIM_EXPORTS.iter().chain(TY_EXPORTS.iter()) {
+        if *name == "U" {
             // Using `U` in tests is very dubious as it invokes a lot of type system logic. It's
             // easy to write tautological tests due to `U` creating a simplified type. Rename to
             // `UnifyingU` so it's clear what's happening.
@@ -557,12 +547,16 @@ pub fn poly_for_str(datum_str: &str) -> ty::Poly {
                 .insert_binding(
                     EMPTY_SPAN,
                     Ident::new(test_ns_id, "UnifyingU".into()),
-                    binding,
+                    binding.clone(),
                 )
                 .unwrap();
         } else {
             scope
-                .insert_binding(EMPTY_SPAN, Ident::new(test_ns_id, name), binding)
+                .insert_binding(
+                    EMPTY_SPAN,
+                    Ident::new(test_ns_id, (*name).into()),
+                    binding.clone(),
+                )
                 .unwrap();
         }
     }
