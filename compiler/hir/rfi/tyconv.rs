@@ -67,14 +67,14 @@ impl ConvertableABIType for abitype::BoxedABIType {
 
         match self {
             BoxedABIType::Any => ty::Ty::Any.into_poly(),
-            BoxedABIType::Vector(elem) => ty::Ty::Vecof(Box::new(elem.to_poly())).into_poly(),
-            BoxedABIType::List(elem) => {
-                let list = ty::List::new(Box::new([]), Some(elem.to_poly()));
+            BoxedABIType::Vector(member) => ty::Ty::Vecof(Box::new(member.to_poly())).into_poly(),
+            BoxedABIType::List(member) => {
+                let list = ty::List::new(Box::new([]), Some(member.to_poly()));
                 ty::Ty::List(list).into_poly()
             }
-            BoxedABIType::Pair(elem) => {
-                let elem_poly = elem.to_poly();
-                let list = ty::List::new(Box::new([elem_poly.clone()]), Some(elem_poly));
+            BoxedABIType::Pair(member) => {
+                let member_poly = member.to_poly();
+                let list = ty::List::new(Box::new([member_poly.clone()]), Some(member_poly));
                 ty::Ty::List(list).into_poly()
             }
             BoxedABIType::DirectTagged(type_tag) => type_tag_to_poly_ty(*type_tag).into_poly(),
@@ -93,9 +93,9 @@ impl ConvertableABIType for abitype::BoxedABIType {
 
         match self {
             BoxedABIType::Any => "boxed::Any".to_owned(),
-            BoxedABIType::Vector(elem) => format!("boxed::Vector<{}>", elem.to_rust_str()),
-            BoxedABIType::List(elem) => format!("boxed::List<{}>", elem.to_rust_str()),
-            BoxedABIType::Pair(elem) => format!("boxed::Pair<{}>", elem.to_rust_str()),
+            BoxedABIType::Vector(member) => format!("boxed::Vector<{}>", member.to_rust_str()),
+            BoxedABIType::List(member) => format!("boxed::List<{}>", member.to_rust_str()),
+            BoxedABIType::Pair(member) => format!("boxed::Pair<{}>", member.to_rust_str()),
             BoxedABIType::DirectTagged(type_tag) => format!("boxed::{}", type_tag.to_str()),
             BoxedABIType::Union(name, _) => format!("boxed::{}", name),
         }
