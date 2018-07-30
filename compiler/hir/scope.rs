@@ -139,18 +139,33 @@ impl Scope {
         ident: Ident,
         binding: Binding,
     ) -> Result<(), Error> {
-        use std::collections::hash_map::Entry;
+        use std::iter;
+        self.insert_bindings(span, iter::once((ident, binding)))
+    }
 
-        match self.mut_data().entries.entry(ident) {
-            Entry::Occupied(occupied) => Err(Error::new(
-                span,
-                ErrorKind::DuplicateDef(occupied.get().span),
-            )),
-            Entry::Vacant(vacant) => {
-                vacant.insert(ScopeEntry { span, binding });
-                Ok(())
+    pub fn insert_bindings<I>(&mut self, span: Span, bindings: I) -> Result<(), Error>
+    where
+        I: Iterator<Item = (Ident, Binding)>,
+    {
+        use std::collections::hash_map::Entry;
+        let mut_data = self.mut_data();
+
+        mut_data.entries.reserve(bindings.size_hint().0);
+
+        for (ident, binding) in bindings {
+            match mut_data.entries.entry(ident) {
+                Entry::Occupied(occupied) => {
+                    return Err(Error::new(
+                        span,
+                        ErrorKind::DuplicateDef(occupied.get().span),
+                    ))
+                }
+                Entry::Vacant(vacant) => {
+                    vacant.insert(ScopeEntry { span, binding });
+                }
             }
         }
+        Ok(())
     }
 
     pub fn insert_var(&mut self, span: Span, ident: Ident, var_id: VarId) -> Result<(), Error> {

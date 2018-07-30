@@ -588,16 +588,16 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
     ) -> Result<(), Vec<Error>> {
         for arg_datum in arg_iter {
             let span = arg_datum.span();
+
             let bindings = lower_import_set(arg_datum, |span, module_name| {
                 Ok(self
                     .load_module(scope, span, module_name)?
                     .exports()
                     .clone())
-            })?;
+            })?.into_iter()
+            .map(|(name, binding)| (Ident::new(ns_id, name), binding));
 
-            for (name, binding) in bindings {
-                scope.insert_binding(span, Ident::new(ns_id, name), binding)?;
-            }
+            scope.insert_bindings(span, bindings)?;
         }
 
         Ok(())
@@ -700,8 +700,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                         } else {
                             Err(Error::new(datum.span(), ErrorKind::ExpectedSym))
                         }
-                    })
-                    .collect::<Result<Vec<DeferredModulePrim>>>()?;
+                    }).collect::<Result<Vec<DeferredModulePrim>>>()?;
 
                 Ok(deferred_exports)
             }
@@ -801,8 +800,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 EMPTY_SPAN,
                 Ident::new(ns_id, "import".into()),
                 Binding::Prim(Prim::Import),
-            )
-            .unwrap();
+            ).unwrap();
 
         // Extract all of our definitions.
         //
