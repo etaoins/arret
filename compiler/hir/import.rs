@@ -247,7 +247,7 @@ mod test {
     use hir::prim::Prim;
     use syntax::span::{t2s, EMPTY_SPAN};
 
-    fn bindings_for_import_set(datum: &str) -> Result<HashMap<Box<str>, Binding>> {
+    fn bindings_for_import_set(datum: &str) -> Result<Bindings> {
         use syntax::parser::datum_from_str;
 
         let test_ns_id = NsId::new(0);
