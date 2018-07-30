@@ -5,13 +5,13 @@ use std::path;
 
 use libloading;
 
-use syntax::span::{Span, EMPTY_SPAN};
+use syntax::span::Span;
 
 use hir::error::{Error, ErrorKind};
 use hir::module::Module;
-use hir::ns::{Ident, NsDatum, NsId};
+use hir::ns::{NsDatum, NsId};
 use hir::scope::Scope;
-use hir::{prim, types};
+use hir::types;
 use source::SourceLoader;
 use ty;
 
@@ -84,19 +84,9 @@ fn push_rfi_lib_path(path_buf: &mut path::PathBuf, package_name: &str) {
 
 impl RfiLoader {
     pub fn new() -> RfiLoader {
-        let mut type_scope = Scope::new_empty();
-
-        for (name, binding) in prim::PRIM_EXPORTS.iter().chain(types::TY_EXPORTS.iter()) {
-            let ident = Ident::new(Self::type_ns_id(), (*name).into());
-            type_scope
-                .insert_binding(EMPTY_SPAN, ident, binding.clone())
-                .unwrap();
-        }
-
         // TODO: Add `Num` type
-
         RfiLoader {
-            type_scope,
+            type_scope: Scope::new_with_primitives(),
             rust_libraries: vec![],
         }
     }

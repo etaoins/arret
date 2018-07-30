@@ -5,7 +5,7 @@ use hir::error::{Error, ErrorKind};
 use hir::ns::{Ident, NsDatum, NsId, NsIdCounter};
 use hir::prim::Prim;
 use hir::{types, VarId};
-use syntax::span::Span;
+use syntax::span::{Span, EMPTY_SPAN};
 use ty;
 
 new_indexing_id_type!(MacroId, u32);
@@ -50,10 +50,54 @@ impl ScopeData {
 pub struct Scope(Rc<ScopeData>);
 
 impl Scope {
-    pub fn new_empty() -> Scope {
+    /// Creates an empty root scope
+    pub fn empty() -> Scope {
         Scope(Rc::new(ScopeData {
             entries: HashMap::new(),
             ns_id_counter: NsIdCounter::new(),
+            parent: None,
+        }))
+    }
+
+    /// Creates a new root scope containing all primitives and types
+    ///
+    /// The bindings will be in `NsId(0)` with an empty span
+    pub fn new_with_primitives() -> Scope {
+        use hir::prim::PRIM_EXPORTS;
+        use hir::types::TY_EXPORTS;
+
+        let entries = PRIM_EXPORTS
+            .iter()
+            .chain(TY_EXPORTS.iter())
+            .map(|(name, binding)| ((*name).into(), binding.clone()));
+
+        Self::new_with_entries(entries)
+    }
+
+    /// Creates a new root scope with entries
+    ///
+    /// The bindings will be in `NsId(0)` with an empty span
+    pub fn new_with_entries<I>(entries: I) -> Scope
+    where
+        I: Iterator<Item = (Box<str>, Binding)>,
+    {
+        let mut ns_id_counter = NsIdCounter::new();
+        let ns_id = ns_id_counter.alloc();
+
+        let entries = entries
+            .map(|(name, binding)| {
+                (
+                    Ident::new(ns_id, (*name).into()),
+                    ScopeEntry {
+                        span: EMPTY_SPAN,
+                        binding: binding.clone(),
+                    },
+                )
+            }).collect::<HashMap<Ident, ScopeEntry>>();
+
+        Scope(Rc::new(ScopeData {
+            entries,
+            ns_id_counter,
             parent: None,
         }))
     }

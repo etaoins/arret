@@ -531,71 +531,48 @@ pub fn poly_for_str(datum_str: &str) -> ty::Poly {
     use hir::ns::NsId;
     use hir::prim::PRIM_EXPORTS;
     use syntax::parser::datum_from_str;
-    use syntax::span::EMPTY_SPAN;
 
-    let test_ns_id = NsId::new(1);
-
-    // Capture our exports
-    // Place them on our scope
-    let mut scope = Scope::new_empty();
-    for (name, binding) in PRIM_EXPORTS.iter().chain(TY_EXPORTS.iter()) {
-        if *name == "U" {
-            // Using `U` in tests is very dubious as it invokes a lot of type system logic. It's
-            // easy to write tautological tests due to `U` creating a simplified type. Rename to
-            // `UnifyingU` so it's clear what's happening.
-            scope
-                .insert_binding(
-                    EMPTY_SPAN,
-                    Ident::new(test_ns_id, "UnifyingU".into()),
-                    binding.clone(),
-                )
-                .unwrap();
-        } else {
-            scope
-                .insert_binding(
-                    EMPTY_SPAN,
-                    Ident::new(test_ns_id, (*name).into()),
-                    binding.clone(),
-                )
-                .unwrap();
-        }
-    }
+    let prim_entries = PRIM_EXPORTS
+        .iter()
+        .chain(TY_EXPORTS.iter())
+        .map(|(name, binding)| {
+            if *name == "U" {
+                // Using `U` in tests is very dubious as it invokes a lot of type system logic. It's
+                // easy to write tautological tests due to `U` creating a simplified type. Rename to
+                // `UnifyingU` so it's clear what's happening.
+                ("UnifyingU".into(), binding.clone())
+            } else {
+                ((*name).into(), binding.clone())
+            }
+        });
 
     // Add some test polymorphic variables
-    for var_idx in 0..26 {
+
+    let tvar_entries = (0..26).map(|var_idx| {
         let var_name = (b'A' + var_idx) as char;
         let tvar_id = ty::TVarId::new(var_idx as usize);
         let poly = ty::Poly::Var(tvar_id);
 
-        scope
-            .insert_binding(
-                EMPTY_SPAN,
-                Ident::new(test_ns_id, var_name.to_string().into_boxed_str()),
-                Binding::Ty(poly),
-            )
-            .unwrap();
-    }
+        (var_name.to_string().into_boxed_str(), Binding::Ty(poly))
+    });
 
-    for var_idx in 0..26 {
+    let pvar_entries = (0..26).map(|var_idx| {
         let var_name = format!("->{}", (b'A' + var_idx) as char);
         let pvar_id = ty::purity::PVarId::new(var_idx as usize);
         let poly = ty::purity::Poly::Var(pvar_id);
 
-        scope
-            .insert_binding(
-                EMPTY_SPAN,
-                Ident::new(test_ns_id, var_name.to_string().into_boxed_str()),
-                Binding::Purity(poly),
-            )
-            .unwrap();
-    }
+        (var_name.to_string().into_boxed_str(), Binding::Purity(poly))
+    });
+
+    let all_entries = prim_entries.chain(tvar_entries).chain(pvar_entries);
+    let scope = Scope::new_with_entries(all_entries);
 
     let test_datum = datum_from_str(datum_str).unwrap();
 
     lower_poly(
         &[],
         &scope,
-        NsDatum::from_syntax_datum(test_ns_id, test_datum),
+        NsDatum::from_syntax_datum(NsId::new(0), test_datum),
     ).unwrap()
 }
 

@@ -864,7 +864,7 @@ pub fn lower_program(
 
     let data = parse_module_data(source_loader.source_file(source_file_id))?;
 
-    let mut root_scope = Scope::new_empty();
+    let mut root_scope = Scope::empty();
     let mut lcx = LoweringCtx::new(package_paths, source_loader);
     lcx.lower_module(&mut root_scope, data)?;
 
@@ -921,7 +921,7 @@ fn import_statement_for_module(names: &[&'static str]) -> Datum {
 fn module_for_str(data_str: &str) -> Result<Module> {
     use syntax::parser::data_from_str;
 
-    let mut root_scope = Scope::new_empty();
+    let mut root_scope = Scope::empty();
 
     let mut test_data = data_from_str(data_str).unwrap();
     let mut program_data = vec![
@@ -947,27 +947,14 @@ pub struct LoweredTestExpr {
 
 #[cfg(test)]
 pub fn lowered_expr_for_str(data_str: &str) -> LoweredTestExpr {
-    use hir::prim::PRIM_EXPORTS;
-    use hir::types::TY_EXPORTS;
     use syntax::parser::datum_from_str;
 
-    let test_ns_id = NsId::new(1);
-    let mut scope = Scope::new_empty();
+    let test_ns_id = NsId::new(0);
+    let scope = Scope::new_with_primitives();
 
     let package_paths = PackagePaths::default();
     let mut source_loader = SourceLoader::new();
     let mut lcx = LoweringCtx::new(&package_paths, &mut source_loader);
-
-    // Create a basic scope
-    for (name, binding) in PRIM_EXPORTS.iter().chain(TY_EXPORTS.iter()) {
-        scope
-            .insert_binding(
-                EMPTY_SPAN,
-                Ident::new(test_ns_id, (*name).into()),
-                binding.clone(),
-            )
-            .unwrap();
-    }
 
     let test_datum = datum_from_str(data_str).unwrap();
     let test_nsdatum = NsDatum::from_syntax_datum(test_ns_id, test_datum);
