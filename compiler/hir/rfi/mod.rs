@@ -1,5 +1,6 @@
 mod tyconv;
 
+use std::collections::HashMap;
 use std::os::raw::c_void;
 use std::path;
 
@@ -8,7 +9,6 @@ use libloading;
 use syntax::span::Span;
 
 use hir::error::{Error, ErrorKind};
-use hir::module::Module;
 use hir::ns::{NsDatum, NsId};
 use hir::scope::Scope;
 use hir::types;
@@ -30,7 +30,9 @@ pub struct Fun {
     pub entry_point: *const c_void,
 }
 
-pub struct RfiLoader {
+pub type Module = HashMap<&'static str, Fun>;
+
+pub struct Loader {
     type_scope: Scope,
     rust_libraries: Vec<libloading::Library>,
 }
@@ -82,10 +84,10 @@ fn push_rfi_lib_path(path_buf: &mut path::PathBuf, package_name: &str) {
     path_buf.push(format!("lib{}.so", package_name));
 }
 
-impl RfiLoader {
-    pub fn new() -> RfiLoader {
+impl Loader {
+    pub fn new() -> Loader {
         // TODO: Add `Num` type
-        RfiLoader {
+        Loader {
             type_scope: Scope::new_with_primitives(),
             rust_libraries: vec![],
         }
@@ -184,7 +186,7 @@ impl RfiLoader {
         source_loader: &mut SourceLoader,
         base_path: &path::Path,
         package_name: &str,
-    ) -> Result<Module, Error> {
+    ) -> Result<HashMap<&'static str, Fun>, Error> {
         let mut path_buf = path::PathBuf::new();
         path_buf.push(base_path);
         push_rfi_lib_path(&mut path_buf, package_name);
@@ -203,14 +205,17 @@ impl RfiLoader {
             &(**exports_symbol)
         };
 
-        for (name, rust_fun) in exports {
-            let entry_point = unsafe {
-                *rust_library
-                    .get::<*const c_void>(rust_fun.entry_point.as_bytes())
-                    .map_err(map_io_err)?
-            };
+        let module = exports
+            .iter()
+            .map(|(name, rust_fun)| {
+                let entry_point = unsafe {
+                    *rust_library
+                        .get::<*const c_void>(rust_fun.entry_point.as_bytes())
+                        .map_err(map_io_err)?
+                };
 
-            self.process_rust_fun(rust_library_id, entry_point, rust_fun)
+                let fun = self
+                .process_rust_fun(rust_library_id, entry_point, rust_fun)
                 .map_err(|err| {
                     // This is a gross hack. We don't want to insert an entry in to the
                     // `SourceLoader` for every Rust function. This requires at least one memory
@@ -223,11 +228,13 @@ impl RfiLoader {
 
                     err.with_span_offset(error_offset)
                 })?;
-        }
+
+                Ok((*name, fun))
+            }).collect::<Result<HashMap<&'static str, Fun>, Error>>()?;
 
         self.rust_libraries.push(rust_library);
 
-        unimplemented!("Load Rust module with {:?} exports", exports.len());
+        Ok(module)
     }
 }
 
@@ -241,9 +248,9 @@ mod test {
     fn binding_fun_to_poly_type(
         rust_fun: &'static binding::RustFun,
     ) -> Result<ty::Fun<ty::Poly>, Error> {
-        let rfi_loader = RfiLoader::new();
+        let loader = Loader::new();
 
-        rfi_loader
+        loader
             .process_rust_fun(RustLibraryId::new(0), ptr::null(), rust_fun)
             .map(|rfi_fun| rfi_fun.arret_fun_type)
     }

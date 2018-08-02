@@ -2,8 +2,7 @@ use std::collections::HashMap;
 use std::path;
 
 use hir::error::{Error, ErrorKind, Result};
-use hir::module::Module;
-use hir::rfi::RfiLoader;
+use hir::rfi;
 use source::{SourceFile, SourceLoader};
 use syntax::datum::Datum;
 use syntax::parser::data_from_str_with_span_offset;
@@ -52,7 +51,7 @@ pub struct ModuleName {
 
 pub enum LoadedModule {
     Source(Vec<Datum>),
-    Rust(Module),
+    Rust(rfi::Module),
 }
 
 impl ModuleName {
@@ -78,7 +77,7 @@ pub fn parse_module_data(source_file: &SourceFile) -> Result<Vec<Datum>> {
 
 pub fn load_module_by_name(
     source_loader: &mut SourceLoader,
-    rfi_loader: &mut RfiLoader,
+    rfi_loader: &mut rfi::Loader,
     span: Span,
     package_paths: &PackagePaths,
     module_name: &ModuleName,
@@ -97,8 +96,7 @@ pub fn load_module_by_name(
                 source_loader,
                 &package_path.rust_base,
                 &module_name.package_name,
-            )
-            .map(LoadedModule::Rust)
+            ).map(LoadedModule::Rust)
     } else {
         // Look file files starting in the package path
         let mut path_buf = path::PathBuf::new();
