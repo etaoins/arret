@@ -5,3 +5,14 @@ rust: [nightly]
 
 sudo: false
 
+addons:
+    apt:
+        sources:
+            - llvm-toolchain-trusty-6.0
+            - ubuntu-toolchain-r-test
+        packages:
+            - llvm-6.0
+            - llvm-6.0-dev
+
+env:
+    LLVM_SYS_60_PREFIX: /usr/lib/llvm-6.0
