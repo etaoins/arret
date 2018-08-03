@@ -6,7 +6,7 @@ authors = ["Ryan Cumming <etaoins@gmail.com>"]
 [lib]
 name = "compiler"
 path = "lib.rs"
-crate-type = ["dylib"]
+crate-type = ["lib"]
 
 [dependencies]
 ansi_term = "0.11"

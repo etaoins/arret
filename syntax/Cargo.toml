@@ -6,4 +6,4 @@ authors = ["Ryan Cumming <etaoins@gmail.com>"]
 [lib]
 name = "syntax"
 path = "lib.rs"
-crate-type = ["dylib"]
+crate-type = ["lib"]
