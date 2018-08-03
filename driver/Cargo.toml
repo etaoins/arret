@@ -8,6 +8,6 @@ name = "arret"
 path = "main.rs"
 
 [dependencies]
-clap = "2.31"
+clap = "2.32"
 syntax = { path = "../syntax" }
 compiler = { path = "../compiler" }
