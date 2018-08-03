@@ -19,6 +19,7 @@ use runtime::{abitype, binding};
 
 new_indexing_id_type!(RustLibraryId, u32);
 
+#[derive(Debug)]
 pub struct Fun {
     pub rust_library_id: RustLibraryId,
 

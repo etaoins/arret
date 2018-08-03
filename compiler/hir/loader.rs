@@ -49,6 +49,7 @@ pub struct ModuleName {
     terminal_name: Box<str>,
 }
 
+#[derive(Debug)]
 pub enum LoadedModule {
     Source(Vec<Datum>),
     Rust(rfi::Module),
@@ -114,5 +115,59 @@ pub fn load_module_by_name(
             .map_err(|err| Error::from_module_io(span, path, &err))?;
 
         parse_module_data(source_loader.source_file(source_file_id)).map(LoadedModule::Source)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use syntax::span::EMPTY_SPAN;
+
+    fn load_stdlib_module(name: &'static str) -> Result<LoadedModule> {
+        let mut source_loader = SourceLoader::new();
+        let mut rfi_loader = rfi::Loader::new();
+        let package_paths = PackagePaths::default();
+        let module_name = ModuleName::new("stdlib".into(), vec![], name.into());
+
+        load_module_by_name(
+            &mut source_loader,
+            &mut rfi_loader,
+            EMPTY_SPAN,
+            &package_paths,
+            &module_name,
+        )
+    }
+
+    #[test]
+    fn load_stdlib_base() {
+        let loaded_module = load_stdlib_module("base").unwrap();
+
+        if let LoadedModule::Source(data) = loaded_module {
+            assert!(!data.is_empty());
+        } else {
+            panic!("Did not get source module; got {:?}", loaded_module);
+        }
+    }
+
+    #[test]
+    fn load_stdlib_rust() {
+        // Ensure we can locate and load the module. The RFI itself is tested separately.
+        let loaded_module = load_stdlib_module("rust").unwrap();
+
+        if let LoadedModule::Rust(rfi_module) = loaded_module {
+            assert!(!rfi_module.is_empty());
+        } else {
+            panic!("Did not get Rust module; got {:?}", loaded_module);
+        }
+    }
+
+    #[test]
+    fn load_stdlib_missing() {
+        let err = load_stdlib_module("notamodule").unwrap_err();
+
+        if let ErrorKind::ModuleNotFound(_) = err.kind() {
+        } else {
+            panic!("Unexpected error kind: {:?}", err.kind())
+        }
     }
 }
