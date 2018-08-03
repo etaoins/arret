@@ -1,5 +1,8 @@
 # Arret
 
+[![Build Status](https://travis-ci.org/etaoins/arret.svg?branch=master)](https://travis-ci.org/etaoins/arret)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 ## Overview
 
 Arret is pure functional, strongly typed language with Lisp-like syntax.
