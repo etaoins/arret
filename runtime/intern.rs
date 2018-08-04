@@ -39,9 +39,6 @@ struct InternedInline {
 }
 
 impl InternedInline {
-    // We need to take a reference so we can return a reference
-    // See rust-lang-nursery/rust-clippy#2946C
-    #![cfg_attr(feature = "cargo-clippy", allow(trivially_copy_pass_by_ref))]
     fn as_str(&self) -> &str {
         // Find the first fill byte. If none is found assume our full inline size.
         let length = self
@@ -67,7 +64,6 @@ enum InternedRepr<'a> {
 }
 
 impl InternedSym {
-    #![cfg_attr(feature = "cargo-clippy", allow(trivially_copy_pass_by_ref))]
     fn repr(&self) -> InternedRepr {
         unsafe {
             if self.indexed.flag_byte == INDEXED_FLAG {
@@ -152,7 +148,6 @@ impl Interner {
         }
     }
 
-    #[cfg_attr(feature = "cargo-clippy", allow(trivially_copy_pass_by_ref))]
     pub fn unintern<'a>(&'a self, interned: &'a InternedSym) -> &'a str {
         match interned.repr() {
             InternedRepr::Indexed(indexed) => &self.names[indexed.name_idx as usize],
