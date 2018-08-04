@@ -1,4 +1,4 @@
-use std::ptr;
+use std::{mem, ptr};
 
 use boxed::heap::Heap;
 use boxed::refs::Gc;
@@ -106,9 +106,6 @@ fn visit_box(mut box_ref: &mut Gc<Any>, old_heap: &Heap, new_heap: &mut Heap) {
     }
 }
 
-// We could take `Heap` by reference but after we collect the old heap is unusable. Taking it by
-// value lets us use Rust's ownership system to express that.
-#[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
 pub fn collect_roots(old_heap: Heap, roots: Vec<&mut Gc<Any>>) -> Heap {
     let mut new_heap = Heap::new();
 
@@ -116,6 +113,8 @@ pub fn collect_roots(old_heap: Heap, roots: Vec<&mut Gc<Any>>) -> Heap {
         visit_box(root, &old_heap, &mut new_heap);
     }
 
+    // The `old_heap` is now unusable
+    mem::drop(old_heap);
     new_heap
 }
 
