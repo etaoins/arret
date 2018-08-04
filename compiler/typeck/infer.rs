@@ -4,6 +4,7 @@ use std::result;
 
 use hir;
 use hir::destruc;
+use hir::rfi;
 use syntax::datum::Datum;
 use syntax::span::Span;
 use ty;
@@ -182,8 +183,7 @@ impl<'vars> InferCtx<'vars> {
                 });
 
                 InputDef::Pending(hir_def)
-            })
-            .collect::<Vec<InputDef>>();
+            }).collect::<Vec<InputDef>>();
 
         let complete_defs = Vec::with_capacity(input_defs.len());
         InferCtx {
@@ -432,8 +432,7 @@ impl<'vars> InferCtx<'vars> {
                 } else {
                     None
                 }
-            })
-            .ok_or_else(|| {
+            }).ok_or_else(|| {
                 Error::new(
                     span,
                     ErrorKind::IsNotTy(self.str_for_poly(&poly_type), "(Listof Any)".into()),
@@ -472,7 +471,8 @@ impl<'vars> InferCtx<'vars> {
             VarType::ParamRest(free_ty_id) => {
                 let new_free_type = {
                     let current_member_type = &self.free_ty_polys[free_ty_id.to_usize()];
-                    let required_member_type = self.member_type_for_poly_list(span, required_type)?;
+                    let required_member_type =
+                        self.member_type_for_poly_list(span, required_type)?;
 
                     self.type_for_free_ref(&required_member_type, span, current_member_type)?
                 };
@@ -515,8 +515,7 @@ impl<'vars> InferCtx<'vars> {
                 // The type of this expression doesn't matter; its value is discarded
                 self.visit_expr(fcx, &ty::Ty::Any.into_poly(), non_terminal_expr)
                     .map(|node| node.expr)
-            })
-            .collect::<Result<Vec<hir::Expr<ty::Poly>>>>()?;
+            }).collect::<Result<Vec<hir::Expr<ty::Poly>>>>()?;
 
         let terminal_node = self.visit_expr(fcx, required_type, terminal_expr)?;
         inferred_exprs.push(terminal_node.expr);
@@ -796,9 +795,9 @@ impl<'vars> InferCtx<'vars> {
                     ));
                 }
 
-                let subject_expr = fixed_arg_exprs
-                    .pop()
-                    .ok_or_else(|| Error::new(span, ErrorKind::InsufficientArgs(0, wanted_arity)))?;
+                let subject_expr = fixed_arg_exprs.pop().ok_or_else(|| {
+                    Error::new(span, ErrorKind::InsufficientArgs(0, wanted_arity))
+                })?;
 
                 let subject_var_id = if let hir::Expr::Ref(_, var_id) = subject_expr {
                     Some(var_id)
@@ -903,6 +902,24 @@ impl<'vars> InferCtx<'vars> {
         })
     }
 
+    fn visit_rust_fun(
+        &self,
+        required_type: &ty::Poly,
+        span: Span,
+        rust_fun: Box<rfi::Fun>,
+    ) -> Result<InferredNode> {
+        // Rust functions have their types validated by the RFI system when they're loaded
+        // We just need to make sure we satisfy `required_type` and convert to an `InferredNode`
+        let poly_type = ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into_poly();
+        self.ensure_is_a(span, &poly_type, required_type)?;
+
+        Ok(InferredNode {
+            expr: hir::Expr::RustFun(span, rust_fun),
+            poly_type,
+            type_cond: None,
+        })
+    }
+
     fn visit_expr_with_self_var_id(
         &mut self,
         fcx: &mut FunCtx,
@@ -915,6 +932,9 @@ impl<'vars> InferCtx<'vars> {
             hir::Expr::Cond(span, cond) => self.visit_cond(fcx, required_type, span, *cond),
             hir::Expr::Do(exprs) => self.visit_do(fcx, required_type, exprs),
             hir::Expr::Fun(span, fun) => self.visit_fun(required_type, span, *fun, self_var_id),
+            hir::Expr::RustFun(span, rust_fun) => {
+                self.visit_rust_fun(required_type, span, rust_fun)
+            }
             hir::Expr::TyPred(span, test_type) => {
                 self.visit_ty_pred(required_type, span, test_type)
             }

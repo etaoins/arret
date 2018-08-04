@@ -342,6 +342,10 @@ impl Ty<Poly> {
     pub fn into_poly(self) -> Poly {
         Poly::Fixed(self)
     }
+
+    pub fn into_decl(self) -> Decl {
+        Decl::Known(Poly::Fixed(self))
+    }
 }
 
 impl TVarIds for Range<TVarId> {
@@ -404,11 +408,4 @@ impl TVarIds for EmptyTVarIds {
 pub enum Decl {
     Known(Poly),
     Free,
-}
-
-impl Ty<Poly> {
-    #[cfg(test)]
-    pub fn into_decl(self) -> Decl {
-        Decl::Known(Poly::Fixed(self))
-    }
 }

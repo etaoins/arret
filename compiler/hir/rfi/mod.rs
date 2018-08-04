@@ -19,16 +19,22 @@ use runtime::{abitype, binding};
 
 new_indexing_id_type!(RustLibraryId, u32);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Fun {
-    pub rust_library_id: RustLibraryId,
+    rust_library_id: RustLibraryId,
 
-    pub arret_fun_type: ty::Fun<ty::Poly>,
-    pub takes_task: bool,
-    pub params: &'static [abitype::ABIType],
-    pub ret: &'static abitype::RetABIType,
+    arret_fun_type: ty::Fun<ty::Poly>,
+    takes_task: bool,
+    params: &'static [abitype::ABIType],
+    ret: &'static abitype::RetABIType,
     // TODO: Use ! once its stable
-    pub entry_point: *const c_void,
+    entry_point: *const c_void,
+}
+
+impl Fun {
+    pub fn arret_fun_type(&self) -> &ty::Fun<ty::Poly> {
+        &self.arret_fun_type
+    }
 }
 
 pub type Module = HashMap<&'static str, Fun>;

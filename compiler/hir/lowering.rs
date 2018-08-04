@@ -24,6 +24,7 @@ pub struct LoweringCtx<'pp, 'sl> {
     package_paths: &'pp PackagePaths,
     source_loader: &'sl mut SourceLoader,
 
+    defs: Vec<Def<ty::Decl>>,
     deferred_defs: Vec<DeferredDef>,
 
     var_id_counter: VarIdCounter,
@@ -84,11 +85,15 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         LoweringCtx {
             package_paths,
             source_loader,
+
+            defs: vec![],
             deferred_defs: vec![],
+
             var_id_counter: VarIdCounter::new(),
             loaded_modules,
             rfi_loader: rfi::Loader::new(),
             macros: vec![],
+
             pvars: vec![],
             tvars: vec![],
         }
@@ -570,9 +575,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 &module_name,
             )? {
                 LoadedModule::Source(module_data) => self.lower_module(scope, module_data)?,
-                LoadedModule::Rust(_) => {
-                    panic!("unimplemented!");
-                }
+                LoadedModule::Rust(rfi_module) => self.include_rfi_module(span, rfi_module),
             }
         };
 
@@ -580,6 +583,34 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             .loaded_modules
             .entry(module_name)
             .or_insert(loaded_module))
+    }
+
+    fn include_rfi_module(&mut self, span: Span, rfi_module: rfi::Module) -> Module {
+        let mut exports = HashMap::new();
+
+        exports.reserve(rfi_module.len());
+        self.defs.reserve(rfi_module.len());
+
+        for (name, rust_fun) in rfi_module {
+            let var_id = self.var_id_counter.alloc();
+            let def = Def {
+                destruc: destruc::Destruc::Scalar(
+                    span,
+                    destruc::Scalar::new(
+                        Some(var_id),
+                        name.into(),
+                        ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into_decl(),
+                    ),
+                ),
+                span,
+                value_expr: Expr::RustFun(span, Box::new(rust_fun)),
+            };
+
+            self.defs.push(def);
+            exports.insert(name.into(), Binding::Var(var_id));
+        }
+
+        Module::new(exports)
     }
 
     fn lower_import(
@@ -868,8 +899,12 @@ pub fn lower_program(
     let mut lcx = LoweringCtx::new(package_paths, source_loader);
     lcx.lower_module(&mut root_scope, data)?;
 
+    // Extract our defs from the `lcx`
+    // We can't just extract its fields because we still need to `lower_expr` using it
+    let mut defs = std::mem::replace(&mut lcx.defs, vec![]);
     let deferred_defs = std::mem::replace(&mut lcx.deferred_defs, vec![]);
-    let mut defs: Vec<Def<ty::Decl>> = vec![];
+    defs.reserve(deferred_defs.len());
+
     let mut errors: Vec<Error> = vec![];
 
     for DeferredDef(span, destruc, value_datum) in deferred_defs {

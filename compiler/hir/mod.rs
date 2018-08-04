@@ -1,13 +1,13 @@
-pub mod destruc;
+pub(crate) mod destruc;
 mod error;
 mod import;
 mod loader;
-pub mod lowering;
+pub(crate) mod lowering;
 mod macros;
-pub mod module;
+pub(crate) mod module;
 mod ns;
 mod prim;
-mod rfi;
+pub(crate) mod rfi;
 mod scope;
 mod types;
 mod util;
@@ -71,6 +71,7 @@ pub enum Expr<T: HirType> {
     Lit(Datum),
     App(Span, Box<App<T>>),
     Fun(Span, Box<Fun<T>>),
+    RustFun(Span, Box<rfi::Fun>),
     Let(Span, Box<Let<T>>),
     Cond(Span, Box<Cond<T>>),
     Ref(Span, VarId),
