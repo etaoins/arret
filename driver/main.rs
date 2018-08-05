@@ -1,6 +1,7 @@
 #![cfg_attr(feature = "cargo-clippy", warn(clippy))]
 
 extern crate ansi_term;
+extern crate app_dirs;
 extern crate clap;
 extern crate compiler;
 extern crate rustyline;
