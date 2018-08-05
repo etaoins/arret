@@ -1,5 +1,6 @@
 use ansi_term::Colour;
 use app_dirs;
+use rustyline;
 
 use compiler;
 
@@ -10,15 +11,62 @@ const APP_INFO: app_dirs::AppInfo = app_dirs::AppInfo {
     author: "arret",
 };
 
+struct Completer {
+    bound_names: Vec<String>,
+}
+
+impl Completer {
+    fn new<'a>(names_iter: impl Iterator<Item = &'a str>) -> Completer {
+        Completer {
+            bound_names: names_iter.map(|s| s.to_owned()).collect(),
+        }
+    }
+}
+
+impl rustyline::completion::Completer for Completer {
+    fn complete(&self, line: &str, pos: usize) -> rustyline::Result<(usize, Vec<String>)> {
+        use syntax::parser::is_identifier_char;
+
+        let prefix_start = line[0..pos]
+            .rfind(|c| !is_identifier_char(c))
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let prefix = &line[prefix_start..pos];
+
+        let suffix = if line.len() > pos {
+            let suffix_end = line[pos..]
+                .find(|c| !is_identifier_char(c))
+                .map(|i| i + pos)
+                .unwrap_or_else(|| line.len());
+            &line[pos..suffix_end]
+        } else {
+            ""
+        };
+
+        let options = self
+            .bound_names
+            .iter()
+            .filter_map(|name| {
+                if name.starts_with(prefix) && name.ends_with(suffix) {
+                    Some((&name[0..name.len() - suffix.len()]).to_owned())
+                } else {
+                    None
+                }
+            }).collect();
+
+        Ok((prefix_start, options))
+    }
+}
+
 pub fn interactive_loop(cfg: &DriverConfig) {
     use compiler::repl::EvaledLine;
+    use rustyline;
     use rustyline::error::ReadlineError;
-    use rustyline::Editor;
 
     // Setup our REPL backend
     let mut source_loader = compiler::SourceLoader::new();
     let mut repl_ctx = compiler::repl::ReplCtx::new(&cfg.package_paths, &mut source_loader);
-    let mut rl = Editor::<()>::new();
+    let mut rl = rustyline::Editor::<Completer>::new();
 
     // Import [stdlib base] so we have most useful things defined
     let initial_import = "(import [stdlib base])".to_owned();
@@ -27,6 +75,7 @@ pub fn interactive_loop(cfg: &DriverConfig) {
             reportable.report(repl_ctx.source_loader())
         }
     }
+    rl.set_completer(Some(Completer::new(repl_ctx.bound_names())));
 
     // Load our history
     let mut history_path = app_dirs::app_root(app_dirs::AppDataType::UserData, &APP_INFO);
@@ -52,6 +101,9 @@ pub fn interactive_loop(cfg: &DriverConfig) {
                 match repl_ctx.eval_line(line) {
                     Ok(EvaledLine::EmptyInput) => {}
                     Ok(EvaledLine::Defs(count)) => {
+                        // Refresh our completions
+                        rl.set_completer(Some(Completer::new(repl_ctx.bound_names())));
+
                         let defs_noun = if count == 1 {
                             "definition"
                         } else {

@@ -20,7 +20,7 @@ fn is_whitespace(c: char) -> bool {
     }
 }
 
-fn is_identifier_char(c: char) -> bool {
+pub fn is_identifier_char(c: char) -> bool {
     match c {
         'A'...'Z' | 'a'...'z' | '0'...'9' |
         // Punctuation allowed at beginning of an identiifer

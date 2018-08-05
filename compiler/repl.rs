@@ -85,6 +85,19 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
         self.lcx.source_loader()
     }
 
+    /// Returns all names bound in the root scope and namespace
+    pub fn bound_names(&self) -> impl Iterator<Item = &str> {
+        let ns_id = self.ns_id;
+
+        self.scope.bound_idents().filter_map(move |ident| {
+            if ident.ns_id() == ns_id {
+                Some(ident.name())
+            } else {
+                None
+            }
+        })
+    }
+
     pub fn eval_line(&mut self, input: String) -> Result<EvaledLine, Error> {
         use hir::lowering::LoweredReplDatum;
 

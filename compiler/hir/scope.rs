@@ -214,6 +214,11 @@ impl Scope {
         }
     }
 
+    /// Returns all bound idents
+    pub fn bound_idents(&self) -> impl Iterator<Item = &Ident> {
+        self.data().entries.iter().map(|(ident, _)| ident)
+    }
+
     /// Allocates a new ns_id
     ///
     /// This is not globally unique; it will only be unique in the current scope chain
