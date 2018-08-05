@@ -25,7 +25,6 @@ pub struct LoweringCtx<'pp, 'sl> {
     source_loader: &'sl mut SourceLoader,
 
     defs: Vec<Def<ty::Decl>>,
-    deferred_defs: Vec<DeferredDef>,
 
     var_id_counter: VarIdCounter,
     loaded_modules: HashMap<ModuleName, Module>,
@@ -42,12 +41,9 @@ pub struct LoweredProgram {
     pub tvars: Vec<ty::TVar>,
 }
 
-struct DeferredDef(Span, destruc::Destruc<ty::Decl>, NsDatum);
-struct DeferredExport(Span, Ident);
-
 enum DeferredModulePrim {
-    Def(DeferredDef),
-    Export(DeferredExport),
+    Def(Span, destruc::Destruc<ty::Decl>, NsDatum),
+    Export(Span, Ident),
 }
 
 pub enum LoweredReplDatum {
@@ -92,7 +88,6 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             source_loader,
 
             defs: vec![],
-            deferred_defs: vec![],
 
             var_id_counter: VarIdCounter::new(),
             loaded_modules,
@@ -734,7 +729,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 let deferred_exports = arg_iter
                     .map(|datum| {
                         if let NsDatum::Ident(span, ident) = datum {
-                            Ok(DeferredModulePrim::Export(DeferredExport(span, ident)))
+                            Ok(DeferredModulePrim::Export(span, ident))
                         } else {
                             Err(Error::new(datum.span(), ErrorKind::ExpectedSym))
                         }
@@ -750,11 +745,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
 
                 let value_datum = arg_iter.next().unwrap();
 
-                Ok(vec![DeferredModulePrim::Def(DeferredDef(
-                    span,
-                    destruc,
-                    value_datum,
-                ))])
+                Ok(vec![DeferredModulePrim::Def(span, destruc, value_datum)])
             }
             Prim::DefMacro => Ok(self.lower_defmacro(scope, span, arg_iter).map(|_| vec![])?),
             Prim::DefType => Ok(self.lower_deftype(scope, span, arg_iter).map(|_| vec![])?),
@@ -842,27 +833,17 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
 
         // Extract all of our definitions.
         //
-        // This occurs in three passes:
+        // This occurs in two passes:
         // - Imports, types and macros are resolved immediately and cannot refer to bindings later
         //   in the body
-        // - Exports are resolved after the module has been loaded
-        // - Other definitions are lowered at the end of the program once all bindings have been
-        //   introduced.
-        let mut deferred_exports = Vec::<DeferredExport>::new();
+        // - Definitions are resolved after the module has been loaded
+        let mut deferred_prims = Vec::<DeferredModulePrim>::new();
+
         for input_datum in data {
             let ns_datum = NsDatum::from_syntax_datum(ns_id, input_datum);
             match self.lower_module_def(scope, ns_datum) {
-                Ok(new_deferred_prims) => {
-                    for deferred_prim in new_deferred_prims {
-                        match deferred_prim {
-                            DeferredModulePrim::Export(deferred_export) => {
-                                deferred_exports.push(deferred_export);
-                            }
-                            DeferredModulePrim::Def(deferred_def) => {
-                                self.deferred_defs.push(deferred_def);
-                            }
-                        }
-                    }
+                Ok(mut new_deferred_prims) => {
+                    deferred_prims.append(&mut new_deferred_prims);
                 }
                 Err(mut new_errors) => {
                     errors.append(&mut new_errors);
@@ -871,14 +852,30 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         }
 
         // Process any exports at the end of the module
-        let mut exports = HashMap::with_capacity(deferred_exports.len());
-        for DeferredExport(span, ident) in deferred_exports {
-            match scope.get_or_err(span, &ident) {
-                Ok(binding) => {
-                    exports.insert(ident.into_name(), binding);
-                }
-                Err(err) => {
-                    errors.push(err);
+        let mut exports = HashMap::new();
+        for deferred_prim in deferred_prims {
+            match deferred_prim {
+                DeferredModulePrim::Export(span, ident) => match scope.get_or_err(span, &ident) {
+                    Ok(binding) => {
+                        exports.insert(ident.into_name(), binding);
+                    }
+                    Err(err) => {
+                        errors.push(err);
+                    }
+                },
+                DeferredModulePrim::Def(span, destruc, value_datum) => {
+                    match self.lower_expr(scope, value_datum) {
+                        Ok(value_expr) => {
+                            self.defs.push(Def {
+                                span,
+                                destruc,
+                                value_expr,
+                            });
+                        }
+                        Err(error) => {
+                            errors.push(error);
+                        }
+                    }
                 }
             }
         }
@@ -921,7 +918,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             Ok(deferred_prims) => {
                 for deferred_prim in deferred_prims {
                     match deferred_prim {
-                        DeferredModulePrim::Def(DeferredDef(span, destruc, value_datum)) => {
+                        DeferredModulePrim::Def(span, destruc, value_datum) => {
                             let value_expr = self.lower_expr(scope, value_datum)?;
                             self.defs.push(Def {
                                 span,
@@ -929,12 +926,11 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                                 value_expr,
                             });
                         }
-                        DeferredModulePrim::Export(_) => {
+                        DeferredModulePrim::Export(_, _) => {
                             return Err(vec![Error::new(datum.span(), ErrorKind::ExportInsideRepl)]);
                         }
                     }
                 }
-
                 Ok(LoweredReplDatum::Defs(self.defs.split_off(previous_def_id)))
             }
             Err(errs) => {
@@ -960,46 +956,17 @@ pub fn lower_program(
     source_loader: &mut SourceLoader,
     source_file_id: SourceFileId,
 ) -> Result<LoweredProgram, Vec<Error>> {
-    use std;
-
     let data = parse_module_data(source_loader.source_file(source_file_id))?;
 
     let mut root_scope = Scope::empty();
     let mut lcx = LoweringCtx::new(package_paths, source_loader);
     lcx.lower_module(&mut root_scope, data)?;
 
-    // Extract our defs from the `lcx`
-    // We can't just extract its fields because we still need to `lower_expr` using it
-    let mut defs = std::mem::replace(&mut lcx.defs, vec![]);
-    let deferred_defs = std::mem::replace(&mut lcx.deferred_defs, vec![]);
-    defs.reserve(deferred_defs.len());
-
-    let mut errors: Vec<Error> = vec![];
-
-    for DeferredDef(span, destruc, value_datum) in deferred_defs {
-        match lcx.lower_expr(&root_scope, value_datum) {
-            Ok(value_expr) => {
-                defs.push(Def {
-                    span,
-                    destruc,
-                    value_expr,
-                });
-            }
-            Err(error) => {
-                errors.push(error);
-            }
-        }
-    }
-
-    if !errors.is_empty() {
-        Err(errors)
-    } else {
-        Ok(LoweredProgram {
-            pvars: lcx.pvars,
-            tvars: lcx.tvars,
-            defs,
-        })
-    }
+    Ok(LoweredProgram {
+        pvars: lcx.pvars,
+        tvars: lcx.tvars,
+        defs: lcx.defs,
+    })
 }
 
 ////

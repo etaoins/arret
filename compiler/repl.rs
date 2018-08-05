@@ -171,15 +171,21 @@ mod test {
         );
 
         repl_ctx
-            .eval_line("(import (only [stdlib base] quote def do))".to_owned())
+            .eval_line("(import (only [stdlib base] quote def do int?))".to_owned())
             .unwrap();
 
+        // Make sure we can references vars from the imported module
+        assert_eq!(
+            EvaledLine::Expr("true".to_owned()),
+            repl_ctx.eval_line("(int? 5)".to_owned()).unwrap()
+        );
+
+        // Make sure we can redefine
         assert_eq!(
             EvaledLine::Defs(1),
             repl_ctx.eval_line("(def x 'first)".to_owned()).unwrap()
         );
 
-        // Make sure we can redefine
         assert_eq!(
             EvaledLine::Defs(1),
             repl_ctx.eval_line("(def x 'second)".to_owned()).unwrap()
