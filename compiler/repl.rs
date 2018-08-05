@@ -120,7 +120,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
 
                 return Err(Error(vec![Box::new(Error::new(
                     extra_span,
-                    ErrorKind::IllegalArg("unexpected data"),
+                    ErrorKind::IllegalArg("unexpected trailing datum"),
                 ))]));
             }
         };
