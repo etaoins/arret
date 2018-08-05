@@ -17,5 +17,5 @@ mod typeck;
 
 pub use hir::lowering::lower_program;
 pub use hir::PackagePaths;
-pub use source::{SourceFile, SourceFileId, SourceLoader};
+pub use source::{SourceFile, SourceFileId, SourceKind, SourceLoader};
 pub use typeck::infer::infer_program;

@@ -11,6 +11,8 @@ const APP_INFO: app_dirs::AppInfo = app_dirs::AppInfo {
     author: "arret",
 };
 
+const PROMPT: &str = "arret> ";
+
 struct Completer {
     bound_names: Vec<String>,
 }
@@ -70,7 +72,7 @@ pub fn interactive_loop(cfg: &DriverConfig) {
 
     // Import [stdlib base] so we have most useful things defined
     let initial_import = "(import [stdlib base])".to_owned();
-    if let Err(err) = repl_ctx.eval_line(initial_import) {
+    if let Err(err) = repl_ctx.eval_line(initial_import, 0) {
         for reportable in err.reports() {
             reportable.report(repl_ctx.source_loader())
         }
@@ -87,7 +89,7 @@ pub fn interactive_loop(cfg: &DriverConfig) {
     // Configure our styles
     let prompt_style = Colour::Blue;
     let defs_style = Colour::Black.bold();
-    let prompt = prompt_style.paint("arret> ");
+    let prompt = prompt_style.paint(PROMPT);
 
     loop {
         let readline = rl.readline(&prompt.to_string());
@@ -98,7 +100,7 @@ pub fn interactive_loop(cfg: &DriverConfig) {
                     rl.add_history_entry(&line);
                 }
 
-                match repl_ctx.eval_line(line) {
+                match repl_ctx.eval_line(line, PROMPT.len()) {
                     Ok(EvaledLine::EmptyInput) => {}
                     Ok(EvaledLine::Defs(count)) => {
                         // Refresh our completions

@@ -34,10 +34,9 @@ struct ExpectedReport {
 
 impl ExpectedReport {
     fn matches(&self, actual_report: &Box<Reportable>) -> bool {
-        self.span.matches(actual_report.span())
-            && actual_report
-                .message()
-                .starts_with(&self.message_prefix[..])
+        self.span.matches(actual_report.span()) && actual_report
+            .message()
+            .starts_with(&self.message_prefix[..])
     }
 }
 
@@ -104,8 +103,7 @@ fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedR
                     span_offset + start_of_line_index..span_offset + index,
                 ),
             }
-        })
-        .collect::<Vec<ExpectedReport>>();
+        }).collect::<Vec<ExpectedReport>>();
 
     let mut spanned_reports = source
         .match_indices(";^")
@@ -141,8 +139,7 @@ fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedR
                     hi: (span_offset + span_end) as u32,
                 }),
             }
-        })
-        .collect();
+        }).collect();
 
     line_reports.append(&mut spanned_reports);
     line_reports
@@ -177,7 +174,7 @@ fn collect_reports(
 
     panic!(
         "Compilation unexpectedly succeeded for {}",
-        source_loader.source_file(source_file_id).display_name()
+        source_loader.source_file(source_file_id).kind()
     )
 }
 

@@ -1,9 +1,31 @@
 use std::collections::HashMap;
-use std::{fs, io, path};
+use std::{fmt, fs, io, path};
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum SourceKind {
+    /// Loaded from a file with the given filename
+    File(String),
+    /// Loaded from the REPL with the span starting at the given terminal column
+    Repl(usize),
+    /// Loaded from an RFI module
+    RfiModule(String, String),
+}
+
+impl fmt::Display for SourceKind {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            SourceKind::File(filename) => write!(formatter, "{}", filename),
+            SourceKind::Repl(_) => write!(formatter, "<repl input>"),
+            SourceKind::RfiModule(filename, fun_name) => {
+                write!(formatter, "{}:{}", filename, fun_name)
+            }
+        }
+    }
+}
 
 pub struct SourceFile {
     span_offset: usize,
-    display_name: String,
+    kind: SourceKind,
     source: String,
 }
 
@@ -14,8 +36,8 @@ impl SourceFile {
         self.span_offset
     }
 
-    pub fn display_name(&self) -> &str {
-        &self.display_name
+    pub fn kind(&self) -> &SourceKind {
+        &self.kind
     }
 
     pub fn source(&self) -> &str {
@@ -40,16 +62,16 @@ impl SourceLoader {
             return Ok(*source_file_id);
         }
 
-        let display_name = path.to_string_lossy().to_string();
+        let kind = SourceKind::File(path.to_string_lossy().to_string());
         let source = fs::read_to_string(path)?;
 
-        let source_file_id = self.load_string(display_name, source);
+        let source_file_id = self.load_string(kind, source);
         self.loaded_paths.insert(path.into(), source_file_id);
 
         Ok(source_file_id)
     }
 
-    pub fn load_string(&mut self, display_name: String, source: String) -> SourceFileId {
+    pub fn load_string(&mut self, kind: SourceKind, source: String) -> SourceFileId {
         let span_offset = self.next_span_offset;
         self.next_span_offset = span_offset + source.len();
 
@@ -57,7 +79,7 @@ impl SourceLoader {
             &mut self.source_files,
             SourceFile {
                 span_offset,
-                display_name,
+                kind,
                 source,
             },
         )

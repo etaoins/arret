@@ -6,28 +6,30 @@ use std::iter;
 use ansi_term::Colour;
 use ansi_term::Style;
 
-use source::SourceLoader;
+use source::{SourceKind, SourceLoader};
 use syntax;
 use syntax::span::Span;
 
 #[derive(PartialEq, Debug)]
-struct HumanPos<'snippet> {
-    display_name: String,
+struct SourceLoc<'kind, 'src> {
+    kind: &'kind SourceKind,
     line: usize,
     column: usize,
-    snippet: &'snippet str,
-    snippet_byte_off: usize,
+
+    snippet: &'src str,
+    span_str: &'src str,
 }
 
-fn bytepos_to_human_pos(source_loader: &SourceLoader, bp: usize) -> HumanPos {
+fn span_to_source_loc(source_loader: &SourceLoader, span: Span) -> SourceLoc {
     let source_files = source_loader.source_files();
+    let lo = span.lo as usize;
 
     // Find the file we landed on
     let source_file_index = source_files
         .binary_search_by(|candidate_file| {
-            if bp < candidate_file.span_offset() {
+            if lo < candidate_file.span_offset() {
                 cmp::Ordering::Greater
-            } else if bp > (candidate_file.span_offset() + candidate_file.source().len()) {
+            } else if lo > (candidate_file.span_offset() + candidate_file.source().len()) {
                 cmp::Ordering::Less
             } else {
                 cmp::Ordering::Equal
@@ -36,10 +38,10 @@ fn bytepos_to_human_pos(source_loader: &SourceLoader, bp: usize) -> HumanPos {
 
     let source_file = &source_files[source_file_index];
 
-    let mut remaining_bytes = bp - source_file.span_offset();
-    let mut remaining_source = &source_file.source()[..];
+    let mut remaining_bytes = lo - source_file.span_offset();
+    let mut remaining_source = source_file.source();
 
-    let mut line = 1;
+    let mut line = 0;
     loop {
         assert!(remaining_bytes <= remaining_source.len());
 
@@ -57,47 +59,41 @@ fn bytepos_to_human_pos(source_loader: &SourceLoader, bp: usize) -> HumanPos {
         line += 1
     }
 
-    let mut column = 1;
-    let mut ci_iter = remaining_source.char_indices();
-    loop {
-        let (off, _) = ci_iter.next().expect("Unable to find character on line");
+    let column = remaining_source[0..remaining_bytes].chars().count();
 
-        if remaining_bytes == off {
-            break;
-        }
-        assert!(remaining_bytes > off);
+    let span_str = &remaining_source[remaining_bytes..];
+    let span_str = &span_str[0..(span.hi - span.lo) as usize];
 
-        column += 1
-    }
-
-    HumanPos {
-        display_name: source_file.display_name().into(),
+    SourceLoc {
+        kind: source_file.kind(),
         line,
         column,
         snippet: remaining_source,
-        snippet_byte_off: remaining_bytes,
+        span_str,
     }
 }
 
-fn print_snippet(source_loader: &SourceLoader, level: Level, span: Span) {
-    let border_style = Colour::Blue.bold();
-    let marker_style = level.colour().bold();
+fn print_span_snippet(source_loader: &SourceLoader, level: Level, span: Span) {
+    let loc = span_to_source_loc(source_loader, span);
+    print_loc_snippet(level, &loc)
+}
 
-    let hp = bytepos_to_human_pos(source_loader, span.lo as usize);
+fn print_loc_snippet(level: Level, loc: &SourceLoc) {
+    let border_style = Colour::Blue.bold();
 
     eprintln!(
         "  {} {}:{}:{}",
         border_style.paint("-->"),
-        hp.display_name,
-        hp.line,
-        hp.column
+        loc.kind,
+        loc.line + 1,
+        loc.column + 1
     );
 
-    let line_number_text = format!("{}", hp.line);
+    let line_number_text = format!("{}", loc.line + 1);
     let line_number_chars = line_number_text.len();
 
-    let snippet_next_newline = hp.snippet.find('\n').unwrap_or_else(|| hp.snippet.len());
-    let snippet_first_line = &hp.snippet[0..snippet_next_newline];
+    let snippet_next_newline = loc.snippet.find('\n').unwrap_or_else(|| loc.snippet.len());
+    let snippet_first_line = &loc.snippet[0..snippet_next_newline];
 
     let print_border_line = || {
         eprint!(
@@ -119,17 +115,18 @@ fn print_snippet(source_loader: &SourceLoader, level: Level, span: Span) {
     );
 
     print_border_line();
+    print_marker(level, loc, 1);
+}
 
-    let marker_bytes = (span.hi - span.lo) as usize;
-    let marker_lo = hp.snippet_byte_off;
-    let marker_hi = cmp::min(marker_lo + marker_bytes, snippet_first_line.len());
-    let marker_chars = cmp::max(1, snippet_first_line[marker_lo..marker_hi].chars().count());
+fn print_marker(level: Level, loc: &SourceLoc, column_offset: usize) {
+    let chars = cmp::max(1, loc.span_str.chars().take_while(|c| c != &'\n').count());
+    let marker_style = level.colour().bold();
 
     eprintln!(
-        " {: <1$}{2}",
+        "{: <1$}{2}",
         "",
-        hp.column - 1,
-        marker_style.paint(iter::repeat("^").take(marker_chars).collect::<String>())
+        loc.column + column_offset,
+        marker_style.paint(iter::repeat("^").take(chars).collect::<String>())
     );
 }
 
@@ -144,6 +141,21 @@ pub trait Reportable {
     fn report(&self, source_loader: &SourceLoader) {
         let default_bold = Style::new().bold();
         let level = self.level();
+        let span = self.span();
+
+        let post_error_snippet_loc = if span.is_empty() {
+            None
+        } else {
+            let loc = span_to_source_loc(source_loader, span);
+            if let (SourceKind::Repl(offset), 0) = (loc.kind, loc.line) {
+                // Print a marker pointing at the REPL line the user entered
+                print_marker(level, &loc, *offset);
+                None
+            } else {
+                // Show the snippet after the error message
+                Some(loc)
+            }
+        };
 
         eprintln!(
             "{}: {}",
@@ -151,14 +163,13 @@ pub trait Reportable {
             default_bold.paint(self.message())
         );
 
-        let span = self.span();
-        if !span.is_empty() {
-            print_snippet(source_loader, self.level(), span);
+        if let Some(loc) = post_error_snippet_loc {
+            print_loc_snippet(self.level(), &loc);
         }
 
         if let Some(macro_invocation_span) = self.macro_invocation_span() {
             eprintln!("{}", default_bold.paint("in this macro invocation"));
-            print_snippet(source_loader, Level::Note, macro_invocation_span);
+            print_span_snippet(source_loader, Level::Note, macro_invocation_span);
         }
 
         if let Some(associated_report) = self.associated_report() {
@@ -211,80 +222,83 @@ mod test {
     use super::*;
 
     #[test]
-    fn bytepos_to_human_pos_tests() {
+    fn bytepos_to_source_loc_tests() {
         let mut source_loader = SourceLoader::new();
 
         let first_contents = "12\n34\n";
         let second_contents = "☃6";
 
-        source_loader.load_string("<first>".into(), first_contents.into());
-        source_loader.load_string("<second>".into(), second_contents.into());
+        let first_kind = SourceKind::File("<first>".to_owned());
+        let second_kind = SourceKind::File("<second>".to_owned());
+
+        source_loader.load_string(first_kind.clone(), first_contents.into());
+        source_loader.load_string(second_kind.clone(), second_contents.into());
 
         let test_cases = vec![
             (
-                0,
-                HumanPos {
-                    display_name: "<first>".to_owned(),
-                    line: 1,
-                    column: 1,
+                Span { lo: 0, hi: 1 },
+                SourceLoc {
+                    kind: &first_kind,
+                    line: 0,
+                    column: 0,
                     snippet: &first_contents[0..],
-                    snippet_byte_off: 0,
+                    span_str: &first_contents[0..1],
                 },
             ),
             (
-                1,
-                HumanPos {
-                    display_name: "<first>".to_owned(),
-                    line: 1,
+                Span { lo: 1, hi: 2 },
+                SourceLoc {
+                    kind: &first_kind,
+                    line: 0,
+                    column: 1,
+                    snippet: &first_contents[0..],
+                    span_str: &first_contents[1..2],
+                },
+            ),
+            (
+                Span { lo: 2, hi: 4 },
+                SourceLoc {
+                    kind: &first_kind,
+                    line: 0,
                     column: 2,
                     snippet: &first_contents[0..],
-                    snippet_byte_off: 1,
+                    span_str: &first_contents[2..4],
                 },
             ),
             (
-                2,
-                HumanPos {
-                    display_name: "<first>".to_owned(),
+                Span { lo: 3, hi: 4 },
+                SourceLoc {
+                    kind: &first_kind,
                     line: 1,
-                    column: 3,
-                    snippet: &first_contents[0..],
-                    snippet_byte_off: 2,
-                },
-            ),
-            (
-                3,
-                HumanPos {
-                    display_name: "<first>".to_owned(),
-                    line: 2,
-                    column: 1,
+                    column: 0,
                     snippet: &first_contents[3..],
-                    snippet_byte_off: 0,
+                    span_str: &first_contents[3..4],
                 },
             ),
             (
-                6,
-                HumanPos {
-                    display_name: "<second>".to_owned(),
-                    line: 1,
+                Span { lo: 6, hi: 9 },
+                SourceLoc {
+                    kind: &second_kind,
+                    line: 0,
+                    column: 0,
+                    snippet: &second_contents[0..],
+                    span_str: &second_contents[0..3],
+                },
+            ),
+            (
+                Span { lo: 9, hi: 10 },
+                SourceLoc {
+                    kind: &second_kind,
+                    line: 0,
                     column: 1,
                     snippet: &second_contents[0..],
-                    snippet_byte_off: 0,
-                },
-            ),
-            (
-                9,
-                HumanPos {
-                    display_name: "<second>".to_owned(),
-                    line: 1,
-                    column: 2,
-                    snippet: &second_contents[0..],
-                    snippet_byte_off: 3,
+                    span_str: &second_contents[3..4],
                 },
             ),
         ];
 
-        for (bp, expected) in test_cases {
-            assert_eq!(expected, bytepos_to_human_pos(&source_loader, bp));
+        for (span, expected) in test_cases {
+            assert_eq!(expected, span_to_source_loc(&source_loader, span));
         }
     }
 }

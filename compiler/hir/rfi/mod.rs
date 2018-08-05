@@ -12,7 +12,7 @@ use hir::error::{Error, ErrorKind};
 use hir::ns::{NsDatum, NsId};
 use hir::scope::Scope;
 use hir::types;
-use source::SourceLoader;
+use source::{SourceKind, SourceLoader};
 use ty;
 
 use runtime::{abitype, binding};
@@ -228,10 +228,10 @@ impl Loader {
                     // `SourceLoader` for every Rust function. This requires at least one memory
                     // allocation for the display name and extending the loaded sources. Instead
                     // only "load" the string once there is an error and adjust the span to match.
-                    let display_name = format!("{}:{}", path.to_string_lossy(), name);
+                    let kind = SourceKind::RfiModule(path.to_string_lossy().into(), (*name).to_owned());
                     let error_offset = source_loader.next_span_offset;
 
-                    source_loader.load_string(display_name, rust_fun.arret_type.to_owned());
+                    source_loader.load_string(kind, rust_fun.arret_type.to_owned());
 
                     err.with_span_offset(error_offset)
                 })?;

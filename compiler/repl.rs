@@ -4,7 +4,7 @@ use syntax::parser::data_from_str_with_span_offset;
 use hir;
 use hir::scope::Scope;
 use reporting::Reportable;
-use {PackagePaths, SourceLoader};
+use {PackagePaths, SourceKind, SourceLoader};
 
 use typeck;
 use typeck::infer::InferCtx;
@@ -98,12 +98,12 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
         })
     }
 
-    pub fn eval_line(&mut self, input: String) -> Result<EvaledLine, Error> {
+    pub fn eval_line(&mut self, input: String, input_column: usize) -> Result<EvaledLine, Error> {
         use hir::lowering::LoweredReplDatum;
 
         let mut input_data = {
             let source_loader = self.lcx.source_loader_mut();
-            let source_id = source_loader.load_string("<repl input>".into(), input);
+            let source_id = source_loader.load_string(SourceKind::Repl(input_column), input);
             let source_file = source_loader.source_file(source_id);
 
             data_from_str_with_span_offset(source_file.source(), source_file.span_offset())?
@@ -155,66 +155,35 @@ mod test {
         let mut source_loader = SourceLoader::new();
         let mut repl_ctx = ReplCtx::new(&package_paths, &mut source_loader);
 
-        assert_eq!(
-            EvaledLine::EmptyInput,
-            repl_ctx.eval_line("   ".to_owned()).unwrap()
-        );
+        macro_rules! assert_eval {
+            ($expected:expr, $line:expr) => {
+                assert_eq!($expected, repl_ctx.eval_line($line.to_owned(), 0).unwrap());
+            };
+        }
 
-        assert_eq!(
-            EvaledLine::EmptyInput,
-            repl_ctx.eval_line("; COMMENT!".to_owned()).unwrap()
-        );
-
-        assert_eq!(
-            EvaledLine::Expr("Int".to_owned()),
-            repl_ctx.eval_line("1".to_owned()).unwrap()
-        );
+        assert_eval!(EvaledLine::EmptyInput, "   ");
+        assert_eval!(EvaledLine::EmptyInput, "; COMMENT!");
+        assert_eval!(EvaledLine::Expr("Int".to_owned()), "1");
 
         repl_ctx
-            .eval_line("(import (only [stdlib base] quote def do int?))".to_owned())
-            .unwrap();
+            .eval_line(
+                "(import (only [stdlib base] quote def do int?))".to_owned(),
+                0,
+            ).unwrap();
 
         // Make sure we can references vars from the imported module
-        assert_eq!(
-            EvaledLine::Expr("true".to_owned()),
-            repl_ctx.eval_line("(int? 5)".to_owned()).unwrap()
-        );
+        assert_eval!(EvaledLine::Expr("true".to_owned()), "(int? 5)");
 
         // Make sure we can redefine
-        assert_eq!(
-            EvaledLine::Defs(1),
-            repl_ctx.eval_line("(def x 'first)".to_owned()).unwrap()
-        );
-
-        assert_eq!(
-            EvaledLine::Defs(1),
-            repl_ctx.eval_line("(def x 'second)".to_owned()).unwrap()
-        );
-
-        assert_eq!(
-            EvaledLine::Expr("'second".to_owned()),
-            repl_ctx.eval_line("x".to_owned()).unwrap()
-        );
+        assert_eval!(EvaledLine::Defs(1), "(def x 'first)");
+        assert_eval!(EvaledLine::Defs(1), "(def x 'second)");
+        assert_eval!(EvaledLine::Expr("'second".to_owned()), "x");
 
         // Make sure we can handle `(do)` at the module level with recursive defs
-        assert_eq!(
-            EvaledLine::Defs(2),
-            repl_ctx
-                .eval_line("(do (def x y) (def y 2))".to_owned())
-                .unwrap()
-        );
-
-        assert_eq!(
-            EvaledLine::Expr("Int".to_owned()),
-            repl_ctx.eval_line("x".to_owned()).unwrap()
-        );
+        assert_eval!(EvaledLine::Defs(2), "(do (def x y) (def y 2))");
+        assert_eval!(EvaledLine::Expr("Int".to_owned()), "x");
 
         // And `(do)` at the expression level
-        assert_eq!(
-            EvaledLine::Expr("'baz".to_owned()),
-            repl_ctx
-                .eval_line("(do 'foo 'bar 'baz)".to_owned())
-                .unwrap()
-        );
+        assert_eval!(EvaledLine::Expr("'baz".to_owned()), "(do 'foo 'bar 'baz)");
     }
 }
