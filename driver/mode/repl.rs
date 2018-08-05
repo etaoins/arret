@@ -88,7 +88,8 @@ pub fn interactive_loop(cfg: &DriverConfig) {
 
     // Configure our styles
     let prompt_style = Colour::Blue;
-    let defs_style = Colour::Black.bold();
+    let defs_style = Colour::Purple.bold();
+    let expr_arrow_style = Colour::Green.bold();
     let prompt = prompt_style.paint(PROMPT);
 
     loop {
@@ -106,19 +107,11 @@ pub fn interactive_loop(cfg: &DriverConfig) {
                         // Refresh our completions
                         rl.set_completer(Some(Completer::new(repl_ctx.bound_names())));
 
-                        let defs_noun = if count == 1 {
-                            "definition"
-                        } else {
-                            "definitions"
-                        };
-                        println!(
-                            "processed {} new {}",
-                            defs_style.paint(count.to_string()),
-                            defs_noun
-                        );
+                        let defs_noun = if count == 1 { "def" } else { "defs" };
+                        println!("{} new {}", defs_style.paint(count.to_string()), defs_noun);
                     }
                     Ok(EvaledLine::Expr(value)) => {
-                        println!("=> {}", value);
+                        println!("{} {}", expr_arrow_style.paint("=>"), value);
                     }
                     Err(err) => {
                         for reportable in err.reports() {
