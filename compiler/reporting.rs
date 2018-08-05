@@ -1,4 +1,6 @@
 use std::cmp;
+#[cfg(test)]
+use std::fmt;
 use std::iter;
 
 use ansi_term::Colour;
@@ -30,8 +32,7 @@ fn bytepos_to_human_pos(source_loader: &SourceLoader, bp: usize) -> HumanPos {
             } else {
                 cmp::Ordering::Equal
             }
-        })
-        .unwrap();
+        }).unwrap();
 
     let source_file = &source_files[source_file_index];
 
@@ -170,6 +171,13 @@ pub trait Reportable {
 
     fn associated_report(&self) -> Option<Box<dyn Reportable>> {
         None
+    }
+}
+
+#[cfg(test)]
+impl fmt::Debug for Reportable {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(formatter, "Reportable({})", self.message())
     }
 }
 

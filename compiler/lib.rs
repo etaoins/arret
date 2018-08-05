@@ -9,6 +9,7 @@ extern crate syntax;
 mod id_type;
 
 mod hir;
+pub mod repl;
 pub mod reporting;
 mod source;
 mod ty;

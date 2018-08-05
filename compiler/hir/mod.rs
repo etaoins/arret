@@ -1,14 +1,14 @@
 pub(crate) mod destruc;
-mod error;
+pub(crate) mod error;
 mod import;
 mod loader;
 pub(crate) mod lowering;
 mod macros;
 pub(crate) mod module;
-mod ns;
+pub(crate) mod ns;
 mod prim;
 pub(crate) mod rfi;
-mod scope;
+pub(crate) mod scope;
 mod types;
 mod util;
 

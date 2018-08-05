@@ -516,14 +516,14 @@ impl<'vars> StrForPolyCtx<'vars> {
     }
 }
 
-pub fn str_for_poly(pvars: &[ty::purity::PVar], tvars: &[ty::TVar], poly: &ty::Poly) -> Box<str> {
+pub fn str_for_poly(pvars: &[ty::purity::PVar], tvars: &[ty::TVar], poly: &ty::Poly) -> String {
     let ctx = StrForPolyCtx { pvars, tvars };
-    ctx.str_for_poly(poly).into_boxed_str()
+    ctx.str_for_poly(poly)
 }
 
-pub fn str_for_purity(pvars: &[ty::purity::PVar], purity: &ty::purity::Poly) -> Box<str> {
+pub fn str_for_purity(pvars: &[ty::purity::PVar], purity: &ty::purity::Poly) -> String {
     let ctx = StrForPolyCtx { pvars, tvars: &[] };
-    ctx.str_for_purity(purity).into_boxed_str()
+    ctx.str_for_purity(purity)
 }
 
 #[cfg(test)]
@@ -592,10 +592,7 @@ mod test {
     ///
     /// This is to make sure we use e.g. `(Listof Int)` instead of `(List Int ...)`
     fn assert_exact_str_repr(datum_str: &str) {
-        assert_eq!(
-            datum_str,
-            str_for_poly(&[], &[], &poly_for_str(datum_str)).as_ref()
-        );
+        assert_eq!(datum_str, str_for_poly(&[], &[], &poly_for_str(datum_str)));
     }
 
     #[test]
@@ -882,9 +879,6 @@ mod test {
         ];
 
         let actual_str = str_for_poly(pvars, tvars, &pfun.into_ty_ref());
-        assert_eq!(
-            "#{[->? : ->!] A [B : Int]} (B C ->? A)",
-            actual_str.as_ref()
-        );
+        assert_eq!("#{[->? : ->!] A [B : Int]} (B C ->? A)", &actual_str);
     }
 }

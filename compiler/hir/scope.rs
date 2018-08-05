@@ -29,6 +29,11 @@ struct ScopeData {
     entries: HashMap<Ident, ScopeEntry>,
     parent: Option<Rc<ScopeData>>,
     ns_id_counter: NsIdCounter,
+
+    /// Allow redefinition of bindings
+    ///
+    /// This is only set for the root scope inside a REPL
+    allow_redef: bool,
 }
 
 impl ScopeData {
@@ -56,7 +61,21 @@ impl Scope {
             entries: HashMap::new(),
             ns_id_counter: NsIdCounter::new(),
             parent: None,
+            allow_redef: false,
         }))
+    }
+
+    /// Creates a new REPL scope containing `import`
+    ///
+    /// This scope is special as it allows redefinitions at the root level.
+    pub fn new_repl() -> Scope {
+        use std::iter;
+
+        let entries = iter::once(("import".into(), Binding::Prim(Prim::Import)));
+        let mut scope = Self::new_with_entries(entries);
+        scope.mut_data().allow_redef = true;
+
+        scope
     }
 
     /// Creates a new root scope containing all primitives and types
@@ -99,6 +118,7 @@ impl Scope {
             entries,
             ns_id_counter,
             parent: None,
+            allow_redef: false,
         }))
     }
 
@@ -107,6 +127,7 @@ impl Scope {
             entries: HashMap::new(),
             ns_id_counter: parent.data().ns_id_counter.clone(),
             parent: Some(parent.0.clone()),
+            allow_redef: false,
         }))
     }
 
@@ -153,15 +174,21 @@ impl Scope {
         mut_data.entries.reserve(bindings.size_hint().0);
 
         for (ident, binding) in bindings {
+            let entry = ScopeEntry { span, binding };
+
             match mut_data.entries.entry(ident) {
-                Entry::Occupied(occupied) => {
-                    return Err(Error::new(
-                        span,
-                        ErrorKind::DuplicateDef(occupied.get().span),
-                    ))
+                Entry::Occupied(mut occupied) => {
+                    if mut_data.allow_redef {
+                        occupied.insert(entry);
+                    } else {
+                        return Err(Error::new(
+                            span,
+                            ErrorKind::DuplicateDef(occupied.get().span),
+                        ));
+                    }
                 }
                 Entry::Vacant(vacant) => {
-                    vacant.insert(ScopeEntry { span, binding });
+                    vacant.insert(entry);
                 }
             }
         }

@@ -17,11 +17,11 @@ use typeck::error::{Error, ErrorKind, WantedArity};
 type Result<T> = result::Result<T, Error>;
 
 /// Result of inferring the type for a HIR expression
-struct InferredNode {
+pub struct InferredNode {
     /// Expression with all free types replaced with poly types
-    pub expr: hir::Expr<ty::Poly>,
+    expr: hir::Expr<ty::Poly>,
     /// Inferred type for the expression's value
-    pub poly_type: ty::Poly,
+    poly_type: ty::Poly,
     /// Type condition depending the poly type of this node
     type_cond: Option<Box<VarTypeCond>>,
 }
@@ -63,6 +63,10 @@ impl InferredNode {
             poly_type,
             type_cond,
         }
+    }
+
+    pub fn poly_type(&self) -> &ty::Poly {
+        &self.poly_type
     }
 }
 
@@ -125,7 +129,7 @@ enum InputDef {
     Complete,
 }
 
-struct InferCtx<'vars> {
+struct RecursiveDefsCtx<'vars, 'types> {
     input_defs: Vec<InputDef>,
     complete_defs: Vec<hir::Def<ty::Poly>>,
 
@@ -138,7 +142,7 @@ struct InferCtx<'vars> {
     // and then pop them off afterwards.
     free_ty_polys: Vec<ty::Poly>,
 
-    var_to_type: HashMap<hir::VarId, VarType>,
+    var_to_type: &'types mut HashMap<hir::VarId, VarType>,
 }
 
 #[derive(Clone)]
@@ -150,15 +154,13 @@ fn unit_type() -> ty::Poly {
     ty::Ty::List(ty::List::new(Box::new([]), None)).into_poly()
 }
 
-impl<'vars> InferCtx<'vars> {
+impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
     fn new(
         pvars: &'vars [ty::purity::PVar],
         tvars: &'vars [ty::TVar],
         defs: Vec<hir::Def<ty::Decl>>,
-    ) -> InferCtx<'vars> {
-        // Typical code should have at least one var per def
-        let mut var_to_type = HashMap::with_capacity(defs.len());
-
+        var_to_type: &'types mut HashMap<hir::VarId, VarType>,
+    ) -> RecursiveDefsCtx<'vars, 'types> {
         // We do this in reverse order because we infer our defs in reverse order. This doesn't
         // matter for correctness. However, presumably most definitions have more depedencies
         // before them than after them. Visiting them in forward order should cause less
@@ -186,7 +188,7 @@ impl<'vars> InferCtx<'vars> {
             }).collect::<Vec<InputDef>>();
 
         let complete_defs = Vec::with_capacity(input_defs.len());
-        InferCtx {
+        RecursiveDefsCtx {
             input_defs,
             complete_defs,
             pvars,
@@ -201,7 +203,7 @@ impl<'vars> InferCtx<'vars> {
     }
 
     fn str_for_poly(&self, poly: &ty::Poly) -> Box<str> {
-        hir::str_for_poly(self.pvars, self.tvars, poly)
+        hir::str_for_poly(self.pvars, self.tvars, poly).into_boxed_str()
     }
 
     /// Ensures `sub_poly` is a subtype of `parent_poly`
@@ -1115,7 +1117,7 @@ impl<'vars> InferCtx<'vars> {
         Ok(())
     }
 
-    fn into_inferred(mut self) -> result::Result<Vec<hir::Def<ty::Poly>>, Vec<Error>> {
+    fn infer_input_defs(&mut self) -> result::Result<(), Vec<Error>> {
         let mut errs = vec![];
         while let Some(def_state) = self.input_defs.pop() {
             match def_state {
@@ -1135,10 +1137,47 @@ impl<'vars> InferCtx<'vars> {
         }
 
         if errs.is_empty() {
-            Ok(self.complete_defs)
+            Ok(())
         } else {
             Err(errs)
         }
+    }
+}
+
+pub(crate) struct InferCtx {
+    var_to_type: HashMap<hir::VarId, VarType>,
+}
+
+impl InferCtx {
+    pub fn new() -> InferCtx {
+        InferCtx {
+            var_to_type: HashMap::new(),
+        }
+    }
+
+    pub fn infer_defs(
+        &mut self,
+        pvars: &[ty::purity::PVar],
+        tvars: &[ty::TVar],
+        defs: Vec<hir::Def<ty::Decl>>,
+    ) -> result::Result<Vec<hir::Def<ty::Poly>>, Vec<Error>> {
+        let mut rdcx = RecursiveDefsCtx::new(pvars, tvars, defs, &mut self.var_to_type);
+        rdcx.infer_input_defs()?;
+        Ok(rdcx.complete_defs)
+    }
+
+    pub fn infer_expr(
+        &mut self,
+        pvars: &[ty::purity::PVar],
+        tvars: &[ty::TVar],
+        expr: hir::Expr<ty::Decl>,
+    ) -> Result<InferredNode> {
+        let mut rdcx = RecursiveDefsCtx::new(pvars, tvars, vec![], &mut self.var_to_type);
+        let mut fcx = FunCtx {
+            purity: PurityVarType::Known(Purity::Impure.into_poly()),
+        };
+
+        rdcx.visit_expr(&mut fcx, &ty::Ty::Any.into_poly(), expr)
     }
 }
 
@@ -1147,8 +1186,13 @@ pub fn infer_program(
     tvars: &[ty::TVar],
     defs: Vec<hir::Def<ty::Decl>>,
 ) -> result::Result<Vec<hir::Def<ty::Poly>>, Vec<Error>> {
-    let icx = InferCtx::new(pvars, tvars, defs);
-    icx.into_inferred()
+    // A program is a giant recursive defs context. We don't use `InferCtx`'s public interface so
+    // we can size `var_to_type` properly.
+    let mut var_to_type = HashMap::with_capacity(defs.len());
+    let mut rdcx = RecursiveDefsCtx::new(pvars, tvars, defs, &mut var_to_type);
+
+    rdcx.infer_input_defs()?;
+    Ok(rdcx.complete_defs)
 }
 
 #[cfg(test)]
@@ -1161,12 +1205,18 @@ mod test {
         required_type: &ty::Poly,
         lowered_expr: hir::lowering::LoweredTestExpr,
     ) -> Result<ty::Poly> {
-        let mut icx = InferCtx::new(&lowered_expr.pvars, &lowered_expr.tvars, vec![]);
+        let mut var_to_type = HashMap::new();
+        let mut rdcx = RecursiveDefsCtx::new(
+            &lowered_expr.pvars,
+            &lowered_expr.tvars,
+            vec![],
+            &mut var_to_type,
+        );
         let mut fcx = FunCtx {
             purity: PurityVarType::Known(Purity::Pure.into_poly()),
         };
 
-        icx.visit_expr(&mut fcx, required_type, lowered_expr.expr)
+        rdcx.visit_expr(&mut fcx, required_type, lowered_expr.expr)
             .map(|node| node.poly_type)
     }
 

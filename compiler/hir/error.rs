@@ -45,6 +45,7 @@ pub enum ErrorKind {
     DefOutsideBody,
     ExportOutsideModule,
     NonDefInsideModule,
+    ExportInsideRepl,
     PackageNotFound,
     ModuleNotFound(Box<path::Path>),
     NoMacroRule,
@@ -122,6 +123,9 @@ impl Reportable for Error {
             ErrorKind::ExportOutsideModule => "(export) outside of module body".to_owned(),
             ErrorKind::NonDefInsideModule => {
                 "definition expected at the top-level of a module body".to_owned()
+            }
+            ErrorKind::ExportInsideRepl => {
+                "export not supported within REPL".to_owned()
             }
             ErrorKind::PackageNotFound => "package not found".to_owned(),
             ErrorKind::ModuleNotFound(ref filename) => format!("module not found at `{}`", filename.to_string_lossy()).to_owned(),

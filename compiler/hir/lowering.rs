@@ -50,6 +50,11 @@ enum DeferredModulePrim {
     Export(DeferredExport),
 }
 
+pub enum LoweredReplDatum {
+    Expr(Expr<ty::Decl>),
+    Defs(Vec<Def<ty::Decl>>),
+}
+
 #[derive(Clone, Copy)]
 struct AppliedPrim {
     /// Primitive that was applied
@@ -882,6 +887,70 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             Ok(Module::new(exports))
         } else {
             Err(errors)
+        }
+    }
+}
+
+// REPL interface
+impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
+    pub fn source_loader(&self) -> &SourceLoader {
+        self.source_loader
+    }
+
+    pub fn source_loader_mut(&mut self) -> &mut SourceLoader {
+        self.source_loader
+    }
+
+    pub fn pvars(&self) -> &[ty::purity::PVar] {
+        &self.pvars
+    }
+
+    pub fn tvars(&self) -> &[ty::TVar] {
+        &self.tvars
+    }
+
+    pub fn lower_repl_datum(
+        &mut self,
+        scope: &mut Scope,
+        datum: NsDatum,
+    ) -> Result<LoweredReplDatum, Vec<Error>> {
+        let previous_def_id = self.defs.len();
+
+        // Try interpreting this as a module def
+        match self.lower_module_def(scope, datum.clone()) {
+            Ok(deferred_prims) => {
+                for deferred_prim in deferred_prims {
+                    match deferred_prim {
+                        DeferredModulePrim::Def(DeferredDef(span, destruc, value_datum)) => {
+                            let value_expr = self.lower_expr(scope, value_datum)?;
+                            self.defs.push(Def {
+                                span,
+                                destruc,
+                                value_expr,
+                            });
+                        }
+                        DeferredModulePrim::Export(_) => {
+                            return Err(vec![Error::new(datum.span(), ErrorKind::ExportInsideRepl)]);
+                        }
+                    }
+                }
+
+                Ok(LoweredReplDatum::Defs(self.defs.split_off(previous_def_id)))
+            }
+            Err(errs) => {
+                let non_def_errs = errs
+                    .into_iter()
+                    .filter(|err| err.kind() != &ErrorKind::NonDefInsideModule)
+                    .collect::<Vec<Error>>();
+
+                if non_def_errs.is_empty() {
+                    // Re-interpret as an expression
+                    let expr = self.lower_expr(scope, datum)?;
+                    Ok(LoweredReplDatum::Expr(expr))
+                } else {
+                    Err(non_def_errs)
+                }
+            }
         }
     }
 }
