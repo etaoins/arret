@@ -7,6 +7,7 @@ use boxed::Boxed;
 /// Reference to a garbage collected value
 ///
 /// This is not memory safe and does not GC root; it's just sugar for a raw pointer.
+#[repr(transparent)]
 pub struct Gc<T: Boxed> {
     inner: ptr::NonNull<T>,
 }
