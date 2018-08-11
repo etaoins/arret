@@ -1,23 +1,21 @@
-use std::collections::HashMap;
 use std::result;
 
 use hir::error::{Error, ErrorKind};
+use hir::exports::Exports;
 use hir::loader::ModuleName;
 use hir::ns::{NsDataIter, NsDatum};
-use hir::scope::Binding;
 use hir::util::{expect_arg_count, expect_ident, expect_ident_and_span, expect_one_arg};
 use syntax::span::Span;
 
 type Result<T> = result::Result<T, Vec<Error>>;
-type Bindings = HashMap<Box<str>, Binding>;
 
 /// Input to an (import) filter
 ///
-/// This tracks the bindings and the terminal name of the original module
+/// This tracks the exports and the terminal name of the original module
 struct FilterInput {
-    bindings: Bindings,
+    exports: Exports,
 
-    /// The terminal name of the module the bindings came from
+    /// The terminal name of the module the exports came from
     ///
     /// This is to support `(prefixed)`. For example, the terminal name of `[scheme base]` would be
     /// `base` and if `(prefixed)` was used it would prepend `base/` to all of its identifiers.
@@ -26,14 +24,14 @@ struct FilterInput {
 
 struct LowerImportCtx<F>
 where
-    F: FnMut(Span, ModuleName) -> Result<Bindings>,
+    F: FnMut(Span, ModuleName) -> Result<Exports>,
 {
     load_module: F,
 }
 
 impl<F> LowerImportCtx<F>
 where
-    F: FnMut(Span, ModuleName) -> Result<Bindings>,
+    F: FnMut(Span, ModuleName) -> Result<Exports>,
 {
     fn lower_module_import(&mut self, span: Span, name_data: Vec<NsDatum>) -> Result<FilterInput> {
         let mut name_idents = name_data
@@ -45,10 +43,10 @@ where
         let name_components = name_idents.collect::<result::Result<Vec<Box<str>>, Error>>()?;
 
         let module_name = ModuleName::new(package_name, name_components, terminal_name.clone());
-        let bindings = (self.load_module)(span, module_name)?;
+        let exports = (self.load_module)(span, module_name)?;
 
         Ok(FilterInput {
-            bindings,
+            exports,
             terminal_name,
         })
     }
@@ -62,12 +60,12 @@ where
     ) -> Result<FilterInput> {
         match filter_name {
             "only" => {
-                let inner_bindings = filter_input.bindings;
-                let only_bindings = arg_iter
+                let inner_exports = filter_input.exports;
+                let only_exports = arg_iter
                     .map(|arg_datum| {
                         let (ident, span) = expect_ident_and_span(arg_datum)?;
 
-                        if let Some(binding) = inner_bindings.get(ident.name()) {
+                        if let Some(binding) = inner_exports.get(ident.name()) {
                             Ok((ident.into_name(), binding.clone()))
                         } else {
                             Err(Error::new(
@@ -76,21 +74,21 @@ where
                             ))
                         }
                     })
-                    .collect::<result::Result<Bindings, Error>>()?;
+                    .collect::<result::Result<Exports, Error>>()?;
 
                 Ok(FilterInput {
-                    bindings: only_bindings,
+                    exports: only_exports,
                     terminal_name: filter_input.terminal_name,
                 })
             }
             "except" => {
-                let mut except_bindings = filter_input.bindings;
+                let mut except_exports = filter_input.exports;
                 let mut errors = vec![];
 
                 for arg_datum in arg_iter {
                     let (ident, span) = expect_ident_and_span(arg_datum)?;
 
-                    if except_bindings.remove(ident.name()).is_none() {
+                    if except_exports.remove(ident.name()).is_none() {
                         errors.push(Error::new(
                             span,
                             ErrorKind::UnboundSym(ident.into_name()),
@@ -100,7 +98,7 @@ where
 
                 if errors.is_empty() {
                     Ok(FilterInput {
-                        bindings: except_bindings,
+                        exports: except_exports,
                         terminal_name: filter_input.terminal_name,
                     })
                 } else {
@@ -111,16 +109,16 @@ where
                 let arg_datum = expect_one_arg(apply_span, arg_iter)?;
 
                 if let NsDatum::Map(_, vs) = arg_datum {
-                    let mut rename_bindings = filter_input.bindings;
+                    let mut rename_exports = filter_input.exports;
                     let mut errors = vec![];
 
                     for (from_datum, to_datum) in vs.into_vec() {
                         let (from_ident, from_span) = expect_ident_and_span(from_datum)?;
                         let to_ident = expect_ident(to_datum)?;
 
-                        match rename_bindings.remove(from_ident.name()) {
+                        match rename_exports.remove(from_ident.name()) {
                             Some(binding) => {
-                                rename_bindings.insert(to_ident.into_name(), binding);
+                                rename_exports.insert(to_ident.into_name(), binding);
                             }
                             None => {
                                 errors.push(Error::new(
@@ -133,7 +131,7 @@ where
 
                     if errors.is_empty() {
                         Ok(FilterInput {
-                            bindings: rename_bindings,
+                            exports: rename_exports,
                             terminal_name: filter_input.terminal_name,
                         })
                     } else {
@@ -152,31 +150,31 @@ where
                 let prefix_datum = expect_one_arg(apply_span, arg_iter)?;
                 let prefix_ident = expect_ident(prefix_datum)?;
 
-                let prefix_bindings = filter_input
-                    .bindings
+                let prefix_exports = filter_input
+                    .exports
                     .into_iter()
                     .map(|(name, binding)| (format!("{}{}", prefix_ident.name(), name).into_boxed_str(), binding))
                     .collect();
 
                 Ok(FilterInput {
-                    bindings: prefix_bindings,
+                    exports: prefix_exports,
                     terminal_name: filter_input.terminal_name,
                 })
             }
             "prefixed" => {
                 expect_arg_count(apply_span, 0, arg_iter.len())?;
                 let FilterInput {
-                    bindings,
+                    exports,
                     terminal_name,
                 } = filter_input;
 
-                let prefixed_bindings = bindings
+                let prefixed_exports = exports
                     .into_iter()
                     .map(|(name, binding)| (format!("{}/{}", &terminal_name, name).into_boxed_str(), binding))
                     .collect();
 
                 Ok(FilterInput {
-                    bindings: prefixed_bindings,
+                    exports: prefixed_exports,
                     terminal_name,
                 })
             }
@@ -231,13 +229,13 @@ where
     }
 }
 
-pub fn lower_import_set<F>(import_set_datum: NsDatum, load_module: F) -> Result<Bindings>
+pub fn lower_import_set<F>(import_set_datum: NsDatum, load_module: F) -> Result<Exports>
 where
-    F: FnMut(Span, ModuleName) -> Result<Bindings>,
+    F: FnMut(Span, ModuleName) -> Result<Exports>,
 {
     let mut lic = LowerImportCtx { load_module };
     lic.lower_import_set(import_set_datum)
-        .map(|filter_input| filter_input.bindings)
+        .map(|filter_input| filter_input.exports)
 }
 
 #[cfg(test)]
@@ -245,9 +243,11 @@ mod test {
     use super::*;
     use hir::ns::NsId;
     use hir::prim::Prim;
+    use hir::scope::Binding;
+    use std::collections::HashMap;
     use syntax::span::{t2s, EMPTY_SPAN};
 
-    fn bindings_for_import_set(datum: &str) -> Result<Bindings> {
+    fn exports_for_import_set(datum: &str) -> Result<Exports> {
         use syntax::parser::datum_from_str;
 
         let test_ns_id = NsId::new(0);
@@ -257,11 +257,11 @@ mod test {
 
         lower_import_set(import_set_datum, |_, module_name| {
             if module_name == ModuleName::new("lib".into(), vec![], "test".into()) {
-                let mut bindings = HashMap::new();
-                bindings.insert("quote".into(), Binding::Prim(Prim::Quote));
-                bindings.insert("if".into(), Binding::Prim(Prim::If));
+                let mut exports = HashMap::new();
+                exports.insert("quote".into(), Binding::Prim(Prim::Quote));
+                exports.insert("if".into(), Binding::Prim(Prim::If));
 
-                Ok(bindings)
+                Ok(exports)
             } else {
                 Err(vec![Error::new(EMPTY_SPAN, ErrorKind::PackageNotFound)])
             }
@@ -271,10 +271,10 @@ mod test {
     #[test]
     fn basic_import() {
         let j = "[lib test]";
-        let bindings = bindings_for_import_set(j).unwrap();
+        let exports = exports_for_import_set(j).unwrap();
 
-        assert_eq!(bindings["quote"], Binding::Prim(Prim::Quote));
-        assert_eq!(bindings["if"], Binding::Prim(Prim::If));
+        assert_eq!(exports["quote"], Binding::Prim(Prim::Quote));
+        assert_eq!(exports["if"], Binding::Prim(Prim::If));
     }
 
     #[test]
@@ -282,69 +282,69 @@ mod test {
         let j = "[not found]";
         let err = vec![Error::new(EMPTY_SPAN, ErrorKind::PackageNotFound)];
 
-        assert_eq!(err, bindings_for_import_set(j).unwrap_err());
+        assert_eq!(err, exports_for_import_set(j).unwrap_err());
     }
 
     #[test]
     fn only_filter() {
         let j = "(only [lib test] quote)";
-        let bindings = bindings_for_import_set(j).unwrap();
+        let exports = exports_for_import_set(j).unwrap();
 
-        assert_eq!(bindings["quote"], Binding::Prim(Prim::Quote));
-        assert_eq!(false, bindings.contains_key("if"));
+        assert_eq!(exports["quote"], Binding::Prim(Prim::Quote));
+        assert_eq!(false, exports.contains_key("if"));
 
         let j = "(only [lib test] quote ifz)";
         let t = "                       ^^^ ";
         let err = vec![Error::new(t2s(t), ErrorKind::UnboundSym("ifz".into()))];
 
-        assert_eq!(err, bindings_for_import_set(j).unwrap_err());
+        assert_eq!(err, exports_for_import_set(j).unwrap_err());
     }
 
     #[test]
     fn except_filter() {
         let j = "(except [lib test] if)";
-        let bindings = bindings_for_import_set(j).unwrap();
+        let exports = exports_for_import_set(j).unwrap();
 
-        assert_eq!(bindings["quote"], Binding::Prim(Prim::Quote));
-        assert_eq!(false, bindings.contains_key("if"));
+        assert_eq!(exports["quote"], Binding::Prim(Prim::Quote));
+        assert_eq!(false, exports.contains_key("if"));
 
         let j = "(except [lib test] ifz)";
         let t = "                   ^^^ ";
         let err = vec![Error::new(t2s(t), ErrorKind::UnboundSym("ifz".into()))];
 
-        assert_eq!(err, bindings_for_import_set(j).unwrap_err());
+        assert_eq!(err, exports_for_import_set(j).unwrap_err());
     }
 
     #[test]
     fn rename_filter() {
         let j = "(rename [lib test] {quote new-quote, if new-if})";
-        let bindings = bindings_for_import_set(j).unwrap();
+        let exports = exports_for_import_set(j).unwrap();
 
-        assert_eq!(bindings["new-quote"], Binding::Prim(Prim::Quote));
-        assert_eq!(bindings["new-if"], Binding::Prim(Prim::If));
+        assert_eq!(exports["new-quote"], Binding::Prim(Prim::Quote));
+        assert_eq!(exports["new-if"], Binding::Prim(Prim::If));
 
         let j = "(rename [lib test] {ifz new-ifz})";
         let t = "                    ^^^          ";
         let err = vec![Error::new(t2s(t), ErrorKind::UnboundSym("ifz".into()))];
 
-        assert_eq!(err, bindings_for_import_set(j).unwrap_err());
+        assert_eq!(err, exports_for_import_set(j).unwrap_err());
     }
 
     #[test]
     fn prefix_filter() {
         let j = "(prefix [lib test] new-)";
-        let bindings = bindings_for_import_set(j).unwrap();
+        let exports = exports_for_import_set(j).unwrap();
 
-        assert_eq!(bindings["new-quote"], Binding::Prim(Prim::Quote));
-        assert_eq!(bindings["new-if"], Binding::Prim(Prim::If));
+        assert_eq!(exports["new-quote"], Binding::Prim(Prim::Quote));
+        assert_eq!(exports["new-if"], Binding::Prim(Prim::If));
     }
 
     #[test]
     fn prefixed_filter() {
         let j = "(prefixed [lib test])";
-        let bindings = bindings_for_import_set(j).unwrap();
+        let exports = exports_for_import_set(j).unwrap();
 
-        assert_eq!(bindings["test/quote"], Binding::Prim(Prim::Quote));
-        assert_eq!(bindings["test/if"], Binding::Prim(Prim::If));
+        assert_eq!(exports["test/quote"], Binding::Prim(Prim::Quote));
+        assert_eq!(exports["test/if"], Binding::Prim(Prim::If));
     }
 }

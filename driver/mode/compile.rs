@@ -23,7 +23,7 @@ pub fn compile_input_file(cfg: &DriverConfig, input_path: &path::Path) {
         }
     };
 
-    match compiler::infer_program(&hir.pvars, &hir.tvars, hir.defs) {
+    match compiler::infer_program(&hir.pvars, &hir.tvars, hir.module_defs) {
         Ok(inferred_defs) => {
             for inferred_def in inferred_defs {
                 println!("{:?}", inferred_def);

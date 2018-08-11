@@ -17,7 +17,7 @@ fn run_single_test(source_loader: &mut compiler::SourceLoader, input_path: &path
         }
     };
 
-    match compiler::infer_program(&hir.pvars, &hir.tvars, hir.defs) {
+    match compiler::infer_program(&hir.pvars, &hir.tvars, hir.module_defs) {
         Ok(_) => {}
         Err(errs) => {
             for err in errs {

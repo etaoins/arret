@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use hir::destruc;
 use hir::error::{Error, ErrorKind, Result};
+use hir::exports::Exports;
 use hir::import::lower_import_set;
 use hir::loader::{load_module_by_name, parse_module_data, LoadedModule, ModuleName, PackagePaths};
 use hir::macros::{expand_macro, lower_macro_rules, Macro};
-use hir::module::Module;
 use hir::ns::{Ident, NsDataIter, NsDatum, NsId};
 use hir::prim::Prim;
 use hir::rfi;
@@ -20,25 +20,31 @@ use syntax::span::{Span, EMPTY_SPAN};
 use ty;
 use ty::purity::Purity;
 
+#[derive(Debug)]
+struct LoweredModule {
+    defs: Vec<Def<ty::Decl>>,
+    exports: Exports,
+}
+
 pub struct LoweringCtx<'pp, 'sl> {
     package_paths: &'pp PackagePaths,
     source_loader: &'sl mut SourceLoader,
 
-    defs: Vec<Def<ty::Decl>>,
-
     var_id_counter: VarIdCounter,
-    loaded_modules: HashMap<ModuleName, Module>,
     rfi_loader: rfi::Loader,
     macros: Vec<Macro>,
 
     pvars: Vec<ty::purity::PVar>,
     tvars: Vec<ty::TVar>,
+
+    module_exports: HashMap<ModuleName, Exports>,
+    module_defs: Vec<Vec<Def<ty::Decl>>>,
 }
 
 pub struct LoweredProgram {
-    pub defs: Vec<Def<ty::Decl>>,
     pub pvars: Vec<ty::purity::PVar>,
     pub tvars: Vec<ty::TVar>,
+    pub module_defs: Vec<Vec<Def<ty::Decl>>>,
 }
 
 enum DeferredModulePrim {
@@ -48,7 +54,7 @@ enum DeferredModulePrim {
 
 pub enum LoweredReplDatum {
     Expr(Expr<ty::Decl>),
-    Defs(Vec<Def<ty::Decl>>),
+    Defs(Vec<Vec<Def<ty::Decl>>>),
 }
 
 #[derive(Clone, Copy)]
@@ -70,32 +76,34 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         package_paths: &'pp PackagePaths,
         source_loader: &'sl mut SourceLoader,
     ) -> LoweringCtx<'pp, 'sl> {
-        let mut loaded_modules = HashMap::new();
+        use hir::exports;
+
+        let mut module_exports = HashMap::with_capacity(2);
 
         // These modules are always loaded
-        loaded_modules.insert(
+        module_exports.insert(
             ModuleName::new("arret".into(), vec!["internal".into()], "primitives".into()),
-            Module::prims_module(),
+            exports::prims_exports(),
         );
 
-        loaded_modules.insert(
+        module_exports.insert(
             ModuleName::new("arret".into(), vec!["internal".into()], "types".into()),
-            Module::tys_module(),
+            exports::tys_exports(),
         );
 
         LoweringCtx {
             package_paths,
             source_loader,
 
-            defs: vec![],
-
             var_id_counter: VarIdCounter::new(),
-            loaded_modules,
             rfi_loader: rfi::Loader::new(),
             macros: vec![],
 
             pvars: vec![],
             tvars: vec![],
+
+            module_exports,
+            module_defs: vec![],
         }
     }
 
@@ -558,15 +566,15 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         scope: &mut Scope,
         span: Span,
         module_name: ModuleName,
-    ) -> Result<&Module, Vec<Error>> {
+    ) -> Result<&Exports, Vec<Error>> {
         // TODO: An if-let or match here will cause the borrow to live past the return. This
         // prevents us from doing the insert below. We need to do a two-phase check instead.
         // This is hopefully fixed by NLL.
-        if self.loaded_modules.contains_key(&module_name) {
-            return Ok(&self.loaded_modules[&module_name]);
+        if self.module_exports.contains_key(&module_name) {
+            return Ok(&self.module_exports[&module_name]);
         }
 
-        let loaded_module = {
+        let LoweredModule { exports, defs } = {
             match load_module_by_name(
                 self.source_loader,
                 &mut self.rfi_loader,
@@ -579,17 +587,16 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             }
         };
 
-        Ok(self
-            .loaded_modules
-            .entry(module_name)
-            .or_insert(loaded_module))
+        self.module_defs.push(defs);
+        Ok(self.module_exports.entry(module_name).or_insert(exports))
     }
 
-    fn include_rfi_module(&mut self, span: Span, rfi_module: rfi::Module) -> Module {
+    fn include_rfi_module(&mut self, span: Span, rfi_module: rfi::Module) -> LoweredModule {
         let mut exports = HashMap::new();
+        let mut defs = vec![];
 
         exports.reserve(rfi_module.len());
-        self.defs.reserve(rfi_module.len());
+        defs.reserve(rfi_module.len());
 
         for (name, rust_fun) in rfi_module {
             let var_id = self.var_id_counter.alloc();
@@ -606,11 +613,11 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 value_expr: Expr::RustFun(span, Box::new(rust_fun)),
             };
 
-            self.defs.push(def);
+            defs.push(def);
             exports.insert(name.into(), Binding::Var(var_id));
         }
 
-        Module::new(exports)
+        LoweredModule { defs, exports }
     }
 
     fn lower_import(
@@ -623,10 +630,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             let span = arg_datum.span();
 
             let bindings = lower_import_set(arg_datum, |span, module_name| {
-                Ok(self
-                    .load_module(scope, span, module_name)?
-                    .exports()
-                    .clone())
+                Ok(self.load_module(scope, span, module_name)?.clone())
             })?.into_iter()
             .map(|(name, binding)| (Ident::new(ns_id, name), binding));
 
@@ -819,7 +823,11 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         Err(vec![Error::new(span, ErrorKind::NonDefInsideModule)])
     }
 
-    fn lower_module(&mut self, scope: &mut Scope, data: Vec<Datum>) -> Result<Module, Vec<Error>> {
+    fn lower_module(
+        &mut self,
+        scope: &mut Scope,
+        data: Vec<Datum>,
+    ) -> Result<LoweredModule, Vec<Error>> {
         let ns_id = scope.alloc_ns_id();
         let mut errors: Vec<Error> = vec![];
 
@@ -853,6 +861,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
 
         // Process any exports at the end of the module
         let mut exports = HashMap::new();
+        let mut defs = vec![];
         for deferred_prim in deferred_prims {
             match deferred_prim {
                 DeferredModulePrim::Export(span, ident) => match scope.get_or_err(span, &ident) {
@@ -866,7 +875,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 DeferredModulePrim::Def(span, destruc, value_datum) => {
                     match self.lower_expr(scope, value_datum) {
                         Ok(value_expr) => {
-                            self.defs.push(Def {
+                            defs.push(Def {
                                 span,
                                 destruc,
                                 value_expr,
@@ -881,7 +890,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         }
 
         if errors.is_empty() {
-            Ok(Module::new(exports))
+            Ok(LoweredModule { defs, exports })
         } else {
             Err(errors)
         }
@@ -911,27 +920,31 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         scope: &mut Scope,
         datum: NsDatum,
     ) -> Result<LoweredReplDatum, Vec<Error>> {
-        let previous_def_id = self.defs.len();
+        use std::mem;
 
         // Try interpreting this as a module def
         match self.lower_module_def(scope, datum.clone()) {
             Ok(deferred_prims) => {
-                for deferred_prim in deferred_prims {
-                    match deferred_prim {
+                let defs = deferred_prims
+                    .into_iter()
+                    .map(|deferred_prim| match deferred_prim {
                         DeferredModulePrim::Def(span, destruc, value_datum) => {
                             let value_expr = self.lower_expr(scope, value_datum)?;
-                            self.defs.push(Def {
+                            Ok(Def {
                                 span,
                                 destruc,
                                 value_expr,
-                            });
+                            })
                         }
                         DeferredModulePrim::Export(_, _) => {
-                            return Err(vec![Error::new(datum.span(), ErrorKind::ExportInsideRepl)]);
+                            Err(vec![Error::new(datum.span(), ErrorKind::ExportInsideRepl)])
                         }
-                    }
-                }
-                Ok(LoweredReplDatum::Defs(self.defs.split_off(previous_def_id)))
+                    }).collect::<Result<Vec<Def<ty::Decl>>, Vec<Error>>>()?;
+
+                let mut all_new_defs = mem::replace(&mut self.module_defs, vec![]);
+                all_new_defs.push(defs);
+
+                Ok(LoweredReplDatum::Defs(all_new_defs))
             }
             Err(errs) => {
                 let non_def_errs = errs
@@ -960,12 +973,14 @@ pub fn lower_program(
 
     let mut root_scope = Scope::empty();
     let mut lcx = LoweringCtx::new(package_paths, source_loader);
-    lcx.lower_module(&mut root_scope, data)?;
+    let root_module = lcx.lower_module(&mut root_scope, data)?;
+
+    lcx.module_defs.push(root_module.defs);
 
     Ok(LoweredProgram {
         pvars: lcx.pvars,
         tvars: lcx.tvars,
-        defs: lcx.defs,
+        module_defs: lcx.module_defs,
     })
 }
 
@@ -989,7 +1004,7 @@ fn import_statement_for_module(names: &[&'static str]) -> Datum {
 }
 
 #[cfg(test)]
-fn module_for_str(data_str: &str) -> Result<Module> {
+fn module_for_str(data_str: &str) -> Result<LoweredModule> {
     use syntax::parser::data_from_str;
 
     let mut root_scope = Scope::empty();
@@ -1502,8 +1517,7 @@ mod test {
         let mut expected_exports = HashMap::new();
         expected_exports.insert("x".into(), Binding::Var(var_id));
 
-        let expected = Module::new(expected_exports);
-        assert_eq!(expected, module_for_str(j).unwrap());
+        assert_eq!(expected_exports, module_for_str(j).unwrap().exports);
     }
 
     #[test]
@@ -1568,7 +1582,7 @@ mod test {
         let j = &[j1, j2, j3].join("");
 
         let module = module_for_str(j).unwrap();
-        assert_eq!(2, module.exports().len());
+        assert_eq!(2, module.exports.len());
     }
 
     #[test]
@@ -1580,7 +1594,7 @@ mod test {
         let j = &[j1, j2, j3].join("");
 
         let module = module_for_str(j).unwrap();
-        assert_eq!(2, module.exports().len());
+        assert_eq!(2, module.exports.len());
     }
 
     #[test]

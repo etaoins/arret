@@ -1184,15 +1184,19 @@ impl InferCtx {
 pub fn infer_program(
     pvars: &[ty::purity::PVar],
     tvars: &[ty::TVar],
-    defs: Vec<hir::Def<ty::Decl>>,
+    defs: Vec<Vec<hir::Def<ty::Decl>>>,
 ) -> result::Result<Vec<hir::Def<ty::Poly>>, Vec<Error>> {
-    // A program is a giant recursive defs context. We don't use `InferCtx`'s public interface so
-    // we can size `var_to_type` properly.
     let mut var_to_type = HashMap::with_capacity(defs.len());
-    let mut rdcx = RecursiveDefsCtx::new(pvars, tvars, defs, &mut var_to_type);
+    let mut complete_defs = vec![];
 
-    rdcx.infer_input_defs()?;
-    Ok(rdcx.complete_defs)
+    for recursive_defs in defs {
+        let mut rdcx = RecursiveDefsCtx::new(pvars, tvars, recursive_defs, &mut var_to_type);
+
+        rdcx.infer_input_defs()?;
+        complete_defs.append(&mut rdcx.complete_defs);
+    }
+
+    Ok(complete_defs)
 }
 
 #[cfg(test)]

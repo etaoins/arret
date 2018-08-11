@@ -1,10 +1,10 @@
 pub(crate) mod destruc;
 pub(crate) mod error;
+mod exports;
 mod import;
 mod loader;
 pub(crate) mod lowering;
 mod macros;
-pub(crate) mod module;
 pub(crate) mod ns;
 mod prim;
 pub(crate) mod rfi;

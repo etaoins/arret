@@ -130,9 +130,18 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
         match self.lcx.lower_repl_datum(&mut self.scope, ns_datum)? {
             LoweredReplDatum::Defs(defs) => {
                 let lcx = &self.lcx;
-                let inferred_defs = self.icx.infer_defs(lcx.pvars(), lcx.tvars(), defs)?;
+                let mut total_defs: usize = 0;
 
-                Ok(EvaledLine::Defs(inferred_defs.len()))
+                for recursive_defs in defs {
+                    let processed = self
+                        .icx
+                        .infer_defs(lcx.pvars(), lcx.tvars(), recursive_defs)?
+                        .len();
+
+                    total_defs += processed;
+                }
+
+                Ok(EvaledLine::Defs(total_defs))
             }
             LoweredReplDatum::Expr(decl_expr) => {
                 let lcx = &self.lcx;
