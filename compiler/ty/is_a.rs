@@ -56,8 +56,8 @@ impl Result {
 }
 
 trait IsACtx<S: ty::TyRef> {
-    fn ty_ref_is_a(&self, &S, &S) -> Result;
-    fn purity_ref_is_a(&self, &S::PRef, &S::PRef) -> Result;
+    fn ty_ref_is_a(&self, sub: &S, parent: &S) -> Result;
+    fn purity_ref_is_a(&self, sub: &S::PRef, parent: &S::PRef) -> Result;
     fn inst_polymorphic_fun(&self, sub_fun: &ty::Fun<S>, par_ret: &S) -> ty::Fun<S>;
 
     fn top_fun_is_a(&self, sub_top_fun: &ty::TopFun<S>, par_top_fun: &ty::TopFun<S>) -> Result {

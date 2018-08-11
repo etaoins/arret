@@ -73,7 +73,7 @@ fn visit_box(mut box_ref: &mut Gc<Any>, old_heap: &Heap, new_heap: &mut Heap) {
 
         match box_ref.header.type_tag {
             TypeTag::Sym => {
-                let mut sym_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Sym) };
+                let sym_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Sym) };
 
                 // If this symbol is heap indexed we need to reintern it on the new heap
                 let new_interned_name = {
@@ -83,7 +83,7 @@ fn visit_box(mut box_ref: &mut Gc<Any>, old_heap: &Heap, new_heap: &mut Heap) {
                 sym_ref.interned = new_interned_name;
             }
             TypeTag::TopPair => {
-                let mut pair_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Pair<Any>) };
+                let pair_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Pair<Any>) };
 
                 visit_box(&mut pair_ref.head, old_heap, new_heap);
 
@@ -93,7 +93,7 @@ fn visit_box(mut box_ref: &mut Gc<Any>, old_heap: &Heap, new_heap: &mut Heap) {
                 continue;
             }
             TypeTag::TopVector => {
-                let mut vec_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Vector<Any>) };
+                let vec_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Vector<Any>) };
 
                 for elem_ref in vec_ref.values_mut() {
                     visit_box(elem_ref, old_heap, new_heap);

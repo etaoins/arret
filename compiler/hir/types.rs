@@ -4,10 +4,12 @@ use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum};
 use crate::hir::prim::Prim;
 use crate::hir::scope::{Binding, Scope};
-use crate::hir::util::{expect_arg_count, expect_ident_and_span, expect_one_arg, try_take_rest_arg};
-use syntax::span::Span;
+use crate::hir::util::{
+    expect_arg_count, expect_ident_and_span, expect_one_arg, try_take_rest_arg,
+};
 use crate::ty;
 use crate::ty::purity::Purity;
+use syntax::span::Span;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum TyCons {
@@ -446,7 +448,7 @@ impl<'vars> StrForPolyCtx<'vars> {
             ),
             ty::Ty::Set(member) => format!("(Setof {})", self.str_for_poly(member)),
             ty::Ty::Vector(members) => {
-                let mut result_parts: Vec<String> = members
+                let result_parts: Vec<String> = members
                     .iter()
                     .map(|member| format!(" {}", self.str_for_poly(member)))
                     .collect();

@@ -13,7 +13,7 @@ pub enum InterpretedPred<S: ty::TyRef> {
 }
 
 trait InterpretPredCtx<S: ty::TyRef> {
-    fn interpret_refs(&self, &S, &S) -> InterpretedPred<S>;
+    fn interpret_refs(&self, subject_ref: &S, test_ref: &S) -> InterpretedPred<S>;
 
     fn interpret_ref_iter<'a, I>(&self, subject_refs: I, test_ref: &'a S) -> InterpretedPred<S>
     where

@@ -37,12 +37,12 @@ pub enum UnifiedList<S: ty::TyRef> {
 }
 
 trait UnifyCtx<S: ty::TyRef> {
-    fn unify_ty_refs(&self, &S, &S) -> UnifiedTy<S>;
-    fn unify_purity_refs(&self, &S::PRef, &S::PRef) -> S::PRef;
+    fn unify_ty_refs(&self, ref1: &S, ref2: &S) -> UnifiedTy<S>;
+    fn unify_purity_refs(&self, purity1: &S::PRef, purity2: &S::PRef) -> S::PRef;
     fn intersect_list(
         &self,
-        &ty::List<S>,
-        &ty::List<S>,
+        list1: &ty::List<S>,
+        list2: &ty::List<S>,
     ) -> Result<ty::List<S>, ty::intersect::Error>;
 
     fn unify_to_ty_ref(&self, ty_ref1: &S, ty_ref2: &S) -> S {

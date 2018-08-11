@@ -9,11 +9,11 @@ pub mod select;
 pub mod subst;
 pub mod unify;
 
+use crate::ty::purity::PRef;
+use crate::ty::purity::PVarIds;
 use std;
 use std::fmt;
 use std::ops::Range;
-use crate::ty::purity::PRef;
-use crate::ty::purity::PVarIds;
 
 /// Abstracts over a reference to a type
 ///
@@ -29,7 +29,7 @@ pub trait TyRef: PartialEq + Clone + Sized + fmt::Debug {
     type PRef: purity::PRef;
 
     /// Constructs a fixed TyRef from the passed Ty
-    fn from_ty(Ty<Self>) -> Self;
+    fn from_ty(ty: Ty<Self>) -> Self;
 
     /// Tries to convert the TyRef to a fixed Ty
     fn try_to_fixed(&self) -> Option<&Ty<Self>>;
