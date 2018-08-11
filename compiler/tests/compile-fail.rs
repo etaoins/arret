@@ -1,3 +1,6 @@
+#![cfg_attr(feature = "cargo-clippy", warn(clippy))]
+#![feature(rust_2018_preview)]
+
 extern crate compiler;
 extern crate syntax;
 
@@ -33,7 +36,7 @@ struct ExpectedReport {
 }
 
 impl ExpectedReport {
-    fn matches(&self, actual_report: &Box<Reportable>) -> bool {
+    fn matches(&self, actual_report: &dyn Reportable) -> bool {
         self.span.matches(actual_report.span()) && actual_report
             .message()
             .starts_with(&self.message_prefix[..])
@@ -189,7 +192,7 @@ fn run_single_test(source_loader: &mut compiler::SourceLoader, input_path: &path
     while let Some(actual_report) = actual_reports.pop() {
         let expected_report_index = expected_reports
             .iter()
-            .position(|expected_report| expected_report.matches(&actual_report));
+            .position(|expected_report| expected_report.matches(actual_report.as_ref()));
 
         match expected_report_index {
             Some(index) => {
