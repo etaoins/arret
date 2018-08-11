@@ -224,26 +224,26 @@ mod test {
     use crate::hir::poly_for_str;
     use crate::ty::purity::Purity;
 
-    fn add_str_evidence(ctx: &mut SelectCtx, target_str: &str, evidence_str: &str) {
+    fn add_str_evidence(ctx: &mut SelectCtx<'_>, target_str: &str, evidence_str: &str) {
         ctx.add_evidence(&poly_for_str(target_str), &poly_for_str(evidence_str));
     }
 
-    fn assert_unselected_type(ctx: &SelectCtx, name: char) {
+    fn assert_unselected_type(ctx: &SelectCtx<'_>, name: char) {
         let idx = (name as usize) - ('A' as usize);
         assert_eq!(&ctx.tvar_types()[idx], &None);
     }
 
-    fn assert_selected_type(ctx: &SelectCtx, name: char, selected_str: &str) {
+    fn assert_selected_type(ctx: &SelectCtx<'_>, name: char, selected_str: &str) {
         let idx = (name as usize) - ('A' as usize);
         assert_eq!(&Some(poly_for_str(selected_str)), &ctx.tvar_types()[idx]);
     }
 
-    fn assert_unselected_purity(ctx: &SelectCtx, name: char) {
+    fn assert_unselected_purity(ctx: &SelectCtx<'_>, name: char) {
         let idx = (name as usize) - ('A' as usize);
         assert_eq!(&None, &ctx.pvar_purities()[idx]);
     }
 
-    fn assert_selected_purity(ctx: &SelectCtx, name: char, selected_purity: Purity) {
+    fn assert_selected_purity(ctx: &SelectCtx<'_>, name: char, selected_purity: Purity) {
         let idx = (name as usize) - ('A' as usize);
         assert_eq!(
             &Some(ty::purity::Poly::Fixed(selected_purity)),

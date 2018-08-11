@@ -115,13 +115,13 @@ impl<'scx> SubstCtx<ty::Poly, ty::Poly, InstPolySelectionError> for InstPolySele
     }
 }
 
-pub fn inst_ty_selection(select_ctx: &ty::select::SelectCtx, poly: &ty::Poly) -> ty::Poly {
+pub fn inst_ty_selection(select_ctx: &ty::select::SelectCtx<'_>, poly: &ty::Poly) -> ty::Poly {
     let ctx = InstPolySelectionCtx { select_ctx };
     ctx.subst_ty_ref(poly).unwrap()
 }
 
 pub fn inst_fun_selection(
-    select_ctx: &ty::select::SelectCtx,
+    select_ctx: &ty::select::SelectCtx<'_>,
     fun: &ty::Fun<ty::Poly>,
 ) -> ty::Fun<ty::Poly> {
     let ctx = InstPolySelectionCtx { select_ctx };
@@ -129,7 +129,7 @@ pub fn inst_fun_selection(
 }
 
 pub fn inst_purity_selection(
-    select_ctx: &ty::select::SelectCtx,
+    select_ctx: &ty::select::SelectCtx<'_>,
     purity: &ty::purity::Poly,
 ) -> ty::purity::Poly {
     let ctx = InstPolySelectionCtx { select_ctx };

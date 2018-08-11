@@ -985,7 +985,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
     fn destruc_rest_value(
         &mut self,
         rest: &destruc::Scalar<ty::Decl>,
-        value_type_iter: ListIterator<ty::Poly>,
+        value_type_iter: ListIterator<'_, ty::Poly>,
         is_param: bool,
     ) {
         let param_free_ty_id = if *rest.ty() == ty::Decl::Free {
@@ -1018,7 +1018,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
     fn destruc_list_value(
         &mut self,
         list: &destruc::List<ty::Decl>,
-        mut value_type_iter: ListIterator<ty::Poly>,
+        mut value_type_iter: ListIterator<'_, ty::Poly>,
         is_param: bool,
     ) -> usize {
         let start_offset = self.free_ty_polys.len();

@@ -29,7 +29,7 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
         }
     }
 
-    fn expand_ident(&mut self, cursor: &ExpandCursor, span: Span, ident: &Ident) -> NsDatum {
+    fn expand_ident(&mut self, cursor: &ExpandCursor<'_, '_>, span: Span, ident: &Ident) -> NsDatum {
         let macro_var = MacroVar::from_ident(self.scope, ident);
 
         if let Some(replacement) = cursor.match_data.vars.get(&macro_var) {
@@ -54,7 +54,7 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
 
     fn expand_zero_or_more(
         &mut self,
-        cursor: &mut ExpandCursor,
+        cursor: &mut ExpandCursor<'_, '_>,
         template: &NsDatum,
     ) -> Vec<NsDatum> {
         // Find our subpattern index from our subtemplate index
@@ -82,7 +82,7 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
 
     fn expand_slice(
         &mut self,
-        cursor: &mut ExpandCursor,
+        cursor: &mut ExpandCursor<'_, '_>,
         mut templates: &[NsDatum],
     ) -> Box<[NsDatum]> {
         let mut result: Vec<NsDatum> = vec![];
@@ -110,7 +110,7 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
 
     fn expand_list(
         &mut self,
-        cursor: &mut ExpandCursor,
+        cursor: &mut ExpandCursor<'_, '_>,
         span: Span,
         templates: &[NsDatum],
     ) -> NsDatum {
@@ -121,7 +121,7 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
         }
     }
 
-    fn expand_datum(&mut self, cursor: &mut ExpandCursor, template: &NsDatum) -> NsDatum {
+    fn expand_datum(&mut self, cursor: &mut ExpandCursor<'_, '_>, template: &NsDatum) -> NsDatum {
         match template {
             NsDatum::Ident(span, ident) => self.expand_ident(cursor, *span, ident),
             NsDatum::List(span, vs) => self.expand_list(cursor, *span, vs),

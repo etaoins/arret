@@ -20,7 +20,7 @@ struct SourceLoc<'kind, 'src> {
     span_str: &'src str,
 }
 
-fn span_to_source_loc(source_loader: &SourceLoader, span: Span) -> SourceLoc {
+fn span_to_source_loc(source_loader: &SourceLoader, span: Span) -> SourceLoc<'_, '_> {
     let source_files = source_loader.source_files();
     let lo = span.lo as usize;
 
@@ -78,7 +78,7 @@ fn print_span_snippet(source_loader: &SourceLoader, level: Level, span: Span) {
     print_loc_snippet(level, &loc)
 }
 
-fn print_loc_snippet(level: Level, loc: &SourceLoc) {
+fn print_loc_snippet(level: Level, loc: &SourceLoc<'_, '_>) {
     let border_style = Colour::Blue.bold();
 
     eprintln!(
@@ -118,7 +118,7 @@ fn print_loc_snippet(level: Level, loc: &SourceLoc) {
     print_marker(level, loc, 1);
 }
 
-fn print_marker(level: Level, loc: &SourceLoc, column_offset: usize) {
+fn print_marker(level: Level, loc: &SourceLoc<'_, '_>, column_offset: usize) {
     let chars = cmp::max(1, loc.span_str.chars().take_while(|c| c != &'\n').count());
     let marker_style = level.colour().bold();
 
@@ -186,8 +186,8 @@ pub trait Reportable {
 }
 
 #[cfg(test)]
-impl fmt::Debug for Reportable {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+impl fmt::Debug for dyn Reportable {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(formatter, "Reportable({})", self.message())
     }
 }

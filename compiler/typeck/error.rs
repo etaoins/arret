@@ -21,7 +21,7 @@ impl WantedArity {
 }
 
 impl fmt::Display for WantedArity {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.has_rest {
             write!(f, "at least {}", self.fixed_len)
         } else {
@@ -104,7 +104,7 @@ impl error::Error for Error {
 }
 
 impl Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }

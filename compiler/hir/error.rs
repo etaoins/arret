@@ -152,7 +152,7 @@ impl Reportable for Error {
         self.error_loc.macro_invocation_span
     }
 
-    fn associated_report(&self) -> Option<Box<Reportable>> {
+    fn associated_report(&self) -> Option<Box<dyn Reportable>> {
         match self.kind {
             ErrorKind::DuplicateDef(span) => if span == EMPTY_SPAN {
                 // Some definitions (e.g. `import`) are magically inserted in to the scope. They
@@ -175,7 +175,7 @@ impl error::Error for Error {
 }
 
 impl Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }

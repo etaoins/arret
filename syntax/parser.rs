@@ -155,7 +155,7 @@ impl<'de> Parser<'de> {
 
     fn capture_span<F, R>(&mut self, block: F) -> (Span, R)
     where
-        F: FnOnce(&mut Parser) -> R,
+        F: FnOnce(&mut Parser<'_>) -> R,
     {
         let lo = self.consumed_bytes as u32;
         let result = block(self);

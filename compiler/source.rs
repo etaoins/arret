@@ -12,7 +12,7 @@ pub enum SourceKind {
 }
 
 impl fmt::Display for SourceKind {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             SourceKind::File(filename) => write!(formatter, "{}", filename),
             SourceKind::Repl(_) => write!(formatter, "<repl input>"),

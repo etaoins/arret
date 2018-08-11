@@ -6,7 +6,7 @@ use crate::ty::list_iter::ListIterator;
 pub fn type_for_decl_list_destruc(
     tvars: &[ty::TVar],
     list: &destruc::List<ty::Decl>,
-    mut guide_type_iter: Option<ListIterator<ty::Poly>>,
+    mut guide_type_iter: Option<ListIterator<'_, ty::Poly>>,
 ) -> ty::List<ty::Poly> {
     let mut fixed_polys = vec![];
 
