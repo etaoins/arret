@@ -1,13 +1,6 @@
 #![cfg_attr(feature = "cargo-clippy", warn(clippy))]
 #![feature(rust_2018_preview)]
 
-extern crate ansi_term;
-extern crate app_dirs;
-extern crate clap;
-extern crate compiler;
-extern crate rustyline;
-extern crate syntax;
-
 mod mode;
 
 use std::path;

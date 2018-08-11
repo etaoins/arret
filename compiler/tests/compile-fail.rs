@@ -1,9 +1,6 @@
 #![cfg_attr(feature = "cargo-clippy", warn(clippy))]
 #![feature(rust_2018_preview)]
 
-extern crate compiler;
-extern crate syntax;
-
 use std::ops::Range;
 use std::{fs, path};
 

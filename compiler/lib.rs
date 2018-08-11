@@ -1,11 +1,6 @@
 #![cfg_attr(feature = "cargo-clippy", warn(clippy))]
 #![feature(rust_2018_preview)]
 
-extern crate ansi_term;
-extern crate libloading;
-extern crate runtime;
-extern crate syntax;
-
 #[macro_use]
 mod id_type;
 
