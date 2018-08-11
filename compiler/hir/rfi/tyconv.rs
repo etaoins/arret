@@ -1,4 +1,4 @@
-use ty;
+use crate::ty;
 
 use runtime::{abitype, boxed};
 

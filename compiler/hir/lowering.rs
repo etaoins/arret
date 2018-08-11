@@ -1,24 +1,24 @@
 use std::collections::HashMap;
 
-use hir::destruc;
-use hir::error::{Error, ErrorKind, Result};
-use hir::exports::Exports;
-use hir::import::lower_import_set;
-use hir::loader::{load_module_by_name, parse_module_data, LoadedModule, ModuleName, PackagePaths};
-use hir::macros::{expand_macro, lower_macro_rules, Macro};
-use hir::ns::{Ident, NsDataIter, NsDatum, NsId};
-use hir::prim::Prim;
-use hir::rfi;
-use hir::scope::{Binding, MacroId, Scope};
-use hir::types::{lower_poly, try_lower_purity};
-use hir::types::{lower_polymorphic_var, PolymorphicVar, PolymorphicVarKind};
-use hir::util::{expect_arg_count, expect_ident_and_span, expect_one_arg, try_take_rest_arg};
-use hir::{App, Cond, Def, Expr, Fun, Let, VarIdCounter};
-use source::{SourceFileId, SourceLoader};
+use crate::hir::destruc;
+use crate::hir::error::{Error, ErrorKind, Result};
+use crate::hir::exports::Exports;
+use crate::hir::import::lower_import_set;
+use crate::hir::loader::{load_module_by_name, parse_module_data, LoadedModule, ModuleName, PackagePaths};
+use crate::hir::macros::{expand_macro, lower_macro_rules, Macro};
+use crate::hir::ns::{Ident, NsDataIter, NsDatum, NsId};
+use crate::hir::prim::Prim;
+use crate::hir::rfi;
+use crate::hir::scope::{Binding, MacroId, Scope};
+use crate::hir::types::{lower_poly, try_lower_purity};
+use crate::hir::types::{lower_polymorphic_var, PolymorphicVar, PolymorphicVarKind};
+use crate::hir::util::{expect_arg_count, expect_ident_and_span, expect_one_arg, try_take_rest_arg};
+use crate::hir::{App, Cond, Def, Expr, Fun, Let, VarIdCounter};
+use crate::source::{SourceFileId, SourceLoader};
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
-use ty;
-use ty::purity::Purity;
+use crate::ty;
+use crate::ty::purity::Purity;
 
 #[derive(Debug)]
 struct LoweredModule {
@@ -76,7 +76,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         package_paths: &'pp PackagePaths,
         source_loader: &'sl mut SourceLoader,
     ) -> LoweringCtx<'pp, 'sl> {
-        use hir::exports;
+        use crate::hir::exports;
 
         let mut module_exports = HashMap::with_capacity(2);
 
@@ -1062,7 +1062,7 @@ pub fn expr_for_str(data_str: &str) -> Expr<ty::Decl> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use hir::VarId;
+    use crate::hir::VarId;
     use syntax::span::t2s;
 
     #[test]

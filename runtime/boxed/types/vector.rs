@@ -1,9 +1,9 @@
 use std::{fmt, marker, mem};
 
-use abitype::{BoxedABIType, EncodeBoxedABIType};
-use boxed::refs::Gc;
-use boxed::{AllocType, Any, AsHeap, BoxSize, Boxed, ConstructableFrom, Header, TypeTag};
-use intern::Interner;
+use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
+use crate::boxed::refs::Gc;
+use crate::boxed::{AllocType, Any, AsHeap, BoxSize, Boxed, ConstructableFrom, Header, TypeTag};
+use crate::intern::Interner;
 
 const MAX_16BYTE_INLINE_LENGTH: usize = ((16 - 8) / mem::size_of::<Gc<Any>>());
 const MAX_32BYTE_INLINE_LENGTH: usize = ((32 - 8) / mem::size_of::<Gc<Any>>());
@@ -173,7 +173,7 @@ impl TopVector {
 #[cfg(test)]
 mod test {
     use super::*;
-    use boxed::heap::Heap;
+    use crate::boxed::heap::Heap;
     use std::mem;
 
     #[test]
@@ -185,7 +185,7 @@ mod test {
 
     #[test]
     fn equality() {
-        use boxed::Int;
+        use crate::boxed::Int;
 
         let mut heap = Heap::new();
 
@@ -203,7 +203,7 @@ mod test {
 
     #[test]
     fn fmt_debug() {
-        use boxed::Int;
+        use crate::boxed::Int;
 
         let mut heap = Heap::new();
 

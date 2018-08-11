@@ -1,5 +1,5 @@
-use boxed::heap::Heap;
-use boxed::prelude::*;
+use crate::boxed::heap::Heap;
+use crate::boxed::prelude::*;
 
 pub struct Task {
     heap: Heap,

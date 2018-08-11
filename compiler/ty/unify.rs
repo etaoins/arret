@@ -11,10 +11,10 @@
 use std::cmp;
 use std::iter;
 
-use ty;
-use ty::purity::PVarIds;
-use ty::purity::Purity;
-use ty::TVarIds;
+use crate::ty;
+use crate::ty::purity::PVarIds;
+use crate::ty::purity::Purity;
+use crate::ty::TVarIds;
 
 #[derive(Debug, PartialEq)]
 enum UnifiedTy<S: ty::TyRef> {
@@ -304,7 +304,7 @@ struct PolyUnifyCtx<'tvars> {
 
 impl<'tvars> UnifyCtx<ty::Poly> for PolyUnifyCtx<'tvars> {
     fn unify_ty_refs(&self, poly1: &ty::Poly, poly2: &ty::Poly) -> UnifiedTy<ty::Poly> {
-        use ty::resolve;
+        use crate::ty::resolve;
 
         // Determine if we're dealing with fixed types or polymorphic bounds
         let resolved1 = resolve::resolve_poly_ty(self.tvars, poly1);
@@ -415,7 +415,7 @@ mod test {
     use super::*;
 
     fn poly_for_str(datum_str: &str) -> ty::Poly {
-        use hir;
+        use crate::hir;
         hir::poly_for_str(datum_str)
     }
 

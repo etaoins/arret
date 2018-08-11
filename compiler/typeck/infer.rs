@@ -2,17 +2,17 @@ use std;
 use std::collections::HashMap;
 use std::result;
 
-use hir;
-use hir::destruc;
-use hir::rfi;
+use crate::hir;
+use crate::hir::destruc;
+use crate::hir::rfi;
 use syntax::datum::Datum;
 use syntax::span::Span;
-use ty;
-use ty::list_iter::ListIterator;
-use ty::purity::Purity;
-use ty::TyRef;
-use typeck;
-use typeck::error::{Error, ErrorKind, WantedArity};
+use crate::ty;
+use crate::ty::list_iter::ListIterator;
+use crate::ty::purity::Purity;
+use crate::ty::TyRef;
+use crate::typeck;
+use crate::typeck::error::{Error, ErrorKind, WantedArity};
 
 type Result<T> = result::Result<T, Error>;
 
@@ -820,7 +820,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
                 let pred_result =
                     ty::pred::interpret_poly_pred(self.tvars, &subject_node.poly_type, &test_poly);
 
-                use ty::pred::InterpretedPred;
+                use crate::ty::pred::InterpretedPred;
                 let pred_result_type = match pred_result {
                     InterpretedPred::Static(result) => ty::Ty::LitBool(result),
                     InterpretedPred::Dynamic(type_if_true, type_if_false) => {
@@ -1202,7 +1202,7 @@ pub fn infer_program(
 #[cfg(test)]
 mod test {
     use super::*;
-    use hir::lowering::lowered_expr_for_str;
+    use crate::hir::lowering::lowered_expr_for_str;
     use syntax::span::t2s;
 
     fn type_for_lowered_expr(

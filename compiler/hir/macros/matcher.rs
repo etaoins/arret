@@ -1,8 +1,8 @@
 use std::result;
 
-use hir::macros::{MacroVar, MatchData, Rule, SpecialVars};
-use hir::ns::{Ident, NsDatum};
-use hir::scope::Scope;
+use crate::hir::macros::{MacroVar, MatchData, Rule, SpecialVars};
+use crate::hir::ns::{Ident, NsDatum};
+use crate::hir::scope::Scope;
 
 struct MatchCtx<'scope, 'svars> {
     scope: &'scope Scope,

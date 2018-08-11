@@ -1,7 +1,7 @@
 use std::fmt;
 
-use boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
-use intern::{InternedSym, Interner};
+use crate::boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
+use crate::intern::{InternedSym, Interner};
 
 #[repr(C, align(16))]
 pub struct Sym {
@@ -48,7 +48,7 @@ impl fmt::Debug for Sym {
 #[cfg(test)]
 mod test {
     use super::*;
-    use boxed::heap::Heap;
+    use crate::boxed::heap::Heap;
     use std::mem;
 
     #[test]

@@ -8,12 +8,12 @@ use libloading;
 
 use syntax::span::Span;
 
-use hir::error::{Error, ErrorKind};
-use hir::ns::{NsDatum, NsId};
-use hir::scope::Scope;
-use hir::types;
-use source::{SourceKind, SourceLoader};
-use ty;
+use crate::hir::error::{Error, ErrorKind};
+use crate::hir::ns::{NsDatum, NsId};
+use crate::hir::scope::Scope;
+use crate::hir::types;
+use crate::source::{SourceKind, SourceLoader};
+use crate::ty;
 
 use runtime::{abitype, binding};
 

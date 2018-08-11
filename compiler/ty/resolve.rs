@@ -1,5 +1,5 @@
-use ty;
-use ty::purity::Purity;
+use crate::ty;
+use crate::ty::purity::Purity;
 
 pub enum Result<'ty> {
     Fixed(&'ty ty::Ty<ty::Poly>),
@@ -90,7 +90,7 @@ mod test {
     use super::*;
 
     fn poly_for_str(datum_str: &str) -> ty::Poly {
-        use hir;
+        use crate::hir;
         hir::poly_for_str(datum_str)
     }
 

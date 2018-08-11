@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::path;
 
-use hir::error::{Error, ErrorKind, Result};
-use hir::rfi;
-use source::{SourceFile, SourceLoader};
+use crate::hir::error::{Error, ErrorKind, Result};
+use crate::hir::rfi;
+use crate::source::{SourceFile, SourceLoader};
 use syntax::datum::Datum;
 use syntax::parser::data_from_str_with_span_offset;
 use syntax::span::Span;

@@ -2,7 +2,7 @@ use std::error;
 use std::fmt;
 use std::fmt::Display;
 
-use reporting::{Level, Reportable};
+use crate::reporting::{Level, Reportable};
 use syntax::span::Span;
 
 #[derive(PartialEq, Debug, Copy, Clone)]

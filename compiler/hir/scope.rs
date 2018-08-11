@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use hir::error::{Error, ErrorKind};
-use hir::ns::{Ident, NsDatum, NsId, NsIdCounter};
-use hir::prim::Prim;
-use hir::{types, VarId};
+use crate::hir::error::{Error, ErrorKind};
+use crate::hir::ns::{Ident, NsDatum, NsId, NsIdCounter};
+use crate::hir::prim::Prim;
+use crate::hir::{types, VarId};
 use syntax::span::{Span, EMPTY_SPAN};
-use ty;
+use crate::ty;
 
 new_indexing_id_type!(MacroId, u32);
 
@@ -82,8 +82,8 @@ impl Scope {
     ///
     /// The bindings will be in `NsId(0)` with an empty span
     pub fn new_with_primitives() -> Scope {
-        use hir::prim::PRIM_EXPORTS;
-        use hir::types::TY_EXPORTS;
+        use crate::hir::prim::PRIM_EXPORTS;
+        use crate::hir::types::TY_EXPORTS;
 
         let entries = PRIM_EXPORTS
             .iter()

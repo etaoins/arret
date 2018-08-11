@@ -4,14 +4,14 @@ mod matcher;
 
 use std::collections::{HashMap, HashSet};
 
-use hir::error::{Error, ErrorKind, Result};
-use hir::macros::checker::{check_rule, VarLinks};
-use hir::macros::expander::expand_rule;
-use hir::macros::matcher::match_rule;
-use hir::ns::{Ident, NsDatum};
-use hir::prim::Prim;
-use hir::scope::{Binding, Scope};
-use hir::util::expect_ident;
+use crate::hir::error::{Error, ErrorKind, Result};
+use crate::hir::macros::checker::{check_rule, VarLinks};
+use crate::hir::macros::expander::expand_rule;
+use crate::hir::macros::matcher::match_rule;
+use crate::hir::ns::{Ident, NsDatum};
+use crate::hir::prim::Prim;
+use crate::hir::scope::{Binding, Scope};
+use crate::hir::util::expect_ident;
 use syntax::span::Span;
 
 #[derive(PartialEq, Eq, Debug, Hash)]

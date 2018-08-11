@@ -1,6 +1,6 @@
-use ty;
-use ty::list_iter::ListIterator;
-use ty::purity::Purity;
+use crate::ty;
+use crate::ty::list_iter::ListIterator;
+use crate::ty::purity::Purity;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Result {
@@ -400,7 +400,7 @@ mod test {
     use super::*;
 
     fn poly_for_str(datum_str: &str) -> ty::Poly {
-        use hir;
+        use crate::hir;
         hir::poly_for_str(datum_str)
     }
 

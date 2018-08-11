@@ -1,8 +1,8 @@
 use std::{mem, ptr};
 
-use boxed::heap::Heap;
-use boxed::refs::Gc;
-use boxed::{AllocType, Any, BoxSize, Header, List, Pair, Sym, TypeTag, Vector};
+use crate::boxed::heap::Heap;
+use crate::boxed::refs::Gc;
+use crate::boxed::{AllocType, Any, BoxSize, Header, List, Pair, Sym, TypeTag, Vector};
 
 #[repr(C, align(16))]
 pub struct ForwardingCell {
@@ -121,11 +121,11 @@ pub fn collect_roots(old_heap: Heap, roots: Vec<&mut Gc<Any>>) -> Heap {
 #[cfg(test)]
 mod test {
     use super::*;
-    use boxed::{Int, List};
+    use crate::boxed::{Int, List};
 
     #[test]
     fn simple_collect() {
-        use boxed::{ConstructableFrom, Str};
+        use crate::boxed::{ConstructableFrom, Str};
 
         let mut old_heap = Heap::new();
 
@@ -164,7 +164,7 @@ mod test {
 
     #[test]
     fn sym_collect() {
-        use boxed::{ConstructableFrom, Sym};
+        use crate::boxed::{ConstructableFrom, Sym};
 
         let mut old_heap = Heap::new();
 

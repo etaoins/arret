@@ -1,6 +1,6 @@
-use datum::Datum;
-use error::{Error, ErrorKind, ExpectedContent, Result};
-use span::Span;
+use crate::datum::Datum;
+use crate::error::{Error, ErrorKind, ExpectedContent, Result};
+use crate::span::Span;
 use std;
 
 pub fn data_from_str_with_span_offset(s: &str, span_offset: usize) -> Result<Vec<Datum>> {
@@ -484,7 +484,7 @@ pub fn data_from_str(s: &str) -> Result<Vec<Datum>> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use span::t2s;
+    use crate::span::t2s;
 
     fn whole_str_span(v: &str) -> Span {
         Span {

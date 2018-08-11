@@ -2,9 +2,9 @@ mod collect;
 
 use std::{cmp, mem, ptr};
 
-use boxed::refs::Gc;
-use boxed::{AllocType, Any, ConstructableFrom};
-use intern::Interner;
+use crate::boxed::refs::Gc;
+use crate::boxed::{AllocType, Any, ConstructableFrom};
+use crate::intern::Interner;
 
 /// Represents an allocated segement of garbage collected memory
 ///
@@ -171,7 +171,7 @@ mod test {
 
     #[test]
     fn basic_alloc() {
-        use boxed::Str;
+        use crate::boxed::Str;
 
         let mut heap = Heap::with_capacity(1);
 

@@ -1,5 +1,5 @@
-use ty;
-use ty::purity::Purity;
+use crate::ty;
+use crate::ty::purity::Purity;
 
 trait SubstCtx<I: ty::TyRef, O: ty::TyRef, E> {
     fn subst_purity_ref(&self, input: &I::PRef) -> Result<O::PRef, E>;

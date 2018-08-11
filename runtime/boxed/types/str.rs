@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::{fmt, mem, ptr};
 
-use boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
-use intern::Interner;
+use crate::boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
+use crate::intern::Interner;
 
 #[repr(C, align(16))]
 pub struct Str {
@@ -151,7 +151,7 @@ enum Repr<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use boxed::heap::Heap;
+    use crate::boxed::heap::Heap;
     use std::mem;
 
     #[test]

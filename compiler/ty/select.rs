@@ -1,7 +1,7 @@
 use std::ops::Range;
 
-use ty;
-use ty::list_iter::ListIterator;
+use crate::ty;
+use crate::ty::list_iter::ListIterator;
 
 /// Selects a set of polymorphic variables for a function application
 ///
@@ -221,8 +221,8 @@ impl<'tvars> SelectCtx<'tvars> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use hir::poly_for_str;
-    use ty::purity::Purity;
+    use crate::hir::poly_for_str;
+    use crate::ty::purity::Purity;
 
     fn add_str_evidence(ctx: &mut SelectCtx, target_str: &str, evidence_str: &str) {
         ctx.add_evidence(&poly_for_str(target_str), &poly_for_str(evidence_str));

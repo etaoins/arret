@@ -1,4 +1,4 @@
-use span::Span;
+use crate::span::Span;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Datum {

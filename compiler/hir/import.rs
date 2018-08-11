@@ -1,10 +1,10 @@
 use std::result;
 
-use hir::error::{Error, ErrorKind};
-use hir::exports::Exports;
-use hir::loader::ModuleName;
-use hir::ns::{NsDataIter, NsDatum};
-use hir::util::{expect_arg_count, expect_ident, expect_ident_and_span, expect_one_arg};
+use crate::hir::error::{Error, ErrorKind};
+use crate::hir::exports::Exports;
+use crate::hir::loader::ModuleName;
+use crate::hir::ns::{NsDataIter, NsDatum};
+use crate::hir::util::{expect_arg_count, expect_ident, expect_ident_and_span, expect_one_arg};
 use syntax::span::Span;
 
 type Result<T> = result::Result<T, Vec<Error>>;
@@ -241,9 +241,9 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use hir::ns::NsId;
-    use hir::prim::Prim;
-    use hir::scope::Binding;
+    use crate::hir::ns::NsId;
+    use crate::hir::prim::Prim;
+    use crate::hir::scope::Binding;
     use std::collections::HashMap;
     use syntax::span::{t2s, EMPTY_SPAN};
 

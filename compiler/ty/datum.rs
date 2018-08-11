@@ -1,5 +1,5 @@
 use syntax::datum::Datum;
-use ty;
+use crate::ty;
 
 trait DatumTyCtx<S: ty::TyRef> {
     fn unify_ref_iter<I>(&self, members: I) -> S
@@ -63,7 +63,7 @@ pub fn poly_for_datum(datum: &Datum) -> ty::Poly {
 #[cfg(test)]
 mod test {
     use super::*;
-    use hir::poly_for_str;
+    use crate::hir::poly_for_str;
 
     fn assert_poly_for_str(ty_str: &str, datum_str: &str) {
         use syntax::parser::datum_from_str;

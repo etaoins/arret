@@ -4,7 +4,7 @@ use rustyline;
 
 use compiler;
 
-use DriverConfig;
+use crate::DriverConfig;
 
 const APP_INFO: app_dirs::AppInfo = app_dirs::AppInfo {
     name: "arret",

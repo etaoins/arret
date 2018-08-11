@@ -6,7 +6,7 @@ use std::iter;
 use ansi_term::Colour;
 use ansi_term::Style;
 
-use source::{SourceKind, SourceLoader};
+use crate::source::{SourceKind, SourceLoader};
 use syntax;
 use syntax::span::Span;
 

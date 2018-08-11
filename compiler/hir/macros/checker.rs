@@ -1,10 +1,10 @@
 use std::collections::{HashMap, HashSet};
 use std::result;
 
-use hir::error::{Error, ErrorKind, Result};
-use hir::macros::{MacroVar, SpecialVars};
-use hir::ns::{Ident, NsDatum};
-use hir::scope::Scope;
+use crate::hir::error::{Error, ErrorKind, Result};
+use crate::hir::macros::{MacroVar, SpecialVars};
+use crate::hir::ns::{Ident, NsDatum};
+use crate::hir::scope::Scope;
 use syntax::span::{Span, EMPTY_SPAN};
 
 #[derive(PartialEq, Debug)]

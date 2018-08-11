@@ -1,7 +1,7 @@
-use hir::macros::checker::VarLinks;
-use hir::macros::{MacroVar, MatchData, SpecialVars};
-use hir::ns::{Ident, NsDatum, NsId};
-use hir::scope::Scope;
+use crate::hir::macros::checker::VarLinks;
+use crate::hir::macros::{MacroVar, MatchData, SpecialVars};
+use crate::hir::ns::{Ident, NsDatum, NsId};
+use crate::hir::scope::Scope;
 use std::collections::HashMap;
 use syntax::span::Span;
 

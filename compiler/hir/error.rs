@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use std::{error, fmt, io, path, result};
 
-use reporting::{Level, Reportable};
+use crate::reporting::{Level, Reportable};
 use syntax::error::Error as SyntaxError;
 use syntax::span::{Span, EMPTY_SPAN};
 

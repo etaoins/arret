@@ -3,7 +3,7 @@ use std::path;
 use compiler;
 use compiler::reporting::Reportable;
 
-use DriverConfig;
+use crate::DriverConfig;
 
 pub fn compile_input_file(cfg: &DriverConfig, input_path: &path::Path) {
     let mut source_loader = compiler::SourceLoader::new();

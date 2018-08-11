@@ -1,4 +1,4 @@
-use hir::scope::Binding;
+use crate::hir::scope::Binding;
 
 macro_rules! export_prims {
     ( $( ($n:expr, $i:ident) ),* ) => {

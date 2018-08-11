@@ -1,7 +1,7 @@
-use hir;
-use hir::destruc;
-use ty;
-use ty::list_iter::ListIterator;
+use crate::hir;
+use crate::hir::destruc;
+use crate::ty;
+use crate::ty::list_iter::ListIterator;
 
 pub fn type_for_decl_list_destruc(
     tvars: &[ty::TVar],

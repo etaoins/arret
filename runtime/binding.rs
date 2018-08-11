@@ -1,4 +1,4 @@
-use abitype::{ABIType, RetABIType};
+use crate::abitype::{ABIType, RetABIType};
 
 #[derive(Debug)]
 pub struct RustFun {
@@ -14,7 +14,7 @@ pub type RustExports = &'static [(&'static str, &'static RustFun)];
 #[macro_export]
 macro_rules! define_rust_fn {
     (#[arret-type=$type:expr] $desc_name:ident = fn $func_name:ident($task_name:ident : &mut Task, $($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
-        use abitype::{EncodeABIType, EncodeRetABIType};
+        use crate::abitype::{EncodeABIType, EncodeRetABIType};
 
         #[no_mangle]
         pub extern "C" fn $func_name($task_name: &mut Task, $($param_name: $rust_ty),*) -> $ret {
@@ -68,11 +68,11 @@ macro_rules! define_rust_module {
 // This needs to be pub because we export functions
 #[cfg(test)]
 pub mod test {
-    use abitype::BoxedABIType;
-    use boxed;
-    use boxed::prelude::*;
-    use boxed::refs::Gc;
-    use task::Task;
+    use crate::abitype::BoxedABIType;
+    use crate::boxed;
+    use crate::boxed::prelude::*;
+    use crate::boxed::refs::Gc;
+    use crate::task::Task;
 
     use super::*;
 

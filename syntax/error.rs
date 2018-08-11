@@ -3,7 +3,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::result;
 
-use span::Span;
+use crate::span::Span;
 
 #[derive(Debug, PartialEq)]
 pub struct Error {

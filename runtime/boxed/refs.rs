@@ -2,7 +2,7 @@ use std::fmt;
 use std::ops::Deref;
 use std::ptr;
 
-use boxed::Boxed;
+use crate::boxed::Boxed;
 
 /// Reference to a garbage collected value
 ///

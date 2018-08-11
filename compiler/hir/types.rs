@@ -1,13 +1,13 @@
 use std::ops::Range;
 
-use hir::error::{Error, ErrorKind, Result};
-use hir::ns::{Ident, NsDataIter, NsDatum};
-use hir::prim::Prim;
-use hir::scope::{Binding, Scope};
-use hir::util::{expect_arg_count, expect_ident_and_span, expect_one_arg, try_take_rest_arg};
+use crate::hir::error::{Error, ErrorKind, Result};
+use crate::hir::ns::{Ident, NsDataIter, NsDatum};
+use crate::hir::prim::Prim;
+use crate::hir::scope::{Binding, Scope};
+use crate::hir::util::{expect_arg_count, expect_ident_and_span, expect_one_arg, try_take_rest_arg};
 use syntax::span::Span;
-use ty;
-use ty::purity::Purity;
+use crate::ty;
+use crate::ty::purity::Purity;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum TyCons {
@@ -528,8 +528,8 @@ pub fn str_for_purity(pvars: &[ty::purity::PVar], purity: &ty::purity::Poly) -> 
 
 #[cfg(test)]
 pub fn poly_for_str(datum_str: &str) -> ty::Poly {
-    use hir::ns::NsId;
-    use hir::prim::PRIM_EXPORTS;
+    use crate::hir::ns::NsId;
+    use crate::hir::prim::PRIM_EXPORTS;
     use syntax::parser::datum_from_str;
 
     let prim_entries = PRIM_EXPORTS

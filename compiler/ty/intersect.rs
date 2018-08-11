@@ -2,10 +2,10 @@ use std::cmp;
 use std::iter;
 use std::result;
 
-use ty;
-use ty::list_iter::ListIterator;
-use ty::purity::Purity;
-use ty::TVarIds;
+use crate::ty;
+use crate::ty::list_iter::ListIterator;
+use crate::ty::purity::Purity;
+use crate::ty::TVarIds;
 
 #[derive(PartialEq, Debug)]
 pub enum Error {
@@ -296,7 +296,7 @@ mod test {
     use super::*;
 
     fn poly_for_str(datum_str: &str) -> ty::Poly {
-        use hir;
+        use crate::hir;
         hir::poly_for_str(datum_str)
     }
 

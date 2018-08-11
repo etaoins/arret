@@ -1,4 +1,4 @@
-use ty;
+use crate::ty;
 
 #[derive(Debug, PartialEq)]
 pub enum InterpretedPred<S: ty::TyRef> {
@@ -103,8 +103,8 @@ impl<'tvars> InterpretPredCtx<ty::Poly> for InterpretPolyPredCtx<'tvars> {
         subject_ref: &ty::Poly,
         test_ref: &ty::Poly,
     ) -> InterpretedPred<ty::Poly> {
-        use ty::is_a;
-        use ty::resolve;
+        use crate::ty::is_a;
+        use crate::ty::resolve;
 
         match is_a::poly_is_a(self.tvars, subject_ref, test_ref) {
             is_a::Result::Yes => InterpretedPred::Static(true),
@@ -139,7 +139,7 @@ mod test {
     use super::*;
 
     fn poly_for_str(datum_str: &str) -> ty::Poly {
-        use hir;
+        use crate::hir;
         hir::poly_for_str(datum_str)
     }
 

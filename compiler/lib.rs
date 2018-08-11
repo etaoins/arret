@@ -16,7 +16,7 @@ mod source;
 mod ty;
 mod typeck;
 
-pub use hir::lowering::lower_program;
-pub use hir::PackagePaths;
-pub use source::{SourceFile, SourceFileId, SourceKind, SourceLoader};
-pub use typeck::infer::infer_program;
+pub use crate::hir::lowering::lower_program;
+pub use crate::hir::PackagePaths;
+pub use crate::source::{SourceFile, SourceFileId, SourceKind, SourceLoader};
+pub use crate::typeck::infer::infer_program;

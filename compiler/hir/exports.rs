@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use hir::prim::PRIM_EXPORTS;
-use hir::scope::Binding;
-use hir::types::TY_EXPORTS;
+use crate::hir::prim::PRIM_EXPORTS;
+use crate::hir::scope::Binding;
+use crate::hir::types::TY_EXPORTS;
 
 pub type Exports = HashMap<Box<str>, Binding>;
 

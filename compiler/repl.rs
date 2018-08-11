@@ -1,13 +1,13 @@
 use syntax;
 use syntax::parser::data_from_str_with_span_offset;
 
-use hir;
-use hir::scope::Scope;
-use reporting::Reportable;
-use {PackagePaths, SourceKind, SourceLoader};
+use crate::hir;
+use crate::hir::scope::Scope;
+use crate::reporting::Reportable;
+use crate::{PackagePaths, SourceKind, SourceLoader};
 
-use typeck;
-use typeck::infer::InferCtx;
+use crate::typeck;
+use crate::typeck::infer::InferCtx;
 
 #[cfg_attr(test, derive(Debug))]
 pub struct Error(Vec<Box<dyn Reportable>>);
@@ -99,7 +99,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
     }
 
     pub fn eval_line(&mut self, input: String, input_column: usize) -> Result<EvaledLine, Error> {
-        use hir::lowering::LoweredReplDatum;
+        use crate::hir::lowering::LoweredReplDatum;
 
         let mut input_data = {
             let source_loader = self.lcx.source_loader_mut();
@@ -115,7 +115,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
             }
             1 => input_data.pop().unwrap(),
             _ => {
-                use hir::error::{Error, ErrorKind};
+                use crate::hir::error::{Error, ErrorKind};
                 let extra_span = input_data[1].span();
 
                 return Err(Error(vec![Box::new(Error::new(

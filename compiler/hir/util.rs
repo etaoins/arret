@@ -1,7 +1,7 @@
-use hir::error::{Error, ErrorKind, Result};
-use hir::ns::{Ident, NsDataIter, NsDatum};
-use hir::prim::Prim;
-use hir::scope::{Binding, Scope};
+use crate::hir::error::{Error, ErrorKind, Result};
+use crate::hir::ns::{Ident, NsDataIter, NsDatum};
+use crate::hir::prim::Prim;
+use crate::hir::scope::{Binding, Scope};
 use syntax::span::Span;
 
 /// Removes the rest argument from the passed iterator and returns it

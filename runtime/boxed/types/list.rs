@@ -2,12 +2,12 @@ use std::iter::FusedIterator;
 use std::marker::PhantomData;
 use std::{fmt, mem};
 
-use abitype::{BoxedABIType, EncodeBoxedABIType};
-use boxed::refs::Gc;
-use boxed::{
+use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
+use crate::boxed::refs::Gc;
+use crate::boxed::{
     AllocType, Any, AsHeap, BoxSize, Boxed, ConstructableFrom, Header, Nil, TypeTag, NIL_INSTANCE,
 };
-use intern::Interner;
+use crate::intern::Interner;
 
 #[repr(C, align(16))]
 pub struct Pair<T: Boxed> {
@@ -204,8 +204,8 @@ impl TopPair {
 #[cfg(test)]
 mod test {
     use super::*;
-    use boxed::heap::Heap;
-    use boxed::Int;
+    use crate::boxed::heap::Heap;
+    use crate::boxed::Int;
     use std::mem;
 
     #[test]
@@ -215,7 +215,7 @@ mod test {
 
     #[test]
     fn equality() {
-        use boxed::Int;
+        use crate::boxed::Int;
 
         let mut heap = Heap::new();
 

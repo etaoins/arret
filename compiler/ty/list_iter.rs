@@ -1,4 +1,4 @@
-use ty;
+use crate::ty;
 
 /// Iterates through the member types of a list
 #[derive(Clone)]

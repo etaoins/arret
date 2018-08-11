@@ -1,6 +1,6 @@
-use boxed;
-use boxed::refs::Gc;
-use intern::InternedSym;
+use crate::boxed;
+use crate::boxed::refs::Gc;
+use crate::intern::InternedSym;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum BoxedABIType {

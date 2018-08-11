@@ -4,18 +4,18 @@ mod types;
 
 use std::ptr;
 
-use abitype::{BoxedABIType, EncodeBoxedABIType};
-use boxed::heap::Heap;
-use boxed::refs::Gc;
-use intern::Interner;
+use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
+use crate::boxed::heap::Heap;
+use crate::boxed::refs::Gc;
+use crate::intern::Interner;
 
-pub use boxed::types::char::Char;
-pub use boxed::types::float::Float;
-pub use boxed::types::int::Int;
-pub use boxed::types::list::{List, Pair, TopPair};
-pub use boxed::types::str::Str;
-pub use boxed::types::sym::Sym;
-pub use boxed::types::vector::{TopVector, Vector};
+pub use crate::boxed::types::char::Char;
+pub use crate::boxed::types::float::Float;
+pub use crate::boxed::types::int::Int;
+pub use crate::boxed::types::list::{List, Pair, TopPair};
+pub use crate::boxed::types::str::Str;
+pub use crate::boxed::types::sym::Sym;
+pub use crate::boxed::types::vector::{TopVector, Vector};
 
 pub mod prelude {
     pub use super::AsHeap;

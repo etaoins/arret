@@ -12,8 +12,8 @@ pub mod unify;
 use std;
 use std::fmt;
 use std::ops::Range;
-use ty::purity::PRef;
-use ty::purity::PVarIds;
+use crate::ty::purity::PRef;
+use crate::ty::purity::PVarIds;
 
 /// Abstracts over a reference to a type
 ///
