@@ -48,7 +48,7 @@ impl<'scope, 'svars> MatchCtx<'scope, 'svars> {
         match (pattern, arg) {
             (NsDatum::Ident(_, pattern_ident), arg) => self.visit_ident(pattern_ident, arg),
             (NsDatum::List(_, pvs), NsDatum::List(_, avs)) => self.visit_slice(pvs, avs),
-            (NsDatum::Vec(_, pvs), NsDatum::Vec(_, avs)) => self.visit_slice(pvs, avs),
+            (NsDatum::Vector(_, pvs), NsDatum::Vector(_, avs)) => self.visit_slice(pvs, avs),
             (NsDatum::Set(_, pvs), NsDatum::Set(_, avs)) => self.visit_slice(pvs, avs),
             (NsDatum::Bool(_, pv), NsDatum::Bool(_, av)) if pv == av => Ok(()),
             (NsDatum::Int(_, pv), NsDatum::Int(_, av)) if pv == av => Ok(()),

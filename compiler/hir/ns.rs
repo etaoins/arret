@@ -44,7 +44,7 @@ pub enum NsDatum {
     List(Span, Box<[NsDatum]>),
     Str(Span, Box<str>),
     Ident(Span, Ident),
-    Vec(Span, Box<[NsDatum]>),
+    Vector(Span, Box<[NsDatum]>),
     Map(Span, Box<[(NsDatum, NsDatum)]>),
     Set(Span, Box<[NsDatum]>),
 }
@@ -67,7 +67,7 @@ impl NsDatum {
             Datum::Str(span, v) => NsDatum::Str(span, v),
             Datum::Sym(span, v) => NsDatum::Ident(span, Ident::new(ns_id, v)),
             Datum::List(span, vs) => NsDatum::List(span, Self::map_syntax_data(ns_id, vs)),
-            Datum::Vec(span, vs) => NsDatum::Vec(span, Self::map_syntax_data(ns_id, vs)),
+            Datum::Vector(span, vs) => NsDatum::Vector(span, Self::map_syntax_data(ns_id, vs)),
             Datum::Set(span, vs) => NsDatum::Set(span, Self::map_syntax_data(ns_id, vs)),
             Datum::Map(span, vs) => NsDatum::Map(
                 span,
@@ -101,7 +101,7 @@ impl NsDatum {
             NsDatum::Str(span, v) => Datum::Str(span, v),
             NsDatum::Ident(span, v) => Datum::Sym(span, v.into_name()),
             NsDatum::List(span, vs) => Datum::List(span, Self::map_nsdata(vs)),
-            NsDatum::Vec(span, vs) => Datum::Vec(span, Self::map_nsdata(vs)),
+            NsDatum::Vector(span, vs) => Datum::Vector(span, Self::map_nsdata(vs)),
             NsDatum::Set(span, vs) => Datum::Set(span, Self::map_nsdata(vs)),
             NsDatum::Map(span, vs) => Datum::Map(
                 span,
@@ -123,7 +123,7 @@ impl NsDatum {
             | NsDatum::Str(span, _)
             | NsDatum::Ident(span, _)
             | NsDatum::List(span, _)
-            | NsDatum::Vec(span, _)
+            | NsDatum::Vector(span, _)
             | NsDatum::Set(span, _)
             | NsDatum::Map(span, _) => *span,
         }

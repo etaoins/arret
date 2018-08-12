@@ -9,7 +9,7 @@ pub enum Datum {
     List(Span, Box<[Datum]>),
     Str(Span, Box<str>),
     Sym(Span, Box<str>),
-    Vec(Span, Box<[Datum]>),
+    Vector(Span, Box<[Datum]>),
     Map(Span, Box<[(Datum, Datum)]>),
     Set(Span, Box<[Datum]>),
 }
@@ -24,7 +24,7 @@ impl Datum {
             | Datum::List(span, _)
             | Datum::Str(span, _)
             | Datum::Sym(span, _)
-            | Datum::Vec(span, _)
+            | Datum::Vector(span, _)
             | Datum::Map(span, _)
             | Datum::Set(span, _) => *span,
         }

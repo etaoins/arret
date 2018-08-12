@@ -190,7 +190,7 @@ where
     fn lower_import_set(&mut self, import_set_datum: NsDatum) -> Result<FilterInput> {
         let span = import_set_datum.span();
         match import_set_datum {
-            NsDatum::Vec(_, vs) => {
+            NsDatum::Vector(_, vs) => {
                 if vs.len() < 2 {
                     return Err(vec![Error::new(
                         span,

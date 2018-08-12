@@ -269,7 +269,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             NsDatum::Ident(span, ident) => {
                 self.lower_ident_destruc(scope, span, ident, ty::Decl::Free)
             }
-            NsDatum::Vec(span, vs) => {
+            NsDatum::Vector(span, vs) => {
                 let mut data = vs.into_vec();
 
                 if data.len() != 3 {
@@ -321,7 +321,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         destruc_datum: NsDatum,
     ) -> Result<destruc::Destruc<ty::Decl>> {
         match destruc_datum {
-            NsDatum::Ident(span, _) | NsDatum::Vec(span, _) => self
+            NsDatum::Ident(span, _) | NsDatum::Vector(span, _) => self
                 .lower_scalar_destruc(scope, destruc_datum)
                 .map(|scalar| destruc::Destruc::Scalar(span, scalar)),
             NsDatum::List(span, vs) => self
@@ -352,7 +352,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             Error::new(span, ErrorKind::IllegalArg("bindings declaration missing"))
         })?;
 
-        let bindings_data = if let NsDatum::Vec(_, vs) = bindings_datum {
+        let bindings_data = if let NsDatum::Vector(_, vs) = bindings_datum {
             vs.into_vec()
         } else {
             return Err(Error::new(
@@ -992,7 +992,7 @@ fn import_statement_for_module(names: &[&'static str]) -> Datum {
         EMPTY_SPAN,
         Box::new([
             Datum::Sym(EMPTY_SPAN, "import".into()),
-            Datum::Vec(
+            Datum::Vector(
                 EMPTY_SPAN,
                 names
                     .iter()

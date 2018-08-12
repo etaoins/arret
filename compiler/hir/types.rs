@@ -58,7 +58,7 @@ impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
                     )),
                 });
             }
-            NsDatum::Vec(vector_span, vs) => {
+            NsDatum::Vector(vector_span, vs) => {
                 let mut arg_data = vs.into_vec();
 
                 if arg_data.len() == 3
@@ -247,7 +247,7 @@ impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
                         .into_poly(),
                 )
             }
-            NsDatum::Vec(_, vs) => {
+            NsDatum::Vector(_, vs) => {
                 let fixed_literals = Self::lower_literal_vec(vs.into_vec())?;
                 Ok(ty::Ty::Vector(fixed_literals.into_boxed_slice()).into_poly())
             }

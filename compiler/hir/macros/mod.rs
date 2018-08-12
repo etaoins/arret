@@ -121,7 +121,7 @@ fn lower_macro_rule_datum(
     special_vars: &SpecialVars,
     rule_datum: NsDatum,
 ) -> Result<Rule> {
-    let (span, mut rule_values) = if let NsDatum::Vec(span, vs) = rule_datum {
+    let (span, mut rule_values) = if let NsDatum::Vector(span, vs) = rule_datum {
         (span, vs.into_vec())
     } else {
         return Err(Error::new(

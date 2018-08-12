@@ -129,7 +129,7 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
         match template {
             NsDatum::Ident(span, ident) => self.expand_ident(cursor, *span, ident),
             NsDatum::List(span, vs) => self.expand_list(cursor, *span, vs),
-            NsDatum::Vec(span, vs) => NsDatum::Vec(*span, self.expand_slice(cursor, vs)),
+            NsDatum::Vector(span, vs) => NsDatum::Vector(*span, self.expand_slice(cursor, vs)),
             NsDatum::Set(span, vs) => NsDatum::Set(*span, self.expand_slice(cursor, vs)),
             other => other.clone(),
         }

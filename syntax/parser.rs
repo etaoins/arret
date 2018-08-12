@@ -305,7 +305,7 @@ impl<'de> Parser<'de> {
         let (outer_span, contents) =
             self.capture_span(|s| s.parse_seq(']', ExpectedContent::Vector));
 
-        contents.map(|contents| Datum::Vec(outer_span, contents))
+        contents.map(|contents| Datum::Vector(outer_span, contents))
     }
 
     fn parse_map(&mut self) -> Result<Datum> {
@@ -570,7 +570,7 @@ mod test {
     fn vector_datum() {
         let j = "  []";
         let t = "  ^^";
-        let expected = Datum::Vec(t2s(t), Box::new([]));
+        let expected = Datum::Vector(t2s(t), Box::new([]));
         assert_eq!(expected, datum_from_str(j).unwrap());
 
         let j = "[ true   (true false) ]";
@@ -580,7 +580,7 @@ mod test {
         let w = "          ^^^^         ";
         let x = "               ^^^^^   ";
 
-        let expected = Datum::Vec(
+        let expected = Datum::Vector(
             t2s(t),
             Box::new([
                 Datum::Bool(t2s(u), true),

@@ -22,7 +22,7 @@ pub fn box_syntax_datum(heap: &mut impl boxed::AsHeap, datum: &Datum) -> Gc<boxe
 
             boxed::List::new(heap, boxed_elems.into_iter()).as_any_ref()
         }
-        Datum::Vec(_, vs) => {
+        Datum::Vector(_, vs) => {
             let boxed_elems = vs
                 .iter()
                 .map(|elem| box_syntax_datum(heap, elem))

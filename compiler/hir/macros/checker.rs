@@ -128,7 +128,7 @@ impl<'scope, 'svars> FindVarsCtx<'scope, 'svars> {
         match pattern {
             NsDatum::Ident(span, ident) => self.visit_ident(pattern_vars, *span, ident),
             NsDatum::List(_, vs) => self.visit_list(pattern_vars, vs),
-            NsDatum::Vec(_, vs) => self.visit_seq(pattern_vars, vs),
+            NsDatum::Vector(_, vs) => self.visit_seq(pattern_vars, vs),
             NsDatum::Set(span, vs) => self.visit_set(pattern_vars, *span, vs),
             _ => {
                 // Can't contain a pattern var
