@@ -267,12 +267,11 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
         let test_node = self.visit_expr(fcx, test_required_type, test_expr)?;
 
         let (true_node, false_node) = if let Some(type_cond) = test_node.type_cond {
-            // TODO: This useless tuple a workaround for https://github.com/rust-lang/rust/issues/16223
-            let (VarTypeCond {
+            let VarTypeCond {
                 var_id,
                 type_if_true,
                 type_if_false,
-            },) = (*type_cond,);
+            } = *type_cond;
 
             // Patch our occurrence types in to the `var_to_type` and restore it after. We
             // avoid `?`ing our results until the end to make sure the original types are
