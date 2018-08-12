@@ -139,9 +139,9 @@ fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedR
                     hi: (span_offset + span_end) as u32,
                 }),
             }
-        }).collect();
+        });
 
-    line_reports.append(&mut spanned_reports);
+    line_reports.extend(&mut spanned_reports);
     line_reports
 }
 
