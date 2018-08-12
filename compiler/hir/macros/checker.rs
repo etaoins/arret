@@ -259,8 +259,7 @@ fn link_found_vars(
             // Iterate over our subpatterns
             let (pattern_idx, subpattern_vars) = possible_indices[0];
             link_found_vars(scope, pattern_idx, subpattern_vars, subtemplate_vars)
-        })
-        .collect::<Result<Vec<VarLinks>>>()?;
+        }).collect::<Result<Vec<VarLinks>>>()?;
 
     Ok(VarLinks {
         pattern_idx,

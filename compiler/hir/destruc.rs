@@ -1,7 +1,7 @@
 use crate::hir;
 use crate::hir::HirType;
-use syntax::span::Span;
 use crate::ty;
+use syntax::span::Span;
 
 #[derive(Debug, PartialEq)]
 pub enum Destruc<T: HirType> {

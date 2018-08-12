@@ -78,8 +78,7 @@ impl NsDatum {
                             NsDatum::from_syntax_datum(ns_id, k),
                             NsDatum::from_syntax_datum(ns_id, v),
                         )
-                    })
-                    .collect::<Vec<(NsDatum, NsDatum)>>()
+                    }).collect::<Vec<(NsDatum, NsDatum)>>()
                     .into_boxed_slice(),
             ),
         }

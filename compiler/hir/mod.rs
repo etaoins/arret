@@ -15,9 +15,9 @@ mod util;
 use std;
 use std::ops::Range;
 
+use crate::ty;
 use syntax::datum::Datum;
 use syntax::span::Span;
-use crate::ty;
 
 pub trait HirType: std::cmp::PartialEq + std::fmt::Debug {
     type Purity: std::cmp::PartialEq + std::fmt::Debug;

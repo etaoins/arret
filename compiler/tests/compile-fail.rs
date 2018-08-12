@@ -105,41 +105,38 @@ fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedR
             }
         }).collect::<Vec<ExpectedReport>>();
 
-    let mut spanned_reports = source
-        .match_indices(";^")
-        .map(|(index, _)| {
-            let span_length = source[index..].find(' ').expect("Cannot find level") - 1;
+    let mut spanned_reports = source.match_indices(";^").map(|(index, _)| {
+        let span_length = source[index..].find(' ').expect("Cannot find level") - 1;
 
-            let start_of_line_index = &source[..index]
-                .rfind('\n')
-                .expect("Cannot have a spanned error on first line");
+        let start_of_line_index = &source[..index]
+            .rfind('\n')
+            .expect("Cannot have a spanned error on first line");
 
-            let start_of_previous_line_index =
-                &source[..*start_of_line_index].rfind('\n').unwrap_or(0);
+        let start_of_previous_line_index = &source[..*start_of_line_index].rfind('\n').unwrap_or(0);
 
-            let end_of_line_index = &source[index..]
-                .find('\n')
-                .map(|i| i + index)
-                .unwrap_or_else(|| source.len());
+        let end_of_line_index = &source[index..]
+            .find('\n')
+            .map(|i| i + index)
+            .unwrap_or_else(|| source.len());
 
-            let span_line_offset = index - start_of_line_index + 1;
+        let span_line_offset = index - start_of_line_index + 1;
 
-            let span_start = start_of_previous_line_index + span_line_offset;
-            let span_end = span_start + span_length;
+        let span_start = start_of_previous_line_index + span_line_offset;
+        let span_end = span_start + span_length;
 
-            // Take from after the ;^^ to the end of the line
-            let marker_string = &source[index + span_length + 1..*end_of_line_index];
-            let (level, marker_string) = take_level(marker_string);
+        // Take from after the ;^^ to the end of the line
+        let marker_string = &source[index + span_length + 1..*end_of_line_index];
+        let (level, marker_string) = take_level(marker_string);
 
-            ExpectedReport {
-                level,
-                message_prefix: marker_string.into(),
-                span: ExpectedSpan::Exact(Span {
-                    lo: (span_offset + span_start) as u32,
-                    hi: (span_offset + span_end) as u32,
-                }),
-            }
-        });
+        ExpectedReport {
+            level,
+            message_prefix: marker_string.into(),
+            span: ExpectedSpan::Exact(Span {
+                lo: (span_offset + span_start) as u32,
+                hi: (span_offset + span_end) as u32,
+            }),
+        }
+    });
 
     line_reports.extend(&mut spanned_reports);
     line_reports

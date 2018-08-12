@@ -5,8 +5,8 @@ use crate::hir::error::{Error, ErrorKind};
 use crate::hir::ns::{Ident, NsDatum, NsId, NsIdCounter};
 use crate::hir::prim::Prim;
 use crate::hir::{types, VarId};
-use syntax::span::{Span, EMPTY_SPAN};
 use crate::ty;
+use syntax::span::{Span, EMPTY_SPAN};
 
 new_indexing_id_type!(MacroId, u32);
 

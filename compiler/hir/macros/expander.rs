@@ -29,7 +29,12 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
         }
     }
 
-    fn expand_ident(&mut self, cursor: &ExpandCursor<'_, '_>, span: Span, ident: &Ident) -> NsDatum {
+    fn expand_ident(
+        &mut self,
+        cursor: &ExpandCursor<'_, '_>,
+        span: Span,
+        ident: &Ident,
+    ) -> NsDatum {
         let macro_var = MacroVar::from_ident(self.scope, ident);
 
         if let Some(replacement) = cursor.match_data.vars.get(&macro_var) {
@@ -76,8 +81,7 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
                 };
 
                 self.expand_datum(&mut subcursor, template)
-            })
-            .collect()
+            }).collect()
     }
 
     fn expand_slice(

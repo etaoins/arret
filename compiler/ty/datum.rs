@@ -1,5 +1,5 @@
-use syntax::datum::Datum;
 use crate::ty;
+use syntax::datum::Datum;
 
 trait DatumTyCtx<S: ty::TyRef> {
     fn unify_ref_iter<I>(&self, members: I) -> S
