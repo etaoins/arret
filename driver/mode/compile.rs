@@ -1,7 +1,7 @@
 use std::path;
 
 use compiler;
-use compiler::reporting::Reportable;
+use compiler::reporting::report_to_stderr;
 
 use crate::DriverConfig;
 
@@ -17,7 +17,7 @@ pub fn compile_input_file(cfg: &DriverConfig, input_path: &path::Path) {
         Ok(hir) => hir,
         Err(errors) => {
             for err in errors {
-                err.report(&source_loader);
+                report_to_stderr(&source_loader, &err);
             }
             return;
         }
@@ -31,7 +31,7 @@ pub fn compile_input_file(cfg: &DriverConfig, input_path: &path::Path) {
         }
         Err(errs) => {
             for err in errs {
-                err.report(&source_loader);
+                report_to_stderr(&source_loader, &err);
             }
             return;
         }

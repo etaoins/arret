@@ -172,53 +172,6 @@ pub trait Reportable {
     fn message(&self) -> String;
     fn loc_trace(&self) -> LocTrace;
 
-    fn report(&self, source_loader: &SourceLoader) {
-        let default_bold = Style::new().bold();
-        let level = self.level();
-        let loc_trace = self.loc_trace();
-
-        let origin = loc_trace.origin();
-        let post_error_snippet_loc = if let Some(origin) = origin.to_non_empty() {
-            let loc = span_to_source_loc(source_loader, origin);
-            if let (SourceKind::Repl(offset), 0) = (loc.kind, loc.line) {
-                // Print a marker pointing at the REPL line the user entered
-                print_marker(level, &loc, *offset);
-                None
-            } else {
-                // Show the snippet after the error message
-                Some(loc)
-            }
-        } else {
-            None
-        };
-
-        eprintln!(
-            "{}: {}",
-            level.colour().bold().paint(level.name()),
-            default_bold.paint(self.message())
-        );
-
-        if let Some(source_loc) = post_error_snippet_loc {
-            print_source_snippet(self.level(), &source_loc);
-        }
-
-        if let Some(macro_invocation) = loc_trace.macro_invocation.to_non_empty() {
-            // Frequently errors will point to the macro arguments.
-            // Showing the whole invocation would just be noise.
-            if !macro_invocation.contains(origin) {
-                eprintln!("{}", default_bold.paint("in this macro invocation"));
-                print_span_snippet(source_loader, Level::Note, macro_invocation);
-            }
-        }
-
-        if let Some(associated_report) = self.associated_report() {
-            // Skip the newline so the reports are visually grouped
-            associated_report.report(source_loader);
-        } else {
-            eprintln!("");
-        }
-    }
-
     fn associated_report(&self) -> Option<Box<dyn Reportable>> {
         None
     }
@@ -228,6 +181,53 @@ pub trait Reportable {
 impl fmt::Debug for dyn Reportable {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(formatter, "Reportable({})", self.message())
+    }
+}
+
+pub fn report_to_stderr(source_loader: &SourceLoader, report: &dyn Reportable) {
+    let default_bold = Style::new().bold();
+    let level = report.level();
+    let loc_trace = report.loc_trace();
+
+    let origin = loc_trace.origin();
+    let post_error_snippet_loc = if let Some(origin) = origin.to_non_empty() {
+        let loc = span_to_source_loc(source_loader, origin);
+        if let (SourceKind::Repl(offset), 0) = (loc.kind, loc.line) {
+            // Print a marker pointing at the REPL line the user entered
+            print_marker(level, &loc, *offset);
+            None
+        } else {
+            // Show the snippet after the error message
+            Some(loc)
+        }
+    } else {
+        None
+    };
+
+    eprintln!(
+        "{}: {}",
+        level.colour().bold().paint(level.name()),
+        default_bold.paint(report.message())
+    );
+
+    if let Some(source_loc) = post_error_snippet_loc {
+        print_source_snippet(level, &source_loc);
+    }
+
+    if let Some(macro_invocation) = loc_trace.macro_invocation.to_non_empty() {
+        // Frequently errors will point to the macro arguments.
+        // Showing the whole invocation would just be noise.
+        if !macro_invocation.contains(origin) {
+            eprintln!("{}", default_bold.paint("in this macro invocation"));
+            print_span_snippet(source_loader, Level::Note, macro_invocation);
+        }
+    }
+
+    if let Some(associated_report) = report.associated_report() {
+        // Skip the newline so the reports are visually grouped
+        report_to_stderr(source_loader, associated_report.as_ref());
+    } else {
+        eprintln!("");
     }
 }
 

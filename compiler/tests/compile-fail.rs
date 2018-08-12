@@ -4,7 +4,7 @@
 use std::ops::Range;
 use std::{fs, path};
 
-use compiler::reporting::{Level, LocTrace, Reportable};
+use compiler::reporting::{report_to_stderr, Level, LocTrace, Reportable};
 use syntax::span::Span;
 
 #[derive(Debug)]
@@ -206,11 +206,11 @@ fn run_single_test(source_loader: &mut compiler::SourceLoader, input_path: &path
 
     for unexpected_report in unexpected_reports {
         eprintln!("Unexpected {}:", unexpected_report.level().name());
-        unexpected_report.report(&source_loader);
+        report_to_stderr(&source_loader, unexpected_report.as_ref());
     }
 
     for expected_report in expected_reports {
-        expected_report.report(&source_loader);
+        report_to_stderr(&source_loader, &expected_report);
     }
 
     false

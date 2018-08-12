@@ -62,6 +62,7 @@ impl rustyline::completion::Completer for Completer {
 
 pub fn interactive_loop(cfg: &DriverConfig) {
     use compiler::repl::EvaledLine;
+    use compiler::reporting::report_to_stderr;
     use rustyline;
     use rustyline::error::ReadlineError;
 
@@ -74,7 +75,7 @@ pub fn interactive_loop(cfg: &DriverConfig) {
     let initial_import = "(import [stdlib base])".to_owned();
     if let Err(err) = repl_ctx.eval_line(initial_import, 0) {
         for reportable in err.reports() {
-            reportable.report(repl_ctx.source_loader())
+            report_to_stderr(repl_ctx.source_loader(), reportable.as_ref())
         }
     }
     rl.set_completer(Some(Completer::new(repl_ctx.bound_names())));
@@ -112,7 +113,7 @@ pub fn interactive_loop(cfg: &DriverConfig) {
                     }
                     Err(err) => {
                         for reportable in err.reports() {
-                            reportable.report(repl_ctx.source_loader());
+                            report_to_stderr(repl_ctx.source_loader(), reportable.as_ref());
                         }
                     }
                 }

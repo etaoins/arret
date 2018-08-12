@@ -1,7 +1,7 @@
 #![cfg_attr(feature = "cargo-clippy", warn(clippy))]
 #![feature(rust_2018_preview)]
 
-use compiler::reporting::Reportable;
+use compiler::reporting::report_to_stderr;
 use std::{fs, path};
 
 fn run_single_test(source_loader: &mut compiler::SourceLoader, input_path: &path::Path) -> bool {
@@ -12,7 +12,7 @@ fn run_single_test(source_loader: &mut compiler::SourceLoader, input_path: &path
         Ok(hir) => hir,
         Err(errors) => {
             for err in errors {
-                err.report(source_loader);
+                report_to_stderr(source_loader, &err);
             }
             return false;
         }
@@ -22,7 +22,7 @@ fn run_single_test(source_loader: &mut compiler::SourceLoader, input_path: &path
         Ok(_) => {}
         Err(errs) => {
             for err in errs {
-                err.report(source_loader);
+                report_to_stderr(source_loader, &err);
             }
             return false;
         }
