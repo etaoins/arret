@@ -5,7 +5,7 @@ use runtime::boxed::prelude::*;
 use runtime::boxed::refs::Gc;
 
 fn write_boxed_seq(
-    w: &mut Write,
+    w: &mut dyn Write,
     heap: &impl AsHeap,
     elems: impl Iterator<Item = Gc<boxed::Any>>,
 ) -> Result<()> {
@@ -24,7 +24,7 @@ fn write_boxed_seq(
 }
 
 /// Writes a representation of the passed box to the writer
-pub fn write_boxed(w: &mut Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any>) -> Result<()> {
+pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any>) -> Result<()> {
     use runtime::boxed::AnySubtype;
 
     match any_ref.as_subtype() {

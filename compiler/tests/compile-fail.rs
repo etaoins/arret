@@ -1,5 +1,6 @@
 #![cfg_attr(feature = "cargo-clippy", warn(clippy))]
 #![feature(rust_2018_preview)]
+#![warn(rust_2018_idioms)]
 
 use std::ops::Range;
 use std::{fs, path};

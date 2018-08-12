@@ -22,7 +22,7 @@ fn is_whitespace(c: char) -> bool {
 
 pub fn is_identifier_char(c: char) -> bool {
     match c {
-        'A'...'Z' | 'a'...'z' | '0'...'9' |
+        'A'..='Z' | 'a'..='z' | '0'..='9' |
         // Punctuation allowed at beginning of an identiifer
         '.' | '*' | '+' | '!' | '-' | '_' | '?' | '$' | '%' | '&' | '=' | '<' | '>' | ':' |
         // Punctuation allowed anywhere
@@ -166,7 +166,7 @@ impl<'de> Parser<'de> {
 
     fn parse_int_content(&mut self) -> Result<u64> {
         let (span, digits) = self.consume_until(|c| match c {
-            '0'...'9' => false,
+            '0'..='9' => false,
             _ => true,
         });
 
@@ -436,7 +436,7 @@ impl<'de> Parser<'de> {
             '(' => self.parse_list(),
             '[' => self.parse_vector(),
             '{' => self.parse_map(),
-            '0'...'9' => self.parse_int(),
+            '0'..='9' => self.parse_int(),
             '-' => self.parse_negative_or_symbol(),
             '\'' => self.parse_symbol_shorthand("quote"),
             '"' => self.parse_string(),
