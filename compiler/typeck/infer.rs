@@ -981,6 +981,13 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
             hir::Expr::Let(span, hir_let) => self.visit_let(fcx, required_type, span, *hir_let),
             hir::Expr::Ref(span, var_id) => self.visit_ref(fcx, required_type, span, var_id),
             hir::Expr::App(span, app) => self.visit_app(fcx, required_type, span, *app),
+            hir::Expr::MacroExpand(span, inner_expr) => self
+                .visit_expr_with_self_var_id(fcx, required_type, *inner_expr, self_var_id)
+                .map(|inferred| InferredNode {
+                    expr: hir::Expr::MacroExpand(span, Box::new(inferred.expr)),
+                    poly_type: inferred.poly_type,
+                    type_cond: inferred.type_cond,
+                }).map_err(|err| err.with_macro_invocation_span(span)),
         }
     }
 

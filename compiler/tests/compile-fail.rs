@@ -4,7 +4,7 @@
 use std::ops::Range;
 use std::{fs, path};
 
-use compiler::reporting::{Level, Reportable};
+use compiler::reporting::{Level, LocTrace, Reportable};
 use syntax::span::Span;
 
 #[derive(Debug)]
@@ -34,21 +34,23 @@ struct ExpectedReport {
 
 impl ExpectedReport {
     fn matches(&self, actual_report: &dyn Reportable) -> bool {
-        self.span.matches(actual_report.span()) && actual_report
+        let actual_span = actual_report.loc_trace().origin();
+
+        self.span.matches(actual_span) && actual_report
             .message()
             .starts_with(&self.message_prefix[..])
     }
 }
 
 impl Reportable for ExpectedReport {
-    fn span(&self) -> Span {
-        match self.span {
+    fn loc_trace(&self) -> LocTrace {
+        (match self.span {
             ExpectedSpan::Exact(span) => span,
             ExpectedSpan::StartRange(ref span_range) => Span {
                 lo: span_range.start as u32,
                 hi: span_range.end as u32,
             },
-        }
+        }).into()
     }
 
     fn level(&self) -> Level {

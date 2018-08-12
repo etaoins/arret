@@ -9,8 +9,12 @@ impl Span {
         Span { lo, hi: self.hi }
     }
 
-    pub fn is_empty(self) -> bool {
-        self.lo == self.hi
+    pub fn to_non_empty(self) -> Option<Span> {
+        if self.lo != self.hi {
+            Some(self)
+        } else {
+            None
+        }
     }
 
     pub fn with_offset(self, offset: usize) -> Span {
@@ -18,6 +22,10 @@ impl Span {
             lo: ((self.lo as usize) + offset) as u32,
             hi: ((self.hi as usize) + offset) as u32,
         }
+    }
+
+    pub fn contains(self, other: Span) -> bool {
+        (other.lo >= self.lo) && (other.hi <= self.hi)
     }
 }
 

@@ -704,6 +704,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                                 expand_macro(&mut macro_scope, span, mac, data_iter.as_slice())?;
 
                             self.lower_expr(&macro_scope, expanded_datum)
+                                .map(|expr| Expr::MacroExpand(span, Box::new(expr)))
                                 .map_err(|e| e.with_macro_invocation_span(span))
                         }
                         Binding::Var(id) => {
@@ -1523,16 +1524,11 @@ mod test {
 
     #[test]
     fn expand_trivial_macro() {
-        let j1 = "(letmacro [one (macro-rules [() 1])]";
-        let t1 = "                                ^   ";
-        let j2 = "(one)";
-        let t2 = "     ";
-        let j3 = ")";
+        let j = "(letmacro [one (macro-rules [() 1])] (one))";
+        let t = "                                     ^^^^^ ";
+        let u = "                                ^          ";
 
-        let j = &[j1, j2, j3].join("");
-        let t = &[t1, t2].join("");
-
-        let expected = Expr::Lit(Datum::Int(t2s(t), 1));
+        let expected = Expr::MacroExpand(t2s(t), Box::new(Expr::Lit(Datum::Int(t2s(u), 1))));
         assert_eq!(expected, expr_for_str(j));
     }
 

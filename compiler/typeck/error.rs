@@ -2,7 +2,7 @@ use std::error;
 use std::fmt;
 use std::fmt::Display;
 
-use crate::reporting::{Level, Reportable};
+use crate::reporting::{Level, LocTrace, Reportable};
 use syntax::span::Span;
 
 #[derive(PartialEq, Debug, Copy, Clone)]
@@ -43,19 +43,28 @@ pub enum ErrorKind {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct Error(Span, ErrorKind);
+pub struct Error {
+    loc_trace: LocTrace,
+    kind: ErrorKind,
+}
 
 impl Error {
     pub fn new(span: Span, kind: ErrorKind) -> Error {
-        Error(span, kind)
-    }
-
-    pub fn span(&self) -> Span {
-        self.0
+        Error {
+            loc_trace: span.into(),
+            kind,
+        }
     }
 
     pub fn kind(&self) -> &ErrorKind {
-        &self.1
+        &self.kind
+    }
+
+    pub fn with_macro_invocation_span(self, span: Span) -> Error {
+        Error {
+            loc_trace: self.loc_trace.with_macro_invocation(span),
+            kind: self.kind,
+        }
     }
 }
 
@@ -65,7 +74,7 @@ impl Reportable for Error {
     }
 
     fn message(&self) -> String {
-        match self.1 {
+        match self.kind() {
             ErrorKind::IsNotTy(ref sub, ref parent) => format!("`{}` is not a `{}`", sub, parent),
             ErrorKind::IsNotPurity(ref fun, ref purity) => {
                 format!("function of type `{}` is not {}", fun, purity)
@@ -92,8 +101,8 @@ impl Reportable for Error {
         }
     }
 
-    fn span(&self) -> Span {
-        self.span()
+    fn loc_trace(&self) -> LocTrace {
+        self.loc_trace.clone()
     }
 }
 

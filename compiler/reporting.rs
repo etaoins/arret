@@ -8,7 +8,44 @@ use ansi_term::Style;
 
 use crate::source::{SourceKind, SourceLoader};
 use syntax;
-use syntax::span::Span;
+use syntax::span::{Span, EMPTY_SPAN};
+
+/// Traces the location of report through macro expansions
+#[derive(Debug, PartialEq, Clone)]
+pub struct LocTrace {
+    origin: Span,
+    macro_invocation: Span,
+}
+
+impl LocTrace {
+    pub fn new(origin: Span, macro_invocation: Span) -> LocTrace {
+        LocTrace {
+            origin,
+            macro_invocation,
+        }
+    }
+
+    pub fn with_macro_invocation(self, macro_invocation: Span) -> LocTrace {
+        LocTrace {
+            origin: self.origin,
+            macro_invocation,
+        }
+    }
+
+    pub fn origin(&self) -> Span {
+        self.origin
+    }
+
+    pub fn macro_invocation(&self) -> Span {
+        self.macro_invocation
+    }
+}
+
+impl From<Span> for LocTrace {
+    fn from(span: Span) -> LocTrace {
+        LocTrace::new(span, EMPTY_SPAN)
+    }
+}
 
 #[derive(PartialEq, Debug)]
 struct SourceLoc<'kind, 'src> {
@@ -75,10 +112,10 @@ fn span_to_source_loc(source_loader: &SourceLoader, span: Span) -> SourceLoc<'_,
 
 fn print_span_snippet(source_loader: &SourceLoader, level: Level, span: Span) {
     let loc = span_to_source_loc(source_loader, span);
-    print_loc_snippet(level, &loc)
+    print_source_snippet(level, &loc)
 }
 
-fn print_loc_snippet(level: Level, loc: &SourceLoc<'_, '_>) {
+fn print_source_snippet(level: Level, loc: &SourceLoc<'_, '_>) {
     let border_style = Colour::Blue.bold();
 
     eprintln!(
@@ -133,20 +170,16 @@ fn print_marker(level: Level, loc: &SourceLoc<'_, '_>, column_offset: usize) {
 pub trait Reportable {
     fn level(&self) -> Level;
     fn message(&self) -> String;
-    fn span(&self) -> Span;
-    fn macro_invocation_span(&self) -> Option<Span> {
-        None
-    }
+    fn loc_trace(&self) -> LocTrace;
 
     fn report(&self, source_loader: &SourceLoader) {
         let default_bold = Style::new().bold();
         let level = self.level();
-        let span = self.span();
+        let loc_trace = self.loc_trace();
 
-        let post_error_snippet_loc = if span.is_empty() {
-            None
-        } else {
-            let loc = span_to_source_loc(source_loader, span);
+        let origin = loc_trace.origin();
+        let post_error_snippet_loc = if let Some(origin) = origin.to_non_empty() {
+            let loc = span_to_source_loc(source_loader, origin);
             if let (SourceKind::Repl(offset), 0) = (loc.kind, loc.line) {
                 // Print a marker pointing at the REPL line the user entered
                 print_marker(level, &loc, *offset);
@@ -155,6 +188,8 @@ pub trait Reportable {
                 // Show the snippet after the error message
                 Some(loc)
             }
+        } else {
+            None
         };
 
         eprintln!(
@@ -163,13 +198,17 @@ pub trait Reportable {
             default_bold.paint(self.message())
         );
 
-        if let Some(loc) = post_error_snippet_loc {
-            print_loc_snippet(self.level(), &loc);
+        if let Some(source_loc) = post_error_snippet_loc {
+            print_source_snippet(self.level(), &source_loc);
         }
 
-        if let Some(macro_invocation_span) = self.macro_invocation_span() {
-            eprintln!("{}", default_bold.paint("in this macro invocation"));
-            print_span_snippet(source_loader, Level::Note, macro_invocation_span);
+        if let Some(macro_invocation) = loc_trace.macro_invocation.to_non_empty() {
+            // Frequently errors will point to the macro arguments.
+            // Showing the whole invocation would just be noise.
+            if !macro_invocation.contains(origin) {
+                eprintln!("{}", default_bold.paint("in this macro invocation"));
+                print_span_snippet(source_loader, Level::Note, macro_invocation);
+            }
         }
 
         if let Some(associated_report) = self.associated_report() {
@@ -321,8 +360,8 @@ impl Reportable for syntax::error::Error {
         }
     }
 
-    fn span(&self) -> Span {
-        self.span()
+    fn loc_trace(&self) -> LocTrace {
+        self.span().into()
     }
 
     fn level(&self) -> Level {
@@ -353,8 +392,8 @@ impl Reportable for ContentStartHelp {
         Level::Help
     }
 
-    fn span(&self) -> Span {
-        self.open_char_span
+    fn loc_trace(&self) -> LocTrace {
+        self.open_char_span.into()
     }
 
     fn message(&self) -> String {

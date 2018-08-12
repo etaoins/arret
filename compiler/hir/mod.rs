@@ -77,6 +77,11 @@ pub enum Expr<T: HirType> {
     Ref(Span, VarId),
     TyPred(Span, ty::Poly),
     Do(Vec<Expr<T>>),
+
+    /// Used for tracing macro expansion for error report and debug information
+    ///
+    /// Other than the above this should be treated identically to the inner expression.
+    MacroExpand(Span, Box<Expr<T>>),
 }
 
 #[derive(PartialEq, Debug)]

@@ -1,37 +1,10 @@
 use std::fmt::Display;
 use std::{error, fmt, io, path, result};
 
-use crate::reporting::{Level, Reportable};
+use crate::reporting::{Level, LocTrace, Reportable};
+
 use syntax::error::Error as SyntaxError;
 use syntax::span::{Span, EMPTY_SPAN};
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct ErrorLoc {
-    span: Span,
-    macro_invocation_span: Option<Span>,
-}
-
-impl ErrorLoc {
-    pub fn new(span: Span, macro_invocation_span: Option<Span>) -> ErrorLoc {
-        ErrorLoc {
-            span,
-            macro_invocation_span,
-        }
-    }
-
-    fn with_macro_invocation_span(self, macro_invocation_span: Span) -> ErrorLoc {
-        ErrorLoc {
-            span: self.span,
-            macro_invocation_span: Some(macro_invocation_span),
-        }
-    }
-}
-
-impl From<Span> for ErrorLoc {
-    fn from(span: Span) -> ErrorLoc {
-        ErrorLoc::new(span, None)
-    }
-}
 
 #[derive(Debug, PartialEq)]
 pub enum ErrorKind {
@@ -61,7 +34,7 @@ pub enum ErrorKind {
 
 #[derive(Debug, PartialEq)]
 pub struct Error {
-    error_loc: ErrorLoc,
+    loc_trace: LocTrace,
     kind: ErrorKind,
 }
 
@@ -70,7 +43,7 @@ pub type Result<T, E = Error> = result::Result<T, E>;
 impl Error {
     pub fn new(span: Span, kind: ErrorKind) -> Error {
         Error {
-            error_loc: span.into(),
+            loc_trace: span.into(),
             kind,
         }
     }
@@ -88,17 +61,14 @@ impl Error {
 
     pub fn with_macro_invocation_span(self, span: Span) -> Error {
         Error {
-            error_loc: self.error_loc.with_macro_invocation_span(span),
+            loc_trace: self.loc_trace.with_macro_invocation(span),
             kind: self.kind,
         }
     }
 
     pub(super) fn with_span_offset(self, offset: usize) -> Error {
         Error {
-            error_loc: ErrorLoc {
-                span: self.error_loc.span.with_offset(offset),
-                macro_invocation_span: None,
-            },
+            loc_trace: self.loc_trace.origin().with_offset(offset).into(),
             kind: self.kind,
         }
     }
@@ -144,12 +114,8 @@ impl Reportable for Error {
         }
     }
 
-    fn span(&self) -> Span {
-        self.error_loc.span
-    }
-
-    fn macro_invocation_span(&self) -> Option<Span> {
-        self.error_loc.macro_invocation_span
+    fn loc_trace(&self) -> LocTrace {
+        self.loc_trace.clone()
     }
 
     fn associated_report(&self) -> Option<Box<dyn Reportable>> {
@@ -201,8 +167,8 @@ impl Reportable for FirstDefHelp {
         Level::Help
     }
 
-    fn span(&self) -> Span {
-        self.span
+    fn loc_trace(&self) -> LocTrace {
+        self.span.into()
     }
 
     fn message(&self) -> String {
