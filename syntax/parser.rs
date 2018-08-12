@@ -244,10 +244,10 @@ impl<'de> Parser<'de> {
             }
 
             match char_name {
-                "newline" => Ok('\u{0a}'),
-                "return" => Ok('\u{0d}'),
-                "space" => Ok('\u{20}'),
-                "tab" => Ok('\u{09}'),
+                "newline" => Ok('\n'),
+                "return" => Ok('\r'),
+                "space" => Ok(' '),
+                "tab" => Ok('\t'),
                 _ => Err(Error::new(span, ErrorKind::UnsupportedChar)),
             }
         });
@@ -635,7 +635,7 @@ mod test {
 
     #[test]
     fn string_datum() {
-        let test_strings = vec![
+        let test_strings = [
             (r#""""#, ""),
             (r#""Hello, world!""#, "Hello, world!"),
             (r#""Hello\"World""#, "Hello\"World"),
@@ -652,9 +652,9 @@ mod test {
             ),
         ];
 
-        for (test_string, expected_contents) in test_strings {
+        for (test_string, expected_contents) in &test_strings {
             let s = whole_str_span(test_string);
-            let expected = Datum::Str(s, expected_contents.into());
+            let expected = Datum::Str(s, (*expected_contents).into());
 
             assert_eq!(expected, datum_from_str(test_string).unwrap());
         }
@@ -673,7 +673,7 @@ mod test {
 
     #[test]
     fn char_datum() {
-        let test_chars = vec![
+        let test_chars = [
             ("\\newline", '\u{0a}'),
             ("\\return", '\u{0d}'),
             ("\\space", '\u{20}'),
@@ -685,9 +685,9 @@ mod test {
             ("\\u03BB", '\u{03bb}'),
         ];
 
-        for (j, expected_char) in test_chars {
+        for (j, expected_char) in &test_chars {
             let s = whole_str_span(j);
-            let expected = Datum::Char(s, expected_char);
+            let expected = Datum::Char(s, *expected_char);
 
             assert_eq!(expected, datum_from_str(j).unwrap());
         }

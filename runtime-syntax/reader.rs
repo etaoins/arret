@@ -1,8 +1,3 @@
-//! This crate contains the single function `box_syntax_datum`
-//!
-//! This is a separate crate to prevent `runtime` from having a direct dependency on `syntax`.
-//! It's intended to be consumed by both `compiler` and `stdlib`.
-
 use syntax::datum::Datum;
 
 use runtime::boxed;
@@ -39,3 +34,5 @@ pub fn box_syntax_datum(heap: &mut impl boxed::AsHeap, datum: &Datum) -> Gc<boxe
         Datum::Set(_, _) => unimplemented!("Sets are not implemented"),
     }
 }
+
+// This is indirectly tested by `writer`

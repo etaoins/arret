@@ -1,7 +1,7 @@
 cargo-features = ["edition"]
 
 [package]
-name = "box-syntax"
+name = "runtime-syntax"
 version = "0.1.0"
 edition = "2018"
 authors = ["Ryan Cumming <etaoins@gmail.com>"]

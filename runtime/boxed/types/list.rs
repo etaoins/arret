@@ -27,7 +27,7 @@ where
 }
 
 impl<T: Boxed> Pair<T> {
-    fn as_list_ref(&self) -> Gc<List<T>> {
+    pub fn as_list_ref(&self) -> Gc<List<T>> {
         unsafe { Gc::new(self as *const Self as *const List<T>) }
     }
 }

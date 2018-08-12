@@ -5,10 +5,10 @@ mod types;
 use std::ptr;
 
 use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
-use crate::boxed::heap::Heap;
 use crate::boxed::refs::Gc;
 use crate::intern::Interner;
 
+pub use crate::boxed::heap::Heap;
 pub use crate::boxed::types::char::Char;
 pub use crate::boxed::types::float::Float;
 pub use crate::boxed::types::int::Int;
@@ -109,11 +109,16 @@ impl<T: DirectTagged> Downcastable for T {
 }
 
 pub trait AsHeap {
-    fn as_heap(&mut self) -> &mut Heap;
+    fn as_heap(&self) -> &Heap;
+    fn as_heap_mut(&mut self) -> &mut Heap;
 }
 
 impl AsHeap for Heap {
-    fn as_heap(&mut self) -> &mut Heap {
+    fn as_heap(&self) -> &Heap {
+        self
+    }
+
+    fn as_heap_mut(&mut self) -> &mut Heap {
         self
     }
 }
@@ -129,7 +134,7 @@ pub trait ConstructableFrom<T>: Boxed {
     fn construct(value: T, alloc_type: AllocType, interner: &mut Interner) -> Self;
 
     fn new(heap: &mut impl AsHeap, value: T) -> Gc<Self> {
-        heap.as_heap().new_box::<Self, T>(value)
+        heap.as_heap_mut().new_box::<Self, T>(value)
     }
 }
 

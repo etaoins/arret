@@ -4,6 +4,6 @@ members = [
 	"compiler",
 	"driver",
 	"runtime",
-	"box-syntax",
+	"runtime-syntax",
 	"stdlib/rust"
 ]

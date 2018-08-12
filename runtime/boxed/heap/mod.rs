@@ -129,6 +129,10 @@ impl Heap {
         alloc
     }
 
+    pub fn interner(&self) -> &Interner {
+        &self.interner
+    }
+
     /// Returns the number of allocated cells
     #[cfg(test)]
     fn len(&self) -> usize {

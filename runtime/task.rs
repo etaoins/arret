@@ -24,7 +24,11 @@ impl Default for Task {
 }
 
 impl AsHeap for Task {
-    fn as_heap(&mut self) -> &mut Heap {
+    fn as_heap(&self) -> &Heap {
+        &self.heap
+    }
+
+    fn as_heap_mut(&mut self) -> &mut Heap {
         &mut self.heap
     }
 }
