@@ -110,6 +110,16 @@ impl<S: TyRef> Ty<S> {
     pub fn into_ty_ref(self) -> S {
         S::from_ty(self)
     }
+
+    /// Returns the canonical unit type
+    pub fn unit() -> Ty<S> {
+        Ty::List(List::new(Box::new([]), None))
+    }
+
+    /// Returns the canonical never type
+    pub fn never() -> Ty<S> {
+        Ty::Union(Box::new([]))
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
@@ -144,6 +154,10 @@ impl<S: TyRef> List<S> {
             fixed,
             rest: rest.map(Box::new),
         }
+    }
+
+    pub fn empty() -> List<S> {
+        List::new(Box::new([]), None)
     }
 
     pub fn fixed(&self) -> &[S] {

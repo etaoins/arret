@@ -14,10 +14,7 @@ fn type_tag_to_poly_ty(type_tag: boxed::TypeTag) -> ty::Ty<ty::Poly> {
         TypeTag::False => ty::Ty::LitBool(true),
         TypeTag::Int => ty::Ty::Int,
         TypeTag::TopVector => ty::Ty::Vectorof(Box::new(ty::Ty::Any.into_poly())),
-        TypeTag::Nil => {
-            let list = ty::List::new(Box::new([]), None);
-            ty::Ty::List(list)
-        }
+        TypeTag::Nil => ty::Ty::List(ty::List::empty()),
         TypeTag::TopPair => {
             let list = ty::List::new(
                 Box::new([ty::Ty::Any.into_poly()]),
@@ -109,8 +106,8 @@ impl ConvertableABIType for abitype::RetABIType {
         use runtime::abitype::RetABIType;
 
         match self {
-            RetABIType::Void => ty::Ty::List(ty::List::new(Box::new([]), None)).into_poly(),
-            RetABIType::Never => ty::Ty::Union(Box::new([])).into_poly(),
+            RetABIType::Void => ty::Ty::unit().into_poly(),
+            RetABIType::Never => ty::Ty::never().into_poly(),
             RetABIType::Inhabited(abi_type) => abi_type.to_poly(),
         }
     }
@@ -172,7 +169,7 @@ mod test {
 
         assert_eq!("boxed::Nil", boxed_abi_type.to_rust_str());
 
-        let nil_poly = ty::Ty::List(ty::List::new(Box::new([]), None)).into_poly();
+        let nil_poly = ty::Ty::List(ty::List::empty()).into_poly();
         assert_eq!(nil_poly, boxed_abi_type.to_poly());
     }
 }

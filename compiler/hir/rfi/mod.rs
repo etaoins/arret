@@ -320,7 +320,7 @@ mod test {
             arret_type: "(-> (U))",
             takes_task: false,
             params: &[],
-            ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Nil))),
+            ret: RetABIType::Never,
             entry_point: "",
         };
 

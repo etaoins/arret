@@ -5,14 +5,14 @@ use std::result;
 use crate::hir;
 use crate::hir::destruc;
 use crate::hir::rfi;
-use syntax::datum::Datum;
-use syntax::span::Span;
 use crate::ty;
 use crate::ty::list_iter::ListIterator;
 use crate::ty::purity::Purity;
 use crate::ty::TyRef;
 use crate::typeck;
 use crate::typeck::error::{Error, ErrorKind, WantedArity};
+use syntax::datum::Datum;
+use syntax::span::Span;
 
 type Result<T> = result::Result<T, Error>;
 
@@ -148,10 +148,6 @@ struct RecursiveDefsCtx<'vars, 'types> {
 #[derive(Clone)]
 struct FunCtx {
     purity: PurityVarType,
-}
-
-fn unit_type() -> ty::Poly {
-    ty::Ty::List(ty::List::new(Box::new([]), None)).into_poly()
 }
 
 impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
@@ -506,7 +502,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
         } else {
             return Ok(InferredNode {
                 expr: hir::Expr::Do(vec![]),
-                poly_type: unit_type(),
+                poly_type: ty::Ty::unit().into_poly(),
                 type_cond: None,
             });
         };

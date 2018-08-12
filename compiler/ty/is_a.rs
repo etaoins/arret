@@ -308,7 +308,7 @@ impl<'tvars> IsACtx<ty::Poly> for PolyIsACtx<'tvars> {
         }
 
         let sub_ty = ty::resolve::resolve_poly_ty(self.tvars, sub).as_ty();
-        if sub_ty == &ty::Ty::Union(Box::new([])) {
+        if sub_ty == &ty::Ty::never() {
             // (U) is a definite subtype of every type, regardless if the parent is bound. This is
             // important as (U) is used as a placeholder for parameters with unknown type. More
             // generally, it's the contravariant equivalent of Any.
@@ -492,7 +492,7 @@ mod test {
     #[test]
     fn any_and_never_types() {
         let any = poly_for_str("Any");
-        let never = ty::Ty::Union(Box::new([])).into_poly();
+        let never = ty::Ty::never().into_poly();
         let foo_sym = poly_for_str("'foo");
 
         assert_eq!(Result::Yes, poly_is_a(&[], &foo_sym, &any));

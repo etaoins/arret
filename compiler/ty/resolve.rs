@@ -41,11 +41,10 @@ fn poly_ty_has_subtypes(tvars: &[ty::TVar], poly_ty: &ty::Ty<ty::Poly>) -> bool 
         ty::Ty::Union(members) => !members.is_empty(),
         ty::Ty::List(list) => {
             // Any arbitrary fixed length list is a subtype of a list with rest
-            list.rest().is_some()
-                || list
-                    .fixed()
-                    .iter()
-                    .any(|fixed| poly_has_subtypes(tvars, fixed))
+            list.rest().is_some() || list
+                .fixed()
+                .iter()
+                .any(|fixed| poly_has_subtypes(tvars, fixed))
         }
         ty::Ty::Vectorof(_) => {
             // Any arbitrary fixed length vector is a subtype of this vector
@@ -128,9 +127,6 @@ mod test {
         assert_eq!(true, str_has_subtypes("(Vectorof false)"));
         assert_eq!(false, str_has_subtypes("(Vector false true)"));
 
-        assert_eq!(
-            false,
-            poly_has_subtypes(&[], &ty::Ty::Union(Box::new([])).into_poly())
-        );
+        assert_eq!(false, poly_has_subtypes(&[], &ty::Ty::never().into_poly()));
     }
 }

@@ -273,7 +273,7 @@ impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
 
                 if data_len == 0 {
                     // This is by analogy with () being self-evaluating in expressions
-                    return Ok(ty::Ty::List(ty::List::new(Box::new([]), None)).into_poly());
+                    return Ok(ty::Ty::List(ty::List::empty()).into_poly());
                 }
 
                 if data_len >= 2 {
@@ -625,7 +625,7 @@ mod test {
     fn empty_list_literal() {
         let j = "()";
 
-        let expected = ty::Ty::List(ty::List::new(Box::new([]), None)).into_poly();
+        let expected = ty::Ty::List(ty::List::empty()).into_poly();
         assert_poly_for_str(&expected, j);
     }
 
@@ -737,7 +737,7 @@ mod test {
             ty::purity::PVarIds::monomorphic(),
             ty::TVarIds::monomorphic(),
             ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
-            ty::List::new(Box::new([]), None),
+            ty::List::empty(),
         ).into_ty_ref();
 
         assert_poly_for_str(&expected, j);
@@ -754,7 +754,7 @@ mod test {
                 Purity::Impure.into_poly(),
                 ty::Ty::LitBool(true).into_poly(),
             ),
-            ty::List::new(Box::new([]), None),
+            ty::List::empty(),
         ).into_ty_ref();
 
         assert_poly_for_str(&expected, j);
