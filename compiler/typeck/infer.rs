@@ -507,22 +507,38 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
             });
         };
 
+        let mut is_divergent = false;
         let mut inferred_exprs = exprs
             .into_iter()
             .map(|non_terminal_expr| {
                 // The type of this expression doesn't matter; its value is discarded
-                self.visit_expr(fcx, &ty::Ty::Any.into_poly(), non_terminal_expr)
-                    .map(|node| node.expr)
+                let node = self.visit_expr(fcx, &ty::Ty::Any.into_poly(), non_terminal_expr)?;
+
+                if node.poly_type == ty::Ty::never().into_poly() {
+                    is_divergent = true;
+                }
+
+                Ok(node.expr)
             }).collect::<Result<Vec<hir::Expr<ty::Poly>>>>()?;
 
-        let terminal_node = self.visit_expr(fcx, required_type, terminal_expr)?;
-        inferred_exprs.push(terminal_node.expr);
+        if is_divergent {
+            self.visit_expr(fcx, &ty::Ty::Any.into_poly(), terminal_expr)?;
 
-        Ok(InferredNode {
-            expr: hir::Expr::Do(inferred_exprs),
-            poly_type: terminal_node.poly_type,
-            type_cond: terminal_node.type_cond,
-        })
+            Ok(InferredNode {
+                expr: hir::Expr::Do(inferred_exprs),
+                poly_type: ty::Ty::never().into_poly(),
+                type_cond: None,
+            })
+        } else {
+            let terminal_node = self.visit_expr(fcx, required_type, terminal_expr)?;
+            inferred_exprs.push(terminal_node.expr);
+
+            Ok(InferredNode {
+                expr: hir::Expr::Do(inferred_exprs),
+                poly_type: terminal_node.poly_type,
+                type_cond: terminal_node.type_cond,
+            })
+        }
     }
 
     /// Visits a function expression
@@ -691,6 +707,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
         let supplied_arg_count = fixed_arg_exprs.len();
         let wanted_arity = WantedArity::new(param_iter.fixed_len(), param_iter.has_rest());
 
+        let mut is_divergent = false;
         let mut inferred_fixed_arg_exprs = vec![];
         for fixed_arg_expr in fixed_arg_exprs {
             let param_type = param_iter.next().ok_or_else(|| {
@@ -703,6 +720,10 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
             let wanted_arg_type = ty::subst::inst_ty_selection(&param_select_ctx, param_type);
             let fixed_arg_node = self.visit_expr(fcx, &wanted_arg_type, fixed_arg_expr)?;
 
+            if fixed_arg_node.poly_type == ty::Ty::never().into_poly() {
+                is_divergent = true;
+            }
+
             ret_select_ctx.add_evidence(param_type, &fixed_arg_node.poly_type);
             inferred_fixed_arg_exprs.push(fixed_arg_node.expr);
         }
@@ -711,6 +732,10 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
             let tail_type = ty::Ty::List(param_iter.tail_type()).into_poly();
             let wanted_tail_type = ty::subst::inst_ty_selection(&param_select_ctx, &tail_type);
             let rest_arg_node = self.visit_expr(fcx, &wanted_tail_type, rest_arg_expr)?;
+
+            if rest_arg_node.poly_type == ty::Ty::never().into_poly() {
+                is_divergent = true;
+            }
 
             ret_select_ctx.add_evidence(&tail_type, &rest_arg_node.poly_type);
             Some(rest_arg_node.expr)
@@ -724,7 +749,11 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
             None
         };
 
-        let ret_type = ty::subst::inst_ty_selection(&ret_select_ctx, fun_type.ret());
+        let ret_type = if is_divergent {
+            ty::Ty::never().into_poly()
+        } else {
+            ty::subst::inst_ty_selection(&ret_select_ctx, fun_type.ret())
+        };
 
         // Keep track of the purity from the application
         let app_purity = ty::subst::inst_purity_selection(&ret_select_ctx, fun_type.purity());
@@ -833,9 +862,16 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
                     }
                 }.into_poly();
 
+                let poly_type = if subject_node.poly_type == ty::Ty::never().into_poly() {
+                    // The subject diverged so we diverged
+                    ty::Ty::never().into_poly()
+                } else {
+                    pred_result_type
+                };
+
                 Ok(InferredNode {
                     expr: app_expr,
-                    poly_type: pred_result_type,
+                    poly_type,
                     type_cond: None,
                 })
             }
@@ -886,6 +922,13 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
         let body_node = self.visit_expr(fcx, required_type, body_expr)?;
         let mut inferred_free_types = self.free_ty_polys.drain(free_ty_offset..);
 
+        let poly_type = if value_node.poly_type == ty::Ty::never().into_poly() {
+            // Value was divergent
+            ty::Ty::never().into_poly()
+        } else {
+            body_node.poly_type
+        };
+
         Ok(InferredNode {
             expr: hir::Expr::Let(
                 span,
@@ -895,7 +938,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
                     body_expr: body_node.expr,
                 }),
             ),
-            poly_type: body_node.poly_type,
+            poly_type,
             type_cond: body_node.type_cond,
         })
     }
@@ -1253,6 +1296,15 @@ mod test {
     #[test]
     fn literal_expr() {
         assert_type_for_expr("Int", "1");
+    }
+
+    #[test]
+    fn do_expr() {
+        assert_type_for_expr("'()", "(do)");
+        assert_type_for_expr("Int", "(do 'one 'two 3)");
+
+        // We have no diverging primitives so we can't test this case easily. This is covered in
+        // run-pass.
     }
 
     #[test]

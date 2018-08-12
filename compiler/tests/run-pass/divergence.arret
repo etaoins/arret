@@ -1,0 +1,40 @@
+(import [stdlib base])
+
+; This isn't `(main!)` to make sure it doesn't acually run
+(defn compile-only ([x : Bool])
+  ; Direct divergence
+  (ann (panic "Hello") (U))
+
+  ; Divergence within a `(do)`
+  (ann (do (panic "(do)") 1 2) (U))
+
+  ; Divergence within `(if)`
+  (ann
+    (if x
+      (do (panic "Left") 'left)
+      (do (panic "Right") 'right))
+    (U))
+
+  ; Divergence within normal application
+  (ann
+    ; This needs a `(do)` wrapper otherwise reverse type propagation will complain about `(length)`
+    ; not returning `(U)`. Real code should not be expecting `(U)` so it would be unaffected.
+    (do
+      (length (panic "Normal apply"))
+      false)
+    (U))
+
+  ; Divergence within type predicate
+  (ann
+    (do
+      (str? (panic "Type predicate apply"))
+      false)
+    (U))
+
+  ; Divergence within `(let)`
+  (ann
+    (do
+      (let [_ (panic "(let)")])
+      false)
+    (U))
+)
