@@ -1,40 +1,35 @@
 (import [stdlib base])
 
+; This needs a `(do)` wrapper otherwise reverse type propagation will complain about `expr` not
+; returning `(U)` before fully evaluating it. Real code shouldn't be expecting `(U)` so it would be
+; unaffected.
+(defmacro assert-diverges (macro-rules
+ [(expr) (ann (do expr '()) (U))]
+))
+
 ; This isn't `(main!)` to make sure it doesn't acually run
 (defn compile-only ([x : Bool])
   ; Direct divergence
-  (ann (panic "Hello") (U))
+  (assert-diverges (panic "Hello"))
 
   ; Divergence within a `(do)`
-  (ann (do (panic "(do)") 1 2) (U))
+  (assert-diverges (do (panic "(do)") 1 2))
 
-  ; Divergence within `(if)`
-  (ann
+  ; Divergence within `(if)` branches
+  (assert-diverges
     (if x
       (do (panic "Left") 'left)
-      (do (panic "Right") 'right))
-    (U))
+      (do (panic "Right") 'right)))
+
+  ; Divergence within `(if)` condition
+  (assert-diverges (if (panic "Test") 'left 'right))
 
   ; Divergence within normal application
-  (ann
-    ; This needs a `(do)` wrapper otherwise reverse type propagation will complain about `(length)`
-    ; not returning `(U)`. Real code should not be expecting `(U)` so it would be unaffected.
-    (do
-      (length (panic "Normal apply"))
-      false)
-    (U))
+  (assert-diverges (length (panic "Normal apply")))
 
   ; Divergence within type predicate
-  (ann
-    (do
-      (str? (panic "Type predicate apply"))
-      false)
-    (U))
+  (assert-diverges (str? (panic "Type predicate apply")))
 
   ; Divergence within `(let)`
-  (ann
-    (do
-      (let [_ (panic "(let)")])
-      false)
-    (U))
+  (assert-diverges (let [_ (panic "(let)")]))
 )

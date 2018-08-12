@@ -364,12 +364,16 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
             }
         }
 
-        let unified_type =
-            ty::unify::poly_unify_to_poly(self.tvars, &true_node.poly_type, &false_node.poly_type);
+        let poly_type = if test_node.poly_type == ty::Ty::never().into_poly() {
+            // Test diverged
+            ty::Ty::never().into_poly()
+        } else {
+            ty::unify::poly_unify_to_poly(self.tvars, &true_node.poly_type, &false_node.poly_type)
+        };
 
         Ok(InferredNode {
             expr: cond_expr,
-            poly_type: unified_type,
+            poly_type,
             type_cond: None,
         })
     }
