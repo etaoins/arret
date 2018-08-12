@@ -7,6 +7,5 @@ edition = "2018"
 authors = ["Ryan Cumming <etaoins@gmail.com>"]
 
 [lib]
-name = "runtime"
 path = "lib.rs"
 crate-type = ["lib", "dylib"]

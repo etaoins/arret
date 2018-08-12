@@ -92,6 +92,10 @@ impl<T: Boxed> Vector<T> {
         self.inline_length == 0
     }
 
+    pub fn as_any_ref(&self) -> Gc<Any> {
+        unsafe { Gc::new(&*(self as *const Self as *const Any)) }
+    }
+
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &Gc<T>> {
         match self.as_repr() {
             Repr::Inline(inline) => inline.values[0..self.len()].iter(),

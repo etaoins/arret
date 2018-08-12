@@ -50,6 +50,14 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "box-syntax"
+version = "0.1.0"
+dependencies = [
+ "runtime 0.1.0",
+ "syntax 0.1.0",
+]
+
+[[package]]
 name = "cc"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"

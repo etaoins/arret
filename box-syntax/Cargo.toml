@@ -1,17 +1,15 @@
 cargo-features = ["edition"]
 
 [package]
-name = "compiler"
+name = "box-syntax"
 version = "0.1.0"
 edition = "2018"
 authors = ["Ryan Cumming <etaoins@gmail.com>"]
 
 [lib]
 path = "lib.rs"
-crate-type = ["lib"]
+crate-type = ["lib", "dylib"]
 
 [dependencies]
-ansi_term = "0.11"
-libloading = "0.5"
 syntax = { path = "../syntax" }
 runtime = { path = "../runtime" }
