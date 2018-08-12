@@ -103,12 +103,9 @@ pub fn interactive_loop(cfg: &DriverConfig) {
 
                 match repl_ctx.eval_line(line, PROMPT.len()) {
                     Ok(EvaledLine::EmptyInput) => {}
-                    Ok(EvaledLine::Defs(count)) => {
+                    Ok(EvaledLine::Defs) => {
                         // Refresh our completions
-                        rl.set_completer(Some(Completer::new(repl_ctx.bound_names())));
-
-                        let defs_noun = if count == 1 { "def" } else { "defs" };
-                        println!("{} new {}", defs_style.paint(count.to_string()), defs_noun);
+                        println!("{}", defs_style.paint("defined"))
                     }
                     Ok(EvaledLine::Expr(value)) => {
                         println!("{} {}", expr_arrow_style.paint("=>"), value);

@@ -61,7 +61,7 @@ pub struct ReplCtx<'pp, 'sl> {
 #[derive(Debug, PartialEq)]
 pub enum EvaledLine {
     EmptyInput,
-    Defs(usize),
+    Defs,
     Expr(String),
 }
 
@@ -129,18 +129,13 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
         match self.lcx.lower_repl_datum(&mut self.scope, ns_datum)? {
             LoweredReplDatum::Defs(defs) => {
                 let lcx = &self.lcx;
-                let mut total_defs: usize = 0;
 
                 for recursive_defs in defs {
-                    let processed = self
-                        .icx
-                        .infer_defs(lcx.pvars(), lcx.tvars(), recursive_defs)?
-                        .len();
-
-                    total_defs += processed;
+                    self.icx
+                        .infer_defs(lcx.pvars(), lcx.tvars(), recursive_defs)?;
                 }
 
-                Ok(EvaledLine::Defs(total_defs))
+                Ok(EvaledLine::Defs)
             }
             LoweredReplDatum::Expr(decl_expr) => {
                 let lcx = &self.lcx;
@@ -183,12 +178,12 @@ mod test {
         assert_eval!(EvaledLine::Expr("true".to_owned()), "(int? 5)");
 
         // Make sure we can redefine
-        assert_eval!(EvaledLine::Defs(1), "(def x 'first)");
-        assert_eval!(EvaledLine::Defs(1), "(def x 'second)");
+        assert_eval!(EvaledLine::Defs, "(def x 'first)");
+        assert_eval!(EvaledLine::Defs, "(def x 'second)");
         assert_eval!(EvaledLine::Expr("'second".to_owned()), "x");
 
         // Make sure we can handle `(do)` at the module level with recursive defs
-        assert_eval!(EvaledLine::Defs(2), "(do (def x y) (def y 2))");
+        assert_eval!(EvaledLine::Defs, "(do (def x y) (def y 2))");
         assert_eval!(EvaledLine::Expr("Int".to_owned()), "x");
 
         // And `(do)` at the expression level
