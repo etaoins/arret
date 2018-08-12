@@ -17,6 +17,22 @@ define_rust_fn! {
     }
 }
 
+define_rust_fn! {
+    #[arret-type="(Any -> (U))"]
+    PANIC = fn panic(input: Gc<boxed::Any>) -> Never {
+        match input.as_subtype() {
+            boxed::AnySubtype::Str(s) => {
+                panic!("Arret panic: {}", s.as_str());
+            }
+            _ => {
+                panic!("Arret non-string panic")
+            }
+
+        }
+    }
+}
+
 define_rust_module! {
-    "length" => LENGTH
+    "length" => LENGTH,
+    "panic" => PANIC
 }

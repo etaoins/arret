@@ -1,3 +1,4 @@
+use crate::binding::Never;
 use crate::boxed;
 use crate::boxed::refs::Gc;
 use crate::intern::InternedSym;
@@ -25,6 +26,7 @@ pub enum ABIType {
 #[derive(Debug, PartialEq, Eq)]
 pub enum RetABIType {
     Void,
+    Never,
     Inhabited(ABIType),
 }
 
@@ -69,4 +71,8 @@ impl<T: EncodeABIType> EncodeRetABIType for T {
 
 impl EncodeRetABIType for () {
     const RET_ABI_TYPE: RetABIType = RetABIType::Void;
+}
+
+impl EncodeRetABIType for Never {
+    const RET_ABI_TYPE: RetABIType = RetABIType::Never;
 }

@@ -315,6 +315,19 @@ mod test {
     }
 
     #[test]
+    fn diverging_fun() {
+        const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
+            arret_type: "(-> (U))",
+            takes_task: false,
+            params: &[],
+            ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Nil))),
+            entry_point: "",
+        };
+
+        assert_valid_binding_fun(&BINDING_RUST_FUN);
+    }
+
+    #[test]
     fn unbound_arret_type() {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
             arret_type: "(unbound)",

@@ -6,6 +6,9 @@
 (export Any Bool Str Sym Int Float Char List Listof Vector Vectorof Setof Map U Type?
         -> ->!)
 
+(import [stdlib rust])
+(export length panic)
+
 (export defn)
 (defmacro defn (macro-rules
   [(destruc fn-data ...) (def destruc (fn fn-data ...))]

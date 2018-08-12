@@ -11,6 +11,9 @@ pub struct RustFun {
 
 pub type RustExports = &'static [(&'static str, &'static RustFun)];
 
+// TODO: Replace with ! once it's stable
+pub enum Never {}
+
 #[macro_export]
 macro_rules! define_rust_fn {
     (#[arret-type=$type:expr] $desc_name:ident = fn $func_name:ident($task_name:ident : &mut Task, $($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
@@ -106,6 +109,13 @@ pub mod test {
         }
     }
 
+    define_rust_fn! {
+    #[arret-type="(Any -> (U))"]
+        DIVERGING = fn diverging(_any: Gc<boxed::Any>) -> Never {
+            panic!("diverge");
+        }
+    }
+
     define_rust_module! {
         "length" => LENGTH,
         "return-42" => RETURN_42
@@ -186,6 +196,16 @@ pub mod test {
         assert_eq!(RetABIType::Void, EMPTY_IMPURE.ret);
 
         empty_impure();
+    }
+
+    #[test]
+    fn diverging_fn() {
+        assert_eq!("diverging", DIVERGING.entry_point);
+        assert_eq!(false, DIVERGING.takes_task);
+        assert_eq!("(Any -> (U))", DIVERGING.arret_type);
+
+        assert_eq!(vec![ABIType::Boxed(BoxedABIType::Any)], DIVERGING.params);
+        assert_eq!(RetABIType::Never, DIVERGING.ret);
     }
 
     #[test]

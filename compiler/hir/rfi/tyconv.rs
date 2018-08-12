@@ -109,8 +109,9 @@ impl ConvertableABIType for abitype::RetABIType {
         use runtime::abitype::RetABIType;
 
         match self {
-            RetABIType::Inhabited(abi_type) => abi_type.to_poly(),
             RetABIType::Void => ty::Ty::List(ty::List::new(Box::new([]), None)).into_poly(),
+            RetABIType::Never => ty::Ty::Union(Box::new([])).into_poly(),
+            RetABIType::Inhabited(abi_type) => abi_type.to_poly(),
         }
     }
 
@@ -118,8 +119,9 @@ impl ConvertableABIType for abitype::RetABIType {
         use runtime::abitype::RetABIType;
 
         match self {
-            RetABIType::Inhabited(abi_type) => abi_type.to_rust_str(),
             RetABIType::Void => "()".to_owned(),
+            RetABIType::Never => "Never".to_owned(),
+            RetABIType::Inhabited(abi_type) => abi_type.to_rust_str(),
         }
     }
 }
