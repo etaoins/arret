@@ -458,22 +458,18 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
                 return Ok(InferredNode::new_ref_node(span, var_id, known_type.clone()));
             }
             VarType::ParamScalar(free_ty_id) => {
-                let new_free_type = {
-                    let current_type = &self.free_ty_polys[free_ty_id.to_usize()];
-                    self.type_for_free_ref(required_type, span, current_type)?
-                };
+                let current_type = &self.free_ty_polys[free_ty_id.to_usize()];
+                let new_free_type = self.type_for_free_ref(required_type, span, current_type)?;
 
                 self.free_ty_polys[free_ty_id.to_usize()] = new_free_type.clone();
                 return Ok(InferredNode::new_ref_node(span, var_id, new_free_type));
             }
             VarType::ParamRest(free_ty_id) => {
-                let new_free_type = {
-                    let current_member_type = &self.free_ty_polys[free_ty_id.to_usize()];
-                    let required_member_type =
-                        self.member_type_for_poly_list(span, required_type)?;
+                let current_member_type = &self.free_ty_polys[free_ty_id.to_usize()];
+                let required_member_type = self.member_type_for_poly_list(span, required_type)?;
 
-                    self.type_for_free_ref(&required_member_type, span, current_member_type)?
-                };
+                let new_free_type =
+                    self.type_for_free_ref(&required_member_type, span, current_member_type)?;
 
                 self.free_ty_polys[free_ty_id.to_usize()] = new_free_type.clone();
                 let rest_list_type =

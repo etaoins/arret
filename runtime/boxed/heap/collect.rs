@@ -76,10 +76,8 @@ fn visit_box(mut box_ref: &mut Gc<Any>, old_heap: &Heap, new_heap: &mut Heap) {
                 let sym_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Sym) };
 
                 // If this symbol is heap indexed we need to reintern it on the new heap
-                let new_interned_name = {
-                    let sym_name = sym_ref.name(&old_heap.interner);
-                    new_heap.interner.intern(sym_name)
-                };
+                let sym_name = sym_ref.name(&old_heap.interner);
+                let new_interned_name = new_heap.interner.intern(sym_name);
                 sym_ref.interned = new_interned_name;
             }
             TypeTag::TopPair => {
@@ -138,20 +136,16 @@ mod test {
             assert_eq!(2, old_heap.len());
 
             // Root everything
-            let all_heap = {
-                let all_roots = vec![&mut hello, &mut world];
-                collect_roots(old_heap, all_roots)
-            };
+            let all_roots = vec![&mut hello, &mut world];
+            let all_heap = collect_roots(old_heap, all_roots);
 
             assert_eq!("HELLO", hello.cast::<Str>().as_str());
             assert_eq!("WORLD", world.cast::<Str>().as_str());
             assert_eq!(2, all_heap.len());
 
             // Root just one string
-            let one_heap = {
-                let one_roots = vec![&mut hello];
-                collect_roots(all_heap, one_roots)
-            };
+            let one_roots = vec![&mut hello];
+            let one_heap = collect_roots(all_heap, one_roots);
 
             assert_eq!("HELLO", hello.cast::<Str>().as_str());
             assert_eq!(1, one_heap.len());
@@ -176,10 +170,8 @@ mod test {
             let mut indexed = Sym::new(&mut old_heap, indexed_name).cast::<Any>();
             assert_eq!(2, old_heap.len());
 
-            let new_heap = {
-                let all_roots = vec![&mut inline, &mut indexed];
-                collect_roots(old_heap, all_roots)
-            };
+            let all_roots = vec![&mut inline, &mut indexed];
+            let new_heap = collect_roots(old_heap, all_roots);
 
             assert_eq!(inline_name, inline.cast::<Sym>().name(&new_heap.interner));
             assert_eq!(indexed_name, indexed.cast::<Sym>().name(&new_heap.interner));

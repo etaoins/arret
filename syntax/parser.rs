@@ -346,10 +346,8 @@ impl<'de> Parser<'de> {
             '\\' => Ok('\\'),
             '"' => Ok('"'),
             'x' => {
-                let (span, code_point) = {
-                    let (span, hex_string) = self.consume_until(|c| c == ';');
-                    (span, u32::from_str_radix(hex_string, 16))
-                };
+                let (span, hex_string) = self.consume_until(|c| c == ';');
+                let code_point = u32::from_str_radix(hex_string, 16);
 
                 let code_point =
                     code_point.map_err(|_| Error::new(span, ErrorKind::UnsupportedChar))?;

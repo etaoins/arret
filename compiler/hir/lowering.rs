@@ -4,7 +4,9 @@ use crate::hir::destruc;
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::exports::Exports;
 use crate::hir::import::lower_import_set;
-use crate::hir::loader::{load_module_by_name, parse_module_data, LoadedModule, ModuleName, PackagePaths};
+use crate::hir::loader::{
+    load_module_by_name, parse_module_data, LoadedModule, ModuleName, PackagePaths,
+};
 use crate::hir::macros::{expand_macro, lower_macro_rules, Macro};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum, NsId};
 use crate::hir::prim::Prim;
@@ -12,13 +14,15 @@ use crate::hir::rfi;
 use crate::hir::scope::{Binding, MacroId, Scope};
 use crate::hir::types::{lower_poly, try_lower_purity};
 use crate::hir::types::{lower_polymorphic_var, PolymorphicVar, PolymorphicVarKind};
-use crate::hir::util::{expect_arg_count, expect_ident_and_span, expect_one_arg, try_take_rest_arg};
+use crate::hir::util::{
+    expect_arg_count, expect_ident_and_span, expect_one_arg, try_take_rest_arg,
+};
 use crate::hir::{App, Cond, Def, Expr, Fun, Let, VarIdCounter};
 use crate::source::{SourceFileId, SourceLoader};
-use syntax::datum::Datum;
-use syntax::span::{Span, EMPTY_SPAN};
 use crate::ty;
 use crate::ty::purity::Purity;
+use syntax::datum::Datum;
+use syntax::span::{Span, EMPTY_SPAN};
 
 #[derive(Debug)]
 struct LoweredModule {
@@ -695,10 +699,9 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                         Binding::Macro(macro_id) => {
                             let mut macro_scope = Scope::new_child(scope);
 
-                            let expanded_datum = {
-                                let mac = &self.macros[macro_id.to_usize()];
-                                expand_macro(&mut macro_scope, span, mac, data_iter.as_slice())?
-                            };
+                            let mac = &self.macros[macro_id.to_usize()];
+                            let expanded_datum =
+                                expand_macro(&mut macro_scope, span, mac, data_iter.as_slice())?;
 
                             self.lower_expr(&macro_scope, expanded_datum)
                                 .map_err(|e| e.with_macro_invocation_span(span))
@@ -800,10 +803,8 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                         return self.lower_module_prim_apply(scope, applied_prim, data_iter);
                     }
                     Binding::Macro(macro_id) => {
-                        let expanded_datum = {
-                            let mac = &self.macros[macro_id.to_usize()];
-                            expand_macro(scope, span, mac, data_iter.as_slice())?
-                        };
+                        let mac = &self.macros[macro_id.to_usize()];
+                        let expanded_datum = expand_macro(scope, span, mac, data_iter.as_slice())?;
 
                         return self
                             .lower_module_def(scope, expanded_datum)

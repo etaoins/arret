@@ -101,13 +101,12 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
     pub fn eval_line(&mut self, input: String, input_column: usize) -> Result<EvaledLine, Error> {
         use crate::hir::lowering::LoweredReplDatum;
 
-        let mut input_data = {
-            let source_loader = self.lcx.source_loader_mut();
-            let source_id = source_loader.load_string(SourceKind::Repl(input_column), input);
-            let source_file = source_loader.source_file(source_id);
+        let source_loader = self.lcx.source_loader_mut();
+        let source_id = source_loader.load_string(SourceKind::Repl(input_column), input);
+        let source_file = source_loader.source_file(source_id);
 
-            data_from_str_with_span_offset(source_file.source(), source_file.span_offset())?
-        };
+        let mut input_data =
+            data_from_str_with_span_offset(source_file.source(), source_file.span_offset())?;
 
         let input_datum = match input_data.len() {
             0 => {
