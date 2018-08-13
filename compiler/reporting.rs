@@ -118,13 +118,16 @@ fn print_span_snippet(source_loader: &SourceLoader, level: Level, span: Span) {
 fn print_source_snippet(level: Level, loc: &SourceLoc<'_, '_>) {
     let border_style = Colour::Blue.bold();
 
-    eprintln!(
-        "  {} {}:{}:{}",
-        border_style.paint("-->"),
-        loc.kind,
-        loc.line + 1,
-        loc.column + 1
-    );
+    // The filename/line/column isn't useful for REPL input
+    if loc.kind != &SourceKind::Repl {
+        eprintln!(
+            "  {} {}:{}:{}",
+            border_style.paint("-->"),
+            loc.kind,
+            loc.line + 1,
+            loc.column + 1
+        );
+    }
 
     let line_number_text = format!("{}", loc.line + 1);
     let line_number_chars = line_number_text.len();
@@ -152,17 +155,13 @@ fn print_source_snippet(level: Level, loc: &SourceLoc<'_, '_>) {
     );
 
     print_border_line();
-    print_marker(level, loc, 1);
-}
 
-fn print_marker(level: Level, loc: &SourceLoc<'_, '_>, column_offset: usize) {
     let chars = cmp::max(1, loc.span_str.chars().take_while(|c| c != &'\n').count());
     let marker_style = level.colour().bold();
-
     eprintln!(
         "{: <1$}{2}",
         "",
-        loc.column + column_offset,
+        loc.column + 1,
         marker_style.paint(iter::repeat("^").take(chars).collect::<String>())
     );
 }
@@ -189,28 +188,15 @@ pub fn report_to_stderr(source_loader: &SourceLoader, report: &dyn Reportable) {
     let level = report.level();
     let loc_trace = report.loc_trace();
 
-    let origin = loc_trace.origin();
-    let post_error_snippet_loc = if let Some(origin) = origin.to_non_empty() {
-        let loc = span_to_source_loc(source_loader, origin);
-        if let (SourceKind::Repl(offset), 0) = (loc.kind, loc.line) {
-            // Print a marker pointing at the REPL line the user entered
-            print_marker(level, &loc, *offset);
-            None
-        } else {
-            // Show the snippet after the error message
-            Some(loc)
-        }
-    } else {
-        None
-    };
-
     eprintln!(
         "{}: {}",
         level.colour().bold().paint(level.name()),
         default_bold.paint(report.message())
     );
 
-    if let Some(source_loc) = post_error_snippet_loc {
+    let origin = loc_trace.origin();
+    if let Some(origin) = origin.to_non_empty() {
+        let source_loc = span_to_source_loc(source_loader, origin);
         print_source_snippet(level, &source_loc);
     }
 

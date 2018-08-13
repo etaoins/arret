@@ -73,7 +73,7 @@ pub fn interactive_loop(cfg: &DriverConfig) {
 
     // Import [stdlib base] so we have most useful things defined
     let initial_import = "(import [stdlib base])".to_owned();
-    if let Err(err) = repl_ctx.eval_line(initial_import, 0) {
+    if let Err(err) = repl_ctx.eval_line(initial_import) {
         for reportable in err.reports() {
             report_to_stderr(repl_ctx.source_loader(), reportable.as_ref())
         }
@@ -102,7 +102,7 @@ pub fn interactive_loop(cfg: &DriverConfig) {
                     rl.add_history_entry(&line);
                 }
 
-                match repl_ctx.eval_line(line, PROMPT.len()) {
+                match repl_ctx.eval_line(line) {
                     Ok(EvaledLine::EmptyInput) => {}
                     Ok(EvaledLine::Defs) => {
                         // Refresh our completions

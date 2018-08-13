@@ -5,8 +5,8 @@ use std::{fmt, fs, io, path};
 pub enum SourceKind {
     /// Loaded from a file with the given filename
     File(String),
-    /// Loaded from the REPL with the span starting at the given terminal column
-    Repl(usize),
+    /// Loaded from the REPL
+    Repl,
     /// Loaded from an RFI module
     RfiModule(String, String),
 }
@@ -15,7 +15,7 @@ impl fmt::Display for SourceKind {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             SourceKind::File(filename) => write!(formatter, "{}", filename),
-            SourceKind::Repl(_) => write!(formatter, "<repl input>"),
+            SourceKind::Repl => write!(formatter, "<repl input>"),
             SourceKind::RfiModule(filename, fun_name) => {
                 write!(formatter, "{}:{}", filename, fun_name)
             }

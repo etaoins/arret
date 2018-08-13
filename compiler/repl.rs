@@ -98,11 +98,11 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
         })
     }
 
-    pub fn eval_line(&mut self, input: String, input_column: usize) -> Result<EvaledLine, Error> {
+    pub fn eval_line(&mut self, input: String) -> Result<EvaledLine, Error> {
         use crate::hir::lowering::LoweredReplDatum;
 
         let source_loader = self.lcx.source_loader_mut();
-        let source_id = source_loader.load_string(SourceKind::Repl(input_column), input);
+        let source_id = source_loader.load_string(SourceKind::Repl, input);
         let source_file = source_loader.source_file(source_id);
 
         let mut input_data =
@@ -160,7 +160,7 @@ mod test {
 
         macro_rules! assert_eval {
             ($expected:expr, $line:expr) => {
-                assert_eq!($expected, repl_ctx.eval_line($line.to_owned(), 0).unwrap());
+                assert_eq!($expected, repl_ctx.eval_line($line.to_owned()).unwrap());
             };
         }
 
@@ -169,10 +169,8 @@ mod test {
         assert_eval!(EvaledLine::Expr("Int".to_owned()), "1");
 
         repl_ctx
-            .eval_line(
-                "(import (only [stdlib base] quote def do int?))".to_owned(),
-                0,
-            ).unwrap();
+            .eval_line("(import (only [stdlib base] quote def do int?))".to_owned())
+            .unwrap();
 
         // Make sure we can references vars from the imported module
         assert_eval!(EvaledLine::Expr("true".to_owned()), "(int? 5)");
