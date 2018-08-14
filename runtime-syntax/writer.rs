@@ -4,6 +4,41 @@ use runtime::boxed;
 use runtime::boxed::prelude::*;
 use runtime::boxed::refs::Gc;
 
+macro_rules! process_escaped_chars {
+    ($w:ident, $source:ident, $( $pattern:pat => $escape:expr ),*) => {
+        // Try to write sequential unescaped characters in chunks
+        // This is especially important if $w isn't buffered
+        let mut last_escape_end = 0;
+        for (index, c) in $source.char_indices() {
+            match c {
+                $(
+                    $pattern => {
+                        $w.write_all(&$source.as_bytes()[last_escape_end..index])?;
+                        last_escape_end = index + c.len_utf8();
+                        ($escape)?;
+                    }
+                ),* ,
+                _ => {}
+            };
+        }
+
+        $w.write_all(&$source.as_bytes()[last_escape_end..])?;
+    }
+}
+
+fn write_escaped_str(w: &mut dyn Write, source: &str) -> Result<()> {
+    process_escaped_chars!(w, source,
+        '\t' => write!(w, "\\t"),
+        '\r' => write!(w, "\\r"),
+        '\n' => write!(w, "\\n"),
+        '\\' => write!(w, "\\\\"),
+        '"' => write!(w, "\\\""),
+        c @ '\u{0}'..='\u{19}' => write!(w, "\\x{:X};", c as u32)
+    );
+
+    Ok(())
+}
+
 fn write_boxed_seq(
     w: &mut dyn Write,
     heap: &impl AsHeap,
@@ -61,19 +96,7 @@ pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any
         },
         AnySubtype::Str(s) => {
             write!(w, "\"");
-
-            for c in s.as_str().chars() {
-                match c {
-                    '\t' => write!(w, "\\t"),
-                    '\r' => write!(w, "\\r"),
-                    '\n' => write!(w, "\\n"),
-                    '\\' => write!(w, "\\\\"),
-                    '"' => write!(w, "\\\""),
-                    '\u{0}'..='\u{19}' => write!(w, "\\x{:X};", c as u32),
-                    // TODO: We could try to batch sequences of printable chars
-                    _ => write!(w, "{}", c),
-                }?;
-            }
+            write_escaped_str(w, s.as_str())?;
             write!(w, "\"")
         }
     }
@@ -196,7 +219,7 @@ mod test {
             (r#""Hello\"World""#, "Hello\"World"),
             (r#""Hello\\World""#, "Hello\\World"),
             (r#""Tab\t""#, "Tab\t"),
-            (r#""\nnewline""#, "\nnewline"),
+            (r#""\n\nnewline""#, "\n\nnewline"),
             (r#""carriage: \r""#, "carriage: \r"),
             (r#""lλ""#, "lλ"),
             (r#""\x0;null!""#, "\u{0}null!"),
