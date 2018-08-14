@@ -408,10 +408,9 @@ impl<'vars> StrForPolyCtx<'vars> {
         let tvar_ids_usize = tvar_ids.start.to_usize()..tvar_ids.end.to_usize();
 
         let pvar_parts = pvar_ids_usize
-            .into_iter()
             .map(|pvar_id_usize| format!("[{} : ->!]", self.pvars[pvar_id_usize].source_name()));
 
-        let tvar_parts = tvar_ids_usize.into_iter().map(|tvar_id_usize| {
+        let tvar_parts = tvar_ids_usize.map(|tvar_id_usize| {
             let tvar = &self.tvars[tvar_id_usize];
 
             if tvar.bound() == &ty::Ty::Any.into_poly() {
