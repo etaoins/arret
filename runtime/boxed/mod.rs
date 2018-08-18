@@ -1,4 +1,4 @@
-pub mod heap;
+mod heap;
 pub mod refs;
 mod types;
 
