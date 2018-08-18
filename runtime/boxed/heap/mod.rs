@@ -97,7 +97,7 @@ impl Heap {
         Self::with_capacity(Self::DEFAULT_SEGMENT_CAPACITY)
     }
 
-    pub fn collect(self, roots: Vec<&mut Gc<Any>>) -> Heap {
+    pub fn collect<'a>(self, roots: impl Iterator<Item = &'a mut Gc<Any>>) -> Heap {
         collect::collect_roots(self, roots)
     }
 

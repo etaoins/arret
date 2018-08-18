@@ -104,7 +104,7 @@ fn visit_box(mut box_ref: &mut Gc<Any>, old_heap: &Heap, new_heap: &mut Heap) {
     }
 }
 
-pub fn collect_roots(old_heap: Heap, roots: Vec<&mut Gc<Any>>) -> Heap {
+pub fn collect_roots<'a>(old_heap: Heap, roots: impl Iterator<Item = &'a mut Gc<Any>>) -> Heap {
     let mut new_heap = Heap::new();
 
     for root in roots {
@@ -124,6 +124,7 @@ mod test {
     #[test]
     fn simple_collect() {
         use crate::boxed::{ConstructableFrom, Str};
+        use std::iter;
 
         let mut old_heap = Heap::new();
 
@@ -137,7 +138,7 @@ mod test {
 
             // Root everything
             let all_roots = vec![&mut hello, &mut world];
-            let all_heap = collect_roots(old_heap, all_roots);
+            let all_heap = collect_roots(old_heap, all_roots.into_iter());
 
             assert_eq!("HELLO", hello.cast::<Str>().as_str());
             assert_eq!("WORLD", world.cast::<Str>().as_str());
@@ -145,13 +146,13 @@ mod test {
 
             // Root just one string
             let one_roots = vec![&mut hello];
-            let one_heap = collect_roots(all_heap, one_roots);
+            let one_heap = collect_roots(all_heap, one_roots.into_iter());
 
             assert_eq!("HELLO", hello.cast::<Str>().as_str());
             assert_eq!(1, one_heap.len());
 
             // Root nothing
-            let zero_heap = collect_roots(one_heap, vec![]);
+            let zero_heap = collect_roots(one_heap, iter::empty());
             assert_eq!(0, zero_heap.len());
         }
     }
@@ -171,7 +172,7 @@ mod test {
             assert_eq!(2, old_heap.len());
 
             let all_roots = vec![&mut inline, &mut indexed];
-            let new_heap = collect_roots(old_heap, all_roots);
+            let new_heap = collect_roots(old_heap, all_roots.into_iter());
 
             assert_eq!(inline_name, inline.cast::<Sym>().name(&new_heap.interner));
             assert_eq!(indexed_name, indexed.cast::<Sym>().name(&new_heap.interner));
@@ -194,10 +195,8 @@ mod test {
 
         assert_eq!(3, boxed_list.len());
 
-        let new_heap = collect_roots(
-            heap,
-            vec![unsafe { &mut *(&mut boxed_list as *mut Gc<List<Int>> as *mut Gc<Any>) }],
-        );
+        let roots = vec![unsafe { &mut *(&mut boxed_list as *mut Gc<List<Int>> as *mut Gc<Any>) }];
+        let new_heap = collect_roots(heap, roots.into_iter());
 
         assert_eq!(3, boxed_list.len());
         assert_eq!(EXPECTED_HEAP_SIZE, new_heap.len());
@@ -221,10 +220,9 @@ mod test {
             let mut heap = Heap::new();
             let mut boxed_vec = Vector::<Int>::from_values(&mut heap, test_content.iter().cloned());
 
-            let _new_heap = collect_roots(
-                heap,
-                vec![unsafe { &mut *(&mut boxed_vec as *mut Gc<Vector<Int>> as *mut Gc<Any>) }],
-            );
+            let roots =
+                vec![unsafe { &mut *(&mut boxed_vec as *mut Gc<Vector<Int>> as *mut Gc<Any>) }];
+            let _new_heap = collect_roots(heap, roots.into_iter());
 
             let mut boxed_list_iter = boxed_vec.iter();
             assert_eq!(test_content.len(), boxed_list_iter.len());
