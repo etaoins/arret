@@ -12,15 +12,14 @@ use crate::hir::ns::{Ident, NsDataIter, NsDatum, NsId};
 use crate::hir::prim::Prim;
 use crate::hir::rfi;
 use crate::hir::scope::{Binding, MacroId, Scope};
+use crate::hir::types::lower_polymorphic_vars;
 use crate::hir::types::{lower_poly, try_lower_purity};
-use crate::hir::types::{lower_polymorphic_var, PolymorphicVar, PolymorphicVarKind};
 use crate::hir::util::{
     expect_arg_count, expect_ident_and_span, expect_one_arg, try_take_rest_arg,
 };
 use crate::hir::{App, Cond, Def, Expr, Fun, Let, VarIdCounter};
 use crate::source::{SourceFileId, SourceLoader};
 use crate::ty;
-use crate::ty::purity::Purity;
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 
@@ -109,14 +108,6 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             module_exports,
             module_defs: vec![],
         }
-    }
-
-    fn insert_pvar(&mut self, pvar: ty::purity::PVar) -> ty::purity::PVarId {
-        ty::purity::PVarId::new_entry_id(&mut self.pvars, pvar)
-    }
-
-    fn insert_tvar(&mut self, tvar: ty::TVar) -> ty::TVarId {
-        ty::TVarId::new_entry_id(&mut self.tvars, tvar)
     }
 
     // This would be less ugly as Result<!> once it's stabilised
@@ -438,45 +429,33 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         mut arg_iter: NsDataIter,
     ) -> Result<Expr<ty::Decl>> {
         let mut fun_scope = Scope::new_child(outer_scope);
-        let pvar_id_start = ty::purity::PVarId::new(self.pvars.len());
-        let tvar_id_start = ty::TVarId::new(self.tvars.len());
 
         let mut next_datum = arg_iter.next().ok_or_else(|| {
             Error::new(span, ErrorKind::IllegalArg("parameter declaration missing"))
         })?;
 
         // We can either begin with a set of type variables or a list of parameters
-        if let NsDatum::Set(_, vs) = next_datum {
-            for tvar_datum in vs.into_vec() {
-                let PolymorphicVar { span, ident, kind } =
-                    lower_polymorphic_var(&self.tvars, outer_scope, tvar_datum)?;
-
-                let binding = match kind {
-                    PolymorphicVarKind::TVar(tvar) => {
-                        let tvar_id = self.insert_tvar(tvar);
-                        Binding::Ty(ty::Poly::Var(tvar_id))
-                    }
-                    PolymorphicVarKind::PVar(pvar) => {
-                        let pvar_id = self.insert_pvar(pvar);
-                        Binding::Purity(ty::purity::Poly::Var(pvar_id))
-                    }
-                    PolymorphicVarKind::Pure => Binding::Purity(Purity::Pure.into_poly()),
-                };
-
-                fun_scope.insert_binding(span, ident, binding)?;
-            }
-
+        let (pvar_ids, tvar_ids) = if let NsDatum::Set(_, vs) = next_datum {
             next_datum = arg_iter.next().ok_or_else(|| {
                 Error::new(
                     span,
                     ErrorKind::IllegalArg("type variables should be followed by parameters"),
                 )
             })?;
-        };
 
-        // We allocate tvar IDs sequentially so we can use a simple range to track them
-        let pvar_ids = pvar_id_start..ty::purity::PVarId::new(self.pvars.len());
-        let tvar_ids = tvar_id_start..ty::TVarId::new(self.tvars.len());
+            lower_polymorphic_vars(
+                &mut self.pvars,
+                &mut self.tvars,
+                vs.into_vec().into_iter(),
+                outer_scope,
+                &mut fun_scope,
+            )?
+        } else {
+            (
+                ty::purity::PVarIds::monomorphic(),
+                ty::TVarIds::monomorphic(),
+            )
+        };
 
         // Pull out our params
         let params = match next_datum {
@@ -1065,6 +1044,7 @@ pub fn expr_for_str(data_str: &str) -> Expr<ty::Decl> {
 mod test {
     use super::*;
     use crate::hir::VarId;
+    use crate::ty::purity::Purity;
     use syntax::span::t2s;
 
     #[test]

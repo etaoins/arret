@@ -311,13 +311,44 @@ impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
     }
 }
 
-pub fn lower_polymorphic_var(
-    tvars: &[ty::TVar],
-    scope: &Scope,
-    tvar_datum: NsDatum,
-) -> Result<PolymorphicVar> {
-    let ctx = LowerTyCtx { tvars, scope };
-    ctx.lower_polymorphic_var(tvar_datum)
+/// Lowers a set of polymorphic variables defined in `outer_scope` and places them in `inner_scope`
+pub fn lower_polymorphic_vars(
+    pvars: &mut Vec<ty::purity::PVar>,
+    tvars: &mut Vec<ty::TVar>,
+    polymorphic_var_data: NsDataIter,
+    outer_scope: &Scope,
+    inner_scope: &mut Scope,
+) -> Result<(Range<ty::purity::PVarId>, Range<ty::TVarId>)> {
+    let pvar_id_start = ty::purity::PVarId::new(pvars.len());
+    let tvar_id_start = ty::TVarId::new(tvars.len());
+
+    for var_datum in polymorphic_var_data {
+        let ctx = LowerTyCtx {
+            tvars,
+            scope: outer_scope,
+        };
+        let PolymorphicVar { span, ident, kind } = ctx.lower_polymorphic_var(var_datum)?;
+
+        let binding = match kind {
+            PolymorphicVarKind::PVar(pvar) => {
+                let pvar_id = ty::purity::PVarId::new_entry_id(pvars, pvar);
+                Binding::Purity(ty::purity::Poly::Var(pvar_id))
+            }
+            PolymorphicVarKind::TVar(tvar) => {
+                let tvar_id = ty::TVarId::new_entry_id(tvars, tvar);
+                Binding::Ty(ty::Poly::Var(tvar_id))
+            }
+            PolymorphicVarKind::Pure => Binding::Purity(Purity::Pure.into_poly()),
+        };
+
+        inner_scope.insert_binding(span, ident, binding)?;
+    }
+
+    // We allocate tvar IDs sequentially so we can use a simple range to track them
+    let pvar_ids = pvar_id_start..ty::purity::PVarId::new(pvars.len());
+    let tvar_ids = tvar_id_start..ty::TVarId::new(tvars.len());
+
+    Ok((pvar_ids, tvar_ids))
 }
 
 pub fn lower_poly(tvars: &[ty::TVar], scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
