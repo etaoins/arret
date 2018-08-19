@@ -211,6 +211,23 @@ impl PartialEvalCtx {
         Self::destruc_value(&mut self.global_values, &destruc, value);
     }
 
+    /// Collect any boxed values that are no longer reachable
+    pub fn collect_garbage(&mut self) {
+        use std::mem;
+        let old_heap = mem::replace(&mut self.heap, boxed::Heap::with_capacity(0));
+
+        // Move all of our global values to the new heap
+        let roots_iter = self
+            .global_values
+            .values_mut()
+            .filter_map(|value| match value {
+                Value::Const(ref mut any_ref) => Some(any_ref),
+                _ => None,
+            });
+
+        self.heap = old_heap.collect_roots(roots_iter);
+    }
+
     pub fn eval_expr<'a>(&'a mut self, dcx: &mut DefCtx<'_>, expr: &Expr) -> Value {
         match expr {
             hir::Expr::Lit(literal) => self.eval_lit(literal),
