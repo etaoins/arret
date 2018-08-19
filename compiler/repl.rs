@@ -175,7 +175,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
 
                         // Perform partial evaluation on the expression
                         // TODO: Shouldn't need to `.into_owned()` here
-                        let value = self.pcx.eval_expr(node.expr()).into_owned();
+                        let value = self.pcx.eval_expr(node.expr());
                         let boxed = self.pcx.value_to_boxed(&value);
 
                         // Write the result to a string

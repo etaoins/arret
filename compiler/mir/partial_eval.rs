@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::collections::HashMap;
 
 use runtime::boxed;
@@ -54,12 +53,12 @@ impl PartialEvalCtx {
     }
 
     fn eval_destruc(&mut self, destruc: &hir::destruc::Destruc<ty::Poly>, expr: &Expr) {
-        let value = self.eval_expr(expr).into_owned();
+        let value = self.eval_expr(expr);
         self.destruc_value(destruc, value)
     }
 
-    fn eval_ref(&mut self, var_id: hir::VarId) -> Cow<'_, Value> {
-        Cow::Borrowed(&self.var_values[&var_id])
+    fn eval_ref(&mut self, var_id: hir::VarId) -> Value {
+        self.var_values[&var_id].clone()
     }
 
     fn eval_do<'a>(&'a mut self, exprs: &[Expr]) -> Value {
@@ -68,10 +67,10 @@ impl PartialEvalCtx {
         // TODO: This needs to handle Never values once we can create them
         exprs
             .iter()
-            .fold(initial_value, |_, expr| self.eval_expr(expr).into_owned())
+            .fold(initial_value, |_, expr| self.eval_expr(expr))
     }
 
-    fn eval_let<'a>(&'a mut self, hir_let: &hir::Let<ty::Poly>) -> Cow<'a, Value> {
+    fn eval_let(&mut self, hir_let: &hir::Let<ty::Poly>) -> Value {
         self.eval_destruc(&hir_let.destruc, &hir_let.value_expr);
         self.eval_expr(&hir_let.body_expr)
     }
@@ -91,6 +90,36 @@ impl PartialEvalCtx {
         }
     }
 
+    fn eval_fun_app(
+        &mut self,
+        fun_expr: &hir::Fun<ty::Poly>,
+        fixed_args: &[Expr],
+        rest_arg: Option<&Expr>,
+    ) -> Value {
+        let fixed_values: Vec<Value> = fixed_args.iter().map(|arg| self.eval_expr(arg)).collect();
+        let rest_value = rest_arg.map(|rest_arg| Box::new(self.eval_expr(rest_arg)));
+
+        let arg_list_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
+        self.destruc_list(&fun_expr.params, &arg_list_value);
+
+        self.eval_expr(&fun_expr.body_expr)
+    }
+
+    fn eval_app(&mut self, app: &hir::App<ty::Poly>) -> Value {
+        let fun_value = self.eval_expr(&app.fun_expr);
+
+        match fun_value {
+            Value::Fun(fun_expr) => self.eval_fun_app(
+                fun_expr.as_ref(),
+                app.fixed_arg_exprs.as_slice(),
+                app.rest_arg_expr.as_ref(),
+            ),
+            _ => {
+                unimplemented!("Unimplemented function value type");
+            }
+        }
+    }
+
     pub fn eval_def(&mut self, def: hir::Def<ty::Poly>) {
         let hir::Def {
             destruc,
@@ -101,15 +130,16 @@ impl PartialEvalCtx {
         self.eval_destruc(&destruc, &value_expr);
     }
 
-    pub fn eval_expr<'a>(&'a mut self, expr: &Expr) -> Cow<'a, Value> {
+    pub fn eval_expr<'a>(&'a mut self, expr: &Expr) -> Value {
         match expr {
-            hir::Expr::Lit(literal) => Cow::Owned(self.eval_lit(literal)),
-            hir::Expr::Do(exprs) => Cow::Owned(self.eval_do(&exprs)),
-            hir::Expr::Fun(_, fun) => Cow::Owned(Value::Fun(fun.clone())),
-            hir::Expr::RustFun(_, rust_fun) => Cow::Owned(Value::RustFun(rust_fun.clone())),
-            hir::Expr::TyPred(_, test_poly) => Cow::Owned(Value::TyPred(test_poly.clone())),
+            hir::Expr::Lit(literal) => self.eval_lit(literal),
+            hir::Expr::Do(exprs) => self.eval_do(&exprs),
+            hir::Expr::Fun(_, fun) => Value::Fun(fun.clone()),
+            hir::Expr::RustFun(_, rust_fun) => Value::RustFun(rust_fun.clone()),
+            hir::Expr::TyPred(_, test_poly) => Value::TyPred(test_poly.clone()),
             hir::Expr::Ref(_, var_id) => self.eval_ref(*var_id),
-            hir::Expr::Let(_, hir_let) => self.eval_let(hir_let.as_ref()),
+            hir::Expr::Let(_, hir_let) => self.eval_let(hir_let),
+            hir::Expr::App(_, app) => self.eval_app(app),
             hir::Expr::MacroExpand(_, expr) => self.eval_expr(expr),
             other => {
                 unimplemented!("Unimplemented expression type: {:?}", other);
