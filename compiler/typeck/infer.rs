@@ -815,6 +815,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
                 ErrorKind::TopFunApply(self.str_for_poly(&revealed_fun_type)),
             )),
             ty::Ty::TyPred(test_poly) => {
+                // TODO: This doesn't handle the subject being in rest args
                 let supplied_arg_count = fixed_arg_exprs.len();
                 let wanted_arity = WantedArity::new(1, false);
 
