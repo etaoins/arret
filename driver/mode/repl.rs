@@ -12,6 +12,7 @@ const APP_INFO: app_dirs::AppInfo = app_dirs::AppInfo {
 };
 
 const PROMPT: &str = "arret> ";
+const TYPE_ONLY_PREFIX: &str = ":type ";
 
 struct Completer {
     bound_names: Vec<String>,
@@ -61,7 +62,7 @@ impl rustyline::completion::Completer for Completer {
 }
 
 pub fn interactive_loop(cfg: &DriverConfig) {
-    use compiler::repl::EvaledLine;
+    use compiler::repl::{EvalKind, EvaledLine};
     use compiler::reporting::report_to_stderr;
     use rustyline;
     use rustyline::error::ReadlineError;
@@ -73,7 +74,7 @@ pub fn interactive_loop(cfg: &DriverConfig) {
 
     // Import [stdlib base] so we have most useful things defined
     let initial_import = "(import [stdlib base])".to_owned();
-    if let Err(err) = repl_ctx.eval_line(initial_import) {
+    if let Err(err) = repl_ctx.eval_line(initial_import, EvalKind::Value) {
         for reportable in err.reports() {
             report_to_stderr(repl_ctx.source_loader(), reportable.as_ref())
         }
@@ -97,12 +98,19 @@ pub fn interactive_loop(cfg: &DriverConfig) {
         let readline = rl.readline(&prompt.to_string());
 
         match readline {
-            Ok(line) => {
+            Ok(mut line) => {
                 if !line.chars().all(char::is_whitespace) {
                     rl.add_history_entry(&line);
                 }
 
-                match repl_ctx.eval_line(line) {
+                let eval_kind = if line.starts_with(TYPE_ONLY_PREFIX) {
+                    line.drain(0..TYPE_ONLY_PREFIX.len());
+                    EvalKind::Type
+                } else {
+                    EvalKind::Value
+                };
+
+                match repl_ctx.eval_line(line, eval_kind) {
                     Ok(EvaledLine::EmptyInput) => {}
                     Ok(EvaledLine::Defs) => {
                         // Refresh our completions

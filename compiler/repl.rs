@@ -6,6 +6,7 @@ use crate::hir::scope::Scope;
 use crate::reporting::Reportable;
 use crate::{PackagePaths, SourceKind, SourceLoader};
 
+use crate::mir::partial_eval::PartialEvalCtx;
 use crate::typeck;
 use crate::typeck::infer::InferCtx;
 
@@ -56,6 +57,21 @@ pub struct ReplCtx<'pp, 'sl> {
     ns_id: hir::ns::NsId,
     lcx: hir::lowering::LoweringCtx<'pp, 'sl>,
     icx: InferCtx,
+    pcx: PartialEvalCtx,
+}
+
+/// Indicates the kind of evaluation to perform on the input
+///
+/// This applies to expressions; it has no effect on empty input or definitions
+#[derive(Clone, Copy)]
+pub enum EvalKind {
+    /// Infers the type of the expression
+    ///
+    /// This only runs as far as type checking
+    Type,
+
+    /// Fully evaluates the expression
+    Value,
 }
 
 #[derive(Debug, PartialEq)]
@@ -78,6 +94,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
             ns_id,
             lcx: hir::lowering::LoweringCtx::new(package_paths, source_loader),
             icx: InferCtx::new(),
+            pcx: PartialEvalCtx::new(),
         }
     }
 
@@ -98,7 +115,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
         })
     }
 
-    pub fn eval_line(&mut self, input: String) -> Result<EvaledLine, Error> {
+    pub fn eval_line(&mut self, input: String, kind: EvalKind) -> Result<EvaledLine, Error> {
         use crate::hir::lowering::LoweredReplDatum;
 
         let source_loader = self.lcx.source_loader_mut();
@@ -140,9 +157,29 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
             LoweredReplDatum::Expr(decl_expr) => {
                 let lcx = &self.lcx;
                 let node = self.icx.infer_expr(lcx.pvars(), lcx.tvars(), decl_expr)?;
-                let poly_str = hir::str_for_poly(lcx.pvars(), lcx.tvars(), node.poly_type());
 
-                Ok(EvaledLine::Expr(poly_str))
+                match kind {
+                    EvalKind::Type => {
+                        let poly_str =
+                            hir::str_for_poly(lcx.pvars(), lcx.tvars(), node.poly_type());
+                        Ok(EvaledLine::Expr(poly_str))
+                    }
+                    EvalKind::Value => {
+                        use runtime_syntax::writer;
+                        use std::str;
+
+                        // Perform partial evaluation on the expression
+                        let value = self.pcx.eval_expr(node.expr());
+                        let boxed = self.pcx.value_to_boxed(&value);
+
+                        // Write the result to a string
+                        let mut output_buf: Vec<u8> = vec![];
+                        writer::write_boxed(&mut output_buf, &self.pcx, boxed).unwrap();
+                        let output_str = str::from_utf8(output_buf.as_slice()).unwrap().to_owned();
+
+                        Ok(EvaledLine::Expr(output_str))
+                    }
+                }
             }
         }
     }
@@ -158,33 +195,81 @@ mod test {
         let mut source_loader = SourceLoader::new();
         let mut repl_ctx = ReplCtx::new(&package_paths, &mut source_loader);
 
-        macro_rules! assert_eval {
-            ($expected:expr, $line:expr) => {
-                assert_eq!($expected, repl_ctx.eval_line($line.to_owned()).unwrap());
+        macro_rules! assert_empty {
+            ($line:expr) => {
+                assert_eq!(
+                    EvaledLine::EmptyInput,
+                    repl_ctx
+                        .eval_line($line.to_owned(), EvalKind::Value)
+                        .unwrap()
+                );
             };
         }
 
-        assert_eval!(EvaledLine::EmptyInput, "   ");
-        assert_eval!(EvaledLine::EmptyInput, "; COMMENT!");
-        assert_eval!(EvaledLine::Expr("Int".to_owned()), "1");
+        macro_rules! assert_defs {
+            ($line:expr) => {
+                assert_eq!(
+                    EvaledLine::Defs,
+                    repl_ctx
+                        .eval_line($line.to_owned(), EvalKind::Value)
+                        .unwrap()
+                );
+            };
+        }
+
+        macro_rules! assert_type {
+            ($expected:expr, $line:expr) => {
+                assert_eq!(
+                    EvaledLine::Expr($expected.to_owned()),
+                    repl_ctx
+                        .eval_line($line.to_owned(), EvalKind::Type)
+                        .unwrap()
+                );
+            };
+        }
+
+        macro_rules! assert_value {
+            ($expected:expr, $line:expr) => {
+                assert_eq!(
+                    EvaledLine::Expr($expected.to_owned()),
+                    repl_ctx
+                        .eval_line($line.to_owned(), EvalKind::Value)
+                        .unwrap()
+                );
+            };
+        }
+
+        assert_empty!("       ");
+        assert_empty!("; COMMENT!");
+
+        assert_type!("Int", "1");
+        assert_value!("1", "1");
 
         repl_ctx
-            .eval_line("(import (only [stdlib base] quote def do int?))".to_owned())
-            .unwrap();
+            .eval_line(
+                "(import (only [stdlib base] quote def do int?))".to_owned(),
+                EvalKind::Value,
+            ).unwrap();
 
         // Make sure we can references vars from the imported module
-        assert_eval!(EvaledLine::Expr("true".to_owned()), "(int? 5)");
+        assert_type!("true", "(int? 5)");
+        // TODO: This isn't implemented although it should be
+        // assert_value!("true", "(int? 5)");
 
         // Make sure we can redefine
-        assert_eval!(EvaledLine::Defs, "(def x 'first)");
-        assert_eval!(EvaledLine::Defs, "(def x 'second)");
-        assert_eval!(EvaledLine::Expr("'second".to_owned()), "x");
+        assert_defs!("(def x 'first)");
+        assert_defs!("(def x 'second)");
+        assert_type!("'second", "x");
+        // TODO: Needs vars to be implemented
+        // assert_value!("'second", "x");
 
         // Make sure we can handle `(do)` at the module level with recursive defs
-        assert_eval!(EvaledLine::Defs, "(do (def x y) (def y 2))");
-        assert_eval!(EvaledLine::Expr("Int".to_owned()), "x");
+        assert_defs!("(do (def x y) (def y 2))");
+        assert_type!("Int", "x");
+        // TODO: Needs vars to be implemented
+        // assert_value!("2", "x");
 
         // And `(do)` at the expression level
-        assert_eval!(EvaledLine::Expr("'baz".to_owned()), "(do 'foo 'bar 'baz)");
+        assert_type!("'baz", "(do 'foo 'bar 'baz)");
     }
 }

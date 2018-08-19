@@ -5,6 +5,7 @@
 mod id_type;
 
 mod hir;
+mod mir;
 pub mod repl;
 pub mod reporting;
 mod source;
