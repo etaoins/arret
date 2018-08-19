@@ -73,6 +73,7 @@ impl PartialEvalCtx {
             hir::Expr::RustFun(_, rust_fun) => Cow::Owned(Value::RustFun(rust_fun.clone())),
             hir::Expr::TyPred(_, test_poly) => Cow::Owned(Value::TyPred(test_poly.clone())),
             hir::Expr::Ref(_, var_id) => self.eval_ref(*var_id),
+            hir::Expr::MacroExpand(_, expr) => self.eval_expr(expr),
             other => {
                 unimplemented!("Unimplemented expression type: {:?}", other);
             }
