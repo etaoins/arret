@@ -266,16 +266,15 @@ mod test {
         assert_defs!("(def x 'first)");
         assert_defs!("(def x 'second)");
         assert_type!("'second", "x");
-        // TODO: Needs vars to be implemented
-        // assert_value!("'second", "x");
+        assert_value!("second", "x");
 
         // Make sure we can handle `(do)` at the module level with recursive defs
         assert_defs!("(do (def x y) (def y 2))");
         assert_type!("Int", "x");
-        // TODO: Needs vars to be implemented
-        // assert_value!("2", "x");
+        assert_value!("2", "x");
 
         // And `(do)` at the expression level
         assert_type!("'baz", "(do 'foo 'bar 'baz)");
+        assert_value!("baz", "(do 'foo 'bar 'baz)");
     }
 }

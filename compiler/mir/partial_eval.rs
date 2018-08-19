@@ -10,6 +10,8 @@ use crate::hir;
 use crate::mir::Value;
 use crate::ty;
 
+type Expr = hir::Expr<ty::Poly>;
+
 pub struct PartialEvalCtx {
     heap: boxed::Heap,
     var_values: HashMap<hir::VarId, Value>,
@@ -23,11 +25,7 @@ impl PartialEvalCtx {
         }
     }
 
-    fn eval_destruc(
-        &mut self,
-        destruc: hir::destruc::Destruc<ty::Poly>,
-        expr: &hir::Expr<ty::Poly>,
-    ) {
+    fn eval_destruc(&mut self, destruc: hir::destruc::Destruc<ty::Poly>, expr: &Expr) {
         use crate::hir::destruc::Destruc;
         let value = self.eval_expr(expr).into_owned();
 
@@ -45,6 +43,15 @@ impl PartialEvalCtx {
         Cow::Borrowed(&self.var_values[&var_id])
     }
 
+    fn eval_do<'a>(&'a mut self, exprs: &[Expr]) -> Value {
+        let initial_value = Value::Const(boxed::List::<boxed::Any>::empty().as_any_ref());
+
+        // TODO: This needs to handle Never values once we can create them
+        exprs
+            .iter()
+            .fold(initial_value, |_, expr| self.eval_expr(expr).into_owned())
+    }
+
     pub fn eval_def(&mut self, def: hir::Def<ty::Poly>) {
         let hir::Def {
             destruc,
@@ -55,12 +62,13 @@ impl PartialEvalCtx {
         self.eval_destruc(destruc, &value_expr);
     }
 
-    pub fn eval_expr<'a>(&'a mut self, expr: &hir::Expr<ty::Poly>) -> Cow<'a, Value> {
+    pub fn eval_expr<'a>(&'a mut self, expr: &Expr) -> Cow<'a, Value> {
         match expr {
             hir::Expr::Lit(literal) => {
                 let boxed = reader::box_syntax_datum(self, &literal);
                 Cow::Owned(Value::Const(boxed))
             }
+            hir::Expr::Do(exprs) => Cow::Owned(self.eval_do(&exprs)),
             hir::Expr::Fun(_, fun) => Cow::Owned(Value::Fun(fun.clone())),
             hir::Expr::RustFun(_, rust_fun) => Cow::Owned(Value::RustFun(rust_fun.clone())),
             hir::Expr::TyPred(_, test_poly) => Cow::Owned(Value::TyPred(test_poly.clone())),
