@@ -25,7 +25,7 @@ impl PartialEvalCtx {
         }
     }
 
-    fn eval_destruc(&mut self, destruc: hir::destruc::Destruc<ty::Poly>, expr: &Expr) {
+    fn eval_destruc(&mut self, destruc: &hir::destruc::Destruc<ty::Poly>, expr: &Expr) {
         use crate::hir::destruc::Destruc;
         let value = self.eval_expr(expr).into_owned();
 
@@ -52,6 +52,11 @@ impl PartialEvalCtx {
             .fold(initial_value, |_, expr| self.eval_expr(expr).into_owned())
     }
 
+    fn eval_let<'a>(&'a mut self, hir_let: &hir::Let<ty::Poly>) -> Cow<'a, Value> {
+        self.eval_destruc(&hir_let.destruc, &hir_let.value_expr);
+        self.eval_expr(&hir_let.body_expr)
+    }
+
     pub fn eval_def(&mut self, def: hir::Def<ty::Poly>) {
         let hir::Def {
             destruc,
@@ -59,7 +64,7 @@ impl PartialEvalCtx {
             ..
         } = def;
 
-        self.eval_destruc(destruc, &value_expr);
+        self.eval_destruc(&destruc, &value_expr);
     }
 
     pub fn eval_expr<'a>(&'a mut self, expr: &Expr) -> Cow<'a, Value> {
@@ -73,6 +78,7 @@ impl PartialEvalCtx {
             hir::Expr::RustFun(_, rust_fun) => Cow::Owned(Value::RustFun(rust_fun.clone())),
             hir::Expr::TyPred(_, test_poly) => Cow::Owned(Value::TyPred(test_poly.clone())),
             hir::Expr::Ref(_, var_id) => self.eval_ref(*var_id),
+            hir::Expr::Let(_, hir_let) => self.eval_let(hir_let.as_ref()),
             hir::Expr::MacroExpand(_, expr) => self.eval_expr(expr),
             other => {
                 unimplemented!("Unimplemented expression type: {:?}", other);
