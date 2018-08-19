@@ -7,10 +7,8 @@ use runtime_syntax::reader;
 use syntax::datum::Datum;
 
 use crate::hir;
-use crate::mir::Value;
+use crate::mir::{Expr, Value};
 use crate::ty;
-
-type Expr = hir::Expr<ty::Poly>;
 
 pub struct PartialEvalCtx {
     heap: boxed::Heap,
@@ -105,12 +103,35 @@ impl PartialEvalCtx {
         self.eval_expr(&fun_expr.body_expr)
     }
 
+    fn eval_rust_fun_app(
+        &mut self,
+        rust_fun: &hir::rfi::Fun,
+        fixed_args: &[Expr],
+        rest_arg: Option<&Expr>,
+    ) -> Value {
+        use crate::mir::intrinsic;
+
+        if let Some(intrinsic_name) = rust_fun.intrinsic_name() {
+            // Attempt specialised evaluation
+            if let Some(value) = intrinsic::try_eval(self, intrinsic_name, fixed_args, rest_arg) {
+                return value;
+            }
+        }
+
+        unimplemented!("Applying Rust functions not implemented")
+    }
+
     fn eval_app(&mut self, app: &hir::App<ty::Poly>) -> Value {
         let fun_value = self.eval_expr(&app.fun_expr);
 
         match fun_value {
             Value::Fun(fun_expr) => self.eval_fun_app(
                 fun_expr.as_ref(),
+                app.fixed_arg_exprs.as_slice(),
+                app.rest_arg_expr.as_ref(),
+            ),
+            Value::RustFun(rust_fun) => self.eval_rust_fun_app(
+                rust_fun.as_ref(),
                 app.fixed_arg_exprs.as_slice(),
                 app.rest_arg_expr.as_ref(),
             ),

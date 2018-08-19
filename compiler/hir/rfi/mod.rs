@@ -23,6 +23,12 @@ new_indexing_id_type!(RustLibraryId, u32);
 pub struct Fun {
     rust_library_id: RustLibraryId,
 
+    /// Name of this function if it corresponds to an instrinsic
+    ///
+    /// Intrinsics may have optimized partial evaluation in MIR. However, they should be
+    /// semantically equivalent to the non-instrinsic version.
+    intrinsic_name: Option<&'static str>,
+
     arret_fun_type: ty::Fun<ty::Poly>,
     takes_task: bool,
     params: &'static [abitype::ABIType],
@@ -32,6 +38,10 @@ pub struct Fun {
 }
 
 impl Fun {
+    pub fn intrinsic_name(&self) -> Option<&'static str> {
+        self.intrinsic_name
+    }
+
     pub fn arret_fun_type(&self) -> &ty::Fun<ty::Poly> {
         &self.arret_fun_type
     }
@@ -107,6 +117,7 @@ impl Loader {
         rust_library_id: RustLibraryId,
         entry_point: *const c_void,
         rust_fun: &'static binding::RustFun,
+        intrinsic_name: Option<&'static str>,
     ) -> Result<Fun, Error> {
         use syntax::parser::datum_from_str;
 
@@ -177,6 +188,9 @@ impl Loader {
 
         Ok(Fun {
             rust_library_id,
+
+            intrinsic_name,
+
             arret_fun_type: *arret_fun_type,
             takes_task: rust_fun.takes_task,
             params: rust_fun.params,
@@ -219,8 +233,11 @@ impl Loader {
                         .map_err(map_io_err)?
                 };
 
+                // Treat every native function in the stdlib as an intrinsic
+                let intrinsic_name = Some(*name).filter(|_| package_name == "stdlib");
+
                 let fun = self
-                    .process_rust_fun(rust_library_id, entry_point, rust_fun)
+                    .process_rust_fun(rust_library_id, entry_point, rust_fun, intrinsic_name)
                     .map_err(|err| {
                         // This is a gross hack. We don't want to insert an entry in to the
                         // `SourceLoader` for every Rust function. This requires at least one memory
@@ -259,7 +276,7 @@ mod test {
         let loader = Loader::new();
 
         loader
-            .process_rust_fun(RustLibraryId::new(0), ptr::null(), rust_fun)
+            .process_rust_fun(RustLibraryId::new(0), ptr::null(), rust_fun, None)
             .map(|rfi_fun| rfi_fun.arret_fun_type)
     }
 
