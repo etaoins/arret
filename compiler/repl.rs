@@ -148,8 +148,13 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
                 let lcx = &self.lcx;
 
                 for recursive_defs in defs {
-                    self.icx
-                        .infer_defs(lcx.pvars(), lcx.tvars(), recursive_defs)?;
+                    let inferred_defs =
+                        self.icx
+                            .infer_defs(lcx.pvars(), lcx.tvars(), recursive_defs)?;
+
+                    for inferred_def in inferred_defs {
+                        self.pcx.eval_def(inferred_def);
+                    }
                 }
 
                 Ok(EvaledLine::Defs)
@@ -169,7 +174,8 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
                         use std::str;
 
                         // Perform partial evaluation on the expression
-                        let value = self.pcx.eval_expr(node.expr());
+                        // TODO: Shouldn't need to `.into_owned()` here
+                        let value = self.pcx.eval_expr(node.expr()).into_owned();
                         let boxed = self.pcx.value_to_boxed(&value);
 
                         // Write the result to a string

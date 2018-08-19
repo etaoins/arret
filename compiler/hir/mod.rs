@@ -19,8 +19,8 @@ use crate::ty;
 use syntax::datum::Datum;
 use syntax::span::Span;
 
-pub trait HirType: std::cmp::PartialEq + std::fmt::Debug {
-    type Purity: std::cmp::PartialEq + std::fmt::Debug;
+pub trait HirType: Clone + std::cmp::PartialEq + std::fmt::Debug {
+    type Purity: Clone + std::cmp::PartialEq + std::fmt::Debug;
 }
 
 impl HirType for ty::Poly {
@@ -33,7 +33,7 @@ impl HirType for ty::Decl {
 
 new_counting_id_type!(VarIdCounter, VarId, u32);
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Fun<T: HirType> {
     pub pvar_ids: Range<ty::purity::PVarId>,
     pub tvar_ids: Range<ty::TVarId>,
@@ -45,28 +45,28 @@ pub struct Fun<T: HirType> {
     pub body_expr: Expr<T>,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Cond<T: HirType> {
     pub test_expr: Expr<T>,
     pub true_expr: Expr<T>,
     pub false_expr: Expr<T>,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Let<T: HirType> {
     pub destruc: destruc::Destruc<T>,
     pub value_expr: Expr<T>,
     pub body_expr: Expr<T>,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct App<T: HirType> {
     pub fun_expr: Expr<T>,
     pub fixed_arg_exprs: Vec<Expr<T>>,
     pub rest_arg_expr: Option<Expr<T>>,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Expr<T: HirType> {
     Lit(Datum),
     App(Span, Box<App<T>>),

@@ -3,13 +3,13 @@ use crate::hir::HirType;
 use crate::ty;
 use syntax::span::Span;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Destruc<T: HirType> {
     Scalar(Span, Scalar<T>),
     List(Span, List<T>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct List<T: HirType> {
     fixed: Vec<Destruc<T>>,
     rest: Option<Box<Scalar<T>>>,
@@ -29,7 +29,7 @@ impl<T: HirType> List<T> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Scalar<T: HirType> {
     /// ID of the variable. If this is None it's treated as a wildcard.
     var_id: Option<hir::VarId>,

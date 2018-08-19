@@ -19,7 +19,7 @@ use runtime::{abitype, binding};
 
 new_indexing_id_type!(RustLibraryId, u32);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Fun {
     rust_library_id: RustLibraryId,
 
@@ -81,13 +81,11 @@ fn push_rfi_lib_path(path_buf: &mut path::PathBuf, package_name: &str) {
     #[cfg(any(target_os = "windows"))]
     path_buf.push(format!("{}.dll", package_name));
 
-    #[cfg(
-        all(
-            not(target_os = "macos"),
-            not(target_os = "ios"),
-            not(target_os = "windows")
-        )
-    )]
+    #[cfg(all(
+        not(target_os = "macos"),
+        not(target_os = "ios"),
+        not(target_os = "windows")
+    ))]
     path_buf.push(format!("lib{}.so", package_name));
 }
 
@@ -222,19 +220,22 @@ impl Loader {
                 };
 
                 let fun = self
-                .process_rust_fun(rust_library_id, entry_point, rust_fun)
-                .map_err(|err| {
-                    // This is a gross hack. We don't want to insert an entry in to the
-                    // `SourceLoader` for every Rust function. This requires at least one memory
-                    // allocation for the display name and extending the loaded sources. Instead
-                    // only "load" the string once there is an error and adjust the span to match.
-                    let kind = SourceKind::RfiModule(path.to_string_lossy().into(), (*name).to_owned());
-                    let error_offset = source_loader.next_span_offset;
+                    .process_rust_fun(rust_library_id, entry_point, rust_fun)
+                    .map_err(|err| {
+                        // This is a gross hack. We don't want to insert an entry in to the
+                        // `SourceLoader` for every Rust function. This requires at least one memory
+                        // allocation for the display name and extending the loaded sources. Instead
+                        // only "load" the string once there is an error and adjust the span to match.
+                        let kind = SourceKind::RfiModule(
+                            path.to_string_lossy().into(),
+                            (*name).to_owned(),
+                        );
+                        let error_offset = source_loader.next_span_offset;
 
-                    source_loader.load_string(kind, rust_fun.arret_type.to_owned());
+                        source_loader.load_string(kind, rust_fun.arret_type.to_owned());
 
-                    err.with_span_offset(error_offset)
-                })?;
+                        err.with_span_offset(error_offset)
+                    })?;
 
                 Ok((*name, fun))
             }).collect::<Result<HashMap<&'static str, Fun>, Error>>()?;
