@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use runtime::boxed;
 use runtime::boxed::prelude::*;
@@ -128,7 +129,7 @@ impl PartialEvalCtx {
             .iter()
             .map(|arg| self.eval_expr(dcx, arg))
             .collect();
-        let rest_value = rest_arg.map(|rest_arg| Box::new(self.eval_expr(dcx, rest_arg)));
+        let rest_value = rest_arg.map(|rest_arg| Rc::new(self.eval_expr(dcx, rest_arg)));
 
         let arg_list_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
         Self::destruc_list(&mut dcx.local_values, &fun_expr.params, &arg_list_value);
@@ -260,9 +261,9 @@ impl PartialEvalCtx {
         match expr {
             hir::Expr::Lit(literal) => self.eval_lit(literal),
             hir::Expr::Do(exprs) => self.eval_do(dcx, &exprs),
-            hir::Expr::Fun(_, fun) => Value::Fun(fun.clone()),
-            hir::Expr::RustFun(_, rust_fun) => Value::RustFun(rust_fun.clone()),
-            hir::Expr::TyPred(_, test_poly) => Value::TyPred(test_poly.clone()),
+            hir::Expr::Fun(_, fun) => Value::Fun(Rc::new(fun.as_ref().clone())),
+            hir::Expr::RustFun(_, rust_fun) => Value::RustFun(Rc::new(rust_fun.as_ref().clone())),
+            hir::Expr::TyPred(_, test_poly) => Value::TyPred(Rc::new(test_poly.clone())),
             hir::Expr::Ref(_, var_id) => self.eval_ref(dcx, *var_id),
             hir::Expr::Let(_, hir_let) => self.eval_let(dcx, hir_let),
             hir::Expr::App(_, app) => self.eval_app(dcx, app),

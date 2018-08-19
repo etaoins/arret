@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use runtime::boxed;
 use runtime::boxed::refs::Gc;
 use runtime::intern::Interner;
@@ -8,10 +10,11 @@ use crate::ty;
 #[derive(Clone)]
 pub enum Value {
     Const(Gc<boxed::Any>),
-    List(Box<[Value]>, Option<Box<Value>>),
-    Fun(Box<hir::Fun<ty::Poly>>),
-    RustFun(Box<hir::rfi::Fun>),
-    TyPred(ty::Poly),
+    // This uses Box<[]> because we can't convert from a Vec<> to Rc<[]> without reallocating
+    List(Box<[Value]>, Option<Rc<Value>>),
+    Fun(Rc<hir::Fun<ty::Poly>>),
+    RustFun(Rc<hir::rfi::Fun>),
+    TyPred(Rc<ty::Poly>),
 }
 
 impl Value {
@@ -118,7 +121,7 @@ impl<'list> ListIterator<'list> {
     pub fn rest(&self) -> Value {
         Value::List(
             self.fixed.to_vec().into_boxed_slice(),
-            self.rest.cloned().map(Box::new),
+            self.rest.cloned().map(Rc::new),
         )
     }
 }
