@@ -227,7 +227,7 @@ impl PartialEvalCtx {
         }
     }
 
-    pub fn eval_def(&mut self, tvars: &[ty::TVar], def: hir::Def<ty::Poly>) {
+    pub fn consume_def(&mut self, tvars: &[ty::TVar], def: hir::Def<ty::Poly>) {
         let hir::Def {
             destruc,
             value_expr,
@@ -236,7 +236,7 @@ impl PartialEvalCtx {
 
         let mut dcx = DefCtx::new(tvars);
 
-        let value = self.eval_expr(&mut dcx, &value_expr);
+        let value = self.consume_expr(&mut dcx, value_expr);
         Self::destruc_value(&mut self.global_values, &destruc, value);
     }
 
@@ -269,6 +269,15 @@ impl PartialEvalCtx {
             hir::Expr::App(_, app) => self.eval_app(dcx, app),
             hir::Expr::MacroExpand(_, expr) => self.eval_expr(dcx, expr),
             hir::Expr::Cond(_, cond) => self.eval_cond(dcx, cond),
+        }
+    }
+
+    pub fn consume_expr<'a>(&'a mut self, dcx: &mut DefCtx<'_>, expr: Expr) -> Value {
+        match expr {
+            hir::Expr::Fun(_, fun) => Value::Fun(fun.into()),
+            hir::Expr::RustFun(_, rust_fun) => Value::RustFun(rust_fun.into()),
+            hir::Expr::TyPred(_, test_poly) => Value::TyPred(Rc::new(test_poly)),
+            other => self.eval_expr(dcx, &other),
         }
     }
 

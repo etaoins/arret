@@ -157,7 +157,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
                             .infer_defs(lcx.pvars(), lcx.tvars(), recursive_defs)?;
 
                     for inferred_def in inferred_defs {
-                        self.pcx.eval_def(lcx.tvars(), inferred_def);
+                        self.pcx.consume_def(lcx.tvars(), inferred_def);
                     }
                 }
 
@@ -180,7 +180,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
 
                         // Perform partial evaluation on the expression
                         let mut dcx = DefCtx::new(lcx.tvars());
-                        let value = self.pcx.eval_expr(&mut dcx, node.expr());
+                        let value = self.pcx.consume_expr(&mut dcx, node.into_expr());
                         let boxed = self.pcx.value_to_boxed(&value);
 
                         // Write the result to a string

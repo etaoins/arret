@@ -65,8 +65,8 @@ impl InferredNode {
         }
     }
 
-    pub fn expr(&self) -> &hir::Expr<ty::Poly> {
-        &self.expr
+    pub fn into_expr(self) -> hir::Expr<ty::Poly> {
+        self.expr
     }
 
     pub fn poly_type(&self) -> &ty::Poly {
