@@ -1,18 +1,22 @@
 mod list;
 use crate::mir::intrinsic::list::*;
 
-use crate::mir::partial_eval::PartialEvalCtx;
+use crate::mir::partial_eval::{DefCtx, PartialEvalCtx};
 use crate::mir::value::ListIterator;
 use crate::mir::{Expr, Value};
 
 trait Intrinsic {
     fn eval_exprs(
         pcx: &mut PartialEvalCtx,
+        dcx: &mut DefCtx<'_>,
         fixed_exprs: &[Expr],
         rest_expr: Option<&Expr>,
     ) -> Option<Value> {
-        let fixed_values: Vec<Value> = fixed_exprs.iter().map(|arg| pcx.eval_expr(arg)).collect();
-        let rest_value = rest_expr.map(|rest_arg| Box::new(pcx.eval_expr(rest_arg)));
+        let fixed_values: Vec<Value> = fixed_exprs
+            .iter()
+            .map(|arg| pcx.eval_expr(dcx, arg))
+            .collect();
+        let rest_value = rest_expr.map(|rest_arg| Box::new(pcx.eval_expr(dcx, rest_arg)));
 
         let args_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
         Self::eval_args_value(pcx, args_value)
@@ -32,6 +36,7 @@ macro_rules! define_intrinsics {
     ( $($name:expr => $handler:ident),* ) => {
         pub fn try_eval(
             pcx: &mut PartialEvalCtx,
+            dcx: &mut DefCtx<'_>,
             intrinsic_name: &'static str,
             fixed_exprs: &[Expr],
             rest_expr: Option<&Expr>,
@@ -39,7 +44,7 @@ macro_rules! define_intrinsics {
             match intrinsic_name {
                 $(
                     $name => {
-                        $handler::eval_exprs(pcx, fixed_exprs, rest_expr)
+                        $handler::eval_exprs(pcx, dcx, fixed_exprs, rest_expr)
                     }
                 ),*
                 _ => None,
