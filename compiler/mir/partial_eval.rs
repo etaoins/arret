@@ -7,15 +7,9 @@ use runtime::boxed::AsHeap;
 use runtime_syntax::reader;
 
 use crate::hir;
+use crate::mir::Value;
 use crate::ty;
 
-#[derive(Clone)]
-pub enum Value {
-    Const(Gc<boxed::Any>),
-    Fun(Box<hir::Fun<ty::Poly>>),
-    RustFun(Box<hir::rfi::Fun>),
-    TyPred(ty::Poly),
-}
 pub struct PartialEvalCtx {
     heap: boxed::Heap,
     var_values: HashMap<hir::VarId, Value>,
