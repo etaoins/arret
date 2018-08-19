@@ -306,6 +306,15 @@ define_tagged_union!(Num, NumSubtype, NumMember, as_num_ref, {
 
 define_tagged_union!(Bool, BoolSubtype, BoolMember, as_bool_ref, { True, False });
 
+impl Bool {
+    pub fn as_bool(&self) -> bool {
+        match self.as_subtype() {
+            BoolSubtype::True(_) => true,
+            BoolSubtype::False(_) => false,
+        }
+    }
+}
+
 define_tagged_union!(TopList, TopListSubtype, TopListMember, as_top_list_ref, {
     TopPair,
     Nil

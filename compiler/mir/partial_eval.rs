@@ -141,6 +141,26 @@ impl PartialEvalCtx {
         }
     }
 
+    fn eval_cond(&mut self, cond: &hir::Cond<ty::Poly>) -> Value {
+        let test_value = self.eval_expr(&cond.test_expr);
+
+        let test_bool = match test_value {
+            Value::Const(any_ref) => {
+                let bool_ref = any_ref.downcast_ref::<boxed::Bool>().unwrap();
+                bool_ref.as_bool()
+            }
+            _ => {
+                unimplemented!("Non-constant condition");
+            }
+        };
+
+        if test_bool {
+            self.eval_expr(&cond.true_expr)
+        } else {
+            self.eval_expr(&cond.false_expr)
+        }
+    }
+
     pub fn eval_def(&mut self, def: hir::Def<ty::Poly>) {
         let hir::Def {
             destruc,
@@ -162,9 +182,7 @@ impl PartialEvalCtx {
             hir::Expr::Let(_, hir_let) => self.eval_let(hir_let),
             hir::Expr::App(_, app) => self.eval_app(app),
             hir::Expr::MacroExpand(_, expr) => self.eval_expr(expr),
-            other => {
-                unimplemented!("Unimplemented expression type: {:?}", other);
-            }
+            hir::Expr::Cond(_, cond) => self.eval_cond(cond),
         }
     }
 
