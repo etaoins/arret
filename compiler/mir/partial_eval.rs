@@ -15,6 +15,11 @@ pub struct PartialEvalCtx {
     var_values: HashMap<hir::VarId, Value>,
 }
 
+pub struct DefCtx<'tvar> {
+    tvars: &'tvar [ty::TVar],
+    var_values: HashMap<hir::VarId, Value>,
+}
+
 impl PartialEvalCtx {
     pub fn new() -> PartialEvalCtx {
         PartialEvalCtx {

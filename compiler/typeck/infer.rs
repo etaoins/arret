@@ -324,6 +324,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
                 Some(true) => {
                     let true_node = self.visit_expr(fcx, required_type, true_expr)?;
                     self.visit_expr(fcx, &ty::Ty::Any.into_poly(), false_expr)?;
+                    // TODO: This is incorrect if the test is impure
                     return Ok(true_node);
                 }
                 Some(false) => {
