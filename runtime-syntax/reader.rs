@@ -7,8 +7,7 @@ use runtime::boxed::refs::Gc;
 /// Places a syntax datum on a box heap
 pub fn box_syntax_datum(heap: &mut impl boxed::AsHeap, datum: &Datum) -> Gc<boxed::Any> {
     match datum {
-        Datum::Bool(_, true) => boxed::TRUE_INSTANCE.as_any_ref(),
-        Datum::Bool(_, false) => boxed::FALSE_INSTANCE.as_any_ref(),
+        Datum::Bool(_, value) => boxed::Bool::singleton_ref(*value).as_any_ref(),
         Datum::Int(_, val) => boxed::Int::new(heap, *val).as_any_ref(),
         Datum::Float(_, val) => boxed::Float::new(heap, *val).as_any_ref(),
         Datum::Char(_, val) => boxed::Char::new(heap, *val).as_any_ref(),

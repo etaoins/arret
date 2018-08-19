@@ -1,5 +1,6 @@
 use runtime::boxed;
 use runtime::boxed::refs::Gc;
+use runtime::intern::Interner;
 
 use crate::hir;
 use crate::ty;
@@ -24,6 +25,76 @@ impl Value {
                 fixed: &[],
                 rest: Some(other),
             },
+        }
+    }
+}
+
+fn type_for_any_ref<S: ty::TyRef>(interner: &Interner, any_ref: Gc<boxed::Any>) -> S {
+    use runtime::boxed::AnySubtype;
+
+    match any_ref.as_subtype() {
+        AnySubtype::True(_) => ty::Ty::LitBool(true).into_ty_ref(),
+        AnySubtype::False(_) => ty::Ty::LitBool(false).into_ty_ref(),
+        AnySubtype::Nil(_) => ty::Ty::List(ty::List::empty()).into_ty_ref(),
+        AnySubtype::Str(_) => ty::Ty::Str.into_ty_ref(),
+        AnySubtype::Int(_) => ty::Ty::Int.into_ty_ref(),
+        AnySubtype::Float(_) => ty::Ty::Float.into_ty_ref(),
+        AnySubtype::Char(_) => ty::Ty::Char.into_ty_ref(),
+        AnySubtype::Sym(sym_ref) => ty::Ty::LitSym(sym_ref.name(interner).into()).into_ty_ref(),
+        AnySubtype::TopVector(top_vector_ref) => {
+            let vector_ref = top_vector_ref.as_vector();
+            let elem_types = vector_ref
+                .iter()
+                .map(|elem| type_for_any_ref(interner, *elem))
+                .collect::<Vec<S>>();
+
+            ty::Ty::Vector(elem_types.into_boxed_slice()).into_ty_ref()
+        }
+        AnySubtype::TopPair(top_pair) => {
+            let list_ref = top_pair.as_pair().as_list();
+            let elem_types = list_ref
+                .iter()
+                .map(|elem| type_for_any_ref(interner, elem))
+                .collect::<Vec<S>>();
+
+            ty::Ty::List(ty::List::new(elem_types.into_boxed_slice(), None)).into_ty_ref()
+        }
+    }
+}
+
+pub fn poly_for_value(interner: &Interner, value: &Value) -> ty::Poly {
+    match value {
+        Value::Const(any_ref) => type_for_any_ref(interner, *any_ref),
+        Value::List(fixed_values, rest_value) => {
+            let fixed_polys = fixed_values
+                .iter()
+                .map(|value| poly_for_value(interner, value))
+                .collect::<Vec<ty::Poly>>();
+
+            let rest_poly = rest_value
+                .as_ref()
+                .map(|value| poly_for_value(interner, value.as_ref()));
+
+            ty::Ty::List(ty::List::new(fixed_polys.into_boxed_slice(), rest_poly)).into_poly()
+        }
+        Value::RustFun(rust_fun) => {
+            ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into_poly()
+        }
+        Value::TyPred(_) => ty::Ty::Fun(Box::new(ty::Fun::new_for_ty_pred())).into_poly(),
+        Value::Fun(fun_expr) => {
+            use crate::hir::destruc::poly_for_list_destruc;
+
+            let top_fun = ty::TopFun::new(fun_expr.purity.clone(), fun_expr.ret_ty.clone());
+            let params_poly = poly_for_list_destruc(&fun_expr.params);
+
+            let fun = ty::Fun::new(
+                fun_expr.pvar_ids.clone(),
+                fun_expr.tvar_ids.clone(),
+                top_fun,
+                params_poly,
+            );
+
+            ty::Ty::Fun(Box::new(fun)).into_poly()
         }
     }
 }

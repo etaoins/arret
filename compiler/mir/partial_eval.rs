@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use runtime::boxed;
+use runtime::boxed::prelude::*;
 use runtime::boxed::refs::Gc;
-use runtime::boxed::AsHeap;
+
 use runtime_syntax::reader;
 use syntax::datum::Datum;
 
@@ -16,14 +17,14 @@ pub struct PartialEvalCtx {
 }
 
 pub struct DefCtx<'tvars> {
-    _tvars: &'tvars [ty::TVar],
+    tvars: &'tvars [ty::TVar],
     local_values: HashMap<hir::VarId, Value>,
 }
 
 impl<'tvars> DefCtx<'tvars> {
     pub fn new(tvars: &'tvars [ty::TVar]) -> DefCtx<'tvars> {
         DefCtx {
-            _tvars: tvars,
+            tvars,
             local_values: HashMap::new(),
         }
     }
@@ -135,6 +136,27 @@ impl PartialEvalCtx {
         self.eval_expr(dcx, &fun_expr.body_expr)
     }
 
+    fn eval_ty_pred_app(
+        &mut self,
+        dcx: &mut DefCtx<'_>,
+        test_poly: &ty::Poly,
+        fixed_args: &[Expr],
+        _rest_arg: Option<&Expr>,
+    ) -> Value {
+        use crate::mir::value::poly_for_value;
+        use crate::ty::pred::InterpretedPred;
+
+        let value = self.eval_expr(dcx, &fixed_args[0]);
+        let subject_poly = poly_for_value(self.heap.interner(), &value);
+
+        match ty::pred::interpret_poly_pred(dcx.tvars, &subject_poly, test_poly) {
+            InterpretedPred::Static(value) => {
+                Value::Const(boxed::Bool::singleton_ref(value).as_any_ref())
+            }
+            InterpretedPred::Dynamic(_, _) => unimplemented!("Runtime type check"),
+        }
+    }
+
     fn eval_rust_fun_app(
         &mut self,
         dcx: &mut DefCtx<'_>,
@@ -169,6 +191,12 @@ impl PartialEvalCtx {
             Value::RustFun(rust_fun) => self.eval_rust_fun_app(
                 dcx,
                 rust_fun.as_ref(),
+                app.fixed_arg_exprs.as_slice(),
+                app.rest_arg_expr.as_ref(),
+            ),
+            Value::TyPred(test_poly) => self.eval_ty_pred_app(
+                dcx,
+                &test_poly,
                 app.fixed_arg_exprs.as_slice(),
                 app.rest_arg_expr.as_ref(),
             ),

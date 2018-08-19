@@ -307,6 +307,14 @@ define_tagged_union!(Num, NumSubtype, NumMember, as_num_ref, {
 define_tagged_union!(Bool, BoolSubtype, BoolMember, as_bool_ref, { True, False });
 
 impl Bool {
+    pub fn singleton_ref(value: bool) -> Gc<Bool> {
+        if value {
+            TRUE_INSTANCE.as_bool_ref()
+        } else {
+            FALSE_INSTANCE.as_bool_ref()
+        }
+    }
+
     pub fn as_bool(&self) -> bool {
         match self.as_subtype() {
             BoolSubtype::True(_) => true,

@@ -27,7 +27,7 @@ where
 }
 
 impl<T: Boxed> Pair<T> {
-    pub fn as_list_ref(&self) -> Gc<List<T>> {
+    pub fn as_list(&self) -> Gc<List<T>> {
         unsafe { Gc::new(self as *const Self as *const List<T>) }
     }
 }
@@ -88,9 +88,7 @@ impl<T: Boxed> List<T> {
         tail: Gc<List<T>>,
     ) -> Gc<List<T>> {
         // TODO: This is naive; we could use a single multi-cell allocation instead
-        elems.rfold(tail, |tail, elem| {
-            Pair::new(heap, (elem, tail)).as_list_ref()
-        })
+        elems.rfold(tail, |tail, elem| Pair::new(heap, (elem, tail)).as_list())
     }
 
     pub fn from_values<V>(heap: &mut impl AsHeap, values: impl Iterator<Item = V>) -> Gc<List<T>>

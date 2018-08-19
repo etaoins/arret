@@ -78,7 +78,7 @@ pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any
         }
         AnySubtype::TopPair(list) => {
             write!(w, "(")?;
-            write_boxed_seq(w, heap, list.as_pair().as_list_ref().iter())?;
+            write_boxed_seq(w, heap, list.as_pair().as_list().iter())?;
             write!(w, ")")
         }
         AnySubtype::TopVector(vec) => {
