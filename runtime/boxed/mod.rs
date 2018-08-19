@@ -311,6 +311,12 @@ define_tagged_union!(TopList, TopListSubtype, TopListMember, as_top_list_ref, {
     Nil
 });
 
+impl TopList {
+    pub fn as_list(&self) -> Gc<List<Any>> {
+        unsafe { Gc::new(&*(self as *const TopList as *const List<Any>)) }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

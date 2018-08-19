@@ -79,10 +79,16 @@ impl<T: Boxed> List<T> {
         heap: &mut impl AsHeap,
         elems: impl DoubleEndedIterator<Item = Gc<T>>,
     ) -> Gc<List<T>> {
-        let initial_tail = Self::empty();
+        Self::new_with_tail(heap, elems, Self::empty())
+    }
 
+    pub fn new_with_tail(
+        heap: &mut impl AsHeap,
+        elems: impl DoubleEndedIterator<Item = Gc<T>>,
+        tail: Gc<List<T>>,
+    ) -> Gc<List<T>> {
         // TODO: This is naive; we could use a single multi-cell allocation instead
-        elems.rfold(initial_tail, |tail, elem| {
+        elems.rfold(tail, |tail, elem| {
             Pair::new(heap, (elem, tail)).as_list_ref()
         })
     }
