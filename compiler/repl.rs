@@ -264,8 +264,7 @@ mod test {
 
         // Make sure we can references vars from the imported module
         assert_type!("true", "(int? 5)");
-        // TODO: This isn't implemented although it should be
-        // assert_value!("true", "(int? 5)");
+        assert_value!("true", "(int? 5)");
 
         // Make sure we can redefine
         assert_defs!("(def x 'first)");
