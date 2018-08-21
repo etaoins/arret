@@ -23,6 +23,11 @@
 
   ; Divergence within `(if)` condition
   (assert-diverges (if (panic "Test") 'left 'right))
+  (assert-diverges (if (do (panic "Test") true) 'left 'right))
+  (assert-diverges (if (do (panic "Test") false) 'left 'right))
+  (ann (if true 'left (panic "Test")) 'left)
+  (ann (if false (panic "Test") 'right) 'right)
+  (ann (if x 'other (panic "Test")) 'other)
 
   ; Divergence within normal application
   (assert-diverges (length (panic "Normal apply")))

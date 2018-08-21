@@ -270,31 +270,47 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
         let test_required_type = &ty::Ty::Bool.into_poly();
         let test_node = self.visit_expr(fcx, test_required_type, test_expr)?;
 
-        let (true_node, false_node) = if let Some(type_cond) = test_node.type_cond {
+        if test_node.poly_type == ty::Ty::never().into_poly() {
+            // Test diverged; we don't need the branches
+            return Ok(test_node);
+        }
+        let test_known_bool = test_node.poly_type.try_to_bool();
+
+        // If a branch isn't taken it doesn't need to match the type of the cond expression
+        let any_type = &ty::Ty::Any.into_poly();
+        let (true_required_type, false_required_type) = match test_known_bool {
+            Some(true) => (required_type, any_type),
+            Some(false) => (any_type, required_type),
+            None => (required_type, required_type),
+        };
+
+        let true_node;
+        let false_node;
+        if let Some(type_cond) = test_node.type_cond {
             let VarTypeCond {
                 var_id,
                 type_if_true,
                 type_if_false,
             } = *type_cond;
 
-            // Patch our occurrence types in to the `var_to_type` and restore it after. We
-            // avoid `?`ing our results until the end to make sure the original types are
-            // properly restored.
+            // Patch our occurrence types in to the `var_to_type` and restore it after. We avoid
+            // `?`ing our results until the end to make sure the original types are properly
+            // restored.
             let original_var_type = self
                 .var_to_type
                 .insert(var_id, VarType::Known(type_if_true.clone()))
                 .unwrap();
 
-            let true_result = self.visit_expr(fcx, required_type, true_expr);
+            let true_result = self.visit_expr(fcx, true_required_type, true_expr);
 
             self.var_to_type
                 .insert(var_id, VarType::Known(type_if_false.clone()));
-            let false_result = self.visit_expr(fcx, required_type, false_expr);
+            let false_result = self.visit_expr(fcx, false_required_type, false_expr);
 
             self.var_to_type.insert(var_id, original_var_type);
 
-            let true_node = true_result?;
-            let false_node = false_result?;
+            true_node = true_result?;
+            false_node = false_result?;
 
             // This is an analog of (not). We can flip the test's type condition
             if true_node.poly_type.try_to_bool() == Some(false)
@@ -317,28 +333,10 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
                     })),
                 });
             }
-
-            (true_node, false_node)
         } else {
-            match test_node.poly_type.try_to_bool() {
-                Some(true) => {
-                    let true_node = self.visit_expr(fcx, required_type, true_expr)?;
-                    self.visit_expr(fcx, &ty::Ty::Any.into_poly(), false_expr)?;
-                    // TODO: This is incorrect if the test is impure
-                    return Ok(true_node);
-                }
-                Some(false) => {
-                    self.visit_expr(fcx, &ty::Ty::Any.into_poly(), true_expr)?;
-                    let false_node = self.visit_expr(fcx, required_type, false_expr)?;
-                    return Ok(false_node);
-                }
-                None => {
-                    let true_node = self.visit_expr(fcx, required_type, true_expr)?;
-                    let false_node = self.visit_expr(fcx, required_type, false_expr)?;
-                    (true_node, false_node)
-                }
-            }
-        };
+            true_node = self.visit_expr(fcx, true_required_type, true_expr)?;
+            false_node = self.visit_expr(fcx, false_required_type, false_expr)?;
+        }
 
         let cond_expr = hir::Expr::Cond(
             span,
@@ -349,38 +347,42 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
             }),
         );
 
-        // If the false branch is always false we can move an occurrence typing from the true
-        // branch upwards. The same reasoning applies for the true branch.
-        if false_node.poly_type.try_to_bool() == Some(false) {
-            if let Some(true_type_cond) = true_node.type_cond {
-                return Ok(InferredNode {
+        // If a single branch is taken then we should use that branch's type and type cond
+        match test_known_bool {
+            Some(true) => Ok(InferredNode {
+                expr: cond_expr,
+                poly_type: true_node.poly_type,
+                type_cond: true_node.type_cond,
+            }),
+            Some(false) => Ok(InferredNode {
+                expr: cond_expr,
+                poly_type: false_node.poly_type,
+                type_cond: false_node.type_cond,
+            }),
+            None => {
+                let poly_type = ty::unify::poly_unify_to_poly(
+                    self.tvars,
+                    &true_node.poly_type,
+                    &false_node.poly_type,
+                );
+
+                // If the false branch is always false we can move an occurrence typing from the
+                // true branch upwards. The same reasoning applies for the true branch.
+                let type_cond = if false_node.poly_type.try_to_bool() == Some(false) {
+                    true_node.type_cond
+                } else if true_node.poly_type.try_to_bool() == Some(true) {
+                    false_node.type_cond
+                } else {
+                    None
+                };
+
+                Ok(InferredNode {
                     expr: cond_expr,
-                    poly_type: true_node.poly_type,
-                    type_cond: Some(true_type_cond),
-                });
-            }
-        } else if true_node.poly_type.try_to_bool() == Some(true) {
-            if let Some(false_type_cond) = false_node.type_cond {
-                return Ok(InferredNode {
-                    expr: cond_expr,
-                    poly_type: false_node.poly_type,
-                    type_cond: Some(false_type_cond),
-                });
+                    poly_type,
+                    type_cond,
+                })
             }
         }
-
-        let poly_type = if test_node.poly_type == ty::Ty::never().into_poly() {
-            // Test diverged
-            ty::Ty::never().into_poly()
-        } else {
-            ty::unify::poly_unify_to_poly(self.tvars, &true_node.poly_type, &false_node.poly_type)
-        };
-
-        Ok(InferredNode {
-            expr: cond_expr,
-            poly_type,
-            type_cond: None,
-        })
     }
 
     fn visit_ty_pred(
