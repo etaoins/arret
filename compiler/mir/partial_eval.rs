@@ -87,7 +87,7 @@ impl PartialEvalCtx {
         self.global_values[&var_id].clone()
     }
 
-    fn eval_do<'a>(&'a mut self, dcx: &mut DefCtx<'_>, exprs: &[Expr]) -> Value {
+    fn eval_do(&mut self, dcx: &mut DefCtx<'_>, exprs: &[Expr]) -> Value {
         let initial_value = Value::List(Box::new([]), None);
 
         // TODO: This needs to handle Never values once we can create them
@@ -257,7 +257,7 @@ impl PartialEvalCtx {
         self.heap = old_heap.collect_roots(roots_iter);
     }
 
-    pub fn eval_expr<'a>(&'a mut self, dcx: &mut DefCtx<'_>, expr: &Expr) -> Value {
+    pub fn eval_expr(&mut self, dcx: &mut DefCtx<'_>, expr: &Expr) -> Value {
         match expr {
             hir::Expr::Lit(literal) => self.eval_lit(literal),
             hir::Expr::Do(exprs) => self.eval_do(dcx, &exprs),
@@ -272,7 +272,7 @@ impl PartialEvalCtx {
         }
     }
 
-    pub fn consume_expr<'a>(&'a mut self, dcx: &mut DefCtx<'_>, expr: Expr) -> Value {
+    pub fn consume_expr(&mut self, dcx: &mut DefCtx<'_>, expr: Expr) -> Value {
         match expr {
             hir::Expr::Fun(_, fun) => Value::Fun(fun.into()),
             hir::Expr::RustFun(_, rust_fun) => Value::RustFun(rust_fun.into()),
