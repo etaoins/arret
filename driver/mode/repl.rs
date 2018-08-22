@@ -114,6 +114,8 @@ pub fn interactive_loop(cfg: &DriverConfig) {
                     Ok(EvaledLine::EmptyInput) => {}
                     Ok(EvaledLine::Defs) => {
                         // Refresh our completions
+                        rl.set_completer(Some(Completer::new(repl_ctx.bound_names())));
+
                         println!("{}", defs_style.paint("defined"))
                     }
                     Ok(EvaledLine::Expr(value)) => {
