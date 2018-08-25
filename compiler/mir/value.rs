@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use runtime::boxed;
@@ -8,11 +9,17 @@ use crate::hir;
 use crate::ty;
 
 #[derive(Clone)]
+pub struct Closure {
+    pub captures: HashMap<hir::VarId, Value>,
+    pub fun_expr: Rc<hir::Fun<ty::Poly>>,
+}
+
+#[derive(Clone)]
 pub enum Value {
     Const(Gc<boxed::Any>),
     // This uses Box<[]> because we can't convert from a Vec<> to Rc<[]> without reallocating
     List(Box<[Value]>, Option<Box<Value>>),
-    Fun(Rc<hir::Fun<ty::Poly>>),
+    Closure(Closure),
     RustFun(Rc<hir::rfi::Fun>),
     TyPred(Rc<ty::Poly>),
 }
@@ -84,8 +91,9 @@ pub fn poly_for_value(interner: &Interner, value: &Value) -> ty::Poly {
             ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into_poly()
         }
         Value::TyPred(_) => ty::Ty::Fun(Box::new(ty::Fun::new_for_ty_pred())).into_poly(),
-        Value::Fun(fun_expr) => {
+        Value::Closure(closure) => {
             use crate::hir::destruc::poly_for_list_destruc;
+            let fun_expr = &closure.fun_expr;
 
             let top_fun = ty::TopFun::new(fun_expr.purity.clone(), fun_expr.ret_ty.clone());
             let params_poly = poly_for_list_destruc(&fun_expr.params);
@@ -134,6 +142,11 @@ pub fn visit_value_root(collection: &mut boxed::Collection, value: &mut Value) {
                 visit_value_root(collection, any_ref);
             }
             for any_ref in rest {
+                visit_value_root(collection, any_ref);
+            }
+        }
+        Value::Closure(ref mut closure) => {
+            for any_ref in closure.captures.values_mut() {
                 visit_value_root(collection, any_ref);
             }
         }

@@ -257,10 +257,8 @@ mod test {
         assert_value!("1", "1");
 
         repl_ctx
-            .eval_line(
-                "(import (only [stdlib base] quote def do int?))".to_owned(),
-                EvalKind::Value,
-            ).unwrap();
+            .eval_line("(import [stdlib base])".to_owned(), EvalKind::Value)
+            .unwrap();
 
         // Make sure we can references vars from the imported module
         assert_type!("true", "(int? 5)");
@@ -280,5 +278,16 @@ mod test {
         // And `(do)` at the expression level
         assert_type!("'baz", "(do 'foo 'bar 'baz)");
         assert_value!("baz", "(do 'foo 'bar 'baz)");
+
+        // Polymorphic capturing closures
+        assert_defs!("(def return-constant (fn #{T} ([x : T]) (fn () -> T x)))");
+        assert_defs!("(def return-one (return-constant 1))");
+        assert_defs!("(def return-two (return-constant 'two))");
+
+        assert_type!("Int", "(return-one)");
+        assert_value!("1", "(return-one)");
+
+        assert_type!("'two", "(return-two)");
+        assert_value!("two", "(return-two)");
     }
 }

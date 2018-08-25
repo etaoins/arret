@@ -11,6 +11,7 @@ pub(crate) mod rfi;
 pub(crate) mod scope;
 mod types;
 mod util;
+pub(crate) mod visitor;
 
 use std;
 use std::ops::Range;

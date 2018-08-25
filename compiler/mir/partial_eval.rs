@@ -9,7 +9,7 @@ use runtime_syntax::reader;
 use syntax::datum::Datum;
 
 use crate::hir;
-use crate::mir::value::visit_value_root;
+use crate::mir::value;
 use crate::mir::{Expr, Value};
 use crate::ty;
 
@@ -119,13 +119,15 @@ impl PartialEvalCtx {
         }
     }
 
-    fn eval_fun_app(
+    fn eval_closure_app(
         &mut self,
         dcx: &mut DefCtx<'_>,
-        fun_expr: &hir::Fun<ty::Poly>,
+        closure: &value::Closure,
         fixed_args: &[Expr],
         rest_arg: Option<&Expr>,
     ) -> Value {
+        let fun_expr = &closure.fun_expr;
+
         let fixed_values: Vec<Value> = fixed_args
             .iter()
             .map(|arg| self.eval_expr(dcx, arg))
@@ -134,6 +136,14 @@ impl PartialEvalCtx {
 
         let arg_list_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
         Self::destruc_list(&mut dcx.local_values, &fun_expr.params, &arg_list_value);
+
+        // Include any captured values from the closure in `local_values`
+        dcx.local_values.extend(
+            closure
+                .captures
+                .iter()
+                .map(|(var_id, value)| (*var_id, value.clone())),
+        );
 
         self.eval_expr(dcx, &fun_expr.body_expr)
     }
@@ -184,9 +194,9 @@ impl PartialEvalCtx {
         let fun_value = self.eval_expr(dcx, &app.fun_expr);
 
         match fun_value {
-            Value::Fun(fun_expr) => self.eval_fun_app(
+            Value::Closure(closure) => self.eval_closure_app(
                 dcx,
-                fun_expr.as_ref(),
+                &closure,
                 app.fixed_arg_exprs.as_slice(),
                 app.rest_arg_expr.as_ref(),
             ),
@@ -228,6 +238,29 @@ impl PartialEvalCtx {
         }
     }
 
+    fn eval_fun(&mut self, dcx: &mut DefCtx<'_>, fun_expr: Rc<hir::Fun<ty::Poly>>) -> Value {
+        let mut captures = HashMap::new();
+
+        // Only process captures if there are local values. This is to avoid visiting the function
+        // body when capturing isn't possible.
+        if !dcx.local_values.is_empty() {
+            // Look for references to variables inside the function
+            hir::visitor::visit_exprs(&fun_expr.body_expr, &mut |expr| {
+                if let hir::Expr::Ref(_, var_id) = expr {
+                    // Avoiding cloning the value if we've already captured
+                    if !captures.contains_key(var_id) {
+                        if let Some(value) = dcx.local_values.get(var_id) {
+                            // Local value is referenced; capture
+                            captures.insert(*var_id, value.clone());
+                        }
+                    }
+                }
+            });
+        }
+
+        Value::Closure(value::Closure { fun_expr, captures })
+    }
+
     pub fn consume_def(&mut self, tvars: &[ty::TVar], def: hir::Def<ty::Poly>) {
         let hir::Def {
             destruc,
@@ -249,7 +282,7 @@ impl PartialEvalCtx {
 
         // Move all of our global values to the new heap
         for value_ref in self.global_values.values_mut() {
-            visit_value_root(&mut collection, value_ref);
+            value::visit_value_root(&mut collection, value_ref);
         }
 
         self.heap = collection.into_new_heap();
@@ -259,7 +292,7 @@ impl PartialEvalCtx {
         match expr {
             hir::Expr::Lit(literal) => self.eval_lit(literal),
             hir::Expr::Do(exprs) => self.eval_do(dcx, &exprs),
-            hir::Expr::Fun(_, fun) => Value::Fun(Rc::new(fun.as_ref().clone())),
+            hir::Expr::Fun(_, fun_expr) => self.eval_fun(dcx, Rc::new(fun_expr.as_ref().clone())),
             hir::Expr::RustFun(_, rust_fun) => Value::RustFun(Rc::new(rust_fun.as_ref().clone())),
             hir::Expr::TyPred(_, test_poly) => Value::TyPred(Rc::new(test_poly.clone())),
             hir::Expr::Ref(_, var_id) => self.eval_ref(dcx, *var_id),
@@ -272,7 +305,7 @@ impl PartialEvalCtx {
 
     pub fn consume_expr(&mut self, dcx: &mut DefCtx<'_>, expr: Expr) -> Value {
         match expr {
-            hir::Expr::Fun(_, fun) => Value::Fun(fun.into()),
+            hir::Expr::Fun(_, fun_expr) => self.eval_fun(dcx, fun_expr.into()),
             hir::Expr::RustFun(_, rust_fun) => Value::RustFun(rust_fun.into()),
             hir::Expr::TyPred(_, test_poly) => Value::TyPred(Rc::new(test_poly)),
             other => self.eval_expr(dcx, &other),
@@ -311,9 +344,10 @@ impl PartialEvalCtx {
             Value::TyPred(ref test_poly) => {
                 unimplemented!("Boxing of type predicates implemented: {:?}", test_poly)
             }
-            Value::Fun(ref fun) => {
-                unimplemented!("Boxing of Arret funs not implemented: {:?}", fun)
-            }
+            Value::Closure(ref closure) => unimplemented!(
+                "Boxing of Arret closures not implemented: {:?}",
+                closure.fun_expr
+            ),
             Value::RustFun(ref rust_fun) => {
                 unimplemented!("Boxing of Rust funs not implemented: {:?}", rust_fun)
             }
