@@ -5,7 +5,7 @@ use crate::boxed::refs::Gc;
 use crate::boxed::{AllocType, Any, BoxSize, Header, List, Pair, Sym, TypeTag, Vector};
 
 #[repr(C, align(16))]
-pub struct ForwardingCell {
+struct ForwardingCell {
     header: Header,
     new_location: Gc<Any>,
 }
