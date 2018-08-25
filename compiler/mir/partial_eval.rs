@@ -9,6 +9,7 @@ use runtime_syntax::reader;
 use syntax::datum::Datum;
 
 use crate::hir;
+use crate::mir::value::visit_value_root;
 use crate::mir::{Expr, Value};
 use crate::ty;
 
@@ -129,7 +130,7 @@ impl PartialEvalCtx {
             .iter()
             .map(|arg| self.eval_expr(dcx, arg))
             .collect();
-        let rest_value = rest_arg.map(|rest_arg| Rc::new(self.eval_expr(dcx, rest_arg)));
+        let rest_value = rest_arg.map(|rest_arg| Box::new(self.eval_expr(dcx, rest_arg)));
 
         let arg_list_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
         Self::destruc_list(&mut dcx.local_values, &fun_expr.params, &arg_list_value);
@@ -244,17 +245,14 @@ impl PartialEvalCtx {
     pub fn collect_garbage(&mut self) {
         use std::mem;
         let old_heap = mem::replace(&mut self.heap, boxed::Heap::with_capacity(0));
+        let mut collection = boxed::Collection::new(old_heap);
 
         // Move all of our global values to the new heap
-        let roots_iter = self
-            .global_values
-            .values_mut()
-            .filter_map(|value| match value {
-                Value::Const(ref mut any_ref) => Some(any_ref),
-                _ => None,
-            });
+        for value_ref in self.global_values.values_mut() {
+            visit_value_root(&mut collection, value_ref);
+        }
 
-        self.heap = old_heap.collect_roots(roots_iter);
+        self.heap = collection.into_new_heap();
     }
 
     pub fn eval_expr(&mut self, dcx: &mut DefCtx<'_>, expr: &Expr) -> Value {

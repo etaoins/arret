@@ -11,7 +11,7 @@ use crate::ty;
 pub enum Value {
     Const(Gc<boxed::Any>),
     // This uses Box<[]> because we can't convert from a Vec<> to Rc<[]> without reallocating
-    List(Box<[Value]>, Option<Rc<Value>>),
+    List(Box<[Value]>, Option<Box<Value>>),
     Fun(Rc<hir::Fun<ty::Poly>>),
     RustFun(Rc<hir::rfi::Fun>),
     TyPred(Rc<ty::Poly>),
@@ -121,7 +121,22 @@ impl<'list> ListIterator<'list> {
     pub fn rest(&self) -> Value {
         Value::List(
             self.fixed.to_vec().into_boxed_slice(),
-            self.rest.cloned().map(Rc::new),
+            self.rest.cloned().map(Box::new),
         )
+    }
+}
+
+pub fn visit_value_root(collection: &mut boxed::Collection, value: &mut Value) {
+    match value {
+        Value::Const(ref mut any_ref) => collection.visit_box(any_ref),
+        Value::List(ref mut fixed, ref mut rest) => {
+            for any_ref in fixed.iter_mut() {
+                visit_value_root(collection, any_ref);
+            }
+            for any_ref in rest {
+                visit_value_root(collection, any_ref);
+            }
+        }
+        _ => {}
     }
 }

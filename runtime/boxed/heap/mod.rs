@@ -1,4 +1,4 @@
-mod collect;
+pub(crate) mod collect;
 
 use std::{cmp, mem, ptr};
 
@@ -95,10 +95,6 @@ impl Heap {
 
     pub fn new() -> Heap {
         Self::with_capacity(Self::DEFAULT_SEGMENT_CAPACITY)
-    }
-
-    pub fn collect_roots<'a>(self, roots: impl Iterator<Item = &'a mut Gc<Any>>) -> Heap {
-        collect::collect_roots(self, roots)
     }
 
     pub fn with_capacity(count: usize) -> Heap {

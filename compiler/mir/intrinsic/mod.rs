@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 mod list;
 use crate::mir::intrinsic::list::*;
 
@@ -18,7 +16,7 @@ trait Intrinsic {
             .iter()
             .map(|arg| pcx.eval_expr(dcx, arg))
             .collect();
-        let rest_value = rest_expr.map(|rest_arg| Rc::new(pcx.eval_expr(dcx, rest_arg)));
+        let rest_value = rest_expr.map(|rest_arg| Box::new(pcx.eval_expr(dcx, rest_arg)));
 
         let args_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
         Self::eval_args_value(pcx, args_value)
