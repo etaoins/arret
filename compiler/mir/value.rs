@@ -118,7 +118,15 @@ pub struct ListIterator<'list> {
 impl<'list> ListIterator<'list> {
     pub fn next_unchecked(&mut self) -> &'list Value {
         if self.fixed.is_empty() {
-            unimplemented!("Need to pull element off rest")
+            if let Some(Value::List(fixed, rest)) = self.rest {
+                // Become our tail
+                self.fixed = fixed;
+                self.rest = rest.as_ref().map(|rest| rest.as_ref());
+
+                self.next_unchecked()
+            } else {
+                unimplemented!("Need to pull element off rest")
+            }
         } else {
             let next = self.fixed.first().unwrap();
             self.fixed = &self.fixed[1..];
