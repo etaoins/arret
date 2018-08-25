@@ -25,8 +25,11 @@ pub fn compile_input_file(cfg: &DriverConfig, input_path: &path::Path) {
 
     match compiler::infer_program(&hir.pvars, &hir.tvars, hir.module_defs) {
         Ok(inferred_defs) => {
+            let mut pcx = compiler::PartialEvalCtx::new();
+
             for inferred_def in inferred_defs {
                 println!("{:?}", inferred_def);
+                pcx.consume_def(&hir.tvars, inferred_def);
             }
         }
         Err(errs) => {

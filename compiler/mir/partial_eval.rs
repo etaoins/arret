@@ -355,6 +355,12 @@ impl PartialEvalCtx {
     }
 }
 
+impl Default for PartialEvalCtx {
+    fn default() -> PartialEvalCtx {
+        PartialEvalCtx::new()
+    }
+}
+
 impl AsHeap for PartialEvalCtx {
     fn as_heap(&self) -> &boxed::Heap {
         &self.heap

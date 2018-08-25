@@ -14,5 +14,6 @@ mod typeck;
 
 pub use crate::hir::lowering::lower_program;
 pub use crate::hir::PackagePaths;
+pub use crate::mir::partial_eval::PartialEvalCtx;
 pub use crate::source::{SourceFile, SourceFileId, SourceKind, SourceLoader};
 pub use crate::typeck::infer::infer_program;

@@ -19,7 +19,13 @@ fn run_single_test(source_loader: &mut compiler::SourceLoader, input_path: &path
     };
 
     match compiler::infer_program(&hir.pvars, &hir.tvars, hir.module_defs) {
-        Ok(_) => {}
+        Ok(inferred_defs) => {
+            let mut pcx = compiler::PartialEvalCtx::new();
+
+            for inferred_def in inferred_defs {
+                pcx.consume_def(&hir.tvars, inferred_def);
+            }
+        }
         Err(errs) => {
             for err in errs {
                 report_to_stderr(source_loader, &err);
