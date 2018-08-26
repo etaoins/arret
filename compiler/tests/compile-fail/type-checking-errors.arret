@@ -37,6 +37,9 @@
   (fn (input) (ann input Str)))
                   ;^^^^^ ERROR inferred conflicting types `Str` and `Sym
 
+(def not-fun-def ("foo"))
+                 ;^^^^^ ERROR `Str` is not a function
+
 (defn impure-fun! () ->! ())
 (def impure-def (impure-fun!))
                ;^^^^^^^^^^^^^ ERROR function of type `(->! ())` is not pure

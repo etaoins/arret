@@ -212,9 +212,9 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
             return Ok(());
         }
 
-        // Try to see if this type check would have passed if the parent was impure. This is purely
-        // a hack to catch applying impure functions in a pure context.
-        if let ty::Poly::Fixed(ty::Ty::TopFun(top_fun)) = parent_poly {
+        // Examine the types to check if there's a more specific message we could use
+        let incorrect_ty_str = self.str_for_poly(&sub_poly);
+        let error_kind = if let ty::Poly::Fixed(ty::Ty::TopFun(top_fun)) = parent_poly {
             let impure_top_fun = ty::TopFun::new(Purity::Impure.into_poly(), top_fun.ret().clone());
 
             if ty::is_a::poly_is_a(
@@ -230,17 +230,15 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
                     format!("`{}`", hir::str_for_purity(self.pvars, top_fun.purity())).into()
                 };
 
-                return Err(Error::new(
-                    span,
-                    ErrorKind::IsNotPurity(self.str_for_poly(&sub_poly), purity_str),
-                ));
+                ErrorKind::IsNotPurity(incorrect_ty_str, purity_str)
+            } else {
+                ErrorKind::IsNotFun(incorrect_ty_str)
             }
-        }
+        } else {
+            ErrorKind::IsNotTy(incorrect_ty_str, self.str_for_poly(parent_poly))
+        };
 
-        Err(Error::new(
-            span,
-            ErrorKind::IsNotTy(self.str_for_poly(&sub_poly), self.str_for_poly(parent_poly)),
-        ))
+        Err(Error::new(span, error_kind))
     }
 
     fn visit_lit(&mut self, required_type: &ty::Poly, datum: Datum) -> Result<InferredNode> {
