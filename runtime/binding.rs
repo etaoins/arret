@@ -16,7 +16,7 @@ pub enum Never {}
 
 #[macro_export]
 macro_rules! define_rust_fn {
-    (#[arret-type=$type:expr] $desc_name:ident = fn $func_name:ident($task_name:ident : &mut Task, $($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
+    (#[arret_type=$type:expr] $desc_name:ident = fn $func_name:ident($task_name:ident : &mut Task, $($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
         use crate::abitype::{EncodeABIType, EncodeRetABIType};
 
         #[no_mangle]
@@ -35,7 +35,7 @@ macro_rules! define_rust_fn {
         };
     };
 
-    (#[arret-type=$type:expr] $desc_name:ident = fn $func_name:ident($($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
+    (#[arret_type=$type:expr] $desc_name:ident = fn $func_name:ident($($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
         #[no_mangle]
         pub extern "C" fn $func_name($($param_name: $rust_ty),*) -> $ret {
             $body
@@ -80,7 +80,7 @@ pub mod test {
     use super::*;
 
     define_rust_fn! {
-        #[arret-type="(-> Int)"]
+        #[arret_type="(-> Int)"]
         RETURN_42 = fn return_42() -> i64 {
             42
         }
@@ -99,7 +99,7 @@ pub mod test {
     }
 
     define_rust_fn! {
-    #[arret-type="(Int Float -> Num)"]
+    #[arret_type="(Int Float -> Num)"]
         ADD_INT_FLOAT = fn add_int_float(
             task: &mut Task,
             int_box: Gc<boxed::Int>,
@@ -110,7 +110,7 @@ pub mod test {
     }
 
     define_rust_fn! {
-    #[arret-type="(Any -> (U))"]
+    #[arret_type="(Any -> (U))"]
         DIVERGING = fn diverging(_any: Gc<boxed::Any>) -> Never {
             panic!("diverge");
         }
@@ -152,7 +152,7 @@ pub mod test {
     }
 
     define_rust_fn! {
-        #[arret-type="((Listof Any) -> Int)"]
+        #[arret_type="((Listof Any) -> Int)"]
         LENGTH = fn length(input: Gc<boxed::List<boxed::Any>>) -> i64 {
             input.len() as i64
         }
@@ -182,7 +182,7 @@ pub mod test {
     }
 
     define_rust_fn! {
-        #[arret-type="(->! ())"]
+        #[arret_type="(->! ())"]
         EMPTY_IMPURE = fn empty_impure() -> () {}
     }
 

@@ -11,14 +11,14 @@ use runtime::boxed;
 use runtime::boxed::refs::Gc;
 
 define_rust_fn! {
-    #[arret-type="((Listof Any) -> Int)"]
+    #[arret_type="((Listof Any) -> Int)"]
     LENGTH = fn length(input: Gc<boxed::List<boxed::Any>>) -> i64 {
         input.len() as i64
     }
 }
 
 define_rust_fn! {
-    #[arret-type="(Any -> (U))"]
+    #[arret_type="(Any -> (U))"]
     PANIC = fn panic(input: Gc<boxed::Any>) -> Never {
         match input.as_subtype() {
             boxed::AnySubtype::Str(s) => {
