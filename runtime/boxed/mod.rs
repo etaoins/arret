@@ -2,7 +2,7 @@ mod heap;
 pub mod refs;
 mod types;
 
-use std::ptr;
+use std::{fmt, ptr};
 
 use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
 use crate::boxed::refs::Gc;
@@ -159,6 +159,7 @@ macro_rules! define_direct_tagged_boxes {
             }
         }
 
+        #[derive(PartialEq, Debug)]
         pub enum AnySubtype<'a> {
             $( $name(&'a $name) ),*
         }
@@ -200,12 +201,32 @@ macro_rules! define_direct_tagged_boxes {
 
             }
         }
+
+        impl fmt::Debug for Any {
+            fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+                match self.as_subtype() {
+                    $(
+                        AnySubtype::$name(subtype) => {
+                            subtype.fmt(formatter)
+                        }
+                    )*
+                }
+
+            }
+        }
+    }
+}
+
+impl PartialEq for Any {
+    fn eq(&self, rhs: &Any) -> bool {
+        self.as_subtype() == rhs.as_subtype()
     }
 }
 
 macro_rules! define_singleton_box {
     ($type_name:ident, $static_name:ident) => {
         #[repr(C, align(16))]
+        #[derive(Debug)]
         pub struct $type_name {
             header: Header,
         }
@@ -216,6 +237,13 @@ macro_rules! define_singleton_box {
                 alloc_type: AllocType::Const,
             },
         };
+
+        impl PartialEq for $type_name {
+            fn eq(&self, _: &$type_name) -> bool {
+                // This is tricky - we're a singleton so if the types match we must be equal
+                true
+            }
+        }
     };
 }
 
@@ -367,6 +395,31 @@ mod test {
         } else {
             panic!("Failed to get tagged representation")
         }
+    }
+
+    #[test]
+    fn any_equality() {
+        let mut heap = Heap::new();
+
+        let box_two = Float::new(&mut heap, 2.0);
+        let box_two_as_any = box_two.as_any_ref();
+
+        let box_three = Float::new(&mut heap, 3.0);
+        let box_three_as_any = box_three.as_any_ref();
+
+        assert_eq!(box_two_as_any, box_two_as_any);
+        assert_ne!(box_two_as_any, box_three_as_any);
+
+        assert_eq!(TRUE_INSTANCE, TRUE_INSTANCE);
+    }
+
+    #[test]
+    fn any_fmt_debug() {
+        let mut heap = Heap::new();
+
+        let boxed_one = Int::new(&mut heap, 1);
+        let boxed_one_as_any = boxed_one.as_any_ref();
+        assert_eq!("Int(1)", format!("{:?}", boxed_one_as_any));
     }
 
     #[test]

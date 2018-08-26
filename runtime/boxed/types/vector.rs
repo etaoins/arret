@@ -174,6 +174,18 @@ impl TopVector {
     }
 }
 
+impl PartialEq for TopVector {
+    fn eq(&self, rhs: &TopVector) -> bool {
+        self.as_vector() == rhs.as_vector()
+    }
+}
+
+impl fmt::Debug for TopVector {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        self.as_vector().fmt(formatter)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

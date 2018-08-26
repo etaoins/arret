@@ -32,6 +32,24 @@ impl<T: Boxed> Pair<T> {
     }
 }
 
+impl<T> PartialEq for Pair<T>
+where
+    T: Boxed + PartialEq,
+{
+    fn eq(&self, rhs: &Pair<T>) -> bool {
+        (self.head == rhs.head) && (self.rest == rhs.rest)
+    }
+}
+
+impl<T> fmt::Debug for Pair<T>
+where
+    T: Boxed + fmt::Debug,
+{
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        self.as_list().fmt(formatter)
+    }
+}
+
 type PairInput<T> = (Gc<T>, Gc<List<T>>);
 
 impl<T: Boxed> ConstructableFrom<PairInput<T>> for Pair<T> {
@@ -202,6 +220,18 @@ pub struct TopPair {
 impl TopPair {
     pub fn as_pair(&self) -> Gc<Pair<Any>> {
         unsafe { Gc::new(&*(self as *const TopPair as *const Pair<Any>)) }
+    }
+}
+
+impl PartialEq for TopPair {
+    fn eq(&self, rhs: &TopPair) -> bool {
+        self.as_pair() == rhs.as_pair()
+    }
+}
+
+impl fmt::Debug for TopPair {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        self.as_pair().fmt(formatter)
     }
 }
 
