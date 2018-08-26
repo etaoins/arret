@@ -719,7 +719,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
             let param_type = param_iter.next().ok_or_else(|| {
                 Error::new(
                     span,
-                    ErrorKind::TooManyArgs(supplied_arg_count, wanted_arity),
+                    ErrorKind::WrongArity(supplied_arg_count, wanted_arity),
                 )
             })?;
 
@@ -749,7 +749,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
             // We wanted more args!
             return Err(Error::new(
                 span,
-                ErrorKind::InsufficientArgs(supplied_arg_count, wanted_arity),
+                ErrorKind::WrongArity(supplied_arg_count, wanted_arity),
             ));
         } else {
             None
@@ -777,6 +777,121 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
                 }),
             ),
             poly_type: ret_type,
+            type_cond: None,
+        })
+    }
+
+    /// Visit type predicate application with a single fixed arg
+    ///
+    /// This supports full occurrence typing
+    fn visit_fixed_ty_pred_app(
+        &mut self,
+        fcx: &mut FunCtx,
+        span: Span,
+        fun_expr: hir::Expr<ty::Poly>,
+        test_poly: &ty::Poly,
+        subject_expr: hir::Expr<ty::Decl>,
+    ) -> Result<InferredNode> {
+        let subject_var_id = if let hir::Expr::Ref(_, var_id) = subject_expr {
+            Some(var_id)
+        } else {
+            None
+        };
+
+        let subject_node = self.visit_expr(fcx, &ty::Ty::Any.into_poly(), subject_expr)?;
+        let app_expr = hir::Expr::App(
+            span,
+            Box::new(hir::App {
+                fun_expr,
+                fixed_arg_exprs: vec![subject_node.expr],
+                rest_arg_expr: None,
+            }),
+        );
+
+        let pred_result =
+            ty::pred::interpret_poly_pred(self.tvars, &subject_node.poly_type, &test_poly);
+
+        use crate::ty::pred::InterpretedPred;
+        let pred_result_type = match pred_result {
+            InterpretedPred::Static(result) => ty::Ty::LitBool(result),
+            InterpretedPred::Dynamic(type_if_true, type_if_false) => {
+                if let Some(subject_var_id) = subject_var_id {
+                    return Ok(InferredNode::new_cond_type_node(
+                        app_expr,
+                        subject_var_id,
+                        type_if_true,
+                        type_if_false,
+                    ));
+                }
+
+                ty::Ty::Bool
+            }
+        }.into_poly();
+
+        let poly_type = if subject_node.poly_type == ty::Ty::never().into_poly() {
+            // The subject diverged so we diverged
+            ty::Ty::never().into_poly()
+        } else {
+            pred_result_type
+        };
+
+        Ok(InferredNode {
+            expr: app_expr,
+            poly_type,
+            type_cond: None,
+        })
+    }
+
+    /// Visit type predicate application with a rest argument
+    ///
+    /// This can do static evaluation but it does not support occurrence typing. This is only
+    /// included to be orthogonal with other function applications; it's not terribly useful
+    /// otherwise.
+    fn visit_rest_ty_pred_app(
+        &mut self,
+        fcx: &mut FunCtx,
+        span: Span,
+        fun_expr: hir::Expr<ty::Poly>,
+        test_poly: &ty::Poly,
+        subject_list_expr: hir::Expr<ty::Decl>,
+    ) -> Result<InferredNode> {
+        let wanted_subject_list_type =
+            ty::Ty::List(ty::List::new(Box::new([ty::Ty::Any.into_poly()]), None)).into_poly();
+
+        let subject_list_node =
+            self.visit_expr(fcx, &wanted_subject_list_type, subject_list_expr)?;
+
+        let app_expr = hir::Expr::App(
+            span,
+            Box::new(hir::App {
+                fun_expr,
+                fixed_arg_exprs: vec![],
+                rest_arg_expr: Some(subject_list_node.expr),
+            }),
+        );
+
+        let subject_type = ListIterator::try_new_from_ty_ref(&subject_list_node.poly_type)
+            .and_then(|mut iter| iter.next())
+            .expect("Unable to extract type argument from type predicate rest list");
+
+        let pred_result = ty::is_a::poly_is_a(self.tvars, subject_type, &test_poly);
+
+        let pred_result_type = match pred_result {
+            ty::is_a::Result::Yes => ty::Ty::LitBool(true),
+            ty::is_a::Result::No => ty::Ty::LitBool(false),
+            ty::is_a::Result::May => ty::Ty::Bool,
+        }.into_poly();
+
+        let poly_type = if subject_list_node.poly_type == ty::Ty::never().into_poly() {
+            // The subject diverged so we diverged
+            ty::Ty::never().into_poly()
+        } else {
+            pred_result_type
+        };
+
+        Ok(InferredNode {
+            expr: app_expr,
+            poly_type,
             type_cond: None,
         })
     }
@@ -818,69 +933,31 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
                 ErrorKind::TopFunApply(self.str_for_poly(&revealed_fun_type)),
             )),
             ty::Ty::TyPred(test_poly) => {
-                // TODO: This doesn't handle the subject being in rest args
-                let supplied_arg_count = fixed_arg_exprs.len();
                 let wanted_arity = WantedArity::new(1, false);
 
-                if supplied_arg_count > 1 {
-                    return Err(Error::new(
-                        span,
-                        ErrorKind::TooManyArgs(supplied_arg_count, wanted_arity),
-                    ));
-                }
-
-                let subject_expr = fixed_arg_exprs.pop().ok_or_else(|| {
-                    Error::new(span, ErrorKind::InsufficientArgs(0, wanted_arity))
-                })?;
-
-                let subject_var_id = if let hir::Expr::Ref(_, var_id) = subject_expr {
-                    Some(var_id)
-                } else {
-                    None
-                };
-
-                let subject_node = self.visit_expr(fcx, &ty::Ty::Any.into_poly(), subject_expr)?;
-                let app_expr = hir::Expr::App(
-                    span,
-                    Box::new(hir::App {
-                        fun_expr: fun_node.expr,
-                        fixed_arg_exprs: vec![subject_node.expr],
-                        rest_arg_expr: None,
-                    }),
-                );
-
-                let pred_result =
-                    ty::pred::interpret_poly_pred(self.tvars, &subject_node.poly_type, &test_poly);
-
-                use crate::ty::pred::InterpretedPred;
-                let pred_result_type = match pred_result {
-                    InterpretedPred::Static(result) => ty::Ty::LitBool(result),
-                    InterpretedPred::Dynamic(type_if_true, type_if_false) => {
-                        if let Some(subject_var_id) = subject_var_id {
-                            return Ok(InferredNode::new_cond_type_node(
-                                app_expr,
-                                subject_var_id,
-                                type_if_true,
-                                type_if_false,
-                            ));
-                        }
-
-                        ty::Ty::Bool
+                match (fixed_arg_exprs.len(), rest_arg_expr) {
+                    (1, None) => {
+                        let subject_expr = fixed_arg_exprs.pop().unwrap();;
+                        self.visit_fixed_ty_pred_app(
+                            fcx,
+                            span,
+                            fun_node.expr,
+                            test_poly,
+                            subject_expr,
+                        )
                     }
-                }.into_poly();
-
-                let poly_type = if subject_node.poly_type == ty::Ty::never().into_poly() {
-                    // The subject diverged so we diverged
-                    ty::Ty::never().into_poly()
-                } else {
-                    pred_result_type
-                };
-
-                Ok(InferredNode {
-                    expr: app_expr,
-                    poly_type,
-                    type_cond: None,
-                })
+                    (0, Some(subject_list_expr)) => self.visit_rest_ty_pred_app(
+                        fcx,
+                        span,
+                        fun_node.expr,
+                        test_poly,
+                        subject_list_expr,
+                    ),
+                    (supplied_arg_count, _) => Err(Error::new(
+                        span,
+                        ErrorKind::WrongArity(supplied_arg_count, wanted_arity),
+                    )),
+                }
             }
             ty::Ty::Fun(fun_type) => {
                 let fun_app = FunApp {
@@ -1456,7 +1533,7 @@ mod test {
         let t = "^^^^^^^^^^^";
 
         let wanted_arity = WantedArity::new(0, false);
-        let err = Error::new(t2s(t), ErrorKind::TooManyArgs(1, wanted_arity));
+        let err = Error::new(t2s(t), ErrorKind::WrongArity(1, wanted_arity));
         assert_type_error(&err, j);
     }
 
@@ -1466,7 +1543,7 @@ mod test {
         let t = "^^^^^^^^^^^^^^";
 
         let wanted_arity = WantedArity::new(2, false);
-        let err = Error::new(t2s(t), ErrorKind::InsufficientArgs(1, wanted_arity));
+        let err = Error::new(t2s(t), ErrorKind::WrongArity(1, wanted_arity));
         assert_type_error(&err, j);
     }
 
@@ -1486,6 +1563,11 @@ mod test {
 
     #[test]
     fn ty_pred() {
-        assert_type_for_expr("(Type? Sym)", "(type-predicate Sym)")
+        assert_type_for_expr("(Type? Sym)", "(type-predicate Sym)");
+
+        assert_type_for_expr("true", "((type-predicate 'foo) '(foo) ...)");
+        assert_type_for_expr("true", "((type-predicate 'foo) 'foo)");
+        assert_type_for_expr("false", "((type-predicate 'foo) '(bar) ...)");
+        assert_type_for_expr("false", "((type-predicate 'foo) 'bar)");
     }
 }

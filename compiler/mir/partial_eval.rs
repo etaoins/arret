@@ -153,12 +153,20 @@ impl PartialEvalCtx {
         dcx: &mut DefCtx<'_>,
         test_poly: &ty::Poly,
         fixed_args: &[Expr],
-        _rest_arg: Option<&Expr>,
+        rest_arg: Option<&Expr>,
     ) -> Value {
         use crate::mir::value::poly_for_value;
         use crate::ty::pred::InterpretedPred;
 
-        let value = self.eval_expr(dcx, &fixed_args[0]);
+        let value = if !fixed_args.is_empty() {
+            self.eval_expr(dcx, &fixed_args[0])
+        } else if let Some(rest_arg) = rest_arg {
+            let rest_value = self.eval_expr(dcx, rest_arg);
+            rest_value.list_iter().next_unchecked().clone()
+        } else {
+            panic!("Unexpected arity for type predicate application");
+        };
+
         let subject_poly = poly_for_value(self.heap.interner(), &value);
 
         match ty::pred::interpret_poly_pred(dcx.tvars, &subject_poly, test_poly) {

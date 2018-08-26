@@ -38,8 +38,7 @@ pub enum ErrorKind {
     TopFunApply(Box<str>),
     RecursiveType,
     DependsOnError,
-    TooManyArgs(usize, WantedArity),
-    InsufficientArgs(usize, WantedArity),
+    WrongArity(usize, WantedArity),
 }
 
 #[derive(PartialEq, Debug)]
@@ -86,12 +85,10 @@ impl Reportable for Error {
                 "cannot determine parameter types for top function type `{}`",
                 top_fun
             ),
-            ErrorKind::TooManyArgs(have, ref wanted) => {
-                format!("too many arguments: wanted {}, have {}", wanted, have)
-            }
-            ErrorKind::InsufficientArgs(have, wanted) => {
-                format!("insufficient arguments: wanted {}, have {}", wanted, have)
-            }
+            ErrorKind::WrongArity(have, ref wanted) => format!(
+                "incorrect number of arguments: wanted {}, have {}",
+                wanted, have
+            ),
             ErrorKind::RecursiveType => {
                 "recursive usage requires explicit type annotation".to_owned()
             }
