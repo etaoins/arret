@@ -29,8 +29,8 @@ pub fn box_syntax_datum(heap: &mut impl boxed::AsHeap, datum: &Datum) -> Gc<boxe
 
             boxed::Vector::new(heap, boxed_elems.as_slice()).as_any_ref()
         }
-        Datum::Map(_, _) => unimplemented!("Maps are not implemented"),
-        Datum::Set(_, _) => unimplemented!("Sets are not implemented"),
+        Datum::Map(_, _) => unimplemented!("Maps"),
+        Datum::Set(_, _) => unimplemented!("Sets"),
     }
 }
 

@@ -195,7 +195,7 @@ impl PartialEvalCtx {
             }
         }
 
-        unimplemented!("Applying Rust functions not implemented")
+        unimplemented!("Applying Rust functions")
     }
 
     fn eval_app(&mut self, dcx: &mut DefCtx<'_>, app: &hir::App<ty::Poly>) -> Value {
@@ -350,15 +350,12 @@ impl PartialEvalCtx {
                 list.as_any_ref()
             }
             Value::TyPred(ref test_poly) => {
-                unimplemented!("Boxing of type predicates implemented: {:?}", test_poly)
+                unimplemented!("Boxing of type predicates: {:?}", test_poly)
             }
-            Value::Closure(ref closure) => unimplemented!(
-                "Boxing of Arret closures not implemented: {:?}",
-                closure.fun_expr
-            ),
-            Value::RustFun(ref rust_fun) => {
-                unimplemented!("Boxing of Rust funs not implemented: {:?}", rust_fun)
+            Value::Closure(ref closure) => {
+                unimplemented!("Boxing of Arret closures: {:?}", closure.fun_expr)
             }
+            Value::RustFun(ref rust_fun) => unimplemented!("Boxing of Rust funs: {:?}", rust_fun),
         }
     }
 }
