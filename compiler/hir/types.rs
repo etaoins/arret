@@ -62,7 +62,7 @@ impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
                 let mut arg_data = vs.into_vec();
 
                 if arg_data.len() == 3
-                    && self.scope.get_datum(&arg_data[1]) == Some(Binding::Prim(Prim::TyColon))
+                    && self.scope.get_datum(&arg_data[1]) == Some(&Binding::Prim(Prim::TyColon))
                 {
                     let bound_datum = arg_data.pop().unwrap();
                     arg_data.pop(); // Discard the : completely
@@ -149,7 +149,7 @@ impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
         let top_fun = ty::TopFun::new(purity, ret_ty);
 
         if arg_iter.len() == 1
-            && self.scope.get_datum(&arg_iter.as_slice()[0]) == Some(Binding::Prim(Prim::Ellipsis))
+            && self.scope.get_datum(&arg_iter.as_slice()[0]) == Some(&Binding::Prim(Prim::Ellipsis))
         {
             // Top function type in the form `(... -> ReturnType)`
             Ok(top_fun.into_ty_ref())
@@ -260,7 +260,7 @@ impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
 
     fn lower_ident(&self, span: Span, ident: &Ident) -> Result<ty::Poly> {
         match self.scope.get_or_err(span, ident)? {
-            Binding::Ty(ty) => Ok(ty),
+            Binding::Ty(ty) => Ok(ty.clone()),
             _ => Err(Error::new(span, ErrorKind::ValueAsTy)),
         }
     }
@@ -294,7 +294,7 @@ impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
                             return Self::lower_literal(literal_datum);
                         }
                         Binding::TyCons(ty_cons) => {
-                            return self.lower_ty_cons_apply(span, ty_cons, data_iter);
+                            return self.lower_ty_cons_apply(span, *ty_cons, data_iter);
                         }
                         _ => {}
                     }
@@ -358,7 +358,7 @@ pub fn lower_poly(tvars: &[ty::TVar], scope: &Scope, datum: NsDatum) -> Result<t
 
 pub fn try_lower_purity(scope: &Scope, datum: &NsDatum) -> Option<ty::purity::Poly> {
     scope.get_datum(datum).and_then(|binding| match binding {
-        Binding::Purity(purity) => Some(purity),
+        Binding::Purity(purity) => Some(purity.clone()),
         _ => None,
     })
 }

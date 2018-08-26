@@ -13,7 +13,7 @@ pub fn try_take_rest_arg(scope: &Scope, data_iter: &mut NsDataIter) -> Option<Ns
     // This is gross becase we need to "peek" at the end of the iterator
     let has_rest = data_len >= 2
         && scope.get_datum(&data_iter.as_slice()[data_len - 1])
-            == Some(Binding::Prim(Prim::Ellipsis));
+            == Some(&Binding::Prim(Prim::Ellipsis));
 
     if has_rest {
         // Remove the ellipsis completely

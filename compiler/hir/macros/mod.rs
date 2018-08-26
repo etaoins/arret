@@ -23,14 +23,14 @@ pub enum MacroVar {
 impl MacroVar {
     fn from_ident(scope: &Scope, ident: &Ident) -> MacroVar {
         match scope.get(ident) {
-            Some(binding) => MacroVar::Bound(binding),
+            Some(binding) => MacroVar::Bound(binding.clone()),
             None => MacroVar::Unbound(ident.name().into()),
         }
     }
 
     fn from_owned_ident(scope: &Scope, ident: Ident) -> MacroVar {
         match scope.get(&ident) {
-            Some(binding) => MacroVar::Bound(binding),
+            Some(binding) => MacroVar::Bound(binding.clone()),
             None => MacroVar::Unbound(ident.into_name()),
         }
     }

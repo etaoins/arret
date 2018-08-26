@@ -133,7 +133,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             let mut transformer_data = vs.into_vec();
 
             if transformer_data.first().and_then(|d| scope.get_datum(d))
-                != Some(Binding::Prim(Prim::MacroRules))
+                != Some(&Binding::Prim(Prim::MacroRules))
             {
                 return Err(Error::new(
                     span,
@@ -152,7 +152,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
 
         let mac = lower_macro_rules(scope, macro_rules_data)?;
 
-        if scope.get(&self_ident) != Some(Binding::Prim(Prim::Wildcard)) {
+        if scope.get(&self_ident) != Some(&Binding::Prim(Prim::Wildcard)) {
             let macro_id = MacroId::new_entry_id(&mut self.macros, mac);
             scope.insert_binding(self_span, self_ident, Binding::Macro(macro_id))?;
         }
@@ -192,7 +192,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         let (ident, span) = expect_ident_and_span(self_datum)?;
         let ty = lower_poly(&self.tvars, scope, ty_datum)?;
 
-        if scope.get(&ident) != Some(Binding::Prim(Prim::Wildcard)) {
+        if scope.get(&ident) != Some(&Binding::Prim(Prim::Wildcard)) {
             scope.insert_binding(span, ident, Binding::Ty(ty))?;
         }
 
@@ -268,7 +268,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 }
 
                 // Make sure the middle element is a type colon
-                if scope.get_datum(&data[1]) != Some(Binding::Prim(Prim::TyColon)) {
+                if scope.get_datum(&data[1]) != Some(&Binding::Prim(Prim::TyColon)) {
                     return Err(Error::new(span, ErrorKind::NoVecDestruc));
                 }
 
@@ -654,7 +654,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
     fn lower_expr(&mut self, scope: &Scope, datum: NsDatum) -> Result<Expr<ty::Decl>> {
         match datum {
             NsDatum::Ident(span, ident) => match scope.get_or_err(span, &ident)? {
-                Binding::Var(id) => Ok(Expr::Ref(span, id)),
+                Binding::Var(id) => Ok(Expr::Ref(span, *id)),
                 Binding::Prim(_) => Err(Error::new(span, ErrorKind::PrimRef)),
                 Binding::Ty(_) | Binding::TyCons(_) | Binding::Purity(_) => {
                     Err(Error::new(span, ErrorKind::TyRef))
@@ -673,7 +673,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 match fn_datum {
                     NsDatum::Ident(fn_span, ref ident) => match scope.get_or_err(fn_span, ident)? {
                         Binding::Prim(prim) => {
-                            self.lower_expr_prim_apply(scope, span, prim, data_iter)
+                            self.lower_expr_prim_apply(scope, span, *prim, data_iter)
                         }
                         Binding::Macro(macro_id) => {
                             let mut macro_scope = Scope::new_child(scope);
@@ -687,7 +687,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                                 .map_err(|e| e.with_macro_invocation_span(span))
                         }
                         Binding::Var(id) => {
-                            self.lower_expr_apply(scope, span, Expr::Ref(span, id), data_iter)
+                            self.lower_expr_apply(scope, span, Expr::Ref(span, *id), data_iter)
                         }
                         Binding::Ty(_) | Binding::TyCons(_) | Binding::Purity(_) => {
                             Err(Error::new(span, ErrorKind::TyRef))
@@ -775,7 +775,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 match scope.get_or_err(fn_span, ident)? {
                     Binding::Prim(prim) => {
                         let applied_prim = AppliedPrim {
-                            prim,
+                            prim: *prim,
                             ns_id: ident.ns_id(),
                             span,
                         };
@@ -847,7 +847,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             match deferred_prim {
                 DeferredModulePrim::Export(span, ident) => match scope.get_or_err(span, &ident) {
                     Ok(binding) => {
-                        exports.insert(ident.into_name(), binding);
+                        exports.insert(ident.into_name(), binding.clone());
                     }
                     Err(err) => {
                         errors.push(err);

@@ -37,9 +37,9 @@ struct ScopeData {
 }
 
 impl ScopeData {
-    fn get(&self, ident: &Ident) -> Option<Binding> {
+    fn get(&self, ident: &Ident) -> Option<&Binding> {
         match self.entries.get(ident) {
-            Some(e) => Some(e.binding.clone()),
+            Some(e) => Some(&e.binding),
             None => {
                 if let Some(ref parent) = self.parent {
                     parent.get(ident)
@@ -134,7 +134,7 @@ impl Scope {
     /// Returns the binding for a given datum if it exists
     ///
     /// Only idents can have bindings; other data will return None.
-    pub fn get_datum(&self, datum: &NsDatum) -> Option<Binding> {
+    pub fn get_datum<'a>(&'a self, datum: &NsDatum) -> Option<&'a Binding> {
         if let NsDatum::Ident(_, ident) = datum {
             self.get(ident)
         } else {
@@ -143,12 +143,12 @@ impl Scope {
     }
 
     /// Returns the binding for a given ident if it exists
-    pub fn get(&self, ident: &Ident) -> Option<Binding> {
+    pub fn get<'a>(&'a self, ident: &Ident) -> Option<&'a Binding> {
         self.data().get(ident)
     }
 
     /// Returns the binding for a given ident if it exists, otherwise returns an error
-    pub fn get_or_err(&self, span: Span, ident: &Ident) -> Result<Binding, Error> {
+    pub fn get_or_err<'a>(&'a self, span: Span, ident: &Ident) -> Result<&'a Binding, Error> {
         self.data()
             .get(ident)
             .ok_or_else(|| Error::new(span, ErrorKind::UnboundSym(ident.name().into())))
