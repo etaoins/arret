@@ -32,7 +32,15 @@ define_rust_fn! {
     }
 }
 
+define_rust_fn! {
+    #[arret_type="(Any Any -> Bool)"]
+    EQUALS = fn equals(lhs: Gc<boxed::Any>, rhs: Gc<boxed::Any>) -> bool {
+        lhs == rhs
+    }
+}
+
 define_rust_module! {
     "length" => LENGTH,
-    "panic" => PANIC
+    "panic" => PANIC,
+    "=" => EQUALS
 }
