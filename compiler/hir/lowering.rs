@@ -1,5 +1,10 @@
 use std::collections::HashMap;
 
+use libloading;
+
+use syntax::datum::Datum;
+use syntax::span::{Span, EMPTY_SPAN};
+
 use crate::hir::destruc;
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::exports::Exports;
@@ -20,8 +25,6 @@ use crate::hir::util::{
 use crate::hir::{App, Cond, Def, Expr, Fun, Let, VarIdCounter};
 use crate::source::{SourceFileId, SourceLoader};
 use crate::ty;
-use syntax::datum::Datum;
-use syntax::span::{Span, EMPTY_SPAN};
 
 #[derive(Debug)]
 struct LoweredModule {
@@ -48,6 +51,7 @@ pub struct LoweredProgram {
     pub pvars: Vec<ty::purity::PVar>,
     pub tvars: Vec<ty::TVar>,
     pub module_defs: Vec<Vec<Def<ty::Decl>>>,
+    pub rust_libraries: Vec<libloading::Library>,
 }
 
 enum DeferredModulePrim {
@@ -962,6 +966,7 @@ pub fn lower_program(
         pvars: lcx.pvars,
         tvars: lcx.tvars,
         module_defs: lcx.module_defs,
+        rust_libraries: lcx.rfi_loader.into_rust_libraries(),
     })
 }
 

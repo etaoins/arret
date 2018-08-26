@@ -261,6 +261,10 @@ impl Loader {
 
         Ok(module)
     }
+
+    pub fn into_rust_libraries(self) -> Vec<libloading::Library> {
+        self.rust_libraries
+    }
 }
 
 #[cfg(test)]
