@@ -53,10 +53,6 @@ impl<T: HirType> Scalar<T> {
     pub fn ty(&self) -> &T {
         &self.ty
     }
-
-    pub fn into_source_name(self) -> Box<str> {
-        self.source_name
-    }
 }
 
 pub fn subst_list_destruc(
@@ -80,13 +76,18 @@ pub fn subst_scalar_destruc(
     free_ty_polys: &mut impl Iterator<Item = ty::Poly>,
     scalar: Scalar<ty::Decl>,
 ) -> Scalar<ty::Poly> {
-    let var_id = *scalar.var_id();
-    let poly_type = match scalar.ty() {
-        ty::Decl::Known(poly) => poly.clone(),
+    let Scalar {
+        var_id,
+        ty,
+        source_name,
+    } = scalar;
+
+    let poly_type = match ty {
+        ty::Decl::Known(poly) => poly,
         ty::Decl::Free => free_ty_polys.next().unwrap(),
     };
 
-    Scalar::new(var_id, scalar.into_source_name(), poly_type)
+    Scalar::new(var_id, source_name, poly_type)
 }
 
 /// Substitutes free types with their inferred types
