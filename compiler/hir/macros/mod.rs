@@ -92,14 +92,14 @@ pub struct Macro {
 }
 
 #[derive(Debug)]
-pub struct MatchData {
-    vars: HashMap<MacroVar, NsDatum>,
+pub struct MatchData<'data> {
+    vars: HashMap<MacroVar, &'data NsDatum>,
     // The outside vector is the subpatterns; the inside vector contains the zero or more matches
-    subpatterns: Vec<Vec<MatchData>>,
+    subpatterns: Vec<Vec<MatchData<'data>>>,
 }
 
-impl MatchData {
-    fn new() -> MatchData {
+impl<'data> MatchData<'data> {
+    fn new() -> MatchData<'data> {
         MatchData {
             vars: HashMap::new(),
             subpatterns: vec![],

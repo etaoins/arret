@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use syntax::span::Span;
 
 struct ExpandCursor<'data, 'links> {
-    match_data: &'data MatchData,
+    match_data: &'data MatchData<'data>,
     var_links: &'links VarLinks,
     subtemplate_idx: usize,
 }
@@ -38,7 +38,7 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
         let macro_var = MacroVar::from_ident(self.scope, ident);
 
         if let Some(replacement) = cursor.match_data.vars.get(&macro_var) {
-            return replacement.clone();
+            return (*replacement).clone();
         }
 
         // Rescope this ident
@@ -136,10 +136,10 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
     }
 }
 
-pub fn expand_rule(
+pub fn expand_rule<'data>(
     scope: &mut Scope,
     special_vars: &SpecialVars,
-    match_data: &MatchData,
+    match_data: &'data MatchData<'data>,
     var_links: &VarLinks,
     template: &NsDatum,
 ) -> NsDatum {

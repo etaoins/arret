@@ -4,17 +4,20 @@ use crate::hir::macros::{MacroVar, MatchData, Rule, SpecialVars};
 use crate::hir::ns::{Ident, NsDatum};
 use crate::hir::scope::Scope;
 
-struct MatchCtx<'scope, 'svars> {
+struct MatchCtx<'scope, 'data, 'svars> {
     scope: &'scope Scope,
     special_vars: &'svars SpecialVars,
-    match_data: MatchData,
+    match_data: MatchData<'data>,
 }
 
 type Result<T> = result::Result<T, ()>;
 type MatchVisitResult = result::Result<(), ()>;
 
-impl<'scope, 'svars> MatchCtx<'scope, 'svars> {
-    fn new(scope: &'scope Scope, special_vars: &'svars SpecialVars) -> MatchCtx<'scope, 'svars> {
+impl<'scope, 'data, 'svars> MatchCtx<'scope, 'data, 'svars> {
+    fn new(
+        scope: &'scope Scope,
+        special_vars: &'svars SpecialVars,
+    ) -> MatchCtx<'scope, 'data, 'svars> {
         MatchCtx {
             scope,
             special_vars,
@@ -22,7 +25,7 @@ impl<'scope, 'svars> MatchCtx<'scope, 'svars> {
         }
     }
 
-    fn visit_ident(&mut self, pattern_ident: &Ident, arg: &NsDatum) -> MatchVisitResult {
+    fn visit_ident(&mut self, pattern_ident: &Ident, arg: &'data NsDatum) -> MatchVisitResult {
         let pattern_var = MacroVar::from_ident(self.scope, pattern_ident);
 
         if self.special_vars.is_wildcard(&pattern_var) {
@@ -38,13 +41,13 @@ impl<'scope, 'svars> MatchCtx<'scope, 'svars> {
 
             Err(())
         } else {
-            self.match_data.vars.insert(pattern_var, arg.clone());
+            self.match_data.vars.insert(pattern_var, arg);
             Ok(())
         }
     }
 
     // TODO: Floats, maps
-    fn visit_datum(&mut self, pattern: &NsDatum, arg: &NsDatum) -> MatchVisitResult {
+    fn visit_datum(&mut self, pattern: &NsDatum, arg: &'data NsDatum) -> MatchVisitResult {
         match (pattern, arg) {
             (NsDatum::Ident(_, pattern_ident), arg) => self.visit_ident(pattern_ident, arg),
             (NsDatum::List(_, pvs), NsDatum::List(_, avs)) => self.visit_slice(pvs, avs),
@@ -58,7 +61,11 @@ impl<'scope, 'svars> MatchCtx<'scope, 'svars> {
         }
     }
 
-    fn visit_zero_or_more(&mut self, pattern: &NsDatum, args: &[NsDatum]) -> MatchVisitResult {
+    fn visit_zero_or_more(
+        &mut self,
+        pattern: &NsDatum,
+        args: &'data [NsDatum],
+    ) -> MatchVisitResult {
         let submatch_data = args
             .iter()
             .map(|arg| {
@@ -70,13 +77,17 @@ impl<'scope, 'svars> MatchCtx<'scope, 'svars> {
 
                 subcontext.visit_datum(pattern, arg)?;
                 Ok(subcontext.match_data)
-            }).collect::<result::Result<Vec<MatchData>, ()>>()?;
+            }).collect::<result::Result<Vec<MatchData<'data>>, ()>>()?;
 
         self.match_data.subpatterns.push(submatch_data);
         Ok(())
     }
 
-    fn visit_slice(&mut self, mut patterns: &[NsDatum], mut args: &[NsDatum]) -> MatchVisitResult {
+    fn visit_slice(
+        &mut self,
+        mut patterns: &[NsDatum],
+        mut args: &'data [NsDatum],
+    ) -> MatchVisitResult {
         loop {
             if self
                 .special_vars
@@ -115,18 +126,18 @@ impl<'scope, 'svars> MatchCtx<'scope, 'svars> {
         }
     }
 
-    fn visit_rule(mut self, rule: &Rule, arg_data: &[NsDatum]) -> Result<MatchData> {
+    fn visit_rule(mut self, rule: &Rule, arg_data: &'data [NsDatum]) -> Result<MatchData<'data>> {
         self.visit_slice(rule.pattern.as_slice(), arg_data)?;
         Ok(self.match_data)
     }
 }
 
-pub fn match_rule(
+pub fn match_rule<'data>(
     scope: &Scope,
     special_vars: &SpecialVars,
     rule: &Rule,
-    arg_data: &[NsDatum],
-) -> Result<MatchData> {
+    arg_data: &'data [NsDatum],
+) -> Result<MatchData<'data>> {
     let mcx = MatchCtx::new(scope, special_vars);
     mcx.visit_rule(rule, arg_data)
 }
