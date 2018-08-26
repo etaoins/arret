@@ -46,6 +46,10 @@ impl EncodeABIType for char {
     const ABI_TYPE: ABIType = ABIType::Char;
 }
 
+impl EncodeABIType for bool {
+    const ABI_TYPE: ABIType = ABIType::Bool;
+}
+
 impl EncodeABIType for InternedSym {
     const ABI_TYPE: ABIType = ABIType::InternedSym;
 }
