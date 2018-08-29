@@ -62,14 +62,14 @@ impl Error {
     pub fn with_macro_invocation_span(self, span: Span) -> Error {
         Error {
             loc_trace: self.loc_trace.with_macro_invocation(span),
-            kind: self.kind,
+            ..self
         }
     }
 
     pub(super) fn with_span_offset(self, offset: usize) -> Error {
         Error {
             loc_trace: self.loc_trace.origin().with_offset(offset).into(),
-            kind: self.kind,
+            ..self
         }
     }
 }

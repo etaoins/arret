@@ -63,7 +63,7 @@ impl Error {
     pub fn with_macro_invocation_span(self, span: Span) -> Error {
         Error {
             loc_trace: self.loc_trace.with_macro_invocation(span),
-            kind: self.kind,
+            ..self
         }
     }
 }

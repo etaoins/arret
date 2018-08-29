@@ -27,8 +27,8 @@ impl LocTrace {
 
     pub fn with_macro_invocation(self, macro_invocation: Span) -> LocTrace {
         LocTrace {
-            origin: self.origin,
             macro_invocation,
+            ..self
         }
     }
 

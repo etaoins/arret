@@ -349,13 +349,11 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
         match test_known_bool {
             Some(true) => Ok(InferredNode {
                 expr: cond_expr,
-                poly_type: true_node.poly_type,
-                type_cond: true_node.type_cond,
+                ..true_node
             }),
             Some(false) => Ok(InferredNode {
                 expr: cond_expr,
-                poly_type: false_node.poly_type,
-                type_cond: false_node.type_cond,
+                ..false_node
             }),
             None => {
                 let poly_type = ty::unify::poly_unify_to_poly(
