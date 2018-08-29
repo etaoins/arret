@@ -1,15 +1,12 @@
+use std::{fs, path};
+
 use ansi_term::Colour;
-use app_dirs;
+use directories;
 use rustyline;
 
 use compiler;
 
 use crate::DriverConfig;
-
-const APP_INFO: app_dirs::AppInfo = app_dirs::AppInfo {
-    name: "arret",
-    author: "arret",
-};
 
 const PROMPT: &str = "arret> ";
 const TYPE_ONLY_PREFIX: &str = ":type ";
@@ -61,6 +58,17 @@ impl rustyline::completion::Completer for Completer {
     }
 }
 
+/// Gets the full path to where our REPL history should be stored
+///
+/// This does very little error handling as history is a "nice to have" feature
+fn repl_history_path() -> Option<path::PathBuf> {
+    let project_dirs = directories::ProjectDirs::from("xyz.arret-lang", "", "arret")?;
+    let data_dir = project_dirs.data_dir();
+
+    fs::create_dir_all(data_dir).ok()?;
+    Some(data_dir.join("repl-history"))
+}
+
 pub fn interactive_loop(cfg: &DriverConfig) {
     use compiler::repl::{EvalKind, EvaledLine};
     use compiler::reporting::report_to_stderr;
@@ -82,10 +90,9 @@ pub fn interactive_loop(cfg: &DriverConfig) {
     rl.set_completer(Some(Completer::new(repl_ctx.bound_names())));
 
     // Load our history
-    let mut history_path = app_dirs::app_root(app_dirs::AppDataType::UserData, &APP_INFO);
-    if let Ok(ref mut history_path) = history_path {
-        history_path.push("repl-history");
-        let _ = rl.load_history(&history_path);
+    let history_path = repl_history_path();
+    if let Some(ref history_path) = history_path {
+        let _ = rl.load_history(history_path);
     }
 
     // Configure our styles
@@ -134,7 +141,7 @@ pub fn interactive_loop(cfg: &DriverConfig) {
             }
         }
 
-        if let Ok(ref history_path) = history_path {
+        if let Some(ref history_path) = history_path {
             let _ = rl.save_history(&history_path);
         }
     }
