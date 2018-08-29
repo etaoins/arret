@@ -1002,7 +1002,7 @@ fn module_for_str(data_str: &str) -> Result<LoweredModule> {
     ];
     program_data.append(&mut test_data);
 
-    let package_paths = PackagePaths::default();
+    let package_paths = PackagePaths::test_paths();
     let mut source_loader = SourceLoader::new();
     let mut lcx = LoweringCtx::new(&package_paths, &mut source_loader);
 
@@ -1024,7 +1024,7 @@ pub fn lowered_expr_for_str(data_str: &str) -> LoweredTestExpr {
     let test_ns_id = NsId::new(0);
     let scope = Scope::new_with_primitives();
 
-    let package_paths = PackagePaths::default();
+    let package_paths = PackagePaths::test_paths();
     let mut source_loader = SourceLoader::new();
     let mut lcx = LoweringCtx::new(&package_paths, &mut source_loader);
 

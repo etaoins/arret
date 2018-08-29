@@ -24,17 +24,23 @@ impl PackagePaths {
         }
     }
 
-    pub fn default() -> PackagePaths {
-        let mut default = PackagePaths::empty();
+    /// Creates an instance including the `stdlib` package
+    pub fn with_stdlib(arret_root_dir: &path::Path) -> PackagePaths {
+        let mut pp = PackagePaths::empty();
 
         let stdlib_path = PackagePath {
-            arret_base: path::Path::new("../stdlib/arret").into(),
-            rust_base: path::Path::new("../target").into(),
+            arret_base: arret_root_dir.join("stdlib/arret").into(),
+            rust_base: arret_root_dir.join("target").into(),
         };
 
-        default.add_package("stdlib", stdlib_path);
+        pp.add_package("stdlib", stdlib_path);
+        pp
+    }
 
-        default
+    /// Creates an instance for use in our internal unit and integration tests
+    pub fn test_paths() -> PackagePaths {
+        let parent_path = path::Path::new("..");
+        Self::with_stdlib(&parent_path)
     }
 
     pub fn add_package(&mut self, package_name: &str, path: PackagePath) {
@@ -126,7 +132,7 @@ mod test {
     fn load_stdlib_module(name: &'static str) -> Result<LoadedModule> {
         let mut source_loader = SourceLoader::new();
         let mut rfi_loader = rfi::Loader::new();
-        let package_paths = PackagePaths::default();
+        let package_paths = PackagePaths::test_paths();
         let module_name = ModuleName::new("stdlib".into(), vec![], name.into());
 
         load_module_by_name(

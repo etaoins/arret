@@ -149,7 +149,7 @@ fn collect_reports(
     source_file_id: compiler::SourceFileId,
 ) -> Vec<Box<dyn Reportable>> {
     let mut err_objects = Vec::<Box<dyn Reportable>>::new();
-    let package_paths = compiler::PackagePaths::default();
+    let package_paths = compiler::PackagePaths::test_paths();
 
     let hir = match compiler::lower_program(&package_paths, source_loader, source_file_id) {
         Ok(hir) => hir,

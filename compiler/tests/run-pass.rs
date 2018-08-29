@@ -6,7 +6,7 @@ use std::{fs, path};
 
 fn run_single_test(source_loader: &mut compiler::SourceLoader, input_path: &path::Path) -> bool {
     let source_file_id = source_loader.load_path(input_path).unwrap();
-    let package_paths = compiler::PackagePaths::default();
+    let package_paths = compiler::PackagePaths::test_paths();
 
     let hir = match compiler::lower_program(&package_paths, source_loader, source_file_id) {
         Ok(hir) => hir,

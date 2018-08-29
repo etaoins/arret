@@ -202,7 +202,7 @@ mod test {
 
     #[test]
     fn basic_session() {
-        let package_paths = PackagePaths::default();
+        let package_paths = PackagePaths::test_paths();
         let mut source_loader = SourceLoader::new();
         let mut repl_ctx = ReplCtx::new(&package_paths, &mut source_loader);
 
