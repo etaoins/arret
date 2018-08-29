@@ -56,7 +56,7 @@ The compiler and runtime are implemented in Rust with code generation provided b
 
 ## Status
 
-Currently parsing, lowering, macros, type checking and limited constant evaluation are implemented.
+Currently parsing, macros, type checking and limited constant evaluation are implemented.
 A basic garbage collected runtime is provided with a partial set of data types.
 
 There is no support for calling functions implemented in Rust or code generation.
