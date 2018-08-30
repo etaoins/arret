@@ -69,6 +69,32 @@ fn repl_history_path() -> Option<path::PathBuf> {
     Some(data_dir.join("repl-history"))
 }
 
+enum ParsedCommand {
+    EvalValue(String),
+    EvalType(String),
+    Quit,
+    Other,
+}
+
+fn parse_command(mut line: String) -> ParsedCommand {
+    match line.as_ref() {
+        _ if line.starts_with(TYPE_ONLY_PREFIX) => {
+            line.drain(0..TYPE_ONLY_PREFIX.len());
+            ParsedCommand::EvalType(line)
+        }
+        ":help" => {
+            println!("Available REPL commands:");
+            println!("");
+            println!(":help                  print this summary");
+            println!(":type <expression>     evaluate the type of the given expression");
+            println!(":quit                  exit the REPL");
+            ParsedCommand::Other
+        }
+        ":quit" => ParsedCommand::Quit,
+        _ => ParsedCommand::EvalValue(line),
+    }
+}
+
 pub fn interactive_loop(cfg: &DriverConfig) {
     use compiler::repl::{EvalKind, EvaledLine};
     use compiler::reporting::report_to_stderr;
@@ -105,19 +131,23 @@ pub fn interactive_loop(cfg: &DriverConfig) {
         let readline = rl.readline(&prompt.to_string());
 
         match readline {
-            Ok(mut line) => {
+            Ok(line) => {
                 if !line.chars().all(char::is_whitespace) {
                     rl.add_history_entry(&line);
                 }
 
-                let eval_kind = if line.starts_with(TYPE_ONLY_PREFIX) {
-                    line.drain(0..TYPE_ONLY_PREFIX.len());
-                    EvalKind::Type
-                } else {
-                    EvalKind::Value
+                let (eval_kind, input) = match parse_command(line) {
+                    ParsedCommand::EvalValue(input) => (EvalKind::Value, input),
+                    ParsedCommand::EvalType(input) => (EvalKind::Type, input),
+                    ParsedCommand::Quit => {
+                        break;
+                    }
+                    ParsedCommand::Other => {
+                        continue;
+                    }
                 };
 
-                match repl_ctx.eval_line(line, eval_kind) {
+                match repl_ctx.eval_line(input, eval_kind) {
                     Ok(EvaledLine::EmptyInput) => {}
                     Ok(EvaledLine::Defs) => {
                         // Refresh our completions
