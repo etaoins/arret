@@ -17,8 +17,11 @@ struct Completer {
 
 impl Completer {
     fn new<'a>(names_iter: impl Iterator<Item = &'a str>) -> Completer {
+        let mut all_names = names_iter.map(|s| s.to_owned()).collect::<Vec<String>>();
+        all_names.sort();
+
         Completer {
-            bound_names: names_iter.map(|s| s.to_owned()).collect(),
+            bound_names: all_names,
         }
     }
 }
