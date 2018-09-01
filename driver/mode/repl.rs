@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::{fs, path};
 
 use ansi_term::Colour;
@@ -11,22 +12,24 @@ use crate::DriverConfig;
 const PROMPT: &str = "arret> ";
 const TYPE_ONLY_PREFIX: &str = ":type ";
 
-struct Completer {
+struct ArretHelper {
     bound_names: Vec<String>,
 }
 
-impl Completer {
-    fn new<'a>(names_iter: impl Iterator<Item = &'a str>) -> Completer {
+impl ArretHelper {
+    fn new<'a>(names_iter: impl Iterator<Item = &'a str>) -> ArretHelper {
         let mut all_names = names_iter.map(|s| s.to_owned()).collect::<Vec<String>>();
         all_names.sort();
 
-        Completer {
+        ArretHelper {
             bound_names: all_names,
         }
     }
 }
 
-impl rustyline::completion::Completer for Completer {
+impl rustyline::completion::Completer for ArretHelper {
+    type Candidate = String;
+
     fn complete(&self, line: &str, pos: usize) -> rustyline::Result<(usize, Vec<String>)> {
         use syntax::parser::is_identifier_char;
 
@@ -60,6 +63,21 @@ impl rustyline::completion::Completer for Completer {
         Ok((prefix_start, options))
     }
 }
+
+impl rustyline::hint::Hinter for ArretHelper {
+    fn hint(&self, _line: &str, _pos: usize) -> Option<String> {
+        None
+    }
+}
+
+impl rustyline::highlight::Highlighter for ArretHelper {
+    fn highlight_prompt<'p>(&self, prompt: &'p str) -> Cow<'p, str> {
+        let prompt_style = Colour::Blue;
+        prompt_style.paint(prompt).to_string().into()
+    }
+}
+
+impl rustyline::Helper for ArretHelper {}
 
 /// Gets the full path to where our REPL history should be stored
 ///
@@ -107,7 +125,9 @@ pub fn interactive_loop(cfg: &DriverConfig) {
     // Setup our REPL backend
     let mut source_loader = compiler::SourceLoader::new();
     let mut repl_ctx = compiler::repl::ReplCtx::new(&cfg.package_paths, &mut source_loader);
-    let mut rl = rustyline::Editor::<Completer>::new();
+
+    // Setup Rustyline
+    let mut rl = rustyline::Editor::<ArretHelper>::new();
 
     // Import [stdlib base] so we have most useful things defined
     let initial_import = "(import [stdlib base])".to_owned();
@@ -116,7 +136,7 @@ pub fn interactive_loop(cfg: &DriverConfig) {
             report_to_stderr(repl_ctx.source_loader(), reportable.as_ref())
         }
     }
-    rl.set_completer(Some(Completer::new(repl_ctx.bound_names())));
+    rl.set_helper(Some(ArretHelper::new(repl_ctx.bound_names())));
 
     // Load our history
     let history_path = repl_history_path();
@@ -125,18 +145,16 @@ pub fn interactive_loop(cfg: &DriverConfig) {
     }
 
     // Configure our styles
-    let prompt_style = Colour::Blue;
     let defs_style = Colour::Purple.bold();
     let expr_arrow_style = Colour::Green.bold();
-    let prompt = prompt_style.paint(PROMPT);
 
     loop {
-        let readline = rl.readline(&prompt.to_string());
+        let readline = rl.readline(&PROMPT);
 
         match readline {
             Ok(line) => {
                 if !line.chars().all(char::is_whitespace) {
-                    rl.add_history_entry(&line);
+                    rl.add_history_entry(line.clone());
                 }
 
                 let (eval_kind, input) = match parse_command(line) {
@@ -154,7 +172,7 @@ pub fn interactive_loop(cfg: &DriverConfig) {
                     Ok(EvaledLine::EmptyInput) => {}
                     Ok(EvaledLine::Defs) => {
                         // Refresh our completions
-                        rl.set_completer(Some(Completer::new(repl_ctx.bound_names())));
+                        rl.set_helper(Some(ArretHelper::new(repl_ctx.bound_names())));
 
                         println!("{}", defs_style.paint("defined"))
                     }
