@@ -222,8 +222,9 @@ impl<'de> Parser<'de> {
             // Consume the \
             s.eat_bytes(1);
 
-            // Take everything up to the next whitespace
-            let (span, char_name) = s.consume_until(is_whitespace);
+            // Consume the characer name
+            let (span, char_name) =
+                s.consume_until(|c| c == ')' || c == ']' || c == '}' || is_whitespace(c));
 
             let mut char_name_chars = char_name.chars();
             if let Some(first_char) = char_name_chars.next() {
@@ -701,6 +702,11 @@ mod test {
         let t = r#" ^^^^^^^"#;
         let err = Error::new(t2s(t), ErrorKind::InvalidCodePoint);
         assert_eq!(err, datum_from_str(j).unwrap_err());
+
+        let j = r#"[\newline]"#;
+        let t = r#" ^^^^^^^^ "#;
+        let expected = Datum::Vector(whole_str_span(j), Box::new([Datum::Char(t2s(t), '\n')]));
+        assert_eq!(expected, datum_from_str(j).unwrap());
     }
 
     #[cfg_attr(feature = "cargo-clippy", allow(unreadable_literal))]
