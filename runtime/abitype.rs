@@ -3,7 +3,7 @@ use crate::boxed;
 use crate::boxed::refs::Gc;
 use crate::intern::InternedSym;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum BoxedABIType {
     Any,
     DirectTagged(boxed::TypeTag),

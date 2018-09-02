@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::os::raw::c_void;
 use std::rc::Rc;
 
 use runtime::boxed;
@@ -8,6 +9,7 @@ use runtime::boxed::refs::Gc;
 use runtime_syntax::reader;
 use syntax::datum::Datum;
 
+use crate::codegen;
 use crate::hir;
 use crate::mir::value;
 use crate::mir::{Expr, Value};
@@ -16,6 +18,10 @@ use crate::ty;
 pub struct PartialEvalCtx {
     heap: boxed::Heap,
     global_values: HashMap<hir::VarId, Value>,
+
+    // This is important for drop order!
+    rust_fun_portals: HashMap<*const c_void, codegen::portal::Portal>,
+    portal_gen: codegen::CodegenCtx,
 }
 
 pub struct DefCtx<'tvars> {
@@ -37,6 +43,8 @@ impl PartialEvalCtx {
         PartialEvalCtx {
             heap: boxed::Heap::new(),
             global_values: HashMap::new(),
+            rust_fun_portals: HashMap::new(),
+            portal_gen: codegen::CodegenCtx::new(),
         }
     }
 
@@ -184,6 +192,7 @@ impl PartialEvalCtx {
         fixed_args: &[Expr],
         rest_arg: Option<&Expr>,
     ) -> Value {
+        use crate::codegen::portal::create_portal_for_rust_fun;
         use crate::mir::intrinsic;
 
         if let Some(intrinsic_name) = rust_fun.intrinsic_name() {
@@ -195,7 +204,24 @@ impl PartialEvalCtx {
             }
         }
 
-        unimplemented!("Applying Rust functions")
+        let fixed_values: Vec<Value> = fixed_args
+            .iter()
+            .map(|arg| self.eval_expr(dcx, arg))
+            .collect();
+        let rest_value = rest_arg.map(|rest_arg| Box::new(self.eval_expr(dcx, rest_arg)));
+        let arg_list_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
+        let boxed_arg_list = self.value_to_boxed(&arg_list_value);
+
+        // Create a dynamic portal to this Rust function if it doesn't exist
+        let portal_gen = &mut self.portal_gen;
+        let portal = self
+            .rust_fun_portals
+            .entry(rust_fun.entry_point())
+            .or_insert_with(|| create_portal_for_rust_fun(portal_gen, rust_fun));
+
+        let result = portal.entry_point()(boxed_arg_list);
+
+        Value::Const(result)
     }
 
     fn eval_app(&mut self, dcx: &mut DefCtx<'_>, app: &hir::App<ty::Poly>) -> Value {

@@ -4,6 +4,7 @@
 #[macro_use]
 mod id_type;
 
+mod codegen;
 mod hir;
 mod mir;
 pub mod repl;

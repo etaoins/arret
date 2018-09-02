@@ -45,6 +45,18 @@ impl Fun {
     pub fn arret_fun_type(&self) -> &ty::Fun<ty::Poly> {
         &self.arret_fun_type
     }
+
+    pub fn params(&self) -> &'static [abitype::ABIType] {
+        self.params
+    }
+
+    pub fn ret(&self) -> &'static abitype::RetABIType {
+        self.ret
+    }
+
+    pub fn entry_point(&self) -> *const c_void {
+        self.entry_point
+    }
 }
 
 pub type Module = HashMap<&'static str, Fun>;

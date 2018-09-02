@@ -142,7 +142,7 @@ pub trait ConstructableFrom<T>: Boxed {
 macro_rules! define_direct_tagged_boxes {
     ($($name:ident),*) => {
         #[repr(u8)]
-        #[derive(Debug, PartialEq, Eq, Copy, Clone)]
+        #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
         pub enum TypeTag {
             $( $name ),*
         }
