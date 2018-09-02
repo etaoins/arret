@@ -241,6 +241,7 @@ name = "stdlib"
 version = "0.1.0"
 dependencies = [
  "runtime 0.1.0",
+ "runtime-syntax 0.1.0",
 ]
 
 [[package]]

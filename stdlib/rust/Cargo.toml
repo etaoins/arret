@@ -13,3 +13,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 runtime = { path = "../../runtime" }
+runtime-syntax = { path = "../../runtime-syntax" }

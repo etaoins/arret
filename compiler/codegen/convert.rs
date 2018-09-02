@@ -7,7 +7,7 @@ use crate::codegen::CodegenCtx;
 use runtime::abitype;
 use runtime::boxed;
 
-fn ptr_to_singleton<T: boxed::Boxed>(
+pub(super) fn ptr_to_singleton<T: boxed::Boxed>(
     cgx: &mut CodegenCtx,
     builder: LLVMBuilderRef,
     singleton: &T,

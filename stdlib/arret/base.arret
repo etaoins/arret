@@ -7,7 +7,7 @@
         -> ->!)
 
 (import [stdlib rust])
-(export length panic =)
+(export length panic = print! println!)
 
 (export defn)
 (defmacro defn (macro-rules

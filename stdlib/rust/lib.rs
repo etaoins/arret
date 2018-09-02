@@ -4,11 +4,17 @@
 #[macro_use]
 extern crate runtime;
 
+mod pprint;
+
+use std::io;
+use std::io::prelude::*;
+
 use runtime::abitype::*;
 use runtime::binding::*;
 
 use runtime::boxed;
 use runtime::boxed::refs::Gc;
+use runtime::task::Task;
 
 define_rust_fn! {
     #[arret_type="((Listof Any) -> Int)"]
@@ -18,17 +24,16 @@ define_rust_fn! {
 }
 
 define_rust_fn! {
-    #[arret_type="(Any -> (U))"]
-    PANIC = fn panic(input: Gc<boxed::Any>) -> Never {
-        match input.as_subtype() {
-            boxed::AnySubtype::Str(s) => {
-                panic!("Arret panic: {}", s.as_str());
-            }
-            _ => {
-                panic!("Arret non-string panic")
-            }
+    #[arret_type="(Any ... -> (U))"]
+    PANIC = fn panic(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Never {
+        use std::str;
 
+        let mut output = Vec::<u8>::new();
+        for value in values.iter() {
+            pprint::pretty_print(&mut output, task, value)
         }
+
+        panic!("{}", str::from_utf8(output.as_slice()).unwrap());
     }
 }
 
@@ -39,8 +44,34 @@ define_rust_fn! {
     }
 }
 
+define_rust_fn! {
+    #[arret_type="(Any ... ->! ())"]
+    PRINT = fn print(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> () {
+        let mut output = io::stdout();
+
+        for value in values.iter() {
+            pprint::pretty_print(&mut output, task, value);
+        }
+    }
+}
+
+define_rust_fn! {
+    #[arret_type="(Any ... ->! ())"]
+    PRINTLN = fn println(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> () {
+        let mut output = io::stdout();
+
+        for value in values.iter() {
+            pprint::pretty_print(&mut output, task, value);
+        }
+
+        output.write_all(&[b'\n']).unwrap();
+    }
+}
+
 define_rust_module! {
     "length" => LENGTH,
     "panic" => PANIC,
-    "=" => EQUALS
+    "=" => EQUALS,
+    "print!" => PRINT,
+    "println!" => PRINTLN
 }

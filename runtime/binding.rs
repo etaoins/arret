@@ -1,5 +1,9 @@
 use crate::abitype::{ABIType, RetABIType};
 
+#[cfg_attr(feature = "cargo-clippy", allow(useless_attribute))]
+#[allow(unused)]
+use crate::abitype::{EncodeABIType, EncodeRetABIType};
+
 #[derive(Debug)]
 pub struct RustFun {
     pub arret_type: &'static str,
@@ -17,8 +21,6 @@ pub enum Never {}
 #[macro_export]
 macro_rules! define_rust_fn {
     (#[arret_type=$type:expr] $desc_name:ident = fn $func_name:ident($task_name:ident : &mut Task, $($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
-        use crate::abitype::{EncodeABIType, EncodeRetABIType};
-
         #[no_mangle]
         pub extern "C" fn $func_name($task_name: &mut Task, $($param_name: $rust_ty),*) -> $ret {
             $body

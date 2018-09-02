@@ -10,7 +10,7 @@ use runtime::abitype;
 use runtime::boxed;
 use runtime::boxed::refs::Gc;
 
-use crate::codegen::convert::convert_to_boxed_any;
+use crate::codegen::convert::{convert_to_boxed_any, ptr_to_singleton};
 use crate::codegen::CodegenCtx;
 use crate::hir::rfi;
 
@@ -77,7 +77,15 @@ pub fn create_portal_for_rust_fun(cgx: &mut CodegenCtx, rust_fun: &rfi::Fun) -> 
         }
 
         let mut arg_list = LLVMGetParam(function, 1);
-        args.extend(rust_fun.params().iter().map(|_| {
+        let mut param_type_iter = rust_fun.params().iter();
+
+        let rest_type = if rust_fun.arret_fun_type().params().rest().is_some() {
+            param_type_iter.next_back()
+        } else {
+            None
+        };
+
+        args.extend(param_type_iter.map(|_| {
             let llvm_pair = cgx
                 .boxed_abi_to_llvm_type(&abitype::BoxedABIType::Pair(&abitype::BoxedABIType::Any));
 
@@ -98,6 +106,10 @@ pub fn create_portal_for_rust_fun(cgx: &mut CodegenCtx, rust_fun: &rfi::Fun) -> 
 
             arg_value
         }));
+
+        if rest_type.is_some() {
+            args.push(arg_list);
+        }
 
         match rust_fun.ret() {
             abitype::RetABIType::Inhabited(abi_type) => {
@@ -121,7 +133,12 @@ pub fn create_portal_for_rust_fun(cgx: &mut CodegenCtx, rust_fun: &rfi::Fun) -> 
                     b"\0".as_ptr() as *const _,
                 );
 
-                LLVMBuildUnreachable(builder);
+                if rust_fun.ret() == &abitype::RetABIType::Never {
+                    LLVMBuildUnreachable(builder);
+                } else {
+                    let nil_ret = ptr_to_singleton(cgx, builder, &boxed::NIL_INSTANCE, b"nil\0");
+                    LLVMBuildRet(builder, nil_ret);
+                }
             }
         }
 
