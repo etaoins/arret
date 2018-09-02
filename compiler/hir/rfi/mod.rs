@@ -57,6 +57,10 @@ impl Fun {
     pub fn entry_point(&self) -> *const c_void {
         self.entry_point
     }
+
+    pub fn takes_task(&self) -> bool {
+        self.takes_task
+    }
 }
 
 pub type Module = HashMap<&'static str, Fun>;

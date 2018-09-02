@@ -12,6 +12,7 @@ use runtime::abitype;
 
 pub struct CodegenCtx {
     llx: LLVMContextRef,
+    task_type: Option<LLVMTypeRef>,
     boxed_abi_types: HashMap<abitype::BoxedABIType, LLVMTypeRef>,
 }
 
@@ -26,9 +27,20 @@ impl CodegenCtx {
 
             CodegenCtx {
                 llx,
+                task_type: None,
                 boxed_abi_types: HashMap::new(),
             }
         }
+    }
+
+    fn task_llvm_type(&mut self) -> LLVMTypeRef {
+        let llx = self.llx;
+        *self.task_type.get_or_insert_with(|| unsafe {
+            LLVMPointerType(
+                LLVMStructCreateNamed(llx, b"task\0".as_ptr() as *const _),
+                0,
+            )
+        })
     }
 
     fn boxed_abi_to_llvm_type(&mut self, boxed_abi_type: &abitype::BoxedABIType) -> LLVMTypeRef {
@@ -86,13 +98,21 @@ impl CodegenCtx {
 
     fn function_to_llvm_type(
         &mut self,
+        takes_task: bool,
         arg_types: &[abitype::ABIType],
         ret_type: &abitype::RetABIType,
     ) -> LLVMTypeRef {
-        let mut llvm_arg_types: Vec<LLVMTypeRef> = arg_types
-            .iter()
-            .map(|abi_type| self.abi_to_llvm_type(abi_type))
-            .collect();
+        let mut llvm_arg_types = vec![];
+
+        if takes_task {
+            llvm_arg_types.push(self.task_llvm_type());
+        }
+
+        llvm_arg_types.extend(
+            arg_types
+                .iter()
+                .map(|abi_type| self.abi_to_llvm_type(abi_type)),
+        );
 
         let llvm_ret_type = self.ret_abi_to_llvm_type(ret_type);
 

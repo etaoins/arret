@@ -4,8 +4,8 @@ use std::{mem, ptr};
 use llvm_sys::analysis::*;
 use llvm_sys::core::*;
 use llvm_sys::execution_engine::*;
-use llvm_sys::prelude::*;
 
+use runtime;
 use runtime::abitype;
 use runtime::boxed;
 use runtime::boxed::refs::Gc;
@@ -14,7 +14,7 @@ use crate::codegen::convert::convert_to_boxed_any;
 use crate::codegen::CodegenCtx;
 use crate::hir::rfi;
 
-type PortalEntryPoint = fn(Gc<boxed::Any>) -> Gc<boxed::Any>;
+type PortalEntryPoint = fn(&mut runtime::task::Task, Gc<boxed::Any>) -> Gc<boxed::Any>;
 
 pub struct Portal {
     execution_engine: *mut LLVMOpaqueExecutionEngine,
@@ -42,6 +42,7 @@ pub fn create_portal_for_rust_fun(cgx: &mut CodegenCtx, rust_fun: &rfi::Fun) -> 
         let builder = LLVMCreateBuilderInContext(cgx.llx);
 
         let outer_function_type = cgx.function_to_llvm_type(
+            true,
             &[abitype::ABIType::Boxed(abitype::BoxedABIType::List(
                 &abitype::BoxedABIType::Any,
             ))],
@@ -56,7 +57,8 @@ pub fn create_portal_for_rust_fun(cgx: &mut CodegenCtx, rust_fun: &rfi::Fun) -> 
         let bb = LLVMAppendBasicBlockInContext(cgx.llx, function, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
 
-        let inner_function_type = cgx.function_to_llvm_type(rust_fun.params(), rust_fun.ret());
+        let inner_function_type =
+            cgx.function_to_llvm_type(rust_fun.takes_task(), rust_fun.params(), rust_fun.ret());
 
         let llvm_i64 = LLVMInt64TypeInContext(cgx.llx);
         let inner_entry_point_int = LLVMConstInt(llvm_i64, rust_fun.entry_point() as u64, 0);
@@ -68,32 +70,34 @@ pub fn create_portal_for_rust_fun(cgx: &mut CodegenCtx, rust_fun: &rfi::Fun) -> 
             b"entry_point\0".as_ptr() as *const _,
         );
 
-        let mut arg_list = LLVMGetParam(function, 0);
-        let mut args = rust_fun
-            .params()
-            .iter()
-            .map(|_| {
-                let llvm_pair = cgx.boxed_abi_to_llvm_type(&abitype::BoxedABIType::Pair(
-                    &abitype::BoxedABIType::Any,
-                ));
+        let mut args = vec![];
 
-                let pair_ptr = LLVMBuildBitCast(
-                    builder,
-                    arg_list,
-                    llvm_pair,
-                    b"pair_cast\0".as_ptr() as *const _,
-                );
+        if rust_fun.takes_task() {
+            args.push(LLVMGetParam(function, 0));
+        }
 
-                let head_ptr =
-                    LLVMBuildStructGEP(builder, pair_ptr, 2, b"head_ptr\0".as_ptr() as *const _);
-                let rest_ptr =
-                    LLVMBuildStructGEP(builder, pair_ptr, 3, b"rest_ptr\0".as_ptr() as *const _);
+        let mut arg_list = LLVMGetParam(function, 1);
+        args.extend(rust_fun.params().iter().map(|_| {
+            let llvm_pair = cgx
+                .boxed_abi_to_llvm_type(&abitype::BoxedABIType::Pair(&abitype::BoxedABIType::Any));
 
-                let arg_value = LLVMBuildLoad(builder, head_ptr, "head\0".as_ptr() as *const _);
-                arg_list = LLVMBuildLoad(builder, rest_ptr, "rest\0".as_ptr() as *const _);
+            let pair_ptr = LLVMBuildBitCast(
+                builder,
+                arg_list,
+                llvm_pair,
+                b"pair_cast\0".as_ptr() as *const _,
+            );
 
-                arg_value
-            }).collect::<Vec<LLVMValueRef>>();
+            let head_ptr =
+                LLVMBuildStructGEP(builder, pair_ptr, 2, b"head_ptr\0".as_ptr() as *const _);
+            let rest_ptr =
+                LLVMBuildStructGEP(builder, pair_ptr, 3, b"rest_ptr\0".as_ptr() as *const _);
+
+            let arg_value = LLVMBuildLoad(builder, head_ptr, "head\0".as_ptr() as *const _);
+            arg_list = LLVMBuildLoad(builder, rest_ptr, "rest\0".as_ptr() as *const _);
+
+            arg_value
+        }));
 
         match rust_fun.ret() {
             abitype::RetABIType::Inhabited(abi_type) => {

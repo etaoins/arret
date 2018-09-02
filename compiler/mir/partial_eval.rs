@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::os::raw::c_void;
 use std::rc::Rc;
 
+use runtime;
 use runtime::boxed;
 use runtime::boxed::prelude::*;
 use runtime::boxed::refs::Gc;
@@ -16,7 +17,7 @@ use crate::mir::{Expr, Value};
 use crate::ty;
 
 pub struct PartialEvalCtx {
-    heap: boxed::Heap,
+    runtime_task: runtime::task::Task,
     global_values: HashMap<hir::VarId, Value>,
 
     // This is important for drop order!
@@ -41,7 +42,7 @@ impl<'tvars> DefCtx<'tvars> {
 impl PartialEvalCtx {
     pub fn new() -> PartialEvalCtx {
         PartialEvalCtx {
-            heap: boxed::Heap::new(),
+            runtime_task: runtime::task::Task::new(),
             global_values: HashMap::new(),
             rust_fun_portals: HashMap::new(),
             portal_gen: codegen::CodegenCtx::new(),
@@ -175,7 +176,7 @@ impl PartialEvalCtx {
             panic!("Unexpected arity for type predicate application");
         };
 
-        let subject_poly = poly_for_value(self.heap.interner(), &value);
+        let subject_poly = poly_for_value(self.runtime_task.heap().interner(), &value);
 
         match ty::pred::interpret_poly_pred(dcx.tvars, &subject_poly, test_poly) {
             InterpretedPred::Static(value) => {
@@ -219,7 +220,7 @@ impl PartialEvalCtx {
             .entry(rust_fun.entry_point())
             .or_insert_with(|| create_portal_for_rust_fun(portal_gen, rust_fun));
 
-        let result = portal.entry_point()(boxed_arg_list);
+        let result = portal.entry_point()(&mut self.runtime_task, boxed_arg_list);
 
         Value::Const(result)
     }
@@ -311,7 +312,7 @@ impl PartialEvalCtx {
     /// Collect any boxed values that are no longer reachable
     pub fn collect_garbage(&mut self) {
         use std::mem;
-        let old_heap = mem::replace(&mut self.heap, boxed::Heap::with_capacity(0));
+        let old_heap = mem::replace(self.runtime_task.heap_mut(), boxed::Heap::with_capacity(0));
         let mut collection = boxed::Collection::new(old_heap);
 
         // Move all of our global values to the new heap
@@ -319,7 +320,7 @@ impl PartialEvalCtx {
             value::visit_value_root(&mut collection, value_ref);
         }
 
-        self.heap = collection.into_new_heap();
+        *self.runtime_task.heap_mut() = collection.into_new_heap();
     }
 
     pub fn eval_expr(&mut self, dcx: &mut DefCtx<'_>, expr: &Expr) -> Value {
@@ -368,7 +369,7 @@ impl PartialEvalCtx {
                 };
 
                 let list = boxed::List::<boxed::Any>::new_with_tail(
-                    &mut self.heap,
+                    &mut self.runtime_task,
                     fixed_boxes.into_iter(),
                     rest_box,
                 );
@@ -394,10 +395,10 @@ impl Default for PartialEvalCtx {
 
 impl AsHeap for PartialEvalCtx {
     fn as_heap(&self) -> &boxed::Heap {
-        &self.heap
+        self.runtime_task.heap()
     }
 
     fn as_heap_mut(&mut self) -> &mut boxed::Heap {
-        &mut self.heap
+        self.runtime_task.heap_mut()
     }
 }
