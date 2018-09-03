@@ -1,4 +1,4 @@
-pub mod convert;
+mod convert;
 pub mod portal;
 
 use std::collections::HashMap;
@@ -8,12 +8,12 @@ use llvm_sys::execution_engine::*;
 use llvm_sys::prelude::*;
 use llvm_sys::target::*;
 
-use runtime::abitype;
+use runtime::abitype::{ABIType, BoxedABIType, RetABIType};
 
 pub struct CodegenCtx {
     llx: LLVMContextRef,
     task_type: Option<LLVMTypeRef>,
-    boxed_abi_types: HashMap<abitype::BoxedABIType, LLVMTypeRef>,
+    boxed_abi_types: HashMap<BoxedABIType, LLVMTypeRef>,
 }
 
 impl CodegenCtx {
@@ -43,19 +43,19 @@ impl CodegenCtx {
         })
     }
 
-    fn boxed_abi_to_llvm_type(&mut self, boxed_abi_type: &abitype::BoxedABIType) -> LLVMTypeRef {
-        if let Some(llvm_type) = self.boxed_abi_types.get(boxed_abi_type) {
-            return *llvm_type;
+    fn boxed_abi_to_llvm_struct_type(&mut self, boxed_abi_type: &BoxedABIType) -> LLVMTypeRef {
+        if let Some(llvm_struct) = self.boxed_abi_types.get(boxed_abi_type) {
+            return *llvm_struct;
         }
 
         unsafe {
             let llvm_i8 = LLVMInt8TypeInContext(self.llx);
             let mut members = vec![llvm_i8, llvm_i8];
 
-            let type_name = if let abitype::BoxedABIType::Pair(member) = boxed_abi_type {
-                let llvm_any_ptr = self.boxed_abi_to_llvm_type(&abitype::BoxedABIType::Any);
+            let type_name = if let BoxedABIType::Pair(member) = boxed_abi_type {
+                let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
 
-                members.push(self.boxed_abi_to_llvm_type(member));
+                members.push(self.boxed_abi_to_llvm_ptr_type(member));
                 members.push(llvm_any_ptr);
                 members.push(LLVMInt64TypeInContext(self.llx));
 
@@ -64,10 +64,8 @@ impl CodegenCtx {
                 b"boxed\0".as_ptr()
             };
 
-            let box_header = LLVMStructCreateNamed(self.llx, type_name as *const _);
-            LLVMStructSetBody(box_header, members.as_mut_ptr(), members.len() as u32, 0);
-
-            let llvm_type = LLVMPointerType(box_header, 0);
+            let llvm_type = LLVMStructCreateNamed(self.llx, type_name as *const _);
+            LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
             self.boxed_abi_types
                 .insert(boxed_abi_type.clone(), llvm_type);
@@ -76,12 +74,16 @@ impl CodegenCtx {
         }
     }
 
-    fn abi_to_llvm_type(&mut self, abi_type: &abitype::ABIType) -> LLVMTypeRef {
+    fn boxed_abi_to_llvm_ptr_type(&mut self, boxed_abi_type: &BoxedABIType) -> LLVMTypeRef {
+        unsafe { LLVMPointerType(self.boxed_abi_to_llvm_struct_type(boxed_abi_type), 0) }
+    }
+
+    fn abi_to_llvm_type(&mut self, abi_type: &ABIType) -> LLVMTypeRef {
         unsafe {
             match abi_type {
-                abitype::ABIType::Bool => LLVMInt8TypeInContext(self.llx),
-                abitype::ABIType::Int => LLVMInt64TypeInContext(self.llx),
-                abitype::ABIType::Boxed(boxed) => self.boxed_abi_to_llvm_type(boxed),
+                ABIType::Bool => LLVMInt8TypeInContext(self.llx),
+                ABIType::Int => LLVMInt64TypeInContext(self.llx),
+                ABIType::Boxed(boxed) => self.boxed_abi_to_llvm_ptr_type(boxed),
                 other => {
                     unimplemented!("ABI type: {:?}", other);
                 }
@@ -89,18 +91,18 @@ impl CodegenCtx {
         }
     }
 
-    fn ret_abi_to_llvm_type(&mut self, ret_abi_type: &abitype::RetABIType) -> LLVMTypeRef {
+    fn ret_abi_to_llvm_type(&mut self, ret_abi_type: &RetABIType) -> LLVMTypeRef {
         match ret_abi_type {
-            abitype::RetABIType::Inhabited(abi_type) => self.abi_to_llvm_type(abi_type),
-            abitype::RetABIType::Void | abitype::RetABIType::Never => unsafe { LLVMVoidType() },
+            RetABIType::Inhabited(abi_type) => self.abi_to_llvm_type(abi_type),
+            RetABIType::Void | RetABIType::Never => unsafe { LLVMVoidType() },
         }
     }
 
     fn function_to_llvm_type(
         &mut self,
         takes_task: bool,
-        arg_types: &[abitype::ABIType],
-        ret_type: &abitype::RetABIType,
+        arg_types: &[ABIType],
+        ret_type: &RetABIType,
     ) -> LLVMTypeRef {
         let mut llvm_arg_types = vec![];
 
@@ -123,6 +125,23 @@ impl CodegenCtx {
                 llvm_arg_types.len() as u32,
                 0,
             )
+        }
+    }
+
+    fn ptr_to_singleton_box(
+        &mut self,
+        module: LLVMModuleRef,
+        boxed_abi_type: &BoxedABIType,
+        name: &[u8],
+    ) -> LLVMValueRef {
+        unsafe {
+            let global = LLVMGetNamedGlobal(module, name.as_ptr() as *const _);
+            if !global.is_null() {
+                return global;
+            }
+
+            let llvm_any = self.boxed_abi_to_llvm_struct_type(boxed_abi_type);
+            LLVMAddGlobal(module, llvm_any, name.as_ptr() as *const _)
         }
     }
 }

@@ -6,11 +6,11 @@ use llvm_sys::core::*;
 use llvm_sys::execution_engine::*;
 
 use runtime;
-use runtime::abitype;
+use runtime::abitype::{ABIType, BoxedABIType, RetABIType};
 use runtime::boxed;
 use runtime::boxed::refs::Gc;
 
-use crate::codegen::convert::{convert_to_boxed_any, ptr_to_singleton};
+use crate::codegen::convert::convert_to_boxed_any;
 use crate::codegen::CodegenCtx;
 use crate::hir::rfi;
 
@@ -36,6 +36,8 @@ impl Drop for Portal {
 }
 
 pub fn create_portal_for_rust_fun(cgx: &mut CodegenCtx, rust_fun: &rfi::Fun) -> Portal {
+    use runtime::boxed::TypeTag;
+
     unsafe {
         // Create the module
         let module = LLVMModuleCreateWithNameInContext(b"arret\0".as_ptr() as *const _, cgx.llx);
@@ -43,10 +45,8 @@ pub fn create_portal_for_rust_fun(cgx: &mut CodegenCtx, rust_fun: &rfi::Fun) -> 
 
         let outer_function_type = cgx.function_to_llvm_type(
             true,
-            &[abitype::ABIType::Boxed(abitype::BoxedABIType::List(
-                &abitype::BoxedABIType::Any,
-            ))],
-            &abitype::RetABIType::Inhabited(abitype::ABIType::Boxed(abitype::BoxedABIType::Any)),
+            &[ABIType::Boxed(BoxedABIType::List(&BoxedABIType::Any))],
+            &RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::Any)),
         );
 
         let function = LLVMAddFunction(
@@ -86,8 +86,7 @@ pub fn create_portal_for_rust_fun(cgx: &mut CodegenCtx, rust_fun: &rfi::Fun) -> 
         };
 
         args.extend(param_type_iter.map(|_| {
-            let llvm_pair = cgx
-                .boxed_abi_to_llvm_type(&abitype::BoxedABIType::Pair(&abitype::BoxedABIType::Any));
+            let llvm_pair = cgx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Pair(&BoxedABIType::Any));
 
             let pair_ptr = LLVMBuildBitCast(
                 builder,
@@ -112,7 +111,7 @@ pub fn create_portal_for_rust_fun(cgx: &mut CodegenCtx, rust_fun: &rfi::Fun) -> 
         }
 
         match rust_fun.ret() {
-            abitype::RetABIType::Inhabited(abi_type) => {
+            RetABIType::Inhabited(abi_type) => {
                 let inner_ret = LLVMBuildCall(
                     builder,
                     inner_entry_point,
@@ -121,10 +120,10 @@ pub fn create_portal_for_rust_fun(cgx: &mut CodegenCtx, rust_fun: &rfi::Fun) -> 
                     b"ret\0".as_ptr() as *const _,
                 );
 
-                let outer_ret = convert_to_boxed_any(cgx, builder, abi_type, inner_ret);
+                let outer_ret = convert_to_boxed_any(cgx, module, builder, abi_type, inner_ret);
                 LLVMBuildRet(builder, outer_ret);
             }
-            abitype::RetABIType::Void | abitype::RetABIType::Never => {
+            RetABIType::Void | RetABIType::Never => {
                 LLVMBuildCall(
                     builder,
                     inner_entry_point,
@@ -133,10 +132,19 @@ pub fn create_portal_for_rust_fun(cgx: &mut CodegenCtx, rust_fun: &rfi::Fun) -> 
                     b"\0".as_ptr() as *const _,
                 );
 
-                if rust_fun.ret() == &abitype::RetABIType::Never {
+                if rust_fun.ret() == &RetABIType::Never {
                     LLVMBuildUnreachable(builder);
                 } else {
-                    let nil_ret = ptr_to_singleton(cgx, builder, &boxed::NIL_INSTANCE, b"nil\0");
+                    let llvm_any_ptr = cgx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
+
+                    let nil_ret = LLVMConstBitCast(
+                        cgx.ptr_to_singleton_box(
+                            module,
+                            &BoxedABIType::DirectTagged(TypeTag::Nil),
+                            b"ARRET_NIL_PTR\0",
+                        ),
+                        llvm_any_ptr,
+                    );
                     LLVMBuildRet(builder, nil_ret);
                 }
             }
@@ -151,7 +159,7 @@ pub fn create_portal_for_rust_fun(cgx: &mut CodegenCtx, rust_fun: &rfi::Fun) -> 
             error,
         );
 
-        //LLVMDumpModule(module);
+        LLVMDumpModule(module);
 
         let mut ee = mem::uninitialized();
         let mut out = mem::zeroed();

@@ -4,34 +4,22 @@ use llvm_sys::prelude::*;
 
 use crate::codegen::CodegenCtx;
 
-use runtime::abitype;
-use runtime::boxed;
-
-pub(super) fn ptr_to_singleton<T: boxed::Boxed>(
-    cgx: &mut CodegenCtx,
-    builder: LLVMBuilderRef,
-    singleton: &T,
-    name: &[u8],
-) -> LLVMValueRef {
-    unsafe {
-        let llvm_i64 = LLVMInt64TypeInContext(cgx.llx);
-        let llvm_any = cgx.boxed_abi_to_llvm_type(&abitype::BoxedABIType::Any);
-
-        let ptr_int = LLVMConstInt(llvm_i64, singleton as *const _ as u64, 0);
-        LLVMBuildIntToPtr(builder, ptr_int, llvm_any, name.as_ptr() as *const _)
-    }
-}
+use runtime::abitype::{ABIType, BoxedABIType};
 
 pub(super) fn convert_to_boxed_any(
     cgx: &mut CodegenCtx,
+    module: LLVMModuleRef,
     builder: LLVMBuilderRef,
-    from_abi_type: &abitype::ABIType,
+    from_abi_type: &ABIType,
     value: LLVMValueRef,
 ) -> LLVMValueRef {
+    use runtime::boxed::TypeTag;
+
     match from_abi_type {
-        abitype::ABIType::Boxed(abitype::BoxedABIType::Any) => value,
-        abitype::ABIType::Bool => unsafe {
+        ABIType::Boxed(BoxedABIType::Any) => value,
+        ABIType::Bool => unsafe {
             let llvm_i8 = LLVMInt8TypeInContext(cgx.llx);
+            let llvm_any_ptr = cgx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
 
             let one_value = LLVMConstInt(llvm_i8, 1, 0);
             let cond_pred = LLVMBuildICmp(
@@ -42,8 +30,23 @@ pub(super) fn convert_to_boxed_any(
                 b"is_true\0".as_ptr() as *const _,
             );
 
-            let true_ptr = ptr_to_singleton(cgx, builder, &boxed::TRUE_INSTANCE, b"true_ptr\0");
-            let false_ptr = ptr_to_singleton(cgx, builder, &boxed::FALSE_INSTANCE, b"false_ptr\0");
+            let true_ptr = LLVMConstBitCast(
+                cgx.ptr_to_singleton_box(
+                    module,
+                    &BoxedABIType::DirectTagged(TypeTag::True),
+                    b"ARRET_TRUE_PTR\0",
+                ),
+                llvm_any_ptr,
+            );
+
+            let false_ptr = LLVMConstBitCast(
+                cgx.ptr_to_singleton_box(
+                    module,
+                    &BoxedABIType::DirectTagged(TypeTag::False),
+                    b"ARRET_FALSE_PTR\0",
+                ),
+                llvm_any_ptr,
+            );
 
             LLVMBuildSelect(
                 builder,

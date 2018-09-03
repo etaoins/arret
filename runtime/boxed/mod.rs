@@ -224,13 +224,14 @@ impl PartialEq for Any {
 }
 
 macro_rules! define_singleton_box {
-    ($type_name:ident, $static_name:ident) => {
+    ($type_name:ident, $static_name:ident, $export_name:expr) => {
         #[repr(C, align(16))]
         #[derive(Debug)]
         pub struct $type_name {
             header: Header,
         }
 
+        #[export_name = $export_name]
         pub static $static_name: $type_name = $type_name {
             header: Header {
                 type_tag: $type_name::TYPE_TAG,
@@ -324,9 +325,9 @@ define_direct_tagged_boxes! {
     TopVector
 }
 
-define_singleton_box!(Nil, NIL_INSTANCE);
-define_singleton_box!(True, TRUE_INSTANCE);
-define_singleton_box!(False, FALSE_INSTANCE);
+define_singleton_box!(Nil, NIL_INSTANCE, "ARRET_NIL_PTR");
+define_singleton_box!(True, TRUE_INSTANCE, "ARRET_TRUE_PTR");
+define_singleton_box!(False, FALSE_INSTANCE, "ARRET_FALSE_PTR");
 
 define_tagged_union!(Num, NumSubtype, NumMember, as_num_ref, {
     Int,
