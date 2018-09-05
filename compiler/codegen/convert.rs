@@ -34,7 +34,7 @@ pub(super) fn convert_to_boxed_any(
                 cgx.ptr_to_singleton_box(
                     module,
                     &BoxedABIType::DirectTagged(TypeTag::True),
-                    b"ARRET_TRUE_PTR\0",
+                    b"ARRET_TRUE\0",
                 ),
                 llvm_any_ptr,
             );
@@ -43,7 +43,7 @@ pub(super) fn convert_to_boxed_any(
                 cgx.ptr_to_singleton_box(
                     module,
                     &BoxedABIType::DirectTagged(TypeTag::False),
-                    b"ARRET_FALSE_PTR\0",
+                    b"ARRET_FALSE\0",
                 ),
                 llvm_any_ptr,
             );

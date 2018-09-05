@@ -1,9 +1,9 @@
-use std::os::raw::c_char;
 use std::{mem, ptr};
+
+use libc;
 
 use llvm_sys::analysis::*;
 use llvm_sys::core::*;
-use llvm_sys::execution_engine::*;
 
 use runtime;
 use runtime::abitype::{ABIType, BoxedABIType, RetABIType};
@@ -11,31 +11,17 @@ use runtime::boxed;
 use runtime::boxed::refs::Gc;
 
 use crate::codegen::convert::convert_to_boxed_any;
+use crate::codegen::jit;
 use crate::codegen::CodegenCtx;
 use crate::hir::rfi;
 
-type PortalEntryPoint = fn(&mut runtime::task::Task, Gc<boxed::Any>) -> Gc<boxed::Any>;
+pub type Portal = fn(&mut runtime::task::Task, Gc<boxed::Any>) -> Gc<boxed::Any>;
 
-pub struct Portal {
-    execution_engine: *mut LLVMOpaqueExecutionEngine,
-    entry_point: PortalEntryPoint,
-}
-
-impl Portal {
-    pub fn entry_point(&self) -> PortalEntryPoint {
-        self.entry_point
-    }
-}
-
-impl Drop for Portal {
-    fn drop(&mut self) {
-        unsafe {
-            LLVMDisposeExecutionEngine(self.execution_engine);
-        }
-    }
-}
-
-pub fn create_portal_for_rust_fun(cgx: &mut CodegenCtx, rust_fun: &rfi::Fun) -> Portal {
+pub fn create_portal_for_rust_fun(
+    cgx: &mut CodegenCtx,
+    jcx: &mut jit::JITCtx,
+    rust_fun: &rfi::Fun,
+) -> Portal {
     use runtime::boxed::TypeTag;
 
     unsafe {
@@ -141,7 +127,7 @@ pub fn create_portal_for_rust_fun(cgx: &mut CodegenCtx, rust_fun: &rfi::Fun) -> 
                         cgx.ptr_to_singleton_box(
                             module,
                             &BoxedABIType::DirectTagged(TypeTag::Nil),
-                            b"ARRET_NIL_PTR\0",
+                            b"ARRET_NIL\0",
                         ),
                         llvm_any_ptr,
                     );
@@ -152,24 +138,16 @@ pub fn create_portal_for_rust_fun(cgx: &mut CodegenCtx, rust_fun: &rfi::Fun) -> 
 
         LLVMDisposeBuilder(builder);
 
-        let error: *mut *mut c_char = ptr::null_mut();
+        let error: *mut *mut libc::c_char = ptr::null_mut();
         LLVMVerifyModule(
             module,
             LLVMVerifierFailureAction::LLVMAbortProcessAction,
             error,
         );
 
-        LLVMDumpModule(module);
+        //LLVMDumpModule(module);
 
-        let mut ee = mem::uninitialized();
-        let mut out = mem::zeroed();
-
-        LLVMCreateExecutionEngineForModule(&mut ee, module, &mut out);
-        let addr = LLVMGetFunctionAddress(ee, b"portal\0".as_ptr() as *const _);
-
-        Portal {
-            execution_engine: ee,
-            entry_point: mem::transmute(addr),
-        }
+        let address = jcx.compile_fun(module, b"portal\0");
+        mem::transmute(address)
     }
 }

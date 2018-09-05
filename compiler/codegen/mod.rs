@@ -1,17 +1,17 @@
 mod convert;
+pub mod jit;
 pub mod portal;
 
 use std::collections::HashMap;
 
 use llvm_sys::core::*;
-use llvm_sys::execution_engine::*;
 use llvm_sys::prelude::*;
-use llvm_sys::target::*;
 
 use runtime::abitype::{ABIType, BoxedABIType, RetABIType};
 
 pub struct CodegenCtx {
     llx: LLVMContextRef,
+
     task_type: Option<LLVMTypeRef>,
     boxed_abi_types: HashMap<BoxedABIType, LLVMTypeRef>,
 }
@@ -21,12 +21,9 @@ impl CodegenCtx {
         unsafe {
             let llx = LLVMContextCreate();
 
-            LLVMLinkInMCJIT();
-            LLVM_InitializeNativeTarget();
-            LLVM_InitializeNativeAsmPrinter();
-
             CodegenCtx {
                 llx,
+
                 task_type: None,
                 boxed_abi_types: HashMap::new(),
             }

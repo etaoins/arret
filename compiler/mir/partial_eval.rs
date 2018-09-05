@@ -23,6 +23,7 @@ pub struct PartialEvalCtx {
     // This is important for drop order!
     rust_fun_portals: HashMap<*const c_void, codegen::portal::Portal>,
     portal_gen: codegen::CodegenCtx,
+    portal_jit: codegen::jit::JITCtx,
 }
 
 pub struct DefCtx<'tvars> {
@@ -44,8 +45,10 @@ impl PartialEvalCtx {
         PartialEvalCtx {
             runtime_task: runtime::task::Task::new(),
             global_values: HashMap::new(),
+
             rust_fun_portals: HashMap::new(),
             portal_gen: codegen::CodegenCtx::new(),
+            portal_jit: codegen::jit::JITCtx::new(),
         }
     }
 
@@ -215,13 +218,13 @@ impl PartialEvalCtx {
 
         // Create a dynamic portal to this Rust function if it doesn't exist
         let portal_gen = &mut self.portal_gen;
+        let portal_jit = &mut self.portal_jit;
         let portal = self
             .rust_fun_portals
             .entry(rust_fun.entry_point())
-            .or_insert_with(|| create_portal_for_rust_fun(portal_gen, rust_fun));
+            .or_insert_with(|| create_portal_for_rust_fun(portal_gen, portal_jit, rust_fun));
 
-        let result = portal.entry_point()(&mut self.runtime_task, boxed_arg_list);
-
+        let result = portal(&mut self.runtime_task, boxed_arg_list);
         Value::Const(result)
     }
 

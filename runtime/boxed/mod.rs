@@ -325,9 +325,9 @@ define_direct_tagged_boxes! {
     TopVector
 }
 
-define_singleton_box!(Nil, NIL_INSTANCE, "ARRET_NIL_PTR");
-define_singleton_box!(True, TRUE_INSTANCE, "ARRET_TRUE_PTR");
-define_singleton_box!(False, FALSE_INSTANCE, "ARRET_FALSE_PTR");
+define_singleton_box!(Nil, NIL_INSTANCE, "ARRET_NIL");
+define_singleton_box!(True, TRUE_INSTANCE, "ARRET_TRUE");
+define_singleton_box!(False, FALSE_INSTANCE, "ARRET_FALSE");
 
 define_tagged_union!(Num, NumSubtype, NumMember, as_num_ref, {
     Int,
