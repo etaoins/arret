@@ -1,9 +1,10 @@
-use std::{mem, ptr};
+use std::{ffi, mem, ptr};
 
 use libc;
 
 use llvm_sys::analysis::*;
 use llvm_sys::core::*;
+use llvm_sys::prelude::*;
 
 use runtime;
 use runtime::abitype::{ABIType, BoxedABIType, RetABIType};
@@ -11,24 +12,76 @@ use runtime::boxed;
 use runtime::boxed::refs::Gc;
 
 use crate::codegen::convert::convert_to_boxed_any;
+use crate::codegen::fun_abi::FunABI;
 use crate::codegen::jit;
 use crate::codegen::CodegenCtx;
 use crate::hir::rfi;
 
 pub type Portal = fn(&mut runtime::task::Task, Gc<boxed::Any>) -> Gc<boxed::Any>;
 
-pub fn create_portal_for_rust_fun(
+/// Compiles a portal to the passed `rust_fun` in the given JIT
+pub fn jit_portal_for_rust_fun(
     cgx: &mut CodegenCtx,
     jcx: &mut jit::JITCtx,
     rust_fun: &rfi::Fun,
 ) -> Portal {
+    unsafe {
+        // Create some names
+        let inner_symbol = ffi::CString::new(rust_fun.symbol()).unwrap();
+        let outer_symbol = ffi::CString::new(format!("{}_portal", rust_fun.symbol())).unwrap();
+
+        // Add the inner symbol
+        jcx.add_symbol(
+            inner_symbol.as_bytes_with_nul(),
+            rust_fun.entry_point() as u64,
+        );
+
+        // Create the module
+        let module = LLVMModuleCreateWithNameInContext(
+            outer_symbol.as_bytes_with_nul().as_ptr() as *const _,
+            cgx.llx,
+        );
+
+        // Create the inner function value
+        let inner_function_type =
+            cgx.function_to_llvm_type(rust_fun.takes_task(), rust_fun.params(), rust_fun.ret());
+
+        let inner_function = LLVMAddGlobal(
+            module,
+            inner_function_type,
+            inner_symbol.as_bytes_with_nul().as_ptr() as *const _,
+        );
+
+        // Build the inner portal
+        build_portal_for_fun(cgx, module, &outer_symbol, rust_fun, inner_function);
+
+        let error: *mut *mut libc::c_char = ptr::null_mut();
+        LLVMVerifyModule(
+            module,
+            LLVMVerifierFailureAction::LLVMAbortProcessAction,
+            error,
+        );
+
+        //LLVMDumpModule(module);
+
+        let address = jcx.compile_fun(module, outer_symbol.as_bytes_with_nul());
+        mem::transmute(address)
+    }
+}
+
+pub fn build_portal_for_fun(
+    cgx: &mut CodegenCtx,
+    module: LLVMModuleRef,
+    outer_symbol: &ffi::CString,
+    fun_abi: &impl FunABI,
+    fun_value: LLVMValueRef,
+) {
     use runtime::boxed::TypeTag;
 
     unsafe {
-        // Create the module
-        let module = LLVMModuleCreateWithNameInContext(b"arret\0".as_ptr() as *const _, cgx.llx);
         let builder = LLVMCreateBuilderInContext(cgx.llx);
 
+        // Create the outer function
         let outer_function_type = cgx.function_to_llvm_type(
             true,
             &[ABIType::Boxed(BoxedABIType::List(&BoxedABIType::Any))],
@@ -37,35 +90,21 @@ pub fn create_portal_for_rust_fun(
 
         let function = LLVMAddFunction(
             module,
-            b"portal\0".as_ptr() as *const _,
+            outer_symbol.as_bytes_with_nul().as_ptr() as *const _,
             outer_function_type,
         );
         let bb = LLVMAppendBasicBlockInContext(cgx.llx, function, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
-
-        let inner_function_type =
-            cgx.function_to_llvm_type(rust_fun.takes_task(), rust_fun.params(), rust_fun.ret());
-
-        let llvm_i64 = LLVMInt64TypeInContext(cgx.llx);
-        let inner_entry_point_int = LLVMConstInt(llvm_i64, rust_fun.entry_point() as u64, 0);
-
-        let inner_entry_point = LLVMBuildIntToPtr(
-            builder,
-            inner_entry_point_int,
-            LLVMPointerType(inner_function_type, 0),
-            b"entry_point\0".as_ptr() as *const _,
-        );
-
         let mut args = vec![];
 
-        if rust_fun.takes_task() {
+        if fun_abi.takes_task() {
             args.push(LLVMGetParam(function, 0));
         }
 
         let mut arg_list = LLVMGetParam(function, 1);
-        let mut param_type_iter = rust_fun.params().iter();
+        let mut param_type_iter = fun_abi.params().iter();
 
-        let rest_type = if rust_fun.arret_fun_type().params().rest().is_some() {
+        let rest_type = if fun_abi.has_rest() {
             param_type_iter.next_back()
         } else {
             None
@@ -96,11 +135,11 @@ pub fn create_portal_for_rust_fun(
             args.push(arg_list);
         }
 
-        match rust_fun.ret() {
+        match fun_abi.ret() {
             RetABIType::Inhabited(abi_type) => {
                 let inner_ret = LLVMBuildCall(
                     builder,
-                    inner_entry_point,
+                    fun_value,
                     args.as_mut_ptr(),
                     args.len() as u32,
                     b"ret\0".as_ptr() as *const _,
@@ -112,13 +151,13 @@ pub fn create_portal_for_rust_fun(
             RetABIType::Void | RetABIType::Never => {
                 LLVMBuildCall(
                     builder,
-                    inner_entry_point,
+                    fun_value,
                     args.as_mut_ptr(),
                     args.len() as u32,
                     b"\0".as_ptr() as *const _,
                 );
 
-                if rust_fun.ret() == &RetABIType::Never {
+                if fun_abi.ret() == &RetABIType::Never {
                     LLVMBuildUnreachable(builder);
                 } else {
                     let llvm_any_ptr = cgx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
@@ -137,17 +176,5 @@ pub fn create_portal_for_rust_fun(
         }
 
         LLVMDisposeBuilder(builder);
-
-        let error: *mut *mut libc::c_char = ptr::null_mut();
-        LLVMVerifyModule(
-            module,
-            LLVMVerifierFailureAction::LLVMAbortProcessAction,
-            error,
-        );
-
-        //LLVMDumpModule(module);
-
-        let address = jcx.compile_fun(module, b"portal\0");
-        mem::transmute(address)
     }
 }

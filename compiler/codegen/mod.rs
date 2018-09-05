@@ -1,4 +1,5 @@
 mod convert;
+pub mod fun_abi;
 pub mod jit;
 pub mod portal;
 

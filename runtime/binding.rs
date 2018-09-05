@@ -10,7 +10,7 @@ pub struct RustFun {
     pub takes_task: bool,
     pub params: &'static [ABIType],
     pub ret: RetABIType,
-    pub entry_point: &'static str,
+    pub symbol: &'static str,
 }
 
 pub type RustExports = &'static [(&'static str, &'static RustFun)];
@@ -33,7 +33,7 @@ macro_rules! define_rust_fn {
                 $(<$rust_ty as EncodeABIType>::ABI_TYPE),*
             ],
             ret: <$ret as EncodeRetABIType>::RET_ABI_TYPE,
-            entry_point: stringify!($func_name),
+            symbol: stringify!($func_name),
         };
     };
 
@@ -50,7 +50,7 @@ macro_rules! define_rust_fn {
                 $(<$rust_ty as EncodeABIType>::ABI_TYPE),*
             ],
             ret: <$ret as EncodeRetABIType>::RET_ABI_TYPE,
-            entry_point: stringify!($func_name),
+            symbol: stringify!($func_name),
         };
     };
 }
@@ -90,7 +90,7 @@ pub mod test {
 
     #[test]
     fn return_42_fn() {
-        assert_eq!("return_42", RETURN_42.entry_point);
+        assert_eq!("return_42", RETURN_42.symbol);
         assert_eq!(false, RETURN_42.takes_task);
 
         assert_eq!(true, RETURN_42.params.is_empty());
@@ -127,7 +127,7 @@ pub mod test {
     fn add_int_float_fn() {
         let mut task = Task::new();
 
-        assert_eq!("add_int_float", ADD_INT_FLOAT.entry_point);
+        assert_eq!("add_int_float", ADD_INT_FLOAT.symbol);
         assert_eq!(true, ADD_INT_FLOAT.takes_task);
         assert_eq!("(Int Float -> Num)", ADD_INT_FLOAT.arret_type);
 
@@ -164,7 +164,7 @@ pub mod test {
     fn length_fn() {
         let mut task = Task::new();
 
-        assert_eq!("length", LENGTH.entry_point);
+        assert_eq!("length", LENGTH.symbol);
         assert_eq!(false, LENGTH.takes_task);
         assert_eq!("((Listof Any) -> Int)", LENGTH.arret_type);
 
@@ -190,7 +190,7 @@ pub mod test {
 
     #[test]
     fn empty_impure_fn() {
-        assert_eq!("empty_impure", EMPTY_IMPURE.entry_point);
+        assert_eq!("empty_impure", EMPTY_IMPURE.symbol);
         assert_eq!(false, EMPTY_IMPURE.takes_task);
         assert_eq!("(->! ())", EMPTY_IMPURE.arret_type);
 
@@ -202,7 +202,7 @@ pub mod test {
 
     #[test]
     fn diverging_fn() {
-        assert_eq!("diverging", DIVERGING.entry_point);
+        assert_eq!("diverging", DIVERGING.symbol);
         assert_eq!(false, DIVERGING.takes_task);
         assert_eq!("(Any -> (U))", DIVERGING.arret_type);
 

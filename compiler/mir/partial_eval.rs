@@ -196,7 +196,7 @@ impl PartialEvalCtx {
         fixed_args: &[Expr],
         rest_arg: Option<&Expr>,
     ) -> Value {
-        use crate::codegen::portal::create_portal_for_rust_fun;
+        use crate::codegen::portal::jit_portal_for_rust_fun;
         use crate::mir::intrinsic;
 
         if let Some(intrinsic_name) = rust_fun.intrinsic_name() {
@@ -222,7 +222,7 @@ impl PartialEvalCtx {
         let portal = self
             .rust_fun_portals
             .entry(rust_fun.entry_point())
-            .or_insert_with(|| create_portal_for_rust_fun(portal_gen, portal_jit, rust_fun));
+            .or_insert_with(|| jit_portal_for_rust_fun(portal_gen, portal_jit, rust_fun));
 
         let result = portal(&mut self.runtime_task, boxed_arg_list);
         Value::Const(result)

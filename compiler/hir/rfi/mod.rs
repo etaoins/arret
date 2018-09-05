@@ -8,6 +8,7 @@ use libloading;
 
 use syntax::span::Span;
 
+use crate::codegen::fun_abi::FunABI;
 use crate::hir::error::{Error, ErrorKind};
 use crate::hir::ns::{NsDatum, NsId};
 use crate::hir::scope::Scope;
@@ -34,6 +35,7 @@ pub struct Fun {
     params: &'static [abitype::ABIType],
     ret: &'static abitype::RetABIType,
     // TODO: Use ! once its stable
+    symbol: &'static str,
     entry_point: *const c_void,
 }
 
@@ -46,20 +48,30 @@ impl Fun {
         &self.arret_fun_type
     }
 
-    pub fn params(&self) -> &'static [abitype::ABIType] {
-        self.params
-    }
-
-    pub fn ret(&self) -> &'static abitype::RetABIType {
-        self.ret
+    pub fn symbol(&self) -> &'static str {
+        self.symbol
     }
 
     pub fn entry_point(&self) -> *const c_void {
         self.entry_point
     }
+}
 
-    pub fn takes_task(&self) -> bool {
+impl FunABI for Fun {
+    fn takes_task(&self) -> bool {
         self.takes_task
+    }
+
+    fn params(&self) -> &'static [abitype::ABIType] {
+        self.params
+    }
+
+    fn has_rest(&self) -> bool {
+        self.arret_fun_type.params().rest().is_some()
+    }
+
+    fn ret(&self) -> &'static abitype::RetABIType {
+        self.ret
     }
 }
 
@@ -211,6 +223,7 @@ impl Loader {
             takes_task: rust_fun.takes_task,
             params: rust_fun.params,
             ret: &rust_fun.ret,
+            symbol: rust_fun.symbol,
             entry_point,
         })
     }
@@ -243,9 +256,9 @@ impl Loader {
         let module = exports
             .iter()
             .map(|(name, rust_fun)| {
-                let entry_point = unsafe {
+                let entry_point_address = unsafe {
                     *rust_library
-                        .get::<*const c_void>(rust_fun.entry_point.as_bytes())
+                        .get::<*const c_void>(rust_fun.symbol.as_bytes())
                         .map_err(map_io_err)?
                 };
 
@@ -253,8 +266,12 @@ impl Loader {
                 let intrinsic_name = Some(*name).filter(|_| package_name == "stdlib");
 
                 let fun = self
-                    .process_rust_fun(rust_library_id, entry_point, rust_fun, intrinsic_name)
-                    .map_err(|err| {
+                    .process_rust_fun(
+                        rust_library_id,
+                        entry_point_address,
+                        rust_fun,
+                        intrinsic_name,
+                    ).map_err(|err| {
                         // This is a gross hack. We don't want to insert an entry in to the
                         // `SourceLoader` for every Rust function. This requires at least one memory
                         // allocation for the display name and extending the loaded sources. Instead
@@ -318,7 +335,7 @@ mod test {
             takes_task: false,
             params: &[ABIType::Int],
             ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))),
-            entry_point: "",
+            symbol: "",
         };
 
         assert_valid_binding_fun(&BINDING_RUST_FUN);
@@ -333,7 +350,7 @@ mod test {
                 &BoxedABIType::DirectTagged(TypeTag::Int),
             ))],
             ret: RetABIType::Inhabited(ABIType::InternedSym),
-            entry_point: "",
+            symbol: "",
         };
 
         assert_valid_binding_fun(&BINDING_RUST_FUN);
@@ -346,7 +363,7 @@ mod test {
             takes_task: false,
             params: &[ABIType::Float],
             ret: RetABIType::Void,
-            entry_point: "",
+            symbol: "",
         };
 
         assert_valid_binding_fun(&BINDING_RUST_FUN);
@@ -359,7 +376,7 @@ mod test {
             takes_task: false,
             params: &[],
             ret: RetABIType::Never,
-            entry_point: "",
+            symbol: "",
         };
 
         assert_valid_binding_fun(&BINDING_RUST_FUN);
@@ -372,7 +389,7 @@ mod test {
             takes_task: false,
             params: &[ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))],
             ret: RetABIType::Inhabited(ABIType::InternedSym),
-            entry_point: "",
+            symbol: "",
         };
 
         let kind = ErrorKind::UnboundSym("unbound".into());
@@ -386,7 +403,7 @@ mod test {
             takes_task: false,
             params: &[ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))],
             ret: RetABIType::Inhabited(ABIType::InternedSym),
-            entry_point: "",
+            symbol: "",
         };
 
         let kind = ErrorKind::RustFunError("function type expected".into());
@@ -400,7 +417,7 @@ mod test {
             takes_task: false,
             params: &[ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))],
             ret: RetABIType::Inhabited(ABIType::InternedSym),
-            entry_point: "",
+            symbol: "",
         };
 
         let kind = ErrorKind::RustFunError("expected Rust function to have `boxed::List` as last parameter to receive the rest argument".into());
@@ -414,7 +431,7 @@ mod test {
             takes_task: false,
             params: &[ABIType::Int, ABIType::Int],
             ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))),
-            entry_point: "",
+            symbol: "",
         };
 
         let kind =
@@ -429,7 +446,7 @@ mod test {
             takes_task: false,
             params: &[ABIType::Int],
             ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))),
-            entry_point: "",
+            symbol: "",
         };
 
         let kind = ErrorKind::RustFunError(
@@ -445,7 +462,7 @@ mod test {
             takes_task: false,
             params: &[ABIType::Int],
             ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))),
-            entry_point: "",
+            symbol: "",
         };
 
         let kind = ErrorKind::RustFunError(

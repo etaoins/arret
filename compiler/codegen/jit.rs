@@ -94,7 +94,7 @@ impl JITCtx {
         }
     }
 
-    fn add_symbol(&mut self, unmangled_name: &[u8], address: u64) {
+    pub fn add_symbol(&mut self, unmangled_name: &[u8], address: u64) {
         unsafe {
             let mut mangled_pointer: *mut libc::c_char = mem::uninitialized();
             LLVMOrcGetMangledSymbol(
