@@ -344,12 +344,12 @@ mod test {
     #[test]
     fn inexact_rust_fun_with_rest() {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
-            arret_type: "(Int ... -> 'foo)",
+            arret_type: "(Int ... -> false)",
             takes_task: false,
             params: &[ABIType::Boxed(BoxedABIType::List(
                 &BoxedABIType::DirectTagged(TypeTag::Int),
             ))],
-            ret: RetABIType::Inhabited(ABIType::InternedSym),
+            ret: RetABIType::Inhabited(ABIType::Bool),
             symbol: "",
         };
 
@@ -388,7 +388,7 @@ mod test {
             arret_type: "(unbound)",
             takes_task: false,
             params: &[ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))],
-            ret: RetABIType::Inhabited(ABIType::InternedSym),
+            ret: RetABIType::Inhabited(ABIType::Bool),
             symbol: "",
         };
 
@@ -402,7 +402,7 @@ mod test {
             arret_type: "Str",
             takes_task: false,
             params: &[ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))],
-            ret: RetABIType::Inhabited(ABIType::InternedSym),
+            ret: RetABIType::Inhabited(ABIType::Bool),
             symbol: "",
         };
 
@@ -413,10 +413,10 @@ mod test {
     #[test]
     fn non_list_rust_rest_param() {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
-            arret_type: "(Int ... -> 'foo)",
+            arret_type: "(Int ... -> true)",
             takes_task: false,
             params: &[ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))],
-            ret: RetABIType::Inhabited(ABIType::InternedSym),
+            ret: RetABIType::Inhabited(ABIType::Bool),
             symbol: "",
         };
 

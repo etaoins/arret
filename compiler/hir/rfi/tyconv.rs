@@ -39,7 +39,6 @@ impl ConvertableABIType for abitype::ABIType {
             ABIType::Char => ty::Ty::Char.into_poly(),
             ABIType::Float => ty::Ty::Float.into_poly(),
             ABIType::Int => ty::Ty::Int.into_poly(),
-            ABIType::InternedSym => ty::Ty::Sym.into_poly(),
             ABIType::Boxed(boxed) => boxed.to_poly(),
         }
     }
@@ -52,7 +51,6 @@ impl ConvertableABIType for abitype::ABIType {
             ABIType::Char => "char".to_owned(),
             ABIType::Float => "f64".to_owned(),
             ABIType::Int => "i64".to_owned(),
-            ABIType::InternedSym => "InternedSym".to_owned(),
             ABIType::Boxed(boxed) => format!("Gc<{}>", boxed.to_rust_str()),
         }
     }

@@ -1,7 +1,6 @@
 use crate::binding::Never;
 use crate::boxed;
 use crate::boxed::refs::Gc;
-use crate::intern::InternedSym;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum BoxedABIType {
@@ -19,7 +18,6 @@ pub enum ABIType {
     Char,
     Float,
     Int,
-    InternedSym,
     Boxed(BoxedABIType),
 }
 
@@ -48,10 +46,6 @@ impl EncodeABIType for char {
 
 impl EncodeABIType for bool {
     const ABI_TYPE: ABIType = ABIType::Bool;
-}
-
-impl EncodeABIType for InternedSym {
-    const ABI_TYPE: ABIType = ABIType::InternedSym;
 }
 
 impl<T: boxed::Boxed> EncodeABIType for Gc<T>
