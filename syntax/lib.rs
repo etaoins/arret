@@ -1,4 +1,5 @@
-#![cfg_attr(feature = "cargo-clippy", warn(clippy))]
+#![feature(tool_lints)]
+#![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
 
 pub mod datum;

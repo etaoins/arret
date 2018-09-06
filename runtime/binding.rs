@@ -1,6 +1,6 @@
 use crate::abitype::{ABIType, RetABIType};
 
-#[cfg_attr(feature = "cargo-clippy", allow(useless_attribute))]
+#[allow(clippy::useless_attribute)]
 #[allow(unused)]
 use crate::abitype::{EncodeABIType, EncodeRetABIType};
 

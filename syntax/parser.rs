@@ -709,7 +709,7 @@ mod test {
         assert_eq!(expected, datum_from_str(j).unwrap());
     }
 
-    #[cfg_attr(feature = "cargo-clippy", allow(unreadable_literal))]
+    #[allow(clippy::unreadable_literal)]
     #[test]
     fn int_datum() {
         let test_ints = [
