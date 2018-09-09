@@ -68,3 +68,6 @@
 (defn takes-generic #{T} ([x : T])
   (takes-symbol x))
                ;^ ERROR `T` is not a `Sym`
+
+
+(defn main! ())

@@ -27,3 +27,5 @@
                            ;^^^^^ ERROR `(List Int Int)` is not a `(List Any Int Any)`
  (def _ (apply-with-spread '(1 2 3 4) ...))
                            ;^^^^^^^^^ ERROR `(List Int Int Int Int)` is not a `(List Any Int Any)`
+
+(defn main! ())

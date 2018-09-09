@@ -4,6 +4,7 @@
 
 use compiler::error::Error;
 use compiler::reporting::report_to_stderr;
+
 use std::{fs, path};
 
 fn try_run_single_test(
@@ -14,7 +15,7 @@ fn try_run_single_test(
     let package_paths = compiler::PackagePaths::test_paths();
 
     let hir = compiler::lower_program(&package_paths, source_loader, source_file_id)?;
-    let inferred_defs = compiler::infer_program(&hir.pvars, &hir.tvars, hir.module_defs)?;
+    let inferred_defs = compiler::infer_program(&hir.pvars, &hir.tvars, hir.defs, hir.main_var_id)?;
 
     let mut pcx = compiler::PartialEvalCtx::new();
     for inferred_def in inferred_defs {

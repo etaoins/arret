@@ -251,6 +251,19 @@ impl<S: TyRef> Fun<S> {
         }
     }
 
+    // Returns the `Fun` type for the `(main!)` function
+    pub fn new_for_main() -> Fun<S> {
+        Self::new(
+            S::PVarIds::monomorphic(),
+            S::TVarIds::monomorphic(),
+            TopFun::new(
+                S::PRef::from_purity(purity::Purity::Impure),
+                Ty::unit().into_ty_ref(),
+            ),
+            List::empty(),
+        )
+    }
+
     /// Returns the `Fun` supertype for all type predicate functions
     ///
     /// This is the type `(Any -> Bool)`. It captures the signature of the type predicates; however

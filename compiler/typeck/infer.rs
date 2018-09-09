@@ -11,6 +11,7 @@ use crate::ty::purity::Purity;
 use crate::ty::TyRef;
 use crate::typeck;
 use crate::typeck::error::{Error, ErrorKind, WantedArity};
+
 use syntax::datum::Datum;
 use syntax::span::Span;
 
@@ -1184,6 +1185,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
     fn visit_def(&mut self, hir_def: hir::Def<ty::Decl>) -> Result<hir::Def<ty::Poly>> {
         let hir::Def {
             span,
+            macro_invocation_span,
             destruc,
             value_expr,
         } = hir_def;
@@ -1222,6 +1224,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
 
         Ok(hir::Def {
             span,
+            macro_invocation_span,
             destruc: destruc::subst_destruc(&mut inferred_free_types, destruc),
             value_expr: value_node.expr,
         })
@@ -1306,10 +1309,49 @@ impl InferCtx {
     }
 }
 
+fn ensure_main_type(
+    pvars: &[ty::purity::PVar],
+    tvars: &[ty::TVar],
+    complete_defs: &[hir::Def<ty::Poly>],
+    main_var_id: hir::VarId,
+    inferred_main_type: &ty::Poly,
+) -> Result<()> {
+    let expected_main_type = ty::Fun::new_for_main().into_ty_ref();
+
+    if !ty::is_a::poly_is_a(tvars, inferred_main_type, &expected_main_type).to_bool() {
+        use crate::reporting::LocTrace;
+        use syntax::span::EMPTY_SPAN;
+
+        // Try to find where `(main!)` was defined
+        let main_loc_trace = complete_defs
+            .iter()
+            .find_map(|def| {
+                if let destruc::Destruc::Scalar(_, ref scalar) = def.destruc {
+                    if scalar.var_id() == &Some(main_var_id) {
+                        return Some(LocTrace::new(def.span, def.macro_invocation_span));
+                    }
+                }
+
+                None
+            }).unwrap_or_else(|| EMPTY_SPAN.into());
+
+        let expected_str = hir::str_for_poly(pvars, tvars, &expected_main_type).into_boxed_str();
+        let inferred_str = hir::str_for_poly(pvars, tvars, inferred_main_type).into_boxed_str();
+
+        return Err(Error::new_with_loc_trace(
+            main_loc_trace,
+            ErrorKind::IsNotTy(inferred_str, expected_str),
+        ));
+    };
+
+    Ok(())
+}
+
 pub fn infer_program(
     pvars: &[ty::purity::PVar],
     tvars: &[ty::TVar],
     defs: Vec<Vec<hir::Def<ty::Decl>>>,
+    main_var_id: hir::VarId,
 ) -> result::Result<Vec<hir::Def<ty::Poly>>, Vec<Error>> {
     let mut var_to_type = HashMap::with_capacity(defs.len());
     let mut complete_defs = vec![];
@@ -1320,6 +1362,20 @@ pub fn infer_program(
         rdcx.infer_input_defs()?;
         complete_defs.append(&mut rdcx.complete_defs);
     }
+
+    let inferred_main_type = if let VarType::Known(ref poly_type) = var_to_type[&main_var_id] {
+        poly_type
+    } else {
+        panic!("Unable to find (main!) var type");
+    };
+
+    ensure_main_type(
+        pvars,
+        tvars,
+        &complete_defs,
+        main_var_id,
+        &inferred_main_type,
+    ).map_err(|err| vec![err])?;
 
     Ok(complete_defs)
 }

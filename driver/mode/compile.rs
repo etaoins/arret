@@ -16,7 +16,7 @@ fn try_compile_input_file(
         .expect("Unable to read input file");
 
     let hir = compiler::lower_program(&cfg.package_paths, source_loader, source_file_id)?;
-    let inferred_defs = compiler::infer_program(&hir.pvars, &hir.tvars, hir.module_defs)?;
+    let inferred_defs = compiler::infer_program(&hir.pvars, &hir.tvars, hir.defs, hir.main_var_id)?;
 
     let mut pcx = compiler::PartialEvalCtx::new();
 

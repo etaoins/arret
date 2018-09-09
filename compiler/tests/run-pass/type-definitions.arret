@@ -3,3 +3,5 @@
 ; Make sure _ eats the type
 (deftype _ Int)
 (deftype _ Float)
+
+(defn main! ())

@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::{fmt, fs, io, path};
 
+use syntax::span::Span;
+
 #[derive(PartialEq, Debug, Clone)]
 pub enum SourceKind {
     /// Loaded from a file with the given filename
@@ -34,6 +36,13 @@ new_indexing_id_type!(SourceFileId, usize);
 impl SourceFile {
     pub fn span_offset(&self) -> usize {
         self.span_offset
+    }
+
+    pub fn span(&self) -> Span {
+        Span {
+            lo: self.span_offset as u32,
+            hi: (self.span_offset + self.source.len()) as u32,
+        }
     }
 
     pub fn kind(&self) -> &SourceKind {

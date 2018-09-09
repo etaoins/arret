@@ -88,6 +88,7 @@ pub enum Expr<T: HirType> {
 #[derive(PartialEq, Debug)]
 pub struct Def<T: HirType> {
     pub span: Span,
+    pub macro_invocation_span: Span,
     pub destruc: destruc::Destruc<T>,
     pub value_expr: Expr<T>,
 }

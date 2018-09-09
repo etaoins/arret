@@ -10,3 +10,5 @@
 ; We should be able to infer the type for rest bindings
 (def (x ...) '(1 2 3))
 (def [_ : (Listof Int)] x)
+
+(defn main! ())

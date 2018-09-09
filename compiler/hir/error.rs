@@ -13,6 +13,7 @@ pub enum ErrorKind {
     UnboundSym(Box<str>),
     WrongArgCount(usize),
     IllegalArg(&'static str),
+    NoMainFun,
     ExpectedSym,
     DefOutsideBody,
     ExportOutsideModule,
@@ -110,6 +111,7 @@ impl Reportable for Error {
             ErrorKind::ReadError(ref filename) => format!("error reading `{}`", filename.to_string_lossy()),
             ErrorKind::SyntaxError(ref err) => err.message(),
             ErrorKind::RustFunError(ref message) => message.clone().into_string(),
+            ErrorKind::NoMainFun => "no main! function defined in root module".to_owned()
         }
     }
 

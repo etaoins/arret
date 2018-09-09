@@ -57,4 +57,6 @@
   (letmacro [nested-patterns (macro-rules [((a b rest ...) ...) [(rest ... b a) ...]])]
     (ann
       (nested-patterns (one two three four) (five six))
-      [(three four two one) (six five)])))
+      [(three four two one) (six five)]))
+
+  ())

@@ -29,3 +29,5 @@
   (if (not (has-type? input 'foo))
     (ann input 'bar)
     (ann input 'foo)))
+
+(defn main! ())

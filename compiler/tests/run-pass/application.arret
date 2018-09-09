@@ -10,3 +10,5 @@
 
 (defn polymorphic-identity-function #{T} ([x : T]) x)
 (def [_ : Str] (polymorphic-identity-function "Hello polymorphism!"))
+
+(defn main! ())

@@ -22,7 +22,7 @@ use crate::hir::types::{lower_poly, try_lower_purity};
 use crate::hir::util::{
     expect_arg_count, expect_ident_and_span, expect_one_arg, try_take_rest_arg,
 };
-use crate::hir::{App, Cond, Def, Expr, Fun, Let, VarIdCounter};
+use crate::hir::{App, Cond, Def, Expr, Fun, Let, VarId, VarIdCounter};
 use crate::source::{SourceFileId, SourceLoader};
 use crate::ty;
 
@@ -30,6 +30,7 @@ use crate::ty;
 struct LoweredModule {
     defs: Vec<Def<ty::Decl>>,
     exports: Exports,
+    ns_id: Option<NsId>,
 }
 
 pub struct LoweringCtx<'pp, 'sl> {
@@ -50,13 +51,33 @@ pub struct LoweringCtx<'pp, 'sl> {
 pub struct LoweredProgram {
     pub pvars: Vec<ty::purity::PVar>,
     pub tvars: Vec<ty::TVar>,
-    pub module_defs: Vec<Vec<Def<ty::Decl>>>,
+    pub defs: Vec<Vec<Def<ty::Decl>>>,
     pub rust_libraries: Vec<libloading::Library>,
+    pub main_var_id: VarId,
+}
+
+struct DeferredDef {
+    span: Span,
+    macro_invocation_span: Span,
+    destruc: destruc::Destruc<ty::Decl>,
+    value_datum: NsDatum,
 }
 
 enum DeferredModulePrim {
-    Def(Span, destruc::Destruc<ty::Decl>, NsDatum),
+    Def(DeferredDef),
     Export(Span, Ident),
+}
+
+impl DeferredModulePrim {
+    fn with_macro_invocation_span(self, span: Span) -> DeferredModulePrim {
+        match self {
+            DeferredModulePrim::Def(deferred_def) => DeferredModulePrim::Def(DeferredDef {
+                macro_invocation_span: span,
+                ..deferred_def
+            }),
+            other => other,
+        }
+    }
 }
 
 pub enum LoweredReplDatum {
@@ -561,7 +582,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             return Ok(&self.module_exports[&module_name]);
         }
 
-        let LoweredModule { exports, defs } = {
+        let LoweredModule { exports, defs, .. } = {
             match load_module_by_name(
                 self.source_loader,
                 &mut self.rfi_loader,
@@ -588,6 +609,8 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         for (name, rust_fun) in rfi_module {
             let var_id = self.var_id_counter.alloc();
             let def = Def {
+                span,
+                macro_invocation_span: EMPTY_SPAN,
                 destruc: destruc::Destruc::Scalar(
                     span,
                     destruc::Scalar::new(
@@ -596,7 +619,6 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                         ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into_decl(),
                     ),
                 ),
-                span,
                 value_expr: Expr::RustFun(span, Box::new(rust_fun)),
             };
 
@@ -604,7 +626,11 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             exports.insert(name.into(), Binding::Var(var_id));
         }
 
-        LoweredModule { defs, exports }
+        LoweredModule {
+            defs,
+            exports,
+            ns_id: None,
+        }
     }
 
     fn lower_import(
@@ -736,7 +762,14 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
 
                 let value_datum = arg_iter.next().unwrap();
 
-                Ok(vec![DeferredModulePrim::Def(span, destruc, value_datum)])
+                let deferred_def = DeferredDef {
+                    span,
+                    macro_invocation_span: EMPTY_SPAN,
+                    destruc,
+                    value_datum,
+                };
+
+                Ok(vec![DeferredModulePrim::Def(deferred_def)])
             }
             Prim::DefMacro => Ok(self.lower_defmacro(scope, span, arg_iter).map(|_| vec![])?),
             Prim::DefType => Ok(self.lower_deftype(scope, span, arg_iter).map(|_| vec![])?),
@@ -792,7 +825,11 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
 
                         return self
                             .lower_module_def(scope, expanded_datum)
-                            .map_err(|errs| {
+                            .map(|defs| {
+                                defs.into_iter()
+                                    .map(|def| def.with_macro_invocation_span(span))
+                                    .collect()
+                            }).map_err(|errs| {
                                 errs.into_iter()
                                     .map(|e| e.with_macro_invocation_span(span))
                                     .collect()
@@ -806,6 +843,26 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         }
 
         Err(vec![Error::new(span, ErrorKind::NonDefInsideModule)])
+    }
+
+    fn resolve_deferred_def(
+        &mut self,
+        scope: &mut Scope,
+        deferred_def: DeferredDef,
+    ) -> Result<Def<ty::Decl>> {
+        let DeferredDef {
+            span,
+            macro_invocation_span,
+            destruc,
+            value_datum,
+        } = deferred_def;
+
+        self.lower_expr(scope, value_datum).map(|value_expr| Def {
+            span,
+            macro_invocation_span,
+            destruc,
+            value_expr,
+        })
     }
 
     fn lower_module(
@@ -857,14 +914,10 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                         errors.push(err);
                     }
                 },
-                DeferredModulePrim::Def(span, destruc, value_datum) => {
-                    match self.lower_expr(scope, value_datum) {
-                        Ok(value_expr) => {
-                            defs.push(Def {
-                                span,
-                                destruc,
-                                value_expr,
-                            });
+                DeferredModulePrim::Def(deferred_def) => {
+                    match self.resolve_deferred_def(scope, deferred_def) {
+                        Ok(def) => {
+                            defs.push(def);
                         }
                         Err(error) => {
                             errors.push(error);
@@ -875,7 +928,11 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         }
 
         if errors.is_empty() {
-            Ok(LoweredModule { defs, exports })
+            Ok(LoweredModule {
+                defs,
+                exports,
+                ns_id: Some(ns_id),
+            })
         } else {
             Err(errors)
         }
@@ -913,14 +970,9 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 let defs = deferred_prims
                     .into_iter()
                     .map(|deferred_prim| match deferred_prim {
-                        DeferredModulePrim::Def(span, destruc, value_datum) => {
-                            let value_expr = self.lower_expr(scope, value_datum)?;
-                            Ok(Def {
-                                span,
-                                destruc,
-                                value_expr,
-                            })
-                        }
+                        DeferredModulePrim::Def(deferred_def) => self
+                            .resolve_deferred_def(scope, deferred_def)
+                            .map_err(|err| vec![err]),
                         DeferredModulePrim::Export(_, _) => {
                             Err(vec![Error::new(datum.span(), ErrorKind::ExportInsideRepl)])
                         }
@@ -954,7 +1006,10 @@ pub fn lower_program(
     source_loader: &mut SourceLoader,
     source_file_id: SourceFileId,
 ) -> Result<LoweredProgram, Vec<Error>> {
-    let data = parse_module_data(source_loader.source_file(source_file_id))?;
+    let source_file = source_loader.source_file(source_file_id);
+    let file_span = source_file.span();
+
+    let data = parse_module_data(source_file)?;
 
     let mut root_scope = Scope::empty();
     let mut lcx = LoweringCtx::new(package_paths, source_loader);
@@ -962,11 +1017,19 @@ pub fn lower_program(
 
     lcx.module_defs.push(root_module.defs);
 
+    let main_ident = Ident::new(root_module.ns_id.unwrap(), "main!".into());
+    let main_var_id = if let Some(Binding::Var(var_id)) = root_scope.get(&main_ident) {
+        *var_id
+    } else {
+        return Err(vec![Error::new(file_span, ErrorKind::NoMainFun)]);
+    };
+
     Ok(LoweredProgram {
         pvars: lcx.pvars,
         tvars: lcx.tvars,
-        module_defs: lcx.module_defs,
+        defs: lcx.module_defs,
         rust_libraries: lcx.rfi_loader.into_rust_libraries(),
+        main_var_id,
     })
 }
 
@@ -1048,7 +1111,6 @@ pub fn expr_for_str(data_str: &str) -> Expr<ty::Decl> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::hir::VarId;
     use crate::ty::purity::Purity;
     use syntax::span::t2s;
 

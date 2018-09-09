@@ -50,10 +50,11 @@ pub struct Error {
 
 impl Error {
     pub fn new(span: Span, kind: ErrorKind) -> Error {
-        Error {
-            loc_trace: span.into(),
-            kind,
-        }
+        Self::new_with_loc_trace(span.into(), kind)
+    }
+
+    pub fn new_with_loc_trace(loc_trace: LocTrace, kind: ErrorKind) -> Error {
+        Error { loc_trace, kind }
     }
 
     pub fn kind(&self) -> &ErrorKind {

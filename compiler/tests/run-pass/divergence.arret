@@ -38,3 +38,5 @@
   ; Divergence within `(let)`
   (assert-diverges (let [_ (panic "(let)")]))
 )
+
+(defn main! ())

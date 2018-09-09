@@ -7,3 +7,5 @@
 (defn union-required-type ()
   (let [[closure : (U false (Sym -> Sym))] (fn (x) x)]
     (ann closure (Sym -> Sym))))
+
+(defn main! ())
