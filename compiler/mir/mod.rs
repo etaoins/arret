@@ -1,6 +1,6 @@
 pub mod error;
+pub mod eval_hir;
 mod intrinsic;
-pub mod partial_eval;
 mod value;
 
 use crate::hir;

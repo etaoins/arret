@@ -18,11 +18,11 @@ fn try_compile_input_file(
     let hir = compiler::lower_program(&cfg.package_paths, source_loader, source_file_id)?;
     let inferred_defs = compiler::infer_program(&hir.pvars, &hir.tvars, hir.defs, hir.main_var_id)?;
 
-    let mut pcx = compiler::PartialEvalCtx::new();
+    let mut ehx = compiler::EvalHirCtx::new(compiler::EvalHirMode::PureOnly);
 
     for inferred_def in inferred_defs {
         println!("{:?}", inferred_def);
-        pcx.consume_def(&hir.tvars, inferred_def)?;
+        ehx.consume_def(&hir.tvars, inferred_def)?;
     }
 
     Ok(())

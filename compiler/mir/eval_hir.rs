@@ -19,7 +19,24 @@ use crate::mir::value;
 use crate::mir::{Expr, Value};
 use crate::ty;
 
-pub struct PartialEvalCtx {
+/// Determines the type of evaluation that will be performed
+#[derive(PartialEq)]
+pub enum EvalMode {
+    /// Immediately evalutes all functions, including impure functions with possible side effects
+    ///
+    /// This is intended for use in the REPL where there is not distinct compile and run phases
+    Immediate,
+
+    /// Only evaluates pure functions
+    ///
+    /// This is intended for compiling standalone binaries. Any operations with side effects will
+    /// be deferred to runtime.
+    PureOnly,
+}
+
+pub struct EvalHirCtx {
+    mode: EvalMode,
+
     runtime_task: runtime::task::Task,
     global_values: HashMap<hir::VarId, Value>,
 
@@ -43,9 +60,11 @@ impl<'tvars> DefCtx<'tvars> {
     }
 }
 
-impl PartialEvalCtx {
-    pub fn new() -> PartialEvalCtx {
-        PartialEvalCtx {
+impl EvalHirCtx {
+    pub fn new(mode: EvalMode) -> EvalHirCtx {
+        EvalHirCtx {
+            mode,
+
             runtime_task: runtime::task::Task::new(),
             global_values: HashMap::new(),
 
@@ -207,6 +226,13 @@ impl PartialEvalCtx {
         use crate::codegen::portal::jit_portal_for_rust_fun;
         use crate::mir::intrinsic;
 
+        // TODO: Fix for polymorphism once it's supported
+        if self.mode == EvalMode::PureOnly
+            && rust_fun.arret_fun_type().purity() != &ty::purity::Purity::Pure.into_poly()
+        {
+            unimplemented!("Applying impure Rust fun in pure only mode")
+        }
+
         if let Some(intrinsic_name) = rust_fun.intrinsic_name() {
             // Attempt specialised evaluation
             if let Some(value) =
@@ -253,23 +279,6 @@ impl PartialEvalCtx {
         })
     }
 
-    fn eval_app(
-        &mut self,
-        dcx: &mut DefCtx<'_>,
-        span: Span,
-        app: &hir::App<ty::Poly>,
-    ) -> Result<Value> {
-        let fun_value = self.eval_expr(dcx, &app.fun_expr)?;
-
-        self.eval_value_app(
-            dcx,
-            span,
-            fun_value,
-            app.fixed_arg_exprs.as_slice(),
-            app.rest_arg_expr.as_ref(),
-        )
-    }
-
     fn eval_value_app(
         &mut self,
         dcx: &mut DefCtx<'_>,
@@ -290,6 +299,23 @@ impl PartialEvalCtx {
                 unimplemented!("Unimplemented function value type");
             }
         }
+    }
+
+    fn eval_app(
+        &mut self,
+        dcx: &mut DefCtx<'_>,
+        span: Span,
+        app: &hir::App<ty::Poly>,
+    ) -> Result<Value> {
+        let fun_value = self.eval_expr(dcx, &app.fun_expr)?;
+
+        self.eval_value_app(
+            dcx,
+            span,
+            fun_value,
+            app.fixed_arg_exprs.as_slice(),
+            app.rest_arg_expr.as_ref(),
+        )
     }
 
     fn eval_cond(&mut self, dcx: &mut DefCtx<'_>, cond: &hir::Cond<ty::Poly>) -> Result<Value> {
@@ -446,13 +472,7 @@ impl PartialEvalCtx {
     }
 }
 
-impl Default for PartialEvalCtx {
-    fn default() -> PartialEvalCtx {
-        PartialEvalCtx::new()
-    }
-}
-
-impl AsHeap for PartialEvalCtx {
+impl AsHeap for EvalHirCtx {
     fn as_heap(&self) -> &boxed::Heap {
         self.runtime_task.heap()
     }

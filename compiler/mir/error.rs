@@ -39,7 +39,7 @@ impl Error {
 
 impl error::Error for Error {
     fn description(&self) -> &str {
-        "Partial evaluation error"
+        "HIR evaluation error"
     }
 }
 

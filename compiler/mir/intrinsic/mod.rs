@@ -5,13 +5,13 @@ use syntax::span::Span;
 use crate::mir::intrinsic::list::*;
 
 use crate::mir::error::Result;
-use crate::mir::partial_eval::{DefCtx, PartialEvalCtx};
+use crate::mir::eval_hir::{DefCtx, EvalHirCtx};
 use crate::mir::value::ListIterator;
 use crate::mir::{Expr, Value};
 
 trait Intrinsic {
     fn eval_exprs(
-        pcx: &mut PartialEvalCtx,
+        ehx: &mut EvalHirCtx,
         dcx: &mut DefCtx<'_>,
         span: Span,
         fixed_exprs: &[Expr],
@@ -19,29 +19,29 @@ trait Intrinsic {
     ) -> Result<Option<Value>> {
         let fixed_values = fixed_exprs
             .iter()
-            .map(|arg| pcx.eval_expr(dcx, arg))
+            .map(|arg| ehx.eval_expr(dcx, arg))
             .collect::<Result<Vec<Value>>>()?;
 
         let rest_value = match rest_expr {
-            Some(rest_arg) => Some(Box::new(pcx.eval_expr(dcx, rest_arg)?)),
+            Some(rest_arg) => Some(Box::new(ehx.eval_expr(dcx, rest_arg)?)),
             None => None,
         };
 
         let args_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
-        Self::eval_args_value(pcx, span, args_value)
+        Self::eval_args_value(ehx, span, args_value)
     }
 
     fn eval_args_value(
-        pcx: &mut PartialEvalCtx,
+        ehx: &mut EvalHirCtx,
         span: Span,
         args_value: Value,
     ) -> Result<Option<Value>> {
         let iter = args_value.list_iter();
-        Self::eval_arg_list(pcx, span, iter)
+        Self::eval_arg_list(ehx, span, iter)
     }
 
     fn eval_arg_list(
-        _pcx: &mut PartialEvalCtx,
+        _ehx: &mut EvalHirCtx,
         _span: Span,
         _iter: ListIterator<'_>,
     ) -> Result<Option<Value>> {
@@ -52,7 +52,7 @@ trait Intrinsic {
 macro_rules! define_intrinsics {
     ( $($name:expr => $handler:ident),* ) => {
         pub fn try_eval(
-            pcx: &mut PartialEvalCtx,
+            ehx: &mut EvalHirCtx,
             dcx: &mut DefCtx<'_>,
             span: Span,
             intrinsic_name: &'static str,
@@ -62,7 +62,7 @@ macro_rules! define_intrinsics {
             match intrinsic_name {
                 $(
                     $name => {
-                        $handler::eval_exprs(pcx, dcx, span, fixed_exprs, rest_expr)
+                        $handler::eval_exprs(ehx, dcx, span, fixed_exprs, rest_expr)
                     }
                 ),*
                 _ => Ok(None),

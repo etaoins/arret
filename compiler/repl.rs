@@ -5,7 +5,7 @@ use crate::hir;
 use crate::hir::scope::Scope;
 use crate::{PackagePaths, SourceKind, SourceLoader};
 
-use crate::mir::partial_eval::PartialEvalCtx;
+use crate::mir::eval_hir::{EvalHirCtx, EvalMode};
 use crate::typeck::infer::InferCtx;
 
 pub struct ReplCtx<'pp, 'sl> {
@@ -13,7 +13,7 @@ pub struct ReplCtx<'pp, 'sl> {
     ns_id: hir::ns::NsId,
     lcx: hir::lowering::LoweringCtx<'pp, 'sl>,
     icx: InferCtx,
-    pcx: PartialEvalCtx,
+    ehx: EvalHirCtx,
 }
 
 /// Indicates the kind of evaluation to perform on the input
@@ -50,7 +50,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
             ns_id,
             lcx: hir::lowering::LoweringCtx::new(package_paths, source_loader),
             icx: InferCtx::new(),
-            pcx: PartialEvalCtx::new(),
+            ehx: EvalHirCtx::new(EvalMode::Immediate),
         }
     }
 
@@ -99,7 +99,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
 
         // TODO: Do this for now to catch GC bugs. This should be done only when required and in
         // a background thread.
-        self.pcx.collect_garbage();
+        self.ehx.collect_garbage();
 
         let ns_datum = hir::ns::NsDatum::from_syntax_datum(self.ns_id, input_datum);
 
@@ -113,7 +113,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
                             .infer_defs(lcx.pvars(), lcx.tvars(), recursive_defs)?;
 
                     for inferred_def in inferred_defs {
-                        self.pcx.consume_def(lcx.tvars(), inferred_def)?;
+                        self.ehx.consume_def(lcx.tvars(), inferred_def)?;
                     }
                 }
 
@@ -130,18 +130,18 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
                         Ok(EvaledLine::Expr(poly_str))
                     }
                     EvalKind::Value => {
-                        use crate::mir::partial_eval::DefCtx;
+                        use crate::mir::eval_hir::DefCtx;
                         use runtime_syntax::writer;
                         use std::str;
 
-                        // Perform partial evaluation on the expression
+                        // Evaluate the expression
                         let mut dcx = DefCtx::new(lcx.tvars());
-                        let value = self.pcx.consume_expr(&mut dcx, node.into_expr())?;
-                        let boxed = self.pcx.value_to_boxed(&value);
+                        let value = self.ehx.consume_expr(&mut dcx, node.into_expr())?;
+                        let boxed = self.ehx.value_to_boxed(&value);
 
                         // Write the result to a string
                         let mut output_buf: Vec<u8> = vec![];
-                        writer::write_boxed(&mut output_buf, &self.pcx, boxed).unwrap();
+                        writer::write_boxed(&mut output_buf, &self.ehx, boxed).unwrap();
                         let output_str = str::from_utf8(output_buf.as_slice()).unwrap().to_owned();
 
                         Ok(EvaledLine::Expr(output_str))
