@@ -39,11 +39,14 @@ struct ExpectedReport {
 
 impl ExpectedReport {
     fn matches(&self, actual_report: &dyn Reportable) -> bool {
-        let actual_span = actual_report.loc_trace().origin();
+        let loc_trace = actual_report.loc_trace();
+        let candidate_spans = &[loc_trace.origin(), loc_trace.macro_invocation()];
 
-        self.span.matches(actual_span) && actual_report
-            .message()
-            .starts_with(&self.message_prefix[..])
+        candidate_spans.iter().any(|candidate_span| {
+            self.span.matches(*candidate_span) && actual_report
+                .message()
+                .starts_with(&self.message_prefix[..])
+        })
     }
 }
 
