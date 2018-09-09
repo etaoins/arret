@@ -17,7 +17,7 @@ use crate::codegen::jit;
 use crate::codegen::CodegenCtx;
 use crate::hir::rfi;
 
-pub type Portal = fn(&mut runtime::task::Task, Gc<boxed::Any>) -> Gc<boxed::Any>;
+pub type Portal = extern "C" fn(&mut runtime::task::Task, Gc<boxed::Any>) -> Gc<boxed::Any>;
 
 /// Compiles a portal to the passed `rust_fun` in the given JIT
 pub fn jit_portal_for_rust_fun(
