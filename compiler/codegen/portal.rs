@@ -19,6 +19,19 @@ use crate::hir::rfi;
 
 pub type Portal = extern "C" fn(&mut runtime::task::Task, Gc<boxed::Any>) -> Gc<boxed::Any>;
 
+fn has_portal_abi(fun_abi: &impl FunABI) -> bool {
+    if !fun_abi.takes_task() || !fun_abi.has_rest() || fun_abi.params().len() != 1 {
+        // Args not compatible
+        false
+    } else {
+        match fun_abi.ret() {
+            RetABIType::Never => true,
+            RetABIType::Inhabited(ABIType::Boxed(_)) => true,
+            _ => false,
+        }
+    }
+}
+
 /// Compiles a portal to the passed `rust_fun` in the given JIT
 pub fn jit_portal_for_rust_fun(
     cgx: &mut CodegenCtx,
@@ -26,6 +39,11 @@ pub fn jit_portal_for_rust_fun(
     rust_fun: &rfi::Fun,
 ) -> Portal {
     unsafe {
+        if has_portal_abi(rust_fun) {
+            // We can skip building the portal
+            return mem::transmute(rust_fun.entry_point());
+        }
+
         // Create some names
         let inner_symbol = ffi::CString::new(rust_fun.symbol()).unwrap();
         let outer_symbol = ffi::CString::new(format!("{}_portal", rust_fun.symbol())).unwrap();
