@@ -1,4 +1,3 @@
-use std::fmt::Display;
 use std::{error, fmt, io, path, result};
 
 use crate::reporting::{Level, LocTrace, Reportable};
@@ -140,7 +139,7 @@ impl error::Error for Error {
     }
 }
 
-impl Display for Error {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }

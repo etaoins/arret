@@ -2,40 +2,39 @@
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
 
+use compiler::error::Error;
 use compiler::reporting::report_to_stderr;
 use std::{fs, path};
 
-fn run_single_test(source_loader: &mut compiler::SourceLoader, input_path: &path::Path) -> bool {
+fn try_run_single_test(
+    source_loader: &mut compiler::SourceLoader,
+    input_path: &path::Path,
+) -> Result<(), Error> {
     let source_file_id = source_loader.load_path(input_path).unwrap();
     let package_paths = compiler::PackagePaths::test_paths();
 
-    let hir = match compiler::lower_program(&package_paths, source_loader, source_file_id) {
-        Ok(hir) => hir,
-        Err(errors) => {
-            for err in errors {
-                report_to_stderr(source_loader, &err);
-            }
-            return false;
-        }
-    };
+    let hir = compiler::lower_program(&package_paths, source_loader, source_file_id)?;
+    let inferred_defs = compiler::infer_program(&hir.pvars, &hir.tvars, hir.module_defs)?;
 
-    match compiler::infer_program(&hir.pvars, &hir.tvars, hir.module_defs) {
-        Ok(inferred_defs) => {
-            let mut pcx = compiler::PartialEvalCtx::new();
-
-            for inferred_def in inferred_defs {
-                pcx.consume_def(&hir.tvars, inferred_def);
-            }
-        }
-        Err(errs) => {
-            for err in errs {
-                report_to_stderr(source_loader, &err);
-            }
-            return false;
-        }
+    let mut pcx = compiler::PartialEvalCtx::new();
+    for inferred_def in inferred_defs {
+        pcx.consume_def(&hir.tvars, inferred_def)?;
     }
 
-    true
+    Ok(())
+}
+
+fn run_single_test(source_loader: &mut compiler::SourceLoader, input_path: &path::Path) -> bool {
+    let result = try_run_single_test(source_loader, input_path);
+
+    if let Err(Error(errs)) = result {
+        for err in errs {
+            report_to_stderr(source_loader, &*err);
+        }
+        false
+    } else {
+        true
+    }
 }
 
 #[test]

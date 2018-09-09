@@ -6,6 +6,7 @@
 mod id_type;
 
 mod codegen;
+pub mod error;
 mod hir;
 mod mir;
 pub mod repl;

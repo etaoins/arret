@@ -34,7 +34,8 @@ define_rust_fn! {
             pprint::pretty_print(&mut output, task, value)
         }
 
-        panic!("{}", str::from_utf8(output.as_slice()).unwrap());
+        let message = str::from_utf8(output.as_slice()).unwrap().to_owned();
+        task.panic(message)
     }
 }
 

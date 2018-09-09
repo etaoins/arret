@@ -1,56 +1,12 @@
-use syntax;
 use syntax::parser::data_from_str_with_span_offset;
 
+use crate::error::Error;
 use crate::hir;
 use crate::hir::scope::Scope;
-use crate::reporting::Reportable;
 use crate::{PackagePaths, SourceKind, SourceLoader};
 
 use crate::mir::partial_eval::PartialEvalCtx;
-use crate::typeck;
 use crate::typeck::infer::InferCtx;
-
-#[cfg_attr(test, derive(Debug))]
-pub struct Error(Vec<Box<dyn Reportable>>);
-
-impl Error {
-    pub fn reports(&self) -> impl Iterator<Item = &Box<dyn Reportable>> {
-        self.0.iter()
-    }
-}
-
-impl From<syntax::error::Error> for Error {
-    fn from(syntax_err: syntax::error::Error) -> Error {
-        Error(vec![Box::new(syntax_err)])
-    }
-}
-
-impl From<Vec<hir::error::Error>> for Error {
-    fn from(hir_errs: Vec<hir::error::Error>) -> Error {
-        Error(
-            hir_errs
-                .into_iter()
-                .map(|hir_err| Box::new(hir_err) as Box<dyn Reportable>)
-                .collect(),
-        )
-    }
-}
-
-impl From<typeck::error::Error> for Error {
-    fn from(type_err: typeck::error::Error) -> Error {
-        Error(vec![Box::new(type_err)])
-    }
-}
-impl From<Vec<typeck::error::Error>> for Error {
-    fn from(type_errs: Vec<typeck::error::Error>) -> Error {
-        Error(
-            type_errs
-                .into_iter()
-                .map(|type_err| Box::new(type_err) as Box<dyn Reportable>)
-                .collect(),
-        )
-    }
-}
 
 pub struct ReplCtx<'pp, 'sl> {
     scope: Scope,
@@ -157,7 +113,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
                             .infer_defs(lcx.pvars(), lcx.tvars(), recursive_defs)?;
 
                     for inferred_def in inferred_defs {
-                        self.pcx.consume_def(lcx.tvars(), inferred_def);
+                        self.pcx.consume_def(lcx.tvars(), inferred_def)?;
                     }
                 }
 
@@ -180,7 +136,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
 
                         // Perform partial evaluation on the expression
                         let mut dcx = DefCtx::new(lcx.tvars());
-                        let value = self.pcx.consume_expr(&mut dcx, node.into_expr());
+                        let value = self.pcx.consume_expr(&mut dcx, node.into_expr())?;
                         let boxed = self.pcx.value_to_boxed(&value);
 
                         // Write the result to a string

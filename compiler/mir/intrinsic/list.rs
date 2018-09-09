@@ -1,6 +1,9 @@
+use syntax::span::Span;
+
 use runtime::boxed;
 use runtime::boxed::prelude::*;
 
+use crate::mir::error::Result;
 use crate::mir::intrinsic::Intrinsic;
 use crate::mir::partial_eval::PartialEvalCtx;
 use crate::mir::value::ListIterator;
@@ -25,11 +28,15 @@ impl Length {
 }
 
 impl Intrinsic for Length {
-    fn eval_arg_list(pcx: &mut PartialEvalCtx, mut iter: ListIterator<'_>) -> Option<Value> {
+    fn eval_arg_list(
+        pcx: &mut PartialEvalCtx,
+        _span: Span,
+        mut iter: ListIterator<'_>,
+    ) -> Result<Option<Value>> {
         let single_arg = iter.next_unchecked();
 
-        Self::value_len(single_arg).map(|known_length| {
+        Ok(Self::value_len(single_arg).map(|known_length| {
             Value::Const(boxed::Int::new(pcx, known_length as i64).as_any_ref())
-        })
+        }))
     }
 }

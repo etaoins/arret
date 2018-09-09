@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::os::raw::c_void;
+use std::panic;
 use std::rc::Rc;
 
 use runtime;
@@ -9,9 +10,11 @@ use runtime::boxed::refs::Gc;
 
 use runtime_syntax::reader;
 use syntax::datum::Datum;
+use syntax::span::Span;
 
 use crate::codegen;
 use crate::hir;
+use crate::mir::error::{Error, ErrorKind, Result};
 use crate::mir::value;
 use crate::mir::{Expr, Value};
 use crate::ty;
@@ -100,17 +103,17 @@ impl PartialEvalCtx {
         self.global_values[&var_id].clone()
     }
 
-    fn eval_do(&mut self, dcx: &mut DefCtx<'_>, exprs: &[Expr]) -> Value {
+    fn eval_do(&mut self, dcx: &mut DefCtx<'_>, exprs: &[Expr]) -> Result<Value> {
         let initial_value = Value::List(Box::new([]), None);
 
         // TODO: This needs to handle Never values once we can create them
         exprs
             .iter()
-            .fold(initial_value, |_, expr| self.eval_expr(dcx, expr))
+            .try_fold(initial_value, |_, expr| self.eval_expr(dcx, expr))
     }
 
-    fn eval_let(&mut self, dcx: &mut DefCtx<'_>, hir_let: &hir::Let<ty::Poly>) -> Value {
-        let value = self.eval_expr(dcx, &hir_let.value_expr);
+    fn eval_let(&mut self, dcx: &mut DefCtx<'_>, hir_let: &hir::Let<ty::Poly>) -> Result<Value> {
+        let value = self.eval_expr(dcx, &hir_let.value_expr)?;
         Self::destruc_value(&mut dcx.local_values, &hir_let.destruc, value);
 
         self.eval_expr(dcx, &hir_let.body_expr)
@@ -137,14 +140,18 @@ impl PartialEvalCtx {
         closure: &value::Closure,
         fixed_args: &[Expr],
         rest_arg: Option<&Expr>,
-    ) -> Value {
+    ) -> Result<Value> {
         let fun_expr = &closure.fun_expr;
 
-        let fixed_values: Vec<Value> = fixed_args
+        let fixed_values = fixed_args
             .iter()
             .map(|arg| self.eval_expr(dcx, arg))
-            .collect();
-        let rest_value = rest_arg.map(|rest_arg| Box::new(self.eval_expr(dcx, rest_arg)));
+            .collect::<Result<Vec<Value>>>()?;
+
+        let rest_value = match rest_arg {
+            Some(rest_arg) => Some(Box::new(self.eval_expr(dcx, rest_arg)?)),
+            None => None,
+        };
 
         let arg_list_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
         Self::destruc_list(&mut dcx.local_values, &fun_expr.params, &arg_list_value);
@@ -166,14 +173,14 @@ impl PartialEvalCtx {
         test_poly: &ty::Poly,
         fixed_args: &[Expr],
         rest_arg: Option<&Expr>,
-    ) -> Value {
+    ) -> Result<Value> {
         use crate::mir::value::poly_for_value;
         use crate::ty::pred::InterpretedPred;
 
         let value = if !fixed_args.is_empty() {
-            self.eval_expr(dcx, &fixed_args[0])
+            self.eval_expr(dcx, &fixed_args[0])?
         } else if let Some(rest_arg) = rest_arg {
-            let rest_value = self.eval_expr(dcx, rest_arg);
+            let rest_value = self.eval_expr(dcx, rest_arg)?;
             rest_value.list_iter().next_unchecked().clone()
         } else {
             panic!("Unexpected arity for type predicate application");
@@ -183,7 +190,7 @@ impl PartialEvalCtx {
 
         match ty::pred::interpret_poly_pred(dcx.tvars, &subject_poly, test_poly) {
             InterpretedPred::Static(value) => {
-                Value::Const(boxed::Bool::singleton_ref(value).as_any_ref())
+                Ok(Value::Const(boxed::Bool::singleton_ref(value).as_any_ref()))
             }
             InterpretedPred::Dynamic(_, _) => unimplemented!("Runtime type check"),
         }
@@ -192,27 +199,33 @@ impl PartialEvalCtx {
     fn eval_rust_fun_app(
         &mut self,
         dcx: &mut DefCtx<'_>,
+        span: Span,
         rust_fun: &hir::rfi::Fun,
         fixed_args: &[Expr],
         rest_arg: Option<&Expr>,
-    ) -> Value {
+    ) -> Result<Value> {
         use crate::codegen::portal::jit_portal_for_rust_fun;
         use crate::mir::intrinsic;
 
         if let Some(intrinsic_name) = rust_fun.intrinsic_name() {
             // Attempt specialised evaluation
             if let Some(value) =
-                intrinsic::try_eval(self, dcx, intrinsic_name, fixed_args, rest_arg)
+                intrinsic::try_eval(self, dcx, span, intrinsic_name, fixed_args, rest_arg)?
             {
-                return value;
+                return Ok(value);
             }
         }
 
-        let fixed_values: Vec<Value> = fixed_args
+        let fixed_values = fixed_args
             .iter()
             .map(|arg| self.eval_expr(dcx, arg))
-            .collect();
-        let rest_value = rest_arg.map(|rest_arg| Box::new(self.eval_expr(dcx, rest_arg)));
+            .collect::<Result<Vec<Value>>>()?;
+
+        let rest_value = match rest_arg {
+            Some(rest_arg) => Some(Box::new(self.eval_expr(dcx, rest_arg)?)),
+            None => None,
+        };
+
         let arg_list_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
         let boxed_arg_list = self.value_to_boxed(&arg_list_value);
 
@@ -224,12 +237,29 @@ impl PartialEvalCtx {
             .entry(rust_fun.entry_point())
             .or_insert_with(|| jit_portal_for_rust_fun(portal_gen, portal_jit, rust_fun));
 
-        let result = portal(&mut self.runtime_task, boxed_arg_list);
-        Value::Const(result)
+        let runtime_task = &mut self.runtime_task;
+
+        // By convention convert string panics in to our `ErrorKind::Panic`
+        panic::catch_unwind(panic::AssertUnwindSafe(|| {
+            Value::Const(portal(runtime_task, boxed_arg_list))
+        })).map_err(|err| {
+            let message = if let Some(message) = err.downcast_ref::<String>() {
+                message.clone()
+            } else {
+                "Unexpected panic type".to_owned()
+            };
+
+            Error::new(span, ErrorKind::Panic(message))
+        })
     }
 
-    fn eval_app(&mut self, dcx: &mut DefCtx<'_>, app: &hir::App<ty::Poly>) -> Value {
-        let fun_value = self.eval_expr(dcx, &app.fun_expr);
+    fn eval_app(
+        &mut self,
+        dcx: &mut DefCtx<'_>,
+        span: Span,
+        app: &hir::App<ty::Poly>,
+    ) -> Result<Value> {
+        let fun_value = self.eval_expr(dcx, &app.fun_expr)?;
 
         match fun_value {
             Value::Closure(closure) => self.eval_closure_app(
@@ -240,6 +270,7 @@ impl PartialEvalCtx {
             ),
             Value::RustFun(rust_fun) => self.eval_rust_fun_app(
                 dcx,
+                span,
                 rust_fun.as_ref(),
                 app.fixed_arg_exprs.as_slice(),
                 app.rest_arg_expr.as_ref(),
@@ -256,8 +287,8 @@ impl PartialEvalCtx {
         }
     }
 
-    fn eval_cond(&mut self, dcx: &mut DefCtx<'_>, cond: &hir::Cond<ty::Poly>) -> Value {
-        let test_value = self.eval_expr(dcx, &cond.test_expr);
+    fn eval_cond(&mut self, dcx: &mut DefCtx<'_>, cond: &hir::Cond<ty::Poly>) -> Result<Value> {
+        let test_value = self.eval_expr(dcx, &cond.test_expr)?;
 
         let test_bool = match test_value {
             Value::Const(any_ref) => {
@@ -299,7 +330,7 @@ impl PartialEvalCtx {
         Value::Closure(value::Closure { fun_expr, captures })
     }
 
-    pub fn consume_def(&mut self, tvars: &[ty::TVar], def: hir::Def<ty::Poly>) {
+    pub fn consume_def(&mut self, tvars: &[ty::TVar], def: hir::Def<ty::Poly>) -> Result<()> {
         let hir::Def {
             destruc,
             value_expr,
@@ -308,8 +339,9 @@ impl PartialEvalCtx {
 
         let mut dcx = DefCtx::new(tvars);
 
-        let value = self.consume_expr(&mut dcx, value_expr);
+        let value = self.consume_expr(&mut dcx, value_expr)?;
         Self::destruc_value(&mut self.global_values, &destruc, value);
+        Ok(())
     }
 
     /// Collect any boxed values that are no longer reachable
@@ -326,26 +358,32 @@ impl PartialEvalCtx {
         *self.runtime_task.heap_mut() = collection.into_new_heap();
     }
 
-    pub fn eval_expr(&mut self, dcx: &mut DefCtx<'_>, expr: &Expr) -> Value {
+    pub fn eval_expr(&mut self, dcx: &mut DefCtx<'_>, expr: &Expr) -> Result<Value> {
         match expr {
-            hir::Expr::Lit(literal) => self.eval_lit(literal),
+            hir::Expr::Lit(literal) => Ok(self.eval_lit(literal)),
             hir::Expr::Do(exprs) => self.eval_do(dcx, &exprs),
-            hir::Expr::Fun(_, fun_expr) => self.eval_fun(dcx, Rc::new(fun_expr.as_ref().clone())),
-            hir::Expr::RustFun(_, rust_fun) => Value::RustFun(Rc::new(rust_fun.as_ref().clone())),
-            hir::Expr::TyPred(_, test_poly) => Value::TyPred(Rc::new(test_poly.clone())),
-            hir::Expr::Ref(_, var_id) => self.eval_ref(dcx, *var_id),
+            hir::Expr::Fun(_, fun_expr) => {
+                Ok(self.eval_fun(dcx, Rc::new(fun_expr.as_ref().clone())))
+            }
+            hir::Expr::RustFun(_, rust_fun) => {
+                Ok(Value::RustFun(Rc::new(rust_fun.as_ref().clone())))
+            }
+            hir::Expr::TyPred(_, test_poly) => Ok(Value::TyPred(Rc::new(test_poly.clone()))),
+            hir::Expr::Ref(_, var_id) => Ok(self.eval_ref(dcx, *var_id)),
             hir::Expr::Let(_, hir_let) => self.eval_let(dcx, hir_let),
-            hir::Expr::App(_, app) => self.eval_app(dcx, app),
-            hir::Expr::MacroExpand(_, expr) => self.eval_expr(dcx, expr),
+            hir::Expr::App(span, app) => self.eval_app(dcx, *span, app),
+            hir::Expr::MacroExpand(span, expr) => self
+                .eval_expr(dcx, expr)
+                .map_err(|err| err.with_macro_invocation_span(*span)),
             hir::Expr::Cond(_, cond) => self.eval_cond(dcx, cond),
         }
     }
 
-    pub fn consume_expr(&mut self, dcx: &mut DefCtx<'_>, expr: Expr) -> Value {
+    pub fn consume_expr(&mut self, dcx: &mut DefCtx<'_>, expr: Expr) -> Result<Value> {
         match expr {
-            hir::Expr::Fun(_, fun_expr) => self.eval_fun(dcx, fun_expr.into()),
-            hir::Expr::RustFun(_, rust_fun) => Value::RustFun(rust_fun.into()),
-            hir::Expr::TyPred(_, test_poly) => Value::TyPred(Rc::new(test_poly)),
+            hir::Expr::Fun(_, fun_expr) => Ok(self.eval_fun(dcx, fun_expr.into())),
+            hir::Expr::RustFun(_, rust_fun) => Ok(Value::RustFun(rust_fun.into())),
+            hir::Expr::TyPred(_, test_poly) => Ok(Value::TyPred(Rc::new(test_poly))),
             other => self.eval_expr(dcx, &other),
         }
     }

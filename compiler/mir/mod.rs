@@ -1,3 +1,4 @@
+pub mod error;
 mod intrinsic;
 pub mod partial_eval;
 mod value;
