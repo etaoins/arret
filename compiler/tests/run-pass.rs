@@ -2,17 +2,23 @@
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
 
+use rayon::prelude::*;
+
 use compiler::error::Error;
 use compiler::reporting::report_to_stderr;
+use compiler::SourceLoader;
 
 use std::alloc::System;
+use std::cell::RefCell;
 use std::{fs, path};
 
 #[global_allocator]
 static GLOBAL: System = System;
 
+thread_local!(static SOURCE_LOADER: RefCell<SourceLoader> = RefCell::new(SourceLoader::new()));
+
 fn try_run_single_test(
-    source_loader: &mut compiler::SourceLoader,
+    source_loader: &mut SourceLoader,
     input_path: &path::Path,
 ) -> Result<(), Error> {
     let source_file_id = source_loader.load_path(input_path).unwrap();
@@ -31,32 +37,43 @@ fn try_run_single_test(
     Ok(())
 }
 
-fn run_single_test(source_loader: &mut compiler::SourceLoader, input_path: &path::Path) -> bool {
-    let result = try_run_single_test(source_loader, input_path);
+fn run_single_test(input_path: &path::Path) -> bool {
+    SOURCE_LOADER.with(|source_loader| {
+        use std::io;
 
-    if let Err(Error(errs)) = result {
-        for err in errs {
-            report_to_stderr(source_loader, &*err);
+        let result = try_run_single_test(&mut *source_loader.borrow_mut(), input_path);
+
+        if let Err(Error(errs)) = result {
+            // Prevent concurrent writes to stderr
+            let stderr = io::stderr();
+            let _errlock = stderr.lock();
+
+            for err in errs {
+                report_to_stderr(&*source_loader.borrow(), &*err);
+            }
+
+            false
+        } else {
+            true
         }
-        false
-    } else {
-        true
-    }
+    })
 }
 
 #[test]
 fn run_pass() {
     let entries = fs::read_dir("./tests/run-pass").unwrap();
-    let mut failed_tests = vec![];
 
-    let mut source_loader = compiler::SourceLoader::new();
-    for entry in entries {
-        let input_path = entry.unwrap().path();
+    let failed_tests = entries
+        .par_bridge()
+        .filter_map(|entry| {
+            let input_path = entry.unwrap().path();
 
-        if !run_single_test(&mut source_loader, input_path.as_path()) {
-            failed_tests.push(input_path.to_string_lossy().to_string());
-        }
-    }
+            if !run_single_test(input_path.as_path()) {
+                Some(input_path.to_string_lossy().to_string())
+            } else {
+                None
+            }
+        }).collect::<Vec<String>>();
 
     if !failed_tests.is_empty() {
         panic!("run-pass tests failed: {}", failed_tests.join(", "))
