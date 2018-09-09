@@ -231,6 +231,13 @@ macro_rules! define_singleton_box {
             header: Header,
         }
 
+        impl $type_name {
+            #[allow(unused)]
+            pub fn as_ref() -> Gc<$type_name> {
+                unsafe { Gc::new(&$static_name) }
+            }
+        }
+
         #[export_name = $export_name]
         pub static $static_name: $type_name = $type_name {
             header: Header {
