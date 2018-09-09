@@ -5,7 +5,7 @@
 mod mode;
 
 use std::alloc::System;
-use std::{env, path};
+use std::{env, path, process};
 
 use clap::{App, Arg};
 
@@ -28,7 +28,7 @@ fn find_path_to_arret_root() -> path::PathBuf {
     panic!("Unable to find the Arret root directory");
 }
 
-fn main() -> Result<(), bool> {
+fn main() {
     let matches = App::new("arret")
         .arg(Arg::with_name("INPUT").help("Input source file").index(1))
         .get_matches();
@@ -40,15 +40,12 @@ fn main() -> Result<(), bool> {
 
     match matches.value_of("INPUT") {
         Some(input_param) => {
-            if mode::compile::compile_input_file(&cfg, path::Path::new(input_param)) {
-                Ok(())
-            } else {
-                Err(false)
+            if !mode::compile::compile_input_file(&cfg, path::Path::new(input_param)) {
+                process::exit(1);
             }
         }
         None => {
             mode::repl::interactive_loop(&cfg);
-            Ok(())
         }
-    }
+    };
 }
