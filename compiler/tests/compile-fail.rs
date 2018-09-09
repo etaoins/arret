@@ -189,11 +189,11 @@ fn run_single_test(source_loader: &mut compiler::SourceLoader, input_path: &path
     let source_file_id = source_loader.load_path(input_path).unwrap();
 
     let mut expected_reports = extract_expected_reports(source_loader.source_file(source_file_id));
-    let mut actual_reports = collect_reports(source_loader, source_file_id);
+    let actual_reports = collect_reports(source_loader, source_file_id);
 
     let mut unexpected_reports = vec![];
 
-    while let Some(actual_report) = actual_reports.pop() {
+    for actual_report in actual_reports.into_iter() {
         let expected_report_index = expected_reports
             .iter()
             .position(|expected_report| expected_report.matches(actual_report.as_ref()));
