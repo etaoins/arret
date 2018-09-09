@@ -26,7 +26,12 @@
 
 (export when)
 (defmacro when (macro-rules
-  [(test body-data ...) (if test (do body-data ...) false)]
+  [(test body-data ...) (if test (do body-data ...) ())]
+))
+
+(export when-not)
+(defmacro when-not (macro-rules
+  [(test body-data ...) (if test () (do body-data ...))]
 ))
 
 (export and)

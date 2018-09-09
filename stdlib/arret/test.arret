@@ -1,0 +1,8 @@
+(import [stdlib base])
+
+(export assert-equal)
+(defmacro assert-equal (macro-rules
+  [(expected actual)
+    (when-not (= expected actual)
+      (panic "`" expected "` does not equal expected value of `" actual "`"))]
+))

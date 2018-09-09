@@ -1,0 +1,12 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn test-length ()
+  (assert-equal 0 (length ()))
+  (assert-equal 4 (length '(1 2 3 4)))
+  (assert-equal 3 (length (list 1 2 3))))
+
+(defn main! () ->! ()
+  (test-length)
+
+  ())
