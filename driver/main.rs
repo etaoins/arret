@@ -4,9 +4,13 @@
 
 mod mode;
 
+use std::alloc::System;
 use std::{env, path};
 
 use clap::{App, Arg};
+
+#[global_allocator]
+static GLOBAL: System = System;
 
 pub struct DriverConfig {
     package_paths: compiler::PackagePaths,
