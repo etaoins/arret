@@ -150,7 +150,11 @@ impl Heap {
         let stack_box = B::construct(value, alloc_type, &mut self.interner);
 
         unsafe {
-            ptr::copy_nonoverlapping(&stack_box, insert_at as *mut B, needed_cells);
+            ptr::copy_nonoverlapping(
+                &stack_box as *const B as *const Any,
+                insert_at,
+                needed_cells,
+            );
         }
 
         // Make sure we don't drop the stack version
