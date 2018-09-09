@@ -261,26 +261,31 @@ impl PartialEvalCtx {
     ) -> Result<Value> {
         let fun_value = self.eval_expr(dcx, &app.fun_expr)?;
 
+        self.eval_value_app(
+            dcx,
+            span,
+            fun_value,
+            app.fixed_arg_exprs.as_slice(),
+            app.rest_arg_expr.as_ref(),
+        )
+    }
+
+    fn eval_value_app(
+        &mut self,
+        dcx: &mut DefCtx<'_>,
+        span: Span,
+        fun_value: Value,
+        fixed_args: &[Expr],
+        rest_arg: Option<&Expr>,
+    ) -> Result<Value> {
         match fun_value {
-            Value::Closure(closure) => self.eval_closure_app(
-                dcx,
-                &closure,
-                app.fixed_arg_exprs.as_slice(),
-                app.rest_arg_expr.as_ref(),
-            ),
-            Value::RustFun(rust_fun) => self.eval_rust_fun_app(
-                dcx,
-                span,
-                rust_fun.as_ref(),
-                app.fixed_arg_exprs.as_slice(),
-                app.rest_arg_expr.as_ref(),
-            ),
-            Value::TyPred(test_poly) => self.eval_ty_pred_app(
-                dcx,
-                &test_poly,
-                app.fixed_arg_exprs.as_slice(),
-                app.rest_arg_expr.as_ref(),
-            ),
+            Value::Closure(closure) => self.eval_closure_app(dcx, &closure, fixed_args, rest_arg),
+            Value::RustFun(rust_fun) => {
+                self.eval_rust_fun_app(dcx, span, rust_fun.as_ref(), fixed_args, rest_arg)
+            }
+            Value::TyPred(test_poly) => {
+                self.eval_ty_pred_app(dcx, &test_poly, fixed_args, rest_arg)
+            }
             _ => {
                 unimplemented!("Unimplemented function value type");
             }
@@ -386,6 +391,19 @@ impl PartialEvalCtx {
             hir::Expr::TyPred(_, test_poly) => Ok(Value::TyPred(Rc::new(test_poly))),
             other => self.eval_expr(dcx, &other),
         }
+    }
+
+    /// Evaluates the main function of a program
+    ///
+    /// This is intended for use by run-pass tests to avoid creating a temporary binary
+    pub fn eval_main_fun(&mut self, tvars: &[ty::TVar], main_var_id: hir::VarId) -> Result<()> {
+        use syntax::span::EMPTY_SPAN;
+
+        let mut dcx = DefCtx::new(tvars);
+        let main_value = self.eval_ref(&dcx, main_var_id);
+        self.eval_value_app(&mut dcx, EMPTY_SPAN, main_value, &[], None)?;
+
+        Ok(())
     }
 
     pub fn value_to_boxed(&mut self, value: &Value) -> Gc<boxed::Any> {

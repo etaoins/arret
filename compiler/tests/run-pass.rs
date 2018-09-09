@@ -5,7 +5,11 @@
 use compiler::error::Error;
 use compiler::reporting::report_to_stderr;
 
+use std::alloc::System;
 use std::{fs, path};
+
+#[global_allocator]
+static GLOBAL: System = System;
 
 fn try_run_single_test(
     source_loader: &mut compiler::SourceLoader,
@@ -21,6 +25,8 @@ fn try_run_single_test(
     for inferred_def in inferred_defs {
         pcx.consume_def(&hir.tvars, inferred_def)?;
     }
+
+    pcx.eval_main_fun(&hir.tvars, hir.main_var_id)?;
 
     Ok(())
 }

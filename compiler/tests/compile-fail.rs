@@ -2,11 +2,15 @@
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
 
+use std::alloc::System;
 use std::ops::Range;
 use std::{fs, path};
 
 use compiler::reporting::{report_to_stderr, Level, LocTrace, Reportable};
 use syntax::span::Span;
+
+#[global_allocator]
+static GLOBAL: System = System;
 
 #[derive(Debug)]
 enum ExpectedSpan {
