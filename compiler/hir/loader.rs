@@ -3,9 +3,8 @@ use std::path;
 
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::rfi;
-use crate::source::{SourceFile, SourceLoader};
+use crate::source::SourceLoader;
 use syntax::datum::Datum;
-use syntax::parser::data_from_str_with_span_offset;
 use syntax::span::Span;
 
 pub struct PackagePath {
@@ -75,13 +74,6 @@ impl ModuleName {
     }
 }
 
-pub fn parse_module_data(source_file: &SourceFile) -> Result<Vec<Datum>> {
-    Ok(data_from_str_with_span_offset(
-        source_file.source(),
-        source_file.span_offset(),
-    )?)
-}
-
 pub fn load_module_by_name(
     source_loader: &mut SourceLoader,
     rfi_loader: &mut rfi::Loader,
@@ -120,7 +112,10 @@ pub fn load_module_by_name(
             .load_path(path)
             .map_err(|err| Error::from_module_io(span, path, &err))?;
 
-        parse_module_data(source_loader.source_file(source_file_id)).map(LoadedModule::Source)
+        Ok(source_loader
+            .source_file(source_file_id)
+            .parse()
+            .map(LoadedModule::Source)?)
     }
 }
 

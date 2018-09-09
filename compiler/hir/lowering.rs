@@ -9,9 +9,7 @@ use crate::hir::destruc;
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::exports::Exports;
 use crate::hir::import::lower_import_set;
-use crate::hir::loader::{
-    load_module_by_name, parse_module_data, LoadedModule, ModuleName, PackagePaths,
-};
+use crate::hir::loader::{load_module_by_name, LoadedModule, ModuleName, PackagePaths};
 use crate::hir::macros::{expand_macro, lower_macro_rules, Macro};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum, NsId};
 use crate::hir::prim::Prim;
@@ -1009,7 +1007,7 @@ pub fn lower_program(
     let source_file = source_loader.source_file(source_file_id);
     let file_span = source_file.span();
 
-    let data = parse_module_data(source_file)?;
+    let data = source_file.parse().map_err(|err| vec![err.into()])?;
 
     let mut root_scope = Scope::empty();
     let mut lcx = LoweringCtx::new(package_paths, source_loader);

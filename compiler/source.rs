@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::{fmt, fs, io, path};
 
+use syntax::datum::Datum;
 use syntax::span::Span;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -51,6 +52,11 @@ impl SourceFile {
 
     pub fn source(&self) -> &str {
         &self.source
+    }
+
+    pub fn parse(&self) -> Result<Vec<Datum>, syntax::error::Error> {
+        use syntax::parser::data_from_str_with_span_offset;
+        data_from_str_with_span_offset(self.source(), self.span_offset())
     }
 }
 

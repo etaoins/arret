@@ -1,5 +1,3 @@
-use syntax::parser::data_from_str_with_span_offset;
-
 use crate::error::Error;
 use crate::hir;
 use crate::hir::scope::Scope;
@@ -78,8 +76,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
         let source_id = source_loader.load_string(SourceKind::Repl, input);
         let source_file = source_loader.source_file(source_id);
 
-        let mut input_data =
-            data_from_str_with_span_offset(source_file.source(), source_file.span_offset())?;
+        let mut input_data = source_file.parse()?;
 
         let input_datum = match input_data.len() {
             0 => {
