@@ -106,9 +106,11 @@ impl<'de> Parser<'de> {
 
     fn skip_until_non_whitespace(&mut self, ec: ExpectedContent) -> Result<char> {
         loop {
+            self.consume_until(|c| !is_whitespace(c) || c == ';' || c == '#');
+
             match self.peek_char(ec)? {
                 ';' => {
-                    let _ = self.consume_until(|c| c == '\n');
+                    self.consume_until(|c| c == '\n');
                 }
                 '#' => {
                     match self.peek_nth_char(1, ec) {
@@ -118,15 +120,13 @@ impl<'de> Parser<'de> {
                             self.parse_datum()?;
                         }
                         _ => {
-                            return Ok('#');
+                            break Ok('#');
                         }
                     }
                 }
-                other => if is_whitespace(other) {
-                    self.eat_bytes(1)
-                } else {
-                    return Ok(other);
-                },
+                other => {
+                    break Ok(other);
+                }
             }
         }
     }
@@ -286,12 +286,13 @@ impl<'de> Parser<'de> {
 
         // Keep eating datums until we hit the terminator
         loop {
-            if self.skip_until_non_whitespace(ec)? == terminator {
+            let next_char = self.skip_until_non_whitespace(ec)?;
+            if next_char == terminator {
                 // End of the sequence
                 self.eat_bytes(1);
-                return Ok(content.into_boxed_slice());
+                break Ok(content.into_boxed_slice());
             } else {
-                content.push(self.parse_datum()?);
+                content.push(self.parse_datum_starting_with(next_char)?);
             }
         }
     }
@@ -432,8 +433,8 @@ impl<'de> Parser<'de> {
         })
     }
 
-    fn parse_datum(&mut self) -> Result<Datum> {
-        match self.skip_until_non_whitespace(ExpectedContent::Datum)? {
+    fn parse_datum_starting_with(&mut self, c: char) -> Result<Datum> {
+        match c {
             '(' => self.parse_list(),
             '[' => self.parse_vector(),
             '{' => self.parse_map(),
@@ -447,14 +448,18 @@ impl<'de> Parser<'de> {
         }
     }
 
+    fn parse_datum(&mut self) -> Result<Datum> {
+        let start_char = self.skip_until_non_whitespace(ExpectedContent::Datum)?;
+        self.parse_datum_starting_with(start_char)
+    }
+
     fn parse_data(&mut self) -> Result<Vec<Datum>> {
         let mut datum_vec = Vec::new();
 
         // Keep eating datums until we hit EOF
         loop {
-            match self.skip_until_non_whitespace(ExpectedContent::Datum) {
-                Ok(_) => {
-                    let datum = self.parse_datum()?;
+            match self.parse_datum() {
+                Ok(datum) => {
                     datum_vec.push(datum);
                 }
                 Err(err) => {
