@@ -209,7 +209,7 @@ impl Loader {
             ensure_types_compatible(span, arret_fixed_poly, rust_fixed_poly)?;
         }
 
-        // And the rest type
+        // And the return type
         //
         // Note that we don't care about contravariance here; simply that the types are compatible
         ensure_types_compatible(span, arret_fun_type.ret(), &rust_fun.ret)?;
