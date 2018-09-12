@@ -8,7 +8,7 @@ use crate::span::Span;
 #[derive(Debug, PartialEq)]
 pub struct Error {
     span: Span,
-    kind: ErrorKind,
+    pub(crate) kind: ErrorKind,
 }
 
 impl Error {

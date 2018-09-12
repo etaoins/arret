@@ -41,18 +41,6 @@ fn u64_to_positive_i64(span: Span, i: u64) -> Result<i64> {
     }
 }
 
-fn u64_to_negative_i64(span: Span, i: u64) -> Result<i64> {
-    let min_i64_abs_value = 1 << 63;
-
-    if i > min_i64_abs_value {
-        Err(Error::new(span, ErrorKind::IntegerOverflow))
-    } else if i == min_i64_abs_value {
-        Ok(i64::min_value())
-    } else {
-        Ok(-(i as i64))
-    }
-}
-
 impl<'de> Parser<'de> {
     fn from_str(input: &'de str, consumed_bytes: usize) -> Self {
         Parser {
@@ -133,7 +121,7 @@ impl<'de> Parser<'de> {
 
     fn consume_until<T>(&mut self, predicate: T) -> (Span, &str)
     where
-        T: Fn(char) -> bool,
+        T: FnMut(char) -> bool,
     {
         let lo = self.consumed_bytes as u32;
         let last_index = self
@@ -164,56 +152,40 @@ impl<'de> Parser<'de> {
         (Span { lo, hi }, result)
     }
 
-    fn parse_int_content(&mut self) -> Result<u64> {
-        let (span, digits) = self.consume_until(|c| match c {
-            '0'..='9' => false,
-            _ => true,
-        });
-
-        // TODO: We assume any error is due to overflow
-        u64::from_str_radix(digits, 10).map_err(|_| Error::new(span, ErrorKind::IntegerOverflow))
-    }
-
     fn parse_int(&mut self) -> Result<Datum> {
-        let (span, content) = self.capture_span(|s| s.parse_int_content());
+        let (span, digits) = self.consume_until(|c| !c.is_ascii_digit());
 
-        content
+        u64::from_str_radix(digits, 10)
+            .map_err(|_| Error::new(span, ErrorKind::IntegerOverflow))
             .and_then(|content| u64_to_positive_i64(span, content))
             .map(|i| Datum::Int(span, i))
     }
 
     fn parse_negative_or_symbol(&mut self) -> Result<Datum> {
-        let (span, content) = self.capture_span(|s| {
-            // Consume the -
-            s.eat_bytes(1);
+        match self.peek_nth_char(1, ExpectedContent::Identifier) {
+            Ok(digit) if digit.is_ascii_digit() => {
+                // Let the `-` through as the first character
+                let mut is_leading_minus = true;
+                let (span, digits) = self.consume_until(|c| {
+                    if is_leading_minus {
+                        is_leading_minus = false;
+                        false
+                    } else {
+                        !c.is_ascii_digit()
+                    }
+                });
 
-            // Try to parse as integer
-            s.parse_int_content()
-        });
+                let value = i64::from_str_radix(digits, 10)
+                    .map_err(|_| Error::new(span, ErrorKind::IntegerOverflow))?;
 
-        match content {
-            Ok(valid_integer) => {
-                u64_to_negative_i64(span, valid_integer).map(|i| Datum::Int(span, i))
+                Ok(Datum::Int(span, value))
             }
-            Err(err) => {
-                // TODO: On overflow we will silently convert to a symbol
-                if *err.kind() == ErrorKind::IntegerOverflow {
-                    // Treat as a symbol
-                    let rest_of_symbol = self.parse_identifier_content();
-
-                    let span_with_symbol = Span {
-                        lo: span.lo,
-                        hi: span.lo + (rest_of_symbol.len() as u32) + 1,
-                    };
-
-                    Ok(Datum::Sym(
-                        span_with_symbol,
-                        format!("-{}", rest_of_symbol).into_boxed_str(),
-                    ))
-                } else {
-                    Err(err)
-                }
-            }
+            Ok(_)
+            | Err(Error {
+                kind: ErrorKind::Eof(_),
+                ..
+            }) => self.parse_identifier(),
+            Err(other) => Err(other),
         }
     }
 
