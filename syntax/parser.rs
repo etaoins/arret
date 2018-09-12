@@ -366,13 +366,8 @@ impl<'de> Parser<'de> {
         contents.map(|contents| Datum::Str(span, contents.into_boxed_str()))
     }
 
-    fn parse_identifier_content(&mut self) -> &str {
-        self.consume_until(|c| !is_identifier_char(c)).1
-    }
-
     fn parse_identifier(&mut self) -> Result<Datum> {
-        let (span, content): (Span, Box<str>) =
-            self.capture_span(|s| s.parse_identifier_content().into());
+        let (span, content) = self.consume_until(|c| !is_identifier_char(c));
 
         if content.is_empty() {
             let (span, next_char) =
@@ -380,10 +375,10 @@ impl<'de> Parser<'de> {
             return Err(Error::new(span, ErrorKind::UnexpectedChar(next_char?)));
         }
 
-        match content.as_ref() {
+        match content {
             "true" => Ok(Datum::Bool(span, true)),
             "false" => Ok(Datum::Bool(span, false)),
-            _ => Ok(Datum::Sym(span, content)),
+            _ => Ok(Datum::Sym(span, content.into())),
         }
     }
 
