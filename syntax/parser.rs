@@ -352,13 +352,16 @@ impl<'de> Parser<'de> {
 
             let mut contents = String::new();
             loop {
+                let (_, unescaped_contents) = s.consume_until(|c| c == '"' || c == '\\');
+                contents.push_str(unescaped_contents);
+
                 match s.consume_char(ExpectedContent::String(open_quote_span))? {
                     '"' => {
                         return Ok(contents);
                     }
                     '\\' => contents.push(s.parse_quote_escape()?),
-                    other => {
-                        contents.push(other);
+                    _ => {
+                        unreachable!("Shouldn't be here");
                     }
                 }
             }
