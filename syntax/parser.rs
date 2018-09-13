@@ -288,18 +288,18 @@ impl<'de> Parser<'de> {
             self.capture_span(|s| s.parse_seq('}', ExpectedContent::Map));
 
         let unpaired_contents = unpaired_contents?;
-
         if unpaired_contents.len() % 2 == 1 {
             return Err(Error::new(span, ErrorKind::UnevenMap));
         }
 
-        let contents = unpaired_contents
-            .chunks(2)
-            .map(|chunk| (chunk[0].clone(), chunk[1].clone()))
-            .collect::<Vec<(Datum, Datum)>>()
-            .into_boxed_slice();
+        let mut paired_contents = Vec::with_capacity(unpaired_contents.len() / 2);
+        let mut unpaired_contents_iter = unpaired_contents.into_vec().into_iter();
+        while let Some(key) = unpaired_contents_iter.next() {
+            let value = unpaired_contents_iter.next().unwrap();
+            paired_contents.push((key, value));
+        }
 
-        Ok(Datum::Map(span, contents))
+        Ok(Datum::Map(span, paired_contents.into_boxed_slice()))
     }
 
     fn parse_set(&mut self) -> Result<Datum> {
