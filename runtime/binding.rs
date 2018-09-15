@@ -132,10 +132,7 @@ pub mod test {
         assert_eq!("(Int Float -> Num)", ADD_INT_FLOAT.arret_type);
 
         assert_eq!(
-            vec![
-                ABIType::Boxed(BoxedABIType::DirectTagged(boxed::TypeTag::Int)),
-                ABIType::Float,
-            ],
+            vec![boxed::TypeTag::Int.into(), ABIType::Float,],
             ADD_INT_FLOAT.params
         );
         assert_eq!(

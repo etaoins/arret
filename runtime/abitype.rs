@@ -74,3 +74,53 @@ impl EncodeRetABIType for () {
 impl EncodeRetABIType for Never {
     const RET_ABI_TYPE: RetABIType = RetABIType::Never;
 }
+
+impl From<boxed::TypeTag> for BoxedABIType {
+    fn from(type_tag: boxed::TypeTag) -> BoxedABIType {
+        type_tag.into_boxed_abi_type()
+    }
+}
+
+impl BoxedABIType {
+    pub fn into_abi_type(self) -> ABIType {
+        ABIType::Boxed(self)
+    }
+}
+
+impl From<boxed::TypeTag> for ABIType {
+    fn from(type_tag: boxed::TypeTag) -> ABIType {
+        type_tag.into_boxed_abi_type().into_abi_type()
+    }
+}
+
+impl From<BoxedABIType> for ABIType {
+    fn from(boxed_abi_type: BoxedABIType) -> ABIType {
+        boxed_abi_type.into_abi_type()
+    }
+}
+
+impl ABIType {
+    pub fn into_ret_abi_type(self) -> RetABIType {
+        RetABIType::Inhabited(self)
+    }
+}
+
+impl From<boxed::TypeTag> for RetABIType {
+    fn from(type_tag: boxed::TypeTag) -> RetABIType {
+        type_tag
+            .into_boxed_abi_type()
+            .into_abi_type()
+            .into_ret_abi_type()
+    }
+}
+impl From<BoxedABIType> for RetABIType {
+    fn from(boxed_abi_type: BoxedABIType) -> RetABIType {
+        boxed_abi_type.into_abi_type().into_ret_abi_type()
+    }
+}
+
+impl From<ABIType> for RetABIType {
+    fn from(abi_type: ABIType) -> RetABIType {
+        abi_type.into_ret_abi_type()
+    }
+}

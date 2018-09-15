@@ -102,8 +102,8 @@ pub fn build_portal_for_fun(
         // Create the outer function
         let outer_function_type = cgx.function_to_llvm_type(
             true,
-            &[ABIType::Boxed(BoxedABIType::List(&BoxedABIType::Any))],
-            &RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::Any)),
+            &[BoxedABIType::List(&BoxedABIType::Any).into()],
+            &BoxedABIType::Any.into(),
         );
 
         let function = LLVMAddFunction(
@@ -181,11 +181,7 @@ pub fn build_portal_for_fun(
                     let llvm_any_ptr = cgx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
 
                     let nil_ret = LLVMConstBitCast(
-                        cgx.ptr_to_singleton_box(
-                            module,
-                            &BoxedABIType::DirectTagged(TypeTag::Nil),
-                            b"ARRET_NIL\0",
-                        ),
+                        cgx.ptr_to_singleton_box(module, &TypeTag::Nil.into(), b"ARRET_NIL\0"),
                         llvm_any_ptr,
                     );
                     LLVMBuildRet(builder, nil_ret);

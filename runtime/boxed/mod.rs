@@ -217,6 +217,12 @@ macro_rules! define_direct_tagged_boxes {
     }
 }
 
+impl TypeTag {
+    pub fn into_boxed_abi_type(self) -> BoxedABIType {
+        BoxedABIType::DirectTagged(self)
+    }
+}
+
 impl PartialEq for Any {
     fn eq(&self, rhs: &Any) -> bool {
         self.as_subtype() == rhs.as_subtype()

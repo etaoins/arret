@@ -31,20 +31,12 @@ pub(super) fn convert_to_boxed_any(
             );
 
             let true_ptr = LLVMConstBitCast(
-                cgx.ptr_to_singleton_box(
-                    module,
-                    &BoxedABIType::DirectTagged(TypeTag::True),
-                    b"ARRET_TRUE\0",
-                ),
+                cgx.ptr_to_singleton_box(module, &TypeTag::True.into(), b"ARRET_TRUE\0"),
                 llvm_any_ptr,
             );
 
             let false_ptr = LLVMConstBitCast(
-                cgx.ptr_to_singleton_box(
-                    module,
-                    &BoxedABIType::DirectTagged(TypeTag::False),
-                    b"ARRET_FALSE\0",
-                ),
+                cgx.ptr_to_singleton_box(module, &TypeTag::False.into(), b"ARRET_FALSE\0"),
                 llvm_any_ptr,
             );
 
