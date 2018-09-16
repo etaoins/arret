@@ -1,4 +1,5 @@
 use runtime::abitype;
+
 use syntax::span::Span;
 
 new_counting_id_type!(RegIdCounter, RegId, u32);
@@ -19,11 +20,26 @@ pub struct ConstEntryPointOp {
     pub abi: EntryPointABI,
 }
 
+pub struct ConstBoxedPairOp {
+    pub car_reg: RegId,
+    pub cdr_reg: RegId,
+    pub length: usize,
+}
+
+pub struct CastBoxedOp {
+    pub from_reg: RegId,
+    pub to_type: abitype::BoxedABIType,
+}
+
 pub enum OpKind {
+    ConstNil(RegId, ()),
     ConstInt(RegId, i64),
     ConstBoxedInt(RegId, i64),
     ConstBoxedStr(RegId, Box<str>),
+    ConstBoxedPair(RegId, ConstBoxedPairOp),
     ConstEntryPoint(RegId, ConstEntryPointOp),
+    CastBoxed(RegId, CastBoxedOp),
+    CurrentTask(RegId, ()),
     Call(RegId, CallOp),
 }
 

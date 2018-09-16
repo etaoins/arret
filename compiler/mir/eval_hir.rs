@@ -216,24 +216,37 @@ impl EvalHirCtx {
         span: Span,
         rust_fun: &hir::rfi::Fun,
         fixed_values: &[Value],
-        rest_value: Option<Value>,
+        rest_value: Option<&Value>,
     ) -> Value {
         use crate::codegen::fun_abi::FunABI;
         use crate::mir::ops::*;
-        use crate::mir::value::to_reg::value_to_reg;
-        use runtime::abitype::RetABIType;
+        use crate::mir::value::to_reg::{list_to_reg, value_to_reg};
+        use runtime::abitype::{BoxedABIType, RetABIType};
 
         let mut arg_regs = vec![];
 
-        for (fixed_value, abi_type) in fixed_values.iter().zip(rust_fun.params().iter()) {
+        if rust_fun.takes_task() {
+            arg_regs.push(b.push_reg(span, OpKind::CurrentTask, ()));
+        }
+
+        let rust_fixed_len = rust_fun.params().len() - (rust_fun.has_rest() as usize);
+        let (direct_fixed_values, rest_head_values) = fixed_values.split_at(rust_fixed_len);
+
+        for (fixed_value, abi_type) in direct_fixed_values.iter().zip(rust_fun.params().iter()) {
             let reg_id = value_to_reg(b, span, fixed_value, abi_type);
             arg_regs.push(reg_id);
         }
 
-        if let Some(rest_value) = rest_value {
-            let reg_id = value_to_reg(b, span, &rest_value, rust_fun.params().last().unwrap());
+        if rust_fun.has_rest() {
+            let reg_id = list_to_reg(
+                b,
+                span,
+                rest_head_values,
+                rest_value,
+                &BoxedABIType::List(&BoxedABIType::Any),
+            );
             arg_regs.push(reg_id);
-        }
+        };
 
         let abi = EntryPointABI {
             takes_task: rust_fun.takes_task(),
@@ -341,7 +354,7 @@ impl EvalHirCtx {
         }
 
         if let Some(b) = b {
-            Ok(self.build_rust_fun_app(b, span, rust_fun, &fixed_values, rest_value))
+            Ok(self.build_rust_fun_app(b, span, rust_fun, &fixed_values, rest_value.as_ref()))
         } else {
             panic!("Need builder for non-const function application");
         }

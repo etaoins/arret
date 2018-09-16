@@ -76,6 +76,8 @@ impl CodegenCtx {
             let mut members = vec![llvm_i8, llvm_i8];
 
             let type_name = match boxed_abi_type {
+                BoxedABIType::Any => b"any\0".as_ptr(),
+                BoxedABIType::DirectTagged(boxed::TypeTag::Nil) => b"nil\0".as_ptr(),
                 BoxedABIType::DirectTagged(boxed::TypeTag::Int) => {
                     members.push(LLVMInt64TypeInContext(self.llx));
                     b"boxed_int\0".as_ptr()
@@ -84,16 +86,17 @@ impl CodegenCtx {
                     members.push(LLVMInt8TypeInContext(self.llx));
                     b"boxed_str\0".as_ptr()
                 }
-                BoxedABIType::Pair(member) => {
+                BoxedABIType::Pair(_) | BoxedABIType::DirectTagged(boxed::TypeTag::TopPair) => {
                     let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
 
-                    members.push(self.boxed_abi_to_llvm_ptr_type(member));
+                    members.push(llvm_any_ptr);
                     members.push(llvm_any_ptr);
                     members.push(LLVMInt64TypeInContext(self.llx));
 
                     b"pair\0".as_ptr()
                 }
-                _ => b"boxed\0".as_ptr(),
+                BoxedABIType::List(_) => b"list\0".as_ptr(),
+                _ => b"opaque_boxed\0".as_ptr(),
             };
 
             let llvm_type = LLVMStructCreateNamed(self.llx, type_name as *const _);
