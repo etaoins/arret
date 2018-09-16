@@ -7,6 +7,7 @@ use llvm_sys::prelude::*;
 use llvm_sys::target_machine::*;
 
 use crate::codegen::fun_gen::{gen_op, FunCtx};
+use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::CodegenCtx;
 use crate::hir::rfi;
 use crate::mir::ops::Op;
@@ -42,9 +43,11 @@ fn program_to_module(cgx: &mut CodegenCtx, program: Vec<Op>) -> LLVMModuleRef {
         let bb = LLVMAppendBasicBlockInContext(cgx.llx, function, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
 
-        let mut fcx = FunCtx::new();
+        let mut mcx = ModCtx::new(module);
+        let mut fcx = FunCtx::new(builder);
+
         for op in program {
-            gen_op(cgx, &mut fcx, module, builder, &op);
+            gen_op(cgx, &mut mcx, &mut fcx, &op);
         }
 
         LLVMBuildRet(builder, LLVMConstInt(LLVMInt32TypeInContext(cgx.llx), 0, 0));

@@ -7,16 +7,19 @@ use llvm_sys::prelude::*;
 
 use runtime::boxed;
 
+use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::CodegenCtx;
 use crate::mir::ops::*;
 
 pub(crate) struct FunCtx {
+    pub builder: LLVMBuilderRef,
     regs: HashMap<RegId, LLVMValueRef>,
 }
 
 impl FunCtx {
-    pub(crate) fn new() -> FunCtx {
+    pub(crate) fn new(builder: LLVMBuilderRef) -> FunCtx {
         FunCtx {
+            builder,
             regs: HashMap::new(),
         }
     }
@@ -35,13 +38,7 @@ fn push_box_header(
     }
 }
 
-pub(crate) fn gen_op(
-    cgx: &mut CodegenCtx,
-    fcx: &mut FunCtx,
-    module: LLVMModuleRef,
-    builder: LLVMBuilderRef,
-    op: &Op,
-) {
+pub(crate) fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
     unsafe {
         match &op.kind {
             OpKind::ConstInt(reg, value) => {
@@ -55,13 +52,14 @@ pub(crate) fn gen_op(
 
                 let box_name = CString::new(format!("arret_int_{}", value)).unwrap();
 
-                let llvm_value = cgx.get_global_or_insert(module, llvm_type, &box_name, |cgx| {
+                let llvm_value = mcx.get_global_or_insert(llvm_type, &box_name, || {
                     let mut members = vec![];
                     push_box_header(cgx, &mut members, type_tag);
                     members.push(LLVMConstInt(llvm_i64, *value as u64, 1));
 
                     LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32)
                 });
+
                 LLVMSetAlignment(llvm_value, mem::align_of::<boxed::Int>() as u32);
 
                 fcx.regs.insert(*reg, llvm_value);
@@ -71,7 +69,7 @@ pub(crate) fn gen_op(
                     cgx.function_to_llvm_type(abi.takes_task, &abi.params, &abi.ret);
 
                 let function = LLVMAddGlobal(
-                    module,
+                    mcx.module,
                     function_type,
                     CString::new(*symbol).unwrap().as_bytes_with_nul().as_ptr() as *const _,
                 );
@@ -86,7 +84,7 @@ pub(crate) fn gen_op(
                     .collect::<Vec<LLVMValueRef>>();
 
                 let llvm_ret = LLVMBuildCall(
-                    builder,
+                    fcx.builder,
                     llvm_fun,
                     llvm_args.as_mut_ptr(),
                     llvm_args.len() as u32,

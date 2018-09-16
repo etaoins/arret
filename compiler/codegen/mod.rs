@@ -2,16 +2,15 @@ mod convert;
 pub mod fun_abi;
 mod fun_gen;
 pub mod jit;
+mod mod_gen;
 pub mod portal;
 pub(crate) mod program;
 mod target;
 
 use std::collections::HashMap;
-use std::ffi::CStr;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
-use llvm_sys::LLVMLinkage;
 
 use runtime::abitype::{ABIType, BoxedABIType, RetABIType};
 use runtime::boxed;
@@ -151,33 +150,6 @@ impl CodegenCtx {
 
             let llvm_any = self.boxed_abi_to_llvm_struct_type(boxed_abi_type);
             LLVMAddGlobal(module, llvm_any, name.as_ptr() as *const _)
-        }
-    }
-
-    fn get_global_or_insert<F>(
-        &mut self,
-        module: LLVMModuleRef,
-        llvm_type: LLVMTypeRef,
-        name: &CStr,
-        mut initial_value: F,
-    ) -> LLVMValueRef
-    where
-        F: FnMut(&mut CodegenCtx) -> LLVMValueRef,
-    {
-        unsafe {
-            let global = LLVMGetNamedGlobal(module, name.as_ptr() as *const _);
-
-            if !global.is_null() {
-                return global;
-            }
-
-            let global = LLVMAddGlobal(module, llvm_type, name.as_ptr() as *const _);
-            LLVMSetInitializer(global, initial_value(self));
-
-            LLVMSetUnnamedAddr(global, 1);
-            LLVMSetLinkage(global, LLVMLinkage::LLVMPrivateLinkage);
-
-            global
         }
     }
 }
