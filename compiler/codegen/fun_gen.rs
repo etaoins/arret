@@ -64,6 +64,47 @@ pub(crate) fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, o
 
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::ConstBoxedStr(reg, value) => {
+                const MAX_INLINE_BYTES: usize = boxed::Str::MAX_INLINE_BYTES;
+
+                if value.len() > MAX_INLINE_BYTES {
+                    unimplemented!("Non-inline strings");
+                }
+
+                let mut inline_buffer: [u8; MAX_INLINE_BYTES] = [0; MAX_INLINE_BYTES];
+                inline_buffer[0..value.len()].copy_from_slice(value.as_bytes());
+
+                let type_tag = boxed::TypeTag::Str;
+                let inline_llvm_type = cgx.boxed_inline_str_llvm_type();
+                let llvm_i8 = LLVMInt8TypeInContext(cgx.llx);
+
+                let mut members = vec![];
+                push_box_header(cgx, &mut members, type_tag);
+                members.push(LLVMConstInt(llvm_i8, value.len() as u64, 0));
+                members.push(LLVMConstString(
+                    inline_buffer.as_mut_ptr() as *mut _,
+                    MAX_INLINE_BYTES as u32,
+                    1,
+                ));
+
+                let inline_llvm_value = LLVMConstNamedStruct(
+                    inline_llvm_type,
+                    members.as_mut_ptr(),
+                    members.len() as u32,
+                );
+
+                let global = LLVMAddGlobal(
+                    mcx.module,
+                    inline_llvm_type,
+                    "arret_str\0".as_ptr() as *const _,
+                );
+                LLVMSetInitializer(global, inline_llvm_value);
+                LLVMSetAlignment(global, mem::align_of::<boxed::Str>() as u32);
+
+                let llvm_type = cgx.boxed_abi_to_llvm_struct_type(&type_tag.into());
+                let llvm_value = LLVMConstBitCast(global, LLVMPointerType(llvm_type, 0));
+                fcx.regs.insert(*reg, llvm_value);
+            }
             OpKind::ConstEntryPoint(reg, ConstEntryPointOp { symbol, abi }) => {
                 let function_type =
                     cgx.function_to_llvm_type(abi.takes_task, &abi.params, &abi.ret);

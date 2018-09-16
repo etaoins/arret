@@ -26,6 +26,10 @@ fn const_to_reg(
             boxed::AnySubtype::Int(int_ref),
             abitype::ABIType::Boxed(abitype::BoxedABIType::DirectTagged(boxed::TypeTag::Int)),
         ) => b.push_reg(span, OpKind::ConstBoxedInt, int_ref.value()),
+        (
+            boxed::AnySubtype::Str(str_ref),
+            abitype::ABIType::Boxed(abitype::BoxedABIType::DirectTagged(boxed::TypeTag::Str)),
+        ) => b.push_reg(span, OpKind::ConstBoxedStr, str_ref.as_str().into()),
         (subtype, abi_type) => unimplemented!(
             "Unimplemented const {:?} to reg {:?} conversion",
             subtype,

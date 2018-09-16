@@ -12,7 +12,7 @@ pub struct Str {
 }
 
 impl Str {
-    const MAX_INLINE_BYTES: usize = 29;
+    pub const MAX_INLINE_BYTES: usize = 29;
 
     fn is_inline(&self) -> bool {
         self.inline_byte_length <= Str::MAX_INLINE_BYTES as u8
