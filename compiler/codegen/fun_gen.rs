@@ -180,12 +180,22 @@ pub(crate) fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, o
             OpKind::ConstEntryPoint(reg, ConstEntryPointOp { symbol, abi }) => {
                 let function_type =
                     cgx.function_to_llvm_type(abi.takes_task, &abi.params, &abi.ret);
+                let function_name = CString::new(*symbol).unwrap();
 
-                let function = LLVMAddGlobal(
+                let global = LLVMGetNamedGlobal(
                     mcx.module,
-                    function_type,
-                    CString::new(*symbol).unwrap().as_bytes_with_nul().as_ptr() as *const _,
+                    function_name.as_bytes_with_nul().as_ptr() as *const _,
                 );
+
+                let function = if global.is_null() {
+                    LLVMAddGlobal(
+                        mcx.module,
+                        function_type,
+                        function_name.as_bytes_with_nul().as_ptr() as *const _,
+                    )
+                } else {
+                    global
+                };
 
                 fcx.regs.insert(*reg, function);
             }
