@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use libloading;
-
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 
@@ -50,7 +48,7 @@ pub struct LoweredProgram {
     pub pvars: Vec<ty::purity::PVar>,
     pub tvars: Vec<ty::TVar>,
     pub defs: Vec<Vec<Def<ty::Decl>>>,
-    pub rust_libraries: Vec<libloading::Library>,
+    pub rust_libraries: Vec<rfi::Library>,
     pub main_var_id: VarId,
 }
 

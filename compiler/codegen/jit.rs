@@ -32,7 +32,10 @@ impl JITCtx {
 
             LLVMLinkInMCJIT();
 
-            let target_machine = default_target_machine(LLVMCodeModel::LLVMCodeModelJITDefault);
+            let target_machine = default_target_machine(
+                LLVMRelocMode::LLVMRelocDefault,
+                LLVMCodeModel::LLVMCodeModelJITDefault,
+            );
             let orc = LLVMOrcCreateInstance(target_machine);
 
             let mut jcx = JITCtx {

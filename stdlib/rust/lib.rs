@@ -19,14 +19,14 @@ use runtime::task::Task;
 
 define_rust_fn! {
     #[arret_type="((Listof Any) -> Int)"]
-    LENGTH = fn length(input: Gc<boxed::List<boxed::Any>>) -> i64 {
+    LENGTH = fn arret_stdlib_length(input: Gc<boxed::List<boxed::Any>>) -> i64 {
         input.len() as i64
     }
 }
 
 define_rust_fn! {
     #[arret_type="(Any ... -> (U))"]
-    PANIC = fn panic(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Never {
+    PANIC = fn arret_stdlib_panic(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Never {
         use std::str;
 
         let mut output = Vec::<u8>::new();
@@ -41,14 +41,14 @@ define_rust_fn! {
 
 define_rust_fn! {
     #[arret_type="(Any Any -> Bool)"]
-    EQUALS = fn equals(lhs: Gc<boxed::Any>, rhs: Gc<boxed::Any>) -> bool {
+    EQUALS = fn arret_stdlib_equals(lhs: Gc<boxed::Any>, rhs: Gc<boxed::Any>) -> bool {
         lhs == rhs
     }
 }
 
 define_rust_fn! {
     #[arret_type="(Any ... ->! ())"]
-    PRINT = fn print(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> () {
+    PRINT = fn arret_stdlib_print(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> () {
         let mut output = io::stdout();
 
         for value in values.iter() {
@@ -59,7 +59,7 @@ define_rust_fn! {
 
 define_rust_fn! {
     #[arret_type="(Any ... ->! ())"]
-    PRINTLN = fn println(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> () {
+    PRINTLN = fn arret_stdlib_println(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> () {
         let mut output = io::stdout();
 
         for value in values.iter() {
@@ -72,7 +72,7 @@ define_rust_fn! {
 
 define_rust_fn! {
     #[arret_type="(Int ->! (U))"]
-    EXIT = fn exit(exit_code: i64) -> () {
+    EXIT = fn arret_stdlib_exit(exit_code: i64) -> () {
         use std::process::exit;
         exit(exit_code as i32);
     }

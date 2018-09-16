@@ -3,7 +3,10 @@ use std::{mem, ptr};
 use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 
-pub fn default_target_machine(code_model: LLVMCodeModel) -> LLVMTargetMachineRef {
+pub fn default_target_machine(
+    reloc_mode: LLVMRelocMode,
+    code_model: LLVMCodeModel,
+) -> LLVMTargetMachineRef {
     unsafe {
         LLVM_InitializeNativeTarget();
         LLVM_InitializeNativeAsmPrinter();
@@ -21,7 +24,7 @@ pub fn default_target_machine(code_model: LLVMCodeModel) -> LLVMTargetMachineRef
             ptr::null(),
             ptr::null(),
             LLVMCodeGenOptLevel::LLVMCodeGenLevelDefault,
-            LLVMRelocMode::LLVMRelocDefault,
+            reloc_mode,
             code_model,
         )
     }

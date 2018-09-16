@@ -25,7 +25,7 @@ fn try_compile_input_file(
     }
 
     let ops = ehx.build_program(&hir.tvars, hir.main_var_id)?;
-    compiler::gen_program(ops, output_path);
+    compiler::gen_program(&hir.rust_libraries, ops, output_path);
 
     Ok(())
 }

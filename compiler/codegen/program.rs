@@ -8,6 +8,7 @@ use llvm_sys::target_machine::*;
 
 use crate::codegen::gen::gen_op;
 use crate::codegen::{CodegenCtx, FunCtx};
+use crate::hir::rfi;
 use crate::mir::ops::Op;
 
 fn c_main_llvm_type(cgx: &mut CodegenCtx) -> LLVMTypeRef {
@@ -52,13 +53,16 @@ fn program_to_module(cgx: &mut CodegenCtx, program: Vec<Op>) -> LLVMModuleRef {
     }
 }
 
-pub fn gen_program(program: Vec<Op>, output_file: &path::Path) {
+pub fn gen_program(rust_libraries: &[rfi::Library], program: Vec<Op>, output_file: &path::Path) {
     use crate::codegen::target::default_target_machine;
     let object_path = "/tmp/temp.o";
 
     let mut cgx = CodegenCtx::new();
 
-    let target_machine = default_target_machine(LLVMCodeModel::LLVMCodeModelDefault);
+    let target_machine = default_target_machine(
+        LLVMRelocMode::LLVMRelocDynamicNoPic,
+        LLVMCodeModel::LLVMCodeModelDefault,
+    );
     let module = program_to_module(&mut cgx, program);
 
     unsafe {
@@ -88,6 +92,7 @@ pub fn gen_program(program: Vec<Op>, output_file: &path::Path) {
         .arg(object_path)
         .arg("-o")
         .arg(output_file)
+        .args(rust_libraries.iter().map(|l| l.path()))
         .status()
         .unwrap();
 

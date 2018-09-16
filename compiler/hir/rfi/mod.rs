@@ -20,6 +20,17 @@ use runtime::{abitype, binding};
 
 new_indexing_id_type!(RustLibraryId, u32);
 
+pub struct Library {
+    _loaded: libloading::Library,
+    path: Box<path::Path>,
+}
+
+impl Library {
+    pub fn path(&self) -> &path::Path {
+        &self.path
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Fun {
     rust_library_id: RustLibraryId,
@@ -79,7 +90,7 @@ pub type Module = HashMap<&'static str, Fun>;
 
 pub struct Loader {
     type_scope: Scope,
-    rust_libraries: Vec<libloading::Library>,
+    rust_libraries: Vec<Library>,
 }
 
 /// Ensure that the specified Arret type is compatible with the corresponding Rust type
@@ -239,14 +250,13 @@ impl Loader {
         path_buf.push(base_path);
         push_rfi_lib_path(&mut path_buf, package_name);
 
-        let path = path_buf.as_path();
-        let map_io_err = |err| Error::from_module_io(span, path, &err);
+        let map_io_err = |err| Error::from_module_io(span, &path_buf, &err);
+        let loaded = libloading::Library::new(&path_buf).map_err(map_io_err)?;
 
-        let rust_library = libloading::Library::new(path).map_err(map_io_err)?;
         let rust_library_id = RustLibraryId::new(self.rust_libraries.len());
 
         let exports: binding::RustExports = unsafe {
-            let exports_symbol = rust_library
+            let exports_symbol = loaded
                 .get::<*const binding::RustExports>(b"ARRET_RUST_EXPORTS")
                 .map_err(map_io_err)?;
 
@@ -257,7 +267,7 @@ impl Loader {
             .iter()
             .map(|(name, rust_fun)| {
                 let entry_point_address = unsafe {
-                    *rust_library
+                    *loaded
                         .get::<*const c_void>(rust_fun.symbol.as_bytes())
                         .map_err(map_io_err)?
                 };
@@ -277,7 +287,7 @@ impl Loader {
                         // allocation for the display name and extending the loaded sources. Instead
                         // only "load" the string once there is an error and adjust the span to match.
                         let kind = SourceKind::RfiModule(
-                            path.to_string_lossy().into(),
+                            path_buf.to_string_lossy().into(),
                             (*name).to_owned(),
                         );
                         let error_offset = source_loader.next_span_offset;
@@ -290,12 +300,15 @@ impl Loader {
                 Ok((*name, fun))
             }).collect::<Result<HashMap<&'static str, Fun>, Error>>()?;
 
-        self.rust_libraries.push(rust_library);
+        self.rust_libraries.push(Library {
+            _loaded: loaded,
+            path: path_buf.into_boxed_path(),
+        });
 
         Ok(module)
     }
 
-    pub fn into_rust_libraries(self) -> Vec<libloading::Library> {
+    pub fn into_rust_libraries(self) -> Vec<Library> {
         self.rust_libraries
     }
 }
