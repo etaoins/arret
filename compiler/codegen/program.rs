@@ -6,8 +6,8 @@ use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::target_machine::*;
 
-use crate::codegen::gen::gen_op;
-use crate::codegen::{CodegenCtx, FunCtx};
+use crate::codegen::fun_gen::{gen_op, FunCtx};
+use crate::codegen::CodegenCtx;
 use crate::hir::rfi;
 use crate::mir::ops::Op;
 

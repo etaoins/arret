@@ -21,6 +21,7 @@ pub struct ConstEntryPointOp {
 
 pub enum OpKind {
     ConstInt(RegId, i64),
+    ConstBoxedInt(RegId, i64),
     ConstEntryPoint(RegId, ConstEntryPointOp),
     Call(RegId, CallOp),
 }

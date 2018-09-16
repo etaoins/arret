@@ -1,19 +1,20 @@
 mod convert;
 pub mod fun_abi;
-mod gen;
+mod fun_gen;
 pub mod jit;
 pub mod portal;
 pub(crate) mod program;
 mod target;
 
 use std::collections::HashMap;
+use std::ffi::CStr;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
+use llvm_sys::LLVMLinkage;
 
 use runtime::abitype::{ABIType, BoxedABIType, RetABIType};
-
-use crate::mir::ops::RegId;
+use runtime::boxed;
 
 pub struct CodegenCtx {
     llx: LLVMContextRef,
@@ -55,16 +56,21 @@ impl CodegenCtx {
             let llvm_i8 = LLVMInt8TypeInContext(self.llx);
             let mut members = vec![llvm_i8, llvm_i8];
 
-            let type_name = if let BoxedABIType::Pair(member) = boxed_abi_type {
-                let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
+            let type_name = match boxed_abi_type {
+                BoxedABIType::DirectTagged(boxed::TypeTag::Int) => {
+                    members.push(LLVMInt64TypeInContext(self.llx));
+                    b"boxed_int\0".as_ptr()
+                }
+                BoxedABIType::Pair(member) => {
+                    let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
 
-                members.push(self.boxed_abi_to_llvm_ptr_type(member));
-                members.push(llvm_any_ptr);
-                members.push(LLVMInt64TypeInContext(self.llx));
+                    members.push(self.boxed_abi_to_llvm_ptr_type(member));
+                    members.push(llvm_any_ptr);
+                    members.push(LLVMInt64TypeInContext(self.llx));
 
-                b"pair\0".as_ptr()
-            } else {
-                b"boxed\0".as_ptr()
+                    b"pair\0".as_ptr()
+                }
+                _ => b"boxed\0".as_ptr(),
             };
 
             let llvm_type = LLVMStructCreateNamed(self.llx, type_name as *const _);
@@ -147,24 +153,39 @@ impl CodegenCtx {
             LLVMAddGlobal(module, llvm_any, name.as_ptr() as *const _)
         }
     }
+
+    fn get_global_or_insert<F>(
+        &mut self,
+        module: LLVMModuleRef,
+        llvm_type: LLVMTypeRef,
+        name: &CStr,
+        mut initial_value: F,
+    ) -> LLVMValueRef
+    where
+        F: FnMut(&mut CodegenCtx) -> LLVMValueRef,
+    {
+        unsafe {
+            let global = LLVMGetNamedGlobal(module, name.as_ptr() as *const _);
+
+            if !global.is_null() {
+                return global;
+            }
+
+            let global = LLVMAddGlobal(module, llvm_type, name.as_ptr() as *const _);
+            LLVMSetInitializer(global, initial_value(self));
+
+            LLVMSetUnnamedAddr(global, 1);
+            LLVMSetLinkage(global, LLVMLinkage::LLVMPrivateLinkage);
+
+            global
+        }
+    }
 }
 
 impl Drop for CodegenCtx {
     fn drop(&mut self) {
         unsafe {
             LLVMContextDispose(self.llx);
-        }
-    }
-}
-
-pub(crate) struct FunCtx {
-    regs: HashMap<RegId, LLVMValueRef>,
-}
-
-impl FunCtx {
-    pub(crate) fn new() -> FunCtx {
-        FunCtx {
-            regs: HashMap::new(),
         }
     }
 }
