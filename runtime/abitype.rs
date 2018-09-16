@@ -12,7 +12,7 @@ pub enum BoxedABIType {
     Pair(&'static BoxedABIType),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ABIType {
     Bool,
     Char,
@@ -21,7 +21,7 @@ pub enum ABIType {
     Boxed(BoxedABIType),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RetABIType {
     Void,
     Never,

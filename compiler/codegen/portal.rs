@@ -87,6 +87,7 @@ pub fn jit_portal_for_rust_fun(
     }
 }
 
+// TODO: Once this can be expressed using `mir::ops::Op` this should be moved to MIR
 pub fn build_portal_for_fun(
     cgx: &mut CodegenCtx,
     module: LLVMModuleRef,

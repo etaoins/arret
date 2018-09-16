@@ -3,7 +3,7 @@ use crate::hir;
 use crate::hir::scope::Scope;
 use crate::{PackagePaths, SourceKind, SourceLoader};
 
-use crate::mir::eval_hir::{EvalHirCtx, EvalMode};
+use crate::mir::eval_hir::EvalHirCtx;
 use crate::typeck::infer::InferCtx;
 
 pub struct ReplCtx<'pp, 'sl> {
@@ -48,7 +48,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
             ns_id,
             lcx: hir::lowering::LoweringCtx::new(package_paths, source_loader),
             icx: InferCtx::new(),
-            ehx: EvalHirCtx::new(EvalMode::Immediate),
+            ehx: EvalHirCtx::new(),
         }
     }
 
@@ -133,8 +133,13 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
 
                         // Evaluate the expression
                         let mut dcx = DefCtx::new(lcx.tvars());
-                        let value = self.ehx.consume_expr(&mut dcx, node.into_expr())?;
-                        let boxed = self.ehx.value_to_boxed(&value);
+                        let value = self
+                            .ehx
+                            .consume_expr(&mut dcx, &mut None, node.into_expr())?;
+                        let boxed = self
+                            .ehx
+                            .value_to_boxed(&value)
+                            .expect("Received register from MIR evaluation");
 
                         // Write the result to a string
                         let mut output_buf: Vec<u8> = vec![];

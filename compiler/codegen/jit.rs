@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::{ffi, mem, ptr};
+use std::{ffi, mem};
 
 use runtime::boxed;
 
@@ -8,7 +8,6 @@ use libc;
 use llvm_sys::execution_engine::*;
 use llvm_sys::orc::*;
 use llvm_sys::prelude::*;
-use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 
 extern "C" fn orc_sym_resolve(name_ptr: *const libc::c_char, jcx_void: *mut libc::c_void) -> u64 {
@@ -29,27 +28,11 @@ pub struct JITCtx {
 impl JITCtx {
     pub fn new() -> JITCtx {
         unsafe {
-            LLVM_InitializeNativeTarget();
-            LLVM_InitializeNativeAsmPrinter();
+            use crate::codegen::target::default_target_machine;
+
             LLVMLinkInMCJIT();
 
-            let default_triple = LLVMGetDefaultTargetTriple();
-
-            let mut target: LLVMTargetRef = mem::uninitialized();
-            if LLVMGetTargetFromTriple(default_triple, &mut target, ptr::null_mut()) != 0 {
-                panic!("Can't get target triple");
-            }
-
-            let target_machine = LLVMCreateTargetMachine(
-                target,
-                default_triple,
-                ptr::null(),
-                ptr::null(),
-                LLVMCodeGenOptLevel::LLVMCodeGenLevelDefault,
-                LLVMRelocMode::LLVMRelocDefault,
-                LLVMCodeModel::LLVMCodeModelJITDefault,
-            );
-
+            let target_machine = default_target_machine(LLVMCodeModel::LLVMCodeModelJITDefault);
             let orc = LLVMOrcCreateInstance(target_machine);
 
             let mut jcx = JITCtx {

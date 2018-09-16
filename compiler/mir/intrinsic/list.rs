@@ -3,6 +3,7 @@ use syntax::span::Span;
 use runtime::boxed;
 use runtime::boxed::prelude::*;
 
+use crate::mir::builder::Builder;
 use crate::mir::error::Result;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::intrinsic::Intrinsic;
@@ -30,6 +31,7 @@ impl Length {
 impl Intrinsic for Length {
     fn eval_arg_list(
         ehx: &mut EvalHirCtx,
+        _b: &mut Option<Builder>,
         _span: Span,
         mut iter: ListIterator<'_>,
     ) -> Result<Option<Value>> {

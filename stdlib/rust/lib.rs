@@ -70,10 +70,19 @@ define_rust_fn! {
     }
 }
 
+define_rust_fn! {
+    #[arret_type="(Int ->! (U))"]
+    EXIT = fn exit(exit_code: i64) -> () {
+        use std::process::exit;
+        exit(exit_code as i32);
+    }
+}
+
 define_rust_module! {
     "length" => LENGTH,
     "panic" => PANIC,
     "=" => EQUALS,
     "print!" => PRINT,
-    "println!" => PRINTLN
+    "println!" => PRINTLN,
+    "exit" => EXIT
 }

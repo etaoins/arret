@@ -1,17 +1,29 @@
+pub mod to_boxed;
+pub mod to_reg;
+
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use runtime::abitype;
 use runtime::boxed;
 use runtime::boxed::refs::Gc;
 use runtime::intern::Interner;
 
 use crate::hir;
+use crate::mir::ops::RegId;
 use crate::ty;
 
 #[derive(Clone)]
 pub struct Closure {
     pub captures: HashMap<hir::VarId, Value>,
     pub fun_expr: Rc<hir::Fun<ty::Poly>>,
+}
+
+#[derive(Clone)]
+pub struct RegValue {
+    pub reg: RegId,
+    pub abi_type: abitype::ABIType,
+    pub arret_type: ty::Poly,
 }
 
 #[derive(Clone)]
@@ -22,6 +34,8 @@ pub enum Value {
     Closure(Closure),
     RustFun(Rc<hir::rfi::Fun>),
     TyPred(Rc<ty::Poly>),
+    Reg(Rc<RegValue>),
+    Divergent,
 }
 
 impl Value {
@@ -107,6 +121,11 @@ pub fn poly_for_value(interner: &Interner, value: &Value) -> ty::Poly {
 
             ty::Ty::Fun(Box::new(fun)).into_poly()
         }
+        Value::Reg(reg_value) => {
+            // TODO: Ugly clone
+            reg_value.arret_type.clone()
+        }
+        Value::Divergent => ty::Ty::never().into_poly(),
     }
 }
 

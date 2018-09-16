@@ -27,7 +27,7 @@ fn try_run_single_test(
     let hir = compiler::lower_program(&package_paths, source_loader, source_file_id)?;
     let inferred_defs = compiler::infer_program(&hir.pvars, &hir.tvars, hir.defs, hir.main_var_id)?;
 
-    let mut ehx = compiler::EvalHirCtx::new(compiler::EvalHirMode::PureOnly);
+    let mut ehx = compiler::EvalHirCtx::new();
     for inferred_def in inferred_defs {
         ehx.consume_def(&hir.tvars, inferred_def)?;
     }

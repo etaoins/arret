@@ -1,7 +1,10 @@
 mod convert;
 pub mod fun_abi;
+mod gen;
 pub mod jit;
 pub mod portal;
+pub(crate) mod program;
+mod target;
 
 use std::collections::HashMap;
 
@@ -9,6 +12,8 @@ use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 
 use runtime::abitype::{ABIType, BoxedABIType, RetABIType};
+
+use crate::mir::ops::RegId;
 
 pub struct CodegenCtx {
     llx: LLVMContextRef,
@@ -148,6 +153,18 @@ impl Drop for CodegenCtx {
     fn drop(&mut self) {
         unsafe {
             LLVMContextDispose(self.llx);
+        }
+    }
+}
+
+pub(crate) struct FunCtx {
+    regs: HashMap<RegId, LLVMValueRef>,
+}
+
+impl FunCtx {
+    pub(crate) fn new() -> FunCtx {
+        FunCtx {
+            regs: HashMap::new(),
         }
     }
 }

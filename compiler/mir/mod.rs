@@ -1,6 +1,8 @@
+mod builder;
 pub mod error;
 pub mod eval_hir;
 mod intrinsic;
+pub(crate) mod ops;
 mod value;
 
 use crate::hir;
