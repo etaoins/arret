@@ -140,9 +140,9 @@ pub fn build_portal_for_fun(
             );
 
             let head_ptr =
-                LLVMBuildStructGEP(builder, pair_ptr, 2, b"head_ptr\0".as_ptr() as *const _);
+                LLVMBuildStructGEP(builder, pair_ptr, 1, b"head_ptr\0".as_ptr() as *const _);
             let rest_ptr =
-                LLVMBuildStructGEP(builder, pair_ptr, 3, b"rest_ptr\0".as_ptr() as *const _);
+                LLVMBuildStructGEP(builder, pair_ptr, 2, b"rest_ptr\0".as_ptr() as *const _);
 
             let arg_value = LLVMBuildLoad(builder, head_ptr, "head\0".as_ptr() as *const _);
             arg_list = LLVMBuildLoad(builder, rest_ptr, "rest\0".as_ptr() as *const _);

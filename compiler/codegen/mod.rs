@@ -19,6 +19,7 @@ pub struct CodegenCtx {
     llx: LLVMContextRef,
 
     task_type: Option<LLVMTypeRef>,
+    box_header_type: Option<LLVMTypeRef>,
     boxed_inline_str_type: Option<LLVMTypeRef>,
     boxed_abi_types: HashMap<BoxedABIType, LLVMTypeRef>,
 }
@@ -32,6 +33,7 @@ impl CodegenCtx {
                 llx,
 
                 task_type: None,
+                box_header_type: None,
                 boxed_inline_str_type: None,
                 boxed_abi_types: HashMap::new(),
             }
@@ -48,13 +50,27 @@ impl CodegenCtx {
         })
     }
 
+    fn box_header_llvm_type(&mut self) -> LLVMTypeRef {
+        let llx = self.llx;
+        *self.box_header_type.get_or_insert_with(|| unsafe {
+            let llvm_i8 = LLVMInt8TypeInContext(llx);
+            let members = &mut [llvm_i8, llvm_i8];
+
+            let llvm_type = LLVMStructCreateNamed(llx, b"box_header\0".as_ptr() as *const _);
+            LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
+
+            llvm_type
+        })
+    }
+
     fn boxed_inline_str_llvm_type(&mut self) -> LLVMTypeRef {
         let llx = self.llx;
+        let llvm_header = self.box_header_llvm_type();
+
         *self.boxed_inline_str_type.get_or_insert_with(|| unsafe {
             let llvm_i8 = LLVMInt8TypeInContext(llx);
-            let mut members = vec![
-                llvm_i8,
-                llvm_i8,
+            let members = &mut [
+                llvm_header,
                 llvm_i8,
                 LLVMArrayType(llvm_i8, boxed::Str::MAX_INLINE_BYTES as u32),
             ];
@@ -72,8 +88,8 @@ impl CodegenCtx {
         }
 
         unsafe {
-            let llvm_i8 = LLVMInt8TypeInContext(self.llx);
-            let mut members = vec![llvm_i8, llvm_i8];
+            let llvm_header = self.box_header_llvm_type();
+            let mut members = vec![llvm_header];
 
             let type_name = match boxed_abi_type {
                 BoxedABIType::Any => b"any\0".as_ptr(),
@@ -177,6 +193,20 @@ impl CodegenCtx {
 
             let llvm_any = self.boxed_abi_to_llvm_struct_type(boxed_abi_type);
             LLVMAddGlobal(module, llvm_any, name.as_ptr() as *const _)
+        }
+    }
+
+    fn const_box_header(&mut self, type_tag: boxed::TypeTag) -> LLVMValueRef {
+        unsafe {
+            let llvm_i8 = LLVMInt8TypeInContext(self.llx);
+            let llvm_type = self.box_header_llvm_type();
+
+            let members = &mut [
+                LLVMConstInt(llvm_i8, type_tag as u64, 0),
+                LLVMConstInt(llvm_i8, 0, 0),
+            ];
+
+            LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32)
         }
     }
 }

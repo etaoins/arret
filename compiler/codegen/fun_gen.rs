@@ -25,19 +25,6 @@ impl FunCtx {
     }
 }
 
-fn push_box_header(
-    cgx: &mut CodegenCtx,
-    members: &mut Vec<LLVMValueRef>,
-    type_tag: boxed::TypeTag,
-) {
-    unsafe {
-        let llvm_i8 = LLVMInt8TypeInContext(cgx.llx);
-
-        members.push(LLVMConstInt(llvm_i8, type_tag as u64, 0));
-        members.push(LLVMConstInt(llvm_i8, 0, 0));
-    }
-}
-
 pub(crate) fn gen_const_boxed_pair(
     cgx: &mut CodegenCtx,
     mcx: &mut ModCtx,
@@ -50,11 +37,12 @@ pub(crate) fn gen_const_boxed_pair(
         let llvm_type = cgx.boxed_abi_to_llvm_struct_type(&type_tag.into());
         let llvm_i64 = LLVMInt64TypeInContext(cgx.llx);
 
-        let mut members = vec![];
-        push_box_header(cgx, &mut members, type_tag);
-        members.push(llvm_car);
-        members.push(llvm_cdr);
-        members.push(LLVMConstInt(llvm_i64, list_length as u64, 0));
+        let members = &mut [
+            cgx.const_box_header(type_tag),
+            llvm_car,
+            llvm_cdr,
+            LLVMConstInt(llvm_i64, list_length as u64, 0),
+        ];
 
         let llvm_value =
             LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
@@ -82,14 +70,15 @@ pub(crate) fn gen_const_boxed_inline_str(
         let inline_llvm_type = cgx.boxed_inline_str_llvm_type();
         let llvm_i8 = LLVMInt8TypeInContext(cgx.llx);
 
-        let mut members = vec![];
-        push_box_header(cgx, &mut members, type_tag);
-        members.push(LLVMConstInt(llvm_i8, value.len() as u64, 0));
-        members.push(LLVMConstString(
-            inline_buffer.as_mut_ptr() as *mut _,
-            MAX_INLINE_BYTES as u32,
-            1,
-        ));
+        let members = &mut [
+            cgx.const_box_header(type_tag),
+            LLVMConstInt(llvm_i8, value.len() as u64, 0),
+            LLVMConstString(
+                inline_buffer.as_mut_ptr() as *mut _,
+                MAX_INLINE_BYTES as u32,
+                1,
+            ),
+        ];
 
         let inline_llvm_value =
             LLVMConstNamedStruct(inline_llvm_type, members.as_mut_ptr(), members.len() as u32);
@@ -137,9 +126,10 @@ pub(crate) fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, o
                 let box_name = CString::new(format!("const_int_{}", value)).unwrap();
 
                 let llvm_value = mcx.get_global_or_insert(llvm_type, &box_name, || {
-                    let mut members = vec![];
-                    push_box_header(cgx, &mut members, type_tag);
-                    members.push(LLVMConstInt(llvm_i64, *value as u64, 1));
+                    let members = &mut [
+                        cgx.const_box_header(type_tag),
+                        LLVMConstInt(llvm_i64, *value as u64, 1),
+                    ];
 
                     LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32)
                 });
