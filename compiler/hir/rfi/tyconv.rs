@@ -80,7 +80,7 @@ impl ConvertableABIType for abitype::BoxedABIType {
                     .iter()
                     .map(|type_tag| type_tag_to_poly_ty(*type_tag).into_poly());
 
-                ty::unify::poly_unify_iter(&[], members)
+                ty::unify::unify_ty_ref_iter(&[], members)
             }
         }
     }

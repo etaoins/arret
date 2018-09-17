@@ -1,63 +1,42 @@
 use crate::ty;
 use syntax::datum::Datum;
 
-trait DatumTyCtx<S: ty::TyRef> {
-    fn unify_ref_iter<I>(&self, members: I) -> S
-    where
-        I: Iterator<Item = S>;
+pub fn ty_ref_for_datum<S: ty::unify::Unifiable>(datum: &Datum) -> S {
+    (match datum {
+        Datum::Bool(_, val) => ty::Ty::LitBool(*val),
+        Datum::Sym(_, val) => ty::Ty::LitSym(val.clone()),
+        Datum::Char(_, _) => ty::Ty::Char,
+        Datum::Int(_, _) => ty::Ty::Int,
+        Datum::Float(_, _) => ty::Ty::Float,
+        Datum::Str(_, _) => ty::Ty::Str,
+        Datum::List(_, vs) => ty::Ty::List(ty::List::new(
+            vs.iter()
+                .map(|datum| ty_ref_for_datum(datum))
+                .collect::<Vec<S>>()
+                .into_boxed_slice(),
+            None,
+        )),
+        Datum::Vector(_, vs) => ty::Ty::Vector(
+            vs.iter()
+                .map(|v| ty_ref_for_datum(v))
+                .collect::<Vec<S>>()
+                .into_boxed_slice(),
+        ),
+        Datum::Set(_, vs) => {
+            let unified_type =
+                ty::unify::unify_ty_ref_iter(&[], vs.iter().map(|v| ty_ref_for_datum(v)));
+            ty::Ty::Set(Box::new(unified_type))
+        }
+        Datum::Map(_, vs) => {
+            let unified_key =
+                ty::unify::unify_ty_ref_iter(&[], vs.iter().map(|(k, _)| ty_ref_for_datum(k)));
 
-    fn ref_for_datum(&self, datum: &Datum) -> S {
-        (match datum {
-            Datum::Bool(_, val) => ty::Ty::LitBool(*val),
-            Datum::Sym(_, val) => ty::Ty::LitSym(val.clone()),
-            Datum::Char(_, _) => ty::Ty::Char,
-            Datum::Int(_, _) => ty::Ty::Int,
-            Datum::Float(_, _) => ty::Ty::Float,
-            Datum::Str(_, _) => ty::Ty::Str,
-            Datum::List(_, vs) => ty::Ty::List(ty::List::new(
-                vs.iter()
-                    .map(|datum| self.ref_for_datum(datum))
-                    .collect::<Vec<S>>()
-                    .into_boxed_slice(),
-                None,
-            )),
-            Datum::Vector(_, vs) => ty::Ty::Vector(
-                vs.iter()
-                    .map(|v| self.ref_for_datum(v))
-                    .collect::<Vec<S>>()
-                    .into_boxed_slice(),
-            ),
-            Datum::Set(_, vs) => {
-                let unified_type = self.unify_ref_iter(vs.iter().map(|v| self.ref_for_datum(v)));
-                ty::Ty::Set(Box::new(unified_type))
-            }
-            Datum::Map(_, vs) => {
-                let unified_key =
-                    self.unify_ref_iter(vs.iter().map(|(k, _)| self.ref_for_datum(k)));
+            let unified_value =
+                ty::unify::unify_ty_ref_iter(&[], vs.iter().map(|(_, v)| ty_ref_for_datum(v)));
 
-                let unified_value =
-                    self.unify_ref_iter(vs.iter().map(|(_, v)| self.ref_for_datum(v)));
-
-                ty::Ty::Map(Box::new(ty::Map::new(unified_key, unified_value)))
-            }
-        }).into_ty_ref()
-    }
-}
-
-struct PolyDatumTyCtx {}
-
-impl DatumTyCtx<ty::Poly> for PolyDatumTyCtx {
-    fn unify_ref_iter<I>(&self, iter: I) -> ty::Poly
-    where
-        I: Iterator<Item = ty::Poly>,
-    {
-        ty::unify::poly_unify_iter(&[], iter)
-    }
-}
-
-pub fn poly_for_datum(datum: &Datum) -> ty::Poly {
-    let ctx = PolyDatumTyCtx {};
-    ctx.ref_for_datum(datum)
+            ty::Ty::Map(Box::new(ty::Map::new(unified_key, unified_value)))
+        }
+    }).into_ty_ref()
 }
 
 #[cfg(test)]
@@ -69,7 +48,7 @@ mod test {
         use syntax::parser::datum_from_str;
         let datum = datum_from_str(datum_str).unwrap();
 
-        assert_eq!(poly_for_str(ty_str), poly_for_datum(&datum));
+        assert_eq!(poly_for_str(ty_str), ty_ref_for_datum(&datum));
     }
 
     #[test]

@@ -472,10 +472,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 &mut fun_scope,
             )?
         } else {
-            (
-                ty::purity::PVarIds::monomorphic(),
-                ty::TVarIds::monomorphic(),
-            )
+            (ty::purity::PVarId::monomorphic(), ty::TVarId::monomorphic())
         };
 
         // Pull out our params
@@ -1306,8 +1303,8 @@ mod test {
         let expected = Expr::Fun(
             t2s(t),
             Box::new(Fun {
-                pvar_ids: ty::purity::PVarIds::monomorphic(),
-                tvar_ids: ty::TVarIds::monomorphic(),
+                pvar_ids: ty::purity::PVarId::monomorphic(),
+                tvar_ids: ty::TVarId::monomorphic(),
                 purity: ty::purity::Decl::Free,
                 params: destruc::List::new(vec![], None),
                 ret_ty: ty::Decl::Free,
@@ -1327,8 +1324,8 @@ mod test {
         let expected = Expr::Fun(
             t2s(t),
             Box::new(Fun {
-                pvar_ids: ty::purity::PVarIds::monomorphic(),
-                tvar_ids: ty::TVarIds::monomorphic(),
+                pvar_ids: ty::purity::PVarId::monomorphic(),
+                tvar_ids: ty::TVarId::monomorphic(),
                 purity: Purity::Pure.into_decl(),
                 params: destruc::List::new(vec![], None),
                 ret_ty: ty::Ty::Int.into_decl(),
@@ -1358,8 +1355,8 @@ mod test {
         let expected = Expr::Fun(
             t2s(u),
             Box::new(Fun {
-                pvar_ids: ty::purity::PVarIds::monomorphic(),
-                tvar_ids: ty::TVarIds::monomorphic(),
+                pvar_ids: ty::purity::PVarId::monomorphic(),
+                tvar_ids: ty::TVarId::monomorphic(),
                 purity: ty::purity::Decl::Free,
                 params,
                 ret_ty: ty::Decl::Free,
@@ -1430,8 +1427,8 @@ mod test {
                 body_expr: Expr::Fun(
                     t2s(w),
                     Box::new(Fun {
-                        pvar_ids: ty::purity::PVarIds::monomorphic(),
-                        tvar_ids: ty::TVarIds::monomorphic(),
+                        pvar_ids: ty::purity::PVarId::monomorphic(),
+                        tvar_ids: ty::TVarId::monomorphic(),
                         purity: ty::purity::Decl::Free,
                         params: destruc::List::new(vec![], None),
                         ret_ty: ty::Decl::Free,
@@ -1477,8 +1474,8 @@ mod test {
                 body_expr: Expr::Fun(
                     t2s(x),
                     Box::new(Fun {
-                        pvar_ids: ty::purity::PVarIds::monomorphic(),
-                        tvar_ids: ty::TVarIds::monomorphic(),
+                        pvar_ids: ty::purity::PVarId::monomorphic(),
+                        tvar_ids: ty::TVarId::monomorphic(),
                         purity: ty::purity::Decl::Free,
                         params,
                         ret_ty: ty::Decl::Free,

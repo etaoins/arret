@@ -155,6 +155,14 @@ struct FunCtx {
     purity: PurityVarType,
 }
 
+/// Tries to convert a polymorphic type to a literal boolean value
+fn try_to_bool(poly: &ty::Poly) -> Option<bool> {
+    match poly {
+        ty::Poly::Fixed(ty::Ty::LitBool(v)) => Some(*v),
+        _ => None,
+    }
+}
+
 impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
     fn new(
         pvars: &'vars [ty::purity::PVar],
@@ -209,7 +217,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
 
     /// Ensures `sub_poly` is a subtype of `parent_poly`
     fn ensure_is_a(&self, span: Span, sub_poly: &ty::Poly, parent_poly: &ty::Poly) -> Result<()> {
-        if ty::is_a::poly_is_a(self.tvars, sub_poly, parent_poly).to_bool() {
+        if ty::is_a::ty_ref_is_a(self.tvars, sub_poly, parent_poly).to_bool() {
             return Ok(());
         }
 
@@ -218,7 +226,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
         let error_kind = if let ty::Poly::Fixed(ty::Ty::TopFun(top_fun)) = parent_poly {
             let impure_top_fun = ty::TopFun::new(Purity::Impure.into_poly(), top_fun.ret().clone());
 
-            if ty::is_a::poly_is_a(
+            if ty::is_a::ty_ref_is_a(
                 self.tvars,
                 sub_poly,
                 &ty::Ty::TopFun(Box::new(impure_top_fun)).into_poly(),
@@ -243,7 +251,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
     }
 
     fn visit_lit(&mut self, required_type: &ty::Poly, datum: Datum) -> Result<InferredNode> {
-        let lit_type = ty::datum::poly_for_datum(&datum);
+        let lit_type = ty::datum::ty_ref_for_datum(&datum);
         self.ensure_is_a(datum.span(), &lit_type, required_type)?;
 
         Ok(InferredNode {
@@ -273,7 +281,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
             // Test diverged; we don't need the branches
             return Ok(test_node);
         }
-        let test_known_bool = test_node.poly_type.try_to_bool();
+        let test_known_bool = try_to_bool(&test_node.poly_type);
 
         // If a branch isn't taken it doesn't need to match the type of the cond expression
         let any_type = &ty::Ty::Any.into_poly();
@@ -312,8 +320,8 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
             false_node = false_result?;
 
             // This is an analog of (not). We can flip the test's type condition
-            if true_node.poly_type.try_to_bool() == Some(false)
-                && false_node.poly_type.try_to_bool() == Some(true)
+            if try_to_bool(&true_node.poly_type) == Some(false)
+                && try_to_bool(&false_node.poly_type) == Some(true)
             {
                 return Ok(InferredNode {
                     expr: hir::Expr::Cond(
@@ -357,7 +365,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
                 ..false_node
             }),
             None => {
-                let poly_type = ty::unify::poly_unify_to_poly(
+                let poly_type = ty::unify::unify_to_ty_ref(
                     self.tvars,
                     &true_node.poly_type,
                     &false_node.poly_type,
@@ -365,9 +373,9 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
 
                 // If the false branch is always false we can move an occurrence typing from the
                 // true branch upwards. The same reasoning applies for the true branch.
-                let type_cond = if false_node.poly_type.try_to_bool() == Some(false) {
+                let type_cond = if try_to_bool(&false_node.poly_type) == Some(false) {
                     true_node.type_cond
-                } else if true_node.poly_type.try_to_bool() == Some(true) {
+                } else if try_to_bool(&true_node.poly_type) == Some(true) {
                     false_node.type_cond
                 } else {
                     None
@@ -401,7 +409,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
 
     fn unify_app_purity(&self, fcx: &mut FunCtx, app_purity: &ty::purity::Poly) {
         if let PurityVarType::Free(ref mut free_purity) = fcx.purity {
-            *free_purity = ty::unify::poly_unify_purity(free_purity, &app_purity)
+            *free_purity = ty::unify::unify_purity_refs(free_purity, &app_purity)
         };
     }
 
@@ -414,7 +422,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
         // Unlike references to known variables the `current_type` and `required_type` have equal
         // footing. We intersect here to find the commonality between the two types. This will
         // become the new type of the variable.
-        ty::intersect::poly_intersect(self.tvars, required_type, current_type).map_err(|_| {
+        ty::intersect::intersect_ty_refs(self.tvars, required_type, current_type).map_err(|_| {
             Error::new(
                 span,
                 ErrorKind::VarHasEmptyType(
@@ -680,7 +688,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
         fcx: &mut FunCtx,
         required_type: &ty::Poly,
         span: Span,
-        fun_type: &ty::Fun<ty::Poly>,
+        fun_type: &ty::Fun,
         fun_app: FunApp,
     ) -> Result<InferredNode> {
         let FunApp {
@@ -806,7 +814,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
         );
 
         let pred_result =
-            ty::pred::interpret_poly_pred(self.tvars, &subject_node.poly_type, &test_poly);
+            ty::pred::interpret_ty_refs(self.tvars, &subject_node.poly_type, &test_poly);
 
         use crate::ty::pred::InterpretedPred;
         let pred_result_type = match pred_result {
@@ -871,7 +879,7 @@ impl<'vars, 'types> RecursiveDefsCtx<'vars, 'types> {
             .and_then(|mut iter| iter.next())
             .expect("Unable to extract type argument from type predicate rest list");
 
-        let pred_result = ty::is_a::poly_is_a(self.tvars, subject_type, &test_poly);
+        let pred_result = ty::is_a::ty_ref_is_a(self.tvars, subject_type, &test_poly);
 
         let pred_result_type = match pred_result {
             ty::is_a::Result::Yes => ty::Ty::LitBool(true),
@@ -1318,7 +1326,7 @@ fn ensure_main_type(
 ) -> Result<()> {
     let expected_main_type = ty::Fun::new_for_main().into_ty_ref();
 
-    if !ty::is_a::poly_is_a(tvars, inferred_main_type, &expected_main_type).to_bool() {
+    if !ty::is_a::ty_ref_is_a(tvars, inferred_main_type, &expected_main_type).to_bool() {
         use crate::reporting::LocTrace;
         use syntax::span::EMPTY_SPAN;
 

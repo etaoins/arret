@@ -20,6 +20,7 @@ use crate::mir::ops;
 use crate::mir::value;
 use crate::mir::{Expr, Value};
 use crate::ty;
+use crate::ty::purity;
 
 pub struct EvalHirCtx {
     runtime_task: runtime::task::Task,
@@ -33,6 +34,9 @@ pub struct EvalHirCtx {
 
 pub struct DefCtx<'tvars> {
     tvars: &'tvars [ty::TVar],
+
+    pvar_purities: HashMap<purity::PVarId, purity::Purity>,
+    tvar_types: HashMap<ty::TVarId, ty::Ty<ty::Mono>>,
     local_values: HashMap<hir::VarId, Value>,
 }
 
@@ -40,6 +44,9 @@ impl<'tvars> DefCtx<'tvars> {
     pub fn new(tvars: &'tvars [ty::TVar]) -> DefCtx<'tvars> {
         DefCtx {
             tvars,
+
+            pvar_purities: HashMap::new(),
+            tvar_types: HashMap::new(),
             local_values: HashMap::new(),
         }
     }
@@ -184,11 +191,11 @@ impl EvalHirCtx {
         &mut self,
         dcx: &mut DefCtx<'_>,
         b: &mut Option<Builder>,
-        test_poly: &ty::Poly,
+        test_mono: &ty::Mono,
         fixed_args: &[Expr],
         rest_arg: Option<&Expr>,
     ) -> Result<Value> {
-        use crate::mir::value::poly_for_value;
+        use crate::mir::value::mono_for_value;
         use crate::ty::pred::InterpretedPred;
 
         let value = if !fixed_args.is_empty() {
@@ -200,9 +207,9 @@ impl EvalHirCtx {
             panic!("Unexpected arity for type predicate application");
         };
 
-        let subject_poly = poly_for_value(self.runtime_task.heap().interner(), &value);
+        let subject_mono = mono_for_value(self.runtime_task.heap().interner(), &value);
 
-        match ty::pred::interpret_poly_pred(dcx.tvars, &subject_poly, test_poly) {
+        match ty::pred::interpret_ty_refs(dcx.tvars, &subject_mono, test_mono) {
             InterpretedPred::Static(value) => {
                 Ok(Value::Const(boxed::Bool::singleton_ref(value).as_any_ref()))
             }
@@ -280,7 +287,7 @@ impl EvalHirCtx {
                     reg: ret_reg,
                     abi_type: abi_type.clone(),
                     arret_type: ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone()))
-                        .into_poly(),
+                        .into_mono(),
                 };
 
                 Value::Reg(Rc::new(reg_value))
@@ -377,7 +384,7 @@ impl EvalHirCtx {
                 self.eval_rust_fun_app(dcx, b, span, rust_fun.as_ref(), fixed_args, rest_arg)
             }
             Value::TyPred(test_poly) => {
-                self.eval_ty_pred_app(dcx, b, &test_poly, fixed_args, rest_arg)
+                self.eval_ty_pred_app(dcx, b, test_poly.as_ref(), fixed_args, rest_arg)
             }
             _ => {
                 unimplemented!("Unimplemented function value type");
@@ -497,7 +504,11 @@ impl EvalHirCtx {
             hir::Expr::RustFun(_, rust_fun) => {
                 Ok(Value::RustFun(Rc::new(rust_fun.as_ref().clone())))
             }
-            hir::Expr::TyPred(_, test_poly) => Ok(Value::TyPred(Rc::new(test_poly.clone()))),
+            hir::Expr::TyPred(_, test_poly) => {
+                let test_mono =
+                    ty::subst::monomorphise(&dcx.pvar_purities, &dcx.tvar_types, test_poly);
+                Ok(Value::TyPred(Rc::new(test_mono)))
+            }
             hir::Expr::Ref(_, var_id) => Ok(self.eval_ref(dcx, *var_id)),
             hir::Expr::Let(_, hir_let) => self.eval_let(dcx, b, hir_let),
             hir::Expr::App(span, app) => self.eval_app(dcx, b, *span, app),
@@ -517,7 +528,6 @@ impl EvalHirCtx {
         match expr {
             hir::Expr::Fun(_, fun_expr) => Ok(self.eval_fun(dcx, fun_expr.into())),
             hir::Expr::RustFun(_, rust_fun) => Ok(Value::RustFun(rust_fun.into())),
-            hir::Expr::TyPred(_, test_poly) => Ok(Value::TyPred(Rc::new(test_poly))),
             other => self.eval_expr(dcx, b, &other),
         }
     }

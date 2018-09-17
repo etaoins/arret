@@ -41,7 +41,7 @@ pub struct Fun {
     /// semantically equivalent to the non-instrinsic version.
     intrinsic_name: Option<&'static str>,
 
-    arret_fun_type: ty::Fun<ty::Poly>,
+    arret_fun_type: ty::Fun,
     takes_task: bool,
     params: &'static [abitype::ABIType],
     ret: &'static abitype::RetABIType,
@@ -55,7 +55,7 @@ impl Fun {
         self.intrinsic_name
     }
 
-    pub fn arret_fun_type(&self) -> &ty::Fun<ty::Poly> {
+    pub fn arret_fun_type(&self) -> &ty::Fun {
         &self.arret_fun_type
     }
 
@@ -101,7 +101,7 @@ fn ensure_types_compatible<T>(span: Span, arret_poly: &ty::Poly, abi_type: &T) -
 where
     T: tyconv::ConvertableABIType,
 {
-    if ty::is_a::poly_is_a(&[], arret_poly, &abi_type.to_poly()).to_bool() {
+    if ty::is_a::ty_ref_is_a(&[], arret_poly, &abi_type.to_poly()).to_bool() {
         Ok(())
     } else {
         Err(Error::new(
@@ -320,9 +320,7 @@ mod test {
     use runtime::boxed::TypeTag;
     use std::ptr;
 
-    fn binding_fun_to_poly_type(
-        rust_fun: &'static binding::RustFun,
-    ) -> Result<ty::Fun<ty::Poly>, Error> {
+    fn binding_fun_to_poly_type(rust_fun: &'static binding::RustFun) -> Result<ty::Fun, Error> {
         let loader = Loader::new();
 
         loader

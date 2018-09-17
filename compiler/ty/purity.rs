@@ -1,4 +1,3 @@
-use std;
 use std::ops::Range;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -9,26 +8,23 @@ pub enum Purity {
 
 impl Purity {
     pub fn into_poly(self) -> Poly {
-        Poly::from_purity(self)
+        Poly::Fixed(self)
     }
 
     #[cfg(test)]
     pub fn into_decl(self) -> Decl {
-        Decl::Known(Poly::from_purity(self))
-    }
-}
-
-pub trait PRef: PartialEq + Eq + Clone + std::fmt::Debug + std::hash::Hash + Sized {
-    fn from_purity(purity: Purity) -> Self;
-}
-
-impl PRef for Purity {
-    fn from_purity(purity: Purity) -> Purity {
-        purity
+        Decl::Known(Poly::Fixed(self))
     }
 }
 
 new_indexing_id_type!(PVarId, u32);
+pub type PVarIds = Range<PVarId>;
+
+impl PVarId {
+    pub fn monomorphic() -> PVarIds {
+        PVarId::new(0)..PVarId::new(0)
+    }
+}
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct PVar {
@@ -57,12 +53,6 @@ impl Poly {
     }
 }
 
-impl PRef for Poly {
-    fn from_purity(purity: Purity) -> Poly {
-        Poly::Fixed(purity)
-    }
-}
-
 /// Decl is a purity declared by a user
 ///
 /// The `Known` variant indicates the purity is specified while `Free` indicates it must be
@@ -71,32 +61,4 @@ impl PRef for Poly {
 pub enum Decl {
     Known(Poly),
     Free,
-}
-
-pub trait PVarIds: PartialEq + Eq + Clone + std::fmt::Debug + std::hash::Hash + Sized {
-    fn monomorphic() -> Self;
-    fn is_monomorphic(&self) -> bool;
-}
-
-impl PVarIds for Range<PVarId> {
-    fn monomorphic() -> Range<PVarId> {
-        PVarId::new(0)..PVarId::new(0)
-    }
-
-    fn is_monomorphic(&self) -> bool {
-        self.start >= self.end
-    }
-}
-
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct EmptyPVarIds();
-
-impl PVarIds for EmptyPVarIds {
-    fn monomorphic() -> EmptyPVarIds {
-        EmptyPVarIds()
-    }
-
-    fn is_monomorphic(&self) -> bool {
-        true
-    }
 }

@@ -157,8 +157,8 @@ impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
             let params = self.lower_list_cons(arg_iter)?;
 
             Ok(ty::Fun::new(
-                ty::purity::PVarIds::monomorphic(),
-                ty::TVarIds::monomorphic(),
+                ty::purity::PVarId::monomorphic(),
+                ty::TVarId::monomorphic(),
                 top_fun,
                 params,
             ).into_ty_ref())
@@ -214,7 +214,7 @@ impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
                     .map(|arg_datum| self.lower_poly(arg_datum))
                     .collect::<Result<Vec<ty::Poly>>>()?;
 
-                Ok(ty::unify::poly_unify_iter(
+                Ok(ty::unify::unify_ty_ref_iter(
                     self.tvars,
                     member_tys.into_iter(),
                 ))
@@ -764,8 +764,8 @@ mod test {
         let j = "(-> true)";
 
         let expected = ty::Fun::new(
-            ty::purity::PVarIds::monomorphic(),
-            ty::TVarIds::monomorphic(),
+            ty::purity::PVarId::monomorphic(),
+            ty::TVarId::monomorphic(),
             ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
             ty::List::empty(),
         ).into_ty_ref();
@@ -778,8 +778,8 @@ mod test {
         let j = "(->! true)";
 
         let expected = ty::Fun::new(
-            ty::purity::PVarIds::monomorphic(),
-            ty::TVarIds::monomorphic(),
+            ty::purity::PVarId::monomorphic(),
+            ty::TVarId::monomorphic(),
             ty::TopFun::new(
                 Purity::Impure.into_poly(),
                 ty::Ty::LitBool(true).into_poly(),
@@ -795,8 +795,8 @@ mod test {
         let j = "(false -> true)";
 
         let expected = ty::Fun::new(
-            ty::purity::PVarIds::monomorphic(),
-            ty::TVarIds::monomorphic(),
+            ty::purity::PVarId::monomorphic(),
+            ty::TVarId::monomorphic(),
             ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
             ty::List::new(Box::new([ty::Ty::LitBool(false).into_poly()]), None),
         ).into_ty_ref();
@@ -809,8 +809,8 @@ mod test {
         let j = "(Str Sym ... ->! true)";
 
         let expected = ty::Fun::new(
-            ty::purity::PVarIds::monomorphic(),
-            ty::TVarIds::monomorphic(),
+            ty::purity::PVarId::monomorphic(),
+            ty::TVarId::monomorphic(),
             ty::TopFun::new(
                 Purity::Impure.into_poly(),
                 ty::Ty::LitBool(true).into_poly(),

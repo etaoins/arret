@@ -24,7 +24,7 @@ pub struct Closure {
 pub struct RegValue {
     pub reg: RegId,
     pub abi_type: abitype::ABIType,
-    pub arret_type: ty::Poly,
+    pub arret_type: ty::Mono,
 }
 
 #[derive(Clone)]
@@ -34,7 +34,7 @@ pub enum Value {
     List(Box<[Value]>, Option<Box<Value>>),
     Closure(Closure),
     RustFun(Rc<hir::rfi::Fun>),
-    TyPred(Rc<ty::Poly>),
+    TyPred(Rc<ty::Mono>),
     Reg(Rc<RegValue>),
     Divergent,
 }
@@ -87,25 +87,25 @@ fn type_for_any_ref<S: ty::TyRef>(interner: &Interner, any_ref: Gc<boxed::Any>) 
     }
 }
 
-pub fn poly_for_value(interner: &Interner, value: &Value) -> ty::Poly {
+pub fn mono_for_value(interner: &Interner, value: &Value) -> ty::Mono {
     match value {
         Value::Const(any_ref) => type_for_any_ref(interner, *any_ref),
         Value::List(fixed_values, rest_value) => {
             let fixed_polys = fixed_values
                 .iter()
-                .map(|value| poly_for_value(interner, value))
-                .collect::<Vec<ty::Poly>>();
+                .map(|value| mono_for_value(interner, value))
+                .collect::<Vec<ty::Mono>>();
 
             let rest_poly = rest_value
                 .as_ref()
-                .map(|value| poly_for_value(interner, value.as_ref()));
+                .map(|value| mono_for_value(interner, value.as_ref()));
 
-            ty::Ty::List(ty::List::new(fixed_polys.into_boxed_slice(), rest_poly)).into_poly()
+            ty::Ty::List(ty::List::new(fixed_polys.into_boxed_slice(), rest_poly)).into_mono()
         }
         Value::RustFun(rust_fun) => {
-            ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into_poly()
+            ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into_mono()
         }
-        Value::TyPred(_) => ty::Ty::Fun(Box::new(ty::Fun::new_for_ty_pred())).into_poly(),
+        Value::TyPred(_) => ty::Ty::Fun(Box::new(ty::Fun::new_for_ty_pred())).into_mono(),
         Value::Closure(closure) => {
             use crate::hir::destruc::poly_for_list_destruc;
             let fun_expr = &closure.fun_expr;
@@ -120,13 +120,13 @@ pub fn poly_for_value(interner: &Interner, value: &Value) -> ty::Poly {
                 params_poly,
             );
 
-            ty::Ty::Fun(Box::new(fun)).into_poly()
+            ty::Ty::Fun(Box::new(fun)).into_mono()
         }
         Value::Reg(reg_value) => {
             // TODO: Ugly clone
             reg_value.arret_type.clone()
         }
-        Value::Divergent => ty::Ty::never().into_poly(),
+        Value::Divergent => ty::Ty::never().into_mono(),
     }
 }
 

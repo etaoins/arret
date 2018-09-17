@@ -76,15 +76,11 @@ impl<'tvars> SelectCtx<'tvars> {
 
         self.pvar_purities[pvar_idx] = Some(match self.pvar_purities[pvar_idx] {
             None => evidence_purity.clone(),
-            Some(ref existing) => ty::unify::poly_unify_purity(existing, evidence_purity),
+            Some(ref existing) => ty::unify::unify_purity_refs(existing, evidence_purity),
         });
     }
 
-    fn add_evidence_top_fun(
-        &mut self,
-        target_top_fun: &ty::TopFun<ty::Poly>,
-        evidence_top_fun: &ty::TopFun<ty::Poly>,
-    ) {
+    fn add_evidence_top_fun(&mut self, target_top_fun: &ty::TopFun, evidence_top_fun: &ty::TopFun) {
         self.add_evidence_purity(target_top_fun.purity(), evidence_top_fun.purity());
         self.add_evidence(target_top_fun.ret(), evidence_top_fun.ret());
     }
@@ -183,15 +179,13 @@ impl<'tvars> SelectCtx<'tvars> {
         };
 
         let var_bound = self.tvars[tvar_id.to_usize()].bound();
-        if !ty::is_a::poly_is_a(self.tvars, evidence_poly, var_bound).to_bool() {
+        if !ty::is_a::ty_ref_is_a(self.tvars, evidence_poly, var_bound).to_bool() {
             return;
         }
 
         self.tvar_types[tvar_idx] = Some(match self.tvar_types[tvar_idx] {
             None => evidence_poly.clone(),
-            Some(ref existing) => {
-                ty::unify::poly_unify_to_poly(self.tvars, existing, evidence_poly)
-            }
+            Some(ref existing) => ty::unify::unify_to_ty_ref(self.tvars, existing, evidence_poly),
         });
     }
 
@@ -253,7 +247,7 @@ mod test {
 
     #[test]
     fn trivial_tvar() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
@@ -269,7 +263,7 @@ mod test {
 
     #[test]
     fn poly_conflicing_tvar() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [
             ty::TVar::new("A".into(), poly_for_str("(... -> Any)")),
             ty::TVar::new("B".into(), poly_for_str("(... -> Sym)")),
@@ -290,7 +284,7 @@ mod test {
 
     #[test]
     fn set_types() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
@@ -302,7 +296,7 @@ mod test {
 
     #[test]
     fn map_types() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [
             ty::TVar::new("A".into(), ty::Ty::Any.into_poly()),
             ty::TVar::new("B".into(), ty::Ty::Any.into_poly()),
@@ -318,7 +312,7 @@ mod test {
 
     #[test]
     fn fixed_list_types() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [
             ty::TVar::new("A".into(), ty::Ty::Any.into_poly()),
             ty::TVar::new("B".into(), ty::Ty::Any.into_poly()),
@@ -334,7 +328,7 @@ mod test {
 
     #[test]
     fn listof_types() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
@@ -346,7 +340,7 @@ mod test {
 
     #[test]
     fn listof_from_fixed_list() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
@@ -358,7 +352,7 @@ mod test {
 
     #[test]
     fn fixed_vector_types() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [
             ty::TVar::new("A".into(), ty::Ty::Any.into_poly()),
             ty::TVar::new("B".into(), ty::Ty::Any.into_poly()),
@@ -374,7 +368,7 @@ mod test {
 
     #[test]
     fn vectorof_types() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
@@ -386,7 +380,7 @@ mod test {
 
     #[test]
     fn vectorof_from_fixed_vector() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
@@ -398,7 +392,7 @@ mod test {
 
     #[test]
     fn union_types() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
@@ -410,7 +404,7 @@ mod test {
 
     #[test]
     fn bounded_union_types() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [
             ty::TVar::new("A".into(), ty::Ty::Sym.into_poly()),
             ty::TVar::new("B".into(), ty::Ty::Bool.into_poly()),
@@ -436,7 +430,7 @@ mod test {
 
     #[test]
     fn top_fun_types() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
@@ -450,7 +444,7 @@ mod test {
     fn top_fun_purities() {
         let pvars = [ty::purity::PVar::new("->A".into())];
         let pvar_ids = ty::purity::PVarId::new(0)..ty::purity::PVarId::new(pvars.len());
-        let tvar_ids = ty::TVarIds::monomorphic();
+        let tvar_ids = ty::TVarId::monomorphic();
 
         let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &[]);
         assert_unselected_purity(&ctx, 'A');
@@ -464,7 +458,7 @@ mod test {
 
     #[test]
     fn top_fun_from_fun() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
@@ -476,7 +470,7 @@ mod test {
 
     #[test]
     fn top_fun_from_ty_pred() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
@@ -488,7 +482,7 @@ mod test {
 
     #[test]
     fn fun_types() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [
             ty::TVar::new("A".into(), ty::Ty::Any.into_poly()),
             ty::TVar::new("B".into(), ty::Ty::Any.into_poly()),
@@ -507,7 +501,7 @@ mod test {
     fn fun_purities() {
         let pvars = [ty::purity::PVar::new("->A".into())];
         let pvar_ids = ty::purity::PVarId::new(0)..ty::purity::PVarId::new(pvars.len());
-        let tvar_ids = ty::TVarIds::monomorphic();
+        let tvar_ids = ty::TVarId::monomorphic();
 
         let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &[]);
         assert_unselected_purity(&ctx, 'A');
@@ -520,7 +514,7 @@ mod test {
     fn fun_purity_conflict() {
         let pvars = [ty::purity::PVar::new("->A".into())];
         let pvar_ids = ty::purity::PVarId::new(0)..ty::purity::PVarId::new(pvars.len());
-        let tvar_ids = ty::TVarIds::monomorphic();
+        let tvar_ids = ty::TVarId::monomorphic();
 
         let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &[]);
         assert_unselected_purity(&ctx, 'A');
@@ -533,7 +527,7 @@ mod test {
 
     #[test]
     fn fun_type_from_ty_pred() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [
             ty::TVar::new("A".into(), ty::Ty::Any.into_poly()),
             ty::TVar::new("B".into(), ty::Ty::Any.into_poly()),
@@ -549,7 +543,7 @@ mod test {
 
     #[test]
     fn ty_pred_types() {
-        let pvar_ids = ty::purity::PVarIds::monomorphic();
+        let pvar_ids = ty::purity::PVarId::monomorphic();
         let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
         let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
 
@@ -563,7 +557,7 @@ mod test {
     fn ty_pred_purity() {
         let pvars = [ty::purity::PVar::new("->A".into())];
         let pvar_ids = ty::purity::PVarId::new(0)..ty::purity::PVarId::new(pvars.len());
-        let tvar_ids = ty::TVarIds::monomorphic();
+        let tvar_ids = ty::TVarId::monomorphic();
 
         let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &[]);
         assert_unselected_purity(&ctx, 'A');

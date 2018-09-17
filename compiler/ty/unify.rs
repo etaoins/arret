@@ -12,12 +12,10 @@ use std::cmp;
 use std::iter;
 
 use crate::ty;
-use crate::ty::purity::PVarIds;
 use crate::ty::purity::Purity;
-use crate::ty::TVarIds;
 
 #[derive(Debug, PartialEq)]
-enum UnifiedTy<S: ty::TyRef> {
+pub enum UnifiedTy<S: ty::TyRef> {
     /// The types are distinct and have no clean simplification
     ///
     /// An example would be Str and Sym.
@@ -36,313 +34,252 @@ pub enum UnifiedList<S: ty::TyRef> {
     Merged(ty::List<S>),
 }
 
-trait UnifyCtx<S: ty::TyRef> {
-    fn unify_ty_refs(&self, ref1: &S, ref2: &S) -> UnifiedTy<S>;
-    fn unify_purity_refs(&self, purity1: &S::PRef, purity2: &S::PRef) -> S::PRef;
-    fn intersect_list(
-        &self,
-        list1: &ty::List<S>,
-        list2: &ty::List<S>,
-    ) -> Result<ty::List<S>, ty::intersect::Error>;
+pub trait Unifiable: ty::TyRef {
+    fn unify_ty_refs(tvars: &[ty::TVar], mono1: &Self, mono2: &Self) -> UnifiedTy<Self>;
+}
 
-    fn unify_to_ty_ref(&self, ty_ref1: &S, ty_ref2: &S) -> S {
-        match self.unify_ty_refs(ty_ref1, ty_ref2) {
-            UnifiedTy::Merged(ty_ref) => ty_ref,
-            UnifiedTy::Discerned => {
-                ty::Ty::Union(Box::new([ty_ref1.clone(), ty_ref2.clone()])).into_ty_ref()
-            }
-        }
-    }
-
-    fn try_list_to_exact_pair(list: &ty::List<S>) -> Option<&S> {
-        if let Some(ref rest) = list.rest {
-            if list.fixed.len() == 1 && &list.fixed[0] == rest.as_ref() {
-                return Some(rest);
-            }
-        }
-
-        None
-    }
-
-    fn unify_list(&self, list1: &ty::List<S>, list2: &ty::List<S>) -> UnifiedList<S> {
-        if list1.is_empty() {
-            if let Some(member) = Self::try_list_to_exact_pair(list2) {
-                return UnifiedList::Merged(ty::List::new(Box::new([]), Some(member.clone())));
-            }
-        } else if list2.is_empty() {
-            if let Some(member) = Self::try_list_to_exact_pair(list1) {
-                return UnifiedList::Merged(ty::List::new(Box::new([]), Some(member.clone())));
-            }
-        }
-
-        if list1.has_disjoint_arity(list2) {
-            // We can quickly check list lengths at runtime
-            return UnifiedList::Discerned;
-        }
-
-        let mut fixed_iter1 = list1.fixed().iter();
-        let mut fixed_iter2 = list2.fixed().iter();
-
-        let mut merged_fixed: Vec<S> =
-            Vec::with_capacity(cmp::min(fixed_iter1.len(), fixed_iter2.len()));
-
-        while fixed_iter1.len() > 0 && fixed_iter2.len() > 0 {
-            let fixed1 = fixed_iter1.next().unwrap();
-            let fixed2 = fixed_iter2.next().unwrap();
-
-            merged_fixed.push(self.unify_to_ty_ref(fixed1, fixed2));
-        }
-
-        let merged_rest = if fixed_iter1.len() > 0
-            || fixed_iter2.len() > 0
-            || list1.rest().is_some()
-            || list2.rest().is_some()
-        {
-            // Merge all remaining fixed and rest args together
-            let rest_iter = fixed_iter1
-                .chain(fixed_iter2.chain(list1.rest().into_iter().chain(list2.rest().into_iter())));
-
-            Some(self.unify_ref_iter(vec![], rest_iter.cloned()))
-        } else {
-            None
-        };
-
-        UnifiedList::Merged(ty::List::new(merged_fixed.into_boxed_slice(), merged_rest))
-    }
-
-    /// Unifies a member in to an existing vector of members
-    ///
-    /// It is assumed `output_members` refers to members of an already unified union.
-    fn unify_ref_into_vec(&self, output_members: &mut Vec<S>, new_member: S) {
-        for i in 0..output_members.len() {
-            match self.unify_ty_refs(&output_members[i], &new_member) {
-                UnifiedTy::Merged(merged_member) => {
-                    // Our merged type may now unify with one of the already processed members of
-                    // the union. Remove the member we merged with and recurse using the merged
-                    // member.
-                    output_members.swap_remove(i);
-                    return self.unify_ref_into_vec(output_members, merged_member);
-                }
-                UnifiedTy::Discerned => {}
-            }
-        }
-
-        output_members.push(new_member);
-    }
-
-    /// Unifies an iterators in to a new type
-    ///
-    /// `existing_members` are assumed to be the members of an existing union. If there is no
-    /// existing union this must be empty. This is an optimisation to avoid processing the already
-    /// unified members.
-    fn unify_ref_iter<I>(&self, existing_members: Vec<S>, new_members: I) -> S
-    where
-        I: Iterator<Item = S>,
-    {
-        let mut output_members = existing_members;
-
-        for new_member in new_members {
-            self.unify_ref_into_vec(&mut output_members, new_member);
-        }
-
-        S::from_vec(output_members)
-    }
-
-    fn unify_top_fun(&self, top_fun1: &ty::TopFun<S>, top_fun2: &ty::TopFun<S>) -> UnifiedTy<S> {
-        let unified_purity = self.unify_purity_refs(top_fun1.purity(), top_fun2.purity());
-        let unified_ret = self.unify_to_ty_ref(top_fun1.ret(), top_fun2.ret());
-
-        UnifiedTy::Merged(ty::TopFun::new(unified_purity, unified_ret).into_ty_ref())
-    }
-
-    fn unify_fun(&self, fun1: &ty::Fun<S>, fun2: &ty::Fun<S>) -> UnifiedTy<S> {
-        let unified_purity = self.unify_purity_refs(fun1.purity(), fun2.purity());
-
-        if fun1.is_monomorphic() && fun2.is_monomorphic() {
-            let unified_ret = self.unify_to_ty_ref(fun1.ret(), fun2.ret());
-
-            match self.intersect_list(fun1.params(), fun2.params()) {
-                Ok(unified_params) => UnifiedTy::Merged(
-                    ty::Fun::new(
-                        S::PVarIds::monomorphic(),
-                        S::TVarIds::monomorphic(),
-                        ty::TopFun::new(unified_purity, unified_ret),
-                        unified_params,
-                    ).into_ty_ref(),
-                ),
-                Err(ty::intersect::Error::Disjoint) => {
-                    UnifiedTy::Merged(ty::TopFun::new(unified_purity, unified_ret).into_ty_ref())
-                }
-            }
-        } else {
-            // TODO: We could do better here by finding our upper bound and unifying them
-            // Preserving the polymorphicness would be very complex
-            UnifiedTy::Merged(
-                ty::TopFun::new(unified_purity, ty::Ty::Any.into_ty_ref()).into_ty_ref(),
-            )
-        }
-    }
-
-    fn unify_ty(&self, ref1: &S, ty1: &ty::Ty<S>, ref2: &S, ty2: &ty::Ty<S>) -> UnifiedTy<S> {
-        if ty1 == ty2 {
-            return UnifiedTy::Merged(ref1.clone());
-        }
-        match (ty1, ty2) {
-            // Handle supertype relationships
-            (_, ty::Ty::Any) | (ty::Ty::Any, _) => UnifiedTy::Merged(ty::Ty::Any.into_ty_ref()),
-            (ty::Ty::LitSym(_), ty::Ty::Sym) | (ty::Ty::Sym, ty::Ty::LitSym(_)) => {
-                UnifiedTy::Merged(ty::Ty::Sym.into_ty_ref())
-            }
-            (ty::Ty::LitBool(_), ty::Ty::Bool) | (ty::Ty::Bool, ty::Ty::LitBool(_)) => {
-                UnifiedTy::Merged(ty::Ty::Bool.into_ty_ref())
-            }
-
-            // Simplify (U true false) => Bool
-            (ty::Ty::LitBool(true), ty::Ty::LitBool(false))
-            | (ty::Ty::LitBool(false), ty::Ty::LitBool(true)) => {
-                UnifiedTy::Merged(ty::Ty::Bool.into_ty_ref())
-            }
-
-            // Set type
-            (ty::Ty::Set(ty_ref1), ty::Ty::Set(ty_ref2)) => {
-                let unified_ty_ref = self.unify_to_ty_ref(&ty_ref1, &ty_ref2);
-
-                UnifiedTy::Merged(ty::Ty::Set(Box::new(unified_ty_ref)).into_ty_ref())
-            }
-
-            // Map type
-            (ty::Ty::Map(map1), ty::Ty::Map(map2)) => {
-                let unified_key_ref = self.unify_to_ty_ref(map1.key(), map2.key());
-                let unified_val_ref = self.unify_to_ty_ref(map1.value(), map2.value());
-
-                UnifiedTy::Merged(
-                    ty::Ty::Map(Box::new(ty::Map::new(unified_key_ref, unified_val_ref)))
-                        .into_ty_ref(),
-                )
-            }
-
-            // Vector types
-            (ty::Ty::Vector(members1), ty::Ty::Vector(members2)) => {
-                if members1.len() != members2.len() {
-                    // We can quickly check vector lengths at runtime
-                    UnifiedTy::Discerned
-                } else {
-                    let unified_members = members1
-                        .iter()
-                        .zip(members2.iter())
-                        .map(|(member1, member2)| self.unify_to_ty_ref(member1, member2))
-                        .collect::<Vec<S>>();
-
-                    UnifiedTy::Merged(
-                        ty::Ty::Vector(unified_members.into_boxed_slice()).into_ty_ref(),
-                    )
-                }
-            }
-            (ty::Ty::Vectorof(member1), ty::Ty::Vectorof(member2)) => UnifiedTy::Merged(
-                ty::Ty::Vectorof(Box::new(self.unify_to_ty_ref(member1, member2))).into_ty_ref(),
-            ),
-            (ty::Ty::Vector(members1), ty::Ty::Vectorof(member2))
-            | (ty::Ty::Vectorof(member2), ty::Ty::Vector(members1)) => {
-                let unified_member =
-                    self.unify_ref_iter(vec![member2.as_ref().clone()], members1.iter().cloned());
-
-                UnifiedTy::Merged(ty::Ty::Vectorof(Box::new(unified_member)).into_ty_ref())
-            }
-
-            // Function types
-            (ty::Ty::TopFun(top_fun1), ty::Ty::TopFun(top_fun2)) => {
-                self.unify_top_fun(top_fun1, top_fun2)
-            }
-            (ty::Ty::Fun(fun), ty::Ty::TopFun(top_fun))
-            | (ty::Ty::TopFun(top_fun), ty::Ty::Fun(fun)) => {
-                self.unify_top_fun(fun.top_fun(), top_fun)
-            }
-            (ty::Ty::TyPred(_), ty::Ty::TopFun(top_fun))
-            | (ty::Ty::TopFun(top_fun), ty::Ty::TyPred(_)) => {
-                self.unify_top_fun(&ty::TopFun::new_for_ty_pred(), top_fun)
-            }
-
-            (ty::Ty::Fun(fun1), ty::Ty::Fun(fun2)) => self.unify_fun(fun1, fun2),
-            (ty::Ty::TyPred(_), ty::Ty::Fun(fun)) | (ty::Ty::Fun(fun), ty::Ty::TyPred(_)) => {
-                self.unify_fun(&ty::Fun::new_for_ty_pred(), fun)
-            }
-
-            (ty::Ty::TyPred(_), ty::Ty::TyPred(_)) => {
-                UnifiedTy::Merged(ty::Ty::Fun(Box::new(ty::Fun::new_for_ty_pred())).into_ty_ref())
-            }
-
-            // Union types
-            (ty::Ty::Union(members1), ty::Ty::Union(members2)) => {
-                let new_union = self.unify_ref_iter(members1.to_vec(), members2.iter().cloned());
-                UnifiedTy::Merged(new_union)
-            }
-            (ty::Ty::Union(members1), _) => {
-                let new_union = self.unify_ref_iter(members1.to_vec(), iter::once(ref2).cloned());
-                UnifiedTy::Merged(new_union)
-            }
-            (_, ty::Ty::Union(members2)) => {
-                let new_union = self.unify_ref_iter(members2.to_vec(), iter::once(ref1).cloned());
-                UnifiedTy::Merged(new_union)
-            }
-
-            // List types
-            (ty::Ty::List(list1), ty::Ty::List(list2)) => match self.unify_list(list1, list2) {
-                UnifiedList::Discerned => UnifiedTy::Discerned,
-                UnifiedList::Merged(merged_list) => {
-                    UnifiedTy::Merged(ty::Ty::List(merged_list).into_ty_ref())
-                }
-            },
-
-            _ => UnifiedTy::Discerned,
-        }
+impl Unifiable for ty::Mono {
+    fn unify_ty_refs(
+        tvars: &[ty::TVar],
+        mono1: &ty::Mono,
+        mono2: &ty::Mono,
+    ) -> UnifiedTy<ty::Mono> {
+        unify_ty(tvars, mono1, mono1.as_ty(), mono2, mono2.as_ty())
     }
 }
 
-struct PolyUnifyCtx<'tvars> {
-    tvars: &'tvars [ty::TVar],
-}
-
-impl<'tvars> UnifyCtx<ty::Poly> for PolyUnifyCtx<'tvars> {
-    fn unify_ty_refs(&self, poly1: &ty::Poly, poly2: &ty::Poly) -> UnifiedTy<ty::Poly> {
+impl Unifiable for ty::Poly {
+    fn unify_ty_refs(
+        tvars: &[ty::TVar],
+        poly1: &ty::Poly,
+        poly2: &ty::Poly,
+    ) -> UnifiedTy<ty::Poly> {
         use crate::ty::resolve;
 
         // Determine if we're dealing with fixed types or polymorphic bounds
-        let resolved1 = resolve::resolve_poly_ty(self.tvars, poly1);
-        let resolved2 = resolve::resolve_poly_ty(self.tvars, poly2);
+        let resolved1 = resolve::resolve_poly_ty(tvars, poly1);
+        let resolved2 = resolve::resolve_poly_ty(tvars, poly2);
 
         if let (resolve::Result::Fixed(ty1), resolve::Result::Fixed(ty2)) = (&resolved1, &resolved2)
         {
             // We can invoke full simplfication logic if we have fixed types
-            self.unify_ty(poly1, ty1, poly2, ty2)
+            unify_ty(tvars, poly1, ty1, poly2, ty2)
         } else {
             // Leave these separate
             UnifiedTy::Discerned
         }
     }
+}
 
-    fn unify_purity_refs(
-        &self,
-        purity1: &ty::purity::Poly,
-        purity2: &ty::purity::Poly,
-    ) -> ty::purity::Poly {
-        poly_unify_purity(purity1, purity2)
+fn try_list_to_exact_pair<S: Unifiable>(list: &ty::List<S>) -> Option<&S> {
+    if let Some(ref rest) = list.rest {
+        if list.fixed.len() == 1 && &list.fixed[0] == rest.as_ref() {
+            return Some(rest);
+        }
     }
 
-    fn intersect_list(
-        &self,
-        list1: &ty::List<ty::Poly>,
-        list2: &ty::List<ty::Poly>,
-    ) -> Result<ty::List<ty::Poly>, ty::intersect::Error> {
-        ty::intersect::poly_intersect_list(self.tvars, list1, list2)
+    None
+}
+
+/// Unifies a member in to an existing vector of members
+///
+/// It is assumed `output_members` refers to members of an already unified union.
+fn union_push<S: Unifiable>(tvars: &[ty::TVar], output_members: &mut Vec<S>, new_member: S) {
+    for i in 0..output_members.len() {
+        match S::unify_ty_refs(tvars, &output_members[i], &new_member) {
+            UnifiedTy::Merged(merged_member) => {
+                // Our merged type may now unify with one of the already processed members of the
+                // union. Remove the member we merged with and recurse using the merged member.
+                output_members.swap_remove(i);
+                return union_push(tvars, output_members, merged_member);
+            }
+            UnifiedTy::Discerned => {}
+        }
+    }
+
+    output_members.push(new_member);
+}
+
+/// Extends an existing union with new members
+///
+/// `existing_members` are assumed to be the members of an existing union. If there is no existing
+/// union this must be empty. This is an optimisation to avoid processing the already unified
+/// members.
+fn union_extend<S, I>(tvars: &[ty::TVar], existing_members: Vec<S>, new_members: I) -> S
+where
+    S: Unifiable,
+    I: Iterator<Item = S>,
+{
+    let mut output_members = existing_members;
+
+    for new_member in new_members {
+        union_push(tvars, &mut output_members, new_member);
+    }
+
+    S::from_vec(output_members)
+}
+
+fn unify_top_fun<S: Unifiable>(
+    tvars: &[ty::TVar],
+    top_fun1: &ty::TopFun,
+    top_fun2: &ty::TopFun,
+) -> UnifiedTy<S> {
+    let unified_purity = unify_purity_refs(top_fun1.purity(), top_fun2.purity());
+    let unified_ret = unify_to_ty_ref(tvars, top_fun1.ret(), top_fun2.ret());
+
+    UnifiedTy::Merged(ty::TopFun::new(unified_purity, unified_ret).into_ty_ref())
+}
+
+fn unify_fun<S: Unifiable>(tvars: &[ty::TVar], fun1: &ty::Fun, fun2: &ty::Fun) -> UnifiedTy<S> {
+    let unified_purity = unify_purity_refs(fun1.purity(), fun2.purity());
+
+    if fun1.is_monomorphic() && fun2.is_monomorphic() {
+        let unified_ret = unify_to_ty_ref(tvars, fun1.ret(), fun2.ret());
+
+        match ty::intersect::intersect_list(tvars, fun1.params(), fun2.params()) {
+            Ok(unified_params) => UnifiedTy::Merged(
+                ty::Fun::new(
+                    ty::purity::PVarId::monomorphic(),
+                    ty::TVarId::monomorphic(),
+                    ty::TopFun::new(unified_purity, unified_ret),
+                    unified_params,
+                ).into_ty_ref(),
+            ),
+            Err(ty::intersect::Error::Disjoint) => {
+                UnifiedTy::Merged(ty::TopFun::new(unified_purity, unified_ret).into_ty_ref())
+            }
+        }
+    } else {
+        // TODO: We could do better here by finding our upper bound and unifying them
+        // Preserving the polymorphicness would be very complex
+        UnifiedTy::Merged(ty::TopFun::new(unified_purity, ty::Ty::Any.into_ty_ref()).into_ty_ref())
     }
 }
 
-pub fn poly_unify_to_poly(tvars: &[ty::TVar], poly1: &ty::Poly, poly2: &ty::Poly) -> ty::Poly {
-    let ctx = PolyUnifyCtx { tvars };
-    ctx.unify_to_ty_ref(poly1, poly2)
+fn unify_ty<S: Unifiable>(
+    tvars: &[ty::TVar],
+    ref1: &S,
+    ty1: &ty::Ty<S>,
+    ref2: &S,
+    ty2: &ty::Ty<S>,
+) -> UnifiedTy<S> {
+    if ty1 == ty2 {
+        return UnifiedTy::Merged(ref1.clone());
+    }
+    match (ty1, ty2) {
+        // Handle supertype relationships
+        (_, ty::Ty::Any) | (ty::Ty::Any, _) => UnifiedTy::Merged(ty::Ty::Any.into_ty_ref()),
+        (ty::Ty::LitSym(_), ty::Ty::Sym) | (ty::Ty::Sym, ty::Ty::LitSym(_)) => {
+            UnifiedTy::Merged(ty::Ty::Sym.into_ty_ref())
+        }
+        (ty::Ty::LitBool(_), ty::Ty::Bool) | (ty::Ty::Bool, ty::Ty::LitBool(_)) => {
+            UnifiedTy::Merged(ty::Ty::Bool.into_ty_ref())
+        }
+
+        // Simplify (U true false) => Bool
+        (ty::Ty::LitBool(true), ty::Ty::LitBool(false))
+        | (ty::Ty::LitBool(false), ty::Ty::LitBool(true)) => {
+            UnifiedTy::Merged(ty::Ty::Bool.into_ty_ref())
+        }
+
+        // Set type
+        (ty::Ty::Set(ty_ref1), ty::Ty::Set(ty_ref2)) => {
+            let unified_ty_ref = unify_to_ty_ref(tvars, ty_ref1.as_ref(), ty_ref2.as_ref());
+            UnifiedTy::Merged(ty::Ty::Set(Box::new(unified_ty_ref)).into_ty_ref())
+        }
+
+        // Map type
+        (ty::Ty::Map(map1), ty::Ty::Map(map2)) => {
+            let unified_key_ref = unify_to_ty_ref(tvars, map1.key(), map2.key());
+            let unified_val_ref = unify_to_ty_ref(tvars, map1.value(), map2.value());
+
+            UnifiedTy::Merged(
+                ty::Ty::Map(Box::new(ty::Map::new(unified_key_ref, unified_val_ref))).into_ty_ref(),
+            )
+        }
+
+        // Vector types
+        (ty::Ty::Vector(members1), ty::Ty::Vector(members2)) => {
+            if members1.len() != members2.len() {
+                // We can quickly check vector lengths at runtime
+                UnifiedTy::Discerned
+            } else {
+                let unified_members = members1
+                    .iter()
+                    .zip(members2.iter())
+                    .map(|(member1, member2)| unify_to_ty_ref(tvars, member1, member2))
+                    .collect::<Vec<S>>();
+
+                UnifiedTy::Merged(ty::Ty::Vector(unified_members.into_boxed_slice()).into_ty_ref())
+            }
+        }
+        (ty::Ty::Vectorof(member1), ty::Ty::Vectorof(member2)) => UnifiedTy::Merged(
+            ty::Ty::Vectorof(Box::new(unify_to_ty_ref(
+                tvars,
+                member1.as_ref(),
+                member2.as_ref(),
+            ))).into_ty_ref(),
+        ),
+        (ty::Ty::Vector(members1), ty::Ty::Vectorof(member2))
+        | (ty::Ty::Vectorof(member2), ty::Ty::Vector(members1)) => {
+            let unified_member = union_extend(
+                tvars,
+                vec![member2.as_ref().clone()],
+                members1.iter().cloned(),
+            );
+
+            UnifiedTy::Merged(ty::Ty::Vectorof(Box::new(unified_member)).into_ty_ref())
+        }
+
+        // Function types
+        (ty::Ty::TopFun(top_fun1), ty::Ty::TopFun(top_fun2)) => {
+            unify_top_fun(tvars, top_fun1, top_fun2)
+        }
+        (ty::Ty::Fun(fun), ty::Ty::TopFun(top_fun))
+        | (ty::Ty::TopFun(top_fun), ty::Ty::Fun(fun)) => {
+            unify_top_fun(tvars, fun.top_fun(), top_fun)
+        }
+        (ty::Ty::TyPred(_), ty::Ty::TopFun(top_fun))
+        | (ty::Ty::TopFun(top_fun), ty::Ty::TyPred(_)) => {
+            unify_top_fun(tvars, &ty::TopFun::new_for_ty_pred(), top_fun)
+        }
+
+        (ty::Ty::Fun(fun1), ty::Ty::Fun(fun2)) => unify_fun(tvars, fun1, fun2),
+        (ty::Ty::TyPred(_), ty::Ty::Fun(fun)) | (ty::Ty::Fun(fun), ty::Ty::TyPred(_)) => {
+            unify_fun(tvars, &ty::Fun::new_for_ty_pred(), fun)
+        }
+
+        (ty::Ty::TyPred(_), ty::Ty::TyPred(_)) => {
+            UnifiedTy::Merged(ty::Ty::Fun(Box::new(ty::Fun::new_for_ty_pred())).into_ty_ref())
+        }
+
+        // Union types
+        (ty::Ty::Union(members1), ty::Ty::Union(members2)) => {
+            let new_union = union_extend(tvars, members1.to_vec(), members2.iter().cloned());
+            UnifiedTy::Merged(new_union)
+        }
+        (ty::Ty::Union(members1), _) => {
+            let new_union = union_extend(tvars, members1.to_vec(), iter::once(ref2).cloned());
+            UnifiedTy::Merged(new_union)
+        }
+        (_, ty::Ty::Union(members2)) => {
+            let new_union = union_extend(tvars, members2.to_vec(), iter::once(ref1).cloned());
+            UnifiedTy::Merged(new_union)
+        }
+
+        // List types
+        (ty::Ty::List(list1), ty::Ty::List(list2)) => match unify_list(tvars, list1, list2) {
+            UnifiedList::Discerned => UnifiedTy::Discerned,
+            UnifiedList::Merged(merged_list) => {
+                UnifiedTy::Merged(ty::Ty::List(merged_list).into_ty_ref())
+            }
+        },
+
+        _ => UnifiedTy::Discerned,
+    }
 }
 
-pub fn poly_unify_purity(
+pub fn unify_purity_refs(
     purity1: &ty::purity::Poly,
     purity2: &ty::purity::Poly,
 ) -> ty::purity::Poly {
@@ -361,53 +298,72 @@ pub fn poly_unify_purity(
     }
 }
 
-pub fn poly_unify_iter<I>(tvars: &[ty::TVar], members: I) -> ty::Poly
-where
-    I: Iterator<Item = ty::Poly>,
-{
-    let ctx = PolyUnifyCtx { tvars };
-    ctx.unify_ref_iter(vec![], members)
-}
-
-pub fn poly_unify_list(
-    tvars: &[ty::TVar],
-    list1: &ty::List<ty::Poly>,
-    list2: &ty::List<ty::Poly>,
-) -> UnifiedList<ty::Poly> {
-    let ctx = PolyUnifyCtx { tvars };
-    ctx.unify_list(list1, list2)
-}
-
-struct MonoUnifyCtx {}
-
-impl UnifyCtx<ty::Mono> for MonoUnifyCtx {
-    fn unify_ty_refs(&self, mono1: &ty::Mono, mono2: &ty::Mono) -> UnifiedTy<ty::Mono> {
-        self.unify_ty(mono1, mono1.as_ty(), mono2, mono2.as_ty())
+pub fn unify_to_ty_ref<S: Unifiable>(tvars: &[ty::TVar], ty_ref1: &S, ty_ref2: &S) -> S {
+    match S::unify_ty_refs(tvars, ty_ref1, ty_ref2) {
+        UnifiedTy::Merged(ty_ref) => ty_ref,
+        UnifiedTy::Discerned => {
+            ty::Ty::Union(Box::new([ty_ref1.clone(), ty_ref2.clone()])).into_ty_ref()
+        }
     }
+}
 
-    fn unify_purity_refs(&self, purity1: &Purity, purity2: &Purity) -> Purity {
-        if purity1 == purity2 {
-            *purity1
-        } else {
-            Purity::Impure
+/// Unifies an iterator of types in to a new type
+pub fn unify_ty_ref_iter<S, I>(tvars: &[ty::TVar], new_members: I) -> S
+where
+    S: Unifiable,
+    I: Iterator<Item = S>,
+{
+    union_extend(tvars, vec![], new_members)
+}
+
+pub fn unify_list<S: Unifiable>(
+    tvars: &[ty::TVar],
+    list1: &ty::List<S>,
+    list2: &ty::List<S>,
+) -> UnifiedList<S> {
+    if list1.is_empty() {
+        if let Some(member) = try_list_to_exact_pair(list2) {
+            return UnifiedList::Merged(ty::List::new(Box::new([]), Some(member.clone())));
+        }
+    } else if list2.is_empty() {
+        if let Some(member) = try_list_to_exact_pair(list1) {
+            return UnifiedList::Merged(ty::List::new(Box::new([]), Some(member.clone())));
         }
     }
 
-    fn intersect_list(
-        &self,
-        list1: &ty::List<ty::Mono>,
-        list2: &ty::List<ty::Mono>,
-    ) -> Result<ty::List<ty::Mono>, ty::intersect::Error> {
-        ty::intersect::mono_intersect_list(list1, list2)
+    if list1.has_disjoint_arity(list2) {
+        // We can quickly check list lengths at runtime
+        return UnifiedList::Discerned;
     }
-}
 
-pub fn mono_unify_list(
-    list1: &ty::List<ty::Mono>,
-    list2: &ty::List<ty::Mono>,
-) -> UnifiedList<ty::Mono> {
-    let ctx = MonoUnifyCtx {};
-    ctx.unify_list(list1, list2)
+    let mut fixed_iter1 = list1.fixed().iter();
+    let mut fixed_iter2 = list2.fixed().iter();
+
+    let mut merged_fixed: Vec<S> =
+        Vec::with_capacity(cmp::min(fixed_iter1.len(), fixed_iter2.len()));
+
+    while fixed_iter1.len() > 0 && fixed_iter2.len() > 0 {
+        let fixed1 = fixed_iter1.next().unwrap();
+        let fixed2 = fixed_iter2.next().unwrap();
+
+        merged_fixed.push(unify_to_ty_ref(tvars, fixed1, fixed2));
+    }
+
+    let merged_rest = if fixed_iter1.len() > 0
+        || fixed_iter2.len() > 0
+        || list1.rest().is_some()
+        || list2.rest().is_some()
+    {
+        // Merge all remaining fixed and rest args together
+        let rest_iter = fixed_iter1
+            .chain(fixed_iter2.chain(list1.rest().into_iter().chain(list2.rest().into_iter())));
+
+        Some(unify_ty_ref_iter(tvars, rest_iter.cloned()))
+    } else {
+        None
+    };
+
+    UnifiedList::Merged(ty::List::new(merged_fixed.into_boxed_slice(), merged_rest))
 }
 
 #[cfg(test)]
@@ -419,16 +375,14 @@ mod test {
         hir::poly_for_str(datum_str)
     }
 
-    fn poly_unify(tvars: &[ty::TVar], poly1: &ty::Poly, poly2: &ty::Poly) -> UnifiedTy<ty::Poly> {
-        let ctx = PolyUnifyCtx { tvars };
-        ctx.unify_ty_refs(poly1, poly2)
-    }
-
     fn assert_discerned(ty_str1: &str, ty_str2: &str) {
         let poly1 = poly_for_str(ty_str1);
         let poly2 = poly_for_str(ty_str2);
 
-        assert_eq!(UnifiedTy::Discerned, poly_unify(&[], &poly1, &poly2));
+        assert_eq!(
+            UnifiedTy::Discerned,
+            ty::Poly::unify_ty_refs(&[], &poly1, &poly2)
+        );
     }
 
     fn assert_merged(expected_str: &str, ty_str1: &str, ty_str2: &str) {
@@ -440,21 +394,24 @@ mod test {
         // type
         assert_eq!(
             ty::is_a::Result::Yes,
-            ty::is_a::poly_is_a(&[], &poly1, &expected)
+            ty::is_a::ty_ref_is_a(&[], &poly1, &expected)
         );
         assert_eq!(
             ty::is_a::Result::Yes,
-            ty::is_a::poly_is_a(&[], &poly2, &expected)
+            ty::is_a::ty_ref_is_a(&[], &poly2, &expected)
         );
 
-        assert_eq!(UnifiedTy::Merged(expected), poly_unify(&[], &poly1, &poly2));
+        assert_eq!(
+            UnifiedTy::Merged(expected),
+            ty::Poly::unify_ty_refs(&[], &poly1, &poly2)
+        );
     }
 
     fn assert_merged_iter(expected_str: &str, ty_strs: &[&str]) {
         let expected = poly_for_str(expected_str);
         let polys = ty_strs.iter().map(|&s| poly_for_str(s));
 
-        assert_eq!(expected, poly_unify_iter(&[], polys));
+        assert_eq!(expected, unify_ty_ref_iter(&[], polys));
     }
 
     fn bounded_polys(bound_str1: &str, bound_str2: &str) -> (Vec<ty::TVar>, ty::Poly, ty::Poly) {
@@ -476,7 +433,7 @@ mod test {
         let expected = poly_for_str(expected_str);
         let (tvars, poly1, poly2) = bounded_polys(bound_str1, bound_str2);
 
-        let result = poly_unify(&tvars, &poly1, &poly2);
+        let result = ty::Poly::unify_ty_refs(&tvars, &poly1, &poly2);
 
         if let UnifiedTy::Merged(merged_poly) = result {
             let merged_ty = ty::resolve::resolve_poly_ty(&tvars, &merged_poly).as_ty();
@@ -491,7 +448,7 @@ mod test {
 
         assert_eq!(
             UnifiedTy::Discerned,
-            poly_unify(&tvars, &poly1, &poly2),
+            ty::Poly::unify_ty_refs(&tvars, &poly1, &poly2),
             "Poly bounds are not discernible"
         );
     }
@@ -668,8 +625,8 @@ mod test {
         ];
 
         // #{A} (A -> A)
-        let pidentity_fun = ty::Fun::new(
-            ty::purity::PVarIds::monomorphic(),
+        let pidentity_fun: ty::Poly = ty::Fun::new(
+            ty::purity::PVarId::monomorphic(),
             ty::TVarId::new(0)..ty::TVarId::new(1),
             ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
             ty::List::new(Box::new([ptype1_unbounded.clone()]), None),
@@ -677,7 +634,7 @@ mod test {
 
         // #{[A : Str]} (A ->! A)
         let pidentity_impure_string_fun = ty::Fun::new(
-            ty::purity::PVarIds::monomorphic(),
+            ty::purity::PVarId::monomorphic(),
             ty::TVarId::new(1)..ty::TVarId::new(2),
             ty::TopFun::new(Purity::Impure.into_poly(), ptype2_string.clone()),
             ty::List::new(Box::new([ptype2_string.clone()]), None),
@@ -685,13 +642,13 @@ mod test {
 
         assert_eq!(
             UnifiedTy::Merged(pidentity_fun.clone()),
-            poly_unify(&tvars, &pidentity_fun, &pidentity_fun)
+            ty::Poly::unify_ty_refs(&tvars, &pidentity_fun, &pidentity_fun)
         );
 
         let top_impure_fun = poly_for_str("(... ->! Any)");
         assert_eq!(
             UnifiedTy::Merged(top_impure_fun),
-            poly_unify(&tvars, &pidentity_fun, &pidentity_impure_string_fun)
+            ty::Poly::unify_ty_refs(&tvars, &pidentity_fun, &pidentity_impure_string_fun)
         );
     }
 
@@ -702,27 +659,27 @@ mod test {
         let purity_var1 = ty::purity::Poly::Var(ty::purity::PVarId::new(1));
         let purity_var2 = ty::purity::Poly::Var(ty::purity::PVarId::new(2));
 
-        assert_eq!(purity_pure, poly_unify_purity(&purity_pure, &purity_pure));
+        assert_eq!(purity_pure, unify_purity_refs(&purity_pure, &purity_pure));
 
         assert_eq!(
             purity_impure,
-            poly_unify_purity(&purity_impure, &purity_impure)
+            unify_purity_refs(&purity_impure, &purity_impure)
         );
 
-        assert_eq!(purity_var1, poly_unify_purity(&purity_var1, &purity_var1));
+        assert_eq!(purity_var1, unify_purity_refs(&purity_var1, &purity_var1));
 
         assert_eq!(
             purity_impure,
-            poly_unify_purity(&purity_pure, &purity_impure)
+            unify_purity_refs(&purity_pure, &purity_impure)
         );
 
-        assert_eq!(purity_var1, poly_unify_purity(&purity_pure, &purity_var1));
+        assert_eq!(purity_var1, unify_purity_refs(&purity_pure, &purity_var1));
 
         assert_eq!(
             purity_impure,
-            poly_unify_purity(&purity_impure, &purity_var1)
+            unify_purity_refs(&purity_impure, &purity_var1)
         );
 
-        assert_eq!(purity_impure, poly_unify_purity(&purity_var1, &purity_var2));
+        assert_eq!(purity_impure, unify_purity_refs(&purity_var1, &purity_var2));
     }
 }

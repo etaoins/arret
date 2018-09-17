@@ -9,9 +9,6 @@ pub mod select;
 pub mod subst;
 pub mod unify;
 
-use crate::ty::purity::PRef;
-use crate::ty::purity::PVarIds;
-use std;
 use std::fmt;
 use std::ops::Range;
 
@@ -19,15 +16,6 @@ use std::ops::Range;
 ///
 /// This allows the implementation of our type system to be generic over `Mono` versus `Poly` types.
 pub trait TyRef: PartialEq + Clone + Sized + fmt::Debug {
-    /// Type used to store the purity variables introduced by a function
-    type PVarIds: purity::PVarIds;
-
-    /// Type used to store the type variables introduced by a function
-    type TVarIds: TVarIds;
-
-    // Type used to refer to function purity
-    type PRef: purity::PRef;
-
     /// Constructs a fixed TyRef from the passed Ty
     fn from_ty(ty: Ty<Self>) -> Self;
 
@@ -44,14 +32,6 @@ pub trait TyRef: PartialEq + Clone + Sized + fmt::Debug {
         } else {
             Self::from_ty(Ty::Union(members.into_boxed_slice()))
         }
-    }
-
-    /// Tries to extract a literal boolean value
-    fn try_to_bool(&self) -> Option<bool> {
-        self.try_to_fixed().and_then(|fixed| match fixed {
-            Ty::LitBool(v) => Some(*v),
-            _ => None,
-        })
     }
 
     /// Combination of find + map looking for a particular fixed type
@@ -73,11 +53,6 @@ pub trait TyRef: PartialEq + Clone + Sized + fmt::Debug {
     }
 }
 
-pub trait TVarIds: PartialEq + Eq + Clone + std::fmt::Debug + std::hash::Hash + Sized {
-    fn monomorphic() -> Self;
-    fn is_monomorphic(&self) -> bool;
-}
-
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub enum Ty<S: TyRef> {
     Any,
@@ -94,8 +69,8 @@ pub enum Ty<S: TyRef> {
     Union(Box<[S]>),
 
     // Function types
-    TopFun(Box<TopFun<S>>),
-    Fun(Box<Fun<S>>),
+    TopFun(Box<TopFun>),
+    Fun(Box<Fun>),
     TyPred(Box<S>),
 
     // Vector types
@@ -192,57 +167,54 @@ impl<S: TyRef> List<S> {
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct TopFun<S: TyRef> {
-    purity: S::PRef,
-    ret: S,
+pub struct TopFun {
+    purity: purity::Poly,
+    ret: Poly,
 }
 
-impl<S: TyRef> TopFun<S> {
+impl TopFun {
     /// Returns a top function type
-    pub fn new(purity: S::PRef, ret: S) -> TopFun<S> {
+    pub fn new(purity: purity::Poly, ret: Poly) -> TopFun {
         TopFun { purity, ret }
     }
 
     /// Returns the `Fun` top type for all type predicate functions
-    pub fn new_for_ty_pred() -> TopFun<S> {
-        Self::new(
-            S::PRef::from_purity(purity::Purity::Pure),
-            Ty::Bool.into_ty_ref(),
-        )
+    pub fn new_for_ty_pred() -> TopFun {
+        Self::new(purity::Purity::Pure.into_poly(), Ty::Bool.into_ty_ref())
     }
 
-    pub fn purity(&self) -> &S::PRef {
+    pub fn purity(&self) -> &purity::Poly {
         &self.purity
     }
 
-    pub fn ret(&self) -> &S {
+    pub fn ret(&self) -> &Poly {
         &self.ret
     }
 
-    pub fn into_ty(self) -> Ty<S> {
+    pub fn into_ty<S: TyRef>(self) -> Ty<S> {
         Ty::TopFun(Box::new(self))
     }
 
-    pub fn into_ty_ref(self) -> S {
+    pub fn into_ty_ref<S: TyRef>(self) -> S {
         self.into_ty().into_ty_ref()
     }
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct Fun<S: TyRef> {
-    pvar_ids: S::PVarIds,
-    tvar_ids: S::TVarIds,
-    top_fun: TopFun<S>,
-    params: List<S>,
+pub struct Fun {
+    pvar_ids: purity::PVarIds,
+    tvar_ids: TVarIds,
+    top_fun: TopFun,
+    params: List<Poly>,
 }
 
-impl<S: TyRef> Fun<S> {
+impl Fun {
     pub fn new(
-        pvar_ids: S::PVarIds,
-        tvar_ids: S::TVarIds,
-        top_fun: TopFun<S>,
-        params: List<S>,
-    ) -> Fun<S> {
+        pvar_ids: purity::PVarIds,
+        tvar_ids: TVarIds,
+        top_fun: TopFun,
+        params: List<Poly>,
+    ) -> Fun {
         Fun {
             pvar_ids,
             tvar_ids,
@@ -252,14 +224,11 @@ impl<S: TyRef> Fun<S> {
     }
 
     // Returns the `Fun` type for the `(main!)` function
-    pub fn new_for_main() -> Fun<S> {
+    pub fn new_for_main() -> Fun {
         Self::new(
-            S::PVarIds::monomorphic(),
-            S::TVarIds::monomorphic(),
-            TopFun::new(
-                S::PRef::from_purity(purity::Purity::Impure),
-                Ty::unit().into_ty_ref(),
-            ),
+            purity::PVarId::monomorphic(),
+            TVarId::monomorphic(),
+            TopFun::new(purity::Purity::Impure.into_poly(), Ty::unit().into_ty_ref()),
             List::empty(),
         )
     }
@@ -268,53 +237,60 @@ impl<S: TyRef> Fun<S> {
     ///
     /// This is the type `(Any -> Bool)`. It captures the signature of the type predicates; however
     /// it does not support occurrence typing.
-    pub fn new_for_ty_pred() -> Fun<S> {
+    pub fn new_for_ty_pred() -> Fun {
         Self::new(
-            S::PVarIds::monomorphic(),
-            S::TVarIds::monomorphic(),
+            purity::PVarId::monomorphic(),
+            TVarId::monomorphic(),
             TopFun::new_for_ty_pred(),
             List::new(Box::new([Ty::Any.into_ty_ref()]), None),
         )
     }
 
-    pub fn pvar_ids(&self) -> &S::PVarIds {
+    pub fn pvar_ids(&self) -> &purity::PVarIds {
         &self.pvar_ids
     }
 
-    pub fn tvar_ids(&self) -> &S::TVarIds {
+    pub fn tvar_ids(&self) -> &TVarIds {
         &self.tvar_ids
     }
 
-    pub fn top_fun(&self) -> &TopFun<S> {
+    pub fn top_fun(&self) -> &TopFun {
         &self.top_fun
     }
 
-    pub fn purity(&self) -> &S::PRef {
+    pub fn purity(&self) -> &purity::Poly {
         &self.top_fun.purity
     }
 
-    pub fn params(&self) -> &List<S> {
+    pub fn params(&self) -> &List<Poly> {
         &self.params
     }
 
-    pub fn ret(&self) -> &S {
+    pub fn ret(&self) -> &Poly {
         &self.top_fun.ret
     }
 
     pub fn is_monomorphic(&self) -> bool {
-        self.pvar_ids.is_monomorphic() && self.tvar_ids.is_monomorphic()
+        (self.pvar_ids.start >= self.pvar_ids.end) && (self.tvar_ids.start >= self.tvar_ids.end)
     }
 
-    pub fn into_ty(self) -> Ty<S> {
+    pub fn into_ty<S: TyRef>(self) -> Ty<S> {
         Ty::Fun(Box::new(self))
     }
 
-    pub fn into_ty_ref(self) -> S {
+    pub fn into_ty_ref<S: TyRef>(self) -> S {
         S::from_ty(self.into_ty())
     }
 }
 
 new_indexing_id_type!(TVarId, u32);
+pub type TVarIds = Range<TVarId>;
+
+impl TVarId {
+    pub fn monomorphic() -> TVarIds {
+        TVarId::new(0)..TVarId::new(0)
+    }
+}
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct TVar {
@@ -349,10 +325,6 @@ impl Poly {
 }
 
 impl TyRef for Poly {
-    type PVarIds = Range<purity::PVarId>;
-    type TVarIds = Range<TVarId>;
-    type PRef = purity::Poly;
-
     fn from_ty(ty: Ty<Poly>) -> Poly {
         Poly::Fixed(ty)
     }
@@ -375,16 +347,6 @@ impl Ty<Poly> {
     }
 }
 
-impl TVarIds for Range<TVarId> {
-    fn monomorphic() -> Range<TVarId> {
-        TVarId::new(0)..TVarId::new(0)
-    }
-
-    fn is_monomorphic(&self) -> bool {
-        self.start >= self.end
-    }
-}
-
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Mono(Ty<Mono>);
 
@@ -395,36 +357,18 @@ impl Mono {
 }
 
 impl Ty<Mono> {
-    #[cfg(test)]
     pub fn into_mono(self) -> Mono {
         Mono(self)
     }
 }
 
 impl TyRef for Mono {
-    type PVarIds = purity::EmptyPVarIds;
-    type TVarIds = EmptyTVarIds;
-    type PRef = purity::Purity;
-
     fn from_ty(ty: Ty<Mono>) -> Mono {
         Mono(ty)
     }
 
     fn try_to_fixed(&self) -> Option<&Ty<Mono>> {
         Some(self.as_ty())
-    }
-}
-
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct EmptyTVarIds();
-
-impl TVarIds for EmptyTVarIds {
-    fn monomorphic() -> EmptyTVarIds {
-        EmptyTVarIds()
-    }
-
-    fn is_monomorphic(&self) -> bool {
-        true
     }
 }
 
