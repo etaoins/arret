@@ -4,19 +4,18 @@ use std::rc::Rc;
 use syntax::span::{Span, EMPTY_SPAN};
 
 use crate::hir::error::{Error, ErrorKind};
+use crate::hir::macros::Macro;
 use crate::hir::ns::{Ident, NsDatum, NsId};
 use crate::hir::prim::Prim;
 use crate::hir::{types, VarId};
 use crate::ty;
 use crate::ty::purity;
 
-new_indexing_id_type!(MacroId, u32);
-
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub enum Binding {
     Var(VarId),
     Prim(Prim),
-    Macro(MacroId),
+    Macro(Rc<Macro>),
     Ty(ty::Poly),
     TyCons(types::TyCons),
     Purity(purity::Poly),
