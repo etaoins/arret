@@ -421,159 +421,144 @@ pub const TY_EXPORTS: &[(&str, Binding)] = &[
     export_ty_cons!("RawU", TyCons::RawU),
 ];
 
-struct StrForPolyCtx {
-    pvars: purity::PVars,
-    tvars: ty::TVars,
+/// Pushes the arguments for a list constructor on to the passed Vec
+///
+/// This is used to share code between list and function types
+fn push_list_parts(
+    pvars: &purity::PVars,
+    tvars: &ty::TVars,
+    list_parts: &mut Vec<String>,
+    list_poly: &ty::List<ty::Poly>,
+) {
+    for fixed in list_poly.fixed() {
+        list_parts.push(str_for_poly(pvars, tvars, fixed));
+    }
+    if let Some(rest) = list_poly.rest() {
+        list_parts.push(str_for_poly(pvars, tvars, rest));
+        list_parts.push("...".to_owned());
+    }
 }
 
-impl StrForPolyCtx {
-    /// Pushes the arguments for a list constructor on to the passed Vec
-    ///
-    /// This is used to share code between list and function types
-    fn push_list_parts(&self, list_parts: &mut Vec<String>, list_poly: &ty::List<ty::Poly>) {
-        for fixed in list_poly.fixed() {
-            list_parts.push(self.str_for_poly(fixed));
-        }
-        if let Some(rest) = list_poly.rest() {
-            list_parts.push(self.str_for_poly(rest));
-            list_parts.push("...".to_owned());
-        }
-    }
+fn str_for_bounds(
+    all_pvars: &purity::PVars,
+    all_tvars: &ty::TVars,
+    bound_pvars: &purity::PVars,
+    bound_tvars: &ty::TVars,
+) -> String {
+    let pvar_parts = bound_pvars
+        .values()
+        .map(|pvar| format!("[{} : ->!]", pvar.source_name()));
 
-    fn str_for_purity(&self, purity: &purity::Poly) -> String {
-        match purity {
-            purity::Poly::Fixed(Purity::Pure) => "->".to_owned(),
-            purity::Poly::Fixed(Purity::Impure) => "->!".to_owned(),
-            purity::Poly::Var(pvar_id) => self.pvars[pvar_id].source_name().into(),
+    let tvar_parts = bound_tvars.values().map(|tvar| {
+        if tvar.bound() == &ty::Ty::Any.into_poly() {
+            return tvar.source_name().into();
         }
-    }
 
-    fn str_for_bounds(&self, pvars: &purity::PVars, tvars: &ty::TVars) -> String {
-        let pvar_parts = pvars
-            .values()
-            .map(|pvar| format!("[{} : ->!]", pvar.source_name()));
+        format!(
+            "[{} : {}]",
+            tvar.source_name(),
+            str_for_poly(all_pvars, all_tvars, tvar.bound())
+        )
+    });
 
-        let tvar_parts = tvars.values().map(|tvar| {
-            if tvar.bound() == &ty::Ty::Any.into_poly() {
-                return tvar.source_name().into();
+    let all_parts = pvar_parts.chain(tvar_parts).collect::<Vec<String>>();
+    format!("#{{{}}}", all_parts.join(" "))
+}
+
+fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty::Poly>) -> String {
+    match poly_ty {
+        ty::Ty::Any => "Any".to_owned(),
+        ty::Ty::Bool => "Bool".to_owned(),
+        ty::Ty::Char => "Char".to_owned(),
+        ty::Ty::Int => "Int".to_owned(),
+        ty::Ty::Sym => "Sym".to_owned(),
+        ty::Ty::Str => "Str".to_owned(),
+        ty::Ty::Float => "Float".to_owned(),
+        ty::Ty::LitBool(false) => "false".to_owned(),
+        ty::Ty::LitBool(true) => "true".to_owned(),
+        ty::Ty::LitSym(name) => format!("'{}", name),
+        ty::Ty::Map(map) => format!(
+            "(Map {} {})",
+            str_for_poly(pvars, tvars, map.key()),
+            str_for_poly(pvars, tvars, map.value())
+        ),
+        ty::Ty::Set(member) => format!("(Setof {})", str_for_poly(pvars, tvars, member)),
+        ty::Ty::Vector(members) => {
+            let result_parts: Vec<String> = members
+                .iter()
+                .map(|member| format!(" {}", str_for_poly(pvars, tvars, member)))
+                .collect();
+
+            format!("(Vector{})", result_parts.join(""))
+        }
+        ty::Ty::Vectorof(member) => format!("(Vectorof {})", str_for_poly(pvars, tvars, member)),
+        ty::Ty::TopFun(top_fun) => format!(
+            "(... {} {})",
+            str_for_purity(pvars, top_fun.purity()),
+            str_for_poly(pvars, tvars, top_fun.ret())
+        ),
+        ty::Ty::Fun(fun) => {
+            let mut fun_parts = Vec::with_capacity(2);
+
+            let inner_pvars = purity::merge_pvars(pvars, fun.pvars());
+            let inner_tvars = ty::merge_tvars(tvars, fun.tvars());
+
+            push_list_parts(&inner_pvars, &inner_tvars, &mut fun_parts, fun.params());
+            fun_parts.push(str_for_purity(&inner_pvars, fun.purity()));
+            fun_parts.push(str_for_poly(&inner_pvars, &inner_tvars, fun.ret()));
+
+            if fun.is_monomorphic() {
+                format!("({})", fun_parts.join(" "))
+            } else {
+                format!(
+                    "(All {} {})",
+                    str_for_bounds(&inner_pvars, &inner_tvars, fun.pvars(), fun.tvars()),
+                    fun_parts.join(" ")
+                )
             }
+        }
+        ty::Ty::TyPred(test) => format!("(Type? {})", str_for_poly(pvars, tvars, test)),
+        ty::Ty::Union(members) => {
+            let member_strs: Vec<String> = members
+                .iter()
+                .map(|m| format!(" {}", str_for_poly(pvars, tvars, m)))
+                .collect();
 
-            format!(
-                "[{} : {}]",
-                tvar.source_name(),
-                self.str_for_poly(tvar.bound())
-            )
-        });
-
-        let all_parts = pvar_parts.chain(tvar_parts).collect::<Vec<String>>();
-        format!("#{{{}}}", all_parts.join(" "))
-    }
-
-    fn str_for_poly_ty(&self, poly_ty: &ty::Ty<ty::Poly>) -> String {
-        match poly_ty {
-            ty::Ty::Any => "Any".to_owned(),
-            ty::Ty::Bool => "Bool".to_owned(),
-            ty::Ty::Char => "Char".to_owned(),
-            ty::Ty::Int => "Int".to_owned(),
-            ty::Ty::Sym => "Sym".to_owned(),
-            ty::Ty::Str => "Str".to_owned(),
-            ty::Ty::Float => "Float".to_owned(),
-            ty::Ty::LitBool(false) => "false".to_owned(),
-            ty::Ty::LitBool(true) => "true".to_owned(),
-            ty::Ty::LitSym(name) => format!("'{}", name),
-            ty::Ty::Map(map) => format!(
-                "(Map {} {})",
-                self.str_for_poly(map.key()),
-                self.str_for_poly(map.value())
-            ),
-            ty::Ty::Set(member) => format!("(Setof {})", self.str_for_poly(member)),
-            ty::Ty::Vector(members) => {
-                let result_parts: Vec<String> = members
-                    .iter()
-                    .map(|member| format!(" {}", self.str_for_poly(member)))
-                    .collect();
-
-                format!("(Vector{})", result_parts.join(""))
-            }
-            ty::Ty::Vectorof(member) => format!("(Vectorof {})", self.str_for_poly(member)),
-            ty::Ty::TopFun(top_fun) => format!(
-                "(... {} {})",
-                self.str_for_purity(top_fun.purity()),
-                self.str_for_poly(top_fun.ret())
-            ),
-            ty::Ty::Fun(fun) => {
-                let mut fun_parts = Vec::with_capacity(2);
-
-                let fun_ctx = StrForPolyCtx {
-                    pvars: purity::merge_pvars(&self.pvars, fun.pvars()),
-                    tvars: ty::merge_tvars(&self.tvars, fun.tvars()),
-                };
-
-                fun_ctx.push_list_parts(&mut fun_parts, fun.params());
-                fun_parts.push(fun_ctx.str_for_purity(fun.purity()));
-                fun_parts.push(fun_ctx.str_for_poly(fun.ret()));
-
-                if fun.is_monomorphic() {
-                    format!("({})", fun_parts.join(" "))
-                } else {
-                    format!(
-                        "(All {} {})",
-                        fun_ctx.str_for_bounds(fun.pvars(), fun.tvars()),
-                        fun_parts.join(" ")
-                    )
+            format!("(U{})", member_strs.join(""))
+        }
+        ty::Ty::List(list) => {
+            // While all list types can be expressed using `(List)` we try to find the shortest
+            // representation
+            if list.fixed().is_empty() {
+                match list.rest() {
+                    Some(rest) => format!("(Listof {})", str_for_poly(pvars, tvars, rest)),
+                    None => "()".to_owned(),
                 }
+            } else {
+                let mut list_parts = Vec::with_capacity(2);
+
+                list_parts.push("List".to_owned());
+                push_list_parts(pvars, tvars, &mut list_parts, list);
+
+                format!("({})", list_parts.join(" "),)
             }
-            ty::Ty::TyPred(test) => format!("(Type? {})", self.str_for_poly(test)),
-            ty::Ty::Union(members) => {
-                let member_strs: Vec<String> = members
-                    .iter()
-                    .map(|m| format!(" {}", self.str_for_poly(m)))
-                    .collect();
-
-                format!("(U{})", member_strs.join(""))
-            }
-            ty::Ty::List(list) => {
-                // While all list types can be expressed using `(List)` we try to find the shortest
-                // representation
-                if list.fixed().is_empty() {
-                    match list.rest() {
-                        Some(rest) => format!("(Listof {})", self.str_for_poly(rest)),
-                        None => "()".to_owned(),
-                    }
-                } else {
-                    let mut list_parts = Vec::with_capacity(2);
-
-                    list_parts.push("List".to_owned());
-                    self.push_list_parts(&mut list_parts, list);
-
-                    format!("({})", list_parts.join(" "),)
-                }
-            }
-        }
-    }
-
-    fn str_for_poly(&self, poly: &ty::Poly) -> String {
-        match poly {
-            ty::Poly::Var(tvar_id) => self.tvars[tvar_id].source_name().to_owned(),
-            ty::Poly::Fixed(poly_ty) => self.str_for_poly_ty(poly_ty),
         }
     }
 }
 
 pub fn str_for_poly(pvars: &purity::PVars, tvars: &ty::TVars, poly: &ty::Poly) -> String {
-    let ctx = StrForPolyCtx {
-        pvars: pvars.clone(),
-        tvars: tvars.clone(),
-    };
-    ctx.str_for_poly(poly)
+    match poly {
+        ty::Poly::Var(tvar_id) => tvars[tvar_id].source_name().to_owned(),
+        ty::Poly::Fixed(poly_ty) => str_for_poly_ty(pvars, tvars, poly_ty),
+    }
 }
 
 pub fn str_for_purity(pvars: &purity::PVars, purity: &purity::Poly) -> String {
-    let ctx = StrForPolyCtx {
-        pvars: pvars.clone(),
-        tvars: ty::TVars::new(),
-    };
-    ctx.str_for_purity(purity)
+    match purity {
+        purity::Poly::Fixed(Purity::Pure) => "->".to_owned(),
+        purity::Poly::Fixed(Purity::Impure) => "->!".to_owned(),
+        purity::Poly::Var(pvar_id) => pvars[pvar_id].source_name().into(),
+    }
 }
 
 #[cfg(test)]
