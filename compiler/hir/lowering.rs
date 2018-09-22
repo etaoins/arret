@@ -539,8 +539,8 @@ fn include_rfi_module(span: Span, rfi_module: rfi::Module) -> LoweredModule {
     exports.reserve(rfi_module.len());
     defs.reserve(rfi_module.len());
 
-    for (name, rust_fun) in rfi_module {
-        let var_id = VarId::alloc();
+    let var_ids = VarId::alloc_iter(rfi_module.len());
+    for ((name, rust_fun), var_id) in rfi_module.into_iter().zip(var_ids) {
         let def = Def {
             span,
             macro_invocation_span: EMPTY_SPAN,

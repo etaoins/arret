@@ -51,10 +51,26 @@ macro_rules! new_counting_id_type {
         pub struct $id_name(NonZeroUsize);
 
         impl $id_name {
-            pub fn alloc() -> $id_name {
+            /// Allocates a ID unique for the duration of compiler's execution
+            pub fn alloc() -> Self {
                 // We used relaxed ordering because the order doesn't actually matter; these are
                 // used only for uniqueness
                 let raw_id = NEXT_VALUE.0.fetch_add(1, Ordering::Relaxed);
+                Self::new(raw_id)
+            }
+
+            /// Produces an iterator of IDs unique for the duration of compiler's execution
+            ///
+            /// This can be significantly more efficient than the equivalent number of calls to `alloc`
+            #[allow(unused)]
+            pub fn alloc_iter(length: usize) -> impl ExactSizeIterator<Item = Self> {
+                let start_raw = NEXT_VALUE.0.fetch_add(length, Ordering::Relaxed);
+                let end_raw = start_raw + length;
+
+                (start_raw..end_raw).map(Self::new)
+            }
+
+            fn new(raw_id: usize) -> Self {
                 $id_name(NonZeroUsize::new(raw_id).unwrap())
             }
         }
