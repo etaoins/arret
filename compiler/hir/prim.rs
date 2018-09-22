@@ -35,5 +35,6 @@ export_prims!(
     ("deftype", DefType),
     ("lettype", LetType),
     ("type-predicate", TyPred),
-    ("compile-error", CompileError)
+    ("compile-error", CompileError),
+    ("All", All)
 );

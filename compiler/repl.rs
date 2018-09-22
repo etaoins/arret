@@ -40,8 +40,8 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
         package_paths: &'pp PackagePaths,
         source_loader: &'sl mut SourceLoader,
     ) -> ReplCtx<'pp, 'sl> {
-        let scope = Scope::new_repl();
-        let ns_id = hir::ns::NsId::new(0);
+        let ns_id = hir::ns::NsId::alloc();
+        let scope = Scope::new_repl(ns_id);
 
         ReplCtx {
             scope,
@@ -102,28 +102,29 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
 
         match self.lcx.lower_repl_datum(&mut self.scope, ns_datum)? {
             LoweredReplDatum::Defs(defs) => {
-                let lcx = &self.lcx;
-
                 for recursive_defs in defs {
-                    let inferred_defs =
-                        self.icx
-                            .infer_defs(lcx.pvars(), lcx.tvars(), recursive_defs)?;
+                    let inferred_defs = self.icx.infer_defs(recursive_defs)?;
 
                     for inferred_def in inferred_defs {
-                        self.ehx.consume_def(lcx.tvars(), inferred_def)?;
+                        self.ehx.consume_def(inferred_def)?;
                     }
                 }
 
                 Ok(EvaledLine::Defs)
             }
             LoweredReplDatum::Expr(decl_expr) => {
-                let lcx = &self.lcx;
-                let node = self.icx.infer_expr(lcx.pvars(), lcx.tvars(), decl_expr)?;
+                let node = self.icx.infer_expr(decl_expr)?;
 
                 match kind {
                     EvalKind::Type => {
-                        let poly_str =
-                            hir::str_for_poly(lcx.pvars(), lcx.tvars(), node.poly_type());
+                        use crate::ty;
+                        use crate::ty::purity;
+
+                        let poly_str = hir::str_for_poly(
+                            &purity::PVars::new(),
+                            &ty::TVars::new(),
+                            node.poly_type(),
+                        );
                         Ok(EvaledLine::Expr(poly_str))
                     }
                     EvalKind::Value => {
@@ -132,7 +133,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
                         use std::str;
 
                         // Evaluate the expression
-                        let mut dcx = DefCtx::new(lcx.tvars());
+                        let mut dcx = DefCtx::new();
                         let value = self
                             .ehx
                             .consume_expr(&mut dcx, &mut None, node.into_expr())?;

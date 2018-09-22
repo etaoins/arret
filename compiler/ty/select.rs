@@ -1,7 +1,9 @@
-use std::ops::Range;
+use std::collections::HashMap;
 
 use crate::ty;
 use crate::ty::list_iter::ListIterator;
+use crate::ty::purity;
+use crate::ty::purity::Purity;
 
 /// Selects a set of polymorphic variables for a function application
 ///
@@ -10,74 +12,51 @@ use crate::ty::list_iter::ListIterator;
 /// the context. The calculated polymorphic types and purities can be retrieved from the
 /// `pvar_purities` and `tvar_types` methods.
 #[derive(Clone, Debug)]
-pub struct SelectCtx<'tvars> {
-    pvar_ids: Range<ty::purity::PVarId>,
-    tvar_ids: Range<ty::TVarId>,
+pub struct SelectCtx<'vars> {
+    all_tvars: &'vars ty::TVars,
 
-    tvars: &'tvars [ty::TVar],
+    selecting_pvars: &'vars purity::PVars,
+    selecting_tvars: &'vars ty::TVars,
 
-    pvar_purities: Vec<Option<ty::purity::Poly>>,
-    tvar_types: Vec<Option<ty::Poly>>,
+    pvar_purities: HashMap<purity::PVarId, purity::Poly>,
+    tvar_types: HashMap<ty::TVarId, ty::Poly>,
 }
 
-impl<'tvars> SelectCtx<'tvars> {
+impl<'vars> SelectCtx<'vars> {
     pub fn new(
-        pvar_ids: Range<ty::purity::PVarId>,
-        tvar_ids: Range<ty::TVarId>,
-        tvars: &'tvars [ty::TVar],
-    ) -> SelectCtx<'tvars> {
-        let pvar_ids_usize = pvar_ids.start.to_usize()..pvar_ids.end.to_usize();
-        let tvar_ids_usize = tvar_ids.start.to_usize()..tvar_ids.end.to_usize();
-
-        let pvar_purities = vec![None; pvar_ids_usize.len()];
-        let tvar_types = vec![None; tvar_ids_usize.len()];
-
+        all_tvars: &'vars ty::TVars,
+        selecting_pvars: &'vars purity::PVars,
+        selecting_tvars: &'vars ty::TVars,
+    ) -> SelectCtx<'vars> {
         SelectCtx {
-            pvar_ids,
-            tvar_ids,
-            tvars,
-            pvar_purities,
-            tvar_types,
-        }
-    }
-
-    pub fn selected_pvar_idx(&self, pvar_id: ty::purity::PVarId) -> Option<usize> {
-        if pvar_id >= self.pvar_ids.start && pvar_id < self.pvar_ids.end {
-            Some(pvar_id.to_usize() - self.pvar_ids.start.to_usize())
-        } else {
-            None
-        }
-    }
-
-    pub fn selected_tvar_idx(&self, tvar_id: ty::TVarId) -> Option<usize> {
-        if tvar_id >= self.tvar_ids.start && tvar_id < self.tvar_ids.end {
-            Some(tvar_id.to_usize() - self.tvar_ids.start.to_usize())
-        } else {
-            None
+            all_tvars,
+            selecting_pvars,
+            selecting_tvars,
+            pvar_purities: HashMap::new(),
+            tvar_types: HashMap::new(),
         }
     }
 
     fn add_evidence_purity(
         &mut self,
-        target_purity: &ty::purity::Poly,
-        evidence_purity: &ty::purity::Poly,
+        target_purity: &purity::Poly,
+        evidence_purity: &purity::Poly,
     ) {
-        let pvar_id = if let ty::purity::Poly::Var(pvar_id) = target_purity {
+        let pvar_id = if let purity::Poly::Var(pvar_id) = target_purity {
             pvar_id
         } else {
             return;
         };
 
-        let pvar_idx = if let Some(pvar_idx) = self.selected_pvar_idx(*pvar_id) {
-            pvar_idx
-        } else {
+        if !self.selecting_pvars.contains_key(&pvar_id) {
             return;
-        };
+        }
 
-        self.pvar_purities[pvar_idx] = Some(match self.pvar_purities[pvar_idx] {
-            None => evidence_purity.clone(),
-            Some(ref existing) => ty::unify::unify_purity_refs(existing, evidence_purity),
-        });
+        self.pvar_purities
+            .entry(*pvar_id)
+            .and_modify(|existing| {
+                *existing = ty::unify::unify_purity_refs(existing, evidence_purity);
+            }).or_insert_with(|| evidence_purity.clone());
     }
 
     fn add_evidence_top_fun(&mut self, target_top_fun: &ty::TopFun, evidence_top_fun: &ty::TopFun) {
@@ -105,7 +84,7 @@ impl<'tvars> SelectCtx<'tvars> {
         }
 
         if let Some(target_rest) = target_iter.next() {
-            if let Some(evidence_rest) = evidence_iter.collect_rest(self.tvars) {
+            if let Some(evidence_rest) = evidence_iter.collect_rest(self.all_tvars) {
                 self.add_evidence(target_rest, &evidence_rest);
             }
         }
@@ -171,398 +150,521 @@ impl<'tvars> SelectCtx<'tvars> {
     }
 
     fn add_var_evidence(&mut self, tvar_id: ty::TVarId, evidence_poly: &ty::Poly) {
-        let tvar_idx = if let Some(tvar_idx) = self.selected_tvar_idx(tvar_id) {
-            // We're selecting on this
-            tvar_idx
+        if let Some(tvar) = self.selecting_tvars.get(&tvar_id) {
+            if !ty::is_a::ty_ref_is_a(self.all_tvars, evidence_poly, &tvar.bound).to_bool() {
+                return;
+            }
         } else {
             return;
         };
 
-        let var_bound = self.tvars[tvar_id.to_usize()].bound();
-        if !ty::is_a::ty_ref_is_a(self.tvars, evidence_poly, var_bound).to_bool() {
-            return;
-        }
-
-        self.tvar_types[tvar_idx] = Some(match self.tvar_types[tvar_idx] {
-            None => evidence_poly.clone(),
-            Some(ref existing) => ty::unify::unify_to_ty_ref(self.tvars, existing, evidence_poly),
-        });
+        let all_tvars = &self.all_tvars;
+        self.tvar_types
+            .entry(tvar_id)
+            .and_modify(|existing| {
+                *existing = ty::unify::unify_to_ty_ref(all_tvars, existing, evidence_poly);
+            }).or_insert_with(|| evidence_poly.clone());
     }
 
     pub fn add_evidence(&mut self, target_poly: &ty::Poly, evidence_poly: &ty::Poly) {
         match target_poly {
             ty::Poly::Var(tvar_id) => self.add_var_evidence(*tvar_id, evidence_poly),
             ty::Poly::Fixed(target_ty) => {
-                let evidence_ty = ty::resolve::resolve_poly_ty(self.tvars, evidence_poly).as_ty();
+                let evidence_ty =
+                    ty::resolve::resolve_poly_ty(self.all_tvars, evidence_poly).as_ty();
                 self.add_evidence_ty(target_ty, evidence_poly, evidence_ty)
             }
         }
     }
 
-    pub fn tvars(&self) -> &[ty::TVar] {
-        &self.tvars
+    pub fn pvar_purity(&self, pvar_id: purity::PVarId) -> Option<purity::Poly> {
+        if !self.selecting_pvars.contains_key(&pvar_id) {
+            return None;
+        }
+
+        Some(
+            self.pvar_purities
+                .get(&pvar_id)
+                .cloned()
+                .unwrap_or_else(|| Purity::Impure.into_poly()),
+        )
     }
 
-    pub fn pvar_purities(&self) -> &[Option<ty::purity::Poly>] {
-        self.pvar_purities.as_slice()
-    }
+    pub fn tvar_type(&self, tvar_id: ty::TVarId) -> Option<ty::Poly> {
+        if !self.selecting_tvars.contains_key(&tvar_id) {
+            return None;
+        }
 
-    pub fn tvar_types(&self) -> &[Option<ty::Poly>] {
-        self.tvar_types.as_slice()
+        Some(
+            self.tvar_types
+                .get(&tvar_id)
+                .cloned()
+                .unwrap_or_else(|| self.selecting_tvars[&tvar_id].bound.clone()),
+        )
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::hir::poly_for_str;
+    use crate::hir::ns::{NsDatum, NsId};
+    use crate::hir::scope::Scope;
     use crate::ty::purity::Purity;
+    use syntax::parser::{data_from_str, datum_from_str};
 
-    fn add_str_evidence(ctx: &mut SelectCtx<'_>, target_str: &str, evidence_str: &str) {
-        ctx.add_evidence(&poly_for_str(target_str), &poly_for_str(evidence_str));
+    struct TestScope {
+        test_ns_id: NsId,
+        scope: Scope,
+        pvars: purity::PVars,
+        tvars: ty::TVars,
     }
 
-    fn assert_unselected_type(ctx: &SelectCtx<'_>, name: char) {
-        let idx = (name as usize) - ('A' as usize);
-        assert_eq!(&ctx.tvar_types()[idx], &None);
+    impl TestScope {
+        fn new(polymorphic_str: &str) -> TestScope {
+            use crate::hir::lower_polymorphic_vars;
+
+            let test_ns_id = NsId::alloc();
+            let outer_scope = Scope::new_with_primitives(test_ns_id);
+            let mut inner_scope = Scope::new_child(&outer_scope);
+
+            let polymorphic_data = data_from_str(polymorphic_str)
+                .unwrap()
+                .into_iter()
+                .map(|value| NsDatum::from_syntax_datum(test_ns_id, value))
+                .collect::<Vec<NsDatum>>();
+
+            let (pvars, tvars) = lower_polymorphic_vars(
+                polymorphic_data.into_iter(),
+                &outer_scope,
+                &mut inner_scope,
+            ).unwrap();
+
+            TestScope {
+                test_ns_id,
+                scope: inner_scope,
+                pvars,
+                tvars,
+            }
+        }
+
+        fn poly_for_str(&self, poly_str: &str) -> ty::Poly {
+            use crate::hir::lower_poly;
+            let test_datum = datum_from_str(poly_str).unwrap();
+
+            lower_poly(
+                &self.scope,
+                NsDatum::from_syntax_datum(self.test_ns_id, test_datum),
+            ).unwrap()
+        }
+
+        fn purity_for_str(&self, poly_str: &str) -> purity::Poly {
+            use crate::hir::try_lower_purity;
+            let test_datum = datum_from_str(poly_str).unwrap();
+
+            try_lower_purity(
+                &self.scope,
+                &NsDatum::from_syntax_datum(self.test_ns_id, test_datum),
+            ).unwrap()
+        }
+
+        fn select_ctx(&self) -> SelectCtx<'_> {
+            SelectCtx::new(&self.tvars, &self.pvars, &self.tvars)
+        }
     }
 
-    fn assert_selected_type(ctx: &SelectCtx<'_>, name: char, selected_str: &str) {
-        let idx = (name as usize) - ('A' as usize);
-        assert_eq!(&Some(poly_for_str(selected_str)), &ctx.tvar_types()[idx]);
+    fn assert_unselected_type(ctx: &SelectCtx<'_>, poly_var: &ty::Poly) {
+        let tvar_id = if let ty::Poly::Var(tvar_id) = poly_var {
+            tvar_id
+        } else {
+            panic!("Can't find tvar ID")
+        };
+
+        assert_eq!(None, ctx.tvar_types.get(&tvar_id));
     }
 
-    fn assert_unselected_purity(ctx: &SelectCtx<'_>, name: char) {
-        let idx = (name as usize) - ('A' as usize);
-        assert_eq!(&None, &ctx.pvar_purities()[idx]);
+    fn assert_selected_type(ctx: &SelectCtx<'_>, poly_var: &ty::Poly, selected_poly: &ty::Poly) {
+        let tvar_id = if let ty::Poly::Var(tvar_id) = poly_var {
+            tvar_id
+        } else {
+            panic!("Can't find tvar ID")
+        };
+
+        assert_eq!(Some(selected_poly), ctx.tvar_types.get(&tvar_id));
     }
 
-    fn assert_selected_purity(ctx: &SelectCtx<'_>, name: char, selected_purity: Purity) {
-        let idx = (name as usize) - ('A' as usize);
+    fn assert_unselected_purity(ctx: &SelectCtx<'_>, poly_var: &purity::Poly) {
+        let pvar_id = if let purity::Poly::Var(pvar_id) = poly_var {
+            pvar_id
+        } else {
+            panic!("Can't find pvar ID")
+        };
+
+        assert_eq!(None, ctx.pvar_purities.get(&pvar_id));
+    }
+
+    fn assert_selected_purity(
+        ctx: &SelectCtx<'_>,
+        poly_var: &purity::Poly,
+        selected_purity: Purity,
+    ) {
+        let pvar_id = if let purity::Poly::Var(pvar_id) = poly_var {
+            pvar_id
+        } else {
+            panic!("Can't find pvar ID")
+        };
+
         assert_eq!(
-            &Some(ty::purity::Poly::Fixed(selected_purity)),
-            &ctx.pvar_purities()[idx]
+            Some(&purity::Poly::Fixed(selected_purity)),
+            ctx.pvar_purities.get(&pvar_id)
         );
     }
 
     #[test]
     fn trivial_tvar() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("A");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
-        assert_unselected_type(&ctx, 'A');
+        let poly_a = scope.poly_for_str("A");
+        let mut stx = scope.select_ctx();
+        assert_unselected_type(&stx, &poly_a);
 
-        add_str_evidence(&mut ctx, "A", "true");
-        assert_selected_type(&ctx, 'A', "true");
+        stx.add_evidence(&poly_a, &scope.poly_for_str("true"));
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("true"));
 
-        add_str_evidence(&mut ctx, "A", "false");
-        assert_selected_type(&ctx, 'A', "Bool");
+        stx.add_evidence(&poly_a, &scope.poly_for_str("false"));
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("Bool"));
     }
 
     #[test]
     fn poly_conflicing_tvar() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [
-            ty::TVar::new("A".into(), poly_for_str("(... -> Any)")),
-            ty::TVar::new("B".into(), poly_for_str("(... -> Sym)")),
-            ty::TVar::new("C".into(), poly_for_str("(... -> 'foo)")),
-        ];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("[A : (... -> Any)] [B : (... -> Sym)] [C : (... -> 'foo)]");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
-        assert_unselected_type(&ctx, 'A');
+        let poly_a = scope.poly_for_str("A");
+        let poly_b = scope.poly_for_str("B");
+        let poly_c = scope.poly_for_str("C");
+
+        let mut stx = scope.select_ctx();
+        assert_unselected_type(&stx, &poly_a);
 
         // We can handle one tvar as evidence
-        add_str_evidence(&mut ctx, "A", "B");
-        assert_selected_type(&ctx, 'A', "B");
+        stx.add_evidence(&poly_a, &poly_b);
+        assert_selected_type(&stx, &poly_a, &poly_b);
 
-        add_str_evidence(&mut ctx, "A", "C");
-        assert_selected_type(&ctx, 'A', "(RawU B C)");
+        stx.add_evidence(&poly_a, &poly_c);
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("(U B C)"));
     }
 
     #[test]
     fn set_types() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("A");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
+        let poly_a = scope.poly_for_str("A");
+        let mut stx = scope.select_ctx();
 
-        add_str_evidence(&mut ctx, "(Setof A)", "(Setof Bool)");
-        assert_selected_type(&ctx, 'A', "Bool");
+        stx.add_evidence(
+            &scope.poly_for_str("(Setof A)"),
+            &scope.poly_for_str("(Setof Bool)"),
+        );
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("Bool"));
     }
 
     #[test]
     fn map_types() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [
-            ty::TVar::new("A".into(), ty::Ty::Any.into_poly()),
-            ty::TVar::new("B".into(), ty::Ty::Any.into_poly()),
-        ];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("A B");
+        let poly_a = scope.poly_for_str("A");
+        let poly_b = scope.poly_for_str("B");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
+        let mut stx = scope.select_ctx();
 
-        add_str_evidence(&mut ctx, "(Map A B)", "(Map true false)");
-        assert_selected_type(&ctx, 'A', "true");
-        assert_selected_type(&ctx, 'B', "false");
+        stx.add_evidence(
+            &scope.poly_for_str("(Map A B)"),
+            &scope.poly_for_str("(Map true false)"),
+        );
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("true"));
+        assert_selected_type(&stx, &poly_b, &scope.poly_for_str("false"));
     }
 
     #[test]
     fn fixed_list_types() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [
-            ty::TVar::new("A".into(), ty::Ty::Any.into_poly()),
-            ty::TVar::new("B".into(), ty::Ty::Any.into_poly()),
-        ];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("A B");
+        let poly_a = scope.poly_for_str("A");
+        let poly_b = scope.poly_for_str("B");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
+        let mut stx = scope.select_ctx();
 
-        add_str_evidence(&mut ctx, "(List A B)", "(List true false)");
-        assert_selected_type(&ctx, 'A', "true");
-        assert_selected_type(&ctx, 'B', "false");
+        stx.add_evidence(
+            &scope.poly_for_str("(List A B)"),
+            &scope.poly_for_str("(List true false)"),
+        );
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("true"));
+        assert_selected_type(&stx, &poly_b, &scope.poly_for_str("false"));
     }
 
     #[test]
     fn listof_types() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("A");
+        let poly_a = scope.poly_for_str("A");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
+        let mut stx = scope.select_ctx();
 
-        add_str_evidence(&mut ctx, "(Listof A)", "(Listof true)");
-        assert_selected_type(&ctx, 'A', "true");
+        stx.add_evidence(
+            &scope.poly_for_str("(Listof A)"),
+            &scope.poly_for_str("(Listof true)"),
+        );
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("true"));
     }
 
     #[test]
     fn listof_from_fixed_list() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("A");
+        let poly_a = scope.poly_for_str("A");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
+        let mut stx = scope.select_ctx();
 
-        add_str_evidence(&mut ctx, "(Listof A)", "(List true false)");
-        assert_selected_type(&ctx, 'A', "Bool");
+        stx.add_evidence(
+            &scope.poly_for_str("(Listof A)"),
+            &scope.poly_for_str("(List true false)"),
+        );
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("Bool"));
     }
 
     #[test]
     fn fixed_vector_types() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [
-            ty::TVar::new("A".into(), ty::Ty::Any.into_poly()),
-            ty::TVar::new("B".into(), ty::Ty::Any.into_poly()),
-        ];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("A B");
+        let poly_a = scope.poly_for_str("A");
+        let poly_b = scope.poly_for_str("B");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
+        let mut stx = scope.select_ctx();
 
-        add_str_evidence(&mut ctx, "(Vector A B)", "(Vector true false)");
-        assert_selected_type(&ctx, 'A', "true");
-        assert_selected_type(&ctx, 'B', "false");
+        stx.add_evidence(
+            &scope.poly_for_str("(Vector A B)"),
+            &scope.poly_for_str("(Vector true false)"),
+        );
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("true"));
+        assert_selected_type(&stx, &poly_b, &scope.poly_for_str("false"));
     }
 
     #[test]
     fn vectorof_types() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("A");
+        let poly_a = scope.poly_for_str("A");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
+        let mut stx = scope.select_ctx();
 
-        add_str_evidence(&mut ctx, "(Vectorof A)", "(Vectorof true)");
-        assert_selected_type(&ctx, 'A', "true");
+        stx.add_evidence(
+            &scope.poly_for_str("(Vectorof A)"),
+            &scope.poly_for_str("(Vectorof true)"),
+        );
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("true"));
     }
 
     #[test]
     fn vectorof_from_fixed_vector() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("A");
+        let poly_a = scope.poly_for_str("A");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
+        let mut stx = scope.select_ctx();
 
-        add_str_evidence(&mut ctx, "(Vectorof A)", "(Vector true false)");
-        assert_selected_type(&ctx, 'A', "Bool");
+        stx.add_evidence(
+            &scope.poly_for_str("(Vectorof A)"),
+            &scope.poly_for_str("(Vector true false)"),
+        );
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("Bool"));
     }
 
     #[test]
     fn union_types() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("A");
+        let poly_a = scope.poly_for_str("A");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
+        let mut stx = scope.select_ctx();
 
-        add_str_evidence(&mut ctx, "(RawU A Sym)", "true");
-        assert_selected_type(&ctx, 'A', "true");
+        stx.add_evidence(
+            &scope.poly_for_str("(U A Sym)"),
+            &scope.poly_for_str("true"),
+        );
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("true"));
     }
 
     #[test]
     fn bounded_union_types() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [
-            ty::TVar::new("A".into(), ty::Ty::Sym.into_poly()),
-            ty::TVar::new("B".into(), ty::Ty::Bool.into_poly()),
-        ];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("[A : Sym] [B : Bool]");
+        let poly_a = scope.poly_for_str("A");
+        let poly_b = scope.poly_for_str("B");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
+        let mut stx = scope.select_ctx();
 
         // A and B are bounded. We should ensure we only use evidence on the members with satisfied
         // bounds.
-        add_str_evidence(&mut ctx, "(RawU A B)", "'foo");
-        assert_selected_type(&ctx, 'A', "'foo");
-        assert_unselected_type(&ctx, 'B');
+        stx.add_evidence(&scope.poly_for_str("(U A B)"), &scope.poly_for_str("'foo"));
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("'foo"));
+        assert_unselected_type(&stx, &poly_b);
 
-        add_str_evidence(&mut ctx, "(RawU A B)", "true");
-        assert_selected_type(&ctx, 'A', "'foo");
-        assert_selected_type(&ctx, 'B', "true");
+        stx.add_evidence(&scope.poly_for_str("(U A B)"), &scope.poly_for_str("true"));
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("'foo"));
+        assert_selected_type(&stx, &poly_b, &scope.poly_for_str("true"));
 
-        add_str_evidence(&mut ctx, "(RawU A B)", "false");
-        assert_selected_type(&ctx, 'A', "'foo");
-        assert_selected_type(&ctx, 'B', "Bool");
+        stx.add_evidence(&scope.poly_for_str("(U A B)"), &scope.poly_for_str("false"));
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("'foo"));
+        assert_selected_type(&stx, &poly_b, &scope.poly_for_str("Bool"));
     }
 
     #[test]
     fn top_fun_types() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("A");
+        let poly_a = scope.poly_for_str("A");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
+        let mut stx = scope.select_ctx();
 
-        add_str_evidence(&mut ctx, "(... -> A)", "(... -> true)");
-        assert_selected_type(&ctx, 'A', "true");
+        stx.add_evidence(
+            &scope.poly_for_str("(... -> A)"),
+            &scope.poly_for_str("(... -> true)"),
+        );
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("true"));
     }
 
     #[test]
     fn top_fun_purities() {
-        let pvars = [ty::purity::PVar::new("->A".into())];
-        let pvar_ids = ty::purity::PVarId::new(0)..ty::purity::PVarId::new(pvars.len());
-        let tvar_ids = ty::TVarId::monomorphic();
+        let scope = TestScope::new("[->A : ->!]");
+        let purity_a = scope.purity_for_str("->A");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &[]);
-        assert_unselected_purity(&ctx, 'A');
+        let mut stx = scope.select_ctx();
+        assert_unselected_purity(&stx, &purity_a);
 
-        add_str_evidence(&mut ctx, "(... ->A true)", "(... -> true)");
-        assert_selected_purity(&ctx, 'A', Purity::Pure);
+        stx.add_evidence(
+            &scope.poly_for_str("(... ->A true)"),
+            &scope.poly_for_str("(... -> true)"),
+        );
+        assert_selected_purity(&stx, &purity_a, Purity::Pure);
 
-        add_str_evidence(&mut ctx, "(... ->A true)", "(... ->! true)");
-        assert_selected_purity(&ctx, 'A', Purity::Impure);
+        stx.add_evidence(
+            &scope.poly_for_str("(... ->A true)"),
+            &scope.poly_for_str("(... ->! true)"),
+        );
+        assert_selected_purity(&stx, &purity_a, Purity::Impure);
     }
 
     #[test]
     fn top_fun_from_fun() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("A");
+        let poly_a = scope.poly_for_str("A");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
+        let mut stx = scope.select_ctx();
 
-        add_str_evidence(&mut ctx, "(... -> A)", "(false -> true)");
-        assert_selected_type(&ctx, 'A', "true");
+        stx.add_evidence(
+            &scope.poly_for_str("(... -> A)"),
+            &scope.poly_for_str("(false -> true)"),
+        );
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("true"));
     }
 
     #[test]
     fn top_fun_from_ty_pred() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("A");
+        let poly_a = scope.poly_for_str("A");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
+        let mut stx = scope.select_ctx();
 
-        add_str_evidence(&mut ctx, "(... -> A)", "(Type? Sym)");
-        assert_selected_type(&ctx, 'A', "Bool");
+        stx.add_evidence(
+            &scope.poly_for_str("(... -> A)"),
+            &scope.poly_for_str("(Type? Sym)"),
+        );
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("Bool"));
     }
 
     #[test]
     fn fun_types() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [
-            ty::TVar::new("A".into(), ty::Ty::Any.into_poly()),
-            ty::TVar::new("B".into(), ty::Ty::Any.into_poly()),
-        ];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("A B");
+        let poly_a = scope.poly_for_str("A");
+        let poly_b = scope.poly_for_str("B");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
+        let mut stx = scope.select_ctx();
 
-        add_str_evidence(&mut ctx, "(A -> B)", "(true -> false)");
+        stx.add_evidence(
+            &scope.poly_for_str("(A -> B)"),
+            &scope.poly_for_str("(true -> false)"),
+        );
         // We intentionally do not use function type params as evidence
-        assert_unselected_type(&ctx, 'A');
-        assert_selected_type(&ctx, 'B', "false");
+        assert_unselected_type(&stx, &poly_a);
+        assert_selected_type(&stx, &poly_b, &scope.poly_for_str("false"));
     }
 
     #[test]
     fn fun_purities() {
-        let pvars = [ty::purity::PVar::new("->A".into())];
-        let pvar_ids = ty::purity::PVarId::new(0)..ty::purity::PVarId::new(pvars.len());
-        let tvar_ids = ty::TVarId::monomorphic();
+        let scope = TestScope::new("[->A : ->!]");
+        let purity_a = scope.purity_for_str("->A");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &[]);
-        assert_unselected_purity(&ctx, 'A');
+        let mut stx = scope.select_ctx();
+        assert_unselected_purity(&stx, &purity_a);
 
-        add_str_evidence(&mut ctx, "(->A true)", "(->! true)");
-        assert_selected_purity(&ctx, 'A', Purity::Impure);
+        stx.add_evidence(
+            &scope.poly_for_str("(->A true)"),
+            &scope.poly_for_str("(->! true)"),
+        );
+        assert_selected_purity(&stx, &purity_a, Purity::Impure);
     }
 
     #[test]
     fn fun_purity_conflict() {
-        let pvars = [ty::purity::PVar::new("->A".into())];
-        let pvar_ids = ty::purity::PVarId::new(0)..ty::purity::PVarId::new(pvars.len());
-        let tvar_ids = ty::TVarId::monomorphic();
+        let scope = TestScope::new("[->A : ->!] [->B : ->!] [->C : ->!]");
+        let purity_a = scope.purity_for_str("->A");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &[]);
-        assert_unselected_purity(&ctx, 'A');
+        let mut stx = scope.select_ctx();
+        assert_unselected_purity(&stx, &purity_a);
 
-        add_str_evidence(&mut ctx, "(->A true)", "(->B true)");
-        add_str_evidence(&mut ctx, "(->A true)", "(->C true)");
+        stx.add_evidence(
+            &scope.poly_for_str("(->A true)"),
+            &scope.poly_for_str("(->B true)"),
+        );
+        stx.add_evidence(
+            &scope.poly_for_str("(->A true)"),
+            &scope.poly_for_str("(->C true)"),
+        );
 
-        assert_selected_purity(&ctx, 'A', Purity::Impure);
+        assert_selected_purity(&stx, &purity_a, Purity::Impure);
     }
 
     #[test]
     fn fun_type_from_ty_pred() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [
-            ty::TVar::new("A".into(), ty::Ty::Any.into_poly()),
-            ty::TVar::new("B".into(), ty::Ty::Any.into_poly()),
-        ];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("A B");
+        let poly_a = scope.poly_for_str("A");
+        let poly_b = scope.poly_for_str("B");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
+        let mut stx = scope.select_ctx();
 
-        add_str_evidence(&mut ctx, "(A -> B)", "(Type? Sym)");
-        assert_unselected_type(&ctx, 'A');
-        assert_selected_type(&ctx, 'B', "Bool");
+        stx.add_evidence(
+            &scope.poly_for_str("(A -> B)"),
+            &scope.poly_for_str("(Type? Sym)"),
+        );
+        assert_unselected_type(&stx, &poly_a);
+        assert_selected_type(&stx, &poly_b, &scope.poly_for_str("Bool"));
     }
 
     #[test]
     fn ty_pred_types() {
-        let pvar_ids = ty::purity::PVarId::monomorphic();
-        let tvars = [ty::TVar::new("A".into(), ty::Ty::Any.into_poly())];
-        let tvar_ids = ty::TVarId::new(0)..ty::TVarId::new(tvars.len());
+        let scope = TestScope::new("A");
+        let poly_a = scope.poly_for_str("A");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &tvars);
+        let mut stx = scope.select_ctx();
 
-        add_str_evidence(&mut ctx, "(Type? A)", "(Type? true)");
-        assert_selected_type(&ctx, 'A', "true");
+        stx.add_evidence(
+            &scope.poly_for_str("(Type? A)"),
+            &scope.poly_for_str("(Type? true)"),
+        );
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("true"));
     }
 
     #[test]
     fn ty_pred_purity() {
-        let pvars = [ty::purity::PVar::new("->A".into())];
-        let pvar_ids = ty::purity::PVarId::new(0)..ty::purity::PVarId::new(pvars.len());
-        let tvar_ids = ty::TVarId::monomorphic();
+        let scope = TestScope::new("[->A : ->!]");
+        let purity_a = scope.purity_for_str("->A");
 
-        let mut ctx = SelectCtx::new(pvar_ids, tvar_ids, &[]);
-        assert_unselected_purity(&ctx, 'A');
+        let mut stx = scope.select_ctx();
+        assert_unselected_purity(&stx, &purity_a);
 
-        add_str_evidence(&mut ctx, "(->A true)", "(Type? Sym)");
-        assert_selected_purity(&ctx, 'A', Purity::Pure);
+        stx.add_evidence(
+            &scope.poly_for_str("(->A true)"),
+            &scope.poly_for_str("(Type? Sym)"),
+        );
+        assert_selected_purity(&stx, &purity_a, Purity::Pure);
     }
 }

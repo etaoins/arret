@@ -18,9 +18,10 @@ use crate::hir::types::{lower_poly, try_lower_purity};
 use crate::hir::util::{
     expect_arg_count, expect_ident_and_span, expect_one_arg, try_take_rest_arg,
 };
-use crate::hir::{App, Cond, Def, Expr, Fun, Let, VarId, VarIdCounter};
+use crate::hir::{App, Cond, Def, Expr, Fun, Let, VarId};
 use crate::source::{SourceFileId, SourceLoader};
 use crate::ty;
+use crate::ty::purity;
 
 #[derive(Debug)]
 struct LoweredModule {
@@ -33,20 +34,14 @@ pub struct LoweringCtx<'pp, 'sl> {
     package_paths: &'pp PackagePaths,
     source_loader: &'sl mut SourceLoader,
 
-    var_id_counter: VarIdCounter,
     rfi_loader: rfi::Loader,
     macros: Vec<Macro>,
-
-    pvars: Vec<ty::purity::PVar>,
-    tvars: Vec<ty::TVar>,
 
     module_exports: HashMap<ModuleName, Exports>,
     module_defs: Vec<Vec<Def<ty::Decl>>>,
 }
 
 pub struct LoweredProgram {
-    pub pvars: Vec<ty::purity::PVar>,
-    pub tvars: Vec<ty::TVar>,
     pub defs: Vec<Vec<Def<ty::Decl>>>,
     pub rust_libraries: Vec<rfi::Library>,
     pub main_var_id: VarId,
@@ -119,12 +114,8 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             package_paths,
             source_loader,
 
-            var_id_counter: VarIdCounter::new(),
             rfi_loader: rfi::Loader::new(),
             macros: vec![],
-
-            pvars: vec![],
-            tvars: vec![],
 
             module_exports,
             module_defs: vec![],
@@ -211,7 +202,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         ty_datum: NsDatum,
     ) -> Result<()> {
         let (ident, span) = expect_ident_and_span(self_datum)?;
-        let ty = lower_poly(&self.tvars, scope, ty_datum)?;
+        let ty = lower_poly(scope, ty_datum)?;
 
         if scope.get(&ident) != Some(&Binding::Prim(Prim::Wildcard)) {
             scope.insert_binding(span, ident, Binding::Ty(ty))?;
@@ -245,7 +236,6 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
 
     /// Lowers an identifier in to a scalar destruc with the passed type
     fn lower_ident_destruc(
-        &mut self,
         scope: &mut Scope,
         span: Span,
         ident: Ident,
@@ -262,7 +252,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 ),
             )),
             _ => {
-                let var_id = self.var_id_counter.alloc();
+                let var_id = VarId::alloc();
                 let source_name = ident.name().into();
 
                 scope.insert_var(span, ident, var_id)?;
@@ -273,13 +263,12 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
     }
 
     fn lower_scalar_destruc(
-        &mut self,
         scope: &mut Scope,
         destruc_datum: NsDatum,
     ) -> Result<destruc::Scalar<ty::Decl>> {
         match destruc_datum {
             NsDatum::Ident(span, ident) => {
-                self.lower_ident_destruc(scope, span, ident, ty::Decl::Free)
+                Self::lower_ident_destruc(scope, span, ident, ty::Decl::Free)
             }
             NsDatum::Vector(span, vs) => {
                 let mut data = vs.into_vec();
@@ -293,13 +282,13 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                     return Err(Error::new(span, ErrorKind::NoVecDestruc));
                 }
 
-                let ty = lower_poly(&self.tvars, scope, data.pop().unwrap())?;
+                let ty = lower_poly(scope, data.pop().unwrap())?;
 
                 // Discard the type colon
                 data.pop();
 
                 let (ident, span) = expect_ident_and_span(data.pop().unwrap())?;
-                self.lower_ident_destruc(scope, span, ident, ty.into_decl())
+                Self::lower_ident_destruc(scope, span, ident, ty.into_decl())
             }
             _ => Err(Error::new(
                 destruc_datum.span(),
@@ -309,18 +298,17 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
     }
 
     fn lower_list_destruc(
-        &mut self,
         scope: &mut Scope,
         mut data_iter: NsDataIter,
     ) -> Result<destruc::List<ty::Decl>> {
         let rest = try_take_rest_arg(scope, &mut data_iter);
 
         let fixed_destrucs = data_iter
-            .map(|v| self.lower_destruc(scope, v))
+            .map(|v| Self::lower_destruc(scope, v))
             .collect::<Result<Vec<destruc::Destruc<ty::Decl>>>>()?;
 
         let rest_destruc = match rest {
-            Some(rest) => Some(Box::new(self.lower_scalar_destruc(scope, rest)?)),
+            Some(rest) => Some(Box::new(Self::lower_scalar_destruc(scope, rest)?)),
             None => None,
         };
 
@@ -328,16 +316,15 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
     }
 
     fn lower_destruc(
-        &mut self,
         scope: &mut Scope,
         destruc_datum: NsDatum,
     ) -> Result<destruc::Destruc<ty::Decl>> {
         match destruc_datum {
-            NsDatum::Ident(span, _) | NsDatum::Vector(span, _) => self
-                .lower_scalar_destruc(scope, destruc_datum)
-                .map(|scalar| destruc::Destruc::Scalar(span, scalar)),
-            NsDatum::List(span, vs) => self
-                .lower_list_destruc(scope, vs.into_vec().into_iter())
+            NsDatum::Ident(span, _) | NsDatum::Vector(span, _) => {
+                Self::lower_scalar_destruc(scope, destruc_datum)
+                    .map(|scalar| destruc::Destruc::Scalar(span, scalar))
+            }
+            NsDatum::List(span, vs) => Self::lower_list_destruc(scope, vs.into_vec().into_iter())
                 .map(|list_destruc| destruc::Destruc::List(span, list_destruc)),
             _ => Err(Error::new(
                 destruc_datum.span(),
@@ -426,7 +413,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             span,
             arg_iter,
             |inner_self, scope, target_datum, value_datum| {
-                let destruc = inner_self.lower_destruc(scope, target_datum)?;
+                let destruc = Self::lower_destruc(scope, target_datum)?;
                 let value_expr = inner_self.lower_expr(scope, value_datum)?;
                 Ok((destruc, value_expr))
             },
@@ -456,7 +443,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         })?;
 
         // We can either begin with a set of type variables or a list of parameters
-        let (pvar_ids, tvar_ids) = if let NsDatum::Set(_, vs) = next_datum {
+        let (pvars, tvars) = if let NsDatum::Set(_, vs) = next_datum {
             next_datum = arg_iter.next().ok_or_else(|| {
                 Error::new(
                     span,
@@ -464,21 +451,15 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 )
             })?;
 
-            lower_polymorphic_vars(
-                &mut self.pvars,
-                &mut self.tvars,
-                vs.into_vec().into_iter(),
-                outer_scope,
-                &mut fun_scope,
-            )?
+            lower_polymorphic_vars(vs.into_vec().into_iter(), outer_scope, &mut fun_scope)?
         } else {
-            (ty::purity::PVarId::monomorphic(), ty::TVarId::monomorphic())
+            (purity::PVars::new(), ty::TVars::new())
         };
 
         // Pull out our params
         let params = match next_datum {
             NsDatum::List(_, vs) => {
-                self.lower_list_destruc(&mut fun_scope, vs.into_vec().into_iter())?
+                Self::lower_list_destruc(&mut fun_scope, vs.into_vec().into_iter())?
             }
             _ => {
                 return Err(Error::new(
@@ -489,7 +470,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         };
 
         // Determine if we have a purity and return type after the parameters, eg (param) -> RetTy
-        let mut purity = ty::purity::Decl::Free;
+        let mut purity = purity::Decl::Free;
         let mut ret_ty = ty::Decl::Free;
 
         if arg_iter.len() >= 2 {
@@ -498,7 +479,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 purity = poly_purity.into_decl();
 
                 let ret_datum = arg_iter.next().unwrap();
-                ret_ty = lower_poly(&self.tvars, &fun_scope, ret_datum)?.into_decl();
+                ret_ty = lower_poly(&fun_scope, ret_datum)?.into_decl();
             }
         }
 
@@ -508,8 +489,8 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         Ok(Expr::Fun(
             span,
             Box::new(Fun {
-                pvar_ids,
-                tvar_ids,
+                pvars,
+                tvars,
                 purity,
                 params,
                 ret_ty,
@@ -552,11 +533,11 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             }
             Prim::TyPred => Ok(Expr::TyPred(
                 span,
-                lower_poly(&self.tvars, scope, expect_one_arg(span, arg_iter)?)?,
+                lower_poly(scope, expect_one_arg(span, arg_iter)?)?,
             )),
             Prim::Do => self.lower_body(scope, arg_iter),
             Prim::CompileError => Err(Self::lower_user_compile_error(span, arg_iter)),
-            Prim::Ellipsis | Prim::Wildcard | Prim::MacroRules | Prim::TyColon => {
+            Prim::Ellipsis | Prim::Wildcard | Prim::MacroRules | Prim::TyColon | Prim::All => {
                 Err(Error::new(span, ErrorKind::PrimRef))
             }
         }
@@ -584,7 +565,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 &module_name,
             )? {
                 LoadedModule::Source(module_data) => self.lower_module(scope, module_data)?,
-                LoadedModule::Rust(rfi_module) => self.include_rfi_module(span, rfi_module),
+                LoadedModule::Rust(rfi_module) => Self::include_rfi_module(span, rfi_module),
             }
         };
 
@@ -592,7 +573,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         Ok(self.module_exports.entry(module_name).or_insert(exports))
     }
 
-    fn include_rfi_module(&mut self, span: Span, rfi_module: rfi::Module) -> LoweredModule {
+    fn include_rfi_module(span: Span, rfi_module: rfi::Module) -> LoweredModule {
         let mut exports = HashMap::new();
         let mut defs = vec![];
 
@@ -600,7 +581,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         defs.reserve(rfi_module.len());
 
         for (name, rust_fun) in rfi_module {
-            let var_id = self.var_id_counter.alloc();
+            let var_id = VarId::alloc();
             let def = Def {
                 span,
                 macro_invocation_span: EMPTY_SPAN,
@@ -751,7 +732,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 expect_arg_count(span, 2, arg_iter.len())?;
 
                 let destruc_datum = arg_iter.next().unwrap();
-                let destruc = self.lower_destruc(scope, destruc_datum)?;
+                let destruc = Self::lower_destruc(scope, destruc_datum)?;
 
                 let value_datum = arg_iter.next().unwrap();
 
@@ -863,7 +844,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         scope: &mut Scope,
         data: Vec<Datum>,
     ) -> Result<LoweredModule, Vec<Error>> {
-        let ns_id = scope.alloc_ns_id();
+        let ns_id = NsId::alloc();
         let mut errors: Vec<Error> = vec![];
 
         // The default scope only consists of (import)
@@ -942,14 +923,6 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         self.source_loader
     }
 
-    pub fn pvars(&self) -> &[ty::purity::PVar] {
-        &self.pvars
-    }
-
-    pub fn tvars(&self) -> &[ty::TVar] {
-        &self.tvars
-    }
-
     pub fn lower_repl_datum(
         &mut self,
         scope: &mut Scope,
@@ -1018,8 +991,6 @@ pub fn lower_program(
     };
 
     Ok(LoweredProgram {
-        pvars: lcx.pvars,
-        tvars: lcx.tvars,
         defs: lcx.module_defs,
         rust_libraries: lcx.rfi_loader.into_rust_libraries(),
         main_var_id,
@@ -1067,18 +1038,11 @@ fn module_for_str(data_str: &str) -> Result<LoweredModule> {
 }
 
 #[cfg(test)]
-pub struct LoweredTestExpr {
-    pub pvars: Vec<ty::purity::PVar>,
-    pub tvars: Vec<ty::TVar>,
-    pub expr: Expr<ty::Decl>,
-}
-
-#[cfg(test)]
-pub fn lowered_expr_for_str(data_str: &str) -> LoweredTestExpr {
+pub fn expr_for_str(data_str: &str) -> Expr<ty::Decl> {
     use syntax::parser::datum_from_str;
 
-    let test_ns_id = NsId::new(0);
-    let scope = Scope::new_with_primitives();
+    let test_ns_id = NsId::alloc();
+    let scope = Scope::new_with_primitives(test_ns_id);
 
     let package_paths = PackagePaths::test_paths();
     let mut source_loader = SourceLoader::new();
@@ -1087,18 +1051,7 @@ pub fn lowered_expr_for_str(data_str: &str) -> LoweredTestExpr {
     let test_datum = datum_from_str(data_str).unwrap();
     let test_nsdatum = NsDatum::from_syntax_datum(test_ns_id, test_datum);
 
-    let expr = lcx.lower_expr(&scope, test_nsdatum).unwrap();
-
-    LoweredTestExpr {
-        pvars: lcx.pvars,
-        tvars: lcx.tvars,
-        expr,
-    }
-}
-
-#[cfg(test)]
-pub fn expr_for_str(data_str: &str) -> Expr<ty::Decl> {
-    lowered_expr_for_str(data_str).expr
+    lcx.lower_expr(&scope, test_nsdatum).unwrap()
 }
 
 #[cfg(test)]
@@ -1144,59 +1097,6 @@ mod test {
     }
 
     #[test]
-    fn basic_untyped_scalar_let() {
-        let j = "(let [x 1] x)";
-        let t = "      ^      ";
-        let u = "^^^^^^^^^^^^^";
-        let v = "        ^    ";
-        let w = "           ^ ";
-
-        let destruc = destruc::Destruc::Scalar(
-            t2s(t),
-            destruc::Scalar::new(Some(VarId(0)), "x".into(), ty::Decl::Free),
-        );
-
-        let expected = Expr::Let(
-            t2s(u),
-            Box::new(Let {
-                destruc,
-                value_expr: Expr::Lit(Datum::Int(t2s(v), 1)),
-                body_expr: Expr::Ref(t2s(w), VarId(0)),
-            }),
-        );
-
-        assert_eq!(expected, expr_for_str(j));
-    }
-
-    #[test]
-    fn basic_typed_let() {
-        let j = "(let [[x : true] true])";
-        let t = "      ^^^^^^^^^^       ";
-        let u = "^^^^^^^^^^^^^^^^^^^^^^^";
-        let v = "                 ^^^^  ";
-
-        let destruc = destruc::Destruc::Scalar(
-            t2s(t),
-            destruc::Scalar::new(
-                Some(VarId(0)),
-                "x".into(),
-                ty::Ty::LitBool(true).into_decl(),
-            ),
-        );
-
-        let expected = Expr::Let(
-            t2s(u),
-            Box::new(Let {
-                destruc,
-                value_expr: Expr::Lit(Datum::Bool(t2s(v), true)),
-                body_expr: Expr::Do(vec![]),
-            }),
-        );
-
-        assert_eq!(expected, expr_for_str(j));
-    }
-
-    #[test]
     fn wildcard_let() {
         let j = "(let [_ 1])";
         let t = "      ^    ";
@@ -1221,81 +1121,6 @@ mod test {
     }
 
     #[test]
-    fn multi_let() {
-        let j = "(let [x 1 y x])";
-        let t = "      ^        ";
-        let u = "          ^    ";
-        let v = "^^^^^^^^^^^^^^^";
-        let w = "        ^      ";
-        let x = "            ^  ";
-
-        let destruc_x = destruc::Destruc::Scalar(
-            t2s(t),
-            destruc::Scalar::new(Some(VarId(0)), "x".into(), ty::Decl::Free),
-        );
-
-        let destruc_y = destruc::Destruc::Scalar(
-            t2s(u),
-            destruc::Scalar::new(Some(VarId(1)), "y".into(), ty::Decl::Free),
-        );
-
-        let expected = Expr::Let(
-            t2s(v),
-            Box::new(Let {
-                destruc: destruc_x,
-                value_expr: Expr::Lit(Datum::Int(t2s(w), 1)),
-                body_expr: Expr::Let(
-                    t2s(v),
-                    Box::new(Let {
-                        destruc: destruc_y,
-                        value_expr: Expr::Ref(t2s(x), VarId(0)),
-                        body_expr: Expr::Do(vec![]),
-                    }),
-                ),
-            }),
-        );
-
-        assert_eq!(expected, expr_for_str(j));
-    }
-
-    #[test]
-    fn list_destruc_let() {
-        let j = "(let [(x rest ...) '(1)] x)";
-        let t = "      ^^^^^^^^^^^^         ";
-        let u = "       ^                   ";
-        let v = "^^^^^^^^^^^^^^^^^^^^^^^^^^^";
-        let w = "                    ^^^    ";
-        let x = "                     ^     ";
-        let y = "                         ^ ";
-
-        let destruc = destruc::Destruc::List(
-            t2s(t),
-            destruc::List::new(
-                vec![destruc::Destruc::Scalar(
-                    t2s(u),
-                    destruc::Scalar::new(Some(VarId(0)), "x".into(), ty::Decl::Free),
-                )],
-                Some(Box::new(destruc::Scalar::new(
-                    Some(VarId(1)),
-                    "rest".into(),
-                    ty::Decl::Free,
-                ))),
-            ),
-        );
-
-        let expected = Expr::Let(
-            t2s(v),
-            Box::new(Let {
-                destruc,
-                value_expr: Expr::Lit(Datum::List(t2s(w), Box::new([Datum::Int(t2s(x), 1)]))),
-                body_expr: Expr::Ref(t2s(y), VarId(0)),
-            }),
-        );
-
-        assert_eq!(expected, expr_for_str(j));
-    }
-
-    #[test]
     fn empty_fn() {
         let j = "(fn ())";
         let t = "^^^^^^^";
@@ -1303,9 +1128,9 @@ mod test {
         let expected = Expr::Fun(
             t2s(t),
             Box::new(Fun {
-                pvar_ids: ty::purity::PVarId::monomorphic(),
-                tvar_ids: ty::TVarId::monomorphic(),
-                purity: ty::purity::Decl::Free,
+                pvars: purity::PVars::new(),
+                tvars: ty::TVars::new(),
+                purity: purity::Decl::Free,
                 params: destruc::List::new(vec![], None),
                 ret_ty: ty::Decl::Free,
                 body_expr: Expr::Do(vec![]),
@@ -1324,164 +1149,12 @@ mod test {
         let expected = Expr::Fun(
             t2s(t),
             Box::new(Fun {
-                pvar_ids: ty::purity::PVarId::monomorphic(),
-                tvar_ids: ty::TVarId::monomorphic(),
+                pvars: purity::PVars::new(),
+                tvars: ty::TVars::new(),
                 purity: Purity::Pure.into_decl(),
                 params: destruc::List::new(vec![], None),
                 ret_ty: ty::Ty::Int.into_decl(),
                 body_expr: Expr::Lit(Datum::Int(t2s(u), 1)),
-            }),
-        );
-
-        assert_eq!(expected, expr_for_str(j));
-    }
-
-    #[test]
-    fn identity_fn() {
-        let j = "(fn (x) x)";
-        let t = "     ^    ";
-        let u = "^^^^^^^^^^";
-        let v = "        ^ ";
-
-        let param_var_id = VarId::new(0);
-        let params = destruc::List::new(
-            vec![destruc::Destruc::Scalar(
-                t2s(t),
-                destruc::Scalar::new(Some(param_var_id), "x".into(), ty::Decl::Free),
-            )],
-            None,
-        );
-
-        let expected = Expr::Fun(
-            t2s(u),
-            Box::new(Fun {
-                pvar_ids: ty::purity::PVarId::monomorphic(),
-                tvar_ids: ty::TVarId::monomorphic(),
-                purity: ty::purity::Decl::Free,
-                params,
-                ret_ty: ty::Decl::Free,
-                body_expr: Expr::Ref(t2s(v), param_var_id),
-            }),
-        );
-
-        assert_eq!(expected, expr_for_str(j));
-    }
-
-    #[test]
-    fn poly_purity_identity_fn() {
-        let j = "(fn #{A [->_ : ->!]} ([x : A]) ->_ A x)";
-        let t = "                      ^^^^^^^          ";
-        let u = "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^";
-        let v = "                                     ^ ";
-
-        let tvar_id = ty::TVarId::new(0);
-
-        let param_var_id = VarId::new(0);
-        let params = destruc::List::new(
-            vec![destruc::Destruc::Scalar(
-                t2s(t),
-                destruc::Scalar::new(
-                    Some(param_var_id),
-                    "x".into(),
-                    ty::Poly::Var(tvar_id).into_decl(),
-                ),
-            )],
-            None,
-        );
-
-        let expected = Expr::Fun(
-            t2s(u),
-            Box::new(Fun {
-                pvar_ids: ty::purity::PVarId::new(0)..ty::purity::PVarId::new(1),
-                tvar_ids: ty::TVarId::new(0)..ty::TVarId::new(1),
-                purity: ty::purity::Poly::Var(ty::purity::PVarId::new(0)).into_decl(),
-                params,
-                ret_ty: ty::Poly::Var(tvar_id).into_decl(),
-                body_expr: Expr::Ref(t2s(v), param_var_id),
-            }),
-        );
-
-        assert_eq!(expected, expr_for_str(j));
-    }
-
-    #[test]
-    fn capturing_fn() {
-        let j = "(let [x 1] (fn () x))";
-        let t = "      ^              ";
-        let u = "^^^^^^^^^^^^^^^^^^^^^";
-        let v = "        ^            ";
-        let w = "           ^^^^^^^^^ ";
-        let x = "                  ^  ";
-
-        let outer_var_id = VarId::new(0);
-        let outer_destruc = destruc::Destruc::Scalar(
-            t2s(t),
-            destruc::Scalar::new(Some(outer_var_id), "x".into(), ty::Decl::Free),
-        );
-
-        let expected = Expr::Let(
-            t2s(u),
-            Box::new(Let {
-                destruc: outer_destruc,
-                value_expr: Expr::Lit(Datum::Int(t2s(v), 1)),
-                body_expr: Expr::Fun(
-                    t2s(w),
-                    Box::new(Fun {
-                        pvar_ids: ty::purity::PVarId::monomorphic(),
-                        tvar_ids: ty::TVarId::monomorphic(),
-                        purity: ty::purity::Decl::Free,
-                        params: destruc::List::new(vec![], None),
-                        ret_ty: ty::Decl::Free,
-                        body_expr: Expr::Ref(t2s(x), outer_var_id),
-                    }),
-                ),
-            }),
-        );
-
-        assert_eq!(expected, expr_for_str(j));
-    }
-
-    #[test]
-    fn shadowing_fn() {
-        let j = "(let [x 1] (fn (x) x))";
-        let t = "      ^               ";
-        let u = "        ^             ";
-        let v = "                ^     ";
-        let w = "^^^^^^^^^^^^^^^^^^^^^^";
-        let x = "           ^^^^^^^^^^ ";
-        let y = "                   ^  ";
-
-        let outer_var_id = VarId::new(0);
-        let outer_destruc = destruc::Destruc::Scalar(
-            t2s(t),
-            destruc::Scalar::new(Some(outer_var_id), "x".into(), ty::Decl::Free),
-        );
-
-        let param_var_id = VarId::new(1);
-        let params = destruc::List::new(
-            vec![destruc::Destruc::Scalar(
-                t2s(v),
-                destruc::Scalar::new(Some(param_var_id), "x".into(), ty::Decl::Free),
-            )],
-            None,
-        );
-
-        let expected = Expr::Let(
-            t2s(w),
-            Box::new(Let {
-                destruc: outer_destruc,
-                value_expr: Expr::Lit(Datum::Int(t2s(u), 1)),
-                body_expr: Expr::Fun(
-                    t2s(x),
-                    Box::new(Fun {
-                        pvar_ids: ty::purity::PVarId::monomorphic(),
-                        tvar_ids: ty::TVarId::monomorphic(),
-                        purity: ty::purity::Decl::Free,
-                        params,
-                        ret_ty: ty::Decl::Free,
-                        body_expr: Expr::Ref(t2s(y), param_var_id),
-                    }),
-                ),
             }),
         );
 
@@ -1552,61 +1225,12 @@ mod test {
     }
 
     #[test]
-    fn simple_export() {
-        let j = "(def x 1)(export x)";
-
-        let var_id = VarId(0);
-        let mut expected_exports = HashMap::new();
-        expected_exports.insert("x".into(), Binding::Var(var_id));
-
-        assert_eq!(expected_exports, module_for_str(j).unwrap().exports);
-    }
-
-    #[test]
     fn expand_trivial_macro() {
         let j = "(letmacro [one (macro-rules [() 1])] (one))";
         let t = "                                     ^^^^^ ";
         let u = "                                ^          ";
 
         let expected = Expr::MacroExpand(t2s(t), Box::new(Expr::Lit(Datum::Int(t2s(u), 1))));
-        assert_eq!(expected, expr_for_str(j));
-    }
-
-    #[test]
-    fn trivial_lettype() {
-        let j1 = "(lettype [MyTrue true]";
-        let s1 = "                      ";
-
-        let j2 = "(let [[x : MyTrue] true])";
-        let t2 = "      ^^^^^^^^^^^^       ";
-        let u2 = "^^^^^^^^^^^^^^^^^^^^^^^^^";
-        let v2 = "                   ^^^^  ";
-
-        let j3 = ")";
-
-        let j = &[j1, j2, j3].join("");
-        let t = &[s1, t2].join("");
-        let u = &[s1, u2].join("");
-        let v = &[s1, v2].join("");
-
-        let destruc = destruc::Destruc::Scalar(
-            t2s(t),
-            destruc::Scalar::new(
-                Some(VarId(0)),
-                "x".into(),
-                ty::Ty::LitBool(true).into_decl(),
-            ),
-        );
-
-        let expected = Expr::Let(
-            t2s(u),
-            Box::new(Let {
-                destruc,
-                value_expr: Expr::Lit(Datum::Bool(t2s(v), true)),
-                body_expr: Expr::Do(vec![]),
-            }),
-        );
-
         assert_eq!(expected, expr_for_str(j));
     }
 

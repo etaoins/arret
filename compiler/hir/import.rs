@@ -250,7 +250,7 @@ mod test {
     fn exports_for_import_set(datum: &str) -> Result<Exports> {
         use syntax::parser::datum_from_str;
 
-        let test_ns_id = NsId::new(0);
+        let test_ns_id = NsId::alloc();
 
         let import_set_datum =
             NsDatum::from_syntax_datum(test_ns_id, datum_from_str(datum).unwrap());

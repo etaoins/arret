@@ -14,7 +14,7 @@ pub enum InterpretedPred<S: ty::TyRef> {
 
 pub trait Interpretable: ty::TyRef {
     fn interpret_ty_refs(
-        tvars: &[ty::TVar],
+        tvars: &ty::TVars,
         subject_ref: &Self,
         test_ref: &Self,
     ) -> InterpretedPred<Self>;
@@ -22,7 +22,7 @@ pub trait Interpretable: ty::TyRef {
 
 impl Interpretable for ty::Mono {
     fn interpret_ty_refs(
-        tvars: &[ty::TVar],
+        tvars: &ty::TVars,
         subject_ref: &ty::Mono,
         test_ref: &ty::Mono,
     ) -> InterpretedPred<ty::Mono> {
@@ -44,20 +44,17 @@ impl Interpretable for ty::Mono {
 
 impl Interpretable for ty::Poly {
     fn interpret_ty_refs(
-        tvars: &[ty::TVar],
+        tvars: &ty::TVars,
         subject_ref: &ty::Poly,
         test_ref: &ty::Poly,
     ) -> InterpretedPred<ty::Poly> {
         use crate::ty::is_a;
-        use crate::ty::resolve;
 
         match is_a::ty_ref_is_a(tvars, subject_ref, test_ref) {
             is_a::Result::Yes => InterpretedPred::Static(true),
             is_a::Result::May => {
-                let subject_resolved = resolve::resolve_poly_ty(tvars, subject_ref);
-                if let resolve::Result::Fixed(subject_ty) = subject_resolved {
-                    let test_resolved = resolve::resolve_poly_ty(tvars, test_ref);
-                    if let resolve::Result::Fixed(test_ty) = test_resolved {
+                if let ty::Poly::Fixed(subject_ty) = subject_ref {
+                    if let ty::Poly::Fixed(test_ty) = test_ref {
                         return interpret_non_subty(
                             tvars,
                             subject_ref,
@@ -75,7 +72,7 @@ impl Interpretable for ty::Poly {
 }
 
 fn interpret_ref_iter<'a, S, I>(
-    tvars: &[ty::TVar],
+    tvars: &ty::TVars,
     subject_refs: I,
     test_ref: &'a S,
 ) -> InterpretedPred<S>
@@ -110,7 +107,7 @@ where
 /// This logic needs to deal with typical union types and "virtual" ones such as `Bool` and `Any`.
 /// The virtual unions need to be broken up in to their subtypes for processing.
 fn interpret_non_subty<S: Interpretable>(
-    tvars: &[ty::TVar],
+    tvars: &ty::TVars,
     subject_ref: &S,
     subject_ty: &ty::Ty<S>,
     test_ref: &S,
@@ -160,7 +157,7 @@ fn interpret_non_subty<S: Interpretable>(
 /// Performs abstract interpretation of applying a type predicate for `test` type on a `subject`
 /// value
 pub fn interpret_ty_refs<S: Interpretable>(
-    tvars: &[ty::TVar],
+    tvars: &ty::TVars,
     subject_ref: &S,
     test_ref: &S,
 ) -> InterpretedPred<S> {
@@ -180,7 +177,10 @@ mod test {
         let subject_poly = poly_for_str(subject_str);
         let test_poly = poly_for_str(test_str);
 
-        assert_eq!(*result, interpret_ty_refs(&[], &subject_poly, &test_poly));
+        assert_eq!(
+            *result,
+            interpret_ty_refs(&ty::TVars::new(), &subject_poly, &test_poly)
+        );
     }
 
     fn assert_static_false(subject_str: &str, test_str: &str) {

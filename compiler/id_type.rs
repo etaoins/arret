@@ -34,29 +34,17 @@ macro_rules! new_indexing_id_type {
 /// internal type (typically `u32`).
 #[macro_export]
 macro_rules! new_counting_id_type {
-    ($counter_name:ident, $id_name:ident, $ty:ty) => {
-        #[derive(Clone)]
-        pub struct $counter_name($ty);
+    ($id_name:ident) => {
+        use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
 
-        impl $counter_name {
-            pub fn new() -> $counter_name {
-                $counter_name(0)
-            }
+        static NEXT_VALUE: AtomicUsize = ATOMIC_USIZE_INIT;
 
-            pub fn alloc(&mut self) -> $id_name {
-                let id = $id_name(self.0);
-                self.0 += 1;
-                id
-            }
-        }
-
-        #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd)]
-        pub struct $id_name($ty);
+        #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
+        pub struct $id_name(usize);
 
         impl $id_name {
-            #[allow(unused)]
-            pub fn new(value: $ty) -> $id_name {
-                $id_name(value)
+            pub fn alloc() -> $id_name {
+                $id_name(NEXT_VALUE.fetch_add(1, Ordering::SeqCst) + 1)
             }
         }
     };

@@ -1,4 +1,5 @@
 pub mod datum;
+pub mod has_subtypes;
 pub mod intersect;
 pub mod is_a;
 pub mod list_iter;
@@ -9,6 +10,7 @@ pub mod select;
 pub mod subst;
 pub mod unify;
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::ops::Range;
 
@@ -202,22 +204,17 @@ impl TopFun {
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct Fun {
-    pvar_ids: purity::PVarIds,
-    tvar_ids: TVarIds,
+    pvars: purity::PVars,
+    tvars: TVars,
     top_fun: TopFun,
     params: List<Poly>,
 }
 
 impl Fun {
-    pub fn new(
-        pvar_ids: purity::PVarIds,
-        tvar_ids: TVarIds,
-        top_fun: TopFun,
-        params: List<Poly>,
-    ) -> Fun {
+    pub fn new(pvars: purity::PVars, tvars: TVars, top_fun: TopFun, params: List<Poly>) -> Fun {
         Fun {
-            pvar_ids,
-            tvar_ids,
+            pvars,
+            tvars,
             top_fun,
             params,
         }
@@ -226,8 +223,8 @@ impl Fun {
     // Returns the `Fun` type for the `(main!)` function
     pub fn new_for_main() -> Fun {
         Self::new(
-            purity::PVarId::monomorphic(),
-            TVarId::monomorphic(),
+            purity::PVars::new(),
+            TVars::new(),
             TopFun::new(purity::Purity::Impure.into_poly(), Ty::unit().into_ty_ref()),
             List::empty(),
         )
@@ -239,19 +236,19 @@ impl Fun {
     /// it does not support occurrence typing.
     pub fn new_for_ty_pred() -> Fun {
         Self::new(
-            purity::PVarId::monomorphic(),
-            TVarId::monomorphic(),
+            purity::PVars::new(),
+            TVars::new(),
             TopFun::new_for_ty_pred(),
             List::new(Box::new([Ty::Any.into_ty_ref()]), None),
         )
     }
 
-    pub fn pvar_ids(&self) -> &purity::PVarIds {
-        &self.pvar_ids
+    pub fn pvars(&self) -> &purity::PVars {
+        &self.pvars
     }
 
-    pub fn tvar_ids(&self) -> &TVarIds {
-        &self.tvar_ids
+    pub fn tvars(&self) -> &TVars {
+        &self.tvars
     }
 
     pub fn top_fun(&self) -> &TopFun {
@@ -271,7 +268,7 @@ impl Fun {
     }
 
     pub fn is_monomorphic(&self) -> bool {
-        (self.pvar_ids.start >= self.pvar_ids.end) && (self.tvar_ids.start >= self.tvar_ids.end)
+        self.pvars.is_empty() && self.tvars.is_empty()
     }
 
     pub fn into_ty<S: TyRef>(self) -> Ty<S> {
@@ -281,22 +278,25 @@ impl Fun {
     pub fn into_ty_ref<S: TyRef>(self) -> S {
         S::from_ty(self.into_ty())
     }
-}
 
-new_indexing_id_type!(TVarId, u32);
-pub type TVarIds = Range<TVarId>;
-
-impl TVarId {
-    pub fn monomorphic() -> TVarIds {
-        TVarId::new(0)..TVarId::new(0)
+    pub fn with_polymorphic_vars(self, pvars: purity::PVars, tvars: TVars) -> Fun {
+        Fun {
+            pvars,
+            tvars,
+            ..self
+        }
     }
 }
+
+new_counting_id_type!(TVarId);
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct TVar {
     source_name: Box<str>,
     bound: Poly,
 }
+
+pub type TVars = BTreeMap<TVarId, TVar>;
 
 impl TVar {
     pub fn new(source_name: Box<str>, bound: Poly) -> TVar {
@@ -310,6 +310,22 @@ impl TVar {
     pub fn bound(&self) -> &Poly {
         &self.bound
     }
+}
+
+pub fn merge_tvars(outer: &TVars, inner: &TVars) -> TVars {
+    outer
+        .iter()
+        .map(|(tvar_id, tvar)| (*tvar_id, tvar.clone()))
+        .chain(inner.iter().map(|(tvar_id, tvar)| (*tvar_id, tvar.clone())))
+        .collect()
+}
+
+pub fn merge_three_tvars(one: &TVars, two: &TVars, three: &TVars) -> TVars {
+    one.iter()
+        .map(|(tvar_id, tvar)| (*tvar_id, tvar.clone()))
+        .chain(two.iter().map(|(tvar_id, tvar)| (*tvar_id, tvar.clone())))
+        .chain(three.iter().map(|(tvar_id, tvar)| (*tvar_id, tvar.clone())))
+        .collect()
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]

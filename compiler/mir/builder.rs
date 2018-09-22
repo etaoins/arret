@@ -1,25 +1,21 @@
 use syntax::span::Span;
 
-use crate::mir::ops::{Op, OpKind, RegId, RegIdCounter};
+use crate::mir::ops::{Op, OpKind, RegId};
 
 pub struct Builder {
     ops: Vec<Op>,
-    reg_id_counter: RegIdCounter,
 }
 
 impl Builder {
     pub fn new() -> Builder {
-        Builder {
-            ops: vec![],
-            reg_id_counter: RegIdCounter::new(),
-        }
+        Builder { ops: vec![] }
     }
 
     pub fn push_reg<F, P>(&mut self, span: Span, kind_cons: F, kind_param: P) -> RegId
     where
         F: FnOnce(RegId, P) -> OpKind,
     {
-        let reg_id = self.reg_id_counter.alloc();
+        let reg_id = RegId::alloc();
         self.ops.push(Op::new(span, kind_cons(reg_id, kind_param)));
         reg_id
     }

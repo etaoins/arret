@@ -1,4 +1,4 @@
-use std::ops::Range;
+use syntax::span::Span;
 
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum};
@@ -8,8 +8,8 @@ use crate::hir::util::{
     expect_arg_count, expect_ident_and_span, expect_one_arg, try_take_rest_arg,
 };
 use crate::ty;
+use crate::ty::purity;
 use crate::ty::purity::Purity;
-use syntax::span::Span;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum TyCons {
@@ -27,7 +27,8 @@ pub enum TyCons {
 
 pub enum PolymorphicVarKind {
     TVar(ty::TVar),
-    PVar(ty::purity::PVar),
+    TFixed(ty::Poly),
+    PVar(purity::PVar),
     Pure,
 }
 
@@ -37,326 +38,343 @@ pub struct PolymorphicVar {
     pub kind: PolymorphicVarKind,
 }
 
-struct LowerTyCtx<'tvars, 'scope> {
-    tvars: &'tvars [ty::TVar],
-    scope: &'scope Scope,
-}
+fn lower_polymorphic_var(scope: &Scope, tvar_datum: NsDatum) -> Result<PolymorphicVar> {
+    let span = tvar_datum.span();
 
-impl<'tvars, 'scope> LowerTyCtx<'tvars, 'scope> {
-    fn lower_polymorphic_var(&self, tvar_datum: NsDatum) -> Result<PolymorphicVar> {
-        let span = tvar_datum.span();
+    match tvar_datum {
+        NsDatum::Ident(span, ident) => {
+            let source_name = ident.name().into();
+            return Ok(PolymorphicVar {
+                span,
+                ident,
+                kind: PolymorphicVarKind::TVar(ty::TVar::new(source_name, ty::Ty::Any.into_poly())),
+            });
+        }
+        NsDatum::Vector(vector_span, vs) => {
+            let mut arg_data = vs.into_vec();
 
-        match tvar_datum {
-            NsDatum::Ident(span, ident) => {
+            if arg_data.len() == 3
+                && scope.get_datum(&arg_data[1]) == Some(&Binding::Prim(Prim::TyColon))
+            {
+                let bound_datum = arg_data.pop().unwrap();
+                arg_data.pop(); // Discard the : completely
+                let (ident, span) = expect_ident_and_span(arg_data.pop().unwrap())?;
+
                 let source_name = ident.name().into();
-                return Ok(PolymorphicVar {
-                    span,
-                    ident,
-                    kind: PolymorphicVarKind::TVar(ty::TVar::new(
-                        source_name,
-                        ty::Ty::Any.into_poly(),
-                    )),
-                });
-            }
-            NsDatum::Vector(vector_span, vs) => {
-                let mut arg_data = vs.into_vec();
 
-                if arg_data.len() == 3
-                    && self.scope.get_datum(&arg_data[1]) == Some(&Binding::Prim(Prim::TyColon))
-                {
-                    let bound_datum = arg_data.pop().unwrap();
-                    arg_data.pop(); // Discard the : completely
-                    let (ident, span) = expect_ident_and_span(arg_data.pop().unwrap())?;
+                match try_lower_purity(scope, &bound_datum) {
+                    Some(purity::Poly::Fixed(Purity::Impure)) => {
+                        return Ok(PolymorphicVar {
+                            span,
+                            ident,
+                            kind: PolymorphicVarKind::PVar(purity::PVar::new(source_name)),
+                        });
+                    }
+                    Some(purity::Poly::Fixed(Purity::Pure)) => {
+                        // Emulate bounding to pure in case the purity comes from e.g. a macro
+                        // expansion
+                        return Ok(PolymorphicVar {
+                            span,
+                            ident,
+                            kind: PolymorphicVarKind::Pure,
+                        });
+                    }
+                    Some(_) => {
+                        return Err(Error::new(
+                            vector_span,
+                            ErrorKind::IllegalArg(
+                                "Purity variables do not support variable bounds",
+                            ),
+                        ))
+                    }
+                    None => {
+                        use crate::ty::has_subtypes::poly_has_subtypes;
 
-                    let source_name = ident.name().into();
+                        let bound_ty = lower_poly(scope, bound_datum)?;
 
-                    match try_lower_purity(self.scope, &bound_datum) {
-                        Some(ty::purity::Poly::Fixed(Purity::Impure)) => {
-                            return Ok(PolymorphicVar {
-                                span,
-                                ident,
-                                kind: PolymorphicVarKind::PVar(ty::purity::PVar::new(source_name)),
-                            });
-                        }
-                        Some(ty::purity::Poly::Fixed(Purity::Pure)) => {
-                            // Emulate bounding to pure in case the purity comes from e.g. a macro
-                            // expansion
-                            return Ok(PolymorphicVar {
-                                span,
-                                ident,
-                                kind: PolymorphicVarKind::Pure,
-                            });
-                        }
-                        Some(_) => {
-                            return Err(Error::new(
-                                vector_span,
-                                ErrorKind::IllegalArg(
-                                    "Purity variables do not support variable bounds",
-                                ),
-                            ))
-                        }
-                        None => {
-                            let bound_ty = self.lower_poly(bound_datum)?;
-                            return Ok(PolymorphicVar {
-                                span,
-                                ident,
-                                kind: PolymorphicVarKind::TVar(ty::TVar::new(
-                                    source_name,
-                                    bound_ty,
-                                )),
-                            });
-                        }
+                        let kind = if poly_has_subtypes(&bound_ty) {
+                            PolymorphicVarKind::TVar(ty::TVar::new(source_name, bound_ty))
+                        } else {
+                            PolymorphicVarKind::TFixed(bound_ty)
+                        };
+
+                        return Ok(PolymorphicVar { span, ident, kind });
                     }
                 }
+            }
+        }
+        _ => {}
+    }
+
+    Err(Error::new(
+        span,
+        ErrorKind::IllegalArg(
+            "polymorphic variables must be either an identifier or [identifier : Type]",
+        ),
+    ))
+}
+
+fn lower_list_cons(scope: &Scope, mut arg_iter: NsDataIter) -> Result<ty::List<ty::Poly>> {
+    let rest = try_take_rest_arg(scope, &mut arg_iter);
+
+    let fixed_polys = arg_iter
+        .map(|fixed_datum| lower_poly(scope, fixed_datum))
+        .collect::<Result<Vec<ty::Poly>>>()?
+        .into_boxed_slice();
+
+    let rest_poly = match rest {
+        Some(rest_datum) => Some(lower_poly(scope, rest_datum)?),
+        None => None,
+    };
+
+    Ok(ty::List::new(fixed_polys, rest_poly))
+}
+
+fn lower_fun_cons(
+    scope: &Scope,
+    purity: purity::Poly,
+    mut arg_iter: NsDataIter,
+) -> Result<ty::Poly> {
+    let ret_ty = lower_poly(scope, arg_iter.next_back().unwrap())?;
+
+    // Discard the purity
+    arg_iter.next_back();
+
+    let top_fun = ty::TopFun::new(purity, ret_ty);
+
+    if arg_iter.len() == 1
+        && scope.get_datum(&arg_iter.as_slice()[0]) == Some(&Binding::Prim(Prim::Ellipsis))
+    {
+        // Top function type in the form `(... -> ReturnType)`
+        Ok(top_fun.into_ty_ref())
+    } else {
+        let params = lower_list_cons(scope, arg_iter)?;
+        Ok(ty::Fun::new(purity::PVars::new(), ty::TVars::new(), top_fun, params).into_ty_ref())
+    }
+}
+
+fn lower_ty_cons_apply(
+    scope: &Scope,
+    span: Span,
+    ty_cons: TyCons,
+    mut arg_iter: NsDataIter,
+) -> Result<ty::Poly> {
+    match ty_cons {
+        TyCons::List => Ok(ty::Ty::List(lower_list_cons(scope, arg_iter)?).into_poly()),
+        TyCons::Listof => {
+            let rest_datum = expect_one_arg(span, arg_iter)?;
+            let rest_poly = lower_poly(scope, rest_datum)?;
+            let list_poly = ty::List::new(Box::new([]), Some(rest_poly));
+
+            Ok(ty::Ty::List(list_poly).into_poly())
+        }
+        TyCons::Vector => {
+            let member_tys = arg_iter
+                .map(|arg_datum| lower_poly(scope, arg_datum))
+                .collect::<Result<Vec<ty::Poly>>>()?
+                .into_boxed_slice();
+
+            Ok(ty::Ty::Vector(member_tys).into_poly())
+        }
+        TyCons::Vectorof => {
+            let start_datum = expect_one_arg(span, arg_iter)?;
+            let start_ty = lower_poly(scope, start_datum)?;
+            Ok(ty::Ty::Vectorof(Box::new(start_ty)).into_poly())
+        }
+        TyCons::TyPred => {
+            let test_datum = expect_one_arg(span, arg_iter)?;
+            let test_ty = lower_poly(scope, test_datum)?;
+            Ok(ty::Ty::TyPred(Box::new(test_ty)).into_poly())
+        }
+        TyCons::Set => {
+            let member_datum = expect_one_arg(span, arg_iter)?;
+            let member_ty = lower_poly(scope, member_datum)?;
+            Ok(ty::Ty::Set(Box::new(member_ty)).into_poly())
+        }
+        TyCons::Map => {
+            expect_arg_count(span, 2, arg_iter.len())?;
+            let key_ty = lower_poly(scope, arg_iter.next().unwrap())?;
+            let value_ty = lower_poly(scope, arg_iter.next().unwrap())?;
+            Ok(ty::Ty::Map(Box::new(ty::Map::new(key_ty, value_ty))).into_poly())
+        }
+        TyCons::Union => {
+            let member_tys = arg_iter
+                .map(|arg_datum| lower_poly(scope, arg_datum))
+                .collect::<Result<Vec<ty::Poly>>>()?;
+
+            Ok(ty::unify::unify_ty_ref_iter(
+                scope.tvars(),
+                member_tys.into_iter(),
+            ))
+        }
+        #[cfg(test)]
+        TyCons::RawU => {
+            // This performs a union *without* unifying the types. This is used when testing the
+            // union code itself
+            let member_tys = arg_iter
+                .map(|arg_datum| lower_poly(scope, arg_datum))
+                .collect::<Result<Vec<ty::Poly>>>()?;
+
+            Ok(ty::Ty::Union(member_tys.into_boxed_slice()).into_poly())
+        }
+    }
+}
+
+fn lower_literal_vec(literal_data: Vec<NsDatum>) -> Result<Vec<ty::Poly>> {
+    literal_data.into_iter().map(lower_literal).collect()
+}
+
+fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
+    match datum {
+        NsDatum::Bool(_, v) => Ok(ty::Ty::LitBool(v).into_poly()),
+        NsDatum::Ident(_, ident) => Ok(ty::Ty::LitSym(ident.name().into()).into_poly()),
+        NsDatum::List(_, vs) => {
+            let fixed_literals = lower_literal_vec(vs.into_vec())?;
+            Ok(ty::Ty::List(ty::List::new(fixed_literals.into_boxed_slice(), None)).into_poly())
+        }
+        NsDatum::Vector(_, vs) => {
+            let fixed_literals = lower_literal_vec(vs.into_vec())?;
+            Ok(ty::Ty::Vector(fixed_literals.into_boxed_slice()).into_poly())
+        }
+        _ => Err(Error::new(
+            datum.span(),
+            ErrorKind::IllegalArg("only boolean and symbol literals are supported"),
+        )),
+    }
+}
+
+fn lower_ident(scope: &Scope, span: Span, ident: &Ident) -> Result<ty::Poly> {
+    match scope.get_or_err(span, ident)? {
+        Binding::Ty(ty) => Ok(ty.clone()),
+        _ => Err(Error::new(span, ErrorKind::ValueAsTy)),
+    }
+}
+
+fn lower_polymorphic_poly(
+    scope: &Scope,
+    span: Span,
+    mut data_iter: NsDataIter,
+) -> Result<ty::Poly> {
+    let polymorphic_vars_datum = data_iter.next().unwrap();
+    let polymorphic_var_data = if let NsDatum::Set(_, vs) = polymorphic_vars_datum {
+        vs
+    } else {
+        return Err(Error::new(
+            polymorphic_vars_datum.span(),
+            ErrorKind::IllegalArg("polymorphic variable set expected"),
+        ));
+    };
+
+    let mut inner_scope = Scope::new_child(scope);
+    let (pvars, tvars) = lower_polymorphic_vars(
+        polymorphic_var_data.into_vec().into_iter(),
+        scope,
+        &mut inner_scope,
+    )?;
+
+    let inner_poly = lower_poly_data_iter(&inner_scope, span, data_iter)?;
+
+    if let ty::Poly::Fixed(ty::Ty::Fun(fun)) = inner_poly {
+        Ok(ty::Ty::Fun(Box::new(fun.with_polymorphic_vars(pvars, tvars))).into_poly())
+    } else {
+        return Err(Error::new(
+            span,
+            ErrorKind::IllegalArg("polymorphism only supported by function type"),
+        ));
+    }
+}
+
+pub fn lower_poly_data_iter(
+    scope: &Scope,
+    span: Span,
+    mut data_iter: NsDataIter,
+) -> Result<ty::Poly> {
+    let data_len = data_iter.len();
+
+    if data_len == 0 {
+        // This is by analogy with () being self-evaluating in expressions
+        return Ok(ty::Ty::List(ty::List::empty()).into_poly());
+    }
+
+    if scope.get_datum(&data_iter.as_slice()[0]) == Some(&Binding::Prim(Prim::All)) {
+        // Discard the `All`
+        data_iter.next();
+
+        return lower_polymorphic_poly(scope, span, data_iter);
+    }
+
+    if data_len >= 2 {
+        if let Some(purity) = try_lower_purity(scope, &data_iter.as_slice()[data_len - 2]) {
+            // This is a function type
+            return lower_fun_cons(scope, purity, data_iter);
+        };
+    }
+
+    let fn_datum = data_iter.next().unwrap();
+
+    if let NsDatum::Ident(ident_span, ref ident) = fn_datum {
+        match scope.get_or_err(ident_span, ident)? {
+            Binding::Prim(Prim::Quote) => {
+                let literal_datum = expect_one_arg(span, data_iter)?;
+                return lower_literal(literal_datum);
+            }
+            Binding::TyCons(ty_cons) => {
+                return lower_ty_cons_apply(scope, span, *ty_cons, data_iter);
             }
             _ => {}
         }
-
-        Err(Error::new(
-            span,
-            ErrorKind::IllegalArg(
-                "polymorphic variables must be either an identifier or [identifier : Type]",
-            ),
-        ))
     }
+    Err(Error::new(
+        fn_datum.span(),
+        ErrorKind::IllegalArg("type constructor expected"),
+    ))
+}
 
-    fn lower_list_cons(&self, mut arg_iter: NsDataIter) -> Result<ty::List<ty::Poly>> {
-        let rest = try_take_rest_arg(self.scope, &mut arg_iter);
-
-        let fixed_polys = arg_iter
-            .map(|fixed_datum| self.lower_poly(fixed_datum))
-            .collect::<Result<Vec<ty::Poly>>>()?
-            .into_boxed_slice();
-
-        let rest_poly = match rest {
-            Some(rest_datum) => Some(self.lower_poly(rest_datum)?),
-            None => None,
-        };
-
-        Ok(ty::List::new(fixed_polys, rest_poly))
-    }
-
-    fn lower_fun_cons(
-        &self,
-        purity: ty::purity::Poly,
-        mut arg_iter: NsDataIter,
-    ) -> Result<ty::Poly> {
-        let ret_ty = self.lower_poly(arg_iter.next_back().unwrap())?;
-
-        // Discard the purity
-        arg_iter.next_back();
-
-        let top_fun = ty::TopFun::new(purity, ret_ty);
-
-        if arg_iter.len() == 1
-            && self.scope.get_datum(&arg_iter.as_slice()[0]) == Some(&Binding::Prim(Prim::Ellipsis))
-        {
-            // Top function type in the form `(... -> ReturnType)`
-            Ok(top_fun.into_ty_ref())
-        } else {
-            let params = self.lower_list_cons(arg_iter)?;
-
-            Ok(ty::Fun::new(
-                ty::purity::PVarId::monomorphic(),
-                ty::TVarId::monomorphic(),
-                top_fun,
-                params,
-            ).into_ty_ref())
-        }
-    }
-
-    fn lower_ty_cons_apply(
-        &self,
-        span: Span,
-        ty_cons: TyCons,
-        mut arg_iter: NsDataIter,
-    ) -> Result<ty::Poly> {
-        match ty_cons {
-            TyCons::List => Ok(ty::Ty::List(self.lower_list_cons(arg_iter)?).into_poly()),
-            TyCons::Listof => {
-                let rest_datum = expect_one_arg(span, arg_iter)?;
-                let rest_poly = self.lower_poly(rest_datum)?;
-                let list_poly = ty::List::new(Box::new([]), Some(rest_poly));
-
-                Ok(ty::Ty::List(list_poly).into_poly())
-            }
-            TyCons::Vector => {
-                let member_tys = arg_iter
-                    .map(|arg_datum| self.lower_poly(arg_datum))
-                    .collect::<Result<Vec<ty::Poly>>>()?
-                    .into_boxed_slice();
-
-                Ok(ty::Ty::Vector(member_tys).into_poly())
-            }
-            TyCons::Vectorof => {
-                let start_datum = expect_one_arg(span, arg_iter)?;
-                let start_ty = self.lower_poly(start_datum)?;
-                Ok(ty::Ty::Vectorof(Box::new(start_ty)).into_poly())
-            }
-            TyCons::TyPred => {
-                let test_datum = expect_one_arg(span, arg_iter)?;
-                let test_ty = self.lower_poly(test_datum)?;
-                Ok(ty::Ty::TyPred(Box::new(test_ty)).into_poly())
-            }
-            TyCons::Set => {
-                let member_datum = expect_one_arg(span, arg_iter)?;
-                let member_ty = self.lower_poly(member_datum)?;
-                Ok(ty::Ty::Set(Box::new(member_ty)).into_poly())
-            }
-            TyCons::Map => {
-                expect_arg_count(span, 2, arg_iter.len())?;
-                let key_ty = self.lower_poly(arg_iter.next().unwrap())?;
-                let value_ty = self.lower_poly(arg_iter.next().unwrap())?;
-                Ok(ty::Ty::Map(Box::new(ty::Map::new(key_ty, value_ty))).into_poly())
-            }
-            TyCons::Union => {
-                let member_tys = arg_iter
-                    .map(|arg_datum| self.lower_poly(arg_datum))
-                    .collect::<Result<Vec<ty::Poly>>>()?;
-
-                Ok(ty::unify::unify_ty_ref_iter(
-                    self.tvars,
-                    member_tys.into_iter(),
-                ))
-            }
-            #[cfg(test)]
-            TyCons::RawU => {
-                // This performs a union *without* unifying the types. This is used when testing the
-                // union code itself
-                let member_tys = arg_iter
-                    .map(|arg_datum| self.lower_poly(arg_datum))
-                    .collect::<Result<Vec<ty::Poly>>>()?;
-
-                Ok(ty::Ty::Union(member_tys.into_boxed_slice()).into_poly())
-            }
-        }
-    }
-
-    fn lower_literal_vec(literal_data: Vec<NsDatum>) -> Result<Vec<ty::Poly>> {
-        literal_data.into_iter().map(Self::lower_literal).collect()
-    }
-
-    fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
-        match datum {
-            NsDatum::Bool(_, v) => Ok(ty::Ty::LitBool(v).into_poly()),
-            NsDatum::Ident(_, ident) => Ok(ty::Ty::LitSym(ident.name().into()).into_poly()),
-            NsDatum::List(_, vs) => {
-                let fixed_literals = Self::lower_literal_vec(vs.into_vec())?;
-                Ok(
-                    ty::Ty::List(ty::List::new(fixed_literals.into_boxed_slice(), None))
-                        .into_poly(),
-                )
-            }
-            NsDatum::Vector(_, vs) => {
-                let fixed_literals = Self::lower_literal_vec(vs.into_vec())?;
-                Ok(ty::Ty::Vector(fixed_literals.into_boxed_slice()).into_poly())
-            }
-            _ => Err(Error::new(
-                datum.span(),
-                ErrorKind::IllegalArg("only boolean and symbol literals are supported"),
-            )),
-        }
-    }
-
-    fn lower_ident(&self, span: Span, ident: &Ident) -> Result<ty::Poly> {
-        match self.scope.get_or_err(span, ident)? {
-            Binding::Ty(ty) => Ok(ty.clone()),
-            _ => Err(Error::new(span, ErrorKind::ValueAsTy)),
-        }
-    }
-
-    fn lower_poly(&self, datum: NsDatum) -> Result<ty::Poly> {
-        match datum {
-            NsDatum::List(span, vs) => {
-                let mut data_iter = vs.into_vec().into_iter();
-                let data_len = data_iter.len();
-
-                if data_len == 0 {
-                    // This is by analogy with () being self-evaluating in expressions
-                    return Ok(ty::Ty::List(ty::List::empty()).into_poly());
-                }
-
-                if data_len >= 2 {
-                    if let Some(purity) =
-                        try_lower_purity(self.scope, &data_iter.as_slice()[data_len - 2])
-                    {
-                        // This is a function type
-                        return self.lower_fun_cons(purity, data_iter);
-                    };
-                }
-
-                let fn_datum = data_iter.next().unwrap();
-
-                if let NsDatum::Ident(ident_span, ref ident) = fn_datum {
-                    match self.scope.get_or_err(ident_span, ident)? {
-                        Binding::Prim(Prim::Quote) => {
-                            let literal_datum = expect_one_arg(span, data_iter)?;
-                            return Self::lower_literal(literal_datum);
-                        }
-                        Binding::TyCons(ty_cons) => {
-                            return self.lower_ty_cons_apply(span, *ty_cons, data_iter);
-                        }
-                        _ => {}
-                    }
-                }
-
-                Err(Error::new(
-                    fn_datum.span(),
-                    ErrorKind::IllegalArg("type constructor expected"),
-                ))
-            }
-            NsDatum::Ident(span, ident) => self.lower_ident(span, &ident),
-            _ => Self::lower_literal(datum),
-        }
+pub fn lower_poly(scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
+    match datum {
+        NsDatum::List(span, vs) => lower_poly_data_iter(scope, span, vs.into_vec().into_iter()),
+        NsDatum::Ident(span, ident) => lower_ident(scope, span, &ident),
+        _ => lower_literal(datum),
     }
 }
 
 /// Lowers a set of polymorphic variables defined in `outer_scope` and places them in `inner_scope`
 pub fn lower_polymorphic_vars(
-    pvars: &mut Vec<ty::purity::PVar>,
-    tvars: &mut Vec<ty::TVar>,
     polymorphic_var_data: NsDataIter,
     outer_scope: &Scope,
     inner_scope: &mut Scope,
-) -> Result<(Range<ty::purity::PVarId>, Range<ty::TVarId>)> {
-    let pvar_id_start = ty::purity::PVarId::new(pvars.len());
-    let tvar_id_start = ty::TVarId::new(tvars.len());
+) -> Result<(purity::PVars, ty::TVars)> {
+    let mut pvars = purity::PVars::new();
+    let mut tvars = ty::TVars::new();
 
     for var_datum in polymorphic_var_data {
-        let ctx = LowerTyCtx {
-            tvars,
-            scope: outer_scope,
-        };
-        let PolymorphicVar { span, ident, kind } = ctx.lower_polymorphic_var(var_datum)?;
+        let PolymorphicVar { span, ident, kind } = lower_polymorphic_var(outer_scope, var_datum)?;
 
         let binding = match kind {
             PolymorphicVarKind::PVar(pvar) => {
-                let pvar_id = ty::purity::PVarId::new_entry_id(pvars, pvar);
-                Binding::Purity(ty::purity::Poly::Var(pvar_id))
+                let pvar_id = purity::PVarId::alloc();
+                pvars.insert(pvar_id, pvar);
+
+                Binding::Purity(purity::Poly::Var(pvar_id))
             }
             PolymorphicVarKind::TVar(tvar) => {
-                let tvar_id = ty::TVarId::new_entry_id(tvars, tvar);
+                let tvar_id = ty::TVarId::alloc();
+                tvars.insert(tvar_id, tvar.clone());
+                inner_scope.tvars_mut().insert(tvar_id, tvar);
+
                 Binding::Ty(ty::Poly::Var(tvar_id))
             }
+            PolymorphicVarKind::TFixed(poly) => Binding::Ty(poly),
             PolymorphicVarKind::Pure => Binding::Purity(Purity::Pure.into_poly()),
         };
 
         inner_scope.insert_binding(span, ident, binding)?;
     }
 
-    // We allocate tvar IDs sequentially so we can use a simple range to track them
-    let pvar_ids = pvar_id_start..ty::purity::PVarId::new(pvars.len());
-    let tvar_ids = tvar_id_start..ty::TVarId::new(tvars.len());
-
-    Ok((pvar_ids, tvar_ids))
+    Ok((pvars, tvars))
 }
 
-pub fn lower_poly(tvars: &[ty::TVar], scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
-    let ctx = LowerTyCtx { tvars, scope };
-    ctx.lower_poly(datum)
-}
-
-pub fn try_lower_purity(scope: &Scope, datum: &NsDatum) -> Option<ty::purity::Poly> {
+pub fn try_lower_purity(scope: &Scope, datum: &NsDatum) -> Option<purity::Poly> {
     scope.get_datum(datum).and_then(|binding| match binding {
         Binding::Purity(purity) => Some(purity.clone()),
         _ => None,
@@ -377,7 +395,7 @@ macro_rules! export_ty_cons {
 
 macro_rules! export_purity {
     ($name:expr, $purity:expr) => {
-        ($name, Binding::Purity(ty::purity::Poly::Fixed($purity)))
+        ($name, Binding::Purity(purity::Poly::Fixed($purity)))
     };
 }
 
@@ -403,12 +421,12 @@ pub const TY_EXPORTS: &[(&str, Binding)] = &[
     export_ty_cons!("RawU", TyCons::RawU),
 ];
 
-struct StrForPolyCtx<'vars> {
-    pvars: &'vars [ty::purity::PVar],
-    tvars: &'vars [ty::TVar],
+struct StrForPolyCtx {
+    pvars: purity::PVars,
+    tvars: ty::TVars,
 }
 
-impl<'vars> StrForPolyCtx<'vars> {
+impl StrForPolyCtx {
     /// Pushes the arguments for a list constructor on to the passed Vec
     ///
     /// This is used to share code between list and function types
@@ -422,28 +440,20 @@ impl<'vars> StrForPolyCtx<'vars> {
         }
     }
 
-    fn str_for_purity(&self, purity: &ty::purity::Poly) -> String {
+    fn str_for_purity(&self, purity: &purity::Poly) -> String {
         match purity {
-            ty::purity::Poly::Fixed(Purity::Pure) => "->".to_owned(),
-            ty::purity::Poly::Fixed(Purity::Impure) => "->!".to_owned(),
-            ty::purity::Poly::Var(pvar_id) => self.pvars[pvar_id.to_usize()].source_name().into(),
+            purity::Poly::Fixed(Purity::Pure) => "->".to_owned(),
+            purity::Poly::Fixed(Purity::Impure) => "->!".to_owned(),
+            purity::Poly::Var(pvar_id) => self.pvars[pvar_id].source_name().into(),
         }
     }
 
-    fn str_for_bounds(
-        &self,
-        pvar_ids: &Range<ty::purity::PVarId>,
-        tvar_ids: &Range<ty::TVarId>,
-    ) -> String {
-        let pvar_ids_usize = pvar_ids.start.to_usize()..pvar_ids.end.to_usize();
-        let tvar_ids_usize = tvar_ids.start.to_usize()..tvar_ids.end.to_usize();
+    fn str_for_bounds(&self, pvars: &purity::PVars, tvars: &ty::TVars) -> String {
+        let pvar_parts = pvars
+            .values()
+            .map(|pvar| format!("[{} : ->!]", pvar.source_name()));
 
-        let pvar_parts = pvar_ids_usize
-            .map(|pvar_id_usize| format!("[{} : ->!]", self.pvars[pvar_id_usize].source_name()));
-
-        let tvar_parts = tvar_ids_usize.map(|tvar_id_usize| {
-            let tvar = &self.tvars[tvar_id_usize];
-
+        let tvar_parts = tvars.values().map(|tvar| {
             if tvar.bound() == &ty::Ty::Any.into_poly() {
                 return tvar.source_name().into();
             }
@@ -494,16 +504,21 @@ impl<'vars> StrForPolyCtx<'vars> {
             ty::Ty::Fun(fun) => {
                 let mut fun_parts = Vec::with_capacity(2);
 
-                self.push_list_parts(&mut fun_parts, fun.params());
-                fun_parts.push(self.str_for_purity(fun.purity()));
-                fun_parts.push(self.str_for_poly(fun.ret()));
+                let fun_ctx = StrForPolyCtx {
+                    pvars: purity::merge_pvars(&self.pvars, fun.pvars()),
+                    tvars: ty::merge_tvars(&self.tvars, fun.tvars()),
+                };
+
+                fun_ctx.push_list_parts(&mut fun_parts, fun.params());
+                fun_parts.push(fun_ctx.str_for_purity(fun.purity()));
+                fun_parts.push(fun_ctx.str_for_poly(fun.ret()));
 
                 if fun.is_monomorphic() {
                     format!("({})", fun_parts.join(" "))
                 } else {
                     format!(
-                        "{} ({})",
-                        self.str_for_bounds(fun.pvar_ids(), fun.tvar_ids()),
+                        "(All {} {})",
+                        fun_ctx.str_for_bounds(fun.pvars(), fun.tvars()),
                         fun_parts.join(" ")
                     )
                 }
@@ -539,22 +554,25 @@ impl<'vars> StrForPolyCtx<'vars> {
 
     fn str_for_poly(&self, poly: &ty::Poly) -> String {
         match poly {
-            ty::Poly::Var(tvar_id) => {
-                // TODO: It's possible to have tvars with overlapping source names
-                self.tvars[tvar_id.to_usize()].source_name().to_owned()
-            }
+            ty::Poly::Var(tvar_id) => self.tvars[tvar_id].source_name().to_owned(),
             ty::Poly::Fixed(poly_ty) => self.str_for_poly_ty(poly_ty),
         }
     }
 }
 
-pub fn str_for_poly(pvars: &[ty::purity::PVar], tvars: &[ty::TVar], poly: &ty::Poly) -> String {
-    let ctx = StrForPolyCtx { pvars, tvars };
+pub fn str_for_poly(pvars: &purity::PVars, tvars: &ty::TVars, poly: &ty::Poly) -> String {
+    let ctx = StrForPolyCtx {
+        pvars: pvars.clone(),
+        tvars: tvars.clone(),
+    };
     ctx.str_for_poly(poly)
 }
 
-pub fn str_for_purity(pvars: &[ty::purity::PVar], purity: &ty::purity::Poly) -> String {
-    let ctx = StrForPolyCtx { pvars, tvars: &[] };
+pub fn str_for_purity(pvars: &purity::PVars, purity: &purity::Poly) -> String {
+    let ctx = StrForPolyCtx {
+        pvars: pvars.clone(),
+        tvars: ty::TVars::new(),
+    };
     ctx.str_for_purity(purity)
 }
 
@@ -578,34 +596,11 @@ pub fn poly_for_str(datum_str: &str) -> ty::Poly {
             }
         });
 
-    // Add some test polymorphic variables
-
-    let tvar_entries = (0..26).map(|var_idx| {
-        let var_name = (b'A' + var_idx) as char;
-        let tvar_id = ty::TVarId::new(var_idx as usize);
-        let poly = ty::Poly::Var(tvar_id);
-
-        (var_name.to_string().into_boxed_str(), Binding::Ty(poly))
-    });
-
-    let pvar_entries = (0..26).map(|var_idx| {
-        let var_name = format!("->{}", (b'A' + var_idx) as char);
-        let pvar_id = ty::purity::PVarId::new(var_idx as usize);
-        let poly = ty::purity::Poly::Var(pvar_id);
-
-        (var_name.to_string().into_boxed_str(), Binding::Purity(poly))
-    });
-
-    let all_entries = prim_entries.chain(tvar_entries).chain(pvar_entries);
-    let scope = Scope::new_with_entries(all_entries);
-
+    let test_ns_id = NsId::alloc();
+    let scope = Scope::new_with_entries(test_ns_id, prim_entries);
     let test_datum = datum_from_str(datum_str).unwrap();
 
-    lower_poly(
-        &[],
-        &scope,
-        NsDatum::from_syntax_datum(NsId::new(0), test_datum),
-    ).unwrap()
+    lower_poly(&scope, NsDatum::from_syntax_datum(test_ns_id, test_datum)).unwrap()
 }
 
 #[cfg(test)]
@@ -616,7 +611,7 @@ mod test {
         assert_eq!(*expected, poly_for_str(datum_str));
 
         // Try to round trip this to make sure str_for_poly works
-        let recovered_str = str_for_poly(&[], &[], &expected);
+        let recovered_str = str_for_poly(&purity::PVars::new(), &ty::TVars::new(), &expected);
         assert_eq!(*expected, poly_for_str(&recovered_str));
     }
 
@@ -624,7 +619,14 @@ mod test {
     ///
     /// This is to make sure we use e.g. `(Listof Int)` instead of `(List Int ...)`
     fn assert_exact_str_repr(datum_str: &str) {
-        assert_eq!(datum_str, str_for_poly(&[], &[], &poly_for_str(datum_str)));
+        assert_eq!(
+            datum_str,
+            str_for_poly(
+                &purity::PVars::new(),
+                &ty::TVars::new(),
+                &poly_for_str(datum_str)
+            )
+        );
     }
 
     #[test]
@@ -764,8 +766,8 @@ mod test {
         let j = "(-> true)";
 
         let expected = ty::Fun::new(
-            ty::purity::PVarId::monomorphic(),
-            ty::TVarId::monomorphic(),
+            purity::PVars::new(),
+            ty::TVars::new(),
             ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
             ty::List::empty(),
         ).into_ty_ref();
@@ -778,8 +780,8 @@ mod test {
         let j = "(->! true)";
 
         let expected = ty::Fun::new(
-            ty::purity::PVarId::monomorphic(),
-            ty::TVarId::monomorphic(),
+            purity::PVars::new(),
+            ty::TVars::new(),
             ty::TopFun::new(
                 Purity::Impure.into_poly(),
                 ty::Ty::LitBool(true).into_poly(),
@@ -795,8 +797,8 @@ mod test {
         let j = "(false -> true)";
 
         let expected = ty::Fun::new(
-            ty::purity::PVarId::monomorphic(),
-            ty::TVarId::monomorphic(),
+            purity::PVars::new(),
+            ty::TVars::new(),
             ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
             ty::List::new(Box::new([ty::Ty::LitBool(false).into_poly()]), None),
         ).into_ty_ref();
@@ -809,8 +811,8 @@ mod test {
         let j = "(Str Sym ... ->! true)";
 
         let expected = ty::Fun::new(
-            ty::purity::PVarId::monomorphic(),
-            ty::TVarId::monomorphic(),
+            purity::PVars::new(),
+            ty::TVars::new(),
             ty::TopFun::new(
                 Purity::Impure.into_poly(),
                 ty::Ty::LitBool(true).into_poly(),
@@ -886,31 +888,6 @@ mod test {
 
     #[test]
     fn polymorphic_fun_str() {
-        // These have no constructors so they can't be round-tripped
-        let pfun = ty::Fun::new(
-            ty::purity::PVarId::new(0)..ty::purity::PVarId::new(1),
-            ty::TVarId::new(0)..ty::TVarId::new(2),
-            ty::TopFun::new(
-                ty::purity::Poly::Var(ty::purity::PVarId::new(0)),
-                ty::Poly::Var(ty::TVarId::new(0)),
-            ),
-            ty::List::new(
-                Box::new([
-                    ty::Poly::Var(ty::TVarId::new(1)),
-                    ty::Poly::Var(ty::TVarId::new(2)),
-                ]),
-                None,
-            ),
-        );
-
-        let pvars = &[ty::purity::PVar::new("->?".into())];
-        let tvars = &[
-            ty::TVar::new("A".into(), ty::Ty::Any.into_poly()),
-            ty::TVar::new("B".into(), ty::Ty::Int.into_poly()),
-            ty::TVar::new("C".into(), ty::Ty::Float.into_poly()),
-        ];
-
-        let actual_str = str_for_poly(pvars, tvars, &pfun.into_ty_ref());
-        assert_eq!("#{[->? : ->!] A [B : Int]} (B C ->? A)", &actual_str);
+        assert_exact_str_repr("(All #{[->? : ->!] A [B : Bool] C} B C ->? A)");
     }
 }

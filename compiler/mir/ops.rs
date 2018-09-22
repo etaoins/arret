@@ -2,7 +2,7 @@ use runtime::abitype;
 
 use syntax::span::Span;
 
-new_counting_id_type!(RegIdCounter, RegId, u32);
+new_counting_id_type!(RegId);
 
 pub struct EntryPointABI {
     pub takes_task: bool,

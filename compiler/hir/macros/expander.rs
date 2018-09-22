@@ -45,10 +45,7 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
         let old_ns_id = ident.ns_id();
 
         let scope = &mut self.scope;
-        let new_ns_id = self
-            .ns_mapping
-            .entry(old_ns_id)
-            .or_insert_with(|| scope.alloc_ns_id());
+        let new_ns_id = self.ns_mapping.entry(old_ns_id).or_insert_with(NsId::alloc);
 
         let new_ident = ident.with_ns_id(*new_ns_id);
         // This should succeed because we should only map each ident once

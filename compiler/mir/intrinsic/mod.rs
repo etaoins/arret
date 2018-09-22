@@ -13,7 +13,7 @@ use crate::mir::{Expr, Value};
 trait Intrinsic {
     fn eval_exprs(
         ehx: &mut EvalHirCtx,
-        dcx: &mut DefCtx<'_>,
+        dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         span: Span,
         fixed_exprs: &[Expr],
@@ -57,7 +57,7 @@ macro_rules! define_intrinsics {
     ( $($name:expr => $handler:ident),* ) => {
         pub fn try_eval(
             ehx: &mut EvalHirCtx,
-            dcx: &mut DefCtx<'_>,
+            dcx: &mut DefCtx,
             b: &mut Option<Builder>,
             span: Span,
             intrinsic_name: &'static str,

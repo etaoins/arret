@@ -14,30 +14,31 @@ mod util;
 pub(crate) mod visitor;
 
 use std;
-use std::ops::Range;
 
-use crate::ty;
 use syntax::datum::Datum;
 use syntax::span::Span;
+
+use crate::ty;
+use crate::ty::purity;
 
 pub trait HirType: Clone + std::cmp::PartialEq + std::fmt::Debug {
     type Purity: Clone + std::cmp::PartialEq + std::fmt::Debug;
 }
 
 impl HirType for ty::Poly {
-    type Purity = ty::purity::Poly;
+    type Purity = purity::Poly;
 }
 
 impl HirType for ty::Decl {
-    type Purity = ty::purity::Decl;
+    type Purity = purity::Decl;
 }
 
-new_counting_id_type!(VarIdCounter, VarId, u32);
+new_counting_id_type!(VarId);
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Fun<T: HirType> {
-    pub pvar_ids: Range<ty::purity::PVarId>,
-    pub tvar_ids: Range<ty::TVarId>,
+    pub pvars: purity::PVars,
+    pub tvars: ty::TVars,
 
     pub purity: T::Purity,
     pub params: destruc::List<T>,
@@ -99,6 +100,15 @@ pub use self::types::str_for_purity;
 
 #[cfg(test)]
 pub use self::types::poly_for_str;
+
+#[cfg(test)]
+pub use self::types::lower_polymorphic_vars;
+
+#[cfg(test)]
+pub use self::types::lower_poly;
+
+#[cfg(test)]
+pub use self::types::try_lower_purity;
 
 #[cfg(test)]
 pub use self::lowering::expr_for_str;

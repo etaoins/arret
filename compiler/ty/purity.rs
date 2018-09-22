@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::collections::BTreeMap;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Purity {
@@ -17,19 +17,14 @@ impl Purity {
     }
 }
 
-new_indexing_id_type!(PVarId, u32);
-pub type PVarIds = Range<PVarId>;
-
-impl PVarId {
-    pub fn monomorphic() -> PVarIds {
-        PVarId::new(0)..PVarId::new(0)
-    }
-}
+new_counting_id_type!(PVarId);
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct PVar {
     source_name: Box<str>,
 }
+
+pub type PVars = BTreeMap<PVarId, PVar>;
 
 impl PVar {
     pub fn new(source_name: Box<str>) -> PVar {
@@ -39,6 +34,14 @@ impl PVar {
     pub fn source_name(&self) -> &str {
         &self.source_name
     }
+}
+
+pub fn merge_pvars(outer: &PVars, inner: &PVars) -> PVars {
+    outer
+        .iter()
+        .map(|(pvar_id, pvar)| (*pvar_id, pvar.clone()))
+        .chain(inner.iter().map(|(pvar_id, pvar)| (*pvar_id, pvar.clone())))
+        .collect()
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]

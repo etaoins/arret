@@ -4,7 +4,7 @@ use crate::ty;
 use crate::ty::list_iter::ListIterator;
 
 pub fn type_for_decl_list_destruc(
-    tvars: &[ty::TVar],
+    tvars: &ty::TVars,
     list: &destruc::List<ty::Decl>,
     mut guide_type_iter: Option<ListIterator<'_, ty::Poly>>,
 ) -> ty::List<ty::Poly> {
@@ -35,7 +35,7 @@ pub fn type_for_decl_list_destruc(
 
 /// Returns the required type for a destruc
 pub fn type_for_decl_destruc(
-    tvars: &[ty::TVar],
+    tvars: &ty::TVars,
     destruc: &destruc::Destruc<ty::Decl>,
     guide_type: Option<&ty::Poly>,
 ) -> ty::Poly {

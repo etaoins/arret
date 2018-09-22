@@ -114,8 +114,8 @@ pub fn mono_for_value(interner: &Interner, value: &Value) -> ty::Mono {
             let params_poly = poly_for_list_destruc(&fun_expr.params);
 
             let fun = ty::Fun::new(
-                fun_expr.pvar_ids.clone(),
-                fun_expr.tvar_ids.clone(),
+                fun_expr.pvars.clone(),
+                fun_expr.tvars.clone(),
                 top_fun,
                 params_poly,
             );

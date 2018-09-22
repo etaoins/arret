@@ -32,23 +32,29 @@ pub struct EvalHirCtx {
     portal_jit: codegen::jit::JITCtx,
 }
 
-pub struct DefCtx<'tvars> {
-    tvars: &'tvars [ty::TVar],
-
+pub struct DefCtx {
     pvar_purities: HashMap<purity::PVarId, purity::Purity>,
     tvar_types: HashMap<ty::TVarId, ty::Ty<ty::Mono>>,
+
+    tvars: ty::TVars,
     local_values: HashMap<hir::VarId, Value>,
 }
 
-impl<'tvars> DefCtx<'tvars> {
-    pub fn new(tvars: &'tvars [ty::TVar]) -> DefCtx<'tvars> {
+impl DefCtx {
+    pub fn new() -> DefCtx {
         DefCtx {
-            tvars,
-
             pvar_purities: HashMap::new(),
             tvar_types: HashMap::new(),
+
+            tvars: ty::TVars::new(),
             local_values: HashMap::new(),
         }
+    }
+}
+
+impl Default for DefCtx {
+    fn default() -> DefCtx {
+        DefCtx::new()
     }
 }
 
@@ -103,7 +109,7 @@ impl EvalHirCtx {
         }
     }
 
-    fn eval_ref(&self, dcx: &DefCtx<'_>, var_id: hir::VarId) -> Value {
+    fn eval_ref(&self, dcx: &DefCtx, var_id: hir::VarId) -> Value {
         // Try local values first
         if let Some(value) = dcx.local_values.get(&var_id) {
             return value.clone();
@@ -114,7 +120,7 @@ impl EvalHirCtx {
 
     fn eval_do(
         &mut self,
-        dcx: &mut DefCtx<'_>,
+        dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         exprs: &[Expr],
     ) -> Result<Value> {
@@ -128,7 +134,7 @@ impl EvalHirCtx {
 
     fn eval_let(
         &mut self,
-        dcx: &mut DefCtx<'_>,
+        dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         hir_let: &hir::Let<ty::Poly>,
     ) -> Result<Value> {
@@ -155,7 +161,7 @@ impl EvalHirCtx {
 
     fn eval_closure_app(
         &mut self,
-        dcx: &mut DefCtx<'_>,
+        dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         closure: &value::Closure,
         fixed_args: &[Expr],
@@ -189,7 +195,7 @@ impl EvalHirCtx {
 
     fn eval_ty_pred_app(
         &mut self,
-        dcx: &mut DefCtx<'_>,
+        dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         test_mono: &ty::Mono,
         fixed_args: &[Expr],
@@ -209,7 +215,7 @@ impl EvalHirCtx {
 
         let subject_mono = mono_for_value(self.runtime_task.heap().interner(), &value);
 
-        match ty::pred::interpret_ty_refs(dcx.tvars, &subject_mono, test_mono) {
+        match ty::pred::interpret_ty_refs(&dcx.tvars, &subject_mono, test_mono) {
             InterpretedPred::Static(value) => {
                 Ok(Value::Const(boxed::Bool::singleton_ref(value).as_any_ref()))
             }
@@ -297,7 +303,7 @@ impl EvalHirCtx {
 
     fn eval_rust_fun_app(
         &mut self,
-        dcx: &mut DefCtx<'_>,
+        dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         span: Span,
         rust_fun: &hir::rfi::Fun,
@@ -309,8 +315,8 @@ impl EvalHirCtx {
         use crate::mir::value::to_boxed::list_to_boxed;
 
         // TODO: Fix for polymorphism once it's supported
-        let can_const_eval = b.is_none()
-            || rust_fun.arret_fun_type().purity() == &ty::purity::Purity::Pure.into_poly();
+        let can_const_eval =
+            b.is_none() || rust_fun.arret_fun_type().purity() == &purity::Purity::Pure.into_poly();
 
         if let Some(intrinsic_name) = rust_fun.intrinsic_name() {
             // Attempt specialised evaluation
@@ -369,7 +375,7 @@ impl EvalHirCtx {
 
     fn eval_value_app(
         &mut self,
-        dcx: &mut DefCtx<'_>,
+        dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         span: Span,
         fun_value: Value,
@@ -394,7 +400,7 @@ impl EvalHirCtx {
 
     fn eval_app(
         &mut self,
-        dcx: &mut DefCtx<'_>,
+        dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         span: Span,
         app: &hir::App<ty::Poly>,
@@ -413,7 +419,7 @@ impl EvalHirCtx {
 
     fn eval_cond(
         &mut self,
-        dcx: &mut DefCtx<'_>,
+        dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         cond: &hir::Cond<ty::Poly>,
     ) -> Result<Value> {
@@ -436,7 +442,7 @@ impl EvalHirCtx {
         }
     }
 
-    fn eval_fun(&mut self, dcx: &mut DefCtx<'_>, fun_expr: Rc<hir::Fun<ty::Poly>>) -> Value {
+    fn eval_fun(&mut self, dcx: &mut DefCtx, fun_expr: Rc<hir::Fun<ty::Poly>>) -> Value {
         let mut captures = HashMap::new();
 
         // Only process captures if there are local values. This is to avoid visiting the function
@@ -459,14 +465,14 @@ impl EvalHirCtx {
         Value::Closure(value::Closure { fun_expr, captures })
     }
 
-    pub fn consume_def(&mut self, tvars: &[ty::TVar], def: hir::Def<ty::Poly>) -> Result<()> {
+    pub fn consume_def(&mut self, def: hir::Def<ty::Poly>) -> Result<()> {
         let hir::Def {
             destruc,
             value_expr,
             ..
         } = def;
 
-        let mut dcx = DefCtx::new(tvars);
+        let mut dcx = DefCtx::new();
 
         // Don't pass a builder; we should never generate ops based on a def
         let value = self.consume_expr(&mut dcx, &mut None, value_expr)?;
@@ -491,7 +497,7 @@ impl EvalHirCtx {
 
     pub fn eval_expr(
         &mut self,
-        dcx: &mut DefCtx<'_>,
+        dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         expr: &Expr,
     ) -> Result<Value> {
@@ -521,7 +527,7 @@ impl EvalHirCtx {
 
     pub fn consume_expr(
         &mut self,
-        dcx: &mut DefCtx<'_>,
+        dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         expr: Expr,
     ) -> Result<Value> {
@@ -535,10 +541,10 @@ impl EvalHirCtx {
     /// Evaluates the main function of a program
     ///
     /// This is intended for use by run-pass tests to avoid creating a temporary binary
-    pub fn eval_main_fun(&mut self, tvars: &[ty::TVar], main_var_id: hir::VarId) -> Result<()> {
+    pub fn eval_main_fun(&mut self, main_var_id: hir::VarId) -> Result<()> {
         use syntax::span::EMPTY_SPAN;
 
-        let mut dcx = DefCtx::new(tvars);
+        let mut dcx = DefCtx::new();
         let main_value = self.eval_ref(&dcx, main_var_id);
         self.eval_value_app(&mut dcx, &mut None, EMPTY_SPAN, main_value, &[], None)?;
 
@@ -546,12 +552,8 @@ impl EvalHirCtx {
     }
 
     /// Builds the main function of the program
-    pub fn build_program(
-        &mut self,
-        tvars: &[ty::TVar],
-        main_var_id: hir::VarId,
-    ) -> Result<Vec<ops::Op>> {
-        let mut dcx = DefCtx::new(tvars);
+    pub fn build_program(&mut self, main_var_id: hir::VarId) -> Result<Vec<ops::Op>> {
+        let mut dcx = DefCtx::new();
         let mut b = Some(Builder::new());
 
         let main_value = self.eval_ref(&dcx, main_var_id);

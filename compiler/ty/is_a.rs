@@ -1,5 +1,6 @@
 use crate::ty;
 use crate::ty::list_iter::ListIterator;
+use crate::ty::purity;
 use crate::ty::purity::Purity;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -56,17 +57,17 @@ impl Result {
 }
 
 pub trait Isable: ty::TyRef {
-    fn ty_ref_is_a(tvars: &[ty::TVar], sub: &Self, parent: &Self) -> Result;
+    fn ty_ref_is_a(tvars: &ty::TVars, sub: &Self, parent: &Self) -> Result;
 }
 
 impl Isable for ty::Mono {
-    fn ty_ref_is_a(tvars: &[ty::TVar], sub: &ty::Mono, parent: &ty::Mono) -> Result {
+    fn ty_ref_is_a(tvars: &ty::TVars, sub: &ty::Mono, parent: &ty::Mono) -> Result {
         ty_is_a(tvars, sub, sub.as_ty(), parent, parent.as_ty())
     }
 }
 
 impl Isable for ty::Poly {
-    fn ty_ref_is_a(tvars: &[ty::TVar], sub: &ty::Poly, parent: &ty::Poly) -> Result {
+    fn ty_ref_is_a(tvars: &ty::TVars, sub: &ty::Poly, parent: &ty::Poly) -> Result {
         if let ty::Poly::Var(parent_tvar_id) = *parent {
             if let ty::Poly::Var(sub_tvar_id) = *sub {
                 if tvar_id_is_bounded_by(tvars, sub_tvar_id, parent_tvar_id) {
@@ -100,13 +101,13 @@ impl Isable for ty::Poly {
     }
 }
 
-fn top_fun_is_a(tvars: &[ty::TVar], sub_top_fun: &ty::TopFun, par_top_fun: &ty::TopFun) -> Result {
+fn top_fun_is_a(tvars: &ty::TVars, sub_top_fun: &ty::TopFun, par_top_fun: &ty::TopFun) -> Result {
     purity_ref_is_a(sub_top_fun.purity(), par_top_fun.purity())
         .and_then(|| ty_ref_is_a(tvars, sub_top_fun.ret(), par_top_fun.ret()))
 }
 
 fn list_is_a<S: Isable>(
-    tvars: &[ty::TVar],
+    tvars: &ty::TVars,
     sub_list: &ty::List<S>,
     par_list: &ty::List<S>,
 ) -> Result {
@@ -155,23 +156,25 @@ fn list_is_a<S: Isable>(
     }
 }
 
-fn monomorphic_fun_is_a(tvars: &[ty::TVar], sub_fun: &ty::Fun, par_fun: &ty::Fun) -> Result {
+fn monomorphic_fun_is_a(tvars: &ty::TVars, sub_fun: &ty::Fun, par_fun: &ty::Fun) -> Result {
     top_fun_is_a(tvars, sub_fun.top_fun(), par_fun.top_fun())
         // Note that parameters are contravariant
         .and_then(|| list_is_a(tvars, par_fun.params(), sub_fun.params()))
 }
 
-fn fun_is_a(tvars: &[ty::TVar], sub_fun: &ty::Fun, par_fun: &ty::Fun) -> Result {
+fn fun_is_a(tvars: &ty::TVars, sub_fun: &ty::Fun, par_fun: &ty::Fun) -> Result {
     if sub_fun.is_monomorphic() {
         monomorphic_fun_is_a(tvars, sub_fun, par_fun)
     } else {
-        let sub_mono = inst_polymorphic_fun(tvars, sub_fun, par_fun.ret());
-        monomorphic_fun_is_a(tvars, &sub_mono, par_fun)
+        let inner_tvars = ty::merge_three_tvars(tvars, sub_fun.tvars(), par_fun.tvars());
+        let sub_mono = inst_polymorphic_fun(&inner_tvars, sub_fun, par_fun.ret());
+
+        monomorphic_fun_is_a(&inner_tvars, &sub_mono, par_fun)
     }
 }
 
 fn ty_is_a<S: Isable>(
-    tvars: &[ty::TVar],
+    tvars: &ty::TVars,
     sub_ref: &S,
     sub_ty: &ty::Ty<S>,
     parent_ref: &S,
@@ -295,13 +298,15 @@ fn ty_is_a<S: Isable>(
             if sub_fun.is_monomorphic() {
                 top_fun_is_a(tvars, sub_fun.top_fun(), par_top_fun)
             } else {
-                let sub_mono = inst_polymorphic_fun(tvars, sub_fun, par_top_fun.ret());
-                top_fun_is_a(tvars, sub_mono.top_fun(), par_top_fun)
+                let inner_tvars = ty::merge_tvars(tvars, sub_fun.tvars());
+                let sub_mono = inst_polymorphic_fun(&inner_tvars, sub_fun, par_top_fun.ret());
+                top_fun_is_a(&inner_tvars, sub_mono.top_fun(), par_top_fun)
             }
         }
-        (ty::Ty::TopFun(sub_top_fun), ty::Ty::Fun(par_fun)) => {
-            Result::May.and_then(|| top_fun_is_a(tvars, sub_top_fun, par_fun.top_fun()))
-        }
+        (ty::Ty::TopFun(sub_top_fun), ty::Ty::Fun(par_fun)) => Result::May.and_then(|| {
+            let inner_tvars = ty::merge_tvars(tvars, par_fun.tvars());
+            top_fun_is_a(&inner_tvars, sub_top_fun, par_fun.top_fun())
+        }),
         (ty::Ty::Fun(sub_fun), ty::Ty::Fun(par_fun)) => fun_is_a(tvars, sub_fun, par_fun),
 
         (ty::Ty::TyPred(_), ty::Ty::TopFun(par_top_fun)) => {
@@ -324,7 +329,7 @@ fn ty_is_a<S: Isable>(
 }
 
 fn tvar_id_is_bounded_by(
-    tvars: &[ty::TVar],
+    tvars: &ty::TVars,
     sub_tvar_id: ty::TVarId,
     parent_tvar_id: ty::TVarId,
 ) -> bool {
@@ -332,38 +337,32 @@ fn tvar_id_is_bounded_by(
         return true;
     }
 
-    match tvars[sub_tvar_id.to_usize()].bound {
+    match tvars[&sub_tvar_id].bound {
         ty::Poly::Fixed(_) => false,
         ty::Poly::Var(tvar_id) => tvar_id_is_bounded_by(tvars, tvar_id, parent_tvar_id),
     }
 }
 
-fn purity_ref_is_a(sub: &ty::purity::Poly, parent: &ty::purity::Poly) -> Result {
+fn purity_ref_is_a(sub: &purity::Poly, parent: &purity::Poly) -> Result {
     if sub == parent {
         return Result::Yes;
     }
 
     match (sub, parent) {
-        (_, ty::purity::Poly::Fixed(Purity::Impure)) => Result::Yes,
-        (ty::purity::Poly::Fixed(Purity::Impure), &ty::purity::Poly::Fixed(Purity::Pure)) => {
-            Result::No
-        }
+        (_, purity::Poly::Fixed(Purity::Impure)) => Result::Yes,
+        (purity::Poly::Fixed(Purity::Impure), &purity::Poly::Fixed(Purity::Pure)) => Result::No,
         _ => Result::May,
     }
 }
 
-fn inst_polymorphic_fun(tvars: &[ty::TVar], sub_fun: &ty::Fun, par_ret: &ty::Poly) -> ty::Fun {
-    let mut select_ctx = ty::select::SelectCtx::new(
-        sub_fun.pvar_ids().clone(),
-        sub_fun.tvar_ids().clone(),
-        tvars,
-    );
+fn inst_polymorphic_fun(tvars: &ty::TVars, sub_fun: &ty::Fun, par_ret: &ty::Poly) -> ty::Fun {
+    let mut select_ctx = ty::select::SelectCtx::new(tvars, sub_fun.pvars(), sub_fun.tvars());
 
     select_ctx.add_evidence(sub_fun.ret(), par_ret);
     ty::subst::inst_fun_selection(&select_ctx, sub_fun)
 }
 
-pub fn ty_ref_is_a<S: Isable>(tvars: &[ty::TVar], sub: &S, parent: &S) -> Result {
+pub fn ty_ref_is_a<S: Isable>(tvars: &ty::TVars, sub: &S, parent: &S) -> Result {
     S::ty_ref_is_a(tvars, sub, parent)
 }
 
@@ -383,14 +382,32 @@ mod test {
         let any_sym = poly_for_str("Sym");
         let any_int = poly_for_str("Int");
 
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &foo_sym, &foo_sym));
-        assert_eq!(Result::No, ty_ref_is_a(&[], &foo_sym, &bar_sym));
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &foo_sym, &foo_sym)
+        );
+        assert_eq!(
+            Result::No,
+            ty_ref_is_a(&ty::TVars::new(), &foo_sym, &bar_sym)
+        );
 
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &foo_sym, &any_sym));
-        assert_eq!(Result::May, ty_ref_is_a(&[], &any_sym, &foo_sym));
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &foo_sym, &any_sym)
+        );
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&ty::TVars::new(), &any_sym, &foo_sym)
+        );
 
-        assert_eq!(Result::No, ty_ref_is_a(&[], &any_sym, &any_int));
-        assert_eq!(Result::No, ty_ref_is_a(&[], &any_int, &any_sym));
+        assert_eq!(
+            Result::No,
+            ty_ref_is_a(&ty::TVars::new(), &any_sym, &any_int)
+        );
+        assert_eq!(
+            Result::No,
+            ty_ref_is_a(&ty::TVars::new(), &any_int, &any_sym)
+        );
     }
 
     #[test]
@@ -399,11 +416,23 @@ mod test {
         let bar_set = poly_for_str("(Setof 'bar)");
         let sym_set = poly_for_str("(Setof Sym)");
 
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &foo_set, &foo_set));
-        assert_eq!(Result::No, ty_ref_is_a(&[], &foo_set, &bar_set));
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &foo_set, &foo_set)
+        );
+        assert_eq!(
+            Result::No,
+            ty_ref_is_a(&ty::TVars::new(), &foo_set, &bar_set)
+        );
 
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &foo_set, &sym_set));
-        assert_eq!(Result::May, ty_ref_is_a(&[], &sym_set, &foo_set));
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &foo_set, &sym_set)
+        );
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&ty::TVars::new(), &sym_set, &foo_set)
+        );
     }
 
     #[test]
@@ -421,15 +450,15 @@ mod test {
 
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&[], &int_to_foo_sym, &int_to_any_sym)
+            ty_ref_is_a(&ty::TVars::new(), &int_to_foo_sym, &int_to_any_sym)
         );
         assert_eq!(
             Result::May,
-            ty_ref_is_a(&[], &int_to_any_sym, &int_to_foo_sym)
+            ty_ref_is_a(&ty::TVars::new(), &int_to_any_sym, &int_to_foo_sym)
         );
         assert_eq!(
             Result::No,
-            ty_ref_is_a(&[], &int_to_any_sym, &any_sym_to_any_sym)
+            ty_ref_is_a(&ty::TVars::new(), &int_to_any_sym, &any_sym_to_any_sym)
         );
     }
 
@@ -443,27 +472,45 @@ mod test {
         let foo_bar_baz_union = poly_for_str("(RawU 'foo 'bar 'baz)");
         let never = poly_for_str("(RawU)");
 
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &foo_sym, &foo_bar_union));
-        assert_eq!(Result::No, ty_ref_is_a(&[], &baz_sym, &foo_bar_union));
-        assert_eq!(Result::No, ty_ref_is_a(&[], &baz_sym, &never));
-
-        assert_eq!(Result::May, ty_ref_is_a(&[], &foo_bar_union, &foo_sym));
-        assert_eq!(Result::No, ty_ref_is_a(&[], &foo_bar_union, &baz_sym));
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &never, &foo_sym));
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &foo_sym, &foo_bar_union)
+        );
+        assert_eq!(
+            Result::No,
+            ty_ref_is_a(&ty::TVars::new(), &baz_sym, &foo_bar_union)
+        );
+        assert_eq!(Result::No, ty_ref_is_a(&ty::TVars::new(), &baz_sym, &never));
 
         assert_eq!(
             Result::May,
-            ty_ref_is_a(&[], &foo_bar_union, &bar_baz_union)
+            ty_ref_is_a(&ty::TVars::new(), &foo_bar_union, &foo_sym)
+        );
+        assert_eq!(
+            Result::No,
+            ty_ref_is_a(&ty::TVars::new(), &foo_bar_union, &baz_sym)
         );
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&[], &foo_bar_union, &foo_bar_union)
+            ty_ref_is_a(&ty::TVars::new(), &never, &foo_sym)
         );
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &never, &foo_bar_union));
+
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&ty::TVars::new(), &foo_bar_union, &bar_baz_union)
+        );
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &foo_bar_union, &foo_bar_union)
+        );
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &never, &foo_bar_union)
+        );
 
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&[], &foo_bar_union, &foo_bar_baz_union)
+            ty_ref_is_a(&ty::TVars::new(), &foo_bar_union, &foo_bar_baz_union)
         );
     }
 
@@ -473,11 +520,11 @@ mod test {
         let never = ty::Ty::never().into_poly();
         let foo_sym = poly_for_str("'foo");
 
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &foo_sym, &any));
-        assert_eq!(Result::May, ty_ref_is_a(&[], &any, &foo_sym));
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &never, &any));
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &never, &never));
-        assert_eq!(Result::No, ty_ref_is_a(&[], &any, &never));
+        assert_eq!(Result::Yes, ty_ref_is_a(&ty::TVars::new(), &foo_sym, &any));
+        assert_eq!(Result::May, ty_ref_is_a(&ty::TVars::new(), &any, &foo_sym));
+        assert_eq!(Result::Yes, ty_ref_is_a(&ty::TVars::new(), &never, &any));
+        assert_eq!(Result::Yes, ty_ref_is_a(&ty::TVars::new(), &never, &never));
+        assert_eq!(Result::No, ty_ref_is_a(&ty::TVars::new(), &any, &never));
     }
 
     #[test]
@@ -489,32 +536,53 @@ mod test {
         let three_ints_list = poly_for_str("(List Int Int Int)");
         let at_least_one_int_list = poly_for_str("(List Int Int ...)");
 
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &empty_list, &listof_any));
-        assert_eq!(Result::May, ty_ref_is_a(&[], &listof_any, &empty_list));
-
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &listof_int, &listof_any));
-        assert_eq!(Result::May, ty_ref_is_a(&[], &listof_any, &listof_int));
-
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &two_ints_list, &listof_int));
-        assert_eq!(Result::May, ty_ref_is_a(&[], &listof_int, &two_ints_list));
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &two_ints_list, &listof_any));
-
         assert_eq!(
-            Result::No,
-            ty_ref_is_a(&[], &two_ints_list, &three_ints_list)
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &empty_list, &listof_any)
         );
         assert_eq!(
-            Result::No,
-            ty_ref_is_a(&[], &three_ints_list, &two_ints_list)
+            Result::May,
+            ty_ref_is_a(&ty::TVars::new(), &listof_any, &empty_list)
         );
 
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&[], &at_least_one_int_list, &listof_int)
+            ty_ref_is_a(&ty::TVars::new(), &listof_int, &listof_any)
         );
         assert_eq!(
             Result::May,
-            ty_ref_is_a(&[], &listof_int, &at_least_one_int_list)
+            ty_ref_is_a(&ty::TVars::new(), &listof_any, &listof_int)
+        );
+
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &two_ints_list, &listof_int)
+        );
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&ty::TVars::new(), &listof_int, &two_ints_list)
+        );
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &two_ints_list, &listof_any)
+        );
+
+        assert_eq!(
+            Result::No,
+            ty_ref_is_a(&ty::TVars::new(), &two_ints_list, &three_ints_list)
+        );
+        assert_eq!(
+            Result::No,
+            ty_ref_is_a(&ty::TVars::new(), &three_ints_list, &two_ints_list)
+        );
+
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &at_least_one_int_list, &listof_int)
+        );
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&ty::TVars::new(), &listof_int, &at_least_one_int_list)
         );
     }
 
@@ -525,15 +593,36 @@ mod test {
         let two_ints_vec = poly_for_str("(Vector Int Int)");
         let three_ints_vec = poly_for_str("(Vector Int Int Int)");
 
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &vecof_int, &vecof_any));
-        assert_eq!(Result::May, ty_ref_is_a(&[], &vecof_any, &vecof_int));
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &vecof_int, &vecof_any)
+        );
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&ty::TVars::new(), &vecof_any, &vecof_int)
+        );
 
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &two_ints_vec, &vecof_int));
-        assert_eq!(Result::May, ty_ref_is_a(&[], &vecof_int, &two_ints_vec));
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &two_ints_vec, &vecof_any));
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &two_ints_vec, &vecof_int)
+        );
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&ty::TVars::new(), &vecof_int, &two_ints_vec)
+        );
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &two_ints_vec, &vecof_any)
+        );
 
-        assert_eq!(Result::No, ty_ref_is_a(&[], &two_ints_vec, &three_ints_vec));
-        assert_eq!(Result::No, ty_ref_is_a(&[], &three_ints_vec, &two_ints_vec));
+        assert_eq!(
+            Result::No,
+            ty_ref_is_a(&ty::TVars::new(), &two_ints_vec, &three_ints_vec)
+        );
+        assert_eq!(
+            Result::No,
+            ty_ref_is_a(&ty::TVars::new(), &three_ints_vec, &two_ints_vec)
+        );
     }
 
     #[test]
@@ -545,24 +634,24 @@ mod test {
 
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&[], &impure_sym_to_sym, &impure_sym_to_any)
+            ty_ref_is_a(&ty::TVars::new(), &impure_sym_to_sym, &impure_sym_to_any)
         );
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&[], &impure_any_to_sym, &impure_sym_to_sym)
+            ty_ref_is_a(&ty::TVars::new(), &impure_any_to_sym, &impure_sym_to_sym)
         );
         assert_eq!(
             Result::May,
-            ty_ref_is_a(&[], &impure_sym_to_any, &impure_sym_to_sym)
+            ty_ref_is_a(&ty::TVars::new(), &impure_sym_to_any, &impure_sym_to_sym)
         );
 
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&[], &pure_sym_to_sym, &impure_sym_to_sym)
+            ty_ref_is_a(&ty::TVars::new(), &pure_sym_to_sym, &impure_sym_to_sym)
         );
         assert_eq!(
             Result::No,
-            ty_ref_is_a(&[], &impure_sym_to_sym, &pure_sym_to_sym)
+            ty_ref_is_a(&ty::TVars::new(), &impure_sym_to_sym, &pure_sym_to_sym)
         );
     }
 
@@ -574,19 +663,40 @@ mod test {
         let pred_top_fun = poly_for_str("(... -> Bool)");
 
         // Type predicates always equal themselves
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &sym_ty_pred, &sym_ty_pred));
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &sym_ty_pred, &sym_ty_pred)
+        );
 
         // Type predicates never equal other type predicates
-        assert_eq!(Result::No, ty_ref_is_a(&[], &sym_ty_pred, &lit_sym_ty_pred));
-        assert_eq!(Result::No, ty_ref_is_a(&[], &lit_sym_ty_pred, &sym_ty_pred));
+        assert_eq!(
+            Result::No,
+            ty_ref_is_a(&ty::TVars::new(), &sym_ty_pred, &lit_sym_ty_pred)
+        );
+        assert_eq!(
+            Result::No,
+            ty_ref_is_a(&ty::TVars::new(), &lit_sym_ty_pred, &sym_ty_pred)
+        );
 
         // Type predicates are a subtype of (Any -> Bool)
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &sym_ty_pred, &general_pred));
-        assert_eq!(Result::May, ty_ref_is_a(&[], &general_pred, &sym_ty_pred));
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &sym_ty_pred, &general_pred)
+        );
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&ty::TVars::new(), &general_pred, &sym_ty_pred)
+        );
 
         // Type predicates are a subtype of (... -> Bool)
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &sym_ty_pred, &pred_top_fun));
-        assert_eq!(Result::May, ty_ref_is_a(&[], &pred_top_fun, &sym_ty_pred));
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &sym_ty_pred, &pred_top_fun)
+        );
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&ty::TVars::new(), &pred_top_fun, &sym_ty_pred)
+        );
     }
 
     #[test]
@@ -595,9 +705,18 @@ mod test {
         let false_type = poly_for_str("false");
         let bool_type = poly_for_str("Bool");
 
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &true_type, &bool_type));
-        assert_eq!(Result::May, ty_ref_is_a(&[], &bool_type, &true_type));
-        assert_eq!(Result::No, ty_ref_is_a(&[], &false_type, &true_type));
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &true_type, &bool_type)
+        );
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&ty::TVars::new(), &bool_type, &true_type)
+        );
+        assert_eq!(
+            Result::No,
+            ty_ref_is_a(&ty::TVars::new(), &false_type, &true_type)
+        );
     }
 
     #[test]
@@ -606,25 +725,39 @@ mod test {
         let false_type = poly_for_str("false");
         let bool_type = poly_for_str("Bool");
 
-        assert_eq!(Result::Yes, ty_ref_is_a(&[], &true_type, &bool_type));
-        assert_eq!(Result::May, ty_ref_is_a(&[], &bool_type, &true_type));
-        assert_eq!(Result::No, ty_ref_is_a(&[], &false_type, &true_type));
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &true_type, &bool_type)
+        );
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&ty::TVars::new(), &bool_type, &true_type)
+        );
+        assert_eq!(
+            Result::No,
+            ty_ref_is_a(&ty::TVars::new(), &false_type, &true_type)
+        );
     }
 
     #[test]
     fn unbounded_poly_vars() {
-        let tvar_id1 = ty::TVarId::new(0);
+        let mut tvars = ty::TVars::new();
+
+        let tvar_id1 = ty::TVarId::alloc();
+        tvars.insert(
+            tvar_id1,
+            ty::TVar::new("one".into(), ty::Ty::Any.into_poly()),
+        );
         let ptype1 = ty::Poly::Var(tvar_id1);
 
-        let tvar_id2 = ty::TVarId::new(1);
+        let tvar_id2 = ty::TVarId::alloc();
+        tvars.insert(
+            tvar_id2,
+            ty::TVar::new("two".into(), ty::Ty::Any.into_poly()),
+        );
         let ptype2 = ty::Poly::Var(tvar_id2);
 
         let poly_bool = poly_for_str("Bool");
-
-        let tvars = [
-            ty::TVar::new("one".into(), ty::Ty::Any.into_poly()),
-            ty::TVar::new("two".into(), ty::Ty::Any.into_poly()),
-        ];
 
         assert_eq!(Result::Yes, ty_ref_is_a(&tvars, &ptype1, &ptype1));
         assert_eq!(Result::May, ty_ref_is_a(&tvars, &ptype1, &ptype2));
@@ -633,18 +766,17 @@ mod test {
 
     #[test]
     fn bounded_poly_vars() {
-        let sym_ptype = ty::Poly::Var(ty::TVarId::new(0));
-        let str_ptype = ty::Poly::Var(ty::TVarId::new(1));
-        let foo_sym_ptype = ty::Poly::Var(ty::TVarId::new(2));
+        let mut tvars = ty::TVars::new();
 
-        let tvars = [
-            ty::TVar::new("sym".into(), poly_for_str("Sym")),
-            ty::TVar::new("str".into(), poly_for_str("Str")),
-            ty::TVar::new("foo".into(), poly_for_str("'foo")),
-        ];
+        let tvar_id1 = ty::TVarId::alloc();
+        tvars.insert(tvar_id1, ty::TVar::new("sym".into(), poly_for_str("Sym")));
+        let sym_ptype = ty::Poly::Var(tvar_id1);
+
+        let tvar_id2 = ty::TVarId::alloc();
+        tvars.insert(tvar_id2, ty::TVar::new("str".into(), poly_for_str("Str")));
+        let str_ptype = ty::Poly::Var(tvar_id2);
 
         let poly_foo_sym = poly_for_str("'foo");
-        let any = poly_for_str("Any");
 
         // A type var always satisfies itself
         assert_eq!(Result::Yes, ty_ref_is_a(&tvars, &sym_ptype, &sym_ptype));
@@ -661,29 +793,29 @@ mod test {
         // The sub has a fixed type while the parent has a poly type. We can't ensure that 'foo
         // satisfies all possible Sym subtypes (such as 'bar)
         assert_eq!(Result::May, ty_ref_is_a(&tvars, &poly_foo_sym, &sym_ptype));
-
-        // Both the sub and parent have fixed types by virtue of having no subtypes
-        assert_eq!(
-            Result::Yes,
-            ty_ref_is_a(&tvars, &poly_foo_sym, &foo_sym_ptype)
-        );
-
-        // The sub has a poly type while the parent has a fixed type. If the sub satisfies the
-        // parent type so should all of its subtypes.
-        assert_eq!(Result::Yes, ty_ref_is_a(&tvars, &sym_ptype, &any));
     }
 
     #[test]
     fn related_poly_bounds() {
-        let ptype1_unbounded = ty::Poly::Var(ty::TVarId::new(0));
-        let ptype2_bounded_by_1 = ty::Poly::Var(ty::TVarId::new(1));
-        let ptype3_bounded_by_2 = ty::Poly::Var(ty::TVarId::new(2));
+        let mut tvars = ty::TVars::new();
 
-        let tvars = [
-            ty::TVar::new("1".into(), poly_for_str("Any")),
+        let tvar_id1 = ty::TVarId::alloc();
+        tvars.insert(tvar_id1, ty::TVar::new("1".into(), poly_for_str("Any")));
+        let ptype1_unbounded = ty::Poly::Var(tvar_id1);
+
+        let tvar_id2 = ty::TVarId::alloc();
+        tvars.insert(
+            tvar_id2,
             ty::TVar::new("2".into(), ptype1_unbounded.clone()),
+        );
+        let ptype2_bounded_by_1 = ty::Poly::Var(tvar_id2);
+
+        let tvar_id3 = ty::TVarId::alloc();
+        tvars.insert(
+            tvar_id3,
             ty::TVar::new("3".into(), ptype2_bounded_by_1.clone()),
-        ];
+        );
+        let ptype3_bounded_by_2 = ty::Poly::Var(tvar_id3);
 
         // Direct bounding
         assert_eq!(
@@ -711,111 +843,90 @@ mod test {
 
     #[test]
     fn polymorphic_funs() {
-        let ptype1_unbounded = ty::Poly::Var(ty::TVarId::new(0));
-        let ptype2_symbol = ty::Poly::Var(ty::TVarId::new(1));
-        let ptype3_string = ty::Poly::Var(ty::TVarId::new(2));
+        let pidentity_fun = poly_for_str("(All #{A} A -> A)");
+        let pidentity_sym_fun = poly_for_str("(All #{[A : Sym]} A -> A)");
+        let pidentity_impure_string_fun = poly_for_str("(All #{[A : Str]} A ->! A)");
 
-        let tvars = [
-            ty::TVar::new("TAny".into(), poly_for_str("Any")),
-            ty::TVar::new("TSym".into(), poly_for_str("Sym")),
-            ty::TVar::new("TStr".into(), poly_for_str("Str")),
-        ];
-
-        // #{A} (A -> A)
-        let pidentity_fun = ty::Fun::new(
-            ty::purity::PVarId::monomorphic(),
-            ty::TVarId::new(0)..ty::TVarId::new(1),
-            ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
-            ty::List::new(Box::new([ptype1_unbounded.clone()]), None),
-        ).into_ty_ref();
-
-        // #{[A : Sym]} (A -> A)
-        let pidentity_sym_fun = ty::Fun::new(
-            ty::purity::PVarId::monomorphic(),
-            ty::TVarId::new(1)..ty::TVarId::new(2),
-            ty::TopFun::new(Purity::Pure.into_poly(), ptype2_symbol.clone()),
-            ty::List::new(Box::new([ptype2_symbol.clone()]), None),
-        ).into_ty_ref();
-
-        // #{[A : Str]} (A ->! A)
-        let pidentity_impure_string_fun = ty::Fun::new(
-            ty::purity::PVarId::monomorphic(),
-            ty::TVarId::new(2)..ty::TVarId::new(3),
-            ty::TopFun::new(Purity::Impure.into_poly(), ptype3_string.clone()),
-            ty::List::new(Box::new([ptype3_string.clone()]), None),
-        ).into_ty_ref();
+        let empty_tvars = ty::TVars::new();
 
         // All functions should have the top function type
         let top_fun = poly_for_str("(... ->! Any)");
-        assert_eq!(Result::Yes, ty_ref_is_a(&tvars, &pidentity_fun, &top_fun));
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&tvars, &pidentity_sym_fun, &top_fun)
+            ty_ref_is_a(&empty_tvars, &pidentity_fun, &top_fun)
         );
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&tvars, &pidentity_impure_string_fun, &top_fun)
+            ty_ref_is_a(&empty_tvars, &pidentity_sym_fun, &top_fun)
+        );
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&empty_tvars, &pidentity_impure_string_fun, &top_fun)
         );
 
         // We should take in to account purity
         let top_pure_fun = poly_for_str("(... -> Any)");
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&tvars, &pidentity_fun, &top_pure_fun)
+            ty_ref_is_a(&empty_tvars, &pidentity_fun, &top_pure_fun)
         );
         assert_eq!(
             Result::No,
-            ty_ref_is_a(&tvars, &pidentity_impure_string_fun, &top_pure_fun)
+            ty_ref_is_a(&empty_tvars, &pidentity_impure_string_fun, &top_pure_fun)
         );
 
         // All functions should have the top one param function type except panys
         let top_one_param_fun = poly_for_str("((RawU) ->! Any)");
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&tvars, &pidentity_fun, &top_one_param_fun)
+            ty_ref_is_a(&empty_tvars, &pidentity_fun, &top_one_param_fun)
         );
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&tvars, &pidentity_sym_fun, &top_one_param_fun)
+            ty_ref_is_a(&empty_tvars, &pidentity_sym_fun, &top_one_param_fun)
         );
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&tvars, &pidentity_impure_string_fun, &top_one_param_fun)
+            ty_ref_is_a(
+                &empty_tvars,
+                &pidentity_impure_string_fun,
+                &top_one_param_fun
+            )
         );
 
         // The identity function is (Any -> Any)
         let any_to_any_fun = poly_for_str("(Any ->! Any)");
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&tvars, &pidentity_fun, &any_to_any_fun)
+            ty_ref_is_a(&empty_tvars, &pidentity_fun, &any_to_any_fun)
         );
         // However, (Any -> Any) is not the identity function because it can take mismatched types
         // (e.g. Int -> Float)
         assert_eq!(
             Result::No,
-            ty_ref_is_a(&tvars, &any_to_any_fun, &pidentity_fun)
+            ty_ref_is_a(&empty_tvars, &any_to_any_fun, &pidentity_fun)
         );
 
         // The identity function is (true -> true)
         let true_to_true_fun = poly_for_str("(true ->! true)");
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&tvars, &pidentity_fun, &true_to_true_fun)
+            ty_ref_is_a(&empty_tvars, &pidentity_fun, &true_to_true_fun)
         );
         assert_eq!(
             Result::No,
-            ty_ref_is_a(&tvars, &true_to_true_fun, &pidentity_fun)
+            ty_ref_is_a(&empty_tvars, &true_to_true_fun, &pidentity_fun)
         );
 
         // The identity function is not (true -> false)
         let true_to_true_fun = poly_for_str("(true ->! false)");
         assert_eq!(
             Result::No,
-            ty_ref_is_a(&tvars, &pidentity_fun, &true_to_true_fun)
+            ty_ref_is_a(&empty_tvars, &pidentity_fun, &true_to_true_fun)
         );
         assert_eq!(
             Result::No,
-            ty_ref_is_a(&tvars, &true_to_true_fun, &pidentity_fun)
+            ty_ref_is_a(&empty_tvars, &true_to_true_fun, &pidentity_fun)
         );
 
         // The symbol function satisfies ((U) -> Sym) as all of its returns must be bounded by
@@ -823,45 +934,49 @@ mod test {
         let top_to_sym_fun = poly_for_str("(... ->! Sym)");
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&tvars, &pidentity_fun, &top_to_sym_fun)
+            ty_ref_is_a(&empty_tvars, &pidentity_fun, &top_to_sym_fun)
         );
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&tvars, &pidentity_sym_fun, &top_to_sym_fun)
+            ty_ref_is_a(&empty_tvars, &pidentity_sym_fun, &top_to_sym_fun)
         );
 
         // The identity string function satisfies (Str -> Str)
         let str_to_str_fun = poly_for_str("(Str ->! Str)");
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&tvars, &pidentity_fun, &str_to_str_fun)
+            ty_ref_is_a(&empty_tvars, &pidentity_fun, &str_to_str_fun)
         );
         assert_eq!(
             Result::No,
-            ty_ref_is_a(&tvars, &pidentity_sym_fun, &str_to_str_fun)
+            ty_ref_is_a(&empty_tvars, &pidentity_sym_fun, &str_to_str_fun)
         );
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&tvars, &pidentity_impure_string_fun, &str_to_str_fun)
+            ty_ref_is_a(&empty_tvars, &pidentity_impure_string_fun, &str_to_str_fun)
         );
 
         // The polymorphic identity string function satisfies (... ->! Str)
         let top_impure_str_fun = poly_for_str("(... ->! Str)");
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&tvars, &pidentity_impure_string_fun, &top_impure_str_fun)
+            ty_ref_is_a(
+                &empty_tvars,
+                &pidentity_impure_string_fun,
+                &top_impure_str_fun
+            )
         );
 
         // As does the unbounded identity function
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&tvars, &pidentity_fun, &top_impure_str_fun)
+            ty_ref_is_a(&empty_tvars, &pidentity_fun, &top_impure_str_fun)
         );
 
         // But not the polymorphic symbol function
         assert_eq!(
             Result::No,
-            ty_ref_is_a(&tvars, &pidentity_sym_fun, &top_impure_str_fun)
+            ty_ref_is_a(&empty_tvars, &pidentity_sym_fun, &top_impure_str_fun)
         );
     }
 }

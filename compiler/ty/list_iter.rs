@@ -52,7 +52,7 @@ where
 }
 
 impl<'list> ListIterator<'list, ty::Poly> {
-    pub fn collect_rest(self, tvars: &[ty::TVar]) -> Option<ty::Poly> {
+    pub fn collect_rest(self, tvars: &ty::TVars) -> Option<ty::Poly> {
         if self.fixed.is_empty() {
             return self.rest.cloned();
         }

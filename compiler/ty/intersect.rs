@@ -4,6 +4,7 @@ use std::result;
 
 use crate::ty;
 use crate::ty::list_iter::ListIterator;
+use crate::ty::purity;
 use crate::ty::purity::Purity;
 
 #[derive(PartialEq, Debug)]
@@ -14,12 +15,12 @@ pub enum Error {
 type Result<S> = result::Result<S, Error>;
 
 pub trait Intersectable: ty::TyRef {
-    fn intersect_ty_refs(tvars: &[ty::TVar], ty_ref1: &Self, ty_ref2: &Self) -> Result<Self>;
+    fn intersect_ty_refs(tvars: &ty::TVars, ty_ref1: &Self, ty_ref2: &Self) -> Result<Self>;
 }
 
 impl Intersectable for ty::Mono {
     fn intersect_ty_refs(
-        tvars: &[ty::TVar],
+        tvars: &ty::TVars,
         mono1: &ty::Mono,
         mono2: &ty::Mono,
     ) -> Result<ty::Mono> {
@@ -35,7 +36,7 @@ impl Intersectable for ty::Mono {
 
 impl Intersectable for ty::Poly {
     fn intersect_ty_refs(
-        tvars: &[ty::TVar],
+        tvars: &ty::TVars,
         poly1: &ty::Poly,
         poly2: &ty::Poly,
     ) -> Result<ty::Poly> {
@@ -45,12 +46,8 @@ impl Intersectable for ty::Poly {
             return Ok(poly2.clone());
         }
 
-        // Determine if we're dealing with fixed types or polymorphic bounds
-        let resolved1 = ty::resolve::resolve_poly_ty(tvars, poly1);
-        let resolved2 = ty::resolve::resolve_poly_ty(tvars, poly2);
-
-        match (resolved1, resolved2) {
-            (ty::resolve::Result::Fixed(ty1), ty::resolve::Result::Fixed(ty2)) => {
+        match (poly1, poly2) {
+            (ty::Poly::Fixed(ty1), ty::Poly::Fixed(ty2)) => {
                 // We can invoke full intersection logic if we have fixed types
                 non_subty_intersect(tvars, poly1, ty1, poly2, ty2)
             }
@@ -63,7 +60,7 @@ impl Intersectable for ty::Poly {
 }
 
 fn unify_list(
-    tvars: &[ty::TVar],
+    tvars: &ty::TVars,
     list1: &ty::List<ty::Poly>,
     list2: &ty::List<ty::Poly>,
 ) -> Result<ty::List<ty::Poly>> {
@@ -73,10 +70,7 @@ fn unify_list(
     }
 }
 
-fn intersect_purity_refs(
-    purity1: &ty::purity::Poly,
-    purity2: &ty::purity::Poly,
-) -> ty::purity::Poly {
+fn intersect_purity_refs(purity1: &purity::Poly, purity2: &purity::Poly) -> purity::Poly {
     if purity1 == purity2 {
         purity1.clone()
     } else {
@@ -88,7 +82,7 @@ fn intersect_purity_refs(
 ///
 /// `lefts` is a slice as it needs to be iterated over multiple times. `rights` is only visited
 /// once so it can be an arbitrary iterator.
-fn intersect_ref_iter<'a, S, I>(tvars: &[ty::TVar], lefts: &[S], rights: I) -> Result<S>
+fn intersect_ref_iter<'a, S, I>(tvars: &ty::TVars, lefts: &[S], rights: I) -> Result<S>
 where
     S: Intersectable + 'a,
     I: Iterator<Item = &'a S>,
@@ -115,7 +109,7 @@ where
 
 /// Intersects two types under the assumption that they are not subtypes
 fn non_subty_intersect<S: Intersectable>(
-    tvars: &[ty::TVar],
+    tvars: &ty::TVars,
     ref1: &S,
     ty1: &ty::Ty<S>,
     ref2: &S,
@@ -192,8 +186,8 @@ fn non_subty_intersect<S: Intersectable>(
             let intersected_ret = intersect_ty_refs(tvars, top_fun.ret(), fun.ret())?;
 
             Ok(ty::Fun::new(
-                ty::purity::PVarId::monomorphic(),
-                ty::TVarId::monomorphic(),
+                purity::PVars::new(),
+                ty::TVars::new(),
                 ty::TopFun::new(intersected_purity, intersected_ret),
                 intersected_params,
             ).into_ty_ref())
@@ -205,8 +199,8 @@ fn non_subty_intersect<S: Intersectable>(
                 let intersected_ret = intersect_ty_refs(tvars, fun1.ret(), fun2.ret())?;
 
                 Ok(ty::Fun::new(
-                    ty::purity::PVarId::monomorphic(),
-                    ty::TVarId::monomorphic(),
+                    purity::PVars::new(),
+                    ty::TVars::new(),
                     ty::TopFun::new(intersected_purity, intersected_ret),
                     intersected_params,
                 ).into_ty_ref())
@@ -220,7 +214,7 @@ fn non_subty_intersect<S: Intersectable>(
 }
 
 pub fn intersect_list<S: Intersectable>(
-    tvars: &[ty::TVar],
+    tvars: &ty::TVars,
     list1: &ty::List<S>,
     list2: &ty::List<S>,
 ) -> Result<ty::List<S>> {
@@ -251,7 +245,7 @@ pub fn intersect_list<S: Intersectable>(
 }
 
 pub fn intersect_ty_refs<S: Intersectable>(
-    tvars: &[ty::TVar],
+    tvars: &ty::TVars,
     ty_ref1: &S,
     ty_ref2: &S,
 ) -> Result<S> {
@@ -273,7 +267,7 @@ mod test {
 
         assert_eq!(
             Error::Disjoint,
-            intersect_ty_refs(&[], &poly1, &poly2).unwrap_err()
+            intersect_ty_refs(&ty::TVars::new(), &poly1, &poly2).unwrap_err()
         );
     }
 
@@ -286,16 +280,19 @@ mod test {
         // our input types.
         assert_eq!(
             ty::is_a::Result::Yes,
-            ty::is_a::ty_ref_is_a(&[], &expected, &poly1),
+            ty::is_a::ty_ref_is_a(&ty::TVars::new(), &expected, &poly1),
             "The expected type does not definitely satisfy the first input type; the test is incorrect"
         );
         assert_eq!(
             ty::is_a::Result::Yes,
-            ty::is_a::ty_ref_is_a(&[], &expected, &poly2),
+            ty::is_a::ty_ref_is_a(&ty::TVars::new(), &expected, &poly2),
             "The expected type does not definitely satisfy the second input type; the test is incorrect"
         );
 
-        assert_eq!(expected, intersect_ty_refs(&[], &poly1, &poly2).unwrap());
+        assert_eq!(
+            expected,
+            intersect_ty_refs(&ty::TVars::new(), &poly1, &poly2).unwrap()
+        );
     }
 
     #[test]
@@ -392,43 +389,21 @@ mod test {
 
     #[test]
     fn polymorphic_funs() {
-        let ptype1_unbounded = ty::Poly::Var(ty::TVarId::new(0));
-        let ptype2_string = ty::Poly::Var(ty::TVarId::new(1));
-
-        let tvars = [
-            ty::TVar::new("TAny".into(), poly_for_str("Any")),
-            ty::TVar::new("TStr".into(), poly_for_str("Str")),
-        ];
-
-        // #{A} (A -> A)
-        let pidentity_fun: ty::Poly = ty::Fun::new(
-            ty::purity::PVarId::monomorphic(),
-            ty::TVarId::new(0)..ty::TVarId::new(1),
-            ty::TopFun::new(Purity::Pure.into_poly(), ptype1_unbounded.clone()),
-            ty::List::new(Box::new([ptype1_unbounded.clone()]), None),
-        ).into_ty_ref();
-
-        // #{[A : Str]} (A ->! A)
-        let pidentity_impure_string_fun = ty::Fun::new(
-            ty::purity::PVarId::monomorphic(),
-            ty::TVarId::new(1)..ty::TVarId::new(2),
-            ty::TopFun::new(Purity::Impure.into_poly(), ptype2_string.clone()),
-            ty::List::new(Box::new([ptype2_string.clone()]), None),
-        ).into_ty_ref();
-
+        let pidentity_fun = poly_for_str("(All #{A} A -> A)");
+        let pidentity_impure_bool_fun = poly_for_str("(All #{[A : Bool]} A ->! A)");
         let top_pure_fun = poly_for_str("(... -> Any)");
 
         // We should intersect polymorphic functions with themselves
         assert_eq!(
             pidentity_fun.clone(),
-            intersect_ty_refs(&tvars, &pidentity_fun, &pidentity_fun).unwrap()
+            intersect_ty_refs(&ty::TVars::new(), &pidentity_fun, &pidentity_fun).unwrap()
         );
 
         // The intersection of the pure identity function and the top pure function is the identity
         // function
         assert_eq!(
             pidentity_fun.clone(),
-            intersect_ty_refs(&tvars, &pidentity_fun, &top_pure_fun).unwrap()
+            intersect_ty_refs(&ty::TVars::new(), &pidentity_fun, &top_pure_fun).unwrap()
         );
 
         // The intersection of the pure identity function and the impure string function is the
@@ -436,14 +411,19 @@ mod test {
         // TODO: This seems like it should be (Str -> Str)
         assert_eq!(
             pidentity_fun.clone(),
-            intersect_ty_refs(&tvars, &pidentity_fun, &pidentity_impure_string_fun).unwrap()
+            intersect_ty_refs(
+                &ty::TVars::new(),
+                &pidentity_fun,
+                &pidentity_impure_bool_fun
+            ).unwrap()
         );
 
         // These have no subtype relationship
         // TODO: This also seems like it should be (Str -> Str)
         assert_eq!(
             Error::Disjoint,
-            intersect_ty_refs(&tvars, &pidentity_impure_string_fun, &top_pure_fun).unwrap_err()
+            intersect_ty_refs(&ty::TVars::new(), &pidentity_impure_bool_fun, &top_pure_fun)
+                .unwrap_err()
         );
     }
 }

@@ -45,8 +45,8 @@ where
 
     // TODO: This doesn't seem right
     ty::Fun::new(
-        purity::PVarId::monomorphic(),
-        ty::TVarId::monomorphic(),
+        purity::PVars::new(),
+        ty::TVars::new(),
         subst_top_fun(stx, fun.top_fun()),
         subst_list(poly_stx, fun.params()),
     )
@@ -98,12 +98,10 @@ impl<'tvars> Substitution for ty::select::SelectCtx<'tvars> {
 
     fn subst_purity_ref(&self, poly: &purity::Poly) -> purity::Poly {
         match poly {
-            ty::purity::Poly::Fixed(_) => poly.clone(),
-            ty::purity::Poly::Var(pvar_id) => {
-                if let Some(pvar_idx) = self.selected_pvar_idx(*pvar_id) {
-                    self.pvar_purities()[pvar_idx]
-                        .clone()
-                        .unwrap_or_else(|| purity::Poly::Fixed(Purity::Impure))
+            purity::Poly::Fixed(_) => poly.clone(),
+            purity::Poly::Var(pvar_id) => {
+                if let Some(selected) = self.pvar_purity(*pvar_id) {
+                    selected
                 } else {
                     poly.clone()
                 }
@@ -115,10 +113,8 @@ impl<'tvars> Substitution for ty::select::SelectCtx<'tvars> {
         match poly {
             ty::Poly::Fixed(fixed) => subst_ty(self, fixed).into_poly(),
             ty::Poly::Var(tvar_id) => {
-                if let Some(tvar_idx) = self.selected_tvar_idx(*tvar_id) {
-                    self.tvar_types()[tvar_idx]
-                        .clone()
-                        .unwrap_or_else(|| self.tvars()[tvar_id.to_usize()].bound().clone())
+                if let Some(selected) = self.tvar_type(*tvar_id) {
+                    selected
                 } else {
                     poly.clone()
                 }
@@ -210,8 +206,8 @@ impl<'vars> Substitution for Monomorphise<'vars> {
 
     fn subst_purity_ref(&self, poly: &purity::Poly) -> purity::Poly {
         match poly {
-            ty::purity::Poly::Fixed(_) => poly.clone(),
-            ty::purity::Poly::Var(pvar_id) => self.pvar_purities[pvar_id].into_poly(),
+            purity::Poly::Fixed(_) => poly.clone(),
+            purity::Poly::Var(pvar_id) => self.pvar_purities[pvar_id].into_poly(),
         }
     }
 
@@ -239,8 +235,8 @@ impl<'vars> Substitution for PartialMonomorphise<'vars> {
 
     fn subst_purity_ref(&self, poly: &purity::Poly) -> purity::Poly {
         match poly {
-            ty::purity::Poly::Fixed(_) => poly.clone(),
-            ty::purity::Poly::Var(pvar_id) => {
+            purity::Poly::Fixed(_) => poly.clone(),
+            purity::Poly::Var(pvar_id) => {
                 if let Some(purity) = self.pvar_purities.get(pvar_id) {
                     purity.clone().into_poly()
                 } else {
@@ -278,8 +274,8 @@ pub fn inst_fun_selection(stx: &ty::select::SelectCtx<'_>, fun: &ty::Fun) -> ty:
 
 pub fn inst_purity_selection(
     stx: &ty::select::SelectCtx<'_>,
-    purity: &ty::purity::Poly,
-) -> ty::purity::Poly {
+    purity: &purity::Poly,
+) -> purity::Poly {
     stx.subst_purity_ref(purity)
 }
 

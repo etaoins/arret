@@ -17,14 +17,14 @@ fn try_compile_input_file(
         .expect("Unable to read input file");
 
     let hir = compiler::lower_program(&cfg.package_paths, source_loader, source_file_id)?;
-    let inferred_defs = compiler::infer_program(&hir.pvars, &hir.tvars, hir.defs, hir.main_var_id)?;
+    let inferred_defs = compiler::infer_program(hir.defs, hir.main_var_id)?;
 
     let mut ehx = compiler::EvalHirCtx::new();
     for inferred_def in inferred_defs {
-        ehx.consume_def(&hir.tvars, inferred_def)?;
+        ehx.consume_def(inferred_def)?;
     }
 
-    let ops = ehx.build_program(&hir.tvars, hir.main_var_id)?;
+    let ops = ehx.build_program(hir.main_var_id)?;
     compiler::gen_program(&hir.rust_libraries, ops, output_path);
 
     Ok(())

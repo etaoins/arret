@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use syntax::span::{Span, EMPTY_SPAN};
+
 use crate::hir::error::{Error, ErrorKind};
-use crate::hir::ns::{Ident, NsDatum, NsId, NsIdCounter};
+use crate::hir::ns::{Ident, NsDatum, NsId};
 use crate::hir::prim::Prim;
 use crate::hir::{types, VarId};
 use crate::ty;
-use syntax::span::{Span, EMPTY_SPAN};
+use crate::ty::purity;
 
 new_indexing_id_type!(MacroId, u32);
 
@@ -17,18 +19,17 @@ pub enum Binding {
     Macro(MacroId),
     Ty(ty::Poly),
     TyCons(types::TyCons),
-    Purity(ty::purity::Poly),
+    Purity(purity::Poly),
 }
 
-struct ScopeEntry {
+struct SpannedBinding {
     span: Span,
     binding: Binding,
 }
 
-struct ScopeData {
-    entries: HashMap<Ident, ScopeEntry>,
-    parent: Option<Rc<ScopeData>>,
-    ns_id_counter: NsIdCounter,
+struct Bindings {
+    entries: HashMap<Ident, SpannedBinding>,
+    parent: Option<Rc<Bindings>>,
 
     /// Allow redefinition of bindings
     ///
@@ -36,7 +37,7 @@ struct ScopeData {
     allow_redef: bool,
 }
 
-impl ScopeData {
+impl Bindings {
     fn get(&self, ident: &Ident) -> Option<&Binding> {
         match self.entries.get(ident) {
             Some(e) => Some(&e.binding),
@@ -52,36 +53,39 @@ impl ScopeData {
 }
 
 // TODO: We shouldn't need to use Rc here but the borrow checker has broken me
-pub struct Scope(Rc<ScopeData>);
+pub struct Scope {
+    bindings: Rc<Bindings>,
+    tvars: ty::TVars,
+}
 
 impl Scope {
     /// Creates an empty root scope
     pub fn empty() -> Scope {
-        Scope(Rc::new(ScopeData {
-            entries: HashMap::new(),
-            ns_id_counter: NsIdCounter::new(),
-            parent: None,
-            allow_redef: false,
-        }))
+        Scope {
+            bindings: Rc::new(Bindings {
+                entries: HashMap::new(),
+                parent: None,
+                allow_redef: false,
+            }),
+            tvars: ty::TVars::new(),
+        }
     }
 
     /// Creates a new REPL scope containing `import`
     ///
     /// This scope is special as it allows redefinitions at the root level.
-    pub fn new_repl() -> Scope {
+    pub fn new_repl(ns_id: NsId) -> Scope {
         use std::iter;
 
         let entries = iter::once(("import".into(), Binding::Prim(Prim::Import)));
-        let mut scope = Self::new_with_entries(entries);
-        scope.mut_data().allow_redef = true;
+        let mut scope = Self::new_with_entries(ns_id, entries);
+        scope.bindings_mut().allow_redef = true;
 
         scope
     }
 
     /// Creates a new root scope containing all primitives and types
-    ///
-    /// The bindings will be in `NsId(0)` with an empty span
-    pub fn new_with_primitives() -> Scope {
+    pub fn new_with_primitives(ns_id: NsId) -> Scope {
         use crate::hir::prim::PRIM_EXPORTS;
         use crate::hir::types::TY_EXPORTS;
 
@@ -90,45 +94,44 @@ impl Scope {
             .chain(TY_EXPORTS.iter())
             .map(|(name, binding)| ((*name).into(), binding.clone()));
 
-        Self::new_with_entries(entries)
+        Self::new_with_entries(ns_id, entries)
     }
 
     /// Creates a new root scope with entries
-    ///
-    /// The bindings will be in `NsId(0)` with an empty span
-    pub fn new_with_entries<I>(entries: I) -> Scope
+    pub fn new_with_entries<I>(ns_id: NsId, entries: I) -> Scope
     where
         I: Iterator<Item = (Box<str>, Binding)>,
     {
-        let mut ns_id_counter = NsIdCounter::new();
-        let ns_id = ns_id_counter.alloc();
-
         let entries = entries
             .map(|(name, binding)| {
                 (
                     Ident::new(ns_id, (*name).into()),
-                    ScopeEntry {
+                    SpannedBinding {
                         span: EMPTY_SPAN,
                         binding: binding.clone(),
                     },
                 )
-            }).collect::<HashMap<Ident, ScopeEntry>>();
+            }).collect::<HashMap<Ident, SpannedBinding>>();
 
-        Scope(Rc::new(ScopeData {
-            entries,
-            ns_id_counter,
-            parent: None,
-            allow_redef: false,
-        }))
+        Scope {
+            bindings: Rc::new(Bindings {
+                entries,
+                parent: None,
+                allow_redef: false,
+            }),
+            tvars: ty::TVars::new(),
+        }
     }
 
     pub fn new_child(parent: &Scope) -> Scope {
-        Scope(Rc::new(ScopeData {
-            entries: HashMap::new(),
-            ns_id_counter: parent.data().ns_id_counter.clone(),
-            parent: Some(parent.0.clone()),
-            allow_redef: false,
-        }))
+        Scope {
+            bindings: Rc::new(Bindings {
+                entries: HashMap::new(),
+                parent: Some(parent.bindings.clone()),
+                allow_redef: false,
+            }),
+            tvars: parent.tvars.clone(),
+        }
     }
 
     /// Returns the binding for a given datum if it exists
@@ -144,12 +147,12 @@ impl Scope {
 
     /// Returns the binding for a given ident if it exists
     pub fn get<'a>(&'a self, ident: &Ident) -> Option<&'a Binding> {
-        self.data().get(ident)
+        self.bindings().get(ident)
     }
 
     /// Returns the binding for a given ident if it exists, otherwise returns an error
     pub fn get_or_err<'a>(&'a self, span: Span, ident: &Ident) -> Result<&'a Binding, Error> {
-        self.data()
+        self.bindings()
             .get(ident)
             .ok_or_else(|| Error::new(span, ErrorKind::UnboundSym(ident.name().into())))
     }
@@ -164,21 +167,21 @@ impl Scope {
         self.insert_bindings(span, iter::once((ident, binding)))
     }
 
-    pub fn insert_bindings<I>(&mut self, span: Span, bindings: I) -> Result<(), Error>
+    pub fn insert_bindings<I>(&mut self, span: Span, new_bindings: I) -> Result<(), Error>
     where
         I: Iterator<Item = (Ident, Binding)>,
     {
         use std::collections::hash_map::Entry;
-        let mut_data = self.mut_data();
+        let bindings = self.bindings_mut();
 
-        mut_data.entries.reserve(bindings.size_hint().0);
+        bindings.entries.reserve(new_bindings.size_hint().0);
 
-        for (ident, binding) in bindings {
-            let entry = ScopeEntry { span, binding };
+        for (ident, binding) in new_bindings {
+            let entry = SpannedBinding { span, binding };
 
-            match mut_data.entries.entry(ident) {
+            match bindings.entries.entry(ident) {
                 Entry::Occupied(mut occupied) => {
-                    if mut_data.allow_redef {
+                    if bindings.allow_redef {
                         occupied.insert(entry);
                     } else {
                         return Err(Error::new(
@@ -216,22 +219,23 @@ impl Scope {
 
     /// Returns all bound idents
     pub fn bound_idents(&self) -> impl Iterator<Item = &Ident> {
-        self.data().entries.iter().map(|(ident, _)| ident)
+        self.bindings().entries.iter().map(|(ident, _)| ident)
     }
 
-    /// Allocates a new ns_id
-    ///
-    /// This is not globally unique; it will only be unique in the current scope chain
-    pub fn alloc_ns_id(&mut self) -> NsId {
-        self.mut_data().ns_id_counter.alloc()
+    pub fn tvars(&self) -> &ty::TVars {
+        &self.tvars
     }
 
-    fn data(&self) -> &ScopeData {
-        &self.0
+    pub fn tvars_mut(&mut self) -> &mut ty::TVars {
+        &mut self.tvars
     }
 
-    fn mut_data(&mut self) -> &mut ScopeData {
+    fn bindings(&self) -> &Bindings {
+        &self.bindings
+    }
+
+    fn bindings_mut(&mut self) -> &mut Bindings {
         // This is also important to keep our `ns_alloc_id` invariant
-        Rc::get_mut(&mut self.0).expect("Cannot mutate non-leaf scope")
+        Rc::get_mut(&mut self.bindings).expect("Cannot mutate non-leaf scope")
     }
 }

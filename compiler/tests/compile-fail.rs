@@ -175,7 +175,7 @@ fn collect_reports(
         }
     };
 
-    match compiler::infer_program(&hir.pvars, &hir.tvars, hir.defs, hir.main_var_id) {
+    match compiler::infer_program(hir.defs, hir.main_var_id) {
         Ok(_) => {}
         Err(errs) => {
             for err in errs {

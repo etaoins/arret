@@ -15,6 +15,7 @@ use crate::hir::scope::Scope;
 use crate::hir::types;
 use crate::source::{SourceKind, SourceLoader};
 use crate::ty;
+use crate::ty::purity;
 
 use runtime::{abitype, binding};
 
@@ -89,6 +90,7 @@ impl FunABI for Fun {
 pub type Module = HashMap<&'static str, Fun>;
 
 pub struct Loader {
+    type_ns_id: NsId,
     type_scope: Scope,
     rust_libraries: Vec<Library>,
 }
@@ -101,7 +103,7 @@ fn ensure_types_compatible<T>(span: Span, arret_poly: &ty::Poly, abi_type: &T) -
 where
     T: tyconv::ConvertableABIType,
 {
-    if ty::is_a::ty_ref_is_a(&[], arret_poly, &abi_type.to_poly()).to_bool() {
+    if ty::is_a::ty_ref_is_a(&ty::TVars::new(), arret_poly, &abi_type.to_poly()).to_bool() {
         Ok(())
     } else {
         Err(Error::new(
@@ -110,7 +112,7 @@ where
                 format!(
                     "Rust type `{}` does not match declared Arret type of `{}`",
                     abi_type.to_rust_str(),
-                    types::str_for_poly(&[], &[], arret_poly),
+                    types::str_for_poly(&purity::PVars::new(), &ty::TVars::new(), arret_poly),
                 ).into_boxed_str(),
             ),
         ))
@@ -140,15 +142,14 @@ fn push_rfi_lib_path(path_buf: &mut path::PathBuf, package_name: &str) {
 
 impl Loader {
     pub fn new() -> Loader {
+        let type_ns_id = NsId::alloc();
+
         // TODO: Add `Num` type
         Loader {
-            type_scope: Scope::new_with_primitives(),
+            type_ns_id,
+            type_scope: Scope::new_with_primitives(type_ns_id),
             rust_libraries: vec![],
         }
-    }
-
-    fn type_ns_id() -> NsId {
-        NsId::new(0)
     }
 
     fn process_rust_fun(
@@ -162,11 +163,11 @@ impl Loader {
 
         // Parse the declared Arret type as a datum
         let syntax_datum = datum_from_str(rust_fun.arret_type)?;
-        let ns_datum = NsDatum::from_syntax_datum(Self::type_ns_id(), syntax_datum);
+        let ns_datum = NsDatum::from_syntax_datum(self.type_ns_id, syntax_datum);
         let span = ns_datum.span();
 
         // Lower the Arret type using a fixed scope
-        let poly_type = types::lower_poly(&[], &self.type_scope, ns_datum)?;
+        let poly_type = types::lower_poly(&self.type_scope, ns_datum)?;
 
         // Ensure the type is actually a function type
         let arret_fun_type = if let ty::Poly::Fixed(ty::Ty::Fun(fun_type)) = poly_type {
