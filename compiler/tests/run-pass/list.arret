@@ -6,7 +6,14 @@
   (assert-equal 4 (length '(1 2 3 4)))
   (assert-equal 3 (length (list 1 2 3))))
 
+(defn test-first-rest ()
+  (assert-equal 'one (ann (first '(one two three)) 'one))
+  (assert-equal '(two three) (ann (rest '(one two three)) (Listof Sym)))
+  ; TODO: The type of this is `(Listof Any)`. Can this be more specific?
+  (assert-equal () (rest '(one))))
+
 (defn main! () ->! ()
   (test-length)
+  (test-first-rest)
 
   ())

@@ -65,6 +65,14 @@
   [(val Type) ((type-predicate Type) val)]
 ))
 
+(export first)
+(defn first #{T} (([head : T] _ ...)) -> T
+  head)
+
+(export rest)
+(defn rest #{T} ((_ [tail : T] ...)) -> (Listof T)
+  tail)
+
 ; Type predicates
 (defmacro deftypred (macro-rules
   [(name Type) (do
