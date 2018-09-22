@@ -99,11 +99,17 @@ pub struct Loader {
 ///
 /// The Arret types are strictly more expressive than the Rust types. This simply checks that the
 /// Arret type is more specific than the Rust type.
-fn ensure_types_compatible<T>(span: Span, arret_poly: &ty::Poly, abi_type: &T) -> Result<(), Error>
+fn ensure_types_compatible<T>(
+    pvars: &purity::PVars,
+    tvars: &ty::TVars,
+    span: Span,
+    arret_poly: &ty::Poly,
+    abi_type: &T,
+) -> Result<(), Error>
 where
     T: tyconv::ConvertableABIType,
 {
-    if ty::is_a::ty_ref_is_a(&ty::TVars::new(), arret_poly, &abi_type.to_poly()).to_bool() {
+    if ty::is_a::ty_ref_is_a(tvars, arret_poly, &abi_type.to_poly()).to_bool() {
         Ok(())
     } else {
         Err(Error::new(
@@ -112,7 +118,7 @@ where
                 format!(
                     "Rust type `{}` does not match declared Arret type of `{}`",
                     abi_type.to_rust_str(),
-                    types::str_for_poly(&purity::PVars::new(), &ty::TVars::new(), arret_poly),
+                    types::str_for_poly(pvars, tvars, arret_poly),
                 ).into_boxed_str(),
             ),
         ))
@@ -178,6 +184,8 @@ impl Loader {
                 ErrorKind::RustFunError("function type expected".into()),
             ));
         };
+        let pvars = arret_fun_type.pvars();
+        let tvars = arret_fun_type.tvars();
 
         // Calculate how many parameters the Rust function should accept
         let expected_rust_params = arret_fun_type.params().fixed().len()
@@ -205,7 +213,7 @@ impl Loader {
             let last_rust_param = abi_params_iter.next_back().unwrap();
 
             if let ABIType::Boxed(BoxedABIType::List(elem)) = last_rust_param {
-                ensure_types_compatible(span, arret_rest, *elem)?;
+                ensure_types_compatible(pvars, tvars, span, arret_rest, *elem)?;
             } else {
                 return Err(Error::new(
                     span,
@@ -218,13 +226,13 @@ impl Loader {
         for (arret_fixed_poly, rust_fixed_poly) in
             arret_fun_type.params().fixed().iter().zip(abi_params_iter)
         {
-            ensure_types_compatible(span, arret_fixed_poly, rust_fixed_poly)?;
+            ensure_types_compatible(pvars, tvars, span, arret_fixed_poly, rust_fixed_poly)?;
         }
 
         // And the return type
         //
         // Note that we don't care about contravariance here; simply that the types are compatible
-        ensure_types_compatible(span, arret_fun_type.ret(), &rust_fun.ret)?;
+        ensure_types_compatible(pvars, tvars, span, arret_fun_type.ret(), &rust_fun.ret)?;
 
         Ok(Fun {
             rust_library_id,
@@ -392,6 +400,35 @@ mod test {
         };
 
         assert_valid_binding_fun(&BINDING_RUST_FUN);
+    }
+
+    #[test]
+    fn polymorphic_rust_fun() {
+        const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
+            arret_type: "(All #{A} (List A Any ...) -> A)",
+            takes_task: false,
+            params: &[ABIType::Boxed(BoxedABIType::Pair(&BoxedABIType::Any))],
+            ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::Any)),
+            symbol: "",
+        };
+
+        assert_valid_binding_fun(&BINDING_RUST_FUN);
+    }
+
+    #[test]
+    fn incompatible_polymorphic_rust_fun() {
+        const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
+            arret_type: "(All #{A} (List Any ...) -> A)",
+            takes_task: false,
+            params: &[ABIType::Boxed(BoxedABIType::Pair(&BoxedABIType::Any))],
+            ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::Any)),
+            symbol: "",
+        };
+
+        let kind = ErrorKind::RustFunError(
+            "Rust type `Gc<boxed::Pair<boxed::Any>>` does not match declared Arret type of `(Listof Any)`".into(),
+        );
+        assert_binding_fun_error(&kind, &BINDING_RUST_FUN);
     }
 
     #[test]
