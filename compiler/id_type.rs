@@ -35,16 +35,27 @@ macro_rules! new_indexing_id_type {
 #[macro_export]
 macro_rules! new_counting_id_type {
     ($id_name:ident) => {
-        use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
+        use std::num::NonZeroUsize;
+        use std::sync::atomic::{AtomicUsize, Ordering};
 
-        static NEXT_VALUE: AtomicUsize = ATOMIC_USIZE_INIT;
+        // These counters are very hot and shared between threads
+        // They're not strongly correlated with each other so put them on different cachelines to
+        // avoid bouncing them between CPUs. The value of 64 is just a guess; it's a typical value
+        // and isn't needed for correctness.
+        #[repr(align(64))]
+        struct AlignedAtomicUsize(AtomicUsize);
+
+        static NEXT_VALUE: AlignedAtomicUsize = AlignedAtomicUsize(AtomicUsize::new(1));
 
         #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
-        pub struct $id_name(usize);
+        pub struct $id_name(NonZeroUsize);
 
         impl $id_name {
             pub fn alloc() -> $id_name {
-                $id_name(NEXT_VALUE.fetch_add(1, Ordering::SeqCst) + 1)
+                // We used relaxed ordering because the order doesn't actually matter; these are
+                // used only for uniqueness
+                let raw_id = NEXT_VALUE.0.fetch_add(1, Ordering::Relaxed);
+                $id_name(NonZeroUsize::new(raw_id).unwrap())
             }
         }
     };
