@@ -23,23 +23,18 @@ fn const_to_reg(
         (boxed::AnySubtype::Int(int_ref), abitype::ABIType::Int) => {
             b.push_reg(span, OpKind::ConstInt, int_ref.value())
         }
+        (boxed::AnySubtype::Int(int_ref), abitype::ABIType::Boxed(to_abi_type)) => {
+            let from_abi_type = boxed::TypeTag::Int.into();
+            let from_reg = b.push_reg(span, OpKind::ConstBoxedInt, int_ref.value());
 
-        (
-            boxed::AnySubtype::Int(int_ref),
-            abitype::ABIType::Boxed(abitype::BoxedABIType::DirectTagged(boxed::TypeTag::Int)),
-        ) => b.push_reg(span, OpKind::ConstBoxedInt, int_ref.value()),
-
-        (
-            boxed::AnySubtype::Str(str_ref),
-            abitype::ABIType::Boxed(abitype::BoxedABIType::DirectTagged(boxed::TypeTag::Str)),
-        ) => b.push_reg(span, OpKind::ConstBoxedStr, str_ref.as_str().into()),
-
-        (boxed::AnySubtype::Str(str_ref), abitype::ABIType::Boxed(boxed_abi_type)) => {
-            // TODO: Temporary hack - this needs to be handled in a general way
-            let from_reg = b.push_reg(span, OpKind::ConstBoxedStr, str_ref.as_str().into());
-            b.cast_boxed(span, from_reg, boxed_abi_type.clone())
+            b.cast_boxed_cond(span, &from_abi_type, from_reg, to_abi_type.clone())
         }
+        (boxed::AnySubtype::Str(str_ref), abitype::ABIType::Boxed(to_abi_type)) => {
+            let from_abi_type = boxed::TypeTag::Str.into();
+            let from_reg = b.push_reg(span, OpKind::ConstBoxedStr, str_ref.as_str().into());
 
+            b.cast_boxed_cond(span, &from_abi_type, from_reg, to_abi_type.clone())
+        }
         (subtype, abi_type) => unimplemented!(
             "Unimplemented const {:?} to reg {:?} conversion",
             subtype,

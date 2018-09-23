@@ -2,14 +2,13 @@ use std::ffi::CStr;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
-use llvm_sys::LLVMLinkage;
 
-pub(crate) struct ModCtx {
+pub struct ModCtx {
     pub module: LLVMModuleRef,
 }
 
 impl ModCtx {
-    pub(crate) fn new(module: LLVMModuleRef) -> ModCtx {
+    pub fn new(module: LLVMModuleRef) -> ModCtx {
         ModCtx { module }
     }
 
@@ -31,9 +30,6 @@ impl ModCtx {
 
             let global = LLVMAddGlobal(self.module, llvm_type, name.as_ptr() as *const _);
             LLVMSetInitializer(global, initial_value());
-
-            LLVMSetUnnamedAddr(global, 1);
-            LLVMSetLinkage(global, LLVMLinkage::LLVMPrivateLinkage);
 
             global
         }

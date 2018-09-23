@@ -1,3 +1,4 @@
+mod const_gen;
 mod fun_gen;
 pub mod jit;
 mod mod_gen;
@@ -189,7 +190,10 @@ impl CodegenCtx {
             }
 
             let llvm_any = self.boxed_abi_to_llvm_struct_type(boxed_abi_type);
-            LLVMAddGlobal(module, llvm_any, name.as_ptr() as *const _)
+            let global = LLVMAddGlobal(module, llvm_any, name.as_ptr() as *const _);
+            LLVMSetGlobalConstant(global, 1 as i32);
+
+            global
         }
     }
 
