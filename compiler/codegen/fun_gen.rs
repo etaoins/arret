@@ -120,27 +120,18 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 );
             }
             OpKind::ConstNil(reg, _) => {
-                let llvm_value = cgx.ptr_to_singleton_box(
-                    mcx.module,
-                    &boxed::TypeTag::Nil.into(),
-                    b"ARRET_NIL\0",
-                );
+                let llvm_value =
+                    cgx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::Nil, b"ARRET_NIL\0");
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstTrue(reg, _) => {
-                let llvm_value = cgx.ptr_to_singleton_box(
-                    mcx.module,
-                    &boxed::TypeTag::True.into(),
-                    b"ARRET_TRUE\0",
-                );
+                let llvm_value =
+                    cgx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::True, b"ARRET_TRUE\0");
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstFalse(reg, _) => {
-                let llvm_value = cgx.ptr_to_singleton_box(
-                    mcx.module,
-                    &boxed::TypeTag::False.into(),
-                    b"ARRET_FALSE\0",
-                );
+                let llvm_value =
+                    cgx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::False, b"ARRET_FALSE\0");
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstInt(reg, value) => {

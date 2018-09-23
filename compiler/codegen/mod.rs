@@ -9,6 +9,7 @@ use std::collections::HashMap;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
+use llvm_sys::LLVMLinkage;
 
 use runtime::abitype::{ABIType, BoxedABIType, RetABIType};
 use runtime::boxed;
@@ -180,18 +181,29 @@ impl CodegenCtx {
     fn ptr_to_singleton_box(
         &mut self,
         module: LLVMModuleRef,
-        boxed_abi_type: &BoxedABIType,
+        type_tag: boxed::TypeTag,
         name: &[u8],
     ) -> LLVMValueRef {
+        use std::mem;
+
         unsafe {
             let global = LLVMGetNamedGlobal(module, name.as_ptr() as *const _);
             if !global.is_null() {
                 return global;
             }
 
-            let llvm_any = self.boxed_abi_to_llvm_struct_type(boxed_abi_type);
-            let global = LLVMAddGlobal(module, llvm_any, name.as_ptr() as *const _);
+            let llvm_type = self.boxed_abi_to_llvm_struct_type(&type_tag.into());
+            let global = LLVMAddGlobal(module, llvm_type, name.as_ptr() as *const _);
+
+            let members = &mut [self.const_box_header(type_tag)];
+
+            let llvm_value =
+                LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
+
+            LLVMSetInitializer(global, llvm_value);
+            LLVMSetAlignment(global, mem::align_of::<boxed::Any>() as u32);
             LLVMSetGlobalConstant(global, 1 as i32);
+            LLVMSetLinkage(global, LLVMLinkage::LLVMAvailableExternallyLinkage);
 
             global
         }
