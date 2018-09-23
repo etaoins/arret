@@ -15,7 +15,7 @@ use crate::hir::scope::{Binding, Scope};
 use crate::hir::util::expect_ident;
 use syntax::span::Span;
 
-new_counting_id_type!(MacroId);
+new_global_id_type!(MacroId);
 
 #[derive(PartialEq, Eq, Debug, Hash)]
 pub enum MacroVar {

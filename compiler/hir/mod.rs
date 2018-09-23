@@ -33,7 +33,7 @@ impl HirType for ty::Decl {
     type Purity = purity::Decl;
 }
 
-new_counting_id_type!(VarId);
+new_global_id_type!(VarId);
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Fun<T: HirType> {

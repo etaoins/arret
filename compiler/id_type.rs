@@ -28,12 +28,12 @@ macro_rules! new_indexing_id_type {
     };
 }
 
-/// Builds a new ID type based off an arbitrary counter
+/// Builds a new ID type using a global counter
 ///
-/// This is used for IDs that are simply allocated sequentially. Their interface type matches their
-/// internal type (typically `u32`).
+/// This allows allocating IDs without threading a mutable counter through multiple layers of
+/// code.
 #[macro_export]
-macro_rules! new_counting_id_type {
+macro_rules! new_global_id_type {
     ($id_name:ident) => {
         use std::num::NonZeroUsize;
         use std::sync::atomic::{AtomicUsize, Ordering};

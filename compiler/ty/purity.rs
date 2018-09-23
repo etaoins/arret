@@ -17,7 +17,7 @@ impl Purity {
     }
 }
 
-new_counting_id_type!(PVarId);
+new_global_id_type!(PVarId);
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct PVar {

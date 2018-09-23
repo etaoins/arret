@@ -3,7 +3,7 @@ use runtime::abitype;
 use syntax::span::Span;
 
 // TODO: This doesn't need to be a global counter
-new_counting_id_type!(RegId);
+new_global_id_type!(RegId);
 
 #[derive(Debug)]
 pub struct EntryPointABI {

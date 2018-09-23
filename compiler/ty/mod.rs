@@ -288,7 +288,7 @@ impl Fun {
     }
 }
 
-new_counting_id_type!(TVarId);
+new_global_id_type!(TVarId);
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct TVar {
