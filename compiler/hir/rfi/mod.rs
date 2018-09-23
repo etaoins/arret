@@ -1,5 +1,3 @@
-mod tyconv;
-
 use std::collections::HashMap;
 use std::os::raw::c_void;
 use std::path;
@@ -104,9 +102,9 @@ fn ensure_types_compatible<T>(
     abi_type: &T,
 ) -> Result<(), Error>
 where
-    T: tyconv::ConvertableABIType,
+    T: ty::conv_abi::ConvertableABIType,
 {
-    if ty::is_a::ty_ref_is_a(tvars, arret_poly, &abi_type.to_poly()).to_bool() {
+    if ty::is_a::ty_ref_is_a(tvars, arret_poly, &abi_type.to_ty_ref()).to_bool() {
         Ok(())
     } else {
         Err(Error::new(

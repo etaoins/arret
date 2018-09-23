@@ -76,7 +76,6 @@ impl<'list> ListIterator {
     ) -> Value {
         use crate::mir::ops::*;
         use crate::mir::value::to_reg::value_to_reg;
-        use crate::ty;
         use runtime::abitype;
 
         let needed_pair_type = abitype::BoxedABIType::Pair(&abitype::BoxedABIType::Any).into();
@@ -88,14 +87,11 @@ impl<'list> ListIterator {
         self.rest = Some(Value::Reg(Rc::new(value::RegValue {
             reg: rest_reg,
             abi_type: abitype::BoxedABIType::Any.into(),
-            arret_type: ty::Ty::List(ty::List::new(Box::new([]), Some(ty::Ty::Any.into_mono())))
-                .into_mono(),
         })));
 
         Value::Reg(Rc::new(value::RegValue {
             reg: head_reg,
             abi_type: abitype::BoxedABIType::Any.into(),
-            arret_type: ty::Ty::Any.into_mono(),
         }))
     }
 }

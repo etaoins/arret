@@ -13,7 +13,6 @@ use crate::mir::builder::Builder;
 use crate::mir::ops;
 use crate::mir::value;
 use crate::mir::value::Value;
-use crate::ty;
 
 pub type Portal = extern "C" fn(&mut runtime::task::Task, Gc<boxed::Any>) -> Gc<boxed::Any>;
 
@@ -101,7 +100,6 @@ pub fn build_rust_fun_app(
             let reg_value = value::RegValue {
                 reg: ret_reg,
                 abi_type: abi_type.clone(),
-                arret_type: ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into_mono(),
             };
 
             Value::Reg(Rc::new(reg_value))
@@ -123,8 +121,6 @@ pub fn build_rust_fun_portal(span: Span, rust_fun: &hir::rfi::Fun) -> ops::Fun {
     let rest_value = Value::Reg(Rc::new(value::RegValue {
         reg: rest_reg,
         abi_type: rest_abi_type.clone(),
-        arret_type: ty::Ty::List(ty::List::new(Box::new([]), Some(ty::Ty::Any.into_mono())))
-            .into_mono(),
     }));
 
     let return_value = build_rust_fun_app(&mut b, span, rust_fun, &[], Some(&rest_value));

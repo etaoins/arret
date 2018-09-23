@@ -1,8 +1,9 @@
 use crate::ty;
+use crate::ty::unify::Unifiable;
 
 use runtime::{abitype, boxed};
 
-fn type_tag_to_poly_ty(type_tag: boxed::TypeTag) -> ty::Ty<ty::Poly> {
+fn type_tag_to_ty<S: Unifiable>(type_tag: boxed::TypeTag) -> ty::Ty<S> {
     use runtime::boxed::TypeTag;
 
     match type_tag {
@@ -13,12 +14,12 @@ fn type_tag_to_poly_ty(type_tag: boxed::TypeTag) -> ty::Ty<ty::Poly> {
         TypeTag::True => ty::Ty::LitBool(true),
         TypeTag::False => ty::Ty::LitBool(true),
         TypeTag::Int => ty::Ty::Int,
-        TypeTag::TopVector => ty::Ty::Vectorof(Box::new(ty::Ty::Any.into_poly())),
+        TypeTag::TopVector => ty::Ty::Vectorof(Box::new(ty::Ty::Any.into_ty_ref())),
         TypeTag::Nil => ty::Ty::List(ty::List::empty()),
         TypeTag::TopPair => {
             let list = ty::List::new(
-                Box::new([ty::Ty::Any.into_poly()]),
-                Some(ty::Ty::Any.into_poly()),
+                Box::new([ty::Ty::Any.into_ty_ref()]),
+                Some(ty::Ty::Any.into_ty_ref()),
             );
             ty::Ty::List(list)
         }
@@ -26,20 +27,20 @@ fn type_tag_to_poly_ty(type_tag: boxed::TypeTag) -> ty::Ty<ty::Poly> {
 }
 
 pub trait ConvertableABIType {
-    fn to_poly(&self) -> ty::Poly;
+    fn to_ty_ref<S: Unifiable>(&self) -> S;
     fn to_rust_str(&self) -> String;
 }
 
 impl ConvertableABIType for abitype::ABIType {
-    fn to_poly(&self) -> ty::Poly {
+    fn to_ty_ref<S: Unifiable>(&self) -> S {
         use runtime::abitype::ABIType;
 
         match self {
-            ABIType::Bool => ty::Ty::Bool.into_poly(),
-            ABIType::Char => ty::Ty::Char.into_poly(),
-            ABIType::Float => ty::Ty::Float.into_poly(),
-            ABIType::Int => ty::Ty::Int.into_poly(),
-            ABIType::Boxed(boxed) => boxed.to_poly(),
+            ABIType::Bool => ty::Ty::Bool.into_ty_ref(),
+            ABIType::Char => ty::Ty::Char.into_ty_ref(),
+            ABIType::Float => ty::Ty::Float.into_ty_ref(),
+            ABIType::Int => ty::Ty::Int.into_ty_ref(),
+            ABIType::Boxed(boxed) => boxed.to_ty_ref(),
         }
     }
 
@@ -57,28 +58,28 @@ impl ConvertableABIType for abitype::ABIType {
 }
 
 impl ConvertableABIType for abitype::BoxedABIType {
-    fn to_poly(&self) -> ty::Poly {
+    fn to_ty_ref<S: Unifiable>(&self) -> S {
         use runtime::abitype::BoxedABIType;
 
         match self {
-            BoxedABIType::Any => ty::Ty::Any.into_poly(),
+            BoxedABIType::Any => ty::Ty::Any.into_ty_ref(),
             BoxedABIType::Vector(member) => {
-                ty::Ty::Vectorof(Box::new(member.to_poly())).into_poly()
+                ty::Ty::Vectorof(Box::new(member.to_ty_ref())).into_ty_ref()
             }
             BoxedABIType::List(member) => {
-                let list = ty::List::new(Box::new([]), Some(member.to_poly()));
-                ty::Ty::List(list).into_poly()
+                let list = ty::List::new(Box::new([]), Some(member.to_ty_ref()));
+                ty::Ty::List(list).into_ty_ref()
             }
             BoxedABIType::Pair(member) => {
-                let member_poly = member.to_poly();
-                let list = ty::List::new(Box::new([member_poly.clone()]), Some(member_poly));
-                ty::Ty::List(list).into_poly()
+                let member_ty_ref: S = member.to_ty_ref();
+                let list = ty::List::new(Box::new([member_ty_ref.clone()]), Some(member_ty_ref));
+                ty::Ty::List(list).into_ty_ref()
             }
-            BoxedABIType::DirectTagged(type_tag) => type_tag_to_poly_ty(*type_tag).into_poly(),
+            BoxedABIType::DirectTagged(type_tag) => type_tag_to_ty(*type_tag).into_ty_ref(),
             BoxedABIType::Union(_, tags) => {
                 let members = tags
                     .iter()
-                    .map(|type_tag| type_tag_to_poly_ty(*type_tag).into_poly());
+                    .map(|type_tag| type_tag_to_ty(*type_tag).into_ty_ref());
 
                 ty::unify::unify_ty_ref_iter(&ty::TVars::new(), members)
             }
@@ -100,13 +101,13 @@ impl ConvertableABIType for abitype::BoxedABIType {
 }
 
 impl ConvertableABIType for abitype::RetABIType {
-    fn to_poly(&self) -> ty::Poly {
+    fn to_ty_ref<S: Unifiable>(&self) -> S {
         use runtime::abitype::RetABIType;
 
         match self {
-            RetABIType::Void => ty::Ty::unit().into_poly(),
-            RetABIType::Never => ty::Ty::never().into_poly(),
-            RetABIType::Inhabited(abi_type) => abi_type.to_poly(),
+            RetABIType::Void => ty::Ty::unit().into_ty_ref(),
+            RetABIType::Never => ty::Ty::never().into_ty_ref(),
+            RetABIType::Inhabited(abi_type) => abi_type.to_ty_ref(),
         }
     }
 
@@ -138,7 +139,7 @@ mod test {
         let top_list_poly =
             ty::Ty::List(ty::List::new(Box::new([]), Some(ty::Ty::Any.into_poly()))).into_poly();
 
-        assert_eq!(top_list_poly, boxed_abi_type.to_poly());
+        assert_eq!(top_list_poly, boxed_abi_type.to_ty_ref());
     }
 
     #[test]
@@ -155,7 +156,7 @@ mod test {
             Some(ty::Ty::Int.into_poly()),
         )).into_poly();
 
-        assert_eq!(int_pair_poly, boxed_abi_type.to_poly());
+        assert_eq!(int_pair_poly, boxed_abi_type.to_ty_ref());
     }
 
     #[test]
@@ -168,6 +169,6 @@ mod test {
         assert_eq!("boxed::Nil", boxed_abi_type.to_rust_str());
 
         let nil_poly = ty::Ty::List(ty::List::empty()).into_poly();
-        assert_eq!(nil_poly, boxed_abi_type.to_poly());
+        assert_eq!(nil_poly, boxed_abi_type.to_ty_ref());
     }
 }

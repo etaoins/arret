@@ -24,7 +24,6 @@ pub struct Closure {
 pub struct RegValue {
     pub reg: RegId,
     pub abi_type: abitype::ABIType,
-    pub arret_type: ty::Mono,
 }
 
 #[derive(Clone, Debug)]
@@ -128,8 +127,8 @@ pub fn mono_for_value(interner: &Interner, value: &Value) -> ty::Mono {
             ty::Ty::Fun(Box::new(fun)).into_mono()
         }
         Value::Reg(reg_value) => {
-            // TODO: Ugly clone
-            reg_value.arret_type.clone()
+            use crate::ty::conv_abi::ConvertableABIType;
+            reg_value.abi_type.to_ty_ref()
         }
         Value::Divergent => ty::Ty::never().into_mono(),
     }
