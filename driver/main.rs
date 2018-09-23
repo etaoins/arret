@@ -36,11 +36,20 @@ fn main() {
                 .short("o")
                 .value_name("FILE")
                 .help("Output filename"),
+        ).arg(
+            Arg::with_name("TARGET")
+                .long("target")
+                .value_name("TRIPLE")
+                .help("Generate code for the given target"),
         ).get_matches();
 
     let arret_target_dir = find_path_to_arret_root();
+
     let cfg = DriverConfig {
-        package_paths: compiler::PackagePaths::with_stdlib(&arret_target_dir),
+        package_paths: compiler::PackagePaths::with_stdlib(
+            &arret_target_dir,
+            matches.value_of("TARGET"),
+        ),
     };
 
     match matches.value_of("INPUT") {
@@ -52,13 +61,20 @@ fn main() {
                 None => input_path.with_extension(""),
             };
 
-            if !mode::compile::compile_input_file(&cfg, input_path, &output_path) {
+            let target_triple = matches.value_of("TARGET");
+
+            if !mode::compile::compile_input_file(&cfg, input_path, target_triple, &output_path) {
                 process::exit(2);
             }
         }
         None => {
             if matches.value_of("OUTPUT").is_some() {
                 eprintln!("-o cannot be used with REPL");
+                process::exit(1);
+            }
+
+            if matches.value_of("TARGET").is_some() {
+                eprintln!("--target cannot be used with REPL");
                 process::exit(1);
             }
 

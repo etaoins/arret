@@ -20,12 +20,12 @@ new_indexing_id_type!(RustLibraryId, u32);
 
 pub struct Library {
     _loaded: libloading::Library,
-    path: Box<path::Path>,
+    target_path: Box<path::Path>,
 }
 
 impl Library {
-    pub fn path(&self) -> &path::Path {
-        &self.path
+    pub fn target_path(&self) -> &path::Path {
+        &self.target_path
     }
 }
 
@@ -120,7 +120,10 @@ where
     }
 }
 
-fn push_rfi_lib_path(path_buf: &mut path::PathBuf, package_name: &str) {
+fn build_rfi_lib_path(base: &path::Path, package_name: &str) -> path::PathBuf {
+    let mut path_buf = path::PathBuf::new();
+    path_buf.push(base);
+
     #[cfg(debug_assertions)]
     path_buf.push("debug");
 
@@ -139,6 +142,8 @@ fn push_rfi_lib_path(path_buf: &mut path::PathBuf, package_name: &str) {
         not(target_os = "windows")
     ))]
     path_buf.push(format!("lib{}.so", package_name));
+
+    path_buf
 }
 
 impl Loader {
@@ -245,15 +250,15 @@ impl Loader {
         &mut self,
         span: Span,
         source_loader: &mut SourceLoader,
-        base_path: &path::Path,
+        native_base_path: &path::Path,
+        target_base_path: &path::Path,
         package_name: &str,
     ) -> Result<HashMap<&'static str, Fun>, Error> {
-        let mut path_buf = path::PathBuf::new();
-        path_buf.push(base_path);
-        push_rfi_lib_path(&mut path_buf, package_name);
+        let native_path = build_rfi_lib_path(native_base_path, package_name);
+        let target_path = build_rfi_lib_path(target_base_path, package_name);
 
-        let map_io_err = |err| Error::from_module_io(span, &path_buf, &err);
-        let loaded = libloading::Library::new(&path_buf).map_err(map_io_err)?;
+        let map_io_err = |err| Error::from_module_io(span, &native_path, &err);
+        let loaded = libloading::Library::new(&native_path).map_err(map_io_err)?;
 
         let rust_library_id = RustLibraryId::new(self.rust_libraries.len());
 
@@ -289,7 +294,7 @@ impl Loader {
                         // allocation for the display name and extending the loaded sources. Instead
                         // only "load" the string once there is an error and adjust the span to match.
                         let kind = SourceKind::RfiModule(
-                            path_buf.to_string_lossy().into(),
+                            native_path.to_string_lossy().into(),
                             (*name).to_owned(),
                         );
                         let error_offset = source_loader.next_span_offset;
@@ -304,7 +309,7 @@ impl Loader {
 
         self.rust_libraries.push(Library {
             _loaded: loaded,
-            path: path_buf.into_boxed_path(),
+            target_path: target_path.into_boxed_path(),
         });
 
         Ok(module)

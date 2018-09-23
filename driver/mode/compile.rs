@@ -10,6 +10,8 @@ fn try_compile_input_file(
     cfg: &DriverConfig,
     source_loader: &mut compiler::SourceLoader,
     input_path: &path::Path,
+    output_type: compiler::OutputType,
+    target_triple: Option<&str>,
     output_path: &path::Path,
 ) -> Result<(), Error> {
     let source_file_id = source_loader
@@ -25,7 +27,13 @@ fn try_compile_input_file(
     }
 
     let mir_program = ehx.build_program(hir.main_var_id)?;
-    compiler::gen_program(&hir.rust_libraries, mir_program, output_path);
+    compiler::gen_program(
+        &hir.rust_libraries,
+        mir_program,
+        target_triple,
+        output_type,
+        output_path,
+    );
 
     Ok(())
 }
@@ -33,10 +41,26 @@ fn try_compile_input_file(
 pub fn compile_input_file(
     cfg: &DriverConfig,
     input_path: &path::Path,
+    target_triple: Option<&str>,
     output_path: &path::Path,
 ) -> bool {
     let mut source_loader = compiler::SourceLoader::new();
-    let result = try_compile_input_file(cfg, &mut source_loader, input_path, output_path);
+
+    let output_type = match output_path.extension().and_then(|e| e.to_str()) {
+        Some("ll") => compiler::OutputType::LLVMIR,
+        Some("s") => compiler::OutputType::Assembly,
+        Some("o") => compiler::OutputType::Object,
+        _ => compiler::OutputType::Executable,
+    };
+
+    let result = try_compile_input_file(
+        cfg,
+        &mut source_loader,
+        input_path,
+        output_type,
+        target_triple,
+        output_path,
+    );
 
     if let Err(Error(errs)) = result {
         for err in errs {

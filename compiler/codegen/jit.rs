@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::{ffi, mem};
+use std::{env, ffi, mem};
 
 use runtime::boxed;
 
@@ -33,11 +33,12 @@ pub struct JITCtx {
 impl JITCtx {
     pub fn new() -> JITCtx {
         unsafe {
-            use crate::codegen::target::default_target_machine;
+            use crate::codegen::target::create_target_machine;
 
             LLVMLinkInMCJIT();
 
-            let target_machine = default_target_machine(
+            let target_machine = create_target_machine(
+                None, // Can't cross compile in the JIT
                 LLVMRelocMode::LLVMRelocDefault,
                 LLVMCodeModel::LLVMCodeModelJITDefault,
             );
@@ -83,7 +84,10 @@ impl JITCtx {
                 LLVMVerifierFailureAction::LLVMAbortProcessAction,
                 error,
             );
-            //LLVMDumpModule(module);
+
+            if env::var_os("ARRET_DUMP_LLVM").is_some() {
+                LLVMDumpModule(module);
+            }
 
             let shared_module = LLVMOrcMakeSharedModule(module);
 

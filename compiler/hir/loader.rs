@@ -9,7 +9,8 @@ use syntax::span::Span;
 
 pub struct PackagePath {
     arret_base: Box<path::Path>,
-    rust_base: Box<path::Path>,
+    native_rust_base: Box<path::Path>,
+    target_rust_base: Box<path::Path>,
 }
 
 pub struct PackagePaths {
@@ -24,12 +25,20 @@ impl PackagePaths {
     }
 
     /// Creates an instance including the `stdlib` package
-    pub fn with_stdlib(arret_root_dir: &path::Path) -> PackagePaths {
+    pub fn with_stdlib(arret_root_dir: &path::Path, target_triple: Option<&str>) -> PackagePaths {
         let mut pp = PackagePaths::empty();
+
+        let native_rust_base = arret_root_dir.join("target");
+        let target_rust_base = if let Some(target_triple) = target_triple {
+            native_rust_base.join(target_triple)
+        } else {
+            native_rust_base.clone()
+        };
 
         let stdlib_path = PackagePath {
             arret_base: arret_root_dir.join("stdlib/arret").into(),
-            rust_base: arret_root_dir.join("target").into(),
+            native_rust_base: native_rust_base.into(),
+            target_rust_base: target_rust_base.into(),
         };
 
         pp.add_package("stdlib", stdlib_path);
@@ -39,7 +48,7 @@ impl PackagePaths {
     /// Creates an instance for use in our internal unit and integration tests
     pub fn test_paths() -> PackagePaths {
         let parent_path = path::Path::new("..");
-        Self::with_stdlib(&parent_path)
+        Self::with_stdlib(&parent_path, None)
     }
 
     pub fn add_package(&mut self, package_name: &str, path: PackagePath) {
@@ -93,7 +102,8 @@ pub fn load_module_by_name(
             .load(
                 span,
                 source_loader,
-                &package_path.rust_base,
+                &package_path.native_rust_base,
+                &package_path.target_rust_base,
                 &module_name.package_name,
             ).map(LoadedModule::Rust)
     } else {

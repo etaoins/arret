@@ -1,5 +1,5 @@
 use std::ffi::{CStr, CString};
-use std::{fs, path, process, ptr};
+use std::{env, fs, path, process, ptr};
 
 use llvm_sys::analysis::*;
 use llvm_sys::core::*;
@@ -11,6 +11,14 @@ use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::CodegenCtx;
 use crate::hir::rfi;
 use crate::mir;
+
+#[derive(Copy, Clone, PartialEq)]
+pub enum OutputType {
+    LLVMIR,
+    Assembly,
+    Object,
+    Executable,
+}
 
 fn c_main_llvm_type(cgx: &mut CodegenCtx) -> LLVMTypeRef {
     unsafe {
@@ -93,53 +101,97 @@ fn program_to_module(cgx: &mut CodegenCtx, program: mir::BuiltProgram) -> LLVMMo
 pub fn gen_program(
     rust_libraries: &[rfi::Library],
     program: mir::BuiltProgram,
+    target_triple: Option<&str>,
+    output_type: OutputType,
     output_file: &path::Path,
 ) {
-    use crate::codegen::target::default_target_machine;
-    let object_path = output_file.with_extension("o");
+    use crate::codegen::target::create_target_machine;
+
+    let llvm_output_path = if output_type == OutputType::Executable {
+        // When outputting an executable this is an intermediate file that we pass to our linker
+        output_file.with_extension("o")
+    } else {
+        // Otherwise this is the final destination
+        output_file.to_owned()
+    };
+
+    let llvm_output_path_cstring = CString::new(llvm_output_path.to_str().unwrap()).unwrap();
 
     let mut cgx = CodegenCtx::new();
 
-    let target_machine = default_target_machine(
+    let target_machine = create_target_machine(
+        target_triple,
         LLVMRelocMode::LLVMRelocDynamicNoPic,
         LLVMCodeModel::LLVMCodeModelDefault,
     );
     let module = program_to_module(&mut cgx, program);
 
     unsafe {
-        let error: *mut *mut libc::c_char = ptr::null_mut();
+        let mut error: *mut libc::c_char = ptr::null_mut();
+
         LLVMVerifyModule(
             module,
             LLVMVerifierFailureAction::LLVMAbortProcessAction,
-            error,
+            &mut error as *mut _,
         );
 
-        //LLVMDumpModule(module);
+        if env::var_os("ARRET_DUMP_LLVM").is_some() {
+            LLVMDumpModule(module);
+        }
 
-        let object_path_cstring = CString::new(object_path.to_str().unwrap()).unwrap();
+        let llvm_code_gen_file_type = match output_type {
+            OutputType::LLVMIR => {
+                if LLVMPrintModuleToFile(
+                    module,
+                    llvm_output_path_cstring.as_ptr() as *mut _,
+                    &mut error as *mut _,
+                ) != 0
+                {
+                    panic!(
+                        "LLVMPrintModuleToFile: {}",
+                        CStr::from_ptr(error).to_str().unwrap()
+                    );
+                }
+                return;
+            }
+            OutputType::Assembly => LLVMCodeGenFileType::LLVMAssemblyFile,
+            OutputType::Object | OutputType::Executable => LLVMCodeGenFileType::LLVMObjectFile,
+        };
+
         if LLVMTargetMachineEmitToFile(
             target_machine,
             module,
-            object_path_cstring.as_ptr() as *mut _,
-            LLVMCodeGenFileType::LLVMObjectFile,
-            error,
+            llvm_output_path_cstring.as_ptr() as *mut _,
+            llvm_code_gen_file_type,
+            &mut error as *mut _,
         ) != 0
         {
-            panic!(CStr::from_ptr(*error));
+            panic!(
+                "LLVMTargetMachineEmitToFile: {}",
+                CStr::from_ptr(error).to_str().unwrap()
+            );
         }
     }
 
-    let status = process::Command::new("cc")
-        .arg(object_path.clone())
-        .arg("-o")
-        .arg(output_file)
-        .args(rust_libraries.iter().map(|l| l.path()))
-        .status()
-        .unwrap();
+    if output_type == OutputType::Executable {
+        let target_args = match target_triple {
+            Some(triple) => vec!["-target", triple],
+            None => vec![],
+        };
 
-    let _ = fs::remove_file(object_path);
+        let status = process::Command::new("cc")
+            .arg(llvm_output_path.clone())
+            .args(target_args)
+            .arg("-o")
+            .arg(output_file)
+            .args(rust_libraries.iter().map(|l| l.target_path()))
+            .status()
+            .unwrap();
 
-    if !status.success() {
-        panic!("Error invoking linker");
+        let _ = fs::remove_file(llvm_output_path);
+
+        if !status.success() {
+            panic!("Error invoking linker");
+        }
     }
 }

@@ -15,7 +15,7 @@ mod source;
 mod ty;
 mod typeck;
 
-pub use crate::codegen::program::gen_program;
+pub use crate::codegen::program::{gen_program, OutputType};
 pub use crate::hir::lowering::lower_program;
 pub use crate::hir::PackagePaths;
 pub use crate::mir::eval_hir::EvalHirCtx;
