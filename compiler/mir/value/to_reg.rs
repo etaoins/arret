@@ -52,16 +52,18 @@ pub fn list_to_reg(
 ) -> RegId {
     use crate::mir::ops::*;
     use crate::mir::value::list::list_value_length;
+    use runtime::abitype::TOP_LIST_BOXED_ABI_TYPE;
 
     let tail_reg = if let Some(rest) = rest {
         value_to_reg(
             b,
             span,
             rest,
-            &abitype::BoxedABIType::List(&abitype::BoxedABIType::Any).into(),
+            &abitype::ABIType::Boxed(TOP_LIST_BOXED_ABI_TYPE),
         )
     } else {
-        b.push_reg(span, OpKind::ConstNil, ())
+        let nil_reg = b.push_reg(span, OpKind::ConstNil, ());
+        b.const_cast_boxed(span, nil_reg, TOP_LIST_BOXED_ABI_TYPE)
     };
 
     let list_reg = if fixed.is_empty() {
@@ -77,7 +79,7 @@ pub fn list_to_reg(
                 let head_length = tail_length + 1;
                 let fixed_reg = value_to_reg(b, span, fixed, &abitype::BoxedABIType::Any.into());
 
-                let head_reg = b.push_reg(
+                let pair_head_reg = b.push_reg(
                     span,
                     OpKind::ConstBoxedPair,
                     ConstBoxedPairOp {
@@ -87,6 +89,8 @@ pub fn list_to_reg(
                     },
                 );
 
+                let head_reg =
+                    b.const_cast_boxed(span, pair_head_reg, TOP_LIST_BOXED_ABI_TYPE.clone());
                 (head_length, head_reg)
             }).1
     };

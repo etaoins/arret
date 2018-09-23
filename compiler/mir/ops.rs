@@ -74,6 +74,7 @@ pub enum OpKind {
     ConstBoxedStr(RegId, Box<str>),
     ConstBoxedPair(RegId, ConstBoxedPairOp),
     ConstEntryPoint(RegId, ConstEntryPointOp),
+    ConstCastBoxed(RegId, CastBoxedOp),
     CastBoxed(RegId, CastBoxedOp),
     CurrentTask(RegId, ()),
     Call(RegId, CallOp),

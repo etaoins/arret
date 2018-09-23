@@ -11,7 +11,7 @@ use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::LLVMLinkage;
 
-use runtime::abitype::{ABIType, BoxedABIType, RetABIType};
+use runtime::abitype::{ABIType, BoxedABIType, RetABIType, TOP_LIST_BOXED_ABI_TYPE};
 use runtime::boxed;
 
 pub struct CodegenCtx {
@@ -103,9 +103,11 @@ impl CodegenCtx {
                 }
                 BoxedABIType::Pair(_) | BoxedABIType::DirectTagged(boxed::TypeTag::TopPair) => {
                     let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
+                    let llvm_any_list_ptr =
+                        self.boxed_abi_to_llvm_ptr_type(&TOP_LIST_BOXED_ABI_TYPE);
 
                     members.push(llvm_any_ptr);
-                    members.push(llvm_any_ptr);
+                    members.push(llvm_any_list_ptr);
                     members.push(LLVMInt64TypeInContext(self.llx));
 
                     b"pair\0".as_ptr()

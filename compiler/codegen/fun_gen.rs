@@ -164,6 +164,13 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 let llvm_value = const_gen::gen_boxed_inline_str(cgx, mcx, value.as_ref());
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::ConstCastBoxed(reg, CastBoxedOp { from_reg, to_type }) => {
+                let from_llvm_value = fcx.regs[from_reg];
+                let to_llvm_type = cgx.boxed_abi_to_llvm_ptr_type(to_type);
+                let to_llvm_value = LLVMConstBitCast(from_llvm_value, to_llvm_type);
+
+                fcx.regs.insert(*reg, to_llvm_value);
+            }
             OpKind::CastBoxed(reg, CastBoxedOp { from_reg, to_type }) => {
                 let from_llvm_value = fcx.regs[from_reg];
                 let to_llvm_type = cgx.boxed_abi_to_llvm_ptr_type(to_type);
@@ -181,16 +188,16 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                     cgx.function_to_llvm_type(abi.takes_task, &abi.params, &abi.ret);
                 let function_name = CString::new(*symbol).unwrap();
 
-                let global = LLVMGetNamedGlobal(
+                let global = LLVMGetNamedFunction(
                     mcx.module,
                     function_name.as_bytes_with_nul().as_ptr() as *const _,
                 );
 
                 let function = if global.is_null() {
-                    LLVMAddGlobal(
+                    LLVMAddFunction(
                         mcx.module,
-                        function_type,
                         function_name.as_bytes_with_nul().as_ptr() as *const _,
+                        function_type,
                     )
                 } else {
                     global

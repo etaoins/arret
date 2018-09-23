@@ -81,6 +81,19 @@ impl Builder {
         self.push_reg(span, OpKind::CastBoxed, CastBoxedOp { from_reg, to_type })
     }
 
+    pub fn const_cast_boxed(
+        &mut self,
+        span: Span,
+        from_reg: RegId,
+        to_type: abitype::BoxedABIType,
+    ) -> RegId {
+        self.push_reg(
+            span,
+            OpKind::ConstCastBoxed,
+            CastBoxedOp { from_reg, to_type },
+        )
+    }
+
     pub fn cast_boxed_cond(
         &mut self,
         span: Span,

@@ -58,10 +58,10 @@ fn program_to_module(cgx: &mut CodegenCtx, program: mir::BuiltProgram) -> LLVMMo
             0,
         );
 
-        let launch_task_llvm_fun = LLVMAddGlobal(
+        let launch_task_llvm_fun = LLVMAddFunction(
             mcx.module,
-            launch_task_llvm_type,
             "arret_runtime_launch_task\0".as_ptr() as *const _,
+            launch_task_llvm_type,
         );
 
         // Now build our C main

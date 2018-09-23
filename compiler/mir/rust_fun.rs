@@ -113,8 +113,7 @@ pub fn build_rust_fun_portal(span: Span, rust_fun: &hir::rfi::Fun) -> ops::Fun {
 
     let mut b = Builder::new();
 
-    let rest_abi_type: abitype::ABIType =
-        abitype::BoxedABIType::List(&abitype::BoxedABIType::Any).into();
+    let rest_abi_type: abitype::ABIType = abitype::TOP_LIST_BOXED_ABI_TYPE.into();
     let ret_abi_type: abitype::ABIType = abitype::BoxedABIType::Any.into();
 
     let rest_reg = b.alloc_reg();

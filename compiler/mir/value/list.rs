@@ -86,7 +86,7 @@ impl<'list> ListIterator {
 
         self.rest = Some(Value::Reg(Rc::new(value::RegValue {
             reg: rest_reg,
-            abi_type: abitype::BoxedABIType::Any.into(),
+            abi_type: abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
         })));
 
         Value::Reg(Rc::new(value::RegValue {
