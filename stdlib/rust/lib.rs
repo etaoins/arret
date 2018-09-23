@@ -14,6 +14,7 @@ use runtime::abitype::*;
 use runtime::binding::*;
 
 use runtime::boxed;
+use runtime::boxed::prelude::*;
 use runtime::boxed::refs::Gc;
 use runtime::task::Task;
 
@@ -78,11 +79,19 @@ define_rust_fn! {
     }
 }
 
+define_rust_fn! {
+    #[arret_type="(All #{H T} H (Listof T) -> (List H T ...))"]
+    CONS = fn arret_stdlib_cons(task: &mut Task, head: Gc<boxed::Any>, tail: Gc<boxed::List<boxed::Any>>) -> Gc<boxed::TopPair> {
+        boxed::Pair::new(task, (head, tail)).as_top_pair()
+    }
+}
+
 define_rust_module! {
     "length" => LENGTH,
     "panic" => PANIC,
     "=" => EQUALS,
     "print!" => PRINT,
     "println!" => PRINTLN,
-    "exit" => EXIT
+    "exit" => EXIT,
+    "cons" => CONS
 }

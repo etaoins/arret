@@ -78,6 +78,12 @@ impl<T: Boxed> ConstructableFrom<PairInput<T>> for Pair<T> {
     }
 }
 
+impl Pair<Any> {
+    pub fn as_top_pair(&self) -> Gc<TopPair> {
+        unsafe { Gc::new(&*(self as *const _ as *const TopPair)) }
+    }
+}
+
 #[repr(C, align(16))]
 pub struct List<T: Boxed> {
     header: Header,

@@ -2,7 +2,7 @@ mod list;
 
 use syntax::span::Span;
 
-use crate::mir::intrinsic::list::*;
+use crate::mir::intrinsic::list::{Cons, Length};
 
 use crate::mir::builder::Builder;
 use crate::mir::error::Result;
@@ -77,5 +77,6 @@ macro_rules! define_intrinsics {
 }
 
 define_intrinsics! {
-    "length" => Length
+    "length" => Length,
+    "cons" => Cons
 }
