@@ -14,20 +14,20 @@ use crate::hir;
 use crate::mir::ops::RegId;
 use crate::ty;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Closure {
     pub captures: HashMap<hir::VarId, Value>,
     pub fun_expr: Rc<hir::Fun<ty::Poly>>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RegValue {
     pub reg: RegId,
     pub abi_type: abitype::ABIType,
     pub arret_type: ty::Mono,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Value {
     Const(Gc<boxed::Any>),
     // This uses Box<[]> because we can't convert from a Vec<> to Rc<[]> without reallocating
@@ -40,16 +40,21 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn list_iter(&self) -> ListIterator<'_> {
+    pub fn list_iter(&self) -> list::ListIterator {
+        use std::ops::Deref;
         match self {
-            Value::List(fixed, rest) => ListIterator {
-                fixed,
-                rest: rest.as_ref().map(|rest| rest.as_ref()),
-            },
-            other => ListIterator {
-                fixed: &[],
-                rest: Some(other),
-            },
+            Value::List(fixed, Some(rest)) => {
+                list::ListIterator::new(fixed.clone().into_vec(), Some(rest.deref().clone()))
+            }
+            Value::List(fixed, None) => list::ListIterator::new(fixed.clone().into_vec(), None),
+            other => list::ListIterator::new(vec![], Some(other.clone())),
+        }
+    }
+
+    pub fn is_divergent(&self) -> bool {
+        match self {
+            Value::Divergent => true,
+            _ => false,
         }
     }
 }
@@ -127,38 +132,6 @@ pub fn mono_for_value(interner: &Interner, value: &Value) -> ty::Mono {
             reg_value.arret_type.clone()
         }
         Value::Divergent => ty::Ty::never().into_mono(),
-    }
-}
-
-pub struct ListIterator<'list> {
-    fixed: &'list [Value],
-    rest: Option<&'list Value>,
-}
-
-impl<'list> ListIterator<'list> {
-    pub fn next_unchecked(&mut self) -> &'list Value {
-        if self.fixed.is_empty() {
-            if let Some(Value::List(fixed, rest)) = self.rest {
-                // Become our tail
-                self.fixed = fixed;
-                self.rest = rest.as_ref().map(|rest| rest.as_ref());
-
-                self.next_unchecked()
-            } else {
-                unimplemented!("Need to pull element off rest")
-            }
-        } else {
-            let next = self.fixed.first().unwrap();
-            self.fixed = &self.fixed[1..];
-            next
-        }
-    }
-
-    pub fn rest(&self) -> Value {
-        Value::List(
-            self.fixed.to_vec().into_boxed_slice(),
-            self.rest.cloned().map(Box::new),
-        )
     }
 }
 

@@ -5,10 +5,15 @@ use runtime::boxed;
 
 use libc;
 
+use llvm_sys::analysis::*;
+use llvm_sys::core::*;
 use llvm_sys::execution_engine::*;
 use llvm_sys::orc::*;
-use llvm_sys::prelude::*;
 use llvm_sys::target_machine::*;
+
+use crate::codegen::mod_gen::ModCtx;
+use crate::codegen::CodegenCtx;
+use crate::mir::ops;
 
 extern "C" fn orc_sym_resolve(name_ptr: *const libc::c_char, jcx_void: *mut libc::c_void) -> u64 {
     unsafe {
@@ -53,8 +58,33 @@ impl JITCtx {
         }
     }
 
-    pub fn compile_fun(&mut self, module: LLVMModuleRef, fun_name: &[u8]) -> u64 {
+    pub fn compile_fun(
+        &mut self,
+        cgx: &mut CodegenCtx,
+        wanted_name: &ffi::CString,
+        fun: &ops::Fun,
+    ) -> u64 {
+        use crate::codegen::fun_gen;
+        use std::{mem, ptr};
+
         unsafe {
+            // Create the module
+            let module = LLVMModuleCreateWithNameInContext(
+                wanted_name.as_bytes_with_nul().as_ptr() as *const _,
+                cgx.llx,
+            );
+
+            let mut mcx = ModCtx::new(module);
+            fun_gen::gen_fun(cgx, &mut mcx, wanted_name, fun);
+
+            let error: *mut *mut libc::c_char = ptr::null_mut();
+            LLVMVerifyModule(
+                module,
+                LLVMVerifierFailureAction::LLVMAbortProcessAction,
+                error,
+            );
+            //LLVMDumpModule(module);
+
             let shared_module = LLVMOrcMakeSharedModule(module);
 
             let mut orc_module: LLVMOrcModuleHandle = mem::uninitialized();
@@ -70,8 +100,11 @@ impl JITCtx {
             }
 
             let mut target_address: LLVMOrcTargetAddress = 0;
-            if LLVMOrcGetSymbolAddress(self.orc, &mut target_address, fun_name.as_ptr() as *const _)
-                != LLVMOrcErrorCode::LLVMOrcErrSuccess
+            if LLVMOrcGetSymbolAddress(
+                self.orc,
+                &mut target_address,
+                wanted_name.as_ptr() as *const _,
+            ) != LLVMOrcErrorCode::LLVMOrcErrSuccess
             {
                 panic!("Unable to get symbol address")
             }

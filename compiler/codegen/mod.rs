@@ -1,9 +1,6 @@
-mod convert;
-pub mod fun_abi;
 mod fun_gen;
 pub mod jit;
 mod mod_gen;
-pub mod portal;
 pub(crate) mod program;
 mod target;
 
@@ -132,7 +129,7 @@ impl CodegenCtx {
     fn abi_to_llvm_type(&mut self, abi_type: &ABIType) -> LLVMTypeRef {
         unsafe {
             match abi_type {
-                ABIType::Bool => LLVMInt8TypeInContext(self.llx),
+                ABIType::Bool => LLVMInt1TypeInContext(self.llx),
                 ABIType::Int => LLVMInt64TypeInContext(self.llx),
                 ABIType::Boxed(boxed) => self.boxed_abi_to_llvm_ptr_type(boxed),
                 other => {

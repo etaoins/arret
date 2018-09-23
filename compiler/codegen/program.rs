@@ -44,7 +44,7 @@ fn program_to_module(cgx: &mut CodegenCtx, program: Vec<Op>) -> LLVMModuleRef {
         LLVMPositionBuilderAtEnd(builder, bb);
 
         let mut mcx = ModCtx::new(module);
-        let mut fcx = FunCtx::new(builder);
+        let mut fcx = FunCtx::new(function, builder);
 
         for op in program {
             gen_op(cgx, &mut mcx, &mut fcx, &op);

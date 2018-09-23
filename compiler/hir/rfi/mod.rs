@@ -8,7 +8,6 @@ use libloading;
 
 use syntax::span::Span;
 
-use crate::codegen::fun_abi::FunABI;
 use crate::hir::error::{Error, ErrorKind};
 use crate::hir::ns::{NsDatum, NsId};
 use crate::hir::scope::Scope;
@@ -67,22 +66,20 @@ impl Fun {
     pub fn entry_point(&self) -> *const c_void {
         self.entry_point
     }
-}
 
-impl FunABI for Fun {
-    fn takes_task(&self) -> bool {
+    pub fn takes_task(&self) -> bool {
         self.takes_task
     }
 
-    fn params(&self) -> &'static [abitype::ABIType] {
+    pub fn params(&self) -> &'static [abitype::ABIType] {
         self.params
     }
 
-    fn has_rest(&self) -> bool {
+    pub fn has_rest(&self) -> bool {
         self.arret_fun_type.params().rest().is_some()
     }
 
-    fn ret(&self) -> &'static abitype::RetABIType {
+    pub fn ret(&self) -> &'static abitype::RetABIType {
         self.ret
     }
 }

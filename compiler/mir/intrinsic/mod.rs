@@ -7,7 +7,7 @@ use crate::mir::intrinsic::list::*;
 use crate::mir::builder::Builder;
 use crate::mir::error::Result;
 use crate::mir::eval_hir::{DefCtx, EvalHirCtx};
-use crate::mir::value::ListIterator;
+use crate::mir::value::list::ListIterator;
 use crate::mir::{Expr, Value};
 
 trait Intrinsic {
@@ -47,7 +47,7 @@ trait Intrinsic {
         _ehx: &mut EvalHirCtx,
         _b: &mut Option<Builder>,
         _span: Span,
-        _iter: ListIterator<'_>,
+        _iter: ListIterator,
     ) -> Result<Option<Value>> {
         panic!("Intrinsic does not implement `eval_arg_list`")
     }
