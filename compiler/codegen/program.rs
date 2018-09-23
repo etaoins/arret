@@ -1,5 +1,5 @@
 use std::ffi::{CStr, CString};
-use std::{path, process, ptr};
+use std::{fs, path, process, ptr};
 
 use llvm_sys::analysis::*;
 use llvm_sys::core::*;
@@ -58,7 +58,7 @@ fn program_to_module(cgx: &mut CodegenCtx, program: Vec<Op>) -> LLVMModuleRef {
 
 pub fn gen_program(rust_libraries: &[rfi::Library], program: Vec<Op>, output_file: &path::Path) {
     use crate::codegen::target::default_target_machine;
-    let object_path = "/tmp/temp.o";
+    let object_path = output_file.with_extension("o");
 
     let mut cgx = CodegenCtx::new();
 
@@ -78,7 +78,7 @@ pub fn gen_program(rust_libraries: &[rfi::Library], program: Vec<Op>, output_fil
 
         //LLVMDumpModule(module);
 
-        let object_path_cstring = CString::new(object_path).unwrap();
+        let object_path_cstring = CString::new(object_path.to_str().unwrap()).unwrap();
         if LLVMTargetMachineEmitToFile(
             target_machine,
             module,
@@ -92,12 +92,14 @@ pub fn gen_program(rust_libraries: &[rfi::Library], program: Vec<Op>, output_fil
     }
 
     let status = process::Command::new("cc")
-        .arg(object_path)
+        .arg(object_path.clone())
         .arg("-o")
         .arg(output_file)
         .args(rust_libraries.iter().map(|l| l.path()))
         .status()
         .unwrap();
+
+    let _ = fs::remove_file(object_path);
 
     if !status.success() {
         panic!("Error invoking linker");
