@@ -50,7 +50,7 @@ fn program_to_module(cgx: &mut CodegenCtx, program: mir::BuiltProgram) -> LLVMMo
         }
 
         // Declare arret_launch_task
-        let mut launch_task_llvm_arg_types = vec![LLVMTypeOf(arret_main_llvm_value)];
+        let launch_task_llvm_arg_types = &mut [LLVMTypeOf(arret_main_llvm_value)];
         let launch_task_llvm_type = LLVMFunctionType(
             LLVMVoidTypeInContext(cgx.llx),
             launch_task_llvm_arg_types.as_mut_ptr(),
@@ -75,7 +75,7 @@ fn program_to_module(cgx: &mut CodegenCtx, program: mir::BuiltProgram) -> LLVMMo
         let bb = LLVMAppendBasicBlockInContext(cgx.llx, function, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
 
-        let mut launch_task_llvm_args = vec![arret_main_llvm_value];
+        let launch_task_llvm_args = &mut [arret_main_llvm_value];
         LLVMBuildCall(
             builder,
             launch_task_llvm_fun,
