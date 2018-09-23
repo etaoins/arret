@@ -2,7 +2,7 @@ use std::vec;
 use syntax::datum::Datum;
 use syntax::span::Span;
 
-new_global_id_type!(NsId);
+new_counting_id_type!(NsIdCounter, NsId);
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Ident {

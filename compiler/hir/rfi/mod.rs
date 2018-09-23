@@ -143,12 +143,10 @@ fn push_rfi_lib_path(path_buf: &mut path::PathBuf, package_name: &str) {
 
 impl Loader {
     pub fn new() -> Loader {
-        let type_ns_id = NsId::alloc();
-
         // TODO: Add `Num` type
         Loader {
-            type_ns_id,
-            type_scope: Scope::new_with_primitives(type_ns_id),
+            type_ns_id: Scope::root_ns_id(),
+            type_scope: Scope::new_with_primitives(),
             rust_libraries: vec![],
         }
     }

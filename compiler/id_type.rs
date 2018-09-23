@@ -76,3 +76,34 @@ macro_rules! new_global_id_type {
         }
     };
 }
+
+/// Builds a new ID type based off an arbitrary counter
+#[macro_export]
+macro_rules! new_counting_id_type {
+    ($counter_name:ident, $id_name:ident) => {
+        #[derive(Clone)]
+        pub struct $counter_name(u32);
+
+        impl $counter_name {
+            pub fn new() -> $counter_name {
+                $counter_name(1)
+            }
+
+            pub fn alloc(&mut self) -> $id_name {
+                let id = $id_name(self.0);
+                self.0 += 1;
+                id
+            }
+        }
+
+        #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd)]
+        pub struct $id_name(u32);
+
+        impl $id_name {
+            #[allow(unused)]
+            pub fn new(value: u32) -> $id_name {
+                $id_name(value)
+            }
+        }
+    };
+}

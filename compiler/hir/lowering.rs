@@ -781,7 +781,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         scope: &mut Scope,
         data: Vec<Datum>,
     ) -> Result<LoweredModule, Vec<Error>> {
-        let ns_id = NsId::alloc();
+        let ns_id = scope.alloc_ns_id();
         let mut errors: Vec<Error> = vec![];
 
         // The default scope only consists of (import)
@@ -978,8 +978,8 @@ fn module_for_str(data_str: &str) -> Result<LoweredModule> {
 pub fn expr_for_str(data_str: &str) -> Expr<ty::Decl> {
     use syntax::parser::datum_from_str;
 
-    let test_ns_id = NsId::alloc();
-    let scope = Scope::new_with_primitives(test_ns_id);
+    let test_ns_id = Scope::root_ns_id();
+    let scope = Scope::new_with_primitives();
 
     let test_datum = datum_from_str(data_str).unwrap();
     let test_nsdatum = NsDatum::from_syntax_datum(test_ns_id, test_datum);

@@ -1,27 +1,8 @@
-use std::num::NonZeroUsize;
-
 use runtime::abitype;
 
 use syntax::span::Span;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
-pub struct RegId(NonZeroUsize);
-
-#[derive(Copy, Clone)]
-pub(super) struct RegIdCounter {
-    curr_id: usize,
-}
-
-impl RegIdCounter {
-    pub(super) fn new() -> RegIdCounter {
-        RegIdCounter { curr_id: 0 }
-    }
-
-    pub(super) fn alloc(&mut self) -> RegId {
-        self.curr_id += 1;
-        RegId(NonZeroUsize::new(self.curr_id).unwrap())
-    }
-}
+new_counting_id_type!(RegIdCounter, RegId);
 
 #[derive(Debug)]
 pub struct EntryPointABI {

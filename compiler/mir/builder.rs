@@ -50,14 +50,14 @@ impl Builder {
         F: FnOnce(&mut Builder) -> RegId,
     {
         let mut true_builder = Builder::new();
-        true_builder.reg_id_counter = self.reg_id_counter;
+        true_builder.reg_id_counter = self.reg_id_counter.clone();
         let true_result_reg = true_cons(&mut true_builder);
 
         let mut false_builder = Builder::new();
-        false_builder.reg_id_counter = true_builder.reg_id_counter;
+        false_builder.reg_id_counter = true_builder.reg_id_counter.clone();
         let false_result_reg = false_cons(&mut false_builder);
 
-        self.reg_id_counter = false_builder.reg_id_counter;
+        self.reg_id_counter = false_builder.reg_id_counter.clone();
 
         self.push_reg(
             span,

@@ -5,7 +5,7 @@ use syntax::span::{Span, EMPTY_SPAN};
 
 use crate::hir::error::{Error, ErrorKind};
 use crate::hir::macros::Macro;
-use crate::hir::ns::{Ident, NsDatum, NsId};
+use crate::hir::ns::{Ident, NsDatum, NsId, NsIdCounter};
 use crate::hir::prim::Prim;
 use crate::hir::{types, VarId};
 use crate::ty;
@@ -55,6 +55,7 @@ impl Bindings {
 pub struct Scope {
     bindings: Rc<Bindings>,
     tvars: ty::TVars,
+    ns_id_counter: NsIdCounter,
 }
 
 impl Scope {
@@ -67,24 +68,29 @@ impl Scope {
                 allow_redef: false,
             }),
             tvars: ty::TVars::new(),
+            ns_id_counter: NsIdCounter::new(),
         }
+    }
+
+    pub fn root_ns_id() -> NsId {
+        NsId::new(0)
     }
 
     /// Creates a new REPL scope containing `import`
     ///
     /// This scope is special as it allows redefinitions at the root level.
-    pub fn new_repl(ns_id: NsId) -> Scope {
+    pub fn new_repl() -> Scope {
         use std::iter;
 
         let entries = iter::once(("import".into(), Binding::Prim(Prim::Import)));
-        let mut scope = Self::new_with_entries(ns_id, entries);
+        let mut scope = Self::new_with_entries(entries);
         scope.bindings_mut().allow_redef = true;
 
         scope
     }
 
     /// Creates a new root scope containing all primitives and types
-    pub fn new_with_primitives(ns_id: NsId) -> Scope {
+    pub fn new_with_primitives() -> Scope {
         use crate::hir::prim::PRIM_EXPORTS;
         use crate::hir::types::TY_EXPORTS;
 
@@ -93,18 +99,18 @@ impl Scope {
             .chain(TY_EXPORTS.iter())
             .map(|(name, binding)| ((*name).into(), binding.clone()));
 
-        Self::new_with_entries(ns_id, entries)
+        Self::new_with_entries(entries)
     }
 
     /// Creates a new root scope with entries
-    pub fn new_with_entries<I>(ns_id: NsId, entries: I) -> Scope
+    pub fn new_with_entries<I>(entries: I) -> Scope
     where
         I: Iterator<Item = (Box<str>, Binding)>,
     {
         let entries = entries
             .map(|(name, binding)| {
                 (
-                    Ident::new(ns_id, (*name).into()),
+                    Ident::new(Self::root_ns_id(), (*name).into()),
                     SpannedBinding {
                         span: EMPTY_SPAN,
                         binding: binding.clone(),
@@ -119,6 +125,7 @@ impl Scope {
                 allow_redef: false,
             }),
             tvars: ty::TVars::new(),
+            ns_id_counter: NsIdCounter::new(),
         }
     }
 
@@ -130,6 +137,7 @@ impl Scope {
                 allow_redef: false,
             }),
             tvars: parent.tvars.clone(),
+            ns_id_counter: parent.ns_id_counter.clone(),
         }
     }
 
@@ -227,6 +235,13 @@ impl Scope {
 
     pub fn tvars_mut(&mut self) -> &mut ty::TVars {
         &mut self.tvars
+    }
+
+    /// Allocates a new ns_id
+    ///
+    /// This is not globally unique; it will only be unique in the current scope chain
+    pub fn alloc_ns_id(&mut self) -> NsId {
+        self.ns_id_counter.alloc()
     }
 
     fn bindings(&self) -> &Bindings {

@@ -223,8 +223,8 @@ mod test {
         fn new(polymorphic_str: &str) -> TestScope {
             use crate::hir::lower_polymorphic_vars;
 
-            let test_ns_id = NsId::alloc();
-            let outer_scope = Scope::new_with_primitives(test_ns_id);
+            let test_ns_id = Scope::root_ns_id();
+            let outer_scope = Scope::new_with_primitives();
             let mut inner_scope = Scope::new_child(&outer_scope);
 
             let polymorphic_data = data_from_str(polymorphic_str)

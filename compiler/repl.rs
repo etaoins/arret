@@ -40,8 +40,8 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
         package_paths: &'pp PackagePaths,
         source_loader: &'sl mut SourceLoader,
     ) -> ReplCtx<'pp, 'sl> {
-        let ns_id = hir::ns::NsId::alloc();
-        let scope = Scope::new_repl(ns_id);
+        let ns_id = Scope::root_ns_id();
+        let scope = Scope::new_repl();
 
         ReplCtx {
             scope,

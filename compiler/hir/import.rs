@@ -241,16 +241,15 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::hir::ns::NsId;
     use crate::hir::prim::Prim;
-    use crate::hir::scope::Binding;
+    use crate::hir::scope::{Binding, Scope};
     use std::collections::HashMap;
     use syntax::span::{t2s, EMPTY_SPAN};
 
     fn exports_for_import_set(datum: &str) -> Result<Exports> {
         use syntax::parser::datum_from_str;
 
-        let test_ns_id = NsId::alloc();
+        let test_ns_id = Scope::root_ns_id();
 
         let import_set_datum =
             NsDatum::from_syntax_datum(test_ns_id, datum_from_str(datum).unwrap());

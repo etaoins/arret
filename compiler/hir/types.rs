@@ -563,7 +563,6 @@ pub fn str_for_purity(pvars: &purity::PVars, purity: &purity::Poly) -> String {
 
 #[cfg(test)]
 pub fn poly_for_str(datum_str: &str) -> ty::Poly {
-    use crate::hir::ns::NsId;
     use crate::hir::prim::PRIM_EXPORTS;
     use syntax::parser::datum_from_str;
 
@@ -581,8 +580,9 @@ pub fn poly_for_str(datum_str: &str) -> ty::Poly {
             }
         });
 
-    let test_ns_id = NsId::alloc();
-    let scope = Scope::new_with_entries(test_ns_id, prim_entries);
+    let test_ns_id = Scope::root_ns_id();
+    let scope = Scope::new_with_entries(prim_entries);
+
     let test_datum = datum_from_str(datum_str).unwrap();
 
     lower_poly(&scope, NsDatum::from_syntax_datum(test_ns_id, test_datum)).unwrap()
