@@ -2,26 +2,30 @@ use syntax::span::Span;
 
 use runtime::abitype;
 
-use crate::mir::ops::{CastBoxedOp, CondOp, Op, OpKind, RegId};
+use crate::mir::ops::{CastBoxedOp, CondOp, Op, OpKind, RegId, RegIdCounter};
 
 pub struct Builder {
     ops: Vec<Op>,
+    reg_id_counter: RegIdCounter,
 }
 
 impl Builder {
     pub fn new() -> Builder {
-        Builder { ops: vec![] }
+        Builder {
+            ops: vec![],
+            reg_id_counter: RegIdCounter::new(),
+        }
     }
 
     pub fn alloc_reg(&mut self) -> RegId {
-        RegId::alloc()
+        self.reg_id_counter.alloc()
     }
 
     pub fn push_reg<F, P>(&mut self, span: Span, kind_cons: F, kind_param: P) -> RegId
     where
         F: FnOnce(RegId, P) -> OpKind,
     {
-        let reg_id = RegId::alloc();
+        let reg_id = self.alloc_reg();
         self.push(span, kind_cons(reg_id, kind_param));
         reg_id
     }
@@ -46,10 +50,14 @@ impl Builder {
         F: FnOnce(&mut Builder) -> RegId,
     {
         let mut true_builder = Builder::new();
+        true_builder.reg_id_counter = self.reg_id_counter;
         let true_result_reg = true_cons(&mut true_builder);
 
         let mut false_builder = Builder::new();
+        false_builder.reg_id_counter = true_builder.reg_id_counter;
         let false_result_reg = false_cons(&mut false_builder);
+
+        self.reg_id_counter = false_builder.reg_id_counter;
 
         self.push_reg(
             span,
