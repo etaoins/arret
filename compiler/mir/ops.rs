@@ -78,6 +78,7 @@ pub enum OpKind {
     CurrentTask(RegId, ()),
     Call(RegId, CallOp),
     Ret(RegId),
+    RetVoid,
     LoadBoxedPairHead(RegId, RegId),
     LoadBoxedPairRest(RegId, RegId),
     LoadBoxedIntValue(RegId, RegId),

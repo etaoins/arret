@@ -142,7 +142,7 @@ impl CodegenCtx {
     fn ret_abi_to_llvm_type(&mut self, ret_abi_type: &RetABIType) -> LLVMTypeRef {
         match ret_abi_type {
             RetABIType::Inhabited(abi_type) => self.abi_to_llvm_type(abi_type),
-            RetABIType::Void | RetABIType::Never => unsafe { LLVMVoidType() },
+            RetABIType::Void | RetABIType::Never => unsafe { LLVMVoidTypeInContext(self.llx) },
         }
     }
 

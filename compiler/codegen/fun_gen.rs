@@ -11,7 +11,7 @@ use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::CodegenCtx;
 use crate::mir::ops::*;
 
-pub(crate) struct FunCtx {
+struct FunCtx {
     function: LLVMValueRef,
     builder: LLVMBuilderRef,
 
@@ -180,7 +180,7 @@ fn gen_cond(
     }
 }
 
-pub(crate) fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
+fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
     unsafe {
         match &op.kind {
             OpKind::CurrentTask(reg, _) => {
@@ -315,6 +315,9 @@ pub(crate) fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, o
                 let llvm_value = fcx.regs[reg];
                 LLVMBuildRet(fcx.builder, llvm_value);
             }
+            OpKind::RetVoid => {
+                LLVMBuildRetVoid(fcx.builder);
+            }
             OpKind::LoadBoxedPairHead(reg, pair_reg) => {
                 let llvm_pair = fcx.regs[pair_reg];
                 let head_ptr = LLVMBuildStructGEP(
@@ -360,7 +363,12 @@ pub(crate) fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, o
     }
 }
 
-pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, outer_symbol: &CString, fun: &Fun) {
+pub(crate) fn gen_fun(
+    cgx: &mut CodegenCtx,
+    mcx: &mut ModCtx,
+    outer_symbol: &CString,
+    fun: &Fun,
+) -> LLVMValueRef {
     unsafe {
         let builder = LLVMCreateBuilderInContext(cgx.llx);
 
@@ -387,5 +395,7 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, outer_symbol: &CSt
         for op in &fun.ops {
             gen_op(cgx, mcx, &mut fcx, &op);
         }
+
+        function
     }
 }

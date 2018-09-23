@@ -10,7 +10,7 @@ use runtime::boxed::refs::Gc;
 
 use runtime_syntax::reader;
 use syntax::datum::Datum;
-use syntax::span::Span;
+use syntax::span::{Span, EMPTY_SPAN};
 
 use crate::codegen;
 use crate::hir;
@@ -39,6 +39,11 @@ pub struct DefCtx {
 
     tvars: ty::TVars,
     local_values: HashMap<hir::VarId, Value>,
+}
+
+pub struct BuiltProgram {
+    pub main: ops::Fun,
+    pub funs: Vec<(String, ops::Fun)>,
 }
 
 impl DefCtx {
@@ -493,7 +498,9 @@ impl EvalHirCtx {
     }
 
     /// Builds the main function of the program
-    pub fn build_program(&mut self, main_var_id: hir::VarId) -> Result<Vec<ops::Op>> {
+    pub fn build_program(&mut self, main_var_id: hir::VarId) -> Result<BuiltProgram> {
+        use runtime::abitype;
+
         let mut dcx = DefCtx::new();
         let mut b = Some(Builder::new());
 
@@ -505,9 +512,25 @@ impl EvalHirCtx {
             unimplemented!("Non-closure main!");
         };
 
+        // TODO: Hack until we can just build normal functions
         self.eval_expr(&mut dcx, &mut b, &main_closure.fun_expr.body_expr)?;
+        let mut ops = b.unwrap().into_ops();
+        ops.push(ops::Op::new(EMPTY_SPAN, ops::OpKind::RetVoid));
 
-        Ok(b.unwrap().into_ops())
+        let main_abi = ops::EntryPointABI {
+            takes_task: true,
+            params: Box::new([]),
+            ret: abitype::RetABIType::Void,
+        };
+
+        Ok(BuiltProgram {
+            main: ops::Fun {
+                abi: main_abi,
+                params: vec![],
+                ops,
+            },
+            funs: vec![],
+        })
     }
 
     pub fn value_to_boxed(&mut self, value: &Value) -> Option<Gc<boxed::Any>> {

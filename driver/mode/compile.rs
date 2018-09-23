@@ -24,8 +24,8 @@ fn try_compile_input_file(
         ehx.consume_def(inferred_def)?;
     }
 
-    let ops = ehx.build_program(hir.main_var_id)?;
-    compiler::gen_program(&hir.rust_libraries, ops, output_path);
+    let mir_program = ehx.build_program(hir.main_var_id)?;
+    compiler::gen_program(&hir.rust_libraries, mir_program, output_path);
 
     Ok(())
 }
