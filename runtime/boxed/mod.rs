@@ -12,6 +12,7 @@ pub use crate::boxed::heap::collect::Collection;
 pub use crate::boxed::heap::Heap;
 pub use crate::boxed::types::char::Char;
 pub use crate::boxed::types::float::Float;
+pub use crate::boxed::types::fun::{FunThunk, ThunkEntry};
 pub use crate::boxed::types::int::Int;
 pub use crate::boxed::types::list::{List, Pair, TopPair};
 pub use crate::boxed::types::str::Str;
@@ -335,7 +336,8 @@ define_direct_tagged_boxes! {
     Nil,
     True,
     False,
-    TopVector
+    TopVector,
+    FunThunk
 }
 
 define_singleton_box!(Nil, NIL_INSTANCE, "ARRET_NIL");

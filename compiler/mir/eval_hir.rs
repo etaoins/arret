@@ -17,7 +17,6 @@ use crate::hir;
 use crate::mir::builder::Builder;
 use crate::mir::error::{Error, ErrorKind, Result};
 use crate::mir::ops;
-use crate::mir::rust_fun;
 use crate::mir::value;
 use crate::mir::{Expr, Value};
 use crate::ty;
@@ -28,7 +27,7 @@ pub struct EvalHirCtx {
     global_values: HashMap<hir::VarId, Value>,
 
     // This is important for drop order!
-    rust_fun_thunks: HashMap<*const c_void, rust_fun::Thunk>,
+    rust_fun_thunks: HashMap<*const c_void, boxed::ThunkEntry>,
     thunk_gen: codegen::CodegenCtx,
     thunk_jit: codegen::jit::JITCtx,
 }
@@ -241,6 +240,19 @@ impl EvalHirCtx {
         }
     }
 
+    pub fn thunk_for_rust_fun(&mut self, rust_fun: &hir::rfi::Fun) -> boxed::ThunkEntry {
+        use crate::mir::rust_fun::jit_thunk_for_rust_fun;
+
+        // Create a dynamic thunk to this Rust function if it doesn't exist
+        let thunk_gen = &mut self.thunk_gen;
+        let thunk_jit = &mut self.thunk_jit;
+
+        *(self
+            .rust_fun_thunks
+            .entry(rust_fun.entry_point())
+            .or_insert_with(|| jit_thunk_for_rust_fun(thunk_gen, thunk_jit, rust_fun)))
+    }
+
     fn eval_rust_fun_app(
         &mut self,
         dcx: &mut DefCtx,
@@ -251,7 +263,7 @@ impl EvalHirCtx {
         rest_arg: Option<&Expr>,
     ) -> Result<Value> {
         use crate::mir::intrinsic;
-        use crate::mir::rust_fun::{build_rust_fun_app, jit_thunk_for_rust_fun};
+        use crate::mir::rust_fun::build_rust_fun_app;
         use crate::mir::value::to_boxed::list_to_boxed;
 
         // TODO: Fix for polymorphism once it's supported
@@ -281,17 +293,10 @@ impl EvalHirCtx {
             let boxed_arg_list = list_to_boxed(self, &fixed_values, rest_value.as_ref());
 
             if let Some(boxed_arg_list) = boxed_arg_list {
-                // Create a dynamic thunk to this Rust function if it doesn't exist
-                let thunk_gen = &mut self.thunk_gen;
-                let thunk_jit = &mut self.thunk_jit;
-                let thunk = self
-                    .rust_fun_thunks
-                    .entry(rust_fun.entry_point())
-                    .or_insert_with(|| jit_thunk_for_rust_fun(thunk_gen, thunk_jit, rust_fun));
-
-                let runtime_task = &mut self.runtime_task;
+                let thunk = self.thunk_for_rust_fun(rust_fun);
 
                 // By convention convert string panics in to our `ErrorKind::Panic`
+                let runtime_task = &mut self.runtime_task;
                 return panic::catch_unwind(panic::AssertUnwindSafe(|| {
                     Value::Const(thunk(runtime_task, boxed_arg_list))
                 })).map_err(|err| {

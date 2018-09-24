@@ -5,7 +5,6 @@ use syntax::span::{Span, EMPTY_SPAN};
 
 use runtime::abitype;
 use runtime::boxed;
-use runtime::boxed::refs::Gc;
 
 use crate::codegen;
 use crate::hir;
@@ -13,8 +12,6 @@ use crate::mir::builder::Builder;
 use crate::mir::ops;
 use crate::mir::value;
 use crate::mir::value::Value;
-
-pub type Thunk = extern "C" fn(&mut runtime::task::Task, Gc<boxed::Any>) -> Gc<boxed::Any>;
 
 fn has_thunk_abi(rust_fun: &hir::rfi::Fun) -> bool {
     if !rust_fun.takes_task() || !rust_fun.has_rest() || rust_fun.params().len() != 1 {
@@ -144,7 +141,7 @@ pub fn jit_thunk_for_rust_fun(
     cgx: &mut codegen::CodegenCtx,
     jcx: &mut codegen::jit::JITCtx,
     rust_fun: &hir::rfi::Fun,
-) -> Thunk {
+) -> boxed::ThunkEntry {
     unsafe {
         use std::mem;
 

@@ -95,10 +95,11 @@ pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any
             other => write!(w, "\\u{:04X}", other as u32),
         },
         AnySubtype::Str(s) => {
-            write!(w, "\"");
+            write!(w, "\"")?;
             write_escaped_str(w, s.as_str())?;
             write!(w, "\"")
         }
+        AnySubtype::FunThunk(_) => write!(w, "#fn"),
     }
 }
 

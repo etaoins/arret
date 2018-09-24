@@ -13,6 +13,7 @@ use runtime::intern::Interner;
 use crate::hir;
 use crate::mir::ops::RegId;
 use crate::ty;
+use crate::ty::purity::Purity;
 
 #[derive(Clone, Debug)]
 pub struct Closure {
@@ -87,6 +88,9 @@ fn type_for_any_ref<S: ty::TyRef>(interner: &Interner, any_ref: Gc<boxed::Any>) 
                 .collect::<Vec<S>>();
 
             ty::Ty::List(ty::List::new(elem_types.into_boxed_slice(), None)).into_ty_ref()
+        }
+        AnySubtype::FunThunk(_) => {
+            ty::TopFun::new(Purity::Impure.into_poly(), ty::Ty::Any.into_poly()).into_ty_ref()
         }
     }
 }

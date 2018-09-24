@@ -1,4 +1,5 @@
 use crate::ty;
+use crate::ty::purity::Purity;
 use crate::ty::unify::Unifiable;
 
 use runtime::{abitype, boxed};
@@ -22,6 +23,9 @@ fn type_tag_to_ty<S: Unifiable>(type_tag: boxed::TypeTag) -> ty::Ty<S> {
                 Some(ty::Ty::Any.into_ty_ref()),
             );
             ty::Ty::List(list)
+        }
+        TypeTag::FunThunk => {
+            ty::TopFun::new(Purity::Impure.into_poly(), ty::Ty::Any.into_poly()).into_ty()
         }
     }
 }
