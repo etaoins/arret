@@ -343,8 +343,8 @@ impl EvalHirCtx {
             Value::TyPred(test_poly) => {
                 self.eval_ty_pred_app(dcx, b, span, test_poly.as_ref(), fixed_args, rest_arg)
             }
-            _ => {
-                unimplemented!("Unimplemented function value type");
+            other => {
+                unimplemented!("applying function value type: {:?}", other);
             }
         }
     }
