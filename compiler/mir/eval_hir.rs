@@ -28,9 +28,9 @@ pub struct EvalHirCtx {
     global_values: HashMap<hir::VarId, Value>,
 
     // This is important for drop order!
-    rust_fun_portals: HashMap<*const c_void, rust_fun::Portal>,
-    portal_gen: codegen::CodegenCtx,
-    portal_jit: codegen::jit::JITCtx,
+    rust_fun_thunks: HashMap<*const c_void, rust_fun::Thunk>,
+    thunk_gen: codegen::CodegenCtx,
+    thunk_jit: codegen::jit::JITCtx,
 }
 
 pub struct DefCtx {
@@ -70,9 +70,9 @@ impl EvalHirCtx {
             runtime_task: runtime::task::Task::new(),
             global_values: HashMap::new(),
 
-            rust_fun_portals: HashMap::new(),
-            portal_gen: codegen::CodegenCtx::new(),
-            portal_jit: codegen::jit::JITCtx::new(),
+            rust_fun_thunks: HashMap::new(),
+            thunk_gen: codegen::CodegenCtx::new(),
+            thunk_jit: codegen::jit::JITCtx::new(),
         }
     }
 
@@ -251,7 +251,7 @@ impl EvalHirCtx {
         rest_arg: Option<&Expr>,
     ) -> Result<Value> {
         use crate::mir::intrinsic;
-        use crate::mir::rust_fun::{build_rust_fun_app, jit_portal_for_rust_fun};
+        use crate::mir::rust_fun::{build_rust_fun_app, jit_thunk_for_rust_fun};
         use crate::mir::value::to_boxed::list_to_boxed;
 
         // TODO: Fix for polymorphism once it's supported
@@ -281,19 +281,19 @@ impl EvalHirCtx {
             let boxed_arg_list = list_to_boxed(self, &fixed_values, rest_value.as_ref());
 
             if let Some(boxed_arg_list) = boxed_arg_list {
-                // Create a dynamic portal to this Rust function if it doesn't exist
-                let portal_gen = &mut self.portal_gen;
-                let portal_jit = &mut self.portal_jit;
-                let portal = self
-                    .rust_fun_portals
+                // Create a dynamic thunk to this Rust function if it doesn't exist
+                let thunk_gen = &mut self.thunk_gen;
+                let thunk_jit = &mut self.thunk_jit;
+                let thunk = self
+                    .rust_fun_thunks
                     .entry(rust_fun.entry_point())
-                    .or_insert_with(|| jit_portal_for_rust_fun(portal_gen, portal_jit, rust_fun));
+                    .or_insert_with(|| jit_thunk_for_rust_fun(thunk_gen, thunk_jit, rust_fun));
 
                 let runtime_task = &mut self.runtime_task;
 
                 // By convention convert string panics in to our `ErrorKind::Panic`
                 return panic::catch_unwind(panic::AssertUnwindSafe(|| {
-                    Value::Const(portal(runtime_task, boxed_arg_list))
+                    Value::Const(thunk(runtime_task, boxed_arg_list))
                 })).map_err(|err| {
                     let message = if let Some(message) = err.downcast_ref::<String>() {
                         message.clone()

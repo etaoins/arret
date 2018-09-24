@@ -14,9 +14,9 @@ use crate::mir::ops;
 use crate::mir::value;
 use crate::mir::value::Value;
 
-pub type Portal = extern "C" fn(&mut runtime::task::Task, Gc<boxed::Any>) -> Gc<boxed::Any>;
+pub type Thunk = extern "C" fn(&mut runtime::task::Task, Gc<boxed::Any>) -> Gc<boxed::Any>;
 
-fn has_portal_abi(rust_fun: &hir::rfi::Fun) -> bool {
+fn has_thunk_abi(rust_fun: &hir::rfi::Fun) -> bool {
     if !rust_fun.takes_task() || !rust_fun.has_rest() || rust_fun.params().len() != 1 {
         // Args not compatible
         false
@@ -107,7 +107,7 @@ pub fn build_rust_fun_app(
     }
 }
 
-pub fn build_rust_fun_portal(span: Span, rust_fun: &hir::rfi::Fun) -> ops::Fun {
+pub fn build_rust_fun_thunk(span: Span, rust_fun: &hir::rfi::Fun) -> ops::Fun {
     use crate::mir::ops::*;
     use crate::mir::value::to_reg::value_to_reg;
 
@@ -140,22 +140,22 @@ pub fn build_rust_fun_portal(span: Span, rust_fun: &hir::rfi::Fun) -> ops::Fun {
     }
 }
 
-pub fn jit_portal_for_rust_fun(
+pub fn jit_thunk_for_rust_fun(
     cgx: &mut codegen::CodegenCtx,
     jcx: &mut codegen::jit::JITCtx,
     rust_fun: &hir::rfi::Fun,
-) -> Portal {
+) -> Thunk {
     unsafe {
         use std::mem;
 
-        if has_portal_abi(rust_fun) {
-            // We can skip building the portal
+        if has_thunk_abi(rust_fun) {
+            // We can skip building the thunk
             return mem::transmute(rust_fun.entry_point());
         }
 
         // Create some names
         let inner_symbol = ffi::CString::new(rust_fun.symbol()).unwrap();
-        let outer_symbol = ffi::CString::new(format!("{}_portal", rust_fun.symbol())).unwrap();
+        let outer_symbol = ffi::CString::new(format!("{}_thunk", rust_fun.symbol())).unwrap();
 
         // Add the inner symbol
         jcx.add_symbol(
@@ -163,7 +163,7 @@ pub fn jit_portal_for_rust_fun(
             rust_fun.entry_point() as u64,
         );
 
-        let ops_fun = build_rust_fun_portal(EMPTY_SPAN, rust_fun);
+        let ops_fun = build_rust_fun_thunk(EMPTY_SPAN, rust_fun);
         let address = jcx.compile_fun(cgx, &outer_symbol, &ops_fun);
 
         mem::transmute(address)
