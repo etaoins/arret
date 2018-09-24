@@ -1,5 +1,8 @@
 (import [stdlib base])
 
+(import (only [stdlib rust] black-box))
+(export black-box)
+
 (export assert-equal)
 (defmacro assert-equal (macro-rules
   [(expected actual)

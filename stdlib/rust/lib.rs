@@ -86,6 +86,13 @@ define_rust_fn! {
     }
 }
 
+define_rust_fn! {
+    #[arret_type="(All #{T} T -> T)"]
+    BLACK_BOX = fn arret_stdlib_black_box(value: Gc<boxed::Any>) -> Gc<boxed::Any> {
+        value
+    }
+}
+
 define_rust_module! {
     "length" => LENGTH,
     "panic" => PANIC,
@@ -93,5 +100,6 @@ define_rust_module! {
     "print!" => PRINT,
     "println!" => PRINTLN,
     "exit" => EXIT,
-    "cons" => CONS
+    "cons" => CONS,
+    "black-box" => BLACK_BOX
 }
