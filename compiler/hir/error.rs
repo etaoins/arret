@@ -22,7 +22,7 @@ pub enum ErrorKind {
     PackageNotFound,
     ModuleNotFound(Box<path::Path>),
     NoMacroRule,
-    DuplicateDef(Span),
+    DuplicateDef(Span, Box<str>),
     MultipleZeroOrMoreMatch(Span),
     NoVecDestruc,
     ValueAsTy,
@@ -89,7 +89,7 @@ impl Reportable for Error {
             ErrorKind::IllegalArg(description) => description.to_owned(),
             ErrorKind::ExpectedSym => "expected symbol".to_owned(),
             ErrorKind::DefOutsideBody => "(def) outside module body".to_owned(),
-            ErrorKind::DuplicateDef(_) => "duplicate definition".to_owned(),
+            ErrorKind::DuplicateDef(_, ref sym) => format!("duplicate definition: `{}`", sym),
             ErrorKind::ExportOutsideModule => "(export) outside of module body".to_owned(),
             ErrorKind::NonDefInsideModule => {
                 "definition expected at the top-level of a module body".to_owned()
@@ -121,7 +121,7 @@ impl Reportable for Error {
 
     fn associated_report(&self) -> Option<Box<dyn Reportable>> {
         match self.kind {
-            ErrorKind::DuplicateDef(span) => if span == EMPTY_SPAN {
+            ErrorKind::DuplicateDef(span, _) => if span == EMPTY_SPAN {
                 // Some definitions (e.g. `import`) are magically inserted in to the scope. They
                 // won't have a span.
                 None

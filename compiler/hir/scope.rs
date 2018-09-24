@@ -193,7 +193,10 @@ impl Scope {
                     } else {
                         return Err(Error::new(
                             span,
-                            ErrorKind::DuplicateDef(occupied.get().span),
+                            ErrorKind::DuplicateDef(
+                                occupied.get().span,
+                                occupied.key().name().into(),
+                            ),
                         ));
                     }
                 }
