@@ -8,7 +8,7 @@ use crate::task;
 // TODO: This is a placeholder until we support record types
 pub struct Record {}
 
-pub type ThunkEntry = extern "C" fn(&mut task::Task, Gc<Any>) -> Gc<Any>;
+pub type ThunkEntry = extern "C" fn(&mut task::Task, *const Record, Gc<Any>) -> Gc<Any>;
 
 #[repr(C, align(16))]
 pub struct FunThunk {
@@ -42,6 +42,12 @@ impl ConstructableFrom<FunThunkInput> for FunThunk {
     }
 }
 
+impl FunThunk {
+    pub fn apply(&mut self, task: &mut task::Task, arg_list: Gc<Any>) -> Gc<Any> {
+        (self.entry)(task, self.closure, arg_list)
+    }
+}
+
 impl PartialEq for FunThunk {
     fn eq(&self, other: &FunThunk) -> bool {
         self as *const _ == other as *const _
@@ -61,11 +67,19 @@ mod test {
     use crate::boxed::prelude::*;
     use std::mem;
 
-    extern "C" fn identity_entry(_: &mut task::Task, rest: Gc<Any>) -> Gc<Any> {
+    extern "C" fn identity_entry(
+        _: &mut task::Task,
+        _closure: *const Record,
+        rest: Gc<Any>,
+    ) -> Gc<Any> {
         rest
     }
 
-    extern "C" fn return_42_entry(task: &mut task::Task, rest: Gc<Any>) -> Gc<Any> {
+    extern "C" fn return_42_entry(
+        task: &mut task::Task,
+        _closure: *const Record,
+        _rest: Gc<Any>,
+    ) -> Gc<Any> {
         use crate::boxed::Int;
         Int::new(task, 32).as_any_ref()
     }

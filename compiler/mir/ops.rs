@@ -7,6 +7,7 @@ new_counting_id_type!(RegIdCounter, RegId);
 #[derive(Debug)]
 pub struct EntryPointABI {
     pub takes_task: bool,
+    pub takes_closure: bool,
     pub params: Box<[abitype::ABIType]>,
     pub ret: abitype::RetABIType,
 }

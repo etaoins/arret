@@ -184,8 +184,12 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 fcx.regs.insert(*reg, to_llvm_value);
             }
             OpKind::ConstEntryPoint(reg, ConstEntryPointOp { symbol, abi }) => {
-                let function_type =
-                    cgx.function_to_llvm_type(abi.takes_task, &abi.params, &abi.ret);
+                let function_type = cgx.function_to_llvm_type(
+                    abi.takes_task,
+                    abi.takes_closure,
+                    &abi.params,
+                    &abi.ret,
+                );
                 let function_name = CString::new(*symbol).unwrap();
 
                 let global = LLVMGetNamedFunction(
@@ -283,8 +287,12 @@ pub(crate) fn gen_fun(
     unsafe {
         let builder = LLVMCreateBuilderInContext(cgx.llx);
 
-        let function_type =
-            cgx.function_to_llvm_type(fun.abi.takes_task, &fun.abi.params, &fun.abi.ret);
+        let function_type = cgx.function_to_llvm_type(
+            fun.abi.takes_task,
+            fun.abi.takes_closure,
+            &fun.abi.params,
+            &fun.abi.ret,
+        );
 
         let function =
             LLVMAddFunction(mcx.module, outer_symbol.as_ptr() as *const _, function_type);
@@ -298,8 +306,9 @@ pub(crate) fn gen_fun(
             fcx.current_task = Some(LLVMGetParam(function, 0));
         }
 
-        for (offset, reg) in fun.params.iter().enumerate() {
-            let llvm_offset = (offset + (fun.abi.takes_task as usize)) as u32;
+        let params_offset = fun.abi.takes_task as usize + fun.abi.takes_closure as usize;
+        for (param_index, reg) in fun.params.iter().enumerate() {
+            let llvm_offset = (params_offset + param_index) as u32;
             fcx.regs.insert(*reg, LLVMGetParam(function, llvm_offset));
         }
 

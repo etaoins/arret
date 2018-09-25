@@ -265,6 +265,7 @@ impl EvalHirCtx {
         use crate::mir::intrinsic;
         use crate::mir::rust_fun::build_rust_fun_app;
         use crate::mir::value::to_boxed::list_to_boxed;
+        use std::ptr;
 
         // TODO: Fix for polymorphism once it's supported
         let can_const_eval =
@@ -298,7 +299,7 @@ impl EvalHirCtx {
                 // By convention convert string panics in to our `ErrorKind::Panic`
                 let runtime_task = &mut self.runtime_task;
                 return panic::catch_unwind(panic::AssertUnwindSafe(|| {
-                    Value::Const(thunk(runtime_task, boxed_arg_list))
+                    Value::Const(thunk(runtime_task, ptr::null(), boxed_arg_list))
                 })).map_err(|err| {
                     let message = if let Some(message) = err.downcast_ref::<String>() {
                         message.clone()
@@ -524,6 +525,7 @@ impl EvalHirCtx {
 
         let main_abi = ops::EntryPointABI {
             takes_task: true,
+            takes_closure: false,
             params: Box::new([]),
             ret: abitype::RetABIType::Void,
         };

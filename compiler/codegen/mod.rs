@@ -18,6 +18,7 @@ pub struct CodegenCtx {
     llx: LLVMContextRef,
 
     task_type: Option<LLVMTypeRef>,
+    record_type: Option<LLVMTypeRef>,
     box_header_type: Option<LLVMTypeRef>,
     boxed_inline_str_type: Option<LLVMTypeRef>,
     boxed_abi_types: HashMap<BoxedABIType, LLVMTypeRef>,
@@ -32,6 +33,7 @@ impl CodegenCtx {
                 llx,
 
                 task_type: None,
+                record_type: None,
                 box_header_type: None,
                 boxed_inline_str_type: None,
                 boxed_abi_types: HashMap::new(),
@@ -44,6 +46,16 @@ impl CodegenCtx {
         *self.task_type.get_or_insert_with(|| unsafe {
             LLVMPointerType(
                 LLVMStructCreateNamed(llx, b"task\0".as_ptr() as *const _),
+                0,
+            )
+        })
+    }
+
+    fn record_llvm_type(&mut self) -> LLVMTypeRef {
+        let llx = self.llx;
+        *self.record_type.get_or_insert_with(|| unsafe {
+            LLVMPointerType(
+                LLVMStructCreateNamed(llx, b"record\0".as_ptr() as *const _),
                 0,
             )
         })
@@ -153,6 +165,7 @@ impl CodegenCtx {
     fn function_to_llvm_type(
         &mut self,
         takes_task: bool,
+        takes_closure: bool,
         arg_types: &[ABIType],
         ret_type: &RetABIType,
     ) -> LLVMTypeRef {
@@ -160,6 +173,10 @@ impl CodegenCtx {
 
         if takes_task {
             llvm_arg_types.push(self.task_llvm_type());
+        }
+
+        if takes_closure {
+            llvm_arg_types.push(self.record_llvm_type());
         }
 
         llvm_arg_types.extend(

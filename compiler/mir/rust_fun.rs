@@ -13,19 +13,6 @@ use crate::mir::ops;
 use crate::mir::value;
 use crate::mir::value::Value;
 
-fn has_thunk_abi(rust_fun: &hir::rfi::Fun) -> bool {
-    if !rust_fun.takes_task() || !rust_fun.has_rest() || rust_fun.params().len() != 1 {
-        // Args not compatible
-        false
-    } else {
-        match rust_fun.ret() {
-            abitype::RetABIType::Never => true,
-            abitype::RetABIType::Inhabited(abitype::ABIType::Boxed(_)) => true,
-            _ => false,
-        }
-    }
-}
-
 pub fn build_rust_fun_app(
     b: &mut Builder,
     span: Span,
@@ -68,6 +55,7 @@ pub fn build_rust_fun_app(
 
     let abi = EntryPointABI {
         takes_task: rust_fun.takes_task(),
+        takes_closure: false,
         params: rust_fun.params().to_owned().into(),
         ret: rust_fun.ret().clone(),
     };
@@ -129,6 +117,7 @@ pub fn build_rust_fun_thunk(span: Span, rust_fun: &hir::rfi::Fun) -> ops::Fun {
     ops::Fun {
         abi: ops::EntryPointABI {
             takes_task: true,
+            takes_closure: true,
             params: Box::new([rest_abi_type]),
             ret: abitype::BoxedABIType::Any.into(),
         },
@@ -144,11 +133,6 @@ pub fn jit_thunk_for_rust_fun(
 ) -> boxed::ThunkEntry {
     unsafe {
         use std::mem;
-
-        if has_thunk_abi(rust_fun) {
-            // We can skip building the thunk
-            return mem::transmute(rust_fun.entry_point());
-        }
 
         // Create some names
         let inner_symbol = ffi::CString::new(rust_fun.symbol()).unwrap();
