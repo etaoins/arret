@@ -138,20 +138,20 @@ pub fn mono_for_value(interner: &Interner, value: &Value) -> ty::Mono {
     }
 }
 
-pub fn visit_value_root(collection: &mut boxed::Collection, value: &mut Value) {
+pub fn visit_value_root(strong_pass: &mut boxed::collect::StrongPass, value: &mut Value) {
     match value {
-        Value::Const(ref mut any_ref) => collection.visit_box(any_ref),
+        Value::Const(ref mut any_ref) => strong_pass.visit_box(any_ref),
         Value::List(ref mut fixed, ref mut rest) => {
             for any_ref in fixed.iter_mut() {
-                visit_value_root(collection, any_ref);
+                visit_value_root(strong_pass, any_ref);
             }
             for any_ref in rest {
-                visit_value_root(collection, any_ref);
+                visit_value_root(strong_pass, any_ref);
             }
         }
         Value::Closure(ref mut closure) => {
             for any_ref in closure.captures.values_mut() {
-                visit_value_root(collection, any_ref);
+                visit_value_root(strong_pass, any_ref);
             }
         }
         _ => {}

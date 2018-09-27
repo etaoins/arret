@@ -8,7 +8,7 @@ use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
 use crate::boxed::refs::Gc;
 use crate::intern::Interner;
 
-pub use crate::boxed::heap::collect::Collection;
+pub use crate::boxed::heap::collect;
 pub use crate::boxed::heap::Heap;
 pub use crate::boxed::types::char::Char;
 pub use crate::boxed::types::float::Float;

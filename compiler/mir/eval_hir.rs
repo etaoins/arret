@@ -435,16 +435,18 @@ impl EvalHirCtx {
 
     /// Collect any boxed values that are no longer reachable
     pub fn collect_garbage(&mut self) {
+        use runtime::boxed::collect;
         use std::mem;
+
         let old_heap = mem::replace(self.runtime_task.heap_mut(), boxed::Heap::with_capacity(0));
-        let mut collection = boxed::Collection::new(old_heap);
+        let mut strong_pass = collect::StrongPass::new(old_heap);
 
         // Move all of our global values to the new heap
         for value_ref in self.global_values.values_mut() {
-            value::visit_value_root(&mut collection, value_ref);
+            value::visit_value_root(&mut strong_pass, value_ref);
         }
 
-        *self.runtime_task.heap_mut() = collection.into_new_heap();
+        *self.runtime_task.heap_mut() = strong_pass.into_new_heap();
     }
 
     pub fn eval_expr(

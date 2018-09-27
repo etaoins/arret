@@ -2,7 +2,7 @@ use std::ptr;
 
 use crate::boxed::heap::Heap;
 use crate::boxed::refs::Gc;
-use crate::boxed::{AllocType, Any, BoxSize, Header, List, Pair, Sym, TypeTag, Vector};
+use crate::boxed::{AllocType, Any, BoxSize, Boxed, Header, List, Pair, Sym, TypeTag, Vector};
 
 #[repr(C, align(16))]
 struct ForwardingCell {
@@ -10,20 +10,27 @@ struct ForwardingCell {
     new_location: Gc<Any>,
 }
 
-/// Represents a collection of an old `Heap` in to a new `Heap`
+/// Represents a collection of strong references an old `Heap` in to a new `Heap`
 ///
 /// `visit_box` should be called for each GC root that needs to be moved to the new heap. Once all
-/// roots have been visited `into_new_heap` will return the new `Heap`.
-pub struct Collection {
+/// roots have been visited `into_new_heap` will return the new `Heap` or `into_weak_pass` will
+/// start an optional weak pass.
+pub struct StrongPass {
     old_heap: Heap,
     new_heap: Heap,
 }
 
-impl Collection {
-    pub fn new(old_heap: Heap) -> Collection {
-        Collection {
+impl StrongPass {
+    pub fn new(old_heap: Heap) -> StrongPass {
+        StrongPass {
             old_heap,
             new_heap: Heap::new(),
+        }
+    }
+
+    pub fn into_weak_pass(self) -> WeakPass {
+        WeakPass {
+            new_heap: self.new_heap,
         }
     }
 
@@ -66,7 +73,12 @@ impl Collection {
         *box_ref = unsafe { Gc::new(dest_location) };
     }
 
-    pub fn visit_box(&mut self, mut box_ref: &mut Gc<Any>) {
+    pub fn visit_box<T: Boxed>(&mut self, box_ref: &mut Gc<T>) {
+        let any_box_ref = unsafe { &mut *(box_ref as *mut _ as *mut Gc<Any>) };
+        self.visit_any_box(any_box_ref);
+    }
+
+    fn visit_any_box(&mut self, mut box_ref: &mut Gc<Any>) {
         // This loop is used for ad-hoc tail recursion when visiting Pairs
         // Everything else will return at the bottom of the loop
         loop {
@@ -126,20 +138,46 @@ impl Collection {
     }
 }
 
+/// Represents a the weak pass of a collection to a new `Heap`
+///
+/// This will return the location of cells that have been moved to the new heap or `None` for
+/// cells that were not visited during the strong pass.
+pub struct WeakPass {
+    new_heap: Heap,
+}
+
+impl WeakPass {
+    pub fn into_new_heap(self) -> Heap {
+        self.new_heap
+    }
+
+    pub fn new_heap_ref_for<T: Boxed>(&self, boxed: Gc<T>) -> Option<Gc<T>> {
+        let any_boxed = unsafe { boxed.cast::<Any>() };
+        self.new_heap_any_ref_for(any_boxed)
+            .map(|new_box| unsafe { new_box.cast::<T>() })
+    }
+
+    fn new_heap_any_ref_for(&self, box_ref: Gc<Any>) -> Option<Gc<Any>> {
+        println!("WEAK: {:?}", box_ref.header);
+        match box_ref.header.alloc_type {
+            AllocType::Const | AllocType::Stack => {
+                // These are managed by the GC; their pointer remains valid
+                Some(box_ref)
+            }
+            AllocType::HeapForward16 | AllocType::HeapForward32 => {
+                // This has already been moved to a new location
+                let forwarding_cell = unsafe { &*(box_ref.as_ptr() as *const ForwardingCell) };
+                Some(forwarding_cell.new_location)
+            }
+            AllocType::Heap16 | AllocType::Heap32 => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::boxed::{Int, List};
-
-    fn collect_roots<'a>(old_heap: Heap, roots: &mut [&'a mut Gc<Any>]) -> Heap {
-        let mut collection = Collection::new(old_heap);
-
-        for root in roots.iter_mut() {
-            collection.visit_box(root);
-        }
-
-        collection.into_new_heap()
-    }
 
     #[test]
     fn simple_collect() {
@@ -147,33 +185,43 @@ mod test {
 
         let mut old_heap = Heap::new();
 
-        unsafe {
-            let mut hello = Str::new(&mut old_heap, "HELLO").cast::<Any>();
-            let mut world = Str::new(&mut old_heap, "WORLD").cast::<Any>();
+        let mut hello = Str::new(&mut old_heap, "HELLO");
+        let mut world = Str::new(&mut old_heap, "WORLD");
 
-            assert_eq!("HELLO", hello.cast::<Str>().as_str());
-            assert_eq!("WORLD", world.cast::<Str>().as_str());
-            assert_eq!(2, old_heap.len());
+        assert_eq!("HELLO", hello.as_str());
+        assert_eq!("WORLD", world.as_str());
+        assert_eq!(2, old_heap.len());
 
-            // Root everything
-            let all_roots = &mut [&mut hello, &mut world];
-            let all_heap = collect_roots(old_heap, all_roots);
+        // Root everything
+        let mut all_strong = StrongPass::new(old_heap);
+        all_strong.visit_box(&mut hello);
+        all_strong.visit_box(&mut world);
 
-            assert_eq!("HELLO", hello.cast::<Str>().as_str());
-            assert_eq!("WORLD", world.cast::<Str>().as_str());
-            assert_eq!(2, all_heap.len());
+        let all_heap = all_strong.into_new_heap();
+        assert_eq!("HELLO", hello.as_str());
+        assert_eq!("WORLD", world.as_str());
+        assert_eq!(2, all_heap.len());
 
-            // Root just one string
-            let one_roots = &mut [&mut hello];
-            let one_heap = collect_roots(all_heap, one_roots);
+        // Take aliases to hello and world to simulate weak reference
+        let hello_alias = hello;
+        let world_alias = world;
 
-            assert_eq!("HELLO", hello.cast::<Str>().as_str());
-            assert_eq!(1, one_heap.len());
+        // Root just one string
+        let mut one_strong = StrongPass::new(all_heap);
+        one_strong.visit_box(&mut hello);
 
-            // Root nothing
-            let zero_heap = collect_roots(one_heap, &mut []);
-            assert_eq!(0, zero_heap.len());
-        }
+        // Start a weak pass
+        let one_weak = one_strong.into_weak_pass();
+        assert_eq!(true, one_weak.new_heap_ref_for(hello_alias).is_some());
+        assert_eq!(true, one_weak.new_heap_ref_for(world_alias).is_none());
+
+        let one_heap = one_weak.into_new_heap();
+        assert_eq!("HELLO", hello.as_str());
+        assert_eq!(1, one_heap.len());
+
+        // Root nothing
+        let zero_heap = StrongPass::new(one_heap).into_new_heap();
+        assert_eq!(0, zero_heap.len());
     }
 
     #[test]
@@ -182,21 +230,21 @@ mod test {
 
         let mut old_heap = Heap::new();
 
-        unsafe {
-            let inline_name = "Hello";
-            let indexed_name = "This is too long; it will be indexed to the heap's intern table";
+        let inline_name = "Hello";
+        let indexed_name = "This is too long; it will be indexed to the heap's intern table";
 
-            let mut inline = Sym::new(&mut old_heap, inline_name).cast::<Any>();
-            let mut indexed = Sym::new(&mut old_heap, indexed_name).cast::<Any>();
-            assert_eq!(2, old_heap.len());
+        let mut inline = Sym::new(&mut old_heap, inline_name);
+        let mut indexed = Sym::new(&mut old_heap, indexed_name);
+        assert_eq!(2, old_heap.len());
 
-            let all_roots = &mut [&mut inline, &mut indexed];
-            let new_heap = collect_roots(old_heap, all_roots);
+        let mut all_strong = StrongPass::new(old_heap);
+        all_strong.visit_box(&mut inline);
+        all_strong.visit_box(&mut indexed);
 
-            assert_eq!(inline_name, inline.cast::<Sym>().name(&new_heap.interner));
-            assert_eq!(indexed_name, indexed.cast::<Sym>().name(&new_heap.interner));
-            assert_eq!(2, new_heap.len());
-        }
+        let all_heap = all_strong.into_new_heap();
+        assert_eq!(inline_name, inline.name(&all_heap.interner));
+        assert_eq!(indexed_name, indexed.name(&all_heap.interner));
+        assert_eq!(2, all_heap.len());
     }
 
     #[test]
@@ -207,18 +255,19 @@ mod test {
         const PAIR_CELLS: usize = mem::size_of::<Pair<Any>>() / mem::size_of::<Any>();
         const EXPECTED_HEAP_SIZE: usize = 3 + (3 * PAIR_CELLS);
 
-        let mut heap = Heap::new();
+        let mut old_heap = Heap::new();
 
-        let mut boxed_list = List::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
-        assert_eq!(EXPECTED_HEAP_SIZE, heap.len());
-
-        assert_eq!(3, boxed_list.len());
-
-        let roots = &mut [unsafe { &mut *(&mut boxed_list as *mut Gc<List<Int>> as *mut Gc<Any>) }];
-        let new_heap = collect_roots(heap, roots);
+        let mut boxed_list = List::<Int>::from_values(&mut old_heap, [1, 2, 3].iter().cloned());
+        assert_eq!(EXPECTED_HEAP_SIZE, old_heap.len());
 
         assert_eq!(3, boxed_list.len());
-        assert_eq!(EXPECTED_HEAP_SIZE, new_heap.len());
+
+        let mut all_strong = StrongPass::new(old_heap);
+        all_strong.visit_box(&mut boxed_list);
+
+        let all_heap = all_strong.into_new_heap();
+        assert_eq!(3, boxed_list.len());
+        assert_eq!(EXPECTED_HEAP_SIZE, all_heap.len());
 
         let mut boxed_list_iter = boxed_list.iter();
         for expected_num in &[1, 2, 3] {
@@ -236,13 +285,14 @@ mod test {
         let test_contents: [&[i64]; 4] = [&[], &[1], &[1, 2, 3], &[9, 8, 7, 6, 5, 4, 3, 2, 1, 0]];
 
         for &test_content in &test_contents {
-            let mut heap = Heap::new();
-            let mut boxed_vec = Vector::<Int>::from_values(&mut heap, test_content.iter().cloned());
+            let mut old_heap = Heap::new();
+            let mut boxed_vec =
+                Vector::<Int>::from_values(&mut old_heap, test_content.iter().cloned());
 
-            let roots =
-                &mut [unsafe { &mut *(&mut boxed_vec as *mut Gc<Vector<Int>> as *mut Gc<Any>) }];
-            let _new_heap = collect_roots(heap, roots);
+            let mut all_strong = StrongPass::new(old_heap);
+            all_strong.visit_box(&mut boxed_vec);
 
+            let _ = all_strong.into_new_heap();
             let mut boxed_list_iter = boxed_vec.iter();
             assert_eq!(test_content.len(), boxed_list_iter.len());
 

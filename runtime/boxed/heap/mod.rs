@@ -1,4 +1,4 @@
-pub(crate) mod collect;
+pub mod collect;
 
 use std::{cmp, mem, ptr};
 
