@@ -433,7 +433,7 @@ impl<'de> Parser<'de> {
                     datum_vec.push(datum);
                 }
                 Err(err) => {
-                    if let ErrorKind::Eof(_) = err.kind() {
+                    if err.kind() == &ErrorKind::Eof(ExpectedContent::Datum) {
                         break Ok(datum_vec);
                     } else {
                         break Err(err);
@@ -899,6 +899,13 @@ mod test {
         let j = "(true)))";
         let t = "      ^ ";
         let err = Error::new(t2s(t), ErrorKind::UnexpectedChar(')'));
+        assert_eq!(err, data_from_str(j).unwrap_err());
+
+        let j = "(true";
+        let t = "    >";
+        let u = "^    ";
+
+        let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::List(t2s(u))));
         assert_eq!(err, data_from_str(j).unwrap_err());
     }
 }
