@@ -78,16 +78,16 @@ impl JITCtx {
             let mut mcx = ModCtx::new(module);
             fun_gen::gen_fun(cgx, &mut mcx, wanted_name, fun);
 
+            if env::var_os("ARRET_DUMP_LLVM").is_some() {
+                LLVMDumpModule(module);
+            }
+
             let error: *mut *mut libc::c_char = ptr::null_mut();
             LLVMVerifyModule(
                 module,
                 LLVMVerifierFailureAction::LLVMAbortProcessAction,
                 error,
             );
-
-            if env::var_os("ARRET_DUMP_LLVM").is_some() {
-                LLVMDumpModule(module);
-            }
 
             let shared_module = LLVMOrcMakeSharedModule(module);
 

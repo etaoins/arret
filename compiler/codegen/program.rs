@@ -129,15 +129,15 @@ pub fn gen_program(
     unsafe {
         let mut error: *mut libc::c_char = ptr::null_mut();
 
+        if env::var_os("ARRET_DUMP_LLVM").is_some() {
+            LLVMDumpModule(module);
+        }
+
         LLVMVerifyModule(
             module,
             LLVMVerifierFailureAction::LLVMAbortProcessAction,
             &mut error as *mut _,
         );
-
-        if env::var_os("ARRET_DUMP_LLVM").is_some() {
-            LLVMDumpModule(module);
-        }
 
         let llvm_code_gen_file_type = match output_type {
             OutputType::LLVMIR => {

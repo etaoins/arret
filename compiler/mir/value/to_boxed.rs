@@ -2,7 +2,6 @@ use runtime::boxed;
 use runtime::boxed::prelude::*;
 use runtime::boxed::refs::Gc;
 
-use crate::hir;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::value::Value;
 
@@ -33,14 +32,6 @@ pub fn list_to_boxed(
     Some(list.as_any_ref())
 }
 
-fn rust_fun_to_boxed(ehx: &mut EvalHirCtx, rust_fun: &hir::rfi::Fun) -> Option<Gc<boxed::Any>> {
-    use std::ptr;
-
-    let closure = ptr::null();
-    let entry = ehx.thunk_for_rust_fun(rust_fun);
-    Some(boxed::FunThunk::new(ehx, (closure, entry)).as_any_ref())
-}
-
 /// Attempts to convert a MIR value to a constant boxed values
 ///
 /// Regs do not have a constant value at compile type; they will return None
@@ -55,7 +46,7 @@ pub fn value_to_boxed(ehx: &mut EvalHirCtx, value: &Value) -> Option<Gc<boxed::A
         Value::Closure(ref closure) => {
             unimplemented!("Boxing of Arret closures: {:?}", closure.fun_expr)
         }
-        Value::RustFun(ref rust_fun) => rust_fun_to_boxed(ehx, rust_fun),
+        Value::RustFun(ref rust_fun) => Some(ehx.rust_fun_to_boxed(value, rust_fun).as_any_ref()),
         Value::Reg(_) => None,
         Value::Divergent => None,
     }

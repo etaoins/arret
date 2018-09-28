@@ -1,4 +1,4 @@
-use std::{fmt, mem};
+use std::{fmt, hash, mem};
 
 use crate::boxed::refs::Gc;
 use crate::boxed::{AllocType, Any, BoxSize, ConstructableFrom, DirectTagged, Header};
@@ -43,7 +43,7 @@ impl ConstructableFrom<FunThunkInput> for FunThunk {
 }
 
 impl FunThunk {
-    pub fn apply(&mut self, task: &mut task::Task, arg_list: Gc<Any>) -> Gc<Any> {
+    pub fn apply(&self, task: &mut task::Task, arg_list: Gc<Any>) -> Gc<Any> {
         (self.entry)(task, self.closure, arg_list)
     }
 }
@@ -51,6 +51,14 @@ impl FunThunk {
 impl PartialEq for FunThunk {
     fn eq(&self, other: &FunThunk) -> bool {
         self as *const _ == other as *const _
+    }
+}
+
+impl Eq for FunThunk {}
+
+impl hash::Hash for FunThunk {
+    fn hash<H: hash::Hasher>(&self, hasher: &mut H) {
+        hasher.write_usize(self as *const _ as usize);
     }
 }
 

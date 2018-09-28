@@ -51,6 +51,16 @@ impl Value {
         }
     }
 
+    pub fn into_list_iter(self) -> list::ListIterator {
+        match self {
+            Value::List(fixed, Some(rest)) => {
+                list::ListIterator::new(fixed.into_vec(), Some(*rest))
+            }
+            Value::List(fixed, None) => list::ListIterator::new(fixed.into_vec(), None),
+            other => list::ListIterator::new(vec![], Some(other)),
+        }
+    }
+
     pub fn is_divergent(&self) -> bool {
         match self {
             Value::Divergent => true,

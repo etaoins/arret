@@ -1,6 +1,6 @@
-use std::fmt;
 use std::ops::Deref;
 use std::ptr;
+use std::{fmt, hash};
 
 use crate::boxed::Boxed;
 
@@ -56,6 +56,17 @@ where
 {
     fn eq(&self, other: &Gc<T>) -> bool {
         unsafe { *self.as_ptr() == *other.as_ptr() }
+    }
+}
+
+impl<T> Eq for Gc<T> where T: Boxed + Eq {}
+
+impl<T> hash::Hash for Gc<T>
+where
+    T: Boxed + hash::Hash,
+{
+    fn hash<H: hash::Hasher>(&self, hasher: &mut H) {
+        unsafe { (*self.as_ptr()).hash(hasher) }
     }
 }
 

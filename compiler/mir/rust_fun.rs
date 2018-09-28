@@ -17,15 +17,13 @@ pub fn build_rust_fun_app(
     b: &mut Builder,
     span: Span,
     rust_fun: &hir::rfi::Fun,
-    fixed_values: &[Value],
-    rest_value: Option<&Value>,
+    arg_list_value: Value,
 ) -> Value {
     use crate::mir::ops::*;
-    use crate::mir::value::list::ListIterator;
     use crate::mir::value::to_reg::value_to_reg;
     use runtime::abitype::{BoxedABIType, RetABIType};
 
-    let mut list_iter = ListIterator::new(fixed_values.to_owned(), rest_value.cloned());
+    let mut list_iter = arg_list_value.into_list_iter();
     let mut arg_regs = vec![];
 
     if rust_fun.takes_task() {
@@ -53,7 +51,7 @@ pub fn build_rust_fun_app(
         arg_regs.push(reg_id);
     };
 
-    let abi = EntryPointABI {
+    let abi = FunABI {
         takes_task: rust_fun.takes_task(),
         takes_closure: false,
         params: rust_fun.params().to_owned().into(),
@@ -80,7 +78,10 @@ pub fn build_rust_fun_app(
 
     match rust_fun.ret() {
         RetABIType::Void => Value::List(Box::new([]), None),
-        RetABIType::Never => Value::Divergent,
+        RetABIType::Never => {
+            b.push(span, OpKind::Unreachable);
+            Value::Divergent
+        }
         RetABIType::Inhabited(abi_type) => {
             let reg_value = value::RegValue {
                 reg: ret_reg,
@@ -107,7 +108,8 @@ pub fn build_rust_fun_thunk(span: Span, rust_fun: &hir::rfi::Fun) -> ops::Fun {
         abi_type: rest_abi_type.clone(),
     }));
 
-    let return_value = build_rust_fun_app(&mut b, span, rust_fun, &[], Some(&rest_value));
+    let empty_list_value = Value::List(Box::new([]), Some(Box::new(rest_value)));
+    let return_value = build_rust_fun_app(&mut b, span, rust_fun, empty_list_value);
 
     if !return_value.is_divergent() {
         let return_reg = value_to_reg(&mut b, span, &return_value, &ret_abi_type);
@@ -115,7 +117,7 @@ pub fn build_rust_fun_thunk(span: Span, rust_fun: &hir::rfi::Fun) -> ops::Fun {
     }
 
     ops::Fun {
-        abi: ops::EntryPointABI {
+        abi: ops::FunABI {
             takes_task: true,
             takes_closure: true,
             params: Box::new([rest_abi_type]),

@@ -3,6 +3,7 @@ use std::ffi::CString;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
+use llvm_sys::LLVMAttributeFunctionIndex;
 
 use runtime::boxed;
 
@@ -184,6 +185,8 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 fcx.regs.insert(*reg, to_llvm_value);
             }
             OpKind::ConstEntryPoint(reg, ConstEntryPointOp { symbol, abi }) => {
+                use runtime::abitype::RetABIType;
+
                 let function_type = cgx.function_to_llvm_type(
                     abi.takes_task,
                     abi.takes_closure,
@@ -197,14 +200,24 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                     function_name.as_bytes_with_nul().as_ptr() as *const _,
                 );
 
-                let function = if global.is_null() {
-                    LLVMAddFunction(
+                let function;
+                if global.is_null() {
+                    function = LLVMAddFunction(
                         mcx.module,
                         function_name.as_bytes_with_nul().as_ptr() as *const _,
                         function_type,
-                    )
+                    );
+
+                    if abi.ret == RetABIType::Never {
+                        let noreturn_attr = cgx.llvm_enum_attr_for_name(b"noreturn");
+                        LLVMAddAttributeAtIndex(
+                            function,
+                            LLVMAttributeFunctionIndex,
+                            noreturn_attr,
+                        );
+                    }
                 } else {
-                    global
+                    function = global;
                 };
 
                 fcx.regs.insert(*reg, function);
@@ -232,6 +245,9 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
             }
             OpKind::RetVoid => {
                 LLVMBuildRetVoid(fcx.builder);
+            }
+            OpKind::Unreachable => {
+                LLVMBuildUnreachable(fcx.builder);
             }
             OpKind::LoadBoxedPairHead(reg, pair_reg) => {
                 let llvm_pair = fcx.regs[pair_reg];

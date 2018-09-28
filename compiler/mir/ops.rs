@@ -5,7 +5,7 @@ use syntax::span::Span;
 new_counting_id_type!(RegIdCounter, RegId);
 
 #[derive(Debug)]
-pub struct EntryPointABI {
+pub struct FunABI {
     pub takes_task: bool,
     pub takes_closure: bool,
     pub params: Box<[abitype::ABIType]>,
@@ -21,7 +21,7 @@ pub struct CallOp {
 #[derive(Debug)]
 pub struct ConstEntryPointOp {
     pub symbol: &'static str,
-    pub abi: EntryPointABI,
+    pub abi: FunABI,
 }
 
 #[derive(Debug)]
@@ -62,6 +62,7 @@ pub enum OpKind {
     Call(RegId, CallOp),
     Ret(RegId),
     RetVoid,
+    Unreachable,
     LoadBoxedPairHead(RegId, RegId),
     LoadBoxedPairRest(RegId, RegId),
     LoadBoxedIntValue(RegId, RegId),
@@ -81,7 +82,7 @@ impl Op {
 }
 
 pub struct Fun {
-    pub abi: EntryPointABI,
+    pub abi: FunABI,
     pub params: Vec<RegId>,
     pub ops: Vec<Op>,
 }

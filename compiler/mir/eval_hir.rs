@@ -26,6 +26,8 @@ pub struct EvalHirCtx {
     runtime_task: runtime::task::Task,
     global_values: HashMap<hir::VarId, Value>,
 
+    boxed_fun_values: HashMap<Gc<boxed::FunThunk>, Value>,
+
     // This is important for drop order!
     rust_fun_thunks: HashMap<*const c_void, boxed::ThunkEntry>,
     thunk_gen: codegen::CodegenCtx,
@@ -69,6 +71,8 @@ impl EvalHirCtx {
             runtime_task: runtime::task::Task::new(),
             global_values: HashMap::new(),
 
+            boxed_fun_values: HashMap::new(),
+
             rust_fun_thunks: HashMap::new(),
             thunk_gen: codegen::CodegenCtx::new(),
             thunk_jit: codegen::jit::JITCtx::new(),
@@ -90,9 +94,9 @@ impl EvalHirCtx {
         span: Span,
         var_values: &mut HashMap<hir::VarId, Value>,
         list: &hir::destruc::List<ty::Poly>,
-        value: &Value,
+        value: Value,
     ) {
-        let mut iter = value.list_iter();
+        let mut iter = value.into_list_iter();
 
         for fixed_destruc in list.fixed() {
             let guide_type = iter.next_unchecked(b, span).clone();
@@ -114,7 +118,7 @@ impl EvalHirCtx {
 
         match destruc {
             Destruc::Scalar(_, scalar) => Self::destruc_scalar(var_values, scalar, value),
-            Destruc::List(span, list) => Self::destruc_list(b, *span, var_values, list, &value),
+            Destruc::List(span, list) => Self::destruc_list(b, *span, var_values, list, value),
         }
     }
 
@@ -174,28 +178,16 @@ impl EvalHirCtx {
         b: &mut Option<Builder>,
         span: Span,
         closure: &value::Closure,
-        fixed_args: &[Expr],
-        rest_arg: Option<&Expr>,
+        arg_list_value: Value,
     ) -> Result<Value> {
         let fun_expr = &closure.fun_expr;
 
-        let fixed_values = fixed_args
-            .iter()
-            .map(|arg| self.eval_expr(dcx, b, arg))
-            .collect::<Result<Vec<Value>>>()?;
-
-        let rest_value = match rest_arg {
-            Some(rest_arg) => Some(Box::new(self.eval_expr(dcx, b, rest_arg)?)),
-            None => None,
-        };
-
-        let arg_list_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
         Self::destruc_list(
             b,
             span,
             &mut dcx.local_values,
             &fun_expr.params,
-            &arg_list_value,
+            arg_list_value,
         );
 
         // Include any captured values from the closure in `local_values`
@@ -215,22 +207,15 @@ impl EvalHirCtx {
         b: &mut Option<Builder>,
         span: Span,
         test_mono: &ty::Mono,
-        fixed_args: &[Expr],
-        rest_arg: Option<&Expr>,
+        arg_list_value: Value,
     ) -> Result<Value> {
         use crate::mir::value::mono_for_value;
         use crate::ty::pred::InterpretedPred;
 
-        let value = if !fixed_args.is_empty() {
-            self.eval_expr(dcx, b, &fixed_args[0])?
-        } else if let Some(rest_arg) = rest_arg {
-            let rest_value = self.eval_expr(dcx, b, rest_arg)?;
-            rest_value.list_iter().next_unchecked(b, span).clone()
-        } else {
-            panic!("Unexpected arity for type predicate application");
-        };
+        let mut arg_list_iter = arg_list_value.into_list_iter();
+        let subject_value = arg_list_iter.next_unchecked(b, span);
 
-        let subject_mono = mono_for_value(self.runtime_task.heap().interner(), &value);
+        let subject_mono = mono_for_value(self.runtime_task.heap().interner(), &subject_value);
 
         match ty::pred::interpret_ty_refs(&dcx.tvars, &subject_mono, test_mono) {
             InterpretedPred::Static(value) => {
@@ -240,7 +225,23 @@ impl EvalHirCtx {
         }
     }
 
-    pub fn thunk_for_rust_fun(&mut self, rust_fun: &hir::rfi::Fun) -> boxed::ThunkEntry {
+    pub fn rust_fun_to_boxed(
+        &mut self,
+        rust_fun_value: &Value,
+        rust_fun: &hir::rfi::Fun,
+    ) -> Gc<boxed::FunThunk> {
+        use std::ptr;
+
+        let closure = ptr::null();
+        let entry = self.thunk_for_rust_fun(rust_fun);
+        let new_boxed = boxed::FunThunk::new(self, (closure, entry));
+
+        self.boxed_fun_values
+            .insert(new_boxed, rust_fun_value.clone());
+        new_boxed
+    }
+
+    fn thunk_for_rust_fun(&mut self, rust_fun: &hir::rfi::Fun) -> boxed::ThunkEntry {
         use crate::mir::rust_fun::jit_thunk_for_rust_fun;
 
         // Create a dynamic thunk to this Rust function if it doesn't exist
@@ -253,18 +254,34 @@ impl EvalHirCtx {
             .or_insert_with(|| jit_thunk_for_rust_fun(thunk_gen, thunk_jit, rust_fun)))
     }
 
+    fn call_native_fun<F>(span: Span, block: F) -> Result<Value>
+    where
+        F: FnOnce() -> Gc<boxed::Any>,
+    {
+        // By convention convert string panics in to our `ErrorKind::Panic`
+        panic::catch_unwind(panic::AssertUnwindSafe(block))
+            .map(Value::Const)
+            .map_err(|err| {
+                let message = if let Some(message) = err.downcast_ref::<String>() {
+                    message.clone()
+                } else {
+                    "Unexpected panic type".to_owned()
+                };
+
+                Error::new(span, ErrorKind::Panic(message))
+            })
+    }
+
     fn eval_rust_fun_app(
         &mut self,
-        dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         span: Span,
         rust_fun: &hir::rfi::Fun,
-        fixed_args: &[Expr],
-        rest_arg: Option<&Expr>,
+        arg_list_value: Value,
     ) -> Result<Value> {
         use crate::mir::intrinsic;
         use crate::mir::rust_fun::build_rust_fun_app;
-        use crate::mir::value::to_boxed::list_to_boxed;
+        use crate::mir::value::to_boxed::value_to_boxed;
         use std::ptr;
 
         // TODO: Fix for polymorphism once it's supported
@@ -274,55 +291,57 @@ impl EvalHirCtx {
         if let Some(intrinsic_name) = rust_fun.intrinsic_name() {
             // Attempt specialised evaluation
             if let Some(value) =
-                intrinsic::try_eval(self, dcx, b, span, intrinsic_name, fixed_args, rest_arg)?
+                intrinsic::try_eval(self, b, span, intrinsic_name, &arg_list_value)?
             {
                 return Ok(value);
             }
         }
 
-        let fixed_values = fixed_args
-            .iter()
-            .map(|arg| self.eval_expr(dcx, b, arg))
-            .collect::<Result<Vec<Value>>>()?;
-
-        let rest_value = match rest_arg {
-            Some(rest_arg) => Some(self.eval_expr(dcx, b, rest_arg)?),
-            None => None,
-        };
-
         if can_const_eval {
-            let boxed_arg_list = list_to_boxed(self, &fixed_values, rest_value.as_ref());
+            let boxed_arg_list = value_to_boxed(self, &arg_list_value);
 
             if let Some(boxed_arg_list) = boxed_arg_list {
                 let thunk = self.thunk_for_rust_fun(rust_fun);
 
                 // By convention convert string panics in to our `ErrorKind::Panic`
                 let runtime_task = &mut self.runtime_task;
-                return panic::catch_unwind(panic::AssertUnwindSafe(|| {
-                    Value::Const(thunk(runtime_task, ptr::null(), boxed_arg_list))
-                })).map_err(|err| {
-                    let message = if let Some(message) = err.downcast_ref::<String>() {
-                        message.clone()
-                    } else {
-                        "Unexpected panic type".to_owned()
-                    };
-
-                    Error::new(span, ErrorKind::Panic(message))
+                return Self::call_native_fun(span, || {
+                    thunk(runtime_task, ptr::null(), boxed_arg_list)
                 });
             }
         }
 
         if let Some(b) = b {
-            Ok(build_rust_fun_app(
-                b,
-                span,
-                rust_fun,
-                &fixed_values,
-                rest_value.as_ref(),
-            ))
+            Ok(build_rust_fun_app(b, span, rust_fun, arg_list_value))
         } else {
             panic!("Need builder for non-const function application");
         }
+    }
+
+    fn eval_fun_thunk_app(
+        &mut self,
+        dcx: &mut DefCtx,
+        b: &mut Option<Builder>,
+        span: Span,
+        fun_thunk: Gc<boxed::FunThunk>,
+        arg_list_value: Value,
+    ) -> Result<Value> {
+        use crate::mir::value::to_boxed::value_to_boxed;
+
+        if let Some(actual_value) = self.boxed_fun_values.get(&fun_thunk) {
+            return self.eval_value_app(dcx, b, span, &actual_value.clone(), arg_list_value);
+        }
+
+        if b.is_some() {
+            unimplemented!("attempt to apply unknown fun thunk during compile phase");
+        }
+
+        let boxed_arg_list =
+            value_to_boxed(self, &arg_list_value).expect("uninhabited value during apply");
+
+        Self::call_native_fun(span, || {
+            fun_thunk.apply(&mut self.runtime_task, boxed_arg_list)
+        })
     }
 
     fn eval_value_app(
@@ -330,20 +349,29 @@ impl EvalHirCtx {
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         span: Span,
-        fun_value: Value,
-        fixed_args: &[Expr],
-        rest_arg: Option<&Expr>,
+        fun_value: &Value,
+        arg_list_value: Value,
     ) -> Result<Value> {
         match fun_value {
             Value::Closure(closure) => {
-                self.eval_closure_app(dcx, b, span, &closure, fixed_args, rest_arg)
+                self.eval_closure_app(dcx, b, span, &closure, arg_list_value)
             }
             Value::RustFun(rust_fun) => {
-                self.eval_rust_fun_app(dcx, b, span, rust_fun.as_ref(), fixed_args, rest_arg)
+                self.eval_rust_fun_app(b, span, rust_fun.as_ref(), arg_list_value)
             }
             Value::TyPred(test_poly) => {
-                self.eval_ty_pred_app(dcx, b, span, test_poly.as_ref(), fixed_args, rest_arg)
+                self.eval_ty_pred_app(dcx, b, span, test_poly.as_ref(), arg_list_value)
             }
+            Value::Const(boxed_fun) => match boxed_fun.as_subtype() {
+                boxed::AnySubtype::FunThunk(fun_thunk) => self.eval_fun_thunk_app(
+                    dcx,
+                    b,
+                    span,
+                    unsafe { Gc::new(fun_thunk) },
+                    arg_list_value,
+                ),
+                other => unimplemented!("applying boxed function value type: {:?}", other),
+            },
             other => {
                 unimplemented!("applying function value type: {:?}", other);
             }
@@ -359,14 +387,19 @@ impl EvalHirCtx {
     ) -> Result<Value> {
         let fun_value = self.eval_expr(dcx, b, &app.fun_expr)?;
 
-        self.eval_value_app(
-            dcx,
-            b,
-            span,
-            fun_value,
-            app.fixed_arg_exprs.as_slice(),
-            app.rest_arg_expr.as_ref(),
-        )
+        let fixed_values = app
+            .fixed_arg_exprs
+            .iter()
+            .map(|arg| self.eval_expr(dcx, b, arg))
+            .collect::<Result<Vec<Value>>>()?;
+
+        let rest_value = match &app.rest_arg_expr {
+            Some(rest_arg) => Some(Box::new(self.eval_expr(dcx, b, rest_arg)?)),
+            None => None,
+        };
+
+        let arg_list_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
+        self.eval_value_app(dcx, b, span, &fun_value, arg_list_value)
     }
 
     fn eval_cond(
@@ -446,7 +479,25 @@ impl EvalHirCtx {
             value::visit_value_root(&mut strong_pass, value_ref);
         }
 
-        *self.runtime_task.heap_mut() = strong_pass.into_new_heap();
+        for value_ref in self.boxed_fun_values.values_mut() {
+            // TODO: This can cause a circular reference with the weak pass below
+            value::visit_value_root(&mut strong_pass, value_ref);
+        }
+
+        // Any function values that are still live need to be updated
+        let weak_pass = strong_pass.into_weak_pass();
+
+        let old_boxed_fun_values = mem::replace(&mut self.boxed_fun_values, HashMap::new());
+        self.boxed_fun_values = old_boxed_fun_values
+            .into_iter()
+            .filter_map(|(fun_thunk, value)| {
+                weak_pass
+                    .new_heap_ref_for(fun_thunk)
+                    .map(|new_fun_thunk| (new_fun_thunk, value))
+            })
+            .collect();
+
+        *self.runtime_task.heap_mut() = weak_pass.into_new_heap();
     }
 
     pub fn eval_expr(
@@ -500,7 +551,15 @@ impl EvalHirCtx {
 
         let mut dcx = DefCtx::new();
         let main_value = self.eval_ref(&dcx, main_var_id);
-        self.eval_value_app(&mut dcx, &mut None, EMPTY_SPAN, main_value, &[], None)?;
+        let empty_list_value = Value::List(Box::new([]), None);
+
+        self.eval_value_app(
+            &mut dcx,
+            &mut None,
+            EMPTY_SPAN,
+            &main_value,
+            empty_list_value,
+        )?;
 
         Ok(())
     }
@@ -525,7 +584,7 @@ impl EvalHirCtx {
         let mut ops = b.unwrap().into_ops();
         ops.push(ops::Op::new(EMPTY_SPAN, ops::OpKind::RetVoid));
 
-        let main_abi = ops::EntryPointABI {
+        let main_abi = ops::FunABI {
             takes_task: true,
             takes_closure: false,
             params: Box::new([]),
