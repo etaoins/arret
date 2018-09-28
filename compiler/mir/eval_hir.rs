@@ -28,10 +28,10 @@ pub struct EvalHirCtx {
     global_values: HashMap<hir::VarId, Value>,
 
     built_funs: Vec<ops::Fun>,
-    boxed_fun_values: HashMap<Gc<boxed::FunThunk>, Value>,
 
-    // This is important for drop order!
     rust_fun_thunks: HashMap<*const c_void, boxed::ThunkEntry>,
+    thunk_fun_values: HashMap<Gc<boxed::FunThunk>, Value>,
+    // This is important for drop order!
     thunk_gen: codegen::CodegenCtx,
     thunk_jit: codegen::jit::JITCtx,
 }
@@ -74,9 +74,9 @@ impl EvalHirCtx {
             global_values: HashMap::new(),
 
             built_funs: vec![],
-            boxed_fun_values: HashMap::new(),
 
             rust_fun_thunks: HashMap::new(),
+            thunk_fun_values: HashMap::new(),
             thunk_gen: codegen::CodegenCtx::new(),
             thunk_jit: codegen::jit::JITCtx::new(),
         }
@@ -247,7 +247,7 @@ impl EvalHirCtx {
         let new_boxed = boxed::FunThunk::new(self, (captures, entry));
 
         let rust_fun_value = Value::RustFun(rust_fun);
-        self.boxed_fun_values.insert(new_boxed, rust_fun_value);
+        self.thunk_fun_values.insert(new_boxed, rust_fun_value);
 
         new_boxed
     }
@@ -371,7 +371,7 @@ impl EvalHirCtx {
     ) -> Result<Value> {
         use crate::mir::value::to_const::value_to_const;
 
-        if let Some(actual_value) = self.boxed_fun_values.get(&fun_thunk) {
+        if let Some(actual_value) = self.thunk_fun_values.get(&fun_thunk) {
             return self.eval_value_app(dcx, b, span, &actual_value.clone(), arg_list_value);
         }
 
@@ -516,7 +516,7 @@ impl EvalHirCtx {
         let new_boxed = boxed::FunThunk::new(self, (ptr::null(), entry));
 
         let arret_fun_value = Value::ArretFun(arret_fun.clone());
-        self.boxed_fun_values.insert(new_boxed, arret_fun_value);
+        self.thunk_fun_values.insert(new_boxed, arret_fun_value);
         new_boxed
     }
 
@@ -645,7 +645,7 @@ impl EvalHirCtx {
             value::visit_value_root(&mut strong_pass, value_ref);
         }
 
-        for value_ref in self.boxed_fun_values.values_mut() {
+        for value_ref in self.thunk_fun_values.values_mut() {
             // TODO: This can cause a circular reference with the weak pass below
             value::visit_value_root(&mut strong_pass, value_ref);
         }
@@ -653,8 +653,8 @@ impl EvalHirCtx {
         // Any function values that are still live need to be updated
         let weak_pass = strong_pass.into_weak_pass();
 
-        let old_boxed_fun_values = mem::replace(&mut self.boxed_fun_values, HashMap::new());
-        self.boxed_fun_values = old_boxed_fun_values
+        let old_thunk_fun_values = mem::replace(&mut self.thunk_fun_values, HashMap::new());
+        self.thunk_fun_values = old_thunk_fun_values
             .into_iter()
             .filter_map(|(fun_thunk, value)| {
                 weak_pass
