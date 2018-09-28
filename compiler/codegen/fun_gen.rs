@@ -143,6 +143,11 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 let llvm_value = const_gen::gen_boxed_int(cgx, mcx, *value);
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::ConstBoxedFunThunk(reg, entry_point_reg) => {
+                let llvm_entry_point = fcx.regs[entry_point_reg];
+                let llvm_value = const_gen::gen_boxed_fun_thunk(cgx, mcx, llvm_entry_point);
+                fcx.regs.insert(*reg, llvm_value);
+            }
             OpKind::ConstBoxedPair(
                 reg,
                 ConstBoxedPairOp {
@@ -187,12 +192,7 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
             OpKind::ConstEntryPoint(reg, ConstEntryPointOp { symbol, abi }) => {
                 use runtime::abitype::RetABIType;
 
-                let function_type = cgx.function_to_llvm_type(
-                    abi.takes_task,
-                    abi.takes_closure,
-                    &abi.params,
-                    &abi.ret,
-                );
+                let function_type = cgx.fun_abi_to_llvm_type(&abi);
                 let function_name = ffi::CString::new(*symbol).unwrap();
 
                 let global = LLVMGetNamedFunction(
@@ -221,6 +221,10 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 };
 
                 fcx.regs.insert(*reg, function);
+            }
+            OpKind::ConstBuiltFunEntryPoint(reg, built_fun_id) => {
+                let llvm_fun = mcx.built_fun_value(*built_fun_id);
+                fcx.regs.insert(*reg, llvm_fun);
             }
             OpKind::Call(reg, CallOp { fun_reg, args }) => {
                 let llvm_fun = fcx.regs[&fun_reg];
@@ -298,12 +302,7 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> LLVM
     unsafe {
         let builder = LLVMCreateBuilderInContext(cgx.llx);
 
-        let function_type = cgx.function_to_llvm_type(
-            fun.abi.takes_task,
-            fun.abi.takes_closure,
-            &fun.abi.params,
-            &fun.abi.ret,
-        );
+        let function_type = cgx.fun_abi_to_llvm_type(&fun.abi);
 
         let fun_symbol = fun
             .source_name
@@ -322,7 +321,7 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> LLVM
             fcx.current_task = Some(LLVMGetParam(function, 0));
         }
 
-        let params_offset = fun.abi.takes_task as usize + fun.abi.takes_closure as usize;
+        let params_offset = fun.abi.takes_task as usize + fun.abi.takes_captures as usize;
         for (param_index, reg) in fun.params.iter().enumerate() {
             let llvm_offset = (params_offset + param_index) as u32;
             fcx.regs.insert(*reg, LLVMGetParam(function, llvm_offset));

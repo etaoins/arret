@@ -14,6 +14,8 @@ use llvm_sys::LLVMLinkage;
 use runtime::abitype::{ABIType, BoxedABIType, RetABIType, TOP_LIST_BOXED_ABI_TYPE};
 use runtime::boxed;
 
+use crate::mir::ops;
+
 pub struct CodegenCtx {
     llx: LLVMContextRef,
 
@@ -113,6 +115,11 @@ impl CodegenCtx {
                     members.push(LLVMInt8TypeInContext(self.llx));
                     b"boxed_str\0".as_ptr()
                 }
+                BoxedABIType::DirectTagged(boxed::TypeTag::FunThunk) => {
+                    members.push(self.record_llvm_type());
+                    members.push(self.fun_abi_to_llvm_type(&ops::FunABI::thunk_abi()));
+                    b"boxed_fun_thunk\0".as_ptr()
+                }
                 BoxedABIType::Pair(_) | BoxedABIType::DirectTagged(boxed::TypeTag::TopPair) => {
                     let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
                     let llvm_any_list_ptr =
@@ -162,36 +169,31 @@ impl CodegenCtx {
         }
     }
 
-    fn function_to_llvm_type(
-        &mut self,
-        takes_task: bool,
-        takes_closure: bool,
-        arg_types: &[ABIType],
-        ret_type: &RetABIType,
-    ) -> LLVMTypeRef {
-        let mut llvm_arg_types = vec![];
+    fn fun_abi_to_llvm_type(&mut self, fun_abi: &ops::FunABI) -> LLVMTypeRef {
+        let mut llvm_param_types = vec![];
 
-        if takes_task {
-            llvm_arg_types.push(self.task_llvm_type());
+        if fun_abi.takes_task {
+            llvm_param_types.push(self.task_llvm_type());
         }
 
-        if takes_closure {
-            llvm_arg_types.push(self.record_llvm_type());
+        if fun_abi.takes_captures {
+            llvm_param_types.push(self.record_llvm_type());
         }
 
-        llvm_arg_types.extend(
-            arg_types
+        llvm_param_types.extend(
+            fun_abi
+                .params
                 .iter()
                 .map(|abi_type| self.abi_to_llvm_type(abi_type)),
         );
 
-        let llvm_ret_type = self.ret_abi_to_llvm_type(ret_type);
+        let llvm_ret_type = self.ret_abi_to_llvm_type(&fun_abi.ret);
 
         unsafe {
             LLVMFunctionType(
                 llvm_ret_type,
-                llvm_arg_types.as_mut_ptr(),
-                llvm_arg_types.len() as u32,
+                llvm_param_types.as_mut_ptr(),
+                llvm_param_types.len() as u32,
                 0,
             )
         }

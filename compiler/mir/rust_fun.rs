@@ -53,7 +53,7 @@ pub fn build_rust_fun_app(
 
     let abi = FunABI {
         takes_task: rust_fun.takes_task(),
-        takes_closure: false,
+        takes_captures: false,
         params: rust_fun.params().to_owned().into(),
         ret: rust_fun.ret().clone(),
     };
@@ -93,7 +93,7 @@ pub fn build_rust_fun_app(
     }
 }
 
-pub fn build_rust_fun_thunk(span: Span, rust_fun: &hir::rfi::Fun) -> ops::Fun {
+fn ops_for_rust_fun_thunk(span: Span, rust_fun: &hir::rfi::Fun) -> ops::Fun {
     use crate::mir::ops::*;
     use crate::mir::value::to_reg::value_to_reg;
 
@@ -119,12 +119,7 @@ pub fn build_rust_fun_thunk(span: Span, rust_fun: &hir::rfi::Fun) -> ops::Fun {
 
     ops::Fun {
         source_name: Some(fun_symbol),
-        abi: ops::FunABI {
-            takes_task: true,
-            takes_closure: true,
-            params: Box::new([rest_abi_type]),
-            ret: abitype::BoxedABIType::Any.into(),
-        },
+        abi: ops::FunABI::thunk_abi(),
         params: vec![rest_reg],
         ops: b.into_ops(),
     }
@@ -147,7 +142,7 @@ pub fn jit_thunk_for_rust_fun(
             rust_fun.entry_point() as u64,
         );
 
-        let ops_fun = build_rust_fun_thunk(EMPTY_SPAN, rust_fun);
+        let ops_fun = ops_for_rust_fun_thunk(EMPTY_SPAN, rust_fun);
         let address = jcx.compile_fun(cgx, &ops_fun);
 
         mem::transmute(address)

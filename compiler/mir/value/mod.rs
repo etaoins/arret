@@ -5,6 +5,8 @@ pub mod to_reg;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use syntax::span::Span;
+
 use runtime::abitype;
 use runtime::boxed;
 use runtime::boxed::refs::Gc;
@@ -16,7 +18,9 @@ use crate::ty;
 use crate::ty::purity::Purity;
 
 #[derive(Clone, Debug)]
-pub struct Closure {
+pub struct ArretFun {
+    pub span: Span,
+    pub source_name: Option<String>,
     pub captures: HashMap<hir::VarId, Value>,
     pub fun_expr: Rc<hir::Fun<ty::Poly>>,
 }
@@ -32,7 +36,7 @@ pub enum Value {
     Const(Gc<boxed::Any>),
     // This uses Box<[]> because we can't convert from a Vec<> to Rc<[]> without reallocating
     List(Box<[Value]>, Option<Box<Value>>),
-    Closure(Closure),
+    ArretFun(ArretFun),
     RustFun(Rc<hir::rfi::Fun>),
     TyPred(Rc<ty::Mono>),
     Reg(Rc<RegValue>),
@@ -124,9 +128,9 @@ pub fn mono_for_value(interner: &Interner, value: &Value) -> ty::Mono {
             ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into_mono()
         }
         Value::TyPred(_) => ty::Ty::Fun(Box::new(ty::Fun::new_for_ty_pred())).into_mono(),
-        Value::Closure(closure) => {
+        Value::ArretFun(arret_fun) => {
             use crate::hir::destruc::poly_for_list_destruc;
-            let fun_expr = &closure.fun_expr;
+            let fun_expr = &arret_fun.fun_expr;
 
             let top_fun = ty::TopFun::new(fun_expr.purity.clone(), fun_expr.ret_ty.clone());
             let params_poly = poly_for_list_destruc(&fun_expr.params);
@@ -159,8 +163,8 @@ pub fn visit_value_root(strong_pass: &mut boxed::collect::StrongPass, value: &mu
                 visit_value_root(strong_pass, any_ref);
             }
         }
-        Value::Closure(ref mut closure) => {
-            for any_ref in closure.captures.values_mut() {
+        Value::ArretFun(ref mut arret_fun) => {
+            for any_ref in arret_fun.captures.values_mut() {
                 visit_value_root(strong_pass, any_ref);
             }
         }

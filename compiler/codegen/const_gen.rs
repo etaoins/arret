@@ -108,3 +108,34 @@ pub fn gen_boxed_int(cgx: &mut CodegenCtx, mcx: &mut ModCtx, value: i64) -> LLVM
         global
     }
 }
+
+pub fn gen_boxed_fun_thunk(
+    cgx: &mut CodegenCtx,
+    mcx: &mut ModCtx,
+    llvm_entry_point: LLVMValueRef,
+) -> LLVMValueRef {
+    unsafe {
+        let type_tag = boxed::TypeTag::FunThunk;
+        let llvm_type = cgx.boxed_abi_to_llvm_struct_type(&type_tag.into());
+
+        let members = &mut [
+            cgx.const_box_header(type_tag),
+            LLVMConstNull(cgx.record_llvm_type()),
+            llvm_entry_point,
+        ];
+
+        let llvm_value =
+            LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
+
+        let global = LLVMAddGlobal(
+            mcx.module,
+            llvm_type,
+            "const_fun_thunk\0".as_ptr() as *const _,
+        );
+        LLVMSetInitializer(global, llvm_value);
+        LLVMSetAlignment(global, mem::align_of::<boxed::FunThunk>() as u32);
+
+        annotate_private_global(global);
+        global
+    }
+}

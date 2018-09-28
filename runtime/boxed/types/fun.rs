@@ -13,7 +13,7 @@ pub type ThunkEntry = extern "C" fn(&mut task::Task, *const Record, Gc<Any>) -> 
 #[repr(C, align(16))]
 pub struct FunThunk {
     header: Header,
-    closure: *const Record,
+    captures: *const Record,
     entry: ThunkEntry,
 }
 
@@ -36,7 +36,7 @@ impl ConstructableFrom<FunThunkInput> for FunThunk {
                 type_tag: Self::TYPE_TAG,
                 alloc_type,
             },
-            closure: value.0,
+            captures: value.0,
             entry: value.1,
         }
     }
@@ -44,7 +44,7 @@ impl ConstructableFrom<FunThunkInput> for FunThunk {
 
 impl FunThunk {
     pub fn apply(&self, task: &mut task::Task, arg_list: Gc<Any>) -> Gc<Any> {
-        (self.entry)(task, self.closure, arg_list)
+        (self.entry)(task, self.captures, arg_list)
     }
 }
 

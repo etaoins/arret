@@ -3,13 +3,32 @@ use std::ffi::CStr;
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 
+use crate::mir::ops;
+
 pub struct ModCtx {
     pub module: LLVMModuleRef,
+    pub built_funs: Vec<LLVMValueRef>,
 }
 
 impl ModCtx {
     pub fn new(module: LLVMModuleRef) -> ModCtx {
-        ModCtx { module }
+        ModCtx {
+            module,
+            built_funs: vec![],
+        }
+    }
+
+    pub fn push_built_fun_value(
+        &mut self,
+        built_fun_id: ops::BuiltFunId,
+        llvm_value: LLVMValueRef,
+    ) {
+        assert_eq!(self.built_funs.len(), built_fun_id.to_usize());
+        self.built_funs.push(llvm_value);
+    }
+
+    pub fn built_fun_value(&self, built_fun_id: ops::BuiltFunId) -> LLVMValueRef {
+        self.built_funs[built_fun_id.to_usize()]
     }
 
     pub fn get_global_or_insert<F>(

@@ -26,10 +26,10 @@ fn try_compile_input_file(
         ehx.consume_def(inferred_def)?;
     }
 
-    let mir_program = ehx.build_program(hir.main_var_id)?;
+    let mir_program = ehx.into_built_program(hir.main_var_id)?;
     compiler::gen_program(
         &hir.rust_libraries,
-        mir_program,
+        &mir_program,
         target_triple,
         output_type,
         output_path,

@@ -2,14 +2,26 @@ use runtime::abitype;
 
 use syntax::span::Span;
 
+new_indexing_id_type!(BuiltFunId, u32);
 new_counting_id_type!(RegIdCounter, RegId);
 
 #[derive(Debug)]
 pub struct FunABI {
     pub takes_task: bool,
-    pub takes_closure: bool,
+    pub takes_captures: bool,
     pub params: Box<[abitype::ABIType]>,
     pub ret: abitype::RetABIType,
+}
+
+impl FunABI {
+    pub fn thunk_abi() -> FunABI {
+        FunABI {
+            takes_task: true,
+            takes_captures: true,
+            params: Box::new([abitype::TOP_LIST_BOXED_ABI_TYPE.into()]),
+            ret: abitype::BoxedABIType::Any.into(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -56,6 +68,8 @@ pub enum OpKind {
     ConstBoxedStr(RegId, Box<str>),
     ConstBoxedPair(RegId, ConstBoxedPairOp),
     ConstEntryPoint(RegId, ConstEntryPointOp),
+    ConstBuiltFunEntryPoint(RegId, BuiltFunId),
+    ConstBoxedFunThunk(RegId, RegId),
     ConstCastBoxed(RegId, CastBoxedOp),
     CastBoxed(RegId, CastBoxedOp),
     CurrentTask(RegId, ()),

@@ -11,6 +11,7 @@ use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::CodegenCtx;
 use crate::hir::rfi;
 use crate::mir;
+use crate::mir::ops;
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum OutputType {
@@ -37,7 +38,7 @@ fn c_main_llvm_type(cgx: &mut CodegenCtx) -> LLVMTypeRef {
     }
 }
 
-fn program_to_module(cgx: &mut CodegenCtx, program: mir::BuiltProgram) -> LLVMModuleRef {
+fn program_to_module(cgx: &mut CodegenCtx, program: &mir::BuiltProgram) -> LLVMModuleRef {
     use crate::codegen::fun_gen;
 
     unsafe {
@@ -48,9 +49,11 @@ fn program_to_module(cgx: &mut CodegenCtx, program: mir::BuiltProgram) -> LLVMMo
         LLVMSetLinkage(arret_main_llvm_value, LLVMLinkage::LLVMPrivateLinkage);
 
         // And all of the other functions
-        for (_, fun) in program.funs {
-            let fun_llvm_value = fun_gen::gen_fun(cgx, &mut mcx, &fun);
-            LLVMSetLinkage(fun_llvm_value, LLVMLinkage::LLVMPrivateLinkage)
+        for (fun_idx, fun) in program.funs.iter().enumerate() {
+            let fun_llvm_value = fun_gen::gen_fun(cgx, &mut mcx, fun);
+            LLVMSetLinkage(fun_llvm_value, LLVMLinkage::LLVMPrivateLinkage);
+
+            mcx.push_built_fun_value(ops::BuiltFunId::new(fun_idx), fun_llvm_value);
         }
 
         // Declare arret_launch_task
@@ -96,7 +99,7 @@ fn program_to_module(cgx: &mut CodegenCtx, program: mir::BuiltProgram) -> LLVMMo
 
 pub fn gen_program(
     rust_libraries: &[rfi::Library],
-    program: mir::BuiltProgram,
+    program: &mir::BuiltProgram,
     target_triple: Option<&str>,
     output_type: OutputType,
     output_file: &path::Path,
@@ -120,7 +123,7 @@ pub fn gen_program(
         LLVMRelocMode::LLVMRelocDynamicNoPic,
         LLVMCodeModel::LLVMCodeModelDefault,
     );
-    let module = program_to_module(&mut cgx, program);
+    let module = program_to_module(&mut cgx, &program);
 
     unsafe {
         let mut error: *mut libc::c_char = ptr::null_mut();

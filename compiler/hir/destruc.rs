@@ -50,6 +50,10 @@ impl<T: HirType> Scalar<T> {
         &self.var_id
     }
 
+    pub fn source_name(&self) -> &str {
+        &self.source_name
+    }
+
     pub fn ty(&self) -> &T {
         &self.ty
     }

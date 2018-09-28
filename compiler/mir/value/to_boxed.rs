@@ -43,10 +43,10 @@ pub fn value_to_boxed(ehx: &mut EvalHirCtx, value: &Value) -> Option<Gc<boxed::A
         Value::TyPred(ref test_poly) => {
             unimplemented!("Boxing of type predicates: {:?}", test_poly)
         }
-        Value::Closure(ref closure) => {
-            unimplemented!("Boxing of Arret closures: {:?}", closure.fun_expr)
+        Value::ArretFun(ref arret_fun) => Some(ehx.arret_fun_to_jit_boxed(arret_fun).as_any_ref()),
+        Value::RustFun(ref rust_fun) => {
+            Some(ehx.rust_fun_to_jit_boxed(rust_fun.clone()).as_any_ref())
         }
-        Value::RustFun(ref rust_fun) => Some(ehx.rust_fun_to_boxed(value, rust_fun).as_any_ref()),
         Value::Reg(_) => None,
         Value::Divergent => None,
     }

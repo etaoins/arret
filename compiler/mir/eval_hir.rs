@@ -10,7 +10,7 @@ use runtime::boxed::refs::Gc;
 
 use runtime_syntax::reader;
 use syntax::datum::Datum;
-use syntax::span::{Span, EMPTY_SPAN};
+use syntax::span::Span;
 
 use crate::codegen;
 use crate::hir;
@@ -26,6 +26,7 @@ pub struct EvalHirCtx {
     runtime_task: runtime::task::Task,
     global_values: HashMap<hir::VarId, Value>,
 
+    built_funs: Vec<ops::Fun>,
     boxed_fun_values: HashMap<Gc<boxed::FunThunk>, Value>,
 
     // This is important for drop order!
@@ -44,7 +45,7 @@ pub struct DefCtx {
 
 pub struct BuiltProgram {
     pub main: ops::Fun,
-    pub funs: Vec<(String, ops::Fun)>,
+    pub funs: Vec<ops::Fun>,
 }
 
 impl DefCtx {
@@ -71,6 +72,7 @@ impl EvalHirCtx {
             runtime_task: runtime::task::Task::new(),
             global_values: HashMap::new(),
 
+            built_funs: vec![],
             boxed_fun_values: HashMap::new(),
 
             rust_fun_thunks: HashMap::new(),
@@ -122,6 +124,15 @@ impl EvalHirCtx {
         }
     }
 
+    fn destruc_source_name(destruc: &hir::destruc::Destruc<ty::Poly>) -> Option<&str> {
+        use crate::hir::destruc::Destruc;
+
+        match destruc {
+            Destruc::Scalar(_, scalar) => Some(scalar.source_name()),
+            Destruc::List(_, _) => None,
+        }
+    }
+
     fn eval_ref(&self, dcx: &DefCtx, var_id: hir::VarId) -> Value {
         // Try local values first
         if let Some(value) = dcx.local_values.get(&var_id) {
@@ -151,7 +162,9 @@ impl EvalHirCtx {
         b: &mut Option<Builder>,
         hir_let: &hir::Let<ty::Poly>,
     ) -> Result<Value> {
-        let value = self.eval_expr(dcx, b, &hir_let.value_expr)?;
+        let source_name = Self::destruc_source_name(&hir_let.destruc);
+        let value = self.eval_expr_with_source_name(dcx, b, &hir_let.value_expr, source_name)?;
+
         Self::destruc_value(b, &mut dcx.local_values, &hir_let.destruc, value);
 
         self.eval_expr(dcx, b, &hir_let.body_expr)
@@ -172,15 +185,15 @@ impl EvalHirCtx {
         }
     }
 
-    fn eval_closure_app(
+    fn eval_arret_fun_app(
         &mut self,
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         span: Span,
-        closure: &value::Closure,
+        arret_fun: &value::ArretFun,
         arg_list_value: Value,
     ) -> Result<Value> {
-        let fun_expr = &closure.fun_expr;
+        let fun_expr = &arret_fun.fun_expr;
 
         Self::destruc_list(
             b,
@@ -192,7 +205,7 @@ impl EvalHirCtx {
 
         // Include any captured values from the closure in `local_values`
         dcx.local_values.extend(
-            closure
+            arret_fun
                 .captures
                 .iter()
                 .map(|(var_id, value)| (*var_id, value.clone())),
@@ -225,19 +238,16 @@ impl EvalHirCtx {
         }
     }
 
-    pub fn rust_fun_to_boxed(
-        &mut self,
-        rust_fun_value: &Value,
-        rust_fun: &hir::rfi::Fun,
-    ) -> Gc<boxed::FunThunk> {
+    pub fn rust_fun_to_jit_boxed(&mut self, rust_fun: Rc<hir::rfi::Fun>) -> Gc<boxed::FunThunk> {
         use std::ptr;
 
-        let closure = ptr::null();
-        let entry = self.thunk_for_rust_fun(rust_fun);
-        let new_boxed = boxed::FunThunk::new(self, (closure, entry));
+        let captures = ptr::null();
+        let entry = self.thunk_for_rust_fun(&rust_fun);
+        let new_boxed = boxed::FunThunk::new(self, (captures, entry));
 
-        self.boxed_fun_values
-            .insert(new_boxed, rust_fun_value.clone());
+        let rust_fun_value = Value::RustFun(rust_fun);
+        self.boxed_fun_values.insert(new_boxed, rust_fun_value);
+
         new_boxed
     }
 
@@ -353,12 +363,10 @@ impl EvalHirCtx {
         arg_list_value: Value,
     ) -> Result<Value> {
         match fun_value {
-            Value::Closure(closure) => {
-                self.eval_closure_app(dcx, b, span, &closure, arg_list_value)
+            Value::ArretFun(arret_fun) => {
+                self.eval_arret_fun_app(dcx, b, span, &arret_fun, arg_list_value)
             }
-            Value::RustFun(rust_fun) => {
-                self.eval_rust_fun_app(b, span, rust_fun.as_ref(), arg_list_value)
-            }
+            Value::RustFun(rust_fun) => self.eval_rust_fun_app(b, span, &rust_fun, arg_list_value),
             Value::TyPred(test_poly) => {
                 self.eval_ty_pred_app(dcx, b, span, test_poly.as_ref(), arg_list_value)
             }
@@ -427,7 +435,13 @@ impl EvalHirCtx {
         }
     }
 
-    fn eval_fun(&mut self, dcx: &mut DefCtx, fun_expr: Rc<hir::Fun<ty::Poly>>) -> Value {
+    fn eval_arret_fun(
+        &mut self,
+        dcx: &mut DefCtx,
+        span: Span,
+        fun_expr: Rc<hir::Fun<ty::Poly>>,
+        source_name: Option<&str>,
+    ) -> Value {
         let mut captures = HashMap::new();
 
         // Only process captures if there are local values. This is to avoid visiting the function
@@ -447,45 +461,106 @@ impl EvalHirCtx {
             });
         }
 
-        Value::Closure(value::Closure { fun_expr, captures })
+        Value::ArretFun(value::ArretFun {
+            span,
+            source_name: source_name.map(|source_name| source_name.to_owned()),
+            fun_expr,
+            captures,
+        })
     }
 
-    fn build_closure(&mut self, dcx: &mut DefCtx, closure: &value::Closure) -> Result<ops::Fun> {
+    pub fn arret_fun_to_jit_boxed(&mut self, arret_fun: &value::ArretFun) -> Gc<boxed::FunThunk> {
+        use std::{mem, ptr};
+
+        let wanted_abi = ops::FunABI::thunk_abi();
+
+        let ops_fun = self
+            .ops_for_arret_fun(&arret_fun, wanted_abi, true)
+            .expect("error during arret fun boxing");
+
+        let address = self.thunk_jit.compile_fun(&mut self.thunk_gen, &ops_fun);
+        let entry = unsafe { mem::transmute(address) };
+
+        let new_boxed = boxed::FunThunk::new(self, (ptr::null(), entry));
+
+        let arret_fun_value = Value::ArretFun(arret_fun.clone());
+        self.boxed_fun_values.insert(new_boxed, arret_fun_value);
+        new_boxed
+    }
+
+    fn ops_for_arret_fun(
+        &mut self,
+        arret_fun: &value::ArretFun,
+        wanted_abi: ops::FunABI,
+        has_rest: bool,
+    ) -> Result<ops::Fun> {
+        use crate::mir::value::to_reg::value_to_reg;
         use runtime::abitype;
 
-        let mut b = Some(Builder::new());
+        // TODO: Make an actual DefCtx
+        let mut dcx = DefCtx::new();
+        let mut b = Builder::new();
+        let span = arret_fun.span;
 
-        let value::Closure { captures, fun_expr } = closure;
-        let params = &fun_expr.params;
+        let mut abi_params_iter = wanted_abi.params.iter();
+        let rest_reg_value = if has_rest {
+            let abi_type = abi_params_iter.next_back().unwrap();
 
-        if !captures.is_empty() {
-            unimplemented!("building Arret functions with captures");
-        }
-
-        if !params.fixed().is_empty() || params.rest().is_some() {
-            unimplemented!("building Arret functions with parameters");
-        }
-
-        if fun_expr.ret_ty != ty::Ty::unit().into_poly() {
-            unimplemented!("building Arret functions with return");
-        }
-
-        self.eval_expr(dcx, &mut b, &fun_expr.body_expr)?;
-        let mut ops = b.unwrap().into_ops();
-        ops.push(ops::Op::new(EMPTY_SPAN, ops::OpKind::RetVoid));
-
-        let main_abi = ops::FunABI {
-            takes_task: true,
-            takes_closure: false,
-            params: Box::new([]),
-            ret: abitype::RetABIType::Void,
+            Some(Rc::new(value::RegValue {
+                reg: b.alloc_reg(),
+                abi_type: abi_type.clone(),
+            }))
+        } else {
+            None
         };
 
+        let fixed_reg_values = abi_params_iter
+            .map(|abi_type| {
+                Rc::new(value::RegValue {
+                    reg: b.alloc_reg(),
+                    abi_type: abi_type.clone(),
+                })
+            })
+            .collect::<Vec<Rc<value::RegValue>>>();
+
+        let param_regs = fixed_reg_values
+            .iter()
+            .chain(rest_reg_value.iter())
+            .map(|reg_value| reg_value.reg)
+            .collect();
+
+        let arg_list_value = Value::List(
+            fixed_reg_values
+                .into_iter()
+                .map(Value::Reg)
+                .collect::<Vec<Value>>()
+                .into_boxed_slice(),
+            rest_reg_value.map(|reg_value| Box::new(Value::Reg(reg_value))),
+        );
+
+        let mut some_b = Some(b);
+        let result_value =
+            self.eval_arret_fun_app(&mut dcx, &mut some_b, span, arret_fun, arg_list_value)?;
+
+        let mut b = some_b.unwrap();
+        match &wanted_abi.ret {
+            abitype::RetABIType::Inhabited(abi_type) => {
+                let ret_reg = value_to_reg(&mut b, span, &result_value, abi_type);
+                b.push(span, ops::OpKind::Ret(ret_reg));
+            }
+            abitype::RetABIType::Never => {
+                b.push(span, ops::OpKind::Unreachable);
+            }
+            abitype::RetABIType::Void => {
+                b.push(span, ops::OpKind::RetVoid);
+            }
+        }
+
         Ok(ops::Fun {
-            source_name: None,
-            abi: main_abi,
-            params: vec![],
-            ops,
+            source_name: arret_fun.source_name.clone(),
+            abi: wanted_abi,
+            params: param_regs,
+            ops: b.into_ops(),
         })
     }
 
@@ -499,7 +574,9 @@ impl EvalHirCtx {
         let mut dcx = DefCtx::new();
 
         // Don't pass a builder; we should never generate ops based on a def
-        let value = self.consume_expr(&mut dcx, &mut None, value_expr)?;
+        let source_name = Self::destruc_source_name(&destruc);
+        let value =
+            self.consume_expr_with_source_name(&mut dcx, &mut None, value_expr, source_name)?;
 
         Self::destruc_value(&mut None, &mut self.global_values, &destruc, value);
         Ok(())
@@ -539,18 +616,22 @@ impl EvalHirCtx {
         *self.runtime_task.heap_mut() = weak_pass.into_new_heap();
     }
 
-    pub fn eval_expr(
+    fn eval_expr_with_source_name(
         &mut self,
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         expr: &Expr,
+        source_name: Option<&str>,
     ) -> Result<Value> {
         match expr {
             hir::Expr::Lit(literal) => Ok(self.eval_lit(literal)),
             hir::Expr::Do(exprs) => self.eval_do(dcx, b, &exprs),
-            hir::Expr::Fun(_, fun_expr) => {
-                Ok(self.eval_fun(dcx, Rc::new(fun_expr.as_ref().clone())))
-            }
+            hir::Expr::Fun(span, fun_expr) => Ok(self.eval_arret_fun(
+                dcx,
+                *span,
+                Rc::new(fun_expr.as_ref().clone()),
+                source_name,
+            )),
             hir::Expr::RustFun(_, rust_fun) => {
                 Ok(Value::RustFun(Rc::new(rust_fun.as_ref().clone())))
             }
@@ -569,17 +650,38 @@ impl EvalHirCtx {
         }
     }
 
+    pub fn eval_expr(
+        &mut self,
+        dcx: &mut DefCtx,
+        b: &mut Option<Builder>,
+        expr: &Expr,
+    ) -> Result<Value> {
+        self.eval_expr_with_source_name(dcx, b, expr, None)
+    }
+
+    fn consume_expr_with_source_name(
+        &mut self,
+        dcx: &mut DefCtx,
+        b: &mut Option<Builder>,
+        expr: Expr,
+        source_name: Option<&str>,
+    ) -> Result<Value> {
+        match expr {
+            hir::Expr::Fun(span, fun_expr) => {
+                Ok(self.eval_arret_fun(dcx, span, fun_expr.into(), source_name))
+            }
+            hir::Expr::RustFun(_, rust_fun) => Ok(Value::RustFun(rust_fun.into())),
+            other => self.eval_expr_with_source_name(dcx, b, &other, source_name),
+        }
+    }
+
     pub fn consume_expr(
         &mut self,
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         expr: Expr,
     ) -> Result<Value> {
-        match expr {
-            hir::Expr::Fun(_, fun_expr) => Ok(self.eval_fun(dcx, fun_expr.into())),
-            hir::Expr::RustFun(_, rust_fun) => Ok(Value::RustFun(rust_fun.into())),
-            other => self.eval_expr(dcx, b, &other),
-        }
+        self.consume_expr_with_source_name(dcx, b, expr, None)
     }
 
     /// Evaluates the main function of a program
@@ -604,20 +706,28 @@ impl EvalHirCtx {
     }
 
     /// Builds the main function of the program
-    pub fn build_program(&mut self, main_var_id: hir::VarId) -> Result<BuiltProgram> {
-        let mut dcx = DefCtx::new();
+    pub fn into_built_program(mut self, main_var_id: hir::VarId) -> Result<BuiltProgram> {
+        use runtime::abitype;
 
+        let dcx = DefCtx::new();
         let main_value = self.eval_ref(&dcx, main_var_id);
 
-        let main_closure = if let Value::Closure(main_closure) = main_value {
-            main_closure
+        let main_arret_fun = if let Value::ArretFun(main_arret_fun) = main_value {
+            main_arret_fun
         } else {
-            unimplemented!("Non-closure main!");
+            unimplemented!("Non-Arret main!");
+        };
+
+        let main_abi = ops::FunABI {
+            takes_task: true,
+            takes_captures: false,
+            params: Box::new([]),
+            ret: abitype::RetABIType::Void,
         };
 
         Ok(BuiltProgram {
-            main: self.build_closure(&mut dcx, &main_closure)?,
-            funs: vec![],
+            main: self.ops_for_arret_fun(&main_arret_fun, main_abi, false)?,
+            funs: self.built_funs,
         })
     }
 
