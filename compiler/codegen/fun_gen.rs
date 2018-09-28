@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::ffi::CString;
+use std::ffi;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
@@ -193,7 +193,7 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                     &abi.params,
                     &abi.ret,
                 );
-                let function_name = CString::new(*symbol).unwrap();
+                let function_name = ffi::CString::new(*symbol).unwrap();
 
                 let global = LLVMGetNamedFunction(
                     mcx.module,
@@ -294,12 +294,7 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
     }
 }
 
-pub(crate) fn gen_fun(
-    cgx: &mut CodegenCtx,
-    mcx: &mut ModCtx,
-    outer_symbol: &CString,
-    fun: &Fun,
-) -> LLVMValueRef {
+pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> LLVMValueRef {
     unsafe {
         let builder = LLVMCreateBuilderInContext(cgx.llx);
 
@@ -310,8 +305,13 @@ pub(crate) fn gen_fun(
             &fun.abi.ret,
         );
 
-        let function =
-            LLVMAddFunction(mcx.module, outer_symbol.as_ptr() as *const _, function_type);
+        let fun_symbol = fun
+            .source_name
+            .as_ref()
+            .map(|source_name| ffi::CString::new(source_name.as_bytes()).unwrap())
+            .unwrap_or_else(|| ffi::CString::new("anon_fun").unwrap());
+
+        let function = LLVMAddFunction(mcx.module, fun_symbol.as_ptr() as *const _, function_type);
 
         let bb = LLVMAppendBasicBlockInContext(cgx.llx, function, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);

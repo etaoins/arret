@@ -82,6 +82,8 @@ impl Op {
 }
 
 pub struct Fun {
+    pub source_name: Option<String>,
+
     pub abi: FunABI,
     pub params: Vec<RegId>,
     pub ops: Vec<Op>,

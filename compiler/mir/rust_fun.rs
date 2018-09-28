@@ -98,6 +98,7 @@ pub fn build_rust_fun_thunk(span: Span, rust_fun: &hir::rfi::Fun) -> ops::Fun {
     use crate::mir::value::to_reg::value_to_reg;
 
     let mut b = Builder::new();
+    let fun_symbol = format!("{}_thunk", rust_fun.symbol());
 
     let rest_abi_type: abitype::ABIType = abitype::TOP_LIST_BOXED_ABI_TYPE.into();
     let ret_abi_type: abitype::ABIType = abitype::BoxedABIType::Any.into();
@@ -117,6 +118,7 @@ pub fn build_rust_fun_thunk(span: Span, rust_fun: &hir::rfi::Fun) -> ops::Fun {
     }
 
     ops::Fun {
+        source_name: Some(fun_symbol),
         abi: ops::FunABI {
             takes_task: true,
             takes_closure: true,
@@ -138,7 +140,6 @@ pub fn jit_thunk_for_rust_fun(
 
         // Create some names
         let inner_symbol = ffi::CString::new(rust_fun.symbol()).unwrap();
-        let outer_symbol = ffi::CString::new(format!("{}_thunk", rust_fun.symbol())).unwrap();
 
         // Add the inner symbol
         jcx.add_symbol(
@@ -147,7 +148,7 @@ pub fn jit_thunk_for_rust_fun(
         );
 
         let ops_fun = build_rust_fun_thunk(EMPTY_SPAN, rust_fun);
-        let address = jcx.compile_fun(cgx, &outer_symbol, &ops_fun);
+        let address = jcx.compile_fun(cgx, &ops_fun);
 
         mem::transmute(address)
     }

@@ -450,6 +450,45 @@ impl EvalHirCtx {
         Value::Closure(value::Closure { fun_expr, captures })
     }
 
+    fn build_closure(&mut self, dcx: &mut DefCtx, closure: &value::Closure) -> Result<ops::Fun> {
+        use runtime::abitype;
+
+        let mut b = Some(Builder::new());
+
+        let value::Closure { captures, fun_expr } = closure;
+        let params = &fun_expr.params;
+
+        if !captures.is_empty() {
+            unimplemented!("building Arret functions with captures");
+        }
+
+        if !params.fixed().is_empty() || params.rest().is_some() {
+            unimplemented!("building Arret functions with parameters");
+        }
+
+        if fun_expr.ret_ty != ty::Ty::unit().into_poly() {
+            unimplemented!("building Arret functions with return");
+        }
+
+        self.eval_expr(dcx, &mut b, &fun_expr.body_expr)?;
+        let mut ops = b.unwrap().into_ops();
+        ops.push(ops::Op::new(EMPTY_SPAN, ops::OpKind::RetVoid));
+
+        let main_abi = ops::FunABI {
+            takes_task: true,
+            takes_closure: false,
+            params: Box::new([]),
+            ret: abitype::RetABIType::Void,
+        };
+
+        Ok(ops::Fun {
+            source_name: None,
+            abi: main_abi,
+            params: vec![],
+            ops,
+        })
+    }
+
     pub fn consume_def(&mut self, def: hir::Def<ty::Poly>) -> Result<()> {
         let hir::Def {
             destruc,
@@ -566,10 +605,7 @@ impl EvalHirCtx {
 
     /// Builds the main function of the program
     pub fn build_program(&mut self, main_var_id: hir::VarId) -> Result<BuiltProgram> {
-        use runtime::abitype;
-
         let mut dcx = DefCtx::new();
-        let mut b = Some(Builder::new());
 
         let main_value = self.eval_ref(&dcx, main_var_id);
 
@@ -579,24 +615,8 @@ impl EvalHirCtx {
             unimplemented!("Non-closure main!");
         };
 
-        // TODO: Hack until we can just build normal functions
-        self.eval_expr(&mut dcx, &mut b, &main_closure.fun_expr.body_expr)?;
-        let mut ops = b.unwrap().into_ops();
-        ops.push(ops::Op::new(EMPTY_SPAN, ops::OpKind::RetVoid));
-
-        let main_abi = ops::FunABI {
-            takes_task: true,
-            takes_closure: false,
-            params: Box::new([]),
-            ret: abitype::RetABIType::Void,
-        };
-
         Ok(BuiltProgram {
-            main: ops::Fun {
-                abi: main_abi,
-                params: vec![],
-                ops,
-            },
+            main: self.build_closure(&mut dcx, &main_closure)?,
             funs: vec![],
         })
     }

@@ -59,24 +59,25 @@ impl JITCtx {
         }
     }
 
-    pub fn compile_fun(
-        &mut self,
-        cgx: &mut CodegenCtx,
-        wanted_name: &ffi::CString,
-        fun: &ops::Fun,
-    ) -> u64 {
+    pub fn compile_fun(&mut self, cgx: &mut CodegenCtx, fun: &ops::Fun) -> u64 {
         use crate::codegen::fun_gen;
         use std::{mem, ptr};
+
+        let module_name = fun
+            .source_name
+            .as_ref()
+            .map(|source_name| ffi::CString::new(source_name.as_bytes()).unwrap())
+            .unwrap_or_else(|| ffi::CString::new("anon_mod").unwrap());
 
         unsafe {
             // Create the module
             let module = LLVMModuleCreateWithNameInContext(
-                wanted_name.as_bytes_with_nul().as_ptr() as *const _,
+                module_name.as_bytes_with_nul().as_ptr() as *const _,
                 cgx.llx,
             );
 
             let mut mcx = ModCtx::new(module);
-            fun_gen::gen_fun(cgx, &mut mcx, wanted_name, fun);
+            let llvm_function = fun_gen::gen_fun(cgx, &mut mcx, fun);
 
             if env::var_os("ARRET_DUMP_LLVM").is_some() {
                 LLVMDumpModule(module);
@@ -92,7 +93,7 @@ impl JITCtx {
             let shared_module = LLVMOrcMakeSharedModule(module);
 
             let mut orc_module: LLVMOrcModuleHandle = mem::uninitialized();
-            if LLVMOrcAddLazilyCompiledIR(
+            if LLVMOrcAddEagerlyCompiledIR(
                 self.orc,
                 &mut orc_module,
                 shared_module,
@@ -103,12 +104,11 @@ impl JITCtx {
                 panic!("Unable to add module");
             }
 
+            let function_name = LLVMGetValueName(llvm_function);
+
             let mut target_address: LLVMOrcTargetAddress = 0;
-            if LLVMOrcGetSymbolAddress(
-                self.orc,
-                &mut target_address,
-                wanted_name.as_ptr() as *const _,
-            ) != LLVMOrcErrorCode::LLVMOrcErrSuccess
+            if LLVMOrcGetSymbolAddress(self.orc, &mut target_address, function_name)
+                != LLVMOrcErrorCode::LLVMOrcErrSuccess
             {
                 panic!("Unable to get symbol address")
             }

@@ -44,16 +44,12 @@ fn program_to_module(cgx: &mut CodegenCtx, program: mir::BuiltProgram) -> LLVMMo
         let module = LLVMModuleCreateWithNameInContext(b"program\0".as_ptr() as *const _, cgx.llx);
         let mut mcx = ModCtx::new(module);
 
-        // Build the Arret main
-        let arret_main_symbol = CString::new("arret_main").unwrap();
-        let arret_main_llvm_value =
-            fun_gen::gen_fun(cgx, &mut mcx, &arret_main_symbol, &program.main);
+        let arret_main_llvm_value = fun_gen::gen_fun(cgx, &mut mcx, &program.main);
         LLVMSetLinkage(arret_main_llvm_value, LLVMLinkage::LLVMPrivateLinkage);
 
         // And all of the other functions
-        for (fun_symbol, fun) in program.funs {
-            let fun_llvm_value =
-                fun_gen::gen_fun(cgx, &mut mcx, &CString::new(fun_symbol).unwrap(), &fun);
+        for (_, fun) in program.funs {
+            let fun_llvm_value = fun_gen::gen_fun(cgx, &mut mcx, &fun);
             LLVMSetLinkage(fun_llvm_value, LLVMLinkage::LLVMPrivateLinkage)
         }
 
