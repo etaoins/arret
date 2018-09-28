@@ -324,7 +324,7 @@ impl EvalHirCtx {
     ) -> Result<Value> {
         use crate::mir::intrinsic;
         use crate::mir::rust_fun::build_rust_fun_app;
-        use crate::mir::value::to_boxed::value_to_boxed;
+        use crate::mir::value::to_const::value_to_const;
         use std::ptr;
 
         // TODO: Fix for polymorphism once it's supported
@@ -341,7 +341,7 @@ impl EvalHirCtx {
         }
 
         if can_const_eval {
-            let boxed_arg_list = value_to_boxed(self, &arg_list_value);
+            let boxed_arg_list = value_to_const(self, &arg_list_value);
 
             if let Some(boxed_arg_list) = boxed_arg_list {
                 let thunk = self.jit_thunk_for_rust_fun(rust_fun);
@@ -369,7 +369,7 @@ impl EvalHirCtx {
         fun_thunk: Gc<boxed::FunThunk>,
         arg_list_value: Value,
     ) -> Result<Value> {
-        use crate::mir::value::to_boxed::value_to_boxed;
+        use crate::mir::value::to_const::value_to_const;
 
         if let Some(actual_value) = self.boxed_fun_values.get(&fun_thunk) {
             return self.eval_value_app(dcx, b, span, &actual_value.clone(), arg_list_value);
@@ -379,11 +379,11 @@ impl EvalHirCtx {
             unimplemented!("attempt to apply unknown fun thunk during compile phase");
         }
 
-        let boxed_arg_list =
-            value_to_boxed(self, &arg_list_value).expect("uninhabited value during apply");
+        let const_arg_list =
+            value_to_const(self, &arg_list_value).expect("non-constant value during apply");
 
         Self::call_native_fun(span, || {
-            fun_thunk.apply(&mut self.runtime_task, boxed_arg_list)
+            fun_thunk.apply(&mut self.runtime_task, const_arg_list)
         })
     }
 
@@ -781,9 +781,9 @@ impl EvalHirCtx {
         })
     }
 
-    pub fn value_to_boxed(&mut self, value: &Value) -> Option<Gc<boxed::Any>> {
-        use crate::mir::value::to_boxed::value_to_boxed;
-        value_to_boxed(self, value)
+    pub fn value_to_const(&mut self, value: &Value) -> Option<Gc<boxed::Any>> {
+        use crate::mir::value::to_const::value_to_const;
+        value_to_const(self, value)
     }
 }
 

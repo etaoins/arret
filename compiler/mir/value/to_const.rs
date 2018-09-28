@@ -5,19 +5,19 @@ use runtime::boxed::refs::Gc;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::value::Value;
 
-pub fn list_to_boxed(
+pub fn list_to_const(
     ehx: &mut EvalHirCtx,
     fixed: &[Value],
     rest: Option<&Value>,
 ) -> Option<Gc<boxed::Any>> {
     let fixed_boxes = fixed
         .iter()
-        .map(|value| value_to_boxed(ehx, value))
+        .map(|value| value_to_const(ehx, value))
         .collect::<Option<Vec<Gc<boxed::Any>>>>()?;
 
     let rest_box = match rest {
         Some(rest) => {
-            let rest_boxed = value_to_boxed(ehx, rest)?;
+            let rest_boxed = value_to_const(ehx, rest)?;
             if let Some(top_list) = rest_boxed.downcast_ref::<boxed::TopList>() {
                 top_list.as_list()
             } else {
@@ -35,11 +35,11 @@ pub fn list_to_boxed(
 /// Attempts to convert a MIR value to a constant boxed values
 ///
 /// Regs do not have a constant value at compile type; they will return None
-pub fn value_to_boxed(ehx: &mut EvalHirCtx, value: &Value) -> Option<Gc<boxed::Any>> {
+pub fn value_to_const(ehx: &mut EvalHirCtx, value: &Value) -> Option<Gc<boxed::Any>> {
     match value {
         Value::Const(boxed) => Some(*boxed),
-        Value::List(fixed, Some(rest)) => list_to_boxed(ehx, fixed, Some(&*rest)),
-        Value::List(fixed, None) => list_to_boxed(ehx, fixed, None),
+        Value::List(fixed, Some(rest)) => list_to_const(ehx, fixed, Some(&*rest)),
+        Value::List(fixed, None) => list_to_const(ehx, fixed, None),
         Value::TyPred(ref test_poly) => {
             unimplemented!("Boxing of type predicates: {:?}", test_poly)
         }

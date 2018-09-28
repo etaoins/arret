@@ -134,12 +134,14 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
 
                         // Evaluate the expression
                         let mut dcx = DefCtx::new();
+
                         let value = self
                             .ehx
                             .consume_expr(&mut dcx, &mut None, node.into_expr())?;
+
                         let boxed = self
                             .ehx
-                            .value_to_boxed(&value)
+                            .value_to_const(&value)
                             .expect("Received register from MIR evaluation");
 
                         // Write the result to a string
