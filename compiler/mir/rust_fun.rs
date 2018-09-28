@@ -1,19 +1,18 @@
-use std::ffi;
 use std::rc::Rc;
 
-use syntax::span::{Span, EMPTY_SPAN};
+use syntax::span::Span;
 
 use runtime::abitype;
-use runtime::boxed;
 
-use crate::codegen;
 use crate::hir;
 use crate::mir::builder::Builder;
+use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops;
 use crate::mir::value;
 use crate::mir::value::Value;
 
 pub fn build_rust_fun_app(
+    ehx: &mut EvalHirCtx,
     b: &mut Builder,
     span: Span,
     rust_fun: &hir::rfi::Fun,
@@ -37,12 +36,13 @@ pub fn build_rust_fun_app(
 
     for abi_type in rust_fixed_iter {
         let fixed_value = list_iter.next_unchecked(b, span);
-        let reg_id = value_to_reg(b, span, &fixed_value, abi_type);
+        let reg_id = value_to_reg(ehx, b, span, &fixed_value, abi_type);
         arg_regs.push(reg_id);
     }
 
     if rust_fun.has_rest() {
         let reg_id = value_to_reg(
+            ehx,
             b,
             span,
             &list_iter.into_rest(),
@@ -93,7 +93,11 @@ pub fn build_rust_fun_app(
     }
 }
 
-fn ops_for_rust_fun_thunk(span: Span, rust_fun: &hir::rfi::Fun) -> ops::Fun {
+pub fn ops_for_rust_fun_thunk(
+    ehx: &mut EvalHirCtx,
+    span: Span,
+    rust_fun: &hir::rfi::Fun,
+) -> ops::Fun {
     use crate::mir::ops::*;
     use crate::mir::value::to_reg::value_to_reg;
 
@@ -110,10 +114,10 @@ fn ops_for_rust_fun_thunk(span: Span, rust_fun: &hir::rfi::Fun) -> ops::Fun {
     }));
 
     let empty_list_value = Value::List(Box::new([]), Some(Box::new(rest_value)));
-    let return_value = build_rust_fun_app(&mut b, span, rust_fun, empty_list_value);
+    let return_value = build_rust_fun_app(ehx, &mut b, span, rust_fun, empty_list_value);
 
     if !return_value.is_divergent() {
-        let return_reg = value_to_reg(&mut b, span, &return_value, &ret_abi_type);
+        let return_reg = value_to_reg(ehx, &mut b, span, &return_value, &ret_abi_type);
         b.push(span, OpKind::Ret(return_reg))
     }
 
@@ -122,29 +126,5 @@ fn ops_for_rust_fun_thunk(span: Span, rust_fun: &hir::rfi::Fun) -> ops::Fun {
         abi: ops::FunABI::thunk_abi(),
         params: vec![rest_reg],
         ops: b.into_ops(),
-    }
-}
-
-pub fn jit_thunk_for_rust_fun(
-    cgx: &mut codegen::CodegenCtx,
-    jcx: &mut codegen::jit::JITCtx,
-    rust_fun: &hir::rfi::Fun,
-) -> boxed::ThunkEntry {
-    unsafe {
-        use std::mem;
-
-        // Create some names
-        let inner_symbol = ffi::CString::new(rust_fun.symbol()).unwrap();
-
-        // Add the inner symbol
-        jcx.add_symbol(
-            inner_symbol.as_bytes_with_nul(),
-            rust_fun.entry_point() as u64,
-        );
-
-        let ops_fun = ops_for_rust_fun_thunk(EMPTY_SPAN, rust_fun);
-        let address = jcx.compile_fun(cgx, &ops_fun);
-
-        mem::transmute(address)
     }
 }

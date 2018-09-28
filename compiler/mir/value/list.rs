@@ -46,14 +46,15 @@ impl<'list> ListIterator {
 
                         self.next_unchecked(b, span)
                     }
-                    Some(other_rest) => {
-                        if let Some(b) = b.try_to_builder() {
-                            self.build_rest_next(b, span, &other_rest)
-                        } else {
-                            panic!("Tried to iterate in to unknown list tail without builder")
-                        }
+                    Some(Value::Reg(reg_value)) => {
+                        let b = b
+                            .try_to_builder()
+                            .expect("popping rest argument without builder");
+
+                        self.build_rest_next(b, span, &reg_value)
                     }
-                    _ => {
+                    Some(other) => unimplemented!("popping rest argument off value {:?}", other),
+                    None => {
                         panic!("Ran off the end of list with no rest argument");
                     }
                 }
@@ -72,14 +73,14 @@ impl<'list> ListIterator {
         &mut self,
         b: &mut Builder,
         span: Span,
-        current_rest_value: &Value,
+        current_rest_value: &value::RegValue,
     ) -> Value {
         use crate::mir::ops::*;
-        use crate::mir::value::to_reg::value_to_reg;
+        use crate::mir::value::to_reg::reg_to_reg;
         use runtime::abitype;
 
         let needed_pair_type = abitype::BoxedABIType::Pair(&abitype::BoxedABIType::Any).into();
-        let current_rest_reg = value_to_reg(b, span, &current_rest_value, &needed_pair_type);
+        let current_rest_reg = reg_to_reg(b, span, &current_rest_value, &needed_pair_type);
 
         let head_reg = b.push_reg(span, OpKind::LoadBoxedPairHead, current_rest_reg);
         let rest_reg = b.push_reg(span, OpKind::LoadBoxedPairRest, current_rest_reg);

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ffi;
 use std::os::raw::c_void;
 use std::panic;
 use std::rc::Rc;
@@ -10,7 +11,7 @@ use runtime::boxed::refs::Gc;
 
 use runtime_syntax::reader;
 use syntax::datum::Datum;
-use syntax::span::Span;
+use syntax::span::{Span, EMPTY_SPAN};
 
 use crate::codegen;
 use crate::hir;
@@ -242,7 +243,7 @@ impl EvalHirCtx {
         use std::ptr;
 
         let captures = ptr::null();
-        let entry = self.thunk_for_rust_fun(&rust_fun);
+        let entry = self.jit_thunk_for_rust_fun(&rust_fun);
         let new_boxed = boxed::FunThunk::new(self, (captures, entry));
 
         let rust_fun_value = Value::RustFun(rust_fun);
@@ -251,17 +252,49 @@ impl EvalHirCtx {
         new_boxed
     }
 
-    fn thunk_for_rust_fun(&mut self, rust_fun: &hir::rfi::Fun) -> boxed::ThunkEntry {
-        use crate::mir::rust_fun::jit_thunk_for_rust_fun;
-
+    fn jit_thunk_for_rust_fun(&mut self, rust_fun: &hir::rfi::Fun) -> boxed::ThunkEntry {
         // Create a dynamic thunk to this Rust function if it doesn't exist
-        let thunk_gen = &mut self.thunk_gen;
-        let thunk_jit = &mut self.thunk_jit;
+        if let Some(thunk) = self.rust_fun_thunks.get(&rust_fun.entry_point()) {
+            return *thunk;
+        }
 
-        *(self
-            .rust_fun_thunks
-            .entry(rust_fun.entry_point())
-            .or_insert_with(|| jit_thunk_for_rust_fun(thunk_gen, thunk_jit, rust_fun)))
+        let thunk = unsafe {
+            use crate::mir::rust_fun::ops_for_rust_fun_thunk;
+            use std::mem;
+
+            // Create some names
+            let inner_symbol = ffi::CString::new(rust_fun.symbol()).unwrap();
+
+            // Add the inner symbol
+            self.thunk_jit.add_symbol(
+                inner_symbol.as_bytes_with_nul(),
+                rust_fun.entry_point() as u64,
+            );
+
+            let ops_fun = ops_for_rust_fun_thunk(self, EMPTY_SPAN, rust_fun);
+            let address = self.thunk_jit.compile_fun(&mut self.thunk_gen, &ops_fun);
+
+            mem::transmute(address)
+        };
+
+        self.rust_fun_thunks.insert(rust_fun.entry_point(), thunk);
+        thunk
+    }
+
+    pub fn rust_fun_to_thunk_reg(
+        &mut self,
+        b: &mut Builder,
+        span: Span,
+        rust_fun: &hir::rfi::Fun,
+    ) -> ops::RegId {
+        use crate::mir::ops::*;
+        use crate::mir::rust_fun::ops_for_rust_fun_thunk;
+
+        let ops_fun = ops_for_rust_fun_thunk(self, span, rust_fun);
+
+        let built_fun_id = ops::BuiltFunId::new_entry_id(&mut self.built_funs, ops_fun);
+        let built_fun_entry_reg = b.push_reg(span, OpKind::ConstBuiltFunEntryPoint, built_fun_id);
+        b.push_reg(span, OpKind::ConstBoxedFunThunk, built_fun_entry_reg)
     }
 
     fn call_native_fun<F>(span: Span, block: F) -> Result<Value>
@@ -311,7 +344,7 @@ impl EvalHirCtx {
             let boxed_arg_list = value_to_boxed(self, &arg_list_value);
 
             if let Some(boxed_arg_list) = boxed_arg_list {
-                let thunk = self.thunk_for_rust_fun(rust_fun);
+                let thunk = self.jit_thunk_for_rust_fun(rust_fun);
 
                 // By convention convert string panics in to our `ErrorKind::Panic`
                 let runtime_task = &mut self.runtime_task;
@@ -322,7 +355,7 @@ impl EvalHirCtx {
         }
 
         if let Some(b) = b {
-            Ok(build_rust_fun_app(b, span, rust_fun, arg_list_value))
+            Ok(build_rust_fun_app(self, b, span, rust_fun, arg_list_value))
         } else {
             panic!("Need builder for non-const function application");
         }
@@ -473,7 +506,6 @@ impl EvalHirCtx {
         use std::{mem, ptr};
 
         let wanted_abi = ops::FunABI::thunk_abi();
-
         let ops_fun = self
             .ops_for_arret_fun(&arret_fun, wanted_abi, true)
             .expect("error during arret fun boxing");
@@ -486,6 +518,24 @@ impl EvalHirCtx {
         let arret_fun_value = Value::ArretFun(arret_fun.clone());
         self.boxed_fun_values.insert(new_boxed, arret_fun_value);
         new_boxed
+    }
+
+    pub fn arret_fun_to_thunk_reg(
+        &mut self,
+        b: &mut Builder,
+        span: Span,
+        arret_fun: &value::ArretFun,
+    ) -> ops::RegId {
+        use crate::mir::ops::*;
+
+        let wanted_abi = FunABI::thunk_abi();
+        let ops_fun = self
+            .ops_for_arret_fun(&arret_fun, wanted_abi, true)
+            .expect("error during arret fun boxing");
+
+        let built_fun_id = ops::BuiltFunId::new_entry_id(&mut self.built_funs, ops_fun);
+        let built_fun_entry_reg = b.push_reg(span, OpKind::ConstBuiltFunEntryPoint, built_fun_id);
+        b.push_reg(span, OpKind::ConstBoxedFunThunk, built_fun_entry_reg)
     }
 
     fn ops_for_arret_fun(
@@ -545,7 +595,7 @@ impl EvalHirCtx {
         let mut b = some_b.unwrap();
         match &wanted_abi.ret {
             abitype::RetABIType::Inhabited(abi_type) => {
-                let ret_reg = value_to_reg(&mut b, span, &result_value, abi_type);
+                let ret_reg = value_to_reg(self, &mut b, span, &result_value, abi_type);
                 b.push(span, ops::OpKind::Ret(ret_reg));
             }
             abitype::RetABIType::Never => {

@@ -45,9 +45,6 @@ fn program_to_module(cgx: &mut CodegenCtx, program: &mir::BuiltProgram) -> LLVMM
         let module = LLVMModuleCreateWithNameInContext(b"program\0".as_ptr() as *const _, cgx.llx);
         let mut mcx = ModCtx::new(module);
 
-        let arret_main_llvm_value = fun_gen::gen_fun(cgx, &mut mcx, &program.main);
-        LLVMSetLinkage(arret_main_llvm_value, LLVMLinkage::LLVMPrivateLinkage);
-
         // And all of the other functions
         for (fun_idx, fun) in program.funs.iter().enumerate() {
             let fun_llvm_value = fun_gen::gen_fun(cgx, &mut mcx, fun);
@@ -55,6 +52,9 @@ fn program_to_module(cgx: &mut CodegenCtx, program: &mir::BuiltProgram) -> LLVMM
 
             mcx.push_built_fun_value(ops::BuiltFunId::new(fun_idx), fun_llvm_value);
         }
+
+        let arret_main_llvm_value = fun_gen::gen_fun(cgx, &mut mcx, &program.main);
+        LLVMSetLinkage(arret_main_llvm_value, LLVMLinkage::LLVMPrivateLinkage);
 
         // Declare arret_launch_task
         let launch_task_llvm_arg_types = &mut [LLVMTypeOf(arret_main_llvm_value)];

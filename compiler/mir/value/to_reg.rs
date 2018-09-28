@@ -5,6 +5,7 @@ use runtime::boxed;
 use runtime::boxed::refs::Gc;
 
 use crate::mir::builder::Builder;
+use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops::RegId;
 use crate::mir::value;
 use crate::mir::value::Value;
@@ -43,7 +44,8 @@ fn const_to_reg(
     }
 }
 
-pub fn list_to_reg(
+fn list_to_reg(
+    ehx: &mut EvalHirCtx,
     b: &mut Builder,
     span: Span,
     fixed: &[Value],
@@ -56,6 +58,7 @@ pub fn list_to_reg(
 
     let tail_reg = if let Some(rest) = rest {
         value_to_reg(
+            ehx,
             b,
             span,
             rest,
@@ -77,7 +80,8 @@ pub fn list_to_reg(
             .iter()
             .rfold((tail_length, tail_reg), |(tail_length, tail_reg), fixed| {
                 let head_length = tail_length + 1;
-                let fixed_reg = value_to_reg(b, span, fixed, &abitype::BoxedABIType::Any.into());
+                let fixed_reg =
+                    value_to_reg(ehx, b, span, fixed, &abitype::BoxedABIType::Any.into());
 
                 let pair_head_reg = b.push_reg(
                     span,
@@ -92,13 +96,14 @@ pub fn list_to_reg(
                 let head_reg =
                     b.const_cast_boxed(span, pair_head_reg, TOP_LIST_BOXED_ABI_TYPE.clone());
                 (head_length, head_reg)
-            }).1
+            })
+            .1
     };
 
     b.cast_boxed(span, list_reg, boxed_abi_type.clone())
 }
 
-fn reg_to_reg(
+pub fn reg_to_reg(
     b: &mut Builder,
     span: Span,
     reg_value: &value::RegValue,
@@ -133,7 +138,30 @@ fn reg_to_reg(
     }
 }
 
+fn thunk_reg_to_reg(
+    b: &mut Builder,
+    span: Span,
+    boxed_thunk_reg: RegId,
+    abi_type: &abitype::ABIType,
+) -> RegId {
+    use runtime::boxed::TypeTag;
+
+    let boxed_abi_type = if let abitype::ABIType::Boxed(boxed_abi_type) = abi_type {
+        boxed_abi_type
+    } else {
+        panic!("attempt to create unboxed function");
+    };
+
+    b.cast_boxed_cond(
+        span,
+        &TypeTag::FunThunk.into(),
+        boxed_thunk_reg,
+        boxed_abi_type.clone(),
+    )
+}
+
 pub fn value_to_reg(
+    ehx: &mut EvalHirCtx,
     b: &mut Builder,
     span: Span,
     value: &Value,
@@ -145,6 +173,7 @@ pub fn value_to_reg(
         Value::List(fixed, rest) => {
             if let abitype::ABIType::Boxed(boxed_abi_type) = abi_type {
                 list_to_reg(
+                    ehx,
                     b,
                     span,
                     fixed,
@@ -154,6 +183,14 @@ pub fn value_to_reg(
             } else {
                 panic!("Attempt to construct non-boxed list");
             }
+        }
+        Value::ArretFun(ref arret_fun) => {
+            let thunk_reg = ehx.arret_fun_to_thunk_reg(b, span, arret_fun);
+            thunk_reg_to_reg(b, span, thunk_reg, abi_type)
+        }
+        Value::RustFun(ref rust_fun) => {
+            let thunk_reg = ehx.rust_fun_to_thunk_reg(b, span, rust_fun);
+            thunk_reg_to_reg(b, span, thunk_reg, abi_type)
         }
         _ => unimplemented!("value {:?} to reg {:?} conversion", value, abi_type),
     }
