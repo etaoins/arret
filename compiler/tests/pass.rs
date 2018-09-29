@@ -44,7 +44,7 @@ impl reporting::Reportable for UnableToCompileEval {
         match &self.display_op {
             None => "unable to evaluate program at compile time".to_owned(),
             Some(display_op) => format!(
-                "unable to evalue at compile time. generated MIR operation `{}`",
+                "unable to evaluate at compile time. generated MIR operation `{}`",
                 display_op.op_string
             ),
         }
