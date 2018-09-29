@@ -40,7 +40,7 @@ impl PartialEq for Sym {
 }
 
 impl fmt::Debug for Sym {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(formatter, "Sym({:?})", self.interned)
     }
 }

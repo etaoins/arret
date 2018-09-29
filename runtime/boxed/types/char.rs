@@ -38,7 +38,7 @@ impl PartialEq for Char {
 }
 
 impl fmt::Debug for Char {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(formatter, "Char({:?})", self.value)
     }
 }

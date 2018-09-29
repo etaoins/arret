@@ -73,7 +73,7 @@ impl<T: Boxed> Vector<T> {
         self.inline_length <= (MAX_INLINE_LENGTH as u32)
     }
 
-    fn as_repr(&self) -> Repr<T> {
+    fn as_repr(&self) -> Repr<'_, T> {
         if self.is_inline() {
             Repr::Inline(unsafe { &*(self as *const Vector<T> as *const InlineVector<T>) })
         } else {
@@ -127,7 +127,7 @@ impl<T: Boxed> fmt::Debug for Vector<T>
 where
     T: fmt::Debug,
 {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         formatter.write_str("Vector(")?;
         formatter.debug_list().entries(self.iter()).finish()?;
         formatter.write_str(")")
@@ -181,7 +181,7 @@ impl PartialEq for TopVector {
 }
 
 impl fmt::Debug for TopVector {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         self.as_vector().fmt(formatter)
     }
 }

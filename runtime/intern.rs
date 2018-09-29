@@ -64,7 +64,7 @@ enum InternedRepr<'a> {
 }
 
 impl InternedSym {
-    fn repr(&self) -> InternedRepr {
+    fn repr(&self) -> InternedRepr<'_> {
         unsafe {
             if self.indexed.flag_byte == INDEXED_FLAG {
                 InternedRepr::Indexed(&self.indexed)
@@ -86,7 +86,7 @@ impl PartialEq for InternedSym {
 impl Eq for InternedSym {}
 
 impl fmt::Debug for InternedSym {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self.repr() {
             InternedRepr::Indexed(indexed) => {
                 // We don't have access to the `Interner` so we can't print our interned value

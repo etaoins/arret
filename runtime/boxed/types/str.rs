@@ -18,7 +18,7 @@ impl Str {
         self.inline_byte_length <= Str::MAX_INLINE_BYTES as u8
     }
 
-    fn as_repr(&self) -> Repr {
+    fn as_repr(&self) -> Repr<'_> {
         if self.is_inline() {
             Repr::Inline(unsafe { &*(self as *const Str as *const InlineStr) })
         } else {
@@ -91,7 +91,7 @@ impl PartialEq for Str {
 }
 
 impl fmt::Debug for Str {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(formatter, "Str({:?})", self.as_str())
     }
 }

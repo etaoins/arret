@@ -174,7 +174,7 @@ macro_rules! define_direct_tagged_boxes {
         )*
 
         impl Any {
-            pub fn as_subtype(&self) -> AnySubtype {
+            pub fn as_subtype(&self) -> AnySubtype<'_> {
                 match self.header.type_tag {
                     $(
                         TypeTag::$name => {
@@ -204,7 +204,7 @@ macro_rules! define_direct_tagged_boxes {
         }
 
         impl fmt::Debug for Any {
-            fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
                 match self.as_subtype() {
                     $(
                         AnySubtype::$name(subtype) => {
@@ -278,7 +278,7 @@ macro_rules! define_tagged_union {
                 }
             }
 
-            pub fn as_subtype(&self) -> $subtype_enum {
+            pub fn as_subtype(&self) -> $subtype_enum<'_> {
                 match self.header.type_tag {
                     $(
                         TypeTag::$member => {

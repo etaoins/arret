@@ -74,7 +74,7 @@ impl<T: Boxed> fmt::Debug for Gc<T>
 where
     T: fmt::Debug,
 {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         unsafe { (*self.as_ptr()).fmt(formatter) }
     }
 }

@@ -45,7 +45,7 @@ impl<T> fmt::Debug for Pair<T>
 where
     T: Boxed + fmt::Debug,
 {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         self.as_list().fmt(formatter)
     }
 }
@@ -127,7 +127,7 @@ impl<T: Boxed> List<T> {
         unsafe { Gc::new(&NIL_INSTANCE as *const Nil as *const List<T>) }
     }
 
-    pub fn as_subtype(&self) -> ListSubtype<T> {
+    pub fn as_subtype(&self) -> ListSubtype<'_, T> {
         match self.header.type_tag {
             TypeTag::TopPair => {
                 ListSubtype::Pair(unsafe { &*(self as *const List<T> as *const Pair<T>) })
@@ -174,7 +174,7 @@ impl<T: Boxed> fmt::Debug for List<T>
 where
     T: fmt::Debug,
 {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         formatter.write_str("List(")?;
         formatter.debug_list().entries(self.iter()).finish()?;
         formatter.write_str(")")
@@ -236,7 +236,7 @@ impl PartialEq for TopPair {
 }
 
 impl fmt::Debug for TopPair {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         self.as_pair().fmt(formatter)
     }
 }

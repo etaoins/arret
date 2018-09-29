@@ -38,7 +38,7 @@ impl PartialEq for Int {
 }
 
 impl fmt::Debug for Int {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(formatter, "Int({:?})", self.value)
     }
 }
