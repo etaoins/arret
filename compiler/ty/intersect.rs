@@ -126,18 +126,21 @@ fn non_subty_intersect<S: Intersectable>(
         // Set type
         (ty::Ty::Set(member1), ty::Ty::Set(member2)) => Ok(ty::Ty::Set(Box::new(
             intersect_ty_refs(tvars, member1.as_ref(), member2.as_ref())?,
-        )).into_ty_ref()),
+        ))
+        .into_ty_ref()),
 
         // Map type
         (ty::Ty::Map(map1), ty::Ty::Map(map2)) => Ok(ty::Ty::Map(Box::new(ty::Map::new(
             intersect_ty_refs(tvars, map1.key(), map2.key())?,
             intersect_ty_refs(tvars, map1.value(), map2.value())?,
-        ))).into_ty_ref()),
+        )))
+        .into_ty_ref()),
 
         // Vector types
         (ty::Ty::Vectorof(member1), ty::Ty::Vectorof(member2)) => Ok(ty::Ty::Vectorof(Box::new(
             intersect_ty_refs(tvars, member1.as_ref(), member2.as_ref())?,
-        )).into_ty_ref()),
+        ))
+        .into_ty_ref()),
         (ty::Ty::Vector(members1), ty::Ty::Vector(members2)) => {
             if members1.len() != members2.len() {
                 Err(Error::Disjoint)
@@ -190,7 +193,8 @@ fn non_subty_intersect<S: Intersectable>(
                 ty::TVars::new(),
                 ty::TopFun::new(intersected_purity, intersected_ret),
                 intersected_params,
-            ).into_ty_ref())
+            )
+            .into_ty_ref())
         }
         (ty::Ty::Fun(fun1), ty::Ty::Fun(fun2)) => {
             if fun1.is_monomorphic() && fun2.is_monomorphic() {
@@ -203,7 +207,8 @@ fn non_subty_intersect<S: Intersectable>(
                     ty::TVars::new(),
                     ty::TopFun::new(intersected_purity, intersected_ret),
                     intersected_params,
-                ).into_ty_ref())
+                )
+                .into_ty_ref())
             } else {
                 // TODO: Same issue as top functions
                 Err(Error::Disjoint)
@@ -415,7 +420,8 @@ mod test {
                 &ty::TVars::new(),
                 &pidentity_fun,
                 &pidentity_impure_bool_fun
-            ).unwrap()
+            )
+            .unwrap()
         );
 
         // These have no subtype relationship

@@ -116,7 +116,8 @@ impl Scope {
                         binding: binding.clone(),
                     },
                 )
-            }).collect::<HashMap<Ident, SpannedBinding>>();
+            })
+            .collect::<HashMap<Ident, SpannedBinding>>();
 
         Scope {
             bindings: Rc::new(Bindings {

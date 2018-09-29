@@ -71,7 +71,8 @@ fn span_to_source_loc(source_loader: &SourceLoader, span: Span) -> SourceLoc<'_,
             } else {
                 cmp::Ordering::Equal
             }
-        }).unwrap();
+        })
+        .unwrap();
 
     let source_file = &source_files[source_file_index];
 

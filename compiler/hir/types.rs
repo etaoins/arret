@@ -656,7 +656,8 @@ mod test {
                 ty::Ty::LitBool(false).into_poly(),
             ]),
             None,
-        )).into_poly();
+        ))
+        .into_poly();
         assert_poly_for_str(&expected, j);
     }
 
@@ -675,7 +676,8 @@ mod test {
         let expected = ty::Ty::Vector(Box::new([
             ty::Ty::LitBool(true).into_poly(),
             ty::Ty::LitBool(false).into_poly(),
-        ])).into_poly();
+        ]))
+        .into_poly();
         assert_poly_for_str(&expected, j);
     }
 
@@ -707,7 +709,8 @@ mod test {
                 ty::Ty::LitBool(false).into_poly(),
             ]),
             None,
-        )).into_poly();
+        ))
+        .into_poly();
 
         assert_poly_for_str(&expected, j);
     }
@@ -719,7 +722,8 @@ mod test {
         let expected = ty::Ty::List(ty::List::new(
             Box::new([ty::Ty::LitBool(true).into_poly()]),
             Some(ty::Ty::LitBool(false).into_poly()),
-        )).into_poly();
+        ))
+        .into_poly();
 
         assert_poly_for_str(&expected, j);
     }
@@ -741,7 +745,8 @@ mod test {
         let expected = ty::Ty::Vector(Box::new([
             ty::Ty::LitBool(true).into_poly(),
             ty::Ty::LitBool(false).into_poly(),
-        ])).into_poly();
+        ]))
+        .into_poly();
 
         assert_poly_for_str(&expected, j);
     }
@@ -755,7 +760,8 @@ mod test {
             ty::TVars::new(),
             ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
             ty::List::empty(),
-        ).into_ty_ref();
+        )
+        .into_ty_ref();
 
         assert_poly_for_str(&expected, j);
     }
@@ -772,7 +778,8 @@ mod test {
                 ty::Ty::LitBool(true).into_poly(),
             ),
             ty::List::empty(),
-        ).into_ty_ref();
+        )
+        .into_ty_ref();
 
         assert_poly_for_str(&expected, j);
     }
@@ -786,7 +793,8 @@ mod test {
             ty::TVars::new(),
             ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
             ty::List::new(Box::new([ty::Ty::LitBool(false).into_poly()]), None),
-        ).into_ty_ref();
+        )
+        .into_ty_ref();
 
         assert_poly_for_str(&expected, j);
     }
@@ -806,7 +814,8 @@ mod test {
                 Box::new([ty::Ty::Str.into_poly()]),
                 Some(ty::Ty::Sym.into_poly()),
             ),
-        ).into_ty_ref();
+        )
+        .into_ty_ref();
 
         assert_poly_for_str(&expected, j);
     }
@@ -818,7 +827,8 @@ mod test {
         let expected = ty::Ty::TopFun(Box::new(ty::TopFun::new(
             Purity::Impure.into_poly(),
             ty::Ty::LitBool(true).into_poly(),
-        ))).into_poly();
+        )))
+        .into_poly();
 
         assert_poly_for_str(&expected, j);
     }
@@ -850,7 +860,8 @@ mod test {
         let expected = ty::Ty::Map(Box::new(ty::Map::new(
             key_ty.into_poly(),
             value_ty.into_poly(),
-        ))).into_poly();
+        )))
+        .into_poly();
 
         assert_poly_for_str(&expected, j);
     }

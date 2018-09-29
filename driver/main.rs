@@ -36,12 +36,14 @@ fn main() {
                 .short("o")
                 .value_name("FILE")
                 .help("Output filename"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("TARGET")
                 .long("target")
                 .value_name("TRIPLE")
                 .help("Generate code for the given target"),
-        ).get_matches();
+        )
+        .get_matches();
 
     let arret_target_dir = find_path_to_arret_root();
 

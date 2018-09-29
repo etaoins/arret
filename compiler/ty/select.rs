@@ -56,7 +56,8 @@ impl<'vars> SelectCtx<'vars> {
             .entry(*pvar_id)
             .and_modify(|existing| {
                 *existing = ty::unify::unify_purity_refs(existing, evidence_purity);
-            }).or_insert_with(|| evidence_purity.clone());
+            })
+            .or_insert_with(|| evidence_purity.clone());
     }
 
     fn add_evidence_top_fun(&mut self, target_top_fun: &ty::TopFun, evidence_top_fun: &ty::TopFun) {
@@ -163,7 +164,8 @@ impl<'vars> SelectCtx<'vars> {
             .entry(tvar_id)
             .and_modify(|existing| {
                 *existing = ty::unify::unify_to_ty_ref(all_tvars, existing, evidence_poly);
-            }).or_insert_with(|| evidence_poly.clone());
+            })
+            .or_insert_with(|| evidence_poly.clone());
     }
 
     pub fn add_evidence(&mut self, target_poly: &ty::Poly, evidence_poly: &ty::Poly) {
@@ -237,7 +239,8 @@ mod test {
                 polymorphic_data.into_iter(),
                 &outer_scope,
                 &mut inner_scope,
-            ).unwrap();
+            )
+            .unwrap();
 
             TestScope {
                 test_ns_id,
@@ -254,7 +257,8 @@ mod test {
             lower_poly(
                 &self.scope,
                 NsDatum::from_syntax_datum(self.test_ns_id, test_datum),
-            ).unwrap()
+            )
+            .unwrap()
         }
 
         fn purity_for_str(&self, poly_str: &str) -> purity::Poly {
@@ -264,7 +268,8 @@ mod test {
             try_lower_purity(
                 &self.scope,
                 &NsDatum::from_syntax_datum(self.test_ns_id, test_datum),
-            ).unwrap()
+            )
+            .unwrap()
         }
 
         fn select_ctx(&self) -> SelectCtx<'_> {

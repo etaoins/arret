@@ -129,7 +129,8 @@ fn unify_fun<S: Unifiable>(tvars: &ty::TVars, fun1: &ty::Fun, fun2: &ty::Fun) ->
                     ty::TVars::new(),
                     ty::TopFun::new(unified_purity, unified_ret),
                     unified_params,
-                ).into_ty_ref(),
+                )
+                .into_ty_ref(),
             ),
             Err(ty::intersect::Error::Disjoint) => {
                 UnifiedTy::Merged(ty::TopFun::new(unified_purity, unified_ret).into_ty_ref())
@@ -204,7 +205,8 @@ fn unify_ty<S: Unifiable>(
                 tvars,
                 member1.as_ref(),
                 member2.as_ref(),
-            ))).into_ty_ref(),
+            )))
+            .into_ty_ref(),
         ),
         (ty::Ty::Vector(members1), ty::Ty::Vectorof(member2))
         | (ty::Ty::Vectorof(member2), ty::Ty::Vector(members1)) => {

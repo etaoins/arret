@@ -158,7 +158,8 @@ mod test {
         let int_pair_poly = ty::Ty::List(ty::List::new(
             Box::new([ty::Ty::Int.into_poly()]),
             Some(ty::Ty::Int.into_poly()),
-        )).into_poly();
+        ))
+        .into_poly();
 
         assert_eq!(int_pair_poly, boxed_abi_type.to_ty_ref());
     }

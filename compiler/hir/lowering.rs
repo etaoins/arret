@@ -638,7 +638,8 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
 
             let bindings = lower_import_set(arg_datum, |span, module_name| {
                 Ok(self.load_module(scope, span, module_name)?.clone())
-            })?.into_iter()
+            })?
+            .into_iter()
             .map(|(name, binding)| (Ident::new(ns_id, name), binding));
 
             scope.insert_bindings(span, bindings)?;
@@ -664,7 +665,8 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                         } else {
                             Err(Error::new(datum.span(), ErrorKind::ExpectedSym))
                         }
-                    }).collect::<Result<Vec<DeferredModulePrim>>>()?;
+                    })
+                    .collect::<Result<Vec<DeferredModulePrim>>>()?;
 
                 Ok(deferred_exports)
             }
@@ -744,7 +746,8 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                                 defs.into_iter()
                                     .map(|def| def.with_macro_invocation_span(span))
                                     .collect()
-                            }).map_err(|errs| {
+                            })
+                            .map_err(|errs| {
                                 errs.into_iter()
                                     .map(|e| e.with_macro_invocation_span(span))
                                     .collect()
@@ -790,7 +793,8 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 EMPTY_SPAN,
                 Ident::new(ns_id, "import".into()),
                 Binding::Prim(Prim::Import),
-            ).unwrap();
+            )
+            .unwrap();
 
         // Extract all of our definitions.
         //
@@ -879,7 +883,8 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                         DeferredModulePrim::Export(_, _) => {
                             Err(vec![Error::new(datum.span(), ErrorKind::ExportInsideRepl)])
                         }
-                    }).collect::<Result<Vec<Def<ty::Decl>>, Vec<Error>>>()?;
+                    })
+                    .collect::<Result<Vec<Def<ty::Decl>>, Vec<Error>>>()?;
 
                 let mut all_new_defs = mem::replace(&mut self.module_defs, vec![]);
                 all_new_defs.push(defs);

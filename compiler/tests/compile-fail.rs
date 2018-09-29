@@ -64,7 +64,8 @@ impl Reportable for ExpectedReport {
                 lo: span_range.start as u32,
                 hi: span_range.end as u32,
             },
-        }).into()
+        })
+        .into()
     }
 
     fn level(&self) -> Level {
@@ -119,7 +120,8 @@ fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedR
                     span_offset + start_of_line_index..span_offset + index,
                 ),
             }
-        }).collect::<Vec<ExpectedReport>>();
+        })
+        .collect::<Vec<ExpectedReport>>();
 
     let mut spanned_reports = source.match_indices(";^").map(|(index, _)| {
         let span_length = source[index..].find(' ').expect("Cannot find level") - 1;
@@ -259,7 +261,8 @@ fn compile_fail() {
             } else {
                 None
             }
-        }).collect::<Vec<String>>();
+        })
+        .collect::<Vec<String>>();
 
     if !failed_tests.is_empty() {
         panic!("compile-fail tests failed: {}", failed_tests.join(", "))

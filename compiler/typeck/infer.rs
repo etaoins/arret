@@ -192,7 +192,8 @@ fn ensure_is_a(
             &fcx.tvars,
             sub_poly,
             &ty::Ty::TopFun(Box::new(impure_top_fun)).into_poly(),
-        ).to_bool()
+        )
+        .to_bool()
         {
             let purity_str = if top_fun.purity() == &Purity::Pure.into_poly() {
                 // `->` might be confusing here
@@ -224,7 +225,8 @@ fn member_type_for_poly_list(fcx: &FunCtx, span: Span, poly_type: &ty::Poly) -> 
             } else {
                 None
             }
-        }).ok_or_else(|| {
+        })
+        .ok_or_else(|| {
             Error::new(
                 span,
                 ErrorKind::IsNotTy(str_for_poly(fcx, &poly_type), "(Listof Any)".into()),
@@ -265,7 +267,8 @@ impl<'types> RecursiveDefsCtx<'types> {
                 });
 
                 InputDef::Pending(hir_def)
-            }).collect::<Vec<InputDef>>();
+            })
+            .collect::<Vec<InputDef>>();
 
         let complete_defs = Vec::with_capacity(input_defs.len());
         RecursiveDefsCtx {
@@ -540,7 +543,8 @@ impl<'types> RecursiveDefsCtx<'types> {
                 }
 
                 Ok(node.expr)
-            }).collect::<Result<Vec<hir::Expr<ty::Poly>>>>()?;
+            })
+            .collect::<Result<Vec<hir::Expr<ty::Poly>>>>()?;
 
         if is_divergent {
             self.visit_expr(fcx, pv, &ty::Ty::Any.into_poly(), terminal_expr)?;
@@ -646,7 +650,8 @@ impl<'types> RecursiveDefsCtx<'types> {
                         decl_fun.tvars.clone(),
                         ty::TopFun::new(poly_purity.clone(), wanted_ret_type.clone()),
                         initial_param_type,
-                    ).into_ty_ref();
+                    )
+                    .into_ty_ref();
 
                     // We have a fully known type; allow recursive calls
                     self.var_to_type
@@ -682,7 +687,8 @@ impl<'types> RecursiveDefsCtx<'types> {
             decl_fun.tvars.clone(),
             ty::TopFun::new(revealed_purity.clone(), revealed_ret_type.clone()),
             revealed_param_type,
-        ).into_ty_ref();
+        )
+        .into_ty_ref();
 
         let revealed_fun = hir::Fun::<ty::Poly> {
             pvars: decl_fun.pvars,
@@ -849,7 +855,8 @@ impl<'types> RecursiveDefsCtx<'types> {
 
                 ty::Ty::Bool
             }
-        }.into_poly();
+        }
+        .into_poly();
 
         let poly_type = if subject_node.poly_type == ty::Ty::never().into_poly() {
             // The subject diverged so we diverged
@@ -904,7 +911,8 @@ impl<'types> RecursiveDefsCtx<'types> {
             ty::is_a::Result::Yes => ty::Ty::LitBool(true),
             ty::is_a::Result::No => ty::Ty::LitBool(false),
             ty::is_a::Result::May => ty::Ty::Bool,
-        }.into_poly();
+        }
+        .into_poly();
 
         let poly_type = if subject_list_node.poly_type == ty::Ty::never().into_poly() {
             // The subject diverged so we diverged
@@ -1108,7 +1116,8 @@ impl<'types> RecursiveDefsCtx<'types> {
                 .map(|inferred| InferredNode {
                     expr: hir::Expr::MacroExpand(span, Box::new(inferred.expr)),
                     ..inferred
-                }).map_err(|err| err.with_macro_invocation_span(span)),
+                })
+                .map_err(|err| err.with_macro_invocation_span(span)),
         }
     }
 
@@ -1376,7 +1385,8 @@ fn ensure_main_type(
                 }
 
                 None
-            }).unwrap_or_else(|| EMPTY_SPAN.into());
+            })
+            .unwrap_or_else(|| EMPTY_SPAN.into());
 
         let expected_str =
             hir::str_for_poly(&empty_pvars, &empty_tvars, &expected_main_type).into_boxed_str();

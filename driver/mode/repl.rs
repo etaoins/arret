@@ -58,7 +58,8 @@ impl rustyline::completion::Completer for ArretHelper {
                 } else {
                     None
                 }
-            }).collect();
+            })
+            .collect();
 
         Ok((prefix_start, options))
     }
@@ -105,7 +106,7 @@ fn parse_command(mut line: String) -> ParsedCommand {
         }
         ":help" => {
             println!("Available REPL commands:");
-            println!("");
+            println!();
             println!(":help                  print this summary");
             println!(":type <expression>     evaluate the type of the given expression");
             println!(":quit                  exit the REPL");

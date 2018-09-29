@@ -63,7 +63,7 @@ pub fn build_rust_fun_app(
         OpKind::ConstEntryPoint,
         ConstEntryPointOp {
             symbol: rust_fun.symbol(),
-            abi: abi,
+            abi,
         },
     );
 

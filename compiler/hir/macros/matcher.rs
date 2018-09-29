@@ -77,7 +77,8 @@ impl<'scope, 'data, 'svars> MatchCtx<'scope, 'data, 'svars> {
 
                 subcontext.visit_datum(pattern, arg)?;
                 Ok(subcontext.match_data)
-            }).collect::<result::Result<Vec<MatchData<'data>>, ()>>()?;
+            })
+            .collect::<result::Result<Vec<MatchData<'data>>, ()>>()?;
 
         self.match_data.subpatterns.push(submatch_data);
         Ok(())

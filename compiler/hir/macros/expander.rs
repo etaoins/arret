@@ -81,7 +81,8 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
                 };
 
                 self.expand_datum(&mut subcursor, template)
-            }).collect()
+            })
+            .collect()
     }
 
     fn expand_slice(

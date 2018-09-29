@@ -121,13 +121,15 @@ impl Reportable for Error {
 
     fn associated_report(&self) -> Option<Box<dyn Reportable>> {
         match self.kind {
-            ErrorKind::DuplicateDef(span, _) => if span == EMPTY_SPAN {
-                // Some definitions (e.g. `import`) are magically inserted in to the scope. They
-                // won't have a span.
-                None
-            } else {
-                Some(Box::new(FirstDefHelp { span }))
-            },
+            ErrorKind::DuplicateDef(span, _) => {
+                if span == EMPTY_SPAN {
+                    // Some definitions (e.g. `import`) are magically inserted in to the scope. They
+                    // won't have a span.
+                    None
+                } else {
+                    Some(Box::new(FirstDefHelp { span }))
+                }
+            }
             ErrorKind::MultipleZeroOrMoreMatch(span) => Some(Box::new(FirstDefHelp { span })),
             ErrorKind::SyntaxError(ref err) => err.associated_report(),
             _ => None,

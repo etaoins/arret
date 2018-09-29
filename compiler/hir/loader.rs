@@ -105,7 +105,8 @@ pub fn load_module_by_name(
                 &package_path.native_rust_base,
                 &package_path.target_rust_base,
                 &module_name.package_name,
-            ).map(LoadedModule::Rust)
+            )
+            .map(LoadedModule::Rust)
     } else {
         // Look file files starting in the package path
         let mut path_buf = path::PathBuf::new();

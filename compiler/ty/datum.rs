@@ -42,7 +42,8 @@ pub fn ty_ref_for_datum<S: ty::unify::Unifiable>(datum: &Datum) -> S {
 
             ty::Ty::Map(Box::new(ty::Map::new(unified_key, unified_value)))
         }
-    }).into_ty_ref()
+    })
+    .into_ty_ref()
 }
 
 #[cfg(test)]
