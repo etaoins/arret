@@ -270,9 +270,10 @@ impl Loader {
 
         let rust_library_id = RustLibraryId::new(self.rust_libraries.len());
 
+        let exports_symbol_name = format!("ARRET_{}_RUST_EXPORTS", package_name.to_uppercase());
         let exports: binding::RustExports = unsafe {
             let exports_symbol = loaded
-                .get::<*const binding::RustExports>(b"ARRET_RUST_EXPORTS")
+                .get::<*const binding::RustExports>(exports_symbol_name.as_bytes())
                 .map_err(map_io_err)?;
 
             &(**exports_symbol)

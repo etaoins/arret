@@ -57,12 +57,9 @@ macro_rules! define_rust_fn {
 
 #[macro_export]
 macro_rules! define_rust_module {
-    ($($export_name:expr => $desc_name:ident),*) => {
+    ($exports_sym:ident, { $( $export_name:expr => $desc_name:ident ),* }) => {
         #[no_mangle]
-        pub static ARRET_ABI_VERSION: u32 = 1;
-
-        #[no_mangle]
-        pub static ARRET_RUST_EXPORTS: RustExports = &[
+        pub static $exports_sym: RustExports = &[
             $(
                 ($export_name, &$desc_name)
             ),*
@@ -118,10 +115,10 @@ pub mod test {
         }
     }
 
-    define_rust_module! {
+    define_rust_module!(ARRET_TEST_EXPORTS, {
         "length" => LENGTH,
         "return-42" => RETURN_42
-    }
+    });
 
     #[test]
     fn add_int_float_fn() {
@@ -209,6 +206,6 @@ pub mod test {
 
     #[test]
     fn rust_module() {
-        assert_eq!(2, ARRET_RUST_EXPORTS.len());
+        assert_eq!(2, ARRET_TEST_EXPORTS.len());
     }
 }

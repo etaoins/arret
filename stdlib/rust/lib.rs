@@ -93,7 +93,7 @@ define_rust_fn! {
     }
 }
 
-define_rust_module! {
+define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "length" => LENGTH,
     "panic" => PANIC,
     "=" => EQUALS,
@@ -102,4 +102,4 @@ define_rust_module! {
     "exit" => EXIT,
     "cons" => CONS,
     "black-box" => BLACK_BOX
-}
+});
