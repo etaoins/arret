@@ -24,9 +24,7 @@ extern "C" fn orc_sym_resolve(name_ptr: *const libc::c_char, jcx_void: *mut libc
 }
 
 pub struct JITCtx {
-    target_machine: LLVMTargetMachineRef,
     orc: LLVMOrcJITStackRef,
-
     symbols: HashMap<ffi::CString, u64>,
 }
 
@@ -45,9 +43,7 @@ impl JITCtx {
             let orc = LLVMOrcCreateInstance(target_machine);
 
             let mut jcx = JITCtx {
-                target_machine,
                 orc,
-
                 symbols: HashMap::new(),
             };
 
@@ -61,7 +57,7 @@ impl JITCtx {
 
     pub fn compile_fun(&mut self, cgx: &mut CodegenCtx, fun: &ops::Fun) -> u64 {
         use crate::codegen::fun_gen;
-        use std::{mem, ptr};
+        use std::ptr;
 
         let module_name = fun
             .source_name
@@ -79,6 +75,11 @@ impl JITCtx {
             let mut mcx = ModCtx::new(module);
             let llvm_function = fun_gen::gen_fun(cgx, &mut mcx, fun);
 
+            // We need to take ownership before we tranfer the module to ORC
+            let mut function_name_len: usize = 0;
+            let function_name_ptr = LLVMGetValueName2(llvm_function, &mut function_name_len);
+            let function_name = ffi::CStr::from_ptr(function_name_ptr).to_owned();
+
             if env::var_os("ARRET_DUMP_LLVM").is_some() {
                 LLVMDumpModule(module);
             }
@@ -90,13 +91,11 @@ impl JITCtx {
                 error,
             );
 
-            let shared_module = LLVMOrcMakeSharedModule(module);
-
-            let mut orc_module: LLVMOrcModuleHandle = mem::uninitialized();
-            if LLVMOrcAddEagerlyCompiledIR(
+            let mut orc_module: LLVMOrcModuleHandle = 0;
+            if LLVMOrcAddLazilyCompiledIR(
                 self.orc,
                 &mut orc_module,
-                shared_module,
+                module,
                 Some(orc_sym_resolve),
                 self as *mut JITCtx as *mut _,
             ) != LLVMOrcErrorCode::LLVMOrcErrSuccess
@@ -104,11 +103,13 @@ impl JITCtx {
                 panic!("Unable to add module");
             }
 
-            let function_name = LLVMGetValueName(llvm_function);
-
             let mut target_address: LLVMOrcTargetAddress = 0;
-            if LLVMOrcGetSymbolAddress(self.orc, &mut target_address, function_name)
-                != LLVMOrcErrorCode::LLVMOrcErrSuccess
+            if LLVMOrcGetSymbolAddressIn(
+                self.orc,
+                &mut target_address,
+                orc_module,
+                function_name.as_ptr() as *const _,
+            ) != LLVMOrcErrorCode::LLVMOrcErrSuccess
             {
                 panic!("Unable to get symbol address")
             }
@@ -137,7 +138,6 @@ impl JITCtx {
 impl Drop for JITCtx {
     fn drop(&mut self) {
         unsafe {
-            LLVMDisposeTargetMachine(self.target_machine);
             LLVMOrcDisposeInstance(self.orc);
         }
     }

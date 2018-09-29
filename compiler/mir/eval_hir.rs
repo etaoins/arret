@@ -32,8 +32,8 @@ pub struct EvalHirCtx {
     rust_fun_thunks: HashMap<*const c_void, boxed::ThunkEntry>,
     thunk_fun_values: HashMap<Gc<boxed::FunThunk>, Value>,
     // This is important for drop order!
-    thunk_gen: codegen::CodegenCtx,
     thunk_jit: codegen::jit::JITCtx,
+    thunk_gen: codegen::CodegenCtx,
 }
 
 pub struct DefCtx {
@@ -77,8 +77,8 @@ impl EvalHirCtx {
 
             rust_fun_thunks: HashMap::new(),
             thunk_fun_values: HashMap::new(),
-            thunk_gen: codegen::CodegenCtx::new(),
             thunk_jit: codegen::jit::JITCtx::new(),
+            thunk_gen: codegen::CodegenCtx::new(),
         }
     }
 

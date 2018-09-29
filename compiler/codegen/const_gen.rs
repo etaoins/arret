@@ -2,7 +2,7 @@ use std::{ffi, mem};
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
-use llvm_sys::LLVMLinkage;
+use llvm_sys::{LLVMLinkage, LLVMUnnamedAddr};
 
 use runtime::boxed;
 
@@ -11,7 +11,7 @@ use crate::codegen::CodegenCtx;
 
 fn annotate_private_global(llvm_global: LLVMValueRef) {
     unsafe {
-        LLVMSetUnnamedAddr(llvm_global, 1 as i32);
+        LLVMSetUnnamedAddress(llvm_global, LLVMUnnamedAddr::LLVMGlobalUnnamedAddr);
         LLVMSetGlobalConstant(llvm_global, 1 as i32);
         LLVMSetLinkage(llvm_global, LLVMLinkage::LLVMPrivateLinkage)
     }
