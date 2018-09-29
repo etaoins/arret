@@ -6,7 +6,7 @@ authors = ["Ryan Cumming <etaoins@gmail.com>"]
 
 [lib]
 path = "lib.rs"
-crate-type = ["lib", "dylib"]
+crate-type = ["lib"]
 
 [dependencies]
 syntax = { path = "../syntax" }

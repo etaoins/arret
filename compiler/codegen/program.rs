@@ -184,6 +184,8 @@ pub fn gen_program(
             .arg("-o")
             .arg(output_file)
             .args(rust_libraries.iter().map(|l| l.target_path()))
+            .arg("-pthread")
+            .arg("-ldl")
             .status()
             .unwrap();
 

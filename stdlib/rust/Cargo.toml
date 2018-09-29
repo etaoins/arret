@@ -7,7 +7,7 @@ authors = ["Ryan Cumming <etaoins@gmail.com>"]
 [lib]
 name = "stdlib"
 path = "lib.rs"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 runtime = { path = "../../runtime" }

@@ -114,13 +114,20 @@ where
                     "Rust type `{}` does not match declared Arret type of `{}`",
                     abi_type.to_rust_str(),
                     types::str_for_poly(pvars, tvars, arret_poly),
-                ).into_boxed_str(),
+                )
+                .into_boxed_str(),
             ),
         ))
     }
 }
 
-fn build_rfi_lib_path(base: &path::Path, package_name: &str) -> path::PathBuf {
+#[derive(Clone, Copy)]
+enum LibType {
+    Static,
+    Dynamic,
+}
+
+fn build_rfi_lib_path(base: &path::Path, package_name: &str, lib_type: LibType) -> path::PathBuf {
     let mut path_buf = path::PathBuf::new();
     path_buf.push(base);
 
@@ -130,18 +137,18 @@ fn build_rfi_lib_path(base: &path::Path, package_name: &str) -> path::PathBuf {
     #[cfg(not(debug_assertions))]
     path_buf.push("release");
 
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    path_buf.push(format!("lib{}.dylib", package_name));
+    match lib_type {
+        LibType::Dynamic => {
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            path_buf.push(format!("lib{}.dylib", package_name));
 
-    #[cfg(any(target_os = "windows"))]
-    path_buf.push(format!("{}.dll", package_name));
-
-    #[cfg(all(
-        not(target_os = "macos"),
-        not(target_os = "ios"),
-        not(target_os = "windows")
-    ))]
-    path_buf.push(format!("lib{}.so", package_name));
+            #[cfg(all(not(target_os = "macos"), not(target_os = "ios"),))]
+            path_buf.push(format!("lib{}.so", package_name));
+        }
+        LibType::Static => {
+            path_buf.push(format!("lib{}.a", package_name));
+        }
+    }
 
     path_buf
 }
@@ -197,7 +204,8 @@ impl Loader {
                         "expected Rust function to have {} parameters; has {}",
                         expected_rust_params,
                         rust_fun.params.len()
-                    ).into_boxed_str(),
+                    )
+                    .into_boxed_str(),
                 ),
             ));
         }
@@ -254,8 +262,8 @@ impl Loader {
         target_base_path: &path::Path,
         package_name: &str,
     ) -> Result<HashMap<&'static str, Fun>, Error> {
-        let native_path = build_rfi_lib_path(native_base_path, package_name);
-        let target_path = build_rfi_lib_path(target_base_path, package_name);
+        let native_path = build_rfi_lib_path(native_base_path, package_name, LibType::Dynamic);
+        let target_path = build_rfi_lib_path(target_base_path, package_name, LibType::Static);
 
         let map_io_err = |err| Error::from_module_io(span, &native_path, &err);
         let loaded = libloading::Library::new(&native_path).map_err(map_io_err)?;
@@ -288,7 +296,8 @@ impl Loader {
                         entry_point_address,
                         rust_fun,
                         intrinsic_name,
-                    ).map_err(|err| {
+                    )
+                    .map_err(|err| {
                         // This is a gross hack. We don't want to insert an entry in to the
                         // `SourceLoader` for every Rust function. This requires at least one memory
                         // allocation for the display name and extending the loaded sources. Instead
@@ -305,7 +314,8 @@ impl Loader {
                     })?;
 
                 Ok((*name, fun))
-            }).collect::<Result<HashMap<&'static str, Fun>, Error>>()?;
+            })
+            .collect::<Result<HashMap<&'static str, Fun>, Error>>()?;
 
         self.rust_libraries.push(Library {
             _loaded: loaded,
