@@ -20,8 +20,8 @@ fn annotate_private_global(llvm_global: LLVMValueRef) {
 pub fn gen_boxed_pair(
     cgx: &mut CodegenCtx,
     mcx: &mut ModCtx,
-    llvm_car: LLVMValueRef,
-    llvm_cdr: LLVMValueRef,
+    llvm_head: LLVMValueRef,
+    llvm_rest: LLVMValueRef,
     list_length: usize,
 ) -> LLVMValueRef {
     unsafe {
@@ -31,8 +31,8 @@ pub fn gen_boxed_pair(
 
         let members = &mut [
             cgx.const_box_header(type_tag),
-            llvm_car,
-            llvm_cdr,
+            llvm_head,
+            llvm_rest,
             LLVMConstInt(llvm_i64, list_length as u64, 0),
         ];
 

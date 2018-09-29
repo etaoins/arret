@@ -38,8 +38,8 @@ pub struct ConstEntryPointOp {
 
 #[derive(Debug)]
 pub struct ConstBoxedPairOp {
-    pub car_reg: RegId,
-    pub cdr_reg: RegId,
+    pub head_reg: RegId,
+    pub rest_reg: RegId,
     pub length: usize,
 }
 

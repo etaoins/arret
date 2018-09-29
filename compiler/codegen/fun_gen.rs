@@ -151,15 +151,15 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
             OpKind::ConstBoxedPair(
                 reg,
                 ConstBoxedPairOp {
-                    car_reg,
-                    cdr_reg,
+                    head_reg,
+                    rest_reg,
                     length,
                 },
             ) => {
-                let llvm_car = fcx.regs[car_reg];
-                let llvm_cdr = fcx.regs[cdr_reg];
+                let llvm_head = fcx.regs[head_reg];
+                let llvm_rest = fcx.regs[rest_reg];
 
-                let llvm_value = const_gen::gen_boxed_pair(cgx, mcx, llvm_car, llvm_cdr, *length);
+                let llvm_value = const_gen::gen_boxed_pair(cgx, mcx, llvm_head, llvm_rest, *length);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBoxedStr(reg, value) => {

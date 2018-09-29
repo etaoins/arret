@@ -99,8 +99,8 @@ fn list_to_reg(
                     span,
                     OpKind::ConstBoxedPair,
                     ConstBoxedPairOp {
-                        car_reg: fixed_reg,
-                        cdr_reg: tail_reg,
+                        head_reg: fixed_reg,
+                        rest_reg: tail_reg,
                         length: head_length,
                     },
                 );
