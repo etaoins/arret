@@ -49,6 +49,12 @@ pub struct BuiltProgram {
     pub funs: Vec<ops::Fun>,
 }
 
+impl BuiltProgram {
+    pub fn is_empty(&self) -> bool {
+        self.funs.is_empty() && self.main.ops.len() == 1
+    }
+}
+
 impl DefCtx {
     pub fn new() -> DefCtx {
         DefCtx {

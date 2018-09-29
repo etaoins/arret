@@ -1,0 +1,5 @@
+(import [stdlib base])
+
+(defn main! ()
+  ; This is dumb but it makes us produce a binary
+  (print! ""))

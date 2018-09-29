@@ -19,4 +19,7 @@
   (let [[rest-list : (Listof Any)] (return-rest 1 2 3)]
     (assert-equal '(1 2 3) rest-list))
 
+  ; Treating functions as first-class values
+  (assert-equal '(1 2 3) ((black-box return-rest) 1 2 3))
+
   ())

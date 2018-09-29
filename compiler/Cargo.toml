@@ -19,3 +19,4 @@ runtime-syntax = { path = "../runtime-syntax" }
 
 [dev-dependencies]
 rayon = "1"
+tempfile = "3"
