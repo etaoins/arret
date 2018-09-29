@@ -85,13 +85,21 @@ pub enum OpKind {
 
 #[derive(Debug)]
 pub struct Op {
-    _span: Span,
+    span: Span,
     pub kind: OpKind,
 }
 
 impl Op {
     pub fn new(span: Span, kind: OpKind) -> Op {
-        Op { _span: span, kind }
+        Op { span, kind }
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
+
+    pub fn kind(&self) -> &OpKind {
+        &self.kind
     }
 }
 

@@ -5,8 +5,10 @@
 use rayon::prelude::*;
 use tempfile::NamedTempFile;
 
+use syntax::span::{Span, EMPTY_SPAN};
+
 use compiler::error::Error;
-use compiler::reporting::report_to_stderr;
+use compiler::reporting;
 use compiler::SourceLoader;
 
 use std::alloc::System;
@@ -22,6 +24,53 @@ thread_local!(static SOURCE_LOADER: RefCell<SourceLoader> = RefCell::new(SourceL
 enum TestType {
     RunPass,
     EvalPass,
+}
+
+struct DisplayOp {
+    span: Span,
+    op_string: String,
+}
+
+struct UnableToCompileEval {
+    display_op: Option<DisplayOp>,
+}
+
+impl reporting::Reportable for UnableToCompileEval {
+    fn level(&self) -> reporting::Level {
+        reporting::Level::Error
+    }
+
+    fn message(&self) -> String {
+        match &self.display_op {
+            None => "unable to evaluate program at compile time".to_owned(),
+            Some(display_op) => format!(
+                "unable to evalue at compile time. generated MIR operation `{}`",
+                display_op.op_string
+            ),
+        }
+    }
+
+    fn loc_trace(&self) -> reporting::LocTrace {
+        self.display_op
+            .as_ref()
+            .map(|display_op| display_op.span)
+            .unwrap_or(EMPTY_SPAN)
+            .into()
+    }
+}
+
+fn find_display_op(mir_program: &compiler::BuiltProgram) -> Option<DisplayOp> {
+    mir_program
+        .main
+        .ops
+        .iter()
+        .filter_map(|op| {
+            op.span().to_non_empty().map(|span| DisplayOp {
+                span,
+                op_string: format!("{:?}", op.kind()),
+            })
+        })
+        .next()
 }
 
 fn try_run_single_test(
@@ -51,10 +100,9 @@ fn try_run_single_test(
     }
 
     if test_type == TestType::EvalPass {
-        panic!(
-            "unexpectedly built program for test {}",
-            input_path.to_string_lossy()
-        );
+        // Try to find an op to display. This will be pretty arbitrary.
+        let display_op = find_display_op(&mir_program);
+        return Err(Error(vec![Box::new(UnableToCompileEval { display_op })]));
     }
 
     let output_path = NamedTempFile::new().unwrap().into_temp_path();
@@ -93,7 +141,7 @@ fn run_single_test(input_path: &path::Path, test_type: TestType) -> bool {
             let _errlock = stderr.lock();
 
             for err in errs {
-                report_to_stderr(&*source_loader.borrow(), &*err);
+                reporting::report_to_stderr(&*source_loader.borrow(), &*err);
             }
 
             false
@@ -107,7 +155,7 @@ fn run_single_test(input_path: &path::Path, test_type: TestType) -> bool {
 fn pass() {
     let eval_entries = fs::read_dir("./tests/eval-pass")
         .unwrap()
-        .map(|entry| (entry, TestType::RunPass));
+        .map(|entry| (entry, TestType::EvalPass));
 
     let run_entries = fs::read_dir("./tests/run-pass")
         .unwrap()
