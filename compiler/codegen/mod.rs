@@ -1,5 +1,6 @@
 mod alloc_gen;
 mod const_gen;
+mod escape_analysis;
 mod fun_gen;
 pub mod jit;
 mod mod_gen;
