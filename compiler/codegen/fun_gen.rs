@@ -214,8 +214,8 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                     let param_attr_offset =
                         1 + (abi.takes_task as usize) + (abi.takes_closure as usize);
 
-                    let readonly_attr = cgx.llvm_enum_attr_for_name(b"readonly");
-                    let nocapture_attr = cgx.llvm_enum_attr_for_name(b"nocapture");
+                    let readonly_attr = cgx.llvm_enum_attr_for_name(b"readonly", 0);
+                    let nocapture_attr = cgx.llvm_enum_attr_for_name(b"nocapture", 0);
                     for (index, param_abi_type) in abi.params.iter().enumerate() {
                         if let ABIType::Boxed(_) = param_abi_type {
                             let param_attr_index = (param_attr_offset + index) as u32;
@@ -226,12 +226,11 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                             if !fun_may_capture_param(&abi.ret, &param_abi_type) {
                                 LLVMAddAttributeAtIndex(function, param_attr_index, nocapture_attr);
                             }
-                        } else {
                         }
                     }
 
                     if abi.ret == RetABIType::Never {
-                        let noreturn_attr = cgx.llvm_enum_attr_for_name(b"noreturn");
+                        let noreturn_attr = cgx.llvm_enum_attr_for_name(b"noreturn", 0);
                         LLVMAddAttributeAtIndex(
                             function,
                             LLVMAttributeFunctionIndex,
@@ -327,6 +326,9 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
 }
 
 pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> LLVMValueRef {
+    use runtime::abitype::ABIType;
+    use std::mem;
+
     unsafe {
         let builder = LLVMCreateBuilderInContext(cgx.llx);
 
@@ -353,6 +355,20 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> LLVM
         for (param_index, reg) in fun.params.iter().enumerate() {
             let llvm_offset = (params_offset + param_index) as u32;
             fcx.regs.insert(*reg, LLVMGetParam(function, llvm_offset));
+        }
+
+        let dereferenceable_attr =
+            cgx.llvm_enum_attr_for_name(b"dereferenceable", mem::size_of::<boxed::Any>() as u64);
+        let align_attr =
+            cgx.llvm_enum_attr_for_name(b"align", mem::align_of::<boxed::Any>() as u64);
+
+        for (param_index, param_abi_type) in fun.abi.params.iter().enumerate() {
+            if let ABIType::Boxed(_) = param_abi_type {
+                let param_attr_index = (params_offset + param_index + 1) as u32;
+
+                LLVMAddAttributeAtIndex(function, param_attr_index, dereferenceable_attr);
+                LLVMAddAttributeAtIndex(function, param_attr_index, align_attr);
+            }
         }
 
         for op in &fun.ops {

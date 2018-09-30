@@ -249,11 +249,11 @@ impl CodegenCtx {
         }
     }
 
-    fn llvm_enum_attr_for_name(&mut self, attr_name: &[u8]) -> LLVMAttributeRef {
+    fn llvm_enum_attr_for_name(&mut self, attr_name: &[u8], attr_value: u64) -> LLVMAttributeRef {
         unsafe {
             let kind_id =
                 LLVMGetEnumAttributeKindForName(attr_name.as_ptr() as *const _, attr_name.len());
-            LLVMCreateEnumAttribute(self.llx, kind_id, 0)
+            LLVMCreateEnumAttribute(self.llx, kind_id, attr_value)
         }
     }
 }

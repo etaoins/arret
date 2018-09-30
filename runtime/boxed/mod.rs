@@ -410,6 +410,9 @@ mod test {
     #[test]
     fn sizes() {
         assert_eq!(2, mem::size_of::<Header>());
+        assert_eq!(16, mem::size_of::<Nil>());
+        assert_eq!(16, mem::size_of::<True>());
+        assert_eq!(16, mem::size_of::<False>());
     }
 
     #[test]
