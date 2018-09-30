@@ -8,7 +8,7 @@ new_counting_id_type!(RegIdCounter, RegId);
 #[derive(Debug, PartialEq, Clone)]
 pub struct FunABI {
     pub takes_task: bool,
-    pub takes_captures: bool,
+    pub takes_closure: bool,
     pub params: Box<[abitype::ABIType]>,
     pub ret: abitype::RetABIType,
 }
@@ -17,7 +17,7 @@ impl FunABI {
     pub fn thunk_abi() -> FunABI {
         FunABI {
             takes_task: true,
-            takes_captures: true,
+            takes_closure: true,
             params: Box::new([abitype::TOP_LIST_BOXED_ABI_TYPE.into()]),
             ret: abitype::BoxedABIType::Any.into(),
         }

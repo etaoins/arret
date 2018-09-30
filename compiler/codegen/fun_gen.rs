@@ -321,7 +321,7 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> LLVM
             fcx.current_task = Some(LLVMGetParam(function, 0));
         }
 
-        let params_offset = fun.abi.takes_task as usize + fun.abi.takes_captures as usize;
+        let params_offset = fun.abi.takes_task as usize + fun.abi.takes_closure as usize;
         for (param_index, reg) in fun.params.iter().enumerate() {
             let llvm_offset = (params_offset + param_index) as u32;
             fcx.regs.insert(*reg, LLVMGetParam(function, llvm_offset));

@@ -176,7 +176,7 @@ impl CodegenCtx {
             llvm_param_types.push(self.task_llvm_type());
         }
 
-        if fun_abi.takes_captures {
+        if fun_abi.takes_closure {
             llvm_param_types.push(self.record_llvm_type());
         }
 

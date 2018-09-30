@@ -53,7 +53,7 @@ pub fn build_rust_fun_app(
 
     let abi = FunABI {
         takes_task: rust_fun.takes_task(),
-        takes_captures: false,
+        takes_closure: false,
         params: rust_fun.params().to_owned().into(),
         ret: rust_fun.ret().clone(),
     };

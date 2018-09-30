@@ -248,9 +248,9 @@ impl EvalHirCtx {
     pub fn rust_fun_to_jit_boxed(&mut self, rust_fun: Rc<hir::rfi::Fun>) -> Gc<boxed::FunThunk> {
         use std::ptr;
 
-        let captures = ptr::null();
+        let closure = ptr::null();
         let entry = self.jit_thunk_for_rust_fun(&rust_fun);
-        let new_boxed = boxed::FunThunk::new(self, (captures, entry));
+        let new_boxed = boxed::FunThunk::new(self, (closure, entry));
 
         let rust_fun_value = Value::RustFun(rust_fun);
         self.thunk_fun_values.insert(new_boxed, rust_fun_value);
@@ -780,7 +780,7 @@ impl EvalHirCtx {
 
         let main_abi = ops::FunABI {
             takes_task: true,
-            takes_captures: false,
+            takes_closure: false,
             params: Box::new([]),
             ret: abitype::RetABIType::Void,
         };
