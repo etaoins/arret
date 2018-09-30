@@ -45,12 +45,15 @@ impl CodegenCtx {
     }
 
     fn task_llvm_type(&mut self) -> LLVMTypeRef {
+        let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
         let llx = self.llx;
         *self.task_type.get_or_insert_with(|| unsafe {
-            LLVMPointerType(
-                LLVMStructCreateNamed(llx, b"task\0".as_ptr() as *const _),
-                0,
-            )
+            let members = &mut [llvm_any_ptr, llvm_any_ptr];
+
+            let llvm_type = LLVMStructCreateNamed(llx, b"task\0".as_ptr() as *const _);
+            LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
+
+            LLVMPointerType(llvm_type, 0)
         })
     }
 
