@@ -533,13 +533,17 @@ impl EvalHirCtx {
         arret_fun: &value::ArretFun,
     ) -> ops::RegId {
         use crate::mir::ops::*;
+        use crate::mir::optimise::optimise_fun;
 
         let wanted_abi = FunABI::thunk_abi();
-        let ops_fun = self
+
+        let unopt_fun = self
             .ops_for_arret_fun(&arret_fun, wanted_abi, true)
             .expect("error during arret fun boxing");
 
-        let built_fun_id = ops::BuiltFunId::new_entry_id(&mut self.built_funs, ops_fun);
+        let opt_fun = optimise_fun(unopt_fun);
+
+        let built_fun_id = ops::BuiltFunId::new_entry_id(&mut self.built_funs, opt_fun);
         let built_fun_entry_reg = b.push_reg(span, OpKind::ConstBuiltFunEntryPoint, built_fun_id);
         b.push_reg(span, OpKind::ConstBoxedFunThunk, built_fun_entry_reg)
     }

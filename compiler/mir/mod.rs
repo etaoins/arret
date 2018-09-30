@@ -3,6 +3,7 @@ pub mod error;
 pub mod eval_hir;
 mod intrinsic;
 pub(crate) mod ops;
+mod optimise;
 mod rust_fun;
 mod value;
 
