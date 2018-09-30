@@ -190,7 +190,7 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 fcx.regs.insert(*reg, to_llvm_value);
             }
             OpKind::ConstEntryPoint(reg, ConstEntryPointOp { symbol, abi }) => {
-                use runtime::abitype::RetABIType;
+                use runtime::abitype::{ABIType, RetABIType};
 
                 let function_type = cgx.fun_abi_to_llvm_type(&abi);
                 let function_name = ffi::CString::new(*symbol).unwrap();
@@ -207,6 +207,23 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                         function_name.as_bytes_with_nul().as_ptr() as *const _,
                         function_type,
                     );
+
+                    // LLVM param attributes are 1 indexed
+                    let param_attr_offset =
+                        1 + (abi.takes_task as usize) + (abi.takes_closure as usize);
+
+                    let readonly_attr = cgx.llvm_enum_attr_for_name(b"readonly");
+                    for (index, param_abi_type) in abi.params.iter().enumerate() {
+                        if let ABIType::Boxed(_) = param_abi_type {
+                            // Our boxes are immutable once created
+                            LLVMAddAttributeAtIndex(
+                                function,
+                                (param_attr_offset + index) as u32,
+                                readonly_attr,
+                            );
+                        } else {
+                        }
+                    }
 
                     if abi.ret == RetABIType::Never {
                         let noreturn_attr = cgx.llvm_enum_attr_for_name(b"noreturn");
