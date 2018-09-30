@@ -2,18 +2,12 @@ use crate::ty;
 
 /// Iterates through the member types of a list
 #[derive(Clone)]
-pub struct ListIterator<'list, S: ty::TyRef>
-where
-    S: 'list,
-{
+pub struct ListIterator<'list, S: ty::TyRef> {
     fixed: &'list [S],
     rest: Option<&'list S>,
 }
 
-impl<'list, S: ty::TyRef> ListIterator<'list, S>
-where
-    S: 'list,
-{
+impl<'list, S: ty::TyRef> ListIterator<'list, S> {
     pub fn new(list: &'list ty::List<S>) -> ListIterator<'list, S> {
         ListIterator {
             fixed: list.fixed(),
