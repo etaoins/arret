@@ -1,3 +1,4 @@
+mod alloc_gen;
 mod const_gen;
 mod fun_gen;
 pub mod jit;
@@ -216,7 +217,7 @@ impl CodegenCtx {
             let llvm_type = self.boxed_abi_to_llvm_struct_type(&type_tag.into());
             let global = LLVMAddGlobal(module, llvm_type, name.as_ptr() as *const _);
 
-            let members = &mut [self.const_box_header(type_tag)];
+            let members = &mut [self.llvm_box_header(type_tag.into_const_header())];
 
             let llvm_value =
                 LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
@@ -230,14 +231,14 @@ impl CodegenCtx {
         }
     }
 
-    fn const_box_header(&mut self, type_tag: boxed::TypeTag) -> LLVMValueRef {
+    fn llvm_box_header(&mut self, header: boxed::Header) -> LLVMValueRef {
         unsafe {
             let llvm_i8 = LLVMInt8TypeInContext(self.llx);
             let llvm_type = self.box_header_llvm_type();
 
             let members = &mut [
-                LLVMConstInt(llvm_i8, type_tag as u64, 0),
-                LLVMConstInt(llvm_i8, 0, 0),
+                LLVMConstInt(llvm_i8, header.type_tag() as u64, 0),
+                LLVMConstInt(llvm_i8, header.alloc_type() as u64, 0),
             ];
 
             LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32)

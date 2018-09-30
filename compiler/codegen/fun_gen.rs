@@ -7,6 +7,7 @@ use llvm_sys::LLVMAttributeFunctionIndex;
 
 use runtime::boxed;
 
+use crate::codegen::alloc_gen;
 use crate::codegen::const_gen;
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::CodegenCtx;
@@ -310,6 +311,12 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
             OpKind::Cond(reg, cond_op) => {
                 let llvm_value = gen_cond(cgx, mcx, fcx, cond_op);
                 fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::AllocInt(reg, int_reg) => {
+                let llvm_int = fcx.regs[int_reg];
+                let llvm_alloced = alloc_gen::gen_alloc_int(cgx, fcx.builder, llvm_int);
+
+                fcx.regs.insert(*reg, llvm_alloced);
             }
         }
     }

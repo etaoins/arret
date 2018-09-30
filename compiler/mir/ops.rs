@@ -70,17 +70,23 @@ pub enum OpKind {
     ConstEntryPoint(RegId, ConstEntryPointOp),
     ConstBuiltFunEntryPoint(RegId, BuiltFunId),
     ConstBoxedFunThunk(RegId, RegId),
+
+    AllocInt(RegId, RegId),
+
     ConstCastBoxed(RegId, CastBoxedOp),
     CastBoxed(RegId, CastBoxedOp),
+
     CurrentTask(RegId, ()),
+
     Call(RegId, CallOp),
-    Ret(RegId),
-    RetVoid,
-    Unreachable,
     LoadBoxedPairHead(RegId, RegId),
     LoadBoxedPairRest(RegId, RegId),
     LoadBoxedIntValue(RegId, RegId),
     Cond(RegId, CondOp),
+
+    Ret(RegId),
+    RetVoid,
+    Unreachable,
 }
 
 impl OpKind {
@@ -98,6 +104,7 @@ impl OpKind {
             | ConstEntryPoint(reg_id, _)
             | ConstBuiltFunEntryPoint(reg_id, _)
             | ConstBoxedFunThunk(reg_id, _)
+            | AllocInt(reg_id, _)
             | ConstCastBoxed(reg_id, _)
             | CastBoxed(reg_id, _)
             | CurrentTask(reg_id, _)
@@ -134,7 +141,8 @@ impl OpKind {
                         .cloned(),
                 );
             }
-            ConstCastBoxed(
+            AllocInt(_, reg_id)
+            | ConstCastBoxed(
                 _,
                 CastBoxedOp {
                     from_reg: reg_id, ..

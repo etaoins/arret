@@ -50,7 +50,7 @@ impl BoxSize {
 }
 
 #[repr(u8)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum AllocType {
     Const,
     Stack,
@@ -61,10 +61,33 @@ pub enum AllocType {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Header {
     type_tag: TypeTag,
     alloc_type: AllocType,
+}
+
+impl Header {
+    pub fn new(type_tag: TypeTag, alloc_type: AllocType) -> Header {
+        Header {
+            type_tag,
+            alloc_type,
+        }
+    }
+
+    pub fn type_tag(self) -> TypeTag {
+        self.type_tag
+    }
+
+    pub fn alloc_type(self) -> AllocType {
+        self.alloc_type
+    }
+}
+
+impl TypeTag {
+    pub fn into_const_header(self) -> Header {
+        Header::new(self, AllocType::Const)
+    }
 }
 
 #[repr(C, align(16))]
