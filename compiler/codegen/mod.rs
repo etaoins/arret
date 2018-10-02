@@ -11,12 +11,24 @@ use std::collections::HashMap;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
-use llvm_sys::LLVMLinkage;
+use llvm_sys::{LLVMAttributeReturnIndex, LLVMLinkage};
 
 use runtime::abitype::{ABIType, BoxedABIType, RetABIType, TOP_LIST_BOXED_ABI_TYPE};
 use runtime::boxed;
 
 use crate::mir::ops;
+
+fn llvm_enum_attr_for_name(
+    llx: LLVMContextRef,
+    attr_name: &[u8],
+    attr_value: u64,
+) -> LLVMAttributeRef {
+    unsafe {
+        let kind_id =
+            LLVMGetEnumAttributeKindForName(attr_name.as_ptr() as *const _, attr_name.len());
+        LLVMCreateEnumAttribute(llx, kind_id, attr_value)
+    }
+}
 
 pub struct CodegenCtx {
     llx: LLVMContextRef,
@@ -26,10 +38,18 @@ pub struct CodegenCtx {
     box_header_type: Option<LLVMTypeRef>,
     boxed_inline_str_type: Option<LLVMTypeRef>,
     boxed_abi_types: HashMap<BoxedABIType, LLVMTypeRef>,
+
+    boxed_dereferenceable_attr: LLVMAttributeRef,
+    boxed_align_attr: LLVMAttributeRef,
+    readonly_attr: LLVMAttributeRef,
+    noalias_attr: LLVMAttributeRef,
+    nocapture_attr: LLVMAttributeRef,
 }
 
 impl CodegenCtx {
     pub fn new() -> CodegenCtx {
+        use std::mem;
+
         unsafe {
             let llx = LLVMContextCreate();
 
@@ -41,6 +61,20 @@ impl CodegenCtx {
                 box_header_type: None,
                 boxed_inline_str_type: None,
                 boxed_abi_types: HashMap::new(),
+
+                boxed_dereferenceable_attr: llvm_enum_attr_for_name(
+                    llx,
+                    b"dereferenceable",
+                    mem::size_of::<boxed::Any>() as u64,
+                ),
+                boxed_align_attr: llvm_enum_attr_for_name(
+                    llx,
+                    b"align",
+                    mem::align_of::<boxed::Any>() as u64,
+                ),
+                readonly_attr: llvm_enum_attr_for_name(llx, b"readonly", 0),
+                noalias_attr: llvm_enum_attr_for_name(llx, b"noalias", 0),
+                nocapture_attr: llvm_enum_attr_for_name(llx, b"nocapture", 0),
             }
         }
     }
@@ -250,10 +284,40 @@ impl CodegenCtx {
     }
 
     fn llvm_enum_attr_for_name(&mut self, attr_name: &[u8], attr_value: u64) -> LLVMAttributeRef {
+        llvm_enum_attr_for_name(self.llx, attr_name, attr_value)
+    }
+
+    fn add_boxed_param_attrs(
+        &mut self,
+        function: LLVMValueRef,
+        param_index: u32,
+        no_capture: bool,
+    ) {
         unsafe {
-            let kind_id =
-                LLVMGetEnumAttributeKindForName(attr_name.as_ptr() as *const _, attr_name.len());
-            LLVMCreateEnumAttribute(self.llx, kind_id, attr_value)
+            for &common_attr in &[
+                self.boxed_dereferenceable_attr,
+                self.boxed_align_attr,
+                self.readonly_attr,
+                self.noalias_attr,
+            ] {
+                LLVMAddAttributeAtIndex(function, param_index, common_attr);
+            }
+
+            if no_capture {
+                LLVMAddAttributeAtIndex(function, param_index, self.nocapture_attr);
+            }
+        }
+    }
+
+    fn add_boxed_return_attrs(&mut self, function: LLVMValueRef) {
+        unsafe {
+            for &common_attr in &[
+                self.boxed_dereferenceable_attr,
+                self.boxed_align_attr,
+                self.noalias_attr,
+            ] {
+                LLVMAddAttributeAtIndex(function, LLVMAttributeReturnIndex, common_attr);
+            }
         }
     }
 }

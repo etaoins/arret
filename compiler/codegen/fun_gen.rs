@@ -214,28 +214,30 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                     let param_attr_offset =
                         1 + (abi.takes_task as usize) + (abi.takes_closure as usize);
 
-                    let readonly_attr = cgx.llvm_enum_attr_for_name(b"readonly", 0);
-                    let nocapture_attr = cgx.llvm_enum_attr_for_name(b"nocapture", 0);
                     for (index, param_abi_type) in abi.params.iter().enumerate() {
                         if let ABIType::Boxed(_) = param_abi_type {
-                            let param_attr_index = (param_attr_offset + index) as u32;
-
-                            // Our boxes are immutable once created
-                            LLVMAddAttributeAtIndex(function, param_attr_index, readonly_attr);
-
-                            if !fun_may_capture_param(&abi.ret, &param_abi_type) {
-                                LLVMAddAttributeAtIndex(function, param_attr_index, nocapture_attr);
-                            }
+                            let no_capture = !fun_may_capture_param(&abi.ret, &param_abi_type);
+                            cgx.add_boxed_param_attrs(
+                                function,
+                                (param_attr_offset + index) as u32,
+                                no_capture,
+                            )
                         }
                     }
 
-                    if abi.ret == RetABIType::Never {
-                        let noreturn_attr = cgx.llvm_enum_attr_for_name(b"noreturn", 0);
-                        LLVMAddAttributeAtIndex(
-                            function,
-                            LLVMAttributeFunctionIndex,
-                            noreturn_attr,
-                        );
+                    match abi.ret {
+                        RetABIType::Inhabited(ABIType::Boxed(_)) => {
+                            cgx.add_boxed_return_attrs(function);
+                        }
+                        RetABIType::Never => {
+                            let noreturn_attr = cgx.llvm_enum_attr_for_name(b"noreturn", 0);
+                            LLVMAddAttributeAtIndex(
+                                function,
+                                LLVMAttributeFunctionIndex,
+                                noreturn_attr,
+                            );
+                        }
+                        _ => {}
                     }
                 } else {
                     function = global;
@@ -326,8 +328,7 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
 }
 
 pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> LLVMValueRef {
-    use runtime::abitype::ABIType;
-    use std::mem;
+    use runtime::abitype::{ABIType, RetABIType};
 
     unsafe {
         let builder = LLVMCreateBuilderInContext(cgx.llx);
@@ -357,18 +358,18 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> LLVM
             fcx.regs.insert(*reg, LLVMGetParam(function, llvm_offset));
         }
 
-        let dereferenceable_attr =
-            cgx.llvm_enum_attr_for_name(b"dereferenceable", mem::size_of::<boxed::Any>() as u64);
-        let align_attr =
-            cgx.llvm_enum_attr_for_name(b"align", mem::align_of::<boxed::Any>() as u64);
-
         for (param_index, param_abi_type) in fun.abi.params.iter().enumerate() {
             if let ABIType::Boxed(_) = param_abi_type {
-                let param_attr_index = (params_offset + param_index + 1) as u32;
-
-                LLVMAddAttributeAtIndex(function, param_attr_index, dereferenceable_attr);
-                LLVMAddAttributeAtIndex(function, param_attr_index, align_attr);
+                cgx.add_boxed_param_attrs(
+                    function,
+                    (params_offset + param_index + 1) as u32,
+                    false,
+                );
             }
+        }
+
+        if let RetABIType::Inhabited(ABIType::Boxed(_)) = fun.abi.ret {
+            cgx.add_boxed_return_attrs(function);
         }
 
         for op in &fun.ops {
