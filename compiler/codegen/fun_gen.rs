@@ -3,7 +3,6 @@ use std::ffi;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
-use llvm_sys::LLVMAttributeFunctionIndex;
 
 use runtime::boxed;
 
@@ -111,6 +110,24 @@ fn gen_cond(
     }
 }
 
+fn gen_callee(
+    cgx: &mut CodegenCtx,
+    mcx: &mut ModCtx,
+    fcx: &mut FunCtx,
+    callee: &Callee,
+) -> LLVMValueRef {
+    use crate::codegen::callee_gen::*;
+
+    match callee {
+        Callee::BuiltFun(built_fun_id) => gen_built_fun_callee(mcx, *built_fun_id),
+        Callee::BoxedFunThunk(fun_thunk_reg) => {
+            let llvm_fun_thunk = fcx.regs[fun_thunk_reg];
+            gen_boxed_fun_thunk_callee(fcx.builder, llvm_fun_thunk)
+        }
+        Callee::StaticSymbol(static_symbol) => gen_static_symbol_callee(cgx, mcx, static_symbol),
+    }
+}
+
 fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
     unsafe {
         match &op.kind {
@@ -144,8 +161,8 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 let llvm_value = const_gen::gen_boxed_int(cgx, mcx, *value);
                 fcx.regs.insert(*reg, llvm_value);
             }
-            OpKind::ConstBoxedFunThunk(reg, entry_point_reg) => {
-                let llvm_entry_point = fcx.regs[entry_point_reg];
+            OpKind::ConstBoxedFunThunk(reg, callee) => {
+                let llvm_entry_point = gen_callee(cgx, mcx, fcx, callee);
                 let llvm_value = const_gen::gen_boxed_fun_thunk(cgx, mcx, llvm_entry_point);
                 fcx.regs.insert(*reg, llvm_value);
             }
@@ -190,67 +207,9 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 );
                 fcx.regs.insert(*reg, to_llvm_value);
             }
-            OpKind::ConstEntryPoint(reg, ConstEntryPointOp { symbol, abi }) => {
-                use crate::codegen::escape_analysis::fun_may_capture_param;
-                use runtime::abitype::{ABIType, RetABIType};
+            OpKind::Call(reg, CallOp { callee, args }) => {
+                let llvm_fun = gen_callee(cgx, mcx, fcx, callee);
 
-                let function_type = cgx.fun_abi_to_llvm_type(&abi);
-                let function_name = ffi::CString::new(*symbol).unwrap();
-
-                let global = LLVMGetNamedFunction(
-                    mcx.module,
-                    function_name.as_bytes_with_nul().as_ptr() as *const _,
-                );
-
-                let function;
-                if global.is_null() {
-                    function = LLVMAddFunction(
-                        mcx.module,
-                        function_name.as_bytes_with_nul().as_ptr() as *const _,
-                        function_type,
-                    );
-
-                    // LLVM param attributes are 1 indexed
-                    let param_attr_offset =
-                        1 + (abi.takes_task as usize) + (abi.takes_closure as usize);
-
-                    for (index, param_abi_type) in abi.params.iter().enumerate() {
-                        if let ABIType::Boxed(_) = param_abi_type {
-                            let no_capture = !fun_may_capture_param(&abi.ret, &param_abi_type);
-                            cgx.add_boxed_param_attrs(
-                                function,
-                                (param_attr_offset + index) as u32,
-                                no_capture,
-                            )
-                        }
-                    }
-
-                    match abi.ret {
-                        RetABIType::Inhabited(ABIType::Boxed(_)) => {
-                            cgx.add_boxed_return_attrs(function);
-                        }
-                        RetABIType::Never => {
-                            let noreturn_attr = cgx.llvm_enum_attr_for_name(b"noreturn", 0);
-                            LLVMAddAttributeAtIndex(
-                                function,
-                                LLVMAttributeFunctionIndex,
-                                noreturn_attr,
-                            );
-                        }
-                        _ => {}
-                    }
-                } else {
-                    function = global;
-                };
-
-                fcx.regs.insert(*reg, function);
-            }
-            OpKind::ConstBuiltFunEntryPoint(reg, built_fun_id) => {
-                let llvm_fun = mcx.built_fun_value(*built_fun_id);
-                fcx.regs.insert(*reg, llvm_fun);
-            }
-            OpKind::Call(reg, CallOp { fun_reg, args }) => {
-                let llvm_fun = fcx.regs[&fun_reg];
                 let mut llvm_args = args
                     .iter()
                     .map(|param_reg| fcx.regs[&param_reg])
@@ -302,7 +261,7 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
             }
             OpKind::LoadBoxedIntValue(reg, boxed_int_reg) => {
                 let llvm_boxed_int = fcx.regs[boxed_int_reg];
-                let head_ptr = LLVMBuildStructGEP(
+                let value_ptr = LLVMBuildStructGEP(
                     fcx.builder,
                     llvm_boxed_int,
                     1,
@@ -310,7 +269,24 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 );
 
                 let llvm_value =
-                    LLVMBuildLoad(fcx.builder, head_ptr, "int_value\0".as_ptr() as *const _);
+                    LLVMBuildLoad(fcx.builder, value_ptr, "int_value\0".as_ptr() as *const _);
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::LoadBoxedFunThunkClosure(reg, boxed_fun_thunk_reg) => {
+                let llvm_boxed_fun_thunk = fcx.regs[boxed_fun_thunk_reg];
+
+                let closure_ptr = LLVMBuildStructGEP(
+                    fcx.builder,
+                    llvm_boxed_fun_thunk,
+                    1,
+                    b"boxed_fun_thunk_closure_ptr\0".as_ptr() as *const _,
+                );
+                let llvm_value = LLVMBuildLoad(
+                    fcx.builder,
+                    closure_ptr,
+                    "boxed_fun_thunk_closure\0".as_ptr() as *const _,
+                );
+
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Cond(reg, cond_op) => {

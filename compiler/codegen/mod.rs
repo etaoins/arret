@@ -1,4 +1,5 @@
 mod alloc_gen;
+mod callee_gen;
 mod const_gen;
 mod escape_analysis;
 mod fun_gen;
@@ -156,7 +157,10 @@ impl CodegenCtx {
                 }
                 BoxedABIType::DirectTagged(boxed::TypeTag::FunThunk) => {
                     members.push(self.record_llvm_type());
-                    members.push(self.fun_abi_to_llvm_type(&ops::FunABI::thunk_abi()));
+                    members.push(LLVMPointerType(
+                        self.fun_abi_to_llvm_type(&ops::FunABI::thunk_abi()),
+                        0,
+                    ));
                     b"boxed_fun_thunk\0".as_ptr()
                 }
                 BoxedABIType::Pair(_) | BoxedABIType::DirectTagged(boxed::TypeTag::TopPair) => {

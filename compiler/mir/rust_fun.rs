@@ -58,20 +58,16 @@ pub fn build_rust_fun_app(
         ret: rust_fun.ret().clone(),
     };
 
-    let fun_reg = b.push_reg(
-        span,
-        OpKind::ConstEntryPoint,
-        ConstEntryPointOp {
-            symbol: rust_fun.symbol(),
-            abi,
-        },
-    );
+    let callee = ops::Callee::StaticSymbol(ops::StaticSymbol {
+        symbol: rust_fun.symbol(),
+        abi,
+    });
 
     let ret_reg = b.push_reg(
         span,
         OpKind::Call,
         CallOp {
-            fun_reg,
+            callee,
             args: arg_regs.into_boxed_slice(),
         },
     );

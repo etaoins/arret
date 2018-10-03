@@ -25,15 +25,26 @@ impl FunABI {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CallOp {
-    pub fun_reg: RegId,
-    pub args: Box<[RegId]>,
+pub struct StaticSymbol {
+    pub symbol: &'static str,
+    pub abi: FunABI,
+}
+
+/// Represents a callable function
+///
+/// This is used instead of a `RegId` to make the ABI of the called function obvious for codegen's
+/// analysis passes.
+#[derive(Debug, PartialEq, Clone)]
+pub enum Callee {
+    BuiltFun(BuiltFunId),
+    BoxedFunThunk(RegId),
+    StaticSymbol(StaticSymbol),
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct ConstEntryPointOp {
-    pub symbol: &'static str,
-    pub abi: FunABI,
+pub struct CallOp {
+    pub callee: Callee,
+    pub args: Box<[RegId]>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -67,9 +78,7 @@ pub enum OpKind {
     ConstBoxedInt(RegId, i64),
     ConstBoxedStr(RegId, Box<str>),
     ConstBoxedPair(RegId, ConstBoxedPairOp),
-    ConstEntryPoint(RegId, ConstEntryPointOp),
-    ConstBuiltFunEntryPoint(RegId, BuiltFunId),
-    ConstBoxedFunThunk(RegId, RegId),
+    ConstBoxedFunThunk(RegId, Callee),
 
     AllocInt(RegId, RegId),
 
@@ -82,6 +91,7 @@ pub enum OpKind {
     LoadBoxedPairHead(RegId, RegId),
     LoadBoxedPairRest(RegId, RegId),
     LoadBoxedIntValue(RegId, RegId),
+    LoadBoxedFunThunkClosure(RegId, RegId),
     Cond(RegId, CondOp),
 
     Ret(RegId),
@@ -101,8 +111,6 @@ impl OpKind {
             | ConstBoxedInt(reg_id, _)
             | ConstBoxedStr(reg_id, _)
             | ConstBoxedPair(reg_id, _)
-            | ConstEntryPoint(reg_id, _)
-            | ConstBuiltFunEntryPoint(reg_id, _)
             | ConstBoxedFunThunk(reg_id, _)
             | AllocInt(reg_id, _)
             | ConstCastBoxed(reg_id, _)
@@ -112,6 +120,7 @@ impl OpKind {
             | LoadBoxedPairHead(reg_id, _)
             | LoadBoxedPairRest(reg_id, _)
             | LoadBoxedIntValue(reg_id, _)
+            | LoadBoxedFunThunkClosure(reg_id, _)
             | Cond(reg_id, _) => Some(*reg_id),
             Ret(_) | RetVoid | Unreachable => None,
         }
@@ -128,8 +137,6 @@ impl OpKind {
             | ConstInt(_, _)
             | ConstBoxedInt(_, _)
             | ConstBoxedStr(_, _)
-            | ConstEntryPoint(_, _)
-            | ConstBuiltFunEntryPoint(_, _)
             | ConstBoxedFunThunk(_, _)
             | CurrentTask(_, _)
             | RetVoid
@@ -157,11 +164,12 @@ impl OpKind {
             | Ret(reg_id)
             | LoadBoxedPairHead(_, reg_id)
             | LoadBoxedPairRest(_, reg_id)
-            | LoadBoxedIntValue(_, reg_id) => {
+            | LoadBoxedIntValue(_, reg_id)
+            | LoadBoxedFunThunkClosure(_, reg_id) => {
                 coll.extend(iter::once(*reg_id));
             }
             Call(_, call_op) => {
-                coll.extend(iter::once(call_op.fun_reg).chain(call_op.args.iter().cloned()));
+                coll.extend(call_op.args.iter().cloned());
             }
             Cond(_, cond_op) => {
                 coll.extend(

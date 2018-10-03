@@ -299,8 +299,11 @@ impl EvalHirCtx {
         let ops_fun = ops_for_rust_fun_thunk(self, span, rust_fun);
 
         let built_fun_id = ops::BuiltFunId::new_entry_id(&mut self.built_funs, ops_fun);
-        let built_fun_entry_reg = b.push_reg(span, OpKind::ConstBuiltFunEntryPoint, built_fun_id);
-        b.push_reg(span, OpKind::ConstBoxedFunThunk, built_fun_entry_reg)
+        b.push_reg(
+            span,
+            OpKind::ConstBoxedFunThunk,
+            ops::Callee::BuiltFun(built_fun_id),
+        )
     }
 
     fn call_native_fun<F>(span: Span, block: F) -> Result<Value>
@@ -367,7 +370,7 @@ impl EvalHirCtx {
         }
     }
 
-    fn eval_fun_thunk_app(
+    fn eval_const_fun_thunk_app(
         &mut self,
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
@@ -393,6 +396,59 @@ impl EvalHirCtx {
         })
     }
 
+    fn eval_reg_fun_thunk_app(
+        &mut self,
+        b: &mut Builder,
+        span: Span,
+        fun_reg_value: &value::RegValue,
+        arg_list_value: &Value,
+    ) -> Value {
+        use crate::mir::ops::*;
+        use crate::mir::value::to_reg::value_to_reg;
+        use runtime::abitype;
+
+        let fun_boxed_abi_type =
+            if let abitype::ABIType::Boxed(ref fun_boxed_abi_type) = fun_reg_value.abi_type {
+                fun_boxed_abi_type
+            } else {
+                panic!(
+                    "Attempted to apply reg value with unboxed ABI type of {:?}",
+                    fun_reg_value.abi_type
+                )
+            };
+
+        let fun_thunk_reg = b.cast_boxed_cond(
+            span,
+            fun_boxed_abi_type,
+            fun_reg_value.reg,
+            boxed::TypeTag::FunThunk.into(),
+        );
+
+        let task_reg = b.push_reg(span, OpKind::CurrentTask, ());
+        let closure_reg = b.push_reg(span, OpKind::LoadBoxedFunThunkClosure, fun_thunk_reg);
+        let arg_list_reg = value_to_reg(
+            self,
+            b,
+            span,
+            &arg_list_value,
+            &abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
+        );
+
+        let ret_reg = b.push_reg(
+            span,
+            OpKind::Call,
+            CallOp {
+                callee: Callee::BoxedFunThunk(fun_thunk_reg),
+                args: vec![task_reg, closure_reg, arg_list_reg].into_boxed_slice(),
+            },
+        );
+
+        Value::Reg(Rc::new(value::RegValue {
+            reg: ret_reg,
+            abi_type: abitype::BoxedABIType::Any.into(),
+        }))
+    }
+
     fn eval_value_app(
         &mut self,
         dcx: &mut DefCtx,
@@ -410,7 +466,7 @@ impl EvalHirCtx {
                 self.eval_ty_pred_app(dcx, b, span, test_poly.as_ref(), arg_list_value)
             }
             Value::Const(boxed_fun) => match boxed_fun.as_subtype() {
-                boxed::AnySubtype::FunThunk(fun_thunk) => self.eval_fun_thunk_app(
+                boxed::AnySubtype::FunThunk(fun_thunk) => self.eval_const_fun_thunk_app(
                     dcx,
                     b,
                     span,
@@ -419,6 +475,13 @@ impl EvalHirCtx {
                 ),
                 other => unimplemented!("applying boxed function value type: {:?}", other),
             },
+            Value::Reg(reg_value) => {
+                if let Some(b) = b {
+                    Ok(self.eval_reg_fun_thunk_app(b, span, reg_value, &arg_list_value))
+                } else {
+                    panic!("Need builder for reg function application");
+                }
+            }
             other => {
                 unimplemented!("applying function value type: {:?}", other);
             }
@@ -544,8 +607,11 @@ impl EvalHirCtx {
         let opt_fun = optimise_fun(unopt_fun);
 
         let built_fun_id = ops::BuiltFunId::new_entry_id(&mut self.built_funs, opt_fun);
-        let built_fun_entry_reg = b.push_reg(span, OpKind::ConstBuiltFunEntryPoint, built_fun_id);
-        b.push_reg(span, OpKind::ConstBoxedFunThunk, built_fun_entry_reg)
+        b.push_reg(
+            span,
+            OpKind::ConstBoxedFunThunk,
+            ops::Callee::BuiltFun(built_fun_id),
+        )
     }
 
     fn ops_for_arret_fun(
