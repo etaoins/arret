@@ -20,13 +20,13 @@ pub enum Never {}
 
 #[macro_export]
 macro_rules! define_rust_fn {
-    (#[arret_type=$type:expr] $desc_name:ident = fn $func_name:ident($task_name:ident : &mut Task, $($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
+    (#[arret_type=$type:expr] $vis:vis $desc_name:ident = fn $func_name:ident($task_name:ident : &mut Task, $($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
         #[no_mangle]
         pub extern "C" fn $func_name($task_name: &mut Task, $($param_name: $rust_ty),*) -> $ret {
             $body
         }
 
-        const $desc_name: RustFun = RustFun {
+        $vis const $desc_name: RustFun = RustFun {
             arret_type: $type,
             takes_task: true,
             params: &[
@@ -37,13 +37,13 @@ macro_rules! define_rust_fn {
         };
     };
 
-    (#[arret_type=$type:expr] $desc_name:ident = fn $func_name:ident($($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
+    (#[arret_type=$type:expr] $vis:vis $desc_name:ident = fn $func_name:ident($($param_name:ident : $rust_ty:ty),*) -> $ret:ty $body:block) => {
         #[no_mangle]
         pub extern "C" fn $func_name($($param_name: $rust_ty),*) -> $ret {
             $body
         }
 
-        const $desc_name: RustFun = RustFun {
+        $vis const $desc_name: RustFun = RustFun {
             arret_type: $type,
             takes_task: false,
             params: &[
