@@ -48,7 +48,7 @@ pub struct CallOp {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct ConstBoxedPairOp {
+pub struct BoxPairOp {
     pub head_reg: RegId,
     pub rest_reg: RegId,
     pub length: usize,
@@ -77,10 +77,11 @@ pub enum OpKind {
     ConstInt(RegId, i64),
     ConstBoxedInt(RegId, i64),
     ConstBoxedStr(RegId, Box<str>),
-    ConstBoxedPair(RegId, ConstBoxedPairOp),
+    ConstBoxedPair(RegId, BoxPairOp),
     ConstBoxedFunThunk(RegId, Callee),
 
     AllocInt(RegId, RegId),
+    AllocBoxedPair(RegId, BoxPairOp),
 
     ConstCastBoxed(RegId, CastBoxedOp),
     CastBoxed(RegId, CastBoxedOp),
@@ -113,6 +114,7 @@ impl OpKind {
             | ConstBoxedPair(reg_id, _)
             | ConstBoxedFunThunk(reg_id, _)
             | AllocInt(reg_id, _)
+            | AllocBoxedPair(reg_id, _)
             | ConstCastBoxed(reg_id, _)
             | CastBoxed(reg_id, _)
             | CurrentTask(reg_id, _)
@@ -141,12 +143,8 @@ impl OpKind {
             | CurrentTask(_, _)
             | RetVoid
             | Unreachable => {}
-            ConstBoxedPair(_, const_pair_op) => {
-                coll.extend(
-                    [const_pair_op.head_reg, const_pair_op.rest_reg]
-                        .iter()
-                        .cloned(),
-                );
+            ConstBoxedPair(_, box_pair_op) | AllocBoxedPair(_, box_pair_op) => {
+                coll.extend([box_pair_op.head_reg, box_pair_op.rest_reg].iter().cloned());
             }
             AllocInt(_, reg_id)
             | ConstCastBoxed(

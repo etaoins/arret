@@ -404,7 +404,7 @@ impl EvalHirCtx {
         arg_list_value: &Value,
     ) -> Value {
         use crate::mir::ops::*;
-        use crate::mir::value::to_reg::value_to_reg;
+        use crate::mir::value::build_reg::value_to_reg;
         use runtime::abitype;
 
         let fun_boxed_abi_type =
@@ -439,7 +439,7 @@ impl EvalHirCtx {
             OpKind::Call,
             CallOp {
                 callee: Callee::BoxedFunThunk(fun_thunk_reg),
-                args: vec![task_reg, closure_reg, arg_list_reg].into_boxed_slice(),
+                args: vec![task_reg, closure_reg, arg_list_reg.into()].into_boxed_slice(),
             },
         );
 
@@ -620,7 +620,7 @@ impl EvalHirCtx {
         wanted_abi: ops::FunABI,
         has_rest: bool,
     ) -> Result<ops::Fun> {
-        use crate::mir::value::to_reg::value_to_reg;
+        use crate::mir::value::build_reg::value_to_reg;
         use runtime::abitype;
 
         // TODO: Make an actual DefCtx
@@ -672,7 +672,7 @@ impl EvalHirCtx {
         match &wanted_abi.ret {
             abitype::RetABIType::Inhabited(abi_type) => {
                 let ret_reg = value_to_reg(self, &mut b, span, &result_value, abi_type);
-                b.push(span, ops::OpKind::Ret(ret_reg));
+                b.push(span, ops::OpKind::Ret(ret_reg.into()));
             }
             abitype::RetABIType::Never => {
                 b.push(span, ops::OpKind::Unreachable);

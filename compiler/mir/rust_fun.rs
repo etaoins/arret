@@ -19,7 +19,7 @@ pub fn build_rust_fun_app(
     arg_list_value: Value,
 ) -> Value {
     use crate::mir::ops::*;
-    use crate::mir::value::to_reg::value_to_reg;
+    use crate::mir::value::build_reg::value_to_reg;
     use runtime::abitype::{BoxedABIType, RetABIType};
 
     let mut list_iter = arg_list_value.into_list_iter();
@@ -37,7 +37,7 @@ pub fn build_rust_fun_app(
     for abi_type in rust_fixed_iter {
         let fixed_value = list_iter.next_unchecked(b, span);
         let reg_id = value_to_reg(ehx, b, span, &fixed_value, abi_type);
-        arg_regs.push(reg_id);
+        arg_regs.push(reg_id.into());
     }
 
     if rust_fun.has_rest() {
@@ -48,7 +48,7 @@ pub fn build_rust_fun_app(
             &list_iter.into_rest(),
             &BoxedABIType::List(&BoxedABIType::Any).into(),
         );
-        arg_regs.push(reg_id);
+        arg_regs.push(reg_id.into());
     };
 
     let abi = FunABI {
@@ -95,7 +95,7 @@ pub fn ops_for_rust_fun_thunk(
     rust_fun: &hir::rfi::Fun,
 ) -> ops::Fun {
     use crate::mir::ops::*;
-    use crate::mir::value::to_reg::value_to_reg;
+    use crate::mir::value::build_reg::value_to_reg;
 
     let mut b = Builder::new();
     let fun_symbol = format!("{}_thunk", rust_fun.symbol());
@@ -114,7 +114,7 @@ pub fn ops_for_rust_fun_thunk(
 
     if !return_value.is_divergent() {
         let return_reg = value_to_reg(ehx, &mut b, span, &return_value, &ret_abi_type);
-        b.push(span, OpKind::Ret(return_reg))
+        b.push(span, OpKind::Ret(return_reg.into()))
     }
 
     ops::Fun {

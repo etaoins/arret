@@ -1,6 +1,6 @@
+pub mod build_reg;
 pub mod list;
 pub mod to_const;
-pub mod to_reg;
 
 use std::collections::HashMap;
 use std::rc::Rc;
