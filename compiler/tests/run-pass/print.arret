@@ -1,5 +1,15 @@
 (import [stdlib base])
+(import [stdlib test])
 
 (defn main! ()
   ; This is dumb but it makes us produce a binary
-  (print! ""))
+  (print! "")
+
+  ; We should be able to call through a thunk as well
+  ((black-box! print!) "")
+
+  ; And print an unknown value
+  (print! (black-box! ""))
+
+  ; And do both at once
+  ((black-box! print!) (black-box! "")))
