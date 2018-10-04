@@ -62,7 +62,8 @@ pub fn gen_boxed_inline_str(cgx: &mut CodegenCtx, mcx: &mut ModCtx, value: &str)
         let members = &mut [
             cgx.llvm_box_header(type_tag.into_const_header()),
             LLVMConstInt(llvm_i8, value.len() as u64, 0),
-            LLVMConstString(
+            LLVMConstStringInContext(
+                cgx.llx,
                 inline_buffer.as_mut_ptr() as *mut _,
                 MAX_INLINE_BYTES as u32,
                 1,
