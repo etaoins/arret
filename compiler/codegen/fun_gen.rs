@@ -240,7 +240,7 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 let head_ptr = LLVMBuildStructGEP(
                     fcx.builder,
                     llvm_pair,
-                    1,
+                    2,
                     b"head_ptr\0".as_ptr() as *const _,
                 );
 
@@ -252,7 +252,7 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 let head_ptr = LLVMBuildStructGEP(
                     fcx.builder,
                     llvm_pair,
-                    2,
+                    3,
                     b"rest_ptr\0".as_ptr() as *const _,
                 );
 

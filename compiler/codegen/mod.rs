@@ -168,13 +168,16 @@ impl CodegenCtx {
                     let llvm_any_list_ptr =
                         self.boxed_abi_to_llvm_ptr_type(&TOP_LIST_BOXED_ABI_TYPE);
 
+                    members.push(LLVMInt64TypeInContext(self.llx));
                     members.push(llvm_any_ptr);
                     members.push(llvm_any_list_ptr);
-                    members.push(LLVMInt64TypeInContext(self.llx));
 
                     b"pair\0".as_ptr()
                 }
-                BoxedABIType::List(_) => b"list\0".as_ptr(),
+                BoxedABIType::List(_) => {
+                    members.push(LLVMInt64TypeInContext(self.llx));
+                    b"list\0".as_ptr()
+                }
                 _ => b"opaque_boxed\0".as_ptr(),
             };
 

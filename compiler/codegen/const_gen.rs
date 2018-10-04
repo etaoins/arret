@@ -31,9 +31,9 @@ pub fn gen_boxed_pair(
 
         let members = &mut [
             cgx.llvm_box_header(type_tag.into_const_header()),
+            LLVMConstInt(llvm_i64, list_length as u64, 0),
             llvm_head,
             llvm_rest,
-            LLVMConstInt(llvm_i64, list_length as u64, 0),
         ];
 
         let llvm_value =

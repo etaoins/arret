@@ -14,7 +14,7 @@ pub use crate::boxed::types::char::Char;
 pub use crate::boxed::types::float::Float;
 pub use crate::boxed::types::fun::{FunThunk, ThunkEntry};
 pub use crate::boxed::types::int::Int;
-pub use crate::boxed::types::list::{List, Pair, TopPair};
+pub use crate::boxed::types::list::{List, Nil, Pair, TopPair, NIL_INSTANCE};
 pub use crate::boxed::types::str::Str;
 pub use crate::boxed::types::sym::Sym;
 pub use crate::boxed::types::vector::{TopVector, Vector};
@@ -261,13 +261,6 @@ macro_rules! define_singleton_box {
             header: Header,
         }
 
-        impl $type_name {
-            #[allow(unused)]
-            pub fn as_ref() -> Gc<$type_name> {
-                unsafe { Gc::new(&$static_name) }
-            }
-        }
-
         #[export_name = $export_name]
         pub static $static_name: $type_name = $type_name {
             header: Header {
@@ -363,7 +356,6 @@ define_direct_tagged_boxes! {
     FunThunk
 }
 
-define_singleton_box!(Nil, NIL_INSTANCE, "ARRET_NIL");
 define_singleton_box!(True, TRUE_INSTANCE, "ARRET_TRUE");
 define_singleton_box!(False, FALSE_INSTANCE, "ARRET_FALSE");
 

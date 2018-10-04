@@ -5,16 +5,16 @@ use std::{fmt, mem};
 use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
 use crate::boxed::refs::Gc;
 use crate::boxed::{
-    AllocType, Any, AsHeap, BoxSize, Boxed, ConstructableFrom, Header, Nil, TypeTag, NIL_INSTANCE,
+    AllocType, Any, AsHeap, BoxSize, Boxed, ConstructableFrom, DirectTagged, Header, TypeTag,
 };
 use crate::intern::Interner;
 
 #[repr(C, align(16))]
 pub struct Pair<T: Boxed> {
     header: Header,
+    list_length: usize,
     pub(crate) head: Gc<T>,
     pub(crate) rest: Gc<List<T>>,
-    list_length: usize,
 }
 
 impl<T: Boxed> Boxed for Pair<T> {}
@@ -87,6 +87,7 @@ impl Pair<Any> {
 #[repr(C, align(16))]
 pub struct List<T: Boxed> {
     header: Header,
+    list_length: usize,
     phantom: PhantomData<T>,
 }
 
@@ -140,10 +141,7 @@ impl<T: Boxed> List<T> {
     }
 
     pub fn len(&self) -> usize {
-        match self.as_subtype() {
-            ListSubtype::Pair(pair) => pair.list_length,
-            ListSubtype::Nil => 0,
-        }
+        self.list_length
     }
 
     pub fn is_empty(&self) -> bool {
@@ -221,6 +219,7 @@ impl<T: Boxed> FusedIterator for ListIterator<T> {}
 #[repr(C, align(16))]
 pub struct TopPair {
     header: Header,
+    list_length: usize,
 }
 
 impl TopPair {
@@ -241,6 +240,28 @@ impl fmt::Debug for TopPair {
     }
 }
 
+#[repr(C, align(16))]
+#[derive(Debug)]
+pub struct Nil {
+    header: Header,
+    list_length: u64,
+}
+
+#[export_name = "ARRET_NIL"]
+pub static NIL_INSTANCE: Nil = Nil {
+    header: Header {
+        type_tag: Nil::TYPE_TAG,
+        alloc_type: AllocType::Const,
+    },
+    list_length: 0,
+};
+
+impl PartialEq for Nil {
+    fn eq(&self, _: &Nil) -> bool {
+        true
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -250,6 +271,8 @@ mod test {
 
     #[test]
     fn sizes() {
+        assert_eq!(16, mem::size_of::<Nil>());
+        assert_eq!(16, mem::size_of::<List<Any>>());
         assert!([16, 32].contains(&mem::size_of::<Pair<Any>>()));
     }
 

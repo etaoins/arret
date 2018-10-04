@@ -62,25 +62,25 @@ pub fn gen_alloc_boxed_pair(
         let alloced_pair = gen_stack_alloced_box::<boxed::TopPair>(cgx, builder, b"alloced_pair\0");
         let llvm_i64 = LLVMInt64TypeInContext(cgx.llx);
 
-        let head_ptr =
-            LLVMBuildStructGEP(builder, alloced_pair, 1, b"head_ptr\0".as_ptr() as *const _);
-        LLVMBuildStore(builder, llvm_head, head_ptr);
-
-        let rest_ptr =
-            LLVMBuildStructGEP(builder, alloced_pair, 2, b"rest_ptr\0".as_ptr() as *const _);
-        LLVMBuildStore(builder, llvm_rest, rest_ptr);
-
         let length_ptr = LLVMBuildStructGEP(
             builder,
             alloced_pair,
-            3,
+            1,
             b"length_ptr\0".as_ptr() as *const _,
         );
+
         LLVMBuildStore(
             builder,
             LLVMConstInt(llvm_i64, list_length as u64, 0),
             length_ptr,
         );
+        let head_ptr =
+            LLVMBuildStructGEP(builder, alloced_pair, 2, b"head_ptr\0".as_ptr() as *const _);
+        LLVMBuildStore(builder, llvm_head, head_ptr);
+
+        let rest_ptr =
+            LLVMBuildStructGEP(builder, alloced_pair, 3, b"rest_ptr\0".as_ptr() as *const _);
+        LLVMBuildStore(builder, llvm_rest, rest_ptr);
 
         alloced_pair
     }
