@@ -52,10 +52,11 @@ fn remove_unused_cond_ops(
 }
 
 fn remove_unused_branch_ops(
-    ops: Vec<ops::Op>,
+    ops: Box<[ops::Op]>,
     used_regs: &mut HashSet<ops::RegId>,
-) -> Vec<ops::Op> {
+) -> Box<[ops::Op]> {
     let mut reverse_ops = ops
+        .into_vec()
         .into_iter()
         .rev()
         .filter_map(|op| {
@@ -85,10 +86,10 @@ fn remove_unused_branch_ops(
 
     // If we do .rev() on the iterator before we collect it will change the order we iterate in
     reverse_ops.reverse();
-    reverse_ops
+    reverse_ops.into_boxed_slice()
 }
 
-pub fn remove_unused_fun_ops(ops: Vec<ops::Op>) -> Vec<ops::Op> {
+pub fn remove_unused_fun_ops(ops: Box<[ops::Op]>) -> Box<[ops::Op]> {
     // Nothing is used at the beginning of a function
     let mut used_regs = HashSet::new();
     remove_unused_branch_ops(ops, &mut used_regs)
@@ -100,7 +101,7 @@ mod test {
 
     #[test]
     fn empty_ops() {
-        let ops = remove_unused_fun_ops(vec![]);
+        let ops = remove_unused_fun_ops(Box::new([]));
         assert!(ops.is_empty());
     }
 
@@ -111,19 +112,19 @@ mod test {
         let reg2 = reg_counter.alloc();
         let reg3 = reg_counter.alloc();
 
-        let input_ops = vec![
+        let input_ops = Box::new([
             ops::OpKind::ConstNil(reg1, ()).into(),
             ops::OpKind::ConstNil(reg2, ()).into(),
             ops::OpKind::ConstNil(reg3, ()).into(),
             ops::OpKind::Ret(reg2).into(),
-        ];
+        ]);
 
         let output_ops = remove_unused_fun_ops(input_ops);
 
-        let expected_ops: Vec<ops::Op> = vec![
+        let expected_ops: Box<[ops::Op]> = Box::new([
             ops::OpKind::ConstNil(reg2, ()).into(),
             ops::OpKind::Ret(reg2).into(),
-        ];
+        ]);
 
         assert_eq!(expected_ops, output_ops);
     }
@@ -137,11 +138,11 @@ mod test {
         let true_result_reg = reg_counter.alloc();
         let false_result_reg = reg_counter.alloc();
 
-        let true_ops = vec![ops::OpKind::ConstNil(true_result_reg, ()).into()];
+        let true_ops = Box::new([ops::OpKind::ConstNil(true_result_reg, ()).into()]);
 
-        let false_ops = vec![ops::OpKind::ConstNil(false_result_reg, ()).into()];
+        let false_ops = Box::new([ops::OpKind::ConstNil(false_result_reg, ()).into()]);
 
-        let input_ops = vec![
+        let input_ops: Box<[ops::Op]> = Box::new([
             ops::OpKind::ConstNil(test_reg, ()).into(),
             ops::OpKind::Cond(
                 output_reg,
@@ -155,7 +156,7 @@ mod test {
             )
             .into(),
             ops::OpKind::Ret(output_reg).into(),
-        ];
+        ]);
 
         let expected_ops = input_ops.clone();
         let output_ops = remove_unused_fun_ops(input_ops);
@@ -172,11 +173,11 @@ mod test {
         let true_result_reg = reg_counter.alloc();
         let false_result_reg = reg_counter.alloc();
 
-        let true_ops = vec![ops::OpKind::ConstNil(true_result_reg, ()).into()];
+        let true_ops = Box::new([ops::OpKind::ConstNil(true_result_reg, ()).into()]);
 
-        let false_ops = vec![ops::OpKind::ConstNil(false_result_reg, ()).into()];
+        let false_ops = Box::new([ops::OpKind::ConstNil(false_result_reg, ()).into()]);
 
-        let input_ops = vec![
+        let input_ops = Box::new([
             ops::OpKind::ConstNil(test_reg, ()).into(),
             ops::OpKind::Cond(
                 output_reg,
@@ -190,15 +191,15 @@ mod test {
             )
             .into(),
             ops::OpKind::Ret(output_reg).into(),
-        ];
+        ]);
 
-        let expected_ops: Vec<ops::Op> = vec![
+        let expected_ops: Box<[ops::Op]> = Box::new([
             ops::OpKind::ConstNil(test_reg, ()).into(),
             ops::OpKind::Cond(
                 output_reg,
                 ops::CondOp {
                     test_reg,
-                    true_ops: vec![],
+                    true_ops: Box::new([]),
                     true_result_reg: test_reg,
                     false_ops,
                     false_result_reg,
@@ -206,7 +207,7 @@ mod test {
             )
             .into(),
             ops::OpKind::Ret(output_reg).into(),
-        ];
+        ]);
 
         let output_ops = remove_unused_fun_ops(input_ops);
 
@@ -222,11 +223,11 @@ mod test {
         let true_result_reg = reg_counter.alloc();
         let false_result_reg = reg_counter.alloc();
 
-        let true_ops = vec![ops::OpKind::ConstNil(true_result_reg, ()).into()];
+        let true_ops = Box::new([ops::OpKind::ConstNil(true_result_reg, ()).into()]);
 
-        let false_ops = vec![ops::OpKind::ConstNil(false_result_reg, ()).into()];
+        let false_ops = Box::new([ops::OpKind::ConstNil(false_result_reg, ()).into()]);
 
-        let input_ops = vec![
+        let input_ops = Box::new([
             ops::OpKind::ConstNil(test_reg, ()).into(),
             ops::OpKind::Cond(
                 output_reg,
@@ -241,23 +242,23 @@ mod test {
             .into(),
             // However, the output of the cond is still used
             ops::OpKind::Ret(output_reg).into(),
-        ];
+        ]);
 
-        let expected_ops: Vec<ops::Op> = vec![
+        let expected_ops: Box<[ops::Op]> = Box::new([
             ops::OpKind::ConstNil(test_reg, ()).into(),
             ops::OpKind::Cond(
                 output_reg,
                 ops::CondOp {
                     test_reg,
-                    true_ops: vec![],
+                    true_ops: Box::new([]),
                     true_result_reg: test_reg,
-                    false_ops: vec![],
+                    false_ops: Box::new([]),
                     false_result_reg: test_reg,
                 },
             )
             .into(),
             ops::OpKind::Ret(output_reg).into(),
-        ];
+        ]);
 
         let output_ops = remove_unused_fun_ops(input_ops);
 
@@ -273,11 +274,11 @@ mod test {
         let true_result_reg = reg_counter.alloc();
         let false_result_reg = reg_counter.alloc();
 
-        let true_ops = vec![ops::OpKind::ConstNil(true_result_reg, ()).into()];
+        let true_ops = Box::new([ops::OpKind::ConstNil(true_result_reg, ()).into()]);
 
-        let false_ops = vec![ops::OpKind::ConstNil(false_result_reg, ()).into()];
+        let false_ops = Box::new([ops::OpKind::ConstNil(false_result_reg, ()).into()]);
 
-        let input_ops = vec![
+        let input_ops = Box::new([
             ops::OpKind::ConstNil(test_reg, ()).into(),
             ops::OpKind::Cond(
                 output_reg,
@@ -290,7 +291,7 @@ mod test {
                 },
             )
             .into(),
-        ];
+        ]);
 
         let output_ops = remove_unused_fun_ops(input_ops);
         assert!(output_ops.is_empty());

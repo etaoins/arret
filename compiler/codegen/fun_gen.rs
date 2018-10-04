@@ -396,7 +396,7 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> LLVM
             cgx.add_boxed_return_attrs(function);
         }
 
-        for op in &fun.ops {
+        for op in fun.ops.as_ref() {
             gen_op(cgx, mcx, &mut fcx, &op);
         }
 

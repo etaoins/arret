@@ -653,7 +653,8 @@ impl EvalHirCtx {
             .iter()
             .chain(rest_reg_value.iter())
             .map(|reg_value| reg_value.reg)
-            .collect();
+            .collect::<Vec<ops::RegId>>()
+            .into_boxed_slice();
 
         let arg_list_value = Value::List(
             fixed_reg_values

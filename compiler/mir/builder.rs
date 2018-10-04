@@ -34,8 +34,8 @@ impl Builder {
         self.ops.push(Op::new(span, kind));
     }
 
-    pub fn into_ops(self) -> Vec<Op> {
-        self.ops
+    pub fn into_ops(self) -> Box<[Op]> {
+        self.ops.into_boxed_slice()
     }
 
     pub fn push_cond<T, F>(

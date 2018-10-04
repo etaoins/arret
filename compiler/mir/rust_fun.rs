@@ -120,7 +120,7 @@ pub fn ops_for_rust_fun_thunk(
     ops::Fun {
         source_name: Some(fun_symbol),
         abi: ops::FunABI::thunk_abi(),
-        params: vec![rest_reg],
+        params: Box::new([rest_reg]),
         ops: b.into_ops(),
     }
 }

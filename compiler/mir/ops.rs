@@ -63,9 +63,9 @@ pub struct CastBoxedOp {
 #[derive(Debug, PartialEq, Clone)]
 pub struct CondOp {
     pub test_reg: RegId,
-    pub true_ops: Vec<Op>,
+    pub true_ops: Box<[Op]>,
     pub true_result_reg: RegId,
-    pub false_ops: Vec<Op>,
+    pub false_ops: Box<[Op]>,
     pub false_result_reg: RegId,
 }
 
@@ -241,8 +241,8 @@ pub struct Fun {
     pub source_name: Option<String>,
 
     pub abi: FunABI,
-    pub params: Vec<RegId>,
-    pub ops: Vec<Op>,
+    pub params: Box<[RegId]>,
+    pub ops: Box<[Op]>,
 }
 
 #[cfg(test)]
@@ -278,9 +278,9 @@ mod test {
 
         let cond_op_with_no_side_effects = CondOp {
             test_reg: reg1,
-            true_ops: vec![],
+            true_ops: Box::new([]),
             true_result_reg: reg1,
-            false_ops: vec![],
+            false_ops: Box::new([]),
             false_result_reg: reg1,
         };
 
@@ -291,9 +291,9 @@ mod test {
 
         let cond_op_with_true_side_effects = CondOp {
             test_reg: reg1,
-            true_ops: vec![OpKind::RetVoid.into()],
+            true_ops: Box::new([OpKind::RetVoid.into()]),
             true_result_reg: reg1,
-            false_ops: vec![],
+            false_ops: Box::new([]),
             false_result_reg: reg1,
         };
 
@@ -304,9 +304,9 @@ mod test {
 
         let cond_op_with_false_side_effects = CondOp {
             test_reg: reg1,
-            true_ops: vec![],
+            true_ops: Box::new([]),
             true_result_reg: reg1,
-            false_ops: vec![OpKind::RetVoid.into()],
+            false_ops: Box::new([OpKind::RetVoid.into()]),
             false_result_reg: reg1,
         };
 
@@ -344,9 +344,9 @@ mod test {
 
         let cond_op = CondOp {
             test_reg,
-            true_ops: vec![OpKind::Ret(true_input_reg).into()],
+            true_ops: Box::new([OpKind::Ret(true_input_reg).into()]),
             true_result_reg,
-            false_ops: vec![OpKind::Ret(false_input_reg).into()],
+            false_ops: Box::new([OpKind::Ret(false_input_reg).into()]),
             false_result_reg,
         };
 
