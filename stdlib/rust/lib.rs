@@ -58,7 +58,7 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "=" => EQUALS,
     "print!" => PRINT,
     "println!" => PRINTLN,
-    "exit" => EXIT,
+    "exit!" => EXIT,
     "cons" => CONS,
     "black-box" => BLACK_BOX,
     "black-box!" => BLACK_BOX_IMPURE
