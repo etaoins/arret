@@ -51,7 +51,7 @@ pub struct CallOp {
 pub struct BoxPairOp {
     pub head_reg: RegId,
     pub rest_reg: RegId,
-    pub length: usize,
+    pub length_reg: RegId,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -67,6 +67,12 @@ pub struct CondOp {
     pub true_result_reg: RegId,
     pub false_ops: Vec<Op>,
     pub false_result_reg: RegId,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct BinaryOp {
+    pub lhs_reg: RegId,
+    pub rhs_reg: RegId,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -89,11 +95,14 @@ pub enum OpKind {
     CurrentTask(RegId, ()),
 
     Call(RegId, CallOp),
+    LoadBoxedListLength(RegId, RegId),
     LoadBoxedPairHead(RegId, RegId),
     LoadBoxedPairRest(RegId, RegId),
     LoadBoxedIntValue(RegId, RegId),
     LoadBoxedFunThunkClosure(RegId, RegId),
     Cond(RegId, CondOp),
+
+    Add(RegId, BinaryOp),
 
     Ret(RegId),
     RetVoid,
@@ -119,11 +128,13 @@ impl OpKind {
             | CastBoxed(reg_id, _)
             | CurrentTask(reg_id, _)
             | Call(reg_id, _)
+            | LoadBoxedListLength(reg_id, _)
             | LoadBoxedPairHead(reg_id, _)
             | LoadBoxedPairRest(reg_id, _)
             | LoadBoxedIntValue(reg_id, _)
             | LoadBoxedFunThunkClosure(reg_id, _)
             | Cond(reg_id, _) => Some(*reg_id),
+            Add(reg_id, _) => Some(*reg_id),
             Ret(_) | RetVoid | Unreachable => None,
         }
     }
@@ -160,6 +171,7 @@ impl OpKind {
                 },
             )
             | Ret(reg_id)
+            | LoadBoxedListLength(_, reg_id)
             | LoadBoxedPairHead(_, reg_id)
             | LoadBoxedPairRest(_, reg_id)
             | LoadBoxedIntValue(_, reg_id)
@@ -183,6 +195,9 @@ impl OpKind {
                 for op in cond_op.true_ops.iter().chain(cond_op.false_ops.iter()) {
                     op.kind().add_input_regs(coll);
                 }
+            }
+            Add(_, binary_op) => {
+                coll.extend([binary_op.lhs_reg, binary_op.rhs_reg].iter().cloned());
             }
         }
     }

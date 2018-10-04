@@ -16,6 +16,11 @@ pub enum BuiltReg {
     Local(RegId),
 }
 
+enum RestLength {
+    Known(usize),
+    Loaded(RegId),
+}
+
 impl BuiltReg {
     pub fn into_reg_id(self) -> RegId {
         match self {
@@ -125,21 +130,46 @@ fn list_to_reg(
     let list_reg = if fixed.is_empty() {
         tail_reg
     } else {
-        let tail_length = rest
-            .map(|rest| list_value_length(rest).expect("Cannot calculate tail length"))
-            .unwrap_or(0);
+        let rest_length = match rest {
+            Some(rest) => match list_value_length(rest) {
+                Some(known) => RestLength::Known(known),
+                None => {
+                    let length_reg = b.push_reg(span, OpKind::LoadBoxedListLength, tail_reg.into());
+                    RestLength::Loaded(length_reg)
+                }
+            },
+            None => RestLength::Known(0),
+        };
 
         fixed
             .iter()
-            .rfold((tail_length, tail_reg), |(tail_length, tail_reg), fixed| {
-                let head_length = tail_length + 1;
+            .rev()
+            .enumerate()
+            .fold(tail_reg, |tail_reg, (i, fixed)| {
+                let length_reg = match rest_length {
+                    RestLength::Known(known) => {
+                        b.push_reg(span, OpKind::ConstInt, (known + i + 1) as i64)
+                    }
+                    RestLength::Loaded(rest_length_reg) => {
+                        let index_reg = b.push_reg(span, OpKind::ConstInt, (i + 1) as i64);
+                        b.push_reg(
+                            span,
+                            OpKind::Add,
+                            BinaryOp {
+                                lhs_reg: rest_length_reg,
+                                rhs_reg: index_reg,
+                            },
+                        )
+                    }
+                };
+
                 let fixed_reg =
                     value_to_reg(ehx, b, span, fixed, &abitype::BoxedABIType::Any.into());
 
                 let box_pair_op = BoxPairOp {
                     head_reg: fixed_reg.into(),
                     rest_reg: tail_reg.into(),
-                    length: head_length,
+                    length_reg,
                 };
 
                 let pair_head_reg = if fixed_reg.is_const() && tail_reg.is_const() {
@@ -148,11 +178,8 @@ fn list_to_reg(
                     BuiltReg::Local(b.push_reg(span, OpKind::AllocBoxedPair, box_pair_op))
                 };
 
-                let head_reg =
-                    pair_head_reg.cast_to_boxed(b, span, TOP_LIST_BOXED_ABI_TYPE.clone());
-                (head_length, head_reg)
+                pair_head_reg.cast_to_boxed(b, span, TOP_LIST_BOXED_ABI_TYPE.clone())
             })
-            .1
     };
 
     list_reg.cast_to_boxed(b, span, boxed_abi_type.clone())

@@ -22,16 +22,15 @@ pub fn gen_boxed_pair(
     mcx: &mut ModCtx,
     llvm_head: LLVMValueRef,
     llvm_rest: LLVMValueRef,
-    list_length: usize,
+    llvm_length: LLVMValueRef,
 ) -> LLVMValueRef {
     unsafe {
         let type_tag = boxed::TypeTag::TopPair;
         let llvm_type = cgx.boxed_abi_to_llvm_struct_type(&type_tag.into());
-        let llvm_i64 = LLVMInt64TypeInContext(cgx.llx);
 
         let members = &mut [
             cgx.llvm_box_header(type_tag.into_const_header()),
-            LLVMConstInt(llvm_i64, list_length as u64, 0),
+            llvm_length,
             llvm_head,
             llvm_rest,
         ];

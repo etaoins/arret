@@ -171,13 +171,15 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 BoxPairOp {
                     head_reg,
                     rest_reg,
-                    length,
+                    length_reg,
                 },
             ) => {
                 let llvm_head = fcx.regs[head_reg];
                 let llvm_rest = fcx.regs[rest_reg];
+                let llvm_length = fcx.regs[length_reg];
 
-                let llvm_value = const_gen::gen_boxed_pair(cgx, mcx, llvm_head, llvm_rest, *length);
+                let llvm_value =
+                    const_gen::gen_boxed_pair(cgx, mcx, llvm_head, llvm_rest, llvm_length);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBoxedStr(reg, value) => {
@@ -234,6 +236,19 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
             }
             OpKind::Unreachable => {
                 LLVMBuildUnreachable(fcx.builder);
+            }
+            OpKind::LoadBoxedListLength(reg, list_reg) => {
+                let llvm_list = fcx.regs[list_reg];
+                let length_ptr = LLVMBuildStructGEP(
+                    fcx.builder,
+                    llvm_list,
+                    1,
+                    b"length_ptr\0".as_ptr() as *const _,
+                );
+
+                let llvm_head =
+                    LLVMBuildLoad(fcx.builder, length_ptr, "length\0".as_ptr() as *const _);
+                fcx.regs.insert(*reg, llvm_head);
             }
             OpKind::LoadBoxedPairHead(reg, pair_reg) => {
                 let llvm_pair = fcx.regs[pair_reg];
@@ -293,7 +308,6 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 let llvm_value = gen_cond(cgx, mcx, fcx, cond_op);
                 fcx.regs.insert(*reg, llvm_value);
             }
-
             OpKind::AllocInt(reg, int_reg) => {
                 let llvm_int = fcx.regs[int_reg];
                 let llvm_alloced = alloc_gen::gen_alloc_int(cgx, fcx.builder, llvm_int);
@@ -305,18 +319,31 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 BoxPairOp {
                     head_reg,
                     rest_reg,
-                    length,
+                    length_reg,
                 },
             ) => {
                 let llvm_head = fcx.regs[head_reg];
                 let llvm_rest = fcx.regs[rest_reg];
+                let llvm_length = fcx.regs[length_reg];
 
                 let llvm_value = alloc_gen::gen_alloc_boxed_pair(
                     cgx,
                     fcx.builder,
                     llvm_head,
                     llvm_rest,
-                    *length,
+                    llvm_length,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::Add(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+
+                let llvm_value = LLVMBuildNUWAdd(
+                    fcx.builder,
+                    llvm_lhs,
+                    llvm_rhs,
+                    "sum\0".as_ptr() as *const _,
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }

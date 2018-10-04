@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use syntax::span::Span;
 
 use runtime::boxed;
@@ -21,9 +23,34 @@ impl Intrinsic for Length {
     ) -> Result<Option<Value>> {
         let single_arg = iter.next_unchecked(b, span);
 
-        Ok(list_value_length(&single_arg).map(|known_length| {
-            Value::Const(boxed::Int::new(ehx, known_length as i64).as_any_ref())
-        }))
+        if let Some(known_length) = list_value_length(&single_arg) {
+            return Ok(Some(Value::Const(
+                boxed::Int::new(ehx, known_length as i64).as_any_ref(),
+            )));
+        }
+
+        if let Some(b) = b {
+            use crate::mir::ops::*;
+            use crate::mir::value;
+            use crate::mir::value::build_reg::value_to_reg;
+            use runtime::abitype;
+
+            let list_reg = value_to_reg(
+                ehx,
+                b,
+                span,
+                &single_arg,
+                &abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
+            );
+
+            let length_reg = b.push_reg(span, OpKind::LoadBoxedListLength, list_reg.into());
+            return Ok(Some(Value::Reg(Rc::new(value::RegValue {
+                reg: length_reg,
+                abi_type: abitype::ABIType::Int,
+            }))));
+        }
+
+        Ok(None)
     }
 }
 
