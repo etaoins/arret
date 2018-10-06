@@ -280,7 +280,7 @@ impl EvalHirCtx {
             let ops_fun = ops_for_rust_fun_thunk(self, EMPTY_SPAN, rust_fun);
             let address = self.thunk_jit.compile_fun(&mut self.thunk_gen, &ops_fun);
 
-            mem::transmute(address)
+            mem::transmute(address as usize)
         };
 
         self.rust_fun_thunks.insert(rust_fun.entry_point(), thunk);
@@ -580,7 +580,7 @@ impl EvalHirCtx {
             .expect("error during arret fun boxing");
 
         let address = self.thunk_jit.compile_fun(&mut self.thunk_gen, &ops_fun);
-        let entry = unsafe { mem::transmute(address) };
+        let entry = unsafe { mem::transmute(address as usize) };
 
         let new_boxed = boxed::FunThunk::new(self, (ptr::null(), entry));
 
