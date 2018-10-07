@@ -433,7 +433,7 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> Buil
         }
 
         for (param_index, param_abi_type) in fun.abi.params.iter().enumerate() {
-            if let ABIType::Boxed(_) = param_abi_type {
+            if let ABIType::Boxed(_) = param_abi_type.abi_type {
                 let no_capture = param_captures[params_offset + param_index] == CaptureKind::Never;
 
                 cgx.add_boxed_param_attrs(

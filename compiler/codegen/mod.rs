@@ -230,7 +230,7 @@ impl CodegenCtx {
             fun_abi
                 .params
                 .iter()
-                .map(|abi_type| self.abi_to_llvm_type(abi_type)),
+                .map(|param_abi_type| self.abi_to_llvm_type(&param_abi_type.abi_type)),
         );
 
         let llvm_ret_type = self.ret_abi_to_llvm_type(&fun_abi.ret);

@@ -41,7 +41,7 @@ pub fn gen_static_symbol_callee(
         let param_attr_offset = 1 + (abi.takes_task as usize) + (abi.takes_closure as usize);
 
         for (index, param_abi_type) in abi.params.iter().enumerate() {
-            if let ABIType::Boxed(_) = param_abi_type {
+            if let ABIType::Boxed(_) = param_abi_type.abi_type {
                 let no_capture =
                     infer_param_capture_kind(&abi.ret, &param_abi_type) == CaptureKind::Never;
 

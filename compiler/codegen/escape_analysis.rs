@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use runtime::abitype::{ABIType, RetABIType};
+use runtime::abitype::{ABIType, ParamABIType, ParamCapture, RetABIType};
 
 use crate::codegen::fun_gen::BuiltFun;
 use crate::mir::ops;
@@ -72,18 +72,23 @@ impl Captures {
 /// arguments.
 pub fn infer_param_capture_kind(
     ret_abi_type: &RetABIType,
-    param_abi_type: &ABIType,
+    param_abi_type: &ParamABIType,
 ) -> CaptureKind {
     let returns_box = match ret_abi_type {
         RetABIType::Inhabited(ABIType::Boxed(_)) => true,
         _ => false,
     };
 
-    // TODO: We need a way for Rust funs to always capture. This will be need for e.g. panics or
-    // future callbacks
-    match param_abi_type {
-        ABIType::Boxed(_) if returns_box => CaptureKind::ViaRet,
-        _ => CaptureKind::Never,
+    match param_abi_type.capture {
+        ParamCapture::Auto => {
+            if returns_box {
+                CaptureKind::ViaRet
+            } else {
+                CaptureKind::Never
+            }
+        }
+        ParamCapture::Always => CaptureKind::Always,
+        ParamCapture::Never => CaptureKind::Never,
     }
 }
 

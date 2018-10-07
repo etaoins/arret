@@ -9,7 +9,7 @@ new_counting_id_type!(RegIdCounter, RegId);
 pub struct FunABI {
     pub takes_task: bool,
     pub takes_closure: bool,
-    pub params: Box<[abitype::ABIType]>,
+    pub params: Box<[abitype::ParamABIType]>,
     pub ret: abitype::RetABIType,
 }
 

@@ -630,21 +630,21 @@ impl EvalHirCtx {
 
         let mut abi_params_iter = wanted_abi.params.iter();
         let rest_reg_value = if has_rest {
-            let abi_type = abi_params_iter.next_back().unwrap();
+            let param_abi_type = abi_params_iter.next_back().unwrap();
 
             Some(Rc::new(value::RegValue {
                 reg: b.alloc_reg(),
-                abi_type: abi_type.clone(),
+                abi_type: param_abi_type.abi_type.clone(),
             }))
         } else {
             None
         };
 
         let fixed_reg_values = abi_params_iter
-            .map(|abi_type| {
+            .map(|param_abi_type| {
                 Rc::new(value::RegValue {
                     reg: b.alloc_reg(),
-                    abi_type: abi_type.clone(),
+                    abi_type: param_abi_type.abi_type.clone(),
                 })
             })
             .collect::<Vec<Rc<value::RegValue>>>();

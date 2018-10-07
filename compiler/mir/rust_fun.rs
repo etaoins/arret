@@ -34,9 +34,9 @@ pub fn build_rust_fun_app(
         rust_fixed_iter.next_back();
     }
 
-    for abi_type in rust_fixed_iter {
+    for param_abi_type in rust_fixed_iter {
         let fixed_value = list_iter.next_unchecked(b, span);
-        let reg_id = value_to_reg(ehx, b, span, &fixed_value, abi_type);
+        let reg_id = value_to_reg(ehx, b, span, &fixed_value, &param_abi_type.abi_type);
         arg_regs.push(reg_id.into());
     }
 

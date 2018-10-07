@@ -78,3 +78,45 @@ where
         unsafe { (*self.as_ptr()).fmt(formatter) }
     }
 }
+
+macro_rules! define_marker_ref {
+    ($ref_name:ident) => {
+        #[repr(transparent)]
+        pub struct $ref_name<T: Boxed> {
+            inner: ptr::NonNull<T>,
+        }
+
+        impl<T: Boxed> Deref for $ref_name<T> {
+            type Target = T;
+            fn deref(&self) -> &T {
+                unsafe { self.inner.as_ref() }
+            }
+        }
+
+        impl<T: Boxed> $ref_name<T> {
+            fn into_gc_ref(self) -> Gc<T> {
+                Gc { inner: self.inner }
+            }
+        }
+
+        impl<T: Boxed> From<$ref_name<T>> for Gc<T> {
+            fn from(marker_ref: $ref_name<T>) -> Gc<T> {
+                marker_ref.into_gc_ref()
+            }
+        }
+    };
+}
+
+/// Special marker ref for parameters that are explicitly not captured
+///
+/// This can be used for performance-sensitive functions where the compiler cannot prove the
+/// parameter can't be captured.
+define_marker_ref!(NoCapture);
+
+/// Special marker ref for parameters that are explicitly captured
+///
+/// Capturing GC managed values is usually not allowed as the captured values become invisible
+/// to the garage collector and will become invalid on the next collection cycle. This is intended
+/// for use by special runtime functions that expose their captured values to the collector via an
+/// internal mechanism.
+define_marker_ref!(Capture);

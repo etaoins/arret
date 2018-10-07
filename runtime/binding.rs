@@ -1,4 +1,4 @@
-use crate::abitype::{ABIType, RetABIType};
+use crate::abitype::{ParamABIType, RetABIType};
 
 #[allow(clippy::useless_attribute)]
 #[allow(unused)]
@@ -8,7 +8,7 @@ use crate::abitype::{EncodeABIType, EncodeRetABIType};
 pub struct RustFun {
     pub arret_type: &'static str,
     pub takes_task: bool,
-    pub params: &'static [ABIType],
+    pub params: &'static [ParamABIType],
     pub ret: RetABIType,
     pub symbol: &'static str,
 }
@@ -30,7 +30,10 @@ macro_rules! define_rust_fn {
             arret_type: $type,
             takes_task: true,
             params: &[
-                $(<$rust_ty as EncodeABIType>::ABI_TYPE),*
+                $(ParamABIType {
+                    abi_type: <$rust_ty as EncodeABIType>::ABI_TYPE,
+                    capture: <$rust_ty as EncodeABIType>::PARAM_CAPTURE,
+                }),*
             ],
             ret: <$ret as EncodeRetABIType>::RET_ABI_TYPE,
             symbol: stringify!($func_name),
@@ -47,7 +50,10 @@ macro_rules! define_rust_fn {
             arret_type: $type,
             takes_task: false,
             params: &[
-                $(<$rust_ty as EncodeABIType>::ABI_TYPE),*
+                $(ParamABIType {
+                    abi_type: <$rust_ty as EncodeABIType>::ABI_TYPE,
+                    capture: <$rust_ty as EncodeABIType>::PARAM_CAPTURE,
+                }),*
             ],
             ret: <$ret as EncodeRetABIType>::RET_ABI_TYPE,
             symbol: stringify!($func_name),
@@ -70,10 +76,10 @@ macro_rules! define_rust_module {
 // This needs to be pub because we export functions
 #[cfg(test)]
 pub mod test {
-    use crate::abitype::BoxedABIType;
+    use crate::abitype::{ABIType, BoxedABIType, ParamCapture};
     use crate::boxed;
     use crate::boxed::prelude::*;
-    use crate::boxed::refs::Gc;
+    use crate::boxed::refs;
     use crate::task::Task;
 
     use super::*;
@@ -84,6 +90,36 @@ pub mod test {
             42
         }
     }
+
+    define_rust_fn! {
+    #[arret_type="(Int Float -> Num)"]
+        ADD_INT_FLOAT = fn add_int_float(
+            task: &mut Task,
+            int_box: refs::Gc<boxed::Int>,
+            native_float: f64
+        ) -> refs::Gc<boxed::Num> {
+            boxed::Int::new(task, int_box.value() + native_float as i64).as_num_ref()
+        }
+    }
+
+    define_rust_fn! {
+    #[arret_type="(Any -> (U))"]
+        DIVERGING = fn diverging(_any: refs::Capture<boxed::Any>) -> Never {
+            panic!("diverge");
+        }
+    }
+
+    define_rust_fn! {
+        #[arret_type="(Int -> ())"]
+        NO_CAPTURE = fn no_capture(_boxed_int: refs::NoCapture<boxed::Int>) -> () {
+            ()
+        }
+    }
+
+    define_rust_module!(ARRET_TEST_EXPORTS, {
+        "length" => LENGTH,
+        "return-42" => RETURN_42
+    });
 
     #[test]
     fn return_42_fn() {
@@ -97,29 +133,6 @@ pub mod test {
         assert_eq!(42, number);
     }
 
-    define_rust_fn! {
-    #[arret_type="(Int Float -> Num)"]
-        ADD_INT_FLOAT = fn add_int_float(
-            task: &mut Task,
-            int_box: Gc<boxed::Int>,
-            native_float: f64
-        ) -> Gc<boxed::Num> {
-            boxed::Int::new(task, int_box.value() + native_float as i64).as_num_ref()
-        }
-    }
-
-    define_rust_fn! {
-    #[arret_type="(Any -> (U))"]
-        DIVERGING = fn diverging(_any: Gc<boxed::Any>) -> Never {
-            panic!("diverge");
-        }
-    }
-
-    define_rust_module!(ARRET_TEST_EXPORTS, {
-        "length" => LENGTH,
-        "return-42" => RETURN_42
-    });
-
     #[test]
     fn add_int_float_fn() {
         let mut task = Task::new();
@@ -129,7 +142,13 @@ pub mod test {
         assert_eq!("(Int Float -> Num)", ADD_INT_FLOAT.arret_type);
 
         assert_eq!(
-            vec![boxed::TypeTag::Int.into(), ABIType::Float,],
+            vec![
+                boxed::TypeTag::Int.into(),
+                ParamABIType {
+                    abi_type: ABIType::Float,
+                    capture: ParamCapture::Never,
+                },
+            ],
             ADD_INT_FLOAT.params
         );
         assert_eq!(
@@ -149,7 +168,7 @@ pub mod test {
 
     define_rust_fn! {
         #[arret_type="((Listof Any) -> Int)"]
-        LENGTH = fn length(input: Gc<boxed::List<boxed::Any>>) -> i64 {
+        LENGTH = fn length(input: refs::Gc<boxed::List<boxed::Any>>) -> i64 {
             input.len() as i64
         }
     }
@@ -163,7 +182,10 @@ pub mod test {
         assert_eq!("((Listof Any) -> Int)", LENGTH.arret_type);
 
         assert_eq!(
-            vec![ABIType::Boxed(BoxedABIType::List(&BoxedABIType::Any))],
+            vec![ParamABIType {
+                abi_type: ABIType::Boxed(BoxedABIType::List(&BoxedABIType::Any)),
+                capture: ParamCapture::Auto
+            }],
             LENGTH.params
         );
         assert_eq!(RetABIType::Inhabited(ABIType::Int), LENGTH.ret);
@@ -171,7 +193,7 @@ pub mod test {
         let boxed_ints = [1, 2, 3]
             .iter()
             .map(|num| boxed::Int::new(&mut task, *num).as_any_ref())
-            .collect::<Vec<Gc<boxed::Any>>>();
+            .collect::<Vec<refs::Gc<boxed::Any>>>();
 
         let boxed_list = boxed::List::new(&mut task, boxed_ints.into_iter());
         assert_eq!(3, length(boxed_list));
@@ -200,8 +222,29 @@ pub mod test {
         assert_eq!(false, DIVERGING.takes_task);
         assert_eq!("(Any -> (U))", DIVERGING.arret_type);
 
-        assert_eq!(vec![ABIType::Boxed(BoxedABIType::Any)], DIVERGING.params);
+        assert_eq!(
+            vec![ParamABIType {
+                abi_type: ABIType::Boxed(BoxedABIType::Any),
+                capture: ParamCapture::Always
+            }],
+            DIVERGING.params
+        );
         assert_eq!(RetABIType::Never, DIVERGING.ret);
+    }
+    #[test]
+    fn no_capture_fn() {
+        assert_eq!("no_capture", NO_CAPTURE.symbol);
+        assert_eq!(false, NO_CAPTURE.takes_task);
+        assert_eq!("(Int -> ())", NO_CAPTURE.arret_type);
+
+        assert_eq!(
+            vec![ParamABIType {
+                abi_type: boxed::TypeTag::Int.into(),
+                capture: ParamCapture::Never
+            }],
+            NO_CAPTURE.params
+        );
+        assert_eq!(RetABIType::Void, NO_CAPTURE.ret);
     }
 
     #[test]

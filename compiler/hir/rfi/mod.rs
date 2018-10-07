@@ -41,7 +41,7 @@ pub struct Fun {
 
     arret_fun_type: ty::Fun,
     takes_task: bool,
-    params: &'static [abitype::ABIType],
+    params: &'static [abitype::ParamABIType],
     ret: &'static abitype::RetABIType,
     // TODO: Use ! once its stable
     symbol: &'static str,
@@ -69,7 +69,7 @@ impl Fun {
         self.takes_task
     }
 
-    pub fn params(&self) -> &'static [abitype::ABIType] {
+    pub fn params(&self) -> &'static [abitype::ParamABIType] {
         self.params
     }
 
@@ -218,7 +218,7 @@ impl Loader {
 
             let last_rust_param = abi_params_iter.next_back().unwrap();
 
-            if let ABIType::Boxed(BoxedABIType::List(elem)) = last_rust_param {
+            if let ABIType::Boxed(BoxedABIType::List(elem)) = &last_rust_param.abi_type {
                 ensure_types_compatible(pvars, tvars, span, arret_rest, *elem)?;
             } else {
                 return Err(Error::new(
@@ -232,7 +232,13 @@ impl Loader {
         for (arret_fixed_poly, rust_fixed_poly) in
             arret_fun_type.params().fixed().iter().zip(abi_params_iter)
         {
-            ensure_types_compatible(pvars, tvars, span, arret_fixed_poly, rust_fixed_poly)?;
+            ensure_types_compatible(
+                pvars,
+                tvars,
+                span,
+                arret_fixed_poly,
+                &rust_fixed_poly.abi_type,
+            )?;
         }
 
         // And the return type
@@ -334,7 +340,7 @@ impl Loader {
 #[cfg(test)]
 mod test {
     use super::*;
-    use runtime::abitype::{ABIType, BoxedABIType, RetABIType};
+    use runtime::abitype::{ABIType, BoxedABIType, ParamABIType, ParamCapture, RetABIType};
     use runtime::boxed::TypeTag;
     use std::ptr;
 
@@ -362,7 +368,10 @@ mod test {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
             arret_type: "(Int -> Int)",
             takes_task: false,
-            params: &[ABIType::Int],
+            params: &[ParamABIType {
+                abi_type: ABIType::Int,
+                capture: ParamCapture::Never,
+            }],
             ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))),
             symbol: "",
         };
@@ -375,9 +384,12 @@ mod test {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
             arret_type: "(Int ... -> false)",
             takes_task: false,
-            params: &[ABIType::Boxed(BoxedABIType::List(
-                &BoxedABIType::DirectTagged(TypeTag::Int),
-            ))],
+            params: &[ParamABIType {
+                abi_type: ABIType::Boxed(BoxedABIType::List(&BoxedABIType::DirectTagged(
+                    TypeTag::Int,
+                ))),
+                capture: ParamCapture::Auto,
+            }],
             ret: RetABIType::Inhabited(ABIType::Bool),
             symbol: "",
         };
@@ -390,7 +402,10 @@ mod test {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
             arret_type: "(Float -> '())",
             takes_task: false,
-            params: &[ABIType::Float],
+            params: &[ParamABIType {
+                abi_type: ABIType::Float,
+                capture: ParamCapture::Never,
+            }],
             ret: RetABIType::Void,
             symbol: "",
         };
@@ -416,7 +431,10 @@ mod test {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
             arret_type: "(All #{A} (List A Any ...) -> A)",
             takes_task: false,
-            params: &[ABIType::Boxed(BoxedABIType::Pair(&BoxedABIType::Any))],
+            params: &[ParamABIType {
+                abi_type: ABIType::Boxed(BoxedABIType::Pair(&BoxedABIType::Any)),
+                capture: ParamCapture::Auto,
+            }],
             ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::Any)),
             symbol: "",
         };
@@ -429,7 +447,10 @@ mod test {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
             arret_type: "(All #{A} (List Any ...) -> A)",
             takes_task: false,
-            params: &[ABIType::Boxed(BoxedABIType::Pair(&BoxedABIType::Any))],
+            params: &[ParamABIType {
+                abi_type: ABIType::Boxed(BoxedABIType::Pair(&BoxedABIType::Any)),
+                capture: ParamCapture::Auto,
+            }],
             ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::Any)),
             symbol: "",
         };
@@ -445,7 +466,10 @@ mod test {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
             arret_type: "(unbound)",
             takes_task: false,
-            params: &[ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))],
+            params: &[ParamABIType {
+                abi_type: ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int)),
+                capture: ParamCapture::Auto,
+            }],
             ret: RetABIType::Inhabited(ABIType::Bool),
             symbol: "",
         };
@@ -459,7 +483,10 @@ mod test {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
             arret_type: "Str",
             takes_task: false,
-            params: &[ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))],
+            params: &[ParamABIType {
+                abi_type: ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int)),
+                capture: ParamCapture::Auto,
+            }],
             ret: RetABIType::Inhabited(ABIType::Bool),
             symbol: "",
         };
@@ -473,7 +500,10 @@ mod test {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
             arret_type: "(Int ... -> true)",
             takes_task: false,
-            params: &[ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))],
+            params: &[ParamABIType {
+                abi_type: ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int)),
+                capture: ParamCapture::Auto,
+            }],
             ret: RetABIType::Inhabited(ABIType::Bool),
             symbol: "",
         };
@@ -487,7 +517,16 @@ mod test {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
             arret_type: "(Int -> Int)",
             takes_task: false,
-            params: &[ABIType::Int, ABIType::Int],
+            params: &[
+                ParamABIType {
+                    abi_type: ABIType::Int,
+                    capture: ParamCapture::Never,
+                },
+                ParamABIType {
+                    abi_type: ABIType::Int,
+                    capture: ParamCapture::Never,
+                },
+            ],
             ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))),
             symbol: "",
         };
@@ -502,7 +541,10 @@ mod test {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
             arret_type: "(Char -> Int)",
             takes_task: false,
-            params: &[ABIType::Int],
+            params: &[ParamABIType {
+                abi_type: ABIType::Int,
+                capture: ParamCapture::Never,
+            }],
             ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))),
             symbol: "",
         };
@@ -518,7 +560,10 @@ mod test {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
             arret_type: "(Int -> Char)",
             takes_task: false,
-            params: &[ABIType::Int],
+            params: &[ParamABIType {
+                abi_type: ABIType::Int,
+                capture: ParamCapture::Never,
+            }],
             ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))),
             symbol: "",
         };
