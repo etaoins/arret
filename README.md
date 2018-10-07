@@ -13,8 +13,14 @@ Arret is a successor to [Llambda](https://github.com/etaoins/llambda) without th
 
 ## Installation
 
-This project is participating in the [Rust 2018 Preview](https://internals.rust-lang.org/t/rust-2018-an-early-preview/7776).
-As such it will require the nightly Rust compiler until Rust 2018 is released.
+### Requirementss
+
+1. A Unix-like host running on ARM64, x86-64 or x86-32.
+   These are the platforms supporting lazy compilation with LLVM's ORC JIT.
+1. [LLVM 7.0](http://releases.llvm.org)
+1. [Rust nightly](https://www.rust-lang.org/en-US/)
+   This project is participating in the [Rust 2018 Preview](https://internals.rust-lang.org/t/rust-2018-an-early-preview/7776).
+   As such it will require the nightly Rust compiler until Rust 2018 is released.
 
 ### Using rustup and Cargo
 
@@ -35,9 +41,13 @@ As such it will require the nightly Rust compiler until Rust 2018 is released.
 
 ## Usage
 
-The best way to explore Arret is by using the REPL
+### REPL
+
+The REPL provides an interactive environment for exploring Arret.
+It's supported as a first class concept in Arret; the REPL is just as powerful as the compiler.
 
 ```
+> cargo +nightly run
 arret> (length '(1 2 3 4 5))
 => 5
 arret> (defn identity #{T} ([x : T]) -> T x)
@@ -50,13 +60,20 @@ arret> :type (identity [one two three])
 => (Vector 'one 'two 'three)
 ```
 
-## Implementation
+### Compiler
 
-The compiler and runtime are implemented in Rust with code generation provided by LLVM.
+Compiled programs have a `(main!)` function as their entry point:
+```clojure
+(import [stdlib base])
 
-## Status
+(defn main! ()
+  (println! "Hello, world!")
+  ())
+```
 
-Currently parsing, macros, type checking and limited constant evaluation are implemented.
-A basic garbage collected runtime is provided with a partial set of data types.
-
-There is no support for calling functions implemented in Rust or code generation.
+These can be compiled to a static binary by running Arret with the path name:
+```sh
+> cargo +nightly run hello-world.arret
+> ./hello-world
+"Hello, world!"
+```
