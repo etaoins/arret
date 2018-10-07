@@ -22,45 +22,43 @@ pub fn gen_static_symbol_callee(
     let function_name = ffi::CString::new(*symbol).unwrap();
 
     unsafe {
-        let global = LLVMGetNamedFunction(
-            mcx.module,
-            function_name.as_bytes_with_nul().as_ptr() as *const _,
-        );
-
-        if !global.is_null() {
-            return global;
-        }
-
-        let function = LLVMAddFunction(
-            mcx.module,
-            function_name.as_bytes_with_nul().as_ptr() as *const _,
+        mcx.get_function_or_insert(
             function_type,
-        );
+            function_name.as_bytes_with_nul(),
+            |function| {
+                // LLVM param attributes are 1 indexed
+                let param_attr_offset =
+                    1 + (abi.takes_task as usize) + (abi.takes_closure as usize);
 
-        // LLVM param attributes are 1 indexed
-        let param_attr_offset = 1 + (abi.takes_task as usize) + (abi.takes_closure as usize);
+                for (index, param_abi_type) in abi.params.iter().enumerate() {
+                    if let ABIType::Boxed(_) = param_abi_type.abi_type {
+                        let no_capture = infer_param_capture_kind(&abi.ret, &param_abi_type)
+                            == CaptureKind::Never;
 
-        for (index, param_abi_type) in abi.params.iter().enumerate() {
-            if let ABIType::Boxed(_) = param_abi_type.abi_type {
-                let no_capture =
-                    infer_param_capture_kind(&abi.ret, &param_abi_type) == CaptureKind::Never;
+                        cgx.add_boxed_param_attrs(
+                            function,
+                            (param_attr_offset + index) as u32,
+                            no_capture,
+                        )
+                    }
+                }
 
-                cgx.add_boxed_param_attrs(function, (param_attr_offset + index) as u32, no_capture)
-            }
-        }
-
-        match abi.ret {
-            RetABIType::Inhabited(ABIType::Boxed(_)) => {
-                cgx.add_boxed_return_attrs(function);
-            }
-            RetABIType::Never => {
-                let noreturn_attr = cgx.llvm_enum_attr_for_name(b"noreturn", 0);
-                LLVMAddAttributeAtIndex(function, LLVMAttributeFunctionIndex, noreturn_attr);
-            }
-            _ => {}
-        }
-
-        function
+                match abi.ret {
+                    RetABIType::Inhabited(ABIType::Boxed(_)) => {
+                        cgx.add_boxed_return_attrs(function);
+                    }
+                    RetABIType::Never => {
+                        let noreturn_attr = cgx.llvm_enum_attr_for_name(b"noreturn", 0);
+                        LLVMAddAttributeAtIndex(
+                            function,
+                            LLVMAttributeFunctionIndex,
+                            noreturn_attr,
+                        );
+                    }
+                    _ => {}
+                }
+            },
+        )
     }
 }
 

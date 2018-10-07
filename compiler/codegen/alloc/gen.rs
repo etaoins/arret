@@ -68,7 +68,6 @@ fn gen_heap_alloced_box<T: boxed::DirectTagged>(
         let llvm_i32 = LLVMInt32TypeInContext(cgx.llx);
         let llvm_param_types = &mut [cgx.task_llvm_type(), llvm_i32];
 
-        let alloc_cells_fun_name = b"arret_runtime_alloc_cells\0";
         let alloc_cells_llvm_type = LLVMFunctionType(
             cgx.boxed_abi_to_llvm_ptr_type(&abitype::BoxedABIType::Any),
             llvm_param_types.as_mut_ptr(),
@@ -76,18 +75,13 @@ fn gen_heap_alloced_box<T: boxed::DirectTagged>(
             0,
         );
 
-        // TODO: Factor out this pattern
-        let mut alloc_cells_fun =
-            LLVMGetNamedFunction(mcx.module, alloc_cells_fun_name.as_ptr() as *const _);
-
-        if alloc_cells_fun.is_null() {
-            alloc_cells_fun = LLVMAddFunction(
-                mcx.module,
-                alloc_cells_fun_name.as_ptr() as *const _,
-                alloc_cells_llvm_type,
-            );
-            cgx.add_boxed_return_attrs(alloc_cells_fun);
-        }
+        let alloc_cells_fun = mcx.get_function_or_insert(
+            alloc_cells_llvm_type,
+            b"arret_runtime_alloc_cells\0",
+            |alloc_cells_fun| {
+                cgx.add_boxed_return_attrs(alloc_cells_fun);
+            },
+        );
 
         let alloc_cells_args = &mut [
             active_alloc.llvm_task,

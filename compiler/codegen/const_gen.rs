@@ -94,7 +94,7 @@ pub fn gen_boxed_int(cgx: &mut CodegenCtx, mcx: &mut ModCtx, value: i64) -> LLVM
 
         let box_name = ffi::CString::new(format!("const_int_{}", value)).unwrap();
 
-        let global = mcx.get_global_or_insert(llvm_type, &box_name, || {
+        let global = mcx.get_global_or_insert(llvm_type, box_name.as_bytes_with_nul(), || {
             let members = &mut [
                 cgx.llvm_box_header(type_tag.into_const_header()),
                 LLVMConstInt(llvm_i64, value as u64, 1),

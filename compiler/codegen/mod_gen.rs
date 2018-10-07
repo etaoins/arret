@@ -1,5 +1,3 @@
-use std::ffi::CStr;
-
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 
@@ -35,11 +33,11 @@ impl ModCtx {
     pub fn get_global_or_insert<F>(
         &mut self,
         llvm_type: LLVMTypeRef,
-        name: &CStr,
-        mut initial_value: F,
+        name: &[u8],
+        initial_value: F,
     ) -> LLVMValueRef
     where
-        F: FnMut() -> LLVMValueRef,
+        F: FnOnce() -> LLVMValueRef,
     {
         unsafe {
             let global = LLVMGetNamedGlobal(self.module, name.as_ptr() as *const _);
@@ -52,6 +50,29 @@ impl ModCtx {
             LLVMSetInitializer(global, initial_value());
 
             global
+        }
+    }
+
+    pub fn get_function_or_insert<F>(
+        &mut self,
+        function_type: LLVMTypeRef,
+        name: &[u8],
+        initialise: F,
+    ) -> LLVMValueRef
+    where
+        F: FnOnce(LLVMValueRef) -> (),
+    {
+        unsafe {
+            let function = LLVMGetNamedFunction(self.module, name.as_ptr() as *const _);
+
+            if !function.is_null() {
+                return function;
+            }
+
+            let function = LLVMAddFunction(self.module, name.as_ptr() as *const _, function_type);
+
+            initialise(function);
+            function
         }
     }
 }
