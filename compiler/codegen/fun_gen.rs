@@ -8,30 +8,44 @@ use runtime::boxed;
 
 use crate::codegen::alloc;
 use crate::codegen::const_gen;
+use crate::codegen::escape_analysis::{CaptureKind, Captures};
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::CodegenCtx;
 use crate::mir::ops::*;
 
-struct FunCtx {
-    function: LLVMValueRef,
-    builder: LLVMBuilderRef,
-
-    regs: HashMap<RegId, LLVMValueRef>,
-    current_task: Option<LLVMValueRef>,
+pub struct BuiltFun {
+    pub llvm_value: LLVMValueRef,
+    // This includes the task and closure
+    pub param_captures: Box<[CaptureKind]>,
 }
 
-impl FunCtx {
-    pub(crate) fn new(function: LLVMValueRef, builder: LLVMBuilderRef) -> FunCtx {
+struct FunCtx<'captures> {
+    regs: HashMap<RegId, LLVMValueRef>,
+    current_task: Option<LLVMValueRef>,
+    captures: &'captures Captures,
+
+    function: LLVMValueRef,
+    builder: LLVMBuilderRef,
+}
+
+impl<'captures> FunCtx<'captures> {
+    pub(crate) fn new(
+        captures: &'captures Captures,
+        function: LLVMValueRef,
+        builder: LLVMBuilderRef,
+    ) -> FunCtx<'captures> {
         FunCtx {
-            function,
-            builder,
             regs: HashMap::new(),
             current_task: None,
+            captures,
+
+            function,
+            builder,
         }
     }
 }
 
-impl Drop for FunCtx {
+impl<'captures> Drop for FunCtx<'captures> {
     fn drop(&mut self) {
         unsafe {
             LLVMDisposeBuilder(self.builder);
@@ -42,7 +56,7 @@ impl Drop for FunCtx {
 fn gen_cond(
     cgx: &mut CodegenCtx,
     mcx: &mut ModCtx,
-    fcx: &mut FunCtx,
+    fcx: &mut FunCtx<'_>,
     cond_op: &CondOp,
 ) -> LLVMValueRef {
     let CondOp {
@@ -111,7 +125,7 @@ fn gen_cond(
 fn gen_callee(
     cgx: &mut CodegenCtx,
     mcx: &mut ModCtx,
-    fcx: &mut FunCtx,
+    fcx: &mut FunCtx<'_>,
     callee: &Callee,
 ) -> LLVMValueRef {
     use crate::codegen::callee_gen::*;
@@ -129,7 +143,7 @@ fn gen_callee(
 fn gen_op(
     cgx: &mut CodegenCtx,
     mcx: &mut ModCtx,
-    fcx: &mut FunCtx,
+    fcx: &mut FunCtx<'_>,
     box_sources: &HashMap<RegId, alloc::BoxSource>,
     op: &Op,
 ) {
@@ -361,9 +375,9 @@ fn gen_op(
     }
 }
 
-fn gen_op_sequence(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, ops: &[Op]) {
+fn gen_op_sequence(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx<'_>, ops: &[Op]) {
     use crate::codegen::alloc::plan::plan_allocs;
-    let alloc_atoms = plan_allocs(ops);
+    let alloc_atoms = plan_allocs(fcx.captures, ops);
 
     for alloc_atom in alloc_atoms {
         for op in alloc_atom.ops() {
@@ -372,8 +386,23 @@ fn gen_op_sequence(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, ops
     }
 }
 
-pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> LLVMValueRef {
+pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> BuiltFun {
+    use crate::codegen::escape_analysis;
     use runtime::abitype::{ABIType, RetABIType};
+
+    let captures = escape_analysis::calc_fun_captures(mcx.built_funs(), fun);
+
+    // Determine which params we captured
+    let mut param_captures = vec![];
+    if fun.abi.takes_task {
+        param_captures.push(CaptureKind::Never);
+    }
+    if fun.abi.takes_closure {
+        param_captures.push(CaptureKind::Never);
+    }
+    for param_reg in fun.params.iter() {
+        param_captures.push(captures.get(*param_reg));
+    }
 
     unsafe {
         let builder = LLVMCreateBuilderInContext(cgx.llx);
@@ -391,7 +420,7 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> LLVM
         let bb = LLVMAppendBasicBlockInContext(cgx.llx, function, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
 
-        let mut fcx = FunCtx::new(function, builder);
+        let mut fcx = FunCtx::new(&captures, function, builder);
 
         if fun.abi.takes_task {
             fcx.current_task = Some(LLVMGetParam(function, 0));
@@ -405,10 +434,12 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> LLVM
 
         for (param_index, param_abi_type) in fun.abi.params.iter().enumerate() {
             if let ABIType::Boxed(_) = param_abi_type {
+                let no_capture = param_captures[params_offset + param_index] == CaptureKind::Never;
+
                 cgx.add_boxed_param_attrs(
                     function,
                     (params_offset + param_index + 1) as u32,
-                    false,
+                    no_capture,
                 );
             }
         }
@@ -419,6 +450,9 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> LLVM
 
         gen_op_sequence(cgx, mcx, &mut fcx, fun.ops.as_ref());
 
-        function
+        BuiltFun {
+            llvm_value: function,
+            param_captures: param_captures.into_boxed_slice(),
+        }
     }
 }

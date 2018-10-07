@@ -3,11 +3,12 @@ use std::ffi::CStr;
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 
+use crate::codegen::fun_gen::BuiltFun;
 use crate::mir::ops;
 
 pub struct ModCtx {
     pub module: LLVMModuleRef,
-    pub built_funs: Vec<LLVMValueRef>,
+    pub built_funs: Vec<BuiltFun>,
 }
 
 impl ModCtx {
@@ -18,17 +19,17 @@ impl ModCtx {
         }
     }
 
-    pub fn push_built_fun_value(
-        &mut self,
-        built_fun_id: ops::BuiltFunId,
-        llvm_value: LLVMValueRef,
-    ) {
+    pub fn push_built_fun(&mut self, built_fun_id: ops::BuiltFunId, built_fun: BuiltFun) {
         assert_eq!(self.built_funs.len(), built_fun_id.to_usize());
-        self.built_funs.push(llvm_value);
+        self.built_funs.push(built_fun);
     }
 
-    pub fn built_fun_value(&self, built_fun_id: ops::BuiltFunId) -> LLVMValueRef {
-        self.built_funs[built_fun_id.to_usize()]
+    pub fn built_fun(&self, built_fun_id: ops::BuiltFunId) -> &BuiltFun {
+        &self.built_funs[built_fun_id.to_usize()]
+    }
+
+    pub fn built_funs(&self) -> &Vec<BuiltFun> {
+        &self.built_funs
     }
 
     pub fn get_global_or_insert<F>(

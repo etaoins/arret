@@ -11,7 +11,7 @@ pub enum BoxSource {
     Stack,
 }
 
-/// Represents a sequence of MIR ops that end with the heap in a consistent state
+/// Represents a sequence of MIR ops that begin and end with the heap in a consistent state
 #[derive(PartialEq, Debug)]
 pub struct AllocAtom<'op> {
     box_sources: HashMap<ops::RegId, BoxSource>,

@@ -73,7 +73,8 @@ impl JITCtx {
             );
 
             let mut mcx = ModCtx::new(module);
-            let llvm_function = fun_gen::gen_fun(cgx, &mut mcx, fun);
+
+            let llvm_function = fun_gen::gen_fun(cgx, &mut mcx, fun).llvm_value;
 
             // We need to take ownership before we tranfer the module to ORC
             let mut function_name_len: usize = 0;

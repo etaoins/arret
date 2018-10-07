@@ -47,17 +47,18 @@ fn program_to_module(cgx: &mut CodegenCtx, program: &mir::BuiltProgram) -> LLVMM
 
         // And all of the other functions
         for (fun_idx, fun) in program.funs.iter().enumerate() {
-            let fun_llvm_value = fun_gen::gen_fun(cgx, &mut mcx, fun);
-            LLVMSetLinkage(fun_llvm_value, LLVMLinkage::LLVMPrivateLinkage);
+            let built_fun = fun_gen::gen_fun(cgx, &mut mcx, fun);
+            LLVMSetLinkage(built_fun.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
 
-            mcx.push_built_fun_value(ops::BuiltFunId::new(fun_idx), fun_llvm_value);
+            mcx.push_built_fun(ops::BuiltFunId::new(fun_idx), built_fun);
         }
 
-        let arret_main_llvm_value = fun_gen::gen_fun(cgx, &mut mcx, &program.main);
-        LLVMSetLinkage(arret_main_llvm_value, LLVMLinkage::LLVMPrivateLinkage);
+        let arret_main = fun_gen::gen_fun(cgx, &mut mcx, &program.main);
+
+        LLVMSetLinkage(arret_main.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
 
         // Declare arret_launch_task
-        let launch_task_llvm_arg_types = &mut [LLVMTypeOf(arret_main_llvm_value)];
+        let launch_task_llvm_arg_types = &mut [LLVMTypeOf(arret_main.llvm_value)];
         let launch_task_llvm_type = LLVMFunctionType(
             LLVMVoidTypeInContext(cgx.llx),
             launch_task_llvm_arg_types.as_mut_ptr(),
@@ -82,7 +83,7 @@ fn program_to_module(cgx: &mut CodegenCtx, program: &mir::BuiltProgram) -> LLVMM
         let bb = LLVMAppendBasicBlockInContext(cgx.llx, function, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
 
-        let launch_task_llvm_args = &mut [arret_main_llvm_value];
+        let launch_task_llvm_args = &mut [arret_main.llvm_value];
         LLVMBuildCall(
             builder,
             launch_task_llvm_fun,

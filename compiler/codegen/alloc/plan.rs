@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::codegen::alloc::{AllocAtom, BoxSource};
+use crate::codegen::escape_analysis::Captures;
 use crate::mir::ops;
 
 /// Determines if an op requires the heap to be in a consistent state before it's executed
@@ -48,7 +49,7 @@ fn push_complete_atom<'op>(
     }
 }
 
-pub fn plan_allocs<'op>(ops: &'op [ops::Op]) -> Vec<AllocAtom<'op>> {
+pub fn plan_allocs<'op>(_captures: &Captures, ops: &'op [ops::Op]) -> Vec<AllocAtom<'op>> {
     let mut atoms = vec![];
 
     let mut box_sources = HashMap::new();
@@ -78,7 +79,7 @@ mod test {
 
     #[test]
     fn empty_ops() {
-        let actual_atoms = plan_allocs(&[]);
+        let actual_atoms = plan_allocs(&Captures::new(), &[]);
         assert_eq!(0, actual_atoms.len());
     }
 
@@ -114,7 +115,7 @@ mod test {
             },
         ];
 
-        let actual_atoms = plan_allocs(&input_ops);
+        let actual_atoms = plan_allocs(&Captures::new(), &input_ops);
 
         assert_eq!(expected_atoms, actual_atoms);
     }
@@ -146,7 +147,7 @@ mod test {
             .into(),
         ];
 
-        let actual_atoms = plan_allocs(&input_ops);
+        let actual_atoms = plan_allocs(&Captures::new(), &input_ops);
         // We should place the `AllocInt` and `Cond` in the same atom
         assert_eq!(1, actual_atoms.len());
     }
@@ -179,7 +180,7 @@ mod test {
             .into(),
         ];
 
-        let actual_atoms = plan_allocs(&input_ops);
+        let actual_atoms = plan_allocs(&Captures::new(), &input_ops);
         // We should place the `AllocInt` and `Cond` in different atoms
         assert_eq!(2, actual_atoms.len());
     }

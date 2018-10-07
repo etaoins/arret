@@ -13,7 +13,7 @@ pub fn gen_static_symbol_callee(
     mcx: &mut ModCtx,
     static_symbol: &ops::StaticSymbol,
 ) -> LLVMValueRef {
-    use crate::codegen::escape_analysis::fun_may_capture_param;
+    use crate::codegen::escape_analysis::{infer_param_capture_kind, CaptureKind};
     use runtime::abitype::{ABIType, RetABIType};
 
     let ops::StaticSymbol { abi, symbol } = static_symbol;
@@ -42,7 +42,9 @@ pub fn gen_static_symbol_callee(
 
         for (index, param_abi_type) in abi.params.iter().enumerate() {
             if let ABIType::Boxed(_) = param_abi_type {
-                let no_capture = !fun_may_capture_param(&abi.ret, &param_abi_type);
+                let no_capture =
+                    infer_param_capture_kind(&abi.ret, &param_abi_type) == CaptureKind::Never;
+
                 cgx.add_boxed_param_attrs(function, (param_attr_offset + index) as u32, no_capture)
             }
         }
@@ -79,5 +81,5 @@ pub fn gen_boxed_fun_thunk_callee(
 }
 
 pub fn gen_built_fun_callee(mcx: &mut ModCtx, built_fun_id: ops::BuiltFunId) -> LLVMValueRef {
-    mcx.built_fun_value(built_fun_id)
+    mcx.built_fun(built_fun_id).llvm_value
 }
