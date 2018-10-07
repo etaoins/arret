@@ -1,5 +1,9 @@
 use std::collections::HashMap;
 
+use llvm_sys::prelude::*;
+
+use runtime::boxed;
+
 use crate::mir::ops;
 
 pub mod gen;
@@ -9,6 +13,7 @@ pub mod plan;
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum BoxSource {
     Stack,
+    Heap(boxed::BoxSize),
 }
 
 /// Represents a sequence of MIR ops that begin and end with the heap in a consistent state
@@ -33,4 +38,8 @@ impl<'op> AllocAtom<'op> {
     pub fn ops(&self) -> &[&'op ops::Op] {
         self.ops.as_ref()
     }
+}
+
+pub struct ActiveAlloc {
+    pub llvm_task: LLVMValueRef,
 }

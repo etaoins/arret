@@ -147,6 +147,10 @@ fn gen_op(
     box_sources: &HashMap<RegId, alloc::BoxSource>,
     op: &Op,
 ) {
+    let mut active_alloc = fcx
+        .current_task
+        .map(|llvm_task| alloc::ActiveAlloc { llvm_task });
+
     unsafe {
         match &op.kind {
             OpKind::CurrentTask(reg, _) => {
@@ -327,11 +331,18 @@ fn gen_op(
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::AllocInt(reg, int_reg) => {
+                let active_alloc = active_alloc.as_mut().expect("need allocation");
                 let box_source = box_sources[reg];
 
                 let llvm_int = fcx.regs[int_reg];
-                let llvm_alloced =
-                    alloc::gen::gen_alloc_int(cgx, fcx.builder, box_source, llvm_int);
+                let llvm_alloced = alloc::gen::gen_alloc_int(
+                    cgx,
+                    mcx,
+                    fcx.builder,
+                    active_alloc,
+                    box_source,
+                    llvm_int,
+                );
 
                 fcx.regs.insert(*reg, llvm_alloced);
             }
@@ -343,19 +354,22 @@ fn gen_op(
                     length_reg,
                 },
             ) => {
+                let active_alloc = active_alloc.as_mut().expect("need allocation");
                 let box_source = box_sources[reg];
 
-                let llvm_head = fcx.regs[head_reg];
-                let llvm_rest = fcx.regs[rest_reg];
-                let llvm_length = fcx.regs[length_reg];
+                let input = alloc::gen::PairInput {
+                    llvm_head: fcx.regs[head_reg],
+                    llvm_rest: fcx.regs[rest_reg],
+                    llvm_length: fcx.regs[length_reg],
+                };
 
                 let llvm_value = alloc::gen::gen_alloc_boxed_pair(
                     cgx,
+                    mcx,
                     fcx.builder,
+                    active_alloc,
                     box_source,
-                    llvm_head,
-                    llvm_rest,
-                    llvm_length,
+                    &input,
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }

@@ -54,15 +54,7 @@ type PairInput<T> = (Gc<T>, Gc<List<T>>);
 
 impl<T: Boxed> ConstructableFrom<PairInput<T>> for Pair<T> {
     fn size_for_value(_: &PairInput<T>) -> BoxSize {
-        // TODO: It'd be nice to expose this as const BOX_SIZE: BoxSize once `if` is allowed in
-        // const contexts
-        if mem::size_of::<Self>() == 16 {
-            BoxSize::Size16
-        } else if mem::size_of::<Self>() == 32 {
-            BoxSize::Size32
-        } else {
-            unreachable!("Unsupported pair size!")
-        }
+        TopPair::size()
     }
 
     fn construct(value: PairInput<T>, alloc_type: AllocType, _: &mut Interner) -> Pair<T> {
@@ -220,9 +212,23 @@ impl<T: Boxed> FusedIterator for ListIterator<T> {}
 pub struct TopPair {
     header: Header,
     list_length: usize,
+    head: Gc<Any>,
+    rest: Gc<List<Any>>,
 }
 
 impl TopPair {
+    pub fn size() -> BoxSize {
+        // TODO: It'd be nice to expose this as const BOX_SIZE: BoxSize once `if` is allowed in
+        // const contexts
+        if mem::size_of::<Self>() == 16 {
+            BoxSize::Size16
+        } else if mem::size_of::<Self>() == 32 {
+            BoxSize::Size32
+        } else {
+            unreachable!("Unsupported pair size!")
+        }
+    }
+
     pub fn as_pair(&self) -> Gc<Pair<Any>> {
         unsafe { Gc::new(&*(self as *const TopPair as *const Pair<Any>)) }
     }

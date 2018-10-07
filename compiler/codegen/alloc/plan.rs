@@ -1,8 +1,15 @@
 use std::collections::HashMap;
 
+use runtime::boxed;
+
 use crate::codegen::alloc::{AllocAtom, BoxSource};
-use crate::codegen::escape_analysis::Captures;
+use crate::codegen::escape_analysis::{CaptureKind, Captures};
 use crate::mir::ops;
+
+struct AllocInfo {
+    output_reg: ops::RegId,
+    box_size: boxed::BoxSize,
+}
 
 /// Determines if an op requires the heap to be in a consistent state before it's executed
 ///
@@ -19,17 +26,24 @@ fn op_needs_heap_checkpoint(op: &ops::Op) -> bool {
             // We additionally need to make sure we don't allocate in our branches. Otherwise we
             // might need to plan an allocation of a dynamic size to cover each branch. Instead
             // just start a new atom for each branch.
-            .any(|op| op_needs_heap_checkpoint(op) || op_alloc_output_reg(op).is_some()),
+            .any(|op| op_needs_heap_checkpoint(op) || op_alloc_info(op).is_some()),
         _ => false,
     }
 }
 
 /// Returns the output reg for an allocating op, or `None` otherwise
-fn op_alloc_output_reg(op: &ops::Op) -> Option<ops::RegId> {
+fn op_alloc_info(op: &ops::Op) -> Option<AllocInfo> {
     use crate::mir::ops::OpKind;
 
     match op.kind() {
-        OpKind::AllocInt(reg_id, _) | OpKind::AllocBoxedPair(reg_id, _) => Some(*reg_id),
+        OpKind::AllocInt(output_reg, _) => Some(AllocInfo {
+            output_reg: *output_reg,
+            box_size: boxed::Int::size(),
+        }),
+        OpKind::AllocBoxedPair(output_reg, _) => Some(AllocInfo {
+            output_reg: *output_reg,
+            box_size: boxed::TopPair::size(),
+        }),
         _ => None,
     }
 }
@@ -49,7 +63,7 @@ fn push_complete_atom<'op>(
     }
 }
 
-pub fn plan_allocs<'op>(_captures: &Captures, ops: &'op [ops::Op]) -> Vec<AllocAtom<'op>> {
+pub fn plan_allocs<'op>(captures: &Captures, ops: &'op [ops::Op]) -> Vec<AllocAtom<'op>> {
     let mut atoms = vec![];
 
     let mut box_sources = HashMap::new();
@@ -62,8 +76,16 @@ pub fn plan_allocs<'op>(_captures: &Captures, ops: &'op [ops::Op]) -> Vec<AllocA
             continue;
         }
 
-        if let Some(reg_id) = op_alloc_output_reg(op) {
-            box_sources.insert(reg_id, BoxSource::Stack);
+        if let Some(AllocInfo {
+            output_reg,
+            box_size,
+        }) = op_alloc_info(op)
+        {
+            if captures.get(output_reg) == CaptureKind::Never {
+                box_sources.insert(output_reg, BoxSource::Stack);
+            } else {
+                box_sources.insert(output_reg, BoxSource::Heap(box_size));
+            }
         }
 
         atom_ops.push(op);

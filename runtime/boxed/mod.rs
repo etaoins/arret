@@ -27,21 +27,21 @@ pub mod prelude {
 
 pub trait Boxed: Sized {}
 
-#[derive(Copy, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 pub enum BoxSize {
     Size16,
     Size32,
 }
 
 impl BoxSize {
-    fn cell_count(self) -> usize {
+    pub fn cell_count(self) -> usize {
         match self {
             BoxSize::Size16 => 1,
             BoxSize::Size32 => 2,
         }
     }
 
-    fn to_heap_alloc_type(self) -> AllocType {
+    pub fn to_heap_alloc_type(self) -> AllocType {
         match self {
             BoxSize::Size16 => AllocType::Heap16,
             BoxSize::Size32 => AllocType::Heap32,

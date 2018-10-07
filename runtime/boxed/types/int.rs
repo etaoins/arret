@@ -11,7 +11,7 @@ pub struct Int {
 
 impl ConstructableFrom<i64> for Int {
     fn size_for_value(_: &i64) -> BoxSize {
-        BoxSize::Size16
+        Self::size()
     }
 
     fn construct(value: i64, alloc_type: AllocType, _: &mut Interner) -> Int {
@@ -26,6 +26,10 @@ impl ConstructableFrom<i64> for Int {
 }
 
 impl Int {
+    pub fn size() -> BoxSize {
+        BoxSize::Size16
+    }
+
     pub fn value(&self) -> i64 {
         self.value
     }
