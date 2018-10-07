@@ -1,4 +1,4 @@
-mod alloc_gen;
+mod alloc;
 mod callee_gen;
 mod const_gen;
 mod escape_analysis;

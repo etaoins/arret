@@ -6,7 +6,7 @@ use llvm_sys::prelude::*;
 
 use runtime::boxed;
 
-use crate::codegen::alloc_gen;
+use crate::codegen::alloc;
 use crate::codegen::const_gen;
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::CodegenCtx;
@@ -74,9 +74,7 @@ fn gen_cond(
 
         for (block, ops) in &[(true_block, true_ops), (false_block, false_ops)] {
             LLVMPositionBuilderAtEnd(fcx.builder, *block);
-            for op in ops.iter() {
-                gen_op(cgx, mcx, fcx, op);
-            }
+            gen_op_sequence(cgx, mcx, fcx, ops);
             LLVMBuildBr(fcx.builder, cont_block);
         }
         let mut true_result_llvm = fcx.regs[true_result_reg];
@@ -128,7 +126,13 @@ fn gen_callee(
     }
 }
 
-fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
+fn gen_op(
+    cgx: &mut CodegenCtx,
+    mcx: &mut ModCtx,
+    fcx: &mut FunCtx,
+    box_sources: &HashMap<RegId, alloc::BoxSource>,
+    op: &Op,
+) {
     unsafe {
         match &op.kind {
             OpKind::CurrentTask(reg, _) => {
@@ -309,8 +313,11 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::AllocInt(reg, int_reg) => {
+                let box_source = box_sources[reg];
+
                 let llvm_int = fcx.regs[int_reg];
-                let llvm_alloced = alloc_gen::gen_alloc_int(cgx, fcx.builder, llvm_int);
+                let llvm_alloced =
+                    alloc::gen::gen_alloc_int(cgx, fcx.builder, box_source, llvm_int);
 
                 fcx.regs.insert(*reg, llvm_alloced);
             }
@@ -322,13 +329,16 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                     length_reg,
                 },
             ) => {
+                let box_source = box_sources[reg];
+
                 let llvm_head = fcx.regs[head_reg];
                 let llvm_rest = fcx.regs[rest_reg];
                 let llvm_length = fcx.regs[length_reg];
 
-                let llvm_value = alloc_gen::gen_alloc_boxed_pair(
+                let llvm_value = alloc::gen::gen_alloc_boxed_pair(
                     cgx,
                     fcx.builder,
+                    box_source,
                     llvm_head,
                     llvm_rest,
                     llvm_length,
@@ -347,6 +357,17 @@ fn gen_op(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, op: &Op) {
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }
+        }
+    }
+}
+
+fn gen_op_sequence(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx, ops: &[Op]) {
+    use crate::codegen::alloc::plan::plan_allocs;
+    let alloc_atoms = plan_allocs(ops);
+
+    for alloc_atom in alloc_atoms {
+        for op in alloc_atom.ops() {
+            gen_op(cgx, mcx, fcx, alloc_atom.box_sources(), &op);
         }
     }
 }
@@ -396,9 +417,7 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> LLVM
             cgx.add_boxed_return_attrs(function);
         }
 
-        for op in fun.ops.as_ref() {
-            gen_op(cgx, mcx, &mut fcx, &op);
-        }
+        gen_op_sequence(cgx, mcx, &mut fcx, fun.ops.as_ref());
 
         function
     }

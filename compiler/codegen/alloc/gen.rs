@@ -5,6 +5,7 @@ use llvm_sys::prelude::*;
 
 use runtime::boxed;
 
+use crate::codegen::alloc::BoxSource;
 use crate::codegen::CodegenCtx;
 
 fn gen_stack_alloced_box<T: boxed::DirectTagged>(
@@ -35,13 +36,25 @@ fn gen_stack_alloced_box<T: boxed::DirectTagged>(
     }
 }
 
+fn gen_alloced_box<T: boxed::DirectTagged>(
+    cgx: &mut CodegenCtx,
+    builder: LLVMBuilderRef,
+    box_source: BoxSource,
+    value_name: &[u8],
+) -> LLVMValueRef {
+    match box_source {
+        BoxSource::Stack => gen_stack_alloced_box::<T>(cgx, builder, value_name),
+    }
+}
+
 pub fn gen_alloc_int(
     cgx: &mut CodegenCtx,
     builder: LLVMBuilderRef,
+    box_source: BoxSource,
     llvm_int_value: LLVMValueRef,
 ) -> LLVMValueRef {
     unsafe {
-        let alloced_int = gen_stack_alloced_box::<boxed::Int>(cgx, builder, b"alloced_int\0");
+        let alloced_int = gen_alloced_box::<boxed::Int>(cgx, builder, box_source, b"alloced_int\0");
 
         let value_ptr =
             LLVMBuildStructGEP(builder, alloced_int, 1, b"value_ptr\0".as_ptr() as *const _);
@@ -54,12 +67,14 @@ pub fn gen_alloc_int(
 pub fn gen_alloc_boxed_pair(
     cgx: &mut CodegenCtx,
     builder: LLVMBuilderRef,
+    box_source: BoxSource,
     llvm_head: LLVMValueRef,
     llvm_rest: LLVMValueRef,
     llvm_length: LLVMValueRef,
 ) -> LLVMValueRef {
     unsafe {
-        let alloced_pair = gen_stack_alloced_box::<boxed::TopPair>(cgx, builder, b"alloced_pair\0");
+        let alloced_pair =
+            gen_alloced_box::<boxed::TopPair>(cgx, builder, box_source, b"alloced_pair\0");
 
         let length_ptr = LLVMBuildStructGEP(
             builder,
