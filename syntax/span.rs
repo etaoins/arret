@@ -1,4 +1,6 @@
-#[derive(PartialEq, Eq, Debug, Hash, Clone, PartialOrd, Ord, Copy)]
+use std::fmt;
+
+#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Copy)]
 pub struct Span {
     pub lo: u32,
     pub hi: u32,
@@ -26,6 +28,16 @@ impl Span {
 
     pub fn contains(self, other: Span) -> bool {
         (other.lo >= self.lo) && (other.hi <= self.hi)
+    }
+}
+
+impl fmt::Debug for Span {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.lo == self.hi {
+            write!(f, "Span[]")
+        } else {
+            write!(f, "Span[{}:{}]", self.lo, self.hi)
+        }
     }
 }
 
