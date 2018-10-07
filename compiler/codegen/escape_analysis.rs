@@ -238,7 +238,7 @@ mod test {
         let mut reg_counter = ops::RegIdCounter::new();
         let param_reg = reg_counter.alloc();
 
-        let empty_fun = ops::Fun {
+        let test_fun = ops::Fun {
             source_name: None,
             abi: ops::FunABI {
                 takes_task: false,
@@ -250,7 +250,7 @@ mod test {
             ops: Box::new([]),
         };
 
-        let captures = calc_fun_captures(&[], &empty_fun);
+        let captures = calc_fun_captures(&[], &test_fun);
         assert_eq!(CaptureKind::Never, captures.get(param_reg));
     }
 
@@ -259,7 +259,7 @@ mod test {
         let mut reg_counter = ops::RegIdCounter::new();
         let capture_reg = reg_counter.alloc();
 
-        let empty_fun = ops::Fun {
+        let test_fun = ops::Fun {
             source_name: None,
             abi: ops::FunABI {
                 takes_task: false,
@@ -271,7 +271,7 @@ mod test {
             ops: Box::new([ops::OpKind::Ret(capture_reg).into()]),
         };
 
-        let captures = calc_fun_captures(&[], &empty_fun);
+        let captures = calc_fun_captures(&[], &test_fun);
         assert_eq!(CaptureKind::ViaRet, captures.get(capture_reg));
     }
 
@@ -281,7 +281,7 @@ mod test {
         let param_reg = reg_counter.alloc();
         let ret_reg = reg_counter.alloc();
 
-        let empty_fun = ops::Fun {
+        let test_fun = ops::Fun {
             source_name: None,
             abi: ops::FunABI {
                 takes_task: false,
@@ -304,7 +304,7 @@ mod test {
             ]),
         };
 
-        let captures = calc_fun_captures(&[], &empty_fun);
+        let captures = calc_fun_captures(&[], &test_fun);
         assert_eq!(CaptureKind::ViaRet, captures.get(param_reg));
         assert_eq!(CaptureKind::ViaRet, captures.get(ret_reg));
     }
@@ -315,7 +315,7 @@ mod test {
         let param_reg = reg_counter.alloc();
         let ret_reg = reg_counter.alloc();
 
-        let empty_fun = ops::Fun {
+        let test_fun = ops::Fun {
             source_name: None,
             abi: ops::FunABI {
                 takes_task: false,
@@ -337,8 +337,101 @@ mod test {
             ]),
         };
 
-        let captures = calc_fun_captures(&[], &empty_fun);
+        let captures = calc_fun_captures(&[], &test_fun);
         assert_eq!(CaptureKind::Always, captures.get(param_reg));
+        assert_eq!(CaptureKind::ViaRet, captures.get(ret_reg));
+    }
+
+    #[test]
+    fn capture_param_via_static_symbol_call() {
+        let mut reg_counter = ops::RegIdCounter::new();
+
+        // These are passed to the first call with an unused ret
+        let param_reg1 = reg_counter.alloc();
+        let param_reg2 = reg_counter.alloc();
+        let param_reg3 = reg_counter.alloc();
+
+        // These are passed to the second call which does have its ret captured
+        let param_reg4 = reg_counter.alloc();
+        let param_reg5 = reg_counter.alloc();
+        let param_reg6 = reg_counter.alloc();
+
+        let unused_reg = reg_counter.alloc();
+        let ret_reg = reg_counter.alloc();
+
+        let static_symbol_abi = ops::FunABI {
+            takes_task: false,
+            takes_closure: false,
+            params: Box::new([
+                ParamABIType {
+                    abi_type: boxed::TypeTag::Int.into(),
+                    capture: ParamCapture::Never,
+                },
+                ParamABIType {
+                    abi_type: boxed::TypeTag::Int.into(),
+                    capture: ParamCapture::Auto,
+                },
+                ParamABIType {
+                    abi_type: boxed::TypeTag::Int.into(),
+                    capture: ParamCapture::Always,
+                },
+            ]),
+            ret: boxed::TypeTag::Int.into(),
+        };
+
+        let static_symbol = ops::StaticSymbol {
+            symbol: "test",
+            abi: static_symbol_abi,
+        };
+
+        let test_fun = ops::Fun {
+            source_name: None,
+            abi: ops::FunABI {
+                takes_task: false,
+                takes_closure: false,
+                params: Box::new([
+                    boxed::TypeTag::Int.into(),
+                    boxed::TypeTag::Int.into(),
+                    boxed::TypeTag::Int.into(),
+                    boxed::TypeTag::Int.into(),
+                    boxed::TypeTag::Int.into(),
+                    boxed::TypeTag::Int.into(),
+                ]),
+                ret: boxed::TypeTag::Int.into(),
+            },
+            params: Box::new([param_reg1]),
+            ops: Box::new([
+                ops::OpKind::Call(
+                    unused_reg,
+                    ops::CallOp {
+                        callee: ops::Callee::StaticSymbol(static_symbol.clone()),
+                        args: Box::new([param_reg1, param_reg2, param_reg3]),
+                    },
+                )
+                .into(),
+                ops::OpKind::Call(
+                    ret_reg,
+                    ops::CallOp {
+                        callee: ops::Callee::StaticSymbol(static_symbol.clone()),
+                        args: Box::new([param_reg4, param_reg5, param_reg6]),
+                    },
+                )
+                .into(),
+                ops::OpKind::Ret(ret_reg).into(),
+            ]),
+        };
+
+        let captures = calc_fun_captures(&[], &test_fun);
+
+        assert_eq!(CaptureKind::Never, captures.get(param_reg1));
+        assert_eq!(CaptureKind::Never, captures.get(param_reg2));
+        assert_eq!(CaptureKind::Always, captures.get(param_reg3));
+
+        assert_eq!(CaptureKind::Never, captures.get(param_reg4));
+        assert_eq!(CaptureKind::ViaRet, captures.get(param_reg5));
+        assert_eq!(CaptureKind::Always, captures.get(param_reg6));
+
+        assert_eq!(CaptureKind::Never, captures.get(unused_reg));
         assert_eq!(CaptureKind::ViaRet, captures.get(ret_reg));
     }
 
@@ -348,7 +441,7 @@ mod test {
         let param_reg = reg_counter.alloc();
         let ret_reg = reg_counter.alloc();
 
-        let empty_fun = ops::Fun {
+        let test_fun = ops::Fun {
             source_name: None,
             abi: ops::FunABI {
                 takes_task: false,
@@ -373,7 +466,7 @@ mod test {
             ]),
         };
 
-        let captures = calc_fun_captures(&[], &empty_fun);
+        let captures = calc_fun_captures(&[], &test_fun);
         assert_eq!(CaptureKind::ViaRet, captures.get(param_reg));
         assert_eq!(CaptureKind::ViaRet, captures.get(ret_reg));
     }
