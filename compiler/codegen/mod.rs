@@ -145,7 +145,16 @@ impl CodegenCtx {
             let mut members = vec![llvm_header];
 
             let type_name = match boxed_abi_type {
-                BoxedABIType::Any => b"any\0".as_ptr(),
+                BoxedABIType::Any => {
+                    use std::mem;
+
+                    let llvm_byte = LLVMInt8TypeInContext(self.llx);
+                    let padding_bytes =
+                        mem::size_of::<boxed::Any>() - mem::size_of::<boxed::Header>();
+
+                    members.push(LLVMArrayType(llvm_byte, padding_bytes as u32));
+                    b"any\0".as_ptr()
+                }
                 BoxedABIType::DirectTagged(boxed::TypeTag::Nil) => b"nil\0".as_ptr(),
                 BoxedABIType::DirectTagged(boxed::TypeTag::Int) => {
                     members.push(LLVMInt64TypeInContext(self.llx));
@@ -292,6 +301,14 @@ impl CodegenCtx {
 
     fn llvm_enum_attr_for_name(&mut self, attr_name: &[u8], attr_value: u64) -> LLVMAttributeRef {
         llvm_enum_attr_for_name(self.llx, attr_name, attr_value)
+    }
+
+    fn llvm_boxed_align_attr(&self) -> LLVMAttributeRef {
+        self.boxed_align_attr
+    }
+
+    fn llvm_noalias_attr(&self) -> LLVMAttributeRef {
+        self.noalias_attr
     }
 
     fn add_boxed_param_attrs(

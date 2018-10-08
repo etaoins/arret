@@ -144,13 +144,10 @@ fn gen_op(
     cgx: &mut CodegenCtx,
     mcx: &mut ModCtx,
     fcx: &mut FunCtx<'_>,
+    active_alloc: &mut alloc::gen::ActiveAlloc,
     box_sources: &HashMap<RegId, alloc::BoxSource>,
     op: &Op,
 ) {
-    let mut active_alloc = fcx
-        .current_task
-        .map(|llvm_task| alloc::ActiveAlloc { llvm_task });
-
     unsafe {
         match &op.kind {
             OpKind::CurrentTask(reg, _) => {
@@ -331,18 +328,11 @@ fn gen_op(
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::AllocInt(reg, int_reg) => {
-                let active_alloc = active_alloc.as_mut().expect("need allocation");
                 let box_source = box_sources[reg];
 
                 let llvm_int = fcx.regs[int_reg];
-                let llvm_alloced = alloc::gen::gen_alloc_int(
-                    cgx,
-                    mcx,
-                    fcx.builder,
-                    active_alloc,
-                    box_source,
-                    llvm_int,
-                );
+                let llvm_alloced =
+                    alloc::gen::gen_alloc_int(cgx, fcx.builder, active_alloc, box_source, llvm_int);
 
                 fcx.regs.insert(*reg, llvm_alloced);
             }
@@ -354,7 +344,6 @@ fn gen_op(
                     length_reg,
                 },
             ) => {
-                let active_alloc = active_alloc.as_mut().expect("need allocation");
                 let box_source = box_sources[reg];
 
                 let input = alloc::gen::PairInput {
@@ -365,7 +354,6 @@ fn gen_op(
 
                 let llvm_value = alloc::gen::gen_alloc_boxed_pair(
                     cgx,
-                    mcx,
                     fcx.builder,
                     active_alloc,
                     box_source,
@@ -394,9 +382,27 @@ fn gen_op_sequence(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx<'_>,
     let alloc_atoms = plan_allocs(fcx.captures, ops);
 
     for alloc_atom in alloc_atoms {
+        let mut active_alloc = if let Some(llvm_task) = fcx.current_task {
+            alloc::gen::gen_active_alloc_for_atom(cgx, mcx, fcx.builder, llvm_task, &alloc_atom)
+        } else {
+            alloc::gen::ActiveAlloc::empty()
+        };
+
         for op in alloc_atom.ops() {
-            gen_op(cgx, mcx, fcx, alloc_atom.box_sources(), &op);
+            gen_op(
+                cgx,
+                mcx,
+                fcx,
+                &mut active_alloc,
+                alloc_atom.box_sources(),
+                &op,
+            );
         }
+
+        assert!(
+            active_alloc.is_empty(),
+            "did not consume entire active heap allocation"
+        );
     }
 }
 

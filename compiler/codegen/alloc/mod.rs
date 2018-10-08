@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use llvm_sys::prelude::*;
-
 use runtime::boxed;
 
 use crate::mir::ops;
@@ -38,8 +36,4 @@ impl<'op> AllocAtom<'op> {
     pub fn ops(&self) -> &[&'op ops::Op] {
         self.ops.as_ref()
     }
-}
-
-pub struct ActiveAlloc {
-    pub llvm_task: LLVMValueRef,
 }

@@ -1,13 +1,35 @@
-use std::mem;
+use std::{mem, ptr};
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
+use llvm_sys::LLVMAttributeReturnIndex;
 
 use runtime::boxed;
 
-use crate::codegen::alloc::{ActiveAlloc, BoxSource};
+use crate::codegen::alloc::{AllocAtom, BoxSource};
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::CodegenCtx;
+
+pub struct ActiveAlloc {
+    box_slots: LLVMValueRef,
+
+    total_cells: usize,
+    used_cells: usize,
+}
+
+impl ActiveAlloc {
+    pub fn empty() -> ActiveAlloc {
+        ActiveAlloc {
+            box_slots: ptr::null_mut(),
+            total_cells: 0,
+            used_cells: 0,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.total_cells == self.used_cells
+    }
+}
 
 pub struct PairInput {
     pub llvm_head: LLVMValueRef,
@@ -57,49 +79,45 @@ fn gen_stack_alloced_box<T: boxed::DirectTagged>(
 
 fn gen_heap_alloced_box<T: boxed::DirectTagged>(
     cgx: &mut CodegenCtx,
-    mcx: &mut ModCtx,
     builder: LLVMBuilderRef,
     active_alloc: &mut ActiveAlloc,
     box_size: boxed::BoxSize,
     value_name: &[u8],
 ) -> LLVMValueRef {
-    use runtime::abitype;
     unsafe {
-        let llvm_i32 = LLVMInt32TypeInContext(cgx.llx);
-        let llvm_param_types = &mut [cgx.task_llvm_type(), llvm_i32];
-
-        let alloc_cells_llvm_type = LLVMFunctionType(
-            cgx.boxed_abi_to_llvm_ptr_type(&abitype::BoxedABIType::Any),
-            llvm_param_types.as_mut_ptr(),
-            llvm_param_types.len() as u32,
-            0,
+        assert!(
+            !active_alloc.is_empty(),
+            "attempt to create heap box with empty active heap allocation"
         );
 
-        let alloc_cells_fun = mcx.get_function_or_insert(
-            alloc_cells_llvm_type,
-            b"arret_runtime_alloc_cells\0",
-            |alloc_cells_fun| {
-                cgx.add_boxed_return_attrs(alloc_cells_fun);
-            },
-        );
+        let cell_count = box_size.cell_count();
 
-        let alloc_cells_args = &mut [
-            active_alloc.llvm_task,
-            LLVMConstInt(llvm_i32, box_size.cell_count() as u64, 0),
-        ];
+        let slot_index = active_alloc.used_cells;
+        let llvm_slot = if slot_index == 0 {
+            active_alloc.box_slots
+        } else {
+            let gep_indices = &mut [LLVMConstInt(
+                LLVMInt32TypeInContext(cgx.llx),
+                slot_index as u64,
+                0,
+            )];
 
-        let cells_ret = LLVMBuildCall(
-            builder,
-            alloc_cells_fun,
-            alloc_cells_args.as_mut_ptr(),
-            alloc_cells_args.len() as u32,
-            b"cell_alloc\0".as_ptr() as *const _,
-        );
+            LLVMBuildInBoundsGEP(
+                builder,
+                active_alloc.box_slots,
+                gep_indices.as_mut_ptr(),
+                gep_indices.len() as u32,
+                b"slot\0".as_ptr() as *const _,
+            )
+        };
+
+        active_alloc.used_cells += cell_count;
+        assert!(active_alloc.used_cells <= active_alloc.total_cells);
 
         let type_tag = T::TYPE_TAG;
         let alloced_box = LLVMBuildBitCast(
             builder,
-            cells_ret,
+            llvm_slot,
             cgx.boxed_abi_to_llvm_ptr_type(&type_tag.into()),
             value_name.as_ptr() as *const _,
         );
@@ -117,7 +135,6 @@ fn gen_heap_alloced_box<T: boxed::DirectTagged>(
 
 fn gen_alloced_box<T: boxed::DirectTagged>(
     cgx: &mut CodegenCtx,
-    mcx: &mut ModCtx,
     builder: LLVMBuilderRef,
     active_alloc: &mut ActiveAlloc,
     box_source: BoxSource,
@@ -126,28 +143,96 @@ fn gen_alloced_box<T: boxed::DirectTagged>(
     match box_source {
         BoxSource::Stack => gen_stack_alloced_box::<T>(cgx, builder, value_name),
         BoxSource::Heap(box_size) => {
-            gen_heap_alloced_box::<T>(cgx, mcx, builder, active_alloc, box_size, value_name)
+            gen_heap_alloced_box::<T>(cgx, builder, active_alloc, box_size, value_name)
+        }
+    }
+}
+
+pub fn gen_active_alloc_for_atom(
+    cgx: &mut CodegenCtx,
+    mcx: &mut ModCtx,
+    builder: LLVMBuilderRef,
+    llvm_task: LLVMValueRef,
+    atom: &AllocAtom<'_>,
+) -> ActiveAlloc {
+    use runtime::abitype;
+
+    let required_cells = atom
+        .box_sources
+        .values()
+        .map(|box_source| match box_source {
+            BoxSource::Stack => 0,
+            BoxSource::Heap(box_size) => box_size.cell_count(),
+        })
+        .sum();
+
+    if required_cells == 0 {
+        return ActiveAlloc::empty();
+    }
+
+    unsafe {
+        let llvm_i32 = LLVMInt32TypeInContext(cgx.llx);
+        let llvm_param_types = &mut [cgx.task_llvm_type(), llvm_i32];
+
+        let alloc_cells_llvm_type = LLVMFunctionType(
+            cgx.boxed_abi_to_llvm_ptr_type(&abitype::BoxedABIType::Any),
+            llvm_param_types.as_mut_ptr(),
+            llvm_param_types.len() as u32,
+            0,
+        );
+
+        let alloc_cells_fun = mcx.get_function_or_insert(
+            alloc_cells_llvm_type,
+            b"arret_runtime_alloc_cells\0",
+            |alloc_cells_fun| {
+                LLVMAddAttributeAtIndex(
+                    alloc_cells_fun,
+                    LLVMAttributeReturnIndex,
+                    cgx.llvm_boxed_align_attr(),
+                );
+                LLVMAddAttributeAtIndex(
+                    alloc_cells_fun,
+                    LLVMAttributeReturnIndex,
+                    cgx.llvm_noalias_attr(),
+                );
+            },
+        );
+
+        let alloc_cells_args = &mut [llvm_task, LLVMConstInt(llvm_i32, required_cells as u64, 0)];
+
+        let box_slots = LLVMBuildCall(
+            builder,
+            alloc_cells_fun,
+            alloc_cells_args.as_mut_ptr(),
+            alloc_cells_args.len() as u32,
+            b"box_slots\0".as_ptr() as *const _,
+        );
+
+        // We can dereference the entire allocation immediately
+        let dereferenceable_attr = cgx.llvm_enum_attr_for_name(
+            b"dereferenceable",
+            (mem::size_of::<boxed::Any>() * required_cells) as u64,
+        );
+        LLVMAddCallSiteAttribute(box_slots, LLVMAttributeReturnIndex, dereferenceable_attr);
+
+        ActiveAlloc {
+            box_slots,
+            total_cells: required_cells,
+            used_cells: 0,
         }
     }
 }
 
 pub fn gen_alloc_int(
     cgx: &mut CodegenCtx,
-    mcx: &mut ModCtx,
     builder: LLVMBuilderRef,
     active_alloc: &mut ActiveAlloc,
     box_source: BoxSource,
     llvm_int_value: LLVMValueRef,
 ) -> LLVMValueRef {
     unsafe {
-        let alloced_int = gen_alloced_box::<boxed::Int>(
-            cgx,
-            mcx,
-            builder,
-            active_alloc,
-            box_source,
-            b"alloced_int\0",
-        );
+        let alloced_int =
+            gen_alloced_box::<boxed::Int>(cgx, builder, active_alloc, box_source, b"alloced_int\0");
 
         let value_ptr =
             LLVMBuildStructGEP(builder, alloced_int, 1, b"value_ptr\0".as_ptr() as *const _);
@@ -159,7 +244,6 @@ pub fn gen_alloc_int(
 
 pub fn gen_alloc_boxed_pair(
     cgx: &mut CodegenCtx,
-    mcx: &mut ModCtx,
     builder: LLVMBuilderRef,
     active_alloc: &mut ActiveAlloc,
     box_source: BoxSource,
@@ -174,7 +258,6 @@ pub fn gen_alloc_boxed_pair(
     unsafe {
         let alloced_pair = gen_alloced_box::<boxed::TopPair>(
             cgx,
-            mcx,
             builder,
             active_alloc,
             box_source,
