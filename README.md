@@ -46,7 +46,7 @@ Arret is a successor to [Llambda](https://github.com/etaoins/llambda) without th
 The REPL provides an interactive environment for exploring Arret.
 It's supported as a first class concept in Arret; the REPL is just as powerful as the compiler.
 
-```
+```text
 > cargo +nightly run
 arret> (length '(1 2 3 4 5))
 => 5
@@ -63,6 +63,7 @@ arret> :type (identity [one two three])
 ### Compiler
 
 Compiled programs have a `(main!)` function as their entry point:
+
 ```clojure
 (import [stdlib base])
 
@@ -72,6 +73,7 @@ Compiled programs have a `(main!)` function as their entry point:
 ```
 
 These can be compiled to a static binary by running Arret with the path name:
+
 ```sh
 > cargo +nightly run hello-world.arret
 > ./hello-world
