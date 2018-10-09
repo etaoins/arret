@@ -68,8 +68,6 @@ fn gen_cond(
     } = cond_op;
 
     unsafe {
-        let previous_block = LLVMGetInsertBlock(fcx.builder);
-
         let mut true_block = LLVMAppendBasicBlockInContext(
             cgx.llx,
             fcx.function,
@@ -86,6 +84,9 @@ fn gen_cond(
             b"cond_cont\0".as_ptr() as *const _,
         );
 
+        let test_llvm = fcx.regs[test_reg];
+        LLVMBuildCondBr(fcx.builder, test_llvm, true_block, false_block);
+
         for (block, ops) in &[(true_block, true_ops), (false_block, false_ops)] {
             LLVMPositionBuilderAtEnd(fcx.builder, *block);
             gen_op_sequence(cgx, mcx, fcx, ops);
@@ -93,10 +94,6 @@ fn gen_cond(
         }
         let mut true_result_llvm = fcx.regs[true_result_reg];
         let mut false_result_llvm = fcx.regs[false_result_reg];
-
-        let test_llvm = fcx.regs[test_reg];
-        LLVMPositionBuilderAtEnd(fcx.builder, previous_block);
-        LLVMBuildCondBr(fcx.builder, test_llvm, true_block, false_block);
 
         LLVMPositionBuilderAtEnd(fcx.builder, cont_block);
         let phi_value = LLVMBuildPhi(
