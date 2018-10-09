@@ -1,11 +1,15 @@
 use std::collections::HashMap;
+use std::ptr;
+
+use llvm_sys::prelude::*;
 
 use runtime::boxed;
 
 use crate::mir::ops;
 
-pub mod gen;
+pub mod core;
 pub mod plan;
+pub mod types;
 
 /// Indicates where memory for a box allocation should come from
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -35,5 +39,25 @@ impl<'op> AllocAtom<'op> {
 
     pub fn ops(&self) -> &[&'op ops::Op] {
         self.ops.as_ref()
+    }
+}
+
+pub struct ActiveAlloc {
+    box_slots: LLVMValueRef,
+    total_cells: usize,
+    used_cells: usize,
+}
+
+impl ActiveAlloc {
+    pub fn empty() -> ActiveAlloc {
+        ActiveAlloc {
+            box_slots: ptr::null_mut(),
+            total_cells: 0,
+            used_cells: 0,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.total_cells == self.used_cells
     }
 }

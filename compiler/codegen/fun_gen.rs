@@ -141,7 +141,7 @@ fn gen_op(
     cgx: &mut CodegenCtx,
     mcx: &mut ModCtx,
     fcx: &mut FunCtx<'_>,
-    active_alloc: &mut alloc::gen::ActiveAlloc,
+    active_alloc: &mut alloc::ActiveAlloc,
     box_sources: &HashMap<RegId, alloc::BoxSource>,
     op: &Op,
 ) {
@@ -328,8 +328,13 @@ fn gen_op(
                 let box_source = box_sources[reg];
 
                 let llvm_int = fcx.regs[int_reg];
-                let llvm_alloced =
-                    alloc::gen::gen_alloc_int(cgx, fcx.builder, active_alloc, box_source, llvm_int);
+                let llvm_alloced = alloc::types::gen_alloc_int(
+                    cgx,
+                    fcx.builder,
+                    active_alloc,
+                    box_source,
+                    llvm_int,
+                );
 
                 fcx.regs.insert(*reg, llvm_alloced);
             }
@@ -343,13 +348,13 @@ fn gen_op(
             ) => {
                 let box_source = box_sources[reg];
 
-                let input = alloc::gen::PairInput {
+                let input = alloc::types::PairInput {
                     llvm_head: fcx.regs[head_reg],
                     llvm_rest: fcx.regs[rest_reg],
                     llvm_length: fcx.regs[length_reg],
                 };
 
-                let llvm_value = alloc::gen::gen_alloc_boxed_pair(
+                let llvm_value = alloc::types::gen_alloc_boxed_pair(
                     cgx,
                     fcx.builder,
                     active_alloc,
@@ -380,9 +385,9 @@ fn gen_op_sequence(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx<'_>,
 
     for alloc_atom in alloc_atoms {
         let mut active_alloc = if let Some(llvm_task) = fcx.current_task {
-            alloc::gen::gen_active_alloc_for_atom(cgx, mcx, fcx.builder, llvm_task, &alloc_atom)
+            alloc::core::gen_active_alloc_for_atom(cgx, mcx, fcx.builder, llvm_task, &alloc_atom)
         } else {
-            alloc::gen::ActiveAlloc::empty()
+            alloc::ActiveAlloc::empty()
         };
 
         for op in alloc_atom.ops() {
