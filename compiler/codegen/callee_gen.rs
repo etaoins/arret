@@ -16,7 +16,11 @@ pub fn gen_static_symbol_callee(
     use crate::codegen::escape_analysis::{infer_param_capture_kind, CaptureKind};
     use runtime::abitype::{ABIType, RetABIType};
 
-    let ops::StaticSymbol { abi, symbol } = static_symbol;
+    let ops::StaticSymbol {
+        abi,
+        impure,
+        symbol,
+    } = static_symbol;
 
     let function_type = cgx.fun_abi_to_llvm_type(&abi);
     let function_name = ffi::CString::new(*symbol).unwrap();
@@ -41,6 +45,15 @@ pub fn gen_static_symbol_callee(
                             no_capture,
                         )
                     }
+                }
+
+                if !impure {
+                    let speculatable_attr = cgx.llvm_enum_attr_for_name(b"speculatable", 0);
+                    LLVMAddAttributeAtIndex(
+                        function,
+                        LLVMAttributeFunctionIndex,
+                        speculatable_attr,
+                    );
                 }
 
                 match abi.ret {

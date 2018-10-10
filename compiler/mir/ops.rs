@@ -27,6 +27,7 @@ impl FunABI {
 #[derive(Debug, PartialEq, Clone)]
 pub struct StaticSymbol {
     pub symbol: &'static str,
+    pub impure: bool,
     pub abi: FunABI,
 }
 
@@ -44,6 +45,7 @@ pub enum Callee {
 #[derive(Debug, PartialEq, Clone)]
 pub struct CallOp {
     pub callee: Callee,
+    pub impure: bool,
     pub args: Box<[RegId]>,
 }
 
@@ -214,7 +216,8 @@ impl OpKind {
         use crate::mir::ops::OpKind::*;
 
         match self {
-            Call(_, _) | Ret(_) | RetVoid | Unreachable => true,
+            Ret(_) | RetVoid | Unreachable => true,
+            Call(_, call_op) => call_op.impure,
             Cond(_, cond_op) => cond_op
                 .true_ops
                 .iter()

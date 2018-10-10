@@ -181,7 +181,7 @@ fn add_op_captures(
                 add_op_captures(built_funs, captures, ret_type, op);
             }
         }
-        OpKind::Call(reg, ops::CallOp { callee, args }) => {
+        OpKind::Call(reg, ops::CallOp { callee, args, .. }) => {
             let return_capture = captures.get(*reg);
 
             match callee {
@@ -329,6 +329,7 @@ mod test {
                     ret_reg,
                     ops::CallOp {
                         callee: ops::Callee::BoxedFunThunk(param_reg),
+                        impure: true,
                         args: Box::new([param_reg, param_reg, param_reg]),
                     },
                 )
@@ -381,6 +382,7 @@ mod test {
 
         let static_symbol = ops::StaticSymbol {
             symbol: "test",
+            impure: true,
             abi: static_symbol_abi,
         };
 
@@ -405,6 +407,7 @@ mod test {
                     unused_reg,
                     ops::CallOp {
                         callee: ops::Callee::StaticSymbol(static_symbol.clone()),
+                        impure: true,
                         args: Box::new([param_reg1, param_reg2, param_reg3]),
                     },
                 )
@@ -413,6 +416,7 @@ mod test {
                     ret_reg,
                     ops::CallOp {
                         callee: ops::Callee::StaticSymbol(static_symbol.clone()),
+                        impure: true,
                         args: Box::new([param_reg4, param_reg5, param_reg6]),
                     },
                 )

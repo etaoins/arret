@@ -10,6 +10,7 @@ use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops;
 use crate::mir::value;
 use crate::mir::value::Value;
+use crate::ty::purity;
 
 pub fn build_rust_fun_app(
     ehx: &mut EvalHirCtx,
@@ -51,6 +52,10 @@ pub fn build_rust_fun_app(
         arg_regs.push(reg_id.into());
     };
 
+    // TODO: Fix for polymorphism once it's supported
+    // This will need to be split in to `always_impure` for the Symbol and a `call_impure` for this call site
+    let impure = rust_fun.arret_fun_type().purity() != &purity::Purity::Pure.into_poly();
+
     let abi = FunABI {
         takes_task: rust_fun.takes_task(),
         takes_closure: false,
@@ -60,6 +65,7 @@ pub fn build_rust_fun_app(
 
     let callee = ops::Callee::StaticSymbol(ops::StaticSymbol {
         symbol: rust_fun.symbol(),
+        impure,
         abi,
     });
 
@@ -68,6 +74,7 @@ pub fn build_rust_fun_app(
         OpKind::Call,
         CallOp {
             callee,
+            impure,
             args: arg_regs.into_boxed_slice(),
         },
     );

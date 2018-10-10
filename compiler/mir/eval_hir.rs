@@ -439,6 +439,7 @@ impl EvalHirCtx {
             OpKind::Call,
             CallOp {
                 callee: Callee::BoxedFunThunk(fun_thunk_reg),
+                impure: true,
                 args: vec![task_reg, closure_reg, arg_list_reg.into()].into_boxed_slice(),
             },
         );

@@ -225,7 +225,7 @@ fn gen_op(
                 );
                 fcx.regs.insert(*reg, to_llvm_value);
             }
-            OpKind::Call(reg, CallOp { callee, args }) => {
+            OpKind::Call(reg, CallOp { callee, args, .. }) => {
                 let llvm_fun = gen_callee(cgx, mcx, fcx, callee);
 
                 let mut llvm_args = args
