@@ -155,7 +155,15 @@ impl OpKind {
             | RetVoid
             | Unreachable => {}
             ConstBoxedPair(_, box_pair_op) | AllocBoxedPair(_, box_pair_op) => {
-                coll.extend([box_pair_op.head_reg, box_pair_op.rest_reg].iter().cloned());
+                coll.extend(
+                    [
+                        box_pair_op.length_reg,
+                        box_pair_op.head_reg,
+                        box_pair_op.rest_reg,
+                    ]
+                        .iter()
+                        .cloned(),
+                );
             }
             AllocInt(_, reg_id)
             | ConstCastBoxed(

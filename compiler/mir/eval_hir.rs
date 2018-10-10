@@ -834,6 +834,7 @@ impl EvalHirCtx {
 
     /// Builds the main function of the program
     pub fn into_built_program(mut self, main_var_id: hir::VarId) -> Result<BuiltProgram> {
+        use crate::mir::optimise::optimise_fun;
         use runtime::abitype;
 
         let dcx = DefCtx::new();
@@ -852,8 +853,10 @@ impl EvalHirCtx {
             ret: abitype::RetABIType::Void,
         };
 
+        let main = optimise_fun(self.ops_for_arret_fun(&main_arret_fun, main_abi, false)?);
+
         Ok(BuiltProgram {
-            main: self.ops_for_arret_fun(&main_arret_fun, main_abi, false)?,
+            main,
             funs: self.built_funs,
         })
     }
