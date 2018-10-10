@@ -33,6 +33,7 @@ fn llvm_enum_attr_for_name(
 
 pub struct CodegenCtx {
     llx: LLVMContextRef,
+    module_pass_manager: LLVMPassManagerRef,
 
     task_type: Option<LLVMTypeRef>,
     record_type: Option<LLVMTypeRef>,
@@ -49,13 +50,22 @@ pub struct CodegenCtx {
 
 impl CodegenCtx {
     pub fn new() -> CodegenCtx {
+        use llvm_sys::transforms::pass_manager_builder::*;
         use std::mem;
 
         unsafe {
             let llx = LLVMContextCreate();
 
+            let module_pass_manager = LLVMCreatePassManager();
+
+            let fpmb = LLVMPassManagerBuilderCreate();
+            LLVMPassManagerBuilderSetOptLevel(fpmb, 2);
+            LLVMPassManagerBuilderPopulateModulePassManager(fpmb, module_pass_manager);
+            LLVMPassManagerBuilderDispose(fpmb);
+
             CodegenCtx {
                 llx,
+                module_pass_manager: LLVMCreatePassManager(),
 
                 task_type: None,
                 record_type: None,
@@ -344,12 +354,19 @@ impl CodegenCtx {
             }
         }
     }
+
+    fn optimise_module(&mut self, module: LLVMModuleRef) {
+        unsafe {
+            LLVMRunPassManager(self.module_pass_manager, module);
+        }
+    }
 }
 
 impl Drop for CodegenCtx {
     fn drop(&mut self) {
         unsafe {
             LLVMContextDispose(self.llx);
+            LLVMDisposePassManager(self.module_pass_manager);
         }
     }
 }

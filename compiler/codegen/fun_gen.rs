@@ -471,6 +471,7 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> Buil
         }
 
         gen_op_sequence(cgx, mcx, &mut fcx, fun.ops.as_ref());
+        mcx.optimise_function(function);
 
         BuiltFun {
             llvm_value: function,

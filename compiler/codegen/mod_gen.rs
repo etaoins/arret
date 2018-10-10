@@ -6,14 +6,35 @@ use crate::mir::ops;
 
 pub struct ModCtx {
     pub module: LLVMModuleRef,
+    pub function_pass_manager: LLVMPassManagerRef,
     pub built_funs: Vec<BuiltFun>,
+}
+
+impl Drop for ModCtx {
+    fn drop(&mut self) {
+        unsafe {
+            LLVMDisposePassManager(self.function_pass_manager);
+        }
+    }
 }
 
 impl ModCtx {
     pub fn new(module: LLVMModuleRef) -> ModCtx {
-        ModCtx {
-            module,
-            built_funs: vec![],
+        use llvm_sys::transforms::pass_manager_builder::*;
+
+        unsafe {
+            let function_pass_manager = LLVMCreateFunctionPassManagerForModule(module);
+
+            let fpmb = LLVMPassManagerBuilderCreate();
+            LLVMPassManagerBuilderSetOptLevel(fpmb, 2);
+            LLVMPassManagerBuilderPopulateFunctionPassManager(fpmb, function_pass_manager);
+            LLVMPassManagerBuilderDispose(fpmb);
+
+            ModCtx {
+                module,
+                function_pass_manager,
+                built_funs: vec![],
+            }
         }
     }
 
@@ -73,6 +94,12 @@ impl ModCtx {
 
             initialise(function);
             function
+        }
+    }
+
+    pub fn optimise_function(&mut self, function: LLVMValueRef) {
+        unsafe {
+            LLVMRunFunctionPassManager(self.function_pass_manager, function);
         }
     }
 }

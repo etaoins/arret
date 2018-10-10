@@ -139,6 +139,8 @@ pub fn gen_program(
             &mut error as *mut _,
         );
 
+        cgx.optimise_module(module);
+
         let llvm_code_gen_file_type = match output_type {
             OutputType::LLVMIR => {
                 if LLVMPrintModuleToFile(

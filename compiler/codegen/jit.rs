@@ -92,6 +92,8 @@ impl JITCtx {
                 error,
             );
 
+            cgx.optimise_module(module);
+
             let mut orc_module: LLVMOrcModuleHandle = 0;
             if LLVMOrcAddLazilyCompiledIR(
                 self.orc,
