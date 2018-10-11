@@ -4,8 +4,8 @@ use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::LLVMAttributeFunctionIndex;
 
+use crate::codegen::context::CodegenCtx;
 use crate::codegen::mod_gen::ModCtx;
-use crate::codegen::CodegenCtx;
 use crate::mir::ops;
 
 pub fn gen_static_symbol_callee(

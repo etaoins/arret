@@ -8,9 +8,9 @@ use runtime::boxed;
 
 use crate::codegen::alloc;
 use crate::codegen::const_gen;
+use crate::codegen::context::CodegenCtx;
 use crate::codegen::escape_analysis::{CaptureKind, Captures};
 use crate::codegen::mod_gen::ModCtx;
-use crate::codegen::CodegenCtx;
 use crate::mir::ops::*;
 
 pub struct BuiltFun {

@@ -6,8 +6,8 @@ use llvm_sys::{LLVMLinkage, LLVMUnnamedAddr};
 
 use runtime::boxed;
 
+use crate::codegen::context::CodegenCtx;
 use crate::codegen::mod_gen::ModCtx;
-use crate::codegen::CodegenCtx;
 
 fn annotate_private_global(llvm_global: LLVMValueRef) {
     unsafe {

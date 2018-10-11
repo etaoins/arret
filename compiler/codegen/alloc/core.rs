@@ -7,8 +7,8 @@ use llvm_sys::{LLVMAttributeFunctionIndex, LLVMAttributeReturnIndex, LLVMIntPred
 use runtime::boxed;
 
 use crate::codegen::alloc::{ActiveAlloc, AllocAtom, BoxSource};
+use crate::codegen::context::CodegenCtx;
 use crate::codegen::mod_gen::ModCtx;
-use crate::codegen::CodegenCtx;
 
 fn init_alloced_box_header(
     cgx: &mut CodegenCtx,

@@ -11,8 +11,8 @@ use llvm_sys::execution_engine::*;
 use llvm_sys::orc::*;
 use llvm_sys::target_machine::*;
 
+use crate::codegen::context::CodegenCtx;
 use crate::codegen::mod_gen::ModCtx;
-use crate::codegen::CodegenCtx;
 use crate::mir::ops;
 
 extern "C" fn orc_sym_resolve(name_ptr: *const libc::c_char, jcx_void: *mut libc::c_void) -> u64 {

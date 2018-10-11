@@ -7,8 +7,8 @@ use llvm_sys::prelude::*;
 use llvm_sys::target_machine::*;
 use llvm_sys::LLVMLinkage;
 
+use crate::codegen::context::CodegenCtx;
 use crate::codegen::mod_gen::ModCtx;
-use crate::codegen::CodegenCtx;
 use crate::hir::rfi;
 use crate::mir;
 use crate::mir::ops;

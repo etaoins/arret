@@ -5,7 +5,7 @@ use runtime::boxed;
 
 use crate::codegen::alloc::core::gen_alloced_box;
 use crate::codegen::alloc::{ActiveAlloc, BoxSource};
-use crate::codegen::CodegenCtx;
+use crate::codegen::context::CodegenCtx;
 
 pub struct PairInput {
     pub llvm_head: LLVMValueRef,
