@@ -1,4 +1,3 @@
-#![feature(tool_lints)]
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
 
