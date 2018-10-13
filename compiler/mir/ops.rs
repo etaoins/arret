@@ -2,22 +2,50 @@ use runtime::abitype;
 
 use syntax::span::Span;
 
+use crate::codegen::GenABI;
+
 new_indexing_id_type!(BuiltFunId, u32);
 new_counting_id_type!(RegIdCounter, RegId);
 
+/// Specifies the calling convention of a ops function
+///
+/// At the lowest level we use the function calling convention of the target platform. This
+/// indicates how higher-level language features like closures are represented.
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum CallConv {
+    /// Must be callable using our external calling convention
+    ///
+    /// This is used for thunks and when passing the function as a parameter. These always take a
+    /// closure parameter even if the function doesn't consume it.
+    External,
+
+    /// Does not need to be externally callable but requires a closure
+    Closure,
+
+    /// Does not need to be externally callable and does not require closure
+    FreeFunction,
+}
+
+impl CallConv {
+    pub fn takes_closure(self) -> bool {
+        match self {
+            CallConv::External | CallConv::Closure => true,
+            CallConv::FreeFunction => false,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
-pub struct FunABI {
-    pub takes_task: bool,
-    pub takes_closure: bool,
-    pub params: Box<[abitype::ParamABIType]>,
+pub struct OpsABI {
+    pub call_conv: CallConv,
+    pub params: Box<[abitype::ABIType]>,
     pub ret: abitype::RetABIType,
 }
 
-impl FunABI {
-    pub fn thunk_abi() -> FunABI {
-        FunABI {
-            takes_task: true,
-            takes_closure: true,
+impl OpsABI {
+    pub fn thunk_abi() -> OpsABI {
+        OpsABI {
+            call_conv: CallConv::External,
             params: Box::new([abitype::TOP_LIST_BOXED_ABI_TYPE.into()]),
             ret: abitype::BoxedABIType::Any.into(),
         }
@@ -28,7 +56,7 @@ impl FunABI {
 pub struct StaticSymbol {
     pub symbol: &'static str,
     pub impure: bool,
-    pub abi: FunABI,
+    pub abi: GenABI,
 }
 
 /// Represents a callable function
@@ -94,8 +122,6 @@ pub enum OpKind {
     ConstCastBoxed(RegId, CastBoxedOp),
     CastBoxed(RegId, CastBoxedOp),
 
-    CurrentTask(RegId, ()),
-
     Call(RegId, CallOp),
     LoadBoxedListLength(RegId, RegId),
     LoadBoxedPairHead(RegId, RegId),
@@ -128,7 +154,6 @@ impl OpKind {
             | AllocBoxedPair(reg_id, _)
             | ConstCastBoxed(reg_id, _)
             | CastBoxed(reg_id, _)
-            | CurrentTask(reg_id, _)
             | Call(reg_id, _)
             | LoadBoxedListLength(reg_id, _)
             | LoadBoxedPairHead(reg_id, _)
@@ -153,7 +178,6 @@ impl OpKind {
             | ConstBoxedInt(_, _)
             | ConstBoxedStr(_, _)
             | ConstBoxedFunThunk(_, _)
-            | CurrentTask(_, _)
             | RetVoid
             | Unreachable => {}
             ConstBoxedPair(_, box_pair_op) | AllocBoxedPair(_, box_pair_op) => {
@@ -251,7 +275,7 @@ impl Op {
 pub struct Fun {
     pub source_name: Option<String>,
 
-    pub abi: FunABI,
+    pub abi: OpsABI,
     pub params: Box<[RegId]>,
     pub ops: Box<[Op]>,
 }

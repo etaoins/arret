@@ -122,13 +122,6 @@ impl BoxedABIType {
     pub fn into_abi_type(self) -> ABIType {
         ABIType::Boxed(self)
     }
-
-    pub fn into_param_abi_type(self) -> ParamABIType {
-        ParamABIType {
-            abi_type: self.into_abi_type(),
-            capture: ParamCapture::Auto,
-        }
-    }
 }
 
 impl From<boxed::TypeTag> for ABIType {
@@ -147,16 +140,38 @@ impl ABIType {
     pub fn into_ret_abi_type(self) -> RetABIType {
         RetABIType::Inhabited(self)
     }
+
+    pub fn into_param_abi_type(self) -> ParamABIType {
+        let capture = match self {
+            ABIType::Boxed(_) => ParamCapture::Auto,
+            _ => ParamCapture::Never,
+        };
+
+        ParamABIType {
+            abi_type: self,
+            capture,
+        }
+    }
 }
 
 impl From<boxed::TypeTag> for ParamABIType {
     fn from(type_tag: boxed::TypeTag) -> ParamABIType {
-        type_tag.into_boxed_abi_type().into_param_abi_type()
+        type_tag
+            .into_boxed_abi_type()
+            .into_abi_type()
+            .into_param_abi_type()
     }
 }
+
 impl From<BoxedABIType> for ParamABIType {
     fn from(boxed_abi_type: BoxedABIType) -> ParamABIType {
-        boxed_abi_type.into_param_abi_type()
+        boxed_abi_type.into_abi_type().into_param_abi_type()
+    }
+}
+
+impl From<ABIType> for ParamABIType {
+    fn from(abi_type: ABIType) -> ParamABIType {
+        abi_type.into_param_abi_type()
     }
 }
 

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use runtime::abitype::{ABIType, ParamABIType, ParamCapture, RetABIType};
 
 use crate::codegen::fun_gen::BuiltFun;
+use crate::codegen::GenABI;
 use crate::mir::ops;
 
 /// Describes the capture behaviour of a function parameter
@@ -95,18 +96,16 @@ pub fn infer_param_capture_kind(
 fn add_static_symbol_call_captures(
     captures: &mut Captures,
     return_capture: CaptureKind,
-    static_symbol_abi: &ops::FunABI,
+    static_symbol_abi: &GenABI,
     args: &[ops::RegId],
 ) {
     let mut arg_iter = args.iter();
 
-    if static_symbol_abi.takes_task {
-        arg_iter.next();
-    }
     if static_symbol_abi.takes_closure {
         arg_iter.next();
     }
 
+    assert_eq!(arg_iter.len(), static_symbol_abi.params.len());
     for (arg_reg, param_abi_type) in arg_iter.zip(static_symbol_abi.params.iter()) {
         let param_capture = infer_param_capture_kind(&static_symbol_abi.ret, param_abi_type);
 
@@ -123,6 +122,7 @@ fn add_built_fun_call_captures(
     built_fun: &BuiltFun,
     args: &[ops::RegId],
 ) {
+    assert_eq!(args.len(), built_fun.param_captures.len());
     for (arg_reg, param_capture) in args.iter().zip(built_fun.param_captures.iter()) {
         captures.add(
             *arg_reg,
@@ -194,7 +194,7 @@ fn add_op_captures(
                 }
                 ops::Callee::BoxedFunThunk(_) => {
                     // We know nothing about the actual captures. We need to assume the worst.
-                    captures.add(args[2], CaptureKind::Always);
+                    captures.add(args[1], CaptureKind::Always);
                 }
             };
         }
@@ -240,9 +240,8 @@ mod test {
 
         let test_fun = ops::Fun {
             source_name: None,
-            abi: ops::FunABI {
-                takes_task: false,
-                takes_closure: false,
+            abi: ops::OpsABI {
+                call_conv: ops::CallConv::FreeFunction,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: RetABIType::Void,
             },
@@ -261,9 +260,8 @@ mod test {
 
         let test_fun = ops::Fun {
             source_name: None,
-            abi: ops::FunABI {
-                takes_task: false,
-                takes_closure: false,
+            abi: ops::OpsABI {
+                call_conv: ops::CallConv::FreeFunction,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::Int.into(),
             },
@@ -283,9 +281,8 @@ mod test {
 
         let test_fun = ops::Fun {
             source_name: None,
-            abi: ops::FunABI {
-                takes_task: false,
-                takes_closure: false,
+            abi: ops::OpsABI {
+                call_conv: ops::CallConv::FreeFunction,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::TopPair.into(),
             },
@@ -317,9 +314,8 @@ mod test {
 
         let test_fun = ops::Fun {
             source_name: None,
-            abi: ops::FunABI {
-                takes_task: false,
-                takes_closure: false,
+            abi: ops::OpsABI {
+                call_conv: ops::CallConv::FreeFunction,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::TopPair.into(),
             },
@@ -360,7 +356,7 @@ mod test {
         let unused_reg = reg_counter.alloc();
         let ret_reg = reg_counter.alloc();
 
-        let static_symbol_abi = ops::FunABI {
+        let static_symbol_abi = GenABI {
             takes_task: false,
             takes_closure: false,
             params: Box::new([
@@ -388,9 +384,8 @@ mod test {
 
         let test_fun = ops::Fun {
             source_name: None,
-            abi: ops::FunABI {
-                takes_task: false,
-                takes_closure: false,
+            abi: ops::OpsABI {
+                call_conv: ops::CallConv::FreeFunction,
                 params: Box::new([
                     boxed::TypeTag::Int.into(),
                     boxed::TypeTag::Int.into(),
@@ -447,9 +442,8 @@ mod test {
 
         let test_fun = ops::Fun {
             source_name: None,
-            abi: ops::FunABI {
-                takes_task: false,
-                takes_closure: false,
+            abi: ops::OpsABI {
+                call_conv: ops::CallConv::FreeFunction,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::TopPair.into(),
             },

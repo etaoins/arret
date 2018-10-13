@@ -43,10 +43,6 @@ impl ModCtx {
         self.built_funs.push(built_fun);
     }
 
-    pub fn built_fun(&self, built_fun_id: ops::BuiltFunId) -> &BuiltFun {
-        &self.built_funs[built_fun_id.to_usize()]
-    }
-
     pub fn built_funs(&self) -> &Vec<BuiltFun> {
         &self.built_funs
     }

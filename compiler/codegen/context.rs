@@ -7,7 +7,7 @@ use llvm_sys::{LLVMAttributeReturnIndex, LLVMLinkage};
 use runtime::abitype::{ABIType, BoxedABIType, RetABIType, TOP_LIST_BOXED_ABI_TYPE};
 use runtime::boxed;
 
-use crate::mir::ops;
+use crate::codegen::GenABI;
 
 fn llvm_enum_attr_for_name(
     llx: LLVMContextRef,
@@ -80,7 +80,7 @@ impl CodegenCtx {
         }
     }
 
-    pub fn task_llvm_type(&mut self) -> LLVMTypeRef {
+    pub fn task_llvm_ptr_type(&mut self) -> LLVMTypeRef {
         let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
         let llx = self.llx;
         *self.task_type.get_or_insert_with(|| unsafe {
@@ -167,7 +167,7 @@ impl CodegenCtx {
                 BoxedABIType::DirectTagged(boxed::TypeTag::FunThunk) => {
                     members.push(self.record_llvm_type());
                     members.push(LLVMPointerType(
-                        self.fun_abi_to_llvm_type(&ops::FunABI::thunk_abi()),
+                        self.fun_abi_to_llvm_type(&GenABI::thunk_abi()),
                         0,
                     ));
                     b"boxed_fun_thunk\0".as_ptr()
@@ -224,11 +224,11 @@ impl CodegenCtx {
         }
     }
 
-    pub fn fun_abi_to_llvm_type(&mut self, fun_abi: &ops::FunABI) -> LLVMTypeRef {
+    pub fn fun_abi_to_llvm_type(&mut self, fun_abi: &GenABI) -> LLVMTypeRef {
         let mut llvm_param_types = vec![];
 
         if fun_abi.takes_task {
-            llvm_param_types.push(self.task_llvm_type());
+            llvm_param_types.push(self.task_llvm_ptr_type());
         }
 
         if fun_abi.takes_closure {

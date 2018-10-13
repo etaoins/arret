@@ -424,7 +424,6 @@ impl EvalHirCtx {
             boxed::TypeTag::FunThunk.into(),
         );
 
-        let task_reg = b.push_reg(span, OpKind::CurrentTask, ());
         let closure_reg = b.push_reg(span, OpKind::LoadBoxedFunThunkClosure, fun_thunk_reg);
         let arg_list_reg = value_to_reg(
             self,
@@ -440,7 +439,7 @@ impl EvalHirCtx {
             CallOp {
                 callee: Callee::BoxedFunThunk(fun_thunk_reg),
                 impure: true,
-                args: vec![task_reg, closure_reg, arg_list_reg.into()].into_boxed_slice(),
+                args: vec![closure_reg, arg_list_reg.into()].into_boxed_slice(),
             },
         );
 
@@ -575,7 +574,7 @@ impl EvalHirCtx {
     pub fn arret_fun_to_jit_boxed(&mut self, arret_fun: &value::ArretFun) -> Gc<boxed::FunThunk> {
         use std::{mem, ptr};
 
-        let wanted_abi = ops::FunABI::thunk_abi();
+        let wanted_abi = ops::OpsABI::thunk_abi();
         let ops_fun = self
             .ops_for_arret_fun(&arret_fun, wanted_abi, true)
             .expect("error during arret fun boxing");
@@ -599,7 +598,7 @@ impl EvalHirCtx {
         use crate::mir::ops::*;
         use crate::mir::optimise::optimise_fun;
 
-        let wanted_abi = FunABI::thunk_abi();
+        let wanted_abi = OpsABI::thunk_abi();
 
         let unopt_fun = self
             .ops_for_arret_fun(&arret_fun, wanted_abi, true)
@@ -618,7 +617,7 @@ impl EvalHirCtx {
     fn ops_for_arret_fun(
         &mut self,
         arret_fun: &value::ArretFun,
-        wanted_abi: ops::FunABI,
+        wanted_abi: ops::OpsABI,
         has_rest: bool,
     ) -> Result<ops::Fun> {
         use crate::mir::value::build_reg::value_to_reg;
@@ -631,21 +630,21 @@ impl EvalHirCtx {
 
         let mut abi_params_iter = wanted_abi.params.iter();
         let rest_reg_value = if has_rest {
-            let param_abi_type = abi_params_iter.next_back().unwrap();
+            let abi_type = abi_params_iter.next_back().unwrap();
 
             Some(Rc::new(value::RegValue {
                 reg: b.alloc_reg(),
-                abi_type: param_abi_type.abi_type.clone(),
+                abi_type: abi_type.clone(),
             }))
         } else {
             None
         };
 
         let fixed_reg_values = abi_params_iter
-            .map(|param_abi_type| {
+            .map(|abi_type| {
                 Rc::new(value::RegValue {
                     reg: b.alloc_reg(),
-                    abi_type: param_abi_type.abi_type.clone(),
+                    abi_type: abi_type.clone(),
                 })
             })
             .collect::<Vec<Rc<value::RegValue>>>();
@@ -847,9 +846,9 @@ impl EvalHirCtx {
             unimplemented!("Non-Arret main!");
         };
 
-        let main_abi = ops::FunABI {
-            takes_task: true,
-            takes_closure: false,
+        let main_abi = ops::OpsABI {
+            // Main is a top-level function; it can't capture
+            call_conv: ops::CallConv::FreeFunction,
             params: Box::new([]),
             ret: abitype::RetABIType::Void,
         };

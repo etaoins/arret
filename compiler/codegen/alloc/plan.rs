@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use runtime::boxed;
 
-use crate::codegen::alloc::{AllocAtom, BoxSource};
-use crate::codegen::escape_analysis::{CaptureKind, Captures};
+use crate::codegen::alloc::{AllocAtom, BoxSource, CondPlan};
+use crate::codegen::analysis::escape::{CaptureKind, Captures};
 use crate::mir::ops;
 
 struct AllocInfo {
@@ -48,56 +46,64 @@ fn op_alloc_info(op: &ops::Op) -> Option<AllocInfo> {
     }
 }
 
-fn push_complete_atom<'op>(
-    atoms: &mut Vec<AllocAtom<'op>>,
-    box_sources: &mut HashMap<ops::RegId, BoxSource>,
-    atom_ops: &mut Vec<&'op ops::Op>,
-) {
+pub fn plan_allocs<'op>(captures: &Captures, ops: &'op [ops::Op]) -> Vec<AllocAtom<'op>> {
     use std::mem;
 
-    if !atom_ops.is_empty() {
-        atoms.push(AllocAtom {
-            box_sources: mem::replace(box_sources, HashMap::new()),
-            ops: mem::replace(atom_ops, vec![]).into_boxed_slice(),
-        });
-    }
-}
-
-pub fn plan_allocs<'op>(captures: &Captures, ops: &'op [ops::Op]) -> Vec<AllocAtom<'op>> {
     let mut atoms = vec![];
-
-    let mut box_sources = HashMap::new();
-    let mut atom_ops = vec![];
+    let mut current_atom = AllocAtom::new();
 
     for op in ops {
         if op_needs_heap_checkpoint(op) {
-            push_complete_atom(&mut atoms, &mut box_sources, &mut atom_ops);
+            if !current_atom.is_empty() {
+                atoms.push(mem::replace(&mut current_atom, AllocAtom::new()));
+            }
+
             atoms.push(AllocAtom::with_unallocating_op(op));
             continue;
         }
 
-        if let Some(AllocInfo {
+        if let ops::OpKind::Cond(
+            output_reg,
+            ops::CondOp {
+                true_ops,
+                false_ops,
+                ..
+            },
+        ) = op.kind()
+        {
+            current_atom.push_cond_plan(
+                *output_reg,
+                CondPlan {
+                    true_subplan: plan_allocs(captures, true_ops),
+                    false_subplan: plan_allocs(captures, false_ops),
+                },
+            );
+        } else if let Some(AllocInfo {
             output_reg,
             box_size,
         }) = op_alloc_info(op)
         {
             if captures.get(output_reg) == CaptureKind::Never {
-                box_sources.insert(output_reg, BoxSource::Stack);
+                current_atom.push_box_source(output_reg, BoxSource::Stack);
             } else {
-                box_sources.insert(output_reg, BoxSource::Heap(box_size));
+                current_atom.push_box_source(output_reg, BoxSource::Heap(box_size));
             }
         }
 
-        atom_ops.push(op);
+        current_atom.push_op(op);
     }
 
-    push_complete_atom(&mut atoms, &mut box_sources, &mut atom_ops);
+    if !current_atom.is_empty() {
+        atoms.push(current_atom);
+    }
+
     atoms
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn empty_ops() {
@@ -125,7 +131,8 @@ mod test {
         let expected_atoms = vec![
             AllocAtom {
                 box_sources: [(reg1, BoxSource::Stack)].iter().cloned().collect(),
-                ops: Box::new([&input_ops[0], &input_ops[1]]),
+                cond_plans: HashMap::new(),
+                ops: vec![&input_ops[0], &input_ops[1]],
             },
             AllocAtom::with_unallocating_op(&input_ops[2]),
             AllocAtom {
@@ -133,7 +140,8 @@ mod test {
                     .iter()
                     .cloned()
                     .collect(),
-                ops: Box::new([&input_ops[3], &input_ops[4]]),
+                cond_plans: HashMap::new(),
+                ops: vec![&input_ops[3], &input_ops[4]],
             },
         ];
 

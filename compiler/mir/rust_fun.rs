@@ -4,6 +4,7 @@ use syntax::span::Span;
 
 use runtime::abitype;
 
+use crate::codegen::GenABI;
 use crate::hir;
 use crate::mir::builder::Builder;
 use crate::mir::eval_hir::EvalHirCtx;
@@ -25,10 +26,6 @@ pub fn build_rust_fun_app(
 
     let mut list_iter = arg_list_value.into_list_iter();
     let mut arg_regs = vec![];
-
-    if rust_fun.takes_task() {
-        arg_regs.push(b.push_reg(span, OpKind::CurrentTask, ()));
-    }
 
     let mut rust_fixed_iter = rust_fun.params().iter();
     if rust_fun.has_rest() {
@@ -56,7 +53,7 @@ pub fn build_rust_fun_app(
     // This will need to be split in to `always_impure` for the Symbol and a `call_impure` for this call site
     let impure = rust_fun.arret_fun_type().purity() != &purity::Purity::Pure.into_poly();
 
-    let abi = FunABI {
+    let abi = GenABI {
         takes_task: rust_fun.takes_task(),
         takes_closure: false,
         params: rust_fun.params().to_owned().into(),
@@ -126,7 +123,7 @@ pub fn ops_for_rust_fun_thunk(
 
     ops::Fun {
         source_name: Some(fun_symbol),
-        abi: ops::FunABI::thunk_abi(),
+        abi: ops::OpsABI::thunk_abi(),
         params: Box::new([rest_reg]),
         ops: b.into_ops(),
     }

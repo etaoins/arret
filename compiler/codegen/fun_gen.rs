@@ -6,38 +6,33 @@ use llvm_sys::prelude::*;
 
 use runtime::boxed;
 
-use crate::codegen::alloc;
-use crate::codegen::const_gen;
+use crate::codegen::analysis::escape::CaptureKind;
 use crate::codegen::context::CodegenCtx;
-use crate::codegen::escape_analysis::{CaptureKind, Captures};
 use crate::codegen::mod_gen::ModCtx;
+use crate::codegen::GenABI;
+use crate::codegen::{alloc, const_gen};
 use crate::mir::ops::*;
 
 pub struct BuiltFun {
     pub llvm_value: LLVMValueRef,
-    // This includes the task and closure
+    pub takes_task: bool,
+    // This includes the closure
     pub param_captures: Box<[CaptureKind]>,
 }
 
-struct FunCtx<'captures> {
+struct FunCtx {
     regs: HashMap<RegId, LLVMValueRef>,
     current_task: Option<LLVMValueRef>,
-    captures: &'captures Captures,
 
     function: LLVMValueRef,
     builder: LLVMBuilderRef,
 }
 
-impl<'captures> FunCtx<'captures> {
-    pub(crate) fn new(
-        captures: &'captures Captures,
-        function: LLVMValueRef,
-        builder: LLVMBuilderRef,
-    ) -> FunCtx<'captures> {
+impl<'captures> FunCtx {
+    pub(crate) fn new(function: LLVMValueRef, builder: LLVMBuilderRef) -> FunCtx {
         FunCtx {
             regs: HashMap::new(),
             current_task: None,
-            captures,
 
             function,
             builder,
@@ -45,7 +40,7 @@ impl<'captures> FunCtx<'captures> {
     }
 }
 
-impl<'captures> Drop for FunCtx<'captures> {
+impl<'captures> Drop for FunCtx {
     fn drop(&mut self) {
         unsafe {
             LLVMDisposeBuilder(self.builder);
@@ -53,18 +48,37 @@ impl<'captures> Drop for FunCtx<'captures> {
     }
 }
 
+fn gen_cond_branch(
+    cgx: &mut CodegenCtx,
+    mcx: &mut ModCtx,
+    fcx: &mut FunCtx,
+    block: LLVMBasicBlockRef,
+    alloc_plan: &[alloc::AllocAtom<'_>],
+    cont_block: LLVMBasicBlockRef,
+) {
+    unsafe {
+        LLVMPositionBuilderAtEnd(fcx.builder, block);
+
+        for alloc_atom in alloc_plan {
+            gen_alloc_atom(cgx, mcx, fcx, alloc_atom);
+        }
+
+        LLVMBuildBr(fcx.builder, cont_block);
+    }
+}
+
 fn gen_cond(
     cgx: &mut CodegenCtx,
     mcx: &mut ModCtx,
-    fcx: &mut FunCtx<'_>,
+    fcx: &mut FunCtx,
     cond_op: &CondOp,
+    cond_alloc_plan: &alloc::CondPlan<'_>,
 ) -> LLVMValueRef {
     let CondOp {
         test_reg,
-        true_ops,
         true_result_reg,
-        false_ops,
         false_result_reg,
+        ..
     } = cond_op;
 
     unsafe {
@@ -87,11 +101,23 @@ fn gen_cond(
         let test_llvm = fcx.regs[test_reg];
         LLVMBuildCondBr(fcx.builder, test_llvm, true_block, false_block);
 
-        for (block, ops) in &[(true_block, true_ops), (false_block, false_ops)] {
-            LLVMPositionBuilderAtEnd(fcx.builder, *block);
-            gen_op_sequence(cgx, mcx, fcx, ops);
-            LLVMBuildBr(fcx.builder, cont_block);
-        }
+        gen_cond_branch(
+            cgx,
+            mcx,
+            fcx,
+            true_block,
+            cond_alloc_plan.true_subplan(),
+            cont_block,
+        );
+        gen_cond_branch(
+            cgx,
+            mcx,
+            fcx,
+            false_block,
+            cond_alloc_plan.false_subplan(),
+            cont_block,
+        );
+
         let mut true_result_llvm = fcx.regs[true_result_reg];
         let mut false_result_llvm = fcx.regs[false_result_reg];
 
@@ -119,41 +145,38 @@ fn gen_cond(
     }
 }
 
-fn gen_callee(
+fn gen_callee_entry_point(
     cgx: &mut CodegenCtx,
     mcx: &mut ModCtx,
-    fcx: &mut FunCtx<'_>,
+    fcx: &mut FunCtx,
     callee: &Callee,
 ) -> LLVMValueRef {
-    use crate::codegen::callee_gen::*;
+    use crate::codegen::callee::*;
 
     match callee {
-        Callee::BuiltFun(built_fun_id) => gen_built_fun_callee(mcx, *built_fun_id),
+        Callee::BuiltFun(built_fun_id) => {
+            gen_built_fun_entry_point(mcx.built_funs(), *built_fun_id)
+        }
         Callee::BoxedFunThunk(fun_thunk_reg) => {
             let llvm_fun_thunk = fcx.regs[fun_thunk_reg];
-            gen_boxed_fun_thunk_callee(fcx.builder, llvm_fun_thunk)
+            gen_boxed_fun_thunk_entry_point(fcx.builder, llvm_fun_thunk)
         }
-        Callee::StaticSymbol(static_symbol) => gen_static_symbol_callee(cgx, mcx, static_symbol),
+        Callee::StaticSymbol(static_symbol) => {
+            gen_static_symbol_entry_point(cgx, mcx, static_symbol)
+        }
     }
 }
 
 fn gen_op(
     cgx: &mut CodegenCtx,
     mcx: &mut ModCtx,
-    fcx: &mut FunCtx<'_>,
+    fcx: &mut FunCtx,
+    alloc_atom: &alloc::AllocAtom<'_>,
     active_alloc: &mut alloc::ActiveAlloc,
-    box_sources: &HashMap<RegId, alloc::BoxSource>,
     op: &Op,
 ) {
     unsafe {
         match &op.kind {
-            OpKind::CurrentTask(reg, _) => {
-                fcx.regs.insert(
-                    *reg,
-                    fcx.current_task
-                        .expect("attempted to get current task in function without task param"),
-                );
-            }
             OpKind::ConstNil(reg, _) => {
                 let llvm_value =
                     cgx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::Nil, b"ARRET_NIL\0");
@@ -178,7 +201,7 @@ fn gen_op(
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBoxedFunThunk(reg, callee) => {
-                let llvm_entry_point = gen_callee(cgx, mcx, fcx, callee);
+                let llvm_entry_point = gen_callee_entry_point(cgx, mcx, fcx, callee);
                 let llvm_value = const_gen::gen_boxed_fun_thunk(cgx, mcx, llvm_entry_point);
                 fcx.regs.insert(*reg, llvm_value);
             }
@@ -226,11 +249,14 @@ fn gen_op(
                 fcx.regs.insert(*reg, to_llvm_value);
             }
             OpKind::Call(reg, CallOp { callee, args, .. }) => {
-                let llvm_fun = gen_callee(cgx, mcx, fcx, callee);
+                use crate::codegen::callee;
 
-                let mut llvm_args = args
-                    .iter()
-                    .map(|param_reg| fcx.regs[&param_reg])
+                let llvm_fun = gen_callee_entry_point(cgx, mcx, fcx, callee);
+                let takes_task = callee::callee_takes_task(mcx.built_funs(), callee);
+
+                let task_reg_iter = fcx.current_task.filter(|_| takes_task).into_iter();
+                let mut llvm_args = task_reg_iter
+                    .chain(args.iter().map(|param_reg| fcx.regs[&param_reg]))
                     .collect::<Vec<LLVMValueRef>>();
 
                 let llvm_ret = LLVMBuildCall(
@@ -321,11 +347,12 @@ fn gen_op(
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Cond(reg, cond_op) => {
-                let llvm_value = gen_cond(cgx, mcx, fcx, cond_op);
+                let cond_alloc_plan = &alloc_atom.cond_plans()[reg];
+                let llvm_value = gen_cond(cgx, mcx, fcx, cond_op, cond_alloc_plan);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::AllocInt(reg, int_reg) => {
-                let box_source = box_sources[reg];
+                let box_source = alloc_atom.box_sources()[reg];
 
                 let llvm_int = fcx.regs[int_reg];
                 let llvm_alloced = alloc::types::gen_alloc_int(
@@ -346,7 +373,7 @@ fn gen_op(
                     length_reg,
                 },
             ) => {
-                let box_source = box_sources[reg];
+                let box_source = alloc_atom.box_sources()[reg];
 
                 let input = alloc::types::PairInput {
                     llvm_head: fcx.regs[head_reg],
@@ -379,57 +406,71 @@ fn gen_op(
     }
 }
 
-fn gen_op_sequence(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fcx: &mut FunCtx<'_>, ops: &[Op]) {
-    use crate::codegen::alloc::plan::plan_allocs;
-    let alloc_atoms = plan_allocs(fcx.captures, ops);
+fn gen_alloc_atom(
+    cgx: &mut CodegenCtx,
+    mcx: &mut ModCtx,
+    fcx: &mut FunCtx,
+    alloc_atom: &alloc::AllocAtom<'_>,
+) {
+    let mut active_alloc = if let Some(llvm_task) = fcx.current_task {
+        alloc::core::gen_active_alloc_for_atom(cgx, mcx, fcx.builder, llvm_task, &alloc_atom)
+    } else {
+        alloc::ActiveAlloc::empty()
+    };
 
-    for alloc_atom in alloc_atoms {
-        let mut active_alloc = if let Some(llvm_task) = fcx.current_task {
-            alloc::core::gen_active_alloc_for_atom(cgx, mcx, fcx.builder, llvm_task, &alloc_atom)
-        } else {
-            alloc::ActiveAlloc::empty()
-        };
-
-        for op in alloc_atom.ops() {
-            gen_op(
-                cgx,
-                mcx,
-                fcx,
-                &mut active_alloc,
-                alloc_atom.box_sources(),
-                &op,
-            );
-        }
-
-        assert!(
-            active_alloc.is_empty(),
-            "did not consume entire active heap allocation"
-        );
+    for op in alloc_atom.ops() {
+        gen_op(cgx, mcx, fcx, alloc_atom, &mut active_alloc, &op);
     }
+
+    assert!(
+        active_alloc.is_empty(),
+        "did not consume entire active heap allocation"
+    );
 }
 
 pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> BuiltFun {
-    use crate::codegen::escape_analysis;
-    use runtime::abitype::{ABIType, RetABIType};
+    use crate::codegen::alloc::plan::plan_allocs;
+    use crate::codegen::analysis;
+    use crate::mir::ops;
+    use runtime::abitype::{ABIType, ParamABIType, RetABIType};
 
-    let captures = escape_analysis::calc_fun_captures(mcx.built_funs(), fun);
+    // Determine which values are captured
+    let captures = analysis::escape::calc_fun_captures(mcx.built_funs(), fun);
+
+    // Use the capture information to plan our allocations
+    let alloc_plan = plan_allocs(&captures, &fun.ops);
+
+    // Use the allocation plan to determine if we need a task parameter
+    let takes_task = (fun.abi.call_conv == ops::CallConv::External)
+        | analysis::needs_task::alloc_plan_needs_task(mcx.built_funs(), &alloc_plan);
 
     // Determine which params we captured
+    let takes_closure = fun.abi.call_conv.takes_closure();
     let mut param_captures = vec![];
-    if fun.abi.takes_task {
-        param_captures.push(CaptureKind::Never);
-    }
-    if fun.abi.takes_closure {
+    if takes_closure {
         param_captures.push(CaptureKind::Never);
     }
     for param_reg in fun.params.iter() {
         param_captures.push(captures.get(*param_reg));
     }
 
+    let gen_abi = GenABI {
+        takes_task,
+        takes_closure,
+        params: fun
+            .abi
+            .params
+            .iter()
+            .map(|abi_type| abi_type.clone().into())
+            .collect::<Vec<ParamABIType>>()
+            .into_boxed_slice(),
+        ret: fun.abi.ret.clone(),
+    };
+
     unsafe {
         let builder = LLVMCreateBuilderInContext(cgx.llx);
 
-        let function_type = cgx.fun_abi_to_llvm_type(&fun.abi);
+        let function_type = cgx.fun_abi_to_llvm_type(&gen_abi);
 
         let fun_symbol = fun
             .source_name
@@ -442,25 +483,28 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> Buil
         let bb = LLVMAppendBasicBlockInContext(cgx.llx, function, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
 
-        let mut fcx = FunCtx::new(&captures, function, builder);
+        let mut fcx = FunCtx::new(function, builder);
 
-        if fun.abi.takes_task {
+        if takes_task {
             fcx.current_task = Some(LLVMGetParam(function, 0));
         }
 
-        let params_offset = fun.abi.takes_task as usize + fun.abi.takes_closure as usize;
+        let llvm_params_offset = takes_task as usize + takes_closure as usize;
         for (param_index, reg) in fun.params.iter().enumerate() {
-            let llvm_offset = (params_offset + param_index) as u32;
+            let llvm_offset = (llvm_params_offset + param_index) as u32;
             fcx.regs.insert(*reg, LLVMGetParam(function, llvm_offset));
         }
 
+        // Our task is an implicit parameter
+        let captures_offset = takes_closure as usize;
         for (param_index, param_abi_type) in fun.abi.params.iter().enumerate() {
-            if let ABIType::Boxed(_) = param_abi_type.abi_type {
-                let no_capture = param_captures[params_offset + param_index] == CaptureKind::Never;
+            if let ABIType::Boxed(_) = param_abi_type {
+                let no_capture =
+                    param_captures[captures_offset + param_index] == CaptureKind::Never;
 
                 cgx.add_boxed_param_attrs(
                     function,
-                    (params_offset + param_index + 1) as u32,
+                    (llvm_params_offset + param_index + 1) as u32,
                     no_capture,
                 );
             }
@@ -470,11 +514,15 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> Buil
             cgx.add_boxed_return_attrs(function);
         }
 
-        gen_op_sequence(cgx, mcx, &mut fcx, fun.ops.as_ref());
+        for alloc_atom in alloc_plan {
+            gen_alloc_atom(cgx, mcx, &mut fcx, &alloc_atom);
+        }
+
         mcx.optimise_function(function);
 
         BuiltFun {
             llvm_value: function,
+            takes_task,
             param_captures: param_captures.into_boxed_slice(),
         }
     }

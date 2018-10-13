@@ -135,7 +135,7 @@ fn gen_runtime_heap_alloc(
 
     unsafe {
         let llvm_i32 = LLVMInt32TypeInContext(cgx.llx);
-        let llvm_param_types = &mut [cgx.task_llvm_type(), llvm_i32];
+        let llvm_param_types = &mut [cgx.task_llvm_ptr_type(), llvm_i32];
 
         let alloc_cells_llvm_type = LLVMFunctionType(
             cgx.boxed_abi_to_llvm_ptr_type(&abitype::BoxedABIType::Any),
