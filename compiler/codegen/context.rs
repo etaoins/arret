@@ -55,7 +55,7 @@ impl CodegenCtx {
 
             CodegenCtx {
                 llx,
-                module_pass_manager: LLVMCreatePassManager(),
+                module_pass_manager,
 
                 task_type: None,
                 record_type: None,

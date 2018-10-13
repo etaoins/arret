@@ -51,12 +51,16 @@ fn c_main_llvm_type(cgx: &mut CodegenCtx) -> LLVMTypeRef {
     }
 }
 
-fn program_to_module(cgx: &mut CodegenCtx, program: &mir::BuiltProgram) -> LLVMModuleRef {
+fn program_to_module(
+    cgx: &mut CodegenCtx,
+    target_machine: LLVMTargetMachineRef,
+    program: &mir::BuiltProgram,
+) -> LLVMModuleRef {
     use crate::codegen::fun_gen;
 
     unsafe {
         let module = LLVMModuleCreateWithNameInContext(b"program\0".as_ptr() as *const _, cgx.llx);
-        let mut mcx = ModCtx::new(module);
+        let mut mcx = ModCtx::new(module, target_machine);
 
         // Build all of our non-main functions
         for (fun_idx, fun) in program.funs.iter().enumerate() {
@@ -121,6 +125,7 @@ fn program_to_module(cgx: &mut CodegenCtx, program: &mir::BuiltProgram) -> LLVMM
 
         LLVMBuildRet(builder, LLVMConstInt(LLVMInt32TypeInContext(cgx.llx), 0, 0));
 
+        LLVMDisposeBuilder(builder);
         module
     }
 }
@@ -151,7 +156,8 @@ pub fn gen_program(
         LLVMRelocMode::LLVMRelocDynamicNoPic,
         LLVMCodeModel::LLVMCodeModelDefault,
     );
-    let module = program_to_module(&mut cgx, &program);
+
+    let module = program_to_module(&mut cgx, target_machine, &program);
 
     unsafe {
         let mut error: *mut libc::c_char = ptr::null_mut();
@@ -165,6 +171,7 @@ pub fn gen_program(
             LLVMVerifierFailureAction::LLVMAbortProcessAction,
             &mut error as *mut _,
         );
+        LLVMDisposeMessage(error);
 
         cgx.optimise_module(module);
 
@@ -200,6 +207,7 @@ pub fn gen_program(
                 CStr::from_ptr(error).to_str().unwrap()
             );
         }
+        LLVMDisposeTargetMachine(target_machine);
     }
 
     if output_type == OutputType::Executable {

@@ -25,6 +25,7 @@ extern "C" fn orc_sym_resolve(name_ptr: *const libc::c_char, jcx_void: *mut libc
 
 pub struct JITCtx {
     orc: LLVMOrcJITStackRef,
+    target_machine: LLVMTargetMachineRef,
     symbols: HashMap<ffi::CString, u64>,
 }
 
@@ -44,6 +45,7 @@ impl JITCtx {
 
             let mut jcx = JITCtx {
                 orc,
+                target_machine,
                 symbols: HashMap::new(),
             };
 
@@ -71,8 +73,7 @@ impl JITCtx {
                 module_name.as_bytes_with_nul().as_ptr() as *const _,
                 cgx.llx,
             );
-
-            let mut mcx = ModCtx::new(module);
+            let mut mcx = ModCtx::new(module, self.target_machine);
 
             let llvm_function = fun_gen::gen_fun(cgx, &mut mcx, fun).llvm_value;
 
@@ -141,6 +142,7 @@ impl JITCtx {
 impl Drop for JITCtx {
     fn drop(&mut self) {
         unsafe {
+            LLVMDisposeTargetMachine(self.target_machine);
             LLVMOrcDisposeInstance(self.orc);
         }
     }

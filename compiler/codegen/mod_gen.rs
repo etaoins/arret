@@ -1,5 +1,7 @@
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
+use llvm_sys::target::*;
+use llvm_sys::target_machine::*;
 
 use crate::codegen::fun_gen::BuiltFun;
 use crate::mir::ops;
@@ -19,10 +21,18 @@ impl Drop for ModCtx {
 }
 
 impl ModCtx {
-    pub fn new(module: LLVMModuleRef) -> ModCtx {
+    pub fn new(module: LLVMModuleRef, target_machine: LLVMTargetMachineRef) -> ModCtx {
         use llvm_sys::transforms::pass_manager_builder::*;
 
         unsafe {
+            let data_layout = LLVMCreateTargetDataLayout(target_machine);
+            LLVMSetModuleDataLayout(module, data_layout);
+            LLVMDisposeTargetData(data_layout);
+
+            let target_triple = LLVMGetTargetMachineTriple(target_machine);
+            LLVMSetTarget(module, target_triple);
+            LLVMDisposeMessage(target_triple);
+
             let function_pass_manager = LLVMCreateFunctionPassManagerForModule(module);
 
             let fpmb = LLVMPassManagerBuilderCreate();
