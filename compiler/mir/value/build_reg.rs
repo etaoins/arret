@@ -94,6 +94,42 @@ fn const_to_reg(
 
             b.cast_boxed_cond(span, &from_abi_type, from_reg, to_abi_type.clone())
         }
+        (boxed::AnySubtype::Nil(_), abitype::ABIType::Boxed(to_abi_type)) => {
+            let from_abi_type = boxed::TypeTag::Nil.into();
+            let from_reg = b.push_reg(span, OpKind::ConstNil, ());
+
+            b.cast_boxed_cond(span, &from_abi_type, from_reg, to_abi_type.clone())
+        }
+        (boxed::AnySubtype::TopPair(top_pair), abitype::ABIType::Boxed(to_abi_type)) => {
+            let pair_ref = top_pair.as_pair();
+
+            let head_reg =
+                const_to_reg(b, span, pair_ref.head(), &abitype::BoxedABIType::Any.into());
+            let rest_reg = const_to_reg(
+                b,
+                span,
+                pair_ref.rest().as_any_ref(),
+                &abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
+            );
+            let length_reg = b.push_reg(span, OpKind::ConstInt, pair_ref.len() as i64);
+
+            let from_reg = b.push_reg(
+                span,
+                OpKind::ConstBoxedPair,
+                BoxPairOp {
+                    head_reg: head_reg.into(),
+                    rest_reg: rest_reg.into(),
+                    length_reg,
+                },
+            );
+
+            b.cast_boxed_cond(
+                span,
+                &boxed::TypeTag::TopPair.into(),
+                from_reg,
+                to_abi_type.clone(),
+            )
+        }
         (subtype, abi_type) => unimplemented!(
             "Unimplemented const {:?} to reg {:?} conversion",
             subtype,

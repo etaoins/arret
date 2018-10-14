@@ -1,4 +1,5 @@
 pub mod build_reg;
+pub mod from_reg;
 pub mod list;
 pub mod to_const;
 

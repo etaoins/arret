@@ -439,7 +439,7 @@ fn lower_expr_prim_apply(
             Ok(Expr::Cond(
                 span,
                 Box::new(Cond {
-                    phi_type: (),
+                    phi_ty: (),
                     test_expr: lower_expr(scope, arg_iter.next().unwrap())?,
                     true_expr: lower_expr(scope, arg_iter.next().unwrap())?,
                     false_expr: lower_expr(scope, arg_iter.next().unwrap())?,
@@ -478,7 +478,7 @@ fn lower_expr_apply(
     Ok(Expr::App(
         span,
         Box::new(App {
-            ret_type: (),
+            ret_ty: (),
             fun_expr,
             fixed_arg_exprs,
             rest_arg_expr,
@@ -1113,7 +1113,7 @@ mod test {
         let expected = Expr::App(
             t2s(t),
             Box::new(App {
-                ret_type: (),
+                ret_ty: (),
                 fun_expr: Expr::Lit(Datum::Int(t2s(u), 1)),
                 fixed_arg_exprs: vec![
                     Expr::Lit(Datum::Int(t2s(v), 2)),
@@ -1137,7 +1137,7 @@ mod test {
         let expected = Expr::App(
             t2s(t),
             Box::new(App {
-                ret_type: (),
+                ret_ty: (),
                 fun_expr: Expr::Lit(Datum::Int(t2s(u), 1)),
                 fixed_arg_exprs: vec![Expr::Lit(Datum::Int(t2s(v), 2))],
                 rest_arg_expr: Some(Expr::Lit(Datum::Int(t2s(w), 3))),
@@ -1158,7 +1158,7 @@ mod test {
         let expected = Expr::Cond(
             t2s(t),
             Box::new(Cond {
-                phi_type: (),
+                phi_ty: (),
                 test_expr: Expr::Lit(Datum::Bool(t2s(u), true)),
                 true_expr: Expr::Lit(Datum::Int(t2s(v), 1)),
                 false_expr: Expr::Lit(Datum::Int(t2s(w), 2)),

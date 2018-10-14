@@ -59,7 +59,7 @@ pub struct Fun<P: Phase> {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Cond<P: Phase> {
-    pub phi_type: P::ResultType,
+    pub phi_ty: P::ResultType,
     pub test_expr: Expr<P>,
     pub true_expr: Expr<P>,
     pub false_expr: Expr<P>,
@@ -74,7 +74,7 @@ pub struct Let<P: Phase> {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct App<P: Phase> {
-    pub ret_type: P::ResultType,
+    pub ret_ty: P::ResultType,
     pub fun_expr: Expr<P>,
     pub fixed_arg_exprs: Vec<Expr<P>>,
     pub rest_arg_expr: Option<Expr<P>>,

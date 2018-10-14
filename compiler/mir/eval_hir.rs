@@ -328,6 +328,7 @@ impl EvalHirCtx {
         &mut self,
         b: &mut Option<Builder>,
         span: Span,
+        ret_ty: &ty::Poly,
         rust_fun: &hir::rfi::Fun,
         arg_list_value: Value,
     ) -> Result<Value> {
@@ -364,7 +365,14 @@ impl EvalHirCtx {
         }
 
         if let Some(b) = b {
-            Ok(build_rust_fun_app(self, b, span, rust_fun, arg_list_value))
+            Ok(build_rust_fun_app(
+                self,
+                b,
+                span,
+                ret_ty,
+                rust_fun,
+                arg_list_value,
+            ))
         } else {
             panic!("Need builder for non-const function application");
         }
@@ -375,13 +383,14 @@ impl EvalHirCtx {
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         span: Span,
+        ret_ty: &ty::Poly,
         fun_thunk: Gc<boxed::FunThunk>,
         arg_list_value: Value,
     ) -> Result<Value> {
         use crate::mir::value::to_const::value_to_const;
 
         if let Some(actual_value) = self.thunk_fun_values.get(&fun_thunk) {
-            return self.eval_value_app(dcx, b, span, &actual_value.clone(), arg_list_value);
+            return self.eval_value_app(dcx, b, span, ret_ty, &actual_value.clone(), arg_list_value);
         }
 
         if b.is_some() {
@@ -454,6 +463,7 @@ impl EvalHirCtx {
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         span: Span,
+        ret_ty: &ty::Poly,
         fun_value: &Value,
         arg_list_value: Value,
     ) -> Result<Value> {
@@ -461,7 +471,9 @@ impl EvalHirCtx {
             Value::ArretFun(arret_fun) => {
                 self.eval_arret_fun_app(dcx, b, span, &arret_fun, arg_list_value)
             }
-            Value::RustFun(rust_fun) => self.eval_rust_fun_app(b, span, &rust_fun, arg_list_value),
+            Value::RustFun(rust_fun) => {
+                self.eval_rust_fun_app(b, span, ret_ty, &rust_fun, arg_list_value)
+            }
             Value::TyPred(test_poly) => {
                 self.eval_ty_pred_app(dcx, b, span, test_poly.as_ref(), arg_list_value)
             }
@@ -470,6 +482,7 @@ impl EvalHirCtx {
                     dcx,
                     b,
                     span,
+                    ret_ty,
                     unsafe { Gc::new(fun_thunk) },
                     arg_list_value,
                 ),
@@ -509,7 +522,7 @@ impl EvalHirCtx {
         };
 
         let arg_list_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
-        self.eval_value_app(dcx, b, span, &fun_value, arg_list_value)
+        self.eval_value_app(dcx, b, span, &app.ret_ty, &fun_value, arg_list_value)
     }
 
     fn eval_cond(
@@ -825,6 +838,7 @@ impl EvalHirCtx {
             &mut dcx,
             &mut None,
             EMPTY_SPAN,
+            &ty::Ty::unit().into_poly(),
             &main_value,
             empty_list_value,
         )?;

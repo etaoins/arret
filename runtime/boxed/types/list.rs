@@ -70,6 +70,25 @@ impl<T: Boxed> ConstructableFrom<PairInput<T>> for Pair<T> {
     }
 }
 
+impl<T: Boxed> Pair<T> {
+    pub fn len(&self) -> usize {
+        self.list_length
+    }
+
+    pub fn is_empty(&self) -> bool {
+        // This is to make Clippy happy since we have `len`
+        false
+    }
+
+    pub fn head(&self) -> Gc<T> {
+        self.head
+    }
+
+    pub fn rest(&self) -> Gc<List<T>> {
+        self.rest
+    }
+}
+
 impl Pair<Any> {
     pub fn as_top_pair(&self) -> Gc<TopPair> {
         unsafe { Gc::new(&*(self as *const _ as *const TopPair)) }

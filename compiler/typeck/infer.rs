@@ -349,7 +349,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                     expr: hir::Expr::Cond(
                         span,
                         Box::new(hir::Cond {
-                            phi_type: test_node.poly_type.clone(),
+                            phi_ty: test_node.poly_type.clone(),
                             test_expr: test_node.expr,
                             true_expr: true_node.expr,
                             false_expr: false_node.expr,
@@ -374,7 +374,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                 expr: hir::Expr::Cond(
                     span,
                     Box::new(hir::Cond {
-                        phi_type: true_node.poly_type.clone(),
+                        phi_ty: true_node.poly_type.clone(),
                         test_expr: test_node.expr,
                         true_expr: true_node.expr,
                         false_expr: false_node.expr,
@@ -386,7 +386,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                 expr: hir::Expr::Cond(
                     span,
                     Box::new(hir::Cond {
-                        phi_type: false_node.poly_type.clone(),
+                        phi_ty: false_node.poly_type.clone(),
                         test_expr: test_node.expr,
                         true_expr: true_node.expr,
                         false_expr: false_node.expr,
@@ -415,7 +415,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                     expr: hir::Expr::Cond(
                         span,
                         Box::new(hir::Cond {
-                            phi_type: poly_type.clone(),
+                            phi_ty: poly_type.clone(),
                             test_expr: test_node.expr,
                             true_expr: true_node.expr,
                             false_expr: false_node.expr,
@@ -798,7 +798,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             expr: hir::Expr::App(
                 span,
                 Box::new(hir::App {
-                    ret_type: ret_type.clone(),
+                    ret_ty: ret_type.clone(),
                     fun_expr,
                     fixed_arg_exprs: inferred_fixed_arg_exprs,
                     rest_arg_expr: inferred_rest_arg_expr,
@@ -865,7 +865,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             expr: hir::Expr::App(
                 span,
                 Box::new(hir::App {
-                    ret_type: poly_type.clone(),
+                    ret_ty: poly_type.clone(),
                     fun_expr,
                     fixed_arg_exprs: vec![subject_node.expr],
                     rest_arg_expr: None,
@@ -920,7 +920,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             expr: hir::Expr::App(
                 span,
                 Box::new(hir::App {
-                    ret_type: poly_type.clone(),
+                    ret_ty: poly_type.clone(),
                     fun_expr,
                     fixed_arg_exprs: vec![],
                     rest_arg_expr: Some(subject_list_node.expr),

@@ -11,17 +11,20 @@ use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops;
 use crate::mir::value;
 use crate::mir::value::Value;
+use crate::ty;
 use crate::ty::purity;
 
 pub fn build_rust_fun_app(
     ehx: &mut EvalHirCtx,
     b: &mut Builder,
     span: Span,
+    ret_ty: &ty::Poly,
     rust_fun: &hir::rfi::Fun,
     arg_list_value: Value,
 ) -> Value {
     use crate::mir::ops::*;
     use crate::mir::value::build_reg::value_to_reg;
+    use crate::mir::value::from_reg::reg_to_value;
     use runtime::abitype::{BoxedABIType, RetABIType};
 
     let mut list_iter = arg_list_value.into_list_iter();
@@ -82,14 +85,7 @@ pub fn build_rust_fun_app(
             b.push(span, OpKind::Unreachable);
             Value::Divergent
         }
-        RetABIType::Inhabited(abi_type) => {
-            let reg_value = value::RegValue {
-                reg: ret_reg,
-                abi_type: abi_type.clone(),
-            };
-
-            Value::Reg(Rc::new(reg_value))
-        }
+        RetABIType::Inhabited(abi_type) => reg_to_value(ehx, ret_reg, abi_type, ret_ty),
     }
 }
 
@@ -113,7 +109,8 @@ pub fn ops_for_rust_fun_thunk(
         abi_type: rest_abi_type.clone(),
     }));
 
-    let return_value = build_rust_fun_app(ehx, &mut b, span, rust_fun, rest_value);
+    let ret_ty = ty::Ty::Any.into_poly();
+    let return_value = build_rust_fun_app(ehx, &mut b, span, &ret_ty, rust_fun, rest_value);
 
     if !return_value.is_divergent() {
         let return_reg = value_to_reg(ehx, &mut b, span, &return_value, &ret_abi_type);
