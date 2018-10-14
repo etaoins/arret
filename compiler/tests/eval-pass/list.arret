@@ -4,6 +4,7 @@
 (defn test-length ()
   (assert-eq 0 (length ()))
   (assert-eq 4 (length '(1 2 3 4)))
+  (assert-eq 4 (length (black-box! '(1 2 3 4))))
   (assert-eq 3 (length (list 1 2 3))))
 
 (defn test-first-rest ()

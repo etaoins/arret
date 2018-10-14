@@ -4,8 +4,6 @@
 use rayon::prelude::*;
 use tempfile::NamedTempFile;
 
-use syntax::span::{Span, EMPTY_SPAN};
-
 use compiler::error::Error;
 use compiler::reporting;
 use compiler::SourceLoader;
@@ -23,53 +21,6 @@ thread_local!(static SOURCE_LOADER: RefCell<SourceLoader> = RefCell::new(SourceL
 enum TestType {
     RunPass,
     EvalPass,
-}
-
-struct DisplayOp {
-    span: Span,
-    op_string: String,
-}
-
-struct UnableToCompileEval {
-    display_op: Option<DisplayOp>,
-}
-
-impl reporting::Reportable for UnableToCompileEval {
-    fn level(&self) -> reporting::Level {
-        reporting::Level::Error
-    }
-
-    fn message(&self) -> String {
-        match &self.display_op {
-            None => "unable to evaluate program at compile time".to_owned(),
-            Some(display_op) => format!(
-                "unable to evaluate at compile time. generated MIR operation `{}`",
-                display_op.op_string
-            ),
-        }
-    }
-
-    fn loc_trace(&self) -> reporting::LocTrace {
-        self.display_op
-            .as_ref()
-            .map(|display_op| display_op.span)
-            .unwrap_or(EMPTY_SPAN)
-            .into()
-    }
-}
-
-fn find_display_op(mir_program: &compiler::BuiltProgram) -> Option<DisplayOp> {
-    mir_program
-        .main
-        .ops
-        .iter()
-        .filter_map(|op| {
-            op.span().to_non_empty().map(|span| DisplayOp {
-                span,
-                op_string: format!("{:?}", op.kind()),
-            })
-        })
-        .next()
 }
 
 fn try_run_single_test(
@@ -91,17 +42,14 @@ fn try_run_single_test(
     // Try evaluating
     ehx.eval_main_fun(hir.main_var_id)?;
 
-    // And now compiling
-    let mir_program = ehx.into_built_program(hir.main_var_id)?;
-    if mir_program.is_empty() {
-        // This is okay for all test types
+    if test_type == TestType::EvalPass {
         return Ok(());
     }
 
-    if test_type == TestType::EvalPass {
-        // Try to find an op to display. This will be pretty arbitrary.
-        let display_op = find_display_op(&mir_program);
-        return Err(Error(vec![Box::new(UnableToCompileEval { display_op })]));
+    // And now compiling
+    let mir_program = ehx.into_built_program(hir.main_var_id)?;
+    if mir_program.is_empty() {
+        return Ok(());
     }
 
     let output_path = NamedTempFile::new().unwrap().into_temp_path();
