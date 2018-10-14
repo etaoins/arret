@@ -44,6 +44,12 @@ pub struct DefCtx {
     local_values: HashMap<hir::VarId, Value>,
 }
 
+impl DefCtx {
+    pub fn monomorphise(&self, poly: &ty::Poly) -> ty::Mono {
+        ty::subst::monomorphise(&self.pvar_purities, &self.tvar_types, poly)
+    }
+}
+
 struct BuiltCondBranch {
     b: Builder,
     value: Value,
@@ -333,7 +339,7 @@ impl EvalHirCtx {
         &mut self,
         b: &mut Option<Builder>,
         span: Span,
-        ret_ty: &ty::Poly,
+        ret_ty: &ty::Mono,
         rust_fun: &hir::rfi::Fun,
         arg_list_value: Value,
     ) -> Result<Value> {
@@ -388,7 +394,7 @@ impl EvalHirCtx {
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         span: Span,
-        ret_ty: &ty::Poly,
+        ret_ty: &ty::Mono,
         fun_thunk: Gc<boxed::FunThunk>,
         arg_list_value: Value,
     ) -> Result<Value> {
@@ -468,7 +474,7 @@ impl EvalHirCtx {
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         span: Span,
-        ret_ty: &ty::Poly,
+        ret_ty: &ty::Mono,
         fun_value: &Value,
         arg_list_value: Value,
     ) -> Result<Value> {
@@ -526,8 +532,9 @@ impl EvalHirCtx {
             None => None,
         };
 
+        let ret_ty = dcx.monomorphise(&app.ret_ty);
         let arg_list_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
-        self.eval_value_app(dcx, b, span, &app.ret_ty, &fun_value, arg_list_value)
+        self.eval_value_app(dcx, b, span, &ret_ty, &fun_value, arg_list_value)
     }
 
     fn eval_cond(
@@ -611,8 +618,9 @@ impl EvalHirCtx {
                 reg_phi = None;
             }
             (false, false) => {
+                let phi_ty = dcx.monomorphise(&cond.phi_ty);
                 let phi_abi_type =
-                    plan_phi_abi_type(&built_true.value, &built_false.value, &cond.phi_ty);
+                    plan_phi_abi_type(&built_true.value, &built_false.value, &phi_ty);
 
                 let true_result_reg = value_to_reg(
                     self,
@@ -632,7 +640,7 @@ impl EvalHirCtx {
 
                 let output_reg = b.alloc_reg();
 
-                output_value = reg_to_value(self, output_reg, &phi_abi_type, &cond.phi_ty);
+                output_value = reg_to_value(self, output_reg, &phi_abi_type, &phi_ty);
                 reg_phi = Some(ops::RegPhi {
                     output_reg,
                     true_result_reg: true_result_reg.into(),
@@ -878,8 +886,7 @@ impl EvalHirCtx {
                 Ok(Value::RustFun(Rc::new(rust_fun.as_ref().clone())))
             }
             hir::Expr::TyPred(_, test_poly) => {
-                let test_mono =
-                    ty::subst::monomorphise(&dcx.pvar_purities, &dcx.tvar_types, test_poly);
+                let test_mono = dcx.monomorphise(test_poly);
                 Ok(Value::TyPred(Rc::new(test_mono)))
             }
             hir::Expr::Ref(_, var_id) => Ok(self.eval_ref(dcx, *var_id)),
@@ -940,7 +947,7 @@ impl EvalHirCtx {
             &mut dcx,
             &mut None,
             EMPTY_SPAN,
-            &ty::Ty::unit().into_poly(),
+            &ty::Ty::unit().into_mono(),
             &main_value,
             empty_list_value,
         )?;

@@ -18,7 +18,7 @@ pub fn build_rust_fun_app(
     ehx: &mut EvalHirCtx,
     b: &mut Builder,
     span: Span,
-    ret_ty: &ty::Poly,
+    ret_ty: &ty::Mono,
     rust_fun: &hir::rfi::Fun,
     arg_list_value: Value,
 ) -> Value {
@@ -111,7 +111,7 @@ pub fn ops_for_rust_fun_thunk(
         abi_type: rest_abi_type.clone(),
     }));
 
-    let ret_ty = ty::Ty::Any.into_poly();
+    let ret_ty = ty::Ty::Any.into_mono();
     let return_value = build_rust_fun_app(ehx, &mut b, span, &ret_ty, rust_fun, rest_value);
 
     if !return_value.is_divergent() {
