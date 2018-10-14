@@ -713,17 +713,14 @@ impl EvalHirCtx {
         arret_fun: &value::ArretFun,
     ) -> ops::RegId {
         use crate::mir::ops::*;
-        use crate::mir::optimise::optimise_fun;
 
         let wanted_abi = OpsABI::thunk_abi();
 
-        let unopt_fun = self
+        let ops_fun = self
             .ops_for_arret_fun(&arret_fun, wanted_abi, true)
             .expect("error during arret fun boxing");
 
-        let opt_fun = optimise_fun(unopt_fun);
-
-        let built_fun_id = ops::BuiltFunId::new_entry_id(&mut self.built_funs, opt_fun);
+        let built_fun_id = ops::BuiltFunId::new_entry_id(&mut self.built_funs, ops_fun);
         b.push_reg(
             span,
             OpKind::ConstBoxedFunThunk,
@@ -737,6 +734,7 @@ impl EvalHirCtx {
         wanted_abi: ops::OpsABI,
         has_rest: bool,
     ) -> Result<ops::Fun> {
+        use crate::mir::optimise::optimise_fun;
         use crate::mir::value::build_reg::value_to_reg;
         use runtime::abitype;
 
@@ -800,12 +798,12 @@ impl EvalHirCtx {
             }
         }
 
-        Ok(ops::Fun {
+        Ok(optimise_fun(ops::Fun {
             source_name: arret_fun.source_name.clone(),
             abi: wanted_abi,
             params: param_regs,
             ops: b.into_ops(),
-        })
+        }))
     }
 
     pub fn consume_def(&mut self, def: hir::Def<hir::Inferred>) -> Result<()> {
@@ -952,7 +950,6 @@ impl EvalHirCtx {
 
     /// Builds the main function of the program
     pub fn into_built_program(mut self, main_var_id: hir::VarId) -> Result<BuiltProgram> {
-        use crate::mir::optimise::optimise_fun;
         use runtime::abitype;
 
         let dcx = DefCtx::new();
@@ -971,7 +968,7 @@ impl EvalHirCtx {
             ret: abitype::RetABIType::Void,
         };
 
-        let main = optimise_fun(self.ops_for_arret_fun(&main_arret_fun, main_abi, false)?);
+        let main = self.ops_for_arret_fun(&main_arret_fun, main_abi, false)?;
 
         Ok(BuiltProgram {
             main,

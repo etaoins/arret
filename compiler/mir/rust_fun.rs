@@ -96,6 +96,7 @@ pub fn ops_for_rust_fun_thunk(
     rust_fun: &hir::rfi::Fun,
 ) -> ops::Fun {
     use crate::mir::ops::*;
+    use crate::mir::optimise::optimise_fun;
     use crate::mir::value::build_reg::value_to_reg;
 
     let mut b = Builder::new();
@@ -118,10 +119,10 @@ pub fn ops_for_rust_fun_thunk(
         b.push(span, OpKind::Ret(return_reg.into()))
     }
 
-    ops::Fun {
+    optimise_fun(ops::Fun {
         source_name: Some(fun_symbol),
         abi: ops::OpsABI::thunk_abi(),
         params: Box::new([rest_reg]),
         ops: b.into_ops(),
-    }
+    })
 }
