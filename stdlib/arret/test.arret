@@ -3,9 +3,16 @@
 (import (only [stdlib rust] black-box black-box!))
 (export black-box black-box!)
 
-(export assert-equal)
-(defmacro assert-equal (macro-rules
+(export assert-eq)
+(defmacro assert-eq (macro-rules
   [(expected actual)
     (when-not (= expected actual)
-      (panic "`" expected "` does not equal expected value of `" actual "`"))]
+      (panic "`" expected "` does not equal `" actual "`"))]
+))
+
+(export assert-ne)
+(defmacro assert-ne (macro-rules
+  [(expected actual)
+    (when (= expected actual)
+      (panic "`" expected "` does equal `" actual "`"))]
 ))

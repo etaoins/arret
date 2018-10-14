@@ -7,7 +7,7 @@ fn op_needs_task(built_funs: &[BuiltFun], op: &ops::Op) -> bool {
     use crate::mir::ops::OpKind;
 
     match op.kind() {
-        OpKind::Cond(_, cond_op) => cond_op
+        OpKind::Cond(cond_op) => cond_op
             .true_ops
             .iter()
             .chain(cond_op.false_ops.iter())

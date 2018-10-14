@@ -39,7 +39,7 @@ impl<'op> CondPlan<'op> {
 #[derive(PartialEq, Debug)]
 pub struct AllocAtom<'op> {
     box_sources: HashMap<ops::RegId, BoxSource>,
-    cond_plans: HashMap<ops::RegId, CondPlan<'op>>,
+    cond_plans: HashMap<usize, CondPlan<'op>>,
     ops: Vec<&'op ops::Op>,
 }
 
@@ -52,19 +52,11 @@ impl<'op> AllocAtom<'op> {
         }
     }
 
-    fn with_unallocating_op(op: &'op ops::Op) -> AllocAtom<'op> {
-        AllocAtom {
-            box_sources: HashMap::new(),
-            cond_plans: HashMap::new(),
-            ops: vec![op],
-        }
-    }
-
     pub fn box_sources(&self) -> &HashMap<ops::RegId, BoxSource> {
         &self.box_sources
     }
 
-    pub fn cond_plans(&self) -> &HashMap<ops::RegId, CondPlan<'op>> {
+    pub fn cond_plans(&self) -> &HashMap<usize, CondPlan<'op>> {
         &self.cond_plans
     }
 
@@ -80,8 +72,8 @@ impl<'op> AllocAtom<'op> {
         self.box_sources.insert(output_reg, box_source);
     }
 
-    fn push_cond_plan(&mut self, output_reg: ops::RegId, cond_plan: CondPlan<'op>) {
-        self.cond_plans.insert(output_reg, cond_plan);
+    fn push_cond_plan(&mut self, op_index: usize, cond_plan: CondPlan<'op>) {
+        self.cond_plans.insert(op_index, cond_plan);
     }
 
     fn push_op(&mut self, op: &'op ops::Op) {

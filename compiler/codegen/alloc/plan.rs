@@ -17,7 +17,7 @@ fn op_needs_heap_checkpoint(op: &ops::Op) -> bool {
 
     match op.kind() {
         OpKind::Ret(_) | OpKind::RetVoid | OpKind::Unreachable | OpKind::Call(_, _) => true,
-        OpKind::Cond(_, cond_op) => cond_op
+        OpKind::Cond(cond_op) => cond_op
             .true_ops
             .iter()
             .chain(cond_op.false_ops.iter())
@@ -53,26 +53,20 @@ pub fn plan_allocs<'op>(captures: &Captures, ops: &'op [ops::Op]) -> Vec<AllocAt
     let mut current_atom = AllocAtom::new();
 
     for op in ops {
-        if op_needs_heap_checkpoint(op) {
-            if !current_atom.is_empty() {
-                atoms.push(mem::replace(&mut current_atom, AllocAtom::new()));
-            }
+        let checkpointing_op = op_needs_heap_checkpoint(op);
 
-            atoms.push(AllocAtom::with_unallocating_op(op));
-            continue;
+        if checkpointing_op && !current_atom.is_empty() {
+            atoms.push(mem::replace(&mut current_atom, AllocAtom::new()));
         }
 
-        if let ops::OpKind::Cond(
-            output_reg,
-            ops::CondOp {
-                true_ops,
-                false_ops,
-                ..
-            },
-        ) = op.kind()
+        if let ops::OpKind::Cond(ops::CondOp {
+            true_ops,
+            false_ops,
+            ..
+        }) = op.kind()
         {
             current_atom.push_cond_plan(
-                *output_reg,
+                current_atom.ops().len(),
                 CondPlan {
                     true_subplan: plan_allocs(captures, true_ops),
                     false_subplan: plan_allocs(captures, false_ops),
@@ -91,6 +85,10 @@ pub fn plan_allocs<'op>(captures: &Captures, ops: &'op [ops::Op]) -> Vec<AllocAt
         }
 
         current_atom.push_op(op);
+
+        if checkpointing_op {
+            atoms.push(mem::replace(&mut current_atom, AllocAtom::new()));
+        }
     }
 
     if !current_atom.is_empty() {
@@ -113,12 +111,10 @@ mod test {
 
     #[test]
     fn condless_allocs() {
-        let mut reg_counter = ops::RegIdCounter::new();
-
-        let reg1 = reg_counter.alloc();
-        let reg2 = reg_counter.alloc();
-        let reg3 = reg_counter.alloc();
-        let reg4 = reg_counter.alloc();
+        let reg1 = ops::RegId::alloc();
+        let reg2 = ops::RegId::alloc();
+        let reg3 = ops::RegId::alloc();
+        let reg4 = ops::RegId::alloc();
 
         let input_ops = [
             ops::OpKind::AllocInt(reg1, reg1).into(),
@@ -134,7 +130,11 @@ mod test {
                 cond_plans: HashMap::new(),
                 ops: vec![&input_ops[0], &input_ops[1]],
             },
-            AllocAtom::with_unallocating_op(&input_ops[2]),
+            AllocAtom {
+                box_sources: HashMap::new(),
+                cond_plans: HashMap::new(),
+                ops: vec![&input_ops[2]],
+            },
             AllocAtom {
                 box_sources: [(reg3, BoxSource::Stack), (reg4, BoxSource::Stack)]
                     .iter()
@@ -152,28 +152,27 @@ mod test {
 
     #[test]
     fn non_allocating_cond() {
-        let mut reg_counter = ops::RegIdCounter::new();
+        let output_reg = ops::RegId::alloc();
+        let true_result_reg = ops::RegId::alloc();
+        let false_result_reg = ops::RegId::alloc();
 
-        let output_reg = reg_counter.alloc();
-        let test_reg = reg_counter.alloc();
-        let true_result_reg = reg_counter.alloc();
-        let false_result_reg = reg_counter.alloc();
+        let test_reg = ops::RegId::alloc();
 
         let true_ops = Box::new([ops::OpKind::ConstNil(true_result_reg, ()).into()]);
         let false_ops = Box::new([ops::OpKind::ConstNil(false_result_reg, ()).into()]);
 
         let input_ops = [
             ops::OpKind::AllocInt(test_reg, test_reg).into(),
-            ops::OpKind::Cond(
-                output_reg,
-                ops::CondOp {
-                    test_reg,
-                    true_ops,
+            ops::OpKind::Cond(ops::CondOp {
+                reg_phi: Some(ops::RegPhi {
+                    output_reg,
                     true_result_reg,
-                    false_ops,
                     false_result_reg,
-                },
-            )
+                }),
+                test_reg,
+                true_ops,
+                false_ops,
+            })
             .into(),
         ];
 
@@ -184,12 +183,10 @@ mod test {
 
     #[test]
     fn allocating_cond() {
-        let mut reg_counter = ops::RegIdCounter::new();
-
-        let output_reg = reg_counter.alloc();
-        let test_reg = reg_counter.alloc();
-        let true_result_reg = reg_counter.alloc();
-        let false_result_reg = reg_counter.alloc();
+        let output_reg = ops::RegId::alloc();
+        let test_reg = ops::RegId::alloc();
+        let true_result_reg = ops::RegId::alloc();
+        let false_result_reg = ops::RegId::alloc();
 
         let true_ops = Box::new([ops::OpKind::ConstNil(true_result_reg, ()).into()]);
         let false_ops =
@@ -197,16 +194,16 @@ mod test {
 
         let input_ops = [
             ops::OpKind::AllocInt(test_reg, test_reg).into(),
-            ops::OpKind::Cond(
-                output_reg,
-                ops::CondOp {
-                    test_reg,
-                    true_ops,
+            ops::OpKind::Cond(ops::CondOp {
+                reg_phi: Some(ops::RegPhi {
+                    output_reg,
                     true_result_reg,
-                    false_ops,
                     false_result_reg,
-                },
-            )
+                }),
+                test_reg,
+                true_ops,
+                false_ops,
+            })
             .into(),
         ];
 

@@ -44,6 +44,11 @@ pub struct DefCtx {
     local_values: HashMap<hir::VarId, Value>,
 }
 
+struct BuiltCondBranch {
+    b: Builder,
+    value: Value,
+}
+
 pub struct BuiltProgram {
     pub main: ops::Fun,
     pub funs: Vec<ops::Fun>,
@@ -405,7 +410,7 @@ impl EvalHirCtx {
         })
     }
 
-    fn eval_reg_fun_thunk_app(
+    fn build_reg_fun_thunk_app(
         &mut self,
         b: &mut Builder,
         span: Span,
@@ -490,7 +495,7 @@ impl EvalHirCtx {
             },
             Value::Reg(reg_value) => {
                 if let Some(b) = b {
-                    Ok(self.eval_reg_fun_thunk_app(b, span, reg_value, &arg_list_value))
+                    Ok(self.build_reg_fun_thunk_app(b, span, reg_value, &arg_list_value))
                 } else {
                     panic!("Need builder for reg function application");
                 }
@@ -529,25 +534,124 @@ impl EvalHirCtx {
         &mut self,
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
+        span: Span,
         cond: &hir::Cond<hir::Inferred>,
     ) -> Result<Value> {
         let test_value = self.eval_expr(dcx, b, &cond.test_expr)?;
 
-        let test_bool = match test_value {
+        match test_value {
             Value::Const(any_ref) => {
                 let bool_ref = any_ref.downcast_ref::<boxed::Bool>().unwrap();
-                bool_ref.as_bool()
+
+                if bool_ref.as_bool() {
+                    self.eval_expr(dcx, b, &cond.true_expr)
+                } else {
+                    self.eval_expr(dcx, b, &cond.false_expr)
+                }
             }
-            _ => {
-                unimplemented!("Non-constant condition");
+            dynamic_value => {
+                if let Some(b) = b {
+                    self.build_cond(dcx, b, span, &dynamic_value, cond)
+                } else {
+                    panic!("need builder for dynamic cond");
+                }
+            }
+        }
+    }
+
+    fn build_cond_branch(
+        &mut self,
+        dcx: &mut DefCtx,
+        branch_expr: &hir::Expr<hir::Inferred>,
+    ) -> Result<BuiltCondBranch> {
+        let b = Builder::new();
+
+        let mut some_b = Some(b);
+        let value = self.eval_expr(dcx, &mut some_b, branch_expr)?;
+        let b = some_b.unwrap();
+
+        Ok(BuiltCondBranch { b, value })
+    }
+
+    fn build_cond(
+        &mut self,
+        dcx: &mut DefCtx,
+        b: &mut Builder,
+        span: Span,
+        test_value: &Value,
+        cond: &hir::Cond<hir::Inferred>,
+    ) -> Result<Value> {
+        use crate::mir::value::build_reg::value_to_reg;
+        use crate::mir::value::from_reg::reg_to_value;
+        use crate::mir::value::plan_phi::plan_phi_abi_type;
+        use runtime::abitype;
+
+        let test_reg = value_to_reg(self, b, span, test_value, &abitype::ABIType::Bool);
+
+        let mut built_true = self.build_cond_branch(dcx, &cond.true_expr)?;
+        let mut built_false = self.build_cond_branch(dcx, &cond.false_expr)?;
+
+        let true_is_divergent = built_true.value.is_divergent();
+        let false_is_divergent = built_false.value.is_divergent();
+
+        let output_value;
+        let reg_phi;
+
+        match (true_is_divergent, false_is_divergent) {
+            (true, true) => {
+                output_value = Value::Divergent;
+                reg_phi = None;
+            }
+            (false, true) => {
+                output_value = built_true.value;
+                reg_phi = None;
+            }
+            (true, false) => {
+                output_value = built_false.value;
+                reg_phi = None;
+            }
+            (false, false) => {
+                let phi_abi_type =
+                    plan_phi_abi_type(&built_true.value, &built_false.value, &cond.phi_ty);
+
+                let true_result_reg = value_to_reg(
+                    self,
+                    &mut built_true.b,
+                    span,
+                    &built_true.value,
+                    &phi_abi_type,
+                );
+
+                let false_result_reg = value_to_reg(
+                    self,
+                    &mut built_false.b,
+                    span,
+                    &built_false.value,
+                    &phi_abi_type,
+                );
+
+                let output_reg = b.alloc_reg();
+
+                output_value = reg_to_value(self, output_reg, &phi_abi_type, &cond.phi_ty);
+                reg_phi = Some(ops::RegPhi {
+                    output_reg,
+                    true_result_reg: true_result_reg.into(),
+                    false_result_reg: false_result_reg.into(),
+                });
             }
         };
 
-        if test_bool {
-            self.eval_expr(dcx, b, &cond.true_expr)
-        } else {
-            self.eval_expr(dcx, b, &cond.false_expr)
-        }
+        b.push(
+            span,
+            ops::OpKind::Cond(ops::CondOp {
+                reg_phi,
+                test_reg: test_reg.into(),
+                true_ops: built_true.b.into_ops(),
+                false_ops: built_false.b.into_ops(),
+            }),
+        );
+
+        Ok(output_value)
     }
 
     fn eval_arret_fun(
@@ -786,7 +890,7 @@ impl EvalHirCtx {
             hir::Expr::MacroExpand(span, expr) => self
                 .eval_expr(dcx, b, expr)
                 .map_err(|err| err.with_macro_invocation_span(*span)),
-            hir::Expr::Cond(_, cond) => self.eval_cond(dcx, b, cond),
+            hir::Expr::Cond(span, cond) => self.eval_cond(dcx, b, *span, cond),
         }
     }
 

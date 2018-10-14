@@ -5,7 +5,7 @@ use syntax::span::Span;
 use crate::codegen::GenABI;
 
 new_indexing_id_type!(BuiltFunId, u32);
-new_counting_id_type!(RegIdCounter, RegId);
+new_global_id_type!(RegId);
 
 /// Specifies the calling convention of a ops function
 ///
@@ -91,12 +91,18 @@ pub struct CastBoxedOp {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct RegPhi {
+    pub output_reg: RegId,
+    pub true_result_reg: RegId,
+    pub false_result_reg: RegId,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct CondOp {
+    pub reg_phi: Option<RegPhi>,
     pub test_reg: RegId,
     pub true_ops: Box<[Op]>,
-    pub true_result_reg: RegId,
     pub false_ops: Box<[Op]>,
-    pub false_result_reg: RegId,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -128,7 +134,7 @@ pub enum OpKind {
     LoadBoxedPairRest(RegId, RegId),
     LoadBoxedIntValue(RegId, RegId),
     LoadBoxedFunThunkClosure(RegId, RegId),
-    Cond(RegId, CondOp),
+    Cond(CondOp),
 
     Add(RegId, BinaryOp),
 
@@ -160,8 +166,8 @@ impl OpKind {
             | LoadBoxedPairRest(reg_id, _)
             | LoadBoxedIntValue(reg_id, _)
             | LoadBoxedFunThunkClosure(reg_id, _)
-            | Cond(reg_id, _) => Some(*reg_id),
-            Add(reg_id, _) => Some(*reg_id),
+            | Add(reg_id, _) => Some(*reg_id),
+            Cond(cond_op) => cond_op.reg_phi.clone().map(|reg_phi| reg_phi.output_reg),
             Ret(_) | RetVoid | Unreachable => None,
         }
     }
@@ -215,16 +221,16 @@ impl OpKind {
             Call(_, call_op) => {
                 coll.extend(call_op.args.iter().cloned());
             }
-            Cond(_, cond_op) => {
-                coll.extend(
-                    [
-                        cond_op.test_reg,
-                        cond_op.true_result_reg,
-                        cond_op.false_result_reg,
-                    ]
-                        .iter()
-                        .cloned(),
-                );
+            Cond(cond_op) => {
+                coll.extend(iter::once(cond_op.test_reg));
+
+                if let Some(reg_phi) = &cond_op.reg_phi {
+                    coll.extend(
+                        [reg_phi.true_result_reg, reg_phi.false_result_reg]
+                            .iter()
+                            .cloned(),
+                    );
+                }
 
                 for op in cond_op.true_ops.iter().chain(cond_op.false_ops.iter()) {
                     op.kind().add_input_regs(coll);
@@ -242,11 +248,20 @@ impl OpKind {
         match self {
             Ret(_) | RetVoid | Unreachable => true,
             Call(_, call_op) => call_op.impure,
-            Cond(_, cond_op) => cond_op
+            Cond(cond_op) => cond_op
                 .true_ops
                 .iter()
                 .chain(cond_op.false_ops.iter())
                 .any(|op| op.kind().has_side_effects()),
+            _ => false,
+        }
+    }
+
+    pub fn is_terminator(&self) -> bool {
+        use crate::mir::ops::OpKind::*;
+
+        match self {
+            Ret(_) | RetVoid | Unreachable => true,
             _ => false,
         }
     }
@@ -295,8 +310,7 @@ mod test {
 
     #[test]
     fn output_reg() {
-        let mut reg_counter = RegIdCounter::new();
-        let reg1 = reg_counter.alloc();
+        let reg1 = RegId::alloc();
 
         assert_eq!(None, OpKind::RetVoid.output_reg());
         assert_eq!(None, OpKind::Ret(reg1).output_reg());
@@ -305,58 +319,53 @@ mod test {
 
     #[test]
     fn has_side_effects() {
-        let mut reg_counter = RegIdCounter::new();
-        let reg1 = reg_counter.alloc();
+        let reg1 = RegId::alloc();
 
         assert_eq!(true, OpKind::RetVoid.has_side_effects());
         assert_eq!(false, OpKind::ConstInt(reg1, 14).has_side_effects());
 
         let cond_op_with_no_side_effects = CondOp {
+            reg_phi: None,
             test_reg: reg1,
             true_ops: Box::new([]),
-            true_result_reg: reg1,
             false_ops: Box::new([]),
-            false_result_reg: reg1,
         };
 
         assert_eq!(
             false,
-            OpKind::Cond(reg1, cond_op_with_no_side_effects).has_side_effects()
+            OpKind::Cond(cond_op_with_no_side_effects).has_side_effects()
         );
 
         let cond_op_with_true_side_effects = CondOp {
+            reg_phi: None,
             test_reg: reg1,
             true_ops: Box::new([OpKind::RetVoid.into()]),
-            true_result_reg: reg1,
             false_ops: Box::new([]),
-            false_result_reg: reg1,
         };
 
         assert_eq!(
             true,
-            OpKind::Cond(reg1, cond_op_with_true_side_effects).has_side_effects()
+            OpKind::Cond(cond_op_with_true_side_effects).has_side_effects()
         );
 
         let cond_op_with_false_side_effects = CondOp {
+            reg_phi: None,
             test_reg: reg1,
             true_ops: Box::new([]),
-            true_result_reg: reg1,
             false_ops: Box::new([OpKind::RetVoid.into()]),
-            false_result_reg: reg1,
         };
 
         assert_eq!(
             true,
-            OpKind::Cond(reg1, cond_op_with_false_side_effects).has_side_effects()
+            OpKind::Cond(cond_op_with_false_side_effects).has_side_effects()
         );
     }
 
     #[test]
     fn ret_input_regs() {
-        let mut reg_counter = RegIdCounter::new();
         let mut used_regs = HashSet::<RegId>::new();
 
-        let ret_reg = reg_counter.alloc();
+        let ret_reg = RegId::alloc();
         OpKind::Ret(ret_reg).add_input_regs(&mut used_regs);
 
         assert_eq!(1, used_regs.len());
@@ -365,27 +374,29 @@ mod test {
 
     #[test]
     fn cond_input_regs() {
-        let mut reg_counter = RegIdCounter::new();
         let mut used_regs = HashSet::<RegId>::new();
 
-        let output_reg = reg_counter.alloc();
-        let test_reg = reg_counter.alloc();
+        let output_reg = RegId::alloc();
+        let test_reg = RegId::alloc();
 
-        let true_input_reg = reg_counter.alloc();
-        let true_result_reg = reg_counter.alloc();
+        let true_input_reg = RegId::alloc();
+        let true_result_reg = RegId::alloc();
 
-        let false_input_reg = reg_counter.alloc();
-        let false_result_reg = reg_counter.alloc();
+        let false_input_reg = RegId::alloc();
+        let false_result_reg = RegId::alloc();
 
         let cond_op = CondOp {
+            reg_phi: Some(RegPhi {
+                output_reg,
+                true_result_reg,
+                false_result_reg,
+            }),
             test_reg,
             true_ops: Box::new([OpKind::Ret(true_input_reg).into()]),
-            true_result_reg,
             false_ops: Box::new([OpKind::Ret(false_input_reg).into()]),
-            false_result_reg,
         };
 
-        OpKind::Cond(output_reg, cond_op).add_input_regs(&mut used_regs);
+        OpKind::Cond(cond_op).add_input_regs(&mut used_regs);
 
         for used_reg in &[
             test_reg,

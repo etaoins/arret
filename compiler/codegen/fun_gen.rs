@@ -63,7 +63,15 @@ fn gen_cond_branch(
             gen_alloc_atom(cgx, mcx, fcx, alloc_atom);
         }
 
-        LLVMBuildBr(fcx.builder, cont_block);
+        // We can't branch if we terminated
+        if alloc_plan
+            .last()
+            .and_then(|alloc_atom| alloc_atom.ops().last())
+            .filter(|op| op.kind().is_terminator())
+            .is_none()
+        {
+            LLVMBuildBr(fcx.builder, cont_block);
+        }
     }
 }
 
@@ -73,12 +81,9 @@ fn gen_cond(
     fcx: &mut FunCtx,
     cond_op: &CondOp,
     cond_alloc_plan: &alloc::CondPlan<'_>,
-) -> LLVMValueRef {
+) {
     let CondOp {
-        test_reg,
-        true_result_reg,
-        false_result_reg,
-        ..
+        reg_phi, test_reg, ..
     } = cond_op;
 
     unsafe {
@@ -117,31 +122,38 @@ fn gen_cond(
             cond_alloc_plan.false_subplan(),
             cont_block,
         );
-
-        let mut true_result_llvm = fcx.regs[true_result_reg];
-        let mut false_result_llvm = fcx.regs[false_result_reg];
-
         LLVMPositionBuilderAtEnd(fcx.builder, cont_block);
-        let phi_value = LLVMBuildPhi(
-            fcx.builder,
-            LLVMTypeOf(true_result_llvm),
-            b"cond_phi\0".as_ptr() as *const _,
-        );
 
-        LLVMAddIncoming(
-            phi_value,
-            &mut true_result_llvm as *mut _,
-            &mut true_block as *mut _,
-            1,
-        );
-        LLVMAddIncoming(
-            phi_value,
-            &mut false_result_llvm as *mut _,
-            &mut false_block as *mut _,
-            1,
-        );
+        if let Some(RegPhi {
+            output_reg,
+            true_result_reg,
+            false_result_reg,
+        }) = reg_phi
+        {
+            let mut true_result_llvm = fcx.regs[true_result_reg];
+            let mut false_result_llvm = fcx.regs[false_result_reg];
 
-        phi_value
+            let phi_value = LLVMBuildPhi(
+                fcx.builder,
+                LLVMTypeOf(true_result_llvm),
+                b"cond_phi\0".as_ptr() as *const _,
+            );
+
+            LLVMAddIncoming(
+                phi_value,
+                &mut true_result_llvm as *mut _,
+                &mut true_block as *mut _,
+                1,
+            );
+            LLVMAddIncoming(
+                phi_value,
+                &mut false_result_llvm as *mut _,
+                &mut false_block as *mut _,
+                1,
+            );
+
+            fcx.regs.insert(*output_reg, phi_value);
+        }
     }
 }
 
@@ -173,6 +185,7 @@ fn gen_op(
     fcx: &mut FunCtx,
     alloc_atom: &alloc::AllocAtom<'_>,
     active_alloc: &mut alloc::ActiveAlloc,
+    op_index: usize,
     op: &Op,
 ) {
     unsafe {
@@ -346,10 +359,9 @@ fn gen_op(
 
                 fcx.regs.insert(*reg, llvm_value);
             }
-            OpKind::Cond(reg, cond_op) => {
-                let cond_alloc_plan = &alloc_atom.cond_plans()[reg];
-                let llvm_value = gen_cond(cgx, mcx, fcx, cond_op, cond_alloc_plan);
-                fcx.regs.insert(*reg, llvm_value);
+            OpKind::Cond(cond_op) => {
+                let cond_alloc_plan = &alloc_atom.cond_plans()[&op_index];
+                gen_cond(cgx, mcx, fcx, cond_op, cond_alloc_plan);
             }
             OpKind::AllocInt(reg, int_reg) => {
                 let box_source = alloc_atom.box_sources()[reg];
@@ -418,8 +430,8 @@ fn gen_alloc_atom(
         alloc::ActiveAlloc::empty()
     };
 
-    for op in alloc_atom.ops() {
-        gen_op(cgx, mcx, fcx, alloc_atom, &mut active_alloc, &op);
+    for (op_index, op) in alloc_atom.ops().iter().enumerate() {
+        gen_op(cgx, mcx, fcx, alloc_atom, &mut active_alloc, op_index, &op);
     }
 
     assert!(

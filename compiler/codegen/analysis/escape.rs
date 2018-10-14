@@ -161,21 +161,19 @@ fn add_op_captures(
             captures.add(*head_reg, output_capture);
             captures.add(*rest_reg, output_capture);
         }
-        OpKind::Cond(
-            reg,
-            ops::CondOp {
-                true_ops,
-                true_result_reg,
-                false_ops,
-                false_result_reg,
-                ..
-            },
-        ) => {
-            let output_capture = captures.get(*reg);
+        OpKind::Cond(ops::CondOp {
+            reg_phi,
+            true_ops,
+            false_ops,
+            ..
+        }) => {
+            if let Some(reg_phi) = reg_phi {
+                let output_capture = captures.get(reg_phi.output_reg);
 
-            // Propagate captures through the phi
-            captures.add(*true_result_reg, output_capture);
-            captures.add(*false_result_reg, output_capture);
+                // Propagate captures through the phi
+                captures.add(reg_phi.true_result_reg, output_capture);
+                captures.add(reg_phi.false_result_reg, output_capture);
+            }
 
             for op in true_ops.iter().rev().chain(false_ops.iter().rev()) {
                 add_op_captures(built_funs, captures, ret_type, op);
@@ -235,8 +233,7 @@ mod test {
 
     #[test]
     fn empty_fun_captures() {
-        let mut reg_counter = ops::RegIdCounter::new();
-        let param_reg = reg_counter.alloc();
+        let param_reg = ops::RegId::alloc();
 
         let test_fun = ops::Fun {
             source_name: None,
@@ -255,8 +252,7 @@ mod test {
 
     #[test]
     fn capture_param_via_ret() {
-        let mut reg_counter = ops::RegIdCounter::new();
-        let capture_reg = reg_counter.alloc();
+        let capture_reg = ops::RegId::alloc();
 
         let test_fun = ops::Fun {
             source_name: None,
@@ -275,9 +271,8 @@ mod test {
 
     #[test]
     fn capture_param_via_pair() {
-        let mut reg_counter = ops::RegIdCounter::new();
-        let param_reg = reg_counter.alloc();
-        let ret_reg = reg_counter.alloc();
+        let param_reg = ops::RegId::alloc();
+        let ret_reg = ops::RegId::alloc();
 
         let test_fun = ops::Fun {
             source_name: None,
@@ -308,9 +303,8 @@ mod test {
 
     #[test]
     fn capture_param_via_box_thunk_call() {
-        let mut reg_counter = ops::RegIdCounter::new();
-        let param_reg = reg_counter.alloc();
-        let ret_reg = reg_counter.alloc();
+        let param_reg = ops::RegId::alloc();
+        let ret_reg = ops::RegId::alloc();
 
         let test_fun = ops::Fun {
             source_name: None,
@@ -341,20 +335,18 @@ mod test {
 
     #[test]
     fn capture_param_via_static_symbol_call() {
-        let mut reg_counter = ops::RegIdCounter::new();
-
         // These are passed to the first call with an unused ret
-        let param_reg1 = reg_counter.alloc();
-        let param_reg2 = reg_counter.alloc();
-        let param_reg3 = reg_counter.alloc();
+        let param_reg1 = ops::RegId::alloc();
+        let param_reg2 = ops::RegId::alloc();
+        let param_reg3 = ops::RegId::alloc();
 
         // These are passed to the second call which does have its ret captured
-        let param_reg4 = reg_counter.alloc();
-        let param_reg5 = reg_counter.alloc();
-        let param_reg6 = reg_counter.alloc();
+        let param_reg4 = ops::RegId::alloc();
+        let param_reg5 = ops::RegId::alloc();
+        let param_reg6 = ops::RegId::alloc();
 
-        let unused_reg = reg_counter.alloc();
-        let ret_reg = reg_counter.alloc();
+        let unused_reg = ops::RegId::alloc();
+        let ret_reg = ops::RegId::alloc();
 
         let static_symbol_abi = GenABI {
             takes_task: false,
@@ -436,9 +428,8 @@ mod test {
 
     #[test]
     fn capture_param_via_cond() {
-        let mut reg_counter = ops::RegIdCounter::new();
-        let param_reg = reg_counter.alloc();
-        let ret_reg = reg_counter.alloc();
+        let param_reg = ops::RegId::alloc();
+        let ret_reg = ops::RegId::alloc();
 
         let test_fun = ops::Fun {
             source_name: None,
@@ -449,16 +440,16 @@ mod test {
             },
             params: Box::new([param_reg]),
             ops: Box::new([
-                ops::OpKind::Cond(
-                    ret_reg,
-                    ops::CondOp {
-                        test_reg: param_reg,
-                        true_ops: Box::new([]),
+                ops::OpKind::Cond(ops::CondOp {
+                    reg_phi: Some(ops::RegPhi {
+                        output_reg: ret_reg,
                         true_result_reg: param_reg,
-                        false_ops: Box::new([]),
                         false_result_reg: param_reg,
-                    },
-                )
+                    }),
+                    test_reg: param_reg,
+                    true_ops: Box::new([]),
+                    false_ops: Box::new([]),
+                })
                 .into(),
                 ops::OpKind::Ret(ret_reg).into(),
             ]),

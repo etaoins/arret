@@ -1,0 +1,12 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn main! ()
+  (assert-eq (black-box! 1) (black-box! 1))
+  (assert-ne (black-box! 1) (black-box! 2))
+
+  (assert-eq (black-box! true) (black-box! true))
+  (assert-ne (black-box! true) (black-box! false))
+  (assert-eq (black-box! false) (black-box! false))
+
+  ())

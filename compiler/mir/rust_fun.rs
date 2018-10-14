@@ -54,7 +54,8 @@ pub fn build_rust_fun_app(
 
     // TODO: Fix for polymorphism once it's supported
     // This will need to be split in to `always_impure` for the Symbol and a `call_impure` for this call site
-    let impure = rust_fun.arret_fun_type().purity() != &purity::Purity::Pure.into_poly();
+    let impure = (rust_fun.arret_fun_type().purity() != &purity::Purity::Pure.into_poly())
+        || rust_fun.arret_fun_type().ret() == &ty::Ty::never().into_poly();
 
     let abi = GenABI {
         takes_task: rust_fun.takes_task(),

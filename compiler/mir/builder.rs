@@ -2,23 +2,19 @@ use syntax::span::Span;
 
 use runtime::abitype;
 
-use crate::mir::ops::{CastBoxedOp, CondOp, Op, OpKind, RegId, RegIdCounter};
+use crate::mir::ops::{CastBoxedOp, CondOp, Op, OpKind, RegId, RegPhi};
 
 pub struct Builder {
     ops: Vec<Op>,
-    reg_id_counter: RegIdCounter,
 }
 
 impl Builder {
     pub fn new() -> Builder {
-        Builder {
-            ops: vec![],
-            reg_id_counter: RegIdCounter::new(),
-        }
+        Builder { ops: vec![] }
     }
 
     pub fn alloc_reg(&mut self) -> RegId {
-        self.reg_id_counter.alloc()
+        RegId::alloc()
     }
 
     pub fn push_reg<F, P>(&mut self, span: Span, kind_cons: F, kind_param: P) -> RegId
@@ -50,26 +46,27 @@ impl Builder {
         F: FnOnce(&mut Builder) -> RegId,
     {
         let mut true_builder = Builder::new();
-        true_builder.reg_id_counter = self.reg_id_counter.clone();
         let true_result_reg = true_cons(&mut true_builder);
 
         let mut false_builder = Builder::new();
-        false_builder.reg_id_counter = true_builder.reg_id_counter.clone();
         let false_result_reg = false_cons(&mut false_builder);
 
-        self.reg_id_counter = false_builder.reg_id_counter.clone();
-
-        self.push_reg(
+        let output_reg = RegId::alloc();
+        self.push(
             span,
-            OpKind::Cond,
-            CondOp {
+            OpKind::Cond(CondOp {
+                reg_phi: Some(RegPhi {
+                    output_reg,
+                    true_result_reg,
+                    false_result_reg,
+                }),
                 test_reg,
                 true_ops: true_builder.into_ops(),
-                true_result_reg,
                 false_ops: false_builder.into_ops(),
-                false_result_reg,
-            },
-        )
+            }),
+        );
+
+        output_reg
     }
 
     pub fn cast_boxed(

@@ -3,52 +3,54 @@ use std::collections::HashSet;
 use crate::mir::ops;
 
 fn remove_unused_cond_ops(
-    output_reg: ops::RegId,
     cond_op: ops::CondOp,
     used_regs: &mut HashSet<ops::RegId>,
 ) -> Option<ops::CondOp> {
     let ops::CondOp {
+        reg_phi,
         test_reg,
         true_ops,
-        true_result_reg,
         false_ops,
-        false_result_reg,
     } = cond_op;
 
+    // Determine if our output is used
+    let used_reg_phi = reg_phi.filter(|reg_phi| used_regs.contains(&reg_phi.output_reg));
+
     // Instead of cloning `used_regs` just rollback any changes we make do it
-    let (rollback_true_result, rollback_false_result) = if used_regs.contains(&output_reg) {
-        // These phi in to the output reg
-        (
-            !used_regs.insert(true_result_reg),
-            !used_regs.insert(false_result_reg),
-        )
-    } else {
-        (false, false)
+    let (rollback_true_reg, rollback_false_reg) = match used_reg_phi {
+        Some(ops::RegPhi {
+            true_result_reg,
+            false_result_reg,
+            ..
+        }) => (
+            Some(true_result_reg).filter(|_| !used_regs.insert(true_result_reg)),
+            Some(false_result_reg).filter(|_| !used_regs.insert(false_result_reg)),
+        ),
+        _ => (None, None),
     };
 
     let used_true_ops = remove_unused_branch_ops(true_ops, used_regs);
     let used_false_ops = remove_unused_branch_ops(false_ops, used_regs);
 
-    if used_true_ops.is_empty() && used_false_ops.is_empty() && !used_regs.contains(&output_reg) {
+    if used_true_ops.is_empty() && used_false_ops.is_empty() && used_reg_phi.is_none() {
         // We can disappear!
-        if rollback_true_result {
-            used_regs.remove(&true_result_reg);
+        if let Some(rollback_true_reg) = rollback_true_reg {
+            used_regs.remove(&rollback_true_reg);
         }
-        if rollback_false_result {
-            used_regs.remove(&false_result_reg);
+        if let Some(rollback_false_reg) = rollback_false_reg {
+            used_regs.remove(&rollback_false_reg);
         }
 
-        return None;
+        None
+    } else {
+        used_regs.insert(test_reg);
+        Some(ops::CondOp {
+            reg_phi: used_reg_phi,
+            test_reg,
+            true_ops: used_true_ops,
+            false_ops: used_false_ops,
+        })
     }
-
-    used_regs.insert(test_reg);
-    Some(ops::CondOp {
-        test_reg,
-        true_ops: used_true_ops,
-        true_result_reg,
-        false_ops: used_false_ops,
-        false_result_reg,
-    })
 }
 
 fn remove_unused_branch_ops(
@@ -63,10 +65,8 @@ fn remove_unused_branch_ops(
             let ops::Op { span, kind } = op;
 
             match kind {
-                ops::OpKind::Cond(output_reg, cond_op) => {
-                    remove_unused_cond_ops(output_reg, cond_op, used_regs)
-                        .map(|cond_op| ops::Op::new(span, ops::OpKind::Cond(output_reg, cond_op)))
-                }
+                ops::OpKind::Cond(cond_op) => remove_unused_cond_ops(cond_op, used_regs)
+                    .map(|cond_op| ops::Op::new(span, ops::OpKind::Cond(cond_op))),
                 _ => {
                     // Does this have no side effects and its output is unused?
                     if !kind.has_side_effects() && kind
@@ -107,10 +107,9 @@ mod test {
 
     #[test]
     fn simple_unused() {
-        let mut reg_counter = ops::RegIdCounter::new();
-        let reg1 = reg_counter.alloc();
-        let reg2 = reg_counter.alloc();
-        let reg3 = reg_counter.alloc();
+        let reg1 = ops::RegId::alloc();
+        let reg2 = ops::RegId::alloc();
+        let reg3 = ops::RegId::alloc();
 
         let input_ops = Box::new([
             ops::OpKind::ConstNil(reg1, ()).into(),
@@ -131,12 +130,10 @@ mod test {
 
     #[test]
     fn fully_used_cond() {
-        let mut reg_counter = ops::RegIdCounter::new();
-
-        let output_reg = reg_counter.alloc();
-        let test_reg = reg_counter.alloc();
-        let true_result_reg = reg_counter.alloc();
-        let false_result_reg = reg_counter.alloc();
+        let output_reg = ops::RegId::alloc();
+        let test_reg = ops::RegId::alloc();
+        let true_result_reg = ops::RegId::alloc();
+        let false_result_reg = ops::RegId::alloc();
 
         let true_ops = Box::new([ops::OpKind::ConstNil(true_result_reg, ()).into()]);
 
@@ -144,16 +141,16 @@ mod test {
 
         let input_ops: Box<[ops::Op]> = Box::new([
             ops::OpKind::ConstNil(test_reg, ()).into(),
-            ops::OpKind::Cond(
-                output_reg,
-                ops::CondOp {
-                    test_reg,
-                    true_ops,
+            ops::OpKind::Cond(ops::CondOp {
+                reg_phi: Some(ops::RegPhi {
+                    output_reg,
                     true_result_reg,
-                    false_ops,
                     false_result_reg,
-                },
-            )
+                }),
+                test_reg,
+                true_ops,
+                false_ops,
+            })
             .into(),
             ops::OpKind::Ret(output_reg).into(),
         ]);
@@ -166,12 +163,10 @@ mod test {
 
     #[test]
     fn partially_used_cond() {
-        let mut reg_counter = ops::RegIdCounter::new();
-
-        let output_reg = reg_counter.alloc();
-        let test_reg = reg_counter.alloc();
-        let true_result_reg = reg_counter.alloc();
-        let false_result_reg = reg_counter.alloc();
+        let output_reg = ops::RegId::alloc();
+        let test_reg = ops::RegId::alloc();
+        let true_result_reg = ops::RegId::alloc();
+        let false_result_reg = ops::RegId::alloc();
 
         let true_ops = Box::new([ops::OpKind::ConstNil(true_result_reg, ()).into()]);
 
@@ -179,32 +174,32 @@ mod test {
 
         let input_ops = Box::new([
             ops::OpKind::ConstNil(test_reg, ()).into(),
-            ops::OpKind::Cond(
-                output_reg,
-                ops::CondOp {
-                    test_reg,
-                    true_ops,
+            ops::OpKind::Cond(ops::CondOp {
+                reg_phi: Some(ops::RegPhi {
+                    output_reg,
                     true_result_reg: test_reg, // This makes the true branch unused
-                    false_ops: false_ops.clone(),
                     false_result_reg,
-                },
-            )
+                }),
+                test_reg,
+                true_ops,
+                false_ops: false_ops.clone(),
+            })
             .into(),
             ops::OpKind::Ret(output_reg).into(),
         ]);
 
         let expected_ops: Box<[ops::Op]> = Box::new([
             ops::OpKind::ConstNil(test_reg, ()).into(),
-            ops::OpKind::Cond(
-                output_reg,
-                ops::CondOp {
-                    test_reg,
-                    true_ops: Box::new([]),
+            ops::OpKind::Cond(ops::CondOp {
+                reg_phi: Some(ops::RegPhi {
+                    output_reg,
                     true_result_reg: test_reg,
-                    false_ops,
                     false_result_reg,
-                },
-            )
+                }),
+                test_reg,
+                true_ops: Box::new([]),
+                false_ops,
+            })
             .into(),
             ops::OpKind::Ret(output_reg).into(),
         ]);
@@ -216,12 +211,10 @@ mod test {
 
     #[test]
     fn output_only_cond() {
-        let mut reg_counter = ops::RegIdCounter::new();
-
-        let output_reg = reg_counter.alloc();
-        let test_reg = reg_counter.alloc();
-        let true_result_reg = reg_counter.alloc();
-        let false_result_reg = reg_counter.alloc();
+        let output_reg = ops::RegId::alloc();
+        let test_reg = ops::RegId::alloc();
+        let true_result_reg = ops::RegId::alloc();
+        let false_result_reg = ops::RegId::alloc();
 
         let true_ops = Box::new([ops::OpKind::ConstNil(true_result_reg, ()).into()]);
 
@@ -229,16 +222,16 @@ mod test {
 
         let input_ops = Box::new([
             ops::OpKind::ConstNil(test_reg, ()).into(),
-            ops::OpKind::Cond(
-                output_reg,
-                ops::CondOp {
-                    test_reg,
-                    true_ops,
+            ops::OpKind::Cond(ops::CondOp {
+                reg_phi: Some(ops::RegPhi {
+                    output_reg,
                     true_result_reg: test_reg, // This makes the true branch unused
-                    false_ops,
                     false_result_reg: test_reg, // This makes the false branch unused
-                },
-            )
+                }),
+                test_reg,
+                true_ops,
+                false_ops,
+            })
             .into(),
             // However, the output of the cond is still used
             ops::OpKind::Ret(output_reg).into(),
@@ -246,16 +239,16 @@ mod test {
 
         let expected_ops: Box<[ops::Op]> = Box::new([
             ops::OpKind::ConstNil(test_reg, ()).into(),
-            ops::OpKind::Cond(
-                output_reg,
-                ops::CondOp {
-                    test_reg,
-                    true_ops: Box::new([]),
+            ops::OpKind::Cond(ops::CondOp {
+                reg_phi: Some(ops::RegPhi {
+                    output_reg,
                     true_result_reg: test_reg,
-                    false_ops: Box::new([]),
                     false_result_reg: test_reg,
-                },
-            )
+                }),
+                test_reg,
+                true_ops: Box::new([]),
+                false_ops: Box::new([]),
+            })
             .into(),
             ops::OpKind::Ret(output_reg).into(),
         ]);
@@ -266,13 +259,50 @@ mod test {
     }
 
     #[test]
-    fn fully_unused_cond() {
-        let mut reg_counter = ops::RegIdCounter::new();
+    fn output_unused_cond() {
+        let output_reg = ops::RegId::alloc();
+        let test_reg = ops::RegId::alloc();
 
-        let output_reg = reg_counter.alloc();
-        let test_reg = reg_counter.alloc();
-        let true_result_reg = reg_counter.alloc();
-        let false_result_reg = reg_counter.alloc();
+        let true_ops = Box::new([ops::OpKind::RetVoid.into()]);
+        let false_ops = Box::new([ops::OpKind::RetVoid.into()]);
+
+        let input_ops = Box::new([
+            ops::OpKind::ConstNil(test_reg, ()).into(),
+            ops::OpKind::Cond(ops::CondOp {
+                reg_phi: Some(ops::RegPhi {
+                    output_reg,
+                    true_result_reg: test_reg, // This makes the true result unused
+                    false_result_reg: test_reg, // This makes the false result unused
+                }),
+                test_reg,
+                true_ops: true_ops.clone(),
+                false_ops: false_ops.clone(),
+            })
+            .into(),
+        ]);
+
+        let expected_ops: Box<[ops::Op]> = Box::new([
+            ops::OpKind::ConstNil(test_reg, ()).into(),
+            ops::OpKind::Cond(ops::CondOp {
+                reg_phi: None,
+                test_reg,
+                true_ops,
+                false_ops,
+            })
+            .into(),
+        ]);
+
+        let output_ops = remove_unused_fun_ops(input_ops);
+
+        assert_eq!(expected_ops, output_ops);
+    }
+
+    #[test]
+    fn fully_unused_cond() {
+        let output_reg = ops::RegId::alloc();
+        let test_reg = ops::RegId::alloc();
+        let true_result_reg = ops::RegId::alloc();
+        let false_result_reg = ops::RegId::alloc();
 
         let true_ops = Box::new([ops::OpKind::ConstNil(true_result_reg, ()).into()]);
 
@@ -280,16 +310,16 @@ mod test {
 
         let input_ops = Box::new([
             ops::OpKind::ConstNil(test_reg, ()).into(),
-            ops::OpKind::Cond(
-                output_reg,
-                ops::CondOp {
-                    test_reg,
-                    true_ops,
+            ops::OpKind::Cond(ops::CondOp {
+                reg_phi: Some(ops::RegPhi {
+                    output_reg,
                     true_result_reg: test_reg, // This makes the true branch unused
-                    false_ops,
                     false_result_reg: test_reg, // This makes the false branch unused
-                },
-            )
+                }),
+                test_reg,
+                true_ops,
+                false_ops,
+            })
             .into(),
         ]);
 
