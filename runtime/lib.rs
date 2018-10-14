@@ -3,7 +3,7 @@
 
 pub mod abitype;
 pub mod binding;
-pub mod bootstrap;
 pub mod boxed;
+pub mod compiler_support;
 pub mod intern;
 pub mod task;

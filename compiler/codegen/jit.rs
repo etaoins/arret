@@ -19,7 +19,10 @@ extern "C" fn orc_sym_resolve(name_ptr: *const libc::c_char, jcx_void: *mut libc
     unsafe {
         let jcx: &JITCtx = &*(jcx_void as *mut _);
         let name = ffi::CStr::from_ptr(name_ptr);
-        jcx.symbols.get(name).cloned().unwrap_or(0)
+        jcx.symbols
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| panic!("unable to lookup symbol {:?}", name))
     }
 }
 
@@ -33,6 +36,7 @@ impl JITCtx {
     pub fn new() -> JITCtx {
         unsafe {
             use crate::codegen::target::create_target_machine;
+            use runtime::compiler_support;
 
             LLVMLinkInMCJIT();
 
@@ -52,6 +56,10 @@ impl JITCtx {
             jcx.add_symbol(b"ARRET_TRUE\0", &boxed::TRUE_INSTANCE as *const _ as u64);
             jcx.add_symbol(b"ARRET_FALSE\0", &boxed::FALSE_INSTANCE as *const _ as u64);
             jcx.add_symbol(b"ARRET_NIL\0", &boxed::NIL_INSTANCE as *const _ as u64);
+            jcx.add_symbol(
+                b"arret_runtime_alloc_cells\0",
+                &compiler_support::alloc_cells as *const _ as u64,
+            );
 
             jcx
         }
