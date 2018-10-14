@@ -9,4 +9,7 @@
   (assert-ne (black-box! true) (black-box! false))
   (assert-eq (black-box! false) (black-box! false))
 
+  (assert-eq (black-box! ()) (black-box! ()))
+  (assert-ne (black-box! ()) (black-box! '(1 2 3)))
+  
   ())
