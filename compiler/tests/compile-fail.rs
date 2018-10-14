@@ -248,6 +248,9 @@ fn run_single_test(input_path: &path::Path) -> bool {
 
 #[test]
 fn compile_fail() {
+    use compiler::initialise_llvm;
+    initialise_llvm(false);
+
     let entries = fs::read_dir("./tests/compile-fail").unwrap();
 
     let failed_tests = entries

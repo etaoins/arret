@@ -28,6 +28,8 @@ fn find_path_to_arret_root() -> path::PathBuf {
 }
 
 fn main() {
+    use compiler::initialise_llvm;
+
     let matches = App::new("arret")
         .arg(Arg::with_name("INPUT").help("Input source file").index(1))
         .arg(
@@ -63,6 +65,7 @@ fn main() {
             };
 
             let target_triple = matches.value_of("TARGET");
+            initialise_llvm(target_triple.is_some());
 
             if !mode::compile::compile_input_file(&cfg, input_path, target_triple, &output_path) {
                 process::exit(2);
@@ -79,6 +82,7 @@ fn main() {
                 process::exit(1);
             }
 
+            initialise_llvm(false);
             mode::repl::interactive_loop(&cfg);
         }
     };

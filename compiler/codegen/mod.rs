@@ -29,3 +29,23 @@ impl GenABI {
         }
     }
 }
+
+/// Initialises LLVM
+///
+/// This must be called before anything else in this module. It can only be called from a single
+/// thread at once.
+pub fn initialise_llvm(support_cross_compilation: bool) {
+    use llvm_sys::target::*;
+
+    unsafe {
+        if support_cross_compilation {
+            LLVM_InitializeAllTargetInfos();
+            LLVM_InitializeAllTargets();
+            LLVM_InitializeAllTargetMCs();
+            LLVM_InitializeAllAsmPrinters();
+        } else {
+            LLVM_InitializeNativeTarget();
+            LLVM_InitializeNativeAsmPrinter();
+        }
+    }
+}

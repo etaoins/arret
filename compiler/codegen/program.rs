@@ -130,6 +130,9 @@ fn program_to_module(
     }
 }
 
+/// Generates code for the program with the given output type
+///
+/// codegen::initialise_llvm() must be called before this.
 pub fn gen_program(
     rust_libraries: &[rfi::Library],
     program: &mir::BuiltProgram,

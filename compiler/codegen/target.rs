@@ -3,7 +3,6 @@ use std::{ffi, mem, ptr};
 use libc;
 
 use llvm_sys::core::*;
-use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 
 enum TripleString {
@@ -41,16 +40,6 @@ pub fn create_target_machine(
 
     unsafe {
         let mut target: LLVMTargetRef = mem::uninitialized();
-
-        if cross_triple.is_some() {
-            LLVM_InitializeAllTargetInfos();
-            LLVM_InitializeAllTargets();
-            LLVM_InitializeAllTargetMCs();
-            LLVM_InitializeAllAsmPrinters();
-        } else {
-            LLVM_InitializeNativeTarget();
-            LLVM_InitializeNativeAsmPrinter();
-        }
 
         let triple_string = cross_triple
             .map(|cross_triple| TripleString::Cross(ffi::CString::new(cross_triple).unwrap()))

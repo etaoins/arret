@@ -152,6 +152,9 @@ fn run_single_test(input_path: &path::Path, test_type: TestType) -> bool {
 
 #[test]
 fn pass() {
+    use compiler::initialise_llvm;
+    initialise_llvm(false);
+
     let eval_entries = fs::read_dir("./tests/eval-pass")
         .unwrap()
         .map(|entry| (entry, TestType::EvalPass));
