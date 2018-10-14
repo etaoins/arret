@@ -90,7 +90,7 @@ impl EvalHirCtx {
 
     fn destruc_scalar(
         var_values: &mut HashMap<hir::VarId, Value>,
-        scalar: &hir::destruc::Scalar<ty::Poly>,
+        scalar: &hir::destruc::Scalar<hir::Inferred>,
         value: Value,
     ) {
         if let Some(var_id) = scalar.var_id() {
@@ -102,7 +102,7 @@ impl EvalHirCtx {
         b: &mut Option<Builder>,
         span: Span,
         var_values: &mut HashMap<hir::VarId, Value>,
-        list: &hir::destruc::List<ty::Poly>,
+        list: &hir::destruc::List<hir::Inferred>,
         value: Value,
     ) {
         let mut iter = value.into_list_iter();
@@ -120,7 +120,7 @@ impl EvalHirCtx {
     fn destruc_value(
         b: &mut Option<Builder>,
         var_values: &mut HashMap<hir::VarId, Value>,
-        destruc: &hir::destruc::Destruc<ty::Poly>,
+        destruc: &hir::destruc::Destruc<hir::Inferred>,
         value: Value,
     ) {
         use crate::hir::destruc::Destruc;
@@ -131,7 +131,7 @@ impl EvalHirCtx {
         }
     }
 
-    fn destruc_source_name(destruc: &hir::destruc::Destruc<ty::Poly>) -> Option<&str> {
+    fn destruc_source_name(destruc: &hir::destruc::Destruc<hir::Inferred>) -> Option<&str> {
         use crate::hir::destruc::Destruc;
 
         match destruc {
@@ -167,7 +167,7 @@ impl EvalHirCtx {
         &mut self,
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
-        hir_let: &hir::Let<ty::Poly>,
+        hir_let: &hir::Let<hir::Inferred>,
     ) -> Result<Value> {
         let source_name = Self::destruc_source_name(&hir_let.destruc);
         let value = self.eval_expr_with_source_name(dcx, b, &hir_let.value_expr, source_name)?;
@@ -493,7 +493,7 @@ impl EvalHirCtx {
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         span: Span,
-        app: &hir::App<ty::Poly>,
+        app: &hir::App<hir::Inferred>,
     ) -> Result<Value> {
         let fun_value = self.eval_expr(dcx, b, &app.fun_expr)?;
 
@@ -516,7 +516,7 @@ impl EvalHirCtx {
         &mut self,
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
-        cond: &hir::Cond<ty::Poly>,
+        cond: &hir::Cond<hir::Inferred>,
     ) -> Result<Value> {
         let test_value = self.eval_expr(dcx, b, &cond.test_expr)?;
 
@@ -541,7 +541,7 @@ impl EvalHirCtx {
         &mut self,
         dcx: &mut DefCtx,
         span: Span,
-        fun_expr: Rc<hir::Fun<ty::Poly>>,
+        fun_expr: Rc<hir::Fun<hir::Inferred>>,
         source_name: Option<&str>,
     ) -> Value {
         let mut captures = HashMap::new();
@@ -691,7 +691,7 @@ impl EvalHirCtx {
         })
     }
 
-    pub fn consume_def(&mut self, def: hir::Def<ty::Poly>) -> Result<()> {
+    pub fn consume_def(&mut self, def: hir::Def<hir::Inferred>) -> Result<()> {
         let hir::Def {
             destruc,
             value_expr,

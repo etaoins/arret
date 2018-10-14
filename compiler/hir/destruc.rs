@@ -1,44 +1,43 @@
 use crate::hir;
-use crate::hir::HirType;
 use crate::ty;
 use syntax::span::Span;
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Destruc<T: HirType> {
-    Scalar(Span, Scalar<T>),
-    List(Span, List<T>),
+pub enum Destruc<P: hir::Phase> {
+    Scalar(Span, Scalar<P>),
+    List(Span, List<P>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct List<T: HirType> {
-    fixed: Vec<Destruc<T>>,
-    rest: Option<Box<Scalar<T>>>,
+pub struct List<P: hir::Phase> {
+    fixed: Vec<Destruc<P>>,
+    rest: Option<Box<Scalar<P>>>,
 }
 
-impl<T: HirType> List<T> {
-    pub fn new(fixed: Vec<Destruc<T>>, rest: Option<Box<Scalar<T>>>) -> List<T> {
+impl<P: hir::Phase> List<P> {
+    pub fn new(fixed: Vec<Destruc<P>>, rest: Option<Box<Scalar<P>>>) -> List<P> {
         List { fixed, rest }
     }
 
-    pub fn fixed(&self) -> &Vec<Destruc<T>> {
+    pub fn fixed(&self) -> &Vec<Destruc<P>> {
         &self.fixed
     }
 
-    pub fn rest(&self) -> &Option<Box<Scalar<T>>> {
+    pub fn rest(&self) -> &Option<Box<Scalar<P>>> {
         &self.rest
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Scalar<T: HirType> {
+pub struct Scalar<P: hir::Phase> {
     /// ID of the variable. If this is None it's treated as a wildcard.
     var_id: Option<hir::VarId>,
     source_name: Box<str>,
-    ty: T,
+    ty: P::DeclType,
 }
 
-impl<T: HirType> Scalar<T> {
-    pub fn new(var_id: Option<hir::VarId>, source_name: Box<str>, ty: T) -> Scalar<T> {
+impl<P: hir::Phase> Scalar<P> {
+    pub fn new(var_id: Option<hir::VarId>, source_name: Box<str>, ty: P::DeclType) -> Scalar<P> {
         Scalar {
             var_id,
             source_name,
@@ -54,15 +53,15 @@ impl<T: HirType> Scalar<T> {
         &self.source_name
     }
 
-    pub fn ty(&self) -> &T {
+    pub fn ty(&self) -> &P::DeclType {
         &self.ty
     }
 }
 
 pub fn subst_list_destruc(
     free_ty_polys: &mut impl Iterator<Item = ty::Poly>,
-    list: List<ty::Decl>,
-) -> List<ty::Poly> {
+    list: List<hir::Lowered>,
+) -> List<hir::Inferred> {
     let fixed = list
         .fixed
         .into_iter()
@@ -78,8 +77,8 @@ pub fn subst_list_destruc(
 
 pub fn subst_scalar_destruc(
     free_ty_polys: &mut impl Iterator<Item = ty::Poly>,
-    scalar: Scalar<ty::Decl>,
-) -> Scalar<ty::Poly> {
+    scalar: Scalar<hir::Lowered>,
+) -> Scalar<hir::Inferred> {
     let Scalar {
         var_id,
         ty,
@@ -100,8 +99,8 @@ pub fn subst_scalar_destruc(
 /// depth-first order
 pub fn subst_destruc(
     free_ty_polys: &mut impl Iterator<Item = ty::Poly>,
-    destruc: Destruc<ty::Decl>,
-) -> Destruc<ty::Poly> {
+    destruc: Destruc<hir::Lowered>,
+) -> Destruc<hir::Inferred> {
     match destruc {
         Destruc::Scalar(span, scalar) => {
             Destruc::Scalar(span, subst_scalar_destruc(free_ty_polys, scalar))
@@ -110,7 +109,7 @@ pub fn subst_destruc(
     }
 }
 
-pub fn poly_for_list_destruc(list: &List<ty::Poly>) -> ty::List<ty::Poly> {
+pub fn poly_for_list_destruc(list: &List<hir::Inferred>) -> ty::List<ty::Poly> {
     let fixed_polys = list
         .fixed()
         .iter()
@@ -126,7 +125,7 @@ pub fn poly_for_list_destruc(list: &List<ty::Poly>) -> ty::List<ty::Poly> {
     ty::List::new(fixed_polys, rest_poly)
 }
 
-pub fn poly_for_destruc(destruc: &Destruc<ty::Poly>) -> ty::Poly {
+pub fn poly_for_destruc(destruc: &Destruc<hir::Inferred>) -> ty::Poly {
     match destruc {
         Destruc::Scalar(_, scalar) => scalar.ty().clone(),
         Destruc::List(_, list) => ty::Ty::List(poly_for_list_destruc(list)).into_poly(),

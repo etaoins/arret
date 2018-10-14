@@ -5,7 +5,7 @@ use crate::ty::list_iter::ListIterator;
 
 pub fn type_for_decl_list_destruc(
     tvars: &ty::TVars,
-    list: &destruc::List<ty::Decl>,
+    list: &destruc::List<hir::Lowered>,
     mut guide_type_iter: Option<ListIterator<'_, ty::Poly>>,
 ) -> ty::List<ty::Poly> {
     let mut fixed_polys = vec![];
@@ -36,7 +36,7 @@ pub fn type_for_decl_list_destruc(
 /// Returns the required type for a destruc
 pub fn type_for_decl_destruc(
     tvars: &ty::TVars,
-    destruc: &destruc::Destruc<ty::Decl>,
+    destruc: &destruc::Destruc<hir::Lowered>,
     guide_type: Option<&ty::Poly>,
 ) -> ty::Poly {
     match destruc {
@@ -67,13 +67,13 @@ impl<F> VisitVarCtx<F>
 where
     F: FnMut(hir::VarId, &ty::Decl) -> (),
 {
-    fn visit_scalar_vars(&mut self, scalar: &destruc::Scalar<ty::Decl>) {
+    fn visit_scalar_vars(&mut self, scalar: &destruc::Scalar<hir::Lowered>) {
         if let Some(var_id) = scalar.var_id() {
             (self.visitor)(*var_id, scalar.ty());
         }
     }
 
-    fn visit_vars(&mut self, destruc: &destruc::Destruc<ty::Decl>) {
+    fn visit_vars(&mut self, destruc: &destruc::Destruc<hir::Lowered>) {
         match destruc {
             destruc::Destruc::Scalar(_, ref scalar) => {
                 self.visit_scalar_vars(scalar);
@@ -94,7 +94,7 @@ where
 /// Visits the variables in the passed destruc with the given visitor function
 ///
 /// If the root destruc is scalar its VarId will be returned, otherwise None
-pub fn visit_vars<F>(destruc: &destruc::Destruc<ty::Decl>, visitor: F) -> Option<hir::VarId>
+pub fn visit_vars<F>(destruc: &destruc::Destruc<hir::Lowered>, visitor: F) -> Option<hir::VarId>
 where
     F: FnMut(hir::VarId, &ty::Decl) -> (),
 {

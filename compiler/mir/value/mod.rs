@@ -22,7 +22,7 @@ pub struct ArretFun {
     pub span: Span,
     pub source_name: Option<String>,
     pub captures: HashMap<hir::VarId, Value>,
-    pub fun_expr: Rc<hir::Fun<ty::Poly>>,
+    pub fun_expr: Rc<hir::Fun<hir::Inferred>>,
 }
 
 #[derive(Clone, Debug)]

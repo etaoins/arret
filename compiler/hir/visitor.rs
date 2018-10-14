@@ -1,10 +1,9 @@
 use crate::hir;
-use crate::hir::HirType;
 
 /// Visits an expression and all of its subexpressions
-pub fn visit_exprs<'a, T: HirType, F>(expr: &'a hir::Expr<T>, visitor: &mut F)
+pub fn visit_exprs<'a, P: hir::Phase, F>(expr: &'a hir::Expr<P>, visitor: &mut F)
 where
-    F: FnMut(&'a hir::Expr<T>),
+    F: FnMut(&'a hir::Expr<P>),
 {
     visitor(expr);
 

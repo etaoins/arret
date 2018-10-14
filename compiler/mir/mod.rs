@@ -11,5 +11,4 @@ pub use crate::mir::eval_hir::BuiltProgram;
 pub use crate::mir::value::Value;
 
 use crate::hir;
-use crate::ty;
-type Expr = hir::Expr<ty::Poly>;
+type Expr = hir::Expr<hir::Inferred>;
