@@ -5,14 +5,16 @@
 
 (export assert-eq)
 (defmacro assert-eq (macro-rules
-  [(expected actual)
-    (when-not (= expected actual)
-      (panic "`" expected "` does not equal `" actual "`"))]
+  [(expected-expr actual-expr)
+    (let [expected expected-expr actual actual-expr]
+      (when-not (= expected actual)
+        (panic "`" expected "` does not equal `" actual "`")))]
 ))
 
 (export assert-ne)
 (defmacro assert-ne (macro-rules
-  [(expected actual)
-    (when (= expected actual)
-      (panic "`" expected "` does equal `" actual "`"))]
+  [(expected-expr actual-expr)
+    (let [expected expected-expr actual actual-expr]
+      (when (= expected actual)
+        (panic "`" expected "` equals `" actual "`")))]
 ))
