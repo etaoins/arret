@@ -113,8 +113,7 @@ pub fn ops_for_rust_fun_thunk(
         abi_type: rest_abi_type.clone(),
     }));
 
-    let empty_list_value = Value::List(Box::new([]), Some(Box::new(rest_value)));
-    let return_value = build_rust_fun_app(ehx, &mut b, span, rust_fun, empty_list_value);
+    let return_value = build_rust_fun_app(ehx, &mut b, span, rust_fun, rest_value);
 
     if !return_value.is_divergent() {
         let return_reg = value_to_reg(ehx, &mut b, span, &return_value, &ret_abi_type);
