@@ -807,7 +807,9 @@ impl EvalHirCtx {
         }
 
         Ok(optimise_fun(ops::Fun {
+            span: arret_fun.span,
             source_name: arret_fun.source_name.clone(),
+
             abi: wanted_abi,
             params: param_regs,
             ops: b.into_ops(),

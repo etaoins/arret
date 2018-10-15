@@ -8,10 +8,12 @@ use llvm_sys::target_machine::*;
 use llvm_sys::LLVMLinkage;
 
 use crate::codegen::context::CodegenCtx;
+use crate::codegen::debug_info::DebugInfoBuilder;
 use crate::codegen::mod_gen::ModCtx;
 use crate::hir::rfi;
 use crate::mir;
 use crate::mir::ops;
+use crate::SourceLoader;
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum OutputType {
@@ -52,6 +54,7 @@ fn c_main_llvm_type(cgx: &mut CodegenCtx) -> LLVMTypeRef {
 }
 
 fn program_to_module(
+    source_loader: &mut SourceLoader,
     cgx: &mut CodegenCtx,
     target_machine: LLVMTargetMachineRef,
     program: &mir::BuiltProgram,
@@ -60,12 +63,19 @@ fn program_to_module(
 
     unsafe {
         let module = LLVMModuleCreateWithNameInContext(b"program\0".as_ptr() as *const _, cgx.llx);
+        let mut di_builder = DebugInfoBuilder::new(source_loader, program.main.span, module);
+
         let mut mcx = ModCtx::new(module, target_machine);
 
         // Build all of our non-main functions
         for (fun_idx, fun) in program.funs.iter().enumerate() {
             let built_fun = fun_gen::gen_fun(cgx, &mut mcx, fun);
             LLVMSetLinkage(built_fun.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
+            di_builder.add_function_debug_info(
+                fun.span,
+                fun.source_name.as_ref(),
+                built_fun.llvm_value,
+            );
 
             mcx.push_built_fun(ops::BuiltFunId::new(fun_idx), built_fun);
         }
@@ -73,16 +83,22 @@ fn program_to_module(
         // And now the Arret main main
         let arret_main = fun_gen::gen_fun(cgx, &mut mcx, &program.main);
         LLVMSetLinkage(arret_main.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
+        di_builder.add_function_debug_info(
+            program.main.span,
+            program.main.source_name.as_ref(),
+            arret_main.llvm_value,
+        );
 
         // Declare our C main
         let builder = LLVMCreateBuilderInContext(cgx.llx);
-        let function = LLVMAddFunction(
+        let c_main = LLVMAddFunction(
             module,
             b"main\0".as_ptr() as *const _,
             c_main_llvm_type(cgx),
         );
+        di_builder.add_function_debug_info(program.main.span, Some(&"main".to_owned()), c_main);
 
-        let bb = LLVMAppendBasicBlockInContext(cgx.llx, function, b"entry\0".as_ptr() as *const _);
+        let bb = LLVMAppendBasicBlockInContext(cgx.llx, c_main, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
 
         if arret_main.takes_task {
@@ -126,6 +142,8 @@ fn program_to_module(
         LLVMBuildRet(builder, LLVMConstInt(LLVMInt32TypeInContext(cgx.llx), 0, 0));
 
         LLVMDisposeBuilder(builder);
+        di_builder.finalise();
+
         module
     }
 }
@@ -134,6 +152,7 @@ fn program_to_module(
 ///
 /// codegen::initialise_llvm() must be called before this.
 pub fn gen_program(
+    source_loader: &mut SourceLoader,
     rust_libraries: &[rfi::Library],
     program: &mir::BuiltProgram,
     target_triple: Option<&str>,
@@ -160,7 +179,7 @@ pub fn gen_program(
         LLVMCodeModel::LLVMCodeModelDefault,
     );
 
-    let module = program_to_module(&mut cgx, target_machine, &program);
+    let module = program_to_module(source_loader, &mut cgx, target_machine, &program);
 
     unsafe {
         let mut error: *mut libc::c_char = ptr::null_mut();

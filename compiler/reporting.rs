@@ -6,9 +6,10 @@ use std::iter;
 use ansi_term::Colour;
 use ansi_term::Style;
 
-use crate::source::{SourceKind, SourceLoader};
 use syntax;
 use syntax::span::{Span, EMPTY_SPAN};
+
+use crate::source::{SourceKind, SourceLoader, SourceLoc};
 
 /// Traces the location of report through macro expansions
 #[derive(Debug, PartialEq, Clone)]
@@ -47,94 +48,32 @@ impl From<Span> for LocTrace {
     }
 }
 
-#[derive(PartialEq, Debug)]
-struct SourceLoc<'kind, 'src> {
-    kind: &'kind SourceKind,
-    line: usize,
-    column: usize,
-
-    snippet: &'src str,
-    span_str: &'src str,
-}
-
-fn span_to_source_loc(source_loader: &SourceLoader, span: Span) -> SourceLoc<'_, '_> {
-    let source_files = source_loader.source_files();
-    let lo = span.lo as usize;
-
-    // Find the file we landed on
-    let source_file_index = source_files
-        .binary_search_by(|candidate_file| {
-            if lo < candidate_file.span_offset() {
-                cmp::Ordering::Greater
-            } else if lo > (candidate_file.span_offset() + candidate_file.source().len()) {
-                cmp::Ordering::Less
-            } else {
-                cmp::Ordering::Equal
-            }
-        })
-        .unwrap();
-
-    let source_file = &source_files[source_file_index];
-
-    let mut remaining_bytes = lo - source_file.span_offset();
-    let mut remaining_source = source_file.source();
-
-    let mut line = 0;
-    loop {
-        assert!(remaining_bytes <= remaining_source.len());
-
-        let next_line_pos = remaining_source
-            .find('\n')
-            .map(|i| i + 1)
-            .unwrap_or_else(|| remaining_source.len());
-
-        if remaining_bytes < next_line_pos {
-            break;
-        }
-
-        remaining_bytes -= next_line_pos;
-        remaining_source = &remaining_source[next_line_pos..];
-        line += 1
-    }
-
-    let column = remaining_source[0..remaining_bytes].chars().count();
-
-    let span_str = &remaining_source[remaining_bytes..];
-    let span_str = &span_str[0..(span.hi - span.lo) as usize];
-
-    SourceLoc {
-        kind: source_file.kind(),
-        line,
-        column,
-        snippet: remaining_source,
-        span_str,
-    }
-}
-
 fn print_span_snippet(source_loader: &SourceLoader, level: Level, span: Span) {
-    let loc = span_to_source_loc(source_loader, span);
-    print_source_snippet(level, &loc)
+    let loc = SourceLoc::calculate_from_span(source_loader, span);
+    print_source_snippet(source_loader, level, &loc)
 }
 
-fn print_source_snippet(level: Level, loc: &SourceLoc<'_, '_>) {
+fn print_source_snippet(source_loader: &SourceLoader, level: Level, loc: &SourceLoc<'_>) {
     let border_style = Colour::Blue.bold();
 
     // The filename/line/column isn't useful for REPL input
-    if loc.kind != &SourceKind::Repl {
+    let kind = source_loader.source_file(loc.source_file_id()).kind();
+    if kind != &SourceKind::Repl {
         eprintln!(
             "  {} {}:{}:{}",
             border_style.paint("-->"),
-            loc.kind,
-            loc.line + 1,
-            loc.column + 1
+            kind,
+            loc.line() + 1,
+            loc.column() + 1
         );
     }
 
-    let line_number_text = format!("{}", loc.line + 1);
+    let line_number_text = format!("{}", loc.line() + 1);
     let line_number_chars = line_number_text.len();
 
-    let snippet_next_newline = loc.snippet.find('\n').unwrap_or_else(|| loc.snippet.len());
-    let snippet_first_line = &loc.snippet[0..snippet_next_newline];
+    let snippet = loc.snippet();
+    let snippet_next_newline = snippet.find('\n').unwrap_or_else(|| snippet.len());
+    let snippet_first_line = &snippet[0..snippet_next_newline];
 
     let print_border_line = || {
         eprint!(
@@ -157,12 +96,12 @@ fn print_source_snippet(level: Level, loc: &SourceLoc<'_, '_>) {
 
     print_border_line();
 
-    let chars = cmp::max(1, loc.span_str.chars().take_while(|c| c != &'\n').count());
+    let chars = cmp::max(1, loc.span_str().chars().take_while(|c| c != &'\n').count());
     let marker_style = level.colour().bold();
     eprintln!(
         "{: <1$}{2}",
         "",
-        loc.column + 1,
+        loc.column() + 1,
         marker_style.paint(iter::repeat("^").take(chars).collect::<String>())
     );
 }
@@ -197,8 +136,8 @@ pub fn report_to_stderr(source_loader: &SourceLoader, report: &dyn Reportable) {
 
     let origin = loc_trace.origin();
     if let Some(origin) = origin.to_non_empty() {
-        let source_loc = span_to_source_loc(source_loader, origin);
-        print_source_snippet(level, &source_loc);
+        let source_loc = SourceLoc::calculate_from_span(source_loader, origin);
+        print_source_snippet(source_loader, level, &source_loc);
     }
 
     if let Some(macro_invocation) = loc_trace.macro_invocation.to_non_empty() {
@@ -239,92 +178,6 @@ impl Level {
             Level::Error => Colour::Red,
             Level::Note => Colour::Blue,
             Level::Help => Colour::Cyan,
-        }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn bytepos_to_source_loc_tests() {
-        let mut source_loader = SourceLoader::new();
-
-        let first_contents = "12\n34\n";
-        let second_contents = "☃6";
-
-        let first_kind = SourceKind::File("<first>".to_owned());
-        let second_kind = SourceKind::File("<second>".to_owned());
-
-        source_loader.load_string(first_kind.clone(), first_contents.into());
-        source_loader.load_string(second_kind.clone(), second_contents.into());
-
-        let test_cases = vec![
-            (
-                Span { lo: 0, hi: 1 },
-                SourceLoc {
-                    kind: &first_kind,
-                    line: 0,
-                    column: 0,
-                    snippet: &first_contents[0..],
-                    span_str: &first_contents[0..1],
-                },
-            ),
-            (
-                Span { lo: 1, hi: 2 },
-                SourceLoc {
-                    kind: &first_kind,
-                    line: 0,
-                    column: 1,
-                    snippet: &first_contents[0..],
-                    span_str: &first_contents[1..2],
-                },
-            ),
-            (
-                Span { lo: 2, hi: 4 },
-                SourceLoc {
-                    kind: &first_kind,
-                    line: 0,
-                    column: 2,
-                    snippet: &first_contents[0..],
-                    span_str: &first_contents[2..4],
-                },
-            ),
-            (
-                Span { lo: 3, hi: 4 },
-                SourceLoc {
-                    kind: &first_kind,
-                    line: 1,
-                    column: 0,
-                    snippet: &first_contents[3..],
-                    span_str: &first_contents[3..4],
-                },
-            ),
-            (
-                Span { lo: 6, hi: 9 },
-                SourceLoc {
-                    kind: &second_kind,
-                    line: 0,
-                    column: 0,
-                    snippet: &second_contents[0..],
-                    span_str: &second_contents[0..3],
-                },
-            ),
-            (
-                Span { lo: 9, hi: 10 },
-                SourceLoc {
-                    kind: &second_kind,
-                    line: 0,
-                    column: 1,
-                    snippet: &second_contents[0..],
-                    span_str: &second_contents[3..4],
-                },
-            ),
-        ];
-
-        for (span, expected) in test_cases {
-            assert_eq!(expected, span_to_source_loc(&source_loader, span));
         }
     }
 }

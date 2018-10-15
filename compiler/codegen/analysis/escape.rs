@@ -215,6 +215,7 @@ pub fn calc_fun_captures(built_funs: &[BuiltFun], fun: &ops::Fun) -> Captures {
 mod test {
     use super::*;
     use runtime::boxed;
+    use syntax::span::EMPTY_SPAN;
 
     #[test]
     fn infer_param_capture() {
@@ -236,7 +237,9 @@ mod test {
         let param_reg = ops::RegId::alloc();
 
         let test_fun = ops::Fun {
+            span: EMPTY_SPAN,
             source_name: None,
+
             abi: ops::OpsABI {
                 call_conv: ops::CallConv::FreeFunction,
                 params: Box::new([boxed::TypeTag::Int.into()]),
@@ -255,7 +258,9 @@ mod test {
         let capture_reg = ops::RegId::alloc();
 
         let test_fun = ops::Fun {
+            span: EMPTY_SPAN,
             source_name: None,
+
             abi: ops::OpsABI {
                 call_conv: ops::CallConv::FreeFunction,
                 params: Box::new([boxed::TypeTag::Int.into()]),
@@ -275,7 +280,9 @@ mod test {
         let ret_reg = ops::RegId::alloc();
 
         let test_fun = ops::Fun {
+            span: EMPTY_SPAN,
             source_name: None,
+
             abi: ops::OpsABI {
                 call_conv: ops::CallConv::FreeFunction,
                 params: Box::new([boxed::TypeTag::Int.into()]),
@@ -307,7 +314,9 @@ mod test {
         let ret_reg = ops::RegId::alloc();
 
         let test_fun = ops::Fun {
+            span: EMPTY_SPAN,
             source_name: None,
+
             abi: ops::OpsABI {
                 call_conv: ops::CallConv::FreeFunction,
                 params: Box::new([boxed::TypeTag::Int.into()]),
@@ -375,7 +384,9 @@ mod test {
         };
 
         let test_fun = ops::Fun {
+            span: EMPTY_SPAN,
             source_name: None,
+
             abi: ops::OpsABI {
                 call_conv: ops::CallConv::FreeFunction,
                 params: Box::new([
@@ -432,7 +443,9 @@ mod test {
         let ret_reg = ops::RegId::alloc();
 
         let test_fun = ops::Fun {
+            span: EMPTY_SPAN,
             source_name: None,
+
             abi: ops::OpsABI {
                 call_conv: ops::CallConv::FreeFunction,
                 params: Box::new([boxed::TypeTag::Int.into()]),

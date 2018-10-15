@@ -288,6 +288,7 @@ impl Op {
 }
 
 pub struct Fun {
+    pub span: Span,
     pub source_name: Option<String>,
 
     pub abi: OpsABI,

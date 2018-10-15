@@ -28,6 +28,7 @@ fn try_compile_input_file(
 
     let mir_program = ehx.into_built_program(hir.main_var_id)?;
     compiler::gen_program(
+        source_loader,
         &hir.rust_libraries,
         &mir_program,
         target_triple,

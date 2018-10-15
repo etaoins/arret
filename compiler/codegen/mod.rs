@@ -3,6 +3,7 @@ mod analysis;
 mod callee;
 mod const_gen;
 pub(crate) mod context;
+mod debug_info;
 mod fun_gen;
 pub(crate) mod jit;
 mod mod_gen;

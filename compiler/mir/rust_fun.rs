@@ -120,7 +120,9 @@ pub fn ops_for_rust_fun_thunk(
     }
 
     optimise_fun(ops::Fun {
+        span,
         source_name: Some(fun_symbol),
+
         abi: ops::OpsABI::thunk_abi(),
         params: Box::new([rest_reg]),
         ops: b.into_ops(),

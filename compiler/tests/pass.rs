@@ -54,6 +54,7 @@ fn try_run_single_test(
 
     let output_path = NamedTempFile::new().unwrap().into_temp_path();
     compiler::gen_program(
+        source_loader,
         &hir.rust_libraries,
         &mir_program,
         None,
