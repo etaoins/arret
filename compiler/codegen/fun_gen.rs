@@ -28,7 +28,7 @@ struct FunCtx {
     builder: LLVMBuilderRef,
 }
 
-impl<'captures> FunCtx {
+impl FunCtx {
     pub(crate) fn new(function: LLVMValueRef, builder: LLVMBuilderRef) -> FunCtx {
         FunCtx {
             regs: HashMap::new(),
@@ -40,7 +40,7 @@ impl<'captures> FunCtx {
     }
 }
 
-impl<'captures> Drop for FunCtx {
+impl Drop for FunCtx {
     fn drop(&mut self) {
         unsafe {
             LLVMDisposeBuilder(self.builder);
