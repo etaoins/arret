@@ -30,6 +30,7 @@ pub struct SourceFile {
     span_offset: usize,
     kind: SourceKind,
     source: String,
+    line_number_offsets: Vec<usize>,
 }
 
 new_indexing_id_type!(SourceFileId, usize);
@@ -54,6 +55,17 @@ impl SourceFile {
         &self.source
     }
 
+    pub fn source_line(&self, line: usize) -> &str {
+        let start = self.line_number_offsets[line];
+        let end = self
+            .line_number_offsets
+            .get(line + 1)
+            .map(|offset| offset - 1) // Don't include the "\n"
+            .unwrap_or_else(|| self.source.len());
+
+        &self.source[start..end]
+    }
+
     pub fn parse(&self) -> Result<Vec<Datum>, syntax::error::Error> {
         use syntax::parser::data_from_str_with_span_offset;
         data_from_str_with_span_offset(self.source(), self.span_offset())
@@ -65,6 +77,14 @@ pub struct SourceLoader {
     source_files: Vec<SourceFile>,
     loaded_paths: HashMap<Box<path::Path>, SourceFileId>,
     pub(crate) next_span_offset: usize,
+}
+
+fn build_line_number_offsets(input: &str) -> Vec<usize> {
+    use std::iter;
+
+    iter::once(0)
+        .chain(input.match_indices('\n').map(|(i, _)| i + 1))
+        .collect()
 }
 
 impl SourceLoader {
@@ -95,6 +115,7 @@ impl SourceLoader {
             SourceFile {
                 span_offset,
                 kind,
+                line_number_offsets: build_line_number_offsets(&source),
                 source,
             },
         )
@@ -110,26 +131,25 @@ impl SourceLoader {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct SourceLoc<'src> {
+pub struct SourceLoc {
     source_file_id: SourceFileId,
+    file_byte_offset: usize,
     line: usize,
     column: usize,
-
-    snippet: &'src str,
-    span_str: &'src str,
 }
 
-impl<'src> SourceLoc<'src> {
-    pub fn calculate_from_span(source_loader: &'src SourceLoader, span: Span) -> SourceLoc<'src> {
+impl<'src> SourceLoc {
+    /// Calculates a source location from a span point
+    pub fn from_span_point(source_loader: &SourceLoader, point: u32) -> SourceLoc {
         let source_files = source_loader.source_files();
-        let lo = span.lo as usize;
+        let point = point as usize;
 
         // Find the file we landed on
         let source_file_index = source_files
             .binary_search_by(|candidate_file| {
-                if lo < candidate_file.span_offset() {
+                if point < candidate_file.span_offset() {
                     cmp::Ordering::Greater
-                } else if lo > (candidate_file.span_offset() + candidate_file.source().len()) {
+                } else if point > (candidate_file.span_offset() + candidate_file.source().len()) {
                     cmp::Ordering::Less
                 } else {
                     cmp::Ordering::Equal
@@ -139,38 +159,27 @@ impl<'src> SourceLoc<'src> {
 
         let source_file = &source_files[source_file_index];
 
-        let mut remaining_bytes = lo - source_file.span_offset();
-        let mut remaining_source = source_file.source();
+        // Now find the line
+        let file_byte_offset = point - source_file.span_offset();
+        let line = match source_file
+            .line_number_offsets
+            .binary_search(&file_byte_offset)
+        {
+            Ok(line) => line,      // Exact hit
+            Err(line) => line - 1, // Within in the line
+        };
 
-        let mut line = 0;
-        loop {
-            assert!(remaining_bytes <= remaining_source.len());
+        let line_start = source_file.line_number_offsets[line];
 
-            let next_line_pos = remaining_source
-                .find('\n')
-                .map(|i| i + 1)
-                .unwrap_or_else(|| remaining_source.len());
-
-            if remaining_bytes < next_line_pos {
-                break;
-            }
-
-            remaining_bytes -= next_line_pos;
-            remaining_source = &remaining_source[next_line_pos..];
-            line += 1
-        }
-
-        let column = remaining_source[0..remaining_bytes].chars().count();
-
-        let span_str = &remaining_source[remaining_bytes..];
-        let span_str = &span_str[0..(span.hi - span.lo) as usize];
+        let column = source_file.source()[line_start..file_byte_offset]
+            .chars()
+            .count();
 
         SourceLoc {
             source_file_id: SourceFileId::new(source_file_index),
+            file_byte_offset,
             line,
             column,
-            snippet: remaining_source,
-            span_str,
         }
     }
 
@@ -179,24 +188,19 @@ impl<'src> SourceLoc<'src> {
         self.source_file_id
     }
 
+    /// Returns the offset in bytes from the beginning of the file
+    pub fn file_byte_offset(&self) -> usize {
+        self.file_byte_offset
+    }
+
     /// Returns the 0-indexed line
     pub fn line(&self) -> usize {
         self.line
     }
 
-    /// Returns the 0-indexed column
+    /// Returns the 0-indexed character column
     pub fn column(&self) -> usize {
         self.column
-    }
-
-    /// Returns a slice containing the characters of the span
-    pub fn span_str(&self) -> &'src str {
-        self.span_str
-    }
-
-    /// Returns a slice from the beginning of the span until the end of the file
-    pub fn snippet(&self) -> &'src str {
-        self.snippet
     }
 }
 
@@ -219,72 +223,63 @@ mod test {
 
         let test_cases = vec![
             (
-                Span { lo: 0, hi: 1 },
+                0,
                 SourceLoc {
                     source_file_id: first_file_id,
+                    file_byte_offset: 0,
                     line: 0,
                     column: 0,
-                    snippet: &first_contents[0..],
-                    span_str: &first_contents[0..1],
                 },
             ),
             (
-                Span { lo: 1, hi: 2 },
+                1,
                 SourceLoc {
                     source_file_id: first_file_id,
+                    file_byte_offset: 1,
                     line: 0,
                     column: 1,
-                    snippet: &first_contents[0..],
-                    span_str: &first_contents[1..2],
                 },
             ),
             (
-                Span { lo: 2, hi: 4 },
+                2,
                 SourceLoc {
                     source_file_id: first_file_id,
+                    file_byte_offset: 2,
                     line: 0,
                     column: 2,
-                    snippet: &first_contents[0..],
-                    span_str: &first_contents[2..4],
                 },
             ),
             (
-                Span { lo: 3, hi: 4 },
+                3,
                 SourceLoc {
                     source_file_id: first_file_id,
+                    file_byte_offset: 3,
                     line: 1,
                     column: 0,
-                    snippet: &first_contents[3..],
-                    span_str: &first_contents[3..4],
                 },
             ),
             (
-                Span { lo: 6, hi: 9 },
+                6,
                 SourceLoc {
                     source_file_id: second_file_id,
+                    file_byte_offset: 0,
                     line: 0,
                     column: 0,
-                    snippet: &second_contents[0..],
-                    span_str: &second_contents[0..3],
                 },
             ),
             (
-                Span { lo: 9, hi: 10 },
+                9,
                 SourceLoc {
                     source_file_id: second_file_id,
+                    file_byte_offset: 3,
                     line: 0,
                     column: 1,
-                    snippet: &second_contents[0..],
-                    span_str: &second_contents[3..4],
                 },
             ),
         ];
 
-        for (span, expected) in test_cases {
-            assert_eq!(
-                expected,
-                SourceLoc::calculate_from_span(&source_loader, span)
-            );
+        for (point, expected) in test_cases {
+            assert_eq!(expected, SourceLoc::from_span_point(&source_loader, point));
         }
     }
 }

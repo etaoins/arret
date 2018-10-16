@@ -45,7 +45,7 @@ impl<'sl> DebugInfoBuilder<'sl> {
     }
 
     fn add_compile_unit_metadata(&mut self, main_span: Span) {
-        let main_loc = SourceLoc::calculate_from_span(self.source_loader, main_span);
+        let main_loc = SourceLoc::from_span_point(self.source_loader, main_span.lo);
         let main_file_id = main_loc.source_file_id();
         let main_file_metadata = if let Some(metadata) = self.file_metadata(main_file_id) {
             metadata
@@ -127,7 +127,7 @@ impl<'sl> DebugInfoBuilder<'sl> {
         source_name: Option<&String>,
         llvm_function: LLVMValueRef,
     ) {
-        let source_loc = SourceLoc::calculate_from_span(self.source_loader, span);
+        let source_loc = SourceLoc::from_span_point(self.source_loader, span.lo);
         let source_file_id = source_loc.source_file_id();
         let source_line = source_loc.line();
 

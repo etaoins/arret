@@ -49,32 +49,31 @@ impl From<Span> for LocTrace {
 }
 
 fn print_span_snippet(source_loader: &SourceLoader, level: Level, span: Span) {
-    let loc = SourceLoc::calculate_from_span(source_loader, span);
-    print_source_snippet(source_loader, level, &loc)
+    print_source_snippet(source_loader, level, span)
 }
 
-fn print_source_snippet(source_loader: &SourceLoader, level: Level, loc: &SourceLoc<'_>) {
+fn print_source_snippet(source_loader: &SourceLoader, level: Level, span: Span) {
     let border_style = Colour::Blue.bold();
 
+    let loc_lo = SourceLoc::from_span_point(source_loader, span.lo);
+    let loc_hi = SourceLoc::from_span_point(source_loader, span.hi);
+
     // The filename/line/column isn't useful for REPL input
-    let kind = source_loader.source_file(loc.source_file_id()).kind();
-    if kind != &SourceKind::Repl {
+    let source_file = source_loader.source_file(loc_lo.source_file_id());
+    if source_file.kind() != &SourceKind::Repl {
         eprintln!(
             "  {} {}:{}:{}",
             border_style.paint("-->"),
-            kind,
-            loc.line() + 1,
-            loc.column() + 1
+            source_file.kind(),
+            loc_lo.line() + 1,
+            loc_lo.column() + 1
         );
     }
 
-    let line_number_text = format!("{}", loc.line() + 1);
+    let line_number_text = format!("{}", loc_lo.line() + 1);
     let line_number_chars = line_number_text.len();
 
-    let snippet = loc.snippet();
-    let snippet_next_newline = snippet.find('\n').unwrap_or_else(|| snippet.len());
-    let snippet_first_line = &snippet[0..snippet_next_newline];
-
+    let first_line = source_file.source_line(loc_lo.line());
     let print_border_line = || {
         eprint!(
             "{: <1$} {2}",
@@ -91,17 +90,23 @@ fn print_source_snippet(source_loader: &SourceLoader, level: Level, loc: &Source
         "{} {} {}",
         border_style.paint(line_number_text),
         border_style.paint("|"),
-        snippet_first_line
+        first_line
     );
 
     print_border_line();
 
-    let chars = cmp::max(1, loc.span_str().chars().take_while(|c| c != &'\n').count());
+    let chars =
+        if loc_lo.source_file_id() == loc_hi.source_file_id() && loc_lo.line() == loc_hi.line() {
+            cmp::max(loc_hi.column() - loc_lo.column(), 1)
+        } else {
+            1
+        };
+
     let marker_style = level.colour().bold();
     eprintln!(
         "{: <1$}{2}",
         "",
-        loc.column() + 1,
+        loc_lo.column() + 1,
         marker_style.paint(iter::repeat("^").take(chars).collect::<String>())
     );
 }
@@ -136,8 +141,7 @@ pub fn report_to_stderr(source_loader: &SourceLoader, report: &dyn Reportable) {
 
     let origin = loc_trace.origin();
     if let Some(origin) = origin.to_non_empty() {
-        let source_loc = SourceLoc::calculate_from_span(source_loader, origin);
-        print_source_snippet(source_loader, level, &source_loc);
+        print_source_snippet(source_loader, level, origin);
     }
 
     if let Some(macro_invocation) = loc_trace.macro_invocation.to_non_empty() {
