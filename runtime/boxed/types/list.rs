@@ -111,6 +111,8 @@ where
 }
 
 impl<T: Boxed> List<T> {
+    /// Creates a new fixed sized list containing the passed `elems`
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         heap: &mut impl AsHeap,
         elems: impl DoubleEndedIterator<Item = Gc<T>>,
@@ -118,6 +120,7 @@ impl<T: Boxed> List<T> {
         Self::new_with_tail(heap, elems, Self::empty())
     }
 
+    /// Creates a list with a head of `elems` and the specifed tail list
     pub fn new_with_tail(
         heap: &mut impl AsHeap,
         elems: impl DoubleEndedIterator<Item = Gc<T>>,
@@ -127,6 +130,9 @@ impl<T: Boxed> List<T> {
         elems.rfold(tail, |tail, elem| Pair::new(heap, (elem, tail)).as_list())
     }
 
+    /// Creates a list from the passed element constructor input
+    ///
+    /// This can potentially be faster than constructing the list and elements separately.
     pub fn from_values<V>(heap: &mut impl AsHeap, values: impl Iterator<Item = V>) -> Gc<List<T>>
     where
         T: ConstructableFrom<V>,

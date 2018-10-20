@@ -112,7 +112,6 @@ pub mod test {
     define_rust_fn! {
         #[arret_type="(Int -> ())"]
         NO_CAPTURE = fn no_capture(_boxed_int: refs::NoCapture<boxed::Int>) -> () {
-            ()
         }
     }
 
