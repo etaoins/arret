@@ -40,7 +40,7 @@ pub enum Value {
     List(Box<[Value]>, Option<Box<Value>>),
     ArretFun(ArretFun),
     RustFun(Rc<hir::rfi::Fun>),
-    TyPred(Rc<ty::Mono>),
+    TyPred(ty::pred::TestTy),
     Reg(Rc<RegValue>),
     Divergent,
 }

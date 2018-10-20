@@ -237,7 +237,7 @@ impl EvalHirCtx {
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         span: Span,
-        test_mono: &ty::Mono,
+        test_ty: ty::pred::TestTy,
         arg_list_value: Value,
     ) -> Result<Value> {
         use crate::mir::value::mono_for_value;
@@ -248,7 +248,7 @@ impl EvalHirCtx {
 
         let subject_mono = mono_for_value(self.runtime_task.heap().interner(), &subject_value);
 
-        match ty::pred::interpret_ty_refs(&dcx.tvars, &subject_mono, test_mono) {
+        match ty::pred::interpret_ty_ref(&dcx.tvars, &subject_mono, test_ty) {
             InterpretedPred::Static(value) => {
                 Ok(Value::Const(boxed::Bool::singleton_ref(value).as_any_ref()))
             }
@@ -485,9 +485,7 @@ impl EvalHirCtx {
             Value::RustFun(rust_fun) => {
                 self.eval_rust_fun_app(b, span, ret_ty, &rust_fun, arg_list_value)
             }
-            Value::TyPred(test_poly) => {
-                self.eval_ty_pred_app(dcx, b, span, test_poly.as_ref(), arg_list_value)
-            }
+            Value::TyPred(test_ty) => self.eval_ty_pred_app(dcx, b, span, *test_ty, arg_list_value),
             Value::Const(boxed_fun) => match boxed_fun.as_subtype() {
                 boxed::AnySubtype::FunThunk(fun_thunk) => self.eval_const_fun_thunk_app(
                     dcx,
@@ -887,10 +885,7 @@ impl EvalHirCtx {
             hir::Expr::RustFun(_, rust_fun) => {
                 Ok(Value::RustFun(Rc::new(rust_fun.as_ref().clone())))
             }
-            hir::Expr::TyPred(_, test_poly) => {
-                let test_mono = dcx.monomorphise(test_poly);
-                Ok(Value::TyPred(Rc::new(test_mono)))
-            }
+            hir::Expr::TyPred(_, test_ty) => Ok(Value::TyPred(*test_ty)),
             hir::Expr::Ref(_, var_id) => Ok(self.eval_ref(dcx, *var_id)),
             hir::Expr::Let(_, hir_let) => self.eval_let(dcx, b, hir_let),
             hir::Expr::App(span, app) => self.eval_app(dcx, b, *span, app),

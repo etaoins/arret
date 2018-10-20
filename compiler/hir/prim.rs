@@ -34,7 +34,6 @@ export_prims!(
     (":", TyColon),
     ("deftype", DefType),
     ("lettype", LetType),
-    ("type-predicate", TyPred),
     ("compile-error", CompileError),
     ("All", All)
 );

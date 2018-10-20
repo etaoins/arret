@@ -74,7 +74,7 @@ pub enum Ty<S: TyRef> {
     // Function types
     TopFun(Box<TopFun>),
     Fun(Box<Fun>),
-    TyPred(Box<S>),
+    TyPred(pred::TestTy),
 
     // Vector types
     Vector(Box<[S]>),

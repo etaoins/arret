@@ -433,14 +433,14 @@ impl<'types> RecursiveDefsCtx<'types> {
         fcx: &FunCtx,
         required_type: &ty::Poly,
         span: Span,
-        test_type: ty::Poly,
+        test_ty: ty::pred::TestTy,
     ) -> Result<InferredNode> {
-        let pred_type = ty::Ty::TyPred(Box::new(test_type.clone())).into_poly();
+        let pred_type = ty::Ty::TyPred(test_ty).into_poly();
 
         ensure_is_a(fcx, span, &pred_type, required_type)?;
 
         Ok(InferredNode {
-            expr: hir::Expr::TyPred(span, test_type),
+            expr: hir::Expr::TyPred(span, test_ty),
             poly_type: pred_type,
             type_cond: None,
         })
@@ -818,7 +818,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         pv: &mut PurityVar,
         span: Span,
         fun_expr: hir::Expr<hir::Inferred>,
-        test_poly: &ty::Poly,
+        test_ty: ty::pred::TestTy,
         subject_expr: hir::Expr<hir::Lowered>,
     ) -> Result<InferredNode> {
         let subject_var_id = if let hir::Expr::Ref(_, var_id) = subject_expr {
@@ -829,8 +829,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         let subject_node = self.visit_expr(fcx, pv, &ty::Ty::Any.into_poly(), subject_expr)?;
 
-        let pred_result =
-            ty::pred::interpret_ty_refs(&fcx.tvars, &subject_node.poly_type, &test_poly);
+        let pred_result = ty::pred::interpret_ty_ref(&fcx.tvars, &subject_node.poly_type, test_ty);
 
         let pred_result_type;
         let type_cond;
@@ -887,7 +886,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         pv: &mut PurityVar,
         span: Span,
         fun_expr: hir::Expr<hir::Inferred>,
-        test_poly: &ty::Poly,
+        test_ty: ty::pred::TestTy,
         subject_list_expr: hir::Expr<hir::Lowered>,
     ) -> Result<InferredNode> {
         let wanted_subject_list_type =
@@ -900,7 +899,8 @@ impl<'types> RecursiveDefsCtx<'types> {
             .and_then(|mut iter| iter.next())
             .expect("Unable to extract type argument from type predicate rest list");
 
-        let pred_result = ty::is_a::ty_ref_is_a(&fcx.tvars, subject_type, &test_poly);
+        let pred_result =
+            ty::is_a::ty_ref_is_a(&fcx.tvars, subject_type, &test_ty.to_ty().into_ty_ref());
 
         let pred_result_type = match pred_result {
             ty::is_a::Result::Yes => ty::Ty::LitBool(true),
@@ -969,7 +969,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                 span,
                 ErrorKind::TopFunApply(str_for_poly(fcx, &revealed_fun_type)),
             )),
-            ty::Ty::TyPred(test_poly) => {
+            ty::Ty::TyPred(test_ty) => {
                 let wanted_arity = WantedArity::new(1, false);
 
                 match (fixed_arg_exprs.len(), rest_arg_expr) {
@@ -980,7 +980,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                             pv,
                             span,
                             fun_node.expr,
-                            &*test_poly,
+                            *test_ty,
                             subject_expr,
                         )
                     }
@@ -989,7 +989,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                         pv,
                         span,
                         fun_node.expr,
-                        &*test_poly,
+                        *test_ty,
                         subject_list_expr,
                     ),
                     (supplied_arg_count, _) => Err(Error::new(
@@ -1553,8 +1553,8 @@ mod test {
     fn app_types() {
         assert_type_for_expr("'foo", "((fn () 'foo))");
 
-        assert_type_for_expr("true", "((type-predicate 'foo) 'foo)");
-        assert_type_for_expr("false", "((type-predicate 'foo) 'false)");
+        assert_type_for_expr("true", "(sym? 'foo)");
+        assert_type_for_expr("false", "(sym? false)");
 
         assert_type_for_expr("Int", "((fn #{A} ([value : A]) -> A value) 1)");
         assert_type_for_expr("'foo", "((fn #{A} ([value : A]) -> A value) '(foo) ...)");
@@ -1578,17 +1578,17 @@ mod test {
         );
 
         let j = "(let [recurse (fn () (recurse))] (recurse))";
-        let t = "                     ^^^^^^^^^             ";
+        let t = "                      ^^^^^^^              ";
         let err = Error::new(t2s(t), ErrorKind::RecursiveType);
         assert_type_error(&err, j);
 
         let j = "(let [recurse (fn (x) -> 'foo (recurse x))] (recurse 1))";
-        let t = "                              ^^^^^^^^^^^               ";
+        let t = "                               ^^^^^^^                  ";
         let err = Error::new(t2s(t), ErrorKind::RecursiveType);
         assert_type_error(&err, j);
 
         let j = "(let [recurse (fn ([x : Int]) (recurse x))] (recurse 1))";
-        let t = "                              ^^^^^^^^^^^               ";
+        let t = "                               ^^^^^^^                  ";
         let err = Error::new(t2s(t), ErrorKind::RecursiveType);
         assert_type_error(&err, j);
     }
@@ -1654,11 +1654,9 @@ mod test {
 
     #[test]
     fn ty_pred() {
-        assert_type_for_expr("(Type? Sym)", "(type-predicate Sym)");
-
-        assert_type_for_expr("true", "((type-predicate 'foo) '(foo) ...)");
-        assert_type_for_expr("true", "((type-predicate 'foo) 'foo)");
-        assert_type_for_expr("false", "((type-predicate 'foo) '(bar) ...)");
-        assert_type_for_expr("false", "((type-predicate 'foo) 'bar)");
+        assert_type_for_expr("true", "(sym? '(foo) ...)");
+        assert_type_for_expr("true", "(sym? 'foo)");
+        assert_type_for_expr("false", "(int? '(foo) ...)");
+        assert_type_for_expr("false", "(int? 'bar)");
     }
 }

@@ -42,15 +42,15 @@
 
 (defn impure-fun! () ->! ())
 (def impure-def (impure-fun!))
-               ;^^^^^^^^^^^^^ ERROR function of type `(->! ())` is not pure
+                ;^^^^^^^^^^^ ERROR function of type `(->! ())` is not pure
 
 (defn impure-app () -> ()
   (impure-fun!))
- ;^^^^^^^^^^^^^ ERROR function of type `(->! ())` is not pure
+  ;^^^^^^^^^^^ ERROR function of type `(->! ())` is not pure
 
 (defn polymorphic-impure-app #{[->A : ->!]} () ->A ()
   (impure-fun!))
- ;^^^^^^^^^^^^^ ERROR function of type `(->! ())` is not `->A`
+  ;^^^^^^^^^^^ ERROR function of type `(->! ())` is not `->A`
 
 (defn non-list-rest-type (x ...)
   (ann x (Vector Any)))

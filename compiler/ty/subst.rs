@@ -64,9 +64,9 @@ where
         ty::Ty::Int => ty::Ty::Int,
         ty::Ty::Str => ty::Ty::Str,
         ty::Ty::Sym => ty::Ty::Sym,
+        ty::Ty::TyPred(test_ty) => ty::Ty::TyPred(*test_ty),
         ty::Ty::TopFun(top_fun) => subst_top_fun(stx, top_fun).into_ty(),
         ty::Ty::Fun(fun) => subst_fun(stx, fun).into_ty(),
-        ty::Ty::TyPred(test_ty) => ty::Ty::TyPred(Box::new(stx.subst_ty_ref(test_ty))),
         ty::Ty::Map(map) => ty::Ty::Map(Box::new(ty::Map::new(
             stx.subst_ty_ref(map.key()),
             stx.subst_ty_ref(map.value()),

@@ -17,7 +17,6 @@ pub enum TyCons {
     Listof,
     Vector,
     Vectorof,
-    TyPred,
     Set,
     Map,
     Union,
@@ -181,11 +180,6 @@ fn lower_ty_cons_apply(
             let start_ty = lower_poly(scope, start_datum)?;
             Ok(ty::Ty::Vectorof(Box::new(start_ty)).into_poly())
         }
-        TyCons::TyPred => {
-            let test_datum = expect_one_arg(span, arg_iter)?;
-            let test_ty = lower_poly(scope, test_datum)?;
-            Ok(ty::Ty::TyPred(Box::new(test_ty)).into_poly())
-        }
         TyCons::Set => {
             let member_datum = expect_one_arg(span, arg_iter)?;
             let member_ty = lower_poly(scope, member_datum)?;
@@ -246,6 +240,7 @@ fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
 fn lower_ident(scope: &Scope, span: Span, ident: &Ident) -> Result<ty::Poly> {
     match scope.get_or_err(span, ident)? {
         Binding::Ty(ty) => Ok(ty.clone()),
+        Binding::TyPred(test_ty) => Ok(ty::Ty::TyPred(*test_ty).into_poly()),
         _ => Err(Error::new(span, ErrorKind::ValueAsTy)),
     }
 }
@@ -399,6 +394,12 @@ macro_rules! export_purity {
     };
 }
 
+macro_rules! export_ty_pred {
+    ($name:expr, $test_ty:expr) => {
+        ($name, Binding::TyPred($test_ty))
+    };
+}
+
 pub const TY_EXPORTS: &[(&str, Binding)] = &[
     export_ty!("Any", ty::Ty::Any),
     export_ty!("Bool", ty::Ty::Bool),
@@ -414,9 +415,20 @@ pub const TY_EXPORTS: &[(&str, Binding)] = &[
     export_ty_cons!("Setof", TyCons::Set),
     export_ty_cons!("Map", TyCons::Map),
     export_ty_cons!("U", TyCons::Union),
-    export_ty_cons!("Type?", TyCons::TyPred),
     export_purity!("->", Purity::Pure),
     export_purity!("->!", Purity::Impure),
+    export_ty_pred!("str?", ty::pred::TestTy::Str),
+    export_ty_pred!("sym?", ty::pred::TestTy::Sym),
+    export_ty_pred!("bool?", ty::pred::TestTy::Bool),
+    export_ty_pred!("int?", ty::pred::TestTy::Int),
+    export_ty_pred!("float?", ty::pred::TestTy::Float),
+    export_ty_pred!("char?", ty::pred::TestTy::Char),
+    export_ty_pred!("list?", ty::pred::TestTy::List),
+    export_ty_pred!("vector?", ty::pred::TestTy::Vector),
+    export_ty_pred!("set?", ty::pred::TestTy::Set),
+    export_ty_pred!("map?", ty::pred::TestTy::Map),
+    export_ty_pred!("fn?", ty::pred::TestTy::Fun),
+    export_ty_pred!("empty?", ty::pred::TestTy::Nil),
     #[cfg(test)]
     export_ty_cons!("RawU", TyCons::RawU),
 ];
@@ -463,6 +475,25 @@ fn str_for_bounds(
 
     let all_parts = pvar_parts.chain(tvar_parts).collect::<Vec<String>>();
     format!("#{{{}}}", all_parts.join(" "))
+}
+
+fn str_for_pred_test_ty(test_ty: ty::pred::TestTy) -> &'static str {
+    use crate::ty::pred::TestTy;
+
+    match test_ty {
+        TestTy::Str => "str?",
+        TestTy::Sym => "sym?",
+        TestTy::Int => "int?",
+        TestTy::Float => "float?",
+        TestTy::Bool => "bool?",
+        TestTy::Char => "char?",
+        TestTy::List => "list?",
+        TestTy::Vector => "vector?",
+        TestTy::Set => "set?",
+        TestTy::Map => "map?",
+        TestTy::Fun => "fn?",
+        TestTy::Nil => "empty?",
+    }
 }
 
 fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty::Poly>) -> String {
@@ -517,7 +548,7 @@ fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty
                 )
             }
         }
-        ty::Ty::TyPred(test) => format!("(Type? {})", str_for_poly(pvars, tvars, test)),
+        ty::Ty::TyPred(test_ty) => str_for_pred_test_ty(*test_ty).to_owned(),
         ty::Ty::Union(members) => {
             let member_strs: Vec<String> = members
                 .iter()
@@ -835,9 +866,9 @@ mod test {
 
     #[test]
     fn ty_predicate() {
-        let j = "(Type? Str)";
+        let j = "str?";
 
-        let expected = ty::Ty::TyPred(Box::new(ty::Ty::Str.into_poly())).into_poly();
+        let expected = ty::Ty::TyPred(ty::pred::TestTy::Str).into_poly();
         assert_poly_for_str(&expected, j);
     }
 

@@ -446,10 +446,6 @@ fn lower_expr_prim_apply(
                 }),
             ))
         }
-        Prim::TyPred => Ok(Expr::TyPred(
-            span,
-            lower_poly(scope, expect_one_arg(span, arg_iter)?)?,
-        )),
         Prim::Do => lower_body(scope, arg_iter),
         Prim::CompileError => Err(lower_user_compile_error(span, arg_iter)),
         Prim::Ellipsis | Prim::Wildcard | Prim::MacroRules | Prim::TyColon | Prim::All => {
@@ -490,6 +486,7 @@ fn lower_expr(scope: &Scope, datum: NsDatum) -> Result<Expr<Lowered>> {
     match datum {
         NsDatum::Ident(span, ident) => match scope.get_or_err(span, &ident)? {
             Binding::Var(id) => Ok(Expr::Ref(span, *id)),
+            Binding::TyPred(test_ty) => Ok(Expr::TyPred(span, *test_ty)),
             Binding::Prim(_) => Err(Error::new(span, ErrorKind::PrimRef)),
             Binding::Ty(_) | Binding::TyCons(_) | Binding::Purity(_) => {
                 Err(Error::new(span, ErrorKind::TyRef))
@@ -505,31 +502,27 @@ fn lower_expr(scope: &Scope, datum: NsDatum) -> Result<Expr<Lowered>> {
                 return Ok(Expr::Lit(Datum::List(span, Box::new([]))));
             };
 
-            match fn_datum {
-                NsDatum::Ident(fn_span, ref ident) => match scope.get_or_err(fn_span, ident)? {
-                    Binding::Prim(prim) => lower_expr_prim_apply(scope, span, *prim, data_iter),
+            if let NsDatum::Ident(fn_span, ref ident) = fn_datum {
+                match scope.get_or_err(fn_span, ident)? {
+                    Binding::Prim(prim) => {
+                        return lower_expr_prim_apply(scope, span, *prim, data_iter);
+                    }
                     Binding::Macro(mac) => {
                         let mut macro_scope = Scope::new_child(scope);
 
                         let expanded_datum =
                             expand_macro(&mut macro_scope, span, mac, data_iter.as_slice())?;
 
-                        lower_expr(&macro_scope, expanded_datum)
+                        return lower_expr(&macro_scope, expanded_datum)
                             .map(|expr| Expr::MacroExpand(span, Box::new(expr)))
-                            .map_err(|e| e.with_macro_invocation_span(span))
+                            .map_err(|e| e.with_macro_invocation_span(span));
                     }
-                    Binding::Var(id) => {
-                        lower_expr_apply(scope, span, Expr::Ref(span, *id), data_iter)
-                    }
-                    Binding::Ty(_) | Binding::TyCons(_) | Binding::Purity(_) => {
-                        Err(Error::new(span, ErrorKind::TyRef))
-                    }
-                },
-                _ => {
-                    let fn_expr = lower_expr(scope, fn_datum)?;
-                    lower_expr_apply(scope, span, fn_expr, data_iter)
+                    _ => {}
                 }
             }
+
+            let fn_expr = lower_expr(scope, fn_datum)?;
+            lower_expr_apply(scope, span, fn_expr, data_iter)
         }
         other => Ok(Expr::Lit(other.into_syntax_datum())),
     }
@@ -1204,10 +1197,10 @@ mod test {
 
     #[test]
     fn type_predicate() {
-        let j = "(type-predicate true)";
-        let t = "^^^^^^^^^^^^^^^^^^^^^";
+        let j = "bool?";
+        let t = "^^^^^";
 
-        let expected = Expr::TyPred(t2s(t), ty::Ty::LitBool(true).into_poly());
+        let expected = Expr::TyPred(t2s(t), ty::pred::TestTy::Bool);
         assert_eq!(expected, expr_for_str(j));
     }
 }

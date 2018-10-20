@@ -18,6 +18,7 @@ pub enum Binding {
     Macro(Rc<Macro>),
     Ty(ty::Poly),
     TyCons(types::TyCons),
+    TyPred(ty::pred::TestTy),
     Purity(purity::Poly),
 }
 

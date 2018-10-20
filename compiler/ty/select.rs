@@ -138,9 +138,6 @@ impl<'vars> SelectCtx<'vars> {
             (ty::Ty::Fun(target_fun), ty::Ty::TyPred(_)) => {
                 self.add_evidence_top_fun(target_fun.top_fun(), &ty::TopFun::new_for_ty_pred());
             }
-            (ty::Ty::TyPred(target_test), ty::Ty::TyPred(evidence_test)) => {
-                self.add_evidence(target_test, evidence_test);
-            }
             (ty::Ty::Union(target_members), _) => {
                 for target_member in target_members.iter() {
                     self.add_evidence(target_member, evidence_poly);
@@ -571,7 +568,7 @@ mod test {
 
         stx.add_evidence(
             &scope.poly_for_str("(... -> A)"),
-            &scope.poly_for_str("(Type? Sym)"),
+            &scope.poly_for_str("sym?"),
         );
         assert_selected_type(&stx, &poly_a, &scope.poly_for_str("Bool"));
     }
@@ -636,26 +633,9 @@ mod test {
 
         let mut stx = scope.select_ctx();
 
-        stx.add_evidence(
-            &scope.poly_for_str("(A -> B)"),
-            &scope.poly_for_str("(Type? Sym)"),
-        );
+        stx.add_evidence(&scope.poly_for_str("(A -> B)"), &scope.poly_for_str("sym?"));
         assert_unselected_type(&stx, &poly_a);
         assert_selected_type(&stx, &poly_b, &scope.poly_for_str("Bool"));
-    }
-
-    #[test]
-    fn ty_pred_types() {
-        let scope = TestScope::new("A");
-        let poly_a = scope.poly_for_str("A");
-
-        let mut stx = scope.select_ctx();
-
-        stx.add_evidence(
-            &scope.poly_for_str("(Type? A)"),
-            &scope.poly_for_str("(Type? true)"),
-        );
-        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("true"));
     }
 
     #[test]
@@ -668,7 +648,7 @@ mod test {
 
         stx.add_evidence(
             &scope.poly_for_str("(->A true)"),
-            &scope.poly_for_str("(Type? Sym)"),
+            &scope.poly_for_str("sym?"),
         );
         assert_selected_purity(&stx, &purity_a, Purity::Pure);
     }

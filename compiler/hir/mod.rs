@@ -89,7 +89,7 @@ pub enum Expr<P: Phase> {
     Let(Span, Box<Let<P>>),
     Cond(Span, Box<Cond<P>>),
     Ref(Span, VarId),
-    TyPred(Span, ty::Poly),
+    TyPred(Span, ty::pred::TestTy),
     Do(Vec<Expr<P>>),
 
     /// Used for tracing macro expansion for error report and debug information

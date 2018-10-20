@@ -384,12 +384,10 @@ mod test {
 
     #[test]
     fn ty_pred_types() {
-        assert_disjoint("(Type? Str)", "(Type? Sym)");
-        assert_merged("(Type? Str)", "(Type? Str)", "(Type? Str)");
-
-        assert_merged("(Type? Str)", "(Type? Str)", "(Any -> Bool)");
-
-        assert_merged("(Type? Str)", "(Type? Str)", "(... -> Bool)");
+        assert_disjoint("str?", "sym?");
+        assert_merged("str?", "str?", "str?");
+        assert_merged("str?", "str?", "(Any -> Bool)");
+        assert_merged("str?", "str?", "(... -> Bool)");
     }
 
     #[test]

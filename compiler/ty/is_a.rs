@@ -657,8 +657,8 @@ mod test {
 
     #[test]
     fn ty_pred_types() {
-        let sym_ty_pred = poly_for_str("(Type? Sym)");
-        let lit_sym_ty_pred = poly_for_str("(Type? 'foo)");
+        let sym_ty_pred = poly_for_str("sym?");
+        let str_ty_pred = poly_for_str("str?");
         let general_pred = poly_for_str("(Any -> Bool)");
         let pred_top_fun = poly_for_str("(... -> Bool)");
 
@@ -671,11 +671,11 @@ mod test {
         // Type predicates never equal other type predicates
         assert_eq!(
             Result::No,
-            ty_ref_is_a(&ty::TVars::new(), &sym_ty_pred, &lit_sym_ty_pred)
+            ty_ref_is_a(&ty::TVars::new(), &sym_ty_pred, &str_ty_pred)
         );
         assert_eq!(
             Result::No,
-            ty_ref_is_a(&ty::TVars::new(), &lit_sym_ty_pred, &sym_ty_pred)
+            ty_ref_is_a(&ty::TVars::new(), &str_ty_pred, &sym_ty_pred)
         );
 
         // Type predicates are a subtype of (Any -> Bool)
