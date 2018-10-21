@@ -427,7 +427,7 @@ pub const TY_EXPORTS: &[(&str, Binding)] = &[
     export_ty_pred!("set?", ty::pred::TestTy::Set),
     export_ty_pred!("map?", ty::pred::TestTy::Map),
     export_ty_pred!("fn?", ty::pred::TestTy::Fun),
-    export_ty_pred!("empty?", ty::pred::TestTy::Nil),
+    export_ty_pred!("nil?", ty::pred::TestTy::Nil),
     #[cfg(test)]
     export_ty_cons!("RawU", TyCons::RawU),
 ];
@@ -491,7 +491,7 @@ fn str_for_pred_test_ty(test_ty: ty::pred::TestTy) -> &'static str {
         TestTy::Set => "set?",
         TestTy::Map => "map?",
         TestTy::Fun => "fn?",
-        TestTy::Nil => "empty?",
+        TestTy::Nil => "nil?",
     }
 }
 

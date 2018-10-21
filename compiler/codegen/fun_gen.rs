@@ -3,6 +3,7 @@ use std::ffi;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
+use llvm_sys::LLVMIntPredicate;
 
 use runtime::boxed;
 
@@ -209,6 +210,10 @@ fn gen_op(
                 let llvm_value = LLVMConstInt(LLVMInt64TypeInContext(cgx.llx), *value as u64, 1);
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::ConstTypeTag(reg, type_tag) => {
+                let llvm_value = LLVMConstInt(LLVMInt8TypeInContext(cgx.llx), *type_tag as u64, 1);
+                fcx.regs.insert(*reg, llvm_value);
+            }
             OpKind::ConstBoxedInt(reg, value) => {
                 let llvm_value = const_gen::gen_boxed_int(cgx, mcx, *value);
                 fcx.regs.insert(*reg, llvm_value);
@@ -291,6 +296,29 @@ fn gen_op(
             }
             OpKind::Unreachable => {
                 LLVMBuildUnreachable(fcx.builder);
+            }
+            OpKind::LoadBoxedTypeTag(reg, any_reg) => {
+                let llvm_any = fcx.regs[any_reg];
+                let gep_indices = &mut [
+                    LLVMConstInt(LLVMInt32TypeInContext(cgx.llx), 0, 0),
+                    LLVMConstInt(LLVMInt32TypeInContext(cgx.llx), 0, 0),
+                    LLVMConstInt(LLVMInt32TypeInContext(cgx.llx), 0, 0),
+                ];
+
+                let llvm_type_tag_ptr = LLVMBuildInBoundsGEP(
+                    fcx.builder,
+                    llvm_any,
+                    gep_indices.as_mut_ptr(),
+                    gep_indices.len() as u32,
+                    b"type_tag_ptr\0".as_ptr() as *const _,
+                );
+
+                let llvm_type_tag = LLVMBuildLoad(
+                    fcx.builder,
+                    llvm_type_tag_ptr,
+                    "type_tag\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_type_tag);
             }
             OpKind::LoadBoxedListLength(reg, list_reg) => {
                 let llvm_list = fcx.regs[list_reg];
@@ -411,6 +439,19 @@ fn gen_op(
                     llvm_lhs,
                     llvm_rhs,
                     "sum\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::IntEqual(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+
+                let llvm_value = LLVMBuildICmp(
+                    fcx.builder,
+                    LLVMIntPredicate::LLVMIntEQ,
+                    llvm_lhs,
+                    llvm_rhs,
+                    "int_equal\0".as_ptr() as *const _,
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }

@@ -228,6 +228,19 @@ impl EvalHirCtx {
         self.eval_expr(dcx, b, &fun_expr.body_expr)
     }
 
+    fn eval_ty_pred_app(
+        &mut self,
+        b: &mut Option<Builder>,
+        span: Span,
+        arg_list_value: &Value,
+        test_ty: ty::pred::TestTy,
+    ) -> Value {
+        use crate::mir::typred::eval_ty_pred;
+
+        let subject_value = arg_list_value.list_iter().next_unchecked(b, span);
+        eval_ty_pred(self, b, span, &subject_value, test_ty)
+    }
+
     fn eval_eq_pred_app(
         &mut self,
         b: &mut Option<Builder>,
@@ -473,9 +486,7 @@ impl EvalHirCtx {
             Value::RustFun(rust_fun) => {
                 self.eval_rust_fun_app(b, span, ret_ty, &rust_fun, arg_list_value)
             }
-            Value::TyPred(_) => {
-                unimplemented!("runtime type predicate");
-            }
+            Value::TyPred(test_ty) => Ok(self.eval_ty_pred_app(b, span, &arg_list_value, *test_ty)),
             Value::EqPred => Ok(self.eval_eq_pred_app(b, span, &arg_list_value)),
             Value::Const(boxed_fun) => match boxed_fun.as_subtype() {
                 boxed::AnySubtype::FunThunk(fun_thunk) => self.eval_const_fun_thunk_app(

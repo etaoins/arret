@@ -1,0 +1,28 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn black-box-untyped! ([input : Any]) ->! Any
+  (black-box! input))
+
+(defn main! ()
+  (assert-eq true (str? (black-box-untyped! "foo")))
+  (assert-eq false (str? (black-box-untyped! 123)))
+  
+  (assert-eq true (bool? (black-box-untyped! true)))
+  (assert-eq false (bool? (black-box-untyped! 123)))
+
+  (assert-eq true (int? (black-box-untyped! 123)))
+  (assert-eq false (int? (black-box-untyped! false)))
+
+  (assert-eq true (fn? (black-box-untyped! cons)))
+  (assert-eq false (fn? (black-box-untyped! 123)))
+
+  (assert-eq true (list? (black-box-untyped! '())))
+  (assert-eq true (list? (black-box-untyped! '(1 2 3))))
+  (assert-eq false (list? (black-box-untyped! 123)))
+
+  (assert-eq true (nil? (black-box-untyped! '())))
+  (assert-eq false (nil? (black-box-untyped! '(1 2 3))))
+  (assert-eq false (nil? (black-box-untyped! 123)))
+
+  ())

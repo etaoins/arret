@@ -1,4 +1,5 @@
 use runtime::abitype;
+use runtime::boxed;
 
 use syntax::span::Span;
 
@@ -117,6 +118,7 @@ pub enum OpKind {
     ConstTrue(RegId, ()),
     ConstFalse(RegId, ()),
     ConstInt(RegId, i64),
+    ConstTypeTag(RegId, boxed::TypeTag),
     ConstBoxedInt(RegId, i64),
     ConstBoxedStr(RegId, Box<str>),
     ConstBoxedPair(RegId, BoxPairOp),
@@ -129,6 +131,7 @@ pub enum OpKind {
     CastBoxed(RegId, CastBoxedOp),
 
     Call(RegId, CallOp),
+    LoadBoxedTypeTag(RegId, RegId),
     LoadBoxedListLength(RegId, RegId),
     LoadBoxedPairHead(RegId, RegId),
     LoadBoxedPairRest(RegId, RegId),
@@ -137,6 +140,7 @@ pub enum OpKind {
     Cond(CondOp),
 
     Add(RegId, BinaryOp),
+    IntEqual(RegId, BinaryOp),
 
     Ret(RegId),
     RetVoid,
@@ -152,6 +156,7 @@ impl OpKind {
             | ConstTrue(reg_id, _)
             | ConstFalse(reg_id, _)
             | ConstInt(reg_id, _)
+            | ConstTypeTag(reg_id, _)
             | ConstBoxedInt(reg_id, _)
             | ConstBoxedStr(reg_id, _)
             | ConstBoxedPair(reg_id, _)
@@ -161,12 +166,14 @@ impl OpKind {
             | ConstCastBoxed(reg_id, _)
             | CastBoxed(reg_id, _)
             | Call(reg_id, _)
+            | LoadBoxedTypeTag(reg_id, _)
             | LoadBoxedListLength(reg_id, _)
             | LoadBoxedPairHead(reg_id, _)
             | LoadBoxedPairRest(reg_id, _)
             | LoadBoxedIntValue(reg_id, _)
             | LoadBoxedFunThunkClosure(reg_id, _)
             | Add(reg_id, _) => Some(*reg_id),
+            IntEqual(reg_id, _) => Some(*reg_id),
             Cond(cond_op) => cond_op.reg_phi.clone().map(|reg_phi| reg_phi.output_reg),
             Ret(_) | RetVoid | Unreachable => None,
         }
@@ -181,6 +188,7 @@ impl OpKind {
             | ConstTrue(_, _)
             | ConstFalse(_, _)
             | ConstInt(_, _)
+            | ConstTypeTag(_, _)
             | ConstBoxedInt(_, _)
             | ConstBoxedStr(_, _)
             | ConstBoxedFunThunk(_, _)
@@ -211,6 +219,7 @@ impl OpKind {
                 },
             )
             | Ret(reg_id)
+            | LoadBoxedTypeTag(_, reg_id)
             | LoadBoxedListLength(_, reg_id)
             | LoadBoxedPairHead(_, reg_id)
             | LoadBoxedPairRest(_, reg_id)
@@ -236,7 +245,7 @@ impl OpKind {
                     op.kind().add_input_regs(coll);
                 }
             }
-            Add(_, binary_op) => {
+            Add(_, binary_op) | IntEqual(_, binary_op) => {
                 coll.extend([binary_op.lhs_reg, binary_op.rhs_reg].iter().cloned());
             }
         }

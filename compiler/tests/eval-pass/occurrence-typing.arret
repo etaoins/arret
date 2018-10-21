@@ -31,7 +31,7 @@
     (ann input false)))
 
 (defn and-typing ([input : (Listof Any)])
-  (if (and (list? input) (empty? input))
+  (if (and (list? input) (nil? input))
     (ann input ())
     (ann input (List Any Any ...))))
 

@@ -96,6 +96,10 @@ pub struct Any {
 }
 
 impl Any {
+    pub fn header(&self) -> Header {
+        self.header
+    }
+
     pub fn downcast_ref<T: Downcastable>(&self) -> Option<Gc<T>> {
         if T::has_tag(self.header.type_tag) {
             Some(unsafe { Gc::new(&*(self as *const Any as *const T)) })
@@ -170,6 +174,10 @@ macro_rules! define_direct_tagged_boxes {
         pub enum TypeTag {
             $( $name ),*
         }
+
+        pub const ALL_TYPE_TAGS: &'static [TypeTag] = &[
+            $( TypeTag::$name ),*
+        ];
 
         impl TypeTag {
             pub fn to_str(&self) -> &'static str {
