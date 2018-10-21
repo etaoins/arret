@@ -20,6 +20,11 @@
     (ann input 'foo)
     (ann input 'bar)))
 
+(defn two-var-equality-predicate ([left : (U 'foo 'bar)] [right : (U 'bar 'baz)])
+  (when (= left right)
+    (ann left 'bar)
+    (ann right 'bar)))
+
 (defn let-preserves-type-information ([input : Bool])
   (if (let [_ ()] 'foo input)
     (ann input true)

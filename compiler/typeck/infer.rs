@@ -24,28 +24,28 @@ pub struct InferredNode {
     expr: hir::Expr<hir::Inferred>,
     /// Inferred type for the expression's value
     poly_type: ty::Poly,
-    /// Type condition depending the poly type of this node
-    type_cond: Option<Box<VarTypeCond>>,
+    /// Type conditions depending the poly type of this node
+    type_conds: Vec<VarTypeCond>,
 }
 
 impl InferredNode {
     fn new_ref_node(span: Span, var_id: hir::VarId, poly_type: ty::Poly) -> InferredNode {
-        let type_cond = if poly_type == ty::Ty::Bool.into_poly() {
+        let type_conds = if poly_type == ty::Ty::Bool.into_poly() {
             // This seems useless but it allows occurrence typing to work if this type
             // flows through another node such as `(do)` or `(let)`
-            Some(Box::new(VarTypeCond {
+            vec![VarTypeCond {
                 var_id,
                 type_if_true: ty::Ty::LitBool(true).into_poly(),
                 type_if_false: ty::Ty::LitBool(false).into_poly(),
-            }))
+            }]
         } else {
-            None
+            vec![]
         };
 
         InferredNode {
             expr: hir::Expr::Ref(span, var_id),
             poly_type,
-            type_cond,
+            type_conds,
         }
     }
 
@@ -62,6 +62,16 @@ struct VarTypeCond {
     var_id: hir::VarId,
     type_if_true: ty::Poly,
     type_if_false: ty::Poly,
+}
+
+impl VarTypeCond {
+    fn reversed(self) -> VarTypeCond {
+        VarTypeCond {
+            var_id: self.var_id,
+            type_if_true: self.type_if_false,
+            type_if_false: self.type_if_true,
+        }
+    }
 }
 
 new_indexing_id_type!(FreeTyId, u32);
@@ -277,7 +287,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         Ok(InferredNode {
             expr: hir::Expr::Lit(datum),
             poly_type: lit_type,
-            type_cond: None,
+            type_conds: vec![],
         })
     }
 
@@ -313,60 +323,50 @@ impl<'types> RecursiveDefsCtx<'types> {
             None => (required_type, required_type),
         };
 
-        let true_node;
-        let false_node;
-        if let Some(type_cond) = test_node.type_cond {
+        // Patch our occurrence types in to the `var_to_type` and restore it after. We avoid
+        // `?`ing our results until the end to make sure the original types are properly restored.
+        let restore_var_types = test_node
+            .type_conds
+            .iter()
+            .map(|type_cond| {
+                let VarTypeCond {
+                    var_id,
+                    ref type_if_true,
+                    ..
+                } = *type_cond;
+
+                (
+                    var_id,
+                    self.var_to_type
+                        .insert(var_id, VarType::Known(type_if_true.clone()))
+                        .unwrap(),
+                )
+            })
+            .collect::<Vec<(hir::VarId, VarType)>>();
+
+        let true_result = self.visit_expr(fcx, pv, true_required_type, true_expr);
+
+        // Now set the false branch types
+        for type_cond in test_node.type_conds.iter() {
             let VarTypeCond {
                 var_id,
-                type_if_true,
-                type_if_false,
+                ref type_if_false,
+                ..
             } = *type_cond;
-
-            // Patch our occurrence types in to the `var_to_type` and restore it after. We avoid
-            // `?`ing our results until the end to make sure the original types are properly
-            // restored.
-            let original_var_type = self
-                .var_to_type
-                .insert(var_id, VarType::Known(type_if_true.clone()))
-                .unwrap();
-
-            let true_result = self.visit_expr(fcx, pv, true_required_type, true_expr);
 
             self.var_to_type
                 .insert(var_id, VarType::Known(type_if_false.clone()));
-            let false_result = self.visit_expr(fcx, pv, false_required_type, false_expr);
-
-            self.var_to_type.insert(var_id, original_var_type);
-
-            true_node = true_result?;
-            false_node = false_result?;
-
-            // This is an analog of (not). We can flip the test's type condition
-            if try_to_bool(&true_node.poly_type) == Some(false)
-                && try_to_bool(&false_node.poly_type) == Some(true)
-            {
-                return Ok(InferredNode {
-                    expr: hir::Expr::Cond(
-                        span,
-                        Box::new(hir::Cond {
-                            phi_ty: test_node.poly_type.clone(),
-                            test_expr: test_node.expr,
-                            true_expr: true_node.expr,
-                            false_expr: false_node.expr,
-                        }),
-                    ),
-                    poly_type: test_node.poly_type,
-                    type_cond: Some(Box::new(VarTypeCond {
-                        var_id,
-                        type_if_true: type_if_false,
-                        type_if_false: type_if_true,
-                    })),
-                });
-            }
-        } else {
-            true_node = self.visit_expr(fcx, pv, true_required_type, true_expr)?;
-            false_node = self.visit_expr(fcx, pv, false_required_type, false_expr)?;
         }
+
+        let false_result = self.visit_expr(fcx, pv, false_required_type, false_expr);
+
+        // Restore the original types
+        for (var_id, original_var_type) in restore_var_types {
+            self.var_to_type.insert(var_id, original_var_type);
+        }
+
+        let true_node = true_result?;
+        let false_node = false_result?;
 
         // If the test is static then we can significantly optimise
         match test_known_bool {
@@ -386,15 +386,29 @@ impl<'types> RecursiveDefsCtx<'types> {
                     &false_node.poly_type,
                 );
 
+                let false_node_bool = try_to_bool(&false_node.poly_type);
+                let true_node_bool = try_to_bool(&true_node.poly_type);
+
+                // This is an analog of (not). We can flip the test's type condition
+                let mut type_conds =
+                    if true_node_bool == Some(false) && false_node_bool == Some(true) {
+                        test_node
+                            .type_conds
+                            .into_iter()
+                            .map(|type_cond| type_cond.reversed())
+                            .collect()
+                    } else {
+                        vec![]
+                    };
+
                 // If the false branch is always false we can move an occurrence typing from the
                 // true branch upwards. The same reasoning applies for the true branch.
-                let type_cond = if try_to_bool(&false_node.poly_type) == Some(false) {
-                    true_node.type_cond
-                } else if try_to_bool(&true_node.poly_type) == Some(true) {
-                    false_node.type_cond
-                } else {
-                    None
-                };
+                if false_node_bool == Some(false) {
+                    type_conds.extend(true_node.type_conds);
+                }
+                if true_node_bool == Some(true) {
+                    type_conds.extend(false_node.type_conds);
+                }
 
                 Ok(InferredNode {
                     expr: hir::Expr::Cond(
@@ -407,7 +421,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                         }),
                     ),
                     poly_type,
-                    type_cond,
+                    type_conds,
                 })
             }
         }
@@ -426,7 +440,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         Ok(InferredNode {
             expr: hir::Expr::TyPred(span, test_ty),
             poly_type: pred_type,
-            type_cond: None,
+            type_conds: vec![],
         })
     }
 
@@ -442,7 +456,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         Ok(InferredNode {
             expr: hir::Expr::EqPred(span),
             poly_type: pred_type,
-            type_cond: None,
+            type_conds: vec![],
         })
     }
 
@@ -526,7 +540,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             return Ok(InferredNode {
                 expr: hir::Expr::Do(vec![]),
                 poly_type: ty::Ty::unit().into_poly(),
-                type_cond: None,
+                type_conds: vec![],
             });
         };
 
@@ -551,7 +565,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             Ok(InferredNode {
                 expr: hir::Expr::Do(inferred_exprs),
                 poly_type: ty::Ty::never().into_poly(),
-                type_cond: None,
+                type_conds: vec![],
             })
         } else {
             let terminal_node = self.visit_expr(fcx, pv, required_type, terminal_expr)?;
@@ -560,7 +574,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             Ok(InferredNode {
                 expr: hir::Expr::Do(inferred_exprs),
                 poly_type: terminal_node.poly_type,
-                type_cond: terminal_node.type_cond,
+                type_conds: terminal_node.type_conds,
             })
         }
     }
@@ -703,7 +717,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         Ok(InferredNode {
             expr: hir::Expr::Fun(span, Box::new(revealed_fun)),
             poly_type: revealed_type,
-            type_cond: None,
+            type_conds: vec![],
         })
     }
 
@@ -805,7 +819,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                 }),
             ),
             poly_type: ret_type,
-            type_cond: None,
+            type_conds: vec![],
         })
     }
 
@@ -854,7 +868,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                         hir::Expr::Lit(Datum::Bool(span, bool_result)),
                     ]),
                     poly_type,
-                    type_cond: None,
+                    type_conds: vec![],
                 })
             }
             ty::is_a::Result::May => {
@@ -872,13 +886,15 @@ impl<'types> RecursiveDefsCtx<'types> {
                 let type_if_false =
                     ty::subtract::subtract_ty_refs(&fcx.tvars, subject_poly, &test_poly);
 
-                let type_cond = subject_var_id.map(|var_id| {
-                    Box::new(VarTypeCond {
+                let type_conds = if let Some(var_id) = subject_var_id {
+                    vec![VarTypeCond {
                         var_id,
                         type_if_true,
                         type_if_false,
-                    })
-                });
+                    }]
+                } else {
+                    vec![]
+                };
 
                 Ok(InferredNode {
                     expr: hir::Expr::App(
@@ -891,7 +907,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                         }),
                     ),
                     poly_type,
-                    type_cond,
+                    type_conds,
                 })
             }
         }
@@ -940,7 +956,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                         hir::Expr::Lit(Datum::Bool(span, bool_result)),
                     ]),
                     poly_type,
-                    type_cond: None,
+                    type_conds: vec![],
                 })
             }
             ty::is_a::Result::May => {
@@ -962,7 +978,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                         }),
                     ),
                     poly_type,
-                    type_cond: None,
+                    type_conds: vec![],
                 })
             }
         }
@@ -1019,7 +1035,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                     hir::Expr::Lit(Datum::Bool(span, true)),
                 ]),
                 poly_type,
-                type_cond: None,
+                type_conds: vec![],
             });
         };
 
@@ -1043,14 +1059,14 @@ impl<'types> RecursiveDefsCtx<'types> {
                         hir::Expr::Lit(Datum::Bool(span, false)),
                     ]),
                     poly_type,
-                    type_cond: None,
+                    type_conds: vec![],
                 });
             }
         };
 
-        // TODO: We currently only support a single type condition
-        // We pick an arbitrary argument var to use if they're both provided
-        let type_cond = if let Some(left_var_id) = left_var_id {
+        let mut type_conds = vec![];
+
+        if let Some(left_var_id) = left_var_id {
             let type_if_false = if right_is_literal {
                 ty::subtract::subtract_ty_refs(
                     &fcx.tvars,
@@ -1061,12 +1077,14 @@ impl<'types> RecursiveDefsCtx<'types> {
                 left_node.poly_type.clone()
             };
 
-            Some(Box::new(VarTypeCond {
+            type_conds.push(VarTypeCond {
                 var_id: left_var_id,
-                type_if_true: intersected_type,
+                type_if_true: intersected_type.clone(),
                 type_if_false,
-            }))
-        } else if let Some(right_var_id) = right_var_id {
+            });
+        }
+
+        if let Some(right_var_id) = right_var_id {
             let type_if_false = if left_is_literal {
                 ty::subtract::subtract_ty_refs(
                     &fcx.tvars,
@@ -1077,13 +1095,11 @@ impl<'types> RecursiveDefsCtx<'types> {
                 right_node.poly_type.clone()
             };
 
-            Some(Box::new(VarTypeCond {
+            type_conds.push(VarTypeCond {
                 var_id: right_var_id,
                 type_if_true: intersected_type,
                 type_if_false,
-            }))
-        } else {
-            None
+            });
         };
 
         let poly_type = if is_divergent {
@@ -1103,7 +1119,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                 }),
             ),
             poly_type,
-            type_cond,
+            type_conds,
         })
     }
 
@@ -1274,7 +1290,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                 }),
             ),
             poly_type,
-            type_cond: body_node.type_cond,
+            type_conds: body_node.type_conds,
         })
     }
 
@@ -1293,7 +1309,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         Ok(InferredNode {
             expr: hir::Expr::RustFun(span, rust_fun),
             poly_type,
-            type_cond: None,
+            type_conds: vec![],
         })
     }
 
