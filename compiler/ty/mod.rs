@@ -1,14 +1,15 @@
 pub mod conv_abi;
 pub mod datum;
-pub mod has_subtypes;
 pub mod intersect;
 pub mod is_a;
 pub mod list_iter;
 pub mod pred;
+pub mod props;
 pub mod purity;
 pub mod resolve;
 pub mod select;
 pub mod subst;
+pub mod subtract;
 pub mod unify;
 
 use std::collections::BTreeMap;
@@ -75,6 +76,7 @@ pub enum Ty<S: TyRef> {
     TopFun(Box<TopFun>),
     Fun(Box<Fun>),
     TyPred(pred::TestTy),
+    EqPred,
 
     // Vector types
     Vector(Box<[S]>),
@@ -181,8 +183,8 @@ impl TopFun {
         TopFun { purity, ret }
     }
 
-    /// Returns the `Fun` top type for all type predicate functions
-    pub fn new_for_ty_pred() -> TopFun {
+    /// Returns the `Fun` top type for all predicate functions
+    pub fn new_for_pred() -> TopFun {
         Self::new(purity::Purity::Pure.into_poly(), Ty::Bool.into_ty_ref())
     }
 
@@ -233,14 +235,30 @@ impl Fun {
 
     /// Returns the `Fun` supertype for all type predicate functions
     ///
-    /// This is the type `(Any -> Bool)`. It captures the signature of the type predicates; however
+    /// This is the type `(Any -> Bool)`. It captures the signature of the type predicates; however,
     /// it does not support occurrence typing.
     pub fn new_for_ty_pred() -> Fun {
         Self::new(
             purity::PVars::new(),
             TVars::new(),
-            TopFun::new_for_ty_pred(),
+            TopFun::new_for_pred(),
             List::new(Box::new([Ty::Any.into_ty_ref()]), None),
+        )
+    }
+
+    /// Returns the `Fun` supertype for the equality predicate
+    ///
+    /// This is the type `(Any Any -> Bool)`. It captures the signature of the equality predicate;
+    /// however, it does not support occurrence typing.
+    pub fn new_for_eq_pred() -> Fun {
+        Self::new(
+            purity::PVars::new(),
+            TVars::new(),
+            TopFun::new_for_pred(),
+            List::new(
+                Box::new([Ty::Any.into_ty_ref(), Ty::Any.into_ty_ref()]),
+                None,
+            ),
         )
     }
 

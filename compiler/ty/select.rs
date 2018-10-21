@@ -129,14 +129,16 @@ impl<'vars> SelectCtx<'vars> {
             (ty::Ty::TopFun(target_top_fun), ty::Ty::Fun(evidence_fun)) => {
                 self.add_evidence_top_fun(target_top_fun, evidence_fun.top_fun());
             }
-            (ty::Ty::TopFun(target_top_fun), ty::Ty::TyPred(_)) => {
-                self.add_evidence_top_fun(target_top_fun, &ty::TopFun::new_for_ty_pred());
+            (ty::Ty::TopFun(target_top_fun), ty::Ty::TyPred(_))
+            | (ty::Ty::TopFun(target_top_fun), ty::Ty::EqPred) => {
+                self.add_evidence_top_fun(target_top_fun, &ty::TopFun::new_for_pred());
             }
             (ty::Ty::Fun(target_fun), ty::Ty::Fun(evidence_fun)) => {
                 self.add_evidence_top_fun(target_fun.top_fun(), evidence_fun.top_fun());
             }
-            (ty::Ty::Fun(target_fun), ty::Ty::TyPred(_)) => {
-                self.add_evidence_top_fun(target_fun.top_fun(), &ty::TopFun::new_for_ty_pred());
+            (ty::Ty::Fun(target_fun), ty::Ty::TyPred(_))
+            | (ty::Ty::Fun(target_fun), ty::Ty::EqPred) => {
+                self.add_evidence_top_fun(target_fun.top_fun(), &ty::TopFun::new_for_pred());
             }
             (ty::Ty::Union(target_members), _) => {
                 for target_member in target_members.iter() {
@@ -574,6 +576,17 @@ mod test {
     }
 
     #[test]
+    fn top_fun_from_eq_pred() {
+        let scope = TestScope::new("A");
+        let poly_a = scope.poly_for_str("A");
+
+        let mut stx = scope.select_ctx();
+
+        stx.add_evidence(&scope.poly_for_str("(... -> A)"), &scope.poly_for_str("="));
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("Bool"));
+    }
+
+    #[test]
     fn fun_types() {
         let scope = TestScope::new("A B");
         let poly_a = scope.poly_for_str("A");
@@ -634,6 +647,19 @@ mod test {
         let mut stx = scope.select_ctx();
 
         stx.add_evidence(&scope.poly_for_str("(A -> B)"), &scope.poly_for_str("sym?"));
+        assert_unselected_type(&stx, &poly_a);
+        assert_selected_type(&stx, &poly_b, &scope.poly_for_str("Bool"));
+    }
+
+    #[test]
+    fn fun_type_from_eq_pred() {
+        let scope = TestScope::new("A B");
+        let poly_a = scope.poly_for_str("A");
+        let poly_b = scope.poly_for_str("B");
+
+        let mut stx = scope.select_ctx();
+
+        stx.add_evidence(&scope.poly_for_str("(A A -> B)"), &scope.poly_for_str("="));
         assert_unselected_type(&stx, &poly_a);
         assert_selected_type(&stx, &poly_b, &scope.poly_for_str("Bool"));
     }

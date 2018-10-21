@@ -260,11 +260,7 @@ pub fn intersect_ty_refs<S: Intersectable>(
 #[cfg(test)]
 mod test {
     use super::*;
-
-    fn poly_for_str(datum_str: &str) -> ty::Poly {
-        use crate::hir;
-        hir::poly_for_str(datum_str)
-    }
+    use crate::hir::poly_for_str;
 
     fn assert_disjoint(ty_str1: &str, ty_str2: &str) {
         let poly1 = poly_for_str(ty_str1);
@@ -388,6 +384,13 @@ mod test {
         assert_merged("str?", "str?", "str?");
         assert_merged("str?", "str?", "(Any -> Bool)");
         assert_merged("str?", "str?", "(... -> Bool)");
+    }
+
+    #[test]
+    fn eq_pred_types() {
+        assert_merged("=", "=", "=");
+        assert_merged("=", "=", "(Any Any -> Bool)");
+        assert_merged("=", "=", "(... -> Bool)");
     }
 
     #[test]

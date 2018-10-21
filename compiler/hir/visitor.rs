@@ -40,7 +40,8 @@ where
         hir::Expr::Ref(_, _)
         | hir::Expr::Lit(_)
         | hir::Expr::RustFun(_, _)
-        | hir::Expr::TyPred(_, _) => {
+        | hir::Expr::TyPred(_, _)
+        | hir::Expr::EqPred(_) => {
             // Terminal expression
         }
     };

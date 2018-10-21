@@ -37,13 +37,6 @@ define_rust_fn! {
 }
 
 define_rust_fn! {
-    #[arret_type="(Any Any -> Bool)"]
-    EQUALS = fn arret_stdlib_equals(lhs: Gc<boxed::Any>, rhs: Gc<boxed::Any>) -> bool {
-        lhs == rhs
-    }
-}
-
-define_rust_fn! {
     #[arret_type="(Int ->! (U))"]
     EXIT = fn arret_stdlib_exit(exit_code: i64) -> () {
         use std::process::exit;
@@ -54,7 +47,6 @@ define_rust_fn! {
 define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "length" => LENGTH,
     "panic" => PANIC,
-    "=" => EQUALS,
     "print!" => PRINT,
     "println!" => PRINTLN,
     "exit!" => EXIT,

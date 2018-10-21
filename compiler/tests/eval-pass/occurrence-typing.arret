@@ -10,6 +10,16 @@
     (ann input Sym)
     (ann input Str)))
 
+(defn non-literal-equality-predicate ([input : (U Int Float)])
+  (if (= input 123)
+    (ann input Int)
+    (ann input (U Int Float))))
+
+(defn literal-equality-predicate ([input : (U 'foo 'bar)])
+  (if (= input 'foo)
+    (ann input 'foo)
+    (ann input 'bar)))
+
 (defn let-preserves-type-information ([input : Bool])
   (if (let [_ ()] 'foo input)
     (ann input true)

@@ -87,11 +87,9 @@ fn lower_polymorphic_var(scope: &Scope, tvar_datum: NsDatum) -> Result<Polymorph
                         ))
                     }
                     None => {
-                        use crate::ty::has_subtypes::poly_has_subtypes;
-
                         let bound_ty = lower_poly(scope, bound_datum)?;
 
-                        let kind = if poly_has_subtypes(&bound_ty) {
+                        let kind = if ty::props::has_subtypes(&bound_ty) {
                             PolymorphicVarKind::TVar(ty::TVar::new(source_name, bound_ty))
                         } else {
                             PolymorphicVarKind::TFixed(bound_ty)
@@ -241,6 +239,7 @@ fn lower_ident(scope: &Scope, span: Span, ident: &Ident) -> Result<ty::Poly> {
     match scope.get_or_err(span, ident)? {
         Binding::Ty(ty) => Ok(ty.clone()),
         Binding::TyPred(test_ty) => Ok(ty::Ty::TyPred(*test_ty).into_poly()),
+        Binding::EqPred => Ok(ty::Ty::EqPred.into_poly()),
         _ => Err(Error::new(span, ErrorKind::ValueAsTy)),
     }
 }
@@ -549,6 +548,7 @@ fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty
             }
         }
         ty::Ty::TyPred(test_ty) => str_for_pred_test_ty(*test_ty).to_owned(),
+        ty::Ty::EqPred => "=".to_owned(),
         ty::Ty::Union(members) => {
             let member_strs: Vec<String> = members
                 .iter()
@@ -865,10 +865,18 @@ mod test {
     }
 
     #[test]
-    fn ty_predicate() {
+    fn type_predicate() {
         let j = "str?";
 
         let expected = ty::Ty::TyPred(ty::pred::TestTy::Str).into_poly();
+        assert_poly_for_str(&expected, j);
+    }
+
+    #[test]
+    fn equality_predicate() {
+        let j = "=";
+
+        let expected = ty::Ty::EqPred.into_poly();
         assert_poly_for_str(&expected, j);
     }
 

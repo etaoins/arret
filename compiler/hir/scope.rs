@@ -19,6 +19,7 @@ pub enum Binding {
     Ty(ty::Poly),
     TyCons(types::TyCons),
     TyPred(ty::pred::TestTy),
+    EqPred,
     Purity(purity::Poly),
 }
 

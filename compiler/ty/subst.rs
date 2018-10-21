@@ -64,6 +64,7 @@ where
         ty::Ty::Int => ty::Ty::Int,
         ty::Ty::Str => ty::Ty::Str,
         ty::Ty::Sym => ty::Ty::Sym,
+        ty::Ty::EqPred => ty::Ty::EqPred,
         ty::Ty::TyPred(test_ty) => ty::Ty::TyPred(*test_ty),
         ty::Ty::TopFun(top_fun) => subst_top_fun(stx, top_fun).into_ty(),
         ty::Ty::Fun(fun) => subst_fun(stx, fun).into_ty(),

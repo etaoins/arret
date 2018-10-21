@@ -228,13 +228,18 @@ fn unify_ty<S: Unifiable>(
             unify_top_fun(tvars, fun.top_fun(), top_fun)
         }
         (ty::Ty::TyPred(_), ty::Ty::TopFun(top_fun))
-        | (ty::Ty::TopFun(top_fun), ty::Ty::TyPred(_)) => {
-            unify_top_fun(tvars, &ty::TopFun::new_for_ty_pred(), top_fun)
+        | (ty::Ty::TopFun(top_fun), ty::Ty::TyPred(_))
+        | (ty::Ty::EqPred, ty::Ty::TopFun(top_fun))
+        | (ty::Ty::TopFun(top_fun), ty::Ty::EqPred) => {
+            unify_top_fun(tvars, &ty::TopFun::new_for_pred(), top_fun)
         }
 
         (ty::Ty::Fun(fun1), ty::Ty::Fun(fun2)) => unify_fun(tvars, fun1, fun2),
         (ty::Ty::TyPred(_), ty::Ty::Fun(fun)) | (ty::Ty::Fun(fun), ty::Ty::TyPred(_)) => {
             unify_fun(tvars, &ty::Fun::new_for_ty_pred(), fun)
+        }
+        (ty::Ty::EqPred, ty::Ty::Fun(fun)) | (ty::Ty::Fun(fun), ty::Ty::EqPred) => {
+            unify_fun(tvars, &ty::Fun::new_for_eq_pred(), fun)
         }
 
         (ty::Ty::TyPred(_), ty::Ty::TyPred(_)) => {
@@ -451,6 +456,13 @@ mod test {
         assert_merged("(Any -> Bool)", "str?", "sym?");
         assert_merged("(Int -> Any)", "(Int -> Any)", "sym?");
         assert_merged("(... ->! Bool)", "(... ->! Bool)", "sym?");
+    }
+
+    #[test]
+    fn eq_pred_type() {
+        assert_merged("=", "=", "=");
+        assert_merged("(Int Int -> Any)", "(Int Int -> Any)", "=");
+        assert_merged("(... ->! Bool)", "(... ->! Bool)", "=");
     }
 
     #[test]

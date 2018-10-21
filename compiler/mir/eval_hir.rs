@@ -39,8 +39,6 @@ pub struct EvalHirCtx {
 pub struct DefCtx {
     pvar_purities: HashMap<purity::PVarId, purity::Purity>,
     tvar_types: HashMap<ty::TVarId, ty::Ty<ty::Mono>>,
-
-    tvars: ty::TVars,
     local_values: HashMap<hir::VarId, Value>,
 }
 
@@ -71,8 +69,6 @@ impl DefCtx {
         DefCtx {
             pvar_purities: HashMap::new(),
             tvar_types: HashMap::new(),
-
-            tvars: ty::TVars::new(),
             local_values: HashMap::new(),
         }
     }
@@ -232,28 +228,20 @@ impl EvalHirCtx {
         self.eval_expr(dcx, b, &fun_expr.body_expr)
     }
 
-    fn eval_ty_pred_app(
+    fn eval_eq_pred_app(
         &mut self,
-        dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         span: Span,
-        test_ty: ty::pred::TestTy,
-        arg_list_value: Value,
-    ) -> Result<Value> {
-        use crate::mir::value::mono_for_value;
-        use crate::ty::pred::InterpretedPred;
+        arg_list_value: &Value,
+    ) -> Value {
+        use crate::mir::equality::eval_equality;
 
-        let mut arg_list_iter = arg_list_value.into_list_iter();
-        let subject_value = arg_list_iter.next_unchecked(b, span);
+        let mut iter = arg_list_value.list_iter();
 
-        let subject_mono = mono_for_value(self.runtime_task.heap().interner(), &subject_value);
+        let left_value = iter.next_unchecked(b, span);
+        let right_value = iter.next_unchecked(b, span);
 
-        match ty::pred::interpret_ty_ref(&dcx.tvars, &subject_mono, test_ty) {
-            InterpretedPred::Static(value) => {
-                Ok(Value::Const(boxed::Bool::singleton_ref(value).as_any_ref()))
-            }
-            InterpretedPred::Dynamic(_, _) => unimplemented!("Runtime type check"),
-        }
+        eval_equality(self, b, span, &left_value, &right_value)
     }
 
     pub fn rust_fun_to_jit_boxed(&mut self, rust_fun: Rc<hir::rfi::Fun>) -> Gc<boxed::FunThunk> {
@@ -485,7 +473,10 @@ impl EvalHirCtx {
             Value::RustFun(rust_fun) => {
                 self.eval_rust_fun_app(b, span, ret_ty, &rust_fun, arg_list_value)
             }
-            Value::TyPred(test_ty) => self.eval_ty_pred_app(dcx, b, span, *test_ty, arg_list_value),
+            Value::TyPred(_) => {
+                unimplemented!("runtime type predicate");
+            }
+            Value::EqPred => Ok(self.eval_eq_pred_app(b, span, &arg_list_value)),
             Value::Const(boxed_fun) => match boxed_fun.as_subtype() {
                 boxed::AnySubtype::FunThunk(fun_thunk) => self.eval_const_fun_thunk_app(
                     dcx,
@@ -886,6 +877,7 @@ impl EvalHirCtx {
                 Ok(Value::RustFun(Rc::new(rust_fun.as_ref().clone())))
             }
             hir::Expr::TyPred(_, test_ty) => Ok(Value::TyPred(*test_ty)),
+            hir::Expr::EqPred(_) => Ok(Value::EqPred),
             hir::Expr::Ref(_, var_id) => Ok(self.eval_ref(dcx, *var_id)),
             hir::Expr::Let(_, hir_let) => self.eval_let(dcx, b, hir_let),
             hir::Expr::App(span, app) => self.eval_app(dcx, b, *span, app),

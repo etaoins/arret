@@ -1,5 +1,6 @@
 mod builder;
 mod compact_abi_type;
+mod equality;
 pub mod error;
 pub mod eval_hir;
 mod intrinsic;

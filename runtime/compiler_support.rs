@@ -1,6 +1,7 @@
 use std::{panic, process};
 
 use crate::boxed;
+use crate::boxed::refs::Gc;
 use crate::task::Task;
 
 type TaskEntry = extern "C" fn(&mut Task);
@@ -23,4 +24,9 @@ pub fn launch_task(entry: TaskEntry) {
 #[export_name = "arret_runtime_alloc_cells"]
 pub fn alloc_cells(task: &mut Task, count: u32) -> *mut boxed::Any {
     task.heap_mut().alloc_cells(count as usize)
+}
+
+#[export_name = "arret_runtime_equals"]
+fn equals(lhs: Gc<boxed::Any>, rhs: Gc<boxed::Any>) -> bool {
+    lhs == rhs
 }

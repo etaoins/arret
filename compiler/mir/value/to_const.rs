@@ -43,6 +43,7 @@ pub fn value_to_const(ehx: &mut EvalHirCtx, value: &Value) -> Option<Gc<boxed::A
         Value::TyPred(ref test_poly) => {
             unimplemented!("Boxing of type predicates: {:?}", test_poly)
         }
+        Value::EqPred => unimplemented!("Boxing of equality predicates"),
         Value::ArretFun(ref arret_fun) => Some(ehx.arret_fun_to_jit_boxed(arret_fun).as_any_ref()),
         Value::RustFun(ref rust_fun) => {
             Some(ehx.rust_fun_to_jit_boxed(rust_fun.clone()).as_any_ref())

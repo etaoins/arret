@@ -487,6 +487,7 @@ fn lower_expr(scope: &Scope, datum: NsDatum) -> Result<Expr<Lowered>> {
         NsDatum::Ident(span, ident) => match scope.get_or_err(span, &ident)? {
             Binding::Var(id) => Ok(Expr::Ref(span, *id)),
             Binding::TyPred(test_ty) => Ok(Expr::TyPred(span, *test_ty)),
+            Binding::EqPred => Ok(Expr::EqPred(span)),
             Binding::Prim(_) => Err(Error::new(span, ErrorKind::PrimRef)),
             Binding::Ty(_) | Binding::TyCons(_) | Binding::Purity(_) => {
                 Err(Error::new(span, ErrorKind::TyRef))
@@ -1201,6 +1202,15 @@ mod test {
         let t = "^^^^^";
 
         let expected = Expr::TyPred(t2s(t), ty::pred::TestTy::Bool);
+        assert_eq!(expected, expr_for_str(j));
+    }
+
+    #[test]
+    fn equality_predicate() {
+        let j = "=";
+        let t = "^";
+
+        let expected = Expr::EqPred(t2s(t));
         assert_eq!(expected, expr_for_str(j));
     }
 }

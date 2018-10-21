@@ -11,6 +11,8 @@ macro_rules! export_prims {
         }
 
         pub const PRIM_EXPORTS: &[(&str, Binding)] = &[
+            // This is a pseudo-primitive. Unlike normal primitives we can take the value of `=`.
+            ("=", Binding::EqPred),
             $(
                 ($n, Binding::Prim(Prim::$i))
             ),*

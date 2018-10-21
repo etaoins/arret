@@ -309,16 +309,30 @@ fn ty_is_a<S: Isable>(
         }),
         (ty::Ty::Fun(sub_fun), ty::Ty::Fun(par_fun)) => fun_is_a(tvars, sub_fun, par_fun),
 
-        (ty::Ty::TyPred(_), ty::Ty::TopFun(par_top_fun)) => {
-            top_fun_is_a(tvars, &ty::TopFun::new_for_ty_pred(), par_top_fun)
+        // All predicate types
+        (ty::Ty::TyPred(_), ty::Ty::TopFun(par_top_fun))
+        | (ty::Ty::EqPred, ty::Ty::TopFun(par_top_fun)) => {
+            top_fun_is_a(tvars, &ty::TopFun::new_for_pred(), par_top_fun)
         }
-        (ty::Ty::TopFun(sub_top_fun), ty::Ty::TyPred(_)) => Result::May
-            .and_then(|| top_fun_is_a(tvars, sub_top_fun, &ty::TopFun::new_for_ty_pred())),
+        (ty::Ty::TopFun(sub_top_fun), ty::Ty::TyPred(_))
+        | (ty::Ty::TopFun(sub_top_fun), ty::Ty::EqPred) => {
+            Result::May.and_then(|| top_fun_is_a(tvars, sub_top_fun, &ty::TopFun::new_for_pred()))
+        }
+
+        // Type predicate types
         (ty::Ty::TyPred(_), ty::Ty::Fun(par_fun)) => {
             fun_is_a(tvars, &ty::Fun::new_for_ty_pred(), par_fun)
         }
         (ty::Ty::Fun(sub_fun), ty::Ty::TyPred(_)) => {
             Result::May.and_then(|| fun_is_a(tvars, sub_fun, &ty::Fun::new_for_ty_pred()))
+        }
+
+        // Equality predicate type
+        (ty::Ty::EqPred, ty::Ty::Fun(par_fun)) => {
+            fun_is_a(tvars, &ty::Fun::new_for_eq_pred(), par_fun)
+        }
+        (ty::Ty::Fun(sub_fun), ty::Ty::EqPred) => {
+            Result::May.and_then(|| fun_is_a(tvars, sub_fun, &ty::Fun::new_for_eq_pred()))
         }
 
         // List types
@@ -659,7 +673,7 @@ mod test {
     fn ty_pred_types() {
         let sym_ty_pred = poly_for_str("sym?");
         let str_ty_pred = poly_for_str("str?");
-        let general_pred = poly_for_str("(Any -> Bool)");
+        let general_ty_pred = poly_for_str("(Any -> Bool)");
         let pred_top_fun = poly_for_str("(... -> Bool)");
 
         // Type predicates always equal themselves
@@ -681,11 +695,11 @@ mod test {
         // Type predicates are a subtype of (Any -> Bool)
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&ty::TVars::new(), &sym_ty_pred, &general_pred)
+            ty_ref_is_a(&ty::TVars::new(), &sym_ty_pred, &general_ty_pred)
         );
         assert_eq!(
             Result::May,
-            ty_ref_is_a(&ty::TVars::new(), &general_pred, &sym_ty_pred)
+            ty_ref_is_a(&ty::TVars::new(), &general_ty_pred, &sym_ty_pred)
         );
 
         // Type predicates are a subtype of (... -> Bool)
@@ -696,6 +710,39 @@ mod test {
         assert_eq!(
             Result::May,
             ty_ref_is_a(&ty::TVars::new(), &pred_top_fun, &sym_ty_pred)
+        );
+    }
+
+    #[test]
+    fn eq_pred_type() {
+        let eq_pred = poly_for_str("=");
+        let general_eq_pred = poly_for_str("(Any Any -> Bool)");
+        let pred_top_fun = poly_for_str("(... -> Bool)");
+
+        // Equality predicate equals itself
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &eq_pred, &eq_pred)
+        );
+
+        // Equality predicate is a subtype of (Any Any -> Bool)
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &eq_pred, &general_eq_pred)
+        );
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&ty::TVars::new(), &general_eq_pred, &eq_pred)
+        );
+
+        // Equality predicate is a subtype of (... -> Bool)
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&ty::TVars::new(), &eq_pred, &pred_top_fun)
+        );
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&ty::TVars::new(), &pred_top_fun, &eq_pred)
         );
     }
 

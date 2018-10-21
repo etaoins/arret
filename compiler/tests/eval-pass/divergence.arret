@@ -35,6 +35,9 @@
   ; Divergence within type predicate
   (assert-diverges (str? (panic "Type predicate apply")))
 
+  ; Divergence within equality predicate
+  (assert-diverges (= true (panic "Type predicate apply")))
+
   ; Divergence within `(let)`
   (assert-diverges (let [_ (panic "(let)")]))
 )
