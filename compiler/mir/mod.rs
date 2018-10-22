@@ -7,6 +7,7 @@ mod intrinsic;
 pub(crate) mod ops;
 mod optimise;
 mod rust_fun;
+mod tagset;
 mod typred;
 mod value;
 

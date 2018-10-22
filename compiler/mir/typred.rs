@@ -7,25 +7,30 @@ use runtime::boxed::prelude::*;
 use crate::mir::builder::Builder;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops::*;
+use crate::mir::tagset::TypeTagSet;
 use crate::mir::value::build_reg::value_to_reg;
 use crate::mir::value::from_reg::reg_to_value;
 use crate::mir::value::Value;
 use crate::ty;
 
-fn type_tags_for_test_ty(test_ty: ty::pred::TestTy) -> &'static [boxed::TypeTag] {
+fn type_tags_for_test_ty(test_ty: ty::pred::TestTy) -> TypeTagSet {
     use crate::ty::pred::TestTy;
 
     match test_ty {
-        TestTy::Str => &[boxed::TypeTag::Str],
-        TestTy::Sym => &[boxed::TypeTag::Sym],
-        TestTy::Int => &[boxed::TypeTag::Int],
-        TestTy::Float => &[boxed::TypeTag::Float],
-        TestTy::Char => &[boxed::TypeTag::Char],
-        TestTy::Nil => &[boxed::TypeTag::Nil],
-        TestTy::Fun => &[boxed::TypeTag::FunThunk],
-        TestTy::Bool => &[boxed::TypeTag::True, boxed::TypeTag::False],
-        TestTy::List => &[boxed::TypeTag::TopPair, boxed::TypeTag::Nil],
-        TestTy::Vector => &[boxed::TypeTag::TopVector],
+        TestTy::Str => boxed::TypeTag::Str.into(),
+        TestTy::Sym => boxed::TypeTag::Sym.into(),
+        TestTy::Int => boxed::TypeTag::Int.into(),
+        TestTy::Float => boxed::TypeTag::Float.into(),
+        TestTy::Char => boxed::TypeTag::Char.into(),
+        TestTy::Nil => boxed::TypeTag::Nil.into(),
+        TestTy::Fun => boxed::TypeTag::FunThunk.into(),
+        TestTy::Bool => [boxed::TypeTag::True, boxed::TypeTag::False]
+            .iter()
+            .collect(),
+        TestTy::List => [boxed::TypeTag::TopPair, boxed::TypeTag::Nil]
+            .iter()
+            .collect(),
+        TestTy::Vector => boxed::TypeTag::TopVector.into(),
         TestTy::Map => {
             unimplemented!("maps");
         }
@@ -35,48 +40,52 @@ fn type_tags_for_test_ty(test_ty: ty::pred::TestTy) -> &'static [boxed::TypeTag]
     }
 }
 
-fn possible_type_tags_for_boxed_abi_type(
-    boxed_abi_type: &abitype::BoxedABIType,
-) -> Vec<boxed::TypeTag> {
+fn possible_type_tags_for_boxed_abi_type(boxed_abi_type: &abitype::BoxedABIType) -> TypeTagSet {
     use runtime::abitype::BoxedABIType;
 
     match boxed_abi_type {
-        BoxedABIType::Any => boxed::ALL_TYPE_TAGS.to_vec(),
-        BoxedABIType::DirectTagged(type_tag) => vec![*type_tag],
-        BoxedABIType::List(_) => vec![boxed::TypeTag::TopPair, boxed::TypeTag::Nil],
-        BoxedABIType::Pair(_) => vec![boxed::TypeTag::TopPair],
-        BoxedABIType::Vector(_) => vec![boxed::TypeTag::TopVector],
-        BoxedABIType::Union(_, type_tags) => type_tags.to_vec(),
+        BoxedABIType::Any => TypeTagSet::all(),
+        BoxedABIType::DirectTagged(type_tag) => (*type_tag).into(),
+        BoxedABIType::List(_) => [boxed::TypeTag::TopPair, boxed::TypeTag::Nil]
+            .iter()
+            .collect(),
+        BoxedABIType::Pair(_) => boxed::TypeTag::TopPair.into(),
+        BoxedABIType::Vector(_) => boxed::TypeTag::TopVector.into(),
+        BoxedABIType::Union(_, type_tags) => type_tags.iter().collect(),
     }
 }
 
-fn possible_type_tags_for_abi_type(abi_type: &abitype::ABIType) -> Vec<boxed::TypeTag> {
+fn possible_type_tags_for_abi_type(abi_type: &abitype::ABIType) -> TypeTagSet {
     use runtime::abitype::ABIType;
 
     match abi_type {
-        ABIType::Int => vec![boxed::TypeTag::Int],
-        ABIType::Float => vec![boxed::TypeTag::Float],
-        ABIType::Char => vec![boxed::TypeTag::Char],
-        ABIType::Bool => vec![boxed::TypeTag::True, boxed::TypeTag::False],
+        ABIType::Int => boxed::TypeTag::Int.into(),
+        ABIType::Float => boxed::TypeTag::Float.into(),
+        ABIType::Char => boxed::TypeTag::Char.into(),
+        ABIType::Bool => [boxed::TypeTag::True, boxed::TypeTag::False]
+            .iter()
+            .collect(),
         ABIType::Boxed(boxed_abi_type) => possible_type_tags_for_boxed_abi_type(boxed_abi_type),
     }
 }
 
-fn possible_type_tags_for_value(value: &Value) -> Vec<boxed::TypeTag> {
+fn possible_type_tags_for_value(value: &Value) -> TypeTagSet {
     match value {
-        Value::Const(any_ref) => vec![any_ref.header().type_tag()],
+        Value::Const(any_ref) => any_ref.header().type_tag().into(),
         Value::ArretFun(_) | Value::RustFun(_) | Value::TyPred(_) | Value::EqPred => {
-            vec![boxed::TypeTag::FunThunk]
+            boxed::TypeTag::FunThunk.into()
         }
         Value::List(fixed, rest) => {
             if fixed.is_empty() && rest.is_none() {
-                vec![boxed::TypeTag::Nil]
+                boxed::TypeTag::Nil.into()
             } else {
-                vec![boxed::TypeTag::Nil, boxed::TypeTag::TopPair]
+                [boxed::TypeTag::Nil, boxed::TypeTag::TopPair]
+                    .iter()
+                    .collect()
             }
         }
         Value::Reg(reg_value) => possible_type_tags_for_abi_type(&reg_value.abi_type),
-        Value::Divergent => vec![],
+        Value::Divergent => TypeTagSet::new(),
     }
 }
 
@@ -112,28 +121,16 @@ pub fn eval_ty_pred(
     subject_value: &Value,
     test_ty: ty::pred::TestTy,
 ) -> Value {
-    let required_type_tags = type_tags_for_test_ty(test_ty);
+    let qualifying_type_tags = type_tags_for_test_ty(test_ty);
     let possible_type_tags = possible_type_tags_for_value(subject_value);
 
-    if possible_type_tags
-        .iter()
-        .all(|type_tag| required_type_tags.contains(type_tag))
-    {
+    if possible_type_tags.is_subset(qualifying_type_tags) {
         // Statically true
         return Value::Const(boxed::TRUE_INSTANCE.as_any_ref());
-    } else if !possible_type_tags
-        .iter()
-        .any(|type_tag| required_type_tags.contains(type_tag))
-    {
+    } else if qualifying_type_tags.is_disjoint(possible_type_tags) {
         // Statically false
         return Value::Const(boxed::FALSE_INSTANCE.as_any_ref());
     }
-
-    let testing_tags: Vec<boxed::TypeTag> = required_type_tags
-        .iter()
-        .filter(|type_tag| possible_type_tags.contains(type_tag))
-        .cloned()
-        .collect();
 
     let some_b = if let Some(some_b) = b {
         some_b
@@ -154,6 +151,7 @@ pub fn eval_ty_pred(
 
     let subject_type_tag_reg = some_b.push_reg(span, OpKind::LoadBoxedTypeTag, subject_reg.into());
 
+    let testing_tags = qualifying_type_tags & possible_type_tags;
     let result_regs = testing_tags
         .into_iter()
         .map(|test_tag| {
