@@ -3,6 +3,7 @@ pub mod from_reg;
 pub mod list;
 pub mod plan_phi;
 pub mod to_const;
+pub mod types;
 
 use std::collections::HashMap;
 use std::rc::Rc;

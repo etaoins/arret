@@ -1,5 +1,6 @@
 use std::{iter, ops};
 
+use runtime::abitype;
 use runtime::boxed::{TypeTag, ALL_TYPE_TAGS};
 
 const INNER_BITS: u8 = 32;
@@ -62,6 +63,35 @@ impl From<TypeTag> for TypeTagSet {
         let mut type_tag_set = TypeTagSet::new();
         type_tag_set.insert(type_tag);
         type_tag_set
+    }
+}
+
+impl<'a> From<&'a abitype::BoxedABIType> for TypeTagSet {
+    fn from(boxed_abi_type: &'a abitype::BoxedABIType) -> TypeTagSet {
+        use runtime::abitype::BoxedABIType;
+
+        match boxed_abi_type {
+            BoxedABIType::Any => TypeTagSet::all(),
+            BoxedABIType::DirectTagged(type_tag) => (*type_tag).into(),
+            BoxedABIType::List(_) => [TypeTag::TopPair, TypeTag::Nil].iter().collect(),
+            BoxedABIType::Pair(_) => TypeTag::TopPair.into(),
+            BoxedABIType::Vector(_) => TypeTag::TopVector.into(),
+            BoxedABIType::Union(_, type_tags) => type_tags.iter().collect(),
+        }
+    }
+}
+
+impl<'a> From<&'a abitype::ABIType> for TypeTagSet {
+    fn from(abi_type: &'a abitype::ABIType) -> TypeTagSet {
+        use runtime::abitype::ABIType;
+
+        match abi_type {
+            ABIType::Int => TypeTag::Int.into(),
+            ABIType::Float => TypeTag::Float.into(),
+            ABIType::Char => TypeTag::Char.into(),
+            ABIType::Bool => [TypeTag::True, TypeTag::False].iter().collect(),
+            ABIType::Boxed(boxed_abi_type) => boxed_abi_type.into(),
+        }
     }
 }
 
