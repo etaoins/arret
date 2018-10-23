@@ -11,12 +11,14 @@ pub fn possible_type_tags_for_value(value: &Value) -> TypeTagSet {
             boxed::TypeTag::FunThunk.into()
         }
         Value::List(fixed, rest) => {
-            if fixed.is_empty() && rest.is_none() {
-                boxed::TypeTag::Nil.into()
+            if !fixed.is_empty() {
+                // Non-empty list
+                boxed::TypeTag::TopPair.into()
+            } else if let Some(tail) = rest {
+                possible_type_tags_for_value(tail)
             } else {
-                [boxed::TypeTag::Nil, boxed::TypeTag::TopPair]
-                    .iter()
-                    .collect()
+                // Empty list
+                boxed::TypeTag::Nil.into()
             }
         }
         Value::Reg(reg_value) => (&reg_value.abi_type).into(),
