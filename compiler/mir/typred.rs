@@ -76,9 +76,17 @@ pub fn eval_ty_pred(
         span,
         subject_value,
         &abitype::BoxedABIType::Any.into(),
-    );
+    )
+    .into();
 
-    let subject_type_tag_reg = b.push_reg(span, OpKind::LoadBoxedTypeTag, subject_reg.into());
+    let subject_type_tag_reg = b.push_reg(
+        span,
+        OpKind::LoadBoxedTypeTag,
+        LoadBoxedTypeTagOp {
+            subject_reg,
+            possible_type_tags,
+        },
+    );
 
     let result_reg = (qualifying_type_tags & possible_type_tags)
         .into_iter()

@@ -175,6 +175,9 @@ macro_rules! define_direct_tagged_boxes {
             $( $name ),*
         }
 
+        /// Static list of all possible type tags
+        ///
+        /// This is guaranteed to be sorted
         pub const ALL_TYPE_TAGS: &'static [TypeTag] = &[
             $( TypeTag::$name ),*
         ];

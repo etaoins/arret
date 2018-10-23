@@ -297,8 +297,16 @@ fn gen_op(
             OpKind::Unreachable => {
                 LLVMBuildUnreachable(fcx.builder);
             }
-            OpKind::LoadBoxedTypeTag(reg, any_reg) => {
-                let llvm_any = fcx.regs[any_reg];
+            OpKind::LoadBoxedTypeTag(
+                reg,
+                LoadBoxedTypeTagOp {
+                    subject_reg,
+                    possible_type_tags,
+                },
+            ) => {
+                use crate::codegen::range_md::int_range_metadata_node;
+
+                let llvm_any = fcx.regs[subject_reg];
                 let gep_indices = &mut [
                     LLVMConstInt(LLVMInt32TypeInContext(cgx.llx), 0, 0),
                     LLVMConstInt(LLVMInt32TypeInContext(cgx.llx), 0, 0),
@@ -318,6 +326,24 @@ fn gen_op(
                     llvm_type_tag_ptr,
                     "type_tag\0".as_ptr() as *const _,
                 );
+
+                let llvm_i8 = LLVMInt8TypeInContext(cgx.llx);
+                let possible_type_tag_metadata = int_range_metadata_node(
+                    cgx.llx,
+                    llvm_i8,
+                    possible_type_tags
+                        .into_iter()
+                        .map(|type_tag| type_tag as i64),
+                );
+
+                let range_name = "range";
+                let range_kind_id = LLVMGetMDKindIDInContext(
+                    cgx.llx,
+                    range_name.as_ptr() as *const _,
+                    range_name.len() as u32,
+                );
+                LLVMSetMetadata(llvm_type_tag, range_kind_id, possible_type_tag_metadata);
+
                 fcx.regs.insert(*reg, llvm_type_tag);
             }
             OpKind::LoadBoxedListLength(reg, list_reg) => {

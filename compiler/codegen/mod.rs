@@ -8,6 +8,7 @@ mod fun_gen;
 pub(crate) mod jit;
 mod mod_gen;
 pub(crate) mod program;
+mod range_md;
 mod target;
 
 use runtime::abitype;

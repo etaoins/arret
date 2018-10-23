@@ -6,7 +6,7 @@ use runtime::boxed::{TypeTag, ALL_TYPE_TAGS};
 const INNER_BITS: u8 = 32;
 type Inner = u32;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct TypeTagSet(Inner);
 
 /// Efficient representation of a set of TypeTag
@@ -50,6 +50,9 @@ impl TypeTagSet {
         type_tag_set.is_subset(self)
     }
 
+    /// Returns an iterator over all type tags in the set
+    ///
+    /// These are returned in sorted order.
     pub fn into_iter(self) -> impl Iterator<Item = TypeTag> {
         ALL_TYPE_TAGS
             .iter()

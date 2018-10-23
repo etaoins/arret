@@ -4,6 +4,7 @@ use runtime::boxed;
 use syntax::span::Span;
 
 use crate::codegen::GenABI;
+use crate::mir::tagset::TypeTagSet;
 
 new_indexing_id_type!(BuiltFunId, u32);
 new_global_id_type!(RegId);
@@ -113,6 +114,12 @@ pub struct BinaryOp {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct LoadBoxedTypeTagOp {
+    pub subject_reg: RegId,
+    pub possible_type_tags: TypeTagSet,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum OpKind {
     ConstNil(RegId, ()),
     ConstTrue(RegId, ()),
@@ -131,7 +138,7 @@ pub enum OpKind {
     CastBoxed(RegId, CastBoxedOp),
 
     Call(RegId, CallOp),
-    LoadBoxedTypeTag(RegId, RegId),
+    LoadBoxedTypeTag(RegId, LoadBoxedTypeTagOp),
     LoadBoxedListLength(RegId, RegId),
     LoadBoxedPairHead(RegId, RegId),
     LoadBoxedPairRest(RegId, RegId),
@@ -219,7 +226,13 @@ impl OpKind {
                 },
             )
             | Ret(reg_id)
-            | LoadBoxedTypeTag(_, reg_id)
+            | LoadBoxedTypeTag(
+                _,
+                LoadBoxedTypeTagOp {
+                    subject_reg: reg_id,
+                    ..
+                },
+            )
             | LoadBoxedListLength(_, reg_id)
             | LoadBoxedPairHead(_, reg_id)
             | LoadBoxedPairRest(_, reg_id)
