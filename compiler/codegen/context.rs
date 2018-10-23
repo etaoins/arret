@@ -315,6 +315,23 @@ impl CodegenCtx {
         self.noalias_attr
     }
 
+    pub fn add_invariant_load_metadata(&mut self, loaded_value: LLVMValueRef) {
+        use std::ptr;
+
+        unsafe {
+            let invariant_load_name = "invariant.load";
+            let invariant_load_kind_id = LLVMGetMDKindIDInContext(
+                self.llx,
+                invariant_load_name.as_ptr() as *const _,
+                invariant_load_name.len() as u32,
+            );
+
+            let empty_node = LLVMMDNodeInContext(self.llx, ptr::null_mut(), 0);
+
+            LLVMSetMetadata(loaded_value, invariant_load_kind_id, empty_node);
+        }
+    }
+
     pub fn add_boxed_param_attrs(
         &mut self,
         function: LLVMValueRef,

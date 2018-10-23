@@ -344,6 +344,7 @@ fn gen_op(
                 );
                 LLVMSetMetadata(llvm_type_tag, range_kind_id, possible_type_tag_metadata);
 
+                cgx.add_invariant_load_metadata(llvm_type_tag);
                 fcx.regs.insert(*reg, llvm_type_tag);
             }
             OpKind::LoadBoxedListLength(reg, list_reg) => {
@@ -355,9 +356,11 @@ fn gen_op(
                     b"length_ptr\0".as_ptr() as *const _,
                 );
 
-                let llvm_head =
+                let llvm_length =
                     LLVMBuildLoad(fcx.builder, length_ptr, "length\0".as_ptr() as *const _);
-                fcx.regs.insert(*reg, llvm_head);
+                cgx.add_invariant_load_metadata(llvm_length);
+
+                fcx.regs.insert(*reg, llvm_length);
             }
             OpKind::LoadBoxedPairHead(reg, pair_reg) => {
                 let llvm_pair = fcx.regs[pair_reg];
@@ -369,6 +372,8 @@ fn gen_op(
                 );
 
                 let llvm_head = LLVMBuildLoad(fcx.builder, head_ptr, "head\0".as_ptr() as *const _);
+                cgx.add_invariant_load_metadata(llvm_head);
+
                 fcx.regs.insert(*reg, llvm_head);
             }
             OpKind::LoadBoxedPairRest(reg, pair_reg) => {
@@ -381,6 +386,8 @@ fn gen_op(
                 );
 
                 let llvm_rest = LLVMBuildLoad(fcx.builder, head_ptr, "rest\0".as_ptr() as *const _);
+                cgx.add_invariant_load_metadata(llvm_rest);
+
                 fcx.regs.insert(*reg, llvm_rest);
             }
             OpKind::LoadBoxedIntValue(reg, boxed_int_reg) => {
@@ -394,6 +401,8 @@ fn gen_op(
 
                 let llvm_value =
                     LLVMBuildLoad(fcx.builder, value_ptr, "int_value\0".as_ptr() as *const _);
+                cgx.add_invariant_load_metadata(llvm_value);
+
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::LoadBoxedFunThunkClosure(reg, boxed_fun_thunk_reg) => {
