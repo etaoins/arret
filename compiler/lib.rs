@@ -15,7 +15,7 @@ mod ty;
 mod typeck;
 
 pub use crate::codegen::initialise_llvm;
-pub use crate::codegen::program::{gen_program, OutputType};
+pub use crate::codegen::program::{gen_program, Options as GenProgramOptions, OutputType};
 pub use crate::hir::lowering::lower_program;
 pub use crate::hir::PackagePaths;
 pub use crate::mir::eval_hir::{BuiltProgram, EvalHirCtx};

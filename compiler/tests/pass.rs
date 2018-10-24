@@ -34,7 +34,7 @@ fn try_run_single_test(
     let hir = compiler::lower_program(&package_paths, source_loader, source_file_id)?;
     let inferred_defs = compiler::infer_program(hir.defs, hir.main_var_id)?;
 
-    let mut ehx = compiler::EvalHirCtx::new();
+    let mut ehx = compiler::EvalHirCtx::new(true);
     for inferred_def in inferred_defs {
         ehx.consume_def(inferred_def)?;
     }
@@ -53,12 +53,13 @@ fn try_run_single_test(
     }
 
     let output_path = NamedTempFile::new().unwrap().into_temp_path();
+    let gen_program_opts = compiler::GenProgramOptions::new();
+
     compiler::gen_program(
         source_loader,
+        gen_program_opts,
         &hir.rust_libraries,
         &mir_program,
-        None,
-        compiler::OutputType::Executable,
         &output_path,
     );
 

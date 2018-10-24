@@ -39,6 +39,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
     pub fn new(
         package_paths: &'pp PackagePaths,
         source_loader: &'sl mut SourceLoader,
+        optimising: bool,
     ) -> ReplCtx<'pp, 'sl> {
         let ns_id = Scope::root_ns_id();
         let scope = Scope::new_repl();
@@ -48,7 +49,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
             ns_id,
             lcx: hir::lowering::LoweringCtx::new(package_paths, source_loader),
             icx: InferCtx::new(),
-            ehx: EvalHirCtx::new(),
+            ehx: EvalHirCtx::new(optimising),
         }
     }
 
@@ -168,7 +169,7 @@ mod test {
 
         let package_paths = PackagePaths::test_paths();
         let mut source_loader = SourceLoader::new();
-        let mut repl_ctx = ReplCtx::new(&package_paths, &mut source_loader);
+        let mut repl_ctx = ReplCtx::new(&package_paths, &mut source_loader, true);
 
         macro_rules! assert_empty {
             ($line:expr) => {

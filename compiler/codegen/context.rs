@@ -40,6 +40,7 @@ fn llvm_i64_md_node(llx: LLVMContextRef, values: &[u64]) -> LLVMValueRef {
 
 pub struct CodegenCtx {
     pub llx: LLVMContextRef,
+    optimising: bool,
     module_pass_manager: LLVMPassManagerRef,
 
     task_type: Option<LLVMTypeRef>,
@@ -64,7 +65,7 @@ pub struct CodegenCtx {
 }
 
 impl CodegenCtx {
-    pub fn new() -> CodegenCtx {
+    pub fn new(optimising: bool) -> CodegenCtx {
         use llvm_sys::transforms::pass_manager_builder::*;
         use std::mem;
 
@@ -73,13 +74,16 @@ impl CodegenCtx {
 
             let module_pass_manager = LLVMCreatePassManager();
 
-            let fpmb = LLVMPassManagerBuilderCreate();
-            LLVMPassManagerBuilderSetOptLevel(fpmb, 2);
-            LLVMPassManagerBuilderPopulateModulePassManager(fpmb, module_pass_manager);
-            LLVMPassManagerBuilderDispose(fpmb);
+            if optimising {
+                let fpmb = LLVMPassManagerBuilderCreate();
+                LLVMPassManagerBuilderSetOptLevel(fpmb, 2);
+                LLVMPassManagerBuilderPopulateModulePassManager(fpmb, module_pass_manager);
+                LLVMPassManagerBuilderDispose(fpmb);
+            }
 
             CodegenCtx {
                 llx,
+                optimising,
                 module_pass_manager,
 
                 task_type: None,
@@ -114,6 +118,10 @@ impl CodegenCtx {
                 boxed_align_md_node: llvm_i64_md_node(llx, &[mem::align_of::<boxed::Any>() as u64]),
             }
         }
+    }
+
+    pub fn optimising(&self) -> bool {
+        self.optimising
     }
 
     pub fn task_llvm_ptr_type(&mut self) -> LLVMTypeRef {

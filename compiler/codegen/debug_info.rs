@@ -21,6 +21,7 @@ pub struct DebugInfoBuilder<'sl> {
 impl<'sl> DebugInfoBuilder<'sl> {
     pub fn new(
         source_loader: &'sl mut SourceLoader,
+        optimised: bool,
         main_span: Span,
         module: LLVMModuleRef,
     ) -> DebugInfoBuilder<'sl> {
@@ -40,11 +41,11 @@ impl<'sl> DebugInfoBuilder<'sl> {
             file_metadata: HashMap::new(),
         };
 
-        di_builder.add_compile_unit_metadata(main_span);
+        di_builder.add_compile_unit_metadata(optimised, main_span);
         di_builder
     }
 
-    fn add_compile_unit_metadata(&mut self, main_span: Span) {
+    fn add_compile_unit_metadata(&mut self, optimised: bool, main_span: Span) {
         let main_loc = SourceLoc::from_span_point(self.source_loader, main_span.lo);
         let main_file_id = main_loc.source_file_id();
         let main_file_metadata = if let Some(metadata) = self.file_metadata(main_file_id) {
@@ -63,7 +64,7 @@ impl<'sl> DebugInfoBuilder<'sl> {
                 main_file_metadata,
                 producer.as_ptr(),
                 producer.as_bytes().len(),
-                1,                                                // isOptimised
+                optimised as i32,                                 // isOptimised
                 ptr::null(),                                      // Flags
                 0,                                                // FlagsLen
                 0,                                                // RuntimeVer,

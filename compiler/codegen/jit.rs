@@ -81,7 +81,7 @@ impl JITCtx {
                 module_name.as_bytes_with_nul().as_ptr() as *const _,
                 cgx.llx,
             );
-            let mut mcx = ModCtx::new(module, self.target_machine);
+            let mut mcx = ModCtx::new(module, self.target_machine, cgx.optimising());
 
             let llvm_function = fun_gen::gen_fun(cgx, &mut mcx, fun).llvm_value;
 

@@ -9,9 +9,8 @@ use compiler::reporting::report_to_stderr;
 fn try_compile_input_file(
     cfg: &DriverConfig,
     source_loader: &mut compiler::SourceLoader,
+    options: compiler::GenProgramOptions<'_>,
     input_path: &path::Path,
-    output_type: compiler::OutputType,
-    target_triple: Option<&str>,
     output_path: &path::Path,
 ) -> Result<(), Error> {
     let source_file_id = source_loader
@@ -21,7 +20,7 @@ fn try_compile_input_file(
     let hir = compiler::lower_program(&cfg.package_paths, source_loader, source_file_id)?;
     let inferred_defs = compiler::infer_program(hir.defs, hir.main_var_id)?;
 
-    let mut ehx = compiler::EvalHirCtx::new();
+    let mut ehx = compiler::EvalHirCtx::new(true);
     for inferred_def in inferred_defs {
         ehx.consume_def(inferred_def)?;
     }
@@ -29,10 +28,9 @@ fn try_compile_input_file(
     let mir_program = ehx.into_built_program(hir.main_var_id)?;
     compiler::gen_program(
         source_loader,
+        options,
         &hir.rust_libraries,
         &mir_program,
-        target_triple,
-        output_type,
         output_path,
     );
 
@@ -54,14 +52,12 @@ pub fn compile_input_file(
         _ => compiler::OutputType::Executable,
     };
 
-    let result = try_compile_input_file(
-        cfg,
-        &mut source_loader,
-        input_path,
-        output_type,
-        target_triple,
-        output_path,
-    );
+    let options = compiler::GenProgramOptions::new()
+        .with_target_triple(target_triple)
+        .with_output_type(output_type)
+        .with_llvm_opt(cfg.llvm_opt);
+
+    let result = try_compile_input_file(cfg, &mut source_loader, options, input_path, output_path);
 
     if let Err(Error(errs)) = result {
         for err in errs {

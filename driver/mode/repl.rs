@@ -125,7 +125,8 @@ pub fn interactive_loop(cfg: &DriverConfig) {
 
     // Setup our REPL backend
     let mut source_loader = compiler::SourceLoader::new();
-    let mut repl_ctx = compiler::repl::ReplCtx::new(&cfg.package_paths, &mut source_loader);
+    let mut repl_ctx =
+        compiler::repl::ReplCtx::new(&cfg.package_paths, &mut source_loader, cfg.llvm_opt);
 
     // Setup Rustyline
     let mut rl = rustyline::Editor::<ArretHelper>::new();

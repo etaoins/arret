@@ -13,6 +13,7 @@ static GLOBAL: System = System;
 
 pub struct DriverConfig {
     package_paths: compiler::PackagePaths,
+    llvm_opt: bool,
 }
 
 fn find_path_to_arret_root() -> path::PathBuf {
@@ -31,6 +32,7 @@ fn main() {
     use compiler::initialise_llvm;
 
     let matches = App::new("arret")
+        .about("Compiler and REPL for the Arret language")
         .arg(Arg::with_name("INPUT").help("Input source file").index(1))
         .arg(
             Arg::with_name("OUTPUT")
@@ -44,6 +46,12 @@ fn main() {
                 .value_name("TRIPLE")
                 .help("Generate code for the given target"),
         )
+        .arg(
+            Arg::with_name("NOOPT")
+                .long("no-llvm-opt")
+                .takes_value(false)
+                .help("Disable LLVM optimisation"),
+        )
         .get_matches();
 
     let arret_target_dir = find_path_to_arret_root();
@@ -53,6 +61,7 @@ fn main() {
             &arret_target_dir,
             matches.value_of("TARGET"),
         ),
+        llvm_opt: !matches.is_present("NOOPT"),
     };
 
     match matches.value_of("INPUT") {

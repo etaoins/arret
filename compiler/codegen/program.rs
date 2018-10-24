@@ -23,6 +23,47 @@ pub enum OutputType {
     Executable,
 }
 
+#[derive(Copy, Clone, PartialEq)]
+pub struct Options<'target> {
+    target_triple: Option<&'target str>,
+    output_type: OutputType,
+    llvm_opt: bool,
+}
+
+impl<'target> Options<'target> {
+    pub fn new() -> Options<'static> {
+        Options {
+            target_triple: None,
+            output_type: OutputType::Executable,
+            llvm_opt: true,
+        }
+    }
+
+    pub fn with_target_triple(self, target_triple: Option<&'target str>) -> Options<'target> {
+        Options {
+            target_triple,
+            ..self
+        }
+    }
+
+    pub fn with_llvm_opt(self, llvm_opt: bool) -> Options<'target> {
+        Options { llvm_opt, ..self }
+    }
+
+    pub fn with_output_type(self, output_type: OutputType) -> Options<'target> {
+        Options {
+            output_type,
+            ..self
+        }
+    }
+}
+
+impl Default for Options<'static> {
+    fn default() -> Options<'static> {
+        Options::new()
+    }
+}
+
 fn task_receiver_llvm_type(cgx: &mut CodegenCtx) -> LLVMTypeRef {
     unsafe {
         let llvm_arg_types = &mut [cgx.task_llvm_ptr_type()];
@@ -63,9 +104,10 @@ fn program_to_module(
 
     unsafe {
         let module = LLVMModuleCreateWithNameInContext(b"program\0".as_ptr() as *const _, cgx.llx);
-        let mut di_builder = DebugInfoBuilder::new(source_loader, program.main.span, module);
+        let mut di_builder =
+            DebugInfoBuilder::new(source_loader, cgx.optimising(), program.main.span, module);
 
-        let mut mcx = ModCtx::new(module, target_machine);
+        let mut mcx = ModCtx::new(module, target_machine, cgx.optimising());
 
         // Build all of our non-main functions
         for (fun_idx, fun) in program.funs.iter().enumerate() {
@@ -153,13 +195,18 @@ fn program_to_module(
 /// codegen::initialise_llvm() must be called before this.
 pub fn gen_program(
     source_loader: &mut SourceLoader,
+    options: Options<'_>,
     rust_libraries: &[rfi::Library],
     program: &mir::BuiltProgram,
-    target_triple: Option<&str>,
-    output_type: OutputType,
     output_file: &path::Path,
 ) {
     use crate::codegen::target::create_target_machine;
+
+    let Options {
+        target_triple,
+        output_type,
+        llvm_opt,
+    } = options;
 
     let llvm_output_path = if output_type == OutputType::Executable {
         // When outputting an executable this is an intermediate file that we pass to our linker
@@ -171,7 +218,7 @@ pub fn gen_program(
 
     let llvm_output_path_cstring = CString::new(llvm_output_path.to_str().unwrap()).unwrap();
 
-    let mut cgx = CodegenCtx::new();
+    let mut cgx = CodegenCtx::new(llvm_opt);
 
     let target_machine = create_target_machine(
         target_triple,

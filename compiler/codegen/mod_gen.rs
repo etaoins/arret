@@ -21,7 +21,11 @@ impl Drop for ModCtx {
 }
 
 impl ModCtx {
-    pub fn new(module: LLVMModuleRef, target_machine: LLVMTargetMachineRef) -> ModCtx {
+    pub fn new(
+        module: LLVMModuleRef,
+        target_machine: LLVMTargetMachineRef,
+        optimising: bool,
+    ) -> ModCtx {
         use llvm_sys::transforms::pass_manager_builder::*;
 
         unsafe {
@@ -35,10 +39,12 @@ impl ModCtx {
 
             let function_pass_manager = LLVMCreateFunctionPassManagerForModule(module);
 
-            let fpmb = LLVMPassManagerBuilderCreate();
-            LLVMPassManagerBuilderSetOptLevel(fpmb, 2);
-            LLVMPassManagerBuilderPopulateFunctionPassManager(fpmb, function_pass_manager);
-            LLVMPassManagerBuilderDispose(fpmb);
+            if optimising {
+                let fpmb = LLVMPassManagerBuilderCreate();
+                LLVMPassManagerBuilderSetOptLevel(fpmb, 2);
+                LLVMPassManagerBuilderPopulateFunctionPassManager(fpmb, function_pass_manager);
+                LLVMPassManagerBuilderDispose(fpmb);
+            }
 
             ModCtx {
                 module,
