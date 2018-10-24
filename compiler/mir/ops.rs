@@ -121,11 +121,13 @@ pub struct LoadBoxedTypeTagOp {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum OpKind {
-    ConstNil(RegId, ()),
-    ConstTrue(RegId, ()),
-    ConstFalse(RegId, ()),
     ConstInt(RegId, i64),
+    ConstBool(RegId, bool),
     ConstTypeTag(RegId, boxed::TypeTag),
+
+    ConstBoxedNil(RegId, ()),
+    ConstBoxedTrue(RegId, ()),
+    ConstBoxedFalse(RegId, ()),
     ConstBoxedInt(RegId, i64),
     ConstBoxedStr(RegId, Box<str>),
     ConstBoxedPair(RegId, BoxPairOp),
@@ -159,10 +161,11 @@ impl OpKind {
         use crate::mir::ops::OpKind::*;
 
         match self {
-            ConstNil(reg_id, _)
-            | ConstTrue(reg_id, _)
-            | ConstFalse(reg_id, _)
+            ConstBoxedNil(reg_id, _)
+            | ConstBoxedTrue(reg_id, _)
+            | ConstBoxedFalse(reg_id, _)
             | ConstInt(reg_id, _)
+            | ConstBool(reg_id, _)
             | ConstTypeTag(reg_id, _)
             | ConstBoxedInt(reg_id, _)
             | ConstBoxedStr(reg_id, _)
@@ -191,10 +194,11 @@ impl OpKind {
         use std::iter;
 
         match self {
-            ConstNil(_, _)
-            | ConstTrue(_, _)
-            | ConstFalse(_, _)
+            ConstBoxedNil(_, _)
+            | ConstBoxedTrue(_, _)
+            | ConstBoxedFalse(_, _)
             | ConstInt(_, _)
+            | ConstBool(_, _)
             | ConstTypeTag(_, _)
             | ConstBoxedInt(_, _)
             | ConstBoxedStr(_, _)
@@ -208,8 +212,8 @@ impl OpKind {
                         box_pair_op.head_reg,
                         box_pair_op.rest_reg,
                     ]
-                        .iter()
-                        .cloned(),
+                    .iter()
+                    .cloned(),
                 );
             }
             AllocInt(_, reg_id)

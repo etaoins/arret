@@ -69,10 +69,11 @@ fn remove_unused_branch_ops(
                     .map(|cond_op| ops::Op::new(span, ops::OpKind::Cond(cond_op))),
                 _ => {
                     // Does this have no side effects and its output is unused?
-                    if !kind.has_side_effects() && kind
-                        .output_reg()
-                        .map(|output_reg| !used_regs.contains(&output_reg))
-                        .unwrap_or(true)
+                    if !kind.has_side_effects()
+                        && kind
+                            .output_reg()
+                            .map(|output_reg| !used_regs.contains(&output_reg))
+                            .unwrap_or(true)
                     {
                         None
                     } else {
@@ -112,16 +113,16 @@ mod test {
         let reg3 = ops::RegId::alloc();
 
         let input_ops = Box::new([
-            ops::OpKind::ConstNil(reg1, ()).into(),
-            ops::OpKind::ConstNil(reg2, ()).into(),
-            ops::OpKind::ConstNil(reg3, ()).into(),
+            ops::OpKind::ConstBoxedNil(reg1, ()).into(),
+            ops::OpKind::ConstBoxedNil(reg2, ()).into(),
+            ops::OpKind::ConstBoxedNil(reg3, ()).into(),
             ops::OpKind::Ret(reg2).into(),
         ]);
 
         let output_ops = remove_unused_fun_ops(input_ops);
 
         let expected_ops: Box<[ops::Op]> = Box::new([
-            ops::OpKind::ConstNil(reg2, ()).into(),
+            ops::OpKind::ConstBoxedNil(reg2, ()).into(),
             ops::OpKind::Ret(reg2).into(),
         ]);
 
@@ -135,12 +136,12 @@ mod test {
         let true_result_reg = ops::RegId::alloc();
         let false_result_reg = ops::RegId::alloc();
 
-        let true_ops = Box::new([ops::OpKind::ConstNil(true_result_reg, ()).into()]);
+        let true_ops = Box::new([ops::OpKind::ConstBoxedNil(true_result_reg, ()).into()]);
 
-        let false_ops = Box::new([ops::OpKind::ConstNil(false_result_reg, ()).into()]);
+        let false_ops = Box::new([ops::OpKind::ConstBoxedNil(false_result_reg, ()).into()]);
 
         let input_ops: Box<[ops::Op]> = Box::new([
-            ops::OpKind::ConstNil(test_reg, ()).into(),
+            ops::OpKind::ConstBoxedNil(test_reg, ()).into(),
             ops::OpKind::Cond(ops::CondOp {
                 reg_phi: Some(ops::RegPhi {
                     output_reg,
@@ -168,12 +169,12 @@ mod test {
         let true_result_reg = ops::RegId::alloc();
         let false_result_reg = ops::RegId::alloc();
 
-        let true_ops = Box::new([ops::OpKind::ConstNil(true_result_reg, ()).into()]);
+        let true_ops = Box::new([ops::OpKind::ConstBoxedNil(true_result_reg, ()).into()]);
 
-        let false_ops = Box::new([ops::OpKind::ConstNil(false_result_reg, ()).into()]);
+        let false_ops = Box::new([ops::OpKind::ConstBoxedNil(false_result_reg, ()).into()]);
 
         let input_ops = Box::new([
-            ops::OpKind::ConstNil(test_reg, ()).into(),
+            ops::OpKind::ConstBoxedNil(test_reg, ()).into(),
             ops::OpKind::Cond(ops::CondOp {
                 reg_phi: Some(ops::RegPhi {
                     output_reg,
@@ -189,7 +190,7 @@ mod test {
         ]);
 
         let expected_ops: Box<[ops::Op]> = Box::new([
-            ops::OpKind::ConstNil(test_reg, ()).into(),
+            ops::OpKind::ConstBoxedNil(test_reg, ()).into(),
             ops::OpKind::Cond(ops::CondOp {
                 reg_phi: Some(ops::RegPhi {
                     output_reg,
@@ -216,12 +217,12 @@ mod test {
         let true_result_reg = ops::RegId::alloc();
         let false_result_reg = ops::RegId::alloc();
 
-        let true_ops = Box::new([ops::OpKind::ConstNil(true_result_reg, ()).into()]);
+        let true_ops = Box::new([ops::OpKind::ConstBoxedNil(true_result_reg, ()).into()]);
 
-        let false_ops = Box::new([ops::OpKind::ConstNil(false_result_reg, ()).into()]);
+        let false_ops = Box::new([ops::OpKind::ConstBoxedNil(false_result_reg, ()).into()]);
 
         let input_ops = Box::new([
-            ops::OpKind::ConstNil(test_reg, ()).into(),
+            ops::OpKind::ConstBoxedNil(test_reg, ()).into(),
             ops::OpKind::Cond(ops::CondOp {
                 reg_phi: Some(ops::RegPhi {
                     output_reg,
@@ -238,7 +239,7 @@ mod test {
         ]);
 
         let expected_ops: Box<[ops::Op]> = Box::new([
-            ops::OpKind::ConstNil(test_reg, ()).into(),
+            ops::OpKind::ConstBoxedNil(test_reg, ()).into(),
             ops::OpKind::Cond(ops::CondOp {
                 reg_phi: Some(ops::RegPhi {
                     output_reg,
@@ -267,7 +268,7 @@ mod test {
         let false_ops = Box::new([ops::OpKind::RetVoid.into()]);
 
         let input_ops = Box::new([
-            ops::OpKind::ConstNil(test_reg, ()).into(),
+            ops::OpKind::ConstBoxedNil(test_reg, ()).into(),
             ops::OpKind::Cond(ops::CondOp {
                 reg_phi: Some(ops::RegPhi {
                     output_reg,
@@ -282,7 +283,7 @@ mod test {
         ]);
 
         let expected_ops: Box<[ops::Op]> = Box::new([
-            ops::OpKind::ConstNil(test_reg, ()).into(),
+            ops::OpKind::ConstBoxedNil(test_reg, ()).into(),
             ops::OpKind::Cond(ops::CondOp {
                 reg_phi: None,
                 test_reg,
@@ -304,12 +305,12 @@ mod test {
         let true_result_reg = ops::RegId::alloc();
         let false_result_reg = ops::RegId::alloc();
 
-        let true_ops = Box::new([ops::OpKind::ConstNil(true_result_reg, ()).into()]);
+        let true_ops = Box::new([ops::OpKind::ConstBoxedNil(true_result_reg, ()).into()]);
 
-        let false_ops = Box::new([ops::OpKind::ConstNil(false_result_reg, ()).into()]);
+        let false_ops = Box::new([ops::OpKind::ConstBoxedNil(false_result_reg, ()).into()]);
 
         let input_ops = Box::new([
-            ops::OpKind::ConstNil(test_reg, ()).into(),
+            ops::OpKind::ConstBoxedNil(test_reg, ()).into(),
             ops::OpKind::Cond(ops::CondOp {
                 reg_phi: Some(ops::RegPhi {
                     output_reg,

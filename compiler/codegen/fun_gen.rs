@@ -191,23 +191,27 @@ fn gen_op(
 ) {
     unsafe {
         match &op.kind {
-            OpKind::ConstNil(reg, _) => {
+            OpKind::ConstBoxedNil(reg, _) => {
                 let llvm_value =
                     cgx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::Nil, b"ARRET_NIL\0");
                 fcx.regs.insert(*reg, llvm_value);
             }
-            OpKind::ConstTrue(reg, _) => {
+            OpKind::ConstBoxedTrue(reg, _) => {
                 let llvm_value =
                     cgx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::True, b"ARRET_TRUE\0");
                 fcx.regs.insert(*reg, llvm_value);
             }
-            OpKind::ConstFalse(reg, _) => {
+            OpKind::ConstBoxedFalse(reg, _) => {
                 let llvm_value =
                     cgx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::False, b"ARRET_FALSE\0");
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstInt(reg, value) => {
                 let llvm_value = LLVMConstInt(LLVMInt64TypeInContext(cgx.llx), *value as u64, 1);
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::ConstBool(reg, value) => {
+                let llvm_value = LLVMConstInt(LLVMInt1TypeInContext(cgx.llx), *value as u64, 1);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstTypeTag(reg, type_tag) => {

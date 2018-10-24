@@ -70,6 +70,12 @@ fn const_to_reg(
         (boxed::AnySubtype::Int(int_ref), abitype::ABIType::Int) => {
             b.push_reg(span, OpKind::ConstInt, int_ref.value())
         }
+        (boxed::AnySubtype::True(_), abitype::ABIType::Bool) => {
+            b.push_reg(span, OpKind::ConstBool, true)
+        }
+        (boxed::AnySubtype::False(_), abitype::ABIType::Bool) => {
+            b.push_reg(span, OpKind::ConstBool, false)
+        }
         (boxed::AnySubtype::Int(int_ref), abitype::ABIType::Boxed(to_abi_type)) => {
             let from_abi_type = boxed::TypeTag::Int.into();
             let from_reg = b.push_reg(span, OpKind::ConstBoxedInt, int_ref.value());
@@ -84,19 +90,19 @@ fn const_to_reg(
         }
         (boxed::AnySubtype::False(_), abitype::ABIType::Boxed(to_abi_type)) => {
             let from_abi_type = boxed::TypeTag::False.into();
-            let from_reg = b.push_reg(span, OpKind::ConstFalse, ());
+            let from_reg = b.push_reg(span, OpKind::ConstBoxedFalse, ());
 
             b.cast_boxed_cond(span, &from_abi_type, from_reg, to_abi_type.clone())
         }
         (boxed::AnySubtype::True(_), abitype::ABIType::Boxed(to_abi_type)) => {
             let from_abi_type = boxed::TypeTag::True.into();
-            let from_reg = b.push_reg(span, OpKind::ConstTrue, ());
+            let from_reg = b.push_reg(span, OpKind::ConstBoxedTrue, ());
 
             b.cast_boxed_cond(span, &from_abi_type, from_reg, to_abi_type.clone())
         }
         (boxed::AnySubtype::Nil(_), abitype::ABIType::Boxed(to_abi_type)) => {
             let from_abi_type = boxed::TypeTag::Nil.into();
-            let from_reg = b.push_reg(span, OpKind::ConstNil, ());
+            let from_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
 
             b.cast_boxed_cond(span, &from_abi_type, from_reg, to_abi_type.clone())
         }
@@ -159,7 +165,7 @@ fn list_to_reg(
             &abitype::ABIType::Boxed(TOP_LIST_BOXED_ABI_TYPE),
         )
     } else {
-        let nil_reg = b.push_reg(span, OpKind::ConstNil, ());
+        let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
         BuiltReg::Const(b.const_cast_boxed(span, nil_reg, TOP_LIST_BOXED_ABI_TYPE))
     };
 
@@ -248,11 +254,11 @@ pub fn reg_to_reg(
             span,
             reg_value.reg,
             |b| {
-                let const_true_reg = b.push_reg(span, OpKind::ConstTrue, ());
+                let const_true_reg = b.push_reg(span, OpKind::ConstBoxedTrue, ());
                 b.cast_boxed(span, const_true_reg, to_boxed.clone())
             },
             |b| {
-                let const_false_reg = b.push_reg(span, OpKind::ConstFalse, ());
+                let const_false_reg = b.push_reg(span, OpKind::ConstBoxedFalse, ());
                 b.cast_boxed(span, const_false_reg, to_boxed.clone())
             },
         ),

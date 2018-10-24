@@ -118,7 +118,7 @@ mod test {
 
         let input_ops = [
             ops::OpKind::AllocInt(reg1, reg1).into(),
-            ops::OpKind::ConstTrue(reg2, ()).into(),
+            ops::OpKind::ConstBoxedTrue(reg2, ()).into(),
             ops::OpKind::RetVoid.into(),
             ops::OpKind::AllocInt(reg3, reg3).into(),
             ops::OpKind::AllocInt(reg4, reg4).into(),
@@ -158,8 +158,8 @@ mod test {
 
         let test_reg = ops::RegId::alloc();
 
-        let true_ops = Box::new([ops::OpKind::ConstNil(true_result_reg, ()).into()]);
-        let false_ops = Box::new([ops::OpKind::ConstNil(false_result_reg, ()).into()]);
+        let true_ops = Box::new([ops::OpKind::ConstBoxedNil(true_result_reg, ()).into()]);
+        let false_ops = Box::new([ops::OpKind::ConstBoxedNil(false_result_reg, ()).into()]);
 
         let input_ops = [
             ops::OpKind::AllocInt(test_reg, test_reg).into(),
@@ -188,7 +188,7 @@ mod test {
         let true_result_reg = ops::RegId::alloc();
         let false_result_reg = ops::RegId::alloc();
 
-        let true_ops = Box::new([ops::OpKind::ConstNil(true_result_reg, ()).into()]);
+        let true_ops = Box::new([ops::OpKind::ConstBoxedNil(true_result_reg, ()).into()]);
         let false_ops =
             Box::new([ops::OpKind::AllocInt(false_result_reg, false_result_reg).into()]);
 
