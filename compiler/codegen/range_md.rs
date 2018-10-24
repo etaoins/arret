@@ -44,7 +44,9 @@ fn find_int_ranges(input: impl Iterator<Item = Int>) -> impl Iterator<Item = Ran
 }
 
 /// Generates a range metadata node from a sorted iterator of possible values
-pub fn int_range_metadata_node(
+///
+/// This does not handle minimum or maximum values of `Int` correctly!
+pub fn int_range_md_node(
     llx: LLVMContextRef,
     llvm_int_type: LLVMTypeRef,
     input: impl Iterator<Item = Int>,

@@ -21,6 +21,23 @@ fn llvm_enum_attr_for_name(
     }
 }
 
+fn llvm_md_kind_id_for_name(llx: LLVMContextRef, md_name: &[u8]) -> u32 {
+    unsafe { LLVMGetMDKindIDInContext(llx, md_name.as_ptr() as *const _, md_name.len() as u32) }
+}
+
+fn llvm_i64_md_node(llx: LLVMContextRef, values: &[u64]) -> LLVMValueRef {
+    unsafe {
+        let llvm_i64 = LLVMInt64TypeInContext(llx);
+
+        let mut node_values: Vec<LLVMValueRef> = values
+            .iter()
+            .map(|value| LLVMConstInt(llvm_i64, *value as u64, 0))
+            .collect();
+
+        LLVMMDNodeInContext(llx, node_values.as_mut_ptr(), node_values.len() as u32)
+    }
+}
+
 pub struct CodegenCtx {
     pub llx: LLVMContextRef,
     module_pass_manager: LLVMPassManagerRef,
@@ -36,6 +53,14 @@ pub struct CodegenCtx {
     readonly_attr: LLVMAttributeRef,
     noalias_attr: LLVMAttributeRef,
     nocapture_attr: LLVMAttributeRef,
+
+    invariant_load_md_kind_id: u32,
+    dereferenceable_md_kind_id: u32,
+    align_md_kind_id: u32,
+
+    empty_md_node: LLVMValueRef,
+    boxed_dereferenceable_md_node: LLVMValueRef,
+    boxed_align_md_node: LLVMValueRef,
 }
 
 impl CodegenCtx {
@@ -76,6 +101,17 @@ impl CodegenCtx {
                 readonly_attr: llvm_enum_attr_for_name(llx, b"readonly", 0),
                 noalias_attr: llvm_enum_attr_for_name(llx, b"noalias", 0),
                 nocapture_attr: llvm_enum_attr_for_name(llx, b"nocapture", 0),
+
+                invariant_load_md_kind_id: llvm_md_kind_id_for_name(llx, b"invariant.load"),
+                dereferenceable_md_kind_id: llvm_md_kind_id_for_name(llx, b"dereferenceable"),
+                align_md_kind_id: llvm_md_kind_id_for_name(llx, b"align"),
+
+                empty_md_node: llvm_i64_md_node(llx, &[]),
+                boxed_dereferenceable_md_node: llvm_i64_md_node(
+                    llx,
+                    &[mem::size_of::<boxed::Any>() as u64],
+                ),
+                boxed_align_md_node: llvm_i64_md_node(llx, &[mem::align_of::<boxed::Any>() as u64]),
             }
         }
     }
@@ -307,6 +343,10 @@ impl CodegenCtx {
         llvm_enum_attr_for_name(self.llx, attr_name, attr_value)
     }
 
+    pub fn llvm_md_kind_id_for_name(&mut self, md_name: &[u8]) -> u32 {
+        llvm_md_kind_id_for_name(self.llx, md_name)
+    }
+
     pub fn llvm_boxed_align_attr(&self) -> LLVMAttributeRef {
         self.boxed_align_attr
     }
@@ -316,19 +356,12 @@ impl CodegenCtx {
     }
 
     pub fn add_invariant_load_metadata(&mut self, loaded_value: LLVMValueRef) {
-        use std::ptr;
-
         unsafe {
-            let invariant_load_name = "invariant.load";
-            let invariant_load_kind_id = LLVMGetMDKindIDInContext(
-                self.llx,
-                invariant_load_name.as_ptr() as *const _,
-                invariant_load_name.len() as u32,
+            LLVMSetMetadata(
+                loaded_value,
+                self.invariant_load_md_kind_id,
+                self.empty_md_node,
             );
-
-            let empty_node = LLVMMDNodeInContext(self.llx, ptr::null_mut(), 0);
-
-            LLVMSetMetadata(loaded_value, invariant_load_kind_id, empty_node);
         }
     }
 
@@ -362,6 +395,20 @@ impl CodegenCtx {
                 self.noalias_attr,
             ] {
                 LLVMAddAttributeAtIndex(function, LLVMAttributeReturnIndex, common_attr);
+            }
+        }
+    }
+
+    pub fn add_boxed_load_metadata(&mut self, loaded_value: LLVMValueRef) {
+        unsafe {
+            for &(kind_id, md_node) in &[
+                (
+                    self.dereferenceable_md_kind_id,
+                    self.boxed_dereferenceable_md_node,
+                ),
+                (self.align_md_kind_id, self.boxed_align_md_node),
+            ] {
+                LLVMSetMetadata(loaded_value, kind_id, md_node);
             }
         }
     }

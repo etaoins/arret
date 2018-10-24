@@ -304,7 +304,7 @@ fn gen_op(
                     possible_type_tags,
                 },
             ) => {
-                use crate::codegen::range_md::int_range_metadata_node;
+                use crate::codegen::range_md::int_range_md_node;
 
                 let llvm_any = fcx.regs[subject_reg];
                 let gep_indices = &mut [
@@ -328,7 +328,7 @@ fn gen_op(
                 );
 
                 let llvm_i8 = LLVMInt8TypeInContext(cgx.llx);
-                let possible_type_tag_metadata = int_range_metadata_node(
+                let possible_type_tag_metadata = int_range_md_node(
                     cgx.llx,
                     llvm_i8,
                     possible_type_tags
@@ -336,13 +336,8 @@ fn gen_op(
                         .map(|type_tag| type_tag as i64),
                 );
 
-                let range_name = "range";
-                let range_kind_id = LLVMGetMDKindIDInContext(
-                    cgx.llx,
-                    range_name.as_ptr() as *const _,
-                    range_name.len() as u32,
-                );
-                LLVMSetMetadata(llvm_type_tag, range_kind_id, possible_type_tag_metadata);
+                let range_md_kind_id = cgx.llvm_md_kind_id_for_name(b"range");
+                LLVMSetMetadata(llvm_type_tag, range_md_kind_id, possible_type_tag_metadata);
 
                 cgx.add_invariant_load_metadata(llvm_type_tag);
                 fcx.regs.insert(*reg, llvm_type_tag);
@@ -373,6 +368,7 @@ fn gen_op(
 
                 let llvm_head = LLVMBuildLoad(fcx.builder, head_ptr, "head\0".as_ptr() as *const _);
                 cgx.add_invariant_load_metadata(llvm_head);
+                cgx.add_boxed_load_metadata(llvm_head);
 
                 fcx.regs.insert(*reg, llvm_head);
             }
@@ -387,6 +383,7 @@ fn gen_op(
 
                 let llvm_rest = LLVMBuildLoad(fcx.builder, head_ptr, "rest\0".as_ptr() as *const _);
                 cgx.add_invariant_load_metadata(llvm_rest);
+                cgx.add_boxed_load_metadata(llvm_rest);
 
                 fcx.regs.insert(*reg, llvm_rest);
             }
