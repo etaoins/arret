@@ -2,6 +2,7 @@ pub mod build_reg;
 pub mod from_reg;
 pub mod list;
 pub mod plan_phi;
+pub mod synthetic_fun;
 pub mod to_const;
 pub mod types;
 

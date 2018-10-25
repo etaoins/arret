@@ -12,4 +12,6 @@
   (assert-eq (black-box! ()) (black-box! ()))
   (assert-ne (black-box! ()) (black-box! '(1 2 3)))
   
+  (assert-eq true ((black-box! =) (black-box! ()) (black-box! ())))
+
   ())

@@ -41,4 +41,21 @@ impl TestTy {
             TestTy::Nil => ty::Ty::List(ty::List::empty()),
         }
     }
+
+    pub fn to_str(self) -> &'static str {
+        match self {
+            TestTy::Str => "str?",
+            TestTy::Sym => "sym?",
+            TestTy::Int => "int?",
+            TestTy::Float => "float?",
+            TestTy::Bool => "bool?",
+            TestTy::Char => "char?",
+            TestTy::List => "list?",
+            TestTy::Vector => "vector?",
+            TestTy::Set => "set?",
+            TestTy::Map => "map?",
+            TestTy::Fun => "fn?",
+            TestTy::Nil => "nil?",
+        }
+    }
 }

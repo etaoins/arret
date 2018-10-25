@@ -476,25 +476,6 @@ fn str_for_bounds(
     format!("#{{{}}}", all_parts.join(" "))
 }
 
-fn str_for_pred_test_ty(test_ty: ty::pred::TestTy) -> &'static str {
-    use crate::ty::pred::TestTy;
-
-    match test_ty {
-        TestTy::Str => "str?",
-        TestTy::Sym => "sym?",
-        TestTy::Int => "int?",
-        TestTy::Float => "float?",
-        TestTy::Bool => "bool?",
-        TestTy::Char => "char?",
-        TestTy::List => "list?",
-        TestTy::Vector => "vector?",
-        TestTy::Set => "set?",
-        TestTy::Map => "map?",
-        TestTy::Fun => "fn?",
-        TestTy::Nil => "nil?",
-    }
-}
-
 fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty::Poly>) -> String {
     match poly_ty {
         ty::Ty::Any => "Any".to_owned(),
@@ -547,7 +528,7 @@ fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty
                 )
             }
         }
-        ty::Ty::TyPred(test_ty) => str_for_pred_test_ty(*test_ty).to_owned(),
+        ty::Ty::TyPred(test_ty) => test_ty.to_str().to_owned(),
         ty::Ty::EqPred => "=".to_owned(),
         ty::Ty::Union(members) => {
             let member_strs: Vec<String> = members

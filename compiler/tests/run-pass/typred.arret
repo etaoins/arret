@@ -25,4 +25,7 @@
   (assert-eq false (nil? (black-box-untyped! '(1 2 3))))
   (assert-eq false (nil? (black-box-untyped! 123)))
 
+  (assert-eq true ((black-box! str?) (black-box-untyped! "foo")))
+  (assert-eq false ((black-box! str?) (black-box-untyped! 123)))
+
   ())

@@ -316,6 +316,16 @@ pub fn value_to_reg(
             let thunk_reg = ehx.arret_fun_to_thunk_reg(b, span, arret_fun);
             thunk_reg_to_reg(b, span, thunk_reg, abi_type)
         }
+        Value::TyPred(test_ty) => {
+            use crate::mir::value::synthetic_fun::ty_pred_arret_fun;
+            let thunk_reg = ehx.arret_fun_to_thunk_reg(b, span, &ty_pred_arret_fun(*test_ty));
+            thunk_reg_to_reg(b, span, thunk_reg, abi_type)
+        }
+        Value::EqPred => {
+            use crate::mir::value::synthetic_fun::eq_pred_arret_fun;
+            let thunk_reg = ehx.arret_fun_to_thunk_reg(b, span, &eq_pred_arret_fun());
+            thunk_reg_to_reg(b, span, thunk_reg, abi_type)
+        }
         Value::RustFun(ref rust_fun) => {
             let thunk_reg = ehx.rust_fun_to_thunk_reg(b, span, rust_fun);
             thunk_reg_to_reg(b, span, thunk_reg, abi_type)
