@@ -230,7 +230,7 @@ fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
         }
         _ => Err(Error::new(
             datum.span(),
-            ErrorKind::IllegalArg("only boolean and symbol literals are supported"),
+            ErrorKind::IllegalArg("only boolean and symbol type literal atoms are supported"),
         )),
     }
 }

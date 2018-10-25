@@ -10,13 +10,13 @@
           ;^^^^^ ERROR value cannot be used as a type
 
 (deftype _ 1)
-          ;^ ERROR only boolean and symbol literals are supported
+          ;^ ERROR only boolean and symbol type literal atoms are supported
 
 (deftype _ '(1))
-            ;^ ERROR only boolean and symbol literals are supported
+            ;^ ERROR only boolean and symbol type literal atoms are supported
 
 (deftype _ [1])
-           ;^ ERROR only boolean and symbol literals are supported
+           ;^ ERROR only boolean and symbol type literal atoms are supported
 
 (deftype _ (->))
            ;^^ ERROR type constructor expected
