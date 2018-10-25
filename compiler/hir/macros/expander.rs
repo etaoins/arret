@@ -51,8 +51,8 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
             .or_insert_with(|| scope.alloc_ns_id());
 
         let new_ident = ident.with_ns_id(*new_ns_id);
-        // This should succeed because we should only map each ident once
-        scope.rebind(span, ident, &new_ident).unwrap();
+        // If the same bound identifier occurs multiple times in the expansion this can error
+        let _ = scope.rebind(span, ident, &new_ident);
 
         NsDatum::Ident(span, new_ident)
     }

@@ -1,4 +1,5 @@
 (import [stdlib base])
+(import [stdlib test])
 
 ; Make sure _ discards the macro
 (defmacro _ (macro-rules))
@@ -6,57 +7,60 @@
 
 (defn main! ()
   (letmacro [return-one (macro-rules [() 'one])]
-    (ann (return-one) 'one))
+    (assert-eq (return-one) 'one))
 
   (letmacro [identity (macro-rules [(x) x])]
-    (ann (identity 'one) 'one))
+    (assert-eq (identity 'one) 'one))
 
   (letmacro [swap (macro-rules [(x y) '(y x)])]
-    (ann (swap one two) '(two one)))
+    (assert-eq (swap one two) '(two one)))
 
   (letmacro [for (macro-rules #{in} [(x in y) [x y]])]
-    (ann (for two in one) [two one]))
+    (assert-eq (for two in one) [two one]))
 
   (letmacro [return-ellipsis (macro-rules [() '(... ...)])]
-    (ann (return-ellipsis) '...))
+    (assert-eq (return-ellipsis) '...))
 
   (letmacro [m (macro-rules #{_} [(_) 'underscore][(a) a])]
-    (ann (m 'not-underscore) 'not-underscore)
-    (ann (m _) 'underscore))
+    (assert-eq (m 'not-underscore) 'not-underscore)
+    (assert-eq (m _) 'underscore))
 
   (letmacro [list-third (macro-rules [(_ _ x) x])]
-    (ann (list-third 'one 'two 'three) 'three))
+    (assert-eq (list-third 'one 'two 'three) 'three))
 
   (letmacro [vector-second (macro-rules [([_ x _]) x])]
-    (ann (vector-second ['one 'two 'three]) 'two))
+    (assert-eq (vector-second ['one 'two 'three]) 'two))
 
   (letmacro [recurse (macro-rules [() 'end] [(_) (recurse)])]
-    (ann (recurse 1) 'end))
+    (assert-eq (recurse 1) 'end))
 
   (letmacro [empty-set? (macro-rules [(#{}) true] [(#{_ ...}) false])]
-    (ann (empty-set? #{}) true)
-    (ann (empty-set? #{one}) false))
+    (assert-eq (empty-set? #{}) true)
+    (assert-eq (empty-set? #{one}) false))
 
   (letmacro [set->list (macro-rules [(#{v ...}) '(v ...)])]
-    (ann (set->list #{one two three}) '(one two three)))
+    (assert-eq (set->list #{one two three}) '(one two three)))
 
   (letmacro [num->name (macro-rules [(1) 'one] [(2) 'two] [(3) 'three])]
-    (ann (num->name 1) 'one)
-    (ann (num->name 2) 'two)
-    (ann (num->name 3) 'three))
+    (assert-eq (num->name 1) 'one)
+    (assert-eq (num->name 2) 'two)
+    (assert-eq (num->name 3) 'three))
 
   (letmacro [return-all (macro-rules [(values ...) '(values ...)])]
-    (ann (return-all one two three) '(one two three)))
+    (assert-eq (return-all one two three) '(one two three)))
 
   (letmacro [mid (macro-rules [([_ vals ... _]) [true vals ... false]])]
-    (ann (mid [one two three four]) [true two three false]))
+    (assert-eq (mid [one two three four]) [true two three false]))
 
   (letmacro [combine-lists (macro-rules [((l ...) (r ...)) [r ... l ...]])]
-    (ann (combine-lists (one two) (three four)) [three four one two]))
+    (assert-eq (combine-lists (one two) (three four)) [three four one two]))
 
   (letmacro [nested-patterns (macro-rules [((a b rest ...) ...) [(rest ... b a) ...]])]
-    (ann
+    (assert-eq
       (nested-patterns (one two three four) (five six))
       [(three four two one) (six five)]))
+
+  (letmacro [rebind-same-ident (macro-rules [() (quote (quote 2))])]
+    (assert-eq (rebind-same-ident) ''2))
 
   ())
