@@ -57,7 +57,17 @@ fn main() {
                         .help("Generate code for the given target"),
                 ),
         )
-        .subcommand(SubCommand::with_name("repl").about("Starts an interactive REPL"))
+        .subcommand(
+            SubCommand::with_name("repl")
+                .about("Starts an interactive REPL")
+                .arg(
+                    Arg::with_name("INCLUDE")
+                        .short("i")
+                        .long("include")
+                        .value_name("FILE")
+                        .help("file to preload before starting REPL"),
+                ),
+        )
         .get_matches();
 
     let arret_target_dir = find_path_to_arret_root();
@@ -86,9 +96,14 @@ fn main() {
         if !subcommand::compile::compile_input_file(&cfg, input_path, target_triple, &output_path) {
             process::exit(2);
         }
-    } else if matches.subcommand_matches("repl").is_some() {
+    } else if let Some(repl_matches) = matches.subcommand_matches("repl") {
         initialise_llvm(false);
-        subcommand::repl::interactive_loop(&cfg);
+
+        let include_path = repl_matches
+            .value_of("INCLUDE")
+            .map(|include_param| path::Path::new(include_param).to_owned());
+
+        subcommand::repl::interactive_loop(&cfg, include_path);
     } else {
         eprintln!("Sub-command not specified");
         process::exit(1);

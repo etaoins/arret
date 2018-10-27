@@ -1,4 +1,6 @@
 use std::borrow::Cow;
+use std::io::prelude::*;
+use std::io::BufReader;
 use std::{fs, path};
 
 use ansi_term::Colour;
@@ -24,6 +26,14 @@ impl ArretHelper {
         ArretHelper {
             bound_names: all_names,
         }
+    }
+}
+
+fn report_all_to_stderr(source_loader: &compiler::SourceLoader, err: &compiler::error::Error) {
+    use compiler::reporting::report_to_stderr;
+
+    for reportable in err.reports() {
+        report_to_stderr(source_loader, reportable.as_ref())
     }
 }
 
@@ -117,9 +127,8 @@ fn parse_command(mut line: String) -> ParsedCommand {
     }
 }
 
-pub fn interactive_loop(cfg: &DriverConfig) {
+pub fn interactive_loop(cfg: &DriverConfig, include_path: Option<path::PathBuf>) {
     use compiler::repl::{EvalKind, EvaledLine};
-    use compiler::reporting::report_to_stderr;
     use rustyline;
     use rustyline::error::ReadlineError;
 
@@ -134,11 +143,19 @@ pub fn interactive_loop(cfg: &DriverConfig) {
     // Import [stdlib base] so we have most useful things defined
     let initial_import = "(import [stdlib base])".to_owned();
     if let Err(err) = repl_ctx.eval_line(initial_import, EvalKind::Value) {
-        for reportable in err.reports() {
-            report_to_stderr(repl_ctx.source_loader(), reportable.as_ref())
-        }
+        report_all_to_stderr(repl_ctx.source_loader(), &err);
     }
     rl.set_helper(Some(ArretHelper::new(repl_ctx.bound_names())));
+
+    // Process the include file if specified
+    if let Some(include_path) = include_path {
+        let include_file = fs::File::open(include_path).unwrap();
+        for include_line in BufReader::new(include_file).lines() {
+            if let Err(err) = repl_ctx.eval_line(include_line.unwrap(), EvalKind::Value) {
+                report_all_to_stderr(repl_ctx.source_loader(), &err);
+            }
+        }
+    }
 
     // Load our history
     let history_path = repl_history_path();
@@ -182,9 +199,7 @@ pub fn interactive_loop(cfg: &DriverConfig) {
                         println!("{} {}", expr_arrow_style.paint("=>"), value);
                     }
                     Err(err) => {
-                        for reportable in err.reports() {
-                            report_to_stderr(repl_ctx.source_loader(), reportable.as_ref());
-                        }
+                        report_all_to_stderr(repl_ctx.source_loader(), &err);
                     }
                 }
             }
