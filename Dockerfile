@@ -23,4 +23,4 @@ RUN $CARGO_PATH build
 RUN $CARGO_PATH test
 RUN $CARGO_PATH build --release
 
-ENTRYPOINT ["/root/.cargo/bin/cargo", "run", "--release"]
+ENTRYPOINT ["/root/.cargo/bin/cargo", "run", "--release", "repl"]

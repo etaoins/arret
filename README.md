@@ -47,7 +47,7 @@ The REPL provides an interactive environment for exploring Arret.
 It's supported as a first class concept in Arret; the REPL is just as powerful as the compiler.
 
 ```text
-> cargo +nightly run
+> cargo +nightly run repl
 arret> (length '(1 2 3 4 5))
 => 5
 arret> (defn identity #{T} ([x : T]) -> T x)
@@ -75,7 +75,7 @@ Compiled programs have a `(main!)` function as their entry point:
 These can be compiled to a static binary by running Arret with the path name:
 
 ```sh
-> cargo +nightly run hello-world.arret
+> cargo +nightly run compile hello-world.arret
 > ./hello-world
 "Hello, world!"
 ```

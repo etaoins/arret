@@ -1,12 +1,10 @@
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
 
-mod mode;
+mod subcommand;
 
 use std::alloc::System;
 use std::{env, path, process};
-
-use clap::{App, Arg};
 
 #[global_allocator]
 static GLOBAL: System = System;
@@ -29,29 +27,37 @@ fn find_path_to_arret_root() -> path::PathBuf {
 }
 
 fn main() {
+    use clap::{crate_version, App, AppSettings, Arg, SubCommand};
     use compiler::initialise_llvm;
 
     let matches = App::new("arret")
+        .version(crate_version!())
+        .setting(AppSettings::SubcommandRequiredElseHelp)
         .about("Compiler and REPL for the Arret language")
-        .arg(Arg::with_name("INPUT").help("Input source file").index(1))
-        .arg(
-            Arg::with_name("OUTPUT")
-                .short("o")
-                .value_name("FILE")
-                .help("Output filename"),
-        )
-        .arg(
-            Arg::with_name("TARGET")
-                .long("target")
-                .value_name("TRIPLE")
-                .help("Generate code for the given target"),
-        )
         .arg(
             Arg::with_name("NOOPT")
                 .long("no-llvm-opt")
                 .takes_value(false)
                 .help("Disable LLVM optimisation"),
         )
+        .subcommand(
+            SubCommand::with_name("compile")
+                .about("Compiles an Arret program to a standalone binary")
+                .arg(Arg::with_name("INPUT").help("Input source file").index(1))
+                .arg(
+                    Arg::with_name("OUTPUT")
+                        .short("o")
+                        .value_name("FILE")
+                        .help("Output filename"),
+                )
+                .arg(
+                    Arg::with_name("TARGET")
+                        .long("target")
+                        .value_name("TRIPLE")
+                        .help("Generate code for the given target"),
+                ),
+        )
+        .subcommand(SubCommand::with_name("repl").about("Starts an interactive REPL"))
         .get_matches();
 
     let arret_target_dir = find_path_to_arret_root();
@@ -64,35 +70,27 @@ fn main() {
         llvm_opt: !matches.is_present("NOOPT"),
     };
 
-    match matches.value_of("INPUT") {
-        Some(input_param) => {
-            let input_path = path::Path::new(input_param);
+    if let Some(compile_matches) = matches.subcommand_matches("compile") {
+        let input_param = compile_matches.value_of("INPUT").unwrap();
 
-            let output_path = match matches.value_of("OUTPUT") {
-                Some(output_param) => path::Path::new(output_param).to_owned(),
-                None => input_path.with_extension(""),
-            };
+        let input_path = path::Path::new(input_param);
 
-            let target_triple = matches.value_of("TARGET");
-            initialise_llvm(target_triple.is_some());
+        let output_path = match compile_matches.value_of("OUTPUT") {
+            Some(output_param) => path::Path::new(output_param).to_owned(),
+            None => input_path.with_extension(""),
+        };
 
-            if !mode::compile::compile_input_file(&cfg, input_path, target_triple, &output_path) {
-                process::exit(2);
-            }
+        let target_triple = compile_matches.value_of("TARGET");
+        initialise_llvm(target_triple.is_some());
+
+        if !subcommand::compile::compile_input_file(&cfg, input_path, target_triple, &output_path) {
+            process::exit(2);
         }
-        None => {
-            if matches.value_of("OUTPUT").is_some() {
-                eprintln!("-o cannot be used with REPL");
-                process::exit(1);
-            }
-
-            if matches.value_of("TARGET").is_some() {
-                eprintln!("--target cannot be used with REPL");
-                process::exit(1);
-            }
-
-            initialise_llvm(false);
-            mode::repl::interactive_loop(&cfg);
-        }
-    };
+    } else if matches.subcommand_matches("repl").is_some() {
+        initialise_llvm(false);
+        subcommand::repl::interactive_loop(&cfg);
+    } else {
+        eprintln!("Sub-command not specified");
+        process::exit(1);
+    }
 }
