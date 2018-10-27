@@ -1,4 +1,4 @@
-FROM debian:jessie
+FROM debian:stretch
 ARG CARGO_PATH=/root/.cargo/bin/cargo
 
 RUN \
@@ -7,7 +7,7 @@ RUN \
   apt-get -y install curl build-essential zlib1g-dev
 
 RUN curl https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
-RUN echo "deb http://apt.llvm.org/jessie/ llvm-toolchain-jessie-7 main" >> /etc/apt/sources.list
+RUN echo "deb http://apt.llvm.org/stretch/ llvm-toolchain-stretch-7 main" >> /etc/apt/sources.list
 
 RUN \
   apt-get update && \
