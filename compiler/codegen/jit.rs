@@ -65,7 +65,12 @@ impl JITCtx {
         }
     }
 
-    pub fn compile_fun(&mut self, cgx: &mut CodegenCtx, fun: &ops::Fun) -> u64 {
+    pub fn compile_fun(
+        &mut self,
+        cgx: &mut CodegenCtx,
+        built_funs: &[ops::Fun],
+        fun: &ops::Fun,
+    ) -> u64 {
         use crate::codegen::fun_gen;
         use std::ptr;
 
@@ -82,6 +87,12 @@ impl JITCtx {
                 cgx.llx,
             );
             let mut mcx = ModCtx::new(module, self.target_machine, cgx.optimising());
+
+            // TODO: We're regenerating every built fun on each JITed function. This is terrible.
+            for (fun_idx, fun) in built_funs.iter().enumerate() {
+                let built_fun = fun_gen::gen_fun(cgx, &mut mcx, fun);
+                mcx.push_built_fun(ops::BuiltFunId::new(fun_idx), built_fun);
+            }
 
             let llvm_function = fun_gen::gen_fun(cgx, &mut mcx, fun).llvm_value;
 
