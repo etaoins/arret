@@ -109,18 +109,27 @@ pub fn gen_boxed_int(cgx: &mut CodegenCtx, mcx: &mut ModCtx, value: i64) -> LLVM
     }
 }
 
+pub fn gen_boxed_nil(cgx: &mut CodegenCtx, mcx: &mut ModCtx) -> LLVMValueRef {
+    cgx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::Nil, b"ARRET_NIL\0")
+}
+
 pub fn gen_boxed_fun_thunk(
     cgx: &mut CodegenCtx,
     mcx: &mut ModCtx,
     llvm_entry_point: LLVMValueRef,
 ) -> LLVMValueRef {
+    use runtime::abitype;
+
     unsafe {
         let type_tag = boxed::TypeTag::FunThunk;
         let llvm_type = cgx.boxed_abi_to_llvm_struct_type(&type_tag.into());
 
         let members = &mut [
             cgx.llvm_box_header(type_tag.into_const_header()),
-            LLVMConstNull(cgx.record_llvm_type()),
+            LLVMConstBitCast(
+                gen_boxed_nil(cgx, mcx),
+                cgx.boxed_abi_to_llvm_ptr_type(&abitype::BoxedABIType::Any),
+            ),
             llvm_entry_point,
         ];
 

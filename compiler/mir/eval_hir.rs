@@ -258,9 +258,7 @@ impl EvalHirCtx {
     }
 
     pub fn rust_fun_to_jit_boxed(&mut self, rust_fun: Rc<hir::rfi::Fun>) -> Gc<boxed::FunThunk> {
-        use std::ptr;
-
-        let closure = ptr::null();
+        let closure = boxed::NIL_INSTANCE.as_any_ref();
         let entry = self.jit_thunk_for_rust_fun(&rust_fun);
         let new_boxed = boxed::FunThunk::new(self, (closure, entry));
 
@@ -351,7 +349,6 @@ impl EvalHirCtx {
         use crate::mir::intrinsic;
         use crate::mir::rust_fun::build_rust_fun_app;
         use crate::mir::value::to_const::value_to_const;
-        use std::ptr;
 
         // TODO: Fix for polymorphism once it's supported
         let can_const_eval =
@@ -375,7 +372,8 @@ impl EvalHirCtx {
                 // By convention convert string panics in to our `ErrorKind::Panic`
                 let runtime_task = &mut self.runtime_task;
                 return Self::call_native_fun(span, || {
-                    thunk(runtime_task, ptr::null(), boxed_arg_list)
+                    let closure = boxed::NIL_INSTANCE.as_any_ref();
+                    thunk(runtime_task, closure, boxed_arg_list)
                 });
             }
         }
@@ -701,7 +699,7 @@ impl EvalHirCtx {
     }
 
     pub fn arret_fun_to_jit_boxed(&mut self, arret_fun: &value::ArretFun) -> Gc<boxed::FunThunk> {
-        use std::{mem, ptr};
+        use std::mem;
 
         let wanted_abi = ops::OpsABI::thunk_abi();
         let ops_fun = self
@@ -713,7 +711,8 @@ impl EvalHirCtx {
                 .compile_fun(&mut self.thunk_gen, self.built_funs.as_slice(), &ops_fun);
         let entry = unsafe { mem::transmute(address as usize) };
 
-        let new_boxed = boxed::FunThunk::new(self, (ptr::null(), entry));
+        let closure = boxed::NIL_INSTANCE.as_any_ref();
+        let new_boxed = boxed::FunThunk::new(self, (closure, entry));
 
         let arret_fun_value = Value::ArretFun(arret_fun.clone());
         self.thunk_fun_values.insert(new_boxed, arret_fun_value);

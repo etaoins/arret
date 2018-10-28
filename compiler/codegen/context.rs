@@ -44,7 +44,6 @@ pub struct CodegenCtx {
     module_pass_manager: LLVMPassManagerRef,
 
     task_type: Option<LLVMTypeRef>,
-    record_type: Option<LLVMTypeRef>,
     box_header_type: Option<LLVMTypeRef>,
     boxed_inline_str_type: Option<LLVMTypeRef>,
     boxed_abi_types: HashMap<BoxedABIType, LLVMTypeRef>,
@@ -87,7 +86,6 @@ impl CodegenCtx {
                 module_pass_manager,
 
                 task_type: None,
-                record_type: None,
                 box_header_type: None,
                 boxed_inline_str_type: None,
                 boxed_abi_types: HashMap::new(),
@@ -137,14 +135,8 @@ impl CodegenCtx {
         })
     }
 
-    pub fn record_llvm_type(&mut self) -> LLVMTypeRef {
-        let llx = self.llx;
-        *self.record_type.get_or_insert_with(|| unsafe {
-            LLVMPointerType(
-                LLVMStructCreateNamed(llx, b"record\0".as_ptr() as *const _),
-                0,
-            )
-        })
+    pub fn closure_llvm_type(&mut self) -> LLVMTypeRef {
+        self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any)
     }
 
     fn box_header_llvm_type(&mut self) -> LLVMTypeRef {
@@ -209,7 +201,7 @@ impl CodegenCtx {
                     b"boxed_str\0".as_ptr()
                 }
                 BoxedABIType::DirectTagged(boxed::TypeTag::FunThunk) => {
-                    members.push(self.record_llvm_type());
+                    members.push(self.closure_llvm_type());
                     members.push(LLVMPointerType(
                         self.fun_abi_to_llvm_type(&GenABI::thunk_abi()),
                         0,
@@ -276,7 +268,7 @@ impl CodegenCtx {
         }
 
         if fun_abi.takes_closure {
-            llvm_param_types.push(self.record_llvm_type());
+            llvm_param_types.push(self.closure_llvm_type());
         }
 
         llvm_param_types.extend(

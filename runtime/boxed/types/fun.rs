@@ -5,19 +5,18 @@ use crate::boxed::{AllocType, Any, BoxSize, ConstructableFrom, DirectTagged, Hea
 use crate::intern::Interner;
 use crate::task;
 
-// TODO: This is a placeholder until we support record types
-pub struct Record {}
+pub type Closure = Gc<Any>;
 
-pub type ThunkEntry = extern "C" fn(&mut task::Task, *const Record, Gc<Any>) -> Gc<Any>;
+pub type ThunkEntry = extern "C" fn(&mut task::Task, Closure, Gc<Any>) -> Gc<Any>;
 
 #[repr(C, align(16))]
 pub struct FunThunk {
     header: Header,
-    closure: *const Record,
+    closure: Closure,
     entry: ThunkEntry,
 }
 
-type FunThunkInput = (*const Record, ThunkEntry);
+type FunThunkInput = (Closure, ThunkEntry);
 
 impl ConstructableFrom<FunThunkInput> for FunThunk {
     fn size_for_value(_: &FunThunkInput) -> BoxSize {
@@ -71,21 +70,18 @@ impl fmt::Debug for FunThunk {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::boxed;
     use crate::boxed::heap::Heap;
     use crate::boxed::prelude::*;
     use std::mem;
 
-    extern "C" fn identity_entry(
-        _: &mut task::Task,
-        _closure: *const Record,
-        rest: Gc<Any>,
-    ) -> Gc<Any> {
+    extern "C" fn identity_entry(_: &mut task::Task, _closure: Closure, rest: Gc<Any>) -> Gc<Any> {
         rest
     }
 
     extern "C" fn return_42_entry(
         task: &mut task::Task,
-        _closure: *const Record,
+        _closure: Closure,
         _rest: Gc<Any>,
     ) -> Gc<Any> {
         use crate::boxed::Int;
@@ -99,13 +95,12 @@ mod test {
 
     #[test]
     fn equality() {
-        use std::ptr;
-
         let mut heap = Heap::new();
 
-        let boxed_identity1 = FunThunk::new(&mut heap, (ptr::null(), identity_entry));
-        let boxed_identity2 = FunThunk::new(&mut heap, (ptr::null(), identity_entry));
-        let boxed_return = FunThunk::new(&mut heap, (ptr::null(), return_42_entry));
+        let nil_closure = boxed::NIL_INSTANCE.as_any_ref();
+        let boxed_identity1 = FunThunk::new(&mut heap, (nil_closure, identity_entry));
+        let boxed_identity2 = FunThunk::new(&mut heap, (nil_closure, identity_entry));
+        let boxed_return = FunThunk::new(&mut heap, (nil_closure, return_42_entry));
 
         assert_ne!(boxed_identity1, boxed_return);
         // We use pointer identity for now
