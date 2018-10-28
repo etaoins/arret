@@ -11,6 +11,7 @@ use crate::mir::value::Value;
 
 type ValueVec = Vec<(hir::VarId, Value)>;
 
+/// Tracks the constant and free values captured by an expression
 #[derive(Clone, Debug)]
 pub struct Closure {
     pub const_values: ValueVec,
@@ -25,22 +26,28 @@ impl Closure {
         }
     }
 
+    /// Determines if this closure needs to be saved and loaded to a register
+    ///
+    /// Empty and constant closures will return false
     pub fn needs_closure_param(&self) -> bool {
         !self.free_values.is_empty()
     }
 }
 
-fn is_free_value(value: &Value) -> bool {
+fn can_reference_local_regs(value: &Value) -> bool {
     match value {
         Value::Const(_)
         | Value::EqPred
         | Value::TyPred(_)
         | Value::RustFun(_)
+        // TODO: Is this correct? My intuition is that the `ArretFun` would have to come from a
+        // nested expression so we would already have accounted for any values it closes over.
         | Value::ArretFun(_) => false,
         _ => true,
     }
 }
 
+/// Calculates the values captured by the passed expression
 pub fn calculate_closure(
     local_values: &HashMap<hir::VarId, Value>,
     capturing_expr: &hir::Expr<hir::Inferred>,
@@ -68,7 +75,7 @@ pub fn calculate_closure(
     type ValueVec = Vec<(hir::VarId, Value)>;
     let (free_values, const_values): (ValueVec, ValueVec) = captured_values
         .into_iter()
-        .partition(|(_, value)| is_free_value(value));
+        .partition(|(_, value)| can_reference_local_regs(value));
 
     Closure {
         const_values,
@@ -76,6 +83,7 @@ pub fn calculate_closure(
     }
 }
 
+/// Builds code to save local values into a closure
 pub fn save_to_closure_reg(
     ehx: &mut EvalHirCtx,
     b: &mut Builder,
@@ -114,7 +122,7 @@ pub fn load_from_closure_param(
     use runtime::abitype;
 
     if closure.free_values.len() > 1 {
-        // This needs record support
+        // We can either place these in a list or wait for record support
         unimplemented!("capturing multiple free values");
     }
 
