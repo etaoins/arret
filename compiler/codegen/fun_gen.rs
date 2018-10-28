@@ -221,9 +221,18 @@ fn gen_op(
                 let llvm_value = const_gen::gen_boxed_int(cgx, mcx, *value);
                 fcx.regs.insert(*reg, llvm_value);
             }
-            OpKind::ConstBoxedFunThunk(reg, callee) => {
+            OpKind::ConstBoxedFunThunk(
+                reg,
+                BoxFunThunkOp {
+                    closure_reg,
+                    callee,
+                },
+            ) => {
                 let llvm_entry_point = gen_callee_entry_point(cgx, mcx, fcx, callee);
-                let llvm_value = const_gen::gen_boxed_fun_thunk(cgx, mcx, llvm_entry_point);
+                let llvm_closure = fcx.regs[closure_reg];
+
+                let llvm_value =
+                    const_gen::gen_boxed_fun_thunk(cgx, mcx, llvm_closure, llvm_entry_point);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBoxedPair(
@@ -465,6 +474,29 @@ fn gen_op(
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::AllocBoxedFunThunk(
+                reg,
+                BoxFunThunkOp {
+                    closure_reg,
+                    callee,
+                },
+            ) => {
+                let box_source = alloc_atom.box_sources()[reg];
+
+                let input = alloc::types::FunThunkInput {
+                    llvm_closure: fcx.regs[closure_reg],
+                    llvm_entry_point: gen_callee_entry_point(cgx, mcx, fcx, callee),
+                };
+
+                let llvm_value = alloc::types::gen_alloc_boxed_fun_thunk(
+                    cgx,
+                    fcx.builder,
+                    active_alloc,
+                    box_source,
+                    &input,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
             OpKind::Add(reg, BinaryOp { lhs_reg, rhs_reg }) => {
                 let llvm_lhs = fcx.regs[lhs_reg];
                 let llvm_rhs = fcx.regs[rhs_reg];
@@ -519,7 +551,6 @@ fn gen_alloc_atom(
 pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> BuiltFun {
     use crate::codegen::alloc::plan::plan_allocs;
     use crate::codegen::analysis;
-    use crate::mir::ops;
     use runtime::abitype::{ABIType, ParamABIType, RetABIType};
 
     // Determine which values are captured
@@ -529,22 +560,17 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> Buil
     let alloc_plan = plan_allocs(&captures, &fun.ops);
 
     // Use the allocation plan to determine if we need a task parameter
-    let takes_task = (fun.abi.call_conv == ops::CallConv::External)
-        | analysis::needs_task::alloc_plan_needs_task(mcx.built_funs(), &alloc_plan);
+    let takes_task = fun.abi.external_call_conv
+        || analysis::needs_task::alloc_plan_needs_task(mcx.built_funs(), &alloc_plan);
 
     // Determine which params we captured
-    let takes_closure = fun.abi.call_conv.takes_closure();
     let mut param_captures = vec![];
-    if takes_closure {
-        param_captures.push(CaptureKind::Never);
-    }
     for param_reg in fun.params.iter() {
         param_captures.push(captures.get(*param_reg));
     }
 
     let gen_abi = GenABI {
         takes_task,
-        takes_closure,
         params: fun
             .abi
             .params
@@ -577,18 +603,16 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &Fun) -> Buil
             fcx.current_task = Some(LLVMGetParam(function, 0));
         }
 
-        let llvm_params_offset = takes_task as usize + takes_closure as usize;
+        let llvm_params_offset = takes_task as usize;
         for (param_index, reg) in fun.params.iter().enumerate() {
             let llvm_offset = (llvm_params_offset + param_index) as u32;
             fcx.regs.insert(*reg, LLVMGetParam(function, llvm_offset));
         }
 
         // Our task is an implicit parameter
-        let captures_offset = takes_closure as usize;
         for (param_index, param_abi_type) in fun.abi.params.iter().enumerate() {
             if let ABIType::Boxed(_) = param_abi_type {
-                let no_capture =
-                    param_captures[captures_offset + param_index] == CaptureKind::Never;
+                let no_capture = param_captures[param_index] == CaptureKind::Never;
 
                 cgx.add_boxed_param_attrs(
                     function,

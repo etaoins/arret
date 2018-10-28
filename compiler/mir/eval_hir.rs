@@ -217,14 +217,6 @@ impl EvalHirCtx {
             arg_list_value,
         );
 
-        // Include any captured values from the closure in `local_values`
-        dcx.local_values.extend(
-            arret_fun
-                .captures
-                .iter()
-                .map(|(var_id, value)| (*var_id, value.clone())),
-        );
-
         self.eval_expr(dcx, b, &fun_expr.body_expr)
     }
 
@@ -309,14 +301,21 @@ impl EvalHirCtx {
     ) -> ops::RegId {
         use crate::mir::ops::*;
         use crate::mir::rust_fun::ops_for_rust_fun_thunk;
+        use runtime::abitype;
 
         let ops_fun = ops_for_rust_fun_thunk(self, span, rust_fun);
+
+        let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
+        let closure_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
 
         let built_fun_id = ops::BuiltFunId::new_entry_id(&mut self.built_funs, ops_fun);
         b.push_reg(
             span,
             OpKind::ConstBoxedFunThunk,
-            ops::Callee::BuiltFun(built_fun_id),
+            BoxFunThunkOp {
+                closure_reg,
+                callee: ops::Callee::BuiltFun(built_fun_id),
+            },
         )
     }
 
@@ -483,6 +482,9 @@ impl EvalHirCtx {
     ) -> Result<Value> {
         match fun_value {
             Value::ArretFun(arret_fun) => {
+                use crate::mir::closure;
+
+                closure::load_from_current_fun(&mut dcx.local_values, &arret_fun.closure);
                 self.eval_arret_fun_app(dcx, b, span, &arret_fun, arg_list_value)
             }
             Value::RustFun(rust_fun) => {
@@ -671,30 +673,15 @@ impl EvalHirCtx {
         fun_expr: Rc<hir::Fun<hir::Inferred>>,
         source_name: Option<&str>,
     ) -> Value {
-        let mut captures = HashMap::new();
+        use crate::mir::closure;
 
-        // Only process captures if there are local values. This is to avoid visiting the function
-        // body when capturing isn't possible.
-        if !dcx.local_values.is_empty() {
-            // Look for references to variables inside the function
-            hir::visitor::visit_exprs(&fun_expr.body_expr, &mut |expr| {
-                if let hir::Expr::Ref(_, var_id) = expr {
-                    // Avoiding cloning the value if we've already captured
-                    if !captures.contains_key(var_id) {
-                        if let Some(value) = dcx.local_values.get(var_id) {
-                            // Local value is referenced; capture
-                            captures.insert(*var_id, value.clone());
-                        }
-                    }
-                }
-            });
-        }
+        let closure = closure::calculate_closure(&dcx.local_values, &fun_expr.body_expr);
 
         Value::ArretFun(value::ArretFun {
             span,
             source_name: source_name.map(|source_name| source_name.to_owned()),
             fun_expr,
-            captures,
+            closure,
         })
     }
 
@@ -725,7 +712,9 @@ impl EvalHirCtx {
         span: Span,
         arret_fun: &value::ArretFun,
     ) -> ops::RegId {
+        use crate::mir::closure;
         use crate::mir::ops::*;
+        use runtime::abitype;
 
         let wanted_abi = OpsABI::thunk_abi();
 
@@ -733,12 +722,31 @@ impl EvalHirCtx {
             .ops_for_arret_fun(&arret_fun, wanted_abi, true)
             .expect("error during arret fun boxing");
 
+        let outer_closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure);
         let built_fun_id = ops::BuiltFunId::new_entry_id(&mut self.built_funs, ops_fun);
-        b.push_reg(
-            span,
-            OpKind::ConstBoxedFunThunk,
-            ops::Callee::BuiltFun(built_fun_id),
-        )
+
+        if let Some(outer_closure_reg) = outer_closure_reg {
+            b.push_reg(
+                span,
+                OpKind::AllocBoxedFunThunk,
+                BoxFunThunkOp {
+                    closure_reg: outer_closure_reg,
+                    callee: ops::Callee::BuiltFun(built_fun_id),
+                },
+            )
+        } else {
+            let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
+            let outer_closure_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
+
+            b.push_reg(
+                span,
+                OpKind::ConstBoxedFunThunk,
+                BoxFunThunkOp {
+                    closure_reg: outer_closure_reg,
+                    callee: ops::Callee::BuiltFun(built_fun_id),
+                },
+            )
+        }
     }
 
     fn ops_for_arret_fun(
@@ -747,16 +755,31 @@ impl EvalHirCtx {
         wanted_abi: ops::OpsABI,
         has_rest: bool,
     ) -> Result<ops::Fun> {
+        use crate::mir::closure;
         use crate::mir::optimise::optimise_fun;
         use crate::mir::value::build_reg::value_to_reg;
         use runtime::abitype;
 
+        let mut b = Builder::new();
+        let closure_reg =
+            if wanted_abi.external_call_conv || arret_fun.closure.needs_closure_param() {
+                Some(b.alloc_reg())
+            } else {
+                None
+            };
+
         // TODO: Make an actual DefCtx
         let mut dcx = DefCtx::new();
-        let mut b = Builder::new();
+        closure::load_from_closure_param(&mut dcx.local_values, &arret_fun.closure, closure_reg);
+
         let span = arret_fun.span;
 
         let mut abi_params_iter = wanted_abi.params.iter();
+
+        if closure_reg.is_some() {
+            abi_params_iter.next();
+        }
+
         let rest_reg_value = if has_rest {
             let abi_type = abi_params_iter.next_back().unwrap();
 
@@ -777,10 +800,10 @@ impl EvalHirCtx {
             })
             .collect::<Vec<Rc<value::RegValue>>>();
 
-        let param_regs = fixed_reg_values
-            .iter()
-            .chain(rest_reg_value.iter())
-            .map(|reg_value| reg_value.reg)
+        let param_regs = closure_reg
+            .into_iter()
+            .chain(fixed_reg_values.iter().map(|reg_value| reg_value.reg))
+            .chain(rest_reg_value.iter().map(|reg_value| reg_value.reg))
             .collect::<Vec<ops::RegId>>()
             .into_boxed_slice();
 
@@ -975,7 +998,7 @@ impl EvalHirCtx {
 
         let main_abi = ops::OpsABI {
             // Main is a top-level function; it can't capture
-            call_conv: ops::CallConv::FreeFunction,
+            external_call_conv: false,
             params: Box::new([]),
             ret: abitype::RetABIType::Void,
         };

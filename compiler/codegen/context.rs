@@ -267,10 +267,6 @@ impl CodegenCtx {
             llvm_param_types.push(self.task_llvm_ptr_type());
         }
 
-        if fun_abi.takes_closure {
-            llvm_param_types.push(self.closure_llvm_type());
-        }
-
         llvm_param_types.extend(
             fun_abi
                 .params

@@ -33,7 +33,7 @@ pub fn gen_static_symbol_entry_point(
             |function| {
                 // LLVM param attributes are 1 indexed
                 let param_attr_offset =
-                    1 + (abi.takes_task as usize) + (abi.takes_closure as usize);
+                    1 + (abi.takes_task as usize) ;
 
                 for (index, param_abi_type) in abi.params.iter().enumerate() {
                     if let ABIType::Boxed(_) = param_abi_type.abi_type {

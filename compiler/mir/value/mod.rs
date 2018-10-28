@@ -6,7 +6,6 @@ pub mod synthetic_fun;
 pub mod to_const;
 pub mod types;
 
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use syntax::span::Span;
@@ -16,6 +15,7 @@ use runtime::boxed;
 use runtime::boxed::refs::Gc;
 
 use crate::hir;
+use crate::mir::closure::Closure;
 use crate::mir::ops::RegId;
 use crate::ty;
 
@@ -23,7 +23,7 @@ use crate::ty;
 pub struct ArretFun {
     pub span: Span,
     pub source_name: Option<String>,
-    pub captures: HashMap<hir::VarId, Value>,
+    pub closure: Closure,
     pub fun_expr: Rc<hir::Fun<hir::Inferred>>,
 }
 
@@ -88,8 +88,11 @@ pub fn visit_value_root(strong_pass: &mut boxed::collect::StrongPass, value: &mu
             }
         }
         Value::ArretFun(ref mut arret_fun) => {
-            for any_ref in arret_fun.captures.values_mut() {
-                visit_value_root(strong_pass, any_ref);
+            for (_, value) in &mut arret_fun.closure.const_values {
+                visit_value_root(strong_pass, value);
+            }
+            for (_, value) in &mut arret_fun.closure.free_values {
+                visit_value_root(strong_pass, value);
             }
         }
         _ => {}

@@ -2,7 +2,9 @@ use std::ptr;
 
 use crate::boxed::heap::Heap;
 use crate::boxed::refs::Gc;
-use crate::boxed::{AllocType, Any, BoxSize, Boxed, Header, List, Pair, Sym, TypeTag, Vector};
+use crate::boxed::{
+    AllocType, Any, BoxSize, Boxed, FunThunk, Header, List, Pair, Sym, TypeTag, Vector,
+};
 
 #[repr(C, align(16))]
 struct ForwardingCell {
@@ -79,7 +81,7 @@ impl StrongPass {
     }
 
     fn visit_any_box(&mut self, mut box_ref: &mut Gc<Any>) {
-        // This loop is used for ad-hoc tail recursion when visiting Pairs
+        // This loop is used for ad-hoc tail recursion when visiting Pairs and FunThunks
         // Everything else will return at the bottom of the loop
         loop {
             match box_ref.header.alloc_type {
@@ -129,6 +131,13 @@ impl StrongPass {
                     for elem_ref in vec_ref.values_mut() {
                         self.visit_box(elem_ref);
                     }
+                }
+                TypeTag::FunThunk => {
+                    let fun_thunk_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut FunThunk) };
+
+                    // Start again with the closure
+                    box_ref = unsafe { &mut *(&mut fun_thunk_ref.closure as *mut Gc<Any>) };
+                    continue;
                 }
                 _ => {}
             }

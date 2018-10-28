@@ -12,7 +12,7 @@ pub type ThunkEntry = extern "C" fn(&mut task::Task, Closure, Gc<Any>) -> Gc<Any
 #[repr(C, align(16))]
 pub struct FunThunk {
     header: Header,
-    closure: Closure,
+    pub(crate) closure: Closure,
     entry: ThunkEntry,
 }
 
@@ -20,13 +20,7 @@ type FunThunkInput = (Closure, ThunkEntry);
 
 impl ConstructableFrom<FunThunkInput> for FunThunk {
     fn size_for_value(_: &FunThunkInput) -> BoxSize {
-        if mem::size_of::<Self>() == 16 {
-            BoxSize::Size16
-        } else if mem::size_of::<Self>() == 32 {
-            BoxSize::Size32
-        } else {
-            unreachable!("Unsupported fun size!")
-        }
+        Self::size()
     }
 
     fn construct(value: FunThunkInput, alloc_type: AllocType, _: &mut Interner) -> FunThunk {
@@ -42,6 +36,16 @@ impl ConstructableFrom<FunThunkInput> for FunThunk {
 }
 
 impl FunThunk {
+    pub fn size() -> BoxSize {
+        if mem::size_of::<Self>() == 16 {
+            BoxSize::Size16
+        } else if mem::size_of::<Self>() == 32 {
+            BoxSize::Size32
+        } else {
+            unreachable!("Unsupported fun size!")
+        }
+    }
+
     pub fn apply(&self, task: &mut task::Task, arg_list: Gc<Any>) -> Gc<Any> {
         (self.entry)(task, self.closure, arg_list)
     }

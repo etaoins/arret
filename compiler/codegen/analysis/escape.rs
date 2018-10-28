@@ -99,11 +99,7 @@ fn add_static_symbol_call_captures(
     static_symbol_abi: &GenABI,
     args: &[ops::RegId],
 ) {
-    let mut arg_iter = args.iter();
-
-    if static_symbol_abi.takes_closure {
-        arg_iter.next();
-    }
+    let arg_iter = args.iter();
 
     assert_eq!(arg_iter.len(), static_symbol_abi.params.len());
     for (arg_reg, param_abi_type) in arg_iter.zip(static_symbol_abi.params.iter()) {
@@ -241,7 +237,7 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
-                call_conv: ops::CallConv::FreeFunction,
+                external_call_conv: false,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: RetABIType::Void,
             },
@@ -262,7 +258,7 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
-                call_conv: ops::CallConv::FreeFunction,
+                external_call_conv: false,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::Int.into(),
             },
@@ -284,7 +280,7 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
-                call_conv: ops::CallConv::FreeFunction,
+                external_call_conv: false,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::TopPair.into(),
             },
@@ -318,7 +314,7 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
-                call_conv: ops::CallConv::FreeFunction,
+                external_call_conv: false,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::TopPair.into(),
             },
@@ -359,7 +355,6 @@ mod test {
 
         let static_symbol_abi = GenABI {
             takes_task: false,
-            takes_closure: false,
             params: Box::new([
                 ParamABIType {
                     abi_type: boxed::TypeTag::Int.into(),
@@ -388,7 +383,7 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
-                call_conv: ops::CallConv::FreeFunction,
+                external_call_conv: false,
                 params: Box::new([
                     boxed::TypeTag::Int.into(),
                     boxed::TypeTag::Int.into(),
@@ -447,7 +442,7 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
-                call_conv: ops::CallConv::FreeFunction,
+                external_call_conv: false,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::TopPair.into(),
             },

@@ -13,6 +13,11 @@ pub struct PairInput {
     pub llvm_length: LLVMValueRef,
 }
 
+pub struct FunThunkInput {
+    pub llvm_closure: LLVMValueRef,
+    pub llvm_entry_point: LLVMValueRef,
+}
+
 pub fn gen_alloc_int(
     cgx: &mut CodegenCtx,
     builder: LLVMBuilderRef,
@@ -71,5 +76,46 @@ pub fn gen_alloc_boxed_pair(
         LLVMBuildStore(builder, *llvm_rest, rest_ptr);
 
         alloced_pair
+    }
+}
+
+pub fn gen_alloc_boxed_fun_thunk(
+    cgx: &mut CodegenCtx,
+    builder: LLVMBuilderRef,
+    active_alloc: &mut ActiveAlloc,
+    box_source: BoxSource,
+    input: &FunThunkInput,
+) -> LLVMValueRef {
+    let FunThunkInput {
+        llvm_closure,
+        llvm_entry_point,
+    } = input;
+
+    unsafe {
+        let alloced_fun_thunk = gen_alloced_box::<boxed::FunThunk>(
+            cgx,
+            builder,
+            active_alloc,
+            box_source,
+            b"alloced_fun_thunk\0",
+        );
+
+        let closure_ptr = LLVMBuildStructGEP(
+            builder,
+            alloced_fun_thunk,
+            1,
+            b"closure_ptr\0".as_ptr() as *const _,
+        );
+        LLVMBuildStore(builder, *llvm_closure, closure_ptr);
+
+        let entry_point_ptr = LLVMBuildStructGEP(
+            builder,
+            alloced_fun_thunk,
+            2,
+            b"entry_point_ptr\0".as_ptr() as *const _,
+        );
+        LLVMBuildStore(builder, *llvm_entry_point, entry_point_ptr);
+
+        alloced_fun_thunk
     }
 }

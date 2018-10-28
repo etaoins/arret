@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use syntax::span::EMPTY_SPAN;
 
 use crate::hir;
+use crate::mir::closure::Closure;
 use crate::mir::value;
 use crate::ty;
 use crate::ty::purity;
@@ -26,7 +26,7 @@ pub fn eq_pred_arret_fun() -> value::ArretFun {
     value::ArretFun {
         span: EMPTY_SPAN,
         source_name: Some("=".to_owned()),
-        captures: HashMap::new(),
+        closure: Closure::empty(),
         fun_expr: Rc::new(hir::Fun {
             pvars: purity::PVars::new(),
             tvars: ty::TVars::new(),
@@ -57,7 +57,7 @@ pub fn ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
     value::ArretFun {
         span: EMPTY_SPAN,
         source_name: Some(test_ty.to_str().to_owned()),
-        captures: HashMap::new(),
+        closure: Closure::empty(),
         fun_expr: Rc::new(hir::Fun {
             pvars: purity::PVars::new(),
             tvars: ty::TVars::new(),

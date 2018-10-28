@@ -59,7 +59,6 @@ pub fn build_rust_fun_app(
 
     let abi = GenABI {
         takes_task: rust_fun.takes_task(),
-        takes_closure: false,
         params: rust_fun.params().to_owned().into(),
         ret: rust_fun.ret().clone(),
     };
@@ -105,6 +104,9 @@ pub fn ops_for_rust_fun_thunk(
     let rest_abi_type: abitype::ABIType = abitype::TOP_LIST_BOXED_ABI_TYPE.into();
     let ret_abi_type: abitype::ABIType = abitype::BoxedABIType::Any.into();
 
+    // This is unused by Rust funs; we just need it as a placeholder
+    let closure_reg = b.alloc_reg();
+
     let rest_reg = b.alloc_reg();
     let rest_value = Value::Reg(Rc::new(value::RegValue {
         reg: rest_reg,
@@ -124,7 +126,7 @@ pub fn ops_for_rust_fun_thunk(
         source_name: Some(fun_symbol),
 
         abi: ops::OpsABI::thunk_abi(),
-        params: Box::new([rest_reg]),
+        params: Box::new([closure_reg, rest_reg]),
         ops: b.into_ops(),
     })
 }

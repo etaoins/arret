@@ -1,4 +1,5 @@
 mod builder;
+mod closure;
 mod compact_abi_type;
 mod equality;
 pub mod error;

@@ -33,7 +33,6 @@ fn runtime_compare(
 
     let abi = GenABI {
         takes_task: false,
-        takes_closure: false,
         params: Box::new([
             abitype::BoxedABIType::Any.into(),
             abitype::BoxedABIType::Any.into(),
