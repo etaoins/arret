@@ -71,16 +71,17 @@ fn main() {
         .get_matches();
 
     let arret_target_dir = find_path_to_arret_root();
-
-    let cfg = DriverConfig {
-        package_paths: compiler::PackagePaths::with_stdlib(
-            &arret_target_dir,
-            matches.value_of("TARGET"),
-        ),
-        llvm_opt: !matches.is_present("NOOPT"),
-    };
+    let llvm_opt = !matches.is_present("NOOPT");
 
     if let Some(compile_matches) = matches.subcommand_matches("compile") {
+        let cfg = DriverConfig {
+            package_paths: compiler::PackagePaths::with_stdlib(
+                &arret_target_dir,
+                compile_matches.value_of("TARGET"),
+            ),
+            llvm_opt,
+        };
+
         let input_param = compile_matches.value_of("INPUT").unwrap();
 
         let input_path = path::Path::new(input_param);
@@ -97,6 +98,11 @@ fn main() {
             process::exit(2);
         }
     } else if let Some(repl_matches) = matches.subcommand_matches("repl") {
+        let cfg = DriverConfig {
+            package_paths: compiler::PackagePaths::with_stdlib(&arret_target_dir, None),
+            llvm_opt,
+        };
+
         initialise_llvm(false);
 
         let include_path = repl_matches
