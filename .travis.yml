@@ -1,7 +1,9 @@
 language: rust
 
 # TODO: While using Rust 2018 preview
-rust: [nightly]
+rust:
+    - beta
+    - nightly
 
 sudo: true
 

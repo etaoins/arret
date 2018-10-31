@@ -18,7 +18,7 @@ Arret is a successor to [Llambda](https://github.com/etaoins/llambda) without th
 1. A Unix-like host running on ARM64, x86-64 or x86-32.
    These are the platforms supporting lazy compilation with LLVM's ORC JIT.
 1. [LLVM 7.0](http://releases.llvm.org)
-1. [Rust nightly](https://www.rust-lang.org/en-US/)
+1. [Rust nightly or beta](https://www.rust-lang.org/en-US/)
    This project is participating in the [Rust 2018 Preview](https://internals.rust-lang.org/t/rust-2018-an-early-preview/7776).
    As such it will require the nightly Rust compiler until Rust 2018 is released.
 
