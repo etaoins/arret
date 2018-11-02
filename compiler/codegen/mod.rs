@@ -7,6 +7,7 @@ mod debug_info;
 mod fun_gen;
 pub(crate) mod jit;
 mod mod_gen;
+mod op_gen;
 pub(crate) mod program;
 mod range_md;
 mod target;
@@ -24,7 +25,10 @@ impl GenABI {
     pub fn thunk_abi() -> GenABI {
         GenABI {
             takes_task: true,
-            params: Box::new([abitype::BoxedABIType::Any.into(), abitype::TOP_LIST_BOXED_ABI_TYPE.into()]),
+            params: Box::new([
+                abitype::BoxedABIType::Any.into(),
+                abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
+            ]),
             ret: abitype::BoxedABIType::Any.into(),
         }
     }
