@@ -8,8 +8,9 @@ use crate::mir::ops;
 
 pub struct ModCtx {
     pub module: LLVMModuleRef,
-    pub function_pass_manager: LLVMPassManagerRef,
     pub built_funs: Vec<BuiltFun>,
+
+    function_pass_manager: LLVMPassManagerRef,
 }
 
 impl Drop for ModCtx {
@@ -48,8 +49,9 @@ impl ModCtx {
 
             ModCtx {
                 module,
-                function_pass_manager,
                 built_funs: vec![],
+
+                function_pass_manager,
             }
         }
     }
