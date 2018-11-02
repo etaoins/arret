@@ -13,9 +13,7 @@ enum TripleString {
 impl TripleString {
     fn as_ptr(&self) -> *const libc::c_char {
         match self {
-            TripleString::Cross(cross_triple) => {
-                cross_triple.as_bytes_with_nul().as_ptr() as *const _
-            }
+            TripleString::Cross(cross_triple) => cross_triple.as_ptr() as *const _,
             TripleString::LLVMDefault(llvm_default) => *llvm_default,
         }
     }

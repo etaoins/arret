@@ -82,10 +82,8 @@ impl JITCtx {
 
         unsafe {
             // Create the module
-            let module = LLVMModuleCreateWithNameInContext(
-                module_name.as_bytes_with_nul().as_ptr() as *const _,
-                cgx.llx,
-            );
+            let module =
+                LLVMModuleCreateWithNameInContext(module_name.as_ptr() as *const _, cgx.llx);
             let mut mcx = ModCtx::new(module, self.target_machine, cgx.optimising());
 
             // TODO: We're regenerating every built fun on each JITed function. This is terrible.
