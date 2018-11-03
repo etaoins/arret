@@ -1,6 +1,8 @@
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
 
+use std::env;
+
 use rayon::prelude::*;
 use tempfile::NamedTempFile;
 
@@ -24,12 +26,13 @@ enum TestType {
 }
 
 fn try_run_single_test(
+    target_triple: Option<&str>,
     source_loader: &mut SourceLoader,
     input_path: &path::Path,
     test_type: TestType,
 ) -> Result<(), Error> {
     let source_file_id = source_loader.load_path(input_path).unwrap();
-    let package_paths = compiler::PackagePaths::test_paths();
+    let package_paths = compiler::PackagePaths::test_paths(target_triple);
 
     let hir = compiler::lower_program(&package_paths, source_loader, source_file_id)?;
     let inferred_defs = compiler::infer_program(hir.defs, hir.main_var_id)?;
@@ -53,7 +56,9 @@ fn try_run_single_test(
     }
 
     let output_path = NamedTempFile::new().unwrap().into_temp_path();
-    let gen_program_opts = compiler::GenProgramOptions::new();
+
+    let gen_program_opts =
+        compiler::GenProgramOptions::new().with_target_triple(target_triple.as_ref().map(|x| &**x));
 
     compiler::gen_program(
         source_loader,
@@ -78,11 +83,20 @@ fn try_run_single_test(
     Ok(())
 }
 
-fn run_single_test(input_path: &path::Path, test_type: TestType) -> bool {
+fn run_single_test(
+    target_triple: Option<&str>,
+    input_path: &path::Path,
+    test_type: TestType,
+) -> bool {
     SOURCE_LOADER.with(|source_loader| {
         use std::io;
 
-        let result = try_run_single_test(&mut *source_loader.borrow_mut(), input_path, test_type);
+        let result = try_run_single_test(
+            target_triple,
+            &mut *source_loader.borrow_mut(),
+            input_path,
+            test_type,
+        );
 
         if let Err(Error(errs)) = result {
             // Prevent concurrent writes to stderr
@@ -102,8 +116,11 @@ fn run_single_test(input_path: &path::Path, test_type: TestType) -> bool {
 
 #[test]
 fn pass() {
+    let target_triple =
+        env::var_os("ARRET_TEST_TARGET_TRIPLE").map(|os_str| os_str.into_string().unwrap());
+
     use compiler::initialise_llvm;
-    initialise_llvm(false);
+    initialise_llvm(target_triple.is_some());
 
     let eval_entries = fs::read_dir("./tests/eval-pass")
         .unwrap()
@@ -119,7 +136,11 @@ fn pass() {
         .filter_map(|(entry, test_type)| {
             let input_path = entry.unwrap().path();
 
-            if !run_single_test(input_path.as_path(), test_type) {
+            if !run_single_test(
+                target_triple.as_ref().map(|t| &**t),
+                input_path.as_path(),
+                test_type,
+            ) {
                 Some(input_path.to_string_lossy().to_string())
             } else {
                 None

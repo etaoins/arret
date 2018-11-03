@@ -46,9 +46,9 @@ impl PackagePaths {
     }
 
     /// Creates an instance for use in our internal unit and integration tests
-    pub fn test_paths() -> PackagePaths {
+    pub fn test_paths(target_triple: Option<&str>) -> PackagePaths {
         let parent_path = path::Path::new("..");
-        Self::with_stdlib(&parent_path, None)
+        Self::with_stdlib(&parent_path, target_triple)
     }
 
     pub fn add_package(&mut self, package_name: &str, path: PackagePath) {
@@ -138,7 +138,7 @@ mod test {
     fn load_stdlib_module(name: &'static str) -> Result<LoadedModule> {
         let mut source_loader = SourceLoader::new();
         let mut rfi_loader = rfi::Loader::new();
-        let package_paths = PackagePaths::test_paths();
+        let package_paths = PackagePaths::test_paths(None);
         let module_name = ModuleName::new("stdlib".into(), vec![], name.into());
 
         load_module_by_name(

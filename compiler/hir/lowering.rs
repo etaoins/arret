@@ -968,7 +968,7 @@ fn module_for_str(data_str: &str) -> Result<LoweredModule> {
     ];
     program_data.append(&mut test_data);
 
-    let package_paths = PackagePaths::test_paths();
+    let package_paths = PackagePaths::test_paths(None);
     let mut source_loader = SourceLoader::new();
     let mut lcx = LoweringCtx::new(&package_paths, &mut source_loader);
 

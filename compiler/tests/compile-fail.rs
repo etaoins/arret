@@ -48,9 +48,10 @@ impl ExpectedReport {
         let candidate_spans = &[loc_trace.origin(), loc_trace.macro_invocation()];
 
         candidate_spans.iter().any(|candidate_span| {
-            self.span.matches(*candidate_span) && actual_report
-                .message()
-                .starts_with(&self.message_prefix[..])
+            self.span.matches(*candidate_span)
+                && actual_report
+                    .message()
+                    .starts_with(&self.message_prefix[..])
         })
     }
 }
@@ -164,7 +165,7 @@ fn collect_reports(
     source_file_id: compiler::SourceFileId,
 ) -> Vec<Box<dyn Reportable>> {
     let mut err_objects = Vec::<Box<dyn Reportable>>::new();
-    let package_paths = compiler::PackagePaths::test_paths();
+    let package_paths = compiler::PackagePaths::test_paths(None);
 
     let hir = match compiler::lower_program(&package_paths, source_loader, source_file_id) {
         Ok(hir) => hir,
