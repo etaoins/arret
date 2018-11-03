@@ -7,11 +7,11 @@ use llvm_sys::{LLVMAttributeFunctionIndex, LLVMAttributeReturnIndex, LLVMIntPred
 use runtime::boxed;
 
 use crate::codegen::alloc::{ActiveAlloc, AllocAtom, BoxSource};
-use crate::codegen::context::CodegenCtx;
 use crate::codegen::mod_gen::ModCtx;
+use crate::codegen::target_gen::TargetCtx;
 
 fn init_alloced_box_header(
-    cgx: &mut CodegenCtx,
+    tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,
     alloced_box: LLVMValueRef,
     header: boxed::Header,
@@ -23,24 +23,24 @@ fn init_alloced_box_header(
             0,
             b"header_ptr\0".as_ptr() as *const _,
         );
-        LLVMBuildStore(builder, cgx.llvm_box_header(header), header_ptr);
+        LLVMBuildStore(builder, tcx.llvm_box_header(header), header_ptr);
     }
 }
 
 fn gen_stack_alloced_box<T: boxed::DirectTagged>(
-    cgx: &mut CodegenCtx,
+    tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,
     value_name: &[u8],
 ) -> LLVMValueRef {
     unsafe {
         let type_tag = T::TYPE_TAG;
-        let llvm_type = cgx.boxed_abi_to_llvm_struct_type(&type_tag.into());
+        let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
 
         let alloced_box = LLVMBuildAlloca(builder, llvm_type, value_name.as_ptr() as *const _);
         LLVMSetAlignment(alloced_box, mem::align_of::<T>() as u32);
 
         init_alloced_box_header(
-            cgx,
+            tcx,
             builder,
             alloced_box,
             boxed::Header::new(type_tag, boxed::AllocType::Stack),
@@ -51,7 +51,7 @@ fn gen_stack_alloced_box<T: boxed::DirectTagged>(
 }
 
 fn gen_heap_alloced_box<T: boxed::DirectTagged>(
-    cgx: &mut CodegenCtx,
+    tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,
     active_alloc: &mut ActiveAlloc,
     box_size: boxed::BoxSize,
@@ -70,7 +70,7 @@ fn gen_heap_alloced_box<T: boxed::DirectTagged>(
             active_alloc.box_slots
         } else {
             let gep_indices = &mut [LLVMConstInt(
-                LLVMInt32TypeInContext(cgx.llx),
+                LLVMInt32TypeInContext(tcx.llx),
                 slot_index as u64,
                 0,
             )];
@@ -91,12 +91,12 @@ fn gen_heap_alloced_box<T: boxed::DirectTagged>(
         let alloced_box = LLVMBuildBitCast(
             builder,
             llvm_slot,
-            cgx.boxed_abi_to_llvm_ptr_type(&type_tag.into()),
+            tcx.boxed_abi_to_llvm_ptr_type(&type_tag.into()),
             value_name.as_ptr() as *const _,
         );
 
         init_alloced_box_header(
-            cgx,
+            tcx,
             builder,
             alloced_box,
             boxed::Header::new(type_tag, box_size.to_heap_alloc_type()),
@@ -107,16 +107,16 @@ fn gen_heap_alloced_box<T: boxed::DirectTagged>(
 }
 
 pub fn gen_alloced_box<T: boxed::DirectTagged>(
-    cgx: &mut CodegenCtx,
+    tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,
     active_alloc: &mut ActiveAlloc,
     box_source: BoxSource,
     value_name: &[u8],
 ) -> LLVMValueRef {
     match box_source {
-        BoxSource::Stack => gen_stack_alloced_box::<T>(cgx, builder, value_name),
+        BoxSource::Stack => gen_stack_alloced_box::<T>(tcx, builder, value_name),
         BoxSource::Heap(box_size) => {
-            gen_heap_alloced_box::<T>(cgx, builder, active_alloc, box_size, value_name)
+            gen_heap_alloced_box::<T>(tcx, builder, active_alloc, box_size, value_name)
         }
     }
 }
@@ -125,7 +125,7 @@ pub fn gen_alloced_box<T: boxed::DirectTagged>(
 ///
 /// This is the slow path; it is only used when our current heap segment is full.
 fn gen_runtime_heap_alloc(
-    cgx: &mut CodegenCtx,
+    tcx: &mut TargetCtx,
     mcx: &mut ModCtx,
     builder: LLVMBuilderRef,
     llvm_task: LLVMValueRef,
@@ -134,11 +134,11 @@ fn gen_runtime_heap_alloc(
     use runtime::abitype;
 
     unsafe {
-        let llvm_i32 = LLVMInt32TypeInContext(cgx.llx);
-        let llvm_param_types = &mut [cgx.task_llvm_ptr_type(), llvm_i32];
+        let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
+        let llvm_param_types = &mut [tcx.task_llvm_ptr_type(), llvm_i32];
 
         let alloc_cells_llvm_type = LLVMFunctionType(
-            cgx.boxed_abi_to_llvm_ptr_type(&abitype::BoxedABIType::Any),
+            tcx.boxed_abi_to_llvm_ptr_type(&abitype::BoxedABIType::Any),
             llvm_param_types.as_mut_ptr(),
             llvm_param_types.len() as u32,
             0,
@@ -151,17 +151,17 @@ fn gen_runtime_heap_alloc(
                 LLVMAddAttributeAtIndex(
                     alloc_cells_fun,
                     LLVMAttributeFunctionIndex,
-                    cgx.llvm_enum_attr_for_name(b"cold", 0),
+                    tcx.llvm_enum_attr_for_name(b"cold", 0),
                 );
                 LLVMAddAttributeAtIndex(
                     alloc_cells_fun,
                     LLVMAttributeReturnIndex,
-                    cgx.llvm_boxed_align_attr(),
+                    tcx.llvm_boxed_align_attr(),
                 );
                 LLVMAddAttributeAtIndex(
                     alloc_cells_fun,
                     LLVMAttributeReturnIndex,
-                    cgx.llvm_noalias_attr(),
+                    tcx.llvm_noalias_attr(),
                 );
             },
         );
@@ -177,7 +177,7 @@ fn gen_runtime_heap_alloc(
         );
 
         // We can dereference the entire allocation immediately
-        let dereferenceable_attr = cgx.llvm_enum_attr_for_name(
+        let dereferenceable_attr = tcx.llvm_enum_attr_for_name(
             b"dereferenceable",
             (mem::size_of::<boxed::Any>() * required_cells) as u64,
         );
@@ -196,7 +196,7 @@ fn gen_runtime_heap_alloc(
 /// This will first attempt a bump allocation on the task's current segment. If that fails it will
 /// fallback to the runtime.
 pub fn gen_active_alloc_for_atom(
-    cgx: &mut CodegenCtx,
+    tcx: &mut TargetCtx,
     mcx: &mut ModCtx,
     builder: LLVMBuilderRef,
     llvm_task: LLVMValueRef,
@@ -221,16 +221,16 @@ pub fn gen_active_alloc_for_atom(
         let function = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
 
         let mut bump_alloc_block =
-            LLVMAppendBasicBlockInContext(cgx.llx, function, b"bump_alloc\0".as_ptr() as *const _);
+            LLVMAppendBasicBlockInContext(tcx.llx, function, b"bump_alloc\0".as_ptr() as *const _);
 
         let mut runtime_alloc_block = LLVMAppendBasicBlockInContext(
-            cgx.llx,
+            tcx.llx,
             function,
             b"runtime_alloc\0".as_ptr() as *const _,
         );
 
         let cont_block =
-            LLVMAppendBasicBlockInContext(cgx.llx, function, b"alloc_cont\0".as_ptr() as *const _);
+            LLVMAppendBasicBlockInContext(tcx.llx, function, b"alloc_cont\0".as_ptr() as *const _);
 
         let seg_next_ptr = LLVMBuildStructGEP(
             builder,
@@ -242,7 +242,7 @@ pub fn gen_active_alloc_for_atom(
             LLVMBuildLoad(builder, seg_next_ptr, "seg_old_next\0".as_ptr() as *const _);
 
         let gep_indices = &mut [LLVMConstInt(
-            LLVMInt32TypeInContext(cgx.llx),
+            LLVMInt32TypeInContext(tcx.llx),
             required_cells as u64,
             0,
         )];
@@ -258,7 +258,7 @@ pub fn gen_active_alloc_for_atom(
             LLVMBuildStructGEP(builder, llvm_task, 1, b"seg_end_ptr\0".as_ptr() as *const _);
         let seg_end = LLVMBuildLoad(builder, seg_end_ptr, "seg_end\0".as_ptr() as *const _);
 
-        let llvm_i64 = LLVMInt64TypeInContext(cgx.llx);
+        let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
         let seg_new_next_int = LLVMBuildPtrToInt(
             builder,
             seg_new_next,
@@ -295,13 +295,13 @@ pub fn gen_active_alloc_for_atom(
         // Bump alloc failed; call the runtime
         LLVMPositionBuilderAtEnd(builder, runtime_alloc_block);
         let mut runtime_box_slots =
-            gen_runtime_heap_alloc(cgx, mcx, builder, llvm_task, required_cells);
+            gen_runtime_heap_alloc(tcx, mcx, builder, llvm_task, required_cells);
         LLVMBuildBr(builder, cont_block);
 
         LLVMPositionBuilderAtEnd(builder, cont_block);
         let box_slots = LLVMBuildPhi(
             builder,
-            cgx.boxed_abi_to_llvm_ptr_type(&abitype::BoxedABIType::Any),
+            tcx.boxed_abi_to_llvm_ptr_type(&abitype::BoxedABIType::Any),
             b"box_slots\0".as_ptr() as *const _,
         );
 

@@ -2,7 +2,6 @@ mod alloc;
 mod analysis;
 mod callee;
 mod const_gen;
-pub(crate) mod context;
 mod debug_info;
 mod fun_gen;
 pub(crate) mod jit;
@@ -10,6 +9,7 @@ mod mod_gen;
 mod op_gen;
 pub(crate) mod program;
 mod range_md;
+pub(crate) mod target_gen;
 mod target_machine;
 
 use runtime::abitype;

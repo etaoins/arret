@@ -6,8 +6,8 @@ use llvm_sys::{LLVMLinkage, LLVMUnnamedAddr};
 
 use runtime::boxed;
 
-use crate::codegen::context::CodegenCtx;
 use crate::codegen::mod_gen::ModCtx;
+use crate::codegen::target_gen::TargetCtx;
 
 fn annotate_private_global(llvm_global: LLVMValueRef) {
     unsafe {
@@ -18,7 +18,7 @@ fn annotate_private_global(llvm_global: LLVMValueRef) {
 }
 
 pub fn gen_boxed_pair(
-    cgx: &mut CodegenCtx,
+    tcx: &mut TargetCtx,
     mcx: &mut ModCtx,
     llvm_head: LLVMValueRef,
     llvm_rest: LLVMValueRef,
@@ -26,10 +26,10 @@ pub fn gen_boxed_pair(
 ) -> LLVMValueRef {
     unsafe {
         let type_tag = boxed::TypeTag::TopPair;
-        let llvm_type = cgx.boxed_abi_to_llvm_struct_type(&type_tag.into());
+        let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
 
         let members = &mut [
-            cgx.llvm_box_header(type_tag.into_const_header()),
+            tcx.llvm_box_header(type_tag.into_const_header()),
             llvm_length,
             llvm_head,
             llvm_rest,
@@ -47,7 +47,7 @@ pub fn gen_boxed_pair(
     }
 }
 
-pub fn gen_boxed_inline_str(cgx: &mut CodegenCtx, mcx: &mut ModCtx, value: &str) -> LLVMValueRef {
+pub fn gen_boxed_inline_str(tcx: &mut TargetCtx, mcx: &mut ModCtx, value: &str) -> LLVMValueRef {
     unsafe {
         const MAX_INLINE_BYTES: usize = boxed::Str::MAX_INLINE_BYTES;
 
@@ -55,14 +55,14 @@ pub fn gen_boxed_inline_str(cgx: &mut CodegenCtx, mcx: &mut ModCtx, value: &str)
         inline_buffer[0..value.len()].copy_from_slice(value.as_bytes());
 
         let type_tag = boxed::TypeTag::Str;
-        let inline_llvm_type = cgx.boxed_inline_str_llvm_type();
-        let llvm_i8 = LLVMInt8TypeInContext(cgx.llx);
+        let inline_llvm_type = tcx.boxed_inline_str_llvm_type();
+        let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
 
         let members = &mut [
-            cgx.llvm_box_header(type_tag.into_const_header()),
+            tcx.llvm_box_header(type_tag.into_const_header()),
             LLVMConstInt(llvm_i8, value.len() as u64, 0),
             LLVMConstStringInContext(
-                cgx.llx,
+                tcx.llx,
                 inline_buffer.as_mut_ptr() as *mut _,
                 MAX_INLINE_BYTES as u32,
                 1,
@@ -81,22 +81,22 @@ pub fn gen_boxed_inline_str(cgx: &mut CodegenCtx, mcx: &mut ModCtx, value: &str)
         LLVMSetAlignment(global, mem::align_of::<boxed::Str>() as u32);
         annotate_private_global(global);
 
-        let llvm_type = cgx.boxed_abi_to_llvm_struct_type(&type_tag.into());
+        let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
         LLVMConstBitCast(global, LLVMPointerType(llvm_type, 0))
     }
 }
 
-pub fn gen_boxed_int(cgx: &mut CodegenCtx, mcx: &mut ModCtx, value: i64) -> LLVMValueRef {
+pub fn gen_boxed_int(tcx: &mut TargetCtx, mcx: &mut ModCtx, value: i64) -> LLVMValueRef {
     unsafe {
         let type_tag = boxed::TypeTag::Int;
-        let llvm_type = cgx.boxed_abi_to_llvm_struct_type(&type_tag.into());
-        let llvm_i64 = LLVMInt64TypeInContext(cgx.llx);
+        let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
+        let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
 
         let box_name = ffi::CString::new(format!("const_int_{}", value)).unwrap();
 
         let global = mcx.get_global_or_insert(llvm_type, box_name.as_bytes_with_nul(), || {
             let members = &mut [
-                cgx.llvm_box_header(type_tag.into_const_header()),
+                tcx.llvm_box_header(type_tag.into_const_header()),
                 LLVMConstInt(llvm_i64, value as u64, 1),
             ];
 
@@ -109,22 +109,22 @@ pub fn gen_boxed_int(cgx: &mut CodegenCtx, mcx: &mut ModCtx, value: i64) -> LLVM
     }
 }
 
-pub fn gen_boxed_nil(cgx: &mut CodegenCtx, mcx: &mut ModCtx) -> LLVMValueRef {
-    cgx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::Nil, b"ARRET_NIL\0")
+pub fn gen_boxed_nil(tcx: &mut TargetCtx, mcx: &mut ModCtx) -> LLVMValueRef {
+    tcx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::Nil, b"ARRET_NIL\0")
 }
 
 pub fn gen_boxed_fun_thunk(
-    cgx: &mut CodegenCtx,
+    tcx: &mut TargetCtx,
     mcx: &mut ModCtx,
     llvm_closure: LLVMValueRef,
     llvm_entry_point: LLVMValueRef,
 ) -> LLVMValueRef {
     unsafe {
         let type_tag = boxed::TypeTag::FunThunk;
-        let llvm_type = cgx.boxed_abi_to_llvm_struct_type(&type_tag.into());
+        let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
 
         let members = &mut [
-            cgx.llvm_box_header(type_tag.into_const_header()),
+            tcx.llvm_box_header(type_tag.into_const_header()),
             llvm_closure,
             llvm_entry_point,
         ];

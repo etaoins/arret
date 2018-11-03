@@ -40,7 +40,7 @@ fn llvm_i64_md_node(llx: LLVMContextRef, values: &[u64]) -> LLVMValueRef {
     }
 }
 
-pub struct CodegenCtx {
+pub struct TargetCtx {
     pub llx: LLVMContextRef,
     target_data: LLVMTargetDataRef,
 
@@ -67,8 +67,8 @@ pub struct CodegenCtx {
     boxed_align_md_node: LLVMValueRef,
 }
 
-impl CodegenCtx {
-    pub fn new(target_machine: LLVMTargetMachineRef, optimising: bool) -> CodegenCtx {
+impl TargetCtx {
+    pub fn new(target_machine: LLVMTargetMachineRef, optimising: bool) -> TargetCtx {
         use llvm_sys::transforms::pass_manager_builder::*;
         use std::mem;
 
@@ -84,7 +84,7 @@ impl CodegenCtx {
                 LLVMPassManagerBuilderDispose(fpmb);
             }
 
-            CodegenCtx {
+            TargetCtx {
                 llx,
                 target_data,
 
@@ -430,7 +430,7 @@ impl CodegenCtx {
     }
 }
 
-impl Drop for CodegenCtx {
+impl Drop for TargetCtx {
     fn drop(&mut self) {
         unsafe {
             LLVMDisposeTargetData(self.target_data);

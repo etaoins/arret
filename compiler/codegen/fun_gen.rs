@@ -7,8 +7,8 @@ use llvm_sys::prelude::*;
 use crate::mir::ops;
 
 use crate::codegen::analysis::escape::CaptureKind;
-use crate::codegen::context::CodegenCtx;
 use crate::codegen::mod_gen::ModCtx;
+use crate::codegen::target_gen::TargetCtx;
 use crate::codegen::GenABI;
 
 pub struct BuiltFun {
@@ -46,7 +46,7 @@ impl Drop for FunCtx {
     }
 }
 
-pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &ops::Fun) -> BuiltFun {
+pub(crate) fn gen_fun(tcx: &mut TargetCtx, mcx: &mut ModCtx, fun: &ops::Fun) -> BuiltFun {
     use crate::codegen::alloc::plan::plan_allocs;
     use crate::codegen::analysis;
     use crate::codegen::op_gen;
@@ -81,9 +81,9 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &ops::Fun) ->
     };
 
     unsafe {
-        let builder = LLVMCreateBuilderInContext(cgx.llx);
+        let builder = LLVMCreateBuilderInContext(tcx.llx);
 
-        let function_type = cgx.fun_abi_to_llvm_type(&gen_abi);
+        let function_type = tcx.fun_abi_to_llvm_type(&gen_abi);
 
         let fun_symbol = fun
             .source_name
@@ -93,7 +93,7 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &ops::Fun) ->
 
         let function = LLVMAddFunction(mcx.module, fun_symbol.as_ptr() as *const _, function_type);
 
-        let bb = LLVMAppendBasicBlockInContext(cgx.llx, function, b"entry\0".as_ptr() as *const _);
+        let bb = LLVMAppendBasicBlockInContext(tcx.llx, function, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
 
         let mut fcx = FunCtx::new(function, builder);
@@ -113,7 +113,7 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &ops::Fun) ->
             if let ABIType::Boxed(_) = param_abi_type {
                 let no_capture = param_captures[param_index] == CaptureKind::Never;
 
-                cgx.add_boxed_param_attrs(
+                tcx.add_boxed_param_attrs(
                     function,
                     (llvm_params_offset + param_index + 1) as u32,
                     no_capture,
@@ -122,11 +122,11 @@ pub(crate) fn gen_fun(cgx: &mut CodegenCtx, mcx: &mut ModCtx, fun: &ops::Fun) ->
         }
 
         if let RetABIType::Inhabited(ABIType::Boxed(_)) = fun.abi.ret {
-            cgx.add_boxed_return_attrs(function);
+            tcx.add_boxed_return_attrs(function);
         }
 
         for alloc_atom in alloc_plan {
-            op_gen::gen_alloc_atom(cgx, mcx, &mut fcx, &alloc_atom);
+            op_gen::gen_alloc_atom(tcx, mcx, &mut fcx, &alloc_atom);
         }
 
         mcx.optimise_function(function);

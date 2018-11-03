@@ -6,13 +6,13 @@ use runtime::boxed;
 
 use crate::mir::ops::*;
 
-use crate::codegen::context::CodegenCtx;
 use crate::codegen::fun_gen::FunCtx;
 use crate::codegen::mod_gen::ModCtx;
+use crate::codegen::target_gen::TargetCtx;
 use crate::codegen::{alloc, const_gen};
 
 fn gen_op(
-    cgx: &mut CodegenCtx,
+    tcx: &mut TargetCtx,
     mcx: &mut ModCtx,
     fcx: &mut FunCtx,
     alloc_atom: &alloc::AllocAtom<'_>,
@@ -23,37 +23,37 @@ fn gen_op(
     unsafe {
         match &op.kind {
             OpKind::ConstBoxedNil(reg, _) => {
-                let llvm_value = const_gen::gen_boxed_nil(cgx, mcx);
+                let llvm_value = const_gen::gen_boxed_nil(tcx, mcx);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBoxedTrue(reg, _) => {
                 let llvm_value =
-                    cgx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::True, b"ARRET_TRUE\0");
+                    tcx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::True, b"ARRET_TRUE\0");
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBoxedFalse(reg, _) => {
                 let llvm_value =
-                    cgx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::False, b"ARRET_FALSE\0");
+                    tcx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::False, b"ARRET_FALSE\0");
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstInt64(reg, value) => {
-                let llvm_value = LLVMConstInt(LLVMInt64TypeInContext(cgx.llx), *value as u64, 1);
+                let llvm_value = LLVMConstInt(LLVMInt64TypeInContext(tcx.llx), *value as u64, 1);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstUsize(reg, value) => {
-                let llvm_value = LLVMConstInt(cgx.usize_llvm_type(), *value as u64, 1);
+                let llvm_value = LLVMConstInt(tcx.usize_llvm_type(), *value as u64, 1);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBool(reg, value) => {
-                let llvm_value = LLVMConstInt(LLVMInt1TypeInContext(cgx.llx), *value as u64, 1);
+                let llvm_value = LLVMConstInt(LLVMInt1TypeInContext(tcx.llx), *value as u64, 1);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstTypeTag(reg, type_tag) => {
-                let llvm_value = LLVMConstInt(LLVMInt8TypeInContext(cgx.llx), *type_tag as u64, 1);
+                let llvm_value = LLVMConstInt(LLVMInt8TypeInContext(tcx.llx), *type_tag as u64, 1);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBoxedInt(reg, value) => {
-                let llvm_value = const_gen::gen_boxed_int(cgx, mcx, *value);
+                let llvm_value = const_gen::gen_boxed_int(tcx, mcx, *value);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBoxedFunThunk(
@@ -63,11 +63,11 @@ fn gen_op(
                     callee,
                 },
             ) => {
-                let llvm_entry_point = gen_callee_entry_point(cgx, mcx, fcx, callee);
+                let llvm_entry_point = gen_callee_entry_point(tcx, mcx, fcx, callee);
                 let llvm_closure = fcx.regs[closure_reg];
 
                 let llvm_value =
-                    const_gen::gen_boxed_fun_thunk(cgx, mcx, llvm_closure, llvm_entry_point);
+                    const_gen::gen_boxed_fun_thunk(tcx, mcx, llvm_closure, llvm_entry_point);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBoxedPair(
@@ -83,7 +83,7 @@ fn gen_op(
                 let llvm_length = fcx.regs[length_reg];
 
                 let llvm_value =
-                    const_gen::gen_boxed_pair(cgx, mcx, llvm_head, llvm_rest, llvm_length);
+                    const_gen::gen_boxed_pair(tcx, mcx, llvm_head, llvm_rest, llvm_length);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBoxedStr(reg, value) => {
@@ -91,19 +91,19 @@ fn gen_op(
                     unimplemented!("Non-inline strings");
                 }
 
-                let llvm_value = const_gen::gen_boxed_inline_str(cgx, mcx, value.as_ref());
+                let llvm_value = const_gen::gen_boxed_inline_str(tcx, mcx, value.as_ref());
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstCastBoxed(reg, CastBoxedOp { from_reg, to_type }) => {
                 let from_llvm_value = fcx.regs[from_reg];
-                let to_llvm_type = cgx.boxed_abi_to_llvm_ptr_type(to_type);
+                let to_llvm_type = tcx.boxed_abi_to_llvm_ptr_type(to_type);
                 let to_llvm_value = LLVMConstBitCast(from_llvm_value, to_llvm_type);
 
                 fcx.regs.insert(*reg, to_llvm_value);
             }
             OpKind::CastBoxed(reg, CastBoxedOp { from_reg, to_type }) => {
                 let from_llvm_value = fcx.regs[from_reg];
-                let to_llvm_type = cgx.boxed_abi_to_llvm_ptr_type(to_type);
+                let to_llvm_type = tcx.boxed_abi_to_llvm_ptr_type(to_type);
 
                 let to_llvm_value = LLVMBuildBitCast(
                     fcx.builder,
@@ -116,7 +116,7 @@ fn gen_op(
             OpKind::Call(reg, CallOp { callee, args, .. }) => {
                 use crate::codegen::callee;
 
-                let llvm_fun = gen_callee_entry_point(cgx, mcx, fcx, callee);
+                let llvm_fun = gen_callee_entry_point(tcx, mcx, fcx, callee);
                 let takes_task = callee::callee_takes_task(mcx.built_funs(), callee);
 
                 let task_reg_iter = fcx.current_task.filter(|_| takes_task).into_iter();
@@ -155,9 +155,9 @@ fn gen_op(
 
                 let llvm_any = fcx.regs[subject_reg];
                 let gep_indices = &mut [
-                    LLVMConstInt(LLVMInt32TypeInContext(cgx.llx), 0, 0),
-                    LLVMConstInt(LLVMInt32TypeInContext(cgx.llx), 0, 0),
-                    LLVMConstInt(LLVMInt32TypeInContext(cgx.llx), 0, 0),
+                    LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), 0, 0),
+                    LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), 0, 0),
+                    LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), 0, 0),
                 ];
 
                 let llvm_type_tag_ptr = LLVMBuildInBoundsGEP(
@@ -174,19 +174,19 @@ fn gen_op(
                     "type_tag\0".as_ptr() as *const _,
                 );
 
-                let llvm_i8 = LLVMInt8TypeInContext(cgx.llx);
+                let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
                 let possible_type_tag_metadata = int_range_md_node(
-                    cgx.llx,
+                    tcx.llx,
                     llvm_i8,
                     possible_type_tags
                         .into_iter()
                         .map(|type_tag| type_tag as i64),
                 );
 
-                let range_md_kind_id = cgx.llvm_md_kind_id_for_name(b"range");
+                let range_md_kind_id = tcx.llvm_md_kind_id_for_name(b"range");
                 LLVMSetMetadata(llvm_type_tag, range_md_kind_id, possible_type_tag_metadata);
 
-                cgx.add_invariant_load_metadata(llvm_type_tag);
+                tcx.add_invariant_load_metadata(llvm_type_tag);
                 fcx.regs.insert(*reg, llvm_type_tag);
             }
             OpKind::LoadBoxedListLength(reg, list_reg) => {
@@ -200,7 +200,7 @@ fn gen_op(
 
                 let llvm_length =
                     LLVMBuildLoad(fcx.builder, length_ptr, "length\0".as_ptr() as *const _);
-                cgx.add_invariant_load_metadata(llvm_length);
+                tcx.add_invariant_load_metadata(llvm_length);
 
                 fcx.regs.insert(*reg, llvm_length);
             }
@@ -214,8 +214,8 @@ fn gen_op(
                 );
 
                 let llvm_head = LLVMBuildLoad(fcx.builder, head_ptr, "head\0".as_ptr() as *const _);
-                cgx.add_invariant_load_metadata(llvm_head);
-                cgx.add_boxed_load_metadata(llvm_head);
+                tcx.add_invariant_load_metadata(llvm_head);
+                tcx.add_boxed_load_metadata(llvm_head);
 
                 fcx.regs.insert(*reg, llvm_head);
             }
@@ -229,8 +229,8 @@ fn gen_op(
                 );
 
                 let llvm_rest = LLVMBuildLoad(fcx.builder, head_ptr, "rest\0".as_ptr() as *const _);
-                cgx.add_invariant_load_metadata(llvm_rest);
-                cgx.add_boxed_load_metadata(llvm_rest);
+                tcx.add_invariant_load_metadata(llvm_rest);
+                tcx.add_boxed_load_metadata(llvm_rest);
 
                 fcx.regs.insert(*reg, llvm_rest);
             }
@@ -245,7 +245,7 @@ fn gen_op(
 
                 let llvm_value =
                     LLVMBuildLoad(fcx.builder, value_ptr, "int_value\0".as_ptr() as *const _);
-                cgx.add_invariant_load_metadata(llvm_value);
+                tcx.add_invariant_load_metadata(llvm_value);
 
                 fcx.regs.insert(*reg, llvm_value);
             }
@@ -268,14 +268,14 @@ fn gen_op(
             }
             OpKind::Cond(cond_op) => {
                 let cond_alloc_plan = &alloc_atom.cond_plans()[&op_index];
-                gen_cond(cgx, mcx, fcx, cond_op, cond_alloc_plan);
+                gen_cond(tcx, mcx, fcx, cond_op, cond_alloc_plan);
             }
             OpKind::AllocInt(reg, int_reg) => {
                 let box_source = alloc_atom.box_sources()[reg];
 
                 let llvm_int = fcx.regs[int_reg];
                 let llvm_alloced = alloc::types::gen_alloc_int(
-                    cgx,
+                    tcx,
                     fcx.builder,
                     active_alloc,
                     box_source,
@@ -301,7 +301,7 @@ fn gen_op(
                 };
 
                 let llvm_value = alloc::types::gen_alloc_boxed_pair(
-                    cgx,
+                    tcx,
                     fcx.builder,
                     active_alloc,
                     box_source,
@@ -320,11 +320,11 @@ fn gen_op(
 
                 let input = alloc::types::FunThunkInput {
                     llvm_closure: fcx.regs[closure_reg],
-                    llvm_entry_point: gen_callee_entry_point(cgx, mcx, fcx, callee),
+                    llvm_entry_point: gen_callee_entry_point(tcx, mcx, fcx, callee),
                 };
 
                 let llvm_value = alloc::types::gen_alloc_boxed_fun_thunk(
-                    cgx,
+                    tcx,
                     fcx.builder,
                     active_alloc,
                     box_source,
@@ -360,13 +360,13 @@ fn gen_op(
             OpKind::UsizeToInt64(reg, usize_reg) => {
                 let llvm_usize = fcx.regs[usize_reg];
 
-                let llvm_i64 = if cgx.pointer_bits() == 64 {
+                let llvm_i64 = if tcx.pointer_bits() == 64 {
                     llvm_usize
                 } else {
                     LLVMBuildZExt(
                         fcx.builder,
                         llvm_usize,
-                        LLVMInt64TypeInContext(cgx.llx),
+                        LLVMInt64TypeInContext(tcx.llx),
                         "usize_as_i64\0".as_ptr() as *const _,
                     )
                 };
@@ -378,7 +378,7 @@ fn gen_op(
 }
 
 fn gen_cond_branch(
-    cgx: &mut CodegenCtx,
+    tcx: &mut TargetCtx,
     mcx: &mut ModCtx,
     fcx: &mut FunCtx,
     block: LLVMBasicBlockRef,
@@ -389,7 +389,7 @@ fn gen_cond_branch(
         LLVMPositionBuilderAtEnd(fcx.builder, block);
 
         for alloc_atom in alloc_plan {
-            gen_alloc_atom(cgx, mcx, fcx, alloc_atom);
+            gen_alloc_atom(tcx, mcx, fcx, alloc_atom);
         }
 
         // We can't branch if we terminated
@@ -405,7 +405,7 @@ fn gen_cond_branch(
 }
 
 fn gen_cond(
-    cgx: &mut CodegenCtx,
+    tcx: &mut TargetCtx,
     mcx: &mut ModCtx,
     fcx: &mut FunCtx,
     cond_op: &CondOp,
@@ -417,17 +417,17 @@ fn gen_cond(
 
     unsafe {
         let mut true_block = LLVMAppendBasicBlockInContext(
-            cgx.llx,
+            tcx.llx,
             fcx.function,
             b"cond_true\0".as_ptr() as *const _,
         );
         let mut false_block = LLVMAppendBasicBlockInContext(
-            cgx.llx,
+            tcx.llx,
             fcx.function,
             b"cond_false\0".as_ptr() as *const _,
         );
         let cont_block = LLVMAppendBasicBlockInContext(
-            cgx.llx,
+            tcx.llx,
             fcx.function,
             b"cond_cont\0".as_ptr() as *const _,
         );
@@ -436,7 +436,7 @@ fn gen_cond(
         LLVMBuildCondBr(fcx.builder, test_llvm, true_block, false_block);
 
         gen_cond_branch(
-            cgx,
+            tcx,
             mcx,
             fcx,
             true_block,
@@ -444,7 +444,7 @@ fn gen_cond(
             cont_block,
         );
         gen_cond_branch(
-            cgx,
+            tcx,
             mcx,
             fcx,
             false_block,
@@ -487,7 +487,7 @@ fn gen_cond(
 }
 
 fn gen_callee_entry_point(
-    cgx: &mut CodegenCtx,
+    cgx: &mut TargetCtx,
     mcx: &mut ModCtx,
     fcx: &mut FunCtx,
     callee: &Callee,
@@ -509,19 +509,19 @@ fn gen_callee_entry_point(
 }
 
 pub(crate) fn gen_alloc_atom(
-    cgx: &mut CodegenCtx,
+    tcx: &mut TargetCtx,
     mcx: &mut ModCtx,
     fcx: &mut FunCtx,
     alloc_atom: &alloc::AllocAtom<'_>,
 ) {
     let mut active_alloc = if let Some(llvm_task) = fcx.current_task {
-        alloc::core::gen_active_alloc_for_atom(cgx, mcx, fcx.builder, llvm_task, &alloc_atom)
+        alloc::core::gen_active_alloc_for_atom(tcx, mcx, fcx.builder, llvm_task, &alloc_atom)
     } else {
         alloc::ActiveAlloc::empty()
     };
 
     for (op_index, op) in alloc_atom.ops().iter().enumerate() {
-        gen_op(cgx, mcx, fcx, alloc_atom, &mut active_alloc, op_index, &op);
+        gen_op(tcx, mcx, fcx, alloc_atom, &mut active_alloc, op_index, &op);
     }
 
     assert!(

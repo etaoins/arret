@@ -4,13 +4,13 @@ use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::LLVMAttributeFunctionIndex;
 
-use crate::codegen::context::CodegenCtx;
 use crate::codegen::fun_gen::BuiltFun;
 use crate::codegen::mod_gen::ModCtx;
+use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
 
 pub fn gen_static_symbol_entry_point(
-    cgx: &mut CodegenCtx,
+    tcx: &mut TargetCtx,
     mcx: &mut ModCtx,
     static_symbol: &ops::StaticSymbol,
 ) -> LLVMValueRef {
@@ -23,7 +23,7 @@ pub fn gen_static_symbol_entry_point(
         symbol,
     } = static_symbol;
 
-    let function_type = cgx.fun_abi_to_llvm_type(&abi);
+    let function_type = tcx.fun_abi_to_llvm_type(&abi);
     let function_name = ffi::CString::new(*symbol).unwrap();
 
     unsafe {
@@ -32,15 +32,14 @@ pub fn gen_static_symbol_entry_point(
             function_name.as_bytes_with_nul(),
             |function| {
                 // LLVM param attributes are 1 indexed
-                let param_attr_offset =
-                    1 + (abi.takes_task as usize) ;
+                let param_attr_offset = 1 + (abi.takes_task as usize);
 
                 for (index, param_abi_type) in abi.params.iter().enumerate() {
                     if let ABIType::Boxed(_) = param_abi_type.abi_type {
                         let no_capture = infer_param_capture_kind(&abi.ret, &param_abi_type)
                             == CaptureKind::Never;
 
-                        cgx.add_boxed_param_attrs(
+                        tcx.add_boxed_param_attrs(
                             function,
                             (param_attr_offset + index) as u32,
                             no_capture,
@@ -49,7 +48,7 @@ pub fn gen_static_symbol_entry_point(
                 }
 
                 if !impure {
-                    let speculatable_attr = cgx.llvm_enum_attr_for_name(b"speculatable", 0);
+                    let speculatable_attr = tcx.llvm_enum_attr_for_name(b"speculatable", 0);
                     LLVMAddAttributeAtIndex(
                         function,
                         LLVMAttributeFunctionIndex,
@@ -59,10 +58,10 @@ pub fn gen_static_symbol_entry_point(
 
                 match abi.ret {
                     RetABIType::Inhabited(ABIType::Boxed(_)) => {
-                        cgx.add_boxed_return_attrs(function);
+                        tcx.add_boxed_return_attrs(function);
                     }
                     RetABIType::Never => {
-                        let noreturn_attr = cgx.llvm_enum_attr_for_name(b"noreturn", 0);
+                        let noreturn_attr = tcx.llvm_enum_attr_for_name(b"noreturn", 0);
                         LLVMAddAttributeAtIndex(
                             function,
                             LLVMAttributeFunctionIndex,

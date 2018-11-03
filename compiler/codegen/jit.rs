@@ -11,8 +11,8 @@ use llvm_sys::execution_engine::*;
 use llvm_sys::orc::*;
 use llvm_sys::target_machine::*;
 
-use crate::codegen::context::CodegenCtx;
 use crate::codegen::mod_gen::ModCtx;
+use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
 
 extern "C" fn orc_sym_resolve(name_ptr: *const libc::c_char, jcx_void: *mut libc::c_void) -> u64 {
@@ -27,13 +27,14 @@ extern "C" fn orc_sym_resolve(name_ptr: *const libc::c_char, jcx_void: *mut libc
 }
 
 pub struct JITCtx {
+    tcx: TargetCtx,
     orc: LLVMOrcJITStackRef,
     target_machine: LLVMTargetMachineRef,
     symbols: HashMap<ffi::CString, u64>,
 }
 
 impl JITCtx {
-    pub fn new() -> JITCtx {
+    pub fn new(optimising: bool) -> JITCtx {
         unsafe {
             use crate::codegen::target_machine::create_target_machine;
             use runtime::compiler_support;
@@ -48,6 +49,7 @@ impl JITCtx {
             let orc = LLVMOrcCreateInstance(target_machine);
 
             let mut jcx = JITCtx {
+                tcx: TargetCtx::new(target_machine, optimising),
                 orc,
                 target_machine,
                 symbols: HashMap::new(),
@@ -65,14 +67,11 @@ impl JITCtx {
         }
     }
 
-    pub fn compile_fun(
-        &mut self,
-        cgx: &mut CodegenCtx,
-        built_funs: &[ops::Fun],
-        fun: &ops::Fun,
-    ) -> u64 {
+    pub fn compile_fun(&mut self, built_funs: &[ops::Fun], fun: &ops::Fun) -> u64 {
         use crate::codegen::fun_gen;
         use std::ptr;
+
+        let tcx = &mut self.tcx;
 
         let module_name = fun
             .source_name
@@ -83,16 +82,16 @@ impl JITCtx {
         unsafe {
             // Create the module
             let module =
-                LLVMModuleCreateWithNameInContext(module_name.as_ptr() as *const _, cgx.llx);
-            let mut mcx = ModCtx::new(module, self.target_machine, cgx.optimising());
+                LLVMModuleCreateWithNameInContext(module_name.as_ptr() as *const _, tcx.llx);
+            let mut mcx = ModCtx::new(module, self.target_machine, tcx.optimising());
 
             // TODO: We're regenerating every built fun on each JITed function. This is terrible.
             for (fun_idx, fun) in built_funs.iter().enumerate() {
-                let built_fun = fun_gen::gen_fun(cgx, &mut mcx, fun);
+                let built_fun = fun_gen::gen_fun(tcx, &mut mcx, fun);
                 mcx.push_built_fun(ops::BuiltFunId::new(fun_idx), built_fun);
             }
 
-            let llvm_function = fun_gen::gen_fun(cgx, &mut mcx, fun).llvm_value;
+            let llvm_function = fun_gen::gen_fun(tcx, &mut mcx, fun).llvm_value;
 
             // We need to take ownership before we tranfer the module to ORC
             let mut function_name_len: usize = 0;
@@ -110,7 +109,7 @@ impl JITCtx {
                 error,
             );
 
-            cgx.optimise_module(module);
+            tcx.optimise_module(module);
 
             let mut orc_module: LLVMOrcModuleHandle = 0;
             if LLVMOrcAddLazilyCompiledIR(
@@ -153,10 +152,6 @@ impl JITCtx {
 
             LLVMOrcDisposeMangledSymbol(mangled_pointer);
         }
-    }
-
-    pub fn target_machine(&self) -> LLVMTargetMachineRef {
-        self.target_machine
     }
 }
 
