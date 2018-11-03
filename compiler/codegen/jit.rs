@@ -35,7 +35,7 @@ pub struct JITCtx {
 impl JITCtx {
     pub fn new() -> JITCtx {
         unsafe {
-            use crate::codegen::target::create_target_machine;
+            use crate::codegen::target_machine::create_target_machine;
             use runtime::compiler_support;
 
             LLVMLinkInMCJIT();
@@ -153,6 +153,10 @@ impl JITCtx {
 
             LLVMOrcDisposeMangledSymbol(mangled_pointer);
         }
+    }
+
+    pub fn target_machine(&self) -> LLVMTargetMachineRef {
+        self.target_machine
     }
 }
 

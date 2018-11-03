@@ -275,7 +275,7 @@ impl fmt::Debug for TopPair {
 #[derive(Debug)]
 pub struct Nil {
     header: Header,
-    list_length: u64,
+    list_length: usize,
 }
 
 #[export_name = "ARRET_NIL"]
@@ -304,7 +304,13 @@ mod test {
     fn sizes() {
         assert_eq!(16, mem::size_of::<Nil>());
         assert_eq!(16, mem::size_of::<List<Any>>());
-        assert!([16, 32].contains(&mem::size_of::<Pair<Any>>()));
+
+        #[cfg(target_pointer_width = "64")]
+        assert_eq!(32, mem::size_of::<Pair<Any>>());
+
+        // We should be able to back in to 16 bytes on 32bit
+        #[cfg(target_pointer_width = "32")]
+        assert_eq!(16, mem::size_of::<Pair<Any>>());
     }
 
     #[test]

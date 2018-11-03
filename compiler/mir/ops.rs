@@ -106,7 +106,8 @@ pub struct LoadBoxedTypeTagOp {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum OpKind {
-    ConstInt(RegId, i64),
+    ConstInt64(RegId, i64),
+    ConstUsize(RegId, usize),
     ConstBool(RegId, bool),
     ConstTypeTag(RegId, boxed::TypeTag),
 
@@ -136,6 +137,7 @@ pub enum OpKind {
 
     Add(RegId, BinaryOp),
     IntEqual(RegId, BinaryOp),
+    UsizeToInt64(RegId, RegId),
 
     Ret(RegId),
     RetVoid,
@@ -150,7 +152,8 @@ impl OpKind {
             ConstBoxedNil(reg_id, _)
             | ConstBoxedTrue(reg_id, _)
             | ConstBoxedFalse(reg_id, _)
-            | ConstInt(reg_id, _)
+            | ConstInt64(reg_id, _)
+            | ConstUsize(reg_id, _)
             | ConstBool(reg_id, _)
             | ConstTypeTag(reg_id, _)
             | ConstBoxedInt(reg_id, _)
@@ -170,7 +173,7 @@ impl OpKind {
             | LoadBoxedIntValue(reg_id, _)
             | LoadBoxedFunThunkClosure(reg_id, _)
             | Add(reg_id, _) => Some(*reg_id),
-            IntEqual(reg_id, _) => Some(*reg_id),
+            IntEqual(reg_id, _) | UsizeToInt64(reg_id, _) => Some(*reg_id),
             Cond(cond_op) => cond_op.reg_phi.clone().map(|reg_phi| reg_phi.output_reg),
             Ret(_) | RetVoid | Unreachable => None,
         }
@@ -184,7 +187,8 @@ impl OpKind {
             ConstBoxedNil(_, _)
             | ConstBoxedTrue(_, _)
             | ConstBoxedFalse(_, _)
-            | ConstInt(_, _)
+            | ConstInt64(_, _)
+            | ConstUsize(_, _)
             | ConstBool(_, _)
             | ConstTypeTag(_, _)
             | ConstBoxedInt(_, _)
@@ -230,7 +234,8 @@ impl OpKind {
             | LoadBoxedPairHead(_, reg_id)
             | LoadBoxedPairRest(_, reg_id)
             | LoadBoxedIntValue(_, reg_id)
-            | LoadBoxedFunThunkClosure(_, reg_id) => {
+            | LoadBoxedFunThunkClosure(_, reg_id)
+            | UsizeToInt64(_, reg_id) => {
                 coll.extend(iter::once(*reg_id));
             }
             Call(_, call_op) => {
@@ -330,7 +335,7 @@ mod test {
 
         assert_eq!(None, OpKind::RetVoid.output_reg());
         assert_eq!(None, OpKind::Ret(reg1).output_reg());
-        assert_eq!(Some(reg1), OpKind::ConstInt(reg1, 14).output_reg());
+        assert_eq!(Some(reg1), OpKind::ConstInt64(reg1, 14).output_reg());
     }
 
     #[test]
@@ -338,7 +343,7 @@ mod test {
         let reg1 = RegId::alloc();
 
         assert_eq!(true, OpKind::RetVoid.has_side_effects());
-        assert_eq!(false, OpKind::ConstInt(reg1, 14).has_side_effects());
+        assert_eq!(false, OpKind::ConstInt64(reg1, 14).has_side_effects());
 
         let cond_op_with_no_side_effects = CondOp {
             reg_phi: None,

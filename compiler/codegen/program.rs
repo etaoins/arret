@@ -200,7 +200,7 @@ pub fn gen_program(
     program: &mir::BuiltProgram,
     output_file: &path::Path,
 ) {
-    use crate::codegen::target::create_target_machine;
+    use crate::codegen::target_machine::create_target_machine;
 
     let Options {
         target_triple,
@@ -218,14 +218,13 @@ pub fn gen_program(
 
     let llvm_output_path_cstring = CString::new(llvm_output_path.to_str().unwrap()).unwrap();
 
-    let mut cgx = CodegenCtx::new(llvm_opt);
-
     let target_machine = create_target_machine(
         target_triple,
         LLVMRelocMode::LLVMRelocDynamicNoPic,
         LLVMCodeModel::LLVMCodeModelDefault,
     );
 
+    let mut cgx = CodegenCtx::new(target_machine, llvm_opt);
     let module = program_to_module(source_loader, &mut cgx, target_machine, &program);
 
     unsafe {

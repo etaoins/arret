@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
+use llvm_sys::target::*;
+use llvm_sys::target_machine::*;
 use llvm_sys::{LLVMAttributeReturnIndex, LLVMLinkage};
 
 use runtime::abitype::{ABIType, BoxedABIType, RetABIType, TOP_LIST_BOXED_ABI_TYPE};
@@ -40,6 +42,8 @@ fn llvm_i64_md_node(llx: LLVMContextRef, values: &[u64]) -> LLVMValueRef {
 
 pub struct CodegenCtx {
     pub llx: LLVMContextRef,
+    target_data: LLVMTargetDataRef,
+
     optimising: bool,
     module_pass_manager: LLVMPassManagerRef,
 
@@ -64,14 +68,14 @@ pub struct CodegenCtx {
 }
 
 impl CodegenCtx {
-    pub fn new(optimising: bool) -> CodegenCtx {
+    pub fn new(target_machine: LLVMTargetMachineRef, optimising: bool) -> CodegenCtx {
         use llvm_sys::transforms::pass_manager_builder::*;
         use std::mem;
 
         unsafe {
             let llx = LLVMContextCreate();
-
             let module_pass_manager = LLVMCreatePassManager();
+            let target_data = LLVMCreateTargetDataLayout(target_machine);
 
             if optimising {
                 let fpmb = LLVMPassManagerBuilderCreate();
@@ -82,6 +86,8 @@ impl CodegenCtx {
 
             CodegenCtx {
                 llx,
+                target_data,
+
                 optimising,
                 module_pass_manager,
 
@@ -120,6 +126,14 @@ impl CodegenCtx {
 
     pub fn optimising(&self) -> bool {
         self.optimising
+    }
+
+    pub fn usize_llvm_type(&self) -> LLVMTypeRef {
+        unsafe { LLVMIntPtrTypeInContext(self.llx, self.target_data) }
+    }
+
+    pub fn pointer_bits(&self) -> u32 {
+        unsafe { LLVMPointerSize(self.target_data) }
     }
 
     pub fn task_llvm_ptr_type(&mut self) -> LLVMTypeRef {
@@ -213,14 +227,14 @@ impl CodegenCtx {
                     let llvm_any_list_ptr =
                         self.boxed_abi_to_llvm_ptr_type(&TOP_LIST_BOXED_ABI_TYPE);
 
-                    members.push(LLVMInt64TypeInContext(self.llx));
+                    members.push(self.usize_llvm_type());
                     members.push(llvm_any_ptr);
                     members.push(llvm_any_list_ptr);
 
                     b"pair\0".as_ptr()
                 }
                 BoxedABIType::List(_) => {
-                    members.push(LLVMInt64TypeInContext(self.llx));
+                    members.push(self.usize_llvm_type());
                     b"list\0".as_ptr()
                 }
                 _ => b"opaque_boxed\0".as_ptr(),
@@ -419,8 +433,9 @@ impl CodegenCtx {
 impl Drop for CodegenCtx {
     fn drop(&mut self) {
         unsafe {
-            LLVMContextDispose(self.llx);
+            LLVMDisposeTargetData(self.target_data);
             LLVMDisposePassManager(self.module_pass_manager);
+            LLVMContextDispose(self.llx);
         }
     }
 }

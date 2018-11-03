@@ -36,8 +36,12 @@ fn gen_op(
                     cgx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::False, b"ARRET_FALSE\0");
                 fcx.regs.insert(*reg, llvm_value);
             }
-            OpKind::ConstInt(reg, value) => {
+            OpKind::ConstInt64(reg, value) => {
                 let llvm_value = LLVMConstInt(LLVMInt64TypeInContext(cgx.llx), *value as u64, 1);
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::ConstUsize(reg, value) => {
+                let llvm_value = LLVMConstInt(cgx.usize_llvm_type(), *value as u64, 1);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBool(reg, value) => {
@@ -352,6 +356,22 @@ fn gen_op(
                     "int_equal\0".as_ptr() as *const _,
                 );
                 fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::UsizeToInt64(reg, usize_reg) => {
+                let llvm_usize = fcx.regs[usize_reg];
+
+                let llvm_i64 = if cgx.pointer_bits() == 64 {
+                    llvm_usize
+                } else {
+                    LLVMBuildZExt(
+                        fcx.builder,
+                        llvm_usize,
+                        LLVMInt64TypeInContext(cgx.llx),
+                        "usize_as_i64\0".as_ptr() as *const _,
+                    )
+                };
+
+                fcx.regs.insert(*reg, llvm_i64);
             }
         }
     }

@@ -82,6 +82,9 @@ impl Default for DefCtx {
 
 impl EvalHirCtx {
     pub fn new(optimising: bool) -> EvalHirCtx {
+        let thunk_jit = codegen::jit::JITCtx::new();
+        let thunk_gen = codegen::context::CodegenCtx::new(thunk_jit.target_machine(), optimising);
+
         EvalHirCtx {
             runtime_task: runtime::task::Task::new(),
             global_values: HashMap::new(),
@@ -90,8 +93,8 @@ impl EvalHirCtx {
 
             rust_fun_thunks: HashMap::new(),
             thunk_fun_values: HashMap::new(),
-            thunk_jit: codegen::jit::JITCtx::new(),
-            thunk_gen: codegen::context::CodegenCtx::new(optimising),
+            thunk_jit,
+            thunk_gen,
         }
     }
 

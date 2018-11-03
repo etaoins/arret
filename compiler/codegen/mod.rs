@@ -10,7 +10,7 @@ mod mod_gen;
 mod op_gen;
 pub(crate) mod program;
 mod range_md;
-mod target;
+mod target_machine;
 
 use runtime::abitype;
 

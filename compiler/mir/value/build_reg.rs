@@ -68,7 +68,7 @@ fn const_to_reg(
 
     BuiltReg::Const(match (subtype, abi_type) {
         (boxed::AnySubtype::Int(int_ref), abitype::ABIType::Int) => {
-            b.push_reg(span, OpKind::ConstInt, int_ref.value())
+            b.push_reg(span, OpKind::ConstInt64, int_ref.value())
         }
         (boxed::AnySubtype::True(_), abitype::ABIType::Bool) => {
             b.push_reg(span, OpKind::ConstBool, true)
@@ -117,7 +117,7 @@ fn const_to_reg(
                 pair_ref.rest().as_any_ref(),
                 &abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
             );
-            let length_reg = b.push_reg(span, OpKind::ConstInt, pair_ref.len() as i64);
+            let length_reg = b.push_reg(span, OpKind::ConstUsize, pair_ref.len());
 
             let from_reg = b.push_reg(
                 span,
@@ -189,11 +189,9 @@ fn list_to_reg(
             .enumerate()
             .fold(tail_reg, |tail_reg, (i, fixed)| {
                 let length_reg = match rest_length {
-                    RestLength::Known(known) => {
-                        b.push_reg(span, OpKind::ConstInt, (known + i + 1) as i64)
-                    }
+                    RestLength::Known(known) => b.push_reg(span, OpKind::ConstUsize, known + i + 1),
                     RestLength::Loaded(rest_length_reg) => {
-                        let index_reg = b.push_reg(span, OpKind::ConstInt, (i + 1) as i64);
+                        let index_reg = b.push_reg(span, OpKind::ConstUsize, i + 1);
                         b.push_reg(
                             span,
                             OpKind::Add,
