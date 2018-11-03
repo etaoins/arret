@@ -1,0 +1,18 @@
+[package]
+name = "rfi-derive"
+version = "0.1.0"
+edition = "2018"
+authors = ["Ryan Cumming <etaoins@gmail.com>"]
+
+[lib]
+path = "lib.rs"
+proc-macro = true
+
+[dependencies]
+quote = "0.6"
+proc-macro2 = "0.4"
+runtime = { path = "../runtime" }
+
+[dependencies.syn]
+version = "0.15"
+features = ["full"]

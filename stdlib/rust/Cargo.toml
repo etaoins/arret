@@ -12,3 +12,4 @@ crate-type = ["cdylib", "staticlib"]
 [dependencies]
 runtime = { path = "../../runtime" }
 runtime-syntax = { path = "../../runtime-syntax" }
+rfi-derive = { path = "../../rfi-derive" }

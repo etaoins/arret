@@ -3,6 +3,7 @@
 
 #[macro_use]
 extern crate runtime;
+use rfi_derive;
 
 mod pretty_print;
 use crate::pretty_print::pretty_print;
@@ -14,43 +15,38 @@ use crate::testing::*;
 pub mod write;
 use crate::write::*;
 
-use runtime::abitype::*;
 use runtime::binding::*;
 
 use runtime::boxed;
 use runtime::boxed::refs::Gc;
 use runtime::task::Task;
 
-define_rust_fn! {
-    #[arret_type="(Any ... -> (U))"]
-    PANIC = fn arret_stdlib_panic(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Never {
-        use std::str;
+#[rfi_derive::rust_fun("(Any ... -> (U))")]
+pub fn stdlib_panic(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Never {
+    use std::str;
 
-        let mut output = Vec::<u8>::new();
-        for value in values.iter() {
-            pretty_print(&mut output, task, value)
-        }
-
-        let message = str::from_utf8(output.as_slice()).unwrap().to_owned();
-        task.panic(message)
+    let mut output = Vec::<u8>::new();
+    for value in values.iter() {
+        pretty_print(&mut output, task, value)
     }
+
+    let message = str::from_utf8(output.as_slice()).unwrap().to_owned();
+    task.panic(message)
 }
 
-define_rust_fn! {
-    #[arret_type="(Int ->! (U))"]
-    EXIT = fn arret_stdlib_exit(exit_code: i64) -> () {
-        use std::process::exit;
-        exit(exit_code as i32);
-    }
+#[rfi_derive::rust_fun("(Int ->! (U))")]
+pub fn stdlib_exit(exit_code: i64) {
+    use std::process::exit;
+    exit(exit_code as i32);
 }
 
 define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
-    "length" => LENGTH,
-    "panic" => PANIC,
-    "print!" => PRINT,
-    "println!" => PRINTLN,
-    "exit!" => EXIT,
-    "cons" => CONS,
-    "black-box" => BLACK_BOX,
-    "black-box!" => BLACK_BOX_IMPURE
+    "length" => stdlib_length,
+    "panic" => stdlib_panic,
+    "print!" => stdlib_print,
+    "println!" => stdlib_println,
+    "exit!" => stdlib_exit,
+    "cons" => stdlib_cons,
+    "black-box" => stdlib_black_box,
+    "black-box!" => stdlib_black_box_impure
 });

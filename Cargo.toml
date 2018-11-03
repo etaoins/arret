@@ -5,5 +5,6 @@ members = [
 	"driver",
 	"runtime",
 	"runtime-syntax",
+	"rfi-derive",
 	"stdlib/rust"
 ]

@@ -50,6 +50,11 @@ pub trait EncodeABIType {
     const ABI_TYPE: ABIType;
     /// Controls the capture type when this is used as a parameter
     const PARAM_CAPTURE: ParamCapture = ParamCapture::Never;
+
+    const PARAM_ABI_TYPE: ParamABIType = ParamABIType {
+        abi_type: Self::ABI_TYPE,
+        capture: Self::PARAM_CAPTURE,
+    };
 }
 
 impl EncodeABIType for f64 {
