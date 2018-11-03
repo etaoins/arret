@@ -29,7 +29,7 @@ pub fn rust_fun(
     let attrs: proc_macro2::TokenStream = attrs.into();
 
     let mut attrs_iter = attrs.into_iter();
-    let arret_type: proc_macro2::TokenTree = attrs_iter.next().expect("Arret type expected");
+    let arret_type = attrs_iter.next().expect("Arret type expected");
 
     if attrs_iter.next().is_some() {
         panic!("unexpected tokens after Arret type");
