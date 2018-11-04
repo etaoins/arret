@@ -309,7 +309,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         let test_required_type = &ty::Ty::Bool.into_poly();
         let test_node = self.visit_expr(fcx, pv, test_required_type, test_expr)?;
 
-        if test_node.poly_type == ty::Ty::never().into_poly() {
+        if test_node.poly_type.is_never() {
             // Test diverged; we don't need the branches
             return Ok(test_node);
         }
@@ -550,10 +550,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             .map(|non_terminal_expr| {
                 // The type of this expression doesn't matter; its value is discarded
                 let node = self.visit_expr(fcx, pv, &ty::Ty::Any.into_poly(), non_terminal_expr)?;
-
-                if node.poly_type == ty::Ty::never().into_poly() {
-                    is_divergent = true;
-                }
+                is_divergent = is_divergent || node.poly_type.is_never();
 
                 Ok(node.expr)
             })
@@ -721,6 +718,30 @@ impl<'types> RecursiveDefsCtx<'types> {
         })
     }
 
+    /// Visit a function application
+    ///
+    /// This has a fairly convoluted algorithm for resolving type variables. The essential
+    /// problem is we don't know the type of our parameters until we visit their expressions.
+    /// However, we also need to provide the parameters with backwards type information which may
+    /// come from other parameters. We need to decide in which order to reveal the types which
+    /// maximise the amount of useful information.
+    ///
+    /// Firstly, we use the required type of the application itself as any evidence against a
+    /// polymorphic return type. For example, if our required type is `Int` and our return type is
+    /// `R` then `R` is an `Int`.
+    ///
+    /// We then visit every non-function fixed parameter and the rest parameter with the evidence
+    /// from the return type. We collect our evidence in to a staged selection context to ensure
+    /// if a type variable appears in multiple parameters they unify instead of supersede each
+    /// other.
+    ///
+    /// In the next phase we visit every function fixed parameter. This is done in a second phase
+    /// as these functions frequently relate to both the type of the parameters and the return
+    /// type (e.g. `map`).
+    ///
+    /// The final phase selects the return type. This uses all the evidence collected above except
+    /// for the original evidence from the wanted return type. If the original evidence is included
+    /// we we typically "over-unify" whatever the wanted type was (e.g. `Any`).
     fn visit_fun_app(
         &mut self,
         fcx: &FunCtx,
@@ -736,17 +757,21 @@ impl<'types> RecursiveDefsCtx<'types> {
             rest_arg_expr,
         } = fun_app;
 
-        // The context used to select the types for our parameters. It's only evidence is the
-        // wanted return type which is used for backwards type propagation.
-        let mut param_select_ctx =
+        // The context used to select the type for our return value. It collects evidence from the
+        // parameters as they're evaluated.
+        let mut ret_stx =
             ty::select::SelectCtx::new(&fcx.tvars, fun_type.pvars(), fun_type.tvars());
 
-        // The context used to select the type for our return value. It collects evidence from the
-        // arguments as they're evaluated.
-        let mut ret_select_ctx = param_select_ctx.clone();
+        // The context used to select the types for our non-function parameters. Its initial
+        // evidence is the wanted return type which is used for backwards type propagation.
+        let mut non_fun_param_stx = ret_stx.clone();
 
         // Add our return type information
-        param_select_ctx.add_evidence(fun_type.ret(), required_type);
+        non_fun_param_stx.add_evidence(fun_type.ret(), required_type);
+
+        // The context used to select the types for our function parameters. This includes the
+        // evidence gathered when visiting non-function parameters.
+        let mut fun_param_stx = non_fun_param_stx.clone();
 
         // Iterate over our parameter type to feed type information in to the arguments
         let mut param_iter = ListIterator::new(fun_type.params());
@@ -755,8 +780,18 @@ impl<'types> RecursiveDefsCtx<'types> {
         let wanted_arity = WantedArity::new(param_iter.fixed_len(), param_iter.has_rest());
 
         let mut is_divergent = false;
-        let mut inferred_fixed_arg_exprs = vec![];
-        for fixed_arg_expr in fixed_arg_exprs {
+
+        struct PendingFixedArg<'ty> {
+            index: usize,
+            param_type: &'ty ty::Poly,
+            expr: hir::Expr<hir::Lowered>,
+        };
+
+        let mut fun_fixed_args: Vec<PendingFixedArg<'_>> = vec![];
+        let mut non_fun_fixed_args: Vec<PendingFixedArg<'_>> = vec![];
+
+        // Pre-visit our fixed args and categorise them as fun and non-fun
+        for (index, fixed_arg_expr) in fixed_arg_exprs.into_iter().enumerate() {
             let param_type = param_iter.next().ok_or_else(|| {
                 Error::new(
                     span,
@@ -764,27 +799,49 @@ impl<'types> RecursiveDefsCtx<'types> {
                 )
             })?;
 
-            let wanted_arg_type = ty::subst::inst_ty_selection(&param_select_ctx, param_type);
-            let fixed_arg_node = self.visit_expr(fcx, pv, &wanted_arg_type, fixed_arg_expr)?;
+            let pending_fixed_arg = PendingFixedArg {
+                index,
+                param_type,
+                expr: fixed_arg_expr,
+            };
 
-            if fixed_arg_node.poly_type == ty::Ty::never().into_poly() {
-                is_divergent = true;
+            if let ty::Poly::Fixed(ty::Ty::Fun(_)) = param_type {
+                fun_fixed_args.push(pending_fixed_arg);
+            } else {
+                non_fun_fixed_args.push(pending_fixed_arg);
             }
-
-            ret_select_ctx.add_evidence(param_type, &fixed_arg_node.poly_type);
-            inferred_fixed_arg_exprs.push(fixed_arg_node.expr);
         }
 
+        let mut inferred_fixed_arg_exprs: Vec<(usize, hir::Expr<hir::Inferred>)> = vec![];
+
+        for PendingFixedArg {
+            index,
+            param_type,
+            expr,
+        } in non_fun_fixed_args
+        {
+            let wanted_arg_type = ty::subst::inst_ty_selection(&non_fun_param_stx, param_type);
+            let fixed_arg_node = self.visit_expr(fcx, pv, &wanted_arg_type, expr)?;
+
+            is_divergent = is_divergent || fixed_arg_node.poly_type.is_never();
+
+            ret_stx.add_evidence(param_type, &fixed_arg_node.poly_type);
+            fun_param_stx.add_evidence(param_type, &fixed_arg_node.poly_type);
+
+            inferred_fixed_arg_exprs.push((index, fixed_arg_node.expr));
+        }
+
+        // Visit our rest arg next so it's grouped in the first phase
         let inferred_rest_arg_expr = if let Some(rest_arg_expr) = rest_arg_expr {
             let tail_type = ty::Ty::List(param_iter.tail_type()).into_poly();
-            let wanted_tail_type = ty::subst::inst_ty_selection(&param_select_ctx, &tail_type);
+            let wanted_tail_type = ty::subst::inst_ty_selection(&non_fun_param_stx, &tail_type);
             let rest_arg_node = self.visit_expr(fcx, pv, &wanted_tail_type, rest_arg_expr)?;
 
-            if rest_arg_node.poly_type == ty::Ty::never().into_poly() {
-                is_divergent = true;
-            }
+            is_divergent = is_divergent || rest_arg_node.poly_type.is_never();
 
-            ret_select_ctx.add_evidence(&tail_type, &rest_arg_node.poly_type);
+            ret_stx.add_evidence(&tail_type, &rest_arg_node.poly_type);
+            fun_param_stx.add_evidence(&tail_type, &rest_arg_node.poly_type);
+
             Some(rest_arg_node.expr)
         } else if param_iter.fixed_len() > 0 {
             // We wanted more args!
@@ -796,14 +853,32 @@ impl<'types> RecursiveDefsCtx<'types> {
             None
         };
 
+        for PendingFixedArg {
+            index,
+            param_type,
+            expr,
+        } in fun_fixed_args
+        {
+            let wanted_arg_type = ty::subst::inst_ty_selection(&fun_param_stx, param_type);
+            let fixed_arg_node = self.visit_expr(fcx, pv, &wanted_arg_type, expr)?;
+
+            is_divergent = is_divergent || fixed_arg_node.poly_type.is_never();
+
+            ret_stx.add_evidence(param_type, &fixed_arg_node.poly_type);
+            inferred_fixed_arg_exprs.push((index, fixed_arg_node.expr));
+        }
+
+        inferred_fixed_arg_exprs.sort_unstable_by_key(|k| k.0);
+        let inferred_fixed_arg_exprs = inferred_fixed_arg_exprs.into_iter().map(|e| e.1).collect();
+
         let ret_type = if is_divergent {
             ty::Ty::never().into_poly()
         } else {
-            ty::subst::inst_ty_selection(&ret_select_ctx, fun_type.ret())
+            ty::subst::inst_ty_selection(&ret_stx, fun_type.ret())
         };
 
         // Keep track of the purity from the application
-        let app_purity = ty::subst::inst_purity_selection(&ret_select_ctx, fun_type.purity());
+        let app_purity = ty::subst::inst_purity_selection(&ret_stx, fun_type.purity());
         unify_app_purity(pv, &app_purity);
 
         ensure_is_a(fcx, span, &ret_type, required_type)?;
@@ -854,7 +929,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             ty::is_a::Result::Yes | ty::is_a::Result::No => {
                 let bool_result = pred_result.to_bool();
 
-                let poly_type = if subject_node.poly_type == ty::Ty::never().into_poly() {
+                let poly_type = if subject_node.poly_type.is_never() {
                     ty::Ty::never().into_poly()
                 } else {
                     ty::Ty::LitBool(bool_result).into_poly()
@@ -872,7 +947,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                 })
             }
             ty::is_a::Result::May => {
-                let poly_type = if subject_node.poly_type == ty::Ty::never().into_poly() {
+                let poly_type = if subject_node.poly_type.is_never() {
                     ty::Ty::never().into_poly()
                 } else {
                     ty::Ty::Bool.into_poly()
@@ -944,7 +1019,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             ty::is_a::Result::Yes | ty::is_a::Result::No => {
                 let bool_result = pred_result.to_bool();
 
-                let poly_type = if subject_list_node.poly_type == ty::Ty::never().into_poly() {
+                let poly_type = if subject_list_node.poly_type.is_never() {
                     ty::Ty::never().into_poly()
                 } else {
                     ty::Ty::LitBool(bool_result).into_poly()
@@ -960,7 +1035,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                 })
             }
             ty::is_a::Result::May => {
-                let poly_type = if subject_list_node.poly_type == ty::Ty::never().into_poly() {
+                let poly_type = if subject_list_node.poly_type.is_never() {
                     // The subject diverged so we diverged
                     ty::Ty::never().into_poly()
                 } else {
@@ -1273,7 +1348,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         let body_node = self.visit_expr(fcx, pv, required_type, body_expr)?;
         let mut inferred_free_types = self.free_ty_polys.drain(free_ty_offset..);
 
-        let poly_type = if value_node.poly_type == ty::Ty::never().into_poly() {
+        let poly_type = if value_node.poly_type.is_never() {
             // Value was divergent
             ty::Ty::never().into_poly()
         } else {
@@ -1785,6 +1860,24 @@ mod test {
         assert_type_for_expr(
             "(Listof Bool)",
             "((fn #{A} ([rest : A] ...) -> (Listof A) rest) true false)",
+        );
+
+        assert_type_for_expr(
+            "Int",
+            // This is essentially `(map)` without the use of lists
+            "((fn #{I O} ([i : I] [mapper : (I -> O)]) -> O (mapper i)) 1 (fn (x) x)))",
+        );
+
+        assert_type_for_expr(
+            "Int",
+            // With the argument positions swapped
+            "((fn #{I O} ([mapper : (I -> O)] [i : I]) -> O (mapper i)) (fn (x) x) 1))",
+        );
+
+        assert_type_for_expr(
+            "Int",
+            // With explicit type annotations
+            "((fn #{I O} ([i : I] [mapper : (I -> O)]) -> O (mapper i)) 1 (fn ([x : Int]) -> Int x)))",
         );
     }
 

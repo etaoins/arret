@@ -55,6 +55,10 @@ pub trait TyRef: PartialEq + Clone + Sized + fmt::Debug {
             None => None,
         }
     }
+
+    fn is_never(&self) -> bool {
+        self.try_to_fixed() == Some(&Ty::never())
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
