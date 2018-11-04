@@ -43,6 +43,7 @@ pub fn stdlib_exit(exit_code: i64) {
 define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "length" => stdlib_length,
     "panic" => stdlib_panic,
+    "map" => stdlib_map,
     "print!" => stdlib_print,
     "println!" => stdlib_println,
     "exit!" => stdlib_exit,

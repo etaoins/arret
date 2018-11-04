@@ -4,6 +4,7 @@
 pub mod abitype;
 pub mod binding;
 pub mod boxed;
+pub mod callback;
 pub mod compiler_support;
 pub mod intern;
 pub mod task;

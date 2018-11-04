@@ -1,6 +1,7 @@
 use crate::binding::Never;
 use crate::boxed;
 use crate::boxed::refs;
+use crate::callback;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum BoxedABIType {
@@ -21,6 +22,7 @@ pub enum ABIType {
     Float,
     Int,
     Boxed(BoxedABIType),
+    Callback(&'static callback::EntryPointABIType),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -95,6 +97,13 @@ where
 {
     const ABI_TYPE: ABIType = ABIType::Boxed(T::BOXED_ABI_TYPE);
     const PARAM_CAPTURE: ParamCapture = ParamCapture::Always;
+}
+
+impl<F> EncodeABIType for callback::Callback<F>
+where
+    F: callback::EncodeEntryPointABIType,
+{
+    const ABI_TYPE: ABIType = ABIType::Callback(&F::ENTRY_POINT_ABI_TYPE);
 }
 
 pub trait EncodeBoxedABIType {

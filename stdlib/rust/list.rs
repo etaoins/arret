@@ -3,6 +3,7 @@ use runtime::binding::*;
 use runtime::boxed;
 use runtime::boxed::prelude::*;
 use runtime::boxed::refs::Gc;
+use runtime::callback;
 use runtime::task::Task;
 
 use rfi_derive;
@@ -19,4 +20,19 @@ pub fn stdlib_cons(
     tail: Gc<boxed::List<boxed::Any>>,
 ) -> Gc<boxed::TopPair> {
     boxed::Pair::new(task, (head, tail)).as_top_pair()
+}
+
+#[rfi_derive::rust_fun("(All #{I O [->_ : ->!]} (Listof I) (I ->_ O) -> (Listof O))")]
+pub fn stdlib_map(
+    task: &mut Task,
+    input: Gc<boxed::List<boxed::Any>>,
+    mapper: callback::Callback<
+        extern "C" fn(&mut Task, boxed::Closure, Gc<boxed::Any>) -> Gc<boxed::Any>,
+    >,
+) -> Gc<boxed::List<boxed::Any>> {
+    // TODO: List::new needs a DoubleEndedIterator which List::iter doesn't implement
+    let output_vec: Vec<Gc<boxed::Any>> =
+        input.iter().map(|elem| mapper.apply(task, elem)).collect();
+
+    boxed::List::new(task, output_vec.into_iter())
 }

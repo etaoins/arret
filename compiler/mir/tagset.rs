@@ -94,6 +94,7 @@ impl<'a> From<&'a abitype::ABIType> for TypeTagSet {
             ABIType::Char => TypeTag::Char.into(),
             ABIType::Bool => [TypeTag::True, TypeTag::False].iter().collect(),
             ABIType::Boxed(boxed_abi_type) => boxed_abi_type.into(),
+            ABIType::Callback(_) => TypeTag::FunThunk.into(),
         }
     }
 }

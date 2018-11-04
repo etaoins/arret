@@ -181,7 +181,7 @@ impl Loader {
         let poly_type = types::lower_poly(&self.type_scope, ns_datum)?;
 
         // Ensure the type is actually a function type
-        let arret_fun_type = if let ty::Poly::Fixed(ty::Ty::Fun(fun_type)) = poly_type {
+        let poly_fun_type = if let ty::Poly::Fixed(ty::Ty::Fun(fun_type)) = poly_type {
             fun_type
         } else {
             return Err(Error::new(
@@ -189,12 +189,17 @@ impl Loader {
                 ErrorKind::RustFunError("function type expected".into()),
             ));
         };
-        let pvars = arret_fun_type.pvars();
-        let tvars = arret_fun_type.tvars();
+
+        let pvars = poly_fun_type.pvars();
+        let tvars = poly_fun_type.tvars();
+
+        // The Rust function signature should match the upper bound of the Arret type
+        let stx = ty::select::SelectCtx::new(tvars, pvars, tvars);
+        let upper_fun_type = ty::subst::inst_fun_selection(&stx, &*poly_fun_type);
 
         // Calculate how many parameters the Rust function should accept
-        let expected_rust_params = arret_fun_type.params().fixed().len()
-            + arret_fun_type.params().rest().is_some() as usize;
+        let expected_rust_params = upper_fun_type.params().fixed().len()
+            + upper_fun_type.params().rest().is_some() as usize;
 
         if expected_rust_params != rust_fun.params.len() {
             return Err(Error::new(
@@ -213,7 +218,7 @@ impl Loader {
         let mut abi_params_iter = rust_fun.params.iter();
 
         // If there are rest types ensure they're compatible
-        if let Some(arret_rest) = arret_fun_type.params().rest() {
+        if let Some(arret_rest) = upper_fun_type.params().rest() {
             use runtime::abitype::{ABIType, BoxedABIType};
 
             let last_rust_param = abi_params_iter.next_back().unwrap();
@@ -230,7 +235,7 @@ impl Loader {
 
         // Ensure the fixed types are compatible
         for (arret_fixed_poly, rust_fixed_poly) in
-            arret_fun_type.params().fixed().iter().zip(abi_params_iter)
+            upper_fun_type.params().fixed().iter().zip(abi_params_iter)
         {
             ensure_types_compatible(
                 pvars,
@@ -244,14 +249,14 @@ impl Loader {
         // And the return type
         //
         // Note that we don't care about contravariance here; simply that the types are compatible
-        ensure_types_compatible(pvars, tvars, span, arret_fun_type.ret(), &rust_fun.ret)?;
+        ensure_types_compatible(pvars, tvars, span, upper_fun_type.ret(), &rust_fun.ret)?;
 
         Ok(Fun {
             rust_library_id,
 
             intrinsic_name,
 
-            arret_fun_type: *arret_fun_type,
+            arret_fun_type: *poly_fun_type,
             takes_task: rust_fun.takes_task,
             params: rust_fun.params,
             ret: &rust_fun.ret,

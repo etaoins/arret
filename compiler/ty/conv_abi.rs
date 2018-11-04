@@ -1,8 +1,10 @@
+use runtime::callback;
+use runtime::{abitype, boxed};
+
 use crate::ty;
+use crate::ty::purity;
 use crate::ty::purity::Purity;
 use crate::ty::unify::Unifiable;
-
-use runtime::{abitype, boxed};
 
 fn type_tag_to_ty<S: Unifiable>(type_tag: boxed::TypeTag) -> ty::Ty<S> {
     use runtime::boxed::TypeTag;
@@ -45,6 +47,7 @@ impl ConvertableABIType for abitype::ABIType {
             ABIType::Float => ty::Ty::Float.into_ty_ref(),
             ABIType::Int => ty::Ty::Int.into_ty_ref(),
             ABIType::Boxed(boxed) => boxed.to_ty_ref(),
+            ABIType::Callback(entry_point_abi) => entry_point_abi.to_ty_ref(),
         }
     }
 
@@ -57,6 +60,7 @@ impl ConvertableABIType for abitype::ABIType {
             ABIType::Float => "f64".to_owned(),
             ABIType::Int => "i64".to_owned(),
             ABIType::Boxed(boxed) => format!("Gc<{}>", boxed.to_rust_str()),
+            ABIType::Callback(entry_point_abi) => entry_point_abi.to_rust_str(),
         }
     }
 }
@@ -126,6 +130,48 @@ impl ConvertableABIType for abitype::RetABIType {
     }
 }
 
+impl ConvertableABIType for callback::EntryPointABIType {
+    fn to_ty_ref<S: Unifiable>(&self) -> S {
+        let top_fun_ty = ty::TopFun::new(Purity::Impure.into_poly(), self.ret.to_ty_ref());
+
+        // TODO: How do we deal with rest params?
+        let fixed_param_ty_refs = self
+            .params
+            .iter()
+            .map(|abi_type| abi_type.to_ty_ref())
+            .collect::<Vec<ty::Poly>>()
+            .into_boxed_slice();
+
+        let param_list_ty = ty::List::new(fixed_param_ty_refs, None);
+
+        ty::Fun::new(
+            purity::PVars::new(),
+            ty::TVars::new(),
+            top_fun_ty,
+            param_list_ty,
+        )
+        .into_ty_ref()
+    }
+
+    fn to_rust_str(&self) -> String {
+        let params_str = if self.params.is_empty() {
+            "".to_owned()
+        } else {
+            self.params
+                .iter()
+                .map(|abi_type| format!(", {}", abi_type.to_rust_str()))
+                .collect::<Vec<String>>()
+                .join("")
+        };
+
+        format!(
+            "extern \"C\" fn(&mut Task, boxed::Closure{}) -> {}",
+            params_str,
+            self.ret.to_rust_str()
+        )
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -175,5 +221,27 @@ mod test {
 
         let nil_poly = ty::Ty::List(ty::List::empty()).into_poly();
         assert_eq!(nil_poly, boxed_abi_type.to_ty_ref());
+    }
+
+    #[test]
+    fn callback_abi_type() {
+        use runtime::task;
+
+        let entry_point_abi_type = <extern "C" fn(&mut task::Task, boxed::Closure, i64) -> char as callback::EncodeEntryPointABIType>::ENTRY_POINT_ABI_TYPE;
+
+        assert_eq!(
+            "extern \"C\" fn(&mut Task, boxed::Closure, i64) -> char",
+            entry_point_abi_type.to_rust_str()
+        );
+
+        let arret_poly: ty::Poly = ty::Fun::new(
+            purity::PVars::new(),
+            ty::TVars::new(),
+            ty::TopFun::new(Purity::Impure.into_poly(), ty::Ty::Char.into_poly()),
+            ty::List::new(Box::new([ty::Ty::Int.into_poly()]), None),
+        )
+        .into_ty_ref();
+
+        assert_eq!(arret_poly, entry_point_abi_type.to_ty_ref());
     }
 }

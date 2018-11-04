@@ -12,7 +12,7 @@ pub use crate::boxed::heap::collect;
 pub use crate::boxed::heap::Heap;
 pub use crate::boxed::types::char::Char;
 pub use crate::boxed::types::float::Float;
-pub use crate::boxed::types::fun::{FunThunk, ThunkEntry};
+pub use crate::boxed::types::fun::{Closure, FunThunk, ThunkEntry};
 pub use crate::boxed::types::int::Int;
 pub use crate::boxed::types::list::{List, Nil, Pair, TopPair, NIL_INSTANCE};
 pub use crate::boxed::types::str::Str;
