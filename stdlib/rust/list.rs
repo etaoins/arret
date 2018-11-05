@@ -22,13 +22,13 @@ pub fn stdlib_cons(
     boxed::Pair::new(task, (head, tail)).as_top_pair()
 }
 
-#[rfi_derive::rust_fun("(All #{I O [->_ : ->!]} (Listof I) (I ->_ O) -> (Listof O))")]
+#[rfi_derive::rust_fun("(All #{I O [->_ : ->!]} (I ->_ O) (Listof I) -> (Listof O))")]
 pub fn stdlib_map(
     task: &mut Task,
-    input: Gc<boxed::List<boxed::Any>>,
     mapper: callback::Callback<
         extern "C" fn(&mut Task, boxed::Closure, Gc<boxed::Any>) -> Gc<boxed::Any>,
     >,
+    input: Gc<boxed::List<boxed::Any>>,
 ) -> Gc<boxed::List<boxed::Any>> {
     // TODO: List::new needs a DoubleEndedIterator which List::iter doesn't implement
     let output_vec: Vec<Gc<boxed::Any>> =

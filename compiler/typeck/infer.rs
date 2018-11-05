@@ -1865,13 +1865,13 @@ mod test {
         assert_type_for_expr(
             "Int",
             // This is essentially `(map)` without the use of lists
-            "((fn #{I O} ([i : I] [mapper : (I -> O)]) -> O (mapper i)) 1 (fn (x) x)))",
+            "((fn #{I O} ([mapper : (I -> O)] [i : I]) -> O (mapper i)) (fn (x) x) 1))",
         );
 
         assert_type_for_expr(
             "Int",
             // With the argument positions swapped
-            "((fn #{I O} ([mapper : (I -> O)] [i : I]) -> O (mapper i)) (fn (x) x) 1))",
+            "((fn #{I O} ([i : I] [mapper : (I -> O)]) -> O (mapper i)) 1 (fn (x) x)))",
         );
 
         assert_type_for_expr(
