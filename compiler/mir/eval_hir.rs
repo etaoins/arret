@@ -752,84 +752,35 @@ impl EvalHirCtx {
         wanted_abi: ops::OpsABI,
         has_rest: bool,
     ) -> Result<ops::Fun> {
+        use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
         use crate::mir::closure;
         use crate::mir::optimise::optimise_fun;
-        use crate::mir::value::build_reg::value_to_reg;
-        use runtime::abitype;
+        use crate::mir::ret_value::build_ret_value;
 
         let mut b = Builder::new();
-        let closure_reg =
-            if wanted_abi.external_call_conv || arret_fun.closure.needs_closure_param() {
-                Some(b.alloc_reg())
-            } else {
-                None
-            };
+        let span = arret_fun.span;
+
+        let LoadedArgList {
+            closure_reg,
+            param_regs,
+            arg_list_value,
+        } = build_load_arg_list_value(
+            &mut b,
+            &wanted_abi,
+            arret_fun.closure.needs_closure_param(),
+            has_rest,
+        );
 
         // TODO: Make an actual DefCtx
         let mut dcx = DefCtx::new();
         closure::load_from_closure_param(&mut dcx.local_values, &arret_fun.closure, closure_reg);
 
-        let span = arret_fun.span;
-
-        let mut abi_params_iter = wanted_abi.params.iter();
-
-        if closure_reg.is_some() {
-            abi_params_iter.next();
-        }
-
-        let rest_reg_value = if has_rest {
-            let abi_type = abi_params_iter.next_back().unwrap();
-
-            Some(Rc::new(value::RegValue {
-                reg: b.alloc_reg(),
-                abi_type: abi_type.clone(),
-            }))
-        } else {
-            None
-        };
-
-        let fixed_reg_values = abi_params_iter
-            .map(|abi_type| {
-                Rc::new(value::RegValue {
-                    reg: b.alloc_reg(),
-                    abi_type: abi_type.clone(),
-                })
-            })
-            .collect::<Vec<Rc<value::RegValue>>>();
-
-        let param_regs = closure_reg
-            .into_iter()
-            .chain(fixed_reg_values.iter().map(|reg_value| reg_value.reg))
-            .chain(rest_reg_value.iter().map(|reg_value| reg_value.reg))
-            .collect::<Vec<ops::RegId>>()
-            .into_boxed_slice();
-
-        let arg_list_value = Value::List(
-            fixed_reg_values
-                .into_iter()
-                .map(Value::Reg)
-                .collect::<Vec<Value>>()
-                .into_boxed_slice(),
-            rest_reg_value.map(|reg_value| Box::new(Value::Reg(reg_value))),
-        );
-
         let mut some_b = Some(b);
         let result_value =
             self.eval_arret_fun_app(&mut dcx, &mut some_b, span, arret_fun, arg_list_value)?;
-
         let mut b = some_b.unwrap();
-        match &wanted_abi.ret {
-            abitype::RetABIType::Inhabited(abi_type) => {
-                let ret_reg = value_to_reg(self, &mut b, span, &result_value, abi_type);
-                b.push(span, ops::OpKind::Ret(ret_reg.into()));
-            }
-            abitype::RetABIType::Never => {
-                b.push(span, ops::OpKind::Unreachable);
-            }
-            abitype::RetABIType::Void => {
-                b.push(span, ops::OpKind::RetVoid);
-            }
-        }
+
+        build_ret_value(self, &mut b, span, &result_value, &wanted_abi.ret);
 
         Ok(optimise_fun(ops::Fun {
             span: arret_fun.span,

@@ -1,3 +1,4 @@
+mod arg_list;
 mod builder;
 mod closure;
 mod compact_abi_type;
@@ -7,6 +8,7 @@ pub mod eval_hir;
 mod intrinsic;
 pub(crate) mod ops;
 mod optimise;
+mod ret_value;
 mod rust_fun;
 mod tagset;
 mod typred;
