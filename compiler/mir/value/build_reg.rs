@@ -245,7 +245,7 @@ pub fn reg_to_reg(
             b.push_reg(span, OpKind::LoadBoxedIntValue, boxed_int_reg)
         }
         (abitype::ABIType::Int, abitype::ABIType::Boxed(to_boxed)) => {
-            let boxed_int_reg = b.push_reg(span, OpKind::AllocInt, reg_value.reg);
+            let boxed_int_reg = b.push_reg(span, OpKind::AllocBoxedInt, reg_value.reg);
             b.cast_boxed_cond(span, &TypeTag::Int.into(), boxed_int_reg, to_boxed.clone())
         }
         (abitype::ABIType::Bool, abitype::ABIType::Boxed(to_boxed)) => b.push_cond(

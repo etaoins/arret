@@ -34,7 +34,7 @@ fn op_alloc_info(op: &ops::Op) -> Option<AllocInfo> {
     use crate::mir::ops::OpKind;
 
     match op.kind() {
-        OpKind::AllocInt(output_reg, _) => Some(AllocInfo {
+        OpKind::AllocBoxedInt(output_reg, _) => Some(AllocInfo {
             output_reg: *output_reg,
             box_size: boxed::Int::size(),
         }),
@@ -121,11 +121,11 @@ mod test {
         let reg4 = ops::RegId::alloc();
 
         let input_ops = [
-            ops::OpKind::AllocInt(reg1, reg1).into(),
+            ops::OpKind::AllocBoxedInt(reg1, reg1).into(),
             ops::OpKind::ConstBoxedTrue(reg2, ()).into(),
             ops::OpKind::RetVoid.into(),
-            ops::OpKind::AllocInt(reg3, reg3).into(),
-            ops::OpKind::AllocInt(reg4, reg4).into(),
+            ops::OpKind::AllocBoxedInt(reg3, reg3).into(),
+            ops::OpKind::AllocBoxedInt(reg4, reg4).into(),
         ];
 
         let expected_atoms = vec![
@@ -166,7 +166,7 @@ mod test {
         let false_ops = Box::new([ops::OpKind::ConstBoxedNil(false_result_reg, ()).into()]);
 
         let input_ops = [
-            ops::OpKind::AllocInt(test_reg, test_reg).into(),
+            ops::OpKind::AllocBoxedInt(test_reg, test_reg).into(),
             ops::OpKind::Cond(ops::CondOp {
                 reg_phi: Some(ops::RegPhi {
                     output_reg,
@@ -181,7 +181,7 @@ mod test {
         ];
 
         let actual_atoms = plan_allocs(&Captures::new(), &input_ops);
-        // We should place the `AllocInt` and `Cond` in the same atom
+        // We should place the `AllocBoxedInt` and `Cond` in the same atom
         assert_eq!(1, actual_atoms.len());
     }
 
@@ -194,10 +194,10 @@ mod test {
 
         let true_ops = Box::new([ops::OpKind::ConstBoxedNil(true_result_reg, ()).into()]);
         let false_ops =
-            Box::new([ops::OpKind::AllocInt(false_result_reg, false_result_reg).into()]);
+            Box::new([ops::OpKind::AllocBoxedInt(false_result_reg, false_result_reg).into()]);
 
         let input_ops = [
-            ops::OpKind::AllocInt(test_reg, test_reg).into(),
+            ops::OpKind::AllocBoxedInt(test_reg, test_reg).into(),
             ops::OpKind::Cond(ops::CondOp {
                 reg_phi: Some(ops::RegPhi {
                     output_reg,
@@ -212,7 +212,7 @@ mod test {
         ];
 
         let actual_atoms = plan_allocs(&Captures::new(), &input_ops);
-        // We should place the `AllocInt` and `Cond` in different atoms
+        // We should place the `AllocBoxedInt` and `Cond` in different atoms
         assert_eq!(2, actual_atoms.len());
     }
 }

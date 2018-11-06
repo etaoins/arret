@@ -270,7 +270,7 @@ fn gen_op(
                 let cond_alloc_plan = &alloc_atom.cond_plans()[&op_index];
                 gen_cond(tcx, mcx, fcx, cond_op, cond_alloc_plan);
             }
-            OpKind::AllocInt(reg, int_reg) => {
+            OpKind::AllocBoxedInt(reg, int_reg) => {
                 let box_source = alloc_atom.box_sources()[reg];
 
                 let llvm_int = fcx.regs[int_reg];

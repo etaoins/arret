@@ -119,7 +119,7 @@ pub enum OpKind {
     ConstBoxedPair(RegId, BoxPairOp),
     ConstBoxedFunThunk(RegId, BoxFunThunkOp),
 
-    AllocInt(RegId, RegId),
+    AllocBoxedInt(RegId, RegId),
     AllocBoxedPair(RegId, BoxPairOp),
     AllocBoxedFunThunk(RegId, BoxFunThunkOp),
 
@@ -160,7 +160,7 @@ impl OpKind {
             | ConstBoxedStr(reg_id, _)
             | ConstBoxedPair(reg_id, _)
             | ConstBoxedFunThunk(reg_id, _)
-            | AllocInt(reg_id, _)
+            | AllocBoxedInt(reg_id, _)
             | AllocBoxedPair(reg_id, _)
             | AllocBoxedFunThunk(reg_id, _)
             | ConstCastBoxed(reg_id, _)
@@ -209,7 +209,7 @@ impl OpKind {
             ConstBoxedFunThunk(_, box_fun_thunk_op) | AllocBoxedFunThunk(_, box_fun_thunk_op) => {
                 coll.extend(iter::once(box_fun_thunk_op.closure_reg));
             }
-            AllocInt(_, reg_id)
+            AllocBoxedInt(_, reg_id)
             | ConstCastBoxed(
                 _,
                 CastBoxedOp {
