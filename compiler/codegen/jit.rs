@@ -31,6 +31,8 @@ pub struct JITCtx {
     orc: LLVMOrcJITStackRef,
     target_machine: LLVMTargetMachineRef,
     symbols: HashMap<ffi::CString, u64>,
+
+    module_counter: usize,
 }
 
 impl JITCtx {
@@ -53,6 +55,8 @@ impl JITCtx {
                 orc,
                 target_machine,
                 symbols: HashMap::new(),
+
+                module_counter: 0,
             };
 
             jcx.add_symbol(b"ARRET_TRUE\0", &boxed::TRUE_INSTANCE as *const _ as u64);
@@ -73,16 +77,23 @@ impl JITCtx {
 
         let tcx = &mut self.tcx;
 
+        self.module_counter += 1;
+
+        let module_counter = self.module_counter;
         let module_name = fun
             .source_name
             .as_ref()
-            .map(|source_name| ffi::CString::new(source_name.as_bytes()).unwrap())
-            .unwrap_or_else(|| ffi::CString::new("anon_mod").unwrap());
+            .map(|source_name| format!("JIT Module #{} for `{}`", module_counter, source_name))
+            .unwrap_or_else(|| format!("Anonymous JIT Module #{}", module_counter));
+
+        let module_name_cstring = ffi::CString::new(module_name.as_bytes()).unwrap();
 
         unsafe {
             // Create the module
-            let module =
-                LLVMModuleCreateWithNameInContext(module_name.as_ptr() as *const _, tcx.llx);
+            let module = LLVMModuleCreateWithNameInContext(
+                module_name_cstring.as_ptr() as *const _,
+                tcx.llx,
+            );
             let mut mcx = ModCtx::new(module, self.target_machine, tcx.optimising());
 
             // TODO: We're regenerating every built fun on each JITed function. This is terrible.
@@ -112,7 +123,7 @@ impl JITCtx {
             tcx.optimise_module(module);
 
             let mut orc_module: LLVMOrcModuleHandle = 0;
-            if LLVMOrcAddLazilyCompiledIR(
+            if LLVMOrcAddEagerlyCompiledIR(
                 self.orc,
                 &mut orc_module,
                 module,
