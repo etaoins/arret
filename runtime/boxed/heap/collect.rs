@@ -32,6 +32,7 @@ impl StrongPass {
 
     pub fn into_weak_pass(self) -> WeakPass {
         WeakPass {
+            _old_heap: self.old_heap,
             new_heap: self.new_heap,
         }
     }
@@ -152,6 +153,8 @@ impl StrongPass {
 /// This will return the location of cells that have been moved to the new heap or `None` for
 /// cells that were not visited during the strong pass.
 pub struct WeakPass {
+    // We need the old heap to remain allocated so we can follow pointers for old cells
+    _old_heap: Heap,
     new_heap: Heap,
 }
 
