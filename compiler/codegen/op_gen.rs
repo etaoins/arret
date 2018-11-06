@@ -518,7 +518,7 @@ fn gen_cond(
 }
 
 fn gen_callee_entry_point(
-    cgx: &mut TargetCtx,
+    tcx: &mut TargetCtx,
     mcx: &mut ModCtx,
     fcx: &mut FunCtx,
     callee: &Callee,
@@ -534,7 +534,7 @@ fn gen_callee_entry_point(
             gen_boxed_fun_thunk_entry_point(fcx.builder, llvm_fun_thunk)
         }
         Callee::StaticSymbol(static_symbol) => {
-            gen_static_symbol_entry_point(cgx, mcx, static_symbol)
+            gen_static_symbol_entry_point(tcx, mcx, static_symbol)
         }
     }
 }

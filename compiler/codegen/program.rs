@@ -64,12 +64,12 @@ impl Default for Options<'static> {
     }
 }
 
-fn task_receiver_llvm_type(cgx: &mut TargetCtx) -> LLVMTypeRef {
+fn task_receiver_llvm_type(tcx: &mut TargetCtx) -> LLVMTypeRef {
     unsafe {
-        let llvm_arg_types = &mut [cgx.task_llvm_ptr_type()];
+        let llvm_arg_types = &mut [tcx.task_llvm_ptr_type()];
 
         LLVMFunctionType(
-            LLVMVoidTypeInContext(cgx.llx),
+            LLVMVoidTypeInContext(tcx.llx),
             llvm_arg_types.as_mut_ptr(),
             llvm_arg_types.len() as u32,
             0,
@@ -77,11 +77,11 @@ fn task_receiver_llvm_type(cgx: &mut TargetCtx) -> LLVMTypeRef {
     }
 }
 
-fn c_main_llvm_type(cgx: &mut TargetCtx) -> LLVMTypeRef {
+fn c_main_llvm_type(tcx: &mut TargetCtx) -> LLVMTypeRef {
     unsafe {
-        let llvm_argc_type = LLVMInt32TypeInContext(cgx.llx);
-        let llvm_argv_type = LLVMPointerType(LLVMPointerType(LLVMInt8TypeInContext(cgx.llx), 0), 0);
-        let llvm_ret_type = LLVMInt32TypeInContext(cgx.llx);
+        let llvm_argc_type = LLVMInt32TypeInContext(tcx.llx);
+        let llvm_argv_type = LLVMPointerType(LLVMPointerType(LLVMInt8TypeInContext(tcx.llx), 0), 0);
+        let llvm_ret_type = LLVMInt32TypeInContext(tcx.llx);
 
         let llvm_arg_types = &mut [llvm_argc_type, llvm_argv_type];
 
