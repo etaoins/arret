@@ -8,7 +8,7 @@ use crate::mir::ops;
 
 pub struct ModCtx {
     pub module: LLVMModuleRef,
-    pub built_funs: Vec<BuiltFun>,
+    built_funs: Vec<BuiltFun>,
 
     function_pass_manager: LLVMPassManagerRef,
 }
@@ -61,8 +61,8 @@ impl ModCtx {
         self.built_funs.push(built_fun);
     }
 
-    pub fn built_funs(&self) -> &Vec<BuiltFun> {
-        &self.built_funs
+    pub fn built_funs(&self) -> &[BuiltFun] {
+        self.built_funs.as_slice()
     }
 
     pub fn get_global_or_insert<F>(
