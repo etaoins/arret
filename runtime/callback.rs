@@ -2,6 +2,7 @@ use crate::abitype;
 use crate::boxed;
 use crate::task::Task;
 
+#[repr(C)]
 pub struct Callback<F>
 where
     F: EncodeEntryPointABIType,

@@ -225,30 +225,24 @@ fn list_to_reg(
     list_reg.cast_to_boxed(b, span, boxed_abi_type.clone())
 }
 
-pub fn reg_to_reg(
+pub fn reg_to_boxed_reg(
     b: &mut Builder,
     span: Span,
     reg_value: &value::RegValue,
-    abi_type: &abitype::ABIType,
-) -> BuiltReg {
+    to_boxed: &abitype::BoxedABIType,
+) -> RegId {
     use crate::mir::ops::*;
     use runtime::boxed::TypeTag;
 
-    BuiltReg::Local(match (&reg_value.abi_type, abi_type) {
-        (from, to) if from == to => reg_value.reg,
-        (abitype::ABIType::Boxed(_), abitype::ABIType::Boxed(to_boxed)) => {
-            b.cast_boxed(span, reg_value.reg, to_boxed.clone())
+    match &reg_value.abi_type {
+        abitype::ABIType::Boxed(from_boxed) => {
+            b.cast_boxed_cond(span, from_boxed, reg_value.reg, to_boxed.clone())
         }
-        (abitype::ABIType::Boxed(from_boxed), abitype::ABIType::Int) => {
-            let boxed_int_reg =
-                b.cast_boxed_cond(span, from_boxed, reg_value.reg, TypeTag::Int.into());
-            b.push_reg(span, OpKind::LoadBoxedIntValue, boxed_int_reg)
-        }
-        (abitype::ABIType::Int, abitype::ABIType::Boxed(to_boxed)) => {
+        abitype::ABIType::Int => {
             let boxed_int_reg = b.push_reg(span, OpKind::AllocBoxedInt, reg_value.reg);
             b.cast_boxed_cond(span, &TypeTag::Int.into(), boxed_int_reg, to_boxed.clone())
         }
-        (abitype::ABIType::Bool, abitype::ABIType::Boxed(to_boxed)) => b.push_cond(
+        abitype::ABIType::Bool => b.push_cond(
             span,
             reg_value.reg,
             |b| {
@@ -260,6 +254,31 @@ pub fn reg_to_reg(
                 b.cast_boxed(span, const_false_reg, to_boxed.clone())
             },
         ),
+        from => unimplemented!("reg {:?} to boxed reg {:?} conversion", from, to_boxed),
+    }
+}
+
+fn reg_to_reg(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    reg_value: &value::RegValue,
+    abi_type: &abitype::ABIType,
+) -> BuiltReg {
+    use crate::mir::ops::*;
+    use runtime::boxed::TypeTag;
+
+    BuiltReg::Local(match (&reg_value.abi_type, abi_type) {
+        (from, to) if from == to => reg_value.reg,
+        (_, abitype::ABIType::Boxed(to_boxed)) => reg_to_boxed_reg(b, span, reg_value, to_boxed),
+        (abitype::ABIType::Boxed(from_boxed), abitype::ABIType::Int) => {
+            let boxed_int_reg =
+                b.cast_boxed_cond(span, from_boxed, reg_value.reg, TypeTag::Int.into());
+            b.push_reg(span, OpKind::LoadBoxedIntValue, boxed_int_reg)
+        }
+        (abitype::ABIType::Boxed(from_boxed), abitype::ABIType::Callback(entry_point_abi)) => {
+            ehx.thunk_reg_to_callback_reg(b, span, from_boxed, reg_value.reg, entry_point_abi)
+        }
         (from, to) => unimplemented!("reg {:?} to reg {:?} conversion", from, to),
     })
 }
@@ -294,7 +313,7 @@ pub fn value_to_reg(
     abi_type: &abitype::ABIType,
 ) -> BuiltReg {
     match value {
-        Value::Reg(reg_value) => reg_to_reg(b, span, reg_value, abi_type),
+        Value::Reg(reg_value) => reg_to_reg(ehx, b, span, reg_value, abi_type),
         Value::Const(any_ref) => const_to_reg(b, span, *any_ref, abi_type),
         Value::List(fixed, rest) => {
             if let abitype::ABIType::Boxed(boxed_abi_type) = abi_type {

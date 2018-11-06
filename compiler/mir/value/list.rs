@@ -76,14 +76,14 @@ impl<'list> ListIterator {
         current_rest_value: &value::RegValue,
     ) -> Value {
         use crate::mir::ops::*;
-        use crate::mir::value::build_reg::reg_to_reg;
+        use crate::mir::value::build_reg::reg_to_boxed_reg;
         use runtime::abitype;
 
-        let needed_pair_type = abitype::BoxedABIType::Pair(&abitype::BoxedABIType::Any).into();
-        let current_rest_reg = reg_to_reg(b, span, &current_rest_value, &needed_pair_type);
+        let needed_pair_type = abitype::BoxedABIType::Pair(&abitype::BoxedABIType::Any);
+        let current_rest_reg = reg_to_boxed_reg(b, span, &current_rest_value, &needed_pair_type);
 
-        let head_reg = b.push_reg(span, OpKind::LoadBoxedPairHead, current_rest_reg.into());
-        let rest_reg = b.push_reg(span, OpKind::LoadBoxedPairRest, current_rest_reg.into());
+        let head_reg = b.push_reg(span, OpKind::LoadBoxedPairHead, current_rest_reg);
+        let rest_reg = b.push_reg(span, OpKind::LoadBoxedPairRest, current_rest_reg);
 
         self.rest = Some(Value::Reg(Rc::new(value::RegValue {
             reg: rest_reg,

@@ -1,6 +1,7 @@
 use runtime::abitype;
 use runtime::boxed;
 
+use runtime::callback;
 use syntax::span::Span;
 
 use crate::codegen::GenABI;
@@ -25,10 +26,30 @@ impl OpsABI {
         OpsABI {
             external_call_conv: true,
             params: Box::new([
+                // Closure
                 abitype::BoxedABIType::Any.into(),
+                // Rest argument
                 abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
             ]),
             ret: abitype::BoxedABIType::Any.into(),
+        }
+    }
+}
+
+impl From<callback::EntryPointABIType> for OpsABI {
+    fn from(abi_type: callback::EntryPointABIType) -> Self {
+        use std::iter;
+
+        // Include our closure
+        let params = iter::once(abitype::BoxedABIType::Any.into())
+            .chain(abi_type.params.iter().cloned())
+            .collect::<Vec<abitype::ABIType>>()
+            .into_boxed_slice();
+
+        OpsABI {
+            external_call_conv: true,
+            params,
+            ret: abi_type.ret,
         }
     }
 }
@@ -105,6 +126,12 @@ pub struct LoadBoxedTypeTagOp {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct MakeCallbackOp {
+    pub closure_reg: RegId,
+    pub callee: Callee,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum OpKind {
     ConstInt64(RegId, i64),
     ConstUsize(RegId, usize),
@@ -134,6 +161,8 @@ pub enum OpKind {
     LoadBoxedIntValue(RegId, RegId),
     LoadBoxedFunThunkClosure(RegId, RegId),
     Cond(CondOp),
+
+    MakeCallback(RegId, MakeCallbackOp),
 
     Add(RegId, BinaryOp),
     IntEqual(RegId, BinaryOp),
@@ -173,7 +202,9 @@ impl OpKind {
             | LoadBoxedIntValue(reg_id, _)
             | LoadBoxedFunThunkClosure(reg_id, _)
             | Add(reg_id, _) => Some(*reg_id),
-            IntEqual(reg_id, _) | UsizeToInt64(reg_id, _) => Some(*reg_id),
+            IntEqual(reg_id, _) | UsizeToInt64(reg_id, _) | MakeCallback(reg_id, _) => {
+                Some(*reg_id)
+            }
             Cond(cond_op) => cond_op.reg_phi.clone().map(|reg_phi| reg_phi.output_reg),
             Ret(_) | RetVoid | Unreachable => None,
         }
@@ -235,7 +266,14 @@ impl OpKind {
             | LoadBoxedPairRest(_, reg_id)
             | LoadBoxedIntValue(_, reg_id)
             | LoadBoxedFunThunkClosure(_, reg_id)
-            | UsizeToInt64(_, reg_id) => {
+            | UsizeToInt64(_, reg_id)
+            | MakeCallback(
+                _,
+                MakeCallbackOp {
+                    closure_reg: reg_id,
+                    ..
+                },
+            ) => {
                 coll.extend(iter::once(*reg_id));
             }
             Call(_, call_op) => {

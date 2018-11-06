@@ -8,6 +8,7 @@ use runtime;
 use runtime::boxed;
 use runtime::boxed::prelude::*;
 use runtime::boxed::refs::Gc;
+use runtime::callback::EntryPointABIType as CallbackEntryPointABIType;
 
 use runtime_syntax::reader;
 use syntax::datum::Datum;
@@ -790,6 +791,78 @@ impl EvalHirCtx {
             params: param_regs,
             ops: b.into_ops(),
         }))
+    }
+
+    /// Builds a function with a callback ABI that calls a thunk passed as its closure
+    fn ops_for_callback_to_thunk_adapter(
+        &mut self,
+        entry_point_abi: CallbackEntryPointABIType,
+    ) -> ops::Fun {
+        use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
+        use crate::mir::optimise::optimise_fun;
+        use crate::mir::ret_value::build_ret_value;
+        use runtime::abitype;
+
+        let ops_abi: ops::OpsABI = entry_point_abi.into();
+
+        let mut b = Builder::new();
+
+        let LoadedArgList {
+            closure_reg,
+            param_regs,
+            arg_list_value,
+        } = build_load_arg_list_value(&mut b, &ops_abi, true, false);
+
+        let fun_reg_value = value::RegValue {
+            reg: closure_reg.unwrap(),
+            abi_type: abitype::BoxedABIType::Any.into(),
+        };
+
+        let result_value =
+            self.build_reg_fun_thunk_app(&mut b, EMPTY_SPAN, &fun_reg_value, &arg_list_value);
+
+        build_ret_value(self, &mut b, EMPTY_SPAN, &result_value, &ops_abi.ret);
+
+        optimise_fun(ops::Fun {
+            span: EMPTY_SPAN,
+            source_name: Some("callback_to_thunk_adapter".to_owned()),
+
+            abi: ops_abi,
+            params: param_regs,
+            ops: b.into_ops(),
+        })
+    }
+
+    pub fn thunk_reg_to_callback_reg(
+        &mut self,
+        b: &mut Builder,
+        span: Span,
+        thunk_reg_abi_type: &::runtime::abitype::BoxedABIType,
+        thunk_reg: ops::RegId,
+        entry_point_abi: &CallbackEntryPointABIType,
+    ) -> ops::RegId {
+        use crate::mir::ops::*;
+        use runtime::abitype;
+
+        // Closures are of type `Any`
+        let closure_reg = b.cast_boxed_cond(
+            EMPTY_SPAN,
+            thunk_reg_abi_type,
+            thunk_reg,
+            abitype::BoxedABIType::Any,
+        );
+
+        let ops_fun = self.ops_for_callback_to_thunk_adapter(entry_point_abi.clone());
+        let built_fun_id = ops::BuiltFunId::new_entry_id(&mut self.built_funs, ops_fun);
+
+        b.push_reg(
+            span,
+            OpKind::MakeCallback,
+            MakeCallbackOp {
+                closure_reg,
+                callee: ops::Callee::BuiltFun(built_fun_id),
+            },
+        )
     }
 
     pub fn consume_def(&mut self, def: hir::Def<hir::Inferred>) -> Result<()> {

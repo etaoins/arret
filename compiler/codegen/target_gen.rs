@@ -8,6 +8,7 @@ use llvm_sys::{LLVMAttributeReturnIndex, LLVMLinkage};
 
 use runtime::abitype::{ABIType, BoxedABIType, RetABIType, TOP_LIST_BOXED_ABI_TYPE};
 use runtime::boxed;
+use runtime::callback::EntryPointABIType as CallbackEntryPointABIType;
 
 use crate::codegen::GenABI;
 
@@ -250,6 +251,46 @@ impl TargetCtx {
         }
     }
 
+    fn callback_entry_point_llvm_type(
+        &mut self,
+        entry_point_abi_type: &CallbackEntryPointABIType,
+    ) -> LLVMTypeRef {
+        let mut llvm_param_types = vec![];
+
+        llvm_param_types.push(self.task_llvm_ptr_type());
+        llvm_param_types.push(self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any));
+
+        llvm_param_types.extend(
+            entry_point_abi_type
+                .params
+                .iter()
+                .map(|abi_type| self.abi_to_llvm_type(abi_type)),
+        );
+
+        let llvm_ret_type = self.ret_abi_to_llvm_type(&entry_point_abi_type.ret);
+
+        unsafe {
+            LLVMPointerType(
+                LLVMFunctionType(
+                    llvm_ret_type,
+                    llvm_param_types.as_mut_ptr(),
+                    llvm_param_types.len() as u32,
+                    0,
+                ),
+                0,
+            )
+        }
+    }
+
+    pub fn callback_llvm_type(&mut self, entry_point_llvm_type: LLVMTypeRef) -> LLVMTypeRef {
+        let mut members = [
+            self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any),
+            entry_point_llvm_type,
+        ];
+
+        unsafe { LLVMStructTypeInContext(self.llx, members.as_mut_ptr(), members.len() as u32, 0) }
+    }
+
     pub fn boxed_abi_to_llvm_ptr_type(&mut self, boxed_abi_type: &BoxedABIType) -> LLVMTypeRef {
         unsafe { LLVMPointerType(self.boxed_abi_to_llvm_struct_type(boxed_abi_type), 0) }
     }
@@ -260,6 +301,11 @@ impl TargetCtx {
                 ABIType::Bool => LLVMInt1TypeInContext(self.llx),
                 ABIType::Int => LLVMInt64TypeInContext(self.llx),
                 ABIType::Boxed(boxed) => self.boxed_abi_to_llvm_ptr_type(boxed),
+                ABIType::Callback(entry_point_abi_type) => {
+                    let entry_point_llvm_type =
+                        self.callback_entry_point_llvm_type(entry_point_abi_type);
+                    self.callback_llvm_type(entry_point_llvm_type)
+                }
                 other => {
                     unimplemented!("ABI type: {:?}", other);
                 }

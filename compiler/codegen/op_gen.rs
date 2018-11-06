@@ -373,6 +373,37 @@ fn gen_op(
 
                 fcx.regs.insert(*reg, llvm_i64);
             }
+            OpKind::MakeCallback(
+                reg,
+                MakeCallbackOp {
+                    callee,
+                    closure_reg,
+                },
+            ) => {
+                let llvm_closure = fcx.regs[closure_reg];
+                let llvm_entry_point = gen_callee_entry_point(tcx, mcx, fcx, callee);
+                let entry_point_llvm_type = LLVMTypeOf(llvm_entry_point);
+
+                let callback_type = tcx.callback_llvm_type(entry_point_llvm_type);
+
+                let llvm_undef = LLVMGetUndef(callback_type);
+                let llvm_with_closure = LLVMBuildInsertValue(
+                    fcx.builder,
+                    llvm_undef,
+                    llvm_closure,
+                    0,
+                    b"\0".as_ptr() as *const _,
+                );
+                let llvm_callback = LLVMBuildInsertValue(
+                    fcx.builder,
+                    llvm_with_closure,
+                    llvm_entry_point,
+                    1,
+                    b"callback\0".as_ptr() as *const _,
+                );
+
+                fcx.regs.insert(*reg, llvm_callback);
+            }
         }
     }
 }
