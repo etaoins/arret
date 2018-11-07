@@ -41,8 +41,22 @@ fn llvm_i64_md_node(llx: LLVMContextRef, values: &[u64]) -> LLVMValueRef {
     }
 }
 
+/// Context for building against a given target machine
+///
+/// During compilation there will typically be two instances of `TargetCtx`: one for the eval JIT
+/// and one for generating the program.
+///
+/// This has a number of responsibilities:
+///
+/// 1. Storing information about the target machine and its data layout
+/// 2. Wrapping the global `LLVMContextRef`
+/// 3. Caching complex types, attributes and metadata nodes
+/// 4. Optimising modules
+///
+/// These are only vaguely related; this is a bit of a God Object.
 pub struct TargetCtx {
     pub llx: LLVMContextRef,
+    target_machine: LLVMTargetMachineRef,
     target_data: LLVMTargetDataRef,
 
     optimising: bool,
@@ -69,6 +83,9 @@ pub struct TargetCtx {
 }
 
 impl TargetCtx {
+    /// Construct a new `TargetCtx`
+    ///
+    /// `target_machine` remains owned by the caller and must outlive this instance.
     pub fn new(target_machine: LLVMTargetMachineRef, optimising: bool) -> TargetCtx {
         use llvm_sys::transforms::pass_manager_builder::*;
         use std::mem;
@@ -87,6 +104,7 @@ impl TargetCtx {
 
             TargetCtx {
                 llx,
+                target_machine,
                 target_data,
 
                 optimising,
@@ -127,6 +145,14 @@ impl TargetCtx {
 
     pub fn optimising(&self) -> bool {
         self.optimising
+    }
+
+    pub fn target_machine(&self) -> LLVMTargetMachineRef {
+        self.target_machine
+    }
+
+    pub fn target_data(&self) -> LLVMTargetDataRef {
+        self.target_data
     }
 
     pub fn usize_llvm_type(&self) -> LLVMTypeRef {

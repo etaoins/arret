@@ -1,11 +1,10 @@
 use std::collections::HashMap;
-use std::{env, ffi, mem};
+use std::{ffi, mem};
 
 use runtime::boxed;
 
 use libc;
 
-use llvm_sys::analysis::*;
 use llvm_sys::core::*;
 use llvm_sys::execution_engine::*;
 use llvm_sys::orc::*;
@@ -73,7 +72,6 @@ impl JITCtx {
 
     pub fn compile_fun(&mut self, built_funs: &[ops::Fun], fun: &ops::Fun) -> u64 {
         use crate::codegen::fun_gen;
-        use std::ptr;
 
         let tcx = &mut self.tcx;
 
@@ -87,15 +85,10 @@ impl JITCtx {
             .unwrap_or_else(|| format!("Anonymous JIT Module #{}", module_counter));
 
         let module_name_cstring = ffi::CString::new(module_name.as_bytes()).unwrap();
+        // Create the module
+        let mut mcx = ModCtx::new(tcx, module_name_cstring.as_ref());
 
         unsafe {
-            // Create the module
-            let module = LLVMModuleCreateWithNameInContext(
-                module_name_cstring.as_ptr() as *const _,
-                tcx.llx,
-            );
-            let mut mcx = ModCtx::new(module, self.target_machine, tcx.optimising());
-
             // TODO: We're regenerating every built fun on each JITed function. This is terrible.
             for (fun_idx, fun) in built_funs.iter().enumerate() {
                 let built_fun = fun_gen::gen_fun(tcx, &mut mcx, fun);
@@ -109,17 +102,7 @@ impl JITCtx {
             let function_name_ptr = LLVMGetValueName2(llvm_function, &mut function_name_len);
             let function_name = ffi::CStr::from_ptr(function_name_ptr).to_owned();
 
-            if env::var_os("ARRET_DUMP_LLVM").is_some() {
-                LLVMDumpModule(module);
-            }
-
-            let error: *mut *mut libc::c_char = ptr::null_mut();
-            LLVMVerifyModule(
-                module,
-                LLVMVerifierFailureAction::LLVMAbortProcessAction,
-                error,
-            );
-
+            let module = mcx.into_llvm_module();
             tcx.optimise_module(module);
 
             let mut orc_module: LLVMOrcModuleHandle = 0;

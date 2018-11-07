@@ -1,7 +1,6 @@
 use std::ffi::{CStr, CString};
-use std::{env, fs, path, process, ptr};
+use std::{fs, path, process, ptr};
 
-use llvm_sys::analysis::*;
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::target_machine::*;
@@ -97,17 +96,18 @@ fn c_main_llvm_type(tcx: &mut TargetCtx) -> LLVMTypeRef {
 fn program_to_module(
     source_loader: &mut SourceLoader,
     tcx: &mut TargetCtx,
-    target_machine: LLVMTargetMachineRef,
     program: &mir::BuiltProgram,
 ) -> LLVMModuleRef {
     use crate::codegen::fun_gen;
 
     unsafe {
-        let module = LLVMModuleCreateWithNameInContext(b"program\0".as_ptr() as *const _, tcx.llx);
-        let mut di_builder =
-            DebugInfoBuilder::new(source_loader, tcx.optimising(), program.main.span, module);
-
-        let mut mcx = ModCtx::new(module, target_machine, tcx.optimising());
+        let mut mcx = ModCtx::new(tcx, CString::new("program").unwrap().as_ref());
+        let mut di_builder = DebugInfoBuilder::new(
+            source_loader,
+            tcx.optimising(),
+            program.main.span,
+            mcx.module,
+        );
 
         // Build all of our non-main functions
         for (fun_idx, fun) in program.funs.iter().enumerate() {
@@ -134,7 +134,7 @@ fn program_to_module(
         // Declare our C main
         let builder = LLVMCreateBuilderInContext(tcx.llx);
         let c_main = LLVMAddFunction(
-            module,
+            mcx.module,
             b"main\0".as_ptr() as *const _,
             c_main_llvm_type(tcx),
         );
@@ -185,8 +185,7 @@ fn program_to_module(
 
         LLVMDisposeBuilder(builder);
         di_builder.finalise();
-
-        module
+        mcx.into_llvm_module()
     }
 }
 
@@ -225,23 +224,11 @@ pub fn gen_program(
     );
 
     let mut tcx = TargetCtx::new(target_machine, llvm_opt);
-    let module = program_to_module(source_loader, &mut tcx, target_machine, &program);
+    let module = program_to_module(source_loader, &mut tcx, &program);
+    tcx.optimise_module(module);
 
     unsafe {
         let mut error: *mut libc::c_char = ptr::null_mut();
-
-        if env::var_os("ARRET_DUMP_LLVM").is_some() {
-            LLVMDumpModule(module);
-        }
-
-        LLVMVerifyModule(
-            module,
-            LLVMVerifierFailureAction::LLVMAbortProcessAction,
-            &mut error as *mut _,
-        );
-        LLVMDisposeMessage(error);
-
-        tcx.optimise_module(module);
 
         let llvm_code_gen_file_type = match output_type {
             OutputType::LLVMIR => {
