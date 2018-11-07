@@ -63,6 +63,7 @@ pub fn build_rust_fun_app(
         ret: rust_fun.ret().clone(),
     };
 
+    ehx.register_rust_fun_with_jit(rust_fun);
     let callee = ops::Callee::StaticSymbol(ops::StaticSymbol {
         symbol: rust_fun.symbol(),
         impure,

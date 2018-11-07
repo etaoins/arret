@@ -270,15 +270,6 @@ impl EvalHirCtx {
             use crate::mir::rust_fun::ops_for_rust_fun_thunk;
             use std::mem;
 
-            // Create some names
-            let inner_symbol = ffi::CString::new(rust_fun.symbol()).unwrap();
-
-            // Add the inner symbol
-            self.thunk_jit.add_symbol(
-                inner_symbol.as_bytes_with_nul(),
-                rust_fun.entry_point() as u64,
-            );
-
             let ops_fun = ops_for_rust_fun_thunk(self, EMPTY_SPAN, rust_fun);
             let address = self
                 .thunk_jit
@@ -289,6 +280,20 @@ impl EvalHirCtx {
 
         self.rust_fun_thunks.insert(rust_fun.entry_point(), thunk);
         thunk
+    }
+
+    /// Ensures the passed `RustFun` is known by the JIT
+    ///
+    /// This can be called multiple times with the same Rust fun. Calling it with a fun that's
+    /// never used by the JIT is harmless
+    pub fn register_rust_fun_with_jit(&mut self, rust_fun: &hir::rfi::Fun) {
+        let symbol_cstring = ffi::CString::new(rust_fun.symbol()).unwrap();
+
+        // Add the inner symbol
+        self.thunk_jit.add_symbol(
+            symbol_cstring.as_bytes_with_nul(),
+            rust_fun.entry_point() as u64,
+        );
     }
 
     pub fn rust_fun_to_thunk_reg(
