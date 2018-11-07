@@ -9,6 +9,7 @@ use llvm_sys::core::*;
 use llvm_sys::execution_engine::*;
 use llvm_sys::orc::*;
 use llvm_sys::target_machine::*;
+use llvm_sys::LLVMLinkage;
 
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
@@ -92,6 +93,7 @@ impl JITCtx {
             // TODO: We're regenerating every built fun on each JITed function. This is terrible.
             for (fun_idx, fun) in built_funs.iter().enumerate() {
                 let built_fun = fun_gen::gen_fun(tcx, &mut mcx, fun);
+                LLVMSetLinkage(built_fun.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
                 mcx.push_built_fun(ops::BuiltFunId::new(fun_idx), built_fun);
             }
 
