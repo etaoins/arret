@@ -11,7 +11,6 @@ use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
 use crate::hir::rfi;
 use crate::mir;
-use crate::mir::ops;
 use crate::SourceLoader;
 
 #[derive(Copy, Clone, PartialEq)]
@@ -113,19 +112,6 @@ fn program_to_module(
             program.main.span,
             mcx.module,
         );
-
-        // Build all of our non-main functions
-        for (fun_idx, fun) in program.funs.iter().enumerate() {
-            let gened_fun = fun_gen::gen_fun(tcx, &mut mcx, fun);
-            LLVMSetLinkage(gened_fun.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
-            di_builder.add_function_debug_info(
-                fun.span,
-                fun.source_name.as_ref(),
-                gened_fun.llvm_value,
-            );
-
-            mcx.push_gened_fun(ops::BuiltFunId::new(fun_idx), gened_fun);
-        }
 
         // And now the Arret main main
         let arret_main = fun_gen::gen_fun(tcx, &mut mcx, &program.main);

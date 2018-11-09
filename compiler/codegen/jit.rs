@@ -9,7 +9,6 @@ use llvm_sys::core::*;
 use llvm_sys::execution_engine::*;
 use llvm_sys::orc::*;
 use llvm_sys::target_machine::*;
-use llvm_sys::LLVMLinkage;
 
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
@@ -90,13 +89,6 @@ impl JITCtx {
         let mut mcx = ModCtx::new(tcx, module_name_cstring.as_ref(), built_funs);
 
         unsafe {
-            // TODO: We're regenerating every built fun on each JITed function. This is terrible.
-            for (fun_idx, ops_fun) in built_funs.iter().enumerate() {
-                let gened_fun = fun_gen::gen_fun(tcx, &mut mcx, ops_fun);
-                LLVMSetLinkage(gened_fun.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
-                mcx.push_gened_fun(ops::BuiltFunId::new(fun_idx), gened_fun);
-            }
-
             let llvm_function = fun_gen::gen_fun(tcx, &mut mcx, fun).llvm_value;
 
             // We need to take ownership before we tranfer the module to ORC

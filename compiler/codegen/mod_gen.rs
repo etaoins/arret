@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::{env, ffi, ptr};
 
 use llvm_sys::analysis::*;
@@ -5,6 +6,7 @@ use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
+use llvm_sys::LLVMLinkage;
 
 use crate::codegen::fun_gen::GenedFun;
 use crate::codegen::target_gen::TargetCtx;
@@ -14,7 +16,7 @@ pub struct ModCtx<'bf> {
     pub module: LLVMModuleRef,
 
     built_funs: &'bf [ops::Fun],
-    gened_funs: Vec<GenedFun>,
+    gened_funs: HashMap<ops::BuiltFunId, GenedFun>,
 
     function_pass_manager: LLVMPassManagerRef,
 }
@@ -57,28 +59,28 @@ impl<'bf> ModCtx<'bf> {
                 module,
 
                 built_funs,
-                gened_funs: vec![],
+                gened_funs: HashMap::new(),
 
                 function_pass_manager,
             }
         }
     }
 
-    pub fn push_gened_fun(&mut self, built_fun_id: ops::BuiltFunId, gened_fun: GenedFun) {
-        assert_eq!(self.gened_funs.len(), built_fun_id.to_usize());
-        self.gened_funs.push(gened_fun);
-    }
-
-    pub fn built_funs(&self) -> &[ops::Fun] {
-        self.built_funs
-    }
-    /*
-    pub fn gened_funs(&self) -> &[GenedFun] {
-        self.gened_funs.as_slice()
-    }*/
-
     pub fn gened_fun(&mut self, tcx: &mut TargetCtx, built_fun_id: ops::BuiltFunId) -> &GenedFun {
-        &self.gened_funs[built_fun_id.to_usize()]
+        use crate::codegen::fun_gen::gen_fun;
+
+        // TODO: Hack around lifetimes
+        if self.gened_funs.contains_key(&built_fun_id) {
+            return &self.gened_funs[&built_fun_id];
+        }
+
+        let gened_fun = gen_fun(tcx, self, &self.built_funs[built_fun_id.to_usize()]);
+        unsafe {
+            // BuiltFuns are always private
+            LLVMSetLinkage(gened_fun.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
+        }
+
+        self.gened_funs.entry(built_fun_id).or_insert(gened_fun)
     }
 
     pub fn get_global_or_insert<F>(

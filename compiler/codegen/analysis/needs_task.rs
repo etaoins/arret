@@ -1,6 +1,5 @@
 use crate::codegen::alloc::AllocAtom;
 use crate::codegen::callee;
-use crate::codegen::fun_gen::GenedFun;
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;

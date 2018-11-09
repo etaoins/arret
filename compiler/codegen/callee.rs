@@ -4,7 +4,6 @@ use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::LLVMAttributeFunctionIndex;
 
-use crate::codegen::fun_gen::GenedFun;
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
