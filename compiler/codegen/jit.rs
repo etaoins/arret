@@ -87,7 +87,7 @@ impl JITCtx {
 
         let module_name_cstring = ffi::CString::new(module_name.as_bytes()).unwrap();
         // Create the module
-        let mut mcx = ModCtx::new(tcx, module_name_cstring.as_ref());
+        let mut mcx = ModCtx::new(tcx, module_name_cstring.as_ref(), built_funs);
 
         unsafe {
             // TODO: We're regenerating every built fun on each JITed function. This is terrible.

@@ -11,7 +11,7 @@ use crate::mir::ops;
 
 pub fn gen_static_symbol_entry_point(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx,
+    mcx: &mut ModCtx<'_>,
     static_symbol: &ops::StaticSymbol,
 ) -> LLVMValueRef {
     use crate::codegen::analysis::escape::{infer_param_capture_kind, CaptureKind};
@@ -92,16 +92,21 @@ pub fn gen_boxed_fun_thunk_entry_point(
 }
 
 pub fn gen_gened_fun_entry_point(
-    gened_funs: &[GenedFun],
+    tcx: &mut TargetCtx,
+    mcx: &mut ModCtx<'_>,
     built_fun_id: ops::BuiltFunId,
 ) -> LLVMValueRef {
-    gened_funs[built_fun_id.to_usize()].llvm_value
+    let gened_fun = mcx.gened_fun(tcx, built_fun_id);
+    gened_fun.llvm_value
 }
 
-pub fn callee_takes_task(gened_funs: &[GenedFun], callee: &ops::Callee) -> bool {
+pub fn callee_takes_task(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_>, callee: &ops::Callee) -> bool {
     match callee {
         ops::Callee::BoxedFunThunk(_) => true,
-        ops::Callee::BuiltFun(built_fun_id) => gened_funs[built_fun_id.to_usize()].takes_task,
+        ops::Callee::BuiltFun(built_fun_id) => {
+            let gened_fun = mcx.gened_fun(tcx, *built_fun_id);
+            gened_fun.takes_task
+        }
         ops::Callee::StaticSymbol(ops::StaticSymbol { abi, .. }) => abi.takes_task,
     }
 }

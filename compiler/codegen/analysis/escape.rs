@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use runtime::abitype::{ABIType, ParamABIType, ParamCapture, RetABIType};
 
 use crate::codegen::fun_gen::GenedFun;
+use crate::codegen::mod_gen::ModCtx;
+use crate::codegen::target_gen::TargetCtx;
 use crate::codegen::GenABI;
 use crate::mir::ops;
 
@@ -128,7 +130,8 @@ fn add_gened_fun_call_captures(
 }
 
 fn add_op_captures(
-    gened_funs: &[GenedFun],
+    tcx: &mut TargetCtx,
+    mcx: &mut ModCtx<'_>,
     captures: &mut Captures,
     ret_type: &RetABIType,
     op: &ops::Op,
@@ -172,7 +175,7 @@ fn add_op_captures(
             }
 
             for op in true_ops.iter().rev().chain(false_ops.iter().rev()) {
-                add_op_captures(gened_funs, captures, ret_type, op);
+                add_op_captures(tcx, mcx, captures, ret_type, op);
             }
         }
         OpKind::Call(reg, ops::CallOp { callee, args, .. }) => {
@@ -183,7 +186,7 @@ fn add_op_captures(
                     add_static_symbol_call_captures(captures, return_capture, abi, args);
                 }
                 ops::Callee::BuiltFun(built_fun_id) => {
-                    let gened_fun = &gened_funs[built_fun_id.to_usize()];
+                    let gened_fun = mcx.gened_fun(tcx, *built_fun_id);
                     add_gened_fun_call_captures(captures, return_capture, gened_fun, args);
                 }
                 ops::Callee::BoxedFunThunk(_) => {
@@ -197,16 +200,16 @@ fn add_op_captures(
 }
 
 /// Calculates all of the the captured regs for a function
-pub fn calc_fun_captures(gened_funs: &[GenedFun], fun: &ops::Fun) -> Captures {
+pub fn calc_fun_captures(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_>, fun: &ops::Fun) -> Captures {
     let mut captures = Captures::new();
 
     for op in fun.ops.iter().rev() {
-        add_op_captures(gened_funs, &mut captures, &fun.abi.ret, op);
+        add_op_captures(tcx, mcx, &mut captures, &fun.abi.ret, op);
     }
 
     captures
 }
-
+/*
 #[cfg(test)]
 mod test {
     use super::*;
@@ -468,3 +471,5 @@ mod test {
         assert_eq!(CaptureKind::ViaRet, captures.get(ret_reg));
     }
 }
+
+*/

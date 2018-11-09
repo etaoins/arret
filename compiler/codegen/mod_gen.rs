@@ -10,14 +10,16 @@ use crate::codegen::fun_gen::GenedFun;
 use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
 
-pub struct ModCtx {
+pub struct ModCtx<'bf> {
     pub module: LLVMModuleRef,
+
+    built_funs: &'bf [ops::Fun],
     gened_funs: Vec<GenedFun>,
 
     function_pass_manager: LLVMPassManagerRef,
 }
 
-impl Drop for ModCtx {
+impl<'bf> Drop for ModCtx<'bf> {
     fn drop(&mut self) {
         unsafe {
             LLVMDisposePassManager(self.function_pass_manager);
@@ -25,13 +27,13 @@ impl Drop for ModCtx {
     }
 }
 
-impl ModCtx {
+impl<'bf> ModCtx<'bf> {
     /// Constructs a new module context with the given name
     ///
     /// Note that the module name in LLVM is not arbitrary. For instance, in the ORC JIT it will
     /// shadow exported symbol names. This identifier should be as unique and descriptive as
     /// possible.
-    pub fn new(tcx: &TargetCtx, name: &ffi::CStr) -> ModCtx {
+    pub fn new(tcx: &TargetCtx, name: &ffi::CStr, built_funs: &'bf [ops::Fun]) -> ModCtx<'bf> {
         use llvm_sys::transforms::pass_manager_builder::*;
 
         unsafe {
@@ -53,6 +55,8 @@ impl ModCtx {
 
             ModCtx {
                 module,
+
+                built_funs,
                 gened_funs: vec![],
 
                 function_pass_manager,
@@ -65,8 +69,16 @@ impl ModCtx {
         self.gened_funs.push(gened_fun);
     }
 
+    pub fn built_funs(&self) -> &[ops::Fun] {
+        self.built_funs
+    }
+    /*
     pub fn gened_funs(&self) -> &[GenedFun] {
         self.gened_funs.as_slice()
+    }*/
+
+    pub fn gened_fun(&mut self, tcx: &mut TargetCtx, built_fun_id: ops::BuiltFunId) -> &GenedFun {
+        &self.gened_funs[built_fun_id.to_usize()]
     }
 
     pub fn get_global_or_insert<F>(

@@ -1,9 +1,11 @@
 use crate::codegen::alloc::AllocAtom;
 use crate::codegen::callee;
 use crate::codegen::fun_gen::GenedFun;
+use crate::codegen::mod_gen::ModCtx;
+use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
 
-fn op_needs_task(gened_funs: &[GenedFun], op: &ops::Op) -> bool {
+fn op_needs_task(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_>, op: &ops::Op) -> bool {
     use crate::mir::ops::OpKind;
 
     match op.kind() {
@@ -11,15 +13,17 @@ fn op_needs_task(gened_funs: &[GenedFun], op: &ops::Op) -> bool {
             .true_ops
             .iter()
             .chain(cond_op.false_ops.iter())
-            .any(|branch_op| op_needs_task(gened_funs, branch_op)),
-        OpKind::Call(_, ops::CallOp { callee, .. }) => {
-            callee::callee_takes_task(gened_funs, callee)
-        }
+            .any(|branch_op| op_needs_task(tcx, mcx, branch_op)),
+        OpKind::Call(_, ops::CallOp { callee, .. }) => callee::callee_takes_task(tcx, mcx, callee),
         _ => false,
     }
 }
 
-pub fn alloc_plan_needs_task(gened_funs: &[GenedFun], atoms: &[AllocAtom<'_>]) -> bool {
+pub fn alloc_plan_needs_task(
+    tcx: &mut TargetCtx,
+    mcx: &mut ModCtx<'_>,
+    atoms: &[AllocAtom<'_>],
+) -> bool {
     use crate::codegen::alloc::BoxSource;
 
     atoms.iter().any(|atom| {
@@ -29,6 +33,6 @@ pub fn alloc_plan_needs_task(gened_funs: &[GenedFun], atoms: &[AllocAtom<'_>]) -
                 BoxSource::Stack => false,
                 BoxSource::Heap(_) => true,
             })
-            || atom.ops().iter().any(|op| op_needs_task(gened_funs, op))
+            || atom.ops().iter().any(|op| op_needs_task(tcx, mcx, op))
     })
 }

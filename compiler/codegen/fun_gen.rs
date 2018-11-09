@@ -46,21 +46,21 @@ impl Drop for FunCtx {
     }
 }
 
-pub(crate) fn gen_fun(tcx: &mut TargetCtx, mcx: &mut ModCtx, fun: &ops::Fun) -> GenedFun {
+pub(crate) fn gen_fun(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_>, fun: &ops::Fun) -> GenedFun {
     use crate::codegen::alloc::plan::plan_allocs;
     use crate::codegen::analysis;
     use crate::codegen::op_gen;
     use runtime::abitype::{ABIType, ParamABIType, RetABIType};
 
     // Determine which values are captured
-    let captures = analysis::escape::calc_fun_captures(mcx.gened_funs(), fun);
+    let captures = analysis::escape::calc_fun_captures(tcx, mcx, fun);
 
     // Use the capture information to plan our allocations
     let alloc_plan = plan_allocs(&captures, &fun.ops);
 
     // Use the allocation plan to determine if we need a task parameter
     let takes_task = fun.abi.external_call_conv
-        || analysis::needs_task::alloc_plan_needs_task(mcx.gened_funs(), &alloc_plan);
+        || analysis::needs_task::alloc_plan_needs_task(tcx, mcx, &alloc_plan);
 
     // Determine which params we captured
     let mut param_captures = vec![];

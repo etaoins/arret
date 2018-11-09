@@ -13,7 +13,7 @@ use crate::codegen::{alloc, const_gen};
 
 fn gen_op(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx,
+    mcx: &mut ModCtx<'_>,
     fcx: &mut FunCtx,
     alloc_atom: &alloc::AllocAtom<'_>,
     active_alloc: &mut alloc::ActiveAlloc,
@@ -117,7 +117,7 @@ fn gen_op(
                 use crate::codegen::callee;
 
                 let llvm_fun = gen_callee_entry_point(tcx, mcx, fcx, callee);
-                let takes_task = callee::callee_takes_task(mcx.gened_funs(), callee);
+                let takes_task = callee::callee_takes_task(tcx, mcx, callee);
 
                 let task_reg_iter = fcx.current_task.filter(|_| takes_task).into_iter();
                 let mut llvm_args = task_reg_iter
@@ -410,7 +410,7 @@ fn gen_op(
 
 fn gen_cond_branch(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx,
+    mcx: &mut ModCtx<'_>,
     fcx: &mut FunCtx,
     block: LLVMBasicBlockRef,
     alloc_plan: &[alloc::AllocAtom<'_>],
@@ -437,7 +437,7 @@ fn gen_cond_branch(
 
 fn gen_cond(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx,
+    mcx: &mut ModCtx<'_>,
     fcx: &mut FunCtx,
     cond_op: &CondOp,
     cond_alloc_plan: &alloc::CondPlan<'_>,
@@ -519,16 +519,14 @@ fn gen_cond(
 
 fn gen_callee_entry_point(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx,
+    mcx: &mut ModCtx<'_>,
     fcx: &mut FunCtx,
     callee: &Callee,
 ) -> LLVMValueRef {
     use crate::codegen::callee::*;
 
     match callee {
-        Callee::BuiltFun(built_fun_id) => {
-            gen_gened_fun_entry_point(mcx.gened_funs(), *built_fun_id)
-        }
+        Callee::BuiltFun(built_fun_id) => gen_gened_fun_entry_point(tcx, mcx, *built_fun_id),
         Callee::BoxedFunThunk(fun_thunk_reg) => {
             let llvm_fun_thunk = fcx.regs[fun_thunk_reg];
             gen_boxed_fun_thunk_entry_point(fcx.builder, llvm_fun_thunk)
@@ -541,7 +539,7 @@ fn gen_callee_entry_point(
 
 pub(crate) fn gen_alloc_atom(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx,
+    mcx: &mut ModCtx<'_>,
     fcx: &mut FunCtx,
     alloc_atom: &alloc::AllocAtom<'_>,
 ) {
