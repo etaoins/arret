@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use runtime::abitype::{ABIType, ParamABIType, ParamCapture, RetABIType};
 
-use crate::codegen::fun_gen::BuiltFun;
+use crate::codegen::fun_gen::GenedFun;
 use crate::codegen::GenABI;
 use crate::mir::ops;
 
@@ -112,14 +112,14 @@ fn add_static_symbol_call_captures(
     }
 }
 
-fn add_built_fun_call_captures(
+fn add_gened_fun_call_captures(
     captures: &mut Captures,
     return_capture: CaptureKind,
-    built_fun: &BuiltFun,
+    gened_fun: &GenedFun,
     args: &[ops::RegId],
 ) {
-    assert_eq!(args.len(), built_fun.param_captures.len());
-    for (arg_reg, param_capture) in args.iter().zip(built_fun.param_captures.iter()) {
+    assert_eq!(args.len(), gened_fun.param_captures.len());
+    for (arg_reg, param_capture) in args.iter().zip(gened_fun.param_captures.iter()) {
         captures.add(
             *arg_reg,
             param_capture.capture_for_call_param(return_capture),
@@ -128,7 +128,7 @@ fn add_built_fun_call_captures(
 }
 
 fn add_op_captures(
-    built_funs: &[BuiltFun],
+    gened_funs: &[GenedFun],
     captures: &mut Captures,
     ret_type: &RetABIType,
     op: &ops::Op,
@@ -172,7 +172,7 @@ fn add_op_captures(
             }
 
             for op in true_ops.iter().rev().chain(false_ops.iter().rev()) {
-                add_op_captures(built_funs, captures, ret_type, op);
+                add_op_captures(gened_funs, captures, ret_type, op);
             }
         }
         OpKind::Call(reg, ops::CallOp { callee, args, .. }) => {
@@ -183,8 +183,8 @@ fn add_op_captures(
                     add_static_symbol_call_captures(captures, return_capture, abi, args);
                 }
                 ops::Callee::BuiltFun(built_fun_id) => {
-                    let built_fun = &built_funs[built_fun_id.to_usize()];
-                    add_built_fun_call_captures(captures, return_capture, built_fun, args);
+                    let gened_fun = &gened_funs[built_fun_id.to_usize()];
+                    add_gened_fun_call_captures(captures, return_capture, gened_fun, args);
                 }
                 ops::Callee::BoxedFunThunk(_) => {
                     // We know nothing about the actual captures. We need to assume the worst.
@@ -197,11 +197,11 @@ fn add_op_captures(
 }
 
 /// Calculates all of the the captured regs for a function
-pub fn calc_fun_captures(built_funs: &[BuiltFun], fun: &ops::Fun) -> Captures {
+pub fn calc_fun_captures(gened_funs: &[GenedFun], fun: &ops::Fun) -> Captures {
     let mut captures = Captures::new();
 
     for op in fun.ops.iter().rev() {
-        add_op_captures(built_funs, &mut captures, &fun.abi.ret, op);
+        add_op_captures(gened_funs, &mut captures, &fun.abi.ret, op);
     }
 
     captures

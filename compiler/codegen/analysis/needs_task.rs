@@ -1,9 +1,9 @@
 use crate::codegen::alloc::AllocAtom;
 use crate::codegen::callee;
-use crate::codegen::fun_gen::BuiltFun;
+use crate::codegen::fun_gen::GenedFun;
 use crate::mir::ops;
 
-fn op_needs_task(built_funs: &[BuiltFun], op: &ops::Op) -> bool {
+fn op_needs_task(gened_funs: &[GenedFun], op: &ops::Op) -> bool {
     use crate::mir::ops::OpKind;
 
     match op.kind() {
@@ -11,15 +11,15 @@ fn op_needs_task(built_funs: &[BuiltFun], op: &ops::Op) -> bool {
             .true_ops
             .iter()
             .chain(cond_op.false_ops.iter())
-            .any(|branch_op| op_needs_task(built_funs, branch_op)),
+            .any(|branch_op| op_needs_task(gened_funs, branch_op)),
         OpKind::Call(_, ops::CallOp { callee, .. }) => {
-            callee::callee_takes_task(built_funs, callee)
+            callee::callee_takes_task(gened_funs, callee)
         }
         _ => false,
     }
 }
 
-pub fn alloc_plan_needs_task(built_funs: &[BuiltFun], atoms: &[AllocAtom<'_>]) -> bool {
+pub fn alloc_plan_needs_task(gened_funs: &[GenedFun], atoms: &[AllocAtom<'_>]) -> bool {
     use crate::codegen::alloc::BoxSource;
 
     atoms.iter().any(|atom| {
@@ -29,6 +29,6 @@ pub fn alloc_plan_needs_task(built_funs: &[BuiltFun], atoms: &[AllocAtom<'_>]) -
                 BoxSource::Stack => false,
                 BoxSource::Heap(_) => true,
             })
-            || atom.ops().iter().any(|op| op_needs_task(built_funs, op))
+            || atom.ops().iter().any(|op| op_needs_task(gened_funs, op))
     })
 }

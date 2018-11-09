@@ -117,7 +117,7 @@ fn gen_op(
                 use crate::codegen::callee;
 
                 let llvm_fun = gen_callee_entry_point(tcx, mcx, fcx, callee);
-                let takes_task = callee::callee_takes_task(mcx.built_funs(), callee);
+                let takes_task = callee::callee_takes_task(mcx.gened_funs(), callee);
 
                 let task_reg_iter = fcx.current_task.filter(|_| takes_task).into_iter();
                 let mut llvm_args = task_reg_iter
@@ -527,7 +527,7 @@ fn gen_callee_entry_point(
 
     match callee {
         Callee::BuiltFun(built_fun_id) => {
-            gen_built_fun_entry_point(mcx.built_funs(), *built_fun_id)
+            gen_gened_fun_entry_point(mcx.gened_funs(), *built_fun_id)
         }
         Callee::BoxedFunThunk(fun_thunk_reg) => {
             let llvm_fun_thunk = fcx.regs[fun_thunk_reg];

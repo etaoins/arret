@@ -111,15 +111,15 @@ fn program_to_module(
 
         // Build all of our non-main functions
         for (fun_idx, fun) in program.funs.iter().enumerate() {
-            let built_fun = fun_gen::gen_fun(tcx, &mut mcx, fun);
-            LLVMSetLinkage(built_fun.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
+            let gened_fun = fun_gen::gen_fun(tcx, &mut mcx, fun);
+            LLVMSetLinkage(gened_fun.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
             di_builder.add_function_debug_info(
                 fun.span,
                 fun.source_name.as_ref(),
-                built_fun.llvm_value,
+                gened_fun.llvm_value,
             );
 
-            mcx.push_built_fun(ops::BuiltFunId::new(fun_idx), built_fun);
+            mcx.push_gened_fun(ops::BuiltFunId::new(fun_idx), gened_fun);
         }
 
         // And now the Arret main main

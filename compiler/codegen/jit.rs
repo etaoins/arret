@@ -91,10 +91,10 @@ impl JITCtx {
 
         unsafe {
             // TODO: We're regenerating every built fun on each JITed function. This is terrible.
-            for (fun_idx, fun) in built_funs.iter().enumerate() {
-                let built_fun = fun_gen::gen_fun(tcx, &mut mcx, fun);
-                LLVMSetLinkage(built_fun.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
-                mcx.push_built_fun(ops::BuiltFunId::new(fun_idx), built_fun);
+            for (fun_idx, ops_fun) in built_funs.iter().enumerate() {
+                let gened_fun = fun_gen::gen_fun(tcx, &mut mcx, ops_fun);
+                LLVMSetLinkage(gened_fun.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
+                mcx.push_gened_fun(ops::BuiltFunId::new(fun_idx), gened_fun);
             }
 
             let llvm_function = fun_gen::gen_fun(tcx, &mut mcx, fun).llvm_value;

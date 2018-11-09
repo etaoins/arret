@@ -6,13 +6,13 @@ use llvm_sys::prelude::*;
 use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 
-use crate::codegen::fun_gen::BuiltFun;
+use crate::codegen::fun_gen::GenedFun;
 use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
 
 pub struct ModCtx {
     pub module: LLVMModuleRef,
-    built_funs: Vec<BuiltFun>,
+    gened_funs: Vec<GenedFun>,
 
     function_pass_manager: LLVMPassManagerRef,
 }
@@ -53,20 +53,20 @@ impl ModCtx {
 
             ModCtx {
                 module,
-                built_funs: vec![],
+                gened_funs: vec![],
 
                 function_pass_manager,
             }
         }
     }
 
-    pub fn push_built_fun(&mut self, built_fun_id: ops::BuiltFunId, built_fun: BuiltFun) {
-        assert_eq!(self.built_funs.len(), built_fun_id.to_usize());
-        self.built_funs.push(built_fun);
+    pub fn push_gened_fun(&mut self, built_fun_id: ops::BuiltFunId, gened_fun: GenedFun) {
+        assert_eq!(self.gened_funs.len(), built_fun_id.to_usize());
+        self.gened_funs.push(gened_fun);
     }
 
-    pub fn built_funs(&self) -> &[BuiltFun] {
-        self.built_funs.as_slice()
+    pub fn gened_funs(&self) -> &[GenedFun] {
+        self.gened_funs.as_slice()
     }
 
     pub fn get_global_or_insert<F>(

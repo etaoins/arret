@@ -4,7 +4,7 @@ use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::LLVMAttributeFunctionIndex;
 
-use crate::codegen::fun_gen::BuiltFun;
+use crate::codegen::fun_gen::GenedFun;
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
@@ -91,17 +91,17 @@ pub fn gen_boxed_fun_thunk_entry_point(
     }
 }
 
-pub fn gen_built_fun_entry_point(
-    built_funs: &[BuiltFun],
+pub fn gen_gened_fun_entry_point(
+    gened_funs: &[GenedFun],
     built_fun_id: ops::BuiltFunId,
 ) -> LLVMValueRef {
-    built_funs[built_fun_id.to_usize()].llvm_value
+    gened_funs[built_fun_id.to_usize()].llvm_value
 }
 
-pub fn callee_takes_task(built_funs: &[BuiltFun], callee: &ops::Callee) -> bool {
+pub fn callee_takes_task(gened_funs: &[GenedFun], callee: &ops::Callee) -> bool {
     match callee {
         ops::Callee::BoxedFunThunk(_) => true,
-        ops::Callee::BuiltFun(built_fun_id) => built_funs[built_fun_id.to_usize()].takes_task,
+        ops::Callee::BuiltFun(built_fun_id) => gened_funs[built_fun_id.to_usize()].takes_task,
         ops::Callee::StaticSymbol(ops::StaticSymbol { abi, .. }) => abi.takes_task,
     }
 }
