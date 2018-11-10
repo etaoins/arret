@@ -22,7 +22,7 @@ pub struct ModCtx<'am> {
     function_pass_manager: LLVMPassManagerRef,
 }
 
-impl<'pf> Drop for ModCtx<'pf> {
+impl<'am> Drop for ModCtx<'am> {
     fn drop(&mut self) {
         unsafe {
             LLVMDisposePassManager(self.function_pass_manager);
