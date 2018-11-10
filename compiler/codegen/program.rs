@@ -7,7 +7,6 @@ use llvm_sys::target_machine::*;
 use llvm_sys::LLVMLinkage;
 
 use crate::codegen::analysis::AnalysedMod;
-use crate::codegen::debug_info::DebugInfoBuilder;
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
 use crate::hir::rfi;
@@ -94,9 +93,9 @@ fn c_main_llvm_type(tcx: &mut TargetCtx) -> LLVMTypeRef {
 }
 
 fn program_to_module(
-    source_loader: &SourceLoader,
     tcx: &mut TargetCtx,
     program: &mir::BuiltProgram,
+    debug_source_loader: Option<&SourceLoader>,
 ) -> LLVMModuleRef {
     unsafe {
         let analysed_mod = AnalysedMod::new(program.private_funs.as_slice(), &program.main);
@@ -105,23 +104,12 @@ fn program_to_module(
             tcx,
             CString::new("program").unwrap().as_ref(),
             &analysed_mod,
-        );
-
-        let mut di_builder = DebugInfoBuilder::new(
-            source_loader,
-            tcx.optimising(),
-            program.main.span,
-            mcx.module,
+            debug_source_loader,
         );
 
         // And now the Arret main main
         let arret_main = mcx.gened_entry_fun(tcx);
         LLVMSetLinkage(arret_main.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
-        di_builder.add_function_debug_info(
-            program.main.span,
-            program.main.source_name.as_ref(),
-            arret_main.llvm_value,
-        );
 
         // Declare our C main
         let builder = LLVMCreateBuilderInContext(tcx.llx);
@@ -130,7 +118,10 @@ fn program_to_module(
             b"main\0".as_ptr() as *const _,
             c_main_llvm_type(tcx),
         );
-        di_builder.add_function_debug_info(program.main.span, Some(&"main".to_owned()), c_main);
+
+        if let Some(di_builder) = mcx.di_builder() {
+            di_builder.add_function_debug_info(program.main.span, Some(&"main".to_owned()), c_main);
+        }
 
         let bb = LLVMAppendBasicBlockInContext(tcx.llx, c_main, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
@@ -176,7 +167,6 @@ fn program_to_module(
         LLVMBuildRet(builder, LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), 0, 0));
 
         LLVMDisposeBuilder(builder);
-        di_builder.finalise();
         mcx.into_llvm_module()
     }
 }
@@ -185,11 +175,11 @@ fn program_to_module(
 ///
 /// codegen::initialise_llvm() must be called before this.
 pub fn gen_program(
-    source_loader: &SourceLoader,
     options: Options<'_>,
     rust_libraries: &[rfi::Library],
     program: &mir::BuiltProgram,
     output_file: &path::Path,
+    debug_source_loader: Option<&SourceLoader>,
 ) {
     use crate::codegen::target_machine::create_target_machine;
 
@@ -216,7 +206,7 @@ pub fn gen_program(
     );
 
     let mut tcx = TargetCtx::new(target_machine, llvm_opt);
-    let module = program_to_module(source_loader, &mut tcx, &program);
+    let module = program_to_module(&mut tcx, &program, debug_source_loader);
     tcx.optimise_module(module);
 
     unsafe {

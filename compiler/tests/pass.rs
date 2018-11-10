@@ -61,11 +61,11 @@ fn try_run_single_test(
         compiler::GenProgramOptions::new().with_target_triple(target_triple.as_ref().map(|x| &**x));
 
     compiler::gen_program(
-        source_loader,
         gen_program_opts,
         &hir.rust_libraries,
         &mir_program,
         &output_path,
+        None,
     );
 
     let status = process::Command::new(output_path.as_os_str())

@@ -51,6 +51,12 @@ fn main() {
                         .help("Output filename"),
                 )
                 .arg(
+                    Arg::with_name("DEBUG")
+                        .short("g")
+                        .long("debug-info")
+                        .help("Generates debugging information"),
+                )
+                .arg(
                     Arg::with_name("TARGET")
                         .long("target")
                         .value_name("TRIPLE")
@@ -91,10 +97,18 @@ fn main() {
             None => input_path.with_extension(""),
         };
 
+        let debug_info = compile_matches.is_present("DEBUG");
+
         let target_triple = compile_matches.value_of("TARGET");
         initialise_llvm(target_triple.is_some());
 
-        if !subcommand::compile::compile_input_file(&cfg, input_path, target_triple, &output_path) {
+        if !subcommand::compile::compile_input_file(
+            &cfg,
+            input_path,
+            target_triple,
+            &output_path,
+            debug_info,
+        ) {
             process::exit(2);
         }
     } else if let Some(repl_matches) = matches.subcommand_matches("repl") {

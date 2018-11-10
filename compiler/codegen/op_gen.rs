@@ -13,7 +13,7 @@ use crate::codegen::{alloc, const_gen};
 
 fn gen_op(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_>,
+    mcx: &mut ModCtx<'_, '_>,
     fcx: &mut FunCtx,
     alloc_atom: &alloc::AllocAtom<'_>,
     active_alloc: &mut alloc::ActiveAlloc,
@@ -410,7 +410,7 @@ fn gen_op(
 
 fn gen_cond_branch(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_>,
+    mcx: &mut ModCtx<'_, '_>,
     fcx: &mut FunCtx,
     block: LLVMBasicBlockRef,
     alloc_plan: &[alloc::AllocAtom<'_>],
@@ -437,7 +437,7 @@ fn gen_cond_branch(
 
 fn gen_cond(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_>,
+    mcx: &mut ModCtx<'_, '_>,
     fcx: &mut FunCtx,
     cond_op: &CondOp,
     cond_alloc_plan: &alloc::CondPlan<'_>,
@@ -519,7 +519,7 @@ fn gen_cond(
 
 fn gen_callee_entry_point(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_>,
+    mcx: &mut ModCtx<'_, '_>,
     fcx: &mut FunCtx,
     callee: &Callee,
 ) -> LLVMValueRef {
@@ -541,7 +541,7 @@ fn gen_callee_entry_point(
 
 pub(crate) fn gen_alloc_atom(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_>,
+    mcx: &mut ModCtx<'_, '_>,
     fcx: &mut FunCtx,
     alloc_atom: &alloc::AllocAtom<'_>,
 ) {

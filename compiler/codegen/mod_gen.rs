@@ -9,20 +9,23 @@ use llvm_sys::target_machine::*;
 use llvm_sys::LLVMLinkage;
 
 use crate::codegen::analysis::AnalysedMod;
+use crate::codegen::debug_info::DebugInfoBuilder;
 use crate::codegen::fun_gen::GenedFun;
 use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
+use crate::source::SourceLoader;
 
-pub struct ModCtx<'am> {
+pub struct ModCtx<'am, 'sl> {
     pub module: LLVMModuleRef,
 
     analysed_mod: &'am AnalysedMod<'am>,
+    di_builder: Option<DebugInfoBuilder<'sl>>,
     gened_private_funs: HashMap<ops::PrivateFunId, GenedFun>,
 
     function_pass_manager: LLVMPassManagerRef,
 }
 
-impl<'am> Drop for ModCtx<'am> {
+impl<'am, 'sl> Drop for ModCtx<'am, 'sl> {
     fn drop(&mut self) {
         unsafe {
             LLVMDisposePassManager(self.function_pass_manager);
@@ -30,7 +33,7 @@ impl<'am> Drop for ModCtx<'am> {
     }
 }
 
-impl<'am> ModCtx<'am> {
+impl<'am, 'sl> ModCtx<'am, 'sl> {
     /// Constructs a new module context with the given name
     ///
     /// Note that the module name in LLVM is not arbitrary. For instance, in the ORC JIT it will
@@ -40,7 +43,8 @@ impl<'am> ModCtx<'am> {
         tcx: &TargetCtx,
         name: &ffi::CStr,
         analysed_mod: &'am AnalysedMod<'am>,
-    ) -> ModCtx<'am> {
+        debug_source_loader: Option<&'sl SourceLoader>,
+    ) -> ModCtx<'am, 'sl> {
         use llvm_sys::transforms::pass_manager_builder::*;
 
         unsafe {
@@ -60,10 +64,20 @@ impl<'am> ModCtx<'am> {
                 LLVMPassManagerBuilderDispose(fpmb);
             }
 
+            let di_builder = debug_source_loader.map(|source_loader| {
+                DebugInfoBuilder::new(
+                    source_loader,
+                    tcx.optimising(),
+                    analysed_mod.entry_fun().span,
+                    module,
+                )
+            });
+
             ModCtx {
                 module,
 
                 analysed_mod,
+                di_builder,
                 gened_private_funs: HashMap::new(),
 
                 function_pass_manager,
@@ -87,6 +101,14 @@ impl<'am> ModCtx<'am> {
         let captures = self.analysed_mod.private_fun_captures(private_fun_id);
         let gened_fun = gen_fun(tcx, self, ops_fun, captures);
 
+        if let Some(ref mut di_builder) = self.di_builder {
+            di_builder.add_function_debug_info(
+                ops_fun.span,
+                ops_fun.source_name.as_ref(),
+                gened_fun.llvm_value,
+            );
+        }
+
         unsafe {
             LLVMSetLinkage(gened_fun.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
         }
@@ -97,12 +119,24 @@ impl<'am> ModCtx<'am> {
     }
 
     pub fn gened_entry_fun(&mut self, tcx: &mut TargetCtx) -> GenedFun {
-        crate::codegen::fun_gen::gen_fun(
+        let ops_fun = self.analysed_mod.entry_fun();
+
+        let gened_fun = crate::codegen::fun_gen::gen_fun(
             tcx,
             self,
-            self.analysed_mod.entry_fun(),
+            ops_fun,
             self.analysed_mod.entry_fun_captures(),
-        )
+        );
+
+        if let Some(ref mut di_builder) = self.di_builder {
+            di_builder.add_function_debug_info(
+                ops_fun.span,
+                ops_fun.source_name.as_ref(),
+                gened_fun.llvm_value,
+            );
+        }
+
+        gened_fun
     }
 
     pub fn get_global_or_insert<F>(
@@ -157,11 +191,19 @@ impl<'am> ModCtx<'am> {
         }
     }
 
+    pub fn di_builder(&mut self) -> Option<&mut DebugInfoBuilder<'sl>> {
+        self.di_builder.as_mut()
+    }
+
     /// Finalise the module and return the LLVMModuleRef
     ///
     /// This will verify the module's correctness and dump the LLVM IR to stdout if the
     /// `ARRET_DUMP_LLVM` environment variable is set
-    pub fn into_llvm_module(self) -> LLVMModuleRef {
+    pub fn into_llvm_module(mut self) -> LLVMModuleRef {
+        if let Some(ref mut di_builder) = self.di_builder {
+            di_builder.finalise();
+        }
+
         unsafe {
             let mut error: *mut libc::c_char = ptr::null_mut();
 

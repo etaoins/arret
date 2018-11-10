@@ -19,7 +19,7 @@ fn annotate_private_global(llvm_global: LLVMValueRef) {
 
 pub fn gen_boxed_pair(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_>,
+    mcx: &mut ModCtx<'_, '_>,
     llvm_head: LLVMValueRef,
     llvm_rest: LLVMValueRef,
     llvm_length: LLVMValueRef,
@@ -49,7 +49,7 @@ pub fn gen_boxed_pair(
 
 pub fn gen_boxed_inline_str(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_>,
+    mcx: &mut ModCtx<'_, '_>,
     value: &str,
 ) -> LLVMValueRef {
     unsafe {
@@ -90,7 +90,7 @@ pub fn gen_boxed_inline_str(
     }
 }
 
-pub fn gen_boxed_int(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_>, value: i64) -> LLVMValueRef {
+pub fn gen_boxed_int(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_, '_>, value: i64) -> LLVMValueRef {
     unsafe {
         let type_tag = boxed::TypeTag::Int;
         let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
@@ -113,13 +113,13 @@ pub fn gen_boxed_int(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_>, value: i64) -> L
     }
 }
 
-pub fn gen_boxed_nil(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_>) -> LLVMValueRef {
+pub fn gen_boxed_nil(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_, '_>) -> LLVMValueRef {
     tcx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::Nil, b"ARRET_NIL\0")
 }
 
 pub fn gen_boxed_fun_thunk(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_>,
+    mcx: &mut ModCtx<'_, '_>,
     llvm_closure: LLVMValueRef,
     llvm_entry_point: LLVMValueRef,
 ) -> LLVMValueRef {

@@ -46,7 +46,7 @@ impl Drop for FunCtx {
 
 pub(crate) fn gen_fun(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_>,
+    mcx: &mut ModCtx<'_, '_>,
     fun: &ops::Fun,
     captures: &Captures,
 ) -> GenedFun {

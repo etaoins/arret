@@ -88,7 +88,7 @@ impl JITCtx {
         // Create the module
         let analysed_mod = AnalysedMod::new(private_funs, fun);
 
-        let mut mcx = ModCtx::new(tcx, module_name_cstring.as_ref(), &analysed_mod);
+        let mut mcx = ModCtx::new(tcx, module_name_cstring.as_ref(), &analysed_mod, None);
 
         unsafe {
             let llvm_function = mcx.gened_entry_fun(tcx).llvm_value;

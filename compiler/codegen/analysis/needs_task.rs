@@ -4,7 +4,7 @@ use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
 
-fn op_needs_task(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_>, op: &ops::Op) -> bool {
+fn op_needs_task(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_, '_>, op: &ops::Op) -> bool {
     use crate::mir::ops::OpKind;
 
     match op.kind() {
@@ -20,7 +20,7 @@ fn op_needs_task(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_>, op: &ops::Op) -> boo
 
 pub fn alloc_plan_needs_task(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_>,
+    mcx: &mut ModCtx<'_, '_>,
     atoms: &[AllocAtom<'_>],
 ) -> bool {
     use crate::codegen::alloc::BoxSource;

@@ -12,6 +12,7 @@ fn try_compile_input_file(
     options: compiler::GenProgramOptions<'_>,
     input_path: &path::Path,
     output_path: &path::Path,
+    debug_info: bool,
 ) -> Result<(), Error> {
     let source_file_id = source_loader
         .load_path(input_path)
@@ -26,12 +27,19 @@ fn try_compile_input_file(
     }
 
     let mir_program = ehx.into_built_program(hir.main_var_id)?;
+
+    let debug_source_loader = if debug_info {
+        Some(&*source_loader)
+    } else {
+        None
+    };
+
     compiler::gen_program(
-        source_loader,
         options,
         &hir.rust_libraries,
         &mir_program,
         output_path,
+        debug_source_loader,
     );
 
     Ok(())
@@ -42,6 +50,7 @@ pub fn compile_input_file(
     input_path: &path::Path,
     target_triple: Option<&str>,
     output_path: &path::Path,
+    debug_info: bool,
 ) -> bool {
     let mut source_loader = compiler::SourceLoader::new();
 
@@ -57,7 +66,14 @@ pub fn compile_input_file(
         .with_output_type(output_type)
         .with_llvm_opt(cfg.llvm_opt);
 
-    let result = try_compile_input_file(cfg, &mut source_loader, options, input_path, output_path);
+    let result = try_compile_input_file(
+        cfg,
+        &mut source_loader,
+        options,
+        input_path,
+        output_path,
+        debug_info,
+    );
 
     if let Err(Error(errs)) = result {
         for err in errs {
