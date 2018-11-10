@@ -22,7 +22,7 @@ pub fn stdlib_cons(
     boxed::Pair::new(task, (head, tail)).as_top_pair()
 }
 
-#[rfi_derive::rust_fun("(All #{I O [->_ : ->!]} (I ->_ O) (Listof I) -> (Listof O))")]
+#[rfi_derive::rust_fun("(All #{I O [->_ : ->!]} (I ->_ O) (Listof I) ->_ (Listof O))")]
 pub fn stdlib_map(
     task: &mut Task,
     mapper: callback::Callback<
