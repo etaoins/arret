@@ -8,14 +8,15 @@ use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 use llvm_sys::LLVMLinkage;
 
+use crate::codegen::analysis::AnalysedMod;
 use crate::codegen::fun_gen::GenedFun;
 use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
 
-pub struct ModCtx<'pf> {
+pub struct ModCtx<'am> {
     pub module: LLVMModuleRef,
 
-    private_funs: &'pf [ops::Fun],
+    analysed_mod: &'am AnalysedMod<'am>,
     gened_private_funs: HashMap<ops::PrivateFunId, GenedFun>,
 
     function_pass_manager: LLVMPassManagerRef,
@@ -29,13 +30,17 @@ impl<'pf> Drop for ModCtx<'pf> {
     }
 }
 
-impl<'pf> ModCtx<'pf> {
+impl<'am> ModCtx<'am> {
     /// Constructs a new module context with the given name
     ///
     /// Note that the module name in LLVM is not arbitrary. For instance, in the ORC JIT it will
     /// shadow exported symbol names. This identifier should be as unique and descriptive as
     /// possible.
-    pub fn new(tcx: &TargetCtx, name: &ffi::CStr, private_funs: &'pf [ops::Fun]) -> ModCtx<'pf> {
+    pub fn new(
+        tcx: &TargetCtx,
+        name: &ffi::CStr,
+        analysed_mod: &'am AnalysedMod<'am>,
+    ) -> ModCtx<'am> {
         use llvm_sys::transforms::pass_manager_builder::*;
 
         unsafe {
@@ -58,7 +63,7 @@ impl<'pf> ModCtx<'pf> {
             ModCtx {
                 module,
 
-                private_funs,
+                analysed_mod,
                 gened_private_funs: HashMap::new(),
 
                 function_pass_manager,
@@ -73,12 +78,15 @@ impl<'pf> ModCtx<'pf> {
     ) -> &GenedFun {
         use crate::codegen::fun_gen::gen_fun;
 
-        // TODO: Hack around lifetimes
+        // TODO: This is a hack around lifetimes
         if self.gened_private_funs.contains_key(&private_fun_id) {
             return &self.gened_private_funs[&private_fun_id];
         }
 
-        let gened_fun = gen_fun(tcx, self, &self.private_funs[private_fun_id.to_usize()]);
+        let ops_fun = self.analysed_mod.private_fun(private_fun_id);
+        let captures = self.analysed_mod.private_fun_captures(private_fun_id);
+        let gened_fun = gen_fun(tcx, self, ops_fun, captures);
+
         unsafe {
             LLVMSetLinkage(gened_fun.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
         }
@@ -86,6 +94,15 @@ impl<'pf> ModCtx<'pf> {
         self.gened_private_funs
             .entry(private_fun_id)
             .or_insert(gened_fun)
+    }
+
+    pub fn gened_entry_fun(&mut self, tcx: &mut TargetCtx) -> GenedFun {
+        crate::codegen::fun_gen::gen_fun(
+            tcx,
+            self,
+            self.analysed_mod.entry_fun(),
+            self.analysed_mod.entry_fun_captures(),
+        )
     }
 
     pub fn get_global_or_insert<F>(

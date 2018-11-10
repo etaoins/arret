@@ -6,6 +6,7 @@ use llvm_sys::prelude::*;
 use llvm_sys::target_machine::*;
 use llvm_sys::LLVMLinkage;
 
+use crate::codegen::analysis::AnalysedMod;
 use crate::codegen::debug_info::DebugInfoBuilder;
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
@@ -97,13 +98,13 @@ fn program_to_module(
     tcx: &mut TargetCtx,
     program: &mir::BuiltProgram,
 ) -> LLVMModuleRef {
-    use crate::codegen::fun_gen;
-
     unsafe {
+        let analysed_mod = AnalysedMod::new(program.private_funs.as_slice(), &program.main);
+
         let mut mcx = ModCtx::new(
             tcx,
             CString::new("program").unwrap().as_ref(),
-            program.private_funs.as_slice(),
+            &analysed_mod,
         );
 
         let mut di_builder = DebugInfoBuilder::new(
@@ -114,7 +115,7 @@ fn program_to_module(
         );
 
         // And now the Arret main main
-        let arret_main = fun_gen::gen_fun(tcx, &mut mcx, &program.main);
+        let arret_main = mcx.gened_entry_fun(tcx);
         LLVMSetLinkage(arret_main.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
         di_builder.add_function_debug_info(
             program.main.span,

@@ -6,7 +6,7 @@ use llvm_sys::prelude::*;
 
 use crate::mir::ops;
 
-use crate::codegen::analysis::escape::CaptureKind;
+use crate::codegen::analysis::escape::{CaptureKind, Captures};
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
 use crate::codegen::GenABI;
@@ -14,8 +14,6 @@ use crate::codegen::GenABI;
 pub struct GenedFun {
     pub llvm_value: LLVMValueRef,
     pub takes_task: bool,
-    // This includes the closure
-    pub param_captures: Box<[CaptureKind]>,
 }
 
 pub(crate) struct FunCtx {
@@ -46,14 +44,16 @@ impl Drop for FunCtx {
     }
 }
 
-pub(crate) fn gen_fun(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_>, fun: &ops::Fun) -> GenedFun {
+pub(crate) fn gen_fun(
+    tcx: &mut TargetCtx,
+    mcx: &mut ModCtx<'_>,
+    fun: &ops::Fun,
+    captures: &Captures,
+) -> GenedFun {
     use crate::codegen::alloc::plan::plan_allocs;
     use crate::codegen::analysis;
     use crate::codegen::op_gen;
     use runtime::abitype::{ABIType, ParamABIType, RetABIType};
-
-    // Determine which values are captured
-    let captures = analysis::escape::calc_fun_captures(tcx, mcx, fun);
 
     // Use the capture information to plan our allocations
     let alloc_plan = plan_allocs(&captures, &fun.ops);
@@ -63,10 +63,11 @@ pub(crate) fn gen_fun(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_>, fun: &ops::Fun)
         || analysis::needs_task::alloc_plan_needs_task(tcx, mcx, &alloc_plan);
 
     // Determine which params we captured
-    let mut param_captures = vec![];
-    for param_reg in fun.params.iter() {
-        param_captures.push(captures.get(*param_reg));
-    }
+    let param_captures: Vec<CaptureKind> = fun
+        .params
+        .iter()
+        .map(|param_reg| captures.get(*param_reg))
+        .collect();
 
     let gen_abi = GenABI {
         takes_task,
@@ -134,7 +135,6 @@ pub(crate) fn gen_fun(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_>, fun: &ops::Fun)
         GenedFun {
             llvm_value: function,
             takes_task,
-            param_captures: param_captures.into_boxed_slice(),
         }
     }
 }

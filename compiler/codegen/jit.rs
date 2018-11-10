@@ -10,6 +10,7 @@ use llvm_sys::execution_engine::*;
 use llvm_sys::orc::*;
 use llvm_sys::target_machine::*;
 
+use crate::codegen::analysis::AnalysedMod;
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
@@ -71,8 +72,6 @@ impl JITCtx {
     }
 
     pub fn compile_fun(&mut self, private_funs: &[ops::Fun], fun: &ops::Fun) -> u64 {
-        use crate::codegen::fun_gen;
-
         let tcx = &mut self.tcx;
 
         self.module_counter += 1;
@@ -85,11 +84,14 @@ impl JITCtx {
             .unwrap_or_else(|| format!("Anonymous JIT Module #{}", module_counter));
 
         let module_name_cstring = ffi::CString::new(module_name.as_bytes()).unwrap();
+
         // Create the module
-        let mut mcx = ModCtx::new(tcx, module_name_cstring.as_ref(), private_funs);
+        let analysed_mod = AnalysedMod::new(private_funs, fun);
+
+        let mut mcx = ModCtx::new(tcx, module_name_cstring.as_ref(), &analysed_mod);
 
         unsafe {
-            let llvm_function = fun_gen::gen_fun(tcx, &mut mcx, fun).llvm_value;
+            let llvm_function = mcx.gened_entry_fun(tcx).llvm_value;
 
             // We need to take ownership before we tranfer the module to ORC
             let mut function_name_len: usize = 0;

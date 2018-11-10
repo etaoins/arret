@@ -2,9 +2,6 @@ use std::collections::HashMap;
 
 use runtime::abitype::{ABIType, ParamABIType, ParamCapture, RetABIType};
 
-use crate::codegen::fun_gen::GenedFun;
-use crate::codegen::mod_gen::ModCtx;
-use crate::codegen::target_gen::TargetCtx;
 use crate::codegen::GenABI;
 use crate::mir::ops;
 
@@ -114,24 +111,9 @@ fn add_static_symbol_call_captures(
     }
 }
 
-fn add_gened_fun_call_captures(
-    captures: &mut Captures,
-    return_capture: CaptureKind,
-    gened_fun: &GenedFun,
-    args: &[ops::RegId],
-) {
-    assert_eq!(args.len(), gened_fun.param_captures.len());
-    for (arg_reg, param_capture) in args.iter().zip(gened_fun.param_captures.iter()) {
-        captures.add(
-            *arg_reg,
-            param_capture.capture_for_call_param(return_capture),
-        );
-    }
-}
-
 fn add_op_captures(
-    tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_>,
+    private_funs: &[ops::Fun],
+    private_fun_captures: &mut HashMap<ops::PrivateFunId, Captures>,
     captures: &mut Captures,
     ret_type: &RetABIType,
     op: &ops::Op,
@@ -175,7 +157,7 @@ fn add_op_captures(
             }
 
             for op in true_ops.iter().rev().chain(false_ops.iter().rev()) {
-                add_op_captures(tcx, mcx, captures, ret_type, op);
+                add_op_captures(private_funs, private_fun_captures, captures, ret_type, op);
             }
         }
         OpKind::Call(reg, ops::CallOp { callee, args, .. }) => {
@@ -186,35 +168,84 @@ fn add_op_captures(
                     add_static_symbol_call_captures(captures, return_capture, abi, args);
                 }
                 ops::Callee::PrivateFun(private_fun_id) => {
-                    let gened_fun = mcx.gened_private_fun(tcx, *private_fun_id);
-                    add_gened_fun_call_captures(captures, return_capture, gened_fun, args);
+                    let ops_fun = &private_funs[private_fun_id.to_usize()];
+                    let callee_captures = captures_for_private_fun_id(
+                        private_funs,
+                        private_fun_captures,
+                        *private_fun_id,
+                    );
+
+                    for (arg_reg, param_reg) in args.iter().zip(ops_fun.params.iter()) {
+                        captures.add(*arg_reg, callee_captures.get(*param_reg));
+                    }
                 }
                 ops::Callee::BoxedFunThunk(_) => {
                     // We know nothing about the actual captures. We need to assume the worst.
-                    captures.add(args[1], CaptureKind::Always);
+                    for arg_reg in args.iter() {
+                        captures.add(*arg_reg, CaptureKind::Always);
+                    }
                 }
             };
+        }
+        OpKind::MakeCallback(_, ops::MakeCallbackOp { callee, .. })
+        | OpKind::AllocBoxedFunThunk(_, ops::BoxFunThunkOp { callee, .. })
+        | OpKind::ConstBoxedFunThunk(_, ops::BoxFunThunkOp { callee, .. }) => {
+            // We don't actually care about these captures; we just pull them in for dependencies
+            if let ops::Callee::PrivateFun(private_fun_id) = callee {
+                captures_for_private_fun_id(private_funs, private_fun_captures, *private_fun_id);
+            }
         }
         _ => {}
     }
 }
 
-/// Calculates all of the the captured regs for a function
-pub fn calc_fun_captures(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_>, fun: &ops::Fun) -> Captures {
+fn captures_for_private_fun_id<'pfc>(
+    private_funs: &[ops::Fun],
+    private_fun_captures: &'pfc mut HashMap<ops::PrivateFunId, Captures>,
+    private_fun_id: ops::PrivateFunId,
+) -> &'pfc Captures {
+    if private_fun_captures.contains_key(&private_fun_id) {
+        return &private_fun_captures[&private_fun_id];
+    }
+
+    let ops_fun = &private_funs[private_fun_id.to_usize()];
+    let captures = calc_fun_captures(private_funs, private_fun_captures, ops_fun);
+
+    private_fun_captures
+        .entry(private_fun_id)
+        .or_insert(captures)
+}
+
+/// Calculates the captured registers for the passed fun and every fun it references
+pub fn calc_fun_captures(
+    private_funs: &[ops::Fun],
+    private_fun_captures: &mut HashMap<ops::PrivateFunId, Captures>,
+    fun: &ops::Fun,
+) -> Captures {
     let mut captures = Captures::new();
 
     for op in fun.ops.iter().rev() {
-        add_op_captures(tcx, mcx, &mut captures, &fun.abi.ret, op);
+        add_op_captures(
+            private_funs,
+            private_fun_captures,
+            &mut captures,
+            &fun.abi.ret,
+            op,
+        );
     }
 
     captures
 }
-/*
+
 #[cfg(test)]
 mod test {
     use super::*;
     use runtime::boxed;
     use syntax::span::EMPTY_SPAN;
+
+    fn calc_single_fun_captures(fun: &ops::Fun) -> Captures {
+        calc_fun_captures(&[], &mut HashMap::new(), fun)
+    }
 
     #[test]
     fn infer_param_capture() {
@@ -248,7 +279,7 @@ mod test {
             ops: Box::new([]),
         };
 
-        let captures = calc_fun_captures(&[], &test_fun);
+        let captures = calc_single_fun_captures(&test_fun);
         assert_eq!(CaptureKind::Never, captures.get(param_reg));
     }
 
@@ -269,7 +300,7 @@ mod test {
             ops: Box::new([ops::OpKind::Ret(capture_reg).into()]),
         };
 
-        let captures = calc_fun_captures(&[], &test_fun);
+        let captures = calc_single_fun_captures(&test_fun);
         assert_eq!(CaptureKind::ViaRet, captures.get(capture_reg));
     }
 
@@ -302,7 +333,7 @@ mod test {
             ]),
         };
 
-        let captures = calc_fun_captures(&[], &test_fun);
+        let captures = calc_single_fun_captures(&test_fun);
         assert_eq!(CaptureKind::ViaRet, captures.get(param_reg));
         assert_eq!(CaptureKind::ViaRet, captures.get(ret_reg));
     }
@@ -336,7 +367,7 @@ mod test {
             ]),
         };
 
-        let captures = calc_fun_captures(&[], &test_fun);
+        let captures = calc_single_fun_captures(&test_fun);
         assert_eq!(CaptureKind::Always, captures.get(param_reg));
         assert_eq!(CaptureKind::ViaRet, captures.get(ret_reg));
     }
@@ -421,7 +452,7 @@ mod test {
             ]),
         };
 
-        let captures = calc_fun_captures(&[], &test_fun);
+        let captures = calc_single_fun_captures(&test_fun);
 
         assert_eq!(CaptureKind::Never, captures.get(param_reg1));
         assert_eq!(CaptureKind::Never, captures.get(param_reg2));
@@ -466,10 +497,8 @@ mod test {
             ]),
         };
 
-        let captures = calc_fun_captures(&[], &test_fun);
+        let captures = calc_single_fun_captures(&test_fun);
         assert_eq!(CaptureKind::ViaRet, captures.get(param_reg));
         assert_eq!(CaptureKind::ViaRet, captures.get(ret_reg));
     }
 }
-
-*/
