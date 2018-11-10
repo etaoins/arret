@@ -7,7 +7,7 @@ use syntax::span::Span;
 use crate::codegen::GenABI;
 use crate::mir::tagset::TypeTagSet;
 
-new_indexing_id_type!(BuiltFunId, u32);
+new_indexing_id_type!(PrivateFunId, u32);
 new_global_id_type!(RegId);
 
 #[derive(Debug, PartialEq, Clone)]
@@ -67,7 +67,7 @@ pub struct StaticSymbol {
 /// analysis passes.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Callee {
-    BuiltFun(BuiltFunId),
+    PrivateFun(PrivateFunId),
     BoxedFunThunk(RegId),
     StaticSymbol(StaticSymbol),
 }

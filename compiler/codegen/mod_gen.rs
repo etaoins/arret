@@ -12,16 +12,16 @@ use crate::codegen::fun_gen::GenedFun;
 use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
 
-pub struct ModCtx<'bf> {
+pub struct ModCtx<'pf> {
     pub module: LLVMModuleRef,
 
-    built_funs: &'bf [ops::Fun],
-    gened_funs: HashMap<ops::BuiltFunId, GenedFun>,
+    private_funs: &'pf [ops::Fun],
+    gened_private_funs: HashMap<ops::PrivateFunId, GenedFun>,
 
     function_pass_manager: LLVMPassManagerRef,
 }
 
-impl<'bf> Drop for ModCtx<'bf> {
+impl<'pf> Drop for ModCtx<'pf> {
     fn drop(&mut self) {
         unsafe {
             LLVMDisposePassManager(self.function_pass_manager);
@@ -29,13 +29,13 @@ impl<'bf> Drop for ModCtx<'bf> {
     }
 }
 
-impl<'bf> ModCtx<'bf> {
+impl<'pf> ModCtx<'pf> {
     /// Constructs a new module context with the given name
     ///
     /// Note that the module name in LLVM is not arbitrary. For instance, in the ORC JIT it will
     /// shadow exported symbol names. This identifier should be as unique and descriptive as
     /// possible.
-    pub fn new(tcx: &TargetCtx, name: &ffi::CStr, built_funs: &'bf [ops::Fun]) -> ModCtx<'bf> {
+    pub fn new(tcx: &TargetCtx, name: &ffi::CStr, private_funs: &'pf [ops::Fun]) -> ModCtx<'pf> {
         use llvm_sys::transforms::pass_manager_builder::*;
 
         unsafe {
@@ -58,29 +58,34 @@ impl<'bf> ModCtx<'bf> {
             ModCtx {
                 module,
 
-                built_funs,
-                gened_funs: HashMap::new(),
+                private_funs,
+                gened_private_funs: HashMap::new(),
 
                 function_pass_manager,
             }
         }
     }
 
-    pub fn gened_fun(&mut self, tcx: &mut TargetCtx, built_fun_id: ops::BuiltFunId) -> &GenedFun {
+    pub fn gened_private_fun(
+        &mut self,
+        tcx: &mut TargetCtx,
+        private_fun_id: ops::PrivateFunId,
+    ) -> &GenedFun {
         use crate::codegen::fun_gen::gen_fun;
 
         // TODO: Hack around lifetimes
-        if self.gened_funs.contains_key(&built_fun_id) {
-            return &self.gened_funs[&built_fun_id];
+        if self.gened_private_funs.contains_key(&private_fun_id) {
+            return &self.gened_private_funs[&private_fun_id];
         }
 
-        let gened_fun = gen_fun(tcx, self, &self.built_funs[built_fun_id.to_usize()]);
+        let gened_fun = gen_fun(tcx, self, &self.private_funs[private_fun_id.to_usize()]);
         unsafe {
-            // BuiltFuns are always private
             LLVMSetLinkage(gened_fun.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
         }
 
-        self.gened_funs.entry(built_fun_id).or_insert(gened_fun)
+        self.gened_private_funs
+            .entry(private_fun_id)
+            .or_insert(gened_fun)
     }
 
     pub fn get_global_or_insert<F>(

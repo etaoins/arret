@@ -28,7 +28,7 @@ pub struct EvalHirCtx {
     runtime_task: runtime::task::Task,
     global_values: HashMap<hir::VarId, Value>,
 
-    built_funs: Vec<ops::Fun>,
+    private_funs: Vec<ops::Fun>,
 
     rust_fun_thunks: HashMap<*const c_void, boxed::ThunkEntry>,
     thunk_fun_values: HashMap<Gc<boxed::FunThunk>, Value>,
@@ -54,12 +54,12 @@ struct BuiltCondBranch {
 
 pub struct BuiltProgram {
     pub main: ops::Fun,
-    pub funs: Vec<ops::Fun>,
+    pub private_funs: Vec<ops::Fun>,
 }
 
 impl BuiltProgram {
     pub fn is_empty(&self) -> bool {
-        self.funs.is_empty() && self.main.ops.len() == 1
+        self.private_funs.is_empty() && self.main.ops.len() == 1
     }
 }
 
@@ -87,7 +87,7 @@ impl EvalHirCtx {
             runtime_task: runtime::task::Task::new(),
             global_values: HashMap::new(),
 
-            built_funs: vec![],
+            private_funs: vec![],
 
             rust_fun_thunks: HashMap::new(),
             thunk_fun_values: HashMap::new(),
@@ -273,7 +273,7 @@ impl EvalHirCtx {
             let ops_fun = ops_for_rust_fun_thunk(self, EMPTY_SPAN, rust_fun);
             let address = self
                 .thunk_jit
-                .compile_fun(self.built_funs.as_slice(), &ops_fun);
+                .compile_fun(self.private_funs.as_slice(), &ops_fun);
 
             mem::transmute(address as usize)
         };
@@ -311,13 +311,13 @@ impl EvalHirCtx {
         let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
         let closure_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
 
-        let built_fun_id = ops::BuiltFunId::new_entry_id(&mut self.built_funs, ops_fun);
+        let private_fun_id = ops::PrivateFunId::new_entry_id(&mut self.private_funs, ops_fun);
         b.push_reg(
             span,
             OpKind::ConstBoxedFunThunk,
             BoxFunThunkOp {
                 closure_reg,
-                callee: ops::Callee::BuiltFun(built_fun_id),
+                callee: ops::Callee::PrivateFun(private_fun_id),
             },
         )
     }
@@ -698,7 +698,7 @@ impl EvalHirCtx {
 
         let address = self
             .thunk_jit
-            .compile_fun(self.built_funs.as_slice(), &ops_fun);
+            .compile_fun(self.private_funs.as_slice(), &ops_fun);
         let entry = unsafe { mem::transmute(address as usize) };
 
         let closure = boxed::NIL_INSTANCE.as_any_ref();
@@ -726,7 +726,7 @@ impl EvalHirCtx {
             .expect("error during arret fun boxing");
 
         let outer_closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure);
-        let built_fun_id = ops::BuiltFunId::new_entry_id(&mut self.built_funs, ops_fun);
+        let private_fun_id = ops::PrivateFunId::new_entry_id(&mut self.private_funs, ops_fun);
 
         if let Some(outer_closure_reg) = outer_closure_reg {
             b.push_reg(
@@ -734,7 +734,7 @@ impl EvalHirCtx {
                 OpKind::AllocBoxedFunThunk,
                 BoxFunThunkOp {
                     closure_reg: outer_closure_reg,
-                    callee: ops::Callee::BuiltFun(built_fun_id),
+                    callee: ops::Callee::PrivateFun(private_fun_id),
                 },
             )
         } else {
@@ -746,7 +746,7 @@ impl EvalHirCtx {
                 OpKind::ConstBoxedFunThunk,
                 BoxFunThunkOp {
                     closure_reg: outer_closure_reg,
-                    callee: ops::Callee::BuiltFun(built_fun_id),
+                    callee: ops::Callee::PrivateFun(private_fun_id),
                 },
             )
         }
@@ -858,14 +858,14 @@ impl EvalHirCtx {
         );
 
         let ops_fun = self.ops_for_callback_to_thunk_adapter(entry_point_abi.clone());
-        let built_fun_id = ops::BuiltFunId::new_entry_id(&mut self.built_funs, ops_fun);
+        let private_fun_id = ops::PrivateFunId::new_entry_id(&mut self.private_funs, ops_fun);
 
         b.push_reg(
             span,
             OpKind::MakeCallback,
             MakeCallbackOp {
                 closure_reg,
-                callee: ops::Callee::BuiltFun(built_fun_id),
+                callee: ops::Callee::PrivateFun(private_fun_id),
             },
         )
     }
@@ -1033,7 +1033,7 @@ impl EvalHirCtx {
 
         Ok(BuiltProgram {
             main,
-            funs: self.built_funs,
+            private_funs: self.private_funs,
         })
     }
 

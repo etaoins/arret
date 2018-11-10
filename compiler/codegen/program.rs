@@ -103,7 +103,7 @@ fn program_to_module(
         let mut mcx = ModCtx::new(
             tcx,
             CString::new("program").unwrap().as_ref(),
-            program.funs.as_slice(),
+            program.private_funs.as_slice(),
         );
 
         let mut di_builder = DebugInfoBuilder::new(

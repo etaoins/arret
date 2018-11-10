@@ -185,8 +185,8 @@ fn add_op_captures(
                 ops::Callee::StaticSymbol(ops::StaticSymbol { abi, .. }) => {
                     add_static_symbol_call_captures(captures, return_capture, abi, args);
                 }
-                ops::Callee::BuiltFun(built_fun_id) => {
-                    let gened_fun = mcx.gened_fun(tcx, *built_fun_id);
+                ops::Callee::PrivateFun(private_fun_id) => {
+                    let gened_fun = mcx.gened_private_fun(tcx, *private_fun_id);
                     add_gened_fun_call_captures(captures, return_capture, gened_fun, args);
                 }
                 ops::Callee::BoxedFunThunk(_) => {

@@ -70,7 +70,7 @@ impl JITCtx {
         }
     }
 
-    pub fn compile_fun(&mut self, built_funs: &[ops::Fun], fun: &ops::Fun) -> u64 {
+    pub fn compile_fun(&mut self, private_funs: &[ops::Fun], fun: &ops::Fun) -> u64 {
         use crate::codegen::fun_gen;
 
         let tcx = &mut self.tcx;
@@ -86,7 +86,7 @@ impl JITCtx {
 
         let module_name_cstring = ffi::CString::new(module_name.as_bytes()).unwrap();
         // Create the module
-        let mut mcx = ModCtx::new(tcx, module_name_cstring.as_ref(), built_funs);
+        let mut mcx = ModCtx::new(tcx, module_name_cstring.as_ref(), private_funs);
 
         unsafe {
             let llvm_function = fun_gen::gen_fun(tcx, &mut mcx, fun).llvm_value;
