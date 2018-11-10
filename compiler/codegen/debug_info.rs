@@ -13,14 +13,14 @@ use crate::source::{SourceFileId, SourceKind, SourceLoader, SourceLoc};
 pub struct DebugInfoBuilder<'sl> {
     pub llvm_dib: LLVMDIBuilderRef,
 
-    source_loader: &'sl mut SourceLoader,
+    source_loader: &'sl SourceLoader,
     current_dir: ffi::CString,
     file_metadata: HashMap<SourceFileId, Option<LLVMMetadataRef>>,
 }
 
 impl<'sl> DebugInfoBuilder<'sl> {
     pub fn new(
-        source_loader: &'sl mut SourceLoader,
+        source_loader: &'sl SourceLoader,
         optimised: bool,
         main_span: Span,
         module: LLVMModuleRef,

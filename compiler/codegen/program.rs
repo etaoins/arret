@@ -94,7 +94,7 @@ fn c_main_llvm_type(tcx: &mut TargetCtx) -> LLVMTypeRef {
 }
 
 fn program_to_module(
-    source_loader: &mut SourceLoader,
+    source_loader: &SourceLoader,
     tcx: &mut TargetCtx,
     program: &mir::BuiltProgram,
 ) -> LLVMModuleRef {
@@ -185,7 +185,7 @@ fn program_to_module(
 ///
 /// codegen::initialise_llvm() must be called before this.
 pub fn gen_program(
-    source_loader: &mut SourceLoader,
+    source_loader: &SourceLoader,
     options: Options<'_>,
     rust_libraries: &[rfi::Library],
     program: &mir::BuiltProgram,
