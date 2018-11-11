@@ -37,6 +37,7 @@ pub struct JITCtx {
 
 impl JITCtx {
     pub fn new(optimising: bool) -> JITCtx {
+        #[allow(clippy::fn_to_numeric_cast)]
         unsafe {
             use crate::codegen::target_machine::create_target_machine;
             use runtime::compiler_support;
@@ -64,8 +65,9 @@ impl JITCtx {
             jcx.add_symbol(b"ARRET_NIL\0", &boxed::NIL_INSTANCE as *const _ as u64);
             jcx.add_symbol(
                 b"arret_runtime_alloc_cells\0",
-                &compiler_support::alloc_cells as *const _ as u64,
+                compiler_support::alloc_cells as u64,
             );
+            jcx.add_symbol(b"arret_runtime_equals\0", compiler_support::equals as u64);
 
             jcx
         }
