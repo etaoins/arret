@@ -725,15 +725,15 @@ impl EvalHirCtx {
             .ops_for_arret_fun(&arret_fun, wanted_abi, true)
             .expect("error during arret fun boxing");
 
-        let outer_closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure);
+        let closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure);
         let private_fun_id = ops::PrivateFunId::new_entry_id(&mut self.private_funs, ops_fun);
 
-        if let Some(outer_closure_reg) = outer_closure_reg {
+        if let Some(closure_reg) = closure_reg {
             b.push_reg(
                 span,
                 OpKind::AllocBoxedFunThunk,
                 BoxFunThunkOp {
-                    closure_reg: outer_closure_reg,
+                    closure_reg,
                     callee: ops::Callee::PrivateFun(private_fun_id),
                 },
             )
@@ -750,6 +750,41 @@ impl EvalHirCtx {
                 },
             )
         }
+    }
+
+    pub fn arret_fun_to_callback_reg(
+        &mut self,
+        b: &mut Builder,
+        span: Span,
+        arret_fun: &value::ArretFun,
+        entry_point_abi: &CallbackEntryPointABIType,
+    ) -> ops::RegId {
+        use crate::mir::closure;
+        use crate::mir::ops::*;
+        use runtime::abitype;
+
+        let wanted_abi = entry_point_abi.clone().into();
+
+        let ops_fun = self
+            .ops_for_arret_fun(&arret_fun, wanted_abi, false)
+            .expect("error during arret fun boxing");
+
+        let closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure)
+            .unwrap_or_else(|| {
+                let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
+                b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any)
+            });
+
+        let private_fun_id = ops::PrivateFunId::new_entry_id(&mut self.private_funs, ops_fun);
+
+        b.push_reg(
+            span,
+            OpKind::MakeCallback,
+            MakeCallbackOp {
+                closure_reg,
+                callee: ops::Callee::PrivateFun(private_fun_id),
+            },
+        )
     }
 
     fn ops_for_arret_fun(

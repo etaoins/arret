@@ -322,15 +322,9 @@ fn thunk_reg_to_reg(
     b: &mut Builder,
     span: Span,
     boxed_thunk_reg: RegId,
-    abi_type: &abitype::ABIType,
+    boxed_abi_type: &abitype::BoxedABIType,
 ) -> BuiltReg {
     use runtime::boxed::TypeTag;
-
-    let boxed_abi_type = if let abitype::ABIType::Boxed(boxed_abi_type) = abi_type {
-        boxed_abi_type
-    } else {
-        panic!("attempt to create unboxed function");
-    };
 
     BuiltReg::Local(b.cast_boxed_cond(
         span,
@@ -338,6 +332,27 @@ fn thunk_reg_to_reg(
         boxed_thunk_reg,
         boxed_abi_type.clone(),
     ))
+}
+
+fn arret_fun_to_reg(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    arret_fun: &value::ArretFun,
+    abi_type: &abitype::ABIType,
+) -> BuiltReg {
+    match abi_type {
+        abitype::ABIType::Boxed(boxed_abi_type) => {
+            let thunk_reg = ehx.arret_fun_to_thunk_reg(b, span, arret_fun);
+            thunk_reg_to_reg(b, span, thunk_reg, boxed_abi_type)
+        }
+        abitype::ABIType::Callback(entry_point_abi) => {
+            BuiltReg::Local(ehx.arret_fun_to_callback_reg(b, span, arret_fun, entry_point_abi))
+        }
+        other => {
+            panic!("Attempt to convert Arret fun to {:?}", other);
+        }
+    }
 }
 
 pub fn value_to_reg(
@@ -364,23 +379,23 @@ pub fn value_to_reg(
                 panic!("Attempt to construct non-boxed list");
             }
         }
-        Value::ArretFun(ref arret_fun) => {
-            let thunk_reg = ehx.arret_fun_to_thunk_reg(b, span, arret_fun);
-            thunk_reg_to_reg(b, span, thunk_reg, abi_type)
-        }
+        Value::ArretFun(ref arret_fun) => arret_fun_to_reg(ehx, b, span, arret_fun, abi_type),
         Value::TyPred(test_ty) => {
             use crate::mir::value::synthetic_fun::ty_pred_arret_fun;
-            let thunk_reg = ehx.arret_fun_to_thunk_reg(b, span, &ty_pred_arret_fun(*test_ty));
-            thunk_reg_to_reg(b, span, thunk_reg, abi_type)
+            arret_fun_to_reg(ehx, b, span, &ty_pred_arret_fun(*test_ty), abi_type)
         }
         Value::EqPred => {
             use crate::mir::value::synthetic_fun::eq_pred_arret_fun;
-            let thunk_reg = ehx.arret_fun_to_thunk_reg(b, span, &eq_pred_arret_fun());
-            thunk_reg_to_reg(b, span, thunk_reg, abi_type)
+            arret_fun_to_reg(ehx, b, span, &eq_pred_arret_fun(), abi_type)
         }
         Value::RustFun(ref rust_fun) => {
             let thunk_reg = ehx.rust_fun_to_thunk_reg(b, span, rust_fun);
-            thunk_reg_to_reg(b, span, thunk_reg, abi_type)
+
+            if let abitype::ABIType::Boxed(boxed_abi_type) = abi_type {
+                thunk_reg_to_reg(b, span, thunk_reg, boxed_abi_type)
+            } else {
+                unimplemented!("Rust fun to callbacks");
+            }
         }
         _ => unimplemented!("value {:?} to reg {:?} conversion", value, abi_type),
     }
