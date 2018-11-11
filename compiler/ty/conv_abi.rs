@@ -15,7 +15,7 @@ fn type_tag_to_ty<S: Unifiable>(type_tag: boxed::TypeTag) -> ty::Ty<S> {
         TypeTag::Str => ty::Ty::Str,
         TypeTag::Sym => ty::Ty::Sym,
         TypeTag::True => ty::Ty::LitBool(true),
-        TypeTag::False => ty::Ty::LitBool(true),
+        TypeTag::False => ty::Ty::LitBool(false),
         TypeTag::Int => ty::Ty::Int,
         TypeTag::TopVector => ty::Ty::Vectorof(Box::new(ty::Ty::Any.into_ty_ref())),
         TypeTag::Nil => ty::Ty::List(ty::List::empty()),
@@ -208,6 +208,19 @@ mod test {
         .into_poly();
 
         assert_eq!(int_pair_poly, boxed_abi_type.to_ty_ref());
+    }
+
+    #[test]
+    fn bool_abi_type() {
+        use runtime::abitype::EncodeBoxedABIType;
+        use runtime::boxed;
+
+        let boxed_abi_type = <boxed::Bool as EncodeBoxedABIType>::BOXED_ABI_TYPE;
+
+        assert_eq!("boxed::Bool", boxed_abi_type.to_rust_str());
+
+        let bool_poly = ty::Ty::Bool.into_poly();
+        assert_eq!(bool_poly, boxed_abi_type.to_ty_ref());
     }
 
     #[test]
