@@ -7,7 +7,7 @@
         str? sym? bool? int? float? char? list? vector? set? map? fn? nil?)
 
 (import [stdlib rust])
-(export length panic print! println! exit! cons map)
+(export length panic print! println! exit! cons map filter)
 
 (export defn)
 (defmacro defn (macro-rules

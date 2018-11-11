@@ -24,10 +24,23 @@
   (assert-eq '(4 4 4) (map (fn (x) 4) '(1 2 3)))
   (assert-eq '(() () ()) (map (fn (x) ()) '(1 2 3))))
 
+(defn test-filter ()
+  (assert-eq '() (filter (fn (x) true) '()))
+  (assert-eq '() (filter (fn (x) false) '()))
+
+  (assert-eq '(1 2 3) (filter (fn (x) true) '(1 2 3)))
+  (assert-eq '() (filter (fn (x) false) '(1 2 3)))
+
+  (assert-eq '(true true) (filter (fn (x) x) '(true false true false)))
+
+  (assert-eq '(3) (filter (fn (x) (= x 3)) '(1 2 3 4)))
+)
+
 (defn main! () ->! ()
   (test-length)
   (test-first-rest)
   (test-cons)
   (test-map)
+  (test-filter)
 
   ())

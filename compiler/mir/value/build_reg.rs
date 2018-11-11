@@ -258,6 +258,38 @@ pub fn reg_to_boxed_reg(
     }
 }
 
+fn boxed_to_bool(
+    b: &mut Builder,
+    span: Span,
+    from_boxed: &abitype::BoxedABIType,
+    boxed_reg: RegId,
+) -> RegId {
+    use crate::mir::ops::*;
+    use runtime::boxed::TypeTag;
+
+    let boxed_any_reg = b.cast_boxed_cond(span, from_boxed, boxed_reg, abitype::BoxedABIType::Any);
+
+    let boxed_type_tag_reg = b.push_reg(
+        span,
+        OpKind::LoadBoxedTypeTag,
+        LoadBoxedTypeTagOp {
+            subject_reg: boxed_any_reg,
+            possible_type_tags: [TypeTag::True, TypeTag::False].iter().collect(),
+        },
+    );
+
+    let true_type_tag_reg = b.push_reg(span, OpKind::ConstTypeTag, TypeTag::True);
+
+    b.push_reg(
+        span,
+        OpKind::IntEqual,
+        BinaryOp {
+            lhs_reg: boxed_type_tag_reg,
+            rhs_reg: true_type_tag_reg,
+        },
+    )
+}
+
 fn reg_to_reg(
     ehx: &mut EvalHirCtx,
     b: &mut Builder,
@@ -275,6 +307,9 @@ fn reg_to_reg(
             let boxed_int_reg =
                 b.cast_boxed_cond(span, from_boxed, reg_value.reg, TypeTag::Int.into());
             b.push_reg(span, OpKind::LoadBoxedIntValue, boxed_int_reg)
+        }
+        (abitype::ABIType::Boxed(from_boxed), abitype::ABIType::Bool) => {
+            boxed_to_bool(b, span, from_boxed, reg_value.reg)
         }
         (abitype::ABIType::Boxed(from_boxed), abitype::ABIType::Callback(entry_point_abi)) => {
             ehx.thunk_reg_to_callback_reg(b, span, from_boxed, reg_value.reg, entry_point_abi)

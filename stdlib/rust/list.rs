@@ -36,3 +36,17 @@ pub fn stdlib_map(
 
     boxed::List::new(task, output_vec.into_iter())
 }
+
+#[rfi_derive::rust_fun("(All #{T [->_ : ->!]} (T ->_ Bool) (Listof T) ->_ (Listof T))")]
+pub fn stdlib_filter(
+    task: &mut Task,
+    filter: callback::Callback<extern "C" fn(&mut Task, boxed::Closure, Gc<boxed::Any>) -> bool>,
+    input: Gc<boxed::List<boxed::Any>>,
+) -> Gc<boxed::List<boxed::Any>> {
+    let output_vec: Vec<Gc<boxed::Any>> = input
+        .iter()
+        .filter(|elem| filter.apply(task, *elem))
+        .collect();
+
+    boxed::List::new(task, output_vec.into_iter())
+}
