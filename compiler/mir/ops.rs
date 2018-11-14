@@ -300,6 +300,27 @@ impl OpKind {
         }
     }
 
+    /// Indicates if the output of this op is a constant
+    pub fn const_output(&self) -> bool {
+        use crate::mir::ops::OpKind::*;
+
+        match self {
+            ConstBoxedNil(_, _)
+            | ConstBoxedTrue(_, _)
+            | ConstBoxedFalse(_, _)
+            | ConstInt64(_, _)
+            | ConstUsize(_, _)
+            | ConstBool(_, _)
+            | ConstTypeTag(_, _)
+            | ConstBoxedInt(_, _)
+            | ConstBoxedStr(_, _)
+            | ConstBoxedPair(_, _)
+            | ConstBoxedFunThunk(_, _)
+            | ConstCastBoxed(_, _) => true,
+            _ => false,
+        }
+    }
+
     pub fn has_side_effects(&self) -> bool {
         use crate::mir::ops::OpKind::*;
 

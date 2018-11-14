@@ -1,11 +1,49 @@
-use syntax::span::Span;
-
-use runtime::abitype;
+use std::fmt;
 
 use crate::mir::ops::{CastBoxedOp, CondOp, Op, OpKind, RegId, RegPhi};
+use runtime::abitype;
+use syntax::span::Span;
 
 pub struct Builder {
     ops: Vec<Op>,
+}
+
+#[derive(Clone, Copy)]
+pub enum BuiltReg {
+    Const(RegId),
+    Local(RegId),
+}
+
+impl BuiltReg {
+    pub fn into_reg_id(self) -> RegId {
+        match self {
+            BuiltReg::Const(reg_id) | BuiltReg::Local(reg_id) => reg_id,
+        }
+    }
+
+    pub fn is_const(self) -> bool {
+        match self {
+            BuiltReg::Const(_) => true,
+            BuiltReg::Local(_) => false,
+        }
+    }
+}
+
+impl From<BuiltReg> for RegId {
+    fn from(built_reg: BuiltReg) -> RegId {
+        built_reg.into_reg_id()
+    }
+}
+
+impl fmt::Debug for BuiltReg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // This is by analogy with LLVM
+        if self.is_const() {
+            write!(f, "@{}", self.into_reg_id().to_usize())
+        } else {
+            write!(f, "%{}", self.into_reg_id().to_usize())
+        }
+    }
 }
 
 impl Builder {
@@ -13,17 +51,25 @@ impl Builder {
         Builder { ops: vec![] }
     }
 
-    pub fn alloc_reg(&mut self) -> RegId {
-        RegId::alloc()
+    pub fn alloc_local(&mut self) -> BuiltReg {
+        BuiltReg::Local(RegId::alloc())
     }
 
-    pub fn push_reg<F, P>(&mut self, span: Span, kind_cons: F, kind_param: P) -> RegId
+    pub fn push_reg<F, P>(&mut self, span: Span, kind_cons: F, kind_param: P) -> BuiltReg
     where
         F: FnOnce(RegId, P) -> OpKind,
     {
-        let reg_id = self.alloc_reg();
-        self.push(span, kind_cons(reg_id, kind_param));
-        reg_id
+        let reg_id = RegId::alloc();
+        let kind = kind_cons(reg_id, kind_param);
+        let output_reg_is_const = kind.const_output();
+
+        self.push(span, kind);
+
+        if output_reg_is_const {
+            BuiltReg::Const(reg_id)
+        } else {
+            BuiltReg::Local(reg_id)
+        }
     }
 
     pub fn push(&mut self, span: Span, kind: OpKind) {
@@ -40,7 +86,7 @@ impl Builder {
         test_reg: RegId,
         true_cons: T,
         false_cons: F,
-    ) -> RegId
+    ) -> BuiltReg
     where
         T: FnOnce(&mut Builder) -> RegId,
         F: FnOnce(&mut Builder) -> RegId,
@@ -66,38 +112,36 @@ impl Builder {
             }),
         );
 
-        output_reg
+        BuiltReg::Local(output_reg)
     }
 
     pub fn cast_boxed(
         &mut self,
         span: Span,
-        from_reg: RegId,
+        from_reg: BuiltReg,
         to_type: abitype::BoxedABIType,
-    ) -> RegId {
-        self.push_reg(span, OpKind::CastBoxed, CastBoxedOp { from_reg, to_type })
-    }
+    ) -> BuiltReg {
+        let kind_cons = if from_reg.is_const() {
+            OpKind::ConstCastBoxed
+        } else {
+            OpKind::CastBoxed
+        };
 
-    pub fn const_cast_boxed(
-        &mut self,
-        span: Span,
-        from_reg: RegId,
-        to_type: abitype::BoxedABIType,
-    ) -> RegId {
-        self.push_reg(
-            span,
-            OpKind::ConstCastBoxed,
-            CastBoxedOp { from_reg, to_type },
-        )
+        let cast_boxed_op = CastBoxedOp {
+            from_reg: from_reg.into(),
+            to_type,
+        };
+
+        self.push_reg(span, kind_cons, cast_boxed_op)
     }
 
     pub fn cast_boxed_cond(
         &mut self,
         span: Span,
         from_type: &abitype::BoxedABIType,
-        from_reg: RegId,
+        from_reg: BuiltReg,
         to_type: abitype::BoxedABIType,
-    ) -> RegId {
+    ) -> BuiltReg {
         if from_type == &to_type {
             from_reg
         } else {

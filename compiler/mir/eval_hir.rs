@@ -16,7 +16,7 @@ use syntax::span::{Span, EMPTY_SPAN};
 
 use crate::codegen;
 use crate::hir;
-use crate::mir::builder::Builder;
+use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::error::{Error, ErrorKind, Result};
 use crate::mir::ops;
 use crate::mir::value;
@@ -301,7 +301,7 @@ impl EvalHirCtx {
         b: &mut Builder,
         span: Span,
         rust_fun: &hir::rfi::Fun,
-    ) -> ops::RegId {
+    ) -> BuiltReg {
         use crate::mir::ops::*;
         use crate::mir::rust_fun::ops_for_rust_fun_thunk;
         use runtime::abitype;
@@ -316,7 +316,7 @@ impl EvalHirCtx {
             span,
             OpKind::ConstBoxedFunThunk,
             BoxFunThunkOp {
-                closure_reg,
+                closure_reg: closure_reg.into(),
                 callee: ops::Callee::PrivateFun(private_fun_id),
             },
         )
@@ -449,7 +449,7 @@ impl EvalHirCtx {
             boxed::TypeTag::FunThunk.into(),
         );
 
-        let closure_reg = b.push_reg(span, OpKind::LoadBoxedFunThunkClosure, fun_thunk_reg);
+        let closure_reg = b.push_reg(span, OpKind::LoadBoxedFunThunkClosure, fun_thunk_reg.into());
         let arg_list_reg = value_to_reg(
             self,
             b,
@@ -462,9 +462,9 @@ impl EvalHirCtx {
             span,
             OpKind::Call,
             CallOp {
-                callee: Callee::BoxedFunThunk(fun_thunk_reg),
+                callee: Callee::BoxedFunThunk(fun_thunk_reg.into()),
                 impure: true,
-                args: vec![closure_reg, arg_list_reg.into()].into_boxed_slice(),
+                args: vec![closure_reg.into(), arg_list_reg.into()].into_boxed_slice(),
             },
         );
 
@@ -645,11 +645,11 @@ impl EvalHirCtx {
                     &phi_abi_type,
                 );
 
-                let output_reg = b.alloc_reg();
+                let output_reg = b.alloc_local();
 
                 output_value = reg_to_value(self, output_reg, &phi_abi_type, &phi_ty);
                 reg_phi = Some(ops::RegPhi {
-                    output_reg,
+                    output_reg: output_reg.into(),
                     true_result_reg: true_result_reg.into(),
                     false_result_reg: false_result_reg.into(),
                 });
@@ -714,7 +714,7 @@ impl EvalHirCtx {
         b: &mut Builder,
         span: Span,
         arret_fun: &value::ArretFun,
-    ) -> ops::RegId {
+    ) -> BuiltReg {
         use crate::mir::closure;
         use crate::mir::ops::*;
         use runtime::abitype;
@@ -733,7 +733,7 @@ impl EvalHirCtx {
                 span,
                 OpKind::AllocBoxedFunThunk,
                 BoxFunThunkOp {
-                    closure_reg,
+                    closure_reg: closure_reg.into(),
                     callee: ops::Callee::PrivateFun(private_fun_id),
                 },
             )
@@ -745,7 +745,7 @@ impl EvalHirCtx {
                 span,
                 OpKind::ConstBoxedFunThunk,
                 BoxFunThunkOp {
-                    closure_reg: outer_closure_reg,
+                    closure_reg: outer_closure_reg.into(),
                     callee: ops::Callee::PrivateFun(private_fun_id),
                 },
             )
@@ -758,7 +758,7 @@ impl EvalHirCtx {
         span: Span,
         arret_fun: &value::ArretFun,
         entry_point_abi: &CallbackEntryPointABIType,
-    ) -> ops::RegId {
+    ) -> BuiltReg {
         use crate::mir::closure;
         use crate::mir::ops::*;
         use runtime::abitype;
@@ -781,7 +781,7 @@ impl EvalHirCtx {
             span,
             OpKind::MakeCallback,
             MakeCallbackOp {
-                closure_reg,
+                closure_reg: closure_reg.into(),
                 callee: ops::Callee::PrivateFun(private_fun_id),
             },
         )
@@ -878,9 +878,9 @@ impl EvalHirCtx {
         b: &mut Builder,
         span: Span,
         thunk_reg_abi_type: &::runtime::abitype::BoxedABIType,
-        thunk_reg: ops::RegId,
+        thunk_reg: BuiltReg,
         entry_point_abi: &CallbackEntryPointABIType,
-    ) -> ops::RegId {
+    ) -> BuiltReg {
         use crate::mir::ops::*;
         use runtime::abitype;
 
@@ -899,7 +899,7 @@ impl EvalHirCtx {
             span,
             OpKind::MakeCallback,
             MakeCallbackOp {
-                closure_reg,
+                closure_reg: closure_reg.into(),
                 callee: ops::Callee::PrivateFun(private_fun_id),
             },
         )

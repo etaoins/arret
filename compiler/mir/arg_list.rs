@@ -1,13 +1,13 @@
 use std::rc::Rc;
 
-use crate::mir::builder::Builder;
+use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::ops;
 use crate::mir::value;
 use crate::mir::value::Value;
 
 pub struct LoadedArgList {
     /// Reg holding the closure parameter
-    pub closure_reg: Option<ops::RegId>,
+    pub closure_reg: Option<BuiltReg>,
 
     /// All regs the function takes including the closure
     pub param_regs: Box<[ops::RegId]>,
@@ -26,7 +26,7 @@ pub fn build_load_arg_list_value(
     has_rest: bool,
 ) -> LoadedArgList {
     let closure_reg = if wanted_abi.external_call_conv || has_closure {
-        Some(b.alloc_reg())
+        Some(b.alloc_local())
     } else {
         None
     };
@@ -41,7 +41,7 @@ pub fn build_load_arg_list_value(
         let abi_type = abi_params_iter.next_back().unwrap();
 
         Some(Rc::new(value::RegValue {
-            reg: b.alloc_reg(),
+            reg: b.alloc_local(),
             abi_type: abi_type.clone(),
         }))
     } else {
@@ -51,7 +51,7 @@ pub fn build_load_arg_list_value(
     let fixed_reg_values = abi_params_iter
         .map(|abi_type| {
             Rc::new(value::RegValue {
-                reg: b.alloc_reg(),
+                reg: b.alloc_local(),
                 abi_type: abi_type.clone(),
             })
         })
@@ -59,8 +59,13 @@ pub fn build_load_arg_list_value(
 
     let param_regs = closure_reg
         .into_iter()
-        .chain(fixed_reg_values.iter().map(|reg_value| reg_value.reg))
-        .chain(rest_reg_value.iter().map(|reg_value| reg_value.reg))
+        .map(|built_reg| built_reg.into())
+        .chain(
+            fixed_reg_values
+                .iter()
+                .map(|reg_value| reg_value.reg.into()),
+        )
+        .chain(rest_reg_value.iter().map(|reg_value| reg_value.reg.into()))
         .collect::<Vec<ops::RegId>>()
         .into_boxed_slice();
 

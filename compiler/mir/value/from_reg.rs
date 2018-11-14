@@ -5,7 +5,7 @@ use runtime::boxed;
 use runtime::boxed::prelude::*;
 use runtime::boxed::refs::Gc;
 
-use crate::mir::ops;
+use crate::mir::builder::BuiltReg;
 use crate::mir::value;
 use crate::mir::value::Value;
 use crate::ty;
@@ -33,7 +33,7 @@ fn mono_to_const(heap: &mut impl boxed::AsHeap, mono: &ty::Mono) -> Option<Gc<bo
 /// `Value::Reg`.
 pub fn reg_to_value(
     heap: &mut impl boxed::AsHeap,
-    reg: ops::RegId,
+    reg: BuiltReg,
     abi_type: &abitype::ABIType,
     arret_ty: &ty::Mono,
 ) -> Value {

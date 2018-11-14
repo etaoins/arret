@@ -44,7 +44,7 @@ impl Intrinsic for Length {
             );
 
             let usize_length_reg = b.push_reg(span, OpKind::LoadBoxedListLength, list_reg.into());
-            let i64_length_reg = b.push_reg(span, OpKind::UsizeToInt64, usize_length_reg);
+            let i64_length_reg = b.push_reg(span, OpKind::UsizeToInt64, usize_length_reg.into());
 
             return Ok(Some(Value::Reg(Rc::new(value::RegValue {
                 reg: i64_length_reg,

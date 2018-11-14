@@ -15,8 +15,8 @@ use runtime::boxed;
 use runtime::boxed::refs::Gc;
 
 use crate::hir;
+use crate::mir::builder::BuiltReg;
 use crate::mir::closure::Closure;
-use crate::mir::ops::RegId;
 use crate::ty;
 
 #[derive(Clone, Debug)]
@@ -29,7 +29,7 @@ pub struct ArretFun {
 
 #[derive(Clone, Debug)]
 pub struct RegValue {
-    pub reg: RegId,
+    pub reg: BuiltReg,
     pub abi_type: abitype::ABIType,
 }
 

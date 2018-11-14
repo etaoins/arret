@@ -4,9 +4,8 @@ use std::rc::Rc;
 use syntax::span::Span;
 
 use crate::hir;
-use crate::mir::builder::Builder;
+use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::eval_hir::EvalHirCtx;
-use crate::mir::ops;
 use crate::mir::value::Value;
 
 type ValueVec = Vec<(hir::VarId, Value)>;
@@ -89,13 +88,19 @@ pub fn save_to_closure_reg(
     b: &mut Builder,
     span: Span,
     closure: &Closure,
-) -> Option<ops::RegId> {
+) -> Option<BuiltReg> {
     match closure.free_values.first() {
         Some((_, value)) => {
             use crate::mir::value::build_reg::value_to_reg;
             use runtime::abitype;
 
-            Some(value_to_reg(ehx, b, span, value, &abitype::BoxedABIType::Any.into()).into())
+            Some(value_to_reg(
+                ehx,
+                b,
+                span,
+                value,
+                &abitype::BoxedABIType::Any.into(),
+            ))
         }
         None => None,
     }
@@ -116,7 +121,7 @@ pub fn load_from_current_fun(local_values: &mut HashMap<hir::VarId, Value>, clos
 pub fn load_from_closure_param(
     local_values: &mut HashMap<hir::VarId, Value>,
     closure: &Closure,
-    closure_reg: Option<ops::RegId>,
+    closure_reg: Option<BuiltReg>,
 ) {
     use crate::mir::value;
     use runtime::abitype;

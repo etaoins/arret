@@ -70,6 +70,11 @@ macro_rules! new_global_id_type {
                 (start_raw..end_raw).map(Self::new)
             }
 
+            #[allow(unused)]
+            pub fn to_usize(&self) -> usize {
+                self.0.into()
+            }
+
             fn new(raw_id: usize) -> Self {
                 $id_name(NonZeroUsize::new(raw_id).unwrap())
             }

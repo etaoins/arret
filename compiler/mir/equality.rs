@@ -5,7 +5,7 @@ use runtime::boxed;
 use runtime::boxed::prelude::*;
 
 use crate::codegen::GenABI;
-use crate::mir::builder::Builder;
+use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops::*;
 use crate::mir::value::build_reg::value_to_reg;
@@ -20,7 +20,7 @@ fn runtime_compare(
     span: Span,
     left_value: &Value,
     right_value: &Value,
-) -> RegId {
+) -> BuiltReg {
     let left_reg = value_to_reg(ehx, b, span, left_value, &abitype::BoxedABIType::Any.into());
 
     let right_reg = value_to_reg(
@@ -63,7 +63,7 @@ fn int_compare(
     span: Span,
     left_value: &Value,
     right_value: &Value,
-) -> RegId {
+) -> BuiltReg {
     let left_reg = value_to_reg(ehx, b, span, left_value, &abitype::ABIType::Int);
     let right_reg = value_to_reg(ehx, b, span, right_value, &abitype::ABIType::Int);
 

@@ -4,7 +4,7 @@ use runtime::abitype;
 use runtime::boxed;
 use runtime::boxed::prelude::*;
 
-use crate::mir::builder::Builder;
+use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops::*;
 use crate::mir::tagset::TypeTagSet;
@@ -90,29 +90,29 @@ pub fn eval_ty_pred(
 
     let result_reg = (qualifying_type_tags & possible_type_tags)
         .into_iter()
-        .fold(None, |tail_result_reg, test_tag| {
+        .fold(None, |tail_result_reg: Option<BuiltReg>, test_tag| {
             let test_tag_reg = b.push_reg(span, OpKind::ConstTypeTag, test_tag);
 
             let is_test_tag = b.push_reg(
                 span,
                 OpKind::IntEqual,
                 BinaryOp {
-                    lhs_reg: subject_type_tag_reg,
-                    rhs_reg: test_tag_reg,
+                    lhs_reg: subject_type_tag_reg.into(),
+                    rhs_reg: test_tag_reg.into(),
                 },
             );
 
             if let Some(tail_result_reg) = tail_result_reg {
                 // Logically or this with our tail result
-                let or_result_reg = b.alloc_reg();
+                let or_result_reg = b.alloc_local();
 
                 let cond_op_kind = OpKind::Cond(CondOp {
                     reg_phi: Some(RegPhi {
-                        output_reg: or_result_reg,
-                        true_result_reg: is_test_tag,
-                        false_result_reg: tail_result_reg,
+                        output_reg: or_result_reg.into(),
+                        true_result_reg: is_test_tag.into(),
+                        false_result_reg: tail_result_reg.into(),
                     }),
-                    test_reg: is_test_tag,
+                    test_reg: is_test_tag.into(),
                     true_ops: Box::new([]),
                     false_ops: Box::new([]),
                 });

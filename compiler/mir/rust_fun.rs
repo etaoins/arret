@@ -106,9 +106,9 @@ pub fn ops_for_rust_fun_thunk(
     let ret_abi_type: abitype::ABIType = abitype::BoxedABIType::Any.into();
 
     // This is unused by Rust funs; we just need it as a placeholder
-    let closure_reg = b.alloc_reg();
+    let closure_reg = b.alloc_local();
 
-    let rest_reg = b.alloc_reg();
+    let rest_reg = b.alloc_local();
     let rest_value = Value::Reg(Rc::new(value::RegValue {
         reg: rest_reg,
         abi_type: rest_abi_type.clone(),
@@ -127,7 +127,7 @@ pub fn ops_for_rust_fun_thunk(
         source_name: Some(fun_symbol),
 
         abi: ops::OpsABI::thunk_abi(),
-        params: Box::new([closure_reg, rest_reg]),
+        params: Box::new([closure_reg.into(), rest_reg.into()]),
         ops: b.into_ops(),
     })
 }
