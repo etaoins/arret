@@ -103,10 +103,10 @@ pub fn eval_equality(
         panic!("runtime equality without builder")
     };
 
-    let common_type_tags =
-        possible_type_tags_for_value(left_value) & possible_type_tags_for_value(right_value);
+    let all_type_tags =
+        possible_type_tags_for_value(left_value) | possible_type_tags_for_value(right_value);
 
-    let result_reg = if common_type_tags == boxed::TypeTag::Int.into() {
+    let result_reg = if all_type_tags == boxed::TypeTag::Int.into() {
         int_compare(ehx, b, span, left_value, right_value)
     } else {
         runtime_compare(ehx, b, span, left_value, right_value)
