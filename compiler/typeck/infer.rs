@@ -164,6 +164,40 @@ fn unify_app_purity(pv: &mut PurityVar, app_purity: &purity::Poly) {
     };
 }
 
+/// Inspects the mismatched sub and parent types to attempt to produce an understandable type error
+fn error_kind_for_type_error(
+    fcx: &FunCtx,
+    sub_poly: &ty::Poly,
+    parent_poly: &ty::Poly,
+) -> ErrorKind {
+    let incorrect_ty_str = str_for_poly(fcx, &sub_poly);
+
+    if let ty::Poly::Fixed(ty::Ty::TopFun(top_fun)) = parent_poly {
+        let topmost_fun =
+            ty::TopFun::new(Purity::Impure.into_poly(), ty::Ty::Any.into_poly()).into_ty_ref();
+
+        let impure_top_fun =
+            ty::TopFun::new(Purity::Impure.into_poly(), top_fun.ret().clone()).into_ty_ref();
+
+        if !ty::is_a::ty_ref_is_a(&fcx.tvars, sub_poly, &topmost_fun).to_bool() {
+            // We aren't a function at all
+            return ErrorKind::IsNotFun(incorrect_ty_str);
+        } else if ty::is_a::ty_ref_is_a(&fcx.tvars, sub_poly, &impure_top_fun).to_bool() {
+            let purity_str = if top_fun.purity() == &Purity::Pure.into_poly() {
+                // `->` might be confusing here
+                "pure".into()
+            } else {
+                format!("`{}`", hir::str_for_purity(&fcx.pvars, top_fun.purity())).into()
+            };
+
+            // We have the right return type but the wrong purity
+            return ErrorKind::IsNotPurity(incorrect_ty_str, purity_str);
+        }
+    }
+
+    ErrorKind::IsNotTy(incorrect_ty_str, str_for_poly(fcx, parent_poly))
+}
+
 /// Ensures `sub_poly` is a subtype of `parent_poly`
 fn ensure_is_a(
     fcx: &FunCtx,
@@ -175,33 +209,7 @@ fn ensure_is_a(
         return Ok(());
     }
 
-    // Examine the types to check if there's a more specific message we could use
-    let incorrect_ty_str = str_for_poly(fcx, &sub_poly);
-    let error_kind = if let ty::Poly::Fixed(ty::Ty::TopFun(top_fun)) = parent_poly {
-        let impure_top_fun = ty::TopFun::new(Purity::Impure.into_poly(), top_fun.ret().clone());
-
-        if ty::is_a::ty_ref_is_a(
-            &fcx.tvars,
-            sub_poly,
-            &ty::Ty::TopFun(Box::new(impure_top_fun)).into_poly(),
-        )
-        .to_bool()
-        {
-            let purity_str = if top_fun.purity() == &Purity::Pure.into_poly() {
-                // `->` might be confusing here
-                "pure".into()
-            } else {
-                format!("`{}`", hir::str_for_purity(&fcx.pvars, top_fun.purity())).into()
-            };
-
-            ErrorKind::IsNotPurity(incorrect_ty_str, purity_str)
-        } else {
-            ErrorKind::IsNotFun(incorrect_ty_str)
-        }
-    } else {
-        ErrorKind::IsNotTy(incorrect_ty_str, str_for_poly(fcx, parent_poly))
-    };
-
+    let error_kind = error_kind_for_type_error(fcx, sub_poly, parent_poly);
     Err(Error::new(span, error_kind))
 }
 

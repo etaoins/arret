@@ -52,6 +52,10 @@
   (impure-fun!))
   ;^^^^^^^^^^^ ERROR function of type `(->! ())` is not `->A`
 
+(defn bad-apply-in-return-position () -> ()
+  (length '(1 2 3)))
+  ;^^^^^^ ERROR `((Listof Any) -> Int)` is not a `(... -> ())
+
 (defn non-list-rest-type (x ...)
   (ann x (Vector Any)))
       ;^ ERROR `(Vector Any)` is not a `(Listof Any)`
