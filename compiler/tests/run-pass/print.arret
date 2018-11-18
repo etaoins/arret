@@ -8,6 +8,9 @@
   ; We should be able to call through a thunk as well
   ((black-box! print!) "")
 
+  ; And through a callback
+  (map print! '(""))
+
   ; And print an unknown value
   (print! (black-box! ""))
 

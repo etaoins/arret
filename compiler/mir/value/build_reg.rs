@@ -4,6 +4,7 @@ use runtime::abitype;
 use runtime::boxed;
 use runtime::boxed::refs::Gc;
 
+use crate::hir::rfi;
 use crate::mir::builder::Builder;
 use crate::mir::builder::BuiltReg;
 use crate::mir::eval_hir::EvalHirCtx;
@@ -326,6 +327,27 @@ fn arret_fun_to_reg(
     }
 }
 
+fn rust_fun_to_reg(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    rust_fun: &rfi::Fun,
+    abi_type: &abitype::ABIType,
+) -> BuiltReg {
+    match abi_type {
+        abitype::ABIType::Boxed(boxed_abi_type) => {
+            let thunk_reg = ehx.rust_fun_to_thunk_reg(b, span, rust_fun);
+            thunk_reg_to_reg(b, span, thunk_reg, boxed_abi_type)
+        }
+        abitype::ABIType::Callback(entry_point_abi) => {
+            ehx.rust_fun_to_callback_reg(b, span, rust_fun, entry_point_abi)
+        }
+        other => {
+            panic!("Attempt to convert Rust fun to {:?}", other);
+        }
+    }
+}
+
 pub fn value_to_reg(
     ehx: &mut EvalHirCtx,
     b: &mut Builder,
@@ -359,15 +381,7 @@ pub fn value_to_reg(
             use crate::mir::value::synthetic_fun::eq_pred_arret_fun;
             arret_fun_to_reg(ehx, b, span, &eq_pred_arret_fun(), abi_type)
         }
-        Value::RustFun(ref rust_fun) => {
-            let thunk_reg = ehx.rust_fun_to_thunk_reg(b, span, rust_fun);
-
-            if let abitype::ABIType::Boxed(boxed_abi_type) = abi_type {
-                thunk_reg_to_reg(b, span, thunk_reg, boxed_abi_type)
-            } else {
-                unimplemented!("Rust fun to callbacks");
-            }
-        }
+        Value::RustFun(ref rust_fun) => rust_fun_to_reg(ehx, b, span, rust_fun, abi_type),
         _ => unimplemented!("value {:?} to reg {:?} conversion", value, abi_type),
     }
 }

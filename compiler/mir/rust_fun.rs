@@ -1,15 +1,10 @@
-use std::rc::Rc;
-
 use syntax::span::Span;
-
-use runtime::abitype;
 
 use crate::codegen::GenABI;
 use crate::hir;
 use crate::mir::builder::Builder;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops;
-use crate::mir::value;
 use crate::mir::value::Value;
 use crate::ty;
 use crate::ty::purity;
@@ -90,44 +85,37 @@ pub fn build_rust_fun_app(
     }
 }
 
-pub fn ops_for_rust_fun_thunk(
+pub fn ops_for_rust_fun(
     ehx: &mut EvalHirCtx,
     span: Span,
     rust_fun: &hir::rfi::Fun,
+    wanted_abi: ops::OpsABI,
+    has_rest: bool,
 ) -> ops::Fun {
-    use crate::mir::ops::*;
+    use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
     use crate::mir::optimise::optimise_fun;
-    use crate::mir::value::build_reg::value_to_reg;
+    use crate::mir::ret_value::build_ret_value;
 
     let mut b = Builder::new();
-    let fun_symbol = format!("{}_thunk", rust_fun.symbol());
+    let fun_symbol = format!("{}_adapter", rust_fun.symbol());
 
-    let rest_abi_type: abitype::ABIType = abitype::TOP_LIST_BOXED_ABI_TYPE.into();
-    let ret_abi_type: abitype::ABIType = abitype::BoxedABIType::Any.into();
-
-    // This is unused by Rust funs; we just need it as a placeholder
-    let closure_reg = b.alloc_local();
-
-    let rest_reg = b.alloc_local();
-    let rest_value = Value::Reg(Rc::new(value::RegValue {
-        reg: rest_reg,
-        abi_type: rest_abi_type.clone(),
-    }));
+    let LoadedArgList {
+        param_regs,
+        arg_list_value,
+        ..
+    } = build_load_arg_list_value(&mut b, &wanted_abi, false, has_rest);
 
     let ret_ty = ty::Ty::Any.into_mono();
-    let return_value = build_rust_fun_app(ehx, &mut b, span, &ret_ty, rust_fun, rest_value);
+    let return_value = build_rust_fun_app(ehx, &mut b, span, &ret_ty, rust_fun, arg_list_value);
 
-    if !return_value.is_divergent() {
-        let return_reg = value_to_reg(ehx, &mut b, span, &return_value, &ret_abi_type);
-        b.push(span, OpKind::Ret(return_reg.into()))
-    }
+    build_ret_value(ehx, &mut b, span, &return_value, &wanted_abi.ret);
 
     optimise_fun(ops::Fun {
         span,
         source_name: Some(fun_symbol),
 
-        abi: ops::OpsABI::thunk_abi(),
-        params: Box::new([closure_reg.into(), rest_reg.into()]),
+        abi: wanted_abi,
+        params: param_regs,
         ops: b.into_ops(),
     })
 }

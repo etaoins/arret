@@ -267,10 +267,12 @@ impl EvalHirCtx {
         }
 
         let thunk = unsafe {
-            use crate::mir::rust_fun::ops_for_rust_fun_thunk;
+            use crate::mir::ops::OpsABI;
+            use crate::mir::rust_fun::ops_for_rust_fun;
             use std::mem;
 
-            let ops_fun = ops_for_rust_fun_thunk(self, EMPTY_SPAN, rust_fun);
+            let wanted_abi = OpsABI::thunk_abi();
+            let ops_fun = ops_for_rust_fun(self, EMPTY_SPAN, rust_fun, wanted_abi, true);
             let address = self
                 .thunk_jit
                 .compile_fun(self.private_funs.as_slice(), &ops_fun);
@@ -303,10 +305,11 @@ impl EvalHirCtx {
         rust_fun: &hir::rfi::Fun,
     ) -> BuiltReg {
         use crate::mir::ops::*;
-        use crate::mir::rust_fun::ops_for_rust_fun_thunk;
+        use crate::mir::rust_fun::ops_for_rust_fun;
         use runtime::abitype;
 
-        let ops_fun = ops_for_rust_fun_thunk(self, span, rust_fun);
+        let wanted_abi = OpsABI::thunk_abi();
+        let ops_fun = ops_for_rust_fun(self, span, rust_fun, wanted_abi, true);
 
         let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
         let closure_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
@@ -316,6 +319,34 @@ impl EvalHirCtx {
             span,
             OpKind::ConstBoxedFunThunk,
             BoxFunThunkOp {
+                closure_reg: closure_reg.into(),
+                callee: ops::Callee::PrivateFun(private_fun_id),
+            },
+        )
+    }
+
+    pub fn rust_fun_to_callback_reg(
+        &mut self,
+        b: &mut Builder,
+        span: Span,
+        rust_fun: &hir::rfi::Fun,
+        entry_point_abi: &CallbackEntryPointABIType,
+    ) -> BuiltReg {
+        use crate::mir::ops::*;
+        use crate::mir::rust_fun::ops_for_rust_fun;
+        use runtime::abitype;
+
+        let wanted_abi = entry_point_abi.clone().into();
+        let ops_fun = ops_for_rust_fun(self, span, rust_fun, wanted_abi, false);
+
+        let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
+        let closure_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
+
+        let private_fun_id = ops::PrivateFunId::new_entry_id(&mut self.private_funs, ops_fun);
+        b.push_reg(
+            span,
+            OpKind::MakeCallback,
+            MakeCallbackOp {
                 closure_reg: closure_reg.into(),
                 callee: ops::Callee::PrivateFun(private_fun_id),
             },
