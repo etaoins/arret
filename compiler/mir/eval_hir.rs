@@ -404,10 +404,18 @@ impl EvalHirCtx {
 
                 // By convention convert string panics in to our `ErrorKind::Panic`
                 let runtime_task = &mut self.runtime_task;
-                return Self::call_native_fun(span, || {
+
+                let native_result = Self::call_native_fun(span, || {
                     let closure = boxed::NIL_INSTANCE.as_any_ref();
                     thunk(runtime_task, closure, boxed_arg_list)
                 });
+
+                // If we receive a panic while building we want to still build the function call.
+                // This `panic` could be in conditional code and we want to build all the
+                // expressions before this panic for their side effects.
+                if native_result.is_ok() || !b.is_some() {
+                    return native_result;
+                }
             }
         }
 
