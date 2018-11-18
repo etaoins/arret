@@ -23,7 +23,10 @@
   (assert-eq '(0 1 2 3) (map (fn (x) (length x)) '(() (1) (1 2) (1 2 3))))
   (assert-eq '(4 4 4) (map (fn (x) 4) '(1 2 3)))
   (assert-eq '(() () ()) (map (fn (x) ()) '(1 2 3)))
-  (assert-eq '(true false true) (map (fn (x) (= x "yes")) '("yes" "no" "yes"))))
+  (assert-eq '(true false true) (map (fn (x) (= x "yes")) '("yes" "no" "yes")))
+
+  ; This should be safe because `panic` won't be called
+  (map panic '()))
 
 (defn test-filter ()
   (assert-eq '() (filter (fn (x) true) '()))

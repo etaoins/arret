@@ -18,6 +18,10 @@ pub fn build_ret_value(
 ) {
     use crate::mir::value::build_reg::value_to_reg;
 
+    if result_value.is_divergent() {
+        return;
+    }
+
     match ret_abi {
         abitype::RetABIType::Inhabited(abi_type) => {
             let ret_reg = value_to_reg(ehx, b, span, &result_value, abi_type);
