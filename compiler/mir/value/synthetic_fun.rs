@@ -35,18 +35,30 @@ pub fn eq_pred_arret_fun() -> value::ArretFun {
             params: hir::destruc::List::new(fixed_params, None),
             ret_ty: ty::Ty::Bool.into_poly(),
 
-            body_expr: hir::Expr::App(
-                EMPTY_SPAN,
-                Box::new(hir::App {
-                    ret_ty: ty::Ty::Bool.into_poly(),
-                    fun_expr: hir::Expr::EqPred(EMPTY_SPAN),
+            body_expr: hir::Expr {
+                span: EMPTY_SPAN,
+                result_ty: ty::Ty::Bool.into_poly(),
+                kind: hir::ExprKind::App(Box::new(hir::App {
+                    fun_expr: hir::Expr {
+                        span: EMPTY_SPAN,
+                        result_ty: ty::Ty::EqPred.into_poly(),
+                        kind: hir::ExprKind::EqPred,
+                    },
                     fixed_arg_exprs: vec![
-                        hir::Expr::Ref(EMPTY_SPAN, left_var_id),
-                        hir::Expr::Ref(EMPTY_SPAN, right_var_id),
+                        hir::Expr {
+                            span: EMPTY_SPAN,
+                            result_ty: ty::Ty::Any.into_poly(),
+                            kind: hir::ExprKind::Ref(left_var_id),
+                        },
+                        hir::Expr {
+                            span: EMPTY_SPAN,
+                            result_ty: ty::Ty::Any.into_poly(),
+                            kind: hir::ExprKind::Ref(right_var_id),
+                        },
                     ],
                     rest_arg_expr: None,
-                }),
-            ),
+                })),
+            },
         }),
     }
 }
@@ -76,15 +88,23 @@ pub fn ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
             ),
             ret_ty: ty::Ty::Bool.into_poly(),
 
-            body_expr: hir::Expr::App(
-                EMPTY_SPAN,
-                Box::new(hir::App {
-                    ret_ty: ty::Ty::Bool.into_poly(),
-                    fun_expr: hir::Expr::TyPred(EMPTY_SPAN, test_ty),
-                    fixed_arg_exprs: vec![hir::Expr::Ref(EMPTY_SPAN, subject_var_id)],
+            body_expr: hir::Expr {
+                span: EMPTY_SPAN,
+                result_ty: ty::Ty::Bool.into_poly(),
+                kind: hir::ExprKind::App(Box::new(hir::App {
+                    fun_expr: hir::Expr {
+                        span: EMPTY_SPAN,
+                        result_ty: ty::Ty::TyPred(test_ty).into_poly(),
+                        kind: hir::ExprKind::TyPred(test_ty),
+                    },
+                    fixed_arg_exprs: vec![hir::Expr {
+                        span: EMPTY_SPAN,
+                        result_ty: ty::Ty::Any.into_poly(),
+                        kind: hir::ExprKind::Ref(subject_var_id),
+                    }],
                     rest_arg_expr: None,
-                }),
-            ),
+                })),
+            },
         }),
     }
 }

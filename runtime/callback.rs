@@ -95,8 +95,12 @@ mod test {
         assert_eq!(abitype::RetABIType::Void, empty_abi_type.ret);
         assert!(empty_abi_type.params.is_empty());
 
-        let two_param_abi_type = <extern "C" fn(&mut Task, boxed::Closure, i64, Gc<boxed::Int>)
-            -> bool as EncodeEntryPointABIType>::ENTRY_POINT_ABI_TYPE;
+        let two_param_abi_type = <extern "C" fn(
+            &mut Task,
+            boxed::Closure,
+            i64,
+            Gc<boxed::Int>,
+        ) -> bool as EncodeEntryPointABIType>::ENTRY_POINT_ABI_TYPE;
         assert_eq!(
             abitype::ABIType::Bool.into_ret_abi_type(),
             two_param_abi_type.ret

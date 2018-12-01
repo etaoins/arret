@@ -563,6 +563,7 @@ impl EvalHirCtx {
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         span: Span,
+        result_ty: &ty::Poly,
         app: &hir::App<hir::Inferred>,
     ) -> Result<Value> {
         let fun_value = self.eval_expr(dcx, b, &app.fun_expr)?;
@@ -578,7 +579,7 @@ impl EvalHirCtx {
             None => None,
         };
 
-        let ret_ty = dcx.monomorphise(&app.ret_ty);
+        let ret_ty = dcx.monomorphise(result_ty);
         let arg_list_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
         self.eval_value_app(dcx, b, span, &ret_ty, &fun_value, arg_list_value)
     }
@@ -588,6 +589,7 @@ impl EvalHirCtx {
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
         span: Span,
+        result_ty: &ty::Poly,
         cond: &hir::Cond<hir::Inferred>,
     ) -> Result<Value> {
         let test_value = self.eval_expr(dcx, b, &cond.test_expr)?;
@@ -604,7 +606,7 @@ impl EvalHirCtx {
             }
             dynamic_value => {
                 if let Some(b) = b {
-                    self.build_cond(dcx, b, span, &dynamic_value, cond)
+                    self.build_cond(dcx, b, span, result_ty, &dynamic_value, cond)
                 } else {
                     panic!("need builder for dynamic cond");
                 }
@@ -631,6 +633,7 @@ impl EvalHirCtx {
         dcx: &mut DefCtx,
         b: &mut Builder,
         span: Span,
+        result_ty: &ty::Poly,
         test_value: &Value,
         cond: &hir::Cond<hir::Inferred>,
     ) -> Result<Value> {
@@ -664,7 +667,7 @@ impl EvalHirCtx {
                 reg_phi = None;
             }
             (false, false) => {
-                let phi_ty = dcx.monomorphise(&cond.phi_ty);
+                let phi_ty = dcx.monomorphise(result_ty);
                 let phi_abi_type =
                     plan_phi_abi_type(&built_true.value, &built_false.value, &phi_ty);
 
@@ -1003,27 +1006,25 @@ impl EvalHirCtx {
         expr: &Expr,
         source_name: Option<&str>,
     ) -> Result<Value> {
-        match expr {
-            hir::Expr::Lit(literal) => Ok(self.eval_lit(literal)),
-            hir::Expr::Do(exprs) => self.eval_do(dcx, b, &exprs),
-            hir::Expr::Fun(span, fun_expr) => Ok(self.eval_arret_fun(
-                dcx,
-                *span,
-                Rc::new(fun_expr.as_ref().clone()),
-                source_name,
-            )),
-            hir::Expr::RustFun(_, rust_fun) => {
-                Ok(Value::RustFun(Rc::new(rust_fun.as_ref().clone())))
+        let span = expr.span;
+
+        use crate::hir::ExprKind;
+        match &expr.kind {
+            ExprKind::Lit(literal) => Ok(self.eval_lit(literal)),
+            ExprKind::Do(exprs) => self.eval_do(dcx, b, &exprs),
+            ExprKind::Fun(fun_expr) => {
+                Ok(self.eval_arret_fun(dcx, span, Rc::new(fun_expr.as_ref().clone()), source_name))
             }
-            hir::Expr::TyPred(_, test_ty) => Ok(Value::TyPred(*test_ty)),
-            hir::Expr::EqPred(_) => Ok(Value::EqPred),
-            hir::Expr::Ref(_, var_id) => Ok(self.eval_ref(dcx, *var_id)),
-            hir::Expr::Let(_, hir_let) => self.eval_let(dcx, b, hir_let),
-            hir::Expr::App(span, app) => self.eval_app(dcx, b, *span, app),
-            hir::Expr::MacroExpand(span, expr) => self
+            ExprKind::RustFun(rust_fun) => Ok(Value::RustFun(Rc::new(rust_fun.as_ref().clone()))),
+            ExprKind::TyPred(test_ty) => Ok(Value::TyPred(*test_ty)),
+            ExprKind::EqPred => Ok(Value::EqPred),
+            ExprKind::Ref(var_id) => Ok(self.eval_ref(dcx, *var_id)),
+            ExprKind::Let(hir_let) => self.eval_let(dcx, b, hir_let),
+            ExprKind::App(app) => self.eval_app(dcx, b, span, &expr.result_ty, app),
+            ExprKind::MacroExpand(expr) => self
                 .eval_expr(dcx, b, expr)
-                .map_err(|err| err.with_macro_invocation_span(*span)),
-            hir::Expr::Cond(span, cond) => self.eval_cond(dcx, b, *span, cond),
+                .map_err(|err| err.with_macro_invocation_span(span)),
+            ExprKind::Cond(cond) => self.eval_cond(dcx, b, span, &expr.result_ty, cond),
         }
     }
 
@@ -1043,12 +1044,13 @@ impl EvalHirCtx {
         expr: Expr,
         source_name: Option<&str>,
     ) -> Result<Value> {
-        match expr {
-            hir::Expr::Fun(span, fun_expr) => {
-                Ok(self.eval_arret_fun(dcx, span, fun_expr.into(), source_name))
+        use crate::hir::ExprKind;
+        match expr.kind {
+            ExprKind::Fun(fun_expr) => {
+                Ok(self.eval_arret_fun(dcx, expr.span, fun_expr.into(), source_name))
             }
-            hir::Expr::RustFun(_, rust_fun) => Ok(Value::RustFun(rust_fun.into())),
-            other => self.eval_expr_with_source_name(dcx, b, &other, source_name),
+            ExprKind::RustFun(rust_fun) => Ok(Value::RustFun(rust_fun.into())),
+            _ => self.eval_expr_with_source_name(dcx, b, &expr, source_name),
         }
     }
 

@@ -7,16 +7,17 @@ where
 {
     visitor(expr);
 
-    match expr {
-        hir::Expr::Cond(_, cond) => {
+    use crate::hir::ExprKind;
+    match &expr.kind {
+        ExprKind::Cond(cond) => {
             visit_exprs(&cond.test_expr, visitor);
             visit_exprs(&cond.true_expr, visitor);
             visit_exprs(&cond.false_expr, visitor);
         }
-        hir::Expr::Fun(_, fun) => {
+        ExprKind::Fun(fun) => {
             visit_exprs(&fun.body_expr, visitor);
         }
-        hir::Expr::App(_, app) => {
+        ExprKind::App(app) => {
             visit_exprs(&app.fun_expr, visitor);
             for fixed_arg_expr in &app.fixed_arg_exprs {
                 visit_exprs(fixed_arg_expr, visitor);
@@ -25,23 +26,23 @@ where
                 visit_exprs(rest_arg_expr, visitor);
             }
         }
-        hir::Expr::Let(_, hir_let) => {
+        ExprKind::Let(hir_let) => {
             visit_exprs(&hir_let.value_expr, visitor);
             visit_exprs(&hir_let.body_expr, visitor);
         }
-        hir::Expr::Do(exprs) => {
+        ExprKind::Do(exprs) => {
             for expr in exprs {
                 visit_exprs(&expr, visitor);
             }
         }
-        hir::Expr::MacroExpand(_, expr) => {
+        ExprKind::MacroExpand(expr) => {
             visit_exprs(expr, visitor);
         }
-        hir::Expr::Ref(_, _)
-        | hir::Expr::Lit(_)
-        | hir::Expr::RustFun(_, _)
-        | hir::Expr::TyPred(_, _)
-        | hir::Expr::EqPred(_) => {
+        ExprKind::Ref(_)
+        | ExprKind::Lit(_)
+        | ExprKind::RustFun(_)
+        | ExprKind::TyPred(_)
+        | ExprKind::EqPred => {
             // Terminal expression
         }
     };

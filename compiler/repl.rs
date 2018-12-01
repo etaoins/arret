@@ -124,7 +124,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
                         let poly_str = hir::str_for_poly(
                             &purity::PVars::new(),
                             &ty::TVars::new(),
-                            node.poly_type(),
+                            node.result_ty(),
                         );
                         Ok(EvaledLine::Expr(poly_str))
                     }

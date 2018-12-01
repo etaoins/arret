@@ -59,7 +59,6 @@ pub struct Fun<P: Phase> {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Cond<P: Phase> {
-    pub phi_ty: P::ResultType,
     pub test_expr: Expr<P>,
     pub true_expr: Expr<P>,
     pub false_expr: Expr<P>,
@@ -74,29 +73,51 @@ pub struct Let<P: Phase> {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct App<P: Phase> {
-    pub ret_ty: P::ResultType,
     pub fun_expr: Expr<P>,
     pub fixed_arg_exprs: Vec<Expr<P>>,
     pub rest_arg_expr: Option<Expr<P>>,
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum Expr<P: Phase> {
+pub struct Expr<P: Phase> {
+    pub span: Span,
+    pub result_ty: P::ResultType,
+    pub kind: ExprKind<P>,
+}
+
+impl Expr<Lowered> {
+    fn new(span: Span, kind: ExprKind<Lowered>) -> Expr<Lowered> {
+        Expr {
+            span,
+            result_ty: (),
+            kind,
+        }
+    }
+}
+
+impl From<Datum> for Expr<Lowered> {
+    fn from(datum: Datum) -> Expr<Lowered> {
+        Expr::new(datum.span(), ExprKind::Lit(datum))
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum ExprKind<P: Phase> {
     Lit(Datum),
-    App(Span, Box<App<P>>),
-    Fun(Span, Box<Fun<P>>),
-    RustFun(Span, Box<rfi::Fun>),
-    Let(Span, Box<Let<P>>),
-    Cond(Span, Box<Cond<P>>),
-    Ref(Span, VarId),
-    TyPred(Span, ty::pred::TestTy),
-    EqPred(Span),
+    App(Box<App<P>>),
+    Fun(Box<Fun<P>>),
+    RustFun(Box<rfi::Fun>),
+    Let(Box<Let<P>>),
+    Cond(Box<Cond<P>>),
+    Ref(VarId),
+    TyPred(ty::pred::TestTy),
+    EqPred,
     Do(Vec<Expr<P>>),
 
     /// Used for tracing macro expansion for error report and debug information
     ///
     /// Other than the above this should be treated identically to the inner expression.
-    MacroExpand(Span, Box<Expr<P>>),
+    MacroExpand(Box<Expr<P>>),
 }
 
 #[derive(PartialEq, Debug)]
