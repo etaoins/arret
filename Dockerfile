@@ -14,7 +14,7 @@ RUN \
   apt-get -y install llvm-7 llvm-7-dev && \
   apt-get clean
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain beta
 
 ADD . /root/arret
 WORKDIR /root/arret
