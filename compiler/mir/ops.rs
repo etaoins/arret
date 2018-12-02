@@ -10,7 +10,7 @@ use crate::mir::tagset::TypeTagSet;
 new_indexing_id_type!(PrivateFunId, u32);
 new_global_id_type!(RegId);
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct OpsABI {
     /// Indicates if this function must be externally callable
     ///

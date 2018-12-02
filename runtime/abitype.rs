@@ -15,7 +15,7 @@ pub enum BoxedABIType {
 
 pub const TOP_LIST_BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::List(&BoxedABIType::Any);
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum ABIType {
     Bool,
     Char,
@@ -25,7 +25,7 @@ pub enum ABIType {
     Callback(&'static callback::EntryPointABIType),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum ParamCapture {
     /// Indicates the capture of this parameter should be automatically inferred
     Auto,
@@ -35,13 +35,13 @@ pub enum ParamCapture {
     Always,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct ParamABIType {
     pub abi_type: ABIType,
     pub capture: ParamCapture,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum RetABIType {
     Void,
     Never,

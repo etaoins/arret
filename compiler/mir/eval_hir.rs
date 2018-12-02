@@ -24,11 +24,19 @@ use crate::mir::{Expr, Value};
 use crate::ty;
 use crate::ty::purity;
 
+#[derive(PartialEq, Eq, Hash)]
+struct RustFunKey {
+    symbol: &'static str,
+    wanted_abi: ops::OpsABI,
+    has_rest: bool,
+}
+
 pub struct EvalHirCtx {
     runtime_task: runtime::task::Task,
     global_values: HashMap<hir::VarId, Value>,
 
     private_funs: Vec<ops::Fun>,
+    rust_funs: HashMap<RustFunKey, ops::PrivateFunId>,
 
     rust_fun_thunks: HashMap<*const c_void, boxed::ThunkEntry>,
     thunk_fun_values: HashMap<Gc<boxed::FunThunk>, Value>,
@@ -88,6 +96,7 @@ impl EvalHirCtx {
             global_values: HashMap::new(),
 
             private_funs: vec![],
+            rust_funs: HashMap::new(),
 
             rust_fun_thunks: HashMap::new(),
             thunk_fun_values: HashMap::new(),
@@ -297,6 +306,35 @@ impl EvalHirCtx {
         );
     }
 
+    /// Returns a private fun ID for the wanted Rust fun and ABI
+    /// 
+    /// This will return a cached ID if available
+    fn id_for_rust_fun(
+        &mut self,
+        span: Span,
+        rust_fun: &hir::rfi::Fun,
+        wanted_abi: ops::OpsABI,
+        has_rest: bool,
+    ) -> ops::PrivateFunId {
+        use crate::mir::rust_fun::ops_for_rust_fun;
+
+        let rust_fun_key = RustFunKey{
+            symbol: rust_fun.symbol(),
+            wanted_abi: wanted_abi.clone(),
+            has_rest
+        };
+
+        if let Some(private_fun_id) = self.rust_funs.get(&rust_fun_key) {
+            return *private_fun_id;
+        }
+
+        let ops_fun = ops_for_rust_fun(self, span, rust_fun, wanted_abi, has_rest);
+        let private_fun_id = ops::PrivateFunId::new_entry_id(&mut self.private_funs, ops_fun);
+
+        self.rust_funs.insert(rust_fun_key, private_fun_id);
+        private_fun_id
+    }
+
     pub fn rust_fun_to_thunk_reg(
         &mut self,
         b: &mut Builder,
@@ -304,16 +342,14 @@ impl EvalHirCtx {
         rust_fun: &hir::rfi::Fun,
     ) -> BuiltReg {
         use crate::mir::ops::*;
-        use crate::mir::rust_fun::ops_for_rust_fun;
         use runtime::abitype;
 
         let wanted_abi = OpsABI::thunk_abi();
-        let ops_fun = ops_for_rust_fun(self, span, rust_fun, wanted_abi, true);
+        let private_fun_id = self.id_for_rust_fun(span, rust_fun, wanted_abi, true);
 
         let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
         let closure_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
 
-        let private_fun_id = ops::PrivateFunId::new_entry_id(&mut self.private_funs, ops_fun);
         b.push_reg(
             span,
             OpKind::ConstBoxedFunThunk,
@@ -332,16 +368,14 @@ impl EvalHirCtx {
         entry_point_abi: &CallbackEntryPointABIType,
     ) -> BuiltReg {
         use crate::mir::ops::*;
-        use crate::mir::rust_fun::ops_for_rust_fun;
         use runtime::abitype;
 
         let wanted_abi = entry_point_abi.clone().into();
-        let ops_fun = ops_for_rust_fun(self, span, rust_fun, wanted_abi, false);
+        let private_fun_id = self.id_for_rust_fun(span, rust_fun, wanted_abi, false);
 
         let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
         let closure_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
 
-        let private_fun_id = ops::PrivateFunId::new_entry_id(&mut self.private_funs, ops_fun);
         b.push_reg(
             span,
             OpKind::MakeCallback,

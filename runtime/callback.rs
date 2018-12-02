@@ -31,7 +31,7 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct EntryPointABIType {
     /// Types of the entry point's parameters
     ///
