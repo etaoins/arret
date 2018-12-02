@@ -397,7 +397,9 @@ fn lower_fun(outer_scope: &Scope, span: Span, mut arg_iter: NsDataIter) -> Resul
             purity = poly_purity.into_decl();
 
             let ret_datum = arg_iter.next().unwrap();
-            ret_ty = lower_poly(&fun_scope, ret_datum)?.into_decl();
+            if fun_scope.get_datum(&ret_datum) != Some(&Binding::Prim(Prim::Wildcard)) {
+                ret_ty = lower_poly(&fun_scope, ret_datum)?.into_decl();
+            }
         }
     }
 
@@ -1070,6 +1072,27 @@ mod test {
                 params: destruc::List::new(vec![], None),
                 ret_ty: ty::Decl::Free,
                 body_expr: Expr::new(EMPTY_SPAN, ExprKind::Do(vec![])),
+            })),
+        );
+
+        assert_eq!(expected, expr_for_str(j));
+    }
+
+    #[test]
+    fn empty_fn_with_purity() {
+        let j = "(fn () -> _ 1)";
+        let t = "^^^^^^^^^^^^^^";
+        let u = "            ^ ";
+
+        let expected = Expr::new(
+            t2s(t),
+            ExprKind::Fun(Box::new(Fun {
+                pvars: purity::PVars::new(),
+                tvars: ty::TVars::new(),
+                purity: Purity::Pure.into_decl(),
+                params: destruc::List::new(vec![], None),
+                ret_ty: ty::Decl::Free,
+                body_expr: Datum::Int(t2s(u), 1).into(),
             })),
         );
 
