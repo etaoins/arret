@@ -17,6 +17,7 @@ use runtime::boxed::refs::Gc;
 use crate::hir;
 use crate::mir::builder::BuiltReg;
 use crate::mir::closure::Closure;
+use crate::mir::tagset::TypeTagSet;
 use crate::ty;
 
 #[derive(Clone, Debug)]
@@ -31,6 +32,17 @@ pub struct ArretFun {
 pub struct RegValue {
     pub reg: BuiltReg,
     pub abi_type: abitype::ABIType,
+    pub possible_type_tags: TypeTagSet,
+}
+
+impl RegValue {
+    pub fn new(reg: BuiltReg, abi_type: abitype::ABIType) -> RegValue {
+        RegValue {
+            reg,
+            possible_type_tags: (&abi_type).into(),
+            abi_type,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

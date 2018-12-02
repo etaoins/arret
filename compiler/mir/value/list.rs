@@ -85,14 +85,14 @@ impl<'list> ListIterator {
         let head_reg = b.push_reg(span, OpKind::LoadBoxedPairHead, current_rest_reg.into());
         let rest_reg = b.push_reg(span, OpKind::LoadBoxedPairRest, current_rest_reg.into());
 
-        self.rest = Some(Value::Reg(Rc::new(value::RegValue {
-            reg: rest_reg,
-            abi_type: abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
-        })));
+        self.rest = Some(Value::Reg(Rc::new(value::RegValue::new(
+            rest_reg,
+            abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
+        ))));
 
-        Value::Reg(Rc::new(value::RegValue {
-            reg: head_reg,
-            abi_type: abitype::BoxedABIType::Any.into(),
-        }))
+        Value::Reg(Rc::new(value::RegValue::new(
+            head_reg,
+            abitype::BoxedABIType::Any.into(),
+        )))
     }
 }

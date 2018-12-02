@@ -157,7 +157,6 @@ impl EvalHirCtx {
     }
 
     fn eval_ref(&self, dcx: &DefCtx, var_id: hir::VarId) -> Value {
-        // Try local values first
         dcx.local_values
             .get(&var_id)
             .unwrap_or_else(|| &self.global_values[&var_id])
@@ -307,7 +306,7 @@ impl EvalHirCtx {
     }
 
     /// Returns a private fun ID for the wanted Rust fun and ABI
-    /// 
+    ///
     /// This will return a cached ID if available
     fn id_for_rust_fun(
         &mut self,
@@ -318,10 +317,10 @@ impl EvalHirCtx {
     ) -> ops::PrivateFunId {
         use crate::mir::rust_fun::ops_for_rust_fun;
 
-        let rust_fun_key = RustFunKey{
+        let rust_fun_key = RustFunKey {
             symbol: rust_fun.symbol(),
             wanted_abi: wanted_abi.clone(),
-            has_rest
+            has_rest,
         };
 
         if let Some(private_fun_id) = self.rust_funs.get(&rust_fun_key) {
@@ -540,10 +539,10 @@ impl EvalHirCtx {
             },
         );
 
-        Value::Reg(Rc::new(value::RegValue {
-            reg: ret_reg,
-            abi_type: abitype::BoxedABIType::Any.into(),
-        }))
+        Value::Reg(Rc::new(value::RegValue::new(
+            ret_reg,
+            abitype::BoxedABIType::Any.into(),
+        )))
     }
 
     fn eval_value_app(
@@ -928,10 +927,8 @@ impl EvalHirCtx {
             arg_list_value,
         } = build_load_arg_list_value(&mut b, &ops_abi, true, false);
 
-        let fun_reg_value = value::RegValue {
-            reg: closure_reg.unwrap(),
-            abi_type: abitype::BoxedABIType::Any.into(),
-        };
+        let fun_reg_value =
+            value::RegValue::new(closure_reg.unwrap(), abitype::BoxedABIType::Any.into());
 
         let result_value =
             self.build_reg_fun_thunk_app(&mut b, EMPTY_SPAN, &fun_reg_value, &arg_list_value);
@@ -1039,10 +1036,11 @@ impl EvalHirCtx {
         expr: &Expr,
         source_name: Option<&str>,
     ) -> Result<Value> {
+        use crate::mir::value::types::value_with_arret_ty;
         let span = expr.span;
 
         use crate::hir::ExprKind;
-        match &expr.kind {
+        let value = match &expr.kind {
             ExprKind::Lit(literal) => Ok(self.eval_lit(literal)),
             ExprKind::Do(exprs) => self.eval_do(dcx, b, &exprs),
             ExprKind::Fun(fun_expr) => {
@@ -1058,7 +1056,12 @@ impl EvalHirCtx {
                 .eval_expr(dcx, b, expr)
                 .map_err(|err| err.with_macro_invocation_span(span)),
             ExprKind::Cond(cond) => self.eval_cond(dcx, b, span, &expr.result_ty, cond),
-        }
+        }?;
+
+        // Annotate this value with the expression's result type as it passes through
+        Ok(value_with_arret_ty(self, value, || {
+            dcx.monomorphise(&expr.result_ty)
+        }))
     }
 
     pub fn eval_expr(

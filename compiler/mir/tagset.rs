@@ -1,5 +1,6 @@
 use std::{iter, ops};
 
+use crate::ty;
 use runtime::abitype;
 use runtime::boxed::{TypeTag, ALL_TYPE_TAGS};
 
@@ -66,6 +67,40 @@ impl From<TypeTag> for TypeTagSet {
         let mut type_tag_set = TypeTagSet::new();
         type_tag_set.insert(type_tag);
         type_tag_set
+    }
+}
+
+impl<'a> From<&'a ty::Mono> for TypeTagSet {
+    fn from(mono: &'a ty::Mono) -> TypeTagSet {
+        match mono.as_ty() {
+            ty::Ty::Any => TypeTagSet::all(),
+            ty::Ty::Int => TypeTag::Int.into(),
+            ty::Ty::Float => TypeTag::Float.into(),
+            ty::Ty::Char => TypeTag::Char.into(),
+            ty::Ty::Bool => [TypeTag::True, TypeTag::False].iter().collect(),
+            ty::Ty::LitBool(true) => TypeTag::True.into(),
+            ty::Ty::LitBool(false) => TypeTag::False.into(),
+            ty::Ty::Sym | ty::Ty::LitSym(_) => TypeTag::Sym.into(),
+            ty::Ty::Str => TypeTag::Str.into(),
+            ty::Ty::Fun(_) | ty::Ty::TopFun(_) | ty::Ty::TyPred(_) | ty::Ty::EqPred => {
+                TypeTag::FunThunk.into()
+            }
+            ty::Ty::Vector(_) | ty::Ty::Vectorof(_) => TypeTag::TopVector.into(),
+            ty::Ty::List(list) => {
+                if list.is_empty() {
+                    TypeTag::Nil.into()
+                } else if !list.fixed().is_empty() {
+                    TypeTag::TopPair.into()
+                } else {
+                    [TypeTag::Nil, TypeTag::TopPair].iter().collect()
+                }
+            }
+            ty::Ty::Union(members) => members
+                .iter()
+                .map(TypeTagSet::from)
+                .fold(TypeTagSet::new(), |a, b| a | b),
+            ty::Ty::Map(_) | ty::Ty::Set(_) => unimplemented!("no corresponding type tag"),
+        }
     }
 }
 

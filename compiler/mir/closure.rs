@@ -144,10 +144,10 @@ pub fn load_from_closure_param(
 
         local_values.insert(
             *var_id,
-            Value::Reg(Rc::new(value::RegValue {
-                reg: closure_reg,
-                abi_type: abitype::BoxedABIType::Any.into(),
-            })),
+            Value::Reg(Rc::new(value::RegValue::new(
+                closure_reg,
+                abitype::BoxedABIType::Any.into(),
+            ))),
         );
     }
 }

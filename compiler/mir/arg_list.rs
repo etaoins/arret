@@ -40,20 +40,20 @@ pub fn build_load_arg_list_value(
     let rest_reg_value = if has_rest {
         let abi_type = abi_params_iter.next_back().unwrap();
 
-        Some(Rc::new(value::RegValue {
-            reg: b.alloc_local(),
-            abi_type: abi_type.clone(),
-        }))
+        Some(Rc::new(value::RegValue::new(
+            b.alloc_local(),
+            abi_type.clone(),
+        )))
     } else {
         None
     };
 
     let fixed_reg_values = abi_params_iter
         .map(|abi_type| {
-            Rc::new(value::RegValue {
-                reg: b.alloc_local(),
-                abi_type: abi_type.clone(),
-            })
+            Rc::new(value::RegValue::new(
+                b.alloc_local(),
+                abi_type.clone(),
+            ))
         })
         .collect::<Vec<Rc<value::RegValue>>>();
 
