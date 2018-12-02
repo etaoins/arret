@@ -149,11 +149,10 @@ impl EvalHirCtx {
 
     fn eval_ref(&self, dcx: &DefCtx, var_id: hir::VarId) -> Value {
         // Try local values first
-        if let Some(value) = dcx.local_values.get(&var_id) {
-            return value.clone();
-        }
-
-        self.global_values[&var_id].clone()
+        dcx.local_values
+            .get(&var_id)
+            .unwrap_or_else(|| &self.global_values[&var_id])
+            .clone()
     }
 
     fn eval_do(
