@@ -179,7 +179,7 @@ impl<'sl> DebugInfoBuilder<'sl> {
     }
 }
 
-impl<'sl> Drop for DebugInfoBuilder<'sl> {
+impl Drop for DebugInfoBuilder<'_> {
     fn drop(&mut self) {
         unsafe { LLVMDisposeDIBuilder(self.llvm_dib) }
     }

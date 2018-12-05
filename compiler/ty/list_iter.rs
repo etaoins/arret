@@ -54,7 +54,7 @@ impl<'list> ListIterator<'list, ty::Poly> {
         Some(ty::unify::unify_ty_ref_iter(
             tvars,
             self.fixed
-                .into_iter()
+                .iter()
                 .cloned()
                 .chain(self.rest.cloned().into_iter()),
         ))

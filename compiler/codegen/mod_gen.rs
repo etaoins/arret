@@ -25,14 +25,6 @@ pub struct ModCtx<'am, 'sl> {
     function_pass_manager: LLVMPassManagerRef,
 }
 
-impl<'am, 'sl> Drop for ModCtx<'am, 'sl> {
-    fn drop(&mut self) {
-        unsafe {
-            LLVMDisposePassManager(self.function_pass_manager);
-        }
-    }
-}
-
 impl<'am, 'sl> ModCtx<'am, 'sl> {
     /// Constructs a new module context with the given name
     ///
@@ -219,5 +211,13 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
             LLVMDisposeMessage(error);
         }
         self.module
+    }
+}
+
+impl Drop for ModCtx<'_, '_> {
+    fn drop(&mut self) {
+        unsafe {
+            LLVMDisposePassManager(self.function_pass_manager);
+        }
     }
 }
