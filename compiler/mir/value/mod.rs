@@ -20,8 +20,11 @@ use crate::mir::closure::Closure;
 use crate::mir::tagset::TypeTagSet;
 use crate::ty;
 
+new_global_id_type!(ArretFunId);
+
 #[derive(Clone, Debug)]
 pub struct ArretFun {
+    pub id: ArretFunId,
     pub span: Span,
     pub source_name: Option<String>,
     pub closure: Closure,

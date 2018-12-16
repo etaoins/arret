@@ -31,12 +31,20 @@ struct RustFunKey {
     has_rest: bool,
 }
 
+#[derive(PartialEq, Eq, Hash)]
+struct ArretFunKey {
+    arret_fun_id: value::ArretFunId,
+    wanted_abi: ops::OpsABI,
+    has_rest: bool,
+}
+
 pub struct EvalHirCtx {
     runtime_task: runtime::task::Task,
     global_values: HashMap<hir::VarId, Value>,
 
     private_funs: Vec<ops::Fun>,
     rust_funs: HashMap<RustFunKey, ops::PrivateFunId>,
+    arret_funs: HashMap<ArretFunKey, ops::PrivateFunId>,
 
     rust_fun_thunks: HashMap<*const c_void, boxed::ThunkEntry>,
     thunk_fun_values: HashMap<Gc<boxed::FunThunk>, Value>,
@@ -97,6 +105,7 @@ impl EvalHirCtx {
 
             private_funs: vec![],
             rust_funs: HashMap::new(),
+            arret_funs: HashMap::new(),
 
             rust_fun_thunks: HashMap::new(),
             thunk_fun_values: HashMap::new(),
@@ -755,6 +764,7 @@ impl EvalHirCtx {
         let closure = closure::calculate_closure(&dcx.local_values, &fun_expr.body_expr);
 
         Value::ArretFun(value::ArretFun {
+            id: value::ArretFunId::alloc(),
             span,
             source_name: source_name.map(|source_name| source_name.to_owned()),
             fun_expr,
@@ -783,6 +793,36 @@ impl EvalHirCtx {
         new_boxed
     }
 
+    /// Returns a private fun ID for the wanted Arret fun and ABI
+    ///
+    /// This will return a cached ID if available
+    fn id_for_arret_fun(
+        &mut self,
+        arret_fun: &value::ArretFun,
+        wanted_abi: ops::OpsABI,
+        has_rest: bool,
+    ) -> ops::PrivateFunId {
+        let arret_fun_key = ArretFunKey {
+            arret_fun_id: arret_fun.id,
+            wanted_abi: wanted_abi.clone(),
+            has_rest,
+        };
+
+        if let Some(private_fun_id) = self.arret_funs.get(&arret_fun_key) {
+            return *private_fun_id;
+        }
+
+        // TODO: What's the point of this error return?
+        let ops_fun = self
+            .ops_for_arret_fun(arret_fun, wanted_abi, has_rest)
+            .expect("error during arret fun boxing");
+
+        let private_fun_id = ops::PrivateFunId::new_entry_id(&mut self.private_funs, ops_fun);
+
+        self.arret_funs.insert(arret_fun_key, private_fun_id);
+        private_fun_id
+    }
+
     pub fn arret_fun_to_thunk_reg(
         &mut self,
         b: &mut Builder,
@@ -794,13 +834,9 @@ impl EvalHirCtx {
         use runtime::abitype;
 
         let wanted_abi = OpsABI::thunk_abi();
-
-        let ops_fun = self
-            .ops_for_arret_fun(&arret_fun, wanted_abi, true)
-            .expect("error during arret fun boxing");
+        let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi, true);
 
         let closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure);
-        let private_fun_id = ops::PrivateFunId::new_entry_id(&mut self.private_funs, ops_fun);
 
         if let Some(closure_reg) = closure_reg {
             b.push_reg(
@@ -838,18 +874,13 @@ impl EvalHirCtx {
         use runtime::abitype;
 
         let wanted_abi = entry_point_abi.clone().into();
-
-        let ops_fun = self
-            .ops_for_arret_fun(&arret_fun, wanted_abi, false)
-            .expect("error during arret fun boxing");
+        let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi, false);
 
         let closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure)
             .unwrap_or_else(|| {
                 let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
                 b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any)
             });
-
-        let private_fun_id = ops::PrivateFunId::new_entry_id(&mut self.private_funs, ops_fun);
 
         b.push_reg(
             span,

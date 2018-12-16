@@ -24,6 +24,7 @@ pub fn eq_pred_arret_fun() -> value::ArretFun {
         .collect();
 
     value::ArretFun {
+        id: value::ArretFunId::alloc(),
         span: EMPTY_SPAN,
         source_name: Some("=".to_owned()),
         closure: Closure::empty(),
@@ -67,6 +68,7 @@ pub fn ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
     let subject_var_id = hir::VarId::alloc();
 
     value::ArretFun {
+        id: value::ArretFunId::alloc(),
         span: EMPTY_SPAN,
         source_name: Some(test_ty.to_str().to_owned()),
         closure: Closure::empty(),
