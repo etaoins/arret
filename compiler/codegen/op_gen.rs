@@ -117,7 +117,7 @@ fn gen_op(
                 use crate::codegen::callee;
 
                 let llvm_fun = gen_callee_entry_point(tcx, mcx, fcx, callee);
-                let takes_task = callee::callee_takes_task(tcx, mcx, callee);
+                let takes_task = callee::callee_takes_task(mcx, callee);
 
                 let task_reg_iter = fcx.current_task.filter(|_| takes_task).into_iter();
                 let mut llvm_args = task_reg_iter

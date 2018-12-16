@@ -77,6 +77,16 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
         }
     }
 
+    /// Determines if a private fun needs a task parameter
+    pub fn private_fun_takes_task(&self, private_fun_id: ops::PrivateFunId) -> bool {
+        use crate::codegen::analysis;
+
+        let fun = self.analysed_mod.private_fun(private_fun_id);
+        let alloc_plan = self.analysed_mod.private_fun_alloc_plan(private_fun_id);
+
+        fun.abi.external_call_conv || analysis::needs_task::alloc_plan_needs_task(self, &alloc_plan)
+    }
+
     pub fn gened_private_fun(
         &mut self,
         tcx: &mut TargetCtx,
@@ -91,7 +101,9 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
 
         let ops_fun = self.analysed_mod.private_fun(private_fun_id);
         let captures = self.analysed_mod.private_fun_captures(private_fun_id);
-        let gened_fun = gen_fun(tcx, self, ops_fun, captures);
+        let alloc_plan = self.analysed_mod.private_fun_alloc_plan(private_fun_id);
+
+        let gened_fun = gen_fun(tcx, self, ops_fun, captures, alloc_plan);
 
         if let Some(ref mut di_builder) = self.di_builder {
             di_builder.add_function_debug_info(
@@ -118,6 +130,7 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
             self,
             ops_fun,
             self.analysed_mod.entry_fun_captures(),
+            self.analysed_mod.entry_fun_alloc_plan(),
         );
 
         if let Some(ref mut di_builder) = self.di_builder {

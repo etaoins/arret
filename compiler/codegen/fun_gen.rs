@@ -6,6 +6,7 @@ use llvm_sys::prelude::*;
 
 use crate::mir::ops;
 
+use crate::codegen::alloc::AllocAtom;
 use crate::codegen::analysis::escape::{CaptureKind, Captures};
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
@@ -49,18 +50,15 @@ pub(crate) fn gen_fun(
     mcx: &mut ModCtx<'_, '_>,
     fun: &ops::Fun,
     captures: &Captures,
+    alloc_plan: &[AllocAtom<'_>],
 ) -> GenedFun {
-    use crate::codegen::alloc::plan::plan_allocs;
     use crate::codegen::analysis;
     use crate::codegen::op_gen;
     use runtime::abitype::{ABIType, ParamABIType, RetABIType};
 
-    // Use the capture information to plan our allocations
-    let alloc_plan = plan_allocs(&captures, &fun.ops);
-
     // Use the allocation plan to determine if we need a task parameter
-    let takes_task = fun.abi.external_call_conv
-        || analysis::needs_task::alloc_plan_needs_task(tcx, mcx, &alloc_plan);
+    let takes_task =
+        fun.abi.external_call_conv || analysis::needs_task::alloc_plan_needs_task(mcx, &alloc_plan);
 
     // Determine which params we captured
     let param_captures: Vec<CaptureKind> = fun
