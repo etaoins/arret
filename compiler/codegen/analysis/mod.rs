@@ -18,9 +18,10 @@ impl<'of> AnalysedMod<'of> {
         private_funs: &'of HashMap<ops::PrivateFunId, ops::Fun>,
         entry_fun: &'of ops::Fun,
     ) -> AnalysedMod<'of> {
-        let mut private_fun_captures = HashMap::new();
-        let entry_fun_captures =
-            escape::calc_fun_captures(private_funs, &mut private_fun_captures, entry_fun);
+        let escape::ProgramCaptures {
+            private_fun_captures,
+            entry_fun_captures,
+        } = escape::calc_program_captures(private_funs, entry_fun);
 
         AnalysedMod {
             private_funs,

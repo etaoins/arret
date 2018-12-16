@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use runtime::abitype::{ABIType, ParamABIType, ParamCapture, RetABIType};
 
@@ -111,130 +111,146 @@ fn add_static_symbol_call_captures(
     }
 }
 
-fn add_op_captures(
-    private_funs: &HashMap<ops::PrivateFunId, ops::Fun>,
-    private_fun_captures: &mut HashMap<ops::PrivateFunId, Captures>,
-    captures: &mut Captures,
-    ret_type: &RetABIType,
-    op: &ops::Op,
-) {
-    use crate::mir::ops::OpKind;
+struct ProgramCaptureCtx<'of> {
+    private_funs: &'of HashMap<ops::PrivateFunId, ops::Fun>,
+    private_fun_captures: HashMap<ops::PrivateFunId, Captures>,
 
-    match op.kind() {
-        OpKind::Ret(ret_reg) => {
-            if let RetABIType::Inhabited(ABIType::Boxed(_)) = ret_type {
-                // `Ret` captures boxes unconditionally
-                captures.add(*ret_reg, CaptureKind::ViaRet);
-            }
-        }
-        OpKind::CastBoxed(reg, ops::CastBoxedOp { from_reg, .. })
-        | OpKind::LoadBoxedPairHead(reg, from_reg)
-        | OpKind::LoadBoxedPairRest(reg, from_reg) => {
-            captures.add(*from_reg, captures.get(*reg));
-        }
-        OpKind::AllocBoxedPair(
-            reg,
-            ops::BoxPairOp {
-                head_reg, rest_reg, ..
-            },
-        ) => {
-            let output_capture = captures.get(*reg);
-            captures.add(*head_reg, output_capture);
-            captures.add(*rest_reg, output_capture);
-        }
-        OpKind::Cond(ops::CondOp {
-            reg_phi,
-            true_ops,
-            false_ops,
-            ..
-        }) => {
-            if let Some(reg_phi) = reg_phi {
-                let output_capture = captures.get(reg_phi.output_reg);
+    // Funs we're currently recursing in to
+    recursing_private_funs: HashSet<ops::PrivateFunId>,
+}
 
-                // Propagate captures through the phi
-                captures.add(reg_phi.true_result_reg, output_capture);
-                captures.add(reg_phi.false_result_reg, output_capture);
-            }
+impl<'of> ProgramCaptureCtx<'of> {
+    fn add_op_captures(&mut self, captures: &mut Captures, ret_type: &RetABIType, op: &ops::Op) {
+        use crate::mir::ops::OpKind;
 
-            for op in true_ops.iter().rev().chain(false_ops.iter().rev()) {
-                add_op_captures(private_funs, private_fun_captures, captures, ret_type, op);
-            }
-        }
-        OpKind::Call(reg, ops::CallOp { callee, args, .. }) => {
-            let return_capture = captures.get(*reg);
-
-            match callee {
-                ops::Callee::StaticSymbol(ops::StaticSymbol { abi, .. }) => {
-                    add_static_symbol_call_captures(captures, return_capture, abi, args);
+        match op.kind() {
+            OpKind::Ret(ret_reg) => {
+                if let RetABIType::Inhabited(ABIType::Boxed(_)) = ret_type {
+                    // `Ret` captures boxes unconditionally
+                    captures.add(*ret_reg, CaptureKind::ViaRet);
                 }
-                ops::Callee::PrivateFun(private_fun_id) => {
-                    let ops_fun = &private_funs[private_fun_id];
-                    let callee_captures = captures_for_private_fun_id(
-                        private_funs,
-                        private_fun_captures,
-                        *private_fun_id,
-                    );
+            }
+            OpKind::CastBoxed(reg, ops::CastBoxedOp { from_reg, .. })
+            | OpKind::LoadBoxedPairHead(reg, from_reg)
+            | OpKind::LoadBoxedPairRest(reg, from_reg) => {
+                captures.add(*from_reg, captures.get(*reg));
+            }
+            OpKind::AllocBoxedPair(
+                reg,
+                ops::BoxPairOp {
+                    head_reg, rest_reg, ..
+                },
+            ) => {
+                let output_capture = captures.get(*reg);
+                captures.add(*head_reg, output_capture);
+                captures.add(*rest_reg, output_capture);
+            }
+            OpKind::Cond(ops::CondOp {
+                reg_phi,
+                true_ops,
+                false_ops,
+                ..
+            }) => {
+                if let Some(reg_phi) = reg_phi {
+                    let output_capture = captures.get(reg_phi.output_reg);
 
-                    for (arg_reg, param_reg) in args.iter().zip(ops_fun.params.iter()) {
-                        captures.add(*arg_reg, callee_captures.get(*param_reg));
+                    // Propagate captures through the phi
+                    captures.add(reg_phi.true_result_reg, output_capture);
+                    captures.add(reg_phi.false_result_reg, output_capture);
+                }
+
+                for op in true_ops.iter().rev().chain(false_ops.iter().rev()) {
+                    self.add_op_captures(captures, ret_type, op);
+                }
+            }
+            OpKind::Call(reg, ops::CallOp { callee, args, .. }) => {
+                let return_capture = captures.get(*reg);
+
+                match callee {
+                    ops::Callee::StaticSymbol(ops::StaticSymbol { abi, .. }) => {
+                        add_static_symbol_call_captures(captures, return_capture, abi, args);
+                    }
+                    ops::Callee::PrivateFun(private_fun_id) => {
+                        let ops_fun = &self.private_funs[private_fun_id];
+                        let callee_captures = self.captures_for_private_fun_id(*private_fun_id);
+
+                        for (arg_reg, param_reg) in args.iter().zip(ops_fun.params.iter()) {
+                            captures.add(*arg_reg, callee_captures.get(*param_reg));
+                        }
+                    }
+                    ops::Callee::BoxedFunThunk(_) => {
+                        // We know nothing about the actual captures. We need to assume the worst.
+                        for arg_reg in args.iter() {
+                            captures.add(*arg_reg, CaptureKind::Always);
+                        }
+                    }
+                };
+            }
+            OpKind::MakeCallback(_, ops::MakeCallbackOp { callee, .. })
+            | OpKind::AllocBoxedFunThunk(_, ops::BoxFunThunkOp { callee, .. })
+            | OpKind::ConstBoxedFunThunk(_, ops::BoxFunThunkOp { callee, .. }) => {
+                // We don't actually care about these captures; we just pull them in for dependencies
+                if let ops::Callee::PrivateFun(private_fun_id) = callee {
+                    // If we're already recursing we'll only loop if we re-enter
+                    if !self.recursing_private_funs.contains(&private_fun_id) {
+                        self.captures_for_private_fun_id(*private_fun_id);
                     }
                 }
-                ops::Callee::BoxedFunThunk(_) => {
-                    // We know nothing about the actual captures. We need to assume the worst.
-                    for arg_reg in args.iter() {
-                        captures.add(*arg_reg, CaptureKind::Always);
-                    }
-                }
-            };
-        }
-        OpKind::MakeCallback(_, ops::MakeCallbackOp { callee, .. })
-        | OpKind::AllocBoxedFunThunk(_, ops::BoxFunThunkOp { callee, .. })
-        | OpKind::ConstBoxedFunThunk(_, ops::BoxFunThunkOp { callee, .. }) => {
-            // We don't actually care about these captures; we just pull them in for dependencies
-            if let ops::Callee::PrivateFun(private_fun_id) = callee {
-                captures_for_private_fun_id(private_funs, private_fun_captures, *private_fun_id);
             }
+            _ => {}
         }
-        _ => {}
+    }
+
+    fn captures_for_private_fun_id(&mut self, private_fun_id: ops::PrivateFunId) -> &Captures {
+        if self.private_fun_captures.contains_key(&private_fun_id) {
+            return &self.private_fun_captures[&private_fun_id];
+        }
+
+        self.recursing_private_funs.insert(private_fun_id);
+
+        let ops_fun = &self.private_funs[&private_fun_id];
+        let captures = self.calc_fun_captures(ops_fun);
+
+        self.recursing_private_funs.remove(&private_fun_id);
+        self.private_fun_captures
+            .entry(private_fun_id)
+            .or_insert(captures)
+    }
+
+    fn calc_fun_captures(&mut self, fun: &ops::Fun) -> Captures {
+        let mut captures = Captures::new();
+
+        for op in fun.ops.iter().rev() {
+            self.add_op_captures(&mut captures, &fun.abi.ret, op);
+        }
+
+        captures
     }
 }
 
-fn captures_for_private_fun_id<'pfc>(
-    private_funs: &HashMap<ops::PrivateFunId, ops::Fun>,
-    private_fun_captures: &'pfc mut HashMap<ops::PrivateFunId, Captures>,
-    private_fun_id: ops::PrivateFunId,
-) -> &'pfc Captures {
-    if private_fun_captures.contains_key(&private_fun_id) {
-        return &private_fun_captures[&private_fun_id];
-    }
-
-    let ops_fun = &private_funs[&private_fun_id];
-    let captures = calc_fun_captures(private_funs, private_fun_captures, ops_fun);
-
-    private_fun_captures
-        .entry(private_fun_id)
-        .or_insert(captures)
+pub struct ProgramCaptures {
+    pub entry_fun_captures: Captures,
+    pub private_fun_captures: HashMap<ops::PrivateFunId, Captures>,
 }
 
 /// Calculates the captured registers for the passed fun and every fun it references
-pub fn calc_fun_captures(
+pub fn calc_program_captures(
     private_funs: &HashMap<ops::PrivateFunId, ops::Fun>,
-    private_fun_captures: &mut HashMap<ops::PrivateFunId, Captures>,
-    fun: &ops::Fun,
-) -> Captures {
-    let mut captures = Captures::new();
+    entry_fun: &ops::Fun,
+) -> ProgramCaptures {
+    let mut ctx = ProgramCaptureCtx {
+        private_funs,
+        private_fun_captures: HashMap::new(),
 
-    for op in fun.ops.iter().rev() {
-        add_op_captures(
-            private_funs,
-            private_fun_captures,
-            &mut captures,
-            &fun.abi.ret,
-            op,
-        );
+        recursing_private_funs: HashSet::new(),
+    };
+
+    let entry_fun_captures = ctx.calc_fun_captures(entry_fun);
+
+    ProgramCaptures {
+        private_fun_captures: ctx.private_fun_captures,
+        entry_fun_captures,
     }
-
-    captures
 }
 
 #[cfg(test)]
@@ -244,7 +260,7 @@ mod test {
     use syntax::span::EMPTY_SPAN;
 
     fn calc_single_fun_captures(fun: &ops::Fun) -> Captures {
-        calc_fun_captures(&HashMap::new(), &mut HashMap::new(), fun)
+        calc_program_captures(&HashMap::new(), fun).entry_fun_captures
     }
 
     #[test]
