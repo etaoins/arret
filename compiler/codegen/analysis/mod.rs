@@ -6,7 +6,7 @@ use crate::mir::ops;
 use std::collections::HashMap;
 
 pub struct AnalysedMod<'of> {
-    private_funs: &'of [ops::Fun],
+    private_funs: &'of HashMap<ops::PrivateFunId, ops::Fun>,
     entry_fun: &'of ops::Fun,
 
     private_fun_captures: HashMap<ops::PrivateFunId, Captures>,
@@ -14,7 +14,10 @@ pub struct AnalysedMod<'of> {
 }
 
 impl<'of> AnalysedMod<'of> {
-    pub fn new(private_funs: &'of [ops::Fun], entry_fun: &'of ops::Fun) -> AnalysedMod<'of> {
+    pub fn new(
+        private_funs: &'of HashMap<ops::PrivateFunId, ops::Fun>,
+        entry_fun: &'of ops::Fun,
+    ) -> AnalysedMod<'of> {
         let mut private_fun_captures = HashMap::new();
         let entry_fun_captures =
             escape::calc_fun_captures(private_funs, &mut private_fun_captures, entry_fun);
@@ -29,7 +32,7 @@ impl<'of> AnalysedMod<'of> {
     }
 
     pub fn private_fun(&self, private_fun_id: ops::PrivateFunId) -> &'of ops::Fun {
-        &self.private_funs[private_fun_id.to_usize()]
+        &self.private_funs[&private_fun_id]
     }
 
     pub fn private_fun_captures(&self, private_fun_id: ops::PrivateFunId) -> &Captures {

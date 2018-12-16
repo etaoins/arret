@@ -43,7 +43,8 @@ pub struct EvalHirCtx {
     runtime_task: runtime::task::Task,
     global_values: HashMap<hir::VarId, Value>,
 
-    private_funs: Vec<ops::Fun>,
+    private_fun_id_counter: ops::PrivateFunIdCounter,
+    private_funs: HashMap<ops::PrivateFunId, ops::Fun>,
     rust_funs: HashMap<RustFunKey, ops::PrivateFunId>,
     arret_funs: HashMap<ArretFunKey, ops::PrivateFunId>,
 
@@ -73,7 +74,7 @@ struct BuiltCondBranch {
 
 pub struct BuiltProgram {
     pub main: ops::Fun,
-    pub private_funs: Vec<ops::Fun>,
+    pub private_funs: HashMap<ops::PrivateFunId, ops::Fun>,
 }
 
 impl BuiltProgram {
@@ -108,7 +109,8 @@ impl EvalHirCtx {
             runtime_task: runtime::task::Task::new(),
             global_values: HashMap::new(),
 
-            private_funs: vec![],
+            private_fun_id_counter: ops::PrivateFunIdCounter::new(),
+            private_funs: HashMap::new(),
             rust_funs: HashMap::new(),
             arret_funs: HashMap::new(),
 
@@ -347,9 +349,7 @@ impl EvalHirCtx {
 
             let wanted_abi = OpsABI::thunk_abi();
             let ops_fun = ops_for_rust_fun(self, EMPTY_SPAN, rust_fun, wanted_abi, true);
-            let address = self
-                .thunk_jit
-                .compile_fun(self.private_funs.as_slice(), &ops_fun);
+            let address = self.thunk_jit.compile_fun(&self.private_funs, &ops_fun);
 
             mem::transmute(address as usize)
         };
@@ -394,10 +394,12 @@ impl EvalHirCtx {
             return *private_fun_id;
         }
 
-        let ops_fun = ops_for_rust_fun(self, span, rust_fun, wanted_abi, has_rest);
-        let private_fun_id = ops::PrivateFunId::new_entry_id(&mut self.private_funs, ops_fun);
-
+        let private_fun_id = self.private_fun_id_counter.alloc();
         self.rust_funs.insert(rust_fun_key, private_fun_id);
+
+        let ops_fun = ops_for_rust_fun(self, span, rust_fun, wanted_abi, has_rest);
+        self.private_funs.insert(private_fun_id, ops_fun);
+
         private_fun_id
     }
 
@@ -838,9 +840,7 @@ impl EvalHirCtx {
             .ops_for_arret_fun(&arret_fun, wanted_abi, true)
             .expect("error during arret fun boxing");
 
-        let address = self
-            .thunk_jit
-            .compile_fun(self.private_funs.as_slice(), &ops_fun);
+        let address = self.thunk_jit.compile_fun(&self.private_funs, &ops_fun);
         let entry = unsafe { mem::transmute(address as usize) };
 
         let closure = boxed::NIL_INSTANCE.as_any_ref();
@@ -870,14 +870,16 @@ impl EvalHirCtx {
             return *private_fun_id;
         }
 
-        // TODO: What's the point of this error return?
+        // Allocate and track our private fun ID before we actually build the fun.
+        // This is to prevent a compile-time loop if this fun ends up recursing.
+        let private_fun_id = self.private_fun_id_counter.alloc();
+        self.arret_funs.insert(arret_fun_key, private_fun_id);
+
         let ops_fun = self
             .ops_for_arret_fun(arret_fun, wanted_abi, has_rest)
             .expect("error during arret fun boxing");
+        self.private_funs.insert(private_fun_id, ops_fun);
 
-        let private_fun_id = ops::PrivateFunId::new_entry_id(&mut self.private_funs, ops_fun);
-
-        self.arret_funs.insert(arret_fun_key, private_fun_id);
         private_fun_id
     }
 
@@ -1053,8 +1055,9 @@ impl EvalHirCtx {
             abitype::BoxedABIType::Any,
         );
 
+        let private_fun_id = self.private_fun_id_counter.alloc();
         let ops_fun = self.ops_for_callback_to_thunk_adapter(entry_point_abi.clone());
-        let private_fun_id = ops::PrivateFunId::new_entry_id(&mut self.private_funs, ops_fun);
+        self.private_funs.insert(private_fun_id, ops_fun);
 
         b.push_reg(
             span,

@@ -73,7 +73,7 @@ impl JITCtx {
         }
     }
 
-    pub fn compile_fun(&mut self, private_funs: &[ops::Fun], fun: &ops::Fun) -> u64 {
+    pub fn compile_fun(&mut self, private_funs: &HashMap<ops::PrivateFunId, ops::Fun>, fun: &ops::Fun) -> u64 {
         let tcx = &mut self.tcx;
 
         self.module_counter += 1;

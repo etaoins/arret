@@ -98,7 +98,7 @@ fn program_to_module(
     debug_source_loader: Option<&SourceLoader>,
 ) -> LLVMModuleRef {
     unsafe {
-        let analysed_mod = AnalysedMod::new(program.private_funs.as_slice(), &program.main);
+        let analysed_mod = AnalysedMod::new(&program.private_funs, &program.main);
 
         let mut mcx = ModCtx::new(
             tcx,

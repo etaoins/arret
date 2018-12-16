@@ -112,7 +112,7 @@ fn add_static_symbol_call_captures(
 }
 
 fn add_op_captures(
-    private_funs: &[ops::Fun],
+    private_funs: &HashMap<ops::PrivateFunId, ops::Fun>,
     private_fun_captures: &mut HashMap<ops::PrivateFunId, Captures>,
     captures: &mut Captures,
     ret_type: &RetABIType,
@@ -168,7 +168,7 @@ fn add_op_captures(
                     add_static_symbol_call_captures(captures, return_capture, abi, args);
                 }
                 ops::Callee::PrivateFun(private_fun_id) => {
-                    let ops_fun = &private_funs[private_fun_id.to_usize()];
+                    let ops_fun = &private_funs[private_fun_id];
                     let callee_captures = captures_for_private_fun_id(
                         private_funs,
                         private_fun_captures,
@@ -200,7 +200,7 @@ fn add_op_captures(
 }
 
 fn captures_for_private_fun_id<'pfc>(
-    private_funs: &[ops::Fun],
+    private_funs: &HashMap<ops::PrivateFunId, ops::Fun>,
     private_fun_captures: &'pfc mut HashMap<ops::PrivateFunId, Captures>,
     private_fun_id: ops::PrivateFunId,
 ) -> &'pfc Captures {
@@ -208,7 +208,7 @@ fn captures_for_private_fun_id<'pfc>(
         return &private_fun_captures[&private_fun_id];
     }
 
-    let ops_fun = &private_funs[private_fun_id.to_usize()];
+    let ops_fun = &private_funs[&private_fun_id];
     let captures = calc_fun_captures(private_funs, private_fun_captures, ops_fun);
 
     private_fun_captures
@@ -218,7 +218,7 @@ fn captures_for_private_fun_id<'pfc>(
 
 /// Calculates the captured registers for the passed fun and every fun it references
 pub fn calc_fun_captures(
-    private_funs: &[ops::Fun],
+    private_funs: &HashMap<ops::PrivateFunId, ops::Fun>,
     private_fun_captures: &mut HashMap<ops::PrivateFunId, Captures>,
     fun: &ops::Fun,
 ) -> Captures {
@@ -244,7 +244,7 @@ mod test {
     use syntax::span::EMPTY_SPAN;
 
     fn calc_single_fun_captures(fun: &ops::Fun) -> Captures {
-        calc_fun_captures(&[], &mut HashMap::new(), fun)
+        calc_fun_captures(&HashMap::new(), &mut HashMap::new(), fun)
     }
 
     #[test]
