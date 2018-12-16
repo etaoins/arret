@@ -2,11 +2,14 @@ use std::{error, fmt, result};
 
 use syntax::span::Span;
 
+use crate::mir::inliner::ApplyCookie;
 use crate::reporting::{Level, LocTrace, Reportable};
 
 #[derive(Debug, PartialEq)]
 pub enum ErrorKind {
     Panic(String),
+    /// Internal error used to abort a recursive function application when a loop is detected
+    AbortRecursion(ApplyCookie),
 }
 
 #[derive(Debug, PartialEq)]
@@ -57,6 +60,7 @@ impl Reportable for Error {
     fn message(&self) -> String {
         match self.kind {
             ErrorKind::Panic(ref message) => message.clone(),
+            ErrorKind::AbortRecursion(_) => panic!("abort recursion should never be user-visible"),
         }
     }
 

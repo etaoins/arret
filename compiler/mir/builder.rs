@@ -76,6 +76,11 @@ impl Builder {
         self.ops.push(Op::new(span, kind));
     }
 
+    /// Appends another Builder to the end of this Builder
+    pub fn append(&mut self, other: Builder) {
+        self.ops.extend(other.ops.into_iter());
+    }
+
     pub fn into_ops(self) -> Box<[Op]> {
         self.ops.into_boxed_slice()
     }

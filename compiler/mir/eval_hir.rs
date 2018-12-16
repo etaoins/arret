@@ -18,6 +18,7 @@ use crate::codegen;
 use crate::hir;
 use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::error::{Error, ErrorKind, Result};
+use crate::mir::inliner;
 use crate::mir::ops;
 use crate::mir::value;
 use crate::mir::{Expr, Value};
@@ -55,6 +56,8 @@ pub struct DefCtx {
     pvar_purities: HashMap<purity::PVarId, purity::Purity>,
     tvar_types: HashMap<ty::TVarId, ty::Ty<ty::Mono>>,
     local_values: HashMap<hir::VarId, Value>,
+
+    pub(super) apply_stack: inliner::ApplyStack,
 }
 
 impl DefCtx {
@@ -85,6 +88,8 @@ impl DefCtx {
             pvar_purities: HashMap::new(),
             tvar_types: HashMap::new(),
             local_values: HashMap::new(),
+
+            apply_stack: inliner::ApplyStack::new(),
         }
     }
 }
@@ -215,7 +220,25 @@ impl EvalHirCtx {
         }
     }
 
-    fn eval_arret_fun_app(
+    fn build_arret_fun_app(
+        &mut self,
+        b: &mut Builder,
+        span: Span,
+        arret_fun: &value::ArretFun,
+        arg_list_value: &Value,
+    ) -> Value {
+        use runtime::boxed::TypeTag;
+
+        // TODO: This is terrible codegen. This is just a placeholder to test recursion
+        let fun_reg_value = value::RegValue::new(
+            self.arret_fun_to_thunk_reg(b, span, arret_fun),
+            TypeTag::FunThunk.into(),
+        );
+
+        self.build_reg_fun_thunk_app(b, span, &fun_reg_value, arg_list_value)
+    }
+
+    fn inline_arret_fun_app(
         &mut self,
         dcx: &mut DefCtx,
         b: &mut Option<Builder>,
@@ -234,6 +257,41 @@ impl EvalHirCtx {
         );
 
         self.eval_expr(dcx, b, &fun_expr.body_expr)
+    }
+
+    fn eval_arret_fun_app(
+        &mut self,
+        dcx: &mut DefCtx,
+        b: &mut Option<Builder>,
+        span: Span,
+        arret_fun: &value::ArretFun,
+        arg_list_value: Value,
+    ) -> Result<Value> {
+        if let Some(outer_b) = b {
+            // `cond_inline` can call our closure and then change its mind. Use a separate builder
+            // instance so we don't append ops from a failed inline to the existing builder.
+            let mut inline_b = Some(Builder::new());
+
+            if let Some(value) = inliner::cond_inline(dcx, arret_fun, |dcx| {
+                self.inline_arret_fun_app(
+                    dcx,
+                    &mut inline_b,
+                    span,
+                    arret_fun,
+                    arg_list_value.clone(),
+                )
+            })? {
+                // We successfully did an inline application
+                outer_b.append(inline_b.unwrap());
+                Ok(value)
+            } else {
+                // We need to build an out-of-line application
+                Ok(self.build_arret_fun_app(outer_b, span, arret_fun, &arg_list_value))
+            }
+        } else {
+            // No builder; we need to inline
+            self.inline_arret_fun_app(dcx, b, span, arret_fun, arg_list_value)
+        }
     }
 
     fn eval_ty_pred_app(

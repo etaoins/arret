@@ -5,6 +5,7 @@ mod compact_abi_type;
 mod equality;
 pub mod error;
 pub mod eval_hir;
+mod inliner;
 mod intrinsic;
 pub(crate) mod ops;
 mod optimise;
