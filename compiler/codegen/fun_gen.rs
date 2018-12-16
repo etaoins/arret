@@ -45,27 +45,26 @@ impl Drop for FunCtx {
     }
 }
 
-pub(crate) fn gen_fun(
+pub(crate) fn fun_takes_task(
+    mcx: &mut ModCtx<'_, '_>,
+    fun: &ops::Fun,
+    alloc_plan: &[AllocAtom<'_>],
+) -> bool {
+    use crate::codegen::analysis;
+
+    // Use the allocation plan to determine if we need a task parameter
+    fun.abi.external_call_conv || analysis::needs_task::alloc_plan_needs_task(mcx, &alloc_plan)
+}
+
+pub(crate) fn declare_fun(
     tcx: &mut TargetCtx,
     mcx: &mut ModCtx<'_, '_>,
     fun: &ops::Fun,
-    captures: &Captures,
     alloc_plan: &[AllocAtom<'_>],
-) -> GenedFun {
-    use crate::codegen::analysis;
-    use crate::codegen::op_gen;
-    use runtime::abitype::{ABIType, ParamABIType, RetABIType};
+) -> LLVMValueRef {
+    use runtime::abitype::ParamABIType;
 
-    // Use the allocation plan to determine if we need a task parameter
-    let takes_task =
-        fun.abi.external_call_conv || analysis::needs_task::alloc_plan_needs_task(mcx, &alloc_plan);
-
-    // Determine which params we captured
-    let param_captures: Vec<CaptureKind> = fun
-        .params
-        .iter()
-        .map(|param_reg| captures.get(*param_reg))
-        .collect();
+    let takes_task = fun_takes_task(mcx, fun, alloc_plan);
 
     let gen_abi = GenABI {
         takes_task,
@@ -79,32 +78,52 @@ pub(crate) fn gen_fun(
         ret: fun.abi.ret.clone(),
     };
 
+    let function_type = tcx.fun_abi_to_llvm_type(&gen_abi);
+
+    let fun_symbol = fun
+        .source_name
+        .as_ref()
+        .map(|source_name| ffi::CString::new(source_name.as_bytes()).unwrap())
+        .unwrap_or_else(|| ffi::CString::new("anon_fun").unwrap());
+
+    unsafe { LLVMAddFunction(mcx.module, fun_symbol.as_ptr() as *const _, function_type) }
+}
+
+pub(crate) fn define_fun(
+    tcx: &mut TargetCtx,
+    mcx: &mut ModCtx<'_, '_>,
+    fun: &ops::Fun,
+    captures: &Captures,
+    alloc_plan: &[AllocAtom<'_>],
+    llvm_fun: LLVMValueRef,
+) -> GenedFun {
+    use crate::codegen::op_gen;
+    use runtime::abitype::{ABIType, RetABIType};
+
+    let takes_task = fun_takes_task(mcx, fun, alloc_plan);
+
+    // Determine which params we captured
+    let param_captures: Vec<CaptureKind> = fun
+        .params
+        .iter()
+        .map(|param_reg| captures.get(*param_reg))
+        .collect();
+
     unsafe {
         let builder = LLVMCreateBuilderInContext(tcx.llx);
-
-        let function_type = tcx.fun_abi_to_llvm_type(&gen_abi);
-
-        let fun_symbol = fun
-            .source_name
-            .as_ref()
-            .map(|source_name| ffi::CString::new(source_name.as_bytes()).unwrap())
-            .unwrap_or_else(|| ffi::CString::new("anon_fun").unwrap());
-
-        let function = LLVMAddFunction(mcx.module, fun_symbol.as_ptr() as *const _, function_type);
-
-        let bb = LLVMAppendBasicBlockInContext(tcx.llx, function, b"entry\0".as_ptr() as *const _);
+        let bb = LLVMAppendBasicBlockInContext(tcx.llx, llvm_fun, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
 
-        let mut fcx = FunCtx::new(function, builder);
+        let mut fcx = FunCtx::new(llvm_fun, builder);
 
         if takes_task {
-            fcx.current_task = Some(LLVMGetParam(function, 0));
+            fcx.current_task = Some(LLVMGetParam(llvm_fun, 0));
         }
 
         let llvm_params_offset = takes_task as usize;
         for (param_index, reg) in fun.params.iter().enumerate() {
             let llvm_offset = (llvm_params_offset + param_index) as u32;
-            fcx.regs.insert(*reg, LLVMGetParam(function, llvm_offset));
+            fcx.regs.insert(*reg, LLVMGetParam(llvm_fun, llvm_offset));
         }
 
         // Our task is an implicit parameter
@@ -113,7 +132,7 @@ pub(crate) fn gen_fun(
                 let no_capture = param_captures[param_index] == CaptureKind::Never;
 
                 tcx.add_boxed_param_attrs(
-                    function,
+                    llvm_fun,
                     (llvm_params_offset + param_index + 1) as u32,
                     no_capture,
                 );
@@ -121,17 +140,17 @@ pub(crate) fn gen_fun(
         }
 
         if let RetABIType::Inhabited(ABIType::Boxed(_)) = fun.abi.ret {
-            tcx.add_boxed_return_attrs(function);
+            tcx.add_boxed_return_attrs(llvm_fun);
         }
 
         for alloc_atom in alloc_plan {
             op_gen::gen_alloc_atom(tcx, mcx, &mut fcx, &alloc_atom);
         }
 
-        mcx.optimise_function(function);
+        mcx.optimise_function(llvm_fun);
 
         GenedFun {
-            llvm_value: function,
+            llvm_value: llvm_fun,
             takes_task,
         }
     }

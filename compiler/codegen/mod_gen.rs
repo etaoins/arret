@@ -92,7 +92,7 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
         tcx: &mut TargetCtx,
         private_fun_id: ops::PrivateFunId,
     ) -> &GenedFun {
-        use crate::codegen::fun_gen::gen_fun;
+        use crate::codegen::fun_gen::{declare_fun, define_fun};
 
         // TODO: This is a hack around lifetimes
         if self.gened_private_funs.contains_key(&private_fun_id) {
@@ -103,18 +103,19 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
         let captures = self.analysed_mod.private_fun_captures(private_fun_id);
         let alloc_plan = self.analysed_mod.private_fun_alloc_plan(private_fun_id);
 
-        let gened_fun = gen_fun(tcx, self, ops_fun, captures, alloc_plan);
+        let llvm_fun = declare_fun(tcx, self, ops_fun, alloc_plan);
+        let gened_fun = define_fun(tcx, self, ops_fun, captures, alloc_plan, llvm_fun);
 
         if let Some(ref mut di_builder) = self.di_builder {
             di_builder.add_function_debug_info(
                 ops_fun.span,
                 ops_fun.source_name.as_ref(),
-                gened_fun.llvm_value,
+                llvm_fun,
             );
         }
 
         unsafe {
-            LLVMSetLinkage(gened_fun.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
+            LLVMSetLinkage(llvm_fun, LLVMLinkage::LLVMPrivateLinkage);
         }
 
         self.gened_private_funs
@@ -123,21 +124,20 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
     }
 
     pub fn gened_entry_fun(&mut self, tcx: &mut TargetCtx) -> GenedFun {
-        let ops_fun = self.analysed_mod.entry_fun();
+        use crate::codegen::fun_gen::{declare_fun, define_fun};
 
-        let gened_fun = crate::codegen::fun_gen::gen_fun(
-            tcx,
-            self,
-            ops_fun,
-            self.analysed_mod.entry_fun_captures(),
-            self.analysed_mod.entry_fun_alloc_plan(),
-        );
+        let ops_fun = self.analysed_mod.entry_fun();
+        let captures = self.analysed_mod.entry_fun_captures();
+        let alloc_plan = self.analysed_mod.entry_fun_alloc_plan();
+
+        let llvm_fun = declare_fun(tcx, self, ops_fun, alloc_plan);
+        let gened_fun = define_fun(tcx, self, ops_fun, captures, alloc_plan, llvm_fun);
 
         if let Some(ref mut di_builder) = self.di_builder {
             di_builder.add_function_debug_info(
                 ops_fun.span,
                 ops_fun.source_name.as_ref(),
-                gened_fun.llvm_value,
+                llvm_fun,
             );
         }
 
