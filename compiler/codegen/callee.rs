@@ -90,19 +90,10 @@ pub fn gen_boxed_fun_thunk_entry_point(
     }
 }
 
-pub fn gen_private_fun_entry_point(
-    tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_, '_>,
-    private_fun_id: ops::PrivateFunId,
-) -> LLVMValueRef {
-    let gened_fun = mcx.gened_private_fun(tcx, private_fun_id);
-    gened_fun.llvm_value
-}
-
-pub fn callee_takes_task(mcx: &ModCtx<'_, '_>, callee: &ops::Callee) -> bool {
+pub fn callee_takes_task(callee: &ops::Callee) -> bool {
     match callee {
         ops::Callee::BoxedFunThunk(_) => true,
-        ops::Callee::PrivateFun(private_fun_id) => mcx.private_fun_takes_task(*private_fun_id),
+        ops::Callee::PrivateFun(_) => true,
         ops::Callee::StaticSymbol(ops::StaticSymbol { abi, .. }) => abi.takes_task,
     }
 }

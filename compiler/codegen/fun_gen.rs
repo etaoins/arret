@@ -6,33 +6,31 @@ use llvm_sys::prelude::*;
 
 use crate::mir::ops;
 
-use crate::codegen::alloc::AllocAtom;
 use crate::codegen::analysis::escape::{CaptureKind, Captures};
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
 use crate::codegen::GenABI;
 
-pub struct GenedFun {
-    pub llvm_value: LLVMValueRef,
-    pub takes_task: bool,
-}
-
 pub(crate) struct FunCtx {
     pub regs: HashMap<ops::RegId, LLVMValueRef>,
-    pub current_task: Option<LLVMValueRef>,
 
     pub function: LLVMValueRef,
     pub builder: LLVMBuilderRef,
+    pub current_task: LLVMValueRef,
 }
 
 impl FunCtx {
-    pub(crate) fn new(function: LLVMValueRef, builder: LLVMBuilderRef) -> FunCtx {
+    pub(crate) fn new(
+        function: LLVMValueRef,
+        builder: LLVMBuilderRef,
+        current_task: LLVMValueRef,
+    ) -> FunCtx {
         FunCtx {
             regs: HashMap::new(),
-            current_task: None,
 
             function,
             builder,
+            current_task,
         }
     }
 }
@@ -45,29 +43,15 @@ impl Drop for FunCtx {
     }
 }
 
-pub(crate) fn fun_takes_task(
-    mcx: &mut ModCtx<'_, '_>,
-    fun: &ops::Fun,
-    alloc_plan: &[AllocAtom<'_>],
-) -> bool {
-    use crate::codegen::analysis;
-
-    // Use the allocation plan to determine if we need a task parameter
-    fun.abi.external_call_conv || analysis::needs_task::alloc_plan_needs_task(mcx, &alloc_plan)
-}
-
 pub(crate) fn declare_fun(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_, '_>,
+    llvm_module: LLVMModuleRef,
     fun: &ops::Fun,
-    alloc_plan: &[AllocAtom<'_>],
 ) -> LLVMValueRef {
     use runtime::abitype::ParamABIType;
 
-    let takes_task = fun_takes_task(mcx, fun, alloc_plan);
-
     let gen_abi = GenABI {
-        takes_task,
+        takes_task: true,
         params: fun
             .abi
             .params
@@ -86,7 +70,7 @@ pub(crate) fn declare_fun(
         .map(|source_name| ffi::CString::new(source_name.as_bytes()).unwrap())
         .unwrap_or_else(|| ffi::CString::new("anon_fun").unwrap());
 
-    unsafe { LLVMAddFunction(mcx.module, fun_symbol.as_ptr() as *const _, function_type) }
+    unsafe { LLVMAddFunction(llvm_module, fun_symbol.as_ptr() as *const _, function_type) }
 }
 
 pub(crate) fn define_fun(
@@ -94,13 +78,13 @@ pub(crate) fn define_fun(
     mcx: &mut ModCtx<'_, '_>,
     fun: &ops::Fun,
     captures: &Captures,
-    alloc_plan: &[AllocAtom<'_>],
     llvm_fun: LLVMValueRef,
-) -> GenedFun {
+) {
+    use crate::codegen::alloc::plan::plan_allocs;
     use crate::codegen::op_gen;
     use runtime::abitype::{ABIType, RetABIType};
 
-    let takes_task = fun_takes_task(mcx, fun, alloc_plan);
+    let alloc_plan = plan_allocs(&captures, &fun.ops);
 
     // Determine which params we captured
     let param_captures: Vec<CaptureKind> = fun
@@ -114,15 +98,10 @@ pub(crate) fn define_fun(
         let bb = LLVMAppendBasicBlockInContext(tcx.llx, llvm_fun, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
 
-        let mut fcx = FunCtx::new(llvm_fun, builder);
+        let mut fcx = FunCtx::new(llvm_fun, builder, LLVMGetParam(llvm_fun, 0));
 
-        if takes_task {
-            fcx.current_task = Some(LLVMGetParam(llvm_fun, 0));
-        }
-
-        let llvm_params_offset = takes_task as usize;
         for (param_index, reg) in fun.params.iter().enumerate() {
-            let llvm_offset = (llvm_params_offset + param_index) as u32;
+            let llvm_offset = (1 + param_index) as u32;
             fcx.regs.insert(*reg, LLVMGetParam(llvm_fun, llvm_offset));
         }
 
@@ -131,11 +110,7 @@ pub(crate) fn define_fun(
             if let ABIType::Boxed(_) = param_abi_type {
                 let no_capture = param_captures[param_index] == CaptureKind::Never;
 
-                tcx.add_boxed_param_attrs(
-                    llvm_fun,
-                    (llvm_params_offset + param_index + 1) as u32,
-                    no_capture,
-                );
+                tcx.add_boxed_param_attrs(llvm_fun, (1 + param_index + 1) as u32, no_capture);
             }
         }
 
@@ -148,10 +123,5 @@ pub(crate) fn define_fun(
         }
 
         mcx.optimise_function(llvm_fun);
-
-        GenedFun {
-            llvm_value: llvm_fun,
-            takes_task,
-        }
     }
 }

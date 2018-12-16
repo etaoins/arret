@@ -73,7 +73,11 @@ impl JITCtx {
         }
     }
 
-    pub fn compile_fun(&mut self, private_funs: &HashMap<ops::PrivateFunId, ops::Fun>, fun: &ops::Fun) -> u64 {
+    pub fn compile_fun(
+        &mut self,
+        private_funs: &HashMap<ops::PrivateFunId, ops::Fun>,
+        fun: &ops::Fun,
+    ) -> u64 {
         let tcx = &mut self.tcx;
 
         self.module_counter += 1;
@@ -93,7 +97,7 @@ impl JITCtx {
         let mut mcx = ModCtx::new(tcx, module_name_cstring.as_ref(), &analysed_mod, None);
 
         unsafe {
-            let llvm_function = mcx.gened_entry_fun(tcx).llvm_value;
+            let llvm_function = mcx.llvm_entry_fun(tcx);
 
             // We need to take ownership before we tranfer the module to ORC
             let mut function_name_len: usize = 0;

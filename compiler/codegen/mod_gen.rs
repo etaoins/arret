@@ -10,7 +10,6 @@ use llvm_sys::LLVMLinkage;
 
 use crate::codegen::analysis::AnalysedMod;
 use crate::codegen::debug_info::DebugInfoBuilder;
-use crate::codegen::fun_gen::GenedFun;
 use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
 use crate::source::SourceLoader;
@@ -20,7 +19,7 @@ pub struct ModCtx<'am, 'sl> {
 
     analysed_mod: &'am AnalysedMod<'am>,
     di_builder: Option<DebugInfoBuilder<'sl>>,
-    gened_private_funs: HashMap<ops::PrivateFunId, GenedFun>,
+    llvm_private_funs: HashMap<ops::PrivateFunId, LLVMValueRef>,
 
     function_pass_manager: LLVMPassManagerRef,
 }
@@ -70,41 +69,30 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
 
                 analysed_mod,
                 di_builder,
-                gened_private_funs: HashMap::new(),
+                llvm_private_funs: HashMap::new(),
 
                 function_pass_manager,
             }
         }
     }
 
-    /// Determines if a private fun needs a task parameter
-    pub fn private_fun_takes_task(&self, private_fun_id: ops::PrivateFunId) -> bool {
-        use crate::codegen::analysis;
-
-        let fun = self.analysed_mod.private_fun(private_fun_id);
-        let alloc_plan = self.analysed_mod.private_fun_alloc_plan(private_fun_id);
-
-        fun.abi.external_call_conv || analysis::needs_task::alloc_plan_needs_task(self, &alloc_plan)
-    }
-
-    pub fn gened_private_fun(
+    pub fn llvm_private_fun(
         &mut self,
         tcx: &mut TargetCtx,
         private_fun_id: ops::PrivateFunId,
-    ) -> &GenedFun {
+    ) -> LLVMValueRef {
         use crate::codegen::fun_gen::{declare_fun, define_fun};
 
         // TODO: This is a hack around lifetimes
-        if self.gened_private_funs.contains_key(&private_fun_id) {
-            return &self.gened_private_funs[&private_fun_id];
+        if self.llvm_private_funs.contains_key(&private_fun_id) {
+            return self.llvm_private_funs[&private_fun_id];
         }
 
         let ops_fun = self.analysed_mod.private_fun(private_fun_id);
         let captures = self.analysed_mod.private_fun_captures(private_fun_id);
-        let alloc_plan = self.analysed_mod.private_fun_alloc_plan(private_fun_id);
 
-        let llvm_fun = declare_fun(tcx, self, ops_fun, alloc_plan);
-        let gened_fun = define_fun(tcx, self, ops_fun, captures, alloc_plan, llvm_fun);
+        let llvm_fun = declare_fun(tcx, self.module, ops_fun);
+        define_fun(tcx, self, ops_fun, captures, llvm_fun);
 
         if let Some(ref mut di_builder) = self.di_builder {
             di_builder.add_function_debug_info(
@@ -118,20 +106,18 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
             LLVMSetLinkage(llvm_fun, LLVMLinkage::LLVMPrivateLinkage);
         }
 
-        self.gened_private_funs
-            .entry(private_fun_id)
-            .or_insert(gened_fun)
+        self.llvm_private_funs.insert(private_fun_id, llvm_fun);
+        llvm_fun
     }
 
-    pub fn gened_entry_fun(&mut self, tcx: &mut TargetCtx) -> GenedFun {
+    pub fn llvm_entry_fun(&mut self, tcx: &mut TargetCtx) -> LLVMValueRef {
         use crate::codegen::fun_gen::{declare_fun, define_fun};
 
         let ops_fun = self.analysed_mod.entry_fun();
         let captures = self.analysed_mod.entry_fun_captures();
-        let alloc_plan = self.analysed_mod.entry_fun_alloc_plan();
 
-        let llvm_fun = declare_fun(tcx, self, ops_fun, alloc_plan);
-        let gened_fun = define_fun(tcx, self, ops_fun, captures, alloc_plan, llvm_fun);
+        let llvm_fun = declare_fun(tcx, self.module, ops_fun);
+        define_fun(tcx, self, ops_fun, captures, llvm_fun);
 
         if let Some(ref mut di_builder) = self.di_builder {
             di_builder.add_function_debug_info(
@@ -141,7 +127,7 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
             );
         }
 
-        gened_fun
+        llvm_fun
     }
 
     pub fn get_global_or_insert<F>(

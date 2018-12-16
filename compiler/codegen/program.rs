@@ -108,8 +108,8 @@ fn program_to_module(
         );
 
         // And now the Arret main main
-        let arret_main = mcx.gened_entry_fun(tcx);
-        LLVMSetLinkage(arret_main.llvm_value, LLVMLinkage::LLVMPrivateLinkage);
+        let llvm_arret_main = mcx.llvm_entry_fun(tcx);
+        LLVMSetLinkage(llvm_arret_main, LLVMLinkage::LLVMPrivateLinkage);
 
         // Declare our C main
         let builder = LLVMCreateBuilderInContext(tcx.llx);
@@ -126,43 +126,31 @@ fn program_to_module(
         let bb = LLVMAppendBasicBlockInContext(tcx.llx, c_main, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
 
-        if arret_main.takes_task {
-            // Declare arret_runtime_launch_task
-            let launch_task_llvm_arg_types =
-                &mut [LLVMPointerType(task_receiver_llvm_type(tcx), 0)];
+        // Declare arret_runtime_launch_task
+        let launch_task_llvm_arg_types = &mut [LLVMPointerType(task_receiver_llvm_type(tcx), 0)];
 
-            let launch_task_llvm_type = LLVMFunctionType(
-                LLVMVoidTypeInContext(tcx.llx),
-                launch_task_llvm_arg_types.as_mut_ptr(),
-                launch_task_llvm_arg_types.len() as u32,
-                0,
-            );
+        let launch_task_llvm_type = LLVMFunctionType(
+            LLVMVoidTypeInContext(tcx.llx),
+            launch_task_llvm_arg_types.as_mut_ptr(),
+            launch_task_llvm_arg_types.len() as u32,
+            0,
+        );
 
-            // And launch the task from C main
-            let launch_task_llvm_fun = LLVMAddFunction(
-                mcx.module,
-                "arret_runtime_launch_task\0".as_ptr() as *const _,
-                launch_task_llvm_type,
-            );
+        // And launch the task from C main
+        let launch_task_llvm_fun = LLVMAddFunction(
+            mcx.module,
+            "arret_runtime_launch_task\0".as_ptr() as *const _,
+            launch_task_llvm_type,
+        );
 
-            let launch_task_llvm_args = &mut [arret_main.llvm_value];
-            LLVMBuildCall(
-                builder,
-                launch_task_llvm_fun,
-                launch_task_llvm_args.as_mut_ptr(),
-                launch_task_llvm_args.len() as u32,
-                b"\0".as_ptr() as *const _,
-            );
-        } else {
-            // Call the function directly from the C main without constructing a task
-            LLVMBuildCall(
-                builder,
-                arret_main.llvm_value,
-                ptr::null_mut() as *mut _,
-                0,
-                b"\0".as_ptr() as *const _,
-            );
-        }
+        let launch_task_llvm_args = &mut [llvm_arret_main];
+        LLVMBuildCall(
+            builder,
+            launch_task_llvm_fun,
+            launch_task_llvm_args.as_mut_ptr(),
+            launch_task_llvm_args.len() as u32,
+            b"\0".as_ptr() as *const _,
+        );
 
         LLVMBuildRet(builder, LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), 0, 0));
 

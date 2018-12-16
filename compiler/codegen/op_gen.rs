@@ -117,9 +117,9 @@ fn gen_op(
                 use crate::codegen::callee;
 
                 let llvm_fun = gen_callee_entry_point(tcx, mcx, fcx, callee);
-                let takes_task = callee::callee_takes_task(mcx, callee);
+                let takes_task = callee::callee_takes_task(callee);
 
-                let task_reg_iter = fcx.current_task.filter(|_| takes_task).into_iter();
+                let task_reg_iter = Some(fcx.current_task).filter(|_| takes_task).into_iter();
                 let mut llvm_args = task_reg_iter
                     .chain(args.iter().map(|param_reg| fcx.regs[&param_reg]))
                     .collect::<Vec<LLVMValueRef>>();
@@ -526,9 +526,7 @@ fn gen_callee_entry_point(
     use crate::codegen::callee::*;
 
     match callee {
-        Callee::PrivateFun(private_fun_id) => {
-            gen_private_fun_entry_point(tcx, mcx, *private_fun_id)
-        }
+        Callee::PrivateFun(private_fun_id) => mcx.llvm_private_fun(tcx, *private_fun_id),
         Callee::BoxedFunThunk(fun_thunk_reg) => {
             let llvm_fun_thunk = fcx.regs[fun_thunk_reg];
             gen_boxed_fun_thunk_entry_point(fcx.builder, llvm_fun_thunk)
@@ -545,11 +543,13 @@ pub(crate) fn gen_alloc_atom(
     fcx: &mut FunCtx,
     alloc_atom: &alloc::AllocAtom<'_>,
 ) {
-    let mut active_alloc = if let Some(llvm_task) = fcx.current_task {
-        alloc::core::gen_active_alloc_for_atom(tcx, mcx, fcx.builder, llvm_task, &alloc_atom)
-    } else {
-        alloc::ActiveAlloc::empty()
-    };
+    let mut active_alloc = alloc::core::gen_active_alloc_for_atom(
+        tcx,
+        mcx,
+        fcx.builder,
+        fcx.current_task,
+        &alloc_atom,
+    );
 
     for (op_index, op) in alloc_atom.ops().iter().enumerate() {
         gen_op(tcx, mcx, fcx, alloc_atom, &mut active_alloc, op_index, &op);
