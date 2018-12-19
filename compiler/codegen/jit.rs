@@ -104,7 +104,7 @@ impl JITCtx {
             let function_name_ptr = LLVMGetValueName2(llvm_function, &mut function_name_len);
             let function_name = ffi::CStr::from_ptr(function_name_ptr).to_owned();
 
-            let module = mcx.into_llvm_module();
+            let module = mcx.into_llvm_module(tcx);
             tcx.optimise_module(module);
 
             let mut orc_module: LLVMOrcModuleHandle = 0;

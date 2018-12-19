@@ -155,7 +155,7 @@ fn program_to_module(
         LLVMBuildRet(builder, LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), 0, 0));
 
         LLVMDisposeBuilder(builder);
-        mcx.into_llvm_module()
+        mcx.into_llvm_module(tcx)
     }
 }
 

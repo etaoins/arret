@@ -526,7 +526,7 @@ fn gen_callee_entry_point(
     use crate::codegen::callee::*;
 
     match callee {
-        Callee::PrivateFun(private_fun_id) => mcx.llvm_private_fun(tcx, *private_fun_id),
+        Callee::PrivateFun(private_fun_id) => mcx.llvm_private_fun(*private_fun_id),
         Callee::BoxedFunThunk(fun_thunk_reg) => {
             let llvm_fun_thunk = fcx.regs[fun_thunk_reg];
             gen_boxed_fun_thunk_entry_point(fcx.builder, llvm_fun_thunk)

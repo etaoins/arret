@@ -49,8 +49,8 @@ impl<'of> AnalysedMod<'of> {
         }
     }
 
-    pub fn private_fun(&self, private_fun_id: ops::PrivateFunId) -> &AnalysedFun<'of> {
-        &self.private_funs[&private_fun_id]
+    pub fn private_funs(&self) -> impl Iterator<Item = (&ops::PrivateFunId, &AnalysedFun<'of>)> {
+        self.private_funs.iter()
     }
 
     pub fn entry_fun(&self) -> &AnalysedFun<'of> {
