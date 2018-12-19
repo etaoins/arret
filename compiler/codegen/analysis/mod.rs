@@ -6,11 +6,13 @@ use crate::codegen::analysis::escape::Captures;
 use crate::mir::ops;
 
 pub struct AnalysedMod<'of> {
-    private_funs: &'of HashMap<ops::PrivateFunId, ops::Fun>,
-    entry_fun: &'of ops::Fun,
+    private_funs: HashMap<ops::PrivateFunId, AnalysedFun<'of>>,
+    entry_fun: AnalysedFun<'of>,
+}
 
-    private_fun_captures: HashMap<ops::PrivateFunId, Captures>,
-    entry_fun_captures: Captures,
+pub struct AnalysedFun<'of> {
+    pub ops_fun: &'of ops::Fun,
+    pub captures: Captures,
 }
 
 impl<'of> AnalysedMod<'of> {
@@ -25,28 +27,33 @@ impl<'of> AnalysedMod<'of> {
             entry_fun_captures,
         } = escape::calc_program_captures(private_funs, entry_fun);
 
+        let private_funs = private_fun_captures
+            .into_iter()
+            .map(|(private_fun_id, captures)| {
+                (
+                    private_fun_id,
+                    AnalysedFun {
+                        ops_fun: &private_funs[&private_fun_id],
+                        captures,
+                    },
+                )
+            })
+            .collect();
+
         AnalysedMod {
             private_funs,
-            entry_fun,
-
-            private_fun_captures,
-            entry_fun_captures,
+            entry_fun: AnalysedFun {
+                ops_fun: entry_fun,
+                captures: entry_fun_captures,
+            },
         }
     }
 
-    pub fn private_fun(&self, private_fun_id: ops::PrivateFunId) -> &'of ops::Fun {
+    pub fn private_fun(&self, private_fun_id: ops::PrivateFunId) -> &AnalysedFun<'of> {
         &self.private_funs[&private_fun_id]
     }
 
-    pub fn private_fun_captures(&self, private_fun_id: ops::PrivateFunId) -> &Captures {
-        &self.private_fun_captures[&private_fun_id]
-    }
-
-    pub fn entry_fun(&self) -> &'of ops::Fun {
-        self.entry_fun
-    }
-
-    pub fn entry_fun_captures(&self) -> &Captures {
-        &self.entry_fun_captures
+    pub fn entry_fun(&self) -> &AnalysedFun<'of> {
+        &self.entry_fun
     }
 }

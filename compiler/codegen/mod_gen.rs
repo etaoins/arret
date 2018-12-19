@@ -59,7 +59,7 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
                 DebugInfoBuilder::new(
                     source_loader,
                     tcx.optimising(),
-                    analysed_mod.entry_fun().span,
+                    analysed_mod.entry_fun().ops_fun.span,
                     module,
                 )
             });
@@ -81,6 +81,7 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
         tcx: &mut TargetCtx,
         private_fun_id: ops::PrivateFunId,
     ) -> LLVMValueRef {
+        use crate::codegen::analysis::AnalysedFun;
         use crate::codegen::fun_gen::{declare_fun, define_fun};
 
         // TODO: This is a hack around lifetimes
@@ -88,8 +89,7 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
             return self.llvm_private_funs[&private_fun_id];
         }
 
-        let ops_fun = self.analysed_mod.private_fun(private_fun_id);
-        let captures = self.analysed_mod.private_fun_captures(private_fun_id);
+        let AnalysedFun { ops_fun, captures } = self.analysed_mod.private_fun(private_fun_id);
 
         let llvm_fun = declare_fun(tcx, self.module, ops_fun);
         define_fun(tcx, self, ops_fun, captures, llvm_fun);
@@ -111,10 +111,10 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
     }
 
     pub fn llvm_entry_fun(&mut self, tcx: &mut TargetCtx) -> LLVMValueRef {
+        use crate::codegen::analysis::AnalysedFun;
         use crate::codegen::fun_gen::{declare_fun, define_fun};
 
-        let ops_fun = self.analysed_mod.entry_fun();
-        let captures = self.analysed_mod.entry_fun_captures();
+        let AnalysedFun { ops_fun, captures } = self.analysed_mod.entry_fun();
 
         let llvm_fun = declare_fun(tcx, self.module, ops_fun);
         define_fun(tcx, self, ops_fun, captures, llvm_fun);
