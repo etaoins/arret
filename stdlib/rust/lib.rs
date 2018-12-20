@@ -49,6 +49,7 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "println!" => stdlib_println,
     "exit!" => stdlib_exit,
     "cons" => stdlib_cons,
+    "concat" => stdlib_concat,
     "black-box" => stdlib_black_box,
     "black-box!" => stdlib_black_box_impure
 });

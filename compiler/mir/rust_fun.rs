@@ -20,15 +20,18 @@ pub fn build_rust_fun_app(
     use crate::mir::ops::*;
     use crate::mir::value::build_reg::value_to_reg;
     use crate::mir::value::from_reg::reg_to_value;
-    use runtime::abitype::{BoxedABIType, RetABIType};
+    use runtime::abitype::RetABIType;
 
     let mut list_iter = arg_list_value.into_list_iter();
     let mut arg_regs = vec![];
 
     let mut rust_fixed_iter = rust_fun.params().iter();
-    if rust_fun.has_rest() {
-        rust_fixed_iter.next_back();
-    }
+
+    let rest_abi_type = if rust_fun.has_rest() {
+        rust_fixed_iter.next_back()
+    } else {
+        None
+    };
 
     for param_abi_type in rust_fixed_iter {
         let fixed_value = list_iter.next_unchecked(b, span);
@@ -36,13 +39,13 @@ pub fn build_rust_fun_app(
         arg_regs.push(reg_id.into());
     }
 
-    if rust_fun.has_rest() {
+    if let Some(rest_abi_type) = rest_abi_type {
         let reg_id = value_to_reg(
             ehx,
             b,
             span,
             &list_iter.into_rest(),
-            &BoxedABIType::List(&BoxedABIType::Any).into(),
+            &rest_abi_type.abi_type,
         );
         arg_regs.push(reg_id.into());
     };

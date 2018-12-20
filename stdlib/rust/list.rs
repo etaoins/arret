@@ -50,3 +50,22 @@ pub fn stdlib_filter(
 
     boxed::List::new(task, output_vec.into_iter())
 }
+
+#[rfi_derive::rust_fun("(All #{T} (Listof T) ... -> (Listof T))")]
+pub fn stdlib_concat(
+    task: &mut Task,
+    lists: Gc<boxed::List<boxed::List<boxed::Any>>>,
+) -> Gc<boxed::List<boxed::Any>> {
+    if lists.is_empty() {
+        return boxed::List::empty();
+    }
+
+    let mut head_values = vec![];
+    let mut list_iter = lists.iter();
+    while list_iter.len() > 1 {
+        head_values.extend(list_iter.next().unwrap().iter());
+    }
+
+    // We don't need to rebuild our tail
+    boxed::List::new_with_tail(task, head_values.into_iter(), list_iter.next().unwrap())
+}
