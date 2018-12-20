@@ -983,7 +983,7 @@ impl EvalHirCtx {
 
         let mut some_b = Some(b);
         let result_value =
-            self.eval_arret_fun_app(&mut dcx, &mut some_b, span, arret_fun, arg_list_value)?;
+            self.inline_arret_fun_app(&mut dcx, &mut some_b, span, arret_fun, arg_list_value)?;
         let mut b = some_b.unwrap();
 
         build_ret_value(self, &mut b, span, &result_value, &wanted_abi.ret);
