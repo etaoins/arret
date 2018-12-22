@@ -370,10 +370,12 @@ fn purity_ref_is_a(sub: &purity::Poly, parent: &purity::Poly) -> Result {
 }
 
 fn inst_polymorphic_fun(tvars: &ty::TVars, sub_fun: &ty::Fun, par_ret: &ty::Poly) -> ty::Fun {
-    let mut select_ctx = ty::select::SelectCtx::new(tvars, sub_fun.pvars(), sub_fun.tvars());
+    let mut stx = ty::select::SelectCtx::new(tvars, sub_fun.pvars(), sub_fun.tvars());
 
-    select_ctx.add_evidence(sub_fun.ret(), par_ret);
-    ty::subst::inst_fun_selection(&select_ctx, sub_fun)
+    stx.add_evidence(sub_fun.ret(), par_ret);
+    let pta = stx.into_poly_ty_args();
+
+    ty::subst::subst_poly_fun(&pta, sub_fun)
 }
 
 pub fn ty_ref_is_a<S: Isable>(tvars: &ty::TVars, sub: &S, parent: &S) -> Result {

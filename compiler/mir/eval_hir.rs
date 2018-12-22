@@ -24,6 +24,7 @@ use crate::mir::value;
 use crate::mir::{Expr, Value};
 use crate::ty;
 use crate::ty::purity;
+use crate::ty::ty_args::MonoTyArgs;
 
 #[derive(PartialEq, Eq, Hash)]
 struct RustFunKey {
@@ -54,8 +55,7 @@ pub struct EvalHirCtx {
 }
 
 pub struct DefCtx {
-    pvar_purities: HashMap<purity::PVarId, purity::Purity>,
-    tvar_types: HashMap<ty::TVarId, ty::Ty<ty::Mono>>,
+    mono_ty_args: MonoTyArgs,
     local_values: HashMap<hir::VarId, Value>,
 
     pub(super) apply_stack: inliner::ApplyStack,
@@ -63,7 +63,7 @@ pub struct DefCtx {
 
 impl DefCtx {
     pub fn monomorphise(&self, poly: &ty::Poly) -> ty::Mono {
-        ty::subst::monomorphise(&self.pvar_purities, &self.tvar_types, poly)
+        ty::subst::monomorphise(&self.mono_ty_args, poly)
     }
 }
 
@@ -86,8 +86,7 @@ impl BuiltProgram {
 impl DefCtx {
     pub fn new() -> DefCtx {
         DefCtx {
-            pvar_purities: HashMap::new(),
-            tvar_types: HashMap::new(),
+            mono_ty_args: MonoTyArgs::empty(),
             local_values: HashMap::new(),
 
             apply_stack: inliner::ApplyStack::new(),

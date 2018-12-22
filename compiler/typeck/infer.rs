@@ -831,6 +831,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         // The context used to select the types for our function parameters. This includes the
         // evidence gathered when visiting non-function parameters.
         let mut fun_param_stx = non_fun_param_stx.clone();
+        let non_fun_param_pta = non_fun_param_stx.into_poly_ty_args();
 
         // Iterate over our parameter type to feed type information in to the arguments
         let mut param_iter = ListIterator::new(fun_type.params());
@@ -879,7 +880,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             expr,
         } in non_fun_fixed_args
         {
-            let wanted_arg_type = ty::subst::inst_ty_selection(&non_fun_param_stx, param_type);
+            let wanted_arg_type = ty::subst::subst_poly(&non_fun_param_pta, param_type);
             let fixed_arg_node = self.visit_expr(fcx, pv, &wanted_arg_type, expr)?;
 
             is_divergent = is_divergent || fixed_arg_node.is_divergent();
@@ -893,7 +894,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         // Visit our rest arg next so it's grouped in the first phase
         let inferred_rest_arg_expr = if let Some(rest_arg_expr) = rest_arg_expr {
             let tail_type = ty::Ty::List(param_iter.tail_type()).into_poly();
-            let wanted_tail_type = ty::subst::inst_ty_selection(&non_fun_param_stx, &tail_type);
+            let wanted_tail_type = ty::subst::subst_poly(&non_fun_param_pta, &tail_type);
             let rest_arg_node = self.visit_expr(fcx, pv, &wanted_tail_type, rest_arg_expr)?;
 
             is_divergent = is_divergent || rest_arg_node.is_divergent();
@@ -912,13 +913,14 @@ impl<'types> RecursiveDefsCtx<'types> {
             None
         };
 
+        let fun_param_pta = fun_param_stx.into_poly_ty_args();
         for PendingFixedArg {
             index,
             param_type,
             expr,
         } in fun_fixed_args
         {
-            let wanted_arg_type = ty::subst::inst_ty_selection(&fun_param_stx, param_type);
+            let wanted_arg_type = ty::subst::subst_poly(&fun_param_pta, param_type);
             let fixed_arg_node = self.visit_expr(fcx, pv, &wanted_arg_type, expr)?;
 
             is_divergent = is_divergent || fixed_arg_node.is_divergent();
@@ -930,14 +932,15 @@ impl<'types> RecursiveDefsCtx<'types> {
         inferred_fixed_arg_exprs.sort_unstable_by_key(|k| k.0);
         let inferred_fixed_arg_exprs = inferred_fixed_arg_exprs.into_iter().map(|e| e.1).collect();
 
+        let ret_pta = ret_stx.into_poly_ty_args();
         let ret_type = if is_divergent {
             ty::Ty::never().into_poly()
         } else {
-            ty::subst::inst_ty_selection(&ret_stx, fun_type.ret())
+            ty::subst::subst_poly(&ret_pta, fun_type.ret())
         };
 
         // Keep track of the purity from the application
-        let app_purity = ty::subst::inst_purity_selection(&ret_stx, fun_type.purity());
+        let app_purity = ty::subst::subst_purity(&ret_pta, fun_type.purity());
         unify_app_purity(pv, &app_purity);
 
         ensure_is_a(fcx, span, &ret_type, required_type)?;

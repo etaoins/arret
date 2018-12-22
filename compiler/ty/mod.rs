@@ -10,6 +10,7 @@ pub mod resolve;
 pub mod select;
 pub mod subst;
 pub mod subtract;
+pub mod ty_args;
 pub mod unify;
 
 use std::collections::BTreeMap;

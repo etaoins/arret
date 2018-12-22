@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-
 use crate::ty;
 use crate::ty::purity;
-use crate::ty::purity::Purity;
+use crate::ty::ty_args::{MonoTyArgs, PolyTyArgs};
 
 fn subst_ty_ref_slice<S>(stx: &S, inputs: &[S::Input]) -> Box<[S::Output]>
 where
@@ -92,7 +90,7 @@ trait Substitution {
     fn as_poly_subst(&self) -> &Self::AsPolySubst;
 }
 
-impl<'tvars> Substitution for ty::select::SelectCtx<'tvars> {
+impl<'tvars> Substitution for PolyTyArgs {
     type Input = ty::Poly;
     type Output = ty::Poly;
     type AsPolySubst = Self;
@@ -101,8 +99,8 @@ impl<'tvars> Substitution for ty::select::SelectCtx<'tvars> {
         match poly {
             purity::Poly::Fixed(_) => poly.clone(),
             purity::Poly::Var(pvar_id) => {
-                if let Some(selected) = self.pvar_purity(*pvar_id) {
-                    selected
+                if let Some(selected) = self.get_pvar_purity(*pvar_id) {
+                    selected.clone()
                 } else {
                     poly.clone()
                 }
@@ -114,8 +112,8 @@ impl<'tvars> Substitution for ty::select::SelectCtx<'tvars> {
         match poly {
             ty::Poly::Fixed(fixed) => subst_ty(self, fixed).into_poly(),
             ty::Poly::Var(tvar_id) => {
-                if let Some(selected) = self.tvar_type(*tvar_id) {
-                    selected
+                if let Some(selected) = self.get_tvar_type(*tvar_id) {
+                    selected.clone()
                 } else {
                     poly.clone()
                 }
@@ -178,58 +176,49 @@ impl Substitution for MonoToPoly {
     }
 }
 
-struct Monomorphise<'vars> {
-    pvar_purities: &'vars HashMap<purity::PVarId, Purity>,
-    tvar_types: &'vars HashMap<ty::TVarId, ty::Ty<ty::Mono>>,
-    partial: PartialMonomorphise<'vars>,
+struct Monomorphise<'tyargs> {
+    mono_ty_args: &'tyargs MonoTyArgs,
+    partial: PartialMonomorphise<'tyargs>,
 }
 
-impl<'vars> Monomorphise<'vars> {
-    fn new(
-        pvar_purities: &'vars HashMap<purity::PVarId, Purity>,
-        tvar_types: &'vars HashMap<ty::TVarId, ty::Ty<ty::Mono>>,
-    ) -> Monomorphise<'vars> {
+impl<'tyargs> Monomorphise<'tyargs> {
+    fn new(mta: &'tyargs MonoTyArgs) -> Monomorphise<'tyargs> {
         Monomorphise {
-            pvar_purities,
-            tvar_types,
-            partial: PartialMonomorphise {
-                pvar_purities,
-                tvar_types,
-            },
+            mono_ty_args: mta,
+            partial: PartialMonomorphise { mono_ty_args: mta },
         }
     }
 }
 
-impl<'vars> Substitution for Monomorphise<'vars> {
+impl<'tyargs> Substitution for Monomorphise<'tyargs> {
     type Input = ty::Poly;
     type Output = ty::Mono;
-    type AsPolySubst = PartialMonomorphise<'vars>;
+    type AsPolySubst = PartialMonomorphise<'tyargs>;
 
     fn subst_purity_ref(&self, poly: &purity::Poly) -> purity::Poly {
         match poly {
             purity::Poly::Fixed(_) => poly.clone(),
-            purity::Poly::Var(pvar_id) => self.pvar_purities[pvar_id].into_poly(),
+            purity::Poly::Var(pvar_id) => self.mono_ty_args.pvar_purity(*pvar_id).into_poly(),
         }
     }
 
     fn subst_ty_ref(&self, poly: &ty::Poly) -> ty::Mono {
         match poly {
             ty::Poly::Fixed(fixed) => subst_ty(self, fixed).clone().into_mono(),
-            ty::Poly::Var(tvar_id) => self.tvar_types[tvar_id].clone().into_mono(),
+            ty::Poly::Var(tvar_id) => self.mono_ty_args.tvar_type(*tvar_id).clone().into_mono(),
         }
     }
 
-    fn as_poly_subst(&self) -> &PartialMonomorphise<'vars> {
+    fn as_poly_subst(&self) -> &PartialMonomorphise<'tyargs> {
         &self.partial
     }
 }
 
-struct PartialMonomorphise<'vars> {
-    pvar_purities: &'vars HashMap<purity::PVarId, Purity>,
-    tvar_types: &'vars HashMap<ty::TVarId, ty::Ty<ty::Mono>>,
+struct PartialMonomorphise<'tyargs> {
+    mono_ty_args: &'tyargs MonoTyArgs,
 }
 
-impl<'vars> Substitution for PartialMonomorphise<'vars> {
+impl<'tyargs> Substitution for PartialMonomorphise<'tyargs> {
     type Input = ty::Poly;
     type Output = ty::Poly;
     type AsPolySubst = Self;
@@ -238,7 +227,7 @@ impl<'vars> Substitution for PartialMonomorphise<'vars> {
         match poly {
             purity::Poly::Fixed(_) => poly.clone(),
             purity::Poly::Var(pvar_id) => {
-                if let Some(purity) = self.pvar_purities.get(pvar_id) {
+                if let Some(purity) = self.mono_ty_args.get_pvar_purity(*pvar_id) {
                     purity.clone().into_poly()
                 } else {
                     poly.clone()
@@ -251,7 +240,7 @@ impl<'vars> Substitution for PartialMonomorphise<'vars> {
         match poly {
             ty::Poly::Fixed(fixed) => subst_ty(self, fixed).into_poly(),
             ty::Poly::Var(tvar_id) => {
-                if let Some(mono_ty) = self.tvar_types.get(tvar_id) {
+                if let Some(mono_ty) = self.mono_ty_args.get_tvar_type(*tvar_id) {
                     subst_ty(&MonoToPoly::new(), mono_ty).into_poly()
                 } else {
                     poly.clone()
@@ -265,26 +254,19 @@ impl<'vars> Substitution for PartialMonomorphise<'vars> {
     }
 }
 
-pub fn inst_ty_selection(stx: &ty::select::SelectCtx<'_>, poly: &ty::Poly) -> ty::Poly {
-    stx.subst_ty_ref(poly)
+pub fn subst_poly(pta: &PolyTyArgs, poly: &ty::Poly) -> ty::Poly {
+    pta.subst_ty_ref(poly)
 }
 
-pub fn inst_fun_selection(stx: &ty::select::SelectCtx<'_>, fun: &ty::Fun) -> ty::Fun {
-    subst_fun(stx, fun)
+pub fn subst_poly_fun(pta: &PolyTyArgs, fun: &ty::Fun) -> ty::Fun {
+    subst_fun(pta, fun)
 }
 
-pub fn inst_purity_selection(
-    stx: &ty::select::SelectCtx<'_>,
-    purity: &purity::Poly,
-) -> purity::Poly {
-    stx.subst_purity_ref(purity)
+pub fn subst_purity(pta: &PolyTyArgs, purity: &purity::Poly) -> purity::Poly {
+    pta.subst_purity_ref(purity)
 }
 
-pub fn monomorphise(
-    pvar_purities: &HashMap<purity::PVarId, Purity>,
-    tvar_types: &HashMap<ty::TVarId, ty::Ty<ty::Mono>>,
-    poly: &ty::Poly,
-) -> ty::Mono {
-    let stx = Monomorphise::new(pvar_purities, tvar_types);
+pub fn monomorphise(mta: &MonoTyArgs, poly: &ty::Poly) -> ty::Mono {
+    let stx = Monomorphise::new(mta);
     stx.subst_ty_ref(poly)
 }

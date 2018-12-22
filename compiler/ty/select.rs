@@ -4,6 +4,7 @@ use crate::ty;
 use crate::ty::list_iter::ListIterator;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
+use crate::ty::ty_args::PolyTyArgs;
 
 /// Selects a set of polymorphic variables for a function application
 ///
@@ -178,30 +179,36 @@ impl<'vars> SelectCtx<'vars> {
         }
     }
 
-    pub fn pvar_purity(&self, pvar_id: purity::PVarId) -> Option<purity::Poly> {
-        if !self.selecting_pvars.contains_key(&pvar_id) {
-            return None;
-        }
+    pub fn into_poly_ty_args(self) -> PolyTyArgs {
+        let pvar_purities = self
+            .selecting_pvars
+            .keys()
+            .map(|pvar_id| {
+                let pvar_purity = self
+                    .pvar_purities
+                    .get(pvar_id)
+                    .cloned()
+                    .unwrap_or_else(|| Purity::Impure.into_poly());
 
-        Some(
-            self.pvar_purities
-                .get(&pvar_id)
-                .cloned()
-                .unwrap_or_else(|| Purity::Impure.into_poly()),
-        )
-    }
+                (*pvar_id, pvar_purity)
+            })
+            .collect();
 
-    pub fn tvar_type(&self, tvar_id: ty::TVarId) -> Option<ty::Poly> {
-        if !self.selecting_tvars.contains_key(&tvar_id) {
-            return None;
-        }
+        let tvar_types = self
+            .selecting_tvars
+            .iter()
+            .map(|(tvar_id, tvar)| {
+                let tvar_type = self
+                    .tvar_types
+                    .get(tvar_id)
+                    .cloned()
+                    .unwrap_or_else(|| tvar.bound.clone());
 
-        Some(
-            self.tvar_types
-                .get(&tvar_id)
-                .cloned()
-                .unwrap_or_else(|| self.selecting_tvars[&tvar_id].bound.clone()),
-        )
+                (*tvar_id, tvar_type)
+            })
+            .collect();
+
+        PolyTyArgs::new(pvar_purities, tvar_types)
     }
 }
 
