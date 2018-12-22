@@ -129,16 +129,16 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
                         Ok(EvaledLine::Expr(poly_str))
                     }
                     EvalKind::Value => {
-                        use crate::mir::eval_hir::DefCtx;
+                        use crate::mir::eval_hir::FunCtx;
                         use runtime_syntax::writer;
                         use std::str;
 
                         // Evaluate the expression
-                        let mut dcx = DefCtx::new();
+                        let mut fcx = FunCtx::new();
 
                         let value = self
                             .ehx
-                            .consume_expr(&mut dcx, &mut None, node.into_expr())?;
+                            .consume_expr(&mut fcx, &mut None, node.into_expr())?;
 
                         let boxed = self
                             .ehx
