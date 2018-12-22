@@ -25,6 +25,7 @@ pub trait Phase: Clone + std::cmp::PartialEq + std::fmt::Debug {
     type Purity: Clone + std::cmp::PartialEq + std::fmt::Debug;
     type DeclType: Clone + std::cmp::PartialEq + std::fmt::Debug;
     type ResultType: Clone + std::cmp::PartialEq + std::fmt::Debug;
+    type TyArgs: Clone + std::cmp::PartialEq + std::fmt::Debug;
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -33,6 +34,7 @@ impl Phase for Inferred {
     type Purity = purity::Poly;
     type DeclType = ty::Poly;
     type ResultType = ty::Poly;
+    type TyArgs = ty::ty_args::PolyTyArgs;
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -41,6 +43,7 @@ impl Phase for Lowered {
     type Purity = purity::Decl;
     type DeclType = ty::Decl;
     type ResultType = ();
+    type TyArgs = ();
 }
 
 new_global_id_type!(VarId);
@@ -74,6 +77,7 @@ pub struct Let<P: Phase> {
 #[derive(PartialEq, Debug, Clone)]
 pub struct App<P: Phase> {
     pub fun_expr: Expr<P>,
+    pub ty_args: P::TyArgs,
     pub fixed_arg_exprs: Vec<Expr<P>>,
     pub rest_arg_expr: Option<Expr<P>>,
 }

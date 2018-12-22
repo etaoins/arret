@@ -8,6 +8,7 @@ use crate::ty::purity::Purity;
 ///
 /// These type arguments are still polymorphic which can happen if the bound refers to another
 /// type variable.
+#[derive(PartialEq, Clone, Debug)]
 pub struct PolyTyArgs {
     pvar_purities: HashMap<purity::PVarId, purity::Poly>,
     tvar_types: HashMap<ty::TVarId, ty::Poly>,
@@ -21,6 +22,13 @@ impl PolyTyArgs {
         PolyTyArgs {
             pvar_purities,
             tvar_types,
+        }
+    }
+
+    pub fn empty() -> PolyTyArgs {
+        PolyTyArgs {
+            pvar_purities: HashMap::new(),
+            tvar_types: HashMap::new(),
         }
     }
 
@@ -55,6 +63,7 @@ impl PolyTyArgs {
 ///
 /// These type arguments are monomorphic which means they've been fully resolved and don't refer
 /// to any polymorphic variables.
+#[derive(PartialEq, Clone, Debug)]
 pub struct MonoTyArgs {
     pvar_purities: HashMap<purity::PVarId, Purity>,
     tvar_types: HashMap<ty::TVarId, ty::Ty<ty::Mono>>,

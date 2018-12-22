@@ -8,6 +8,7 @@ use crate::mir::value;
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
+use crate::ty::ty_args::PolyTyArgs;
 
 pub fn eq_pred_arret_fun() -> value::ArretFun {
     let left_var_id = hir::VarId::alloc();
@@ -45,6 +46,7 @@ pub fn eq_pred_arret_fun() -> value::ArretFun {
                         result_ty: ty::Ty::EqPred.into_poly(),
                         kind: hir::ExprKind::EqPred,
                     },
+                    ty_args: PolyTyArgs::empty(),
                     fixed_arg_exprs: vec![
                         hir::Expr {
                             span: EMPTY_SPAN,
@@ -99,6 +101,7 @@ pub fn ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
                         result_ty: ty::Ty::TyPred(test_ty).into_poly(),
                         kind: hir::ExprKind::TyPred(test_ty),
                     },
+                    ty_args: PolyTyArgs::empty(),
                     fixed_arg_exprs: vec![hir::Expr {
                         span: EMPTY_SPAN,
                         result_ty: ty::Ty::Any.into_poly(),

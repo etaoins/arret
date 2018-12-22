@@ -479,6 +479,7 @@ fn lower_expr_apply(
         span,
         ExprKind::App(Box::new(App {
             fun_expr,
+            ty_args: (),
             fixed_arg_exprs,
             rest_arg_expr,
         })),
@@ -1132,6 +1133,7 @@ mod test {
             t2s(t),
             ExprKind::App(Box::new(App {
                 fun_expr: Datum::Int(t2s(u), 1).into(),
+                ty_args: (),
                 fixed_arg_exprs: vec![Datum::Int(t2s(v), 2).into(), Datum::Int(t2s(w), 3).into()],
                 rest_arg_expr: None,
             })),
@@ -1152,6 +1154,7 @@ mod test {
             t2s(t),
             ExprKind::App(Box::new(App {
                 fun_expr: Datum::Int(t2s(u), 1).into(),
+                ty_args: (),
                 fixed_arg_exprs: vec![Datum::Int(t2s(v), 2).into()],
                 rest_arg_expr: Some(Datum::Int(t2s(w), 3).into()),
             })),
