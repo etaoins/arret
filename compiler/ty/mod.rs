@@ -394,6 +394,10 @@ impl Mono {
     pub fn as_ty(&self) -> &Ty<Mono> {
         &self.0
     }
+
+    pub fn into_ty(self) -> Ty<Mono> {
+        self.0
+    }
 }
 
 impl Ty<Mono> {

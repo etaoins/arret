@@ -1,7 +1,6 @@
 use syntax::span::EMPTY_SPAN;
 
 use crate::mir::error::{Error, ErrorKind, Result};
-use crate::mir::eval_hir::DefCtx;
 use crate::mir::value;
 
 /// Opaque hash of an Arret fun application
@@ -27,6 +26,19 @@ impl ApplyStack {
     pub fn new() -> ApplyStack {
         ApplyStack { entries: vec![] }
     }
+
+    fn with_apply_cookie(&self, apply_cookie: ApplyCookie) -> ApplyStack {
+        use std::iter;
+
+        ApplyStack {
+            entries: self
+                .entries
+                .iter()
+                .cloned()
+                .chain(iter::once(apply_cookie))
+                .collect(),
+        }
+    }
 }
 
 /// Conditionally inlines an Arret fun using the passed `inliner`
@@ -39,22 +51,22 @@ impl ApplyStack {
 /// case `eval_inline` will be called but `Ok(None)` will be returned anyway. For this reason it's
 /// important that `inliner` has no side effects.
 pub fn cond_inline<F>(
-    dcx: &mut DefCtx,
+    apply_stack: &ApplyStack,
     arret_fun: &value::ArretFun,
     eval_inline: F,
 ) -> Result<Option<value::Value>>
 where
-    F: FnOnce(&mut DefCtx) -> Result<value::Value>,
+    F: FnOnce(ApplyStack) -> Result<value::Value>,
 {
     const INLINE_LIMIT: usize = 16;
 
-    if dcx.apply_stack.entries.len() >= INLINE_LIMIT {
+    if apply_stack.entries.len() >= INLINE_LIMIT {
         // Inline limit reached; don't attempt another inline
         return Ok(None);
     }
 
     let apply_cookie = ApplyCookie::new(arret_fun);
-    if dcx.apply_stack.entries.contains(&apply_cookie) {
+    if apply_stack.entries.contains(&apply_cookie) {
         // Abort recursion all the way back to the original callsite
 
         // This prevents us from doing a "partial unroll" where we recurse in to one iteration
@@ -66,9 +78,7 @@ where
         ));
     }
 
-    dcx.apply_stack.entries.push(apply_cookie);
-    let inline_result = eval_inline(dcx);
-    dcx.apply_stack.entries.pop();
+    let inline_result = eval_inline(apply_stack.with_apply_cookie(apply_cookie));
 
     match inline_result {
         Ok(value) => {

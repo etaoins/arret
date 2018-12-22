@@ -50,12 +50,12 @@ impl PolyTyArgs {
         }
     }
 
-    pub fn get_pvar_purity(&self, pvar_id: purity::PVarId) -> Option<&purity::Poly> {
-        self.pvar_purities.get(&pvar_id)
+    pub fn pvar_purities(&self) -> &HashMap<purity::PVarId, purity::Poly> {
+        &self.pvar_purities
     }
 
-    pub fn get_tvar_type(&self, tvar_id: ty::TVarId) -> Option<&ty::Poly> {
-        self.tvar_types.get(&tvar_id)
+    pub fn tvar_types(&self) -> &HashMap<ty::TVarId, ty::Poly> {
+        &self.tvar_types
     }
 }
 
@@ -65,11 +65,21 @@ impl PolyTyArgs {
 /// to any polymorphic variables.
 #[derive(PartialEq, Clone, Debug)]
 pub struct MonoTyArgs {
-    pvar_purities: HashMap<purity::PVarId, Purity>,
+    pvar_purities: HashMap<purity::PVarId, purity::Poly>,
     tvar_types: HashMap<ty::TVarId, ty::Ty<ty::Mono>>,
 }
 
 impl MonoTyArgs {
+    pub fn new(
+        pvar_purities: HashMap<purity::PVarId, purity::Poly>,
+        tvar_types: HashMap<ty::TVarId, ty::Ty<ty::Mono>>,
+    ) -> MonoTyArgs {
+        MonoTyArgs {
+            pvar_purities,
+            tvar_types,
+        }
+    }
+
     pub fn empty() -> MonoTyArgs {
         MonoTyArgs {
             pvar_purities: HashMap::new(),
@@ -77,19 +87,11 @@ impl MonoTyArgs {
         }
     }
 
-    pub fn pvar_purity(&self, pvar_id: purity::PVarId) -> &Purity {
-        &self.pvar_purities[&pvar_id]
+    pub fn pvar_purities(&self) -> &HashMap<purity::PVarId, purity::Poly> {
+        &self.pvar_purities
     }
 
-    pub fn tvar_type(&self, tvar_id: ty::TVarId) -> &ty::Ty<ty::Mono> {
-        &self.tvar_types[&tvar_id]
-    }
-
-    pub fn get_pvar_purity(&self, pvar_id: purity::PVarId) -> Option<&Purity> {
-        self.pvar_purities.get(&pvar_id)
-    }
-
-    pub fn get_tvar_type(&self, tvar_id: ty::TVarId) -> Option<&ty::Ty<ty::Mono>> {
-        self.tvar_types.get(&tvar_id)
+    pub fn tvar_types(&self) -> &HashMap<ty::TVarId, ty::Ty<ty::Mono>> {
+        &self.tvar_types
     }
 }

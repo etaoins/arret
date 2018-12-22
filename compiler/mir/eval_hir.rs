@@ -24,7 +24,7 @@ use crate::mir::value;
 use crate::mir::{Expr, Value};
 use crate::ty;
 use crate::ty::purity;
-use crate::ty::ty_args::MonoTyArgs;
+use crate::ty::ty_args::{MonoTyArgs, PolyTyArgs};
 
 #[derive(PartialEq, Eq, Hash)]
 struct RustFunKey {
@@ -58,10 +58,19 @@ pub struct DefCtx {
     mono_ty_args: MonoTyArgs,
     local_values: HashMap<hir::VarId, Value>,
 
-    pub(super) apply_stack: inliner::ApplyStack,
+    apply_stack: inliner::ApplyStack,
 }
 
 impl DefCtx {
+    pub fn new() -> DefCtx {
+        DefCtx {
+            mono_ty_args: MonoTyArgs::empty(),
+            local_values: HashMap::new(),
+
+            apply_stack: inliner::ApplyStack::new(),
+        }
+    }
+
     pub fn monomorphise(&self, poly: &ty::Poly) -> ty::Mono {
         ty::subst::monomorphise(&self.mono_ty_args, poly)
     }
@@ -83,15 +92,37 @@ impl BuiltProgram {
     }
 }
 
-impl DefCtx {
-    pub fn new() -> DefCtx {
-        DefCtx {
-            mono_ty_args: MonoTyArgs::empty(),
-            local_values: HashMap::new(),
+#[derive(Clone)]
+struct ApplyArgs<'tyargs> {
+    ty_args: &'tyargs PolyTyArgs,
+    list_value: Value,
+}
 
-            apply_stack: inliner::ApplyStack::new(),
-        }
-    }
+/// Merge poly type args in to existing mono type args
+///
+/// This is used when applying a polymorphic function. The `scope` args are used to monomorphise
+/// the `apply_ty_args` which are then added to the existing `scope` and returned.
+///
+fn merge_apply_ty_args_into_scope(scope: &MonoTyArgs, apply_ty_args: &PolyTyArgs) -> MonoTyArgs {
+    use crate::ty::subst;
+
+    let pvar_purities = scope
+        .pvar_purities()
+        .iter()
+        .chain(apply_ty_args.pvar_purities().iter())
+        .map(|(k, v)| (*k, v.clone()))
+        .collect();
+
+    let tvar_types = apply_ty_args
+        .tvar_types()
+        .iter()
+        .map(|(tvar_id, poly_type)| {
+            let mono_ty = subst::monomorphise(scope, poly_type).into_ty();
+            (*tvar_id, mono_ty)
+        })
+        .collect();
+
+    MonoTyArgs::new(pvar_purities, tvar_types)
 }
 
 impl Default for DefCtx {
@@ -241,23 +272,34 @@ impl EvalHirCtx {
 
     fn inline_arret_fun_app(
         &mut self,
-        dcx: &mut DefCtx,
+        outer_dcx: &DefCtx,
         b: &mut Option<Builder>,
         span: Span,
         arret_fun: &value::ArretFun,
-        arg_list_value: Value,
+        apply_args: ApplyArgs<'_>,
+        apply_stack: inliner::ApplyStack,
     ) -> Result<Value> {
         let fun_expr = &arret_fun.fun_expr;
+
+        let mut inner_dcx = DefCtx {
+            mono_ty_args: merge_apply_ty_args_into_scope(
+                &outer_dcx.mono_ty_args,
+                apply_args.ty_args,
+            ),
+            local_values: outer_dcx.local_values.clone(),
+
+            apply_stack,
+        };
 
         Self::destruc_list(
             b,
             span,
-            &mut dcx.local_values,
+            &mut inner_dcx.local_values,
             &fun_expr.params,
-            arg_list_value,
+            apply_args.list_value,
         );
 
-        self.eval_expr(dcx, b, &fun_expr.body_expr)
+        self.eval_expr(&mut inner_dcx, b, &fun_expr.body_expr)
     }
 
     fn eval_arret_fun_app(
@@ -266,20 +308,21 @@ impl EvalHirCtx {
         b: &mut Option<Builder>,
         span: Span,
         arret_fun: &value::ArretFun,
-        arg_list_value: Value,
+        apply_args: ApplyArgs<'_>,
     ) -> Result<Value> {
         if let Some(outer_b) = b {
             // `cond_inline` can call our closure and then change its mind. Use a separate builder
             // instance so we don't append ops from a failed inline to the existing builder.
             let mut inline_b = Some(Builder::new());
 
-            if let Some(value) = inliner::cond_inline(dcx, arret_fun, |dcx| {
+            if let Some(value) = inliner::cond_inline(&dcx.apply_stack, arret_fun, |apply_stack| {
                 self.inline_arret_fun_app(
                     dcx,
                     &mut inline_b,
                     span,
                     arret_fun,
-                    arg_list_value.clone(),
+                    apply_args.clone(),
+                    apply_stack,
                 )
             })? {
                 // We successfully did an inline application
@@ -287,11 +330,18 @@ impl EvalHirCtx {
                 Ok(value)
             } else {
                 // We need to build an out-of-line application
-                Ok(self.build_arret_fun_app(outer_b, span, arret_fun, &arg_list_value))
+                Ok(self.build_arret_fun_app(outer_b, span, arret_fun, &apply_args.list_value))
             }
         } else {
             // No builder; we need to inline
-            self.inline_arret_fun_app(dcx, b, span, arret_fun, arg_list_value)
+            self.inline_arret_fun_app(
+                dcx,
+                b,
+                span,
+                arret_fun,
+                apply_args,
+                inliner::ApplyStack::new(),
+            )
         }
     }
 
@@ -477,11 +527,16 @@ impl EvalHirCtx {
         span: Span,
         ret_ty: &ty::Mono,
         rust_fun: &hir::rfi::Fun,
-        arg_list_value: Value,
+        apply_args: ApplyArgs<'_>,
     ) -> Result<Value> {
         use crate::mir::intrinsic;
         use crate::mir::rust_fun::build_rust_fun_app;
         use crate::mir::value::to_const::value_to_const;
+
+        let ApplyArgs {
+            list_value: arg_list_value,
+            ..
+        } = apply_args;
 
         // TODO: Fix for polymorphism once it's supported
         let can_const_eval =
@@ -545,7 +600,17 @@ impl EvalHirCtx {
         use crate::mir::value::to_const::value_to_const;
 
         if let Some(actual_value) = self.thunk_fun_values.get(&fun_thunk) {
-            return self.eval_value_app(dcx, b, span, ret_ty, &actual_value.clone(), arg_list_value);
+            return self.eval_value_app(
+                dcx,
+                b,
+                span,
+                ret_ty,
+                &actual_value.clone(),
+                ApplyArgs {
+                    ty_args: &PolyTyArgs::empty(),
+                    list_value: arg_list_value,
+                },
+            );
         }
 
         if b.is_some() {
@@ -620,20 +685,22 @@ impl EvalHirCtx {
         span: Span,
         ret_ty: &ty::Mono,
         fun_value: &Value,
-        arg_list_value: Value,
+        apply_args: ApplyArgs<'_>,
     ) -> Result<Value> {
         match fun_value {
             Value::ArretFun(arret_fun) => {
                 use crate::mir::closure;
 
                 closure::load_from_current_fun(&mut dcx.local_values, &arret_fun.closure);
-                self.eval_arret_fun_app(dcx, b, span, &arret_fun, arg_list_value)
+                self.eval_arret_fun_app(dcx, b, span, &arret_fun, apply_args)
             }
             Value::RustFun(rust_fun) => {
-                self.eval_rust_fun_app(b, span, ret_ty, &rust_fun, arg_list_value)
+                self.eval_rust_fun_app(b, span, ret_ty, &rust_fun, apply_args)
             }
-            Value::TyPred(test_ty) => Ok(self.eval_ty_pred_app(b, span, &arg_list_value, *test_ty)),
-            Value::EqPred => Ok(self.eval_eq_pred_app(b, span, &arg_list_value)),
+            Value::TyPred(test_ty) => {
+                Ok(self.eval_ty_pred_app(b, span, &apply_args.list_value, *test_ty))
+            }
+            Value::EqPred => Ok(self.eval_eq_pred_app(b, span, &apply_args.list_value)),
             Value::Const(boxed_fun) => match boxed_fun.as_subtype() {
                 boxed::AnySubtype::FunThunk(fun_thunk) => self.eval_const_fun_thunk_app(
                     dcx,
@@ -641,13 +708,13 @@ impl EvalHirCtx {
                     span,
                     ret_ty,
                     unsafe { Gc::new(fun_thunk) },
-                    arg_list_value,
+                    apply_args.list_value,
                 ),
                 other => unimplemented!("applying boxed function value type: {:?}", other),
             },
             Value::Reg(reg_value) => {
                 if let Some(b) = b {
-                    Ok(self.build_reg_fun_thunk_app(b, span, reg_value, &arg_list_value))
+                    Ok(self.build_reg_fun_thunk_app(b, span, reg_value, &apply_args.list_value))
                 } else {
                     panic!("Need builder for reg function application");
                 }
@@ -681,7 +748,17 @@ impl EvalHirCtx {
 
         let ret_ty = dcx.monomorphise(result_ty);
         let arg_list_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
-        self.eval_value_app(dcx, b, span, &ret_ty, &fun_value, arg_list_value)
+        self.eval_value_app(
+            dcx,
+            b,
+            span,
+            &ret_ty,
+            &fun_value,
+            ApplyArgs {
+                ty_args: &app.ty_args,
+                list_value: arg_list_value,
+            },
+        )
     }
 
     fn eval_cond(
@@ -976,13 +1053,22 @@ impl EvalHirCtx {
             has_rest,
         );
 
-        // TODO: Make an actual DefCtx
+        // TODO: Include initial `ty_args`
         let mut dcx = DefCtx::new();
         closure::load_from_closure_param(&mut dcx.local_values, &arret_fun.closure, closure_reg);
 
         let mut some_b = Some(b);
-        let result_value =
-            self.inline_arret_fun_app(&mut dcx, &mut some_b, span, arret_fun, arg_list_value)?;
+        let result_value = self.inline_arret_fun_app(
+            &dcx,
+            &mut some_b,
+            span,
+            arret_fun,
+            ApplyArgs {
+                ty_args: &PolyTyArgs::empty(),
+                list_value: arg_list_value,
+            },
+            inliner::ApplyStack::new(),
+        )?;
         let mut b = some_b.unwrap();
 
         build_ret_value(self, &mut b, span, &result_value, &wanted_abi.ret);
@@ -1206,7 +1292,10 @@ impl EvalHirCtx {
             EMPTY_SPAN,
             &ty::Ty::unit().into_mono(),
             &main_value,
-            empty_list_value,
+            ApplyArgs {
+                ty_args: &PolyTyArgs::empty(),
+                list_value: empty_list_value,
+            },
         )?;
 
         Ok(())

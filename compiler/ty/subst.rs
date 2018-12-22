@@ -99,7 +99,7 @@ impl<'tvars> Substitution for PolyTyArgs {
         match poly {
             purity::Poly::Fixed(_) => poly.clone(),
             purity::Poly::Var(pvar_id) => {
-                if let Some(selected) = self.get_pvar_purity(*pvar_id) {
+                if let Some(selected) = self.pvar_purities().get(pvar_id) {
                     selected.clone()
                 } else {
                     poly.clone()
@@ -112,7 +112,7 @@ impl<'tvars> Substitution for PolyTyArgs {
         match poly {
             ty::Poly::Fixed(fixed) => subst_ty(self, fixed).into_poly(),
             ty::Poly::Var(tvar_id) => {
-                if let Some(selected) = self.get_tvar_type(*tvar_id) {
+                if let Some(selected) = self.tvar_types().get(tvar_id) {
                     selected.clone()
                 } else {
                     poly.clone()
@@ -198,14 +198,14 @@ impl<'tyargs> Substitution for Monomorphise<'tyargs> {
     fn subst_purity_ref(&self, poly: &purity::Poly) -> purity::Poly {
         match poly {
             purity::Poly::Fixed(_) => poly.clone(),
-            purity::Poly::Var(pvar_id) => self.mono_ty_args.pvar_purity(*pvar_id).into_poly(),
+            purity::Poly::Var(pvar_id) => self.mono_ty_args.pvar_purities()[pvar_id].clone(),
         }
     }
 
     fn subst_ty_ref(&self, poly: &ty::Poly) -> ty::Mono {
         match poly {
             ty::Poly::Fixed(fixed) => subst_ty(self, fixed).clone().into_mono(),
-            ty::Poly::Var(tvar_id) => self.mono_ty_args.tvar_type(*tvar_id).clone().into_mono(),
+            ty::Poly::Var(tvar_id) => self.mono_ty_args.tvar_types()[tvar_id].clone().into_mono(),
         }
     }
 
@@ -227,8 +227,8 @@ impl<'tyargs> Substitution for PartialMonomorphise<'tyargs> {
         match poly {
             purity::Poly::Fixed(_) => poly.clone(),
             purity::Poly::Var(pvar_id) => {
-                if let Some(purity) = self.mono_ty_args.get_pvar_purity(*pvar_id) {
-                    purity.clone().into_poly()
+                if let Some(purity) = self.mono_ty_args.pvar_purities().get(pvar_id) {
+                    purity.clone()
                 } else {
                     poly.clone()
                 }
@@ -240,7 +240,7 @@ impl<'tyargs> Substitution for PartialMonomorphise<'tyargs> {
         match poly {
             ty::Poly::Fixed(fixed) => subst_ty(self, fixed).into_poly(),
             ty::Poly::Var(tvar_id) => {
-                if let Some(mono_ty) = self.mono_ty_args.get_tvar_type(*tvar_id) {
+                if let Some(mono_ty) = self.mono_ty_args.tvar_types().get(tvar_id) {
                     subst_ty(&MonoToPoly::new(), mono_ty).into_poly()
                 } else {
                     poly.clone()
