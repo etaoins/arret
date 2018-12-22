@@ -9,8 +9,8 @@ name = "arret"
 path = "main.rs"
 
 [dependencies]
-clap = "2.32"
-rustyline = "2"
+clap = "2"
+rustyline = "3"
 directories = "1"
 ansi_term = "0.11"
 syntax = { path = "../syntax" }
