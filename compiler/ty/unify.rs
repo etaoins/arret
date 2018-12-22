@@ -50,6 +50,10 @@ impl Unifiable for ty::Poly {
         if let (ty::Poly::Fixed(ty1), ty::Poly::Fixed(ty2)) = (&poly1, &poly2) {
             // We can invoke full simplfication logic if we have fixed types
             unify_ty(tvars, poly1, ty1, poly2, ty2)
+        } else if ty::is_a::ty_ref_is_a(tvars, poly1, poly2).to_bool() {
+            UnifiedTy::Merged(poly2.clone())
+        } else if ty::is_a::ty_ref_is_a(tvars, poly2, poly1).to_bool() {
+            UnifiedTy::Merged(poly1.clone())
         } else {
             // Leave these separate
             UnifiedTy::Discerned
@@ -603,5 +607,41 @@ mod test {
         );
 
         assert_eq!(purity_impure, unify_purity_refs(&purity_var1, &purity_var2));
+    }
+
+    #[test]
+    fn related_poly_bounds() {
+        let mut tvars = ty::TVars::new();
+
+        let tvar_id1 = ty::TVarId::alloc();
+        tvars.insert(tvar_id1, ty::TVar::new("1".into(), poly_for_str("Any")));
+        let ptype1_unbounded = ty::Poly::Var(tvar_id1);
+
+        let tvar_id2 = ty::TVarId::alloc();
+        tvars.insert(
+            tvar_id2,
+            ty::TVar::new("2".into(), ptype1_unbounded.clone()),
+        );
+        let ptype2_bounded_by_1 = ty::Poly::Var(tvar_id2);
+
+        assert_eq!(
+            UnifiedTy::Merged(ptype1_unbounded.clone()),
+            ty::Poly::unify_ty_refs(&tvars, &ptype1_unbounded, &ptype1_unbounded)
+        );
+
+        assert_eq!(
+            UnifiedTy::Merged(ptype2_bounded_by_1.clone()),
+            ty::Poly::unify_ty_refs(&tvars, &ptype2_bounded_by_1, &ptype2_bounded_by_1)
+        );
+
+        assert_eq!(
+            UnifiedTy::Merged(ptype1_unbounded.clone()),
+            ty::Poly::unify_ty_refs(&tvars, &ptype2_bounded_by_1, &ptype1_unbounded)
+        );
+
+        assert_eq!(
+            UnifiedTy::Merged(ptype1_unbounded.clone()),
+            ty::Poly::unify_ty_refs(&tvars, &ptype1_unbounded, &ptype2_bounded_by_1,)
+        );
     }
 }
