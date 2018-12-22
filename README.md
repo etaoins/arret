@@ -1,6 +1,6 @@
 # Arret
 
-[![Build Status](https://travis-ci.org/etaoins/arret.svg?branch=master)](https://travis-ci.org/etaoins/arret)
+[![Build status](https://badge.buildkite.com/bcda02e06b6795e669edae4264bdecbb11ff98b4f5afb1fa4b.svg?branch=master)](https://buildkite.com/arret/arret)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ## Overview
