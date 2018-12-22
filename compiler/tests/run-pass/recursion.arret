@@ -1,0 +1,11 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn recursive-reverse ([lst : (Listof Any)]) -> (Listof Any)
+  (if (nil? lst)
+    lst
+    (concat (recursive-reverse (rest lst)) (list (first lst)))))
+
+(defn main! () ->! ()
+  (assert-eq '(7 6 5 4 3 2 1) (recursive-reverse '(1 2 3 4 5 6 7)))
+  ())

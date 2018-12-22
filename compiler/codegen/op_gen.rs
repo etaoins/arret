@@ -447,12 +447,12 @@ fn gen_cond(
     } = cond_op;
 
     unsafe {
-        let mut true_block = LLVMAppendBasicBlockInContext(
+        let true_block = LLVMAppendBasicBlockInContext(
             tcx.llx,
             fcx.function,
             b"cond_true\0".as_ptr() as *const _,
         );
-        let mut false_block = LLVMAppendBasicBlockInContext(
+        let false_block = LLVMAppendBasicBlockInContext(
             tcx.llx,
             fcx.function,
             b"cond_false\0".as_ptr() as *const _,
@@ -474,6 +474,8 @@ fn gen_cond(
             cond_alloc_plan.true_subplan(),
             cont_block,
         );
+        let mut final_true_block = LLVMGetInsertBlock(fcx.builder);
+
         gen_cond_branch(
             tcx,
             mcx,
@@ -482,6 +484,8 @@ fn gen_cond(
             cond_alloc_plan.false_subplan(),
             cont_block,
         );
+        let mut final_false_block = LLVMGetInsertBlock(fcx.builder);
+
         LLVMPositionBuilderAtEnd(fcx.builder, cont_block);
 
         if let Some(RegPhi {
@@ -502,13 +506,13 @@ fn gen_cond(
             LLVMAddIncoming(
                 phi_value,
                 &mut true_result_llvm as *mut _,
-                &mut true_block as *mut _,
+                &mut final_true_block as *mut _,
                 1,
             );
             LLVMAddIncoming(
                 phi_value,
                 &mut false_result_llvm as *mut _,
-                &mut false_block as *mut _,
+                &mut final_false_block as *mut _,
                 1,
             );
 
