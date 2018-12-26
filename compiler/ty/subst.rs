@@ -198,14 +198,25 @@ impl<'tyargs> Substitution for Monomorphise<'tyargs> {
     fn subst_purity_ref(&self, poly: &purity::Poly) -> purity::Poly {
         match poly {
             purity::Poly::Fixed(_) => poly.clone(),
-            purity::Poly::Var(pvar_id) => self.mono_ty_args.pvar_purities()[pvar_id].clone(),
+            purity::Poly::Var(pvar_id) => self
+                .mono_ty_args
+                .pvar_purities()
+                .get(pvar_id)
+                .expect("Unable to find purity argument during monomorphisation")
+                .clone(),
         }
     }
 
     fn subst_ty_ref(&self, poly: &ty::Poly) -> ty::Mono {
         match poly {
             ty::Poly::Fixed(fixed) => subst_ty(self, fixed).clone().into_mono(),
-            ty::Poly::Var(tvar_id) => self.mono_ty_args.tvar_types()[tvar_id].clone().into_mono(),
+            ty::Poly::Var(tvar_id) => self
+                .mono_ty_args
+                .tvar_types()
+                .get(tvar_id)
+                .expect("Unable to find type argument during monomorphisation")
+                .clone()
+                .into_mono(),
         }
     }
 
