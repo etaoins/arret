@@ -229,7 +229,8 @@ fn unify_ty<S: Unifiable>(
         }
         (ty::Ty::Fun(fun), ty::Ty::TopFun(top_fun))
         | (ty::Ty::TopFun(top_fun), ty::Ty::Fun(fun)) => {
-            unify_top_fun(tvars, fun.top_fun(), top_fun)
+            let inner_tvars = ty::merge_tvars(tvars, fun.tvars());
+            unify_top_fun(&inner_tvars, fun.top_fun(), top_fun)
         }
         (ty::Ty::TyPred(_), ty::Ty::TopFun(top_fun))
         | (ty::Ty::TopFun(top_fun), ty::Ty::TyPred(_))
@@ -557,20 +558,26 @@ mod test {
     #[test]
     fn polymorphic_funs() {
         let pidentity_fun = poly_for_str("(All #{A} A -> A)");
+        let pidentity_impure_string_fun = poly_for_str("(All #{[A : Str]} A ->! A)");
+        let top_impure_fun = poly_for_str("(... ->! Any)");
+
         assert_eq!(
             UnifiedTy::Merged(pidentity_fun.clone()),
             ty::Poly::unify_ty_refs(&ty::TVars::new(), &pidentity_fun, &pidentity_fun)
         );
 
-        let pidentity_impure_string_fun = poly_for_str("(All #{[A : Str]} A ->! A)");
-        let top_impure_fun = poly_for_str("(... ->! Any)");
         assert_eq!(
-            UnifiedTy::Merged(top_impure_fun),
+            UnifiedTy::Merged(top_impure_fun.clone()),
             ty::Poly::unify_ty_refs(
                 &ty::TVars::new(),
                 &pidentity_fun,
                 &pidentity_impure_string_fun
             )
+        );
+
+        assert_eq!(
+            UnifiedTy::Merged(top_impure_fun.clone()),
+            ty::Poly::unify_ty_refs(&ty::TVars::new(), &pidentity_fun, &top_impure_fun)
         );
     }
 
