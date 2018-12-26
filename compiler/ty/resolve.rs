@@ -15,7 +15,11 @@ impl<'ty> Result<'ty> {
 }
 
 fn resolve_tvar_id_bound(tvars: &ty::TVars, tvar_id: ty::TVarId) -> &ty::Ty<ty::Poly> {
-    match tvars[&tvar_id].bound {
+    match tvars
+        .get(&tvar_id)
+        .expect("TVar not found while resolving TVarId")
+        .bound
+    {
         ty::Poly::Fixed(ref fixed_ty) => fixed_ty,
         ty::Poly::Var(tvar_id) => resolve_tvar_id_bound(tvars, tvar_id),
     }
