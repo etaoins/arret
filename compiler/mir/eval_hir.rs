@@ -104,9 +104,13 @@ struct ApplyArgs<'tyargs> {
 
 /// Merge poly type args in to existing mono type args
 ///
-/// This is used when applying a polymorphic function. The `scope` args are used to monomorphise
+/// This is used when applying a polymorphic function. The `subst_with` are used to monomorphise
 /// the `apply_ty_args` which are then added to the existing `scope` and returned.
-fn merge_apply_ty_args_into_scope(scope: &MonoTyArgs, apply_ty_args: &PolyTyArgs) -> MonoTyArgs {
+fn merge_apply_ty_args_into_scope(
+    scope: &MonoTyArgs,
+    apply_ty_args: &PolyTyArgs,
+    subst_with: &MonoTyArgs,
+) -> MonoTyArgs {
     use crate::ty::subst;
 
     let pvar_purities = scope
@@ -125,7 +129,7 @@ fn merge_apply_ty_args_into_scope(scope: &MonoTyArgs, apply_ty_args: &PolyTyArgs
                 .tvar_types()
                 .iter()
                 .map(|(tvar_id, poly_type)| {
-                    let mono_ty = subst::monomorphise(scope, poly_type).into_ty();
+                    let mono_ty = subst::monomorphise(subst_with, poly_type).into_ty();
                     (*tvar_id, mono_ty)
                 }),
         )
@@ -292,8 +296,9 @@ impl EvalHirCtx {
 
         let mut inner_fcx = FunCtx {
             mono_ty_args: merge_apply_ty_args_into_scope(
-                &outer_fcx.mono_ty_args,
+                &arret_fun.env_ty_args,
                 apply_args.ty_args,
+                &outer_fcx.mono_ty_args,
             ),
             local_values: outer_fcx.local_values.clone(),
 
