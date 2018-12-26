@@ -1,7 +1,7 @@
 (import [stdlib base])
 (import [stdlib test])
 
-(defn recursive-reverse ([lst : (Listof Any)]) -> (Listof Any)
+(defn recursive-reverse #{T} ([lst : (Listof T)]) -> (Listof T)
   (if (nil? lst)
     lst
     (concat (recursive-reverse (rest lst)) (list (first lst)))))

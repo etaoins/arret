@@ -1054,9 +1054,15 @@ impl EvalHirCtx {
             has_rest,
         );
 
-        // TODO: Include initial `ty_args`
         let mut fcx = FunCtx::new();
         closure::load_from_closure_param(&mut fcx.local_values, &arret_fun.closure, closure_reg);
+
+        // TODO: Right now we're only polymorphic on the parameter's ABI types, not the function's
+        // actual type variables. While this should be correct it can result in suboptimal code
+        // generation. We should either be polymorphic over both or derive the polymorphic type
+        // variables from the ABI type.
+        let fun_expr = &arret_fun.fun_expr;
+        let ty_args = PolyTyArgs::from_upper_bound(&fun_expr.pvars, &fun_expr.tvars);
 
         let mut some_b = Some(b);
         let result_value = self.inline_arret_fun_app(
@@ -1065,7 +1071,7 @@ impl EvalHirCtx {
             span,
             arret_fun,
             ApplyArgs {
-                ty_args: &PolyTyArgs::empty(),
+                ty_args: &ty_args,
                 list_value: arg_list_value,
             },
             inliner::ApplyStack::new(),
