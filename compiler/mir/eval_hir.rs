@@ -63,8 +63,12 @@ pub struct FunCtx {
 
 impl FunCtx {
     pub fn new() -> FunCtx {
+        FunCtx::with_mono_ty_args(MonoTyArgs::empty())
+    }
+
+    pub fn with_mono_ty_args(mono_ty_args: MonoTyArgs) -> FunCtx {
         FunCtx {
-            mono_ty_args: MonoTyArgs::empty(),
+            mono_ty_args,
             local_values: HashMap::new(),
 
             inliner_stack: inliner::ApplyStack::new(),
@@ -112,13 +116,19 @@ fn merge_apply_ty_args_into_scope(scope: &MonoTyArgs, apply_ty_args: &PolyTyArgs
         .map(|(k, v)| (*k, v.clone()))
         .collect();
 
-    let tvar_types = apply_ty_args
+    let tvar_types = scope
         .tvar_types()
         .iter()
-        .map(|(tvar_id, poly_type)| {
-            let mono_ty = subst::monomorphise(scope, poly_type).into_ty();
-            (*tvar_id, mono_ty)
-        })
+        .map(|(k, v)| (*k, v.clone()))
+        .chain(
+            apply_ty_args
+                .tvar_types()
+                .iter()
+                .map(|(tvar_id, poly_type)| {
+                    let mono_ty = subst::monomorphise(scope, poly_type).into_ty();
+                    (*tvar_id, mono_ty)
+                }),
+        )
         .collect();
 
     MonoTyArgs::new(pvar_purities, tvar_types)
@@ -904,8 +914,9 @@ impl EvalHirCtx {
             id: value::ArretFunId::alloc(),
             span,
             source_name: source_name.map(|source_name| source_name.to_owned()),
-            fun_expr,
+            env_ty_args: fcx.mono_ty_args.clone(),
             closure,
+            fun_expr,
         })
     }
 
@@ -1054,7 +1065,10 @@ impl EvalHirCtx {
             has_rest,
         );
 
-        let mut fcx = FunCtx::new();
+        // Start by taking the type args from the fun's enclosing environment
+        let mut fcx = FunCtx::with_mono_ty_args(arret_fun.env_ty_args.clone());
+
+        // And loading its closure
         closure::load_from_closure_param(&mut fcx.local_values, &arret_fun.closure, closure_reg);
 
         // TODO: Right now we're only polymorphic on the parameter's ABI types, not the function's

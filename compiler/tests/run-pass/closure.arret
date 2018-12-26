@@ -2,12 +2,17 @@
 (import [stdlib test])
 
 (defn return-const (x) (fn () x))
-
+(defn generic-return-const #{T} ([x : T]) -> (-> T)
+  (fn () -> T x))
 
 (defn main! ()
+  (assert-eq true (fn? (black-box! return-const)))
   (assert-eq 1 ((return-const 1)))
   (assert-eq 2 (((black-box! return-const) 2)))
   (assert-eq 3 ((return-const (black-box! 3))))
   (assert-eq 4 (((black-box! return-const) (black-box! 4))))
+
+  (assert-eq true (fn? (black-box! generic-return-const)))
+  ; TODO: We crash if we attempt the rest of the tests on `generic-return-const`
 
   ())
