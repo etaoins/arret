@@ -163,13 +163,13 @@ fn monomorphic_fun_is_a(tvars: &ty::TVars, sub_fun: &ty::Fun, par_fun: &ty::Fun)
 }
 
 fn fun_is_a(tvars: &ty::TVars, sub_fun: &ty::Fun, par_fun: &ty::Fun) -> Result {
-    if sub_fun.is_monomorphic() {
-        monomorphic_fun_is_a(tvars, sub_fun, par_fun)
-    } else {
+    if sub_fun.has_polymorphic_vars() {
         let inner_tvars = ty::merge_three_tvars(tvars, sub_fun.tvars(), par_fun.tvars());
         let sub_mono = inst_polymorphic_fun(&inner_tvars, sub_fun, par_fun.ret());
 
         monomorphic_fun_is_a(&inner_tvars, &sub_mono, par_fun)
+    } else {
+        monomorphic_fun_is_a(tvars, sub_fun, par_fun)
     }
 }
 
@@ -295,12 +295,12 @@ fn ty_is_a<S: Isable>(
             top_fun_is_a(tvars, sub_top_fun, par_top_fun)
         }
         (ty::Ty::Fun(sub_fun), ty::Ty::TopFun(par_top_fun)) => {
-            if sub_fun.is_monomorphic() {
-                top_fun_is_a(tvars, sub_fun.top_fun(), par_top_fun)
-            } else {
+            if sub_fun.has_polymorphic_vars() {
                 let inner_tvars = ty::merge_tvars(tvars, sub_fun.tvars());
                 let sub_mono = inst_polymorphic_fun(&inner_tvars, sub_fun, par_top_fun.ret());
                 top_fun_is_a(&inner_tvars, sub_mono.top_fun(), par_top_fun)
+            } else {
+                top_fun_is_a(tvars, sub_fun.top_fun(), par_top_fun)
             }
         }
         (ty::Ty::TopFun(sub_top_fun), ty::Ty::Fun(par_fun)) => Result::May.and_then(|| {

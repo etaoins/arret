@@ -291,8 +291,8 @@ impl Fun {
         &self.top_fun.ret
     }
 
-    pub fn is_monomorphic(&self) -> bool {
-        self.pvars.is_empty() && self.tvars.is_empty()
+    pub fn has_polymorphic_vars(&self) -> bool {
+        !self.pvars.is_empty() || !self.tvars.is_empty()
     }
 
     pub fn into_ty<S: TyRef>(self) -> Ty<S> {

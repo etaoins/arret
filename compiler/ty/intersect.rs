@@ -178,7 +178,7 @@ fn non_subty_intersect<S: Intersectable>(
         }
         (ty::Ty::TopFun(top_fun), ty::Ty::Fun(fun))
         | (ty::Ty::Fun(fun), ty::Ty::TopFun(top_fun)) => {
-            if !fun.is_monomorphic() {
+            if fun.has_polymorphic_vars() {
                 // TODO: This might be possible but we would have to recalculate the tvars for
                 // the intersected function
                 return Err(Error::Disjoint);
@@ -197,7 +197,10 @@ fn non_subty_intersect<S: Intersectable>(
             .into_ty_ref())
         }
         (ty::Ty::Fun(fun1), ty::Ty::Fun(fun2)) => {
-            if fun1.is_monomorphic() && fun2.is_monomorphic() {
+            if fun1.has_polymorphic_vars() || fun2.has_polymorphic_vars() {
+                // TODO: Same issue as top functions
+                Err(Error::Disjoint)
+            } else {
                 let intersected_purity = intersect_purity_refs(fun1.purity(), fun2.purity());
                 let intersected_params = unify_list(tvars, fun1.params(), fun2.params())?;
                 let intersected_ret = intersect_ty_refs(tvars, fun1.ret(), fun2.ret())?;
@@ -209,9 +212,6 @@ fn non_subty_intersect<S: Intersectable>(
                     intersected_params,
                 )
                 .into_ty_ref())
-            } else {
-                // TODO: Same issue as top functions
-                Err(Error::Disjoint)
             }
         }
         (_, _) => Err(Error::Disjoint),

@@ -518,14 +518,14 @@ fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty
             fun_parts.push(str_for_purity(&inner_pvars, fun.purity()));
             fun_parts.push(str_for_poly(&inner_pvars, &inner_tvars, fun.ret()));
 
-            if fun.is_monomorphic() {
-                format!("({})", fun_parts.join(" "))
-            } else {
+            if fun.has_polymorphic_vars() {
                 format!(
                     "(All {} {})",
                     str_for_bounds(&inner_pvars, &inner_tvars, fun.pvars(), fun.tvars()),
                     fun_parts.join(" ")
                 )
+            } else {
+                format!("({})", fun_parts.join(" "))
             }
         }
         ty::Ty::TyPred(test_ty) => test_ty.to_str().to_owned(),

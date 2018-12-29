@@ -123,7 +123,11 @@ fn unify_top_fun<S: Unifiable>(
 fn unify_fun<S: Unifiable>(tvars: &ty::TVars, fun1: &ty::Fun, fun2: &ty::Fun) -> UnifiedTy<S> {
     let unified_purity = unify_purity_refs(fun1.purity(), fun2.purity());
 
-    if fun1.is_monomorphic() && fun2.is_monomorphic() {
+    if fun1.has_polymorphic_vars() || fun2.has_polymorphic_vars() {
+        // TODO: We could do better here by finding our upper bound and unifying them
+        // Preserving the polymorphicness would be very complex
+        UnifiedTy::Merged(ty::TopFun::new(unified_purity, ty::Ty::Any.into_ty_ref()).into_ty_ref())
+    } else {
         let unified_ret = unify_to_ty_ref(tvars, fun1.ret(), fun2.ret());
 
         match ty::intersect::intersect_list(tvars, fun1.params(), fun2.params()) {
@@ -140,10 +144,6 @@ fn unify_fun<S: Unifiable>(tvars: &ty::TVars, fun1: &ty::Fun, fun2: &ty::Fun) ->
                 UnifiedTy::Merged(ty::TopFun::new(unified_purity, unified_ret).into_ty_ref())
             }
         }
-    } else {
-        // TODO: We could do better here by finding our upper bound and unifying them
-        // Preserving the polymorphicness would be very complex
-        UnifiedTy::Merged(ty::TopFun::new(unified_purity, ty::Ty::Any.into_ty_ref()).into_ty_ref())
     }
 }
 
