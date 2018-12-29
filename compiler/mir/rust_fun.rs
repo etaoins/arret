@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use syntax::span::Span;
 
 use crate::codegen::GenABI;
@@ -8,6 +10,53 @@ use crate::mir::ops;
 use crate::mir::value::Value;
 use crate::ty;
 use crate::ty::purity;
+use crate::ty::purity::Purity;
+
+/// Returns the purity for a Rust fun application
+///
+/// Rust funs cannot capture pvars so this only needs to look at the pvars from the apply
+pub fn rust_fun_app_purity(
+    apply_pvar_purities: &HashMap<purity::PVarId, purity::Poly>,
+    rust_fun: &hir::rfi::Fun,
+) -> Purity {
+    use crate::ty::TyRef;
+    let arret_fun_type = rust_fun.arret_fun_type();
+
+    if arret_fun_type.ret().is_never() {
+        // This is a hack for things like `panic`. Pure funs are allowed to panic but if they
+        // return `(U)` they're likely only called to terminate the program. Without this `panic`
+        // would be optimised away.
+        return Purity::Impure;
+    }
+
+    match arret_fun_type.purity() {
+        purity::Poly::Fixed(purity) => *purity,
+        purity::Poly::Var(pvar_id) => {
+            if let purity::Poly::Fixed(purity) = apply_pvar_purities
+                .get(pvar_id)
+                .expect("Unable to find PVar when monomorphising Rust fun apply")
+            {
+                *purity
+            } else {
+                panic!("found polymorphic purity during Rust fun apply");
+            }
+        }
+    }
+}
+
+/// Returns the upper bound on the purity for a Rust fun
+pub fn rust_fun_purity_upper_bound(rust_fun: &hir::rfi::Fun) -> Purity {
+    use crate::ty::TyRef;
+    let arret_fun_type = rust_fun.arret_fun_type();
+
+    if arret_fun_type.ret().is_never() {
+        Purity::Impure
+    } else if arret_fun_type.purity() == &Purity::Pure.into_poly() {
+        Purity::Pure
+    } else {
+        Purity::Impure
+    }
+}
 
 pub fn build_rust_fun_app(
     ehx: &mut EvalHirCtx,
@@ -15,6 +64,7 @@ pub fn build_rust_fun_app(
     span: Span,
     ret_ty: &ty::Mono,
     rust_fun: &hir::rfi::Fun,
+    call_purity: Purity,
     arg_list_value: Value,
 ) -> Value {
     use crate::mir::ops::*;
@@ -50,10 +100,7 @@ pub fn build_rust_fun_app(
         arg_regs.push(reg_id.into());
     };
 
-    // TODO: Fix for polymorphism once it's supported
-    // This will need to be split in to `always_impure` for the Symbol and a `call_impure` for this call site
-    let impure = (rust_fun.arret_fun_type().purity() != &purity::Purity::Pure.into_poly())
-        || rust_fun.arret_fun_type().ret() == &ty::Ty::never().into_poly();
+    let purity_upper_bound = rust_fun_purity_upper_bound(rust_fun);
 
     let abi = GenABI {
         takes_task: rust_fun.takes_task(),
@@ -64,7 +111,7 @@ pub fn build_rust_fun_app(
     ehx.register_rust_fun_with_jit(rust_fun);
     let callee = ops::Callee::StaticSymbol(ops::StaticSymbol {
         symbol: rust_fun.symbol(),
-        impure,
+        impure: purity_upper_bound == Purity::Impure,
         abi,
     });
 
@@ -73,7 +120,7 @@ pub fn build_rust_fun_app(
         OpKind::Call,
         CallOp {
             callee,
-            impure,
+            impure: call_purity == Purity::Impure,
             args: arg_regs.into_boxed_slice(),
         },
     );
@@ -108,8 +155,17 @@ pub fn ops_for_rust_fun(
         ..
     } = build_load_arg_list_value(&mut b, &wanted_abi, false, has_rest);
 
+    let purity_upper_bound = rust_fun_purity_upper_bound(rust_fun);
     let ret_ty = ty::Ty::Any.into_mono();
-    let return_value = build_rust_fun_app(ehx, &mut b, span, &ret_ty, rust_fun, arg_list_value);
+    let return_value = build_rust_fun_app(
+        ehx,
+        &mut b,
+        span,
+        &ret_ty,
+        rust_fun,
+        purity_upper_bound,
+        arg_list_value,
+    );
 
     build_ret_value(ehx, &mut b, span, &return_value, &wanted_abi.ret);
 

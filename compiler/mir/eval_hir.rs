@@ -546,17 +546,16 @@ impl EvalHirCtx {
         apply_args: ApplyArgs<'_>,
     ) -> Result<Value> {
         use crate::mir::intrinsic;
-        use crate::mir::rust_fun::build_rust_fun_app;
+        use crate::mir::rust_fun::{build_rust_fun_app, rust_fun_app_purity};
         use crate::mir::value::to_const::value_to_const;
 
         let ApplyArgs {
             list_value: arg_list_value,
-            ..
+            ty_args,
         } = apply_args;
 
-        // TODO: Fix for polymorphism once it's supported
-        let can_const_eval =
-            b.is_none() || rust_fun.arret_fun_type().purity() == &purity::Purity::Pure.into_poly();
+        let call_purity = rust_fun_app_purity(ty_args.pvar_purities(), rust_fun);
+        let can_const_eval = b.is_none() || (call_purity == purity::Purity::Pure);
 
         if let Some(intrinsic_name) = rust_fun.intrinsic_name() {
             // Attempt specialised evaluation
@@ -597,6 +596,7 @@ impl EvalHirCtx {
                 span,
                 ret_ty,
                 rust_fun,
+                call_purity,
                 arg_list_value,
             ))
         } else {
