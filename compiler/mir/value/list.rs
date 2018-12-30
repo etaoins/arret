@@ -8,6 +8,8 @@ use crate::mir::value;
 use crate::mir::value::Value;
 
 pub fn list_value_length(value: &Value) -> Option<usize> {
+    use runtime::boxed;
+
     match value {
         Value::List(fixed, rest) => {
             let fixed_len = fixed.len();
@@ -16,6 +18,9 @@ pub fn list_value_length(value: &Value) -> Option<usize> {
                 Some(rest) => list_value_length(rest).map(|rest_len| fixed_len + rest_len),
                 None => Some(fixed_len),
             }
+        }
+        Value::Const(any_ref) => {
+            any_ref.downcast_ref::<boxed::TopList>().map(|top_list| top_list.as_list().len())
         }
         _ => None,
     }
@@ -127,6 +132,39 @@ mod test {
     use runtime::boxed;
     use runtime::boxed::prelude::*;
     use syntax::span::EMPTY_SPAN;
+
+    #[test]
+    fn list_length() {
+        let mut heap = boxed::Heap::new();
+        let elements = &[1, 2, 3];
+
+        // Start with three fixed values
+        let fixed_values: Vec<Value> = elements
+            .iter()
+            .map(|element| {
+                let element_ref = boxed::Int::new(&mut heap, *element).as_any_ref();
+                Value::Const(element_ref)
+            })
+            .collect();
+
+        // Have a constant list tail
+        let boxed_list_tail =
+            boxed::List::<boxed::Int>::from_values(&mut heap, elements.iter().cloned());
+
+        let const_list_tail = Value::List(
+            Box::new([]),
+            Some(Box::new(Value::Const(boxed_list_tail.as_any_ref()))),
+        );
+
+        // Add the fixed values (3 elements) to the constant tail (3 elements)
+        let list_value = Value::List(
+            fixed_values.into_boxed_slice(),
+            Some(Box::new(const_list_tail)),
+        );
+
+        // The length should be 6
+        assert_eq!(Some(6), list_value_length(&list_value));
+    }
 
     #[test]
     fn const_list_iter() {
