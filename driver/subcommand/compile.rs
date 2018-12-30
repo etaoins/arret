@@ -1,10 +1,9 @@
 use std::path;
 
 use compiler::error::Error;
+use compiler::reporting::report_to_stderr;
 
 use crate::DriverConfig;
-
-use compiler::reporting::report_to_stderr;
 
 fn try_compile_input_file(
     cfg: &DriverConfig,

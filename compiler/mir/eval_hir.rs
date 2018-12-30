@@ -1303,8 +1303,6 @@ impl EvalHirCtx {
     }
 
     /// Evaluates the main function of a program
-    ///
-    /// This is intended for use by run-pass tests to avoid creating a temporary binary
     pub fn eval_main_fun(&mut self, main_var_id: hir::VarId) -> Result<()> {
         use syntax::span::EMPTY_SPAN;
 

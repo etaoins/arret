@@ -64,6 +64,11 @@ fn main() {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("eval")
+                .about("Evaluates an Arret program once")
+                .arg(Arg::with_name("INPUT").help("Input source file").index(1)),
+        )
+        .subcommand(
             SubCommand::with_name("repl")
                 .about("Starts an interactive REPL")
                 .arg(
@@ -89,7 +94,6 @@ fn main() {
         };
 
         let input_param = compile_matches.value_of("INPUT").unwrap();
-
         let input_path = path::Path::new(input_param);
 
         let output_path = match compile_matches.value_of("OUTPUT") {
@@ -124,6 +128,20 @@ fn main() {
             .map(|include_param| path::Path::new(include_param).to_owned());
 
         subcommand::repl::interactive_loop(&cfg, include_path);
+    } else if let Some(eval_matches) = matches.subcommand_matches("eval") {
+        let cfg = DriverConfig {
+            package_paths: compiler::PackagePaths::with_stdlib(&arret_target_dir, None),
+            llvm_opt,
+        };
+
+        let input_param = eval_matches.value_of("INPUT").unwrap();
+        let input_path = path::Path::new(input_param);
+
+        initialise_llvm(false);
+
+        if !subcommand::eval::eval_input_file(&cfg, input_path) {
+            process::exit(2);
+        }
     } else {
         eprintln!("Sub-command not specified");
         process::exit(1);
