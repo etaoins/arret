@@ -34,6 +34,10 @@ impl<'list> ListIterator {
         }
     }
 
+    /// Returns the next element in the list
+    ///
+    /// It is undefined if the list has no more elements. This function may panic, generate
+    /// nonsense code, generate code that crashes at runtime, etc.
     pub fn next_unchecked(&mut self, b: &mut impl TryToBuilder, span: Span) -> Value {
         if let Some(next) = self.fixed.next() {
             return next;
@@ -80,6 +84,7 @@ impl<'list> ListIterator {
         }
     }
 
+    /// Returns a Value containing the rest of the iterator
     pub fn into_rest(self) -> Value {
         Value::List(
             self.fixed.collect::<Vec<Value>>().into_boxed_slice(),
@@ -112,5 +117,65 @@ impl<'list> ListIterator {
             head_reg,
             abitype::BoxedABIType::Any.into(),
         )))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use runtime::boxed;
+    use runtime::boxed::prelude::*;
+    use syntax::span::EMPTY_SPAN;
+
+    #[test]
+    fn const_list_iter() {
+        let mut heap = boxed::Heap::new();
+
+        let elements = &[1, 2, 3];
+
+        let boxed_list =
+            boxed::List::<boxed::Int>::from_values(&mut heap, elements.iter().cloned());
+
+        let mut iter = ListIterator::new(vec![], Some(Value::Const(boxed_list.as_any_ref())));
+
+        for expected in elements {
+            let next_value = iter.next_unchecked(&mut None, EMPTY_SPAN);
+
+            if let Value::Const(next_ref) = next_value {
+                let expected_ref = boxed::Int::new(&mut heap, *expected).as_any_ref();
+                assert_eq!(expected_ref, next_ref);
+            } else {
+                panic!("expected const value, got {:?}", next_value);
+            }
+        }
+    }
+
+    #[test]
+    fn fixed_list_value_iter() {
+        let mut heap = boxed::Heap::new();
+
+        let elements = &[1, 2, 3];
+
+        let element_values: Vec<Value> = elements
+            .iter()
+            .map(|element| {
+                let element_ref = boxed::Int::new(&mut heap, *element).as_any_ref();
+                Value::Const(element_ref)
+            })
+            .collect();
+
+        let mut iter = ListIterator::new(element_values, None);
+
+        for expected in elements {
+            let next_value = iter.next_unchecked(&mut None, EMPTY_SPAN);
+
+            if let Value::Const(next_ref) = next_value {
+                let expected_ref = boxed::Int::new(&mut heap, *expected).as_any_ref();
+                assert_eq!(expected_ref, next_ref);
+            } else {
+                panic!("expected const value, got {:?}", next_value);
+            }
+        }
     }
 }
