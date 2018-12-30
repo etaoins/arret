@@ -20,6 +20,7 @@ use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::error::{Error, ErrorKind, Result};
 use crate::mir::inliner;
 use crate::mir::ops;
+use crate::mir::polymorph::PolymorphABI;
 use crate::mir::value;
 use crate::mir::{Expr, Value};
 use crate::ty;
@@ -29,15 +30,13 @@ use crate::ty::ty_args::{MonoTyArgs, PolyTyArgs};
 #[derive(PartialEq, Eq, Hash)]
 struct RustFunKey {
     symbol: &'static str,
-    wanted_abi: ops::OpsABI,
-    has_rest: bool,
+    polymorph_abi: PolymorphABI,
 }
 
 #[derive(PartialEq, Eq, Hash)]
 struct ArretFunKey {
     arret_fun_id: value::ArretFunId,
-    wanted_abi: ops::OpsABI,
-    has_rest: bool,
+    polymorph_abi: PolymorphABI,
 }
 
 pub struct EvalHirCtx {
@@ -408,12 +407,11 @@ impl EvalHirCtx {
         }
 
         let thunk = unsafe {
-            use crate::mir::ops::OpsABI;
             use crate::mir::rust_fun::ops_for_rust_fun;
             use std::mem;
 
-            let wanted_abi = OpsABI::thunk_abi();
-            let ops_fun = ops_for_rust_fun(self, EMPTY_SPAN, rust_fun, wanted_abi, true);
+            let wanted_abi = PolymorphABI::thunk_abi();
+            let ops_fun = ops_for_rust_fun(self, EMPTY_SPAN, rust_fun, wanted_abi);
             let address = self.thunk_jit.compile_fun(&self.private_funs, &ops_fun);
 
             mem::transmute(address as usize)
@@ -444,15 +442,13 @@ impl EvalHirCtx {
         &mut self,
         span: Span,
         rust_fun: &hir::rfi::Fun,
-        wanted_abi: ops::OpsABI,
-        has_rest: bool,
+        wanted_abi: PolymorphABI,
     ) -> ops::PrivateFunId {
         use crate::mir::rust_fun::ops_for_rust_fun;
 
         let rust_fun_key = RustFunKey {
             symbol: rust_fun.symbol(),
-            wanted_abi: wanted_abi.clone(),
-            has_rest,
+            polymorph_abi: wanted_abi.clone(),
         };
 
         if let Some(private_fun_id) = self.rust_funs.get(&rust_fun_key) {
@@ -462,7 +458,7 @@ impl EvalHirCtx {
         let private_fun_id = self.private_fun_id_counter.alloc();
         self.rust_funs.insert(rust_fun_key, private_fun_id);
 
-        let ops_fun = ops_for_rust_fun(self, span, rust_fun, wanted_abi, has_rest);
+        let ops_fun = ops_for_rust_fun(self, span, rust_fun, wanted_abi);
         self.private_funs.insert(private_fun_id, ops_fun);
 
         private_fun_id
@@ -477,8 +473,8 @@ impl EvalHirCtx {
         use crate::mir::ops::*;
         use runtime::abitype;
 
-        let wanted_abi = OpsABI::thunk_abi();
-        let private_fun_id = self.id_for_rust_fun(span, rust_fun, wanted_abi, true);
+        let wanted_abi = PolymorphABI::thunk_abi();
+        let private_fun_id = self.id_for_rust_fun(span, rust_fun, wanted_abi);
 
         let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
         let closure_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
@@ -504,7 +500,7 @@ impl EvalHirCtx {
         use runtime::abitype;
 
         let wanted_abi = entry_point_abi.clone().into();
-        let private_fun_id = self.id_for_rust_fun(span, rust_fun, wanted_abi, false);
+        let private_fun_id = self.id_for_rust_fun(span, rust_fun, wanted_abi);
 
         let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
         let closure_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
@@ -928,9 +924,9 @@ impl EvalHirCtx {
     pub fn arret_fun_to_jit_boxed(&mut self, arret_fun: &value::ArretFun) -> Gc<boxed::FunThunk> {
         use std::mem;
 
-        let wanted_abi = ops::OpsABI::thunk_abi();
+        let wanted_abi = PolymorphABI::thunk_abi();
         let ops_fun = self
-            .ops_for_arret_fun(&arret_fun, wanted_abi, true)
+            .ops_for_arret_fun(&arret_fun, wanted_abi)
             .expect("error during arret fun boxing");
 
         let address = self.thunk_jit.compile_fun(&self.private_funs, &ops_fun);
@@ -950,13 +946,11 @@ impl EvalHirCtx {
     fn id_for_arret_fun(
         &mut self,
         arret_fun: &value::ArretFun,
-        wanted_abi: ops::OpsABI,
-        has_rest: bool,
+        wanted_abi: PolymorphABI,
     ) -> ops::PrivateFunId {
         let arret_fun_key = ArretFunKey {
             arret_fun_id: arret_fun.id,
-            wanted_abi: wanted_abi.clone(),
-            has_rest,
+            polymorph_abi: wanted_abi.clone(),
         };
 
         if let Some(private_fun_id) = self.arret_funs.get(&arret_fun_key) {
@@ -969,7 +963,7 @@ impl EvalHirCtx {
         self.arret_funs.insert(arret_fun_key, private_fun_id);
 
         let ops_fun = self
-            .ops_for_arret_fun(arret_fun, wanted_abi, has_rest)
+            .ops_for_arret_fun(arret_fun, wanted_abi)
             .expect("error during arret fun boxing");
         self.private_funs.insert(private_fun_id, ops_fun);
 
@@ -986,8 +980,8 @@ impl EvalHirCtx {
         use crate::mir::ops::*;
         use runtime::abitype;
 
-        let wanted_abi = OpsABI::thunk_abi();
-        let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi, true);
+        let wanted_abi = PolymorphABI::thunk_abi();
+        let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
 
         let closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure);
 
@@ -1027,7 +1021,7 @@ impl EvalHirCtx {
         use runtime::abitype;
 
         let wanted_abi = entry_point_abi.clone().into();
-        let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi, false);
+        let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
 
         let closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure)
             .unwrap_or_else(|| {
@@ -1048,8 +1042,7 @@ impl EvalHirCtx {
     fn ops_for_arret_fun(
         &mut self,
         arret_fun: &value::ArretFun,
-        wanted_abi: ops::OpsABI,
-        has_rest: bool,
+        wanted_abi: PolymorphABI,
     ) -> Result<ops::Fun> {
         use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
         use crate::mir::closure;
@@ -1063,12 +1056,7 @@ impl EvalHirCtx {
             closure_reg,
             param_regs,
             arg_list_value,
-        } = build_load_arg_list_value(
-            &mut b,
-            &wanted_abi,
-            arret_fun.closure.needs_closure_param(),
-            has_rest,
-        );
+        } = build_load_arg_list_value(&mut b, &wanted_abi);
 
         // Start by taking the type args from the fun's enclosing environment
         let mut fcx = FunCtx::with_mono_ty_args(arret_fun.env_ty_args.clone());
@@ -1097,13 +1085,13 @@ impl EvalHirCtx {
         )?;
         let mut b = some_b.unwrap();
 
-        build_ret_value(self, &mut b, span, &result_value, &wanted_abi.ret);
+        build_ret_value(self, &mut b, span, &result_value, &wanted_abi.ops_abi.ret);
 
         Ok(optimise_fun(ops::Fun {
             span: arret_fun.span,
             source_name: arret_fun.source_name.clone(),
 
-            abi: wanted_abi,
+            abi: wanted_abi.ops_abi,
             params: param_regs,
             ops: b.into_ops(),
         }))
@@ -1119,7 +1107,7 @@ impl EvalHirCtx {
         use crate::mir::ret_value::build_ret_value;
         use runtime::abitype;
 
-        let ops_abi: ops::OpsABI = entry_point_abi.into();
+        let wanted_abi = entry_point_abi.into();
 
         let mut b = Builder::new();
 
@@ -1127,7 +1115,7 @@ impl EvalHirCtx {
             closure_reg,
             param_regs,
             arg_list_value,
-        } = build_load_arg_list_value(&mut b, &ops_abi, true, false);
+        } = build_load_arg_list_value(&mut b, &wanted_abi);
 
         let fun_reg_value =
             value::RegValue::new(closure_reg.unwrap(), abitype::BoxedABIType::Any.into());
@@ -1135,13 +1123,19 @@ impl EvalHirCtx {
         let result_value =
             self.build_reg_fun_thunk_app(&mut b, EMPTY_SPAN, &fun_reg_value, &arg_list_value);
 
-        build_ret_value(self, &mut b, EMPTY_SPAN, &result_value, &ops_abi.ret);
+        build_ret_value(
+            self,
+            &mut b,
+            EMPTY_SPAN,
+            &result_value,
+            &wanted_abi.ops_abi.ret,
+        );
 
         optimise_fun(ops::Fun {
             span: EMPTY_SPAN,
             source_name: Some("callback_to_thunk_adapter".to_owned()),
 
-            abi: ops_abi,
+            abi: wanted_abi.ops_abi,
             params: param_regs,
             ops: b.into_ops(),
         })
@@ -1338,14 +1332,17 @@ impl EvalHirCtx {
             unimplemented!("Non-Arret main!");
         };
 
-        let main_abi = ops::OpsABI {
+        let main_abi = PolymorphABI {
+            ops_abi: ops::OpsABI {
+                params: Box::new([]),
+                ret: abitype::RetABIType::Void,
+            },
             // Main is a top-level function; it can't capture
-            external_call_conv: false,
-            params: Box::new([]),
-            ret: abitype::RetABIType::Void,
+            has_closure: false,
+            has_rest: false,
         };
 
-        let main = self.ops_for_arret_fun(&main_arret_fun, main_abi, false)?;
+        let main = self.ops_for_arret_fun(&main_arret_fun, main_abi)?;
 
         Ok(BuiltProgram {
             main,

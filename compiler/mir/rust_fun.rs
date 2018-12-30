@@ -7,6 +7,7 @@ use crate::hir;
 use crate::mir::builder::Builder;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops;
+use crate::mir::polymorph::PolymorphABI;
 use crate::mir::value::Value;
 use crate::ty;
 use crate::ty::purity;
@@ -139,8 +140,7 @@ pub fn ops_for_rust_fun(
     ehx: &mut EvalHirCtx,
     span: Span,
     rust_fun: &hir::rfi::Fun,
-    wanted_abi: ops::OpsABI,
-    has_rest: bool,
+    wanted_abi: PolymorphABI,
 ) -> ops::Fun {
     use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
     use crate::mir::optimise::optimise_fun;
@@ -153,7 +153,7 @@ pub fn ops_for_rust_fun(
         param_regs,
         arg_list_value,
         ..
-    } = build_load_arg_list_value(&mut b, &wanted_abi, false, has_rest);
+    } = build_load_arg_list_value(&mut b, &wanted_abi);
 
     let purity_upper_bound = rust_fun_purity_upper_bound(rust_fun);
     let ret_ty = ty::Ty::Any.into_mono();
@@ -167,13 +167,13 @@ pub fn ops_for_rust_fun(
         arg_list_value,
     );
 
-    build_ret_value(ehx, &mut b, span, &return_value, &wanted_abi.ret);
+    build_ret_value(ehx, &mut b, span, &return_value, &wanted_abi.ops_abi.ret);
 
     optimise_fun(ops::Fun {
         span,
         source_name: Some(fun_symbol),
 
-        abi: wanted_abi,
+        abi: wanted_abi.ops_abi,
         params: param_regs,
         ops: b.into_ops(),
     })

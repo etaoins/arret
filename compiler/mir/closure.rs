@@ -24,13 +24,6 @@ impl Closure {
             free_values: vec![],
         }
     }
-
-    /// Determines if this closure needs to be saved and loaded to a register
-    ///
-    /// Empty and constant closures will return false
-    pub fn needs_closure_param(&self) -> bool {
-        !self.free_values.is_empty()
-    }
 }
 
 fn can_reference_local_regs(value: &Value) -> bool {

@@ -287,7 +287,6 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
-                external_call_conv: false,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: RetABIType::Void,
             },
@@ -308,7 +307,6 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
-                external_call_conv: false,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::Int.into(),
             },
@@ -330,7 +328,6 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
-                external_call_conv: false,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::TopPair.into(),
             },
@@ -364,7 +361,6 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
-                external_call_conv: false,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::TopPair.into(),
             },
@@ -433,7 +429,6 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
-                external_call_conv: false,
                 params: Box::new([
                     boxed::TypeTag::Int.into(),
                     boxed::TypeTag::Int.into(),
@@ -492,7 +487,6 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
-                external_call_conv: false,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::TopPair.into(),
             },

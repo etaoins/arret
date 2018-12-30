@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::ops;
+use crate::mir::polymorph::PolymorphABI;
 use crate::mir::value;
 use crate::mir::value::Value;
 
@@ -19,25 +20,20 @@ pub struct LoadedArgList {
 /// Builds the regs and ops for loading the argument list of a function
 ///
 /// This results in an argument list value which contains all arguments passed to the function.
-pub fn build_load_arg_list_value(
-    b: &mut Builder,
-    wanted_abi: &ops::OpsABI,
-    has_closure: bool,
-    has_rest: bool,
-) -> LoadedArgList {
-    let closure_reg = if wanted_abi.external_call_conv || has_closure {
+pub fn build_load_arg_list_value(b: &mut Builder, polymorph_abi: &PolymorphABI) -> LoadedArgList {
+    let closure_reg = if polymorph_abi.has_closure {
         Some(b.alloc_local())
     } else {
         None
     };
 
-    let mut abi_params_iter = wanted_abi.params.iter();
+    let mut abi_params_iter = polymorph_abi.ops_abi.params.iter();
 
     if closure_reg.is_some() {
         abi_params_iter.next();
     }
 
-    let rest_reg_value = if has_rest {
+    let rest_reg_value = if polymorph_abi.has_rest {
         let abi_type = abi_params_iter.next_back().unwrap();
 
         Some(Rc::new(value::RegValue::new(
@@ -49,12 +45,7 @@ pub fn build_load_arg_list_value(
     };
 
     let fixed_reg_values = abi_params_iter
-        .map(|abi_type| {
-            Rc::new(value::RegValue::new(
-                b.alloc_local(),
-                abi_type.clone(),
-            ))
-        })
+        .map(|abi_type| Rc::new(value::RegValue::new(b.alloc_local(), abi_type.clone())))
         .collect::<Vec<Rc<value::RegValue>>>();
 
     let param_regs = closure_reg

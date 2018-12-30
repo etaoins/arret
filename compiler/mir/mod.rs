@@ -14,6 +14,7 @@ mod rust_fun;
 mod tagset;
 mod typred;
 mod value;
+mod polymorph;
 
 pub use crate::mir::eval_hir::BuiltProgram;
 pub use crate::mir::value::Value;

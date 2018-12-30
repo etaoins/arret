@@ -12,11 +12,6 @@ new_global_id_type!(RegId);
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct OpsABI {
-    /// Indicates if this function must be externally callable
-    ///
-    /// This ensures the function takes both a task and closure even if they're unused.
-    pub external_call_conv: bool,
-
     pub params: Box<[abitype::ABIType]>,
     pub ret: abitype::RetABIType,
 }
@@ -24,7 +19,6 @@ pub struct OpsABI {
 impl OpsABI {
     pub fn thunk_abi() -> OpsABI {
         OpsABI {
-            external_call_conv: true,
             params: Box::new([
                 // Closure
                 abitype::BoxedABIType::Any.into(),
@@ -47,7 +41,6 @@ impl From<callback::EntryPointABIType> for OpsABI {
             .into_boxed_slice();
 
         OpsABI {
-            external_call_conv: true,
             params,
             ret: abi_type.ret,
         }
