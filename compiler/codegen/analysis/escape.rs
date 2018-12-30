@@ -172,10 +172,24 @@ impl<'of> ProgramCaptureCtx<'of> {
                     }
                     ops::Callee::PrivateFun(private_fun_id) => {
                         let ops_fun = &self.private_funs[private_fun_id];
-                        let callee_captures = self.captures_for_private_fun_id(*private_fun_id);
 
-                        for (arg_reg, param_reg) in args.iter().zip(ops_fun.params.iter()) {
-                            captures.add(*arg_reg, callee_captures.get(*param_reg));
+                        if !self.recursing_private_funs.contains(private_fun_id) {
+                            let callee_captures = self.captures_for_private_fun_id(*private_fun_id);
+
+                            for (arg_reg, param_reg) in args.iter().zip(ops_fun.params.iter()) {
+                                captures.add(*arg_reg, callee_captures.get(*param_reg));
+                            }
+                        } else {
+                            // This is part of a recursive loop; assume everything is captured.
+
+                            // While this seems like an easy way out this is probably the right
+                            // thing to do. If there are many loop iterations at runtime we do
+                            // not want to allocate boxes on the stack. This both prevents tail
+                            // recursion and can lead to a stack overflow. By claiming that
+                            // everything is captured we force them to be heap allocated.
+                            for arg_reg in args.iter() {
+                                captures.add(*arg_reg, CaptureKind::Always);
+                            }
                         }
                     }
                     ops::Callee::BoxedFunThunk(_) => {

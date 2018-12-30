@@ -268,18 +268,52 @@ impl EvalHirCtx {
         &mut self,
         b: &mut Builder,
         span: Span,
+        ret_ty: &ty::Mono,
         arret_fun: &value::ArretFun,
-        arg_list_value: &Value,
+        arg_list_value: Value,
     ) -> Value {
-        use runtime::boxed::TypeTag;
+        use crate::mir::arg_list::build_save_arg_list_to_regs;
+        use crate::mir::closure;
+        use crate::mir::ops::*;
+        use crate::mir::polymorph::polymorph_abi_for_arg_list_value;
+        use crate::mir::ret_value::ret_reg_to_value;
 
-        // TODO: This is terrible codegen. This is just a placeholder to test recursion
-        let fun_reg_value = value::RegValue::new(
-            self.arret_fun_to_thunk_reg(b, span, arret_fun),
-            TypeTag::FunThunk.into(),
+        let closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure);
+
+        let wanted_abi =
+            polymorph_abi_for_arg_list_value(closure_reg.is_some(), &arg_list_value, ret_ty);
+        let ret_abi = wanted_abi.ops_abi.ret.clone();
+
+        let mut arg_regs: Vec<RegId> = vec![];
+        if let Some(closure_reg) = closure_reg {
+            arg_regs.push(closure_reg.into());
+        }
+
+        arg_regs.extend(build_save_arg_list_to_regs(
+            self,
+            b,
+            span,
+            arg_list_value,
+            wanted_abi.ops_abi.params.iter(),
+            wanted_abi.has_rest,
+        ));
+
+        let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
+
+        // TODO: Support polymorphic purity
+        let impure = arret_fun.fun_expr.purity != purity::Purity::Pure.into_poly();
+
+        let ret_reg = b.push_reg(
+            span,
+            OpKind::Call,
+            CallOp {
+                callee: Callee::PrivateFun(private_fun_id),
+                impure,
+                args: arg_regs.into_boxed_slice(),
+            },
         );
 
-        self.build_reg_fun_thunk_app(b, span, &fun_reg_value, arg_list_value)
+        ret_reg_to_value(ret_reg, ret_abi)
     }
 
     fn inline_arret_fun_app(
@@ -320,6 +354,7 @@ impl EvalHirCtx {
         fcx: &mut FunCtx,
         b: &mut Option<Builder>,
         span: Span,
+        ret_ty: &ty::Mono,
         arret_fun: &value::ArretFun,
         apply_args: ApplyArgs<'_>,
     ) -> Result<Value> {
@@ -345,7 +380,13 @@ impl EvalHirCtx {
                 Ok(value)
             } else {
                 // We need to build an out-of-line application
-                Ok(self.build_arret_fun_app(outer_b, span, arret_fun, &apply_args.list_value))
+                Ok(self.build_arret_fun_app(
+                    outer_b,
+                    span,
+                    ret_ty,
+                    arret_fun,
+                    apply_args.list_value,
+                ))
             }
         } else {
             // No builder; we need to inline
@@ -704,7 +745,7 @@ impl EvalHirCtx {
                 use crate::mir::closure;
 
                 closure::load_from_current_fun(&mut fcx.local_values, &arret_fun.closure);
-                self.eval_arret_fun_app(fcx, b, span, &arret_fun, apply_args)
+                self.eval_arret_fun_app(fcx, b, span, ret_ty, &arret_fun, apply_args)
             }
             Value::RustFun(rust_fun) => {
                 self.eval_rust_fun_app(b, span, ret_ty, &rust_fun, apply_args)
@@ -1047,7 +1088,7 @@ impl EvalHirCtx {
         use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
         use crate::mir::closure;
         use crate::mir::optimise::optimise_fun;
-        use crate::mir::ret_value::build_ret_value;
+        use crate::mir::ret_value::build_value_ret;
 
         let mut b = Builder::new();
         let span = arret_fun.span;
@@ -1085,7 +1126,7 @@ impl EvalHirCtx {
         )?;
         let mut b = some_b.unwrap();
 
-        build_ret_value(self, &mut b, span, &result_value, &wanted_abi.ops_abi.ret);
+        build_value_ret(self, &mut b, span, &result_value, &wanted_abi.ops_abi.ret);
 
         Ok(optimise_fun(ops::Fun {
             span: arret_fun.span,
@@ -1104,7 +1145,7 @@ impl EvalHirCtx {
     ) -> ops::Fun {
         use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
         use crate::mir::optimise::optimise_fun;
-        use crate::mir::ret_value::build_ret_value;
+        use crate::mir::ret_value::build_value_ret;
         use runtime::abitype;
 
         let wanted_abi = entry_point_abi.into();
@@ -1123,7 +1164,7 @@ impl EvalHirCtx {
         let result_value =
             self.build_reg_fun_thunk_app(&mut b, EMPTY_SPAN, &fun_reg_value, &arg_list_value);
 
-        build_ret_value(
+        build_value_ret(
             self,
             &mut b,
             EMPTY_SPAN,

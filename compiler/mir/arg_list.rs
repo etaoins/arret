@@ -1,6 +1,11 @@
 use std::rc::Rc;
 
+use syntax::span::Span;
+
+use runtime::abitype;
+
 use crate::mir::builder::{Builder, BuiltReg};
+use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops;
 use crate::mir::polymorph::PolymorphABI;
 use crate::mir::value;
@@ -74,4 +79,37 @@ pub fn build_load_arg_list_value(b: &mut Builder, polymorph_abi: &PolymorphABI) 
         param_regs,
         arg_list_value,
     }
+}
+
+pub fn build_save_arg_list_to_regs<'a>(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    arg_list_value: Value,
+    mut arg_abi_types: impl DoubleEndedIterator<Item = &'a abitype::ABIType>,
+    has_rest: bool,
+) -> Vec<ops::RegId> {
+    use crate::mir::value::build_reg::value_to_reg;
+
+    let mut list_iter = arg_list_value.into_list_iter();
+
+    let rest_abi_type = if has_rest {
+        arg_abi_types.next_back()
+    } else {
+        None
+    };
+
+    let mut arg_regs = vec![];
+    for abi_type in arg_abi_types {
+        let fixed_value = list_iter.next_unchecked(b, span);
+        let reg_id = value_to_reg(ehx, b, span, &fixed_value, &abi_type);
+        arg_regs.push(reg_id.into());
+    }
+
+    if let Some(rest_abi_type) = rest_abi_type {
+        let reg_id = value_to_reg(ehx, b, span, &list_iter.into_rest(), &rest_abi_type);
+        arg_regs.push(reg_id.into());
+    };
+
+    arg_regs
 }

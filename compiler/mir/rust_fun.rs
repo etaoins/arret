@@ -68,38 +68,24 @@ pub fn build_rust_fun_app(
     call_purity: Purity,
     arg_list_value: Value,
 ) -> Value {
+    use crate::mir::arg_list::build_save_arg_list_to_regs;
     use crate::mir::ops::*;
-    use crate::mir::value::build_reg::value_to_reg;
     use crate::mir::value::from_reg::reg_to_value;
     use runtime::abitype::RetABIType;
 
-    let mut list_iter = arg_list_value.into_list_iter();
-    let mut arg_regs = vec![];
+    let arg_abi_types = rust_fun
+        .params()
+        .iter()
+        .map(|param_abi_type| &param_abi_type.abi_type);
 
-    let mut rust_param_iter = rust_fun.params().iter();
-
-    let rest_abi_type = if rust_fun.has_rest() {
-        rust_param_iter.next_back()
-    } else {
-        None
-    };
-
-    for param_abi_type in rust_param_iter {
-        let fixed_value = list_iter.next_unchecked(b, span);
-        let reg_id = value_to_reg(ehx, b, span, &fixed_value, &param_abi_type.abi_type);
-        arg_regs.push(reg_id.into());
-    }
-
-    if let Some(rest_abi_type) = rest_abi_type {
-        let reg_id = value_to_reg(
-            ehx,
-            b,
-            span,
-            &list_iter.into_rest(),
-            &rest_abi_type.abi_type,
-        );
-        arg_regs.push(reg_id.into());
-    };
+    let arg_regs = build_save_arg_list_to_regs(
+        ehx,
+        b,
+        span,
+        arg_list_value,
+        arg_abi_types,
+        rust_fun.has_rest(),
+    );
 
     let purity_upper_bound = rust_fun_purity_upper_bound(rust_fun);
 
@@ -144,7 +130,7 @@ pub fn ops_for_rust_fun(
 ) -> ops::Fun {
     use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
     use crate::mir::optimise::optimise_fun;
-    use crate::mir::ret_value::build_ret_value;
+    use crate::mir::ret_value::build_value_ret;
 
     let mut b = Builder::new();
     let fun_symbol = format!("{}_adapter", rust_fun.symbol());
@@ -167,7 +153,7 @@ pub fn ops_for_rust_fun(
         arg_list_value,
     );
 
-    build_ret_value(ehx, &mut b, span, &return_value, &wanted_abi.ops_abi.ret);
+    build_value_ret(ehx, &mut b, span, &return_value, &wanted_abi.ops_abi.ret);
 
     optimise_fun(ops::Fun {
         span,
