@@ -35,30 +35,48 @@ impl<'list> ListIterator {
     }
 
     pub fn next_unchecked(&mut self, b: &mut impl TryToBuilder, span: Span) -> Value {
-        match self.fixed.next() {
-            Some(next) => next,
-            None => {
-                match self.rest.take() {
-                    Some(Value::List(fixed, rest)) => {
-                        // Become our tail
-                        self.fixed = fixed.into_vec().into_iter();
-                        self.rest = rest.map(|rest| *rest);
+        if let Some(next) = self.fixed.next() {
+            return next;
+        }
 
-                        self.next_unchecked(b, span)
-                    }
-                    Some(Value::Reg(reg_value)) => {
-                        let b = b
-                            .try_to_builder()
-                            .expect("popping rest argument without builder");
+        let rest_value = self
+            .rest
+            .take()
+            .expect("ran off the end of list with no rest argument");
 
-                        self.build_rest_next(b, span, &reg_value)
-                    }
-                    Some(other) => unimplemented!("popping rest argument off value {:?}", other),
-                    None => {
-                        panic!("Ran off the end of list with no rest argument");
-                    }
-                }
+        match rest_value {
+            Value::List(fixed, rest) => {
+                // Become our tail
+                self.fixed = fixed.into_vec().into_iter();
+                self.rest = rest.map(|rest| *rest);
+
+                self.next_unchecked(b, span)
             }
+            Value::Const(any_ref) => {
+                use runtime::boxed;
+
+                let const_pair = any_ref
+                    .downcast_ref::<boxed::TopPair>()
+                    .expect("tried to pop off non-pair constant")
+                    .as_pair();
+
+                let tail = const_pair.rest();
+                self.rest = if tail.is_empty() {
+                    None
+                } else {
+                    Some(Value::Const(tail.as_any_ref()))
+                };
+
+                Value::Const(const_pair.head())
+            }
+            Value::Reg(reg_value) => {
+                let b = b
+                    .try_to_builder()
+                    .expect("popping rest argument without builder");
+
+                self.build_rest_next(b, span, &reg_value)
+            }
+            other => unimplemented!("popping rest argument off value {:?}", other),
         }
     }
 

@@ -64,6 +64,7 @@ fn abi_type_for_arg_value(_value: &Value) -> abitype::ABIType {
     abitype::BoxedABIType::Any.into()
 }
 
+// TODO: This should use the list iterator so we can deal with chained lists, consts, etc
 fn list_polymorph_abi(
     has_closure: bool,
     fixed: &[Value],
