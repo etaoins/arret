@@ -15,10 +15,10 @@
         (even-length? (rest tail))))))
 
 (defn main! () ->! ()
-  ; TODO: If both the fun and arg are black boxed we ICE
-  (assert-eq '(7 6 5 4 3 2 1) (recursive-reverse '(1 2 3 4 5 6 7)))
-  (assert-eq '("three" "two" "one") (recursive-reverse (black-box! '("one" "two" "three"))))
   (assert-eq '() ((black-box! recursive-reverse) '()))
+  (assert-eq '(()) ((black-box! recursive-reverse) (black-box! '(()))))
+  (assert-eq '("three" "two" "one") (recursive-reverse (black-box! '("one" "two" "three"))))
+  (assert-eq '(7 6 5 4 3 2 1) (recursive-reverse '(1 2 3 4 5 6 7)))
 
   (assert-eq true (even-length? '()))
   (assert-eq false (even-length? (black-box! '(1))))

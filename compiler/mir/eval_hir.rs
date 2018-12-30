@@ -648,22 +648,12 @@ impl EvalHirCtx {
         span: Span,
         ret_ty: &ty::Mono,
         fun_thunk: Gc<boxed::FunThunk>,
-        arg_list_value: Value,
+        apply_args: ApplyArgs<'_>,
     ) -> Result<Value> {
         use crate::mir::value::to_const::value_to_const;
 
         if let Some(actual_value) = self.thunk_fun_values.get(&fun_thunk) {
-            return self.eval_value_app(
-                fcx,
-                b,
-                span,
-                ret_ty,
-                &actual_value.clone(),
-                ApplyArgs {
-                    ty_args: &PolyTyArgs::empty(),
-                    list_value: arg_list_value,
-                },
-            );
+            return self.eval_value_app(fcx, b, span, ret_ty, &actual_value.clone(), apply_args);
         }
 
         if b.is_some() {
@@ -671,7 +661,7 @@ impl EvalHirCtx {
         }
 
         let const_arg_list =
-            value_to_const(self, &arg_list_value).expect("non-constant value during apply");
+            value_to_const(self, &apply_args.list_value).expect("non-constant value during apply");
 
         Self::call_native_fun(span, || {
             fun_thunk.apply(&mut self.runtime_task, const_arg_list)
@@ -761,7 +751,7 @@ impl EvalHirCtx {
                     span,
                     ret_ty,
                     unsafe { Gc::new(fun_thunk) },
-                    apply_args.list_value,
+                    apply_args,
                 ),
                 other => unimplemented!("applying boxed function value type: {:?}", other),
             },
