@@ -75,15 +75,15 @@ pub fn build_rust_fun_app(
     let mut list_iter = arg_list_value.into_list_iter();
     let mut arg_regs = vec![];
 
-    let mut rust_fixed_iter = rust_fun.params().iter();
+    let mut rust_param_iter = rust_fun.params().iter();
 
     let rest_abi_type = if rust_fun.has_rest() {
-        rust_fixed_iter.next_back()
+        rust_param_iter.next_back()
     } else {
         None
     };
 
-    for param_abi_type in rust_fixed_iter {
+    for param_abi_type in rust_param_iter {
         let fixed_value = list_iter.next_unchecked(b, span);
         let reg_id = value_to_reg(ehx, b, span, &fixed_value, &param_abi_type.abi_type);
         arg_regs.push(reg_id.into());
