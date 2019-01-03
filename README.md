@@ -19,16 +19,13 @@ Arret is a successor to [Llambda](https://github.com/etaoins/llambda) without th
    These are the platforms supporting lazy compilation with LLVM's ORC JIT.
 1. [LLVM 7.0](http://releases.llvm.org)
 1. [Rust](https://www.rust-lang.org/en-US/)
-   This project is participating in the [Rust 2018 Preview](https://internals.rust-lang.org/t/rust-2018-an-early-preview/7776).
-   As such it will require the nightly Rust compiler until Rust 2018 is released.
 
 ### Using rustup and Cargo
 
 ```shell
 > curl https://sh.rustup.rs -sSf | sh
-> rustup toolchain install nightly
 > cd ~/path/to/repo/root
-> cargo +nightly run
+> cargo run repl
 ```
 
 ### Using Docker
@@ -47,7 +44,7 @@ The REPL provides an interactive environment for exploring Arret.
 It's supported as a first class concept in Arret; the REPL is just as powerful as the compiler.
 
 ```text
-> cargo +nightly run repl
+> cargo run repl
 arret> (length '(1 2 3 4 5))
 => 5
 arret> (defn identity #{T} ([x : T]) -> T x)
@@ -75,7 +72,7 @@ Compiled programs have a `(main!)` function as their entry point:
 These can be compiled to a static binary by running Arret with the path name:
 
 ```sh
-> cargo +nightly run compile hello-world.arret
+> cargo run compile hello-world.arret
 > ./hello-world
 "Hello, world!"
 ```
