@@ -1,14 +1,12 @@
 steps:
   - label: ":docker: Build & Test"
     command:
-      - /bin/bash -c "cargo build && cargo test"
+      - /bin/bash -c "cargo build && cargo test && ./.buildkite/cross-i686.sh"
     plugins:
       - docker-compose#v2.6.0:
           run: arret
 
   - label: ":docker: Build (Rust Beta)"
-    command:
-      - /bin/bash -c "cargo build && cargo test"
     plugins:
       - docker-compose#v2.6.0:
           build: arret
@@ -16,8 +14,6 @@ steps:
             - rust_toolchain=beta
 
   - label: ":docker: Build (Rust Nightly)"
-    command:
-      - /bin/bash -c "cargo build && cargo test"
     plugins:
       - docker-compose#v2.6.0:
           build: arret
