@@ -3,5 +3,23 @@ steps:
     command:
       - /bin/bash -c "cargo build && cargo test"
     plugins:
-      - docker-compose#v2.5.1:
+      - docker-compose#v2.6.0:
           run: arret
+
+  - label: ":docker: Build (Rust Beta)"
+    command:
+      - /bin/bash -c "cargo build && cargo test"
+    plugins:
+      - docker-compose#v2.6.0:
+          build: arret
+          args:
+            - rust_toolchain=beta
+
+  - label: ":docker: Build (Rust Nightly)"
+    command:
+      - /bin/bash -c "cargo build && cargo test"
+    plugins:
+      - docker-compose#v2.6.0:
+          build: arret
+          args:
+            - rust_toolchain=nightly

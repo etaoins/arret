@@ -1,4 +1,7 @@
 version: '3'
 services:
   arret:
-    build: .
+    build:
+      context: .
+      args:
+        - rust_toolchain=stable
