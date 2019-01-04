@@ -4,11 +4,7 @@ set -e
 
 TARGET_TRIPLE=i686-unknown-linux-gnu
 
-apt-get update
-apt-get -y install clang-7 gcc-multilib
-
-# Use Clang as it understands LLVM target triples
-update-alternatives --install /usr/bin/cc cc /usr/bin/clang-7 100
+apt-get -y install gcc-multilib
 
 rustup target add $TARGET_TRIPLE
 
