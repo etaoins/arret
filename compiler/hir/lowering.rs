@@ -606,7 +606,6 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
     ) -> Result<&Exports, Vec<Error>> {
         // TODO: An if-let or match here will cause the borrow to live past the return. This
         // prevents us from doing the insert below. We need to do a two-phase check instead.
-        // This is hopefully fixed by NLL.
         if self.module_exports.contains_key(&module_name) {
             return Ok(&self.module_exports[&module_name]);
         }

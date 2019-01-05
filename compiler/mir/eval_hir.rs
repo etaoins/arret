@@ -229,7 +229,7 @@ impl EvalHirCtx {
     ) -> Result<Value> {
         let initial_value = Value::List(Box::new([]), None);
 
-        // TODO: This needs to handle Never values once we can create them
+        // TODO: This needs to handle Never values
         exprs
             .iter()
             .try_fold(initial_value, |_, expr| self.eval_expr(fcx, b, expr))

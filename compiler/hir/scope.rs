@@ -53,7 +53,6 @@ impl Bindings {
     }
 }
 
-// TODO: We shouldn't need to use Rc here but the borrow checker has broken me
 pub struct Scope {
     bindings: Rc<Bindings>,
     tvars: ty::TVars,

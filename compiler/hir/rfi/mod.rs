@@ -155,7 +155,6 @@ fn build_rfi_lib_path(base: &path::Path, package_name: &str, lib_type: LibType) 
 
 impl Loader {
     pub fn new() -> Loader {
-        // TODO: Add `Num` type
         Loader {
             type_ns_id: Scope::root_ns_id(),
             type_scope: Scope::new_with_primitives(),

@@ -399,6 +399,7 @@ macro_rules! export_ty_pred {
     };
 }
 
+// TODO: Add `Num` type
 pub const TY_EXPORTS: &[(&str, Binding)] = &[
     export_ty!("Any", ty::Ty::Any),
     export_ty!("Bool", ty::Ty::Bool),
