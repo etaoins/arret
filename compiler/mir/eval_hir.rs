@@ -227,12 +227,22 @@ impl EvalHirCtx {
         b: &mut Option<Builder>,
         exprs: &[Expr],
     ) -> Result<Value> {
-        let initial_value = Value::List(Box::new([]), None);
+        let mut exprs_iter = exprs.iter();
 
-        // TODO: This needs to handle Never values
-        exprs
-            .iter()
-            .try_fold(initial_value, |_, expr| self.eval_expr(fcx, b, expr))
+        let terminal_expr = if let Some(terminal_expr) = exprs_iter.next_back() {
+            terminal_expr
+        } else {
+            return Ok(Value::List(Box::new([]), None));
+        };
+
+        for non_terminal_expr in exprs_iter {
+            let result = self.eval_expr(fcx, b, non_terminal_expr)?;
+            if result.is_divergent() {
+                return Ok(result);
+            }
+        }
+
+        self.eval_expr(fcx, b, terminal_expr)
     }
 
     fn eval_let(

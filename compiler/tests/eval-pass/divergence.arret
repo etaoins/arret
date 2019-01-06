@@ -49,10 +49,18 @@
   (let [_ (panic "This panics!")])
   5)
 
+(defn panics-inside-cond () -> Int
+  ; This is tricky because our typeck doesn't know this is constant but `eval_hir` does
+  (if (= 0 1)
+    ()
+    (panic "HERE"))
+  5)
+
 (defn main! () ->! ()
   ; Boxing these should not panic us
   (black-box! panic)
   (black-box! always-panics)
   (black-box! panics-inside-let)
+  (black-box! panics-inside-cond)
   
   ())
