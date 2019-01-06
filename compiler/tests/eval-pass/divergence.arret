@@ -45,9 +45,14 @@
 (defn always-panics () -> (U)
   (panic "This panics!"))
 
+(defn panics-inside-let () -> Int
+  (let [_ (panic "This panics!")])
+  5)
+
 (defn main! () ->! ()
   ; Boxing these should not panic us
   (black-box! panic)
   (black-box! always-panics)
+  (black-box! panics-inside-let)
   
   ())

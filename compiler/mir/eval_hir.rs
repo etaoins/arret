@@ -244,6 +244,10 @@ impl EvalHirCtx {
         let source_name = Self::destruc_source_name(&hir_let.destruc);
         let value = self.eval_expr_with_source_name(fcx, b, &hir_let.value_expr, source_name)?;
 
+        if value.is_divergent() {
+            return Ok(value);
+        }
+
         Self::destruc_value(b, &mut fcx.local_values, &hir_let.destruc, value);
 
         self.eval_expr(fcx, b, &hir_let.body_expr)
