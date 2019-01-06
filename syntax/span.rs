@@ -19,13 +19,6 @@ impl Span {
         }
     }
 
-    pub fn with_offset(self, offset: usize) -> Span {
-        Span {
-            lo: ((self.lo as usize) + offset) as u32,
-            hi: ((self.hi as usize) + offset) as u32,
-        }
-    }
-
     pub fn contains(self, other: Span) -> bool {
         (other.lo >= self.lo) && (other.hi <= self.hi)
     }

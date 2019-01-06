@@ -164,15 +164,16 @@ impl Loader {
 
     fn process_rust_fun(
         &self,
+        span_offset: usize,
         rust_library_id: RustLibraryId,
         entry_point: *const c_void,
         rust_fun: &'static binding::RustFun,
         intrinsic_name: Option<&'static str>,
     ) -> Result<Fun, Error> {
-        use syntax::parser::datum_from_str;
+        use syntax::parser::datum_from_str_with_span_offset;
 
         // Parse the declared Arret type as a datum
-        let syntax_datum = datum_from_str(rust_fun.arret_type)?;
+        let syntax_datum = datum_from_str_with_span_offset(rust_fun.arret_type, span_offset)?;
         let ns_datum = NsDatum::from_syntax_datum(self.type_ns_id, syntax_datum);
         let span = ns_datum.span();
 
@@ -301,30 +302,31 @@ impl Loader {
                 // Treat every native function in the stdlib as an intrinsic
                 let intrinsic_name = Some(*name).filter(|_| package_name == "stdlib");
 
-                let fun = self
-                    .process_rust_fun(
-                        rust_library_id,
-                        entry_point_address,
-                        rust_fun,
-                        intrinsic_name,
-                    )
-                    .map_err(|err| {
+                let fun = self.process_rust_fun(
+                    source_loader.next_span_offset,
+                    rust_library_id,
+                    entry_point_address,
+                    rust_fun,
+                    intrinsic_name,
+                );
+
+                match fun {
+                    Ok(fun) => Ok((*name, fun)),
+                    Err(err) => {
                         // This is a gross hack. We don't want to insert an entry in to the
-                        // `SourceLoader` for every Rust function. This requires at least one memory
-                        // allocation for the display name and extending the loaded sources. Instead
-                        // only "load" the string once there is an error and adjust the span to match.
+                        // `SourceLoader` for every Rust function. That requires at least one
+                        // memory allocation for the display name and extending the loaded sources.
+                        // Instead only "load" the string once there is an error. We parsed the
+                        // data with correct span offset already.
                         let kind = SourceKind::RfiModule(
                             native_path.to_string_lossy().into(),
                             (*name).to_owned(),
                         );
-                        let error_offset = source_loader.next_span_offset;
 
                         source_loader.load_string(kind, rust_fun.arret_type.to_owned());
-
-                        err.with_span_offset(error_offset)
-                    })?;
-
-                Ok((*name, fun))
+                        Err(err)
+                    }
+                }
             })
             .collect::<Result<HashMap<&'static str, Fun>, Error>>()?;
 
@@ -352,7 +354,7 @@ mod test {
         let loader = Loader::new();
 
         loader
-            .process_rust_fun(RustLibraryId::new(0), ptr::null(), rust_fun, None)
+            .process_rust_fun(0, RustLibraryId::new(0), ptr::null(), rust_fun, None)
             .map(|rfi_fun| rfi_fun.arret_fun_type)
     }
 

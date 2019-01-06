@@ -8,6 +8,19 @@ pub fn data_from_str_with_span_offset(s: &str, span_offset: usize) -> Result<Vec
     parser.parse_data()
 }
 
+pub fn data_from_str(s: &str) -> Result<Vec<Datum>> {
+    data_from_str_with_span_offset(s, 0)
+}
+
+pub fn datum_from_str_with_span_offset(s: &str, span_offset: usize) -> Result<Datum> {
+    let mut parser = Parser::from_str(s, span_offset);
+    parser.parse_datum()
+}
+
+pub fn datum_from_str(s: &str) -> Result<Datum> {
+    datum_from_str_with_span_offset(s, 0)
+}
+
 pub struct Parser<'de> {
     input: &'de str,
     consumed_bytes: usize,
@@ -445,15 +458,6 @@ impl<'de> Parser<'de> {
 }
 
 /////////
-
-pub fn datum_from_str(s: &str) -> Result<Datum> {
-    let mut parser = Parser::from_str(s, 0);
-    parser.parse_datum()
-}
-
-pub fn data_from_str(s: &str) -> Result<Vec<Datum>> {
-    data_from_str_with_span_offset(s, 0)
-}
 
 #[cfg(test)]
 mod test {

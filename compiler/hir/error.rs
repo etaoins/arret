@@ -65,13 +65,6 @@ impl Error {
             ..self
         }
     }
-
-    pub(super) fn with_span_offset(self, offset: usize) -> Error {
-        Error {
-            loc_trace: self.loc_trace.origin().with_offset(offset).into(),
-            ..self
-        }
-    }
 }
 
 impl Reportable for Error {
