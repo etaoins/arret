@@ -70,6 +70,7 @@ pub enum Ty<S: TyRef> {
     Float,
     Map(Box<Map<S>>),
     Int,
+    Num,
     LitBool(bool),
     LitSym(Box<str>),
     Set(Box<S>),

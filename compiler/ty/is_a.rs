@@ -252,6 +252,14 @@ fn ty_is_a<S: Isable>(
         (ty::Ty::LitBool(_), ty::Ty::Bool) => Result::Yes,
         (ty::Ty::Bool, ty::Ty::LitBool(_)) => Result::May,
 
+        // Floats
+        (ty::Ty::Float, ty::Ty::Num) => Result::Yes,
+        (ty::Ty::Num, ty::Ty::Float) => Result::May,
+
+        // Ints
+        (ty::Ty::Int, ty::Ty::Num) => Result::Yes,
+        (ty::Ty::Num, ty::Ty::Int) => Result::May,
+
         // Sets
         (ty::Ty::Set(sub), ty::Ty::Set(par)) => ty_ref_is_a(tvars, sub.as_ref(), par.as_ref()),
 
@@ -639,6 +647,20 @@ mod test {
             Result::No,
             ty_ref_is_a(&ty::TVars::new(), &three_ints_vec, &two_ints_vec)
         );
+    }
+
+    #[test]
+    fn num_types() {
+        let int = poly_for_str("Int");
+        let float = poly_for_str("Float");
+        let num = poly_for_str("Num");
+
+        assert_eq!(Result::Yes, ty_ref_is_a(&ty::TVars::new(), &int, &num));
+        assert_eq!(Result::Yes, ty_ref_is_a(&ty::TVars::new(), &float, &num));
+        assert_eq!(Result::Yes, ty_ref_is_a(&ty::TVars::new(), &num, &num));
+        assert_eq!(Result::No, ty_ref_is_a(&ty::TVars::new(), &float, &int));
+        assert_eq!(Result::May, ty_ref_is_a(&ty::TVars::new(), &num, &int));
+        assert_eq!(Result::May, ty_ref_is_a(&ty::TVars::new(), &num, &float));
     }
 
     #[test]

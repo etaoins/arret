@@ -60,6 +60,7 @@ where
         ty::Ty::Char => ty::Ty::Char,
         ty::Ty::Float => ty::Ty::Float,
         ty::Ty::Int => ty::Ty::Int,
+        ty::Ty::Num => ty::Ty::Num,
         ty::Ty::Str => ty::Ty::Str,
         ty::Ty::Sym => ty::Ty::Sym,
         ty::Ty::EqPred => ty::Ty::EqPred,

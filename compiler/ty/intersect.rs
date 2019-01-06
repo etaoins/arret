@@ -304,6 +304,7 @@ mod test {
     #[test]
     fn simple_subtypes() {
         assert_merged("true", "Bool", "true");
+        assert_merged("Float", "Num", "Float");
         assert_merged("Bool", "Bool", "Any");
     }
 
@@ -366,11 +367,7 @@ mod test {
 
     #[test]
     fn fun_types() {
-        assert_merged(
-            "((RawU Float Int) -> Int)",
-            "(Float -> Int)",
-            "(Int -> Int)",
-        );
+        assert_merged("(Num -> Int)", "(Float -> Int)", "(Int -> Int)");
         assert_disjoint("(Str -> Sym)", "(Str Str -> Sym)");
         assert_merged("(-> true)", "(-> Bool)", "(->! true)");
         assert_merged("(Bool -> Str)", "(true -> Str)", "(false ->! Str)");

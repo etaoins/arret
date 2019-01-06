@@ -4,7 +4,7 @@ use crate::ty::TyRef;
 
 fn ty_has_subtypes<S: TyRef>(ty: &ty::Ty<S>) -> bool {
     match ty {
-        ty::Ty::Any | ty::Ty::Bool | ty::Ty::Sym | ty::Ty::TopFun(_) => true,
+        ty::Ty::Any | ty::Ty::Bool | ty::Ty::Num | ty::Ty::Sym | ty::Ty::TopFun(_) => true,
         ty::Ty::Char
         | ty::Ty::Float
         | ty::Ty::Int
@@ -81,6 +81,7 @@ mod test {
         assert_eq!(false, str_has_subtypes("Float"));
         assert_eq!(false, str_has_subtypes("Str"));
         assert_eq!(true, str_has_subtypes("Sym"));
+        assert_eq!(true, str_has_subtypes("Num"));
 
         assert_eq!(false, str_has_subtypes("(Any ... -> true)"));
         assert_eq!(true, str_has_subtypes("(Any ... ->! true)"));

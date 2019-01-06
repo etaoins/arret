@@ -78,6 +78,7 @@ impl<'a> From<&'a ty::Mono> for TypeTagSet {
             ty::Ty::Float => TypeTag::Float.into(),
             ty::Ty::Char => TypeTag::Char.into(),
             ty::Ty::Bool => [TypeTag::True, TypeTag::False].iter().collect(),
+            ty::Ty::Num => [TypeTag::Int, TypeTag::Float].iter().collect(),
             ty::Ty::LitBool(true) => TypeTag::True.into(),
             ty::Ty::LitBool(false) => TypeTag::False.into(),
             ty::Ty::Sym | ty::Ty::LitSym(_) => TypeTag::Sym.into(),

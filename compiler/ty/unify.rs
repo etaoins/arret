@@ -166,11 +166,22 @@ fn unify_ty<S: Unifiable>(
         (ty::Ty::LitBool(_), ty::Ty::Bool) | (ty::Ty::Bool, ty::Ty::LitBool(_)) => {
             UnifiedTy::Merged(ty::Ty::Bool.into_ty_ref())
         }
+        (ty::Ty::Float, ty::Ty::Num) | (ty::Ty::Num, ty::Ty::Float) => {
+            UnifiedTy::Merged(ty::Ty::Num.into_ty_ref())
+        }
+        (ty::Ty::Int, ty::Ty::Num) | (ty::Ty::Num, ty::Ty::Int) => {
+            UnifiedTy::Merged(ty::Ty::Num.into_ty_ref())
+        }
 
         // Simplify (U true false) => Bool
         (ty::Ty::LitBool(true), ty::Ty::LitBool(false))
         | (ty::Ty::LitBool(false), ty::Ty::LitBool(true)) => {
             UnifiedTy::Merged(ty::Ty::Bool.into_ty_ref())
+        }
+
+        // Simplify (U Float Int) => Num
+        (ty::Ty::Float, ty::Ty::Int) | (ty::Ty::Int, ty::Ty::Float) => {
+            UnifiedTy::Merged(ty::Ty::Num.into_ty_ref())
         }
 
         // Set type
@@ -431,6 +442,13 @@ mod test {
     }
 
     #[test]
+    fn num_types() {
+        assert_merged("Int", "Int", "Int");
+        assert_merged("Num", "Int", "Float");
+        assert_merged("Num", "Float", "Int");
+    }
+
+    #[test]
     fn top_fun_types() {
         assert_merged("(... ->! Bool)", "(... ->! true)", "(... -> false)");
     }
@@ -438,17 +456,9 @@ mod test {
     #[test]
     fn fun_types() {
         // Parameters are contravariant and Float/Int are disjoint
-        assert_merged(
-            "(... -> (RawU Int Float))",
-            "(Float -> Int)",
-            "(Int -> Float)",
-        );
+        assert_merged("(... -> Num)", "(Float -> Int)", "(Int -> Float)");
 
-        assert_merged(
-            "(true -> (RawU Int Float))",
-            "(Bool -> Int)",
-            "(true -> Float)",
-        );
+        assert_merged("(true -> Num)", "(Bool -> Int)", "(true -> Float)");
         assert_merged("(->! Int)", "(-> Int)", "(->! Int)");
         assert_merged("(->! Bool)", "(-> true)", "(->! false)");
 
@@ -500,7 +510,7 @@ mod test {
             "(RawU Str Sym)",
         );
         assert_merged(
-            "(RawU true (... -> (RawU Float Int)))",
+            "(RawU true (... -> Num))",
             "(RawU true (Int -> Float))",
             "(RawU true (Float -> Int))",
         );

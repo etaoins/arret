@@ -399,7 +399,6 @@ macro_rules! export_ty_pred {
     };
 }
 
-// TODO: Add `Num` type
 pub const TY_EXPORTS: &[(&str, Binding)] = &[
     export_ty!("Any", ty::Ty::Any),
     export_ty!("Bool", ty::Ty::Bool),
@@ -407,6 +406,7 @@ pub const TY_EXPORTS: &[(&str, Binding)] = &[
     export_ty!("Str", ty::Ty::Str),
     export_ty!("Int", ty::Ty::Int),
     export_ty!("Float", ty::Ty::Float),
+    export_ty!("Num", ty::Ty::Num),
     export_ty!("Char", ty::Ty::Char),
     export_ty_cons!("List", TyCons::List),
     export_ty_cons!("Listof", TyCons::Listof),
@@ -486,6 +486,7 @@ fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty
         ty::Ty::Sym => "Sym".to_owned(),
         ty::Ty::Str => "Str".to_owned(),
         ty::Ty::Float => "Float".to_owned(),
+        ty::Ty::Num => "Num".to_owned(),
         ty::Ty::LitBool(false) => "false".to_owned(),
         ty::Ty::LitBool(true) => "true".to_owned(),
         ty::Ty::LitSym(name) => format!("'{}", name),
