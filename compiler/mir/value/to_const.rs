@@ -42,15 +42,18 @@ pub fn value_to_const(ehx: &mut EvalHirCtx, value: &Value) -> Option<Gc<boxed::A
         Value::Const(boxed) => Some(*boxed),
         Value::List(fixed, Some(rest)) => list_to_const(ehx, fixed, Some(&*rest)),
         Value::List(fixed, None) => list_to_const(ehx, fixed, None),
-        Value::TyPred(test_ty) => Some(
-            ehx.arret_fun_to_jit_boxed(&ty_pred_arret_fun(*test_ty))
-                .as_any_ref(),
-        ),
-        Value::EqPred => Some(
-            ehx.arret_fun_to_jit_boxed(&eq_pred_arret_fun())
-                .as_any_ref(),
-        ),
-        Value::ArretFun(ref arret_fun) => Some(ehx.arret_fun_to_jit_boxed(arret_fun).as_any_ref()),
+        Value::TyPred(test_ty) => ehx
+            .arret_fun_to_jit_boxed(&ty_pred_arret_fun(*test_ty))
+            .map(|f| f.as_any_ref()),
+
+        Value::EqPred => ehx
+            .arret_fun_to_jit_boxed(&eq_pred_arret_fun())
+            .map(|f| f.as_any_ref()),
+
+        Value::ArretFun(ref arret_fun) => ehx
+            .arret_fun_to_jit_boxed(arret_fun)
+            .map(|f| f.as_any_ref()),
+
         Value::RustFun(ref rust_fun) => {
             Some(ehx.rust_fun_to_jit_boxed(rust_fun.clone()).as_any_ref())
         }

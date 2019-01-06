@@ -51,5 +51,6 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "cons" => stdlib_cons,
     "concat" => stdlib_concat,
     "black-box" => stdlib_black_box,
-    "black-box!" => stdlib_black_box_impure
+    "black-box!" => stdlib_black_box_impure,
+    "heap-alloc-count" => stdlib_heap_alloc_count
 });

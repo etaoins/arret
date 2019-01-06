@@ -53,7 +53,6 @@ impl Segment {
     }
 
     /// Returns the number of allocated cells
-    #[cfg(test)]
     fn len(&self) -> usize {
         // TODO: Replace with `offset_from` once its stable
         (self.next as usize - self.backing_vec.as_ptr() as usize) / mem::size_of::<Any>()
@@ -130,10 +129,15 @@ impl Heap {
     }
 
     /// Returns the number of allocated cells
-    #[cfg(test)]
-    fn len(&self) -> usize {
+    ///
+    /// This is slow; it should only be used for testing purposes
+    pub fn len(&self) -> usize {
         let full_len: usize = self.full_segments.iter().map(|s| s.len()).sum();
         self.current_segment.len() + full_len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.current_segment.len() == 0 && self.full_segments.is_empty()
     }
 
     /// Constructs a new boxed value on the heap

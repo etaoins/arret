@@ -26,4 +26,10 @@
   (assert-eq false ((black-box! even-length?) (black-box! '(1 2 3))))
   (assert-eq true (even-length? '(1 2 3 4)))
 
+  ; We should select an ABI for `even-length?` which doesn't require allocaton
+  (let [black-box-list (black-box! '(1 2 3 4 5))
+        (alloc-count is-even) (heap-alloc-count (fn () (even-length? black-box-list)))]
+    (assert-eq 0 alloc-count)
+    (assert-eq false is-even))
+
   ())

@@ -966,8 +966,16 @@ impl EvalHirCtx {
         })
     }
 
-    pub fn arret_fun_to_jit_boxed(&mut self, arret_fun: &value::ArretFun) -> Gc<boxed::FunThunk> {
+    pub fn arret_fun_to_jit_boxed(
+        &mut self,
+        arret_fun: &value::ArretFun,
+    ) -> Option<Gc<boxed::FunThunk>> {
         use std::mem;
+
+        // If we have non-const (i.e. "free") values in our closure we can't be const
+        if !arret_fun.closure.free_values.is_empty() {
+            return None;
+        }
 
         let wanted_abi = PolymorphABI::thunk_abi();
         let ops_fun = self
@@ -982,7 +990,7 @@ impl EvalHirCtx {
 
         let arret_fun_value = Value::ArretFun(arret_fun.clone());
         self.thunk_fun_values.insert(new_boxed, arret_fun_value);
-        new_boxed
+        Some(new_boxed)
     }
 
     /// Returns a private fun ID for the wanted Arret fun and ABI
