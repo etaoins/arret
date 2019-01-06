@@ -49,6 +49,12 @@ impl From<Vec<typeck::error::Error>> for Error {
 
 impl From<mir::error::Error> for Error {
     fn from(mir_err: mir::error::Error) -> Error {
-        Error(vec![Box::new(mir_err)])
+        match mir_err {
+            mir::error::Error::Panic(mir_panic) => Error(vec![Box::new(mir_panic)]),
+            other => panic!(
+                "attempted to convert internal MIR error {:?} to external error",
+                other
+            ),
+        }
     }
 }

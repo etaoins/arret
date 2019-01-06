@@ -58,6 +58,5 @@ pub fn value_to_const(ehx: &mut EvalHirCtx, value: &Value) -> Option<Gc<boxed::A
             Some(ehx.rust_fun_to_jit_boxed(rust_fun.clone()).as_any_ref())
         }
         Value::Reg(_) => None,
-        Value::Divergent => None,
     }
 }

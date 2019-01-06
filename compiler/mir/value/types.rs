@@ -44,7 +44,6 @@ pub fn possible_type_tags_for_value(value: &Value) -> TypeTagSet {
             }
         }
         Value::Reg(reg_value) => reg_value.possible_type_tags,
-        Value::Divergent => TypeTagSet::new(),
     }
 }
 

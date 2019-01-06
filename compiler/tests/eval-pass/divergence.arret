@@ -56,11 +56,15 @@
     (panic "HERE"))
   5)
 
+(defn panics-inside-app () -> (Listof Any)
+  (list (panic "HERE") 2 3))
+
 (defn main! () ->! ()
   ; Boxing these should not panic us
   (black-box! panic)
   (black-box! always-panics)
   (black-box! panics-inside-let)
   (black-box! panics-inside-cond)
+  (black-box! panics-inside-app)
   
   ())

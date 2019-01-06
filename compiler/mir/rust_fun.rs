@@ -5,6 +5,7 @@ use syntax::span::Span;
 use crate::codegen::GenABI;
 use crate::hir;
 use crate::mir::builder::Builder;
+use crate::mir::error::{Error, Result};
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops;
 use crate::mir::polymorph::PolymorphABI;
@@ -67,7 +68,7 @@ pub fn build_rust_fun_app(
     rust_fun: &hir::rfi::Fun,
     call_purity: Purity,
     arg_list_value: Value,
-) -> Value {
+) -> Result<Value> {
     use crate::mir::arg_list::build_save_arg_list_to_regs;
     use crate::mir::ops::*;
     use crate::mir::value::from_reg::reg_to_value;
@@ -113,12 +114,12 @@ pub fn build_rust_fun_app(
     );
 
     match rust_fun.ret() {
-        RetABIType::Void => Value::List(Box::new([]), None),
+        RetABIType::Void => Ok(Value::List(Box::new([]), None)),
         RetABIType::Never => {
             b.push(span, OpKind::Unreachable);
-            Value::Divergent
+            Err(Error::Diverged)
         }
-        RetABIType::Inhabited(abi_type) => reg_to_value(ehx, ret_reg, abi_type, ret_ty),
+        RetABIType::Inhabited(abi_type) => Ok(reg_to_value(ehx, ret_reg, abi_type, ret_ty)),
     }
 }
 
@@ -143,7 +144,7 @@ pub fn ops_for_rust_fun(
 
     let purity_upper_bound = rust_fun_purity_upper_bound(rust_fun);
     let ret_ty = ty::Ty::Any.into_mono();
-    let return_value = build_rust_fun_app(
+    let app_result = build_rust_fun_app(
         ehx,
         &mut b,
         span,
@@ -153,7 +154,7 @@ pub fn ops_for_rust_fun(
         arg_list_value,
     );
 
-    build_value_ret(ehx, &mut b, span, &return_value, &wanted_abi.ops_abi.ret);
+    build_value_ret(ehx, &mut b, span, app_result, &wanted_abi.ops_abi.ret);
 
     optimise_fun(ops::Fun {
         span,

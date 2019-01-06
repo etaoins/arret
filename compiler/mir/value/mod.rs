@@ -60,7 +60,6 @@ pub enum Value {
     TyPred(ty::pred::TestTy),
     EqPred,
     Reg(Rc<RegValue>),
-    Divergent,
 }
 
 impl Value {
@@ -82,13 +81,6 @@ impl Value {
             }
             Value::List(fixed, None) => list::ListIterator::new(fixed.into_vec(), None),
             other => list::ListIterator::new(vec![], Some(other)),
-        }
-    }
-
-    pub fn is_divergent(&self) -> bool {
-        match self {
-            Value::Divergent => true,
-            _ => false,
         }
     }
 }

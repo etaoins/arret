@@ -17,7 +17,7 @@ use syntax::span::{Span, EMPTY_SPAN};
 use crate::codegen;
 use crate::hir;
 use crate::mir::builder::{Builder, BuiltReg};
-use crate::mir::error::{Error, ErrorKind, Result};
+use crate::mir::error::{Error, Result};
 use crate::mir::inliner;
 use crate::mir::ops;
 use crate::mir::polymorph::PolymorphABI;
@@ -81,7 +81,7 @@ impl FunCtx {
 
 struct BuiltCondBranch {
     b: Builder,
-    value: Value,
+    result: Result<Value>,
 }
 
 pub struct BuiltProgram {
@@ -227,22 +227,11 @@ impl EvalHirCtx {
         b: &mut Option<Builder>,
         exprs: &[Expr],
     ) -> Result<Value> {
-        let mut exprs_iter = exprs.iter();
+        let initial_value = Value::List(Box::new([]), None);
 
-        let terminal_expr = if let Some(terminal_expr) = exprs_iter.next_back() {
-            terminal_expr
-        } else {
-            return Ok(Value::List(Box::new([]), None));
-        };
-
-        for non_terminal_expr in exprs_iter {
-            let result = self.eval_expr(fcx, b, non_terminal_expr)?;
-            if result.is_divergent() {
-                return Ok(result);
-            }
-        }
-
-        self.eval_expr(fcx, b, terminal_expr)
+        exprs
+            .iter()
+            .try_fold(initial_value, |_, expr| self.eval_expr(fcx, b, expr))
     }
 
     fn eval_let(
@@ -253,10 +242,6 @@ impl EvalHirCtx {
     ) -> Result<Value> {
         let source_name = Self::destruc_source_name(&hir_let.destruc);
         let value = self.eval_expr_with_source_name(fcx, b, &hir_let.value_expr, source_name)?;
-
-        if value.is_divergent() {
-            return Ok(value);
-        }
 
         Self::destruc_value(b, &mut fcx.local_values, &hir_let.destruc, value);
 
@@ -285,7 +270,7 @@ impl EvalHirCtx {
         ret_ty: &ty::Mono,
         arret_fun: &value::ArretFun,
         arg_list_value: Value,
-    ) -> Value {
+    ) -> Result<Value> {
         use crate::mir::arg_list::build_save_arg_list_to_regs;
         use crate::mir::closure;
         use crate::mir::ops::*;
@@ -394,13 +379,7 @@ impl EvalHirCtx {
                 Ok(value)
             } else {
                 // We need to build an out-of-line application
-                Ok(self.build_arret_fun_app(
-                    outer_b,
-                    span,
-                    ret_ty,
-                    arret_fun,
-                    apply_args.list_value,
-                ))
+                self.build_arret_fun_app(outer_b, span, ret_ty, arret_fun, apply_args.list_value)
             }
         } else {
             // No builder; we need to inline
@@ -578,13 +557,15 @@ impl EvalHirCtx {
         panic::catch_unwind(panic::AssertUnwindSafe(block))
             .map(Value::Const)
             .map_err(|err| {
+                use crate::mir::error;
+
                 let message = if let Some(message) = err.downcast_ref::<String>() {
                     message.clone()
                 } else {
                     "Unexpected panic type".to_owned()
                 };
 
-                Error::new(span, ErrorKind::Panic(message))
+                Error::Panic(error::Panic::new(span, message))
             })
     }
 
@@ -641,15 +622,7 @@ impl EvalHirCtx {
         }
 
         if let Some(b) = b {
-            Ok(build_rust_fun_app(
-                self,
-                b,
-                span,
-                ret_ty,
-                rust_fun,
-                call_purity,
-                arg_list_value,
-            ))
+            build_rust_fun_app(self, b, span, ret_ty, rust_fun, call_purity, arg_list_value)
         } else {
             panic!("Need builder for non-const function application");
         }
@@ -856,10 +829,10 @@ impl EvalHirCtx {
         let b = Builder::new();
 
         let mut some_b = Some(b);
-        let value = self.eval_expr(fcx, &mut some_b, branch_expr)?;
+        let result = self.eval_expr(fcx, &mut some_b, branch_expr);
         let b = some_b.unwrap();
 
-        Ok(BuiltCondBranch { b, value })
+        Ok(BuiltCondBranch { b, result })
     }
 
     fn build_cond(
@@ -881,45 +854,19 @@ impl EvalHirCtx {
         let mut built_true = self.build_cond_branch(fcx, &cond.true_expr)?;
         let mut built_false = self.build_cond_branch(fcx, &cond.false_expr)?;
 
-        let true_is_divergent = built_true.value.is_divergent();
-        let false_is_divergent = built_false.value.is_divergent();
-
         let output_value;
         let reg_phi;
 
-        match (true_is_divergent, false_is_divergent) {
-            (true, true) => {
-                output_value = Value::Divergent;
-                reg_phi = None;
-            }
-            (false, true) => {
-                output_value = built_true.value;
-                reg_phi = None;
-            }
-            (true, false) => {
-                output_value = built_false.value;
-                reg_phi = None;
-            }
-            (false, false) => {
+        match (built_true.result, built_false.result) {
+            (Ok(true_value), Ok(false_value)) => {
                 let phi_ty = fcx.monomorphise(result_ty);
-                let phi_abi_type =
-                    plan_phi_abi_type(&built_true.value, &built_false.value, &phi_ty);
+                let phi_abi_type = plan_phi_abi_type(&true_value, &false_value, &phi_ty);
 
-                let true_result_reg = value_to_reg(
-                    self,
-                    &mut built_true.b,
-                    span,
-                    &built_true.value,
-                    &phi_abi_type,
-                );
+                let true_result_reg =
+                    value_to_reg(self, &mut built_true.b, span, &true_value, &phi_abi_type);
 
-                let false_result_reg = value_to_reg(
-                    self,
-                    &mut built_false.b,
-                    span,
-                    &built_false.value,
-                    &phi_abi_type,
-                );
+                let false_result_reg =
+                    value_to_reg(self, &mut built_false.b, span, &false_value, &phi_abi_type);
 
                 let output_reg = b.alloc_local();
 
@@ -929,6 +876,20 @@ impl EvalHirCtx {
                     true_result_reg: true_result_reg.into(),
                     false_result_reg: false_result_reg.into(),
                 });
+            }
+            (Ok(true_value), Err(Error::Diverged)) => {
+                output_value = true_value;
+                reg_phi = None;
+            }
+            (Err(Error::Diverged), Ok(false_value)) => {
+                output_value = false_value;
+                reg_phi = None;
+            }
+            (Err(true_error), _) => {
+                return Err(true_error);
+            }
+            (_, Err(false_error)) => {
+                return Err(false_error);
             }
         };
 
@@ -1125,7 +1086,7 @@ impl EvalHirCtx {
         let ty_args = PolyTyArgs::from_upper_bound(&fun_expr.pvars, &fun_expr.tvars);
 
         let mut some_b = Some(b);
-        let result_value = self.inline_arret_fun_app(
+        let app_result = self.inline_arret_fun_app(
             &fcx,
             &mut some_b,
             span,
@@ -1135,10 +1096,10 @@ impl EvalHirCtx {
                 list_value: arg_list_value,
             },
             inliner::ApplyStack::new(),
-        )?;
+        );
         let mut b = some_b.unwrap();
 
-        build_value_ret(self, &mut b, span, &result_value, &wanted_abi.ops_abi.ret);
+        build_value_ret(self, &mut b, span, app_result, &wanted_abi.ops_abi.ret);
 
         Ok(optimise_fun(ops::Fun {
             span: arret_fun.span,
@@ -1180,7 +1141,7 @@ impl EvalHirCtx {
             self,
             &mut b,
             EMPTY_SPAN,
-            &result_value,
+            Ok(result_value),
             &wanted_abi.ops_abi.ret,
         );
 

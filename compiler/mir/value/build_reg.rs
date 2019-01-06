@@ -382,6 +382,5 @@ pub fn value_to_reg(
             arret_fun_to_reg(ehx, b, span, &eq_pred_arret_fun(), abi_type)
         }
         Value::RustFun(ref rust_fun) => rust_fun_to_reg(ehx, b, span, rust_fun, abi_type),
-        _ => unimplemented!("value {:?} to reg {:?} conversion", value, abi_type),
     }
 }

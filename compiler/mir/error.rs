@@ -6,62 +6,62 @@ use crate::mir::inliner::ApplyCookie;
 use crate::reporting::{Level, LocTrace, Reportable};
 
 #[derive(Debug, PartialEq)]
-pub enum ErrorKind {
-    Panic(String),
-    /// Internal error used to abort a recursive function application when a loop is detected
-    AbortRecursion(ApplyCookie),
+pub struct Panic {
+    loc_trace: LocTrace,
+    message: String,
+}
+
+impl Panic {
+    pub fn new(span: Span, message: String) -> Panic {
+        Panic {
+            loc_trace: span.into(),
+            message,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Error {
-    loc_trace: LocTrace,
-    kind: ErrorKind,
+pub enum Error {
+    Panic(Panic),
+    /// Internal error used to abort a recursive function application when a loop is detected
+    AbortRecursion(ApplyCookie),
+    /// Internal error indicating that a divergent value was encountered
+    Diverged,
 }
 
 pub type Result<T> = result::Result<T, Error>;
 
 impl Error {
-    pub fn new(span: Span, kind: ErrorKind) -> Error {
-        Error {
-            loc_trace: span.into(),
-            kind,
-        }
-    }
-
-    pub fn kind(&self) -> &ErrorKind {
-        &self.kind
-    }
-
     pub fn with_macro_invocation_span(self, span: Span) -> Error {
-        Error {
-            loc_trace: self.loc_trace.with_macro_invocation(span),
-            ..self
+        match self {
+            Error::Panic(Panic { loc_trace, message }) => Error::Panic(Panic {
+                loc_trace: loc_trace.with_macro_invocation(span),
+                message,
+            }),
+            other => other,
         }
     }
 }
 
-impl error::Error for Error {
+impl error::Error for Panic {
     fn description(&self) -> &str {
-        "HIR evaluation error"
+        "Panic during HIR evaluation"
     }
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for Panic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl Reportable for Error {
+impl Reportable for Panic {
     fn level(&self) -> Level {
         Level::Error
     }
 
     fn message(&self) -> String {
-        match self.kind {
-            ErrorKind::Panic(ref message) => message.clone(),
-            ErrorKind::AbortRecursion(_) => panic!("abort recursion should never be user-visible"),
-        }
+        self.message.clone()
     }
 
     fn loc_trace(&self) -> LocTrace {

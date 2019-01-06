@@ -1,6 +1,4 @@
-use syntax::span::EMPTY_SPAN;
-
-use crate::mir::error::{Error, ErrorKind, Result};
+use crate::mir::error::{Error, Result};
 use crate::mir::value;
 
 /// Opaque hash of an Arret fun application
@@ -72,10 +70,7 @@ where
         // This prevents us from doing a "partial unroll" where we recurse in to one iteration
         // of the fun application and then bail out to a call. This is a bit gnarly as we're
         // using errors for flow control but it's isolated to this function.
-        return Err(Error::new(
-            EMPTY_SPAN,
-            ErrorKind::AbortRecursion(apply_cookie),
-        ));
+        return Err(Error::AbortRecursion(apply_cookie));
     }
 
     let inline_result = eval_inline(apply_stack.with_apply_cookie(apply_cookie));
@@ -85,14 +80,11 @@ where
             // Success!
             Ok(Some(value))
         }
-        Err(err) => {
-            if err.kind() == &ErrorKind::AbortRecursion(apply_cookie) {
-                // We detected another application of this fun and requested recursion is aborted
-                // back to this point
-                Ok(None)
-            } else {
-                Err(err)
-            }
+        Err(Error::AbortRecursion(abort_to_cookie)) if abort_to_cookie == apply_cookie => {
+            // We detected another application of this fun and requested recursion is aborted back
+            // to this point
+            Ok(None)
         }
+        Err(other) => Err(other),
     }
 }
