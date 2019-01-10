@@ -46,14 +46,6 @@ pub fn is_identifier_char(c: char) -> bool {
     }
 }
 
-fn u64_to_positive_i64(span: Span, i: u64) -> Result<i64> {
-    if i > (1 << 63) - 1 {
-        Err(Error::new(span, ErrorKind::IntegerOverflow))
-    } else {
-        Ok(i as i64)
-    }
-}
-
 impl<'de> Parser<'de> {
     fn from_str(input: &'de str, consumed_bytes: usize) -> Self {
         Parser {
@@ -165,34 +157,54 @@ impl<'de> Parser<'de> {
         (Span { lo, hi }, result)
     }
 
-    fn parse_int(&mut self) -> Result<Datum> {
-        let (span, digits) = self.consume_until(|c| !c.is_ascii_digit());
+    fn parse_num(&mut self) -> Result<Datum> {
+        enum State {
+            Sign,
+            Whole,
+            Fractional,
+        };
 
-        u64::from_str_radix(digits, 10)
-            .map_err(|_| Error::new(span, ErrorKind::IntegerOverflow))
-            .and_then(|content| u64_to_positive_i64(span, content))
-            .map(|i| Datum::Int(span, i))
+        let mut state: State = State::Sign;
+
+        let (span, digits) = self.consume_until(|c| match state {
+            State::Sign => match c {
+                '+' | '-' | '0'..='9' => {
+                    state = State::Whole;
+                    false
+                }
+                _ => true,
+            },
+            State::Whole => match c {
+                '.' => {
+                    state = State::Fractional;
+                    false
+                }
+                '0'..='9' => false,
+                _ => true,
+            },
+            State::Fractional => match c {
+                '0'..='9' => false,
+                _ => true,
+            },
+        });
+
+        match state {
+            State::Sign => Err(Error::new(span, ErrorKind::InvalidFloat)),
+
+            State::Whole => i64::from_str_radix(digits, 10)
+                .map_err(|_| Error::new(span, ErrorKind::IntegerOverflow))
+                .map(|i| Datum::Int(span, i)),
+
+            State::Fractional => digits
+                .parse::<f64>()
+                .map_err(|_| Error::new(span, ErrorKind::InvalidFloat))
+                .map(|f| Datum::Float(span, f)),
+        }
     }
 
-    fn parse_negative_or_symbol(&mut self) -> Result<Datum> {
+    fn parse_signed_num_or_symbol(&mut self) -> Result<Datum> {
         match self.peek_nth_char(1, ExpectedContent::Identifier) {
-            Ok(digit) if digit.is_ascii_digit() => {
-                // Let the `-` through as the first character
-                let mut is_leading_minus = true;
-                let (span, digits) = self.consume_until(|c| {
-                    if is_leading_minus {
-                        is_leading_minus = false;
-                        false
-                    } else {
-                        !c.is_ascii_digit()
-                    }
-                });
-
-                let value = i64::from_str_radix(digits, 10)
-                    .map_err(|_| Error::new(span, ErrorKind::IntegerOverflow))?;
-
-                Ok(Datum::Int(span, value))
-            }
+            Ok(digit) if digit.is_ascii_digit() => self.parse_num(),
             Ok(_)
             | Err(Error {
                 kind: ErrorKind::Eof(_),
@@ -421,8 +433,8 @@ impl<'de> Parser<'de> {
             '(' => self.parse_list(),
             '[' => self.parse_vector(),
             '{' => self.parse_map(),
-            '0'..='9' => self.parse_int(),
-            '-' => self.parse_negative_or_symbol(),
+            '0'..='9' => self.parse_num(),
+            '-' | '+' => self.parse_signed_num_or_symbol(),
             '\'' => self.parse_symbol_shorthand("quote"),
             '"' => self.parse_string(),
             '\\' => self.parse_char(),
@@ -593,8 +605,14 @@ mod test {
             "mutate!",
             "from->to",
             "!$%&*+-./:<=>?",
+            // These are nearly numbers
+            ".",
             "+",
+            "+.",
+            "+.5",
             "-",
+            "-.",
+            "-.5",
         ] {
             let s = whole_str_span(test_symbol);
             let expected = Datum::Sym(s, test_symbol.into());
@@ -695,8 +713,10 @@ mod test {
             ("0", 0),
             ("000", 0),
             ("1000", 1000),
+            ("+1000", 1000),
             ("-1000", -1000),
             ("9223372036854775807", 9223372036854775807),
+            ("+9223372036854775807", 9223372036854775807),
             ("-9223372036854775808", -9223372036854775808),
         ];
 
@@ -721,6 +741,28 @@ mod test {
         let t = "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^";
         let err = Error::new(t2s(t), ErrorKind::IntegerOverflow);
         assert_eq!(err, datum_from_str(j).unwrap_err());
+    }
+
+    #[test]
+    fn float_datum() {
+        let test_floats = [
+            ("0.", 0.0),
+            ("0.0", 0.0),
+            ("000.000", 0.0),
+            ("+16.", 16.0),
+            ("+16.5", 16.5),
+            ("+016.500", 16.5),
+            ("-32.", -32.0),
+            ("-32.25", -32.25),
+            ("-032.2500", -32.25),
+        ];
+
+        for &(j, expected_float) in &test_floats {
+            let s = whole_str_span(j);
+            let expected = Datum::Float(s, expected_float);
+
+            assert_eq!(expected, datum_from_str(j).unwrap());
+        }
     }
 
     #[test]

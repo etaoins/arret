@@ -73,8 +73,15 @@ pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any
             let interner = heap.as_heap().interner();
             write!(w, "{}", sym.name(interner))
         }
-        AnySubtype::Float(_) => {
-            unimplemented!("No format for floats defined");
+        AnySubtype::Float(float_ref) => {
+            let f = float_ref.value();
+
+            if f.fract() == 0.0 {
+                // This is has no fractional part; force a .0 to mark it as a float
+                write!(w, "{:.1}", f)
+            } else {
+                write!(w, "{:.}", f)
+            }
         }
         AnySubtype::TopPair(list) => {
             write!(w, "(")?;
@@ -146,6 +153,26 @@ mod test {
 
         let boxed_positive = boxed::Int::new(&mut heap, 120);
         assert_write(&mut heap, "120", boxed_positive.as_any_ref());
+
+        let boxed_negative = boxed::Int::new(&mut heap, -120);
+        assert_write(&mut heap, "-120", boxed_negative.as_any_ref());
+    }
+
+    #[test]
+    fn floats() {
+        let mut heap = boxed::Heap::new();
+
+        let boxed_zero = boxed::Float::new(&mut heap, 0.0);
+        assert_write(&mut heap, "0.0", boxed_zero.as_any_ref());
+
+        let boxed_positive = boxed::Float::new(&mut heap, 120.0);
+        assert_write(&mut heap, "120.0", boxed_positive.as_any_ref());
+
+        let boxed_fractional = boxed::Float::new(&mut heap, 0.25);
+        assert_write(&mut heap, "0.25", boxed_fractional.as_any_ref());
+
+        let boxed_negative = boxed::Float::new(&mut heap, -120.0);
+        assert_write(&mut heap, "-120.0", boxed_negative.as_any_ref());
     }
 
     #[test]

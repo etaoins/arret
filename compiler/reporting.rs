@@ -199,6 +199,7 @@ impl Reportable for syntax::error::Error {
             ErrorKind::InvalidCodePoint => "invalid code point".to_owned(),
             ErrorKind::UnsupportedStringEscape => "unsupported string escape".to_owned(),
             ErrorKind::IntegerOverflow => "integer literal does not fit in i64".to_owned(),
+            ErrorKind::InvalidFloat => "unable to parse float".to_owned(),
             ErrorKind::UnexpectedChar(c) => format!("unexpected `{}`", c),
             ErrorKind::UnevenMap => "map literal must have an even number of values".to_owned(),
         }

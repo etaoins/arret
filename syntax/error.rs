@@ -33,6 +33,7 @@ pub enum ErrorKind {
     InvalidCodePoint,
     UnsupportedStringEscape,
     IntegerOverflow,
+    InvalidFloat,
     UnexpectedChar(char),
     UnevenMap,
 }
