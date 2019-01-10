@@ -59,6 +59,7 @@ fn write_boxed_seq(
 }
 
 /// Writes a representation of the passed box to the writer
+#[allow(clippy::float_cmp)]
 pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any>) -> Result<()> {
     use runtime::boxed::AnySubtype;
 
@@ -76,7 +77,17 @@ pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any
         AnySubtype::Float(float_ref) => {
             let f = float_ref.value();
 
-            if f.fract() == 0.0 {
+            // The NaN and infinity representations are not parsable at the moment
+            // EDN does not specify a representation for them
+            if f.is_nan() {
+                write!(w, "#.nan")
+            } else if f.is_infinite() {
+                if f.is_sign_positive() {
+                    write!(w, "#.+inf")
+                } else {
+                    write!(w, "#.-inf")
+                }
+            } else if (f as i64 as f64) == f {
                 // This is has no fractional part; force a .0 to mark it as a float
                 write!(w, "{:.1}", f)
             } else {
@@ -162,17 +173,18 @@ mod test {
     fn floats() {
         let mut heap = boxed::Heap::new();
 
-        let boxed_zero = boxed::Float::new(&mut heap, 0.0);
-        assert_write(&mut heap, "0.0", boxed_zero.as_any_ref());
+        let test_floats = [
+            ("0.0", 0.0),
+            ("120.0", 120.0),
+            ("0.25", 0.25),
+            ("-120.0", -120.0),
+            ("9007199254740992.0", 9_007_199_254_740_992.0),
+        ];
 
-        let boxed_positive = boxed::Float::new(&mut heap, 120.0);
-        assert_write(&mut heap, "120.0", boxed_positive.as_any_ref());
-
-        let boxed_fractional = boxed::Float::new(&mut heap, 0.25);
-        assert_write(&mut heap, "0.25", boxed_fractional.as_any_ref());
-
-        let boxed_negative = boxed::Float::new(&mut heap, -120.0);
-        assert_write(&mut heap, "-120.0", boxed_negative.as_any_ref());
+        for (expected, f) in &test_floats {
+            let boxed_float = boxed::Float::new(&mut heap, *f);
+            assert_write(&mut heap, expected, boxed_float.as_any_ref());
+        }
     }
 
     #[test]
