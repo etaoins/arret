@@ -249,6 +249,7 @@ pub fn gen_program(
             .args(rust_libraries.iter().map(|l| l.target_path()))
             .arg("-pthread")
             .arg("-ldl")
+            .arg("-lm")
             .status()
             .unwrap();
 
