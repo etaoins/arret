@@ -12,10 +12,3 @@ steps:
           build: arret
           args:
             - rust_toolchain=beta
-
-  - label: ":docker: Build (Rust Nightly)"
-    plugins:
-      - docker-compose#v2.6.0:
-          build: arret
-          args:
-            - rust_toolchain=nightly
