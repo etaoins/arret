@@ -47,8 +47,8 @@ impl Intrinsic for Length {
             let i64_length_reg = b.push_reg(span, OpKind::UsizeToInt64, usize_length_reg.into());
 
             return Ok(Some(Value::Reg(Rc::new(value::RegValue::new(
-                 i64_length_reg,
-                 abitype::ABIType::Int,
+                i64_length_reg,
+                abitype::ABIType::Int,
             )))));
         }
 

@@ -19,9 +19,9 @@ pub fn list_value_length(value: &Value) -> Option<usize> {
                 None => Some(fixed_len),
             }
         }
-        Value::Const(any_ref) => {
-            any_ref.downcast_ref::<boxed::TopList>().map(|top_list| top_list.as_list().len())
-        }
+        Value::Const(any_ref) => any_ref
+            .downcast_ref::<boxed::TopList>()
+            .map(|top_list| top_list.as_list().len()),
         _ => None,
     }
 }
