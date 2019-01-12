@@ -46,7 +46,8 @@ impl<'scope, 'data, 'svars> MatchCtx<'scope, 'data, 'svars> {
         }
     }
 
-    // TODO: Floats, maps
+    // TODO: Maps
+    #[allow(clippy::float_cmp)]
     fn visit_datum(&mut self, pattern: &NsDatum, arg: &'data NsDatum) -> MatchVisitResult {
         match (pattern, arg) {
             (NsDatum::Ident(_, pattern_ident), arg) => self.visit_ident(pattern_ident, arg),
@@ -55,6 +56,9 @@ impl<'scope, 'data, 'svars> MatchCtx<'scope, 'data, 'svars> {
             (NsDatum::Set(_, pvs), NsDatum::Set(_, avs)) => self.visit_slice(pvs, avs),
             (NsDatum::Bool(_, pv), NsDatum::Bool(_, av)) if pv == av => Ok(()),
             (NsDatum::Int(_, pv), NsDatum::Int(_, av)) if pv == av => Ok(()),
+            // This doesn't handle NaN. This is impossible to notice at the moment as our syntax
+            // has no NaN representation.
+            (NsDatum::Float(_, pv), NsDatum::Float(_, av)) if pv == av => Ok(()),
             (NsDatum::Char(_, pv), NsDatum::Char(_, av)) if pv == av => Ok(()),
             (NsDatum::Str(_, pv), NsDatum::Str(_, av)) if pv == av => Ok(()),
             _ => Err(()),

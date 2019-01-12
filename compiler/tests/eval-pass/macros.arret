@@ -41,10 +41,19 @@
   (letmacro [set->list (macro-rules [(#{v ...}) '(v ...)])]
     (assert-eq (set->list #{one two three}) '(one two three)))
 
-  (letmacro [num->name (macro-rules [(1) 'one] [(2) 'two] [(3) 'three])]
-    (assert-eq (num->name 1) 'one)
-    (assert-eq (num->name 2) 'two)
-    (assert-eq (num->name 3) 'three))
+  (letmacro [num->name (macro-rules
+                         [(1) 'one-int]
+                         [(2) 'two-int]
+                         [(3) 'three-int]
+                         [(1.0) 'one-float]
+                         [(2.0) 'two-float]
+                         [(3.0) 'three-float])]
+    (assert-eq (num->name 1) 'one-int)
+    (assert-eq (num->name 2) 'two-int)
+    (assert-eq (num->name 3) 'three-int)
+    (assert-eq (num->name 1.0) 'one-float)
+    (assert-eq (num->name 2.0) 'two-float)
+    (assert-eq (num->name 3.0) 'three-float))
 
   (letmacro [return-all (macro-rules [(values ...) '(values ...)])]
     (assert-eq (return-all one two three) '(one two three)))
