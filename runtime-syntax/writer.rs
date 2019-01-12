@@ -77,15 +77,13 @@ pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any
         AnySubtype::Float(float_ref) => {
             let f = float_ref.value();
 
-            // The NaN and infinity representations are not parsable at the moment
-            // EDN does not specify a representation for them
             if f.is_nan() {
-                write!(w, "#.nan")
+                write!(w, "##NaN")
             } else if f.is_infinite() {
                 if f.is_sign_positive() {
-                    write!(w, "#.+inf")
+                    write!(w, "##Inf")
                 } else {
-                    write!(w, "#.-inf")
+                    write!(w, "##-Inf")
                 }
             } else if (f as i64 as f64) == f {
                 // This is has no fractional part; force a .0 to mark it as a float
@@ -179,6 +177,9 @@ mod test {
             ("0.25", 0.25),
             ("-120.0", -120.0),
             ("9007199254740992.0", 9_007_199_254_740_992.0),
+            ("##NaN", std::f64::NAN),
+            ("##Inf", std::f64::INFINITY),
+            ("##-Inf", std::f64::NEG_INFINITY),
         ];
 
         for (expected, f) in &test_floats {

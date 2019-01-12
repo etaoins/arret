@@ -202,6 +202,23 @@ impl<'de> Parser<'de> {
         }
     }
 
+    fn parse_symbolic_float(&mut self) -> Result<Datum> {
+        let (span, symbolic_name) = self.consume_until(|c| !is_identifier_char(c));
+
+        let float_value = match symbolic_name {
+            "#NaN" => std::f64::NAN,
+            "#Inf" => std::f64::INFINITY,
+            "#-Inf" => std::f64::NEG_INFINITY,
+            _ => {
+                return Err(Error::new(span, ErrorKind::UnsupportedDispatch));
+            }
+        };
+
+        // Cover the initial #
+        let adj_span = span.with_lo(span.lo - 1);
+        Ok(Datum::Float(adj_span, float_value))
+    }
+
     fn parse_signed_num_or_symbol(&mut self) -> Result<Datum> {
         match self.peek_nth_char(1, ExpectedContent::Identifier) {
             Ok(digit) if digit.is_ascii_digit() => self.parse_num(),
@@ -260,6 +277,7 @@ impl<'de> Parser<'de> {
 
         match self.peek_char(ExpectedContent::Dispatch)? {
             '{' => self.parse_set(),
+            '#' => self.parse_symbolic_float(),
             _ => {
                 let (span, _) = self.capture_span(|s| s.consume_char(ExpectedContent::Dispatch));
                 let adj_span = span.with_lo(span.lo - 1);
@@ -755,6 +773,8 @@ mod test {
             ("-32.", -32.0),
             ("-32.25", -32.25),
             ("-032.2500", -32.25),
+            ("##Inf", std::f64::INFINITY),
+            ("##-Inf", std::f64::NEG_INFINITY),
         ];
 
         for &(j, expected_float) in &test_floats {
@@ -762,6 +782,13 @@ mod test {
             let expected = Datum::Float(s, expected_float);
 
             assert_eq!(expected, datum_from_str(j).unwrap());
+        }
+
+        // This can't be compared using normal equality
+        if let Datum::Float(_, f) = datum_from_str("##NaN").unwrap() {
+            assert!(f.is_nan());
+        } else {
+            panic!("Expected ##NaN to parse as float");
         }
     }
 
