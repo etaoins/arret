@@ -22,7 +22,7 @@ pub fn stdlib_cons(
     boxed::Pair::new(task, (head, tail)).as_top_pair()
 }
 
-#[rfi_derive::rust_fun("(All #{I O [->_ : ->!]} (I ->_ O) (Listof I) ->_ (Listof O))")]
+#[rfi_derive::rust_fun("(All #{I O [->_ ->!]} (I ->_ O) (Listof I) ->_ (Listof O))")]
 pub fn stdlib_map(
     task: &mut Task,
     mapper: callback::Callback<
@@ -37,7 +37,7 @@ pub fn stdlib_map(
     boxed::List::new(task, output_vec.into_iter())
 }
 
-#[rfi_derive::rust_fun("(All #{T [->_ : ->!]} (T ->_ Bool) (Listof T) ->_ (Listof T))")]
+#[rfi_derive::rust_fun("(All #{T [->_ ->!]} (T ->_ Bool) (Listof T) ->_ (Listof T))")]
 pub fn stdlib_filter(
     task: &mut Task,
     filter: callback::Callback<extern "C" fn(&mut Task, boxed::Closure, Gc<boxed::Any>) -> bool>,

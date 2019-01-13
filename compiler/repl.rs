@@ -245,7 +245,7 @@ mod test {
         assert_value!("baz", "(do 'foo 'bar 'baz)");
 
         // Polymorphic capturing closures
-        assert_defs!("(def return-constant (fn #{T} ([x : T]) (fn () -> T x)))");
+        assert_defs!("(def return-constant (fn #{T} ([x T]) (fn () -> T x)))");
         assert_defs!("(def return-one (return-constant 1))");
         assert_defs!("(def return-two (return-constant 'two))");
 

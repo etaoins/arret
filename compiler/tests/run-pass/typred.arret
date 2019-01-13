@@ -1,7 +1,7 @@
 (import [stdlib base])
 (import [stdlib test])
 
-(defn black-box-untyped! ([input : Any]) ->! Any
+(defn black-box-untyped! ([input Any]) ->! Any
   (black-box! input))
 
 (defn main! ()

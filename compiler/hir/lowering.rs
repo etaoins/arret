@@ -204,26 +204,18 @@ fn lower_scalar_destruc(
         NsDatum::Vector(span, vs) => {
             let mut data = vs.into_vec();
 
-            if data.len() != 3 {
-                return Err(Error::new(span, ErrorKind::NoVecDestruc));
-            }
-
-            // Make sure the middle element is a type colon
-            if scope.get_datum(&data[1]) != Some(&Binding::Prim(Prim::TyColon)) {
+            if data.len() != 2 {
                 return Err(Error::new(span, ErrorKind::NoVecDestruc));
             }
 
             let ty = lower_poly(scope, data.pop().unwrap())?;
-
-            // Discard the type colon
-            data.pop();
 
             let (ident, span) = expect_ident_and_span(data.pop().unwrap())?;
             lower_ident_destruc(scope, span, ident, ty.into_decl())
         }
         _ => Err(Error::new(
             destruc_datum.span(),
-            ErrorKind::IllegalArg("expected a variable name or [name : Type]"),
+            ErrorKind::IllegalArg("expected a variable name or [name Type]"),
         )),
     }
 }
@@ -452,7 +444,7 @@ fn lower_expr_prim_apply(
         }
         Prim::Do => lower_body(scope, span, arg_iter),
         Prim::CompileError => Err(lower_user_compile_error(span, arg_iter)),
-        Prim::Ellipsis | Prim::Wildcard | Prim::MacroRules | Prim::TyColon | Prim::All => {
+        Prim::Ellipsis | Prim::Wildcard | Prim::MacroRules | Prim::All => {
             Err(Error::new(span, ErrorKind::PrimRef))
         }
     }

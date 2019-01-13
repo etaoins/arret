@@ -9,7 +9,7 @@
 ))
 
 ; This isn't `(main!)` to make sure it doesn't acually run
-(defn compile-only ([x : Bool])
+(defn compile-only ([x Bool])
   ; Direct divergence
   (assert-diverges (panic "Hello"))
 

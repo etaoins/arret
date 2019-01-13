@@ -47,7 +47,7 @@ It's supported as a first class concept in Arret; the REPL is just as powerful a
 > cargo run repl
 arret> (length '(1 2 3 4 5))
 => 5
-arret> (defn identity #{T} ([x : T]) -> T x)
+arret> (defn identity #{T} ([x T]) -> T x)
 defined
 arret> :type identity
 => #{T} (T -> T)

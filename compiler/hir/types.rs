@@ -52,11 +52,8 @@ fn lower_polymorphic_var(scope: &Scope, tvar_datum: NsDatum) -> Result<Polymorph
         NsDatum::Vector(vector_span, vs) => {
             let mut arg_data = vs.into_vec();
 
-            if arg_data.len() == 3
-                && scope.get_datum(&arg_data[1]) == Some(&Binding::Prim(Prim::TyColon))
-            {
+            if arg_data.len() == 2 {
                 let bound_datum = arg_data.pop().unwrap();
-                arg_data.pop(); // Discard the : completely
                 let (ident, span) = expect_ident_and_span(arg_data.pop().unwrap())?;
 
                 let source_name = ident.name().into();
@@ -106,7 +103,7 @@ fn lower_polymorphic_var(scope: &Scope, tvar_datum: NsDatum) -> Result<Polymorph
     Err(Error::new(
         span,
         ErrorKind::IllegalArg(
-            "polymorphic variables must be either an identifier or [identifier : Type]",
+            "polymorphic variables must be either an identifier or [identifier Type]",
         ),
     ))
 }
@@ -459,7 +456,7 @@ fn str_for_bounds(
 ) -> String {
     let pvar_parts = bound_pvars
         .values()
-        .map(|pvar| format!("[{} : ->!]", pvar.source_name()));
+        .map(|pvar| format!("[{} ->!]", pvar.source_name()));
 
     let tvar_parts = bound_tvars.values().map(|tvar| {
         if tvar.bound() == &ty::Ty::Any.into_poly() {
@@ -467,7 +464,7 @@ fn str_for_bounds(
         }
 
         format!(
-            "[{} : {}]",
+            "[{} {}]",
             tvar.source_name(),
             str_for_poly(all_pvars, all_tvars, tvar.bound())
         )
@@ -906,6 +903,6 @@ mod test {
 
     #[test]
     fn polymorphic_fun_str() {
-        assert_exact_str_repr("(All #{[->? : ->!] A [B : Bool] C} B C ->? A)");
+        assert_exact_str_repr("(All #{[->? ->!] A [B Bool] C} B C ->? A)");
     }
 }

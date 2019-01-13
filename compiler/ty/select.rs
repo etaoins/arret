@@ -347,7 +347,7 @@ mod test {
 
     #[test]
     fn poly_conflicing_tvar() {
-        let scope = TestScope::new("[A : (... -> Any)] [B : (... -> Sym)] [C : (... -> 'foo)]");
+        let scope = TestScope::new("[A (... -> Any)] [B (... -> Sym)] [C (... -> 'foo)]");
 
         let poly_a = scope.poly_for_str("A");
         let poly_b = scope.poly_for_str("B");
@@ -498,7 +498,7 @@ mod test {
 
     #[test]
     fn bounded_union_types() {
-        let scope = TestScope::new("[A : Sym] [B : Bool]");
+        let scope = TestScope::new("[A Sym] [B Bool]");
         let poly_a = scope.poly_for_str("A");
         let poly_b = scope.poly_for_str("B");
 
@@ -535,7 +535,7 @@ mod test {
 
     #[test]
     fn top_fun_purities() {
-        let scope = TestScope::new("[->A : ->!]");
+        let scope = TestScope::new("[->A ->!]");
         let purity_a = scope.purity_for_str("->A");
 
         let mut stx = scope.select_ctx();
@@ -612,7 +612,7 @@ mod test {
 
     #[test]
     fn fun_purities() {
-        let scope = TestScope::new("[->A : ->!]");
+        let scope = TestScope::new("[->A ->!]");
         let purity_a = scope.purity_for_str("->A");
 
         let mut stx = scope.select_ctx();
@@ -627,7 +627,7 @@ mod test {
 
     #[test]
     fn fun_purity_conflict() {
-        let scope = TestScope::new("[->A : ->!] [->B : ->!] [->C : ->!]");
+        let scope = TestScope::new("[->A ->!] [->B ->!] [->C ->!]");
         let purity_a = scope.purity_for_str("->A");
 
         let mut stx = scope.select_ctx();
@@ -673,7 +673,7 @@ mod test {
 
     #[test]
     fn ty_pred_purity() {
-        let scope = TestScope::new("[->A : ->!]");
+        let scope = TestScope::new("[->A ->!]");
         let purity_a = scope.purity_for_str("->A");
 
         let mut stx = scope.select_ctx();

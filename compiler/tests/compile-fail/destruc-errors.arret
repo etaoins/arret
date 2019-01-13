@@ -1,20 +1,20 @@
 (import [stdlib base])
 
 (def [x y] [1 2])
-    ;^^^^^ ERROR vectors can only be used in a destructure for type ascription in the form [name : Type]
+       ;^ ERROR unable to resolve symbol: `y`
 
 (def [x / y] [1 2 3])
-    ;^^^^^^^ ERROR vectors can only be used in a destructure for type ascription in the form [name : Type]
+    ;^^^^^^^ ERROR vectors can only be used in a destructure for type ascription in the form [name Type]
 
-(def [x : y z] [1 2 3 4])
-    ;^^^^^^^^^ ERROR vectors can only be used in a destructure for type ascription in the form [name : Type]
+(def [x y z] [1 2 3 4])
+    ;^^^^^^^ ERROR vectors can only be used in a destructure for type ascription in the form [name Type]
 
-(def [1 : Int] 1)
+(def [1 Int] 1)
      ;^ ERROR expected symbol
 
 (def 1 1)
     ;^ ERROR values can only be bound to variables or destructured into lists
 
 ; Double type annotation
-(def [[x : Int] : Int] 1)
-     ;^^^^^^^^^ ERROR expected symbol
+(def [[x Int] Int] 1)
+     ;^^^^^^^ ERROR expected symbol

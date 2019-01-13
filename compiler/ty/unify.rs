@@ -568,7 +568,7 @@ mod test {
     #[test]
     fn polymorphic_funs() {
         let pidentity_fun = poly_for_str("(All #{A} A -> A)");
-        let pidentity_impure_string_fun = poly_for_str("(All #{[A : Str]} A ->! A)");
+        let pidentity_impure_string_fun = poly_for_str("(All #{[A Str]} A ->! A)");
         let top_impure_fun = poly_for_str("(... ->! Any)");
 
         assert_eq!(

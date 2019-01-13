@@ -1,10 +1,10 @@
 (import [stdlib base])
 
-(def [wrong-ascription : Int] 'foo)
-                              ;^^^ ERROR `'foo` is not a `Int`
+(def [wrong-ascription Int] 'foo)
+                            ;^^^ ERROR `'foo` is not a `Int`
 
-(def ([one : 'one] [two : 'two]) '(two one))
-                                 ;^^^^^^^^^ ERROR `(List 'two 'one)` is not a `(List 'one 'two)`
+(def ([one 'one] [two 'two]) '(two one))
+                             ;^^^^^^^^^ ERROR `(List 'two 'one)` is not a `(List 'one 'two)`
 
 (defn wrong-ret () -> Str
   'foo)
@@ -13,19 +13,19 @@
 (def non-bool-if-test (if 'foo true false))
                           ;^^^ ERROR `'foo` is not a `Bool`
 
-(defn wrong-if-branch-type ([test : Bool]) -> Sym
+(defn wrong-if-branch-type ([test Bool]) -> Sym
   (if test
     'foo
     "foo"))
    ;^^^^^ ERROR `Str` is not a `Sym`
 
-(def [wrong-do-type : Int]
+(def [wrong-do-type Int]
   (do 1 2 'three))
           ;^^^^^ ERROR `'three` is not a `Int`
 
 (def wrong-arg-type
-  ((fn ([input : Str])) 'foo))
-                        ;^^^ ERROR `'foo` is not a `Str`
+  ((fn ([input Str])) 'foo))
+                      ;^^^ ERROR `'foo` is not a `Str`
 
 (defn conflicting-free-type (free-input)
   (ann free-input Str)
@@ -33,7 +33,7 @@
       ;^^^^^^^^^^ ERROR inferred conflicting types `Sym` and `Str`
 
 ; `input` will gain type information from the function type annotation
-(def [conflicting-closure-type : (Sym -> Str)]
+(def [conflicting-closure-type (Sym -> Str)]
   (fn (input) (ann input Str)))
                   ;^^^^^ ERROR inferred conflicting types `Str` and `Sym
 
@@ -48,7 +48,7 @@
   (impure-fun!))
   ;^^^^^^^^^^^ ERROR function of type `(->! ())` is not pure
 
-(defn polymorphic-impure-app #{[->A : ->!]} () ->A ()
+(defn polymorphic-impure-app #{[->A ->!]} () ->A ()
   (impure-fun!))
   ;^^^^^^^^^^^ ERROR function of type `(->! ())` is not `->A`
 
@@ -68,8 +68,8 @@
 (def depends-on-type-error specific-rest-list-type)
 
 ; This generic parameter isn't sufficiently bound
-(defn takes-symbol ([x : Sym]))
-(defn takes-generic #{T} ([x : T])
+(defn takes-symbol ([x Sym]))
+(defn takes-generic #{T} ([x T])
   (takes-symbol x))
                ;^ ERROR `T` is not a `Sym`
 

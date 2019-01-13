@@ -393,7 +393,7 @@ mod test {
     #[test]
     fn polymorphic_funs() {
         let pidentity_fun = poly_for_str("(All #{A} A -> A)");
-        let pidentity_impure_bool_fun = poly_for_str("(All #{[A : Bool]} A ->! A)");
+        let pidentity_impure_bool_fun = poly_for_str("(All #{[A Bool]} A ->! A)");
         let top_pure_fun = poly_for_str("(... -> Any)");
 
         // We should intersect polymorphic functions with themselves

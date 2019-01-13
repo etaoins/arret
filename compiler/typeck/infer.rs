@@ -1884,15 +1884,15 @@ mod test {
     fn fun_expr() {
         assert_type_for_expr("(-> ())", "(fn ())");
         assert_type_for_expr("(Any -> true)", "(fn (_) true)");
-        assert_type_for_expr("(Str -> Str)", "(fn ([x : Str]) x)");
+        assert_type_for_expr("(Str -> Str)", "(fn ([x Str]) x)");
 
         // We should feed our wanted type in to the function type
         assert_constrained_type_for_expr("(Sym -> true)", "(fn (_) true)", "(Sym -> true)");
         assert_constrained_type_for_expr("(Sym -> Sym)", "(fn (x) x)", "(Sym -> Any))");
 
         // Function with free types being bound to an incompatible type
-        let j = "(let [[f : (Sym -> true)] (fn ([_ : Str]) true)])";
-        let t = "                          ^^^^^^^^^^^^^^^^^^^^^  ";
+        let j = "(let [[f (Sym -> true)] (fn ([_ Str]) true)])";
+        let t = "                        ^^^^^^^^^^^^^^^^^^^  ";
         let err = Error::new(
             t2s(t),
             ErrorKind::IsNotTy("(Str -> true)".into(), "(Sym -> true)".into()),
@@ -1900,28 +1900,25 @@ mod test {
         assert_type_error(&err, j);
 
         // Function with a known type being bound to an incompatible type
-        let j = "(let [[f : (Sym -> true)] (fn ([_ : Str]) -> true true)])";
-        let t = "                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ";
+        let j = "(let [[f (Sym -> true)] (fn ([_ Str]) -> true true)])";
+        let t = "                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^  ";
         let err = Error::new(
             t2s(t),
             ErrorKind::IsNotTy("(Str -> true)".into(), "(Sym -> true)".into()),
         );
         assert_type_error(&err, j);
 
-        let j = "(fn ([x : Str]) -> Sym x)";
-        let t = "                       ^ ";
+        let j = "(fn ([x Str]) -> Sym x)";
+        let t = "                     ^ ";
         let err = Error::new(t2s(t), ErrorKind::IsNotTy("Str".into(), "Sym".into()));
         assert_type_error(&err, j);
 
         // Instantiating a polymorphic function
         // We can't name polymorphic types so we need the (let) hack
-        assert_type_for_expr(
-            "()",
-            "(let [[_ : (Sym -> Sym)] (fn #{T} ([x : T]) -> T x)])",
-        );
+        assert_type_for_expr("()", "(let [[_ (Sym -> Sym)] (fn #{T} ([x T]) -> T x)])");
 
-        let j = "(let [[_ : (Sym -> Str)] (fn #{T} ([x : T]) -> T x)])";
-        let t = "                         ^^^^^^^^^^^^^^^^^^^^^^^^^^  ";
+        let j = "(let [[_ (Sym -> Str)] (fn #{T} ([x T]) -> T x)])";
+        let t = "                       ^^^^^^^^^^^^^^^^^^^^^^^^  ";
         let err = Error::new(
             t2s(t),
             ErrorKind::IsNotTy("(All #{T} T -> T)".into(), "(Sym -> Str)".into()),
@@ -1936,30 +1933,30 @@ mod test {
         assert_type_for_expr("true", "(sym? 'foo)");
         assert_type_for_expr("false", "(sym? false)");
 
-        assert_type_for_expr("Int", "((fn #{A} ([value : A]) -> A value) 1)");
-        assert_type_for_expr("'foo", "((fn #{A} ([value : A]) -> A value) '(foo) ...)");
+        assert_type_for_expr("Int", "((fn #{A} ([value A]) -> A value) 1)");
+        assert_type_for_expr("'foo", "((fn #{A} ([value A]) -> A value) '(foo) ...)");
 
         assert_type_for_expr(
             "(Listof Bool)",
-            "((fn #{A} ([rest : A] ...) -> (Listof A) rest) true false)",
+            "((fn #{A} ([rest A] ...) -> (Listof A) rest) true false)",
         );
 
         assert_type_for_expr(
             "Int",
             // This is essentially `(map)` without the use of lists
-            "((fn #{I O} ([mapper : (I -> O)] [i : I]) -> O (mapper i)) (fn (x) x) 1))",
+            "((fn #{I O} ([mapper (I -> O)] [i I]) -> O (mapper i)) (fn (x) x) 1))",
         );
 
         assert_type_for_expr(
             "Int",
             // With the argument positions swapped
-            "((fn #{I O} ([i : I] [mapper : (I -> O)]) -> O (mapper i)) 1 (fn (x) x)))",
+            "((fn #{I O} ([i I] [mapper (I -> O)]) -> O (mapper i)) 1 (fn (x) x)))",
         );
 
         assert_type_for_expr(
             "Int",
             // With explicit type annotations
-            "((fn #{I O} ([i : I] [mapper : (I -> O)]) -> O (mapper i)) 1 (fn ([x : Int]) -> Int x)))",
+            "((fn #{I O} ([i I] [mapper (I -> O)]) -> O (mapper i)) 1 (fn ([x Int]) -> Int x)))",
         );
     }
 
@@ -1967,12 +1964,12 @@ mod test {
     fn recursive_app() {
         assert_type_for_expr(
             "'foo",
-            "(let [[recurse : (-> 'foo)] (fn () (recurse))] (recurse))",
+            "(let [[recurse (-> 'foo)] (fn () (recurse))] (recurse))",
         );
 
         assert_type_for_expr(
             "'foo",
-            "(let [recurse (fn ([x : Int]) -> 'foo (recurse x))] (recurse 1))",
+            "(let [recurse (fn ([x Int]) -> 'foo (recurse x))] (recurse 1))",
         );
 
         let j = "(let [recurse (fn () (recurse))] (recurse))";
@@ -1985,8 +1982,8 @@ mod test {
         let err = Error::new(t2s(t), ErrorKind::RecursiveType);
         assert_type_error(&err, j);
 
-        let j = "(let [recurse (fn ([x : Int]) (recurse x))] (recurse 1))";
-        let t = "                               ^^^^^^^                  ";
+        let j = "(let [recurse (fn ([x Int]) (recurse x))] (recurse 1))";
+        let t = "                             ^^^^^^^                  ";
         let err = Error::new(t2s(t), ErrorKind::RecursiveType);
         assert_type_error(&err, j);
     }

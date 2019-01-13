@@ -1,6 +1,5 @@
 (import [arret internal primitives])
-(export def let fn if quote export ... _ defmacro letmacro macro-rules : deftype compile-error do
-        =)
+(export def let fn if quote export ... _ defmacro letmacro macro-rules deftype compile-error do =)
 
 (import [arret internal types])
 (export Any Bool Str Sym Int Float Num Char List Listof Vector Vectorof Setof Map U -> ->! str?
@@ -21,7 +20,7 @@
 ))
 
 (export list)
-(defn list #{A} ([l : A] ...) -> (Listof A)
+(defn list #{A} ([l A] ...) -> (Listof A)
   l)
 
 (export when)
@@ -57,13 +56,13 @@
 
 (export ann)
 (defmacro ann (macro-rules
- [(val Type) (let [[_ : Type] val] val)]
+ [(val Type) (let [[_ Type] val] val)]
 ))
 
 (export first)
-(defn first #{T} (([head : T] _ ...)) -> T
+(defn first #{T} (([head T] _ ...)) -> T
   head)
 
 (export rest)
-(defn rest #{T} ((_ [tail : T] ...)) -> (Listof T)
+(defn rest #{T} ((_ [tail T] ...)) -> (Listof T)
   tail)

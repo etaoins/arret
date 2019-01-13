@@ -2,7 +2,7 @@
 (import [stdlib test])
 
 (defn return-const (x) (fn () x))
-(defn generic-return-const #{T} ([x : T]) -> (-> T)
+(defn generic-return-const #{T} ([x T]) -> (-> T)
   (fn () -> T x))
 
 (defn main! ()

@@ -915,8 +915,8 @@ mod test {
     #[test]
     fn polymorphic_funs() {
         let pidentity_fun = poly_for_str("(All #{A} A -> A)");
-        let pidentity_sym_fun = poly_for_str("(All #{[A : Sym]} A -> A)");
-        let pidentity_impure_string_fun = poly_for_str("(All #{[A : Str]} A ->! A)");
+        let pidentity_sym_fun = poly_for_str("(All #{[A Sym]} A -> A)");
+        let pidentity_impure_string_fun = poly_for_str("(All #{[A Str]} A ->! A)");
 
         let empty_tvars = ty::TVars::new();
 

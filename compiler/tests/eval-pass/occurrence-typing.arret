@@ -1,46 +1,46 @@
 (import [stdlib base])
 
-(defn test-type-in-branches ([test : Bool])
+(defn test-type-in-branches ([test Bool])
   (if test
     (ann test true)
     (ann test false)))
 
-(defn trivial-type-predicate ([input : (U Sym Str)])
+(defn trivial-type-predicate ([input (U Sym Str)])
   (if (sym? input)
     (ann input Sym)
     (ann input Str)))
 
-(defn non-literal-equality-predicate ([input : (U Int Float)])
+(defn non-literal-equality-predicate ([input (U Int Float)])
   (if (= input 123)
     (ann input Int)
     (ann input (U Int Float))))
 
-(defn literal-equality-predicate ([input : (U 'foo 'bar)])
+(defn literal-equality-predicate ([input (U 'foo 'bar)])
   (if (= input 'foo)
     (ann input 'foo)
     (ann input 'bar)))
 
-(defn two-var-equality-predicate ([left : (U 'foo 'bar)] [right : (U 'bar 'baz)])
+(defn two-var-equality-predicate ([left (U 'foo 'bar)] [right (U 'bar 'baz)])
   (when (= left right)
     (ann left 'bar)
     (ann right 'bar)))
 
-(defn let-preserves-type-information ([input : Bool])
+(defn let-preserves-type-information ([input Bool])
   (if (let [_ ()] 'foo input)
     (ann input true)
     (ann input false)))
 
-(defn and-typing ([input : (Listof Any)])
+(defn and-typing ([input (Listof Any)])
   (if (and (list? input) (nil? input))
     (ann input ())
     (ann input (List Any Any ...))))
 
-(defn or-typing ([input : (U Sym Str Int)])
+(defn or-typing ([input (U Sym Str Int)])
   (if (or (sym? input) (str? input))
     (ann input (U Sym Str))
     (ann input (U Sym Str Int))))
 
-(defn not-typing ([input : (U Sym Str)])
+(defn not-typing ([input (U Sym Str)])
   (if (not (str? input))
     (ann input Sym)
     (ann input Str)))

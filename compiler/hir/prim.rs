@@ -33,7 +33,6 @@ export_prims!(
     ("...", Ellipsis),
     ("_", Wildcard),
     ("macro-rules", MacroRules),
-    (":", TyColon),
     ("deftype", DefType),
     ("lettype", LetType),
     ("compile-error", CompileError),
