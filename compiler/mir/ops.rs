@@ -164,6 +164,7 @@ pub enum OpKind {
     Add(RegId, BinaryOp),
     IntEqual(RegId, BinaryOp),
     FloatEqual(RegId, BinaryOp),
+    BoxIdentical(RegId, BinaryOp),
     UsizeToInt64(RegId, RegId),
 
     Ret(RegId),
@@ -206,6 +207,7 @@ impl OpKind {
             | Add(reg_id, _) => Some(*reg_id),
             IntEqual(reg_id, _)
             | FloatEqual(reg_id, _)
+            | BoxIdentical(reg_id, _)
             | UsizeToInt64(reg_id, _)
             | MakeCallback(reg_id, _) => Some(*reg_id),
             Cond(cond_op) => cond_op.reg_phi.clone().map(|reg_phi| reg_phi.output_reg),
@@ -301,7 +303,10 @@ impl OpKind {
                     op.kind().add_input_regs(coll);
                 }
             }
-            Add(_, binary_op) | IntEqual(_, binary_op) | FloatEqual(_, binary_op) => {
+            Add(_, binary_op)
+            | IntEqual(_, binary_op)
+            | FloatEqual(_, binary_op)
+            | BoxIdentical(_, binary_op) => {
                 coll.extend([binary_op.lhs_reg, binary_op.rhs_reg].iter().cloned());
             }
         }

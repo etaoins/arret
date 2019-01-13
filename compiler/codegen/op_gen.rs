@@ -407,6 +407,33 @@ fn gen_op(
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::BoxIdentical(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+                let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
+
+                let i64_lhs = LLVMBuildPtrToInt(
+                    fcx.builder,
+                    llvm_lhs,
+                    llvm_i64,
+                    "lhs_as_int\0".as_ptr() as *const _,
+                );
+                let i64_rhs = LLVMBuildPtrToInt(
+                    fcx.builder,
+                    llvm_rhs,
+                    llvm_i64,
+                    "rhs_as_int\0".as_ptr() as *const _,
+                );
+
+                let llvm_value = LLVMBuildICmp(
+                    fcx.builder,
+                    LLVMIntPredicate::LLVMIntEQ,
+                    i64_lhs,
+                    i64_rhs,
+                    "box_identical\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
             OpKind::UsizeToInt64(reg, usize_reg) => {
                 let llvm_usize = fcx.regs[usize_reg];
 

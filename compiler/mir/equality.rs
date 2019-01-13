@@ -57,39 +57,24 @@ fn runtime_compare(
     )
 }
 
-fn int_compare(
+fn build_native_compare<F>(
     ehx: &mut EvalHirCtx,
     b: &mut Builder,
     span: Span,
     left_value: &Value,
     right_value: &Value,
-) -> BuiltReg {
-    let left_reg = value_to_reg(ehx, b, span, left_value, &abitype::ABIType::Int);
-    let right_reg = value_to_reg(ehx, b, span, right_value, &abitype::ABIType::Int);
+    abi_type: &abitype::ABIType,
+    op_kind: F,
+) -> BuiltReg
+where
+    F: FnOnce(RegId, BinaryOp) -> OpKind,
+{
+    let left_reg = value_to_reg(ehx, b, span, left_value, abi_type);
+    let right_reg = value_to_reg(ehx, b, span, right_value, abi_type);
 
     b.push_reg(
         span,
-        OpKind::IntEqual,
-        BinaryOp {
-            lhs_reg: left_reg.into(),
-            rhs_reg: right_reg.into(),
-        },
-    )
-}
-
-fn float_compare(
-    ehx: &mut EvalHirCtx,
-    b: &mut Builder,
-    span: Span,
-    left_value: &Value,
-    right_value: &Value,
-) -> BuiltReg {
-    let left_reg = value_to_reg(ehx, b, span, left_value, &abitype::ABIType::Float);
-    let right_reg = value_to_reg(ehx, b, span, right_value, &abitype::ABIType::Float);
-
-    b.push_reg(
-        span,
-        OpKind::FloatEqual,
+        op_kind,
         BinaryOp {
             lhs_reg: left_reg.into(),
             rhs_reg: right_reg.into(),
@@ -108,6 +93,7 @@ pub fn eval_equality(
     left_value: &Value,
     right_value: &Value,
 ) -> Value {
+    use crate::mir::tagset::TypeTagSet;
     use crate::mir::value::types::possible_type_tags_for_value;
 
     if let Some(const_left) = value_to_const(ehx, left_value) {
@@ -123,13 +109,50 @@ pub fn eval_equality(
         panic!("runtime equality without builder")
     };
 
-    let all_type_tags =
-        possible_type_tags_for_value(left_value) | possible_type_tags_for_value(right_value);
+    let left_type_tags = possible_type_tags_for_value(left_value);
+    let right_type_tags = possible_type_tags_for_value(right_value);
+    let all_type_tags = left_type_tags | right_type_tags;
+    let common_type_tags = left_type_tags & right_type_tags;
 
-    let result_reg = if all_type_tags == boxed::TypeTag::Int.into() {
-        int_compare(ehx, b, span, left_value, right_value)
+    let boxed_singleton_type_tags: TypeTagSet = [
+        boxed::TypeTag::True,
+        boxed::TypeTag::False,
+        boxed::TypeTag::Nil,
+    ]
+    .iter()
+    .collect();
+
+    let result_reg = if common_type_tags.is_subset(boxed_singleton_type_tags) {
+        // We an do a direct pointer comparison
+        build_native_compare(
+            ehx,
+            b,
+            span,
+            left_value,
+            right_value,
+            &abitype::BoxedABIType::Any.into(),
+            OpKind::BoxIdentical,
+        )
+    } else if all_type_tags == boxed::TypeTag::Int.into() {
+        build_native_compare(
+            ehx,
+            b,
+            span,
+            left_value,
+            right_value,
+            &abitype::ABIType::Int,
+            OpKind::IntEqual,
+        )
     } else if all_type_tags == boxed::TypeTag::Float.into() {
-        float_compare(ehx, b, span, left_value, right_value)
+        build_native_compare(
+            ehx,
+            b,
+            span,
+            left_value,
+            right_value,
+            &abitype::ABIType::Float,
+            OpKind::FloatEqual,
+        )
     } else {
         runtime_compare(ehx, b, span, left_value, right_value)
     };
