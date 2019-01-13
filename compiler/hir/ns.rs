@@ -33,6 +33,13 @@ impl Ident {
             name: self.name.clone(),
         }
     }
+
+    /// Returns if the ident should be considered a keyword
+    ///
+    /// Unlike Clojure these are still symbols. They're merely self-evaluating.
+    pub fn is_keyword(&self) -> bool {
+        self.name.as_bytes().first() == Some(&b':')
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
