@@ -32,6 +32,15 @@ where
                 .iter(),
             subtrahend_ref,
         ),
+        (ty::Ty::Num, _) => subtract_ref_iters(
+            tvars,
+            [
+                ty::Ty::Int.into_ty_ref(),
+                ty::Ty::Float.into_ty_ref(),
+            ]
+                .iter(),
+            subtrahend_ref,
+        ),
         (ty::Ty::Union(members), _) => subtract_ref_iters(tvars, members.iter(), subtrahend_ref),
         (ty::Ty::List(minuend_list), ty::Ty::List(subtrahend_list))
             // Make sure this is even useful or else we can recurse splitting list types
@@ -115,6 +124,12 @@ mod test {
     fn bool_subtraction() {
         assert_subtraction("true", "Bool", "false");
         assert_subtraction("false", "Bool", "true");
+    }
+
+    #[test]
+    fn num_subtraction() {
+        assert_subtraction("Float", "Num", "Int");
+        assert_subtraction("Int", "Num", "Float");
     }
 
     #[test]
