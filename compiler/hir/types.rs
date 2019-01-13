@@ -233,6 +233,11 @@ fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
 }
 
 fn lower_ident(scope: &Scope, span: Span, ident: &Ident) -> Result<ty::Poly> {
+    if ident.is_keyword() {
+        // Keywords are self-evaluating
+        return Ok(ty::Ty::LitSym(ident.name().into()).into_poly());
+    }
+
     match scope.get_or_err(span, ident)? {
         Binding::Ty(ty) => Ok(ty.clone()),
         Binding::TyPred(test_ty) => Ok(ty::Ty::TyPred(*test_ty).into_poly()),
@@ -646,6 +651,14 @@ mod test {
         let j = "'foo";
 
         let expected = ty::Ty::LitSym("foo".into()).into_poly();
+        assert_poly_for_str(&expected, j);
+    }
+
+    #[test]
+    fn keyword_literal() {
+        let j = ":foo";
+
+        let expected = ty::Ty::LitSym(":foo".into()).into_poly();
         assert_poly_for_str(&expected, j);
     }
 
