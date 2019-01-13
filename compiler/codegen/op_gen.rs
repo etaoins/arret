@@ -1,6 +1,6 @@
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
-use llvm_sys::LLVMIntPredicate;
+use llvm_sys::{LLVMIntPredicate, LLVMRealPredicate};
 
 use runtime::boxed;
 
@@ -40,6 +40,10 @@ fn gen_op(
                 let llvm_value = LLVMConstInt(LLVMInt64TypeInContext(tcx.llx), *value as u64, 1);
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::ConstFloat(reg, value) => {
+                let llvm_value = LLVMConstReal(LLVMDoubleTypeInContext(tcx.llx), *value);
+                fcx.regs.insert(*reg, llvm_value);
+            }
             OpKind::ConstUsize(reg, value) => {
                 let llvm_value = LLVMConstInt(tcx.usize_llvm_type(), *value as u64, 1);
                 fcx.regs.insert(*reg, llvm_value);
@@ -54,6 +58,10 @@ fn gen_op(
             }
             OpKind::ConstBoxedInt(reg, value) => {
                 let llvm_value = const_gen::gen_boxed_int(tcx, mcx, *value);
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::ConstBoxedFloat(reg, value) => {
+                let llvm_value = const_gen::gen_boxed_float(tcx, mcx, *value);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBoxedFunThunk(
@@ -249,6 +257,21 @@ fn gen_op(
 
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::LoadBoxedFloatValue(reg, boxed_float_reg) => {
+                let llvm_boxed_float = fcx.regs[boxed_float_reg];
+                let value_ptr = LLVMBuildStructGEP(
+                    fcx.builder,
+                    llvm_boxed_float,
+                    1,
+                    b"float_value_ptr\0".as_ptr() as *const _,
+                );
+
+                let llvm_value =
+                    LLVMBuildLoad(fcx.builder, value_ptr, "float_value\0".as_ptr() as *const _);
+                tcx.add_invariant_load_metadata(llvm_value);
+
+                fcx.regs.insert(*reg, llvm_value);
+            }
             OpKind::LoadBoxedFunThunkClosure(reg, boxed_fun_thunk_reg) => {
                 let llvm_boxed_fun_thunk = fcx.regs[boxed_fun_thunk_reg];
 
@@ -280,6 +303,20 @@ fn gen_op(
                     active_alloc,
                     box_source,
                     llvm_int,
+                );
+
+                fcx.regs.insert(*reg, llvm_alloced);
+            }
+            OpKind::AllocBoxedFloat(reg, float_reg) => {
+                let box_source = alloc_atom.box_sources()[reg];
+
+                let llvm_float = fcx.regs[float_reg];
+                let llvm_alloced = alloc::types::gen_alloc_float(
+                    tcx,
+                    fcx.builder,
+                    active_alloc,
+                    box_source,
+                    llvm_float,
                 );
 
                 fcx.regs.insert(*reg, llvm_alloced);
@@ -354,6 +391,19 @@ fn gen_op(
                     llvm_lhs,
                     llvm_rhs,
                     "int_equal\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::FloatEqual(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+
+                let llvm_value = LLVMBuildFCmp(
+                    fcx.builder,
+                    LLVMRealPredicate::LLVMRealOLE,
+                    llvm_lhs,
+                    llvm_rhs,
+                    "float_equal\0".as_ptr() as *const _,
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }

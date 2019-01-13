@@ -66,3 +66,9 @@
 (export rest)
 (defn rest #{T} ((_ [tail T] ...)) -> (Listof T)
   tail)
+
+(export zero?)
+(defn zero? ([n Num]) -> Bool
+  (if (int? n)
+    (= n 0)
+    (= n 0.0)))

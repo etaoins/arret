@@ -113,6 +113,29 @@ pub fn gen_boxed_int(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_, '_>, value: i64) 
     }
 }
 
+pub fn gen_boxed_float(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_, '_>, value: f64) -> LLVMValueRef {
+    unsafe {
+        let type_tag = boxed::TypeTag::Float;
+        let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
+        let llvm_double = LLVMDoubleTypeInContext(tcx.llx);
+
+        let members = &mut [
+            tcx.llvm_box_header(type_tag.into_const_header()),
+            LLVMConstInt(llvm_double, value as u64, 1),
+        ];
+
+        let llvm_value =
+            LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
+
+        let global = LLVMAddGlobal(mcx.module, llvm_type, "const_float\0".as_ptr() as *const _);
+        LLVMSetInitializer(global, llvm_value);
+        LLVMSetAlignment(global, mem::align_of::<boxed::Float>() as u32);
+
+        annotate_private_global(global);
+        global
+    }
+}
+
 pub fn gen_boxed_nil(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_, '_>) -> LLVMValueRef {
     tcx.ptr_to_singleton_box(mcx.module, boxed::TypeTag::Nil, b"ARRET_NIL\0")
 }

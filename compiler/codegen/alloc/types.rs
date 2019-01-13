@@ -37,6 +37,34 @@ pub fn gen_alloc_int(
     }
 }
 
+pub fn gen_alloc_float(
+    tcx: &mut TargetCtx,
+    builder: LLVMBuilderRef,
+    active_alloc: &mut ActiveAlloc,
+    box_source: BoxSource,
+    llvm_float_value: LLVMValueRef,
+) -> LLVMValueRef {
+    unsafe {
+        let alloced_float = gen_alloced_box::<boxed::Float>(
+            tcx,
+            builder,
+            active_alloc,
+            box_source,
+            b"alloced_float\0",
+        );
+
+        let value_ptr = LLVMBuildStructGEP(
+            builder,
+            alloced_float,
+            1,
+            b"value_ptr\0".as_ptr() as *const _,
+        );
+        LLVMBuildStore(builder, llvm_float_value, value_ptr);
+
+        alloced_float
+    }
+}
+
 pub fn gen_alloc_boxed_pair(
     tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,

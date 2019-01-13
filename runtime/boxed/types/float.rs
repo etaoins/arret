@@ -26,6 +26,10 @@ impl ConstructableFrom<f64> for Float {
 }
 
 impl Float {
+    pub fn size() -> BoxSize {
+        BoxSize::Size16
+    }
+    
     pub fn value(&self) -> f64 {
         self.value
     }

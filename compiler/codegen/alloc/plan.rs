@@ -38,6 +38,10 @@ fn op_alloc_info(op: &ops::Op) -> Option<AllocInfo> {
             output_reg: *output_reg,
             box_size: boxed::Int::size(),
         }),
+        OpKind::AllocBoxedFloat(output_reg, _) => Some(AllocInfo {
+            output_reg: *output_reg,
+            box_size: boxed::Float::size(),
+        }),
         OpKind::AllocBoxedPair(output_reg, _) => Some(AllocInfo {
             output_reg: *output_reg,
             box_size: boxed::TopPair::size(),

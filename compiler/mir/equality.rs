@@ -77,6 +77,26 @@ fn int_compare(
     )
 }
 
+fn float_compare(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    left_value: &Value,
+    right_value: &Value,
+) -> BuiltReg {
+    let left_reg = value_to_reg(ehx, b, span, left_value, &abitype::ABIType::Float);
+    let right_reg = value_to_reg(ehx, b, span, right_value, &abitype::ABIType::Float);
+
+    b.push_reg(
+        span,
+        OpKind::FloatEqual,
+        BinaryOp {
+            lhs_reg: left_reg.into(),
+            rhs_reg: right_reg.into(),
+        },
+    )
+}
+
 /// Evaluates if two values are equal
 ///
 /// If `left_value` and `right_value` are const then a const is returned. Otherwise, a comparison
@@ -108,6 +128,8 @@ pub fn eval_equality(
 
     let result_reg = if all_type_tags == boxed::TypeTag::Int.into() {
         int_compare(ehx, b, span, left_value, right_value)
+    } else if all_type_tags == boxed::TypeTag::Float.into() {
+        float_compare(ehx, b, span, left_value, right_value)
     } else {
         runtime_compare(ehx, b, span, left_value, right_value)
     };

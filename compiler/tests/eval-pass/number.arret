@@ -1,0 +1,16 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn test-zero? ()
+  (assert-eq true (zero? 0))
+  (assert-eq true (zero? 0.0))
+
+  (assert-eq false (zero? 10))
+  (assert-eq false (zero? 10.0))
+  (assert-eq false (zero? ##NaN))
+  (assert-eq false (zero? ##Inf))
+  (assert-eq false (zero? ##-Inf)))
+
+(defn main! () ->! ()
+  (test-zero?)
+  ())
