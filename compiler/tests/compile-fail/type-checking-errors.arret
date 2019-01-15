@@ -73,5 +73,8 @@
   (takes-symbol x))
                ;^ ERROR `T` is not a `Sym`
 
+; Applying a fun with incorrect polymorphic purity inside a pure context
+(def _ (map println! '(0 1 2 3)))
+           ;^^^^^^^^ ERROR `(Any ... ->! ())` is not a `(Int -> Any)`
 
 (defn main! ())

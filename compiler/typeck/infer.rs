@@ -829,6 +829,11 @@ impl<'types> RecursiveDefsCtx<'types> {
         // Add our return type information
         non_fun_param_stx.add_evidence(fun_type.ret(), required_type);
 
+        if let PurityVar::Known(purity_type) = pv {
+            // Add our purity information
+            non_fun_param_stx.add_evidence_purity(fun_type.purity(), purity_type);
+        }
+
         // The context used to select the types for our function parameters. This includes the
         // evidence gathered when visiting non-function parameters.
         let mut fun_param_stx = non_fun_param_stx.clone();
