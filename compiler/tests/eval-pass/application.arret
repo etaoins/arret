@@ -1,6 +1,9 @@
 (import [stdlib base])
 (import [stdlib test])
 
+; Applying a fun with correct polymorphic purity inside a pure context
+(def _ (filter zero? '(0 1 2 3)))
+
 (defn take-exactly-three (_ _ _) false)
 (defn return-rest (x ...) x)
 (defn polymorphic-identity-function #{T} ([x T]) x)

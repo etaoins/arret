@@ -38,29 +38,6 @@ impl<'vars> SelectCtx<'vars> {
         }
     }
 
-    fn add_evidence_purity(
-        &mut self,
-        target_purity: &purity::Poly,
-        evidence_purity: &purity::Poly,
-    ) {
-        let pvar_id = if let purity::Poly::Var(pvar_id) = target_purity {
-            pvar_id
-        } else {
-            return;
-        };
-
-        if !self.selecting_pvars.contains_key(&pvar_id) {
-            return;
-        }
-
-        self.pvar_purities
-            .entry(*pvar_id)
-            .and_modify(|existing| {
-                *existing = ty::unify::unify_purity_refs(existing, evidence_purity);
-            })
-            .or_insert_with(|| evidence_purity.clone());
-    }
-
     fn add_evidence_top_fun(&mut self, target_top_fun: &ty::TopFun, evidence_top_fun: &ty::TopFun) {
         self.add_evidence_purity(target_top_fun.purity(), evidence_top_fun.purity());
         self.add_evidence(target_top_fun.ret(), evidence_top_fun.ret());
@@ -177,6 +154,29 @@ impl<'vars> SelectCtx<'vars> {
                 self.add_evidence_ty(target_ty, evidence_poly, evidence_ty)
             }
         }
+    }
+
+    pub fn add_evidence_purity(
+        &mut self,
+        target_purity: &purity::Poly,
+        evidence_purity: &purity::Poly,
+    ) {
+        let pvar_id = if let purity::Poly::Var(pvar_id) = target_purity {
+            pvar_id
+        } else {
+            return;
+        };
+
+        if !self.selecting_pvars.contains_key(&pvar_id) {
+            return;
+        }
+
+        self.pvar_purities
+            .entry(*pvar_id)
+            .and_modify(|existing| {
+                *existing = ty::unify::unify_purity_refs(existing, evidence_purity);
+            })
+            .or_insert_with(|| evidence_purity.clone());
     }
 
     pub fn into_poly_ty_args(self) -> PolyTyArgs {

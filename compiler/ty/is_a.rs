@@ -165,7 +165,7 @@ fn monomorphic_fun_is_a(tvars: &ty::TVars, sub_fun: &ty::Fun, par_fun: &ty::Fun)
 fn fun_is_a(tvars: &ty::TVars, sub_fun: &ty::Fun, par_fun: &ty::Fun) -> Result {
     if sub_fun.has_polymorphic_vars() {
         let inner_tvars = ty::merge_three_tvars(tvars, sub_fun.tvars(), par_fun.tvars());
-        let sub_mono = inst_polymorphic_fun(&inner_tvars, sub_fun, par_fun.ret());
+        let sub_mono = inst_polymorphic_fun(&inner_tvars, sub_fun, &par_fun.top_fun());
 
         monomorphic_fun_is_a(&inner_tvars, &sub_mono, par_fun)
     } else {
@@ -305,7 +305,7 @@ fn ty_is_a<S: Isable>(
         (ty::Ty::Fun(sub_fun), ty::Ty::TopFun(par_top_fun)) => {
             if sub_fun.has_polymorphic_vars() {
                 let inner_tvars = ty::merge_tvars(tvars, sub_fun.tvars());
-                let sub_mono = inst_polymorphic_fun(&inner_tvars, sub_fun, par_top_fun.ret());
+                let sub_mono = inst_polymorphic_fun(&inner_tvars, sub_fun, &par_top_fun);
                 top_fun_is_a(&inner_tvars, sub_mono.top_fun(), par_top_fun)
             } else {
                 top_fun_is_a(tvars, sub_fun.top_fun(), par_top_fun)
@@ -377,10 +377,11 @@ fn purity_ref_is_a(sub: &purity::Poly, parent: &purity::Poly) -> Result {
     }
 }
 
-fn inst_polymorphic_fun(tvars: &ty::TVars, sub_fun: &ty::Fun, par_ret: &ty::Poly) -> ty::Fun {
+fn inst_polymorphic_fun(tvars: &ty::TVars, sub_fun: &ty::Fun, par_top_fun: &ty::TopFun) -> ty::Fun {
     let mut stx = ty::select::SelectCtx::new(tvars, sub_fun.pvars(), sub_fun.tvars());
 
-    stx.add_evidence(sub_fun.ret(), par_ret);
+    stx.add_evidence(sub_fun.ret(), &par_top_fun.ret());
+    stx.add_evidence_purity(sub_fun.purity(), &par_top_fun.purity());
     let pta = stx.into_poly_ty_args();
 
     ty::subst::subst_poly_fun(&pta, sub_fun)
@@ -1048,6 +1049,24 @@ mod test {
         assert_eq!(
             Result::No,
             ty_ref_is_a(&empty_tvars, &pidentity_sym_fun, &top_impure_str_fun)
+        );
+    }
+
+    #[test]
+    fn polymorphic_purity_funs() {
+        let poly_purity_fun = poly_for_str("(All #{[->_ ->!]} (->_ Str) ->_ Str)");
+        let top_to_str_fun = poly_for_str("(... -> Str)");
+
+        let empty_tvars = ty::TVars::new();
+
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&empty_tvars, &poly_purity_fun, &top_to_str_fun)
+        );
+
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&empty_tvars, &top_to_str_fun, &poly_purity_fun)
         );
     }
 }
