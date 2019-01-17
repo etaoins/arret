@@ -81,7 +81,7 @@ fn lower_polymorphic_var(scope: &Scope, tvar_datum: NsDatum) -> Result<Polymorph
                             ErrorKind::IllegalArg(
                                 "Purity variables do not support variable bounds",
                             ),
-                        ))
+                        ));
                     }
                     None => {
                         let bound_ty = lower_poly(scope, bound_datum)?;
