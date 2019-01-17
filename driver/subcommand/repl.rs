@@ -3,7 +3,7 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::{fs, path};
 
-use ansi_term::Colour;
+use ansi_term::{Colour, Style};
 use directories;
 use rustyline;
 
@@ -17,24 +17,48 @@ const TYPE_ONLY_PREFIX: &str = "/type ";
 const QUIT_COMMAND: &str = "/quit";
 const HELP_COMMAND: &str = "/help";
 
-const ALL_COMMANDS: &[&str] = &[TYPE_ONLY_PREFIX, QUIT_COMMAND, HELP_COMMAND];
+/// Completions that don't map to a bound value in scope
+const UNBOUND_COMPLETIONS: &[&str] = &[
+    TYPE_ONLY_PREFIX,
+    QUIT_COMMAND,
+    HELP_COMMAND,
+    "true",
+    "false",
+];
+
+fn expected_content_for_line(mut line: &str) -> Option<syntax::error::ExpectedContent> {
+    use syntax::parser::datum_from_str;
+
+    if line.starts_with(TYPE_ONLY_PREFIX) {
+        line = &line[TYPE_ONLY_PREFIX.len()..];
+    } else if line.starts_with('/') || line.chars().all(char::is_whitespace) {
+        // This is empty or a command
+        return None;
+    }
+
+    datum_from_str(line).err().and_then(|error| {
+        if let syntax::error::ErrorKind::Eof(expected_content) = error.kind() {
+            Some(*expected_content)
+        } else {
+            None
+        }
+    })
+}
 
 struct ArretHelper {
-    bound_names: Vec<String>,
+    all_names: Vec<String>,
 }
 
 impl ArretHelper {
     fn new<'a>(names_iter: impl Iterator<Item = &'a str>) -> ArretHelper {
         let mut all_names = names_iter
-            .chain(ALL_COMMANDS.iter().cloned())
+            .chain(UNBOUND_COMPLETIONS.iter().cloned())
             .map(|s| s.to_owned())
             .collect::<Vec<String>>();
 
         all_names.sort();
 
-        ArretHelper {
-            bound_names: all_names,
-        }
+        ArretHelper { all_names }
     }
 }
 
@@ -56,6 +80,7 @@ impl rustyline::completion::Completer for ArretHelper {
             .rfind(|c| !is_identifier_char(c))
             .map(|i| i + 1)
             .unwrap_or(0);
+
         let prefix = &line[prefix_start..pos];
 
         let suffix = if line.len() > pos {
@@ -69,7 +94,7 @@ impl rustyline::completion::Completer for ArretHelper {
         };
 
         let options = self
-            .bound_names
+            .all_names
             .iter()
             .filter_map(|name| {
                 if name.starts_with('/') && (pos - prefix.len()) != 0 {
@@ -88,8 +113,39 @@ impl rustyline::completion::Completer for ArretHelper {
 }
 
 impl rustyline::hint::Hinter for ArretHelper {
-    fn hint(&self, _line: &str, _pos: usize) -> Option<String> {
-        None
+    fn hint(&self, line: &str, pos: usize) -> Option<String> {
+        use syntax::error::ExpectedContent;
+        use syntax::parser::is_identifier_char;
+
+        let last_ident_start = line
+            .rfind(|c| !is_identifier_char(c))
+            .map(|i| i + 1)
+            .unwrap_or(0);
+
+        let last_ident = &line[last_ident_start..];
+
+        if !last_ident.is_empty() {
+            for name in self.all_names.iter() {
+                if name.starts_with('/') && (pos - last_ident.len()) != 0 {
+                    // Command not at the start of the line
+                    continue;
+                }
+
+                if name.starts_with(last_ident) && name.len() > last_ident.len() {
+                    return Some(name[last_ident.len()..].to_owned());
+                }
+            }
+        }
+
+        expected_content_for_line(line)
+            .and_then(|expected_content| match expected_content {
+                ExpectedContent::List(_) => Some(")"),
+                ExpectedContent::Vector(_) => Some("]"),
+                ExpectedContent::String(_) => Some("\""),
+                ExpectedContent::Set(_) | ExpectedContent::Map(_) => Some("}"),
+                _ => None,
+            })
+            .map(|s| s.to_owned())
     }
 }
 
@@ -97,6 +153,20 @@ impl rustyline::highlight::Highlighter for ArretHelper {
     fn highlight_prompt<'p>(&self, prompt: &'p str) -> Cow<'p, str> {
         let prompt_style = Colour::Blue;
         prompt_style.paint(prompt).to_string().into()
+    }
+
+    fn highlight_hint<'h>(&self, hint: &'h str) -> Cow<'h, str> {
+        use syntax::parser::is_identifier_char;
+
+        if hint.chars().next().map(is_identifier_char) == Some(true) {
+            // This is a name completion
+            let name_style = Style::new().dimmed();
+            name_style.paint(hint).to_string().into()
+        } else {
+            // This is an unexpected EOF hint
+            let unexpected_eof_style = Colour::Red.bold();
+            unexpected_eof_style.paint(hint).to_string().into()
+        }
     }
 }
 
