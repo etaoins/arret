@@ -117,6 +117,13 @@ impl rustyline::hint::Hinter for ArretHelper {
         use syntax::error::ExpectedContent;
         use syntax::parser::is_identifier_char;
 
+        let expected_content = expected_content_for_line(line);
+
+        // If we're inside a string we shouldn't try to hint identifiers
+        if let Some(ExpectedContent::String(_)) = expected_content {
+            return Some("\"".to_owned());
+        }
+
         let last_ident_start = line
             .rfind(|c| !is_identifier_char(c))
             .map(|i| i + 1)
@@ -137,11 +144,10 @@ impl rustyline::hint::Hinter for ArretHelper {
             }
         }
 
-        expected_content_for_line(line)
+        expected_content
             .and_then(|expected_content| match expected_content {
                 ExpectedContent::List(_) => Some(")"),
                 ExpectedContent::Vector(_) => Some("]"),
-                ExpectedContent::String(_) => Some("\""),
                 ExpectedContent::Set(_) | ExpectedContent::Map(_) => Some("}"),
                 _ => None,
             })
