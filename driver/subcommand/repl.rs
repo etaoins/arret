@@ -17,6 +17,14 @@ const TYPE_ONLY_PREFIX: &str = "/type ";
 const QUIT_COMMAND: &str = "/quit";
 const HELP_COMMAND: &str = "/help";
 
+/// Maximum line length we'll provide parser hints and error highlighting for
+///
+/// This requires parsing the whole line and we don't support incremental reparsing. This means
+/// in the worst case of pasting a large line character-by-character we'll behave O(n!) with
+/// with the size of the pasted line. This seems like a reasonable cutoff where a human isn't
+/// typing the input.
+const MAXIMUM_PARSED_LINE_LEN: usize = 512;
+
 /// Completions that don't map to a bound value in scope
 const UNBOUND_COMPLETIONS: &[&str] = &[
     TYPE_ONLY_PREFIX,
@@ -33,6 +41,11 @@ fn error_for_line(mut line: &str) -> Option<syntax::error::Error> {
         line = &line[TYPE_ONLY_PREFIX.len()..];
     } else if line.starts_with('/') || line.chars().all(char::is_whitespace) {
         // This is empty or a command
+        return None;
+    }
+
+    if line.len() > MAXIMUM_PARSED_LINE_LEN {
+        // This is too large to parse interactively
         return None;
     }
 
