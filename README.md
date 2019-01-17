@@ -49,11 +49,11 @@ arret> (length '(1 2 3 4 5))
 => 5
 arret> (defn identity #{T} ([x T]) -> T x)
 defined
-arret> :type identity
+arret> /type identity
 => #{T} (T -> T)
 arret> (identity "Hello, world!")
 => "Hello, world!"
-arret> :type (identity [one two three])
+arret> /type (identity [one two three])
 => (Vector 'one 'two 'three)
 ```
 

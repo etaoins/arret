@@ -12,7 +12,12 @@ use compiler;
 use crate::DriverConfig;
 
 const PROMPT: &str = "arret> ";
-const TYPE_ONLY_PREFIX: &str = ":type ";
+
+const TYPE_ONLY_PREFIX: &str = "/type ";
+const QUIT_COMMAND: &str = "/quit";
+const HELP_COMMAND: &str = "/help";
+
+const ALL_COMMANDS: &[&str] = &[TYPE_ONLY_PREFIX, QUIT_COMMAND, HELP_COMMAND];
 
 struct ArretHelper {
     bound_names: Vec<String>,
@@ -20,7 +25,11 @@ struct ArretHelper {
 
 impl ArretHelper {
     fn new<'a>(names_iter: impl Iterator<Item = &'a str>) -> ArretHelper {
-        let mut all_names = names_iter.map(|s| s.to_owned()).collect::<Vec<String>>();
+        let mut all_names = names_iter
+            .chain(ALL_COMMANDS.iter().cloned())
+            .map(|s| s.to_owned())
+            .collect::<Vec<String>>();
+
         all_names.sort();
 
         ArretHelper {
@@ -63,7 +72,10 @@ impl rustyline::completion::Completer for ArretHelper {
             .bound_names
             .iter()
             .filter_map(|name| {
-                if name.starts_with(prefix) && name.ends_with(suffix) {
+                if name.starts_with('/') && (pos - prefix.len()) != 0 {
+                    // Commands can only appear at the beginning of the line
+                    None
+                } else if name.starts_with(prefix) && name.ends_with(suffix) {
                     Some((&name[0..name.len() - suffix.len()]).to_owned())
                 } else {
                     None
@@ -114,15 +126,15 @@ fn parse_command(mut line: String) -> ParsedCommand {
             line.drain(0..TYPE_ONLY_PREFIX.len());
             ParsedCommand::EvalType(line)
         }
-        ":help" => {
+        HELP_COMMAND => {
             println!("Available REPL commands:");
             println!();
-            println!(":help                  print this summary");
-            println!(":type <expression>     evaluate the type of the given expression");
-            println!(":quit                  exit the REPL");
+            println!("/help                  print this summary");
+            println!("/type <expression>     evaluate the type of the given expression");
+            println!("/quit                  exit the REPL");
             ParsedCommand::Other
         }
-        ":quit" => ParsedCommand::Quit,
+        QUIT_COMMAND => ParsedCommand::Quit,
         _ => ParsedCommand::EvalValue(line),
     }
 }
