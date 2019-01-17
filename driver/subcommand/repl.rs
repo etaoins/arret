@@ -26,7 +26,7 @@ const UNBOUND_COMPLETIONS: &[&str] = &[
     "false",
 ];
 
-fn expected_content_for_line(mut line: &str) -> Option<syntax::error::ExpectedContent> {
+fn error_for_line(mut line: &str) -> Option<syntax::error::Error> {
     use syntax::parser::datum_from_str;
 
     if line.starts_with(TYPE_ONLY_PREFIX) {
@@ -36,7 +36,11 @@ fn expected_content_for_line(mut line: &str) -> Option<syntax::error::ExpectedCo
         return None;
     }
 
-    datum_from_str(line).err().and_then(|error| {
+    datum_from_str(line).err()
+}
+
+fn expected_content_for_line(line: &str) -> Option<syntax::error::ExpectedContent> {
+    error_for_line(line).and_then(|error| {
         if let syntax::error::ErrorKind::Eof(expected_content) = error.kind() {
             Some(*expected_content)
         } else {
@@ -156,6 +160,34 @@ impl rustyline::hint::Hinter for ArretHelper {
 }
 
 impl rustyline::highlight::Highlighter for ArretHelper {
+    fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
+        // See if we have an error
+        let error_span = error_for_line(line).and_then(|error| {
+            if let syntax::error::ErrorKind::Eof(ec) = error.kind() {
+                // We'll already be hinting at the end of the line so point to the opening char
+                ec.open_char_span()
+            } else {
+                Some(error.span())
+            }
+        });
+
+        let error_span = if let Some(error_span) = error_span {
+            error_span
+        } else {
+            return line.into();
+        };
+
+        let error_start = error_span.lo as usize;
+        let error_end = error_span.hi as usize;
+
+        let prefix = &line[0..error_start];
+        let error = &line[error_start..error_end];
+        let suffix = &line[error_end..];
+
+        let error_style = Colour::Red.bold();
+        format!("{}{}{}", prefix, error_style.paint(error), suffix).into()
+    }
+
     fn highlight_prompt<'p>(&self, prompt: &'p str) -> Cow<'p, str> {
         let prompt_style = Colour::Blue;
         prompt_style.paint(prompt).to_string().into()
