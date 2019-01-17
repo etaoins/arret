@@ -48,8 +48,6 @@ pub(crate) fn declare_fun(
     llvm_module: LLVMModuleRef,
     fun: &ops::Fun,
 ) -> LLVMValueRef {
-    use runtime::abitype::ParamABIType;
-
     let gen_abi = GenABI {
         takes_task: true,
         params: fun
@@ -57,8 +55,7 @@ pub(crate) fn declare_fun(
             .params
             .iter()
             .map(|abi_type| abi_type.clone().into())
-            .collect::<Vec<ParamABIType>>()
-            .into_boxed_slice(),
+            .collect(),
         ret: fun.abi.ret.clone(),
     };
 

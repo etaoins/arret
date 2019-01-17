@@ -251,10 +251,8 @@ impl EvalHirCtx {
     fn eval_lit(&mut self, literal: &Datum) -> Value {
         match literal {
             Datum::List(_, elems) => {
-                let elem_values: Vec<Value> =
-                    elems.iter().map(|elem| self.eval_lit(elem)).collect();
-
-                Value::List(elem_values.into_boxed_slice(), None)
+                let elem_values = elems.iter().map(|elem| self.eval_lit(elem)).collect();
+                Value::List(elem_values, None)
             }
             other => {
                 let boxed = reader::box_syntax_datum(self, other);
@@ -698,7 +696,7 @@ impl EvalHirCtx {
             CallOp {
                 callee: Callee::BoxedFunThunk(fun_thunk_reg.into()),
                 impure: true,
-                args: vec![closure_reg.into(), arg_list_reg.into()].into_boxed_slice(),
+                args: Box::new([closure_reg.into(), arg_list_reg.into()]),
             },
         );
 
@@ -769,7 +767,7 @@ impl EvalHirCtx {
             .fixed_arg_exprs
             .iter()
             .map(|arg| self.eval_expr(fcx, b, arg))
-            .collect::<Result<Vec<Value>>>()?;
+            .collect::<Result<Box<[Value]>>>()?;
 
         let rest_value = match &app.rest_arg_expr {
             Some(rest_arg) => Some(Box::new(self.eval_expr(fcx, b, rest_arg)?)),
@@ -777,7 +775,7 @@ impl EvalHirCtx {
         };
 
         let ret_ty = fcx.monomorphise(result_ty);
-        let arg_list_value = Value::List(fixed_values.into_boxed_slice(), rest_value);
+        let arg_list_value = Value::List(fixed_values, rest_value);
         self.eval_value_app(
             fcx,
             b,

@@ -113,8 +113,7 @@ fn lower_list_cons(scope: &Scope, mut arg_iter: NsDataIter) -> Result<ty::List<t
 
     let fixed_polys = arg_iter
         .map(|fixed_datum| lower_poly(scope, fixed_datum))
-        .collect::<Result<Vec<ty::Poly>>>()?
-        .into_boxed_slice();
+        .collect::<Result<Box<[ty::Poly]>>>()?;
 
     let rest_poly = match rest {
         Some(rest_datum) => Some(lower_poly(scope, rest_datum)?),
@@ -165,8 +164,7 @@ fn lower_ty_cons_apply(
         TyCons::Vector => {
             let member_tys = arg_iter
                 .map(|arg_datum| lower_poly(scope, arg_datum))
-                .collect::<Result<Vec<ty::Poly>>>()?
-                .into_boxed_slice();
+                .collect::<Result<Box<[ty::Poly]>>>()?;
 
             Ok(ty::Ty::Vector(member_tys).into_poly())
         }
@@ -202,9 +200,9 @@ fn lower_ty_cons_apply(
             // union code itself
             let member_tys = arg_iter
                 .map(|arg_datum| lower_poly(scope, arg_datum))
-                .collect::<Result<Vec<ty::Poly>>>()?;
+                .collect::<Result<Box<[ty::Poly]>>>()?;
 
-            Ok(ty::Ty::Union(member_tys.into_boxed_slice()).into_poly())
+            Ok(ty::Ty::Union(member_tys).into_poly())
         }
     }
 }

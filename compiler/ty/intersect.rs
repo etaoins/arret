@@ -149,9 +149,9 @@ fn non_subty_intersect<S: Intersectable>(
                     .iter()
                     .zip(members2.iter())
                     .map(|(member1, member2)| intersect_ty_refs(tvars, member1, member2))
-                    .collect::<Result<Vec<S>>>()?;
+                    .collect::<Result<Box<[S]>>>()?;
 
-                Ok(ty::Ty::Vector(intersected_members.into_boxed_slice()).into_ty_ref())
+                Ok(ty::Ty::Vector(intersected_members).into_ty_ref())
             }
         }
         (ty::Ty::Vectorof(member1), ty::Ty::Vector(members2))
@@ -159,9 +159,9 @@ fn non_subty_intersect<S: Intersectable>(
             let intersected_members = members2
                 .iter()
                 .map(|member2| intersect_ty_refs(tvars, member1.as_ref(), member2))
-                .collect::<Result<Vec<S>>>()?;
+                .collect::<Result<Box<[S]>>>()?;
 
-            Ok(ty::Ty::Vector(intersected_members.into_boxed_slice()).into_ty_ref())
+            Ok(ty::Ty::Vector(intersected_members).into_ty_ref())
         }
 
         // List types

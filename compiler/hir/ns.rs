@@ -61,8 +61,7 @@ impl NsDatum {
         vs.into_vec()
             .into_iter()
             .map(|v| Self::from_syntax_datum(ns_id, v))
-            .collect::<Vec<NsDatum>>()
-            .into_boxed_slice()
+            .collect()
     }
 
     pub fn from_syntax_datum(ns_id: NsId, value: Datum) -> NsDatum {
@@ -86,8 +85,7 @@ impl NsDatum {
                             NsDatum::from_syntax_datum(ns_id, v),
                         )
                     })
-                    .collect::<Vec<(NsDatum, NsDatum)>>()
-                    .into_boxed_slice(),
+                    .collect(),
             ),
         }
     }
@@ -96,8 +94,7 @@ impl NsDatum {
         vs.into_vec()
             .into_iter()
             .map(|v| v.into_syntax_datum())
-            .collect::<Vec<Datum>>()
-            .into_boxed_slice()
+            .collect()
     }
 
     pub fn into_syntax_datum(self) -> Datum {
@@ -116,8 +113,7 @@ impl NsDatum {
                 vs.into_vec()
                     .into_iter()
                     .map(|(k, v)| (k.into_syntax_datum(), v.into_syntax_datum()))
-                    .collect::<Vec<(Datum, Datum)>>()
-                    .into_boxed_slice(),
+                    .collect(),
             ),
         }
     }

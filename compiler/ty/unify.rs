@@ -210,9 +210,9 @@ fn unify_ty<S: Unifiable>(
                     .iter()
                     .zip(members2.iter())
                     .map(|(member1, member2)| unify_to_ty_ref(tvars, member1, member2))
-                    .collect::<Vec<S>>();
+                    .collect();
 
-                UnifiedTy::Merged(ty::Ty::Vector(unified_members.into_boxed_slice()).into_ty_ref())
+                UnifiedTy::Merged(ty::Ty::Vector(unified_members).into_ty_ref())
             }
         }
         (ty::Ty::Vectorof(member1), ty::Ty::Vectorof(member2)) => UnifiedTy::Merged(

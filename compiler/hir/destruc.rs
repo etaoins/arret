@@ -114,8 +114,7 @@ pub fn poly_for_list_destruc(list: &List<hir::Inferred>) -> ty::List<ty::Poly> {
         .fixed()
         .iter()
         .map(poly_for_destruc)
-        .collect::<Vec<ty::Poly>>()
-        .into_boxed_slice();
+        .collect();
 
     let rest_poly = match list.rest() {
         Some(rest) => Some(rest.ty().clone()),

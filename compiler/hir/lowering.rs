@@ -952,8 +952,7 @@ fn import_statement_for_module(names: &[&'static str]) -> Datum {
                 names
                     .iter()
                     .map(|&n| Datum::Sym(EMPTY_SPAN, n.into()))
-                    .collect::<Vec<Datum>>()
-                    .into_boxed_slice(),
+                    .collect()
             ),
         ]),
     )

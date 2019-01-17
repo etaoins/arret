@@ -41,14 +41,14 @@ impl From<callback::EntryPointABIType> for PolymorphABI {
 fn fallback_polymorph_abi(has_closure: bool, ret_ty: &ty::Mono) -> PolymorphABI {
     use crate::mir::compact_abi_type::compact_abi_type_for_mono;
 
-    let params_vec: Vec<abitype::ABIType> = Some(abitype::BoxedABIType::Any.into())
+    let params = Some(abitype::BoxedABIType::Any.into())
         .filter(|_| has_closure)
         .into_iter()
         .chain(iter::once(abitype::TOP_LIST_BOXED_ABI_TYPE.into()))
         .collect();
 
     let ops_abi = ops::OpsABI {
-        params: params_vec.into_boxed_slice(),
+        params,
         ret: compact_abi_type_for_mono(ret_ty).into(),
     };
 
@@ -73,7 +73,7 @@ fn list_polymorph_abi(
 ) -> PolymorphABI {
     use crate::mir::compact_abi_type::compact_abi_type_for_mono;
 
-    let params_vec: Vec<abitype::ABIType> = Some(abitype::BoxedABIType::Any.into())
+    let params = Some(abitype::BoxedABIType::Any.into())
         .filter(|_| has_closure)
         .into_iter()
         .chain(fixed.iter().map(abi_type_for_arg_value))
@@ -84,7 +84,7 @@ fn list_polymorph_abi(
         .collect();
 
     let ops_abi = ops::OpsABI {
-        params: params_vec.into_boxed_slice(),
+        params,
         ret: compact_abi_type_for_mono(ret_ty).into(),
     };
 

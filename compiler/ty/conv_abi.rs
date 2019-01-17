@@ -139,8 +139,7 @@ impl ConvertableABIType for callback::EntryPointABIType {
             .params
             .iter()
             .map(|abi_type| abi_type.to_ty_ref())
-            .collect::<Vec<ty::Poly>>()
-            .into_boxed_slice();
+            .collect();
 
         let param_list_ty = ty::List::new(fixed_param_ty_refs, None);
 

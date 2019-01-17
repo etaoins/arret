@@ -37,8 +37,7 @@ impl From<callback::EntryPointABIType> for OpsABI {
         // Include our closure
         let params = iter::once(abitype::BoxedABIType::Any.into())
             .chain(abi_type.params.iter().cloned())
-            .collect::<Vec<abitype::ABIType>>()
-            .into_boxed_slice();
+            .collect();
 
         OpsABI {
             params,

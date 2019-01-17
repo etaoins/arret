@@ -9,8 +9,7 @@ where
     inputs
         .iter()
         .map(|i| stx.subst_ty_ref(i))
-        .collect::<Vec<S::Output>>()
-        .into_boxed_slice()
+        .collect()
 }
 
 fn subst_list<S>(stx: &S, list: &ty::List<S::Input>) -> ty::List<S::Output>

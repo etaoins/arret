@@ -62,15 +62,10 @@ pub fn build_load_arg_list_value(b: &mut Builder, polymorph_abi: &PolymorphABI) 
                 .map(|reg_value| reg_value.reg.into()),
         )
         .chain(rest_reg_value.iter().map(|reg_value| reg_value.reg.into()))
-        .collect::<Vec<ops::RegId>>()
-        .into_boxed_slice();
+        .collect();
 
     let arg_list_value = Value::List(
-        fixed_reg_values
-            .into_iter()
-            .map(Value::Reg)
-            .collect::<Vec<Value>>()
-            .into_boxed_slice(),
+        fixed_reg_values.into_iter().map(Value::Reg).collect(),
         rest_reg_value.map(|reg_value| Box::new(Value::Reg(reg_value))),
     );
 

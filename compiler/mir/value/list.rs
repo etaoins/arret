@@ -91,10 +91,7 @@ impl<'list> ListIterator {
 
     /// Returns a Value containing the rest of the iterator
     pub fn into_rest(self) -> Value {
-        Value::List(
-            self.fixed.collect::<Vec<Value>>().into_boxed_slice(),
-            self.rest.map(Box::new),
-        )
+        Value::List(self.fixed.collect(), self.rest.map(Box::new))
     }
 
     fn build_rest_next(
@@ -139,7 +136,7 @@ mod test {
         let elements = &[1, 2, 3];
 
         // Start with three fixed values
-        let fixed_values: Vec<Value> = elements
+        let fixed_values = elements
             .iter()
             .map(|element| {
                 let element_ref = boxed::Int::new(&mut heap, *element).as_any_ref();
@@ -158,7 +155,7 @@ mod test {
 
         // Add the fixed values (3 elements) to the constant tail (3 elements)
         let list_value = Value::List(
-            fixed_values.into_boxed_slice(),
+            fixed_values,
             Some(Box::new(const_list_tail)),
         );
 
