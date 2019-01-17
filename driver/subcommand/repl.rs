@@ -19,6 +19,26 @@ const HELP_COMMAND: &str = "/help";
 
 const ALL_COMMANDS: &[&str] = &[TYPE_ONLY_PREFIX, QUIT_COMMAND, HELP_COMMAND];
 
+fn expected_content_for_line(line: &str) -> Option<syntax::error::ExpectedContent> {
+    use syntax::parser::datum_from_str;
+
+    if line.starts_with('/') || line.chars().all(char::is_whitespace) {
+        // This is empty or a command
+        return None;
+    }
+
+    match datum_from_str(line) {
+        Err(error) => {
+            if let syntax::error::ErrorKind::Eof(expected_content) = error.kind() {
+                Some(*expected_content)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 struct ArretHelper {
     bound_names: Vec<String>,
 }
@@ -49,7 +69,12 @@ fn report_all_to_stderr(source_loader: &compiler::SourceLoader, err: &compiler::
 impl rustyline::completion::Completer for ArretHelper {
     type Candidate = String;
 
-    fn complete(&self, line: &str, pos: usize) -> rustyline::Result<(usize, Vec<String>)> {
+    fn complete(
+        &self,
+        line: &str,
+        pos: usize,
+        _: &rustyline::Context<'_>,
+    ) -> rustyline::Result<(usize, Vec<String>)> {
         use syntax::parser::is_identifier_char;
 
         let prefix_start = line[0..pos]
@@ -88,8 +113,18 @@ impl rustyline::completion::Completer for ArretHelper {
 }
 
 impl rustyline::hint::Hinter for ArretHelper {
-    fn hint(&self, _line: &str, _pos: usize) -> Option<String> {
-        None
+    fn hint(&self, line: &str, _pos: usize, _: &rustyline::Context<'_>) -> Option<String> {
+        use syntax::error::ExpectedContent;
+
+        expected_content_for_line(line)
+            .and_then(|expected_content| match expected_content {
+                ExpectedContent::List(_) => Some(")"),
+                ExpectedContent::Vector(_) => Some("]"),
+                ExpectedContent::String(_) => Some("\""),
+                ExpectedContent::Set(_) | ExpectedContent::Map(_) => Some("}"),
+                _ => None,
+            })
+            .map(|s| s.to_owned())
     }
 }
 
@@ -97,6 +132,17 @@ impl rustyline::highlight::Highlighter for ArretHelper {
     fn highlight_prompt<'p>(&self, prompt: &'p str) -> Cow<'p, str> {
         let prompt_style = Colour::Blue;
         prompt_style.paint(prompt).to_string().into()
+    }
+
+    fn highlight_hint<'h>(&self, hint: &'h str) -> Cow<'h, str> {
+        let hint_style = Colour::Red.bold();
+        hint_style.paint(hint).to_string().into()
+    }
+}
+
+impl rustyline::validate::Validator for ArretHelper {
+    fn is_valid(&self, line: &str) -> bool {
+        expected_content_for_line(line).is_none()
     }
 }
 
