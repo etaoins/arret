@@ -1204,6 +1204,10 @@ impl EvalHirCtx {
         Ok(())
     }
 
+    pub fn should_collect(&self) -> bool {
+        self.runtime_task.heap().should_collect()
+    }
+
     /// Collect any boxed values that are no longer reachable
     pub fn collect_garbage(&mut self) {
         use runtime::boxed::collect;

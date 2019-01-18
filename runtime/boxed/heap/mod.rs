@@ -22,6 +22,7 @@ pub struct Heap {
     current_segment: Segment,
     full_segments: Vec<Segment>,
     interner: Interner,
+    len_at_last_gc: usize,
 }
 
 impl Segment {
@@ -101,7 +102,20 @@ impl Heap {
             current_segment: Segment::with_capacity(count),
             full_segments: vec![],
             interner: Interner::new(),
+            len_at_last_gc: 0,
         }
+    }
+
+    /// Indicates if this Heap should be garbage collected
+    ///
+    /// This is a heuristic based on the number of allocations since the last GC cycle.
+    pub fn should_collect(&self) -> bool {
+        let maximum_len = std::cmp::max(Self::DEFAULT_SEGMENT_CAPACITY, self.len_at_last_gc) * 2;
+        self.len() > maximum_len
+    }
+
+    fn save_len_at_gc(&mut self) {
+        self.len_at_last_gc = self.len();
     }
 
     /// Allocates space for contiguous `count` cells

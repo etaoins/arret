@@ -95,9 +95,9 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
             }
         };
 
-        // TODO: Do this for now to catch GC bugs. This should be done only when required and in
-        // a background thread.
-        self.ehx.collect_garbage();
+        if self.ehx.should_collect() {
+            self.ehx.collect_garbage();
+        }
 
         let ns_datum = hir::ns::NsDatum::from_syntax_datum(self.ns_id, input_datum);
 

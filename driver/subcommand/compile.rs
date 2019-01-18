@@ -25,6 +25,10 @@ fn try_compile_input_file(
         ehx.consume_def(inferred_def)?;
     }
 
+    if ehx.should_collect() {
+        ehx.collect_garbage();
+    }
+
     let mir_program = ehx.into_built_program(hir.main_var_id)?;
 
     let debug_source_loader = if debug_info {

@@ -38,7 +38,9 @@ impl StrongPass {
     }
 
     pub fn into_new_heap(self) -> Heap {
-        self.new_heap
+        let mut new_heap = self.new_heap;
+        new_heap.save_len_at_gc();
+        new_heap
     }
 
     fn move_box_to_new_heap(&mut self, box_ref: &mut Gc<Any>, size: BoxSize) {
@@ -160,7 +162,9 @@ pub struct WeakPass {
 
 impl WeakPass {
     pub fn into_new_heap(self) -> Heap {
-        self.new_heap
+        let mut new_heap = self.new_heap;
+        new_heap.save_len_at_gc();
+        new_heap
     }
 
     pub fn new_heap_ref_for<T: Boxed>(&self, boxed: Gc<T>) -> Option<Gc<T>> {
