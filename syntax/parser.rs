@@ -99,7 +99,7 @@ impl<'de> Parser<'de> {
 
     fn skip_until_non_whitespace(&mut self, ec: ExpectedContent) -> Result<char> {
         loop {
-            self.consume_until(|c| !is_whitespace(c) || c == ';' || c == '#');
+            self.consume_while(is_whitespace);
 
             match self.peek_char(ec)? {
                 ';' => {
@@ -146,6 +146,13 @@ impl<'de> Parser<'de> {
         (span, consumed)
     }
 
+    fn consume_while<T>(&mut self, mut predicate: T) -> (Span, &str)
+    where
+        T: FnMut(char) -> bool,
+    {
+        self.consume_until(|c| !predicate(c))
+    }
+
     fn capture_span<F, R>(&mut self, block: F) -> (Span, R)
     where
         F: FnOnce(&mut Parser<'_>) -> R,
@@ -166,25 +173,25 @@ impl<'de> Parser<'de> {
 
         let mut state: State = State::Sign;
 
-        let (span, digits) = self.consume_until(|c| match state {
+        let (span, digits) = self.consume_while(|c| match state {
             State::Sign => match c {
                 '+' | '-' | '0'..='9' => {
                     state = State::Whole;
-                    false
+                    true
                 }
-                _ => true,
+                _ => false,
             },
             State::Whole => match c {
                 '.' => {
                     state = State::Fractional;
-                    false
+                    true
                 }
-                '0'..='9' => false,
-                _ => true,
+                '0'..='9' => true,
+                _ => false,
             },
             State::Fractional => match c {
-                '0'..='9' => false,
-                _ => true,
+                '0'..='9' => true,
+                _ => false,
             },
         });
 
@@ -203,7 +210,7 @@ impl<'de> Parser<'de> {
     }
 
     fn parse_symbolic_float(&mut self) -> Result<Datum> {
-        let (span, symbolic_name) = self.consume_until(|c| !is_identifier_char(c));
+        let (span, symbolic_name) = self.consume_while(is_identifier_char);
 
         let float_value = match symbolic_name {
             "#NaN" => std::f64::NAN,
@@ -299,7 +306,7 @@ impl<'de> Parser<'de> {
 
         let mut content = Vec::new();
 
-        // Keep eating datums until we hit the terminator
+        // Keep eating data until we hit the terminator
         loop {
             let next_char = self.skip_until_non_whitespace(ec)?;
             if next_char == terminator {
@@ -413,7 +420,7 @@ impl<'de> Parser<'de> {
     }
 
     fn parse_identifier(&mut self) -> Result<Datum> {
-        let (span, content) = self.consume_until(|c| !is_identifier_char(c));
+        let (span, content) = self.consume_while(is_identifier_char);
 
         if content.is_empty() {
             let (span, next_char) =
