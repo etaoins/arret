@@ -6,10 +6,7 @@ fn subst_ty_ref_slice<S>(stx: &S, inputs: &[S::Input]) -> Box<[S::Output]>
 where
     S: Substitution,
 {
-    inputs
-        .iter()
-        .map(|i| stx.subst_ty_ref(i))
-        .collect()
+    inputs.iter().map(|i| stx.subst_ty_ref(i)).collect()
 }
 
 fn subst_list<S>(stx: &S, list: &ty::List<S::Input>) -> ty::List<S::Output>

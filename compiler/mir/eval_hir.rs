@@ -844,7 +844,8 @@ impl EvalHirCtx {
     ) -> Result<Value> {
         use crate::mir::value::build_reg::value_to_reg;
         use crate::mir::value::from_reg::reg_to_value;
-        use crate::mir::value::plan_phi::plan_phi_abi_type;
+        use crate::mir::value::plan_phi::*;
+        use crate::mir::equality::values_statically_equal;
         use runtime::abitype;
 
         let test_reg = value_to_reg(self, b, span, test_value, &abitype::ABIType::Bool);
@@ -857,23 +858,28 @@ impl EvalHirCtx {
 
         match (built_true.result, built_false.result) {
             (Ok(true_value), Ok(false_value)) => {
-                let phi_ty = fcx.monomorphise(result_ty);
-                let phi_abi_type = plan_phi_abi_type(&true_value, &false_value, &phi_ty);
+                if values_statically_equal(self, &true_value, &false_value) == Some(true) {
+                    output_value = true_value;
+                    reg_phi = None;
+                } else {
+                    let phi_abi_type = plan_phi_abi_type(&true_value, &false_value);
 
-                let true_result_reg =
-                    value_to_reg(self, &mut built_true.b, span, &true_value, &phi_abi_type);
+                    let true_result_reg =
+                        value_to_reg(self, &mut built_true.b, span, &true_value, &phi_abi_type);
 
-                let false_result_reg =
-                    value_to_reg(self, &mut built_false.b, span, &false_value, &phi_abi_type);
+                    let false_result_reg =
+                        value_to_reg(self, &mut built_false.b, span, &false_value, &phi_abi_type);
 
-                let output_reg = b.alloc_local();
+                    let output_reg = b.alloc_local();
 
-                output_value = reg_to_value(self, output_reg, &phi_abi_type, &phi_ty);
-                reg_phi = Some(ops::RegPhi {
-                    output_reg: output_reg.into(),
-                    true_result_reg: true_result_reg.into(),
-                    false_result_reg: false_result_reg.into(),
-                });
+                    let phi_ty = fcx.monomorphise(result_ty);
+                    output_value = reg_to_value(self, output_reg, &phi_abi_type, &phi_ty);
+                    reg_phi = Some(ops::RegPhi {
+                        output_reg: output_reg.into(),
+                        true_result_reg: true_result_reg.into(),
+                        false_result_reg: false_result_reg.into(),
+                    });
+                }
             }
             (Ok(true_value), Err(Error::Diverged)) => {
                 output_value = true_value;

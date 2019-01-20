@@ -154,10 +154,7 @@ mod test {
         );
 
         // Add the fixed values (3 elements) to the constant tail (3 elements)
-        let list_value = Value::List(
-            fixed_values,
-            Some(Box::new(const_list_tail)),
-        );
+        let list_value = Value::List(fixed_values, Some(Box::new(const_list_tail)));
 
         // The length should be 6
         assert_eq!(Some(6), list_value_length(&list_value));

@@ -24,6 +24,10 @@ impl TypeTagSet {
         self.0 == 0
     }
 
+    pub fn len(self) -> usize {
+        self.0.count_ones() as usize
+    }
+
     pub fn insert(&mut self, type_tag: TypeTag) {
         // The compiler is smart enough to eliminate this
         assert!((type_tag as u8) < INNER_BITS);

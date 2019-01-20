@@ -1,7 +1,6 @@
 mod arg_list;
 mod builder;
 mod closure;
-mod compact_abi_type;
 mod equality;
 pub mod error;
 pub mod eval_hir;
@@ -12,6 +11,7 @@ mod optimise;
 mod polymorph;
 mod ret_value;
 mod rust_fun;
+mod specific_abi_type;
 mod tagset;
 mod typred;
 mod value;

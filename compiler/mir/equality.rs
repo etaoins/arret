@@ -82,10 +82,48 @@ where
     )
 }
 
+/// Determines if two values are statically equal
+pub fn values_statically_equal(
+    ehx: &mut EvalHirCtx,
+    left_value: &Value,
+    right_value: &Value,
+) -> Option<bool> {
+    match (left_value, right_value) {
+        (Value::Reg(left_reg), Value::Reg(right_reg)) => {
+            if [left_reg, right_reg]
+                .iter()
+                .all(|reg| reg.possible_type_tags.contains(boxed::TypeTag::Float))
+            {
+                // Either side could be NaN
+                return None;
+            }
+
+            if left_reg.reg.into_reg_id() == right_reg.reg.into_reg_id() {
+                Some(true)
+            } else {
+                None
+            }
+        }
+        (Value::RustFun(left_fun), Value::RustFun(right_fun)) => {
+            Some(left_fun.symbol() == right_fun.symbol())
+        }
+        (Value::EqPred, Value::EqPred) => Some(true),
+        (Value::TyPred(left_ty), Value::TyPred(right_ty)) => Some(left_ty == right_ty),
+        _ => {
+            if let Some(const_left) = value_to_const(ehx, left_value) {
+                if let Some(const_right) = value_to_const(ehx, right_value) {
+                    return Some(const_left == const_right);
+                }
+            }
+
+            None
+        }
+    }
+}
+
 /// Evaluates if two values are equal
 ///
-/// If `left_value` and `right_value` are const then a const is returned. Otherwise, a comparison
-/// is built.
+/// This attempts `values_statically_equal` before building a runtime comparison.
 pub fn eval_equality(
     ehx: &mut EvalHirCtx,
     b: &mut Option<Builder>,
@@ -96,11 +134,8 @@ pub fn eval_equality(
     use crate::mir::tagset::TypeTagSet;
     use crate::mir::value::types::possible_type_tags_for_value;
 
-    if let Some(const_left) = value_to_const(ehx, left_value) {
-        if let Some(const_right) = value_to_const(ehx, right_value) {
-            let static_result = const_left == const_right;
-            return Value::Const(boxed::Bool::singleton_ref(static_result).as_any_ref());
-        }
+    if let Some(static_result) = values_statically_equal(ehx, left_value, right_value) {
+        return Value::Const(boxed::Bool::singleton_ref(static_result).as_any_ref());
     }
 
     let b = if let Some(some_b) = b {

@@ -110,11 +110,7 @@ pub fn subst_destruc(
 }
 
 pub fn poly_for_list_destruc(list: &List<hir::Inferred>) -> ty::List<ty::Poly> {
-    let fixed_polys = list
-        .fixed()
-        .iter()
-        .map(poly_for_destruc)
-        .collect();
+    let fixed_polys = list.fixed().iter().map(poly_for_destruc).collect();
 
     let rest_poly = match list.rest() {
         Some(rest) => Some(rest.ty().clone()),
