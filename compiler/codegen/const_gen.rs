@@ -121,7 +121,7 @@ pub fn gen_boxed_float(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_, '_>, value: f64
 
         let members = &mut [
             tcx.llvm_box_header(type_tag.into_const_header()),
-            LLVMConstInt(llvm_double, value as u64, 1),
+            LLVMConstReal(llvm_double, value),
         ];
 
         let llvm_value =
