@@ -360,24 +360,37 @@ impl EvalHirCtx {
             // instance so we don't append ops from a failed inline to the existing builder.
             let mut inline_b = Some(Builder::new());
 
-            if let Some(value) =
-                inliner::cond_inline(&fcx.inliner_stack, arret_fun, |inliner_stack| {
-                    self.inline_arret_fun_app(
-                        fcx,
-                        &mut inline_b,
+            match inliner::cond_inline(&fcx.inliner_stack, arret_fun, |inliner_stack| {
+                self.inline_arret_fun_app(
+                    fcx,
+                    &mut inline_b,
+                    span,
+                    arret_fun,
+                    apply_args.clone(),
+                    inliner_stack,
+                )
+            }) {
+                Ok(Some(value)) => {
+                    // Successfully inlined
+                    outer_b.append(inline_b.unwrap());
+                    Ok(value)
+                }
+                Err(Error::Diverged) => {
+                    // Diverged; we still need the ops
+                    outer_b.append(inline_b.unwrap());
+                    Err(Error::Diverged)
+                }
+                Ok(None) => {
+                    // We need to build an out-of-line application
+                    self.build_arret_fun_app(
+                        outer_b,
                         span,
+                        ret_ty,
                         arret_fun,
-                        apply_args.clone(),
-                        inliner_stack,
+                        apply_args.list_value,
                     )
-                })?
-            {
-                // We successfully did an inline application
-                outer_b.append(inline_b.unwrap());
-                Ok(value)
-            } else {
-                // We need to build an out-of-line application
-                self.build_arret_fun_app(outer_b, span, ret_ty, arret_fun, apply_args.list_value)
+                }
+                Err(error) => Err(error),
             }
         } else {
             // No builder; we need to inline
