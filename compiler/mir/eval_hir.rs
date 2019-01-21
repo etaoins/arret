@@ -794,7 +794,6 @@ impl EvalHirCtx {
         fcx: &mut FunCtx,
         b: &mut Option<Builder>,
         span: Span,
-        result_ty: &ty::Poly,
         cond: &hir::Cond<hir::Inferred>,
     ) -> Result<Value> {
         let test_value = self.eval_expr(fcx, b, &cond.test_expr)?;
@@ -811,7 +810,7 @@ impl EvalHirCtx {
             }
             dynamic_value => {
                 if let Some(b) = b {
-                    self.build_cond(fcx, b, span, result_ty, &dynamic_value, cond)
+                    self.build_cond(fcx, b, span, &dynamic_value, cond)
                 } else {
                     panic!("need builder for dynamic cond");
                 }
@@ -838,14 +837,13 @@ impl EvalHirCtx {
         fcx: &mut FunCtx,
         b: &mut Builder,
         span: Span,
-        result_ty: &ty::Poly,
         test_value: &Value,
         cond: &hir::Cond<hir::Inferred>,
     ) -> Result<Value> {
-        use crate::mir::value::build_reg::value_to_reg;
-        use crate::mir::value::from_reg::reg_to_value;
-        use crate::mir::value::plan_phi::*;
         use crate::mir::equality::values_statically_equal;
+        use crate::mir::value::build_reg::value_to_reg;
+        use crate::mir::value::plan_phi::*;
+        use crate::mir::value::types::possible_type_tags_for_value;
         use runtime::abitype;
 
         let test_reg = value_to_reg(self, b, span, test_value, &abitype::ABIType::Bool);
@@ -871,9 +869,15 @@ impl EvalHirCtx {
                         value_to_reg(self, &mut built_false.b, span, &false_value, &phi_abi_type);
 
                     let output_reg = b.alloc_local();
+                    let reg_value = value::RegValue {
+                        reg: output_reg,
+                        abi_type: phi_abi_type.clone(),
+                        possible_type_tags: possible_type_tags_for_value(&true_value)
+                            | possible_type_tags_for_value(&false_value),
+                    };
 
-                    let phi_ty = fcx.monomorphise(result_ty);
-                    output_value = reg_to_value(self, output_reg, &phi_abi_type, &phi_ty);
+                    output_value = Value::Reg(Rc::new(reg_value));
+
                     reg_phi = Some(ops::RegPhi {
                         output_reg: output_reg.into(),
                         true_result_reg: true_result_reg.into(),
@@ -1274,7 +1278,7 @@ impl EvalHirCtx {
             ExprKind::MacroExpand(expr) => self
                 .eval_expr(fcx, b, expr)
                 .map_err(|err| err.with_macro_invocation_span(span)),
-            ExprKind::Cond(cond) => self.eval_cond(fcx, b, span, &expr.result_ty, cond),
+            ExprKind::Cond(cond) => self.eval_cond(fcx, b, span, cond),
         }?;
 
         // Annotate this value with the expression's result type as it passes through
