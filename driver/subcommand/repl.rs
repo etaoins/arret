@@ -117,7 +117,7 @@ impl rustyline::completion::Completer for ArretHelper {
             .all_names
             .iter()
             .filter_map(|name| {
-                if name.starts_with('/') && (pos - prefix.len()) != 0 {
+                if name.starts_with('/') && pos != prefix.len() {
                     // Commands can only appear at the beginning of the line
                     None
                 } else if name.starts_with(prefix) && name.ends_with(suffix) {
@@ -153,7 +153,7 @@ impl rustyline::hint::Hinter for ArretHelper {
 
         if !last_ident.is_empty() {
             for name in self.all_names.iter() {
-                if name.starts_with('/') && (pos - last_ident.len()) != 0 {
+                if name.starts_with('/') && pos != last_ident.len() {
                     // Command not at the start of the line
                     continue;
                 }
