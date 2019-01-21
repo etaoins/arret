@@ -32,6 +32,9 @@ const UNBOUND_COMPLETIONS: &[&str] = &[
     HELP_COMMAND,
     "true",
     "false",
+    "##NaN",
+    "##Inf",
+    "##-Inf",
 ];
 
 fn error_for_line(mut line: &str) -> Option<syntax::error::Error> {
