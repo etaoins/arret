@@ -38,21 +38,26 @@ const UNBOUND_COMPLETIONS: &[&str] = &[
 ];
 
 fn error_for_line(mut line: &str) -> Option<syntax::error::Error> {
-    use syntax::parser::datum_from_str;
+    use syntax::parser::datum_from_str_with_span_offset;
 
-    if line.starts_with(TYPE_ONLY_PREFIX) {
+    let span_offset = if line.starts_with(TYPE_ONLY_PREFIX) {
         line = &line[TYPE_ONLY_PREFIX.len()..];
-    } else if line.starts_with('/') || line.chars().all(char::is_whitespace) {
-        // This is empty or a command
+        TYPE_ONLY_PREFIX.len()
+    } else {
+        0
+    };
+
+    // Is this a command?
+    if line.starts_with('/') ||
+    // Or empty?
+    line.chars().all(char::is_whitespace) ||
+    // Or is too large to parse interactively?
+    line.len() > MAXIMUM_PARSED_LINE_LEN
+    {
         return None;
     }
 
-    if line.len() > MAXIMUM_PARSED_LINE_LEN {
-        // This is too large to parse interactively
-        return None;
-    }
-
-    datum_from_str(line).err()
+    datum_from_str_with_span_offset(line, span_offset).err()
 }
 
 fn expected_content_for_line(line: &str) -> Option<syntax::error::ExpectedContent> {
