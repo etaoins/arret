@@ -24,3 +24,5 @@ steps:
       - docker-compose#v2.6.0:
           push:
             repl:etaoins/arret:repl
+          env:
+            - BUILDKITE_COMMIT
