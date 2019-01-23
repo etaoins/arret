@@ -13,27 +13,28 @@ Arret is a successor to [Llambda](https://github.com/etaoins/llambda) without th
 
 ## Installation
 
-### Requirementss
+### Docker REPL Image
+
+There is a public Docker image at [etaoins/arret-lang:latest-repl](https://cloud.docker.com/u/etaoins/repository/docker/etaoins/arret-lang) that runs the Arret REPL.
+Whenever `cargo run repl` appears in the documentation this command can be used instead:
+
+```shell
+> docker run -ti etaoins/arret-lang:latest-repl
+```
+
+### Build Requirementss
 
 1. A Unix-like host running on ARM64, x86-64 or x86-32.
    These are the platforms supporting lazy compilation with LLVM's ORC JIT.
 1. [LLVM 7.0](http://releases.llvm.org)
 1. [Rust](https://www.rust-lang.org/en-US/)
 
-### Using rustup and Cargo
+### Building with rustup and Cargo
 
 ```shell
 > curl https://sh.rustup.rs -sSf | sh
 > cd ~/path/to/repo/root
 > cargo run repl
-```
-
-### Using Docker
-
-```shell
-> cd ~/path/to/repo/root
-> docker build . -t arret
-> docker run -ti arret
 ```
 
 ## Usage
@@ -55,6 +56,7 @@ arret> (identity "Hello, world!")
 => "Hello, world!"
 arret> /type (identity [one two three])
 => (Vector 'one 'two 'three)
+arret> /quit
 ```
 
 ### Compiler

@@ -12,3 +12,15 @@ steps:
           build: full-compiler
           args:
             - rust_toolchain=beta
+
+  - wait
+
+  - label: ":docker: Push REPL Image"
+    branches: "master"
+    plugins:
+      - docker-login#v2.0.1:
+          username: etaoins
+          password-env: DOCKER_HUB_PASSWORD
+      - docker-compose#v2.6.0:
+          push:
+            repl:etaoins/arret-lang:latest-repl
