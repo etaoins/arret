@@ -43,7 +43,12 @@ fn main() {
         .subcommand(
             SubCommand::with_name("compile")
                 .about("Compiles an Arret program to a standalone binary")
-                .arg(Arg::with_name("INPUT").help("Input source file").index(1))
+                .arg(
+                    Arg::with_name("INPUT")
+                        .required(true)
+                        .help("Input source file")
+                        .index(1),
+                )
                 .arg(
                     Arg::with_name("OUTPUT")
                         .short("o")
@@ -66,7 +71,12 @@ fn main() {
         .subcommand(
             SubCommand::with_name("eval")
                 .about("Evaluates an Arret program once")
-                .arg(Arg::with_name("INPUT").help("Input source file").index(1)),
+                .arg(
+                    Arg::with_name("INPUT")
+                        .required(true)
+                        .help("Input source file")
+                        .index(1),
+                ),
         )
         .subcommand(
             SubCommand::with_name("repl")
