@@ -268,15 +268,14 @@ fn parse_command(mut line: String) -> ParsedCommand {
     }
 }
 
-pub fn interactive_loop(cfg: &DriverConfig, include_path: Option<path::PathBuf>) {
+pub fn interactive_loop(cfg: &mut DriverConfig, include_path: Option<path::PathBuf>) {
     use compiler::repl::{EvalKind, EvaledLine};
     use rustyline;
     use rustyline::error::ReadlineError;
 
     // Setup our REPL backend
-    let mut source_loader = compiler::SourceLoader::new();
     let mut repl_ctx =
-        compiler::repl::ReplCtx::new(&cfg.package_paths, &mut source_loader, cfg.llvm_opt);
+        compiler::repl::ReplCtx::new(&cfg.package_paths, &mut cfg.source_loader, cfg.llvm_opt);
 
     // Setup Rustyline
     let mut rl = rustyline::Editor::<ArretHelper>::new();

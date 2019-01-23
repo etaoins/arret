@@ -1,7 +1,7 @@
 # Arret
 
-[![Build status](https://badge.buildkite.com/bcda02e06b6795e669edae4264bdecbb11ff98b4f5afb1fa4b.svg?branch=master)](https://buildkite.com/arret/arret)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Build status](https://badge.buildkite.com/bcda02e06b6795e669edae4264bdecbb11ff98b4f5afb1fa4b.svg?branch=master)](https://buildkite.com/arret/arret)
 
 ## Overview
 
@@ -15,11 +15,22 @@ Arret is a successor to [Llambda](https://github.com/etaoins/llambda) without th
 
 ### Docker REPL Image
 
-There is a public Docker image at [etaoins/arret-lang:latest-repl](https://cloud.docker.com/u/etaoins/repository/docker/etaoins/arret-lang) that runs the Arret REPL.
-Whenever `cargo run repl` appears in the documentation this command can be used instead:
+There is a public Docker image at [etaoins/arret-lang:repl](https://cloud.docker.com/u/etaoins/repository/docker/etaoins/arret-lang) that runs the Arret REPL. Whenever `cargo run repl` appears in the documentation this command can be used instead:
 
 ```shell
-> docker run -ti etaoins/arret-lang:latest-repl
+> docker run -ti etaoins/arret-lang:repl
+```
+
+It can also evaluate single file programs:
+
+```shell
+> cat hello-world.arret
+(import [stdlib base])
+(defn main! ()
+  (println! "Hello, world!"))
+
+> docker run -i etaoins/arret-lang:repl eval - < hello-world.arret
+Hello, world!
 ```
 
 ### Build Requirementss

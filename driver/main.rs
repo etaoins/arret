@@ -9,7 +9,10 @@ use std::{env, path, process};
 #[global_allocator]
 static GLOBAL: System = System;
 
+const ARRET_FILE_EXTENSION: &str = ".arret";
+
 pub struct DriverConfig {
+    source_loader: compiler::SourceLoader,
     package_paths: compiler::PackagePaths,
     llvm_opt: bool,
 }
@@ -24,6 +27,26 @@ fn find_path_to_arret_root() -> path::PathBuf {
     }
 
     panic!("Unable to find the Arret root directory");
+}
+
+fn input_arg_to_source_file_id(
+    source_loader: &mut compiler::SourceLoader,
+    input_param: &str,
+) -> compiler::SourceFileId {
+    if input_param == "-" {
+        use std::io::prelude::*;
+
+        let mut input_string = String::new();
+        std::io::stdin().read_to_string(&mut input_string).unwrap();
+
+        source_loader.load_string(compiler::SourceKind::File("stdin".to_owned()), input_string)
+    } else {
+        let input_path = path::Path::new(input_param);
+
+        source_loader
+            .load_path(input_path)
+            .expect("Unable to read input file")
+    }
 }
 
 fn main() {
@@ -92,10 +115,12 @@ fn main() {
         .get_matches();
 
     let arret_target_dir = find_path_to_arret_root();
+    let source_loader = compiler::SourceLoader::new();
     let llvm_opt = !matches.is_present("NOOPT");
 
     if let Some(compile_matches) = matches.subcommand_matches("compile") {
-        let cfg = DriverConfig {
+        let mut cfg = DriverConfig {
+            source_loader,
             package_paths: compiler::PackagePaths::with_stdlib(
                 &arret_target_dir,
                 compile_matches.value_of("TARGET"),
@@ -103,13 +128,21 @@ fn main() {
             llvm_opt,
         };
 
-        let input_param = compile_matches.value_of("INPUT").unwrap();
-        let input_path = path::Path::new(input_param);
+        let input_arg = compile_matches.value_of("INPUT").unwrap();
+        let input_file_id = input_arg_to_source_file_id(&mut cfg.source_loader, input_arg);
 
-        let output_path = match compile_matches.value_of("OUTPUT") {
-            Some(output_param) => path::Path::new(output_param).to_owned(),
-            None => input_path.with_extension(""),
-        };
+        let output_path = path::Path::new(
+            if let Some(output_param) = compile_matches.value_of("OUTPUT") {
+                output_param
+            } else if input_arg.ends_with(ARRET_FILE_EXTENSION) {
+                &input_arg[0..input_arg.len() - ARRET_FILE_EXTENSION.len()]
+            } else {
+                panic!(
+                    "Can't determine output filename from input arg `{}`",
+                    input_arg
+                );
+            },
+        );
 
         let debug_info = compile_matches.is_present("DEBUG");
 
@@ -117,8 +150,8 @@ fn main() {
         initialise_llvm(target_triple.is_some());
 
         if !subcommand::compile::compile_input_file(
-            &cfg,
-            input_path,
+            &mut cfg,
+            input_file_id,
             target_triple,
             &output_path,
             debug_info,
@@ -126,7 +159,8 @@ fn main() {
             process::exit(2);
         }
     } else if let Some(repl_matches) = matches.subcommand_matches("repl") {
-        let cfg = DriverConfig {
+        let mut cfg = DriverConfig {
+            source_loader,
             package_paths: compiler::PackagePaths::with_stdlib(&arret_target_dir, None),
             llvm_opt,
         };
@@ -137,19 +171,20 @@ fn main() {
             .value_of("INCLUDE")
             .map(|include_param| path::Path::new(include_param).to_owned());
 
-        subcommand::repl::interactive_loop(&cfg, include_path);
+        subcommand::repl::interactive_loop(&mut cfg, include_path);
     } else if let Some(eval_matches) = matches.subcommand_matches("eval") {
-        let cfg = DriverConfig {
+        let mut cfg = DriverConfig {
+            source_loader: compiler::SourceLoader::new(),
             package_paths: compiler::PackagePaths::with_stdlib(&arret_target_dir, None),
             llvm_opt,
         };
 
         let input_param = eval_matches.value_of("INPUT").unwrap();
-        let input_path = path::Path::new(input_param);
+        let input_file_id = input_arg_to_source_file_id(&mut cfg.source_loader, input_param);
 
         initialise_llvm(false);
 
-        if !subcommand::eval::eval_input_file(&cfg, input_path) {
+        if !subcommand::eval::eval_input_file(&mut cfg, input_file_id) {
             process::exit(2);
         }
     } else {

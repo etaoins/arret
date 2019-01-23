@@ -6,18 +6,13 @@ use compiler::reporting::report_to_stderr;
 use crate::DriverConfig;
 
 fn try_compile_input_file(
-    cfg: &DriverConfig,
-    source_loader: &mut compiler::SourceLoader,
+    cfg: &mut DriverConfig,
     options: compiler::GenProgramOptions<'_>,
-    input_path: &path::Path,
+    input_file_id: compiler::SourceFileId,
     output_path: &path::Path,
     debug_info: bool,
 ) -> Result<(), Error> {
-    let source_file_id = source_loader
-        .load_path(input_path)
-        .expect("Unable to read input file");
-
-    let hir = compiler::lower_program(&cfg.package_paths, source_loader, source_file_id)?;
+    let hir = compiler::lower_program(&cfg.package_paths, &mut cfg.source_loader, input_file_id)?;
     let inferred_defs = compiler::infer_program(hir.defs, hir.main_var_id)?;
 
     let mut ehx = compiler::EvalHirCtx::new(true);
@@ -32,7 +27,7 @@ fn try_compile_input_file(
     let mir_program = ehx.into_built_program(hir.main_var_id)?;
 
     let debug_source_loader = if debug_info {
-        Some(&*source_loader)
+        Some(&cfg.source_loader)
     } else {
         None
     };
@@ -49,14 +44,12 @@ fn try_compile_input_file(
 }
 
 pub fn compile_input_file(
-    cfg: &DriverConfig,
-    input_path: &path::Path,
+    cfg: &mut DriverConfig,
+    input_file_id: compiler::SourceFileId,
     target_triple: Option<&str>,
     output_path: &path::Path,
     debug_info: bool,
 ) -> bool {
-    let mut source_loader = compiler::SourceLoader::new();
-
     let output_type = match output_path.extension().and_then(|e| e.to_str()) {
         Some("ll") => compiler::OutputType::LLVMIR,
         Some("s") => compiler::OutputType::Assembly,
@@ -69,18 +62,11 @@ pub fn compile_input_file(
         .with_output_type(output_type)
         .with_llvm_opt(cfg.llvm_opt);
 
-    let result = try_compile_input_file(
-        cfg,
-        &mut source_loader,
-        options,
-        input_path,
-        output_path,
-        debug_info,
-    );
+    let result = try_compile_input_file(cfg, options, input_file_id, output_path, debug_info);
 
     if let Err(Error(errs)) = result {
         for err in errs {
-            report_to_stderr(&source_loader, &*err);
+            report_to_stderr(&cfg.source_loader, &*err);
         }
         false
     } else {

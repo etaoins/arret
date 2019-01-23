@@ -25,4 +25,5 @@ COPY --from=full-compiler /root/arret/target/release/arret /root/arret/target/re
 COPY --from=full-compiler /root/arret/target/release/*.so /root/arret/target/release/
 
 WORKDIR /root/arret
-CMD ["/root/arret/target/release/arret", "repl"]
+ENTRYPOINT ["/root/arret/target/release/arret"]
+CMD ["repl"]

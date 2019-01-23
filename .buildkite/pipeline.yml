@@ -23,4 +23,4 @@ steps:
           password-env: DOCKER_HUB_PASSWORD
       - docker-compose#v2.6.0:
           push:
-            repl:etaoins/arret-lang:latest-repl
+            repl:etaoins/arret-lang:repl
