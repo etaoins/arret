@@ -1,4 +1,4 @@
-FROM debian:buster
+FROM debian:buster AS full-compiler
 
 ARG rust_toolchain=stable
 
@@ -18,4 +18,11 @@ WORKDIR /root/arret
 
 RUN cargo build --release
 
+FROM debian:buster-slim AS repl
+COPY --from=full-compiler /root/arret/.arret-root /root/arret/.arret-root
+COPY --from=full-compiler /root/arret/stdlib/arret /root/arret/stdlib/arret
+COPY --from=full-compiler /root/arret/target/release/arret /root/arret/target/release/arret
+COPY --from=full-compiler /root/arret/target/release/*.so /root/arret/target/release/
+
+WORKDIR /root/arret
 CMD ["/root/arret/target/release/arret", "repl"]
