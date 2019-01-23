@@ -4,7 +4,7 @@ ARG rust_toolchain=stable
 
 RUN \
   apt-get update && \
-  apt-get -y install curl clang-7 zlib1g-dev llvm-7 llvm-7-dev && \
+  apt-get -y --no-install-recommends install ca-certificates curl clang-7 zlib1g-dev llvm-7 llvm-7-dev && \
   apt-get clean
 
 # Use Clang as it understands LLVM target triples
