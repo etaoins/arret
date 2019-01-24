@@ -33,13 +33,6 @@ impl Ident {
             name: self.name.clone(),
         }
     }
-
-    /// Returns if the ident should be considered a keyword
-    ///
-    /// Unlike Clojure these are still symbols. They're merely self-evaluating.
-    pub fn is_keyword(&self) -> bool {
-        self.name.as_bytes().first() == Some(&b':')
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -50,6 +43,7 @@ pub enum NsDatum {
     Float(Span, f64),
     List(Span, Box<[NsDatum]>),
     Str(Span, Box<str>),
+    Keyword(Span, Box<str>),
     Ident(Span, Ident),
     Vector(Span, Box<[NsDatum]>),
     Map(Span, Box<[(NsDatum, NsDatum)]>),
@@ -71,7 +65,13 @@ impl NsDatum {
             Datum::Int(span, v) => NsDatum::Int(span, v),
             Datum::Float(span, v) => NsDatum::Float(span, v),
             Datum::Str(span, v) => NsDatum::Str(span, v),
-            Datum::Sym(span, v) => NsDatum::Ident(span, Ident::new(ns_id, v)),
+            Datum::Sym(span, v) => {
+                if v.starts_with(':') {
+                    NsDatum::Keyword(span, v)
+                } else {
+                    NsDatum::Ident(span, Ident::new(ns_id, v))
+                }
+            }
             Datum::List(span, vs) => NsDatum::List(span, Self::map_syntax_data(ns_id, vs)),
             Datum::Vector(span, vs) => NsDatum::Vector(span, Self::map_syntax_data(ns_id, vs)),
             Datum::Set(span, vs) => NsDatum::Set(span, Self::map_syntax_data(ns_id, vs)),
@@ -104,6 +104,7 @@ impl NsDatum {
             NsDatum::Int(span, v) => Datum::Int(span, v),
             NsDatum::Float(span, v) => Datum::Float(span, v),
             NsDatum::Str(span, v) => Datum::Str(span, v),
+            NsDatum::Keyword(span, v) => Datum::Sym(span, v),
             NsDatum::Ident(span, v) => Datum::Sym(span, v.into_name()),
             NsDatum::List(span, vs) => Datum::List(span, Self::map_nsdata(vs)),
             NsDatum::Vector(span, vs) => Datum::Vector(span, Self::map_nsdata(vs)),
@@ -125,6 +126,7 @@ impl NsDatum {
             | NsDatum::Int(span, _)
             | NsDatum::Float(span, _)
             | NsDatum::Str(span, _)
+            | NsDatum::Keyword(span, _)
             | NsDatum::Ident(span, _)
             | NsDatum::List(span, _)
             | NsDatum::Vector(span, _)

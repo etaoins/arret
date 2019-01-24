@@ -15,6 +15,9 @@
 (def 1 1)
     ;^ ERROR values can only be bound to variables or destructured into lists
 
+(def :foo 1)
+    ;^^^^ ERROR values can only be bound to variables or destructured into lists
+
 ; Double type annotation
 (def [[x Int] Int] 1)
      ;^^^^^^^ ERROR expected symbol

@@ -214,6 +214,7 @@ fn lower_literal_vec(literal_data: Vec<NsDatum>) -> Result<Vec<ty::Poly>> {
 fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
     match datum {
         NsDatum::Bool(_, v) => Ok(ty::Ty::LitBool(v).into_poly()),
+        NsDatum::Keyword(_, name) => Ok(ty::Ty::LitSym(name).into_poly()),
         NsDatum::Ident(_, ident) => Ok(ty::Ty::LitSym(ident.name().into()).into_poly()),
         NsDatum::List(_, vs) => {
             let fixed_literals = lower_literal_vec(vs.into_vec())?;
@@ -231,11 +232,6 @@ fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
 }
 
 fn lower_ident(scope: &Scope, span: Span, ident: &Ident) -> Result<ty::Poly> {
-    if ident.is_keyword() {
-        // Keywords are self-evaluating
-        return Ok(ty::Ty::LitSym(ident.name().into()).into_poly());
-    }
-
     match scope.get_or_err(span, ident)? {
         Binding::Ty(ty) => Ok(ty.clone()),
         Binding::TyPred(test_ty) => Ok(ty::Ty::TyPred(*test_ty).into_poly()),

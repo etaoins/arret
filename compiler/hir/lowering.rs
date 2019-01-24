@@ -480,25 +480,16 @@ fn lower_expr_apply(
 
 fn lower_expr(scope: &Scope, datum: NsDatum) -> Result<Expr<Lowered>> {
     match datum {
-        NsDatum::Ident(span, ident) => {
-            if ident.is_keyword() {
-                // Keywords self-evaluate
-                Ok(Datum::Sym(span, ident.into_name()).into())
-            } else {
-                match scope.get_or_err(span, &ident)? {
-                    Binding::Var(id) => Ok(Expr::new(span, ExprKind::Ref(*id))),
-                    Binding::TyPred(test_ty) => Ok(Expr::new(span, ExprKind::TyPred(*test_ty))),
-                    Binding::EqPred => Ok(Expr::new(span, ExprKind::EqPred)),
-                    Binding::Prim(_) => Err(Error::new(span, ErrorKind::PrimRef)),
-                    Binding::Ty(_) | Binding::TyCons(_) | Binding::Purity(_) => {
-                        Err(Error::new(span, ErrorKind::TyRef))
-                    }
-                    Binding::Macro(_) => {
-                        Err(Error::new(span, ErrorKind::MacroRef(ident.into_name())))
-                    }
-                }
+        NsDatum::Ident(span, ident) => match scope.get_or_err(span, &ident)? {
+            Binding::Var(id) => Ok(Expr::new(span, ExprKind::Ref(*id))),
+            Binding::TyPred(test_ty) => Ok(Expr::new(span, ExprKind::TyPred(*test_ty))),
+            Binding::EqPred => Ok(Expr::new(span, ExprKind::EqPred)),
+            Binding::Prim(_) => Err(Error::new(span, ErrorKind::PrimRef)),
+            Binding::Ty(_) | Binding::TyCons(_) | Binding::Purity(_) => {
+                Err(Error::new(span, ErrorKind::TyRef))
             }
-        }
+            Binding::Macro(_) => Err(Error::new(span, ErrorKind::MacroRef(ident.into_name()))),
+        },
         NsDatum::List(span, vs) => {
             let mut data_iter = vs.into_vec().into_iter();
 
