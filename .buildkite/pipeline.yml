@@ -1,12 +1,12 @@
 steps:
-  - label: ":docker: Build & Test"
+  - label: ":cargo: Build & Test"
     command:
       - /bin/bash -c "cargo build && cargo test && ./.buildkite/cross-i686.sh"
     plugins:
       - docker-compose#v2.6.0:
           run: full-compiler
 
-  - label: ":docker: Build (Rust Beta)"
+  - label: ":rust: Build (Rust Beta)"
     plugins:
       - docker-compose#v2.6.0:
           build: full-compiler
@@ -15,7 +15,7 @@ steps:
 
   - wait
 
-  - label: ":docker: Push REPL Image"
+  - label: ":rocket: Push REPL Image"
     branches: "master"
     plugins:
       - docker-login#v2.0.1:
