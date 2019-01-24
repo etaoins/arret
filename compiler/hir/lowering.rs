@@ -737,7 +737,6 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                         return self.lower_module_prim_apply(scope, applied_prim, data_iter);
                     }
                     Binding::Macro(mac) => {
-                        // TODO: Stupid clone
                         let expanded_datum =
                             expand_macro(scope, span, &mac.clone(), data_iter.as_slice())?;
 
