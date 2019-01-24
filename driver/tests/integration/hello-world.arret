@@ -1,0 +1,4 @@
+(import [stdlib base])
+
+(defn main! () ->! ()
+  (println! "Hello, world!"))
