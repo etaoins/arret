@@ -54,7 +54,7 @@ pub fn is_literal<S: TyRef>(ty_ref: &S) -> bool {
     ty_ref
         .try_to_fixed()
         .map(|ty| ty_is_literal(ty))
-        .unwrap_or(true)
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -103,6 +103,9 @@ mod test {
         assert_eq!(false, str_has_subtypes("(Vector false true)"));
 
         assert_eq!(false, str_has_subtypes("(RawU)"));
+
+        let tvar_id = ty::TVarId::alloc();
+        assert_eq!(true, has_subtypes(&ty::Poly::Var(tvar_id)));
     }
 
     #[test]
@@ -131,5 +134,8 @@ mod test {
 
         assert_eq!(false, str_is_literal("(Vectorof false)"));
         assert_eq!(true, str_is_literal("(Vector false true)"));
+
+        let tvar_id = ty::TVarId::alloc();
+        assert_eq!(false, is_literal(&ty::Poly::Var(tvar_id)));
     }
 }
