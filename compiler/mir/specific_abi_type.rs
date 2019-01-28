@@ -41,11 +41,11 @@ fn specific_boxed_abi_type_for_type_tags(possible_type_tags: TypeTagSet) -> abit
 }
 
 fn specific_abi_type_for_type_tags(possible_type_tags: TypeTagSet) -> abitype::ABIType {
-    if possible_type_tags.len() == 1 {
+    if possible_type_tags.is_subset([TypeTag::True, TypeTag::False].iter().collect()) {
+        abitype::ABIType::Bool
+    } else if possible_type_tags.len() == 1 {
         let single_type_tag = possible_type_tags.into_iter().next().unwrap();
         specific_abi_type_for_type_tag(single_type_tag)
-    } else if possible_type_tags == [TypeTag::True, TypeTag::False].iter().collect() {
-        abitype::ABIType::Bool
     } else {
         specific_boxed_abi_type_for_type_tags(possible_type_tags).into()
     }
@@ -89,4 +89,38 @@ pub fn specific_abi_type_for_values<'v>(
 /// Return a specific ABI type to compactly encode the given value
 pub fn specific_abi_type_for_value(value: &Value) -> abitype::ABIType {
     specific_abi_type_for_values(std::iter::once(value))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use runtime::abitype::EncodeBoxedABIType;
+    use runtime::boxed;
+
+    fn poly_for_str(datum_str: &str) -> ty::Poly {
+        use crate::hir;
+        hir::poly_for_str(datum_str)
+    }
+
+    fn assert_abi_type_for_str(abi_type: abitype::ABIType, ty_str: &'static str) {
+        let poly = poly_for_str(ty_str);
+        assert_eq!(abi_type, specific_abi_type_for_ty_ref(&poly));
+    }
+
+    #[test]
+    fn test_specific_abi_type_for_ty_ref() {
+        assert_abi_type_for_str(abitype::ABIType::Bool, "true");
+        assert_abi_type_for_str(abitype::ABIType::Bool, "false");
+        assert_abi_type_for_str(abitype::ABIType::Bool, "Bool");
+
+        assert_abi_type_for_str(abitype::ABIType::Float, "Float");
+        assert_abi_type_for_str(abitype::ABIType::Int, "Int");
+        assert_abi_type_for_str(boxed::Num::BOXED_ABI_TYPE.into(), "Num");
+
+        assert_abi_type_for_str(boxed::TopList::BOXED_ABI_TYPE.into(), "(Listof Any)");
+
+        assert_abi_type_for_str(abitype::ABIType::Char, "Char");
+
+        assert_abi_type_for_str(abitype::BoxedABIType::Any.into(), "(RawU Num Bool)");
+    }
 }
