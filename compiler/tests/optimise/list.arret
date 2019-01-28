@@ -1,0 +1,9 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn main! ()
+  ; This should just need to load the length from the cell
+  (assert-fn-doesnt-contain-op :call (fn ([l (Listof Any)]) -> Int
+    (length l)))
+
+  ())
