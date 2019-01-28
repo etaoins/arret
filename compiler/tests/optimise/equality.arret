@@ -1,0 +1,21 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn main! ()
+  ; This requires calling in to the runtime
+  (assert-fn-contains-op :call (fn ([left Any] [right Any]) -> Bool
+    (= left right)))
+
+  ; Ints can be directly compared
+  (assert-fn-doesnt-contain-op :call (fn ([left Int] [right Int]) -> Bool
+    (= left right)))
+
+  ; Floats can be directly compared
+  (assert-fn-doesnt-contain-op :call (fn ([left Float] [right Float]) -> Bool
+    (= left right)))
+
+  ; Bools can be directly compared
+  (assert-fn-doesnt-contain-op :call (fn ([left Bool] [right Bool]) -> Bool
+    (= left right)))
+
+  ())

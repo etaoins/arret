@@ -39,7 +39,7 @@ impl From<callback::EntryPointABIType> for PolymorphABI {
 
 // This is essentially the thunk ABI type with an optional closure
 fn fallback_polymorph_abi(has_closure: bool, ret_ty: &ty::Mono) -> PolymorphABI {
-    use crate::mir::specific_abi_type::specific_abi_type_for_mono;
+    use crate::mir::specific_abi_type::specific_abi_type_for_ty_ref;
 
     let params = Some(abitype::BoxedABIType::Any.into())
         .filter(|_| has_closure)
@@ -49,7 +49,7 @@ fn fallback_polymorph_abi(has_closure: bool, ret_ty: &ty::Mono) -> PolymorphABI 
 
     let ops_abi = ops::OpsABI {
         params,
-        ret: specific_abi_type_for_mono(ret_ty).into(),
+        ret: specific_abi_type_for_ty_ref(ret_ty).into(),
     };
 
     PolymorphABI {
@@ -66,7 +66,9 @@ fn list_polymorph_abi(
     rest: Option<&Value>,
     ret_ty: &ty::Mono,
 ) -> PolymorphABI {
-    use crate::mir::specific_abi_type::{specific_abi_type_for_mono, specific_abi_type_for_value};
+    use crate::mir::specific_abi_type::{
+        specific_abi_type_for_ty_ref, specific_abi_type_for_value,
+    };
 
     let params = Some(abitype::BoxedABIType::Any.into())
         .filter(|_| has_closure)
@@ -80,7 +82,7 @@ fn list_polymorph_abi(
 
     let ops_abi = ops::OpsABI {
         params,
-        ret: specific_abi_type_for_mono(ret_ty).into(),
+        ret: specific_abi_type_for_ty_ref(ret_ty).into(),
     };
 
     PolymorphABI {

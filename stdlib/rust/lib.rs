@@ -53,5 +53,6 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "member?" => stdlib_member_p,
     "black-box" => stdlib_black_box,
     "black-box!" => stdlib_black_box_impure,
-    "heap-alloc-count" => stdlib_heap_alloc_count
+    "heap-alloc-count" => stdlib_heap_alloc_count,
+    "fn-op-categories" => stdlib_fn_op_categories
 });

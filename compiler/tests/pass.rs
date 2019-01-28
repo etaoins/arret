@@ -124,6 +124,7 @@ fn pass() {
 
     let eval_entries = fs::read_dir("./tests/eval-pass")
         .unwrap()
+        .chain(fs::read_dir("./tests/optimise").unwrap())
         .map(|entry| (entry, TestType::EvalPass));
 
     let run_entries = fs::read_dir("./tests/run-pass")

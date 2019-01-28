@@ -30,3 +30,9 @@ pub fn stdlib_heap_alloc_count(
     let alloc_count = boxed::Int::new(task, (after_len - before_len) as i64);
     boxed::List::new(task, [alloc_count.as_any_ref(), ret].iter().cloned())
 }
+
+// TODO: This should return a `Set` once they're better supported
+#[rfi_derive::rust_fun("((... ->! Any) -> (Listof Sym))")]
+pub fn stdlib_fn_op_categories(_value: Gc<boxed::FunThunk>) -> Gc<boxed::List<boxed::Sym>> {
+    panic!("cannot call `(fn-op-categories)` at runtime")
+}

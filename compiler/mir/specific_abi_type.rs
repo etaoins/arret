@@ -12,6 +12,7 @@ fn specific_boxed_abi_type_for_type_tag(type_tag: TypeTag) -> abitype::BoxedABIT
         other_tag => abitype::BoxedABIType::DirectTagged(other_tag),
     }
 }
+
 fn specific_abi_type_for_type_tag(type_tag: TypeTag) -> abitype::ABIType {
     match type_tag {
         TypeTag::Int => abitype::ABIType::Int,
@@ -50,9 +51,9 @@ fn specific_abi_type_for_type_tags(possible_type_tags: TypeTagSet) -> abitype::A
     }
 }
 
-/// Returns a specific ABI type to encode the given mono type
-pub fn specific_abi_type_for_mono(mono: &ty::Mono) -> abitype::ABIType {
-    specific_abi_type_for_type_tags(mono.into())
+/// Returns a specific ABI type to encode the given ty_ref
+pub fn specific_abi_type_for_ty_ref(ty_ref: &impl ty::TyRef) -> abitype::ABIType {
+    specific_abi_type_for_type_tags(ty_ref.into())
 }
 
 fn specific_type_for_values<'v, F, T>(

@@ -1,8 +1,10 @@
 mod list;
+mod testing;
 
 use syntax::span::Span;
 
 use crate::mir::intrinsic::list::{Cons, Length};
+use crate::mir::intrinsic::testing::{FnOpCategories};
 
 use crate::mir::builder::Builder;
 use crate::mir::error::Result;
@@ -54,5 +56,6 @@ macro_rules! define_intrinsics {
 
 define_intrinsics! {
     "length" => Length,
-    "cons" => Cons
+    "cons" => Cons,
+    "fn-op-categories" => FnOpCategories
 }

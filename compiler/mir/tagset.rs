@@ -74,38 +74,44 @@ impl From<TypeTag> for TypeTagSet {
     }
 }
 
-impl<'a> From<&'a ty::Mono> for TypeTagSet {
-    fn from(mono: &'a ty::Mono) -> TypeTagSet {
-        match mono.as_ty() {
-            ty::Ty::Any => TypeTagSet::all(),
-            ty::Ty::Int => TypeTag::Int.into(),
-            ty::Ty::Float => TypeTag::Float.into(),
-            ty::Ty::Char => TypeTag::Char.into(),
-            ty::Ty::Bool => [TypeTag::True, TypeTag::False].iter().collect(),
-            ty::Ty::Num => [TypeTag::Int, TypeTag::Float].iter().collect(),
-            ty::Ty::LitBool(true) => TypeTag::True.into(),
-            ty::Ty::LitBool(false) => TypeTag::False.into(),
-            ty::Ty::Sym | ty::Ty::LitSym(_) => TypeTag::Sym.into(),
-            ty::Ty::Str => TypeTag::Str.into(),
-            ty::Ty::Fun(_) | ty::Ty::TopFun(_) | ty::Ty::TyPred(_) | ty::Ty::EqPred => {
-                TypeTag::FunThunk.into()
-            }
-            ty::Ty::Vector(_) | ty::Ty::Vectorof(_) => TypeTag::TopVector.into(),
-            ty::Ty::List(list) => {
-                if list.is_empty() {
-                    TypeTag::Nil.into()
-                } else if !list.fixed().is_empty() {
-                    TypeTag::TopPair.into()
-                } else {
-                    [TypeTag::Nil, TypeTag::TopPair].iter().collect()
+impl<'a, S> From<&'a S> for TypeTagSet
+where
+    S: ty::TyRef,
+{
+    fn from(ty_ref: &'a S) -> TypeTagSet {
+        ty_ref
+            .try_to_fixed()
+            .map(|ty| match ty {
+                ty::Ty::Any => TypeTagSet::all(),
+                ty::Ty::Int => TypeTag::Int.into(),
+                ty::Ty::Float => TypeTag::Float.into(),
+                ty::Ty::Char => TypeTag::Char.into(),
+                ty::Ty::Bool => [TypeTag::True, TypeTag::False].iter().collect(),
+                ty::Ty::Num => [TypeTag::Int, TypeTag::Float].iter().collect(),
+                ty::Ty::LitBool(true) => TypeTag::True.into(),
+                ty::Ty::LitBool(false) => TypeTag::False.into(),
+                ty::Ty::Sym | ty::Ty::LitSym(_) => TypeTag::Sym.into(),
+                ty::Ty::Str => TypeTag::Str.into(),
+                ty::Ty::Fun(_) | ty::Ty::TopFun(_) | ty::Ty::TyPred(_) | ty::Ty::EqPred => {
+                    TypeTag::FunThunk.into()
                 }
-            }
-            ty::Ty::Union(members) => members
-                .iter()
-                .map(TypeTagSet::from)
-                .fold(TypeTagSet::new(), |a, b| a | b),
-            ty::Ty::Map(_) | ty::Ty::Set(_) => unimplemented!("no corresponding type tag"),
-        }
+                ty::Ty::Vector(_) | ty::Ty::Vectorof(_) => TypeTag::TopVector.into(),
+                ty::Ty::List(list) => {
+                    if list.is_empty() {
+                        TypeTag::Nil.into()
+                    } else if !list.fixed().is_empty() {
+                        TypeTag::TopPair.into()
+                    } else {
+                        [TypeTag::Nil, TypeTag::TopPair].iter().collect()
+                    }
+                }
+                ty::Ty::Union(members) => members
+                    .iter()
+                    .map(TypeTagSet::from)
+                    .fold(TypeTagSet::new(), |a, b| a | b),
+                ty::Ty::Map(_) | ty::Ty::Set(_) => unimplemented!("no corresponding type tag"),
+            })
+            .unwrap_or_else(TypeTagSet::all)
     }
 }
 

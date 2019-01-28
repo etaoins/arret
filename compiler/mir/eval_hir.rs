@@ -1074,7 +1074,7 @@ impl EvalHirCtx {
         )
     }
 
-    fn ops_for_arret_fun(
+    pub(super) fn ops_for_arret_fun(
         &mut self,
         arret_fun: &value::ArretFun,
         wanted_abi: PolymorphABI,

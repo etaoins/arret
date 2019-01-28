@@ -1,6 +1,7 @@
 (import [stdlib base])
 
-(import (only [stdlib rust] black-box black-box! heap-alloc-count))
+; Explicitly don't export `fn-op-categories`; make callers use our assertions instead
+(import (only [stdlib rust] black-box black-box! heap-alloc-count fn-op-categories))
 (export black-box black-box! heap-alloc-count)
 
 (export assert-eq)
@@ -8,13 +9,23 @@
   [(expected-expr actual-expr)
     (let [expected expected-expr actual actual-expr]
       (when-not (= expected actual)
-        (panic "`" expected "` does not equal `" actual "`")))]
-))
+        (panic "`" expected "` does not equal `" actual "`")))]))
 
 (export assert-ne)
 (defmacro assert-ne (macro-rules
   [(expected-expr actual-expr)
     (let [expected expected-expr actual actual-expr]
       (when (= expected actual)
-        (panic "`" expected "` equals `" actual "`")))]
-))
+        (panic "`" expected "` equals `" actual "`")))]))
+
+(export assert-fn-contains-op)
+(defmacro assert-fn-contains-op (macro-rules
+  [(op-category test-fn)
+    (when-not (member? op-category (fn-op-categories test-fn))
+        (panic "expected built function to contain an op of category `" op-category "`"))]))
+
+(export assert-fn-doesnt-contain-op)
+(defmacro assert-fn-doesnt-contain-op (macro-rules
+  [(op-category test-fn)
+    (when (member? op-category (fn-op-categories test-fn))
+        (panic "built function unexpectedly contained an op of category `" op-category "`"))]))

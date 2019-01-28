@@ -171,6 +171,22 @@ pub enum OpKind {
     Unreachable,
 }
 
+/// Indicates the high-level category of an op
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum OpCategory {
+    ConstReg,
+    ConstBox,
+    AllocBoxed,
+    Call,
+    Cond,
+    MemLoad,
+    RegCast,
+    RegOp,
+    MakeCallback,
+    Ret,
+    Unreachable,
+}
+
 impl OpKind {
     pub fn output_reg(&self) -> Option<RegId> {
         use crate::mir::ops::OpKind::*;
@@ -313,23 +329,8 @@ impl OpKind {
 
     /// Indicates if the output of this op is a constant
     pub fn const_output(&self) -> bool {
-        use crate::mir::ops::OpKind::*;
-
-        match self {
-            ConstBoxedNil(_, _)
-            | ConstBoxedTrue(_, _)
-            | ConstBoxedFalse(_, _)
-            | ConstInt64(_, _)
-            | ConstUsize(_, _)
-            | ConstBool(_, _)
-            | ConstTypeTag(_, _)
-            | ConstBoxedInt(_, _)
-            | ConstBoxedStr(_, _)
-            | ConstBoxedPair(_, _)
-            | ConstBoxedFunThunk(_, _)
-            | ConstCastBoxed(_, _) => true,
-            _ => false,
-        }
+        let category = self.category();
+        category == OpCategory::ConstBox || category == OpCategory::ConstReg
     }
 
     pub fn has_side_effects(&self) -> bool {
@@ -348,11 +349,52 @@ impl OpKind {
     }
 
     pub fn is_terminator(&self) -> bool {
+        let category = self.category();
+        category == OpCategory::Ret || category == OpCategory::Unreachable
+    }
+
+    pub fn category(&self) -> OpCategory {
         use crate::mir::ops::OpKind::*;
 
         match self {
-            Ret(_) | RetVoid | Unreachable => true,
-            _ => false,
+            ConstInt64(_, _)
+            | ConstFloat(_, _)
+            | ConstUsize(_, _)
+            | ConstBool(_, _)
+            | ConstTypeTag(_, _) => OpCategory::ConstReg,
+
+            ConstBoxedNil(_, _)
+            | ConstBoxedTrue(_, _)
+            | ConstBoxedFalse(_, _)
+            | ConstBoxedInt(_, _)
+            | ConstBoxedFloat(_, _)
+            | ConstBoxedStr(_, _)
+            | ConstBoxedPair(_, _)
+            | ConstBoxedFunThunk(_, _) => OpCategory::ConstBox,
+
+            AllocBoxedInt(_, _)
+            | AllocBoxedFloat(_, _)
+            | AllocBoxedPair(_, _)
+            | AllocBoxedFunThunk(_, _) => OpCategory::AllocBoxed,
+
+            ConstCastBoxed(_, _) | CastBoxed(_, _) | UsizeToInt64(_, _) => OpCategory::RegCast,
+
+            LoadBoxedTypeTag(_, _)
+            | LoadBoxedListLength(_, _)
+            | LoadBoxedPairHead(_, _)
+            | LoadBoxedPairRest(_, _)
+            | LoadBoxedIntValue(_, _)
+            | LoadBoxedFloatValue(_, _)
+            | LoadBoxedFunThunkClosure(_, _) => OpCategory::MemLoad,
+
+            Add(_, _) | IntEqual(_, _) | FloatEqual(_, _) | BoxIdentical(_, _) => OpCategory::RegOp,
+
+            Ret(_) | RetVoid => OpCategory::Ret,
+
+            Cond(_) => OpCategory::Cond,
+            MakeCallback(_, _) => OpCategory::MakeCallback,
+            Call(_, _) => OpCategory::Call,
+            Unreachable => OpCategory::Unreachable,
         }
     }
 }
