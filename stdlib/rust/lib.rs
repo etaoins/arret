@@ -50,6 +50,7 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "exit!" => stdlib_exit,
     "cons" => stdlib_cons,
     "concat" => stdlib_concat,
+    "member?" => stdlib_member_p,
     "black-box" => stdlib_black_box,
     "black-box!" => stdlib_black_box_impure,
     "heap-alloc-count" => stdlib_heap_alloc_count

@@ -69,3 +69,8 @@ pub fn stdlib_concat(
     // We don't need to rebuild our tail
     boxed::List::new_with_tail(task, head_values.into_iter(), list_iter.next().unwrap())
 }
+
+#[rfi_derive::rust_fun("(Any (Listof Any) -> Bool)")]
+pub fn stdlib_member_p(needle: Gc<boxed::Any>, haystack: Gc<boxed::List<boxed::Any>>) -> bool {
+    haystack.iter().any(|member| member == needle)
+}
