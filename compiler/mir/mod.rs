@@ -6,7 +6,7 @@ pub mod error;
 pub mod eval_hir;
 mod inliner;
 mod intrinsic;
-pub(crate) mod ops;
+pub mod ops;
 mod optimise;
 mod polymorph;
 mod ret_value;
