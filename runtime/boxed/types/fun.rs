@@ -1,4 +1,5 @@
-use std::{fmt, hash, mem};
+use std::hash::{Hash, Hasher};
+use std::{fmt, mem};
 
 use crate::boxed::refs::Gc;
 use crate::boxed::{AllocType, Any, BoxSize, ConstructableFrom, DirectTagged, Header};
@@ -59,9 +60,10 @@ impl PartialEq for FunThunk {
 
 impl Eq for FunThunk {}
 
-impl hash::Hash for FunThunk {
-    fn hash<H: hash::Hasher>(&self, hasher: &mut H) {
-        hasher.write_usize(self as *const _ as usize);
+impl Hash for FunThunk {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Self::TYPE_TAG.hash(state);
+        state.write_usize(self as *const _ as usize);
     }
 }
 

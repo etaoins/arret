@@ -1,4 +1,5 @@
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 use crate::boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
 use crate::intern::Interner;
@@ -41,6 +42,21 @@ impl PartialEq for Float {
     }
 }
 
+impl Hash for Float {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Self::TYPE_TAG.hash(state);
+
+        let value = self.value();
+        if value == 0.0 {
+            // 0.0 == -0.0 so they need to hash to the same value
+            state.write_u64((0.0f64).to_bits())
+        } else {
+            // NaNs will mostly map to the same value which is allowed but also a collision
+            state.write_u64(value.to_bits());
+        }
+    }
+}
+
 impl fmt::Debug for Float {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(formatter, "Float({:?})", self.value)
@@ -52,6 +68,17 @@ mod test {
     use super::*;
     use crate::boxed::heap::Heap;
     use std::mem;
+
+    fn calc_hash(value: f64) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+
+        let mut heap = Heap::new();
+        let boxed_float = Float::new(&mut heap, value);
+
+        let mut hasher = DefaultHasher::new();
+        boxed_float.hash(&mut hasher);
+        hasher.finish()
+    }
 
     #[test]
     fn sizes() {
@@ -68,6 +95,16 @@ mod test {
 
         assert_ne!(boxed_one1, boxed_two);
         assert_eq!(boxed_one1, boxed_one2);
+    }
+
+    #[test]
+    fn hash() {
+        let minus_zero_hash = calc_hash(-0.0);
+        let plus_zero_hash = calc_hash(0.0);
+        let plus_one_hash = calc_hash(1.0);
+
+        assert_ne!(plus_one_hash, minus_zero_hash);
+        assert_eq!(plus_zero_hash, minus_zero_hash);
     }
 
     #[test]

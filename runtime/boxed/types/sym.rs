@@ -1,4 +1,5 @@
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 use crate::boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
 use crate::intern::{InternedSym, Interner};
@@ -36,6 +37,13 @@ impl Sym {
 impl PartialEq for Sym {
     fn eq(&self, other: &Sym) -> bool {
         self.interned == other.interned
+    }
+}
+
+impl Hash for Sym {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Self::TYPE_TAG.hash(state);
+        self.interned.hash(state);
     }
 }
 

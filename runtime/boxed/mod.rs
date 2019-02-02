@@ -2,6 +2,7 @@ mod heap;
 pub mod refs;
 mod types;
 
+use std::hash::{Hash, Hasher};
 use std::{fmt, ptr};
 
 use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
@@ -246,9 +247,21 @@ macro_rules! define_direct_tagged_boxes {
                         }
                     )*
                 }
-
             }
         }
+
+        impl Hash for Any {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                match self.as_subtype() {
+                    $(
+                        AnySubtype::$name(subtype) => {
+                            subtype.hash(state)
+                        }
+                    )*
+                }
+            }
+        }
+
     }
 }
 
@@ -284,6 +297,13 @@ macro_rules! define_singleton_box {
             fn eq(&self, _: &$type_name) -> bool {
                 // This is tricky - we're a singleton so if the types match we must be equal
                 true
+            }
+        }
+
+        impl Hash for $type_name {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                Self::TYPE_TAG.hash(state);
+                state.write_usize(&$static_name as *const $type_name as usize);
             }
         }
     };

@@ -1,3 +1,4 @@
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::{fmt, mem, ptr};
 
@@ -87,6 +88,13 @@ impl<'a> ConstructableFrom<&'a str> for Str {
 impl PartialEq for Str {
     fn eq(&self, other: &Str) -> bool {
         self.as_str() == other.as_str()
+    }
+}
+
+impl Hash for Str {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Self::TYPE_TAG.hash(state);
+        self.as_str().hash(state);
     }
 }
 

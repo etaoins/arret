@@ -1,3 +1,4 @@
+use std::hash::{Hash, Hasher};
 use std::{fmt, marker, mem};
 
 use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
@@ -177,6 +178,18 @@ impl TopVector {
 impl PartialEq for TopVector {
     fn eq(&self, rhs: &TopVector) -> bool {
         self.as_vector() == rhs.as_vector()
+    }
+}
+
+impl Hash for TopVector {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let vector = self.as_vector();
+
+        TypeTag::TopVector.hash(state);
+        state.write_usize(vector.len());
+        for value in vector.iter() {
+            value.hash(state);
+        }
     }
 }
 

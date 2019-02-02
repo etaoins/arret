@@ -1,4 +1,5 @@
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 use crate::boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
 use crate::intern::Interner;
@@ -38,6 +39,13 @@ impl Int {
 impl PartialEq for Int {
     fn eq(&self, other: &Int) -> bool {
         self.value() == other.value()
+    }
+}
+
+impl Hash for Int {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Self::TYPE_TAG.hash(state);
+        self.value().hash(state)
     }
 }
 

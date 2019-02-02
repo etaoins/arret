@@ -1,3 +1,4 @@
+use std::hash::{Hash, Hasher};
 use std::iter::FusedIterator;
 use std::marker::PhantomData;
 use std::{fmt, mem};
@@ -38,6 +39,17 @@ where
 {
     fn eq(&self, rhs: &Pair<T>) -> bool {
         (self.head == rhs.head) && (self.rest == rhs.rest)
+    }
+}
+
+impl<T> Hash for Pair<T>
+where
+    T: Boxed + Hash,
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        TypeTag::TopPair.hash(state);
+        self.head().hash(state);
+        self.rest().hash(state);
     }
 }
 
@@ -176,18 +188,30 @@ impl<T: Boxed> List<T> {
     }
 }
 
-impl<T: Boxed> PartialEq for List<T>
+impl<T> PartialEq for List<T>
 where
-    T: PartialEq,
+    T: Boxed + PartialEq,
 {
     fn eq(&self, other: &List<T>) -> bool {
         self.iter().eq(other.iter())
     }
 }
 
-impl<T: Boxed> fmt::Debug for List<T>
+impl<T> Hash for List<T>
 where
-    T: fmt::Debug,
+    T: Boxed + Hash,
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self.as_subtype() {
+            ListSubtype::Pair(pair) => pair.hash(state),
+            ListSubtype::Nil => NIL_INSTANCE.hash(state),
+        }
+    }
+}
+
+impl<T> fmt::Debug for List<T>
+where
+    T: Boxed + fmt::Debug,
 {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         formatter.write_str("List(")?;
@@ -265,6 +289,12 @@ impl PartialEq for TopPair {
     }
 }
 
+impl Hash for TopPair {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_pair().hash(state);
+    }
+}
+
 impl fmt::Debug for TopPair {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         self.as_pair().fmt(formatter)
@@ -290,6 +320,13 @@ pub static NIL_INSTANCE: Nil = Nil {
 impl PartialEq for Nil {
     fn eq(&self, _: &Nil) -> bool {
         true
+    }
+}
+
+impl Hash for Nil {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Self::TYPE_TAG.hash(state);
+        state.write_usize(&NIL_INSTANCE as *const _ as usize);
     }
 }
 

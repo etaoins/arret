@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::{fmt, ptr, str};
 
 ///! Interned symbols
@@ -84,6 +85,14 @@ impl PartialEq for InternedSym {
 }
 
 impl Eq for InternedSym {}
+
+impl Hash for InternedSym {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        unsafe {
+            state.write(&self.inline.name_bytes);
+        }
+    }
+}
 
 impl fmt::Debug for InternedSym {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
