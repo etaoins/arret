@@ -23,14 +23,21 @@
   (assert-eq false (= ##NaN ##NaN))
   (assert-eq false ((black-box! =) ##NaN ##NaN))
   (assert-eq false (= (black-box! ##NaN) (black-box! ##NaN)))
-  (assert-eq false ((black-box! =) ##NaN ##NaN))
+  (assert-eq false ((black-box! =) (black-box! ##NaN) (black-box! ##NaN)))
 
   (assert-eq false (arg-is-self-equal (black-box! ##NaN))))
+
+(defn test-float-zero-equality! ()
+  (assert-eq true (= 0.0 -0.0))
+  (assert-eq true ((black-box! =) -0.0 0.0))
+  (assert-eq true (= (black-box! 0.0) (black-box! -0.0)))
+  (assert-eq true ((black-box! =) (black-box! -0.0) (black-box! 0.0))))
 
 (defn main! ()
   (test-int-equality!)
   (test-bool-equality!)
   (test-list-equality!)
   (test-nan-equality!)
+  (test-float-zero-equality!)
 
   ())

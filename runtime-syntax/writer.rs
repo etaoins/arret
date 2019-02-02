@@ -85,6 +85,8 @@ pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any
                 } else {
                     write!(w, "##-Inf")
                 }
+            } else if f == 0.0 && f.is_sign_negative() {
+                write!(w, "-0.0")
             } else if (f as i64 as f64) == f {
                 // This is has no fractional part; force a .0 to mark it as a float
                 write!(w, "{:.1}", f)
@@ -173,6 +175,7 @@ mod test {
 
         let test_floats = [
             ("0.0", 0.0),
+            ("-0.0", -0.0),
             ("120.0", 120.0),
             ("0.25", 0.25),
             ("-120.0", -120.0),
