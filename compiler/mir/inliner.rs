@@ -1,3 +1,5 @@
+use std::hash::{Hash, Hasher};
+
 use syntax::span::Span;
 
 use crate::mir::builder::Builder;
@@ -15,11 +17,17 @@ use crate::ty;
 ///
 /// This is used to heuristically detect recursion loops
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct ApplyCookie(u64);
+pub struct ApplyCookie {
+    arret_fun_id: value::ArretFunId,
+    arg_hash: u64,
+}
 
 impl ApplyCookie {
-    pub fn new(arret_fun: &value::ArretFun) -> Self {
-        ApplyCookie(arret_fun.id.to_usize() as u64)
+    pub fn new(arret_fun: &value::ArretFun, arg_list_value: &Value) -> Self {
+        ApplyCookie {
+            arret_fun_id: arret_fun.id,
+            arg_hash: hash_for_arg_list_value(arg_list_value),
+        }
     }
 }
 
@@ -142,6 +150,66 @@ fn calc_inline_preference_factor(
         * inline_preference_factor_for_closure(&arret_fun.closure)
 }
 
+/// Hashes the passed value, poorly
+///
+/// This can only distinguish constants; regs hash to the same value. It's possible for constants
+/// would compare as equal to receive different hashes depending on their representation.
+fn hash_value<H: Hasher>(value: &Value, state: &mut H) {
+    match value {
+        Value::List(fixed, rest) => {
+            state.write_u8(0);
+
+            state.write_usize(fixed.len());
+            for member in fixed.iter() {
+                hash_value(member, state);
+            }
+
+            state.write_u8(rest.is_some() as u8);
+            if let Some(rest_value) = rest {
+                hash_value(rest_value, state);
+            }
+        }
+        Value::Const(any_ref) => {
+            state.write_u8(1);
+            any_ref.hash(state);
+        }
+        Value::EqPred => {
+            state.write_u8(2);
+        }
+        Value::TyPred(test_ty) => {
+            state.write_u8(3);
+            test_ty.hash(state);
+        }
+        Value::RustFun(rust_fun) => {
+            state.write_u8(4);
+            rust_fun.symbol().hash(state);
+        }
+        Value::ArretFun(arret_fun) => {
+            state.write_u8(5);
+
+            state.write_usize(arret_fun.closure.const_values.len());
+            for (_, const_value) in arret_fun.closure.const_values.iter() {
+                hash_value(const_value, state);
+            }
+        }
+        Value::Reg(_) => {
+            state.write_u8(6);
+        }
+    };
+}
+
+/// Hashes the arg list, poorly
+///
+/// This is used to detect if a recursive loop is making forward progress. Collisions will cause us
+/// to abort recursive inlining.
+fn hash_for_arg_list_value(arg_list_value: &Value) -> u64 {
+    use std::collections::hash_map::DefaultHasher;
+    let mut state = DefaultHasher::new();
+
+    hash_value(arg_list_value, &mut state);
+    state.finish()
+}
+
 /// Conditionally inlines an Arret fun
 ///
 /// This makes an inlining decision based on four criteria:
@@ -182,20 +250,25 @@ pub(super) fn cond_inline<'a>(
     );
     let call_ops = call_b.into_ops();
 
-    if apply_stack.entries.len() >= INLINE_LIMIT {
-        // Inline limit reached; don't attempt another inline
-        outer_b.append(call_ops.into_vec().into_iter());
-        return call_result;
-    }
-
-    let apply_cookie = ApplyCookie::new(arret_fun);
-    if apply_stack.entries.contains(&apply_cookie) {
-        // Abort recursion all the way back to the original callsite
+    let apply_cookie = ApplyCookie::new(arret_fun, &apply_args.list_value);
+    if apply_stack.entries.len() >= INLINE_LIMIT || apply_stack.entries.contains(&apply_cookie) {
+        // Abort recursion all the way back to the original call of this function
 
         // This prevents us from doing a "partial unroll" where we recurse in to one iteration
         // of the fun application and then bail out to a call. This is a bit gnarly as we're
         // using errors for flow control but it's isolated to this function.
-        return Err(Error::AbortRecursion(apply_cookie));
+        let abort_to = apply_stack
+            .entries
+            .iter()
+            .find(|apply_cookie| apply_cookie.arret_fun_id == arret_fun.id);
+
+        if let Some(abort_to) = abort_to {
+            return Err(Error::AbortRecursion(*abort_to));
+        } else {
+            // Inline limit reached; don't attempt another inline
+            outer_b.append(call_ops.into_vec().into_iter());
+            return call_result;
+        }
     }
 
     let mut inline_b = Some(Builder::new());

@@ -1,0 +1,24 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn recursive-member? ([item Any] [l (Listof Any)]) -> Bool
+  (if (nil? l)
+    false
+    (or
+      (= item (first l))
+      (recursive-member? item (rest l)))))
+
+(defn infinite-loop () -> Bool
+  (infinite-loop))
+
+(defn main! ()
+  ; We should be able to evaluate this at compile time
+  ; This is recursive but does not exceed our inline limit and every iteration makes progress
+  (assert-fn-doesnt-contain-op :call (fn ()
+    (recursive-member? "dog" '("cat" "dog" "fish"))))
+
+  ; This does not make progress; we should compile this in to a loop
+  (assert-fn-contains-op :call (fn ()
+    (infinite-loop)))
+
+  ())
