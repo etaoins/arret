@@ -77,6 +77,7 @@ pub fn rust_fun(
 
     // Build the output, possibly using quasi-quotation
     let expanded = quote! {
+        #[allow(non_upper_case_globals)]
         #vis const #descriptor_ident: RustFun = RustFun {
             arret_type: #arret_type,
             takes_task: #takes_task,
