@@ -76,9 +76,8 @@ impl Builder {
         self.ops.push(Op::new(span, kind));
     }
 
-    /// Appends another Builder to the end of this Builder
-    pub fn append(&mut self, other: Builder) {
-        self.ops.extend(other.ops.into_iter());
+    pub fn append(&mut self, ops: impl IntoIterator<Item = Op>) {
+        self.ops.extend(ops);
     }
 
     pub fn into_ops(self) -> Box<[Op]> {

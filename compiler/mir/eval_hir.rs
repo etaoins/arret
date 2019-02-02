@@ -57,7 +57,7 @@ pub struct FunCtx {
     mono_ty_args: MonoTyArgs,
     local_values: HashMap<hir::VarId, Value>,
 
-    inliner_stack: inliner::ApplyStack,
+    pub(super) inliner_stack: inliner::ApplyStack,
 }
 
 impl FunCtx {
@@ -96,9 +96,9 @@ impl BuiltProgram {
 }
 
 #[derive(Clone)]
-struct ApplyArgs<'tyargs> {
+pub(super) struct ApplyArgs<'tyargs> {
     ty_args: &'tyargs PolyTyArgs,
-    list_value: Value,
+    pub(super) list_value: Value,
 }
 
 /// Merge poly type args in to existing mono type args
@@ -261,7 +261,7 @@ impl EvalHirCtx {
         }
     }
 
-    fn build_arret_fun_app(
+    pub(super) fn build_arret_fun_app(
         &mut self,
         b: &mut Builder,
         span: Span,
@@ -316,7 +316,7 @@ impl EvalHirCtx {
         ret_reg_to_value(ret_reg, ret_abi)
     }
 
-    fn inline_arret_fun_app(
+    pub(super) fn inline_arret_fun_app(
         &mut self,
         outer_fcx: &FunCtx,
         b: &mut Option<Builder>,
@@ -359,42 +359,7 @@ impl EvalHirCtx {
         apply_args: ApplyArgs<'_>,
     ) -> Result<Value> {
         if let Some(outer_b) = b {
-            // `cond_inline` can call our closure and then change its mind. Use a separate builder
-            // instance so we don't append ops from a failed inline to the existing builder.
-            let mut inline_b = Some(Builder::new());
-
-            match inliner::cond_inline(&fcx.inliner_stack, arret_fun, |inliner_stack| {
-                self.inline_arret_fun_app(
-                    fcx,
-                    &mut inline_b,
-                    span,
-                    arret_fun,
-                    apply_args.clone(),
-                    inliner_stack,
-                )
-            }) {
-                Ok(Some(value)) => {
-                    // Successfully inlined
-                    outer_b.append(inline_b.unwrap());
-                    Ok(value)
-                }
-                Err(Error::Diverged) => {
-                    // Diverged; we still need the ops
-                    outer_b.append(inline_b.unwrap());
-                    Err(Error::Diverged)
-                }
-                Ok(None) => {
-                    // We need to build an out-of-line application
-                    self.build_arret_fun_app(
-                        outer_b,
-                        span,
-                        ret_ty,
-                        arret_fun,
-                        apply_args.list_value,
-                    )
-                }
-                Err(error) => Err(error),
-            }
+            inliner::cond_inline(self, fcx, outer_b, span, ret_ty, arret_fun, apply_args)
         } else {
             // No builder; we need to inline
             self.inline_arret_fun_app(
