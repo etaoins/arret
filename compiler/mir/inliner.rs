@@ -13,6 +13,9 @@ use crate::mir::value;
 use crate::mir::value::Value;
 use crate::ty;
 
+/// Maximum number of consecutive inlinings in a call stack
+const MAX_INLINE_DEPTH: usize = 16;
+
 /// Opaque hash of an Arret fun application
 ///
 /// This is used to heuristically detect recursion loops
@@ -238,7 +241,6 @@ pub(super) fn cond_inline<'a>(
     apply_args: ApplyArgs<'a>,
 ) -> Result<value::Value> {
     let apply_stack = &fcx.inliner_stack;
-    const INLINE_LIMIT: usize = 16;
 
     // We need to build an out-of-line call in every case
     let mut call_b = Builder::new();
@@ -252,7 +254,8 @@ pub(super) fn cond_inline<'a>(
     let call_ops = call_b.into_ops();
 
     let apply_cookie = ApplyCookie::new(arret_fun, &apply_args.list_value);
-    if apply_stack.entries.len() >= INLINE_LIMIT || apply_stack.entries.contains(&apply_cookie) {
+    if apply_stack.entries.len() >= MAX_INLINE_DEPTH || apply_stack.entries.contains(&apply_cookie)
+    {
         // Abort recursion all the way back to the original call of this function
 
         // This prevents us from doing a "partial unroll" where we recurse in to one iteration
