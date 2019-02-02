@@ -65,7 +65,7 @@ type OpCostFactor = f32;
 
 /// Returns the approximate runtime cost of an operation in an abstract unit
 fn cost_for_op(op: &ops::Op) -> OpCost {
-    use crate::mir::ops::OpCategory::*;
+    use crate::mir::ops::OpCategory;
 
     let inner_cost = if let ops::OpKind::Cond(cond_op) = op.kind() {
         cost_for_ops(cond_op.true_ops.iter().chain(cond_op.false_ops.iter()))
@@ -75,20 +75,21 @@ fn cost_for_op(op: &ops::Op) -> OpCost {
 
     inner_cost
         + match op.kind().category() {
-            Unreachable => 0,
-            ConstReg => 1,
-            RegCast => 1,
-            RegOp => 2,
-            ConstBox => 4,
-            Cond => 5,
-            MakeCallback => 5,
-            MemLoad => 5,
-            Ret => 5,
-            Call => 10,
+            OpCategory::Unreachable => 0,
+            OpCategory::ConstCastBoxed => 0,
+            OpCategory::ConstReg => 1,
+            OpCategory::RegCast => 1,
+            OpCategory::RegOp => 2,
+            OpCategory::ConstBox => 4,
+            OpCategory::Cond => 5,
+            OpCategory::MakeCallback => 5,
+            OpCategory::MemLoad => 5,
+            OpCategory::Ret => 5,
+            OpCategory::Call => 10,
             // This is tricky. This could either do a stack allocation (which is cheap) or a heap
             // allocation (which is very expensive). This depends on the type and escape analysis
             // in codegen. We need to make use compromise between those two costs here.
-            AllocBoxed => 15,
+            OpCategory::AllocBoxed => 15,
         }
 }
 

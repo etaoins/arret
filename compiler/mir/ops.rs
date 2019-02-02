@@ -176,6 +176,7 @@ pub enum OpKind {
 pub enum OpCategory {
     ConstReg,
     ConstBox,
+    ConstCastBoxed,
     AllocBoxed,
     Call,
     Cond,
@@ -329,8 +330,12 @@ impl OpKind {
 
     /// Indicates if the output of this op is a constant
     pub fn const_output(&self) -> bool {
-        let category = self.category();
-        category == OpCategory::ConstBox || category == OpCategory::ConstReg
+        [
+            OpCategory::ConstBox,
+            OpCategory::ConstReg,
+            OpCategory::ConstCastBoxed,
+        ]
+        .contains(&self.category())
     }
 
     pub fn has_side_effects(&self) -> bool {
@@ -377,7 +382,7 @@ impl OpKind {
             | AllocBoxedPair(_, _)
             | AllocBoxedFunThunk(_, _) => OpCategory::AllocBoxed,
 
-            ConstCastBoxed(_, _) | CastBoxed(_, _) | UsizeToInt64(_, _) => OpCategory::RegCast,
+            CastBoxed(_, _) | UsizeToInt64(_, _) => OpCategory::RegCast,
 
             LoadBoxedTypeTag(_, _)
             | LoadBoxedListLength(_, _)
@@ -393,6 +398,7 @@ impl OpKind {
 
             Cond(_) => OpCategory::Cond,
             MakeCallback(_, _) => OpCategory::MakeCallback,
+            ConstCastBoxed(_, _) => OpCategory::ConstCastBoxed,
             Call(_, _) => OpCategory::Call,
             Unreachable => OpCategory::Unreachable,
         }
@@ -491,6 +497,35 @@ mod test {
         assert_eq!(
             true,
             OpKind::Cond(cond_op_with_false_side_effects).has_side_effects()
+        );
+    }
+
+    #[test]
+    fn const_output() {
+        assert_eq!(true, OpKind::ConstBool(RegId::alloc(), true).const_output());
+        assert_eq!(
+            true,
+            OpKind::ConstBoxedFalse(RegId::alloc(), ()).const_output()
+        );
+        assert_eq!(
+            true,
+            OpKind::ConstCastBoxed(
+                RegId::alloc(),
+                CastBoxedOp {
+                    from_reg: RegId::alloc(),
+                    to_type: abitype::BoxedABIType::Any
+                }
+            )
+            .const_output()
+        );
+
+        assert_eq!(
+            false,
+            OpKind::AllocBoxedInt(RegId::alloc(), RegId::alloc()).const_output()
+        );
+        assert_eq!(
+            false,
+            OpKind::LoadBoxedListLength(RegId::alloc(), RegId::alloc()).const_output()
         );
     }
 

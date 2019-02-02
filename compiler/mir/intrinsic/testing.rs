@@ -84,6 +84,7 @@ fn op_category_to_string(category: ops::OpCategory) -> &'static str {
         OpCategory::AllocBoxed => ":alloc-boxed",
         OpCategory::Call => ":call",
         OpCategory::ConstBox => ":const-box",
+        OpCategory::ConstCastBoxed => ":const-cast-box",
         OpCategory::ConstReg => ":const-reg",
         OpCategory::Cond => ":cond",
         OpCategory::MakeCallback => ":make-callback",
