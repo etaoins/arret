@@ -1,21 +1,33 @@
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
 
-use std::alloc::System;
-use std::cell::RefCell;
+use std::env;
 use std::ops::Range;
-use std::{fs, path};
 
 use rayon::prelude::*;
+use tempfile::NamedTempFile;
 
+use syntax::span::Span;
+
+use compiler::error::Error;
 use compiler::reporting::{report_to_stderr, Level, LocTrace, Reportable};
 use compiler::SourceLoader;
-use syntax::span::Span;
+
+use std::alloc::System;
+use std::cell::RefCell;
+use std::{fs, path, process};
 
 #[global_allocator]
 static GLOBAL: System = System;
 
 thread_local!(static SOURCE_LOADER: RefCell<SourceLoader> = RefCell::new(SourceLoader::new()));
+
+#[derive(Clone, Copy, PartialEq)]
+enum TestType {
+    CompileFail,
+    RunPass,
+    EvalPass,
+}
 
 #[derive(Debug)]
 enum ExpectedSpan {
@@ -160,49 +172,111 @@ fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedR
     line_reports
 }
 
-fn collect_reports(
+fn result_for_single_test(
+    target_triple: Option<&str>,
     source_loader: &mut SourceLoader,
     source_file_id: compiler::SourceFileId,
-) -> Vec<Box<dyn Reportable>> {
-    let mut err_objects = Vec::<Box<dyn Reportable>>::new();
-    let package_paths = compiler::PackagePaths::test_paths(None);
+    test_type: TestType,
+) -> Result<(), Error> {
+    let package_paths = compiler::PackagePaths::test_paths(target_triple);
 
-    let hir = match compiler::lower_program(&package_paths, source_loader, source_file_id) {
-        Ok(hir) => hir,
-        Err(errs) => {
-            for err in errs {
-                err_objects.push(Box::new(err));
-            }
-            return err_objects;
-        }
-    };
+    let hir = compiler::lower_program(&package_paths, source_loader, source_file_id)?;
+    let inferred_defs = compiler::infer_program(hir.defs, hir.main_var_id)?;
 
-    match compiler::infer_program(hir.defs, hir.main_var_id) {
-        Ok(_) => {}
-        Err(errs) => {
-            for err in errs {
-                err_objects.push(Box::new(err));
-            }
-            return err_objects;
-        }
+    let mut ehx = compiler::EvalHirCtx::new(true);
+    for inferred_def in inferred_defs {
+        ehx.consume_def(inferred_def)?;
     }
 
-    panic!(
-        "Compilation unexpectedly succeeded for {}",
-        source_loader.source_file(source_file_id).kind()
-    )
+    // Try evaluating
+    ehx.eval_main_fun(hir.main_var_id)?;
+
+    if test_type != TestType::RunPass {
+        return Ok(());
+    }
+
+    // And now compiling and running
+    let mir_program = ehx.into_built_program(hir.main_var_id)?;
+    if mir_program.is_empty() {
+        return Ok(());
+    }
+
+    let output_path = NamedTempFile::new().unwrap().into_temp_path();
+
+    let gen_program_opts =
+        compiler::GenProgramOptions::new().with_target_triple(target_triple.as_ref().map(|x| &**x));
+
+    compiler::gen_program(
+        gen_program_opts,
+        &hir.rust_libraries,
+        &mir_program,
+        &output_path,
+        None,
+    );
+
+    let status = process::Command::new(output_path.as_os_str())
+        .status()
+        .unwrap();
+
+    if !status.success() {
+        panic!(
+            "unexpected status {} returned from compiled test {}",
+            status,
+            source_loader.source_file(source_file_id).kind()
+        );
+    }
+
+    Ok(())
 }
 
-fn run_single_test_with_source_loader(
+fn run_single_pass_test(
+    target_triple: Option<&str>,
     source_loader: &mut SourceLoader,
-    input_path: &path::Path,
+    source_file_id: compiler::SourceFileId,
+    test_type: TestType,
 ) -> bool {
     use std::io;
 
-    let source_file_id = source_loader.load_path(input_path).unwrap();
+    let result = result_for_single_test(target_triple, source_loader, source_file_id, test_type);
+
+    if let Err(Error(errs)) = result {
+        // Prevent concurrent writes to stderr
+        let stderr = io::stderr();
+        let _errlock = stderr.lock();
+
+        for err in errs {
+            report_to_stderr(source_loader, &*err);
+        }
+
+        false
+    } else {
+        true
+    }
+}
+
+fn run_single_compile_fail_test(
+    target_triple: Option<&str>,
+    source_loader: &mut SourceLoader,
+    source_file_id: compiler::SourceFileId,
+) -> bool {
+    use std::io;
+
+    let result = result_for_single_test(
+        target_triple,
+        source_loader,
+        source_file_id,
+        TestType::CompileFail,
+    );
 
     let mut expected_reports = extract_expected_reports(source_loader.source_file(source_file_id));
-    let actual_reports = collect_reports(source_loader, source_file_id);
+    let actual_reports = if let Err(Error(reports)) = result {
+        reports
+    } else {
+        panic!(
+            "Compilation unexpectedly succeeded for {}",
+            source_loader.source_file(source_file_id).kind()
+        )
+    };
 
     let mut unexpected_reports = vec![];
 
@@ -241,25 +315,56 @@ fn run_single_test_with_source_loader(
     false
 }
 
-fn run_single_test(input_path: &path::Path) -> bool {
+fn run_single_test(
+    target_triple: Option<&str>,
+    input_path: &path::Path,
+    test_type: TestType,
+) -> bool {
     SOURCE_LOADER.with(|source_loader| {
-        run_single_test_with_source_loader(&mut *source_loader.borrow_mut(), input_path)
+        let source_loader = &mut *source_loader.borrow_mut();
+        let source_file_id = source_loader.load_path(input_path).unwrap();
+
+        if test_type == TestType::CompileFail {
+            run_single_compile_fail_test(target_triple, source_loader, source_file_id)
+        } else {
+            run_single_pass_test(target_triple, source_loader, source_file_id, test_type)
+        }
     })
 }
 
 #[test]
-fn compile_fail() {
+fn pass() {
+    let target_triple =
+        env::var_os("ARRET_TEST_TARGET_TRIPLE").map(|os_str| os_str.into_string().unwrap());
+
     use compiler::initialise_llvm;
-    initialise_llvm(false);
+    initialise_llvm(target_triple.is_some());
 
-    let entries = fs::read_dir("./tests/compile-fail").unwrap();
+    let compile_fail_entries = fs::read_dir("./tests/compile-fail")
+        .unwrap()
+        .map(|entry| (entry, TestType::CompileFail));
 
-    let failed_tests = entries
+    let eval_entries = fs::read_dir("./tests/eval-pass")
+        .unwrap()
+        .chain(fs::read_dir("./tests/optimise").unwrap())
+        .map(|entry| (entry, TestType::EvalPass));
+
+    let run_entries = fs::read_dir("./tests/run-pass")
+        .unwrap()
+        .map(|entry| (entry, TestType::RunPass));
+
+    let failed_tests = compile_fail_entries
+        .chain(eval_entries)
+        .chain(run_entries)
         .par_bridge()
-        .filter_map(|entry| {
+        .filter_map(|(entry, test_type)| {
             let input_path = entry.unwrap().path();
 
-            if !run_single_test(input_path.as_path()) {
+            if !run_single_test(
+                target_triple.as_ref().map(|t| &**t),
+                input_path.as_path(),
+                test_type,
+            ) {
                 Some(input_path.to_string_lossy().to_string())
             } else {
                 None
@@ -268,6 +373,6 @@ fn compile_fail() {
         .collect::<Vec<String>>();
 
     if !failed_tests.is_empty() {
-        panic!("compile-fail tests failed: {}", failed_tests.join(", "))
+        panic!("pass tests failed: {}", failed_tests.join(", "))
     }
 }
