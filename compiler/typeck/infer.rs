@@ -1025,15 +1025,15 @@ impl<'types> RecursiveDefsCtx<'types> {
                     ty::Ty::Bool.into_poly()
                 };
 
-                let type_if_true =
-                    ty::intersect::intersect_ty_refs(&fcx.tvars, subject_poly, &test_poly)
-                        // If this was really empty we should've gotten Result::No
-                        .expect("intersect resulted in empty type");
-
-                let type_if_false =
-                    ty::subtract::subtract_ty_refs(&fcx.tvars, subject_poly, &test_poly);
-
                 let type_conds = if let Some(var_id) = subject_var_id {
+                    // TODO: This works badly with polymorphic types. See GH-14
+                    let type_if_true =
+                        ty::intersect::intersect_ty_refs(&fcx.tvars, subject_poly, &test_poly)
+                            .unwrap_or_else(|_| subject_poly.clone());
+
+                    let type_if_false =
+                        ty::subtract::subtract_ty_refs(&fcx.tvars, subject_poly, &test_poly);
+
                     vec![VarTypeCond {
                         var_id,
                         type_if_true,
