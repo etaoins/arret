@@ -416,6 +416,7 @@ pub const TY_EXPORTS: &[(&str, Binding)] = &[
     export_ty_pred!("str?", ty::pred::TestTy::Str),
     export_ty_pred!("sym?", ty::pred::TestTy::Sym),
     export_ty_pred!("bool?", ty::pred::TestTy::Bool),
+    export_ty_pred!("num?", ty::pred::TestTy::Num),
     export_ty_pred!("int?", ty::pred::TestTy::Int),
     export_ty_pred!("float?", ty::pred::TestTy::Float),
     export_ty_pred!("char?", ty::pred::TestTy::Char),

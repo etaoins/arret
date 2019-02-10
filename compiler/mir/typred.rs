@@ -28,6 +28,9 @@ fn type_tags_for_test_ty(test_ty: ty::pred::TestTy) -> TypeTagSet {
         TestTy::Bool => [boxed::TypeTag::True, boxed::TypeTag::False]
             .iter()
             .collect(),
+        TestTy::Num => [boxed::TypeTag::Int, boxed::TypeTag::Float]
+            .iter()
+            .collect(),
         TestTy::List => [boxed::TypeTag::TopPair, boxed::TypeTag::Nil]
             .iter()
             .collect(),

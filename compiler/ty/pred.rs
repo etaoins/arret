@@ -6,6 +6,7 @@ pub enum TestTy {
     Sym,
     Str,
     Bool,
+    Num,
     Int,
     Float,
     Char,
@@ -23,6 +24,7 @@ impl TestTy {
             TestTy::Sym => ty::Ty::Sym,
             TestTy::Str => ty::Ty::Str,
             TestTy::Bool => ty::Ty::Bool,
+            TestTy::Num => ty::Ty::Num,
             TestTy::Int => ty::Ty::Int,
             TestTy::Float => ty::Ty::Float,
             TestTy::Char => ty::Ty::Char,
@@ -46,6 +48,7 @@ impl TestTy {
         match self {
             TestTy::Str => "str?",
             TestTy::Sym => "sym?",
+            TestTy::Num => "num?",
             TestTy::Int => "int?",
             TestTy::Float => "float?",
             TestTy::Bool => "bool?",

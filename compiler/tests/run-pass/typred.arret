@@ -11,6 +11,10 @@
   (assert-eq true (bool? (black-box-untyped! true)))
   (assert-eq false (bool? (black-box-untyped! 123)))
 
+  (assert-eq true (num? (black-box-untyped! 123)))
+  (assert-eq true (num? (black-box-untyped! -456.7)))
+  (assert-eq false (num? (black-box-untyped! "twelve")))
+
   (assert-eq true (int? (black-box-untyped! 123)))
   (assert-eq false (int? (black-box-untyped! false)))
 
