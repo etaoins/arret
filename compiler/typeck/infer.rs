@@ -1026,7 +1026,6 @@ impl<'types> RecursiveDefsCtx<'types> {
                 };
 
                 let type_conds = if let Some(var_id) = subject_var_id {
-                    // TODO: This works badly with polymorphic types. See GH-14
                     let type_if_true =
                         ty::intersect::intersect_ty_refs(&fcx.tvars, subject_poly, &test_poly)
                             .unwrap_or_else(|_| subject_poly.clone());

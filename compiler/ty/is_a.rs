@@ -35,24 +35,46 @@ impl Result {
         }
     }
 
-    fn from_iter<I>(mut iter: I) -> Result
+    /// Returns the worst result from an iterator of results
+    fn all_from_iter<I>(iter: I) -> Result
     where
         I: Iterator<Item = Result>,
     {
-        let mut best_result = Result::Yes;
-
-        loop {
-            match iter.next() {
-                Some(Result::Yes) => {}
-                Some(Result::May) => {
-                    best_result = Result::May;
+        let mut worst_result = Result::Yes;
+        for result in iter {
+            match result {
+                Result::Yes => {}
+                Result::May => {
+                    worst_result = Result::May;
                 }
-                Some(Result::No) => {
+                Result::No => {
                     return Result::No;
                 }
-                None => return best_result,
             }
         }
+
+        worst_result
+    }
+
+    /// Returns the best result from an iterator of results
+    fn any_from_iter<I>(iter: I) -> Result
+    where
+        I: Iterator<Item = Result>,
+    {
+        let mut best_result = Result::No;
+        for result in iter {
+            match result {
+                Result::Yes => {
+                    return Result::Yes;
+                }
+                Result::May => {
+                    best_result = Result::May;
+                }
+                Result::No => {}
+            }
+        }
+
+        best_result
     }
 }
 
@@ -69,11 +91,26 @@ impl Isable for ty::Mono {
 impl Isable for ty::Poly {
     fn ty_ref_is_a(tvars: &ty::TVars, sub: &ty::Poly, parent: &ty::Poly) -> Result {
         if let ty::Poly::Var(parent_tvar_id) = *parent {
-            if let ty::Poly::Var(sub_tvar_id) = *sub {
-                if tvar_id_is_bounded_by(tvars, sub_tvar_id, parent_tvar_id) {
-                    return Result::Yes;
+            // Typically `parent_is_bound` makes the best result for a polymorphic parent `May`.
+            // These are overrides for cases where they can be `Yes`.
+            match sub {
+                ty::Poly::Var(sub_tvar_id) => {
+                    // Are we either the same var our bounded by the same var?
+                    if tvar_id_is_bounded_by(tvars, *sub_tvar_id, parent_tvar_id) {
+                        return Result::Yes;
+                    }
                 }
-            }
+                ty::Poly::Fixed(ty::Ty::Intersect(sub_members)) => {
+                    // Do we satisfy any of the members of the intersection?
+                    if sub_members
+                        .iter()
+                        .any(|sub_member| ty_ref_is_a(tvars, sub_member, parent) == Result::Yes)
+                    {
+                        return Result::Yes;
+                    }
+                }
+                _ => {}
+            };
         }
 
         let sub_ty = ty::resolve::resolve_poly_ty(tvars, sub).as_ty();
@@ -221,24 +258,23 @@ fn ty_is_a<S: Isable>(
                 Result::May
             }
         }
-        (_, ty::Ty::Union(par_members)) => {
-            let results = par_members
+        (_, ty::Ty::Union(par_members)) => Result::any_from_iter(
+            par_members
                 .iter()
-                .map(|par_member| ty_ref_is_a(tvars, sub_ref, par_member));
+                .map(|par_member| ty_ref_is_a(tvars, sub_ref, par_member)),
+        ),
 
-            // Manually consume the iterator to avoid building a temporary Vec and to let us bail
-            // early on Yes
-            let mut best_result = Result::No;
-            for result in results {
-                if result == Result::Yes {
-                    return Result::Yes;
-                } else if result == Result::May {
-                    best_result = Result::May;
-                }
-            }
-
-            best_result
-        }
+        // Intersection types
+        (ty::Ty::Intersect(sub_members), _) => Result::any_from_iter(
+            sub_members
+                .iter()
+                .map(|sub_member| ty_ref_is_a(tvars, sub_member, parent_ref)),
+        ),
+        (_, ty::Ty::Intersect(par_members)) => Result::all_from_iter(
+            par_members
+                .iter()
+                .map(|par_member| ty_ref_is_a(tvars, sub_ref, par_member)),
+        ),
 
         // Any type
         (_, ty::Ty::Any) => Result::Yes,
@@ -274,7 +310,7 @@ fn ty_is_a<S: Isable>(
             if sub_members.len() != par_members.len() {
                 Result::No
             } else {
-                Result::from_iter(
+                Result::all_from_iter(
                     sub_members
                         .iter()
                         .zip(par_members.iter())
@@ -285,13 +321,13 @@ fn ty_is_a<S: Isable>(
         (ty::Ty::Vectorof(sub_member), ty::Ty::Vectorof(par_member)) => {
             ty_ref_is_a(tvars, sub_member.as_ref(), par_member.as_ref())
         }
-        (ty::Ty::Vector(sub_members), ty::Ty::Vectorof(par_member)) => Result::from_iter(
+        (ty::Ty::Vector(sub_members), ty::Ty::Vectorof(par_member)) => Result::all_from_iter(
             sub_members
                 .iter()
                 .map(|sub_member| ty_ref_is_a(tvars, sub_member, par_member)),
         ),
         (ty::Ty::Vectorof(sub_member), ty::Ty::Vector(par_members)) => Result::May.and_then(|| {
-            Result::from_iter(
+            Result::all_from_iter(
                 par_members
                     .iter()
                     .map(|par_member| ty_ref_is_a(tvars, sub_member.as_ref(), par_member)),
@@ -536,6 +572,45 @@ mod test {
         assert_eq!(
             Result::Yes,
             ty_ref_is_a(&ty::TVars::new(), &foo_bar_union, &foo_bar_baz_union)
+        );
+    }
+
+    #[test]
+    fn intersection_types() {
+        let mut tvars = ty::TVars::new();
+
+        let tvar_id = ty::TVarId::alloc();
+        tvars.insert(
+            tvar_id,
+            ty::TVar::new("Poly".into(), ty::Ty::Any.into_poly()),
+        );
+        let ptype = ty::Poly::Var(tvar_id);
+
+        let any_sym = poly_for_str("Sym");
+        let foo_sym = poly_for_str("'foo");
+        let sym_poly_intersection =
+            ty::Ty::Intersect(Box::new([ptype.clone(), any_sym.clone()])).into_poly();
+
+        // `Sym` might not be `Poly`
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&tvars, &any_sym, &sym_poly_intersection)
+        );
+
+        // Our intersection must be both `Sym` and `Poly
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&tvars, &sym_poly_intersection, &any_sym)
+        );
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(&tvars, &sym_poly_intersection, &ptype)
+        );
+
+        // However, it might not be a 'foo
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&tvars, &sym_poly_intersection, &foo_sym)
         );
     }
 

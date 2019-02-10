@@ -536,6 +536,14 @@ fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty
 
             format!("(U{})", member_strs.join(""))
         }
+        ty::Ty::Intersect(members) => {
+            let member_strs: Vec<String> = members
+                .iter()
+                .map(|m| format!(" {}", str_for_poly(pvars, tvars, m)))
+                .collect();
+
+            format!("(∩{})", member_strs.join(""))
+        }
         ty::Ty::List(list) => {
             // While all list types can be expressed using `(List)` we try to find the shortest
             // representation

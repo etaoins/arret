@@ -77,6 +77,7 @@ pub enum Ty<S: TyRef> {
     Str,
     Sym,
     Union(Box<[S]>),
+    Intersect(Box<[S]>),
 
     // Function types
     TopFun(Box<TopFun>),

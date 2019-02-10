@@ -45,9 +45,14 @@
     (ann input Sym)
     (ann input Str)))
 
-; Polymorphic types do not support occurrence typing. See GH-14
-; This just ensures it doesn't crash.
-(defn generic-typing #{[T Num]} ([input T]) -> T
-  (if (float? input) input input))
+(defn unbounded-generic-typing #{T} ([input T]) -> T
+  (if (str? input)
+    (ann input Str)
+    input))
+
+(defn bounded-generic-typing #{[T Num]} ([input T]) -> T
+  (if (float? input)
+    (ann input Float)
+    (ann input Int)))
 
 (defn main! ())

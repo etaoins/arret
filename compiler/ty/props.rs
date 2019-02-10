@@ -31,6 +31,10 @@ fn ty_has_subtypes<S: TyRef>(ty: &ty::Ty<S>) -> bool {
             // Any arbitrary fixed length vector is a subtype of this vector
             true
         }
+        ty::Ty::Intersect(_) => {
+            // If we're correctly normalised we should have subtypes
+            true
+        }
     }
 }
 

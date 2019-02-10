@@ -1,11 +1,79 @@
 use crate::ty;
+use crate::ty::intersect::Intersectable;
 use crate::ty::is_a::Isable;
 use crate::ty::unify::Unifiable;
+
+pub trait Subtractable: ty::TyRef + Isable + Unifiable + Intersectable {
+    fn subtract_ty_refs(tvars: &ty::TVars, minuend_ref: &Self, subtrahend_ref: &Self) -> Self;
+}
+
+impl Subtractable for ty::Mono {
+    fn subtract_ty_refs(
+        tvars: &ty::TVars,
+        minuend_mono: &ty::Mono,
+        subtrahend_mono: &ty::Mono,
+    ) -> ty::Mono {
+        match ty::is_a::ty_ref_is_a(tvars, minuend_mono, subtrahend_mono) {
+            ty::is_a::Result::Yes => {
+                // No type remains
+                ty::Ty::Union(Box::new([])).into_mono()
+            }
+            ty::is_a::Result::May => subtract_tys(
+                tvars,
+                minuend_mono.as_ty(),
+                subtrahend_mono,
+                subtrahend_mono.as_ty(),
+            ),
+            ty::is_a::Result::No => {
+                // Nothing to subtract
+                minuend_mono.clone()
+            }
+        }
+    }
+}
+
+impl Subtractable for ty::Poly {
+    fn subtract_ty_refs(
+        tvars: &ty::TVars,
+        minuend_poly: &ty::Poly,
+        subtrahend_poly: &ty::Poly,
+    ) -> ty::Poly {
+        use crate::ty::intersect;
+        use crate::ty::resolve;
+
+        match ty::is_a::ty_ref_is_a(tvars, minuend_poly, subtrahend_poly) {
+            ty::is_a::Result::Yes => {
+                // No type remains
+                ty::Ty::Union(Box::new([])).into_ty_ref()
+            }
+            ty::is_a::Result::May => match (minuend_poly, subtrahend_poly) {
+                (ty::Poly::Fixed(minuend_ty), ty::Poly::Fixed(subtrahend_ty)) => {
+                    // We can substract directly
+                    subtract_tys(tvars, minuend_ty, subtrahend_poly, subtrahend_ty)
+                }
+                (ty::Poly::Var(_), ty::Poly::Fixed(subtrahend_ty)) => {
+                    // We can refine the bound using an intersection type
+                    let minuend_bound_ty = resolve::resolve_poly_ty(tvars, minuend_poly).as_ty();
+                    let refined_bound_poly =
+                        subtract_tys(tvars, minuend_bound_ty, subtrahend_poly, subtrahend_ty);
+
+                    intersect::intersect_ty_refs(tvars, minuend_poly, &refined_bound_poly)
+                        .unwrap_or_else(|_| minuend_poly.clone())
+                }
+                _ => minuend_poly.clone(),
+            },
+            ty::is_a::Result::No => {
+                // Nothing to subtract
+                minuend_poly.clone()
+            }
+        }
+    }
+}
 
 fn subtract_ref_iters<'a, I, S>(tvars: &ty::TVars, minuend_iter: I, subtrahend_ref: &S) -> S
 where
     I: Iterator<Item = &'a S>,
-    S: Isable + Unifiable + 'a,
+    S: Subtractable + 'a,
 {
     ty::unify::unify_ty_ref_iter(
         tvars,
@@ -13,15 +81,12 @@ where
     )
 }
 
-fn subtract_tys<S>(
+fn subtract_tys<S: Subtractable>(
     tvars: &ty::TVars,
     minuend_ty: &ty::Ty<S>,
     subtrahend_ref: &S,
     subtrahend_ty: &ty::Ty<S>,
-) -> S
-where
-    S: Isable + Unifiable,
-{
+) -> S {
     match (minuend_ty, subtrahend_ty) {
         (ty::Ty::Bool, _) => subtract_ref_iters(
             tvars,
@@ -77,27 +142,9 @@ where
 
 pub fn subtract_ty_refs<S>(tvars: &ty::TVars, minuend_ref: &S, subtrahend_ref: &S) -> S
 where
-    S: Isable + Unifiable,
+    S: Subtractable,
 {
-    match ty::is_a::ty_ref_is_a(tvars, minuend_ref, subtrahend_ref) {
-        ty::is_a::Result::Yes => {
-            // No type remains
-            ty::Ty::Union(Box::new([])).into_ty_ref()
-        }
-        ty::is_a::Result::May => {
-            if let Some(minuend_ty) = minuend_ref.try_to_fixed() {
-                if let Some(subtrahend_ty) = subtrahend_ref.try_to_fixed() {
-                    return subtract_tys(tvars, minuend_ty, subtrahend_ref, subtrahend_ty);
-                }
-            }
-
-            minuend_ref.clone()
-        }
-        ty::is_a::Result::No => {
-            // Nothing to subtract
-            minuend_ref.clone()
-        }
-    }
+    S::subtract_ty_refs(tvars, minuend_ref, subtrahend_ref)
 }
 
 #[cfg(test)]
@@ -145,5 +192,53 @@ mod test {
     #[test]
     fn list_subtraction() {
         assert_subtraction("(List Int Int ...)", "(Listof Int)", "()");
+    }
+
+    #[test]
+    fn poly_substraction() {
+        let mut tvars = ty::TVars::new();
+
+        let tvar_id1 = ty::TVarId::alloc();
+        tvars.insert(
+            tvar_id1,
+            ty::TVar::new("PType1".into(), poly_for_str("Any")),
+        );
+        let ptype1_unbounded = ty::Poly::Var(tvar_id1);
+
+        let tvar_id2 = ty::TVarId::alloc();
+        tvars.insert(
+            tvar_id2,
+            ty::TVar::new("PType2".into(), poly_for_str("Sym")),
+        );
+        let ptype2_sym = ty::Poly::Var(tvar_id2);
+
+        let tvar_id3 = ty::TVarId::alloc();
+        tvars.insert(
+            tvar_id3,
+            ty::TVar::new("PType3".into(), poly_for_str("Num")),
+        );
+        let ptype3_num = ty::Poly::Var(tvar_id3);
+
+        let any_float = poly_for_str("Float");
+        let any_int = poly_for_str("Int");
+        let foo_sym = poly_for_str("'foo");
+
+        // PType1 - 'foo = PType1
+        assert_eq!(
+            ptype1_unbounded.clone(),
+            subtract_ty_refs(&tvars, &ptype1_unbounded, &foo_sym)
+        );
+
+        // [PType2 Sym] - 'foo = PType1
+        assert_eq!(
+            ptype2_sym.clone(),
+            subtract_ty_refs(&tvars, &ptype2_sym, &foo_sym)
+        );
+
+        // [PType3 Num] - Float = (∩ PType3 Int)
+        assert_eq!(
+            ty::Ty::Intersect(Box::new([ptype3_num.clone(), any_int])).into_poly(),
+            subtract_ty_refs(&tvars, &ptype3_num, &any_float)
+        );
     }
 }

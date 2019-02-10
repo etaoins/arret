@@ -71,6 +71,7 @@ where
         ty::Ty::LitSym(val) => ty::Ty::LitSym(val.clone()),
         ty::Ty::Set(member) => ty::Ty::Set(Box::new(stx.subst_ty_ref(&member))),
         ty::Ty::Union(members) => ty::Ty::Union(subst_ty_ref_slice(stx, members)),
+        ty::Ty::Intersect(members) => ty::Ty::Intersect(subst_ty_ref_slice(stx, members)),
         ty::Ty::Vector(members) => ty::Ty::Vector(subst_ty_ref_slice(stx, members)),
         ty::Ty::Vectorof(member) => ty::Ty::Vectorof(Box::new(stx.subst_ty_ref(member))),
         ty::Ty::List(list) => ty::Ty::List(subst_list(stx, list)),
