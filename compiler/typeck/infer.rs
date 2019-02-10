@@ -1164,14 +1164,16 @@ impl<'types> RecursiveDefsCtx<'types> {
         };
 
         let left_node = self.visit_expr(fcx, pv, &ty::Ty::Any.into_poly(), left_expr)?;
-        let left_is_literal = is_literal(left_node.result_ty());
+        let left_ty = left_node.result_ty();
+        let left_is_literal = is_literal(left_ty);
 
         let right_node = self.visit_expr(fcx, pv, &ty::Ty::Any.into_poly(), right_expr)?;
-        let right_is_literal = is_literal(right_node.result_ty());
+        let right_ty = right_node.result_ty();
+        let right_is_literal = is_literal(right_ty);
 
         let is_divergent = left_node.is_divergent() || right_node.is_divergent();
 
-        if left_is_literal && right_is_literal && left_node.result_ty() == right_node.result_ty() {
+        if left_is_literal && right_is_literal && left_ty == right_ty {
             // We were comparing literal types; this is a static true
             let result_ty = if is_divergent {
                 ty::Ty::never().into_poly()
@@ -1192,11 +1194,8 @@ impl<'types> RecursiveDefsCtx<'types> {
             });
         };
 
-        let intersected_type = match ty::intersect::intersect_ty_refs(
-            &fcx.tvars,
-            left_node.result_ty(),
-            right_node.result_ty(),
-        ) {
+        let intersected_type = match ty::intersect::intersect_ty_refs(&fcx.tvars, left_ty, right_ty)
+        {
             Ok(intersected_type) => intersected_type,
             Err(ty::intersect::Error::Disjoint) => {
                 let result_ty = if is_divergent {
@@ -1223,13 +1222,9 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         if let Some(left_var_id) = left_var_id {
             let type_if_false = if right_is_literal {
-                ty::subtract::subtract_ty_refs(
-                    &fcx.tvars,
-                    left_node.result_ty(),
-                    right_node.result_ty(),
-                )
+                ty::subtract::subtract_ty_refs(&fcx.tvars, left_ty, right_ty)
             } else {
-                left_node.result_ty().clone()
+                left_ty.clone()
             };
 
             type_conds.push(VarTypeCond {
@@ -1241,13 +1236,9 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         if let Some(right_var_id) = right_var_id {
             let type_if_false = if left_is_literal {
-                ty::subtract::subtract_ty_refs(
-                    &fcx.tvars,
-                    right_node.result_ty(),
-                    left_node.result_ty(),
-                )
+                ty::subtract::subtract_ty_refs(&fcx.tvars, right_ty, left_ty)
             } else {
-                right_node.result_ty().clone()
+                right_ty.clone()
             };
 
             type_conds.push(VarTypeCond {
