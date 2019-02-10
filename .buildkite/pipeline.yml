@@ -9,13 +9,6 @@ steps:
       - docker-compose#v2.6.0:
           run: full-compiler
 
-  - label: ":rust: Build (Rust Beta)"
-    plugins:
-      - docker-compose#v2.6.0:
-          build: full-compiler
-          args:
-            - rust_toolchain=beta
-
   - wait
 
   - label: ":rocket: Push REPL Image"
@@ -29,3 +22,11 @@ steps:
             repl:etaoins/arret:repl
           env:
             - BUILDKITE_COMMIT
+
+  - label: ":rust: Build (Rust Beta)"
+    branches: "master"
+    plugins:
+      - docker-compose#v2.6.0:
+          build: full-compiler
+          args:
+            - rust_toolchain=beta
