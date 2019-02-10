@@ -265,15 +265,15 @@ fn ty_is_a<S: Isable>(
         ),
 
         // Intersection types
-        (ty::Ty::Intersect(sub_members), _) => Result::any_from_iter(
-            sub_members
-                .iter()
-                .map(|sub_member| ty_ref_is_a(tvars, sub_member, parent_ref)),
-        ),
         (_, ty::Ty::Intersect(par_members)) => Result::all_from_iter(
             par_members
                 .iter()
                 .map(|par_member| ty_ref_is_a(tvars, sub_ref, par_member)),
+        ),
+        (ty::Ty::Intersect(sub_members), _) => Result::any_from_iter(
+            sub_members
+                .iter()
+                .map(|sub_member| ty_ref_is_a(tvars, sub_member, parent_ref)),
         ),
 
         // Any type
@@ -576,41 +576,80 @@ mod test {
     }
 
     #[test]
-    fn intersection_types() {
+    fn intersect_types() {
         let mut tvars = ty::TVars::new();
 
-        let tvar_id = ty::TVarId::alloc();
+        let tvar_id1 = ty::TVarId::alloc();
         tvars.insert(
-            tvar_id,
-            ty::TVar::new("Poly".into(), ty::Ty::Any.into_poly()),
+            tvar_id1,
+            ty::TVar::new("Poly1".into(), ty::Ty::Any.into_poly()),
         );
-        let ptype = ty::Poly::Var(tvar_id);
+        let ptype1 = ty::Poly::Var(tvar_id1);
+
+        let tvar_id2 = ty::TVarId::alloc();
+        tvars.insert(
+            tvar_id2,
+            ty::TVar::new("Poly2".into(), ty::Ty::Any.into_poly()),
+        );
+        let ptype2 = ty::Poly::Var(tvar_id2);
 
         let any_sym = poly_for_str("Sym");
         let foo_sym = poly_for_str("'foo");
-        let sym_poly_intersection =
-            ty::Ty::Intersect(Box::new([ptype.clone(), any_sym.clone()])).into_poly();
+
+        let sym_poly1_intersection =
+            ty::Ty::Intersect(Box::new([ptype1.clone(), any_sym.clone()])).into_poly();
+        let sym_poly2_intersection =
+            ty::Ty::Intersect(Box::new([ptype2.clone(), any_sym.clone()])).into_poly();
+        let sym_poly1_poly2_intersection =
+            ty::Ty::Intersect(Box::new([ptype1.clone(), ptype2.clone(), any_sym.clone()]))
+                .into_poly();
 
         // `Sym` might not be `Poly`
         assert_eq!(
             Result::May,
-            ty_ref_is_a(&tvars, &any_sym, &sym_poly_intersection)
+            ty_ref_is_a(&tvars, &any_sym, &sym_poly1_intersection)
         );
 
         // Our intersection must be both `Sym` and `Poly
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&tvars, &sym_poly_intersection, &any_sym)
+            ty_ref_is_a(&tvars, &sym_poly1_intersection, &any_sym)
         );
         assert_eq!(
             Result::Yes,
-            ty_ref_is_a(&tvars, &sym_poly_intersection, &ptype)
+            ty_ref_is_a(&tvars, &sym_poly1_intersection, &ptype1)
         );
 
         // However, it might not be a 'foo
         assert_eq!(
             Result::May,
-            ty_ref_is_a(&tvars, &sym_poly_intersection, &foo_sym)
+            ty_ref_is_a(&tvars, &sym_poly1_intersection, &foo_sym)
+        );
+
+        // A more specific intersection must satisfy a less specific one
+        assert_eq!(
+            Result::Yes,
+            ty_ref_is_a(
+                &tvars,
+                &sym_poly1_poly2_intersection,
+                &sym_poly1_intersection
+            )
+        );
+
+        // A less specific intersection may satisfy a more specific one
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(
+                &tvars,
+                &sym_poly1_intersection,
+                &sym_poly1_poly2_intersection,
+            )
+        );
+
+        // Partially disjoint intersections may satisfy each other
+        assert_eq!(
+            Result::May,
+            ty_ref_is_a(&tvars, &sym_poly1_intersection, &sym_poly2_intersection)
         );
     }
 

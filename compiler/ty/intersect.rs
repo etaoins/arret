@@ -315,14 +315,40 @@ mod test {
     use super::*;
     use crate::hir::poly_for_str;
 
+    fn assert_disjoint_poly(tvars: &ty::TVars, poly1: &ty::Poly, poly2: &ty::Poly) {
+        assert_eq!(
+            Error::Disjoint,
+            intersect_ty_refs(tvars, poly1, poly2).unwrap_err()
+        );
+    }
+
+    fn assert_merged_poly(
+        expected: &ty::Poly,
+        tvars: &ty::TVars,
+        poly1: &ty::Poly,
+        poly2: &ty::Poly,
+    ) {
+        // This is the basic invariant we're testing - each of our merged type satisfies each of
+        // our input types.
+        assert_eq!(
+            ty::is_a::Result::Yes,
+            ty::is_a::ty_ref_is_a(tvars, expected, poly1),
+            "The expected type does not definitely satisfy the first input type; the test is incorrect"
+        );
+        assert_eq!(
+            ty::is_a::Result::Yes,
+            ty::is_a::ty_ref_is_a(tvars, expected, poly2),
+            "The expected type does not definitely satisfy the second input type; the test is incorrect"
+        );
+
+        assert_eq!(expected, &intersect_ty_refs(tvars, poly1, poly2).unwrap());
+    }
+
     fn assert_disjoint(ty_str1: &str, ty_str2: &str) {
         let poly1 = poly_for_str(ty_str1);
         let poly2 = poly_for_str(ty_str2);
 
-        assert_eq!(
-            Error::Disjoint,
-            intersect_ty_refs(&ty::TVars::new(), &poly1, &poly2).unwrap_err()
-        );
+        assert_disjoint_poly(&ty::TVars::new(), &poly1, &poly2)
     }
 
     fn assert_merged(expected_str: &str, ty_str1: &str, ty_str2: &str) {
@@ -330,23 +356,7 @@ mod test {
         let poly1 = poly_for_str(ty_str1);
         let poly2 = poly_for_str(ty_str2);
 
-        // This is the basic invariant we're testing - each of our merged type satisfies each of
-        // our input types.
-        assert_eq!(
-            ty::is_a::Result::Yes,
-            ty::is_a::ty_ref_is_a(&ty::TVars::new(), &expected, &poly1),
-            "The expected type does not definitely satisfy the first input type; the test is incorrect"
-        );
-        assert_eq!(
-            ty::is_a::Result::Yes,
-            ty::is_a::ty_ref_is_a(&ty::TVars::new(), &expected, &poly2),
-            "The expected type does not definitely satisfy the second input type; the test is incorrect"
-        );
-
-        assert_eq!(
-            expected,
-            intersect_ty_refs(&ty::TVars::new(), &poly1, &poly2).unwrap()
-        );
+        assert_merged_poly(&expected, &ty::TVars::new(), &poly1, &poly2);
     }
 
     fn assert_disjoint_iter(ty_strs: &[&str]) {
@@ -511,27 +521,30 @@ mod test {
         let any_sym = poly_for_str("Sym");
 
         // These are equal; it should just return the original type
-        assert_eq!(
-            ptype1.clone(),
-            intersect_ty_refs(&tvars, &ptype1, &ptype1).unwrap()
+        assert_merged_poly(&ptype1, &tvars, &ptype1, &ptype1);
+
+        // These create an intersect type
+        assert_merged_poly(
+            &ty::Ty::Intersect(Box::new([ptype1.clone(), ptype2.clone()])).into_ty_ref(),
+            &tvars,
+            &ptype1,
+            &ptype2,
         );
 
-        // These create an intersection type
-        assert_eq!(
-            ty::Ty::Intersect(Box::new([ptype1.clone(), ptype2.clone()])).into_ty_ref(),
-            intersect_ty_refs(&tvars, &ptype1, &ptype2).unwrap()
-        );
-
-        assert_eq!(
-            ty::Ty::Intersect(Box::new([any_sym.clone(), ptype2.clone()])).into_ty_ref(),
-            intersect_ty_refs(&tvars, &any_sym, &ptype2).unwrap()
+        assert_merged_poly(
+            &ty::Ty::Intersect(Box::new([any_sym.clone(), ptype2.clone()])).into_ty_ref(),
+            &tvars,
+            &any_sym,
+            &ptype2,
         );
 
         // These extend an existing intersection
-        assert_eq!(
-            ty::Ty::Intersect(Box::new([any_sym.clone(), ptype1.clone(), ptype2.clone()]))
+        assert_merged_poly(
+            &ty::Ty::Intersect(Box::new([any_sym.clone(), ptype1.clone(), ptype2.clone()]))
                 .into_ty_ref(),
-            intersect_ty_refs(&tvars, &any_sym, &ptype_intersect).unwrap()
+            &tvars,
+            &any_sym,
+            &ptype_intersect,
         );
     }
 
@@ -542,38 +555,35 @@ mod test {
         let top_pure_fun = poly_for_str("(... -> Any)");
 
         // We should intersect polymorphic functions with themselves
-        assert_eq!(
-            pidentity_fun.clone(),
-            intersect_ty_refs(&ty::TVars::new(), &pidentity_fun, &pidentity_fun).unwrap()
+        assert_merged_poly(
+            &pidentity_fun,
+            &ty::TVars::new(),
+            &pidentity_fun,
+            &pidentity_fun,
         );
 
         // The intersection of the pure identity function and the top pure function is the identity
         // function
-        assert_eq!(
-            pidentity_fun.clone(),
-            intersect_ty_refs(&ty::TVars::new(), &pidentity_fun, &top_pure_fun).unwrap()
+        assert_merged_poly(
+            &pidentity_fun,
+            &ty::TVars::new(),
+            &pidentity_fun,
+            &top_pure_fun,
         );
 
         // The intersection of the pure identity function and the impure string function is the
         // identity function
         // TODO: This seems like it should be (Str -> Str)
-        assert_eq!(
-            pidentity_fun.clone(),
-            intersect_ty_refs(
-                &ty::TVars::new(),
-                &pidentity_fun,
-                &pidentity_impure_bool_fun
-            )
-            .unwrap()
+        assert_merged_poly(
+            &pidentity_fun,
+            &ty::TVars::new(),
+            &pidentity_fun,
+            &pidentity_impure_bool_fun,
         );
 
         // These have no subtype relationship
         // TODO: This also seems like it should be (Str -> Str)
-        assert_eq!(
-            Error::Disjoint,
-            intersect_ty_refs(&ty::TVars::new(), &pidentity_impure_bool_fun, &top_pure_fun)
-                .unwrap_err()
-        );
+        assert_disjoint_poly(&ty::TVars::new(), &pidentity_impure_bool_fun, &top_pure_fun);
     }
 
     #[test]
