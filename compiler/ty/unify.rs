@@ -376,11 +376,7 @@ pub fn unify_list<S: Unifiable>(
 #[cfg(test)]
 mod test {
     use super::*;
-
-    fn poly_for_str(datum_str: &str) -> ty::Poly {
-        use crate::hir;
-        hir::poly_for_str(datum_str)
-    }
+    use crate::hir::poly_for_str;
 
     fn assert_discerned(ty_str1: &str, ty_str2: &str) {
         let poly1 = poly_for_str(ty_str1);

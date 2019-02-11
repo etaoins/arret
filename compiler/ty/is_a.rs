@@ -430,11 +430,7 @@ pub fn ty_ref_is_a<S: Isable>(tvars: &ty::TVars, sub: &S, parent: &S) -> Result 
 #[cfg(test)]
 mod test {
     use super::*;
-
-    fn poly_for_str(datum_str: &str) -> ty::Poly {
-        use crate::hir;
-        hir::poly_for_str(datum_str)
-    }
+    use crate::hir::poly_for_str;
 
     #[test]
     fn sym_types() {

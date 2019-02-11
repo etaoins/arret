@@ -96,11 +96,7 @@ mod test {
     use super::*;
     use runtime::abitype::EncodeBoxedABIType;
     use runtime::boxed;
-
-    fn poly_for_str(datum_str: &str) -> ty::Poly {
-        use crate::hir;
-        hir::poly_for_str(datum_str)
-    }
+    use crate::hir::poly_for_str;
 
     fn assert_abi_type_for_str(abi_type: abitype::ABIType, ty_str: &'static str) {
         let poly = poly_for_str(ty_str);
