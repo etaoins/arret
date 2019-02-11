@@ -430,7 +430,7 @@ pub fn ty_ref_is_a<S: Isable>(tvars: &ty::TVars, sub: &S, parent: &S) -> Result 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::hir::poly_for_str;
+    use crate::hir::{poly_for_str, tvar_bounded_by};
 
     #[test]
     fn sym_types() {
@@ -575,19 +575,8 @@ mod test {
     fn intersect_types() {
         let mut tvars = ty::TVars::new();
 
-        let tvar_id1 = ty::TVarId::alloc();
-        tvars.insert(
-            tvar_id1,
-            ty::TVar::new("Poly1".into(), ty::Ty::Any.into_poly()),
-        );
-        let ptype1 = ty::Poly::Var(tvar_id1);
-
-        let tvar_id2 = ty::TVarId::alloc();
-        tvars.insert(
-            tvar_id2,
-            ty::TVar::new("Poly2".into(), ty::Ty::Any.into_poly()),
-        );
-        let ptype2 = ty::Poly::Var(tvar_id2);
+        let ptype1 = tvar_bounded_by(&mut tvars, ty::Ty::Any.into_poly());
+        let ptype2 = tvar_bounded_by(&mut tvars, ty::Ty::Any.into_poly());
 
         let any_sym = poly_for_str("Sym");
         let foo_sym = poly_for_str("'foo");
@@ -925,19 +914,8 @@ mod test {
     fn unbounded_poly_vars() {
         let mut tvars = ty::TVars::new();
 
-        let tvar_id1 = ty::TVarId::alloc();
-        tvars.insert(
-            tvar_id1,
-            ty::TVar::new("one".into(), ty::Ty::Any.into_poly()),
-        );
-        let ptype1 = ty::Poly::Var(tvar_id1);
-
-        let tvar_id2 = ty::TVarId::alloc();
-        tvars.insert(
-            tvar_id2,
-            ty::TVar::new("two".into(), ty::Ty::Any.into_poly()),
-        );
-        let ptype2 = ty::Poly::Var(tvar_id2);
+        let ptype1 = tvar_bounded_by(&mut tvars, ty::Ty::Any.into_poly());
+        let ptype2 = tvar_bounded_by(&mut tvars, ty::Ty::Any.into_poly());
 
         let poly_bool = poly_for_str("Bool");
 
@@ -950,54 +928,35 @@ mod test {
     fn bounded_poly_vars() {
         let mut tvars = ty::TVars::new();
 
-        let tvar_id1 = ty::TVarId::alloc();
-        tvars.insert(tvar_id1, ty::TVar::new("sym".into(), poly_for_str("Sym")));
-        let sym_ptype = ty::Poly::Var(tvar_id1);
-
-        let tvar_id2 = ty::TVarId::alloc();
-        tvars.insert(tvar_id2, ty::TVar::new("str".into(), poly_for_str("Str")));
-        let str_ptype = ty::Poly::Var(tvar_id2);
+        let ptype1_sym = tvar_bounded_by(&mut tvars, ty::Ty::Sym.into_poly());
+        let ptype2_str = tvar_bounded_by(&mut tvars, ty::Ty::Str.into_poly());
 
         let poly_foo_sym = poly_for_str("'foo");
 
         // A type var always satisfies itself
-        assert_eq!(Result::Yes, ty_ref_is_a(&tvars, &sym_ptype, &sym_ptype));
+        assert_eq!(Result::Yes, ty_ref_is_a(&tvars, &ptype1_sym, &ptype1_sym));
 
         // The bounds of these vars are disjoint
-        assert_eq!(Result::No, ty_ref_is_a(&tvars, &sym_ptype, &str_ptype));
+        assert_eq!(Result::No, ty_ref_is_a(&tvars, &ptype1_sym, &ptype2_str));
 
         // The type var may satisfy a more specific bound
-        assert_eq!(Result::May, ty_ref_is_a(&tvars, &sym_ptype, &poly_foo_sym));
+        assert_eq!(Result::May, ty_ref_is_a(&tvars, &ptype1_sym, &poly_foo_sym));
 
         // A sub never satisfies a type var with a disjoint bound
-        assert_eq!(Result::No, ty_ref_is_a(&tvars, &poly_foo_sym, &str_ptype));
+        assert_eq!(Result::No, ty_ref_is_a(&tvars, &poly_foo_sym, &ptype2_str));
 
         // The sub has a fixed type while the parent has a poly type. We can't ensure that 'foo
         // satisfies all possible Sym subtypes (such as 'bar)
-        assert_eq!(Result::May, ty_ref_is_a(&tvars, &poly_foo_sym, &sym_ptype));
+        assert_eq!(Result::May, ty_ref_is_a(&tvars, &poly_foo_sym, &ptype1_sym));
     }
 
     #[test]
     fn related_poly_bounds() {
         let mut tvars = ty::TVars::new();
 
-        let tvar_id1 = ty::TVarId::alloc();
-        tvars.insert(tvar_id1, ty::TVar::new("1".into(), poly_for_str("Any")));
-        let ptype1_unbounded = ty::Poly::Var(tvar_id1);
-
-        let tvar_id2 = ty::TVarId::alloc();
-        tvars.insert(
-            tvar_id2,
-            ty::TVar::new("2".into(), ptype1_unbounded.clone()),
-        );
-        let ptype2_bounded_by_1 = ty::Poly::Var(tvar_id2);
-
-        let tvar_id3 = ty::TVarId::alloc();
-        tvars.insert(
-            tvar_id3,
-            ty::TVar::new("3".into(), ptype2_bounded_by_1.clone()),
-        );
-        let ptype3_bounded_by_2 = ty::Poly::Var(tvar_id3);
+        let ptype1_unbounded = tvar_bounded_by(&mut tvars, ty::Ty::Any.into_poly());
+        let ptype2_bounded_by_1 = tvar_bounded_by(&mut tvars, ptype1_unbounded.clone());
+        let ptype3_bounded_by_2 = tvar_bounded_by(&mut tvars, ptype2_bounded_by_1.clone());
 
         // Direct bounding
         assert_eq!(

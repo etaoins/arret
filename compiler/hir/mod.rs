@@ -137,16 +137,9 @@ pub use self::types::str_for_poly;
 pub use self::types::str_for_purity;
 
 #[cfg(test)]
-pub use self::types::poly_for_str;
-
-#[cfg(test)]
-pub use self::types::lower_polymorphic_vars;
-
-#[cfg(test)]
-pub use self::types::lower_poly;
-
-#[cfg(test)]
-pub use self::types::try_lower_purity;
+pub use self::types::{
+    lower_poly, lower_polymorphic_vars, poly_for_str, try_lower_purity, tvar_bounded_by,
+};
 
 #[cfg(test)]
 pub use self::lowering::expr_for_str;

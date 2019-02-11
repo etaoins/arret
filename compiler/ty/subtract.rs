@@ -150,7 +150,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::hir::poly_for_str;
+    use crate::hir::{poly_for_str, tvar_bounded_by};
 
     fn assert_subtraction(expected_str: &str, minuend_str: &str, subrahend_str: &str) {
         let expected_poly = poly_for_str(expected_str);
@@ -198,26 +198,9 @@ mod test {
     fn poly_substraction() {
         let mut tvars = ty::TVars::new();
 
-        let tvar_id1 = ty::TVarId::alloc();
-        tvars.insert(
-            tvar_id1,
-            ty::TVar::new("PType1".into(), poly_for_str("Any")),
-        );
-        let ptype1_unbounded = ty::Poly::Var(tvar_id1);
-
-        let tvar_id2 = ty::TVarId::alloc();
-        tvars.insert(
-            tvar_id2,
-            ty::TVar::new("PType2".into(), poly_for_str("Sym")),
-        );
-        let ptype2_sym = ty::Poly::Var(tvar_id2);
-
-        let tvar_id3 = ty::TVarId::alloc();
-        tvars.insert(
-            tvar_id3,
-            ty::TVar::new("PType3".into(), poly_for_str("Num")),
-        );
-        let ptype3_num = ty::Poly::Var(tvar_id3);
+        let ptype1_unbounded = tvar_bounded_by(&mut tvars, ty::Ty::Any.into_poly());
+        let ptype2_sym = tvar_bounded_by(&mut tvars, ty::Ty::Sym.into_poly());
+        let ptype3_num = tvar_bounded_by(&mut tvars, ty::Ty::Num.into_poly());
 
         let any_float = poly_for_str("Float");
         let any_int = poly_for_str("Int");

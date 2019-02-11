@@ -608,6 +608,14 @@ pub fn poly_for_str(datum_str: &str) -> ty::Poly {
 }
 
 #[cfg(test)]
+pub fn tvar_bounded_by(tvars: &mut ty::TVars, bound: ty::Poly) -> ty::Poly {
+    let tvar_id = ty::TVarId::alloc();
+    tvars.insert(tvar_id, ty::TVar::new("TVar".into(), bound));
+
+    ty::Poly::Var(tvar_id)
+}
+
+#[cfg(test)]
 mod test {
     use super::*;
 

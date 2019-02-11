@@ -313,7 +313,7 @@ pub fn intersect_ty_refs<S: Intersectable>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::hir::poly_for_str;
+    use crate::hir::{poly_for_str, tvar_bounded_by};
 
     fn assert_disjoint_poly(tvars: &ty::TVars, poly1: &ty::Poly, poly2: &ty::Poly) {
         assert_eq!(
@@ -404,13 +404,7 @@ mod test {
     #[test]
     fn intersect_types() {
         let mut tvars = ty::TVars::new();
-
-        let tvar_id = ty::TVarId::alloc();
-        tvars.insert(
-            tvar_id,
-            ty::TVar::new("Poly".into(), ty::Ty::Any.into_poly()),
-        );
-        let ptype = ty::Poly::Var(tvar_id);
+        let ptype = tvar_bounded_by(&mut tvars, ty::Ty::Any.into_poly());
 
         let any_int = poly_for_str("Int");
         let any_float = poly_for_str("Float");
@@ -502,19 +496,8 @@ mod test {
     fn poly_vars() {
         let mut tvars = ty::TVars::new();
 
-        let tvar_id1 = ty::TVarId::alloc();
-        tvars.insert(
-            tvar_id1,
-            ty::TVar::new("One".into(), ty::Ty::Any.into_poly()),
-        );
-        let ptype1 = ty::Poly::Var(tvar_id1);
-
-        let tvar_id2 = ty::TVarId::alloc();
-        tvars.insert(
-            tvar_id2,
-            ty::TVar::new("Two".into(), ty::Ty::Any.into_poly()),
-        );
-        let ptype2 = ty::Poly::Var(tvar_id2);
+        let ptype1 = tvar_bounded_by(&mut tvars, ty::Ty::Any.into_poly());
+        let ptype2 = tvar_bounded_by(&mut tvars, ty::Ty::Any.into_poly());
 
         let ptype_intersect =
             ty::Ty::Intersect(Box::new([ptype1.clone(), ptype2.clone()])).into_poly();

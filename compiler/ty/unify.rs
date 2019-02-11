@@ -376,7 +376,7 @@ pub fn unify_list<S: Unifiable>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::hir::poly_for_str;
+    use crate::hir::{poly_for_str, tvar_bounded_by};
 
     fn assert_discerned(ty_str1: &str, ty_str2: &str) {
         let poly1 = poly_for_str(ty_str1);
@@ -626,16 +626,8 @@ mod test {
     fn related_poly_bounds() {
         let mut tvars = ty::TVars::new();
 
-        let tvar_id1 = ty::TVarId::alloc();
-        tvars.insert(tvar_id1, ty::TVar::new("1".into(), poly_for_str("Any")));
-        let ptype1_unbounded = ty::Poly::Var(tvar_id1);
-
-        let tvar_id2 = ty::TVarId::alloc();
-        tvars.insert(
-            tvar_id2,
-            ty::TVar::new("2".into(), ptype1_unbounded.clone()),
-        );
-        let ptype2_bounded_by_1 = ty::Poly::Var(tvar_id2);
+        let ptype1_unbounded = tvar_bounded_by(&mut tvars, ty::Ty::Any.into_poly());
+        let ptype2_bounded_by_1 = tvar_bounded_by(&mut tvars, ptype1_unbounded.clone());
 
         assert_eq!(
             UnifiedTy::Merged(ptype1_unbounded.clone()),
