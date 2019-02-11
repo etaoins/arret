@@ -498,12 +498,20 @@ mod test {
         let any_sym = poly_for_str("Sym");
         let any_int = poly_for_str("Int");
 
-        let int_to_any_sym =
-            ty::Ty::Map(Box::new(ty::Map::new(any_int.clone(), any_sym.clone()))).into_poly();
-        let int_to_foo_sym =
-            ty::Ty::Map(Box::new(ty::Map::new(any_int.clone(), foo_sym.clone()))).into_poly();
-        let any_sym_to_any_sym =
-            ty::Ty::Map(Box::new(ty::Map::new(any_sym.clone(), any_sym.clone()))).into_poly();
+        let int_to_any_sym = ty::Poly::from(ty::Ty::Map(Box::new(ty::Map::new(
+            any_int.clone(),
+            any_sym.clone(),
+        ))));
+
+        let int_to_foo_sym = ty::Poly::from(ty::Ty::Map(Box::new(ty::Map::new(
+            any_int.clone(),
+            foo_sym.clone(),
+        ))));
+
+        let any_sym_to_any_sym = ty::Poly::from(ty::Ty::Map(Box::new(ty::Map::new(
+            any_sym.clone(),
+            any_sym.clone(),
+        ))));
 
         assert_eq!(
             Result::Yes,
@@ -575,19 +583,18 @@ mod test {
     fn intersect_types() {
         let mut tvars = ty::TVars::new();
 
-        let ptype1 = tvar_bounded_by(&mut tvars, ty::Ty::Any.into_poly());
-        let ptype2 = tvar_bounded_by(&mut tvars, ty::Ty::Any.into_poly());
+        let ptype1 = tvar_bounded_by(&mut tvars, ty::Ty::Any.into());
+        let ptype2 = tvar_bounded_by(&mut tvars, ty::Ty::Any.into());
 
         let any_sym = poly_for_str("Sym");
         let foo_sym = poly_for_str("'foo");
 
         let sym_poly1_intersection =
-            ty::Ty::Intersect(Box::new([ptype1.clone(), any_sym.clone()])).into_poly();
+            ty::Ty::Intersect(Box::new([ptype1.clone(), any_sym.clone()])).into();
         let sym_poly2_intersection =
-            ty::Ty::Intersect(Box::new([ptype2.clone(), any_sym.clone()])).into_poly();
+            ty::Ty::Intersect(Box::new([ptype2.clone(), any_sym.clone()])).into();
         let sym_poly1_poly2_intersection =
-            ty::Ty::Intersect(Box::new([ptype1.clone(), ptype2.clone(), any_sym.clone()]))
-                .into_poly();
+            ty::Ty::Intersect(Box::new([ptype1.clone(), ptype2.clone(), any_sym.clone()])).into();
 
         // `Sym` might not be `Poly`
         assert_eq!(
@@ -641,7 +648,7 @@ mod test {
     #[test]
     fn any_and_never_types() {
         let any = poly_for_str("Any");
-        let never = ty::Ty::never().into_poly();
+        let never = ty::Ty::never().into();
         let foo_sym = poly_for_str("'foo");
 
         assert_eq!(Result::Yes, ty_ref_is_a(&ty::TVars::new(), &foo_sym, &any));
@@ -914,8 +921,8 @@ mod test {
     fn unbounded_poly_vars() {
         let mut tvars = ty::TVars::new();
 
-        let ptype1 = tvar_bounded_by(&mut tvars, ty::Ty::Any.into_poly());
-        let ptype2 = tvar_bounded_by(&mut tvars, ty::Ty::Any.into_poly());
+        let ptype1 = tvar_bounded_by(&mut tvars, ty::Ty::Any.into());
+        let ptype2 = tvar_bounded_by(&mut tvars, ty::Ty::Any.into());
 
         let poly_bool = poly_for_str("Bool");
 
@@ -928,8 +935,8 @@ mod test {
     fn bounded_poly_vars() {
         let mut tvars = ty::TVars::new();
 
-        let ptype1_sym = tvar_bounded_by(&mut tvars, ty::Ty::Sym.into_poly());
-        let ptype2_str = tvar_bounded_by(&mut tvars, ty::Ty::Str.into_poly());
+        let ptype1_sym = tvar_bounded_by(&mut tvars, ty::Ty::Sym.into());
+        let ptype2_str = tvar_bounded_by(&mut tvars, ty::Ty::Str.into());
 
         let poly_foo_sym = poly_for_str("'foo");
 
@@ -954,7 +961,7 @@ mod test {
     fn related_poly_bounds() {
         let mut tvars = ty::TVars::new();
 
-        let ptype1_unbounded = tvar_bounded_by(&mut tvars, ty::Ty::Any.into_poly());
+        let ptype1_unbounded = tvar_bounded_by(&mut tvars, ty::Ty::Any.into());
         let ptype2_bounded_by_1 = tvar_bounded_by(&mut tvars, ptype1_unbounded.clone());
         let ptype3_bounded_by_2 = tvar_bounded_by(&mut tvars, ptype2_bounded_by_1.clone());
 

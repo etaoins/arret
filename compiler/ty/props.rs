@@ -14,9 +14,9 @@ fn ty_has_subtypes<S: TyRef>(ty: &ty::Ty<S>) -> bool {
         | ty::Ty::TyPred(_)
         | ty::Ty::EqPred => false,
         ty::Ty::Fun(fun) => {
-            fun.purity() != &Purity::Pure.into_poly()
+            fun.purity() != &Purity::Pure.into()
                 || !fun.params().fixed().is_empty()
-                || fun.params().rest() != Some(&ty::Ty::Any.into_poly())
+                || fun.params().rest() != Some(&ty::Ty::Any.into())
                 || has_subtypes(fun.ret())
         }
         ty::Ty::Map(map) => has_subtypes(map.key()) || has_subtypes(map.value()),

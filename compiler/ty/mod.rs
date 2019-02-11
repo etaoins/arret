@@ -20,10 +20,9 @@ use std::ops::Range;
 /// Abstracts over a reference to a type
 ///
 /// This allows the implementation of our type system to be generic over `Mono` versus `Poly` types.
-pub trait TyRef: PartialEq + Clone + Sized + fmt::Debug {
-    /// Constructs a fixed TyRef from the passed Ty
-    fn from_ty(ty: Ty<Self>) -> Self;
-
+pub trait TyRef:
+    PartialEq + Clone + Sized + fmt::Debug + From<Ty<Self>> + From<Fun> + From<TopFun>
+{
     /// Tries to convert the TyRef to a fixed Ty
     fn try_to_fixed(&self) -> Option<&Ty<Self>>;
 
@@ -35,7 +34,7 @@ pub trait TyRef: PartialEq + Clone + Sized + fmt::Debug {
         if members.len() == 1 {
             members.pop().unwrap()
         } else {
-            Self::from_ty(Ty::Union(members.into_boxed_slice()))
+            Ty::Union(members.into_boxed_slice()).into()
         }
     }
 
@@ -94,10 +93,6 @@ pub enum Ty<S: TyRef> {
 }
 
 impl<S: TyRef> Ty<S> {
-    pub fn into_ty_ref(self) -> S {
-        S::from_ty(self)
-    }
-
     /// Returns the canonical unit type
     pub fn unit() -> Ty<S> {
         Ty::List(List::new(Box::new([]), None))
@@ -192,7 +187,7 @@ impl TopFun {
 
     /// Returns the `Fun` top type for all predicate functions
     pub fn new_for_pred() -> TopFun {
-        Self::new(purity::Purity::Pure.into_poly(), Ty::Bool.into_ty_ref())
+        Self::new(purity::Purity::Pure.into(), Ty::Bool.into())
     }
 
     pub fn purity(&self) -> &purity::Poly {
@@ -202,13 +197,23 @@ impl TopFun {
     pub fn ret(&self) -> &Poly {
         &self.ret
     }
+}
 
-    pub fn into_ty<S: TyRef>(self) -> Ty<S> {
-        Ty::TopFun(Box::new(self))
+impl<S: TyRef> From<TopFun> for Ty<S> {
+    fn from(top_fun: TopFun) -> Self {
+        Ty::TopFun(Box::new(top_fun))
     }
+}
 
-    pub fn into_ty_ref<S: TyRef>(self) -> S {
-        self.into_ty().into_ty_ref()
+impl From<TopFun> for Poly {
+    fn from(top_fun: TopFun) -> Self {
+        Poly::Fixed(Ty::TopFun(Box::new(top_fun)))
+    }
+}
+
+impl From<TopFun> for Mono {
+    fn from(top_fun: TopFun) -> Self {
+        Mono(Ty::TopFun(Box::new(top_fun)))
     }
 }
 
@@ -235,7 +240,7 @@ impl Fun {
         Self::new(
             purity::PVars::new(),
             TVars::new(),
-            TopFun::new(purity::Purity::Impure.into_poly(), Ty::unit().into_ty_ref()),
+            TopFun::new(purity::Purity::Impure.into(), Ty::unit().into()),
             List::empty(),
         )
     }
@@ -249,7 +254,7 @@ impl Fun {
             purity::PVars::new(),
             TVars::new(),
             TopFun::new_for_pred(),
-            List::new(Box::new([Ty::Any.into_ty_ref()]), None),
+            List::new(Box::new([Ty::Any.into()]), None),
         )
     }
 
@@ -262,10 +267,7 @@ impl Fun {
             purity::PVars::new(),
             TVars::new(),
             TopFun::new_for_pred(),
-            List::new(
-                Box::new([Ty::Any.into_ty_ref(), Ty::Any.into_ty_ref()]),
-                None,
-            ),
+            List::new(Box::new([Ty::Any.into(), Ty::Any.into()]), None),
         )
     }
 
@@ -297,20 +299,30 @@ impl Fun {
         !self.pvars.is_empty() || !self.tvars.is_empty()
     }
 
-    pub fn into_ty<S: TyRef>(self) -> Ty<S> {
-        Ty::Fun(Box::new(self))
-    }
-
-    pub fn into_ty_ref<S: TyRef>(self) -> S {
-        S::from_ty(self.into_ty())
-    }
-
     pub fn with_polymorphic_vars(self, pvars: purity::PVars, tvars: TVars) -> Fun {
         Fun {
             pvars,
             tvars,
             ..self
         }
+    }
+}
+
+impl<S: TyRef> From<Fun> for Ty<S> {
+    fn from(fun: Fun) -> Self {
+        Ty::Fun(Box::new(fun))
+    }
+}
+
+impl From<Fun> for Poly {
+    fn from(fun: Fun) -> Self {
+        Poly::Fixed(Ty::Fun(Box::new(fun)))
+    }
+}
+
+impl From<Fun> for Mono {
+    fn from(fun: Fun) -> Self {
+        Mono(Ty::Fun(Box::new(fun)))
     }
 }
 
@@ -360,17 +372,7 @@ pub enum Poly {
     Fixed(Ty<Poly>),
 }
 
-impl Poly {
-    pub fn into_decl(self) -> Decl {
-        Decl::Known(self)
-    }
-}
-
 impl TyRef for Poly {
-    fn from_ty(ty: Ty<Poly>) -> Poly {
-        Poly::Fixed(ty)
-    }
-
     fn try_to_fixed(&self) -> Option<&Ty<Poly>> {
         match self {
             Poly::Fixed(fixed) => Some(fixed),
@@ -379,13 +381,9 @@ impl TyRef for Poly {
     }
 }
 
-impl Ty<Poly> {
-    pub fn into_poly(self) -> Poly {
-        Poly::Fixed(self)
-    }
-
-    pub fn into_decl(self) -> Decl {
-        Decl::Known(Poly::Fixed(self))
+impl From<Ty<Poly>> for Poly {
+    fn from(ty: Ty<Poly>) -> Self {
+        Poly::Fixed(ty)
     }
 }
 
@@ -402,19 +400,15 @@ impl Mono {
     }
 }
 
-impl Ty<Mono> {
-    pub fn into_mono(self) -> Mono {
-        Mono(self)
+impl TyRef for Mono {
+    fn try_to_fixed(&self) -> Option<&Ty<Mono>> {
+        Some(self.as_ty())
     }
 }
 
-impl TyRef for Mono {
-    fn from_ty(ty: Ty<Mono>) -> Mono {
+impl From<Ty<Mono>> for Mono {
+    fn from(ty: Ty<Mono>) -> Self {
         Mono(ty)
-    }
-
-    fn try_to_fixed(&self) -> Option<&Ty<Mono>> {
-        Some(self.as_ty())
     }
 }
 
@@ -425,4 +419,16 @@ impl TyRef for Mono {
 pub enum Decl {
     Known(Poly),
     Free,
+}
+
+impl From<Ty<Poly>> for Decl {
+    fn from(ty: Ty<Poly>) -> Self {
+        Decl::Known(Poly::Fixed(ty))
+    }
+}
+
+impl From<Poly> for Decl {
+    fn from(poly: Poly) -> Self {
+        Decl::Known(poly)
+    }
 }

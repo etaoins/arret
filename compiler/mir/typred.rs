@@ -133,6 +133,6 @@ pub fn eval_ty_pred(
         ehx,
         result_reg,
         &abitype::ABIType::Bool,
-        &ty::Ty::Bool.into_mono(),
+        &ty::Ty::Bool.into(),
     )
 }

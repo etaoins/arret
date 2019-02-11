@@ -29,13 +29,13 @@ pub struct InferredNode {
 
 impl InferredNode {
     fn new_ref_node(span: Span, var_id: hir::VarId, poly_type: ty::Poly) -> InferredNode {
-        let type_conds = if poly_type == ty::Ty::Bool.into_poly() {
+        let type_conds = if poly_type == ty::Ty::Bool.into() {
             // This seems useless but it allows occurrence typing to work if this type
             // flows through another node such as `(do)` or `(let)`
             vec![VarTypeCond {
                 var_id,
-                type_if_true: ty::Ty::LitBool(true).into_poly(),
-                type_if_false: ty::Ty::LitBool(false).into_poly(),
+                type_if_true: ty::Ty::LitBool(true).into(),
+                type_if_false: ty::Ty::LitBool(false).into(),
             }]
         } else {
             vec![]
@@ -179,17 +179,15 @@ fn error_kind_for_type_error(
     let incorrect_ty_str = str_for_poly(fcx, &sub_poly);
 
     if let ty::Poly::Fixed(ty::Ty::TopFun(top_fun)) = parent_poly {
-        let topmost_fun =
-            ty::TopFun::new(Purity::Impure.into_poly(), ty::Ty::Any.into_poly()).into_ty_ref();
+        let topmost_fun = ty::TopFun::new(Purity::Impure.into(), ty::Ty::Any.into()).into();
 
-        let impure_top_fun =
-            ty::TopFun::new(Purity::Impure.into_poly(), top_fun.ret().clone()).into_ty_ref();
+        let impure_top_fun = ty::TopFun::new(Purity::Impure.into(), top_fun.ret().clone()).into();
 
         if !ty::is_a::ty_ref_is_a(&fcx.tvars, sub_poly, &topmost_fun).to_bool() {
             // We aren't a function at all
             return ErrorKind::IsNotFun(incorrect_ty_str);
         } else if ty::is_a::ty_ref_is_a(&fcx.tvars, sub_poly, &impure_top_fun).to_bool() {
-            let purity_str = if top_fun.purity() == &Purity::Pure.into_poly() {
+            let purity_str = if top_fun.purity() == &Purity::Pure.into() {
                 // `->` might be confusing here
                 "pure".into()
             } else {
@@ -220,8 +218,8 @@ fn ensure_is_a(
 }
 
 fn member_type_for_poly_list(fcx: &FunCtx, span: Span, poly_type: &ty::Poly) -> Result<ty::Poly> {
-    if poly_type == &ty::Ty::Any.into_poly() {
-        return Ok(ty::Ty::Any.into_poly());
+    if poly_type == &ty::Ty::Any.into() {
+        return Ok(ty::Ty::Any.into());
     }
 
     let list = poly_type
@@ -241,7 +239,7 @@ fn member_type_for_poly_list(fcx: &FunCtx, span: Span, poly_type: &ty::Poly) -> 
 
     Ok(ListIterator::new(list)
         .collect_rest(&fcx.tvars)
-        .unwrap_or_else(|| ty::Ty::Any.into_poly()))
+        .unwrap_or_else(|| ty::Ty::Any.into()))
 }
 
 /// Preserves expressions for their side effects
@@ -347,7 +345,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             ..
         } = cond;
 
-        let test_required_type = &ty::Ty::Bool.into_poly();
+        let test_required_type = &ty::Ty::Bool.into();
         let test_node = self.visit_expr(fcx, pv, test_required_type, test_expr)?;
 
         if test_node.is_divergent() {
@@ -357,7 +355,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         let test_known_bool = try_to_bool(test_node.result_ty());
 
         // If a branch isn't taken it doesn't need to match the type of the cond expression
-        let any_type = &ty::Ty::Any.into_poly();
+        let any_type = &ty::Ty::Any.into();
         let (true_required_type, false_required_type) = match test_known_bool {
             Some(true) => (required_type, any_type),
             Some(false) => (any_type, required_type),
@@ -474,7 +472,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         span: Span,
         test_ty: ty::pred::TestTy,
     ) -> Result<InferredNode> {
-        let pred_type = ty::Ty::TyPred(test_ty).into_poly();
+        let pred_type = ty::Ty::TyPred(test_ty).into();
         ensure_is_a(fcx, span, &pred_type, required_type)?;
 
         Ok(InferredNode {
@@ -493,7 +491,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         required_type: &ty::Poly,
         span: Span,
     ) -> Result<InferredNode> {
-        let pred_type = ty::Ty::EqPred.into_poly();
+        let pred_type = ty::Ty::EqPred.into();
         ensure_is_a(fcx, span, &pred_type, required_type)?;
 
         Ok(InferredNode {
@@ -559,7 +557,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
                 self.free_ty_polys[free_ty_id.to_usize()] = new_free_type.clone();
                 let rest_list_type =
-                    ty::Ty::List(ty::List::new(Box::new([]), Some(new_free_type))).into_poly();
+                    ty::Ty::List(ty::List::new(Box::new([]), Some(new_free_type))).into();
 
                 // Make sure we didn't require a specific list type e.g. `(List Int Int Int)`
                 ensure_is_a(fcx, span, &rest_list_type, required_type)?;
@@ -587,7 +585,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             return Ok(InferredNode {
                 expr: hir::Expr {
                     span,
-                    result_ty: ty::Ty::unit().into_poly(),
+                    result_ty: ty::Ty::unit().into(),
                     kind: hir::ExprKind::Do(vec![]),
                 },
                 type_conds: vec![],
@@ -599,7 +597,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             .into_iter()
             .map(|non_terminal_expr| {
                 // The type of this expression doesn't matter; its value is discarded
-                let node = self.visit_expr(fcx, pv, &ty::Ty::Any.into_poly(), non_terminal_expr)?;
+                let node = self.visit_expr(fcx, pv, &ty::Ty::Any.into(), non_terminal_expr)?;
                 is_divergent = is_divergent || node.is_divergent();
 
                 Ok(node.expr)
@@ -607,12 +605,12 @@ impl<'types> RecursiveDefsCtx<'types> {
             .collect::<Result<Vec<hir::Expr<hir::Inferred>>>>()?;
 
         if is_divergent {
-            self.visit_expr(fcx, pv, &ty::Ty::Any.into_poly(), terminal_expr)?;
+            self.visit_expr(fcx, pv, &ty::Ty::Any.into(), terminal_expr)?;
 
             Ok(InferredNode {
                 expr: hir::Expr {
                     span,
-                    result_ty: ty::Ty::never().into_poly(),
+                    result_ty: ty::Ty::never().into(),
                     kind: hir::ExprKind::Do(inferred_exprs),
                 },
                 type_conds: vec![],
@@ -704,7 +702,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                     required_top_fun_type.ret().clone()
                 } else {
                     // Use Any as a last resort
-                    ty::Ty::Any.into_poly()
+                    ty::Ty::Any.into()
                 }
             }
         };
@@ -718,7 +716,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                         ty::TopFun::new(poly_purity.clone(), wanted_ret_type.clone()),
                         initial_param_type,
                     )
-                    .into_ty_ref();
+                    .into();
 
                     // We have a fully known type; allow recursive calls
                     self.var_to_type
@@ -729,7 +727,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             }
             purity::Decl::Free => {
                 // Functions start pure until proven otherwise
-                PurityVar::Free(Purity::Pure.into_poly())
+                PurityVar::Free(Purity::Pure.into())
             }
         };
 
@@ -755,7 +753,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             ty::TopFun::new(revealed_purity.clone(), revealed_ret_type.clone()),
             revealed_param_type,
         )
-        .into_ty_ref();
+        .into();
 
         let revealed_fun = hir::Fun::<hir::Inferred> {
             pvars: decl_fun.pvars,
@@ -899,7 +897,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         // Visit our rest arg next so it's grouped in the first phase
         let inferred_rest_arg_expr = if let Some(rest_arg_expr) = rest_arg_expr {
-            let tail_type = ty::Ty::List(param_iter.tail_type()).into_poly();
+            let tail_type = ty::Ty::List(param_iter.tail_type()).into();
             let wanted_tail_type = ty::subst::subst_poly(&non_fun_param_pta, &tail_type);
             let rest_arg_node = self.visit_expr(fcx, pv, &wanted_tail_type, rest_arg_expr)?;
 
@@ -940,7 +938,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         let ret_pta = ret_stx.into_poly_ty_args();
         let ret_type = if is_divergent {
-            ty::Ty::never().into_poly()
+            ty::Ty::never().into()
         } else {
             ty::subst::subst_poly(&ret_pta, fun_type.ret())
         };
@@ -987,9 +985,9 @@ impl<'types> RecursiveDefsCtx<'types> {
             None
         };
 
-        let subject_node = self.visit_expr(fcx, pv, &ty::Ty::Any.into_poly(), subject_expr)?;
+        let subject_node = self.visit_expr(fcx, pv, &ty::Ty::Any.into(), subject_expr)?;
 
-        let test_poly = test_ty.to_ty().into_ty_ref();
+        let test_poly = test_ty.to_ty().into();
         let subject_poly = subject_node.result_ty();
 
         let pred_result = ty::is_a::ty_ref_is_a(&fcx.tvars, subject_poly, &test_poly);
@@ -999,9 +997,9 @@ impl<'types> RecursiveDefsCtx<'types> {
                 let bool_result = pred_result.to_bool();
 
                 let result_ty = if subject_node.is_divergent() {
-                    ty::Ty::never().into_poly()
+                    ty::Ty::never().into()
                 } else {
-                    ty::Ty::LitBool(bool_result).into_poly()
+                    ty::Ty::LitBool(bool_result).into()
                 };
 
                 // Get rid of the predicate application entirely
@@ -1020,9 +1018,9 @@ impl<'types> RecursiveDefsCtx<'types> {
             }
             ty::is_a::Result::May => {
                 let poly_type = if subject_node.is_divergent() {
-                    ty::Ty::never().into_poly()
+                    ty::Ty::never().into()
                 } else {
-                    ty::Ty::Bool.into_poly()
+                    ty::Ty::Bool.into()
                 };
 
                 let type_conds = if let Some(var_id) = subject_var_id {
@@ -1076,7 +1074,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         use std::iter;
 
         let wanted_subject_list_type =
-            ty::Ty::List(ty::List::new(Box::new([ty::Ty::Any.into_poly()]), None)).into_poly();
+            ty::Ty::List(ty::List::new(Box::new([ty::Ty::Any.into()]), None)).into();
 
         let subject_list_node =
             self.visit_expr(fcx, pv, &wanted_subject_list_type, subject_list_expr)?;
@@ -1085,17 +1083,16 @@ impl<'types> RecursiveDefsCtx<'types> {
             .and_then(|mut iter| iter.next())
             .expect("Unable to extract type argument from type predicate rest list");
 
-        let pred_result =
-            ty::is_a::ty_ref_is_a(&fcx.tvars, subject_type, &test_ty.to_ty().into_ty_ref());
+        let pred_result = ty::is_a::ty_ref_is_a(&fcx.tvars, subject_type, &test_ty.to_ty().into());
 
         match pred_result {
             ty::is_a::Result::Yes | ty::is_a::Result::No => {
                 let bool_result = pred_result.to_bool();
 
                 let result_ty = if subject_list_node.is_divergent() {
-                    ty::Ty::never().into_poly()
+                    ty::Ty::never().into()
                 } else {
-                    ty::Ty::LitBool(bool_result).into_poly()
+                    ty::Ty::LitBool(bool_result).into()
                 };
 
                 Ok(InferredNode {
@@ -1113,9 +1110,9 @@ impl<'types> RecursiveDefsCtx<'types> {
             ty::is_a::Result::May => {
                 let poly_type = if subject_list_node.is_divergent() {
                     // The subject diverged so we diverged
-                    ty::Ty::never().into_poly()
+                    ty::Ty::never().into()
                 } else {
-                    ty::Ty::Bool.into_poly()
+                    ty::Ty::Bool.into()
                 };
 
                 Ok(InferredNode {
@@ -1163,11 +1160,11 @@ impl<'types> RecursiveDefsCtx<'types> {
             None
         };
 
-        let left_node = self.visit_expr(fcx, pv, &ty::Ty::Any.into_poly(), left_expr)?;
+        let left_node = self.visit_expr(fcx, pv, &ty::Ty::Any.into(), left_expr)?;
         let left_ty = left_node.result_ty();
         let left_is_literal = is_literal(left_ty);
 
-        let right_node = self.visit_expr(fcx, pv, &ty::Ty::Any.into_poly(), right_expr)?;
+        let right_node = self.visit_expr(fcx, pv, &ty::Ty::Any.into(), right_expr)?;
         let right_ty = right_node.result_ty();
         let right_is_literal = is_literal(right_ty);
 
@@ -1176,9 +1173,9 @@ impl<'types> RecursiveDefsCtx<'types> {
         if left_is_literal && right_is_literal && left_ty == right_ty {
             // We were comparing literal types; this is a static true
             let result_ty = if is_divergent {
-                ty::Ty::never().into_poly()
+                ty::Ty::never().into()
             } else {
-                ty::Ty::LitBool(true).into_poly()
+                ty::Ty::LitBool(true).into()
             };
 
             return Ok(InferredNode {
@@ -1199,9 +1196,9 @@ impl<'types> RecursiveDefsCtx<'types> {
             Ok(intersected_type) => intersected_type,
             Err(ty::intersect::Error::Disjoint) => {
                 let result_ty = if is_divergent {
-                    ty::Ty::never().into_poly()
+                    ty::Ty::never().into()
                 } else {
-                    ty::Ty::LitBool(false).into_poly()
+                    ty::Ty::LitBool(false).into()
                 };
 
                 return Ok(InferredNode {
@@ -1249,9 +1246,9 @@ impl<'types> RecursiveDefsCtx<'types> {
         };
 
         let result_ty = if is_divergent {
-            ty::Ty::never().into_poly()
+            ty::Ty::never().into()
         } else {
-            ty::Ty::Bool.into_poly()
+            ty::Ty::Bool.into()
         };
 
         Ok(InferredNode {
@@ -1289,7 +1286,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         let wanted_purity = match pv {
             PurityVar::Free(_) => {
                 // We're inferring the purity; this application can have any purity
-                Purity::Impure.into_poly()
+                Purity::Impure.into()
             }
             PurityVar::Known(purity_type) => {
                 // We have a specific declared purity
@@ -1297,7 +1294,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             }
         };
 
-        let wanted_fun_type = ty::TopFun::new(wanted_purity, required_type.clone()).into_ty_ref();
+        let wanted_fun_type = ty::TopFun::new(wanted_purity, required_type.clone()).into();
 
         let fun_node = self.visit_expr(fcx, pv, &wanted_fun_type, fun_expr)?;
         let revealed_fun_type = fun_node.result_ty().clone();
@@ -1422,7 +1419,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         let result_ty = if value_node.is_divergent() {
             // Value was divergent
-            ty::Ty::never().into_poly()
+            ty::Ty::never().into()
         } else {
             body_node.result_ty().clone()
         };
@@ -1450,7 +1447,7 @@ impl<'types> RecursiveDefsCtx<'types> {
     ) -> Result<InferredNode> {
         // Rust functions have their types validated by the RFI system when they're loaded
         // We just need to make sure we satisfy `required_type` and convert to an `InferredNode`
-        let poly_type = ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into_poly();
+        let poly_type = ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into();
         ensure_is_a(fcx, span, &poly_type, required_type)?;
 
         Ok(InferredNode {
@@ -1548,7 +1545,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             let member_type = value_type_iter
                 .clone()
                 .collect_rest(tvars)
-                .unwrap_or_else(|| ty::Ty::Any.into_poly());
+                .unwrap_or_else(|| ty::Ty::Any.into());
 
             let free_ty_id = self.insert_free_ty(member_type);
             Some(free_ty_id).filter(|_| is_param)
@@ -1563,7 +1560,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                 // If we're not a rest parameter we know our exact tail type. We can't subst
                 // the tail type in to the destruc because it only takes a member type.
                 // However, we can use the exact tail type whenever we reference the var.
-                VarType::Known(ty::Ty::List(value_type_iter.tail_type()).into_poly())
+                VarType::Known(ty::Ty::List(value_type_iter.tail_type()).into())
             };
 
             self.var_to_type.insert(var_id, var_type);
@@ -1627,7 +1624,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         };
 
         // Module definitions must be pure
-        let mut pv = PurityVar::Known(Purity::Pure.into_poly());
+        let mut pv = PurityVar::Known(Purity::Pure.into());
 
         // Mark all of our free typed variable as recursive
         let self_var_id = typeck::destruc::visit_vars(&destruc, |var_id, decl_type| {
@@ -1734,9 +1731,9 @@ impl InferCtx {
             pvars: purity::PVars::new(),
             tvars: ty::TVars::new(),
         };
-        let mut pv = PurityVar::Known(Purity::Impure.into_poly());
+        let mut pv = PurityVar::Known(Purity::Impure.into());
 
-        rdcx.visit_expr(&fcx, &mut pv, &ty::Ty::Any.into_poly(), expr)
+        rdcx.visit_expr(&fcx, &mut pv, &ty::Ty::Any.into(), expr)
     }
 }
 
@@ -1745,7 +1742,7 @@ fn ensure_main_type(
     main_var_id: hir::VarId,
     inferred_main_type: &ty::Poly,
 ) -> Result<()> {
-    let expected_main_type = ty::Fun::new_for_main().into_ty_ref();
+    let expected_main_type = ty::Fun::new_for_main().into();
     let empty_pvars = purity::PVars::new();
     let empty_tvars = ty::TVars::new();
 
@@ -1820,7 +1817,7 @@ mod test {
             pvars: purity::PVars::new(),
             tvars: ty::TVars::new(),
         };
-        let mut pv = PurityVar::Known(Purity::Pure.into_poly());
+        let mut pv = PurityVar::Known(Purity::Pure.into());
 
         rdcx.visit_expr(&fcx, &mut pv, required_type, expr)
             .map(|node| node.expr.result_ty)
@@ -1830,7 +1827,7 @@ mod test {
         let expr = expr_for_str(expr_str);
         let poly = hir::poly_for_str(ty_str);
 
-        assert_eq!(poly, type_for_expr(&ty::Ty::Any.into_poly(), expr).unwrap());
+        assert_eq!(poly, type_for_expr(&ty::Ty::Any.into(), expr).unwrap());
     }
 
     fn assert_constrained_type_for_expr(expected_ty_str: &str, expr_str: &str, guide_ty_str: &str) {
@@ -1844,10 +1841,7 @@ mod test {
     fn assert_type_error(err: &Error, expr_str: &str) {
         let expr = expr_for_str(expr_str);
 
-        assert_eq!(
-            err,
-            &type_for_expr(&ty::Ty::Any.into_poly(), expr).unwrap_err()
-        )
+        assert_eq!(err, &type_for_expr(&ty::Ty::Any.into(), expr).unwrap_err())
     }
 
     #[test]

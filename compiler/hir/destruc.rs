@@ -123,6 +123,6 @@ pub fn poly_for_list_destruc(list: &List<hir::Inferred>) -> ty::List<ty::Poly> {
 pub fn poly_for_destruc(destruc: &Destruc<hir::Inferred>) -> ty::Poly {
     match destruc {
         Destruc::Scalar(_, scalar) => scalar.ty().clone(),
-        Destruc::List(_, list) => ty::Ty::List(poly_for_list_destruc(list)).into_poly(),
+        Destruc::List(_, list) => ty::Ty::List(poly_for_list_destruc(list)).into(),
     }
 }

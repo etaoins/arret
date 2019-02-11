@@ -6,17 +6,6 @@ pub enum Purity {
     Impure,
 }
 
-impl Purity {
-    pub fn into_poly(self) -> Poly {
-        Poly::Fixed(self)
-    }
-
-    #[cfg(test)]
-    pub fn into_decl(self) -> Decl {
-        Decl::Known(Poly::Fixed(self))
-    }
-}
-
 new_global_id_type!(PVarId);
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
@@ -50,9 +39,9 @@ pub enum Poly {
     Var(PVarId),
 }
 
-impl Poly {
-    pub fn into_decl(self) -> Decl {
-        Decl::Known(self)
+impl From<Purity> for Poly {
+    fn from(purity: Purity) -> Self {
+        Poly::Fixed(purity)
     }
 }
 
@@ -64,4 +53,17 @@ impl Poly {
 pub enum Decl {
     Known(Poly),
     Free,
+}
+
+impl From<Poly> for Decl {
+    fn from(poly: Poly) -> Self {
+        Decl::Known(poly)
+    }
+}
+
+#[cfg(test)]
+impl From<Purity> for Decl {
+    fn from(purity: Purity) -> Self {
+        Decl::Known(Poly::Fixed(purity))
+    }
 }

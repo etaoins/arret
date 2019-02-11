@@ -25,7 +25,7 @@ pub fn type_for_decl_list_destruc(
             ty::Decl::Known(poly) => poly.clone(),
             ty::Decl::Free => guide_type_iter
                 .and_then(|guide_type_iter| guide_type_iter.collect_rest(tvars))
-                .unwrap_or_else(|| ty::Ty::Any.into_poly()),
+                .unwrap_or_else(|| ty::Ty::Any.into()),
         }),
         None => None,
     };
@@ -42,16 +42,14 @@ pub fn type_for_decl_destruc(
     match destruc {
         destruc::Destruc::Scalar(_, scalar) => match scalar.ty() {
             ty::Decl::Known(poly) => poly.clone(),
-            ty::Decl::Free => guide_type
-                .cloned()
-                .unwrap_or_else(|| ty::Ty::Any.into_poly()),
+            ty::Decl::Free => guide_type.cloned().unwrap_or_else(|| ty::Ty::Any.into()),
         },
 
         destruc::Destruc::List(_, list) => {
             let guide_type_iter =
                 guide_type.and_then(|guide_type| ListIterator::try_new_from_ty_ref(guide_type));
 
-            ty::Ty::List(type_for_decl_list_destruc(tvars, list, guide_type_iter)).into_poly()
+            ty::Ty::List(type_for_decl_list_destruc(tvars, list, guide_type_iter)).into()
         }
     }
 }

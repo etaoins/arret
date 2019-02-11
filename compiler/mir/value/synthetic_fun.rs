@@ -19,7 +19,7 @@ pub fn eq_pred_arret_fun() -> value::ArretFun {
         .map(|(name, var_id)| {
             hir::destruc::Destruc::Scalar(
                 EMPTY_SPAN,
-                hir::destruc::Scalar::new(Some(*var_id), (*name).into(), ty::Ty::Any.into_poly()),
+                hir::destruc::Scalar::new(Some(*var_id), (*name).into(), ty::Ty::Any.into()),
             )
         })
         .collect();
@@ -34,29 +34,29 @@ pub fn eq_pred_arret_fun() -> value::ArretFun {
             pvars: purity::PVars::new(),
             tvars: ty::TVars::new(),
 
-            purity: Purity::Pure.into_poly(),
+            purity: Purity::Pure.into(),
             params: hir::destruc::List::new(fixed_params, None),
-            ret_ty: ty::Ty::Bool.into_poly(),
+            ret_ty: ty::Ty::Bool.into(),
 
             body_expr: hir::Expr {
                 span: EMPTY_SPAN,
-                result_ty: ty::Ty::Bool.into_poly(),
+                result_ty: ty::Ty::Bool.into(),
                 kind: hir::ExprKind::App(Box::new(hir::App {
                     fun_expr: hir::Expr {
                         span: EMPTY_SPAN,
-                        result_ty: ty::Ty::EqPred.into_poly(),
+                        result_ty: ty::Ty::EqPred.into(),
                         kind: hir::ExprKind::EqPred,
                     },
                     ty_args: PolyTyArgs::empty(),
                     fixed_arg_exprs: vec![
                         hir::Expr {
                             span: EMPTY_SPAN,
-                            result_ty: ty::Ty::Any.into_poly(),
+                            result_ty: ty::Ty::Any.into(),
                             kind: hir::ExprKind::Ref(left_var_id),
                         },
                         hir::Expr {
                             span: EMPTY_SPAN,
-                            result_ty: ty::Ty::Any.into_poly(),
+                            result_ty: ty::Ty::Any.into(),
                             kind: hir::ExprKind::Ref(right_var_id),
                         },
                     ],
@@ -80,33 +80,33 @@ pub fn ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
             pvars: purity::PVars::new(),
             tvars: ty::TVars::new(),
 
-            purity: Purity::Pure.into_poly(),
+            purity: Purity::Pure.into(),
             params: hir::destruc::List::new(
                 vec![hir::destruc::Destruc::Scalar(
                     EMPTY_SPAN,
                     hir::destruc::Scalar::new(
                         Some(subject_var_id),
                         "subject".into(),
-                        ty::Ty::Any.into_poly(),
+                        ty::Ty::Any.into(),
                     ),
                 )],
                 None,
             ),
-            ret_ty: ty::Ty::Bool.into_poly(),
+            ret_ty: ty::Ty::Bool.into(),
 
             body_expr: hir::Expr {
                 span: EMPTY_SPAN,
-                result_ty: ty::Ty::Bool.into_poly(),
+                result_ty: ty::Ty::Bool.into(),
                 kind: hir::ExprKind::App(Box::new(hir::App {
                     fun_expr: hir::Expr {
                         span: EMPTY_SPAN,
-                        result_ty: ty::Ty::TyPred(test_ty).into_poly(),
+                        result_ty: ty::Ty::TyPred(test_ty).into(),
                         kind: hir::ExprKind::TyPred(test_ty),
                     },
                     ty_args: PolyTyArgs::empty(),
                     fixed_arg_exprs: vec![hir::Expr {
                         span: EMPTY_SPAN,
-                        result_ty: ty::Ty::Any.into_poly(),
+                        result_ty: ty::Ty::Any.into(),
                         kind: hir::ExprKind::Ref(subject_var_id),
                     }],
                     rest_arg_expr: None,

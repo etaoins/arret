@@ -61,8 +61,8 @@ where
         ty::Ty::Sym => ty::Ty::Sym,
         ty::Ty::EqPred => ty::Ty::EqPred,
         ty::Ty::TyPred(test_ty) => ty::Ty::TyPred(*test_ty),
-        ty::Ty::TopFun(top_fun) => subst_top_fun(stx, top_fun).into_ty(),
-        ty::Ty::Fun(fun) => subst_fun(stx, fun).into_ty(),
+        ty::Ty::TopFun(top_fun) => subst_top_fun(stx, top_fun).into(),
+        ty::Ty::Fun(fun) => subst_fun(stx, fun).into(),
         ty::Ty::Map(map) => ty::Ty::Map(Box::new(ty::Map::new(
             stx.subst_ty_ref(map.key()),
             stx.subst_ty_ref(map.value()),
@@ -108,7 +108,7 @@ impl<'tvars> Substitution for PolyTyArgs {
 
     fn subst_ty_ref(&self, poly: &ty::Poly) -> ty::Poly {
         match poly {
-            ty::Poly::Fixed(fixed) => subst_ty(self, fixed).into_poly(),
+            ty::Poly::Fixed(fixed) => subst_ty(self, fixed).into(),
             ty::Poly::Var(tvar_id) => {
                 if let Some(selected) = self.tvar_types().get(tvar_id) {
                     selected.clone()
@@ -166,7 +166,7 @@ impl Substitution for MonoToPoly {
     }
 
     fn subst_ty_ref(&self, mono: &ty::Mono) -> ty::Poly {
-        subst_ty(self, mono.as_ty()).into_poly()
+        subst_ty(self, mono.as_ty()).into()
     }
 
     fn as_poly_subst(&self) -> &PolyIdentity {
@@ -207,14 +207,14 @@ impl<'tyargs> Substitution for Monomorphise<'tyargs> {
 
     fn subst_ty_ref(&self, poly: &ty::Poly) -> ty::Mono {
         match poly {
-            ty::Poly::Fixed(fixed) => subst_ty(self, fixed).clone().into_mono(),
+            ty::Poly::Fixed(fixed) => subst_ty(self, fixed).clone().into(),
             ty::Poly::Var(tvar_id) => self
                 .mono_ty_args
                 .tvar_types()
                 .get(tvar_id)
                 .expect("Unable to find type argument during monomorphisation")
                 .clone()
-                .into_mono(),
+                .into(),
         }
     }
 
@@ -247,10 +247,10 @@ impl<'tyargs> Substitution for PartialMonomorphise<'tyargs> {
 
     fn subst_ty_ref(&self, poly: &ty::Poly) -> ty::Poly {
         match poly {
-            ty::Poly::Fixed(fixed) => subst_ty(self, fixed).into_poly(),
+            ty::Poly::Fixed(fixed) => subst_ty(self, fixed).into(),
             ty::Poly::Var(tvar_id) => {
                 if let Some(mono_ty) = self.mono_ty_args.tvar_types().get(tvar_id) {
-                    subst_ty(&MonoToPoly::new(), mono_ty).into_poly()
+                    subst_ty(&MonoToPoly::new(), mono_ty).into()
                 } else {
                     poly.clone()
                 }

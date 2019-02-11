@@ -188,7 +188,7 @@ impl<'vars> SelectCtx<'vars> {
                     .pvar_purities
                     .get(pvar_id)
                     .cloned()
-                    .unwrap_or_else(|| Purity::Impure.into_poly());
+                    .unwrap_or_else(|| Purity::Impure.into());
 
                 (*pvar_id, pvar_purity)
             })

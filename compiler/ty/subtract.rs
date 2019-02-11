@@ -16,7 +16,7 @@ impl Subtractable for ty::Mono {
         match ty::is_a::ty_ref_is_a(tvars, minuend_mono, subtrahend_mono) {
             ty::is_a::Result::Yes => {
                 // No type remains
-                ty::Ty::Union(Box::new([])).into_mono()
+                ty::Ty::Union(Box::new([])).into()
             }
             ty::is_a::Result::May => subtract_tys(
                 tvars,
@@ -44,7 +44,7 @@ impl Subtractable for ty::Poly {
         match ty::is_a::ty_ref_is_a(tvars, minuend_poly, subtrahend_poly) {
             ty::is_a::Result::Yes => {
                 // No type remains
-                ty::Ty::Union(Box::new([])).into_ty_ref()
+                ty::Ty::Union(Box::new([])).into()
             }
             ty::is_a::Result::May => match (minuend_poly, subtrahend_poly) {
                 (ty::Poly::Fixed(minuend_ty), ty::Poly::Fixed(subtrahend_ty)) => {
@@ -91,8 +91,8 @@ fn subtract_tys<S: Subtractable>(
         (ty::Ty::Bool, _) => subtract_ref_iters(
             tvars,
             [
-                ty::Ty::LitBool(false).into_ty_ref(),
-                ty::Ty::LitBool(true).into_ty_ref(),
+                ty::Ty::LitBool(false).into(),
+                ty::Ty::LitBool(true).into(),
             ]
                 .iter(),
             subtrahend_ref,
@@ -100,8 +100,8 @@ fn subtract_tys<S: Subtractable>(
         (ty::Ty::Num, _) => subtract_ref_iters(
             tvars,
             [
-                ty::Ty::Int.into_ty_ref(),
-                ty::Ty::Float.into_ty_ref(),
+                ty::Ty::Int.into(),
+                ty::Ty::Float.into(),
             ]
                 .iter(),
             subtrahend_ref,
@@ -127,16 +127,16 @@ fn subtract_tys<S: Subtractable>(
                 subtract_ref_iters(
                     tvars,
                     [
-                        ty::Ty::List(terminated_list).into_ty_ref(),
-                        ty::Ty::List(continued_list).into_ty_ref(),
+                        ty::Ty::List(terminated_list).into(),
+                        ty::Ty::List(continued_list).into(),
                     ].iter(),
                     subtrahend_ref,
                 )
             } else {
-                minuend_ty.clone().into_ty_ref()
+                minuend_ty.clone().into()
             }
         },
-        _ => minuend_ty.clone().into_ty_ref(),
+        _ => minuend_ty.clone().into(),
     }
 }
 
@@ -198,9 +198,9 @@ mod test {
     fn poly_substraction() {
         let mut tvars = ty::TVars::new();
 
-        let ptype1_unbounded = tvar_bounded_by(&mut tvars, ty::Ty::Any.into_poly());
-        let ptype2_sym = tvar_bounded_by(&mut tvars, ty::Ty::Sym.into_poly());
-        let ptype3_num = tvar_bounded_by(&mut tvars, ty::Ty::Num.into_poly());
+        let ptype1_unbounded = tvar_bounded_by(&mut tvars, ty::Ty::Any.into());
+        let ptype2_sym = tvar_bounded_by(&mut tvars, ty::Ty::Sym.into());
+        let ptype3_num = tvar_bounded_by(&mut tvars, ty::Ty::Num.into());
 
         let any_float = poly_for_str("Float");
         let any_int = poly_for_str("Int");
@@ -219,8 +219,9 @@ mod test {
         );
 
         // [PType3 Num] - Float = (∩ PType3 Int)
+        let ptype3_int_intersect: ty::Poly = ty::Ty::Intersect(Box::new([ptype3_num.clone(), any_int])).into();
         assert_eq!(
-            ty::Ty::Intersect(Box::new([ptype3_num.clone(), any_int])).into_poly(),
+            ptype3_int_intersect,
             subtract_ty_refs(&tvars, &ptype3_num, &any_float)
         );
     }

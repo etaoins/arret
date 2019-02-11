@@ -46,7 +46,7 @@ fn lower_polymorphic_var(scope: &Scope, tvar_datum: NsDatum) -> Result<Polymorph
             return Ok(PolymorphicVar {
                 span,
                 ident,
-                kind: PolymorphicVarKind::TVar(ty::TVar::new(source_name, ty::Ty::Any.into_poly())),
+                kind: PolymorphicVarKind::TVar(ty::TVar::new(source_name, ty::Ty::Any.into())),
             });
         }
         NsDatum::Vector(vector_span, vs) => {
@@ -139,10 +139,10 @@ fn lower_fun_cons(
         && scope.get_datum(&arg_iter.as_slice()[0]) == Some(&Binding::Prim(Prim::Ellipsis))
     {
         // Top function type in the form `(... -> ReturnType)`
-        Ok(top_fun.into_ty_ref())
+        Ok(top_fun.into())
     } else {
         let params = lower_list_cons(scope, arg_iter)?;
-        Ok(ty::Fun::new(purity::PVars::new(), ty::TVars::new(), top_fun, params).into_ty_ref())
+        Ok(ty::Fun::new(purity::PVars::new(), ty::TVars::new(), top_fun, params).into())
     }
 }
 
@@ -153,36 +153,36 @@ fn lower_ty_cons_apply(
     mut arg_iter: NsDataIter,
 ) -> Result<ty::Poly> {
     match ty_cons {
-        TyCons::List => Ok(ty::Ty::List(lower_list_cons(scope, arg_iter)?).into_poly()),
+        TyCons::List => Ok(ty::Ty::List(lower_list_cons(scope, arg_iter)?).into()),
         TyCons::Listof => {
             let rest_datum = expect_one_arg(span, arg_iter)?;
             let rest_poly = lower_poly(scope, rest_datum)?;
             let list_poly = ty::List::new(Box::new([]), Some(rest_poly));
 
-            Ok(ty::Ty::List(list_poly).into_poly())
+            Ok(ty::Ty::List(list_poly).into())
         }
         TyCons::Vector => {
             let member_tys = arg_iter
                 .map(|arg_datum| lower_poly(scope, arg_datum))
                 .collect::<Result<Box<[ty::Poly]>>>()?;
 
-            Ok(ty::Ty::Vector(member_tys).into_poly())
+            Ok(ty::Ty::Vector(member_tys).into())
         }
         TyCons::Vectorof => {
             let start_datum = expect_one_arg(span, arg_iter)?;
             let start_ty = lower_poly(scope, start_datum)?;
-            Ok(ty::Ty::Vectorof(Box::new(start_ty)).into_poly())
+            Ok(ty::Ty::Vectorof(Box::new(start_ty)).into())
         }
         TyCons::Set => {
             let member_datum = expect_one_arg(span, arg_iter)?;
             let member_ty = lower_poly(scope, member_datum)?;
-            Ok(ty::Ty::Set(Box::new(member_ty)).into_poly())
+            Ok(ty::Ty::Set(Box::new(member_ty)).into())
         }
         TyCons::Map => {
             expect_arg_count(span, 2, arg_iter.len())?;
             let key_ty = lower_poly(scope, arg_iter.next().unwrap())?;
             let value_ty = lower_poly(scope, arg_iter.next().unwrap())?;
-            Ok(ty::Ty::Map(Box::new(ty::Map::new(key_ty, value_ty))).into_poly())
+            Ok(ty::Ty::Map(Box::new(ty::Map::new(key_ty, value_ty))).into())
         }
         TyCons::Union => {
             let member_tys = arg_iter
@@ -202,7 +202,7 @@ fn lower_ty_cons_apply(
                 .map(|arg_datum| lower_poly(scope, arg_datum))
                 .collect::<Result<Box<[ty::Poly]>>>()?;
 
-            Ok(ty::Ty::Union(member_tys).into_poly())
+            Ok(ty::Ty::Union(member_tys).into())
         }
     }
 }
@@ -213,16 +213,16 @@ fn lower_literal_vec(literal_data: Vec<NsDatum>) -> Result<Vec<ty::Poly>> {
 
 fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
     match datum {
-        NsDatum::Bool(_, v) => Ok(ty::Ty::LitBool(v).into_poly()),
-        NsDatum::Keyword(_, name) => Ok(ty::Ty::LitSym(name).into_poly()),
-        NsDatum::Ident(_, ident) => Ok(ty::Ty::LitSym(ident.name().into()).into_poly()),
+        NsDatum::Bool(_, v) => Ok(ty::Ty::LitBool(v).into()),
+        NsDatum::Keyword(_, name) => Ok(ty::Ty::LitSym(name).into()),
+        NsDatum::Ident(_, ident) => Ok(ty::Ty::LitSym(ident.name().into()).into()),
         NsDatum::List(_, vs) => {
             let fixed_literals = lower_literal_vec(vs.into_vec())?;
-            Ok(ty::Ty::List(ty::List::new(fixed_literals.into_boxed_slice(), None)).into_poly())
+            Ok(ty::Ty::List(ty::List::new(fixed_literals.into_boxed_slice(), None)).into())
         }
         NsDatum::Vector(_, vs) => {
             let fixed_literals = lower_literal_vec(vs.into_vec())?;
-            Ok(ty::Ty::Vector(fixed_literals.into_boxed_slice()).into_poly())
+            Ok(ty::Ty::Vector(fixed_literals.into_boxed_slice()).into())
         }
         _ => Err(Error::new(
             datum.span(),
@@ -234,8 +234,8 @@ fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
 fn lower_ident(scope: &Scope, span: Span, ident: &Ident) -> Result<ty::Poly> {
     match scope.get_or_err(span, ident)? {
         Binding::Ty(ty) => Ok(ty.clone()),
-        Binding::TyPred(test_ty) => Ok(ty::Ty::TyPred(*test_ty).into_poly()),
-        Binding::EqPred => Ok(ty::Ty::EqPred.into_poly()),
+        Binding::TyPred(test_ty) => Ok(ty::Ty::TyPred(*test_ty).into()),
+        Binding::EqPred => Ok(ty::Ty::EqPred.into()),
         _ => Err(Error::new(span, ErrorKind::ValueAsTy)),
     }
 }
@@ -265,7 +265,7 @@ fn lower_polymorphic_poly(
     let inner_poly = lower_poly_data_iter(&inner_scope, span, data_iter)?;
 
     if let ty::Poly::Fixed(ty::Ty::Fun(fun)) = inner_poly {
-        Ok(ty::Ty::Fun(Box::new(fun.with_polymorphic_vars(pvars, tvars))).into_poly())
+        Ok(ty::Ty::Fun(Box::new(fun.with_polymorphic_vars(pvars, tvars))).into())
     } else {
         return Err(Error::new(
             span,
@@ -283,7 +283,7 @@ pub fn lower_poly_data_iter(
 
     if data_len == 0 {
         // This is by analogy with () being self-evaluating in expressions
-        return Ok(ty::Ty::List(ty::List::empty()).into_poly());
+        return Ok(ty::Ty::List(ty::List::empty()).into());
     }
 
     if scope.get_datum(&data_iter.as_slice()[0]) == Some(&Binding::Prim(Prim::All)) {
@@ -355,7 +355,7 @@ pub fn lower_polymorphic_vars(
                 Binding::Ty(ty::Poly::Var(tvar_id))
             }
             PolymorphicVarKind::TFixed(poly) => Binding::Ty(poly),
-            PolymorphicVarKind::Pure => Binding::Purity(Purity::Pure.into_poly()),
+            PolymorphicVarKind::Pure => Binding::Purity(Purity::Pure.into()),
         };
 
         inner_scope.insert_binding(span, ident, binding)?;
@@ -459,7 +459,7 @@ fn str_for_bounds(
         .map(|pvar| format!("[{} ->!]", pvar.source_name()));
 
     let tvar_parts = bound_tvars.values().map(|tvar| {
-        if tvar.bound() == &ty::Ty::Any.into_poly() {
+        if tvar.bound() == &ty::Ty::Any.into() {
             return tvar.source_name().into();
         }
 
@@ -645,7 +645,7 @@ mod test {
     fn true_literal() {
         let j = "true";
 
-        let expected = ty::Ty::LitBool(true).into_poly();
+        let expected = ty::Ty::LitBool(true).into();
         assert_poly_for_str(&expected, j);
     }
 
@@ -653,7 +653,7 @@ mod test {
     fn false_literal() {
         let j = "false";
 
-        let expected = ty::Ty::LitBool(false).into_poly();
+        let expected = ty::Ty::LitBool(false).into();
         assert_poly_for_str(&expected, j);
     }
 
@@ -661,7 +661,7 @@ mod test {
     fn sym_literal() {
         let j = "'foo";
 
-        let expected = ty::Ty::LitSym("foo".into()).into_poly();
+        let expected = ty::Ty::LitSym("foo".into()).into();
         assert_poly_for_str(&expected, j);
     }
 
@@ -669,7 +669,7 @@ mod test {
     fn keyword_literal() {
         let j = ":foo";
 
-        let expected = ty::Ty::LitSym(":foo".into()).into_poly();
+        let expected = ty::Ty::LitSym(":foo".into()).into();
         assert_poly_for_str(&expected, j);
     }
 
@@ -677,7 +677,7 @@ mod test {
     fn empty_list_literal() {
         let j = "()";
 
-        let expected = ty::Ty::List(ty::List::empty()).into_poly();
+        let expected = ty::Ty::List(ty::List::empty()).into();
         assert_poly_for_str(&expected, j);
     }
 
@@ -686,13 +686,10 @@ mod test {
         let j = "'(true false)";
 
         let expected = ty::Ty::List(ty::List::new(
-            Box::new([
-                ty::Ty::LitBool(true).into_poly(),
-                ty::Ty::LitBool(false).into_poly(),
-            ]),
+            Box::new([ty::Ty::LitBool(true).into(), ty::Ty::LitBool(false).into()]),
             None,
         ))
-        .into_poly();
+        .into();
         assert_poly_for_str(&expected, j);
     }
 
@@ -700,7 +697,7 @@ mod test {
     fn empty_vector_literal() {
         let j = "[]";
 
-        let expected = ty::Ty::Vector(Box::new([])).into_poly();
+        let expected = ty::Ty::Vector(Box::new([])).into();
         assert_poly_for_str(&expected, j);
     }
 
@@ -709,10 +706,10 @@ mod test {
         let j = "[true false]";
 
         let expected = ty::Ty::Vector(Box::new([
-            ty::Ty::LitBool(true).into_poly(),
-            ty::Ty::LitBool(false).into_poly(),
+            ty::Ty::LitBool(true).into(),
+            ty::Ty::LitBool(false).into(),
         ]))
-        .into_poly();
+        .into();
         assert_poly_for_str(&expected, j);
     }
 
@@ -720,7 +717,7 @@ mod test {
     fn ty_ref() {
         let j = "Sym";
 
-        let expected = ty::Ty::Sym.into_poly();
+        let expected = ty::Ty::Sym.into();
         assert_poly_for_str(&expected, j);
     }
 
@@ -728,8 +725,8 @@ mod test {
     fn listof_cons() {
         let j = "(Listof true)";
 
-        let inner_ty = ty::Ty::LitBool(true).into_poly();
-        let expected = ty::Ty::List(ty::List::new(Box::new([]), Some(inner_ty))).into_poly();
+        let inner_ty = ty::Ty::LitBool(true).into();
+        let expected = ty::Ty::List(ty::List::new(Box::new([]), Some(inner_ty))).into();
 
         assert_poly_for_str(&expected, j);
     }
@@ -739,13 +736,10 @@ mod test {
         let j = "(List true false)";
 
         let expected = ty::Ty::List(ty::List::new(
-            Box::new([
-                ty::Ty::LitBool(true).into_poly(),
-                ty::Ty::LitBool(false).into_poly(),
-            ]),
+            Box::new([ty::Ty::LitBool(true).into(), ty::Ty::LitBool(false).into()]),
             None,
         ))
-        .into_poly();
+        .into();
 
         assert_poly_for_str(&expected, j);
     }
@@ -755,10 +749,10 @@ mod test {
         let j = "(List true false ...)";
 
         let expected = ty::Ty::List(ty::List::new(
-            Box::new([ty::Ty::LitBool(true).into_poly()]),
-            Some(ty::Ty::LitBool(false).into_poly()),
+            Box::new([ty::Ty::LitBool(true).into()]),
+            Some(ty::Ty::LitBool(false).into()),
         ))
-        .into_poly();
+        .into();
 
         assert_poly_for_str(&expected, j);
     }
@@ -767,8 +761,8 @@ mod test {
     fn vectorof_cons() {
         let j = "(Vectorof true)";
 
-        let inner_ty = ty::Ty::LitBool(true).into_poly();
-        let expected = ty::Ty::Vectorof(Box::new(inner_ty)).into_poly();
+        let inner_ty = ty::Ty::LitBool(true).into();
+        let expected = ty::Ty::Vectorof(Box::new(inner_ty)).into();
 
         assert_poly_for_str(&expected, j);
     }
@@ -778,10 +772,10 @@ mod test {
         let j = "(Vector true false)";
 
         let expected = ty::Ty::Vector(Box::new([
-            ty::Ty::LitBool(true).into_poly(),
-            ty::Ty::LitBool(false).into_poly(),
+            ty::Ty::LitBool(true).into(),
+            ty::Ty::LitBool(false).into(),
         ]))
-        .into_poly();
+        .into();
 
         assert_poly_for_str(&expected, j);
     }
@@ -793,10 +787,10 @@ mod test {
         let expected = ty::Fun::new(
             purity::PVars::new(),
             ty::TVars::new(),
-            ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
+            ty::TopFun::new(Purity::Pure.into(), ty::Ty::LitBool(true).into()),
             ty::List::empty(),
         )
-        .into_ty_ref();
+        .into();
 
         assert_poly_for_str(&expected, j);
     }
@@ -808,13 +802,10 @@ mod test {
         let expected = ty::Fun::new(
             purity::PVars::new(),
             ty::TVars::new(),
-            ty::TopFun::new(
-                Purity::Impure.into_poly(),
-                ty::Ty::LitBool(true).into_poly(),
-            ),
+            ty::TopFun::new(Purity::Impure.into(), ty::Ty::LitBool(true).into()),
             ty::List::empty(),
         )
-        .into_ty_ref();
+        .into();
 
         assert_poly_for_str(&expected, j);
     }
@@ -826,10 +817,10 @@ mod test {
         let expected = ty::Fun::new(
             purity::PVars::new(),
             ty::TVars::new(),
-            ty::TopFun::new(Purity::Pure.into_poly(), ty::Ty::LitBool(true).into_poly()),
-            ty::List::new(Box::new([ty::Ty::LitBool(false).into_poly()]), None),
+            ty::TopFun::new(Purity::Pure.into(), ty::Ty::LitBool(true).into()),
+            ty::List::new(Box::new([ty::Ty::LitBool(false).into()]), None),
         )
-        .into_ty_ref();
+        .into();
 
         assert_poly_for_str(&expected, j);
     }
@@ -841,16 +832,10 @@ mod test {
         let expected = ty::Fun::new(
             purity::PVars::new(),
             ty::TVars::new(),
-            ty::TopFun::new(
-                Purity::Impure.into_poly(),
-                ty::Ty::LitBool(true).into_poly(),
-            ),
-            ty::List::new(
-                Box::new([ty::Ty::Str.into_poly()]),
-                Some(ty::Ty::Sym.into_poly()),
-            ),
+            ty::TopFun::new(Purity::Impure.into(), ty::Ty::LitBool(true).into()),
+            ty::List::new(Box::new([ty::Ty::Str.into()]), Some(ty::Ty::Sym.into())),
         )
-        .into_ty_ref();
+        .into();
 
         assert_poly_for_str(&expected, j);
     }
@@ -860,10 +845,10 @@ mod test {
         let j = "(... ->! true)";
 
         let expected = ty::Ty::TopFun(Box::new(ty::TopFun::new(
-            Purity::Impure.into_poly(),
-            ty::Ty::LitBool(true).into_poly(),
+            Purity::Impure.into(),
+            ty::Ty::LitBool(true).into(),
         )))
-        .into_poly();
+        .into();
 
         assert_poly_for_str(&expected, j);
     }
@@ -872,7 +857,7 @@ mod test {
     fn type_predicate() {
         let j = "str?";
 
-        let expected = ty::Ty::TyPred(ty::pred::TestTy::Str).into_poly();
+        let expected = ty::Ty::TyPred(ty::pred::TestTy::Str).into();
         assert_poly_for_str(&expected, j);
     }
 
@@ -880,7 +865,7 @@ mod test {
     fn equality_predicate() {
         let j = "=";
 
-        let expected = ty::Ty::EqPred.into_poly();
+        let expected = ty::Ty::EqPred.into();
         assert_poly_for_str(&expected, j);
     }
 
@@ -888,8 +873,8 @@ mod test {
     fn set_cons() {
         let j = "(Setof true)";
 
-        let inner_ty = ty::Ty::LitBool(true).into_poly();
-        let expected = ty::Ty::Set(Box::new(inner_ty)).into_poly();
+        let inner_ty = ty::Ty::LitBool(true).into();
+        let expected = ty::Ty::Set(Box::new(inner_ty)).into();
 
         assert_poly_for_str(&expected, j);
     }
@@ -900,11 +885,7 @@ mod test {
 
         let key_ty = ty::Ty::LitBool(true);
         let value_ty = ty::Ty::LitBool(false);
-        let expected = ty::Ty::Map(Box::new(ty::Map::new(
-            key_ty.into_poly(),
-            value_ty.into_poly(),
-        )))
-        .into_poly();
+        let expected = ty::Ty::Map(Box::new(ty::Map::new(key_ty.into(), value_ty.into()))).into();
 
         assert_poly_for_str(&expected, j);
     }
@@ -912,7 +893,7 @@ mod test {
     #[test]
     fn merged_union_cons() {
         let j = "(UnifyingU true false)";
-        let expected = ty::Ty::Bool.into_poly();
+        let expected = ty::Ty::Bool.into();
 
         assert_poly_for_str(&expected, j);
     }

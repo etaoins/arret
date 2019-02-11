@@ -211,7 +211,7 @@ fn lower_scalar_destruc(
             let ty = lower_poly(scope, data.pop().unwrap())?;
 
             let (ident, span) = expect_ident_and_span(data.pop().unwrap())?;
-            lower_ident_destruc(scope, span, ident, ty.into_decl())
+            lower_ident_destruc(scope, span, ident, ty.into())
         }
         _ => Err(Error::new(
             destruc_datum.span(),
@@ -386,11 +386,11 @@ fn lower_fun(outer_scope: &Scope, span: Span, mut arg_iter: NsDataIter) -> Resul
     if arg_iter.len() >= 2 {
         if let Some(poly_purity) = try_lower_purity(&fun_scope, &arg_iter.as_slice()[0]) {
             arg_iter.next();
-            purity = poly_purity.into_decl();
+            purity = poly_purity.into();
 
             let ret_datum = arg_iter.next().unwrap();
             if fun_scope.get_datum(&ret_datum) != Some(&Binding::Prim(Prim::Wildcard)) {
-                ret_ty = lower_poly(&fun_scope, ret_datum)?.into_decl();
+                ret_ty = lower_poly(&fun_scope, ret_datum)?.into();
             }
         }
     }
@@ -542,7 +542,7 @@ fn include_rfi_module(span: Span, rfi_module: rfi::Module) -> LoweredModule {
                 destruc::Scalar::new(
                     Some(var_id),
                     name.into(),
-                    ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into_decl(),
+                    ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into(),
                 ),
             ),
             value_expr: Expr::new(span, ExprKind::RustFun(Box::new(rust_fun))),
@@ -1088,7 +1088,7 @@ mod test {
             ExprKind::Fun(Box::new(Fun {
                 pvars: purity::PVars::new(),
                 tvars: ty::TVars::new(),
-                purity: Purity::Pure.into_decl(),
+                purity: Purity::Pure.into(),
                 params: destruc::List::new(vec![], None),
                 ret_ty: ty::Decl::Free,
                 body_expr: Datum::Int(t2s(u), 1).into(),
@@ -1109,9 +1109,9 @@ mod test {
             ExprKind::Fun(Box::new(Fun {
                 pvars: purity::PVars::new(),
                 tvars: ty::TVars::new(),
-                purity: Purity::Pure.into_decl(),
+                purity: Purity::Pure.into(),
                 params: destruc::List::new(vec![], None),
-                ret_ty: ty::Ty::Int.into_decl(),
+                ret_ty: ty::Ty::Int.into(),
                 body_expr: Datum::Int(t2s(u), 1).into(),
             })),
         );

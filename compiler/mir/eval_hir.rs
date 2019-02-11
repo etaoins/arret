@@ -301,7 +301,7 @@ impl EvalHirCtx {
         let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
 
         // TODO: Support polymorphic purity
-        let impure = arret_fun.fun_expr.purity != purity::Purity::Pure.into_poly();
+        let impure = arret_fun.fun_expr.purity != purity::Purity::Pure.into();
 
         let ret_reg = b.push_reg(
             span,
@@ -1315,7 +1315,7 @@ impl EvalHirCtx {
             &mut fcx,
             &mut None,
             EMPTY_SPAN,
-            &ty::Ty::unit().into_mono(),
+            &ty::Ty::unit().into(),
             &main_value,
             ApplyArgs {
                 ty_args: &PolyTyArgs::empty(),

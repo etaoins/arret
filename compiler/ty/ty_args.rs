@@ -36,7 +36,7 @@ impl PolyTyArgs {
     pub fn from_upper_bound(pvars: &purity::PVars, tvars: &ty::TVars) -> PolyTyArgs {
         let pvar_purities = pvars
             .keys()
-            .map(|pvar_id| (*pvar_id, Purity::Impure.into_poly()))
+            .map(|pvar_id| (*pvar_id, Purity::Impure.into()))
             .collect();
 
         let tvar_types = tvars

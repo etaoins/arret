@@ -53,7 +53,7 @@ pub fn rust_fun_purity_upper_bound(rust_fun: &hir::rfi::Fun) -> Purity {
 
     if arret_fun_type.ret().is_never() {
         Purity::Impure
-    } else if arret_fun_type.purity() == &Purity::Pure.into_poly() {
+    } else if arret_fun_type.purity() == &Purity::Pure.into() {
         Purity::Pure
     } else {
         Purity::Impure
@@ -143,7 +143,7 @@ pub fn ops_for_rust_fun(
     } = build_load_arg_list_value(&mut b, &wanted_abi);
 
     let purity_upper_bound = rust_fun_purity_upper_bound(rust_fun);
-    let ret_ty = ty::Ty::Any.into_mono();
+    let ret_ty = ty::Ty::Any.into();
     let app_result = build_rust_fun_app(
         ehx,
         &mut b,
