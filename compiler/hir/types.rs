@@ -842,10 +842,10 @@ mod test {
     fn top_impure_fun() {
         let j = "(... ->! true)";
 
-        let expected = ty::Ty::TopFun(Box::new(ty::TopFun::new(
+        let expected = ty::TopFun::new(
             Purity::Impure.into(),
             ty::Ty::LitBool(true).into(),
-        )))
+        )
         .into();
 
         assert_ty_for_str(expected, j);
