@@ -152,47 +152,44 @@ fn lower_ty_cons_apply(
     ty_cons: TyCons,
     mut arg_iter: NsDataIter,
 ) -> Result<ty::Poly> {
-    match ty_cons {
-        TyCons::List => Ok(ty::Ty::List(lower_list_cons(scope, arg_iter)?).into()),
+    Ok(match ty_cons {
+        TyCons::List => ty::Ty::List(lower_list_cons(scope, arg_iter)?).into(),
         TyCons::Listof => {
             let rest_datum = expect_one_arg(span, arg_iter)?;
             let rest_poly = lower_poly(scope, rest_datum)?;
             let list_poly = ty::List::new(Box::new([]), Some(rest_poly));
 
-            Ok(ty::Ty::List(list_poly).into())
+            ty::Ty::List(list_poly).into()
         }
         TyCons::Vector => {
             let member_tys = arg_iter
                 .map(|arg_datum| lower_poly(scope, arg_datum))
                 .collect::<Result<Box<[ty::Poly]>>>()?;
 
-            Ok(ty::Ty::Vector(member_tys).into())
+            ty::Ty::Vector(member_tys).into()
         }
         TyCons::Vectorof => {
             let start_datum = expect_one_arg(span, arg_iter)?;
             let start_ty = lower_poly(scope, start_datum)?;
-            Ok(ty::Ty::Vectorof(Box::new(start_ty)).into())
+            ty::Ty::Vectorof(Box::new(start_ty)).into()
         }
         TyCons::Set => {
             let member_datum = expect_one_arg(span, arg_iter)?;
             let member_ty = lower_poly(scope, member_datum)?;
-            Ok(ty::Ty::Set(Box::new(member_ty)).into())
+            ty::Ty::Set(Box::new(member_ty)).into()
         }
         TyCons::Map => {
             expect_arg_count(span, 2, arg_iter.len())?;
             let key_ty = lower_poly(scope, arg_iter.next().unwrap())?;
             let value_ty = lower_poly(scope, arg_iter.next().unwrap())?;
-            Ok(ty::Ty::Map(Box::new(ty::Map::new(key_ty, value_ty))).into())
+            ty::Ty::Map(Box::new(ty::Map::new(key_ty, value_ty))).into()
         }
         TyCons::Union => {
             let member_tys = arg_iter
                 .map(|arg_datum| lower_poly(scope, arg_datum))
                 .collect::<Result<Vec<ty::Poly>>>()?;
 
-            Ok(ty::unify::unify_ty_ref_iter(
-                scope.tvars(),
-                member_tys.into_iter(),
-            ))
+            ty::unify::unify_ty_ref_iter(scope.tvars(), member_tys.into_iter())
         }
         #[cfg(test)]
         TyCons::RawU => {
@@ -202,9 +199,9 @@ fn lower_ty_cons_apply(
                 .map(|arg_datum| lower_poly(scope, arg_datum))
                 .collect::<Result<Box<[ty::Poly]>>>()?;
 
-            Ok(ty::Ty::Union(member_tys).into())
+            ty::Ty::Union(member_tys).into()
         }
-    }
+    })
 }
 
 fn lower_literal_vec(literal_data: Vec<NsDatum>) -> Result<Vec<ty::Poly>> {
@@ -842,11 +839,7 @@ mod test {
     fn top_impure_fun() {
         let j = "(... ->! true)";
 
-        let expected = ty::TopFun::new(
-            Purity::Impure.into(),
-            ty::Ty::LitBool(true).into(),
-        )
-        .into();
+        let expected = ty::TopFun::new(Purity::Impure.into(), ty::Ty::LitBool(true).into()).into();
 
         assert_ty_for_str(expected, j);
     }
