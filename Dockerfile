@@ -13,8 +13,8 @@ RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang-7 100
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain $rust_toolchain
 ENV PATH "/root/.cargo/bin:${PATH}"
 
-ADD . /root/arret
-WORKDIR /root/arret
+ADD . /opt/arret
+WORKDIR /opt/arret
 
 RUN cargo build --release
 
@@ -24,13 +24,16 @@ FROM debian:buster-slim AS repl
 
 ARG vcs_ref
 
-COPY --from=full-compiler /root/arret/.arret-root /root/arret/.arret-root
-COPY --from=full-compiler /root/arret/stdlib/arret /root/arret/stdlib/arret
-COPY --from=full-compiler /root/arret/target/release/arret /root/arret/target/release/arret
-COPY --from=full-compiler /root/arret/target/release/*.so /root/arret/target/release/
+COPY --from=full-compiler /opt/arret/.arret-root /opt/arret/.arret-root
+COPY --from=full-compiler /opt/arret/stdlib/arret /opt/arret/stdlib/arret
+COPY --from=full-compiler /opt/arret/target/release/arret /opt/arret/target/release/arret
+COPY --from=full-compiler /opt/arret/target/release/*.so /opt/arret/target/release/
 
-WORKDIR /root/arret
-ENTRYPOINT ["/root/arret/target/release/arret"]
+RUN groupadd arret && useradd -r -g arret arret
+USER arret:arret
+
+WORKDIR /opt/arret
+ENTRYPOINT ["/opt/arret/target/release/arret"]
 CMD ["repl"]
 
 # Label the commit that was used to build this
