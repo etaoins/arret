@@ -619,12 +619,13 @@ pub fn tvar_bounded_by(tvars: &mut ty::TVars, bound: ty::Poly) -> ty::Poly {
 mod test {
     use super::*;
 
-    fn assert_poly_for_str(expected: &ty::Poly, datum_str: &str) {
-        assert_eq!(*expected, poly_for_str(datum_str));
+    fn assert_ty_for_str(expected: ty::Ty<ty::Poly>, datum_str: &str) {
+        let expected_poly = ty::Poly::from(expected);
+        assert_eq!(expected_poly, poly_for_str(datum_str));
 
         // Try to round trip this to make sure str_for_poly works
-        let recovered_str = str_for_poly(&purity::PVars::new(), &ty::TVars::new(), &expected);
-        assert_eq!(*expected, poly_for_str(&recovered_str));
+        let recovered_str = str_for_poly(&purity::PVars::new(), &ty::TVars::new(), &expected_poly);
+        assert_eq!(expected_poly, poly_for_str(&recovered_str));
     }
 
     /// This asserts that a type uses an exact string in str_for_poly
@@ -645,40 +646,40 @@ mod test {
     fn true_literal() {
         let j = "true";
 
-        let expected = ty::Ty::LitBool(true).into();
-        assert_poly_for_str(&expected, j);
+        let expected = ty::Ty::LitBool(true);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn false_literal() {
         let j = "false";
 
-        let expected = ty::Ty::LitBool(false).into();
-        assert_poly_for_str(&expected, j);
+        let expected = ty::Ty::LitBool(false);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn sym_literal() {
         let j = "'foo";
 
-        let expected = ty::Ty::LitSym("foo".into()).into();
-        assert_poly_for_str(&expected, j);
+        let expected = ty::Ty::LitSym("foo".into());
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn keyword_literal() {
         let j = ":foo";
 
-        let expected = ty::Ty::LitSym(":foo".into()).into();
-        assert_poly_for_str(&expected, j);
+        let expected = ty::Ty::LitSym(":foo".into());
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn empty_list_literal() {
         let j = "()";
 
-        let expected = ty::Ty::List(ty::List::empty()).into();
-        assert_poly_for_str(&expected, j);
+        let expected = ty::Ty::List(ty::List::empty());
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -688,17 +689,17 @@ mod test {
         let expected = ty::Ty::List(ty::List::new(
             Box::new([ty::Ty::LitBool(true).into(), ty::Ty::LitBool(false).into()]),
             None,
-        ))
-        .into();
-        assert_poly_for_str(&expected, j);
+        ));
+
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn empty_vector_literal() {
         let j = "[]";
 
-        let expected = ty::Ty::Vector(Box::new([])).into();
-        assert_poly_for_str(&expected, j);
+        let expected = ty::Ty::Vector(Box::new([]));
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -708,27 +709,27 @@ mod test {
         let expected = ty::Ty::Vector(Box::new([
             ty::Ty::LitBool(true).into(),
             ty::Ty::LitBool(false).into(),
-        ]))
-        .into();
-        assert_poly_for_str(&expected, j);
+        ]));
+
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn ty_ref() {
         let j = "Sym";
 
-        let expected = ty::Ty::Sym.into();
-        assert_poly_for_str(&expected, j);
+        let expected = ty::Ty::Sym;
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn listof_cons() {
         let j = "(Listof true)";
 
-        let inner_ty = ty::Ty::LitBool(true).into();
-        let expected = ty::Ty::List(ty::List::new(Box::new([]), Some(inner_ty))).into();
+        let inner_poly = ty::Ty::LitBool(true).into();
+        let expected = ty::Ty::List(ty::List::new(Box::new([]), Some(inner_poly)));
 
-        assert_poly_for_str(&expected, j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -738,10 +739,9 @@ mod test {
         let expected = ty::Ty::List(ty::List::new(
             Box::new([ty::Ty::LitBool(true).into(), ty::Ty::LitBool(false).into()]),
             None,
-        ))
-        .into();
+        ));
 
-        assert_poly_for_str(&expected, j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -751,20 +751,19 @@ mod test {
         let expected = ty::Ty::List(ty::List::new(
             Box::new([ty::Ty::LitBool(true).into()]),
             Some(ty::Ty::LitBool(false).into()),
-        ))
-        .into();
+        ));
 
-        assert_poly_for_str(&expected, j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn vectorof_cons() {
         let j = "(Vectorof true)";
 
-        let inner_ty = ty::Ty::LitBool(true).into();
-        let expected = ty::Ty::Vectorof(Box::new(inner_ty)).into();
+        let inner_poly = ty::Ty::LitBool(true).into();
+        let expected = ty::Ty::Vectorof(Box::new(inner_poly));
 
-        assert_poly_for_str(&expected, j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -774,10 +773,9 @@ mod test {
         let expected = ty::Ty::Vector(Box::new([
             ty::Ty::LitBool(true).into(),
             ty::Ty::LitBool(false).into(),
-        ]))
-        .into();
+        ]));
 
-        assert_poly_for_str(&expected, j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -792,7 +790,7 @@ mod test {
         )
         .into();
 
-        assert_poly_for_str(&expected, j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -807,7 +805,7 @@ mod test {
         )
         .into();
 
-        assert_poly_for_str(&expected, j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -822,7 +820,7 @@ mod test {
         )
         .into();
 
-        assert_poly_for_str(&expected, j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -837,7 +835,7 @@ mod test {
         )
         .into();
 
-        assert_poly_for_str(&expected, j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -850,33 +848,33 @@ mod test {
         )))
         .into();
 
-        assert_poly_for_str(&expected, j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn type_predicate() {
         let j = "str?";
 
-        let expected = ty::Ty::TyPred(ty::pred::TestTy::Str).into();
-        assert_poly_for_str(&expected, j);
+        let expected = ty::Ty::TyPred(ty::pred::TestTy::Str);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn equality_predicate() {
         let j = "=";
 
-        let expected = ty::Ty::EqPred.into();
-        assert_poly_for_str(&expected, j);
+        let expected = ty::Ty::EqPred;
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn set_cons() {
         let j = "(Setof true)";
 
-        let inner_ty = ty::Ty::LitBool(true).into();
-        let expected = ty::Ty::Set(Box::new(inner_ty)).into();
+        let inner_poly = ty::Ty::LitBool(true).into();
+        let expected = ty::Ty::Set(Box::new(inner_poly));
 
-        assert_poly_for_str(&expected, j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
@@ -885,17 +883,17 @@ mod test {
 
         let key_ty = ty::Ty::LitBool(true);
         let value_ty = ty::Ty::LitBool(false);
-        let expected = ty::Ty::Map(Box::new(ty::Map::new(key_ty.into(), value_ty.into()))).into();
+        let expected = ty::Ty::Map(Box::new(ty::Map::new(key_ty.into(), value_ty.into())));
 
-        assert_poly_for_str(&expected, j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
     fn merged_union_cons() {
         let j = "(UnifyingU true false)";
-        let expected = ty::Ty::Bool.into();
+        let expected = ty::Ty::Bool;
 
-        assert_poly_for_str(&expected, j);
+        assert_ty_for_str(expected, j);
     }
 
     #[test]
