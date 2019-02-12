@@ -20,7 +20,7 @@ use crate::hir::util::{
     expect_arg_count, expect_ident_and_span, expect_one_arg, try_take_rest_arg,
 };
 use crate::hir::Lowered;
-use crate::hir::{App, Cond, Def, Expr, ExprKind, Fun, Let, VarId};
+use crate::hir::{App, Cond, DeclPurity, DeclTy, Def, Expr, ExprKind, Fun, Let, VarId};
 use crate::source::{SourceFileId, SourceLoader};
 use crate::ty;
 use crate::ty::purity;
@@ -175,7 +175,7 @@ fn lower_ident_destruc(
     scope: &mut Scope,
     span: Span,
     ident: Ident,
-    decl_ty: ty::Decl,
+    decl_ty: DeclTy,
 ) -> Result<destruc::Scalar<Lowered>> {
     match scope.get(&ident) {
         Some(Binding::Prim(Prim::Wildcard)) => {
@@ -200,7 +200,7 @@ fn lower_scalar_destruc(
     destruc_datum: NsDatum,
 ) -> Result<destruc::Scalar<Lowered>> {
     match destruc_datum {
-        NsDatum::Ident(span, ident) => lower_ident_destruc(scope, span, ident, ty::Decl::Free),
+        NsDatum::Ident(span, ident) => lower_ident_destruc(scope, span, ident, DeclTy::Free),
         NsDatum::Vector(span, vs) => {
             let mut data = vs.into_vec();
 
@@ -380,8 +380,8 @@ fn lower_fun(outer_scope: &Scope, span: Span, mut arg_iter: NsDataIter) -> Resul
     };
 
     // Determine if we have a purity and return type after the parameters, eg (param) -> RetTy
-    let mut purity = purity::Decl::Free;
-    let mut ret_ty = ty::Decl::Free;
+    let mut purity = DeclPurity::Free;
+    let mut ret_ty = DeclTy::Free;
 
     if arg_iter.len() >= 2 {
         if let Some(poly_purity) = try_lower_purity(&fun_scope, &arg_iter.as_slice()[0]) {
@@ -1040,10 +1040,8 @@ mod test {
         let u = "^^^^^^^^^^^";
         let v = "        ^  ";
 
-        let destruc = destruc::Destruc::Scalar(
-            t2s(t),
-            destruc::Scalar::new(None, "_".into(), ty::Decl::Free),
-        );
+        let destruc =
+            destruc::Destruc::Scalar(t2s(t), destruc::Scalar::new(None, "_".into(), DeclTy::Free));
 
         let expected = Expr::new(
             t2s(u),
@@ -1067,9 +1065,9 @@ mod test {
             ExprKind::Fun(Box::new(Fun {
                 pvars: purity::PVars::new(),
                 tvars: ty::TVars::new(),
-                purity: purity::Decl::Free,
+                purity: DeclPurity::Free,
                 params: destruc::List::new(vec![], None),
-                ret_ty: ty::Decl::Free,
+                ret_ty: DeclTy::Free,
                 body_expr: Expr::new(EMPTY_SPAN, ExprKind::Do(vec![])),
             })),
         );
@@ -1090,7 +1088,7 @@ mod test {
                 tvars: ty::TVars::new(),
                 purity: Purity::Pure.into(),
                 params: destruc::List::new(vec![], None),
-                ret_ty: ty::Decl::Free,
+                ret_ty: DeclTy::Free,
                 body_expr: Datum::Int(t2s(u), 1).into(),
             })),
         );

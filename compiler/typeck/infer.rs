@@ -285,8 +285,8 @@ impl<'types> RecursiveDefsCtx<'types> {
 
                 typeck::destruc::visit_vars(&hir_def.destruc, |var_id, decl_type| {
                     let var_type = match decl_type {
-                        ty::Decl::Known(poly_type) => VarType::Known(poly_type.clone()),
-                        ty::Decl::Free => {
+                        hir::DeclTy::Known(poly_type) => VarType::Known(poly_type.clone()),
+                        hir::DeclTy::Free => {
                             // Record the definition ID so we can deal with forward type references
                             VarType::Pending(def_id)
                         }
@@ -696,8 +696,8 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         // Use the declared return type if possible
         let wanted_ret_type = match decl_fun.ret_ty {
-            ty::Decl::Known(poly) => poly.clone(),
-            ty::Decl::Free => {
+            hir::DeclTy::Known(poly) => poly.clone(),
+            hir::DeclTy::Free => {
                 decl_tys_are_known = false;
 
                 if let Some(ref required_top_fun_type) = required_top_fun_type {
@@ -711,7 +711,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         };
 
         let mut fun_pv = match decl_fun.purity {
-            purity::Decl::Known(poly_purity) => {
+            hir::DeclPurity::Known(poly_purity) => {
                 if let (Some(self_var_id), true) = (self_var_id, decl_tys_are_known) {
                     let self_type = ty::Fun::new(
                         decl_fun.pvars.clone(),
@@ -728,7 +728,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
                 PurityVar::Known(poly_purity)
             }
-            purity::Decl::Free => {
+            hir::DeclPurity::Free => {
                 // Functions start pure until proven otherwise
                 PurityVar::Free(Purity::Pure.into())
             }
@@ -1399,8 +1399,8 @@ impl<'types> RecursiveDefsCtx<'types> {
         // Pre-bind our variables to deal with recursive definitions
         let self_var_id = typeck::destruc::visit_vars(&destruc, |var_id, decl_type| {
             let var_type = match decl_type {
-                ty::Decl::Known(poly_type) => VarType::Known(poly_type.clone()),
-                ty::Decl::Free => VarType::Recursive,
+                hir::DeclTy::Known(poly_type) => VarType::Known(poly_type.clone()),
+                hir::DeclTy::Free => VarType::Recursive,
             };
 
             self.var_to_type.insert(var_id, var_type);
@@ -1517,7 +1517,7 @@ impl<'types> RecursiveDefsCtx<'types> {
     ) -> usize {
         let start_offset = self.free_ty_polys.len();
 
-        let free_ty_id = if *scalar.ty() == ty::Decl::Free {
+        let free_ty_id = if *scalar.ty() == hir::DeclTy::Free {
             Some(self.insert_free_ty(value_type.clone()))
         } else {
             None
@@ -1543,7 +1543,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         value_type_iter: ListIterator<'_, ty::Poly>,
         is_param: bool,
     ) {
-        let param_free_ty_id = if *rest.ty() == ty::Decl::Free {
+        let param_free_ty_id = if *rest.ty() == hir::DeclTy::Free {
             // Start with member type as a guide
             let member_type = value_type_iter
                 .clone()
@@ -1631,7 +1631,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         // Mark all of our free typed variable as recursive
         let self_var_id = typeck::destruc::visit_vars(&destruc, |var_id, decl_type| {
-            if *decl_type == ty::Decl::Free {
+            if *decl_type == hir::DeclTy::Free {
                 self.var_to_type.insert(var_id, VarType::Recursive);
             }
         });

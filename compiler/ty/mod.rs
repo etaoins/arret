@@ -422,24 +422,3 @@ impl<M: PM> From<Fun> for Ref<M> {
         Ref::Fixed(Ty::Fun(Box::new(fun)))
     }
 }
-
-/// Decl is a type declared by a user
-///
-/// The `Known` variant indicates the type is specified while `Free` indicates it must be inferred.
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub enum Decl {
-    Known(Ref<Poly>),
-    Free,
-}
-
-impl From<Ty<Poly>> for Decl {
-    fn from(ty: Ty<Poly>) -> Self {
-        Decl::Known(Ref::Fixed(ty))
-    }
-}
-
-impl From<Ref<Poly>> for Decl {
-    fn from(poly: Ref<Poly>) -> Self {
-        Decl::Known(poly)
-    }
-}

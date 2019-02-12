@@ -22,8 +22,8 @@ pub fn type_for_decl_list_destruc(
 
     let rest_poly = match list.rest() {
         Some(rest) => Some(match rest.ty() {
-            ty::Decl::Known(poly) => poly.clone(),
-            ty::Decl::Free => guide_type_iter
+            hir::DeclTy::Known(poly) => poly.clone(),
+            hir::DeclTy::Free => guide_type_iter
                 .and_then(|guide_type_iter| guide_type_iter.collect_rest(tvars))
                 .unwrap_or_else(|| ty::Ty::Any.into()),
         }),
@@ -41,8 +41,8 @@ pub fn type_for_decl_destruc(
 ) -> ty::Ref<ty::Poly> {
     match destruc {
         destruc::Destruc::Scalar(_, scalar) => match scalar.ty() {
-            ty::Decl::Known(poly) => poly.clone(),
-            ty::Decl::Free => guide_type.cloned().unwrap_or_else(|| ty::Ty::Any.into()),
+            hir::DeclTy::Known(poly) => poly.clone(),
+            hir::DeclTy::Free => guide_type.cloned().unwrap_or_else(|| ty::Ty::Any.into()),
         },
 
         destruc::Destruc::List(_, list) => {
@@ -56,14 +56,14 @@ pub fn type_for_decl_destruc(
 
 struct VisitVarCtx<F>
 where
-    F: FnMut(hir::VarId, &ty::Decl) -> (),
+    F: FnMut(hir::VarId, &hir::DeclTy) -> (),
 {
     visitor: F,
 }
 
 impl<F> VisitVarCtx<F>
 where
-    F: FnMut(hir::VarId, &ty::Decl) -> (),
+    F: FnMut(hir::VarId, &hir::DeclTy) -> (),
 {
     fn visit_scalar_vars(&mut self, scalar: &destruc::Scalar<hir::Lowered>) {
         if let Some(var_id) = scalar.var_id() {
@@ -94,7 +94,7 @@ where
 /// If the root destruc is scalar its VarId will be returned, otherwise None
 pub fn visit_vars<F>(destruc: &destruc::Destruc<hir::Lowered>, visitor: F) -> Option<hir::VarId>
 where
-    F: FnMut(hir::VarId, &ty::Decl) -> (),
+    F: FnMut(hir::VarId, &hir::DeclTy) -> (),
 {
     let mut vcx = VisitVarCtx { visitor };
     vcx.visit_vars(destruc);

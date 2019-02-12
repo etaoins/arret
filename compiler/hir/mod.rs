@@ -21,6 +21,50 @@ use syntax::span::Span;
 use crate::ty;
 use crate::ty::purity;
 
+/// DeclTy is a type declared by a user
+///
+/// The `Known` variant indicates the type is specified while `Free` indicates it must be inferred.
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum DeclTy {
+    Known(ty::Ref<ty::Poly>),
+    Free,
+}
+
+impl From<ty::Ty<ty::Poly>> for DeclTy {
+    fn from(ty: ty::Ty<ty::Poly>) -> Self {
+        DeclTy::Known(ty::Ref::Fixed(ty))
+    }
+}
+
+impl From<ty::Ref<ty::Poly>> for DeclTy {
+    fn from(poly: ty::Ref<ty::Poly>) -> Self {
+        DeclTy::Known(poly)
+    }
+}
+
+/// Decl is a purity declared by a user
+///
+/// The `Known` variant indicates the purity is specified while `Free` indicates it must be
+/// inferred.
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum DeclPurity {
+    Known(purity::Poly),
+    Free,
+}
+
+impl From<purity::Poly> for DeclPurity {
+    fn from(poly: purity::Poly) -> Self {
+        DeclPurity::Known(poly)
+    }
+}
+
+#[cfg(test)]
+impl From<purity::Purity> for DeclPurity {
+    fn from(purity: purity::Purity) -> Self {
+        DeclPurity::Known(purity::Poly::Fixed(purity))
+    }
+}
+
 pub trait Phase: Clone + std::cmp::PartialEq + std::fmt::Debug {
     type Purity: Clone + std::cmp::PartialEq + std::fmt::Debug;
     type DeclType: Clone + std::cmp::PartialEq + std::fmt::Debug;
@@ -40,8 +84,8 @@ impl Phase for Inferred {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Lowered {}
 impl Phase for Lowered {
-    type Purity = purity::Decl;
-    type DeclType = ty::Decl;
+    type Purity = DeclPurity;
+    type DeclType = DeclTy;
     type ResultType = ();
     type TyArgs = ();
 }

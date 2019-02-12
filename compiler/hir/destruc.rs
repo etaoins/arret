@@ -86,8 +86,8 @@ pub fn subst_scalar_destruc(
     } = scalar;
 
     let poly_type = match ty {
-        ty::Decl::Known(poly) => poly,
-        ty::Decl::Free => free_ty_polys.next().unwrap(),
+        hir::DeclTy::Known(poly) => poly,
+        hir::DeclTy::Free => free_ty_polys.next().unwrap(),
     };
 
     Scalar::new(var_id, source_name, poly_type)

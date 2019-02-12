@@ -44,26 +44,3 @@ impl From<Purity> for Poly {
         Poly::Fixed(purity)
     }
 }
-
-/// Decl is a purity declared by a user
-///
-/// The `Known` variant indicates the purity is specified while `Free` indicates it must be
-/// inferred.
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub enum Decl {
-    Known(Poly),
-    Free,
-}
-
-impl From<Poly> for Decl {
-    fn from(poly: Poly) -> Self {
-        Decl::Known(poly)
-    }
-}
-
-#[cfg(test)]
-impl From<Purity> for Decl {
-    fn from(purity: Purity) -> Self {
-        Decl::Known(Poly::Fixed(purity))
-    }
-}
