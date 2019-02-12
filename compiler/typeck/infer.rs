@@ -9,7 +9,7 @@ use crate::ty;
 use crate::ty::list_iter::ListIterator;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
-use crate::ty::ty_args::PolyTyArgs;
+use crate::ty::ty_args::TyArgs;
 use crate::typeck;
 use crate::typeck::error::{Error, ErrorKind, WantedArity};
 
@@ -1049,7 +1049,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                         result_ty: poly_type,
                         kind: hir::ExprKind::App(Box::new(hir::App {
                             fun_expr,
-                            ty_args: PolyTyArgs::empty(),
+                            ty_args: TyArgs::empty(),
                             fixed_arg_exprs: vec![subject_node.expr],
                             rest_arg_expr: None,
                         })),
@@ -1124,7 +1124,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                         result_ty: poly_type,
                         kind: hir::ExprKind::App(Box::new(hir::App {
                             fun_expr,
-                            ty_args: PolyTyArgs::empty(),
+                            ty_args: TyArgs::empty(),
                             fixed_arg_exprs: vec![],
                             rest_arg_expr: Some(subject_list_node.expr),
                         })),
@@ -1260,7 +1260,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                 result_ty,
                 kind: hir::ExprKind::App(Box::new(hir::App {
                     fun_expr,
-                    ty_args: PolyTyArgs::empty(),
+                    ty_args: TyArgs::empty(),
                     fixed_arg_exprs: vec![left_node.expr, right_node.expr],
                     rest_arg_expr: None,
                 })),

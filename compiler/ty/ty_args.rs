@@ -4,36 +4,46 @@ use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
 
-/// Polymorphic type arguments to a polymorphic function
+/// Type arguments to a polymorphic function
 ///
 /// These type arguments are still polymorphic which can happen if the bound refers to another
 /// type variable.
 #[derive(PartialEq, Clone, Debug)]
-pub struct PolyTyArgs {
+pub struct TyArgs<M: ty::PM> {
     pvar_purities: HashMap<purity::PVarId, purity::Poly>,
-    tvar_types: HashMap<ty::TVarId, ty::Ref<ty::Poly>>,
+    tvar_types: HashMap<ty::TVarId, ty::Ref<M>>,
 }
 
-impl PolyTyArgs {
+impl<M: ty::PM> TyArgs<M> {
     pub fn new(
         pvar_purities: HashMap<purity::PVarId, purity::Poly>,
-        tvar_types: HashMap<ty::TVarId, ty::Ref<ty::Poly>>,
-    ) -> PolyTyArgs {
-        PolyTyArgs {
+        tvar_types: HashMap<ty::TVarId, ty::Ref<M>>,
+    ) -> Self {
+        Self {
             pvar_purities,
             tvar_types,
         }
     }
 
-    pub fn empty() -> PolyTyArgs {
-        PolyTyArgs {
+    pub fn empty() -> Self {
+        Self {
             pvar_purities: HashMap::new(),
             tvar_types: HashMap::new(),
         }
     }
 
+    pub fn pvar_purities(&self) -> &HashMap<purity::PVarId, purity::Poly> {
+        &self.pvar_purities
+    }
+
+    pub fn tvar_types(&self) -> &HashMap<ty::TVarId, ty::Ref<M>> {
+        &self.tvar_types
+    }
+}
+
+impl TyArgs<ty::Poly> {
     /// Returns the args for the passed pvars/tvars where all args are set to their upper bound
-    pub fn from_upper_bound(pvars: &purity::PVars, tvars: &ty::TVars) -> PolyTyArgs {
+    pub fn from_upper_bound(pvars: &purity::PVars, tvars: &ty::TVars) -> Self {
         let pvar_purities = pvars
             .keys()
             .map(|pvar_id| (*pvar_id, Purity::Impure.into()))
@@ -44,54 +54,9 @@ impl PolyTyArgs {
             .map(|(tvar_id, tvar)| (*tvar_id, tvar.bound.clone()))
             .collect();
 
-        PolyTyArgs {
+        Self {
             pvar_purities,
             tvar_types,
         }
-    }
-
-    pub fn pvar_purities(&self) -> &HashMap<purity::PVarId, purity::Poly> {
-        &self.pvar_purities
-    }
-
-    pub fn tvar_types(&self) -> &HashMap<ty::TVarId, ty::Ref<ty::Poly>> {
-        &self.tvar_types
-    }
-}
-
-/// Monomorphic type arguments to a polymorphic function
-///
-/// These type arguments are monomorphic which means they've been fully resolved and don't refer
-/// to any polymorphic variables.
-#[derive(PartialEq, Clone, Debug)]
-pub struct MonoTyArgs {
-    pvar_purities: HashMap<purity::PVarId, purity::Poly>,
-    tvar_types: HashMap<ty::TVarId, ty::Ty<ty::Mono>>,
-}
-
-impl MonoTyArgs {
-    pub fn new(
-        pvar_purities: HashMap<purity::PVarId, purity::Poly>,
-        tvar_types: HashMap<ty::TVarId, ty::Ty<ty::Mono>>,
-    ) -> MonoTyArgs {
-        MonoTyArgs {
-            pvar_purities,
-            tvar_types,
-        }
-    }
-
-    pub fn empty() -> MonoTyArgs {
-        MonoTyArgs {
-            pvar_purities: HashMap::new(),
-            tvar_types: HashMap::new(),
-        }
-    }
-
-    pub fn pvar_purities(&self) -> &HashMap<purity::PVarId, purity::Poly> {
-        &self.pvar_purities
-    }
-
-    pub fn tvar_types(&self) -> &HashMap<ty::TVarId, ty::Ty<ty::Mono>> {
-        &self.tvar_types
     }
 }

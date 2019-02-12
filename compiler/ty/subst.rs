@@ -1,6 +1,6 @@
 use crate::ty;
 use crate::ty::purity;
-use crate::ty::ty_args::{MonoTyArgs, PolyTyArgs};
+use crate::ty::ty_args::TyArgs;
 
 fn subst_ty_ref_slice<S>(stx: &S, inputs: &[ty::Ref<S::InputPM>]) -> Box<[ty::Ref<S::OutputPM>]>
 where
@@ -88,7 +88,7 @@ trait Substitution {
     fn as_poly_subst(&self) -> &Self::AsPolySubst;
 }
 
-impl<'tvars> Substitution for PolyTyArgs {
+impl<'tvars> Substitution for TyArgs<ty::Poly> {
     type InputPM = ty::Poly;
     type OutputPM = ty::Poly;
     type AsPolySubst = Self;
@@ -175,12 +175,12 @@ impl Substitution for MonoToPoly {
 }
 
 struct Monomorphise<'tyargs> {
-    mono_ty_args: &'tyargs MonoTyArgs,
+    mono_ty_args: &'tyargs TyArgs<ty::Mono>,
     partial: PartialMonomorphise<'tyargs>,
 }
 
 impl<'tyargs> Monomorphise<'tyargs> {
-    fn new(mta: &'tyargs MonoTyArgs) -> Monomorphise<'tyargs> {
+    fn new(mta: &'tyargs TyArgs<ty::Mono>) -> Monomorphise<'tyargs> {
         Monomorphise {
             mono_ty_args: mta,
             partial: PartialMonomorphise { mono_ty_args: mta },
@@ -213,8 +213,7 @@ impl<'tyargs> Substitution for Monomorphise<'tyargs> {
                 .tvar_types()
                 .get(tvar_id)
                 .expect("Unable to find type argument during monomorphisation")
-                .clone()
-                .into(),
+                .clone(),
         }
     }
 
@@ -224,7 +223,7 @@ impl<'tyargs> Substitution for Monomorphise<'tyargs> {
 }
 
 struct PartialMonomorphise<'tyargs> {
-    mono_ty_args: &'tyargs MonoTyArgs,
+    mono_ty_args: &'tyargs TyArgs<ty::Mono>,
 }
 
 impl<'tyargs> Substitution for PartialMonomorphise<'tyargs> {
@@ -249,8 +248,8 @@ impl<'tyargs> Substitution for PartialMonomorphise<'tyargs> {
         match poly {
             ty::Ref::Fixed(fixed) => subst_ty(self, fixed).into(),
             ty::Ref::Var(tvar_id, _) => {
-                if let Some(mono_ty) = self.mono_ty_args.tvar_types().get(tvar_id) {
-                    subst_ty(&MonoToPoly::new(), mono_ty).into()
+                if let Some(mono) = self.mono_ty_args.tvar_types().get(tvar_id) {
+                    subst_ty(&MonoToPoly::new(), mono.as_ty()).into()
                 } else {
                     poly.clone()
                 }
@@ -263,19 +262,19 @@ impl<'tyargs> Substitution for PartialMonomorphise<'tyargs> {
     }
 }
 
-pub fn subst_poly(pta: &PolyTyArgs, poly: &ty::Ref<ty::Poly>) -> ty::Ref<ty::Poly> {
+pub fn subst_poly(pta: &TyArgs<ty::Poly>, poly: &ty::Ref<ty::Poly>) -> ty::Ref<ty::Poly> {
     pta.subst_ty_ref(poly)
 }
 
-pub fn subst_poly_fun(pta: &PolyTyArgs, fun: &ty::Fun) -> ty::Fun {
+pub fn subst_poly_fun(pta: &TyArgs<ty::Poly>, fun: &ty::Fun) -> ty::Fun {
     subst_fun(pta, fun)
 }
 
-pub fn subst_purity(pta: &PolyTyArgs, purity: &purity::Poly) -> purity::Poly {
+pub fn subst_purity(pta: &TyArgs<ty::Poly>, purity: &purity::Poly) -> purity::Poly {
     pta.subst_purity_ref(purity)
 }
 
-pub fn monomorphise(mta: &MonoTyArgs, poly: &ty::Ref<ty::Poly>) -> ty::Ref<ty::Mono> {
+pub fn monomorphise(mta: &TyArgs<ty::Mono>, poly: &ty::Ref<ty::Poly>) -> ty::Ref<ty::Mono> {
     let stx = Monomorphise::new(mta);
     stx.subst_ty_ref(poly)
 }

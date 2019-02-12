@@ -4,7 +4,7 @@ use crate::ty;
 use crate::ty::list_iter::ListIterator;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
-use crate::ty::ty_args::PolyTyArgs;
+use crate::ty::ty_args::TyArgs;
 
 /// Selects a set of polymorphic variables for a function application
 ///
@@ -182,7 +182,7 @@ impl<'vars> SelectCtx<'vars> {
             .or_insert_with(|| evidence_purity.clone());
     }
 
-    pub fn into_poly_ty_args(self) -> PolyTyArgs {
+    pub fn into_poly_ty_args(self) -> TyArgs<ty::Poly> {
         let pvar_purities = self
             .selecting_pvars
             .keys()
@@ -211,7 +211,7 @@ impl<'vars> SelectCtx<'vars> {
             })
             .collect();
 
-        PolyTyArgs::new(pvar_purities, tvar_types)
+        TyArgs::new(pvar_purities, tvar_types)
     }
 }
 

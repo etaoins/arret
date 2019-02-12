@@ -25,7 +25,7 @@ use crate::mir::value;
 use crate::mir::{Expr, Value};
 use crate::ty;
 use crate::ty::purity;
-use crate::ty::ty_args::{MonoTyArgs, PolyTyArgs};
+use crate::ty::ty_args::TyArgs;
 
 #[derive(PartialEq, Eq, Hash)]
 struct RustFunKey {
@@ -54,7 +54,7 @@ pub struct EvalHirCtx {
 }
 
 pub struct FunCtx {
-    mono_ty_args: MonoTyArgs,
+    mono_ty_args: TyArgs<ty::Mono>,
     local_values: HashMap<hir::VarId, Value>,
 
     pub(super) inliner_stack: inliner::ApplyStack,
@@ -62,10 +62,10 @@ pub struct FunCtx {
 
 impl FunCtx {
     pub fn new() -> FunCtx {
-        FunCtx::with_mono_ty_args(MonoTyArgs::empty())
+        FunCtx::with_mono_ty_args(TyArgs::empty())
     }
 
-    pub fn with_mono_ty_args(mono_ty_args: MonoTyArgs) -> FunCtx {
+    pub fn with_mono_ty_args(mono_ty_args: TyArgs<ty::Mono>) -> FunCtx {
         FunCtx {
             mono_ty_args,
             local_values: HashMap::new(),
@@ -97,7 +97,7 @@ impl BuiltProgram {
 
 #[derive(Clone)]
 pub(super) struct ApplyArgs<'tyargs> {
-    ty_args: &'tyargs PolyTyArgs,
+    ty_args: &'tyargs TyArgs<ty::Poly>,
     pub(super) list_value: Value,
 }
 
@@ -106,10 +106,10 @@ pub(super) struct ApplyArgs<'tyargs> {
 /// This is used when applying a polymorphic function. The `subst_with` are used to monomorphise
 /// the `apply_ty_args` which are then added to the existing `scope` and returned.
 fn merge_apply_ty_args_into_scope(
-    scope: &MonoTyArgs,
-    apply_ty_args: &PolyTyArgs,
-    subst_with: &MonoTyArgs,
-) -> MonoTyArgs {
+    scope: &TyArgs<ty::Mono>,
+    apply_ty_args: &TyArgs<ty::Poly>,
+    subst_with: &TyArgs<ty::Mono>,
+) -> TyArgs<ty::Mono> {
     use crate::ty::subst;
 
     let pvar_purities = scope
@@ -122,19 +122,19 @@ fn merge_apply_ty_args_into_scope(
     let tvar_types = scope
         .tvar_types()
         .iter()
-        .map(|(k, v)| (*k, v.clone()))
+        .map(|(tvar_id, mono)| (*tvar_id, mono.clone()))
         .chain(
             apply_ty_args
                 .tvar_types()
                 .iter()
                 .map(|(tvar_id, poly_type)| {
-                    let mono_ty = subst::monomorphise(subst_with, poly_type).into_ty();
+                    let mono_ty = subst::monomorphise(subst_with, poly_type);
                     (*tvar_id, mono_ty)
                 }),
         )
         .collect();
 
-    MonoTyArgs::new(pvar_purities, tvar_types)
+    TyArgs::new(pvar_purities, tvar_types)
 }
 
 impl Default for FunCtx {
@@ -1072,7 +1072,7 @@ impl EvalHirCtx {
         // generation. We should either be polymorphic over both or derive the polymorphic type
         // variables from the ABI type.
         let fun_expr = &arret_fun.fun_expr;
-        let ty_args = PolyTyArgs::from_upper_bound(&fun_expr.pvars, &fun_expr.tvars);
+        let ty_args = TyArgs::from_upper_bound(&fun_expr.pvars, &fun_expr.tvars);
 
         let mut some_b = Some(b);
         let app_result = self.inline_arret_fun_app(
@@ -1318,7 +1318,7 @@ impl EvalHirCtx {
             &ty::Ty::unit().into(),
             &main_value,
             ApplyArgs {
-                ty_args: &PolyTyArgs::empty(),
+                ty_args: &TyArgs::empty(),
                 list_value: empty_list_value,
             },
         )?;

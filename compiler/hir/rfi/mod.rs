@@ -194,7 +194,7 @@ impl Loader {
         let tvars = poly_fun_type.tvars();
 
         // The Rust function signature should match the upper bound of the Arret type
-        let pta = ty::ty_args::PolyTyArgs::from_upper_bound(pvars, tvars);
+        let pta = ty::ty_args::TyArgs::from_upper_bound(pvars, tvars);
         let upper_fun_type = ty::subst::subst_poly_fun(&pta, &*poly_fun_type);
 
         // Calculate how many parameters the Rust function should accept

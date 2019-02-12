@@ -23,7 +23,7 @@ fn ideal_polymorph_abi_for_arret_fun(arret_fun: &value::ArretFun) -> PolymorphAB
     use crate::hir::destruc::poly_for_list_destruc;
     use crate::mir::specific_abi_type::specific_abi_type_for_ty_ref;
     use crate::ty::subst;
-    use crate::ty::ty_args::PolyTyArgs;
+    use crate::ty::ty_args::TyArgs;
 
     let value::ArretFun {
         closure, fun_expr, ..
@@ -31,7 +31,7 @@ fn ideal_polymorph_abi_for_arret_fun(arret_fun: &value::ArretFun) -> PolymorphAB
 
     let has_closure = !closure.free_values.is_empty();
 
-    let upper_bound = PolyTyArgs::from_upper_bound(&fun_expr.pvars, &fun_expr.tvars);
+    let upper_bound = TyArgs::from_upper_bound(&fun_expr.pvars, &fun_expr.tvars);
     let param_list_type = poly_for_list_destruc(&fun_expr.params);
 
     let params = Some(abitype::BoxedABIType::Any.into())

@@ -19,7 +19,7 @@ use crate::mir::builder::BuiltReg;
 use crate::mir::closure::Closure;
 use crate::mir::tagset::TypeTagSet;
 use crate::ty;
-use crate::ty::ty_args::MonoTyArgs;
+use crate::ty::ty_args::TyArgs;
 
 new_global_id_type!(ArretFunId);
 
@@ -28,7 +28,7 @@ pub struct ArretFun {
     pub id: ArretFunId,
     pub span: Span,
     pub source_name: Option<String>,
-    pub env_ty_args: MonoTyArgs,
+    pub env_ty_args: TyArgs<ty::Mono>,
     pub closure: Closure,
     pub fun_expr: Rc<hir::Fun<hir::Inferred>>,
 }

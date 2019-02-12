@@ -8,7 +8,7 @@ use crate::mir::value;
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
-use crate::ty::ty_args::{MonoTyArgs, PolyTyArgs};
+use crate::ty::ty_args::TyArgs;
 
 pub fn eq_pred_arret_fun() -> value::ArretFun {
     let left_var_id = hir::VarId::alloc();
@@ -28,7 +28,7 @@ pub fn eq_pred_arret_fun() -> value::ArretFun {
         id: value::ArretFunId::alloc(),
         span: EMPTY_SPAN,
         source_name: Some("=".to_owned()),
-        env_ty_args: MonoTyArgs::empty(),
+        env_ty_args: TyArgs::empty(),
         closure: Closure::empty(),
         fun_expr: Rc::new(hir::Fun {
             pvars: purity::PVars::new(),
@@ -47,7 +47,7 @@ pub fn eq_pred_arret_fun() -> value::ArretFun {
                         result_ty: ty::Ty::EqPred.into(),
                         kind: hir::ExprKind::EqPred,
                     },
-                    ty_args: PolyTyArgs::empty(),
+                    ty_args: TyArgs::empty(),
                     fixed_arg_exprs: vec![
                         hir::Expr {
                             span: EMPTY_SPAN,
@@ -74,7 +74,7 @@ pub fn ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
         id: value::ArretFunId::alloc(),
         span: EMPTY_SPAN,
         source_name: Some(test_ty.to_str().to_owned()),
-        env_ty_args: MonoTyArgs::empty(),
+        env_ty_args: TyArgs::empty(),
         closure: Closure::empty(),
         fun_expr: Rc::new(hir::Fun {
             pvars: purity::PVars::new(),
@@ -103,7 +103,7 @@ pub fn ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
                         result_ty: ty::Ty::TyPred(test_ty).into(),
                         kind: hir::ExprKind::TyPred(test_ty),
                     },
-                    ty_args: PolyTyArgs::empty(),
+                    ty_args: TyArgs::empty(),
                     fixed_arg_exprs: vec![hir::Expr {
                         span: EMPTY_SPAN,
                         result_ty: ty::Ty::Any.into(),

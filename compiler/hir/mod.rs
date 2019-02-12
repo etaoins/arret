@@ -78,7 +78,7 @@ impl Phase for Inferred {
     type Purity = purity::Poly;
     type DeclType = ty::Ref<ty::Poly>;
     type ResultType = ty::Ref<ty::Poly>;
-    type TyArgs = ty::ty_args::PolyTyArgs;
+    type TyArgs = ty::ty_args::TyArgs<ty::Poly>;
 }
 
 #[derive(Clone, PartialEq, Debug)]
