@@ -113,7 +113,7 @@ impl Isable for ty::Poly {
             };
         }
 
-        let sub_ty = ty::resolve::resolve_poly_ty(tvars, sub).as_ty();
+        let sub_ty = ty::resolve::resolve_poly_ty(tvars, sub);
         if sub_ty == &ty::Ty::never() {
             // (U) is a definite subtype of every type, regardless if the parent is bound. This is
             // important as (U) is used as a placeholder for parameters with unknown type. More
@@ -121,9 +121,11 @@ impl Isable for ty::Poly {
             return Result::Yes;
         }
 
-        let (parent_ty, parent_is_bound) = match ty::resolve::resolve_poly_ty(tvars, parent) {
-            ty::resolve::Result::Bound(ty) => (ty, true),
-            ty::resolve::Result::Fixed(ty) => (ty, false),
+        let parent_ty = ty::resolve::resolve_poly_ty(tvars, parent);
+        let parent_is_bound = if let ty::Poly::Var(_) = parent {
+            true
+        } else {
+            false
         };
 
         let result = ty_is_a(tvars, sub, sub_ty, parent, parent_ty);

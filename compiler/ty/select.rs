@@ -149,8 +149,7 @@ impl<'vars> SelectCtx<'vars> {
         match target_poly {
             ty::Poly::Var(tvar_id) => self.add_var_evidence(*tvar_id, evidence_poly),
             ty::Poly::Fixed(target_ty) => {
-                let evidence_ty =
-                    ty::resolve::resolve_poly_ty(self.all_tvars, evidence_poly).as_ty();
+                let evidence_ty = ty::resolve::resolve_poly_ty(self.all_tvars, evidence_poly);
                 self.add_evidence_ty(target_ty, evidence_poly, evidence_ty)
             }
         }

@@ -53,7 +53,7 @@ impl Subtractable for ty::Poly {
                 }
                 (ty::Poly::Var(_), ty::Poly::Fixed(subtrahend_ty)) => {
                     // We can refine the bound using an intersection type
-                    let minuend_bound_ty = resolve::resolve_poly_ty(tvars, minuend_poly).as_ty();
+                    let minuend_bound_ty = resolve::resolve_poly_ty(tvars, minuend_poly);
                     let refined_bound_poly =
                         subtract_tys(tvars, minuend_bound_ty, subtrahend_poly, subtrahend_ty);
 
@@ -219,7 +219,8 @@ mod test {
         );
 
         // [PType3 Num] - Float = (∩ PType3 Int)
-        let ptype3_int_intersect: ty::Poly = ty::Ty::Intersect(Box::new([ptype3_num.clone(), any_int])).into();
+        let ptype3_int_intersect: ty::Poly =
+            ty::Ty::Intersect(Box::new([ptype3_num.clone(), any_int])).into();
         assert_eq!(
             ptype3_int_intersect,
             subtract_ty_refs(&tvars, &ptype3_num, &any_float)

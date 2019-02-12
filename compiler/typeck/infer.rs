@@ -1299,7 +1299,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         let fun_node = self.visit_expr(fcx, pv, &wanted_fun_type, fun_expr)?;
         let revealed_fun_type = fun_node.result_ty().clone();
 
-        match ty::resolve::resolve_poly_ty(&fcx.tvars, &revealed_fun_type).as_ty() {
+        match ty::resolve::resolve_poly_ty(&fcx.tvars, &revealed_fun_type) {
             ty::Ty::TopFun(_) => Err(Error::new(
                 span,
                 ErrorKind::TopFunApply(str_for_poly(fcx, &revealed_fun_type)),
