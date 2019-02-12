@@ -59,7 +59,7 @@ impl<P: hir::Phase> Scalar<P> {
 }
 
 pub fn subst_list_destruc(
-    free_ty_polys: &mut impl Iterator<Item = ty::Poly>,
+    free_ty_polys: &mut impl Iterator<Item = ty::Ref<ty::Poly>>,
     list: List<hir::Lowered>,
 ) -> List<hir::Inferred> {
     let fixed = list
@@ -76,7 +76,7 @@ pub fn subst_list_destruc(
 }
 
 pub fn subst_scalar_destruc(
-    free_ty_polys: &mut impl Iterator<Item = ty::Poly>,
+    free_ty_polys: &mut impl Iterator<Item = ty::Ref<ty::Poly>>,
     scalar: Scalar<hir::Lowered>,
 ) -> Scalar<hir::Inferred> {
     let Scalar {
@@ -98,7 +98,7 @@ pub fn subst_scalar_destruc(
 /// `free_ty_polys` must be ordered in the same way the types appear in the destruc type in
 /// depth-first order
 pub fn subst_destruc(
-    free_ty_polys: &mut impl Iterator<Item = ty::Poly>,
+    free_ty_polys: &mut impl Iterator<Item = ty::Ref<ty::Poly>>,
     destruc: Destruc<hir::Lowered>,
 ) -> Destruc<hir::Inferred> {
     match destruc {
@@ -120,7 +120,7 @@ pub fn poly_for_list_destruc(list: &List<hir::Inferred>) -> ty::List<ty::Poly> {
     ty::List::new(fixed_polys, rest_poly)
 }
 
-pub fn poly_for_destruc(destruc: &Destruc<hir::Inferred>) -> ty::Poly {
+pub fn poly_for_destruc(destruc: &Destruc<hir::Inferred>) -> ty::Ref<ty::Poly> {
     match destruc {
         Destruc::Scalar(_, scalar) => scalar.ty().clone(),
         Destruc::List(_, list) => ty::Ty::List(poly_for_list_destruc(list)).into(),

@@ -1,8 +1,7 @@
 use crate::ty;
 use crate::ty::purity::Purity;
-use crate::ty::TyRef;
 
-fn ty_has_subtypes<S: TyRef>(ty: &ty::Ty<S>) -> bool {
+fn ty_has_subtypes<M: ty::PM>(ty: &ty::Ty<M>) -> bool {
     match ty {
         ty::Ty::Any | ty::Ty::Bool | ty::Ty::Num | ty::Ty::Sym | ty::Ty::TopFun(_) => true,
         ty::Ty::Char
@@ -38,14 +37,14 @@ fn ty_has_subtypes<S: TyRef>(ty: &ty::Ty<S>) -> bool {
     }
 }
 
-pub fn has_subtypes<S: TyRef>(ty_ref: &S) -> bool {
+pub fn has_subtypes<M: ty::PM>(ty_ref: &ty::Ref<M>) -> bool {
     ty_ref
         .try_to_fixed()
         .map(|ty| ty_has_subtypes(ty))
         .unwrap_or(true)
 }
 
-fn ty_is_literal<S: TyRef>(ty: &ty::Ty<S>) -> bool {
+fn ty_is_literal<M: ty::PM>(ty: &ty::Ty<M>) -> bool {
     match ty {
         ty::Ty::LitBool(_) | ty::Ty::LitSym(_) => true,
         ty::Ty::Vector(members) => members.iter().all(is_literal),
@@ -54,7 +53,7 @@ fn ty_is_literal<S: TyRef>(ty: &ty::Ty<S>) -> bool {
     }
 }
 
-pub fn is_literal<S: TyRef>(ty_ref: &S) -> bool {
+pub fn is_literal<M: ty::PM>(ty_ref: &ty::Ref<M>) -> bool {
     ty_ref
         .try_to_fixed()
         .map(|ty| ty_is_literal(ty))
@@ -109,7 +108,7 @@ mod test {
         assert_eq!(false, str_has_subtypes("(RawU)"));
 
         let tvar_id = ty::TVarId::alloc();
-        assert_eq!(true, has_subtypes(&ty::Poly::Var(tvar_id)));
+        assert_eq!(true, has_subtypes(&ty::Ref::Var(tvar_id, ty::Poly {})));
     }
 
     #[test]
@@ -140,6 +139,6 @@ mod test {
         assert_eq!(true, str_is_literal("(Vector false true)"));
 
         let tvar_id = ty::TVarId::alloc();
-        assert_eq!(false, is_literal(&ty::Poly::Var(tvar_id)));
+        assert_eq!(false, is_literal(&ty::Ref::Var(tvar_id, ty::Poly {})));
     }
 }

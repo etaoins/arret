@@ -74,11 +74,11 @@ impl From<TypeTag> for TypeTagSet {
     }
 }
 
-impl<'a, S> From<&'a S> for TypeTagSet
+impl<'a, M> From<&'a ty::Ref<M>> for TypeTagSet
 where
-    S: ty::TyRef,
+    M: ty::PM,
 {
-    fn from(ty_ref: &'a S) -> TypeTagSet {
+    fn from(ty_ref: &'a ty::Ref<M>) -> TypeTagSet {
         ty_ref
             .try_to_fixed()
             .map(|ty| match ty {

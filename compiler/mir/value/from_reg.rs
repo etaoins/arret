@@ -17,7 +17,7 @@ pub fn reg_to_value(
     heap: &mut impl boxed::AsHeap,
     reg: BuiltReg,
     abi_type: &abitype::ABIType,
-    arret_ty: &ty::Mono,
+    arret_ty: &ty::Ref<ty::Mono>,
 ) -> Value {
     use crate::mir::value::types::mono_to_const;
 

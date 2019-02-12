@@ -78,77 +78,15 @@ impl Result {
     }
 }
 
-pub trait Isable: ty::TyRef {
-    fn ty_ref_is_a(tvars: &ty::TVars, sub: &Self, parent: &Self) -> Result;
-}
-
-impl Isable for ty::Mono {
-    fn ty_ref_is_a(tvars: &ty::TVars, sub: &ty::Mono, parent: &ty::Mono) -> Result {
-        ty_is_a(tvars, sub, sub.as_ty(), parent, parent.as_ty())
-    }
-}
-
-impl Isable for ty::Poly {
-    fn ty_ref_is_a(tvars: &ty::TVars, sub: &ty::Poly, parent: &ty::Poly) -> Result {
-        if let ty::Poly::Var(parent_tvar_id) = *parent {
-            // Typically `parent_is_bound` makes the best result for a polymorphic parent `May`.
-            // These are overrides for cases where they can be `Yes`.
-            match sub {
-                ty::Poly::Var(sub_tvar_id) => {
-                    // Are we either the same var our bounded by the same var?
-                    if tvar_id_is_bounded_by(tvars, *sub_tvar_id, parent_tvar_id) {
-                        return Result::Yes;
-                    }
-                }
-                ty::Poly::Fixed(ty::Ty::Intersect(sub_members)) => {
-                    // Do we satisfy any of the members of the intersection?
-                    if sub_members
-                        .iter()
-                        .any(|sub_member| ty_ref_is_a(tvars, sub_member, parent) == Result::Yes)
-                    {
-                        return Result::Yes;
-                    }
-                }
-                _ => {}
-            };
-        }
-
-        let sub_ty = ty::resolve::resolve_poly_ty(tvars, sub);
-        if sub_ty == &ty::Ty::never() {
-            // (U) is a definite subtype of every type, regardless if the parent is bound. This is
-            // important as (U) is used as a placeholder for parameters with unknown type. More
-            // generally, it's the contravariant equivalent of Any.
-            return Result::Yes;
-        }
-
-        let parent_ty = ty::resolve::resolve_poly_ty(tvars, parent);
-        let parent_is_bound = if let ty::Poly::Var(_) = parent {
-            true
-        } else {
-            false
-        };
-
-        let result = ty_is_a(tvars, sub, sub_ty, parent, parent_ty);
-
-        if parent_is_bound {
-            // The parent is polymorphic and has child types. We can't ensure that the sub
-            // satisfies all child types of the parent bound.
-            Result::May.and_then(|| result)
-        } else {
-            result
-        }
-    }
-}
-
 fn top_fun_is_a(tvars: &ty::TVars, sub_top_fun: &ty::TopFun, par_top_fun: &ty::TopFun) -> Result {
     purity_ref_is_a(sub_top_fun.purity(), par_top_fun.purity())
         .and_then(|| ty_ref_is_a(tvars, sub_top_fun.ret(), par_top_fun.ret()))
 }
 
-fn list_is_a<S: Isable>(
+fn list_is_a<M: ty::PM>(
     tvars: &ty::TVars,
-    sub_list: &ty::List<S>,
-    par_list: &ty::List<S>,
+    sub_list: &ty::List<M>,
+    par_list: &ty::List<M>,
 ) -> Result {
     let mut sub_iter = ListIterator::new(sub_list);
     let mut par_iter = ListIterator::new(par_list);
@@ -212,12 +150,12 @@ fn fun_is_a(tvars: &ty::TVars, sub_fun: &ty::Fun, par_fun: &ty::Fun) -> Result {
     }
 }
 
-fn ty_is_a<S: Isable>(
+fn ty_is_a<M: ty::PM>(
     tvars: &ty::TVars,
-    sub_ref: &S,
-    sub_ty: &ty::Ty<S>,
-    parent_ref: &S,
-    parent_ty: &ty::Ty<S>,
+    sub_ref: &ty::Ref<M>,
+    sub_ty: &ty::Ty<M>,
+    parent_ref: &ty::Ref<M>,
+    parent_ty: &ty::Ty<M>,
 ) -> Result {
     if sub_ty == parent_ty {
         return Result::Yes;
@@ -398,8 +336,8 @@ fn tvar_id_is_bounded_by(
     }
 
     match tvars[&sub_tvar_id].bound {
-        ty::Poly::Fixed(_) => false,
-        ty::Poly::Var(tvar_id) => tvar_id_is_bounded_by(tvars, tvar_id, parent_tvar_id),
+        ty::Ref::Fixed(_) => false,
+        ty::Ref::Var(tvar_id, _) => tvar_id_is_bounded_by(tvars, tvar_id, parent_tvar_id),
     }
 }
 
@@ -425,8 +363,54 @@ fn inst_polymorphic_fun(tvars: &ty::TVars, sub_fun: &ty::Fun, par_top_fun: &ty::
     ty::subst::subst_poly_fun(&pta, sub_fun)
 }
 
-pub fn ty_ref_is_a<S: Isable>(tvars: &ty::TVars, sub: &S, parent: &S) -> Result {
-    S::ty_ref_is_a(tvars, sub, parent)
+pub fn ty_ref_is_a<M: ty::PM>(tvars: &ty::TVars, sub: &ty::Ref<M>, parent: &ty::Ref<M>) -> Result {
+    if let ty::Ref::Var(parent_tvar_id, _) = *parent {
+        // Typically `parent_is_bound` makes the best result for a polymorphic parent `May`.
+        // These are overrides for cases where they can be `Yes`.
+        match sub {
+            ty::Ref::Var(sub_tvar_id, _) => {
+                // Are we either the same var our bounded by the same var?
+                if tvar_id_is_bounded_by(tvars, *sub_tvar_id, parent_tvar_id) {
+                    return Result::Yes;
+                }
+            }
+            ty::Ref::Fixed(ty::Ty::Intersect(sub_members)) => {
+                // Do we satisfy any of the members of the intersection?
+                if sub_members
+                    .iter()
+                    .any(|sub_member| ty_ref_is_a(tvars, sub_member, parent) == Result::Yes)
+                {
+                    return Result::Yes;
+                }
+            }
+            _ => {}
+        };
+    }
+
+    let sub_ty = sub.resolve_to_ty(tvars);
+    if sub_ty == &ty::Ty::never() {
+        // (U) is a definite subtype of every type, regardless if the parent is bound. This is
+        // important as (U) is used as a placeholder for parameters with unknown type. More
+        // generally, it's the contravariant equivalent of Any.
+        return Result::Yes;
+    }
+
+    let parent_ty = parent.resolve_to_ty(tvars);
+    let parent_is_bound = if let ty::Ref::Var(_, _) = parent {
+        true
+    } else {
+        false
+    };
+
+    let result = ty_is_a(tvars, sub, sub_ty, parent, parent_ty);
+
+    if parent_is_bound {
+        // The parent is polymorphic and has child types. We can't ensure that the sub
+        // satisfies all child types of the parent bound.
+        Result::May.and_then(|| result)
+    } else {
+        result
+    }
 }
 
 #[cfg(test)]
@@ -500,20 +484,14 @@ mod test {
         let any_sym = poly_for_str("Sym");
         let any_int = poly_for_str("Int");
 
-        let int_to_any_sym = ty::Poly::from(ty::Ty::Map(Box::new(ty::Map::new(
-            any_int.clone(),
-            any_sym.clone(),
-        ))));
+        let int_to_any_sym =
+            ty::Ty::Map(Box::new(ty::Map::new(any_int.clone(), any_sym.clone()))).into();
 
-        let int_to_foo_sym = ty::Poly::from(ty::Ty::Map(Box::new(ty::Map::new(
-            any_int.clone(),
-            foo_sym.clone(),
-        ))));
+        let int_to_foo_sym =
+            ty::Ty::Map(Box::new(ty::Map::new(any_int.clone(), foo_sym.clone()))).into();
 
-        let any_sym_to_any_sym = ty::Poly::from(ty::Ty::Map(Box::new(ty::Map::new(
-            any_sym.clone(),
-            any_sym.clone(),
-        ))));
+        let any_sym_to_any_sym =
+            ty::Ty::Map(Box::new(ty::Map::new(any_sym.clone(), any_sym.clone()))).into();
 
         assert_eq!(
             Result::Yes,

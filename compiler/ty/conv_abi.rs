@@ -4,9 +4,8 @@ use runtime::{abitype, boxed};
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
-use crate::ty::unify::Unifiable;
 
-fn type_tag_to_ty<S: Unifiable>(type_tag: boxed::TypeTag) -> ty::Ty<S> {
+fn type_tag_to_ty<M: ty::PM>(type_tag: boxed::TypeTag) -> ty::Ty<M> {
     use runtime::boxed::TypeTag;
 
     match type_tag {
@@ -28,12 +27,12 @@ fn type_tag_to_ty<S: Unifiable>(type_tag: boxed::TypeTag) -> ty::Ty<S> {
 }
 
 pub trait ConvertableABIType {
-    fn to_ty_ref<S: Unifiable>(&self) -> S;
+    fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M>;
     fn to_rust_str(&self) -> String;
 }
 
 impl ConvertableABIType for abitype::ABIType {
-    fn to_ty_ref<S: Unifiable>(&self) -> S {
+    fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M> {
         use runtime::abitype::ABIType;
 
         match self {
@@ -61,7 +60,7 @@ impl ConvertableABIType for abitype::ABIType {
 }
 
 impl ConvertableABIType for abitype::BoxedABIType {
-    fn to_ty_ref<S: Unifiable>(&self) -> S {
+    fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M> {
         use runtime::abitype::BoxedABIType;
 
         match self {
@@ -72,7 +71,7 @@ impl ConvertableABIType for abitype::BoxedABIType {
                 ty::Ty::List(list).into()
             }
             BoxedABIType::Pair(member) => {
-                let member_ty_ref: S = member.to_ty_ref();
+                let member_ty_ref: ty::Ref<M> = member.to_ty_ref();
                 let list = ty::List::new(Box::new([member_ty_ref.clone()]), Some(member_ty_ref));
                 ty::Ty::List(list).into()
             }
@@ -100,7 +99,7 @@ impl ConvertableABIType for abitype::BoxedABIType {
 }
 
 impl ConvertableABIType for abitype::RetABIType {
-    fn to_ty_ref<S: Unifiable>(&self) -> S {
+    fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M> {
         use runtime::abitype::RetABIType;
 
         match self {
@@ -122,7 +121,7 @@ impl ConvertableABIType for abitype::RetABIType {
 }
 
 impl ConvertableABIType for callback::EntryPointABIType {
-    fn to_ty_ref<S: Unifiable>(&self) -> S {
+    fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M> {
         let top_fun_ty = ty::TopFun::new(Purity::Impure.into(), self.ret.to_ty_ref());
 
         // TODO: How do we deal with rest params?
@@ -176,10 +175,8 @@ mod test {
 
         assert_eq!("boxed::TopList", boxed_abi_type.to_rust_str());
 
-        let top_list_poly = ty::Poly::from(ty::Ty::List(ty::List::new(
-            Box::new([]),
-            Some(ty::Ty::Any.into()),
-        )));
+        let top_list_poly: ty::Ref<ty::Poly> =
+            ty::Ty::List(ty::List::new(Box::new([]), Some(ty::Ty::Any.into()))).into();
 
         assert_eq!(top_list_poly, boxed_abi_type.to_ty_ref());
     }
@@ -193,10 +190,11 @@ mod test {
 
         assert_eq!("boxed::Pair<boxed::Int>", boxed_abi_type.to_rust_str());
 
-        let int_pair_poly = ty::Poly::from(ty::Ty::List(ty::List::new(
+        let int_pair_poly: ty::Ref<ty::Poly> = ty::Ty::List(ty::List::new(
             Box::new([ty::Ty::Int.into()]),
             Some(ty::Ty::Int.into()),
-        )));
+        ))
+        .into();
 
         assert_eq!(int_pair_poly, boxed_abi_type.to_ty_ref());
     }
@@ -210,7 +208,7 @@ mod test {
 
         assert_eq!("boxed::Bool", boxed_abi_type.to_rust_str());
 
-        let bool_poly = ty::Poly::from(ty::Ty::Bool);
+        let bool_poly: ty::Ref<ty::Poly> = ty::Ty::Bool.into();
         assert_eq!(bool_poly, boxed_abi_type.to_ty_ref());
     }
 
@@ -223,7 +221,7 @@ mod test {
 
         assert_eq!("boxed::Nil", boxed_abi_type.to_rust_str());
 
-        let nil_poly = ty::Poly::from(ty::Ty::List(ty::List::empty()));
+        let nil_poly: ty::Ref<ty::Poly> = ty::Ty::List(ty::List::empty()).into();
         assert_eq!(nil_poly, boxed_abi_type.to_ty_ref());
     }
 
@@ -238,12 +236,13 @@ mod test {
             entry_point_abi_type.to_rust_str()
         );
 
-        let arret_poly = ty::Poly::from(ty::Fun::new(
+        let arret_poly: ty::Ref<ty::Poly> = ty::Fun::new(
             purity::PVars::new(),
             ty::TVars::new(),
             ty::TopFun::new(Purity::Impure.into(), ty::Ty::Char.into()),
             ty::List::new(Box::new([ty::Ty::Int.into()]), None),
-        ));
+        )
+        .into();
 
         assert_eq!(arret_poly, entry_point_abi_type.to_ty_ref());
     }

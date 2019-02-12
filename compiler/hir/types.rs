@@ -26,7 +26,7 @@ pub enum TyCons {
 
 pub enum PolymorphicVarKind {
     TVar(ty::TVar),
-    TFixed(ty::Poly),
+    TFixed(ty::Ref<ty::Poly>),
     PVar(purity::PVar),
     Pure,
 }
@@ -113,7 +113,7 @@ fn lower_list_cons(scope: &Scope, mut arg_iter: NsDataIter) -> Result<ty::List<t
 
     let fixed_polys = arg_iter
         .map(|fixed_datum| lower_poly(scope, fixed_datum))
-        .collect::<Result<Box<[ty::Poly]>>>()?;
+        .collect::<Result<Box<[ty::Ref<ty::Poly>]>>>()?;
 
     let rest_poly = match rest {
         Some(rest_datum) => Some(lower_poly(scope, rest_datum)?),
@@ -127,7 +127,7 @@ fn lower_fun_cons(
     scope: &Scope,
     purity: purity::Poly,
     mut arg_iter: NsDataIter,
-) -> Result<ty::Poly> {
+) -> Result<ty::Ref<ty::Poly>> {
     let ret_ty = lower_poly(scope, arg_iter.next_back().unwrap())?;
 
     // Discard the purity
@@ -151,7 +151,7 @@ fn lower_ty_cons_apply(
     span: Span,
     ty_cons: TyCons,
     mut arg_iter: NsDataIter,
-) -> Result<ty::Poly> {
+) -> Result<ty::Ref<ty::Poly>> {
     Ok(match ty_cons {
         TyCons::List => ty::Ty::List(lower_list_cons(scope, arg_iter)?).into(),
         TyCons::Listof => {
@@ -164,7 +164,7 @@ fn lower_ty_cons_apply(
         TyCons::Vector => {
             let member_tys = arg_iter
                 .map(|arg_datum| lower_poly(scope, arg_datum))
-                .collect::<Result<Box<[ty::Poly]>>>()?;
+                .collect::<Result<Box<[ty::Ref<ty::Poly>]>>>()?;
 
             ty::Ty::Vector(member_tys).into()
         }
@@ -187,7 +187,7 @@ fn lower_ty_cons_apply(
         TyCons::Union => {
             let member_tys = arg_iter
                 .map(|arg_datum| lower_poly(scope, arg_datum))
-                .collect::<Result<Vec<ty::Poly>>>()?;
+                .collect::<Result<Vec<ty::Ref<ty::Poly>>>>()?;
 
             ty::unify::unify_ty_ref_iter(scope.tvars(), member_tys.into_iter())
         }
@@ -197,18 +197,18 @@ fn lower_ty_cons_apply(
             // union code itself
             let member_tys = arg_iter
                 .map(|arg_datum| lower_poly(scope, arg_datum))
-                .collect::<Result<Box<[ty::Poly]>>>()?;
+                .collect::<Result<Box<[ty::Ref<ty::Poly>]>>>()?;
 
             ty::Ty::Union(member_tys).into()
         }
     })
 }
 
-fn lower_literal_vec(literal_data: Vec<NsDatum>) -> Result<Vec<ty::Poly>> {
+fn lower_literal_vec(literal_data: Vec<NsDatum>) -> Result<Vec<ty::Ref<ty::Poly>>> {
     literal_data.into_iter().map(lower_literal).collect()
 }
 
-fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
+fn lower_literal(datum: NsDatum) -> Result<ty::Ref<ty::Poly>> {
     match datum {
         NsDatum::Bool(_, v) => Ok(ty::Ty::LitBool(v).into()),
         NsDatum::Keyword(_, name) => Ok(ty::Ty::LitSym(name).into()),
@@ -228,7 +228,7 @@ fn lower_literal(datum: NsDatum) -> Result<ty::Poly> {
     }
 }
 
-fn lower_ident(scope: &Scope, span: Span, ident: &Ident) -> Result<ty::Poly> {
+fn lower_ident(scope: &Scope, span: Span, ident: &Ident) -> Result<ty::Ref<ty::Poly>> {
     match scope.get_or_err(span, ident)? {
         Binding::Ty(ty) => Ok(ty.clone()),
         Binding::TyPred(test_ty) => Ok(ty::Ty::TyPred(*test_ty).into()),
@@ -241,7 +241,7 @@ fn lower_polymorphic_poly(
     scope: &Scope,
     span: Span,
     mut data_iter: NsDataIter,
-) -> Result<ty::Poly> {
+) -> Result<ty::Ref<ty::Poly>> {
     let polymorphic_vars_datum = data_iter.next().unwrap();
     let polymorphic_var_data = if let NsDatum::Set(_, vs) = polymorphic_vars_datum {
         vs
@@ -261,7 +261,7 @@ fn lower_polymorphic_poly(
 
     let inner_poly = lower_poly_data_iter(&inner_scope, span, data_iter)?;
 
-    if let ty::Poly::Fixed(ty::Ty::Fun(fun)) = inner_poly {
+    if let ty::Ref::Fixed(ty::Ty::Fun(fun)) = inner_poly {
         Ok(ty::Ty::Fun(Box::new(fun.with_polymorphic_vars(pvars, tvars))).into())
     } else {
         return Err(Error::new(
@@ -275,7 +275,7 @@ pub fn lower_poly_data_iter(
     scope: &Scope,
     span: Span,
     mut data_iter: NsDataIter,
-) -> Result<ty::Poly> {
+) -> Result<ty::Ref<ty::Poly>> {
     let data_len = data_iter.len();
 
     if data_len == 0 {
@@ -317,7 +317,7 @@ pub fn lower_poly_data_iter(
     ))
 }
 
-pub fn lower_poly(scope: &Scope, datum: NsDatum) -> Result<ty::Poly> {
+pub fn lower_poly(scope: &Scope, datum: NsDatum) -> Result<ty::Ref<ty::Poly>> {
     match datum {
         NsDatum::List(span, vs) => lower_poly_data_iter(scope, span, vs.into_vec().into_iter()),
         NsDatum::Ident(span, ident) => lower_ident(scope, span, &ident),
@@ -349,7 +349,7 @@ pub fn lower_polymorphic_vars(
                 tvars.insert(tvar_id, tvar.clone());
                 inner_scope.tvars_mut().insert(tvar_id, tvar);
 
-                Binding::Ty(ty::Poly::Var(tvar_id))
+                Binding::Ty(ty::Ref::Var(tvar_id, ty::Poly {}))
             }
             PolymorphicVarKind::TFixed(poly) => Binding::Ty(poly),
             PolymorphicVarKind::Pure => Binding::Purity(Purity::Pure.into()),
@@ -370,7 +370,7 @@ pub fn try_lower_purity(scope: &Scope, datum: &NsDatum) -> Option<purity::Poly> 
 
 macro_rules! export_ty {
     ($name:expr, $type:expr) => {
-        ($name, Binding::Ty(ty::Poly::Fixed($type)))
+        ($name, Binding::Ty(ty::Ref::Fixed($type)))
     };
 }
 
@@ -562,10 +562,10 @@ fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty
     }
 }
 
-pub fn str_for_poly(pvars: &purity::PVars, tvars: &ty::TVars, poly: &ty::Poly) -> String {
+pub fn str_for_poly(pvars: &purity::PVars, tvars: &ty::TVars, poly: &ty::Ref<ty::Poly>) -> String {
     match poly {
-        ty::Poly::Var(tvar_id) => tvars[tvar_id].source_name().to_owned(),
-        ty::Poly::Fixed(poly_ty) => str_for_poly_ty(pvars, tvars, poly_ty),
+        ty::Ref::Var(tvar_id, _) => tvars[tvar_id].source_name().to_owned(),
+        ty::Ref::Fixed(poly_ty) => str_for_poly_ty(pvars, tvars, poly_ty),
     }
 }
 
@@ -578,7 +578,7 @@ pub fn str_for_purity(pvars: &purity::PVars, purity: &purity::Poly) -> String {
 }
 
 #[cfg(test)]
-pub fn poly_for_str(datum_str: &str) -> ty::Poly {
+pub fn poly_for_str(datum_str: &str) -> ty::Ref<ty::Poly> {
     use crate::hir::prim::PRIM_EXPORTS;
     use syntax::parser::datum_from_str;
 
@@ -605,11 +605,11 @@ pub fn poly_for_str(datum_str: &str) -> ty::Poly {
 }
 
 #[cfg(test)]
-pub fn tvar_bounded_by(tvars: &mut ty::TVars, bound: ty::Poly) -> ty::Poly {
+pub fn tvar_bounded_by(tvars: &mut ty::TVars, bound: ty::Ref<ty::Poly>) -> ty::Ref<ty::Poly> {
     let tvar_id = ty::TVarId::alloc();
     tvars.insert(tvar_id, ty::TVar::new("TVar".into(), bound));
 
-    ty::Poly::Var(tvar_id)
+    ty::Ref::Var(tvar_id, ty::Poly {})
 }
 
 #[cfg(test)]
@@ -617,7 +617,7 @@ mod test {
     use super::*;
 
     fn assert_ty_for_str(expected: ty::Ty<ty::Poly>, datum_str: &str) {
-        let expected_poly = ty::Poly::from(expected);
+        let expected_poly = expected.into();
         assert_eq!(expected_poly, poly_for_str(datum_str));
 
         // Try to round trip this to make sure str_for_poly works
@@ -625,7 +625,7 @@ mod test {
         assert_eq!(expected_poly, poly_for_str(&recovered_str));
     }
 
-    /// This asserts that a type uses an exact string in str_for_poly
+    /// This asserts that a type uses an exact str  [ing in str_for_poly
     ///
     /// This is to make sure we use e.g. `(Listof Int)` instead of `(List Int ...)`
     fn assert_exact_str_repr(datum_str: &str) {

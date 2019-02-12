@@ -20,7 +20,7 @@ pub struct SelectCtx<'vars> {
     selecting_tvars: &'vars ty::TVars,
 
     pvar_purities: HashMap<purity::PVarId, purity::Poly>,
-    tvar_types: HashMap<ty::TVarId, ty::Poly>,
+    tvar_types: HashMap<ty::TVarId, ty::Ref<ty::Poly>>,
 }
 
 impl<'vars> SelectCtx<'vars> {
@@ -72,7 +72,7 @@ impl<'vars> SelectCtx<'vars> {
     fn add_evidence_ty(
         &mut self,
         target_ty: &ty::Ty<ty::Poly>,
-        evidence_poly: &ty::Poly,
+        evidence_poly: &ty::Ref<ty::Poly>,
         evidence_ty: &ty::Ty<ty::Poly>,
     ) {
         match (target_ty, evidence_ty) {
@@ -127,7 +127,7 @@ impl<'vars> SelectCtx<'vars> {
         }
     }
 
-    fn add_var_evidence(&mut self, tvar_id: ty::TVarId, evidence_poly: &ty::Poly) {
+    fn add_var_evidence(&mut self, tvar_id: ty::TVarId, evidence_poly: &ty::Ref<ty::Poly>) {
         if let Some(tvar) = self.selecting_tvars.get(&tvar_id) {
             if !ty::is_a::ty_ref_is_a(self.all_tvars, evidence_poly, &tvar.bound).to_bool() {
                 return;
@@ -145,11 +145,15 @@ impl<'vars> SelectCtx<'vars> {
             .or_insert_with(|| evidence_poly.clone());
     }
 
-    pub fn add_evidence(&mut self, target_poly: &ty::Poly, evidence_poly: &ty::Poly) {
+    pub fn add_evidence(
+        &mut self,
+        target_poly: &ty::Ref<ty::Poly>,
+        evidence_poly: &ty::Ref<ty::Poly>,
+    ) {
         match target_poly {
-            ty::Poly::Var(tvar_id) => self.add_var_evidence(*tvar_id, evidence_poly),
-            ty::Poly::Fixed(target_ty) => {
-                let evidence_ty = ty::resolve::resolve_poly_ty(self.all_tvars, evidence_poly);
+            ty::Ref::Var(tvar_id, _) => self.add_var_evidence(*tvar_id, evidence_poly),
+            ty::Ref::Fixed(target_ty) => {
+                let evidence_ty = evidence_poly.resolve_to_ty(self.all_tvars);
                 self.add_evidence_ty(target_ty, evidence_poly, evidence_ty)
             }
         }
@@ -255,7 +259,7 @@ mod test {
             }
         }
 
-        fn poly_for_str(&self, poly_str: &str) -> ty::Poly {
+        fn poly_for_str(&self, poly_str: &str) -> ty::Ref<ty::Poly> {
             use crate::hir::lower_poly;
             let test_datum = datum_from_str(poly_str).unwrap();
 
@@ -282,8 +286,8 @@ mod test {
         }
     }
 
-    fn assert_unselected_type(ctx: &SelectCtx<'_>, poly_var: &ty::Poly) {
-        let tvar_id = if let ty::Poly::Var(tvar_id) = poly_var {
+    fn assert_unselected_type(ctx: &SelectCtx<'_>, poly_var: &ty::Ref<ty::Poly>) {
+        let tvar_id = if let ty::Ref::Var(tvar_id, _) = poly_var {
             tvar_id
         } else {
             panic!("Can't find tvar ID")
@@ -292,8 +296,12 @@ mod test {
         assert_eq!(None, ctx.tvar_types.get(&tvar_id));
     }
 
-    fn assert_selected_type(ctx: &SelectCtx<'_>, poly_var: &ty::Poly, selected_poly: &ty::Poly) {
-        let tvar_id = if let ty::Poly::Var(tvar_id) = poly_var {
+    fn assert_selected_type(
+        ctx: &SelectCtx<'_>,
+        poly_var: &ty::Ref<ty::Poly>,
+        selected_poly: &ty::Ref<ty::Poly>,
+    ) {
+        let tvar_id = if let ty::Ref::Var(tvar_id, _) = poly_var {
             tvar_id
         } else {
             panic!("Can't find tvar ID")

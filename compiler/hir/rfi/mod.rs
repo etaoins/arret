@@ -98,7 +98,7 @@ fn ensure_types_compatible<T>(
     pvars: &purity::PVars,
     tvars: &ty::TVars,
     span: Span,
-    arret_poly: &ty::Poly,
+    arret_poly: &ty::Ref<ty::Poly>,
     abi_type: &T,
 ) -> Result<(), Error>
 where
@@ -181,7 +181,7 @@ impl Loader {
         let poly_type = types::lower_poly(&self.type_scope, ns_datum)?;
 
         // Ensure the type is actually a function type
-        let poly_fun_type = if let ty::Poly::Fixed(ty::Ty::Fun(fun_type)) = poly_type {
+        let poly_fun_type = if let ty::Ref::Fixed(ty::Ty::Fun(fun_type)) = poly_type {
             fun_type
         } else {
             return Err(Error::new(

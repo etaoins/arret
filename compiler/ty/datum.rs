@@ -1,7 +1,7 @@
 use crate::ty;
 use syntax::datum::Datum;
 
-pub fn ty_ref_for_datum<S: ty::unify::Unifiable>(datum: &Datum) -> S {
+pub fn ty_ref_for_datum<M: ty::PM>(datum: &Datum) -> ty::Ref<M> {
     (match datum {
         Datum::Bool(_, val) => ty::Ty::LitBool(*val),
         Datum::Sym(_, val) => ty::Ty::LitSym(val.clone()),

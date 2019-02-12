@@ -32,8 +32,8 @@ pub trait Phase: Clone + std::cmp::PartialEq + std::fmt::Debug {
 pub struct Inferred {}
 impl Phase for Inferred {
     type Purity = purity::Poly;
-    type DeclType = ty::Poly;
-    type ResultType = ty::Poly;
+    type DeclType = ty::Ref<ty::Poly>;
+    type ResultType = ty::Ref<ty::Poly>;
     type TyArgs = ty::ty_args::PolyTyArgs;
 }
 

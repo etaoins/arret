@@ -236,7 +236,7 @@ pub(super) fn cond_inline<'a>(
     fcx: &mut FunCtx,
     outer_b: &mut Builder,
     span: Span,
-    ret_ty: &ty::Mono,
+    ret_ty: &ty::Ref<ty::Mono>,
     arret_fun: &value::ArretFun,
     apply_args: ApplyArgs<'a>,
 ) -> Result<value::Value> {

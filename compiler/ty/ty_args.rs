@@ -11,13 +11,13 @@ use crate::ty::purity::Purity;
 #[derive(PartialEq, Clone, Debug)]
 pub struct PolyTyArgs {
     pvar_purities: HashMap<purity::PVarId, purity::Poly>,
-    tvar_types: HashMap<ty::TVarId, ty::Poly>,
+    tvar_types: HashMap<ty::TVarId, ty::Ref<ty::Poly>>,
 }
 
 impl PolyTyArgs {
     pub fn new(
         pvar_purities: HashMap<purity::PVarId, purity::Poly>,
-        tvar_types: HashMap<ty::TVarId, ty::Poly>,
+        tvar_types: HashMap<ty::TVarId, ty::Ref<ty::Poly>>,
     ) -> PolyTyArgs {
         PolyTyArgs {
             pvar_purities,
@@ -54,7 +54,7 @@ impl PolyTyArgs {
         &self.pvar_purities
     }
 
-    pub fn tvar_types(&self) -> &HashMap<ty::TVarId, ty::Poly> {
+    pub fn tvar_types(&self) -> &HashMap<ty::TVarId, ty::Ref<ty::Poly>> {
         &self.tvar_types
     }
 }

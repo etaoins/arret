@@ -6,7 +6,6 @@ pub mod list_iter;
 pub mod pred;
 pub mod props;
 pub mod purity;
-pub mod resolve;
 pub mod select;
 pub mod subst;
 pub mod subtract;
@@ -15,22 +14,102 @@ pub mod unify;
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::hash;
 use std::ops::Range;
 
-/// Abstracts over a reference to a type
-///
-/// This allows the implementation of our type system to be generic over `Mono` versus `Poly` types.
-pub trait TyRef:
-    PartialEq + Clone + Sized + fmt::Debug + From<Ty<Self>> + From<Fun> + From<TopFun>
-{
+new_global_id_type!(TVarId);
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+pub struct TVar {
+    source_name: Box<str>,
+    bound: Ref<Poly>,
+}
+
+pub type TVars = BTreeMap<TVarId, TVar>;
+
+impl TVar {
+    pub fn new(source_name: Box<str>, bound: Ref<Poly>) -> TVar {
+        TVar { source_name, bound }
+    }
+
+    pub fn source_name(&self) -> &str {
+        &self.source_name
+    }
+
+    pub fn bound(&self) -> &Ref<Poly> {
+        &self.bound
+    }
+}
+
+pub fn merge_tvars(outer: &TVars, inner: &TVars) -> TVars {
+    outer
+        .iter()
+        .map(|(tvar_id, tvar)| (*tvar_id, tvar.clone()))
+        .chain(inner.iter().map(|(tvar_id, tvar)| (*tvar_id, tvar.clone())))
+        .collect()
+}
+
+pub fn merge_three_tvars(one: &TVars, two: &TVars, three: &TVars) -> TVars {
+    one.iter()
+        .map(|(tvar_id, tvar)| (*tvar_id, tvar.clone()))
+        .chain(two.iter().map(|(tvar_id, tvar)| (*tvar_id, tvar.clone())))
+        .chain(three.iter().map(|(tvar_id, tvar)| (*tvar_id, tvar.clone())))
+        .collect()
+}
+/// Marker that determines if type variables are allowed within a type
+pub trait PM: PartialEq + Eq + Clone + Copy + Sized + fmt::Debug + hash::Hash {
+    /// Resolves a possibly variable type to its bound
+    fn resolve_ref_to_ty<'ty>(tvars: &'ty TVars, ty_ref: &'ty Ref<Self>) -> &'ty Ty<Self>;
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub enum Mono {}
+impl PM for Mono {
+    fn resolve_ref_to_ty<'ty>(_tvars: &'ty TVars, ty_ref: &'ty Ref<Mono>) -> &'ty Ty<Mono> {
+        match ty_ref {
+            Ref::Fixed(ty) => ty,
+            Ref::Var(_, _) => unreachable!(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub struct Poly {}
+impl PM for Poly {
+    fn resolve_ref_to_ty<'ty>(tvars: &'ty TVars, ty_ref: &'ty Ref<Poly>) -> &'ty Ty<Poly> {
+        match ty_ref {
+            Ref::Fixed(ty) => ty,
+            Ref::Var(tvar_id, _) => Self::resolve_ref_to_ty(
+                tvars,
+                &tvars
+                    .get(tvar_id)
+                    .expect("TVar not found while resolving TVarId")
+                    .bound,
+            ),
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+pub enum Ref<M: PM> {
+    Var(TVarId, M),
+    Fixed(Ty<M>),
+}
+
+impl<M: PM> Ref<M> {
     /// Tries to convert the TyRef to a fixed Ty
-    fn try_to_fixed(&self) -> Option<&Ty<Self>>;
+    pub fn try_to_fixed(&self) -> Option<&Ty<M>> {
+        match self {
+            Ref::Var(_, _) => None,
+            Ref::Fixed(ty) => Some(ty),
+        }
+    }
 
     /// Constructs a fixed TyRef from a union of the passed vector `members`
     ///
     /// `members` should already be unified by the type system; this cannot be used to construct
     /// arbitrary valid unions.
-    fn from_vec(mut members: Vec<Self>) -> Self {
+    pub fn from_vec(mut members: Vec<Self>) -> Self {
         if members.len() == 1 {
             members.pop().unwrap()
         } else {
@@ -41,9 +120,9 @@ pub trait TyRef:
     /// Combination of find + map looking for a particular fixed type
     ///
     /// This is identical to `try_to_fixed().and_then(pred)` except it iterates inside unions.
-    fn find_member<'a, F, T>(&'a self, f: F) -> Option<T>
+    pub fn find_member<'a, F, T>(&'a self, f: F) -> Option<T>
     where
-        F: Fn(&'a Ty<Self>) -> Option<T> + Copy,
+        F: Fn(&'a Ty<M>) -> Option<T> + Copy,
         T: 'a,
     {
         match self.try_to_fixed() {
@@ -56,27 +135,57 @@ pub trait TyRef:
         }
     }
 
-    fn is_never(&self) -> bool {
+    pub fn resolve_to_ty<'ty>(&'ty self, tvars: &'ty TVars) -> &'ty Ty<M> {
+        M::resolve_ref_to_ty(tvars, self)
+    }
+
+    pub fn is_never(&self) -> bool {
         self.try_to_fixed() == Some(&Ty::never())
     }
 }
 
+impl Ref<Mono> {
+    pub fn as_ty(&self) -> &Ty<Mono> {
+        match self {
+            Ref::Fixed(ty) => ty,
+            Ref::Var(_, _) => {
+                unreachable!();
+            }
+        }
+    }
+
+    pub fn into_ty(self) -> Ty<Mono> {
+        match self {
+            Ref::Fixed(ty) => ty,
+            Ref::Var(_, _) => {
+                unreachable!();
+            }
+        }
+    }
+}
+
+impl<M: PM> From<Ty<M>> for Ref<M> {
+    fn from(ty: Ty<M>) -> Self {
+        Ref::Fixed(ty)
+    }
+}
+
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub enum Ty<S: TyRef> {
+pub enum Ty<M: PM> {
     Any,
     Bool,
     Char,
     Float,
-    Map(Box<Map<S>>),
+    Map(Box<Map<M>>),
     Int,
     Num,
     LitBool(bool),
     LitSym(Box<str>),
-    Set(Box<S>),
+    Set(Box<Ref<M>>),
     Str,
     Sym,
-    Union(Box<[S]>),
-    Intersect(Box<[S]>),
+    Union(Box<[Ref<M>]>),
+    Intersect(Box<[Ref<M>]>),
 
     // Function types
     TopFun(Box<TopFun>),
@@ -85,68 +194,68 @@ pub enum Ty<S: TyRef> {
     EqPred,
 
     // Vector types
-    Vector(Box<[S]>),
-    Vectorof(Box<S>),
+    Vector(Box<[Ref<M>]>),
+    Vectorof(Box<Ref<M>>),
 
     // List types
-    List(List<S>),
+    List(List<M>),
 }
 
-impl<S: TyRef> Ty<S> {
+impl<M: PM> Ty<M> {
     /// Returns the canonical unit type
-    pub fn unit() -> Ty<S> {
+    pub fn unit() -> Ty<M> {
         Ty::List(List::new(Box::new([]), None))
     }
 
     /// Returns the canonical never type
-    pub fn never() -> Ty<S> {
+    pub fn never() -> Ty<M> {
         Ty::Union(Box::new([]))
     }
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct Map<S: TyRef> {
-    key: S,
-    value: S,
+pub struct Map<M: PM> {
+    key: Ref<M>,
+    value: Ref<M>,
 }
 
-impl<S: TyRef> Map<S> {
-    pub fn new(key: S, value: S) -> Map<S> {
+impl<M: PM> Map<M> {
+    pub fn new(key: Ref<M>, value: Ref<M>) -> Map<M> {
         Map { key, value }
     }
 
-    pub fn key(&self) -> &S {
+    pub fn key(&self) -> &Ref<M> {
         &self.key
     }
 
-    pub fn value(&self) -> &S {
+    pub fn value(&self) -> &Ref<M> {
         &self.value
     }
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct List<S: TyRef> {
-    fixed: Box<[S]>,
-    rest: Option<Box<S>>,
+pub struct List<M: PM> {
+    fixed: Box<[Ref<M>]>,
+    rest: Option<Box<Ref<M>>>,
 }
 
-impl<S: TyRef> List<S> {
-    pub fn new(fixed: Box<[S]>, rest: Option<S>) -> List<S> {
+impl<M: PM> List<M> {
+    pub fn new(fixed: Box<[Ref<M>]>, rest: Option<Ref<M>>) -> List<M> {
         List {
             fixed,
             rest: rest.map(Box::new),
         }
     }
 
-    pub fn empty() -> List<S> {
+    pub fn empty() -> List<M> {
         List::new(Box::new([]), None)
     }
 
-    pub fn fixed(&self) -> &[S] {
+    pub fn fixed(&self) -> &[Ref<M>] {
         &self.fixed
     }
 
-    pub fn rest(&self) -> Option<&S> {
+    pub fn rest(&self) -> Option<&Ref<M>> {
         match self.rest {
             Some(ref rest) => Some(rest.as_ref()),
             None => None,
@@ -176,12 +285,12 @@ impl<S: TyRef> List<S> {
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct TopFun {
     purity: purity::Poly,
-    ret: Poly,
+    ret: Ref<Poly>,
 }
 
 impl TopFun {
     /// Returns a top function type
-    pub fn new(purity: purity::Poly, ret: Poly) -> TopFun {
+    pub fn new(purity: purity::Poly, ret: Ref<Poly>) -> TopFun {
         TopFun { purity, ret }
     }
 
@@ -194,26 +303,20 @@ impl TopFun {
         &self.purity
     }
 
-    pub fn ret(&self) -> &Poly {
+    pub fn ret(&self) -> &Ref<Poly> {
         &self.ret
     }
 }
 
-impl<S: TyRef> From<TopFun> for Ty<S> {
+impl<M: PM> From<TopFun> for Ty<M> {
     fn from(top_fun: TopFun) -> Self {
         Ty::TopFun(Box::new(top_fun))
     }
 }
 
-impl From<TopFun> for Poly {
+impl<M: PM> From<TopFun> for Ref<M> {
     fn from(top_fun: TopFun) -> Self {
-        Poly::Fixed(Ty::TopFun(Box::new(top_fun)))
-    }
-}
-
-impl From<TopFun> for Mono {
-    fn from(top_fun: TopFun) -> Self {
-        Mono(Ty::TopFun(Box::new(top_fun)))
+        Ref::Fixed(Ty::TopFun(Box::new(top_fun)))
     }
 }
 
@@ -291,7 +394,7 @@ impl Fun {
         &self.params
     }
 
-    pub fn ret(&self) -> &Poly {
+    pub fn ret(&self) -> &Ref<Poly> {
         &self.top_fun.ret
     }
 
@@ -308,107 +411,15 @@ impl Fun {
     }
 }
 
-impl<S: TyRef> From<Fun> for Ty<S> {
+impl<M: PM> From<Fun> for Ty<M> {
     fn from(fun: Fun) -> Self {
         Ty::Fun(Box::new(fun))
     }
 }
 
-impl From<Fun> for Poly {
+impl<M: PM> From<Fun> for Ref<M> {
     fn from(fun: Fun) -> Self {
-        Poly::Fixed(Ty::Fun(Box::new(fun)))
-    }
-}
-
-impl From<Fun> for Mono {
-    fn from(fun: Fun) -> Self {
-        Mono(Ty::Fun(Box::new(fun)))
-    }
-}
-
-new_global_id_type!(TVarId);
-
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub struct TVar {
-    source_name: Box<str>,
-    bound: Poly,
-}
-
-pub type TVars = BTreeMap<TVarId, TVar>;
-
-impl TVar {
-    pub fn new(source_name: Box<str>, bound: Poly) -> TVar {
-        TVar { source_name, bound }
-    }
-
-    pub fn source_name(&self) -> &str {
-        &self.source_name
-    }
-
-    pub fn bound(&self) -> &Poly {
-        &self.bound
-    }
-}
-
-pub fn merge_tvars(outer: &TVars, inner: &TVars) -> TVars {
-    outer
-        .iter()
-        .map(|(tvar_id, tvar)| (*tvar_id, tvar.clone()))
-        .chain(inner.iter().map(|(tvar_id, tvar)| (*tvar_id, tvar.clone())))
-        .collect()
-}
-
-pub fn merge_three_tvars(one: &TVars, two: &TVars, three: &TVars) -> TVars {
-    one.iter()
-        .map(|(tvar_id, tvar)| (*tvar_id, tvar.clone()))
-        .chain(two.iter().map(|(tvar_id, tvar)| (*tvar_id, tvar.clone())))
-        .chain(three.iter().map(|(tvar_id, tvar)| (*tvar_id, tvar.clone())))
-        .collect()
-}
-
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
-pub enum Poly {
-    Var(TVarId),
-    Fixed(Ty<Poly>),
-}
-
-impl TyRef for Poly {
-    fn try_to_fixed(&self) -> Option<&Ty<Poly>> {
-        match self {
-            Poly::Fixed(fixed) => Some(fixed),
-            _ => None,
-        }
-    }
-}
-
-impl From<Ty<Poly>> for Poly {
-    fn from(ty: Ty<Poly>) -> Self {
-        Poly::Fixed(ty)
-    }
-}
-
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub struct Mono(Ty<Mono>);
-
-impl Mono {
-    pub fn as_ty(&self) -> &Ty<Mono> {
-        &self.0
-    }
-
-    pub fn into_ty(self) -> Ty<Mono> {
-        self.0
-    }
-}
-
-impl TyRef for Mono {
-    fn try_to_fixed(&self) -> Option<&Ty<Mono>> {
-        Some(self.as_ty())
-    }
-}
-
-impl From<Ty<Mono>> for Mono {
-    fn from(ty: Ty<Mono>) -> Self {
-        Mono(ty)
+        Ref::Fixed(Ty::Fun(Box::new(fun)))
     }
 }
 
@@ -417,18 +428,18 @@ impl From<Ty<Mono>> for Mono {
 /// The `Known` variant indicates the type is specified while `Free` indicates it must be inferred.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Decl {
-    Known(Poly),
+    Known(Ref<Poly>),
     Free,
 }
 
 impl From<Ty<Poly>> for Decl {
     fn from(ty: Ty<Poly>) -> Self {
-        Decl::Known(Poly::Fixed(ty))
+        Decl::Known(Ref::Fixed(ty))
     }
 }
 
-impl From<Poly> for Decl {
-    fn from(poly: Poly) -> Self {
+impl From<Ref<Poly>> for Decl {
+    fn from(poly: Ref<Poly>) -> Self {
         Decl::Known(poly)
     }
 }

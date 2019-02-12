@@ -16,7 +16,7 @@ pub enum Binding {
     Var(VarId),
     Prim(Prim),
     Macro(Rc<Macro>),
-    Ty(ty::Poly),
+    Ty(ty::Ref<ty::Poly>),
     TyCons(types::TyCons),
     TyPred(ty::pred::TestTy),
     EqPred,

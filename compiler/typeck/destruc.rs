@@ -37,8 +37,8 @@ pub fn type_for_decl_list_destruc(
 pub fn type_for_decl_destruc(
     tvars: &ty::TVars,
     destruc: &destruc::Destruc<hir::Lowered>,
-    guide_type: Option<&ty::Poly>,
-) -> ty::Poly {
+    guide_type: Option<&ty::Ref<ty::Poly>>,
+) -> ty::Ref<ty::Poly> {
     match destruc {
         destruc::Destruc::Scalar(_, scalar) => match scalar.ty() {
             ty::Decl::Known(poly) => poly.clone(),

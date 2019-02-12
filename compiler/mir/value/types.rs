@@ -8,7 +8,10 @@ use crate::mir::tagset::TypeTagSet;
 use crate::mir::value::{RegValue, Value};
 use crate::ty;
 
-pub fn mono_to_const(heap: &mut impl boxed::AsHeap, mono: &ty::Mono) -> Option<Gc<boxed::Any>> {
+pub fn mono_to_const(
+    heap: &mut impl boxed::AsHeap,
+    mono: &ty::Ref<ty::Mono>,
+) -> Option<Gc<boxed::Any>> {
     match mono.as_ty() {
         ty::Ty::LitBool(value) => Some(boxed::Bool::singleton_ref(*value).as_any_ref()),
         ty::Ty::LitSym(value) => Some(boxed::Sym::new(heap, value.as_ref()).as_any_ref()),
@@ -57,7 +60,7 @@ pub fn value_with_arret_ty<F>(
     build_arret_ty: F,
 ) -> Value
 where
-    F: FnOnce() -> ty::Mono,
+    F: FnOnce() -> ty::Ref<ty::Mono>,
 {
     if let Value::Reg(reg_value) = value {
         // This could be useful; request the type

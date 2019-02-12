@@ -19,7 +19,7 @@ pub enum TestTy {
 }
 
 impl TestTy {
-    pub fn to_ty<S: ty::TyRef>(self) -> ty::Ty<S> {
+    pub fn to_ty<M: ty::PM>(self) -> ty::Ty<M> {
         match self {
             TestTy::Sym => ty::Ty::Sym,
             TestTy::Str => ty::Ty::Str,

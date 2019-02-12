@@ -74,7 +74,7 @@ impl FunCtx {
         }
     }
 
-    pub fn monomorphise(&self, poly: &ty::Poly) -> ty::Mono {
+    pub fn monomorphise(&self, poly: &ty::Ref<ty::Poly>) -> ty::Ref<ty::Mono> {
         ty::subst::monomorphise(&self.mono_ty_args, poly)
     }
 }
@@ -265,7 +265,7 @@ impl EvalHirCtx {
         &mut self,
         b: &mut Builder,
         span: Span,
-        ret_ty: &ty::Mono,
+        ret_ty: &ty::Ref<ty::Mono>,
         arret_fun: &value::ArretFun,
         arg_list_value: Value,
     ) -> Result<Value> {
@@ -354,7 +354,7 @@ impl EvalHirCtx {
         fcx: &mut FunCtx,
         b: &mut Option<Builder>,
         span: Span,
-        ret_ty: &ty::Mono,
+        ret_ty: &ty::Ref<ty::Mono>,
         arret_fun: &value::ArretFun,
         apply_args: ApplyArgs<'_>,
     ) -> Result<Value> {
@@ -552,7 +552,7 @@ impl EvalHirCtx {
         &mut self,
         b: &mut Option<Builder>,
         span: Span,
-        ret_ty: &ty::Mono,
+        ret_ty: &ty::Ref<ty::Mono>,
         rust_fun: &hir::rfi::Fun,
         apply_args: ApplyArgs<'_>,
     ) -> Result<Value> {
@@ -612,7 +612,7 @@ impl EvalHirCtx {
         fcx: &mut FunCtx,
         b: &mut Option<Builder>,
         span: Span,
-        ret_ty: &ty::Mono,
+        ret_ty: &ty::Ref<ty::Mono>,
         fun_thunk: Gc<boxed::FunThunk>,
         apply_args: ApplyArgs<'_>,
     ) -> Result<Value> {
@@ -692,7 +692,7 @@ impl EvalHirCtx {
         fcx: &mut FunCtx,
         b: &mut Option<Builder>,
         span: Span,
-        ret_ty: &ty::Mono,
+        ret_ty: &ty::Ref<ty::Mono>,
         fun_value: &Value,
         apply_args: ApplyArgs<'_>,
     ) -> Result<Value> {
@@ -739,7 +739,7 @@ impl EvalHirCtx {
         fcx: &mut FunCtx,
         b: &mut Option<Builder>,
         span: Span,
-        result_ty: &ty::Poly,
+        result_ty: &ty::Ref<ty::Poly>,
         app: &hir::App<hir::Inferred>,
     ) -> Result<Value> {
         let fun_value = self.eval_expr(fcx, b, &app.fun_expr)?;

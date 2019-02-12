@@ -21,7 +21,6 @@ pub fn rust_fun_app_purity(
     apply_pvar_purities: &HashMap<purity::PVarId, purity::Poly>,
     rust_fun: &hir::rfi::Fun,
 ) -> Purity {
-    use crate::ty::TyRef;
     let arret_fun_type = rust_fun.arret_fun_type();
 
     if arret_fun_type.ret().is_never() {
@@ -48,7 +47,6 @@ pub fn rust_fun_app_purity(
 
 /// Returns the upper bound on the purity for a Rust fun
 pub fn rust_fun_purity_upper_bound(rust_fun: &hir::rfi::Fun) -> Purity {
-    use crate::ty::TyRef;
     let arret_fun_type = rust_fun.arret_fun_type();
 
     if arret_fun_type.ret().is_never() {
@@ -64,7 +62,7 @@ pub fn build_rust_fun_app(
     ehx: &mut EvalHirCtx,
     b: &mut Builder,
     span: Span,
-    ret_ty: &ty::Mono,
+    ret_ty: &ty::Ref<ty::Mono>,
     rust_fun: &hir::rfi::Fun,
     call_purity: Purity,
     arg_list_value: Value,
