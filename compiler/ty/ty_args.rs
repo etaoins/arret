@@ -10,13 +10,13 @@ use crate::ty::purity::Purity;
 /// type variable.
 #[derive(PartialEq, Clone, Debug)]
 pub struct TyArgs<M: ty::PM> {
-    pvar_purities: HashMap<purity::PVarId, purity::Poly>,
+    pvar_purities: HashMap<purity::PVarId, purity::Ref>,
     tvar_types: HashMap<ty::TVarId, ty::Ref<M>>,
 }
 
 impl<M: ty::PM> TyArgs<M> {
     pub fn new(
-        pvar_purities: HashMap<purity::PVarId, purity::Poly>,
+        pvar_purities: HashMap<purity::PVarId, purity::Ref>,
         tvar_types: HashMap<ty::TVarId, ty::Ref<M>>,
     ) -> Self {
         Self {
@@ -32,7 +32,7 @@ impl<M: ty::PM> TyArgs<M> {
         }
     }
 
-    pub fn pvar_purities(&self) -> &HashMap<purity::PVarId, purity::Poly> {
+    pub fn pvar_purities(&self) -> &HashMap<purity::PVarId, purity::Ref> {
         &self.pvar_purities
     }
 

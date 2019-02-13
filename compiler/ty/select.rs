@@ -19,7 +19,7 @@ pub struct SelectCtx<'vars> {
     selecting_pvars: &'vars purity::PVars,
     selecting_tvars: &'vars ty::TVars,
 
-    pvar_purities: HashMap<purity::PVarId, purity::Poly>,
+    pvar_purities: HashMap<purity::PVarId, purity::Ref>,
     tvar_types: HashMap<ty::TVarId, ty::Ref<ty::Poly>>,
 }
 
@@ -161,10 +161,10 @@ impl<'vars> SelectCtx<'vars> {
 
     pub fn add_evidence_purity(
         &mut self,
-        target_purity: &purity::Poly,
-        evidence_purity: &purity::Poly,
+        target_purity: &purity::Ref,
+        evidence_purity: &purity::Ref,
     ) {
-        let pvar_id = if let purity::Poly::Var(pvar_id) = target_purity {
+        let pvar_id = if let purity::Ref::Var(pvar_id) = target_purity {
             pvar_id
         } else {
             return;
@@ -270,7 +270,7 @@ mod test {
             .unwrap()
         }
 
-        fn purity_for_str(&self, poly_str: &str) -> purity::Poly {
+        fn purity_for_str(&self, poly_str: &str) -> purity::Ref {
             use crate::hir::try_lower_purity;
             let test_datum = datum_from_str(poly_str).unwrap();
 
@@ -310,8 +310,8 @@ mod test {
         assert_eq!(Some(selected_poly), ctx.tvar_types.get(&tvar_id));
     }
 
-    fn assert_unselected_purity(ctx: &SelectCtx<'_>, poly_var: &purity::Poly) {
-        let pvar_id = if let purity::Poly::Var(pvar_id) = poly_var {
+    fn assert_unselected_purity(ctx: &SelectCtx<'_>, poly_var: &purity::Ref) {
+        let pvar_id = if let purity::Ref::Var(pvar_id) = poly_var {
             pvar_id
         } else {
             panic!("Can't find pvar ID")
@@ -322,17 +322,17 @@ mod test {
 
     fn assert_selected_purity(
         ctx: &SelectCtx<'_>,
-        poly_var: &purity::Poly,
+        poly_var: &purity::Ref,
         selected_purity: Purity,
     ) {
-        let pvar_id = if let purity::Poly::Var(pvar_id) = poly_var {
+        let pvar_id = if let purity::Ref::Var(pvar_id) = poly_var {
             pvar_id
         } else {
             panic!("Can't find pvar ID")
         };
 
         assert_eq!(
-            Some(&purity::Poly::Fixed(selected_purity)),
+            Some(&purity::Ref::Fixed(selected_purity)),
             ctx.pvar_purities.get(&pvar_id)
         );
     }

@@ -48,12 +48,12 @@ impl From<ty::Ref<ty::Poly>> for DeclTy {
 /// inferred.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum DeclPurity {
-    Known(purity::Poly),
+    Known(purity::Ref),
     Free,
 }
 
-impl From<purity::Poly> for DeclPurity {
-    fn from(poly: purity::Poly) -> Self {
+impl From<purity::Ref> for DeclPurity {
+    fn from(poly: purity::Ref) -> Self {
         DeclPurity::Known(poly)
     }
 }
@@ -61,7 +61,7 @@ impl From<purity::Poly> for DeclPurity {
 #[cfg(test)]
 impl From<purity::Purity> for DeclPurity {
     fn from(purity: purity::Purity) -> Self {
-        DeclPurity::Known(purity::Poly::Fixed(purity))
+        DeclPurity::Known(purity::Ref::Fixed(purity))
     }
 }
 
@@ -75,7 +75,7 @@ pub trait Phase: Clone + std::cmp::PartialEq + std::fmt::Debug {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Inferred {}
 impl Phase for Inferred {
-    type Purity = purity::Poly;
+    type Purity = purity::Ref;
     type DeclType = ty::Ref<ty::Poly>;
     type ResultType = ty::Ref<ty::Poly>;
     type TyArgs = ty::ty_args::TyArgs<ty::Poly>;

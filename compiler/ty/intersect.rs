@@ -50,7 +50,7 @@ fn unify_list(
     }
 }
 
-fn intersect_purity_refs(purity1: &purity::Poly, purity2: &purity::Poly) -> purity::Poly {
+fn intersect_purity_refs(purity1: &purity::Ref, purity2: &purity::Ref) -> purity::Ref {
     if purity1 == purity2 {
         purity1.clone()
     } else {

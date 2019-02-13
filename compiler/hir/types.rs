@@ -59,14 +59,14 @@ fn lower_polymorphic_var(scope: &Scope, tvar_datum: NsDatum) -> Result<Polymorph
                 let source_name = ident.name().into();
 
                 match try_lower_purity(scope, &bound_datum) {
-                    Some(purity::Poly::Fixed(Purity::Impure)) => {
+                    Some(purity::Ref::Fixed(Purity::Impure)) => {
                         return Ok(PolymorphicVar {
                             span,
                             ident,
                             kind: PolymorphicVarKind::PVar(purity::PVar::new(source_name)),
                         });
                     }
-                    Some(purity::Poly::Fixed(Purity::Pure)) => {
+                    Some(purity::Ref::Fixed(Purity::Pure)) => {
                         // Emulate bounding to pure in case the purity comes from e.g. a macro
                         // expansion
                         return Ok(PolymorphicVar {
@@ -125,7 +125,7 @@ fn lower_list_cons(scope: &Scope, mut arg_iter: NsDataIter) -> Result<ty::List<t
 
 fn lower_fun_cons(
     scope: &Scope,
-    purity: purity::Poly,
+    purity: purity::Ref,
     mut arg_iter: NsDataIter,
 ) -> Result<ty::Ref<ty::Poly>> {
     let ret_ty = lower_poly(scope, arg_iter.next_back().unwrap())?;
@@ -342,7 +342,7 @@ pub fn lower_polymorphic_vars(
                 let pvar_id = purity::PVarId::alloc();
                 pvars.insert(pvar_id, pvar);
 
-                Binding::Purity(purity::Poly::Var(pvar_id))
+                Binding::Purity(purity::Ref::Var(pvar_id))
             }
             PolymorphicVarKind::TVar(tvar) => {
                 let tvar_id = ty::TVarId::alloc();
@@ -361,7 +361,7 @@ pub fn lower_polymorphic_vars(
     Ok((pvars, tvars))
 }
 
-pub fn try_lower_purity(scope: &Scope, datum: &NsDatum) -> Option<purity::Poly> {
+pub fn try_lower_purity(scope: &Scope, datum: &NsDatum) -> Option<purity::Ref> {
     scope.get_datum(datum).and_then(|binding| match binding {
         Binding::Purity(purity) => Some(purity.clone()),
         _ => None,
@@ -382,7 +382,7 @@ macro_rules! export_ty_cons {
 
 macro_rules! export_purity {
     ($name:expr, $purity:expr) => {
-        ($name, Binding::Purity(purity::Poly::Fixed($purity)))
+        ($name, Binding::Purity(purity::Ref::Fixed($purity)))
     };
 }
 
@@ -573,11 +573,11 @@ pub fn str_for_ty_ref<M: ty::PM>(
     }
 }
 
-pub fn str_for_purity(pvars: &purity::PVars, purity: &purity::Poly) -> String {
+pub fn str_for_purity(pvars: &purity::PVars, purity: &purity::Ref) -> String {
     match purity {
-        purity::Poly::Fixed(Purity::Pure) => "->".to_owned(),
-        purity::Poly::Fixed(Purity::Impure) => "->!".to_owned(),
-        purity::Poly::Var(pvar_id) => pvars[pvar_id].source_name().into(),
+        purity::Ref::Fixed(Purity::Pure) => "->".to_owned(),
+        purity::Ref::Fixed(Purity::Impure) => "->!".to_owned(),
+        purity::Ref::Var(pvar_id) => pvars[pvar_id].source_name().into(),
     }
 }
 

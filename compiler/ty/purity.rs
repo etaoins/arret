@@ -34,13 +34,13 @@ pub fn merge_pvars(outer: &PVars, inner: &PVars) -> PVars {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
-pub enum Poly {
+pub enum Ref {
     Fixed(Purity),
     Var(PVarId),
 }
 
-impl From<Purity> for Poly {
+impl From<Purity> for Ref {
     fn from(purity: Purity) -> Self {
-        Poly::Fixed(purity)
+        Ref::Fixed(purity)
     }
 }

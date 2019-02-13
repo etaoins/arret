@@ -20,7 +20,7 @@ pub enum Binding {
     TyCons(types::TyCons),
     TyPred(ty::pred::TestTy),
     EqPred,
-    Purity(purity::Poly),
+    Purity(purity::Ref),
 }
 
 struct SpannedBinding {

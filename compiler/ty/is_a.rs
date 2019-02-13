@@ -341,14 +341,14 @@ fn tvar_id_is_bounded_by(
     }
 }
 
-fn purity_ref_is_a(sub: &purity::Poly, parent: &purity::Poly) -> Result {
+fn purity_ref_is_a(sub: &purity::Ref, parent: &purity::Ref) -> Result {
     if sub == parent {
         return Result::Yes;
     }
 
     match (sub, parent) {
-        (_, purity::Poly::Fixed(Purity::Impure)) => Result::Yes,
-        (purity::Poly::Fixed(Purity::Impure), &purity::Poly::Fixed(Purity::Pure)) => Result::No,
+        (_, purity::Ref::Fixed(Purity::Impure)) => Result::Yes,
+        (purity::Ref::Fixed(Purity::Impure), &purity::Ref::Fixed(Purity::Pure)) => Result::No,
         _ => Result::May,
     }
 }

@@ -284,13 +284,13 @@ impl<M: PM> List<M> {
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct TopFun {
-    purity: purity::Poly,
+    purity: purity::Ref,
     ret: Ref<Poly>,
 }
 
 impl TopFun {
     /// Returns a top function type
-    pub fn new(purity: purity::Poly, ret: Ref<Poly>) -> TopFun {
+    pub fn new(purity: purity::Ref, ret: Ref<Poly>) -> TopFun {
         TopFun { purity, ret }
     }
 
@@ -299,7 +299,7 @@ impl TopFun {
         Self::new(purity::Purity::Pure.into(), Ty::Bool.into())
     }
 
-    pub fn purity(&self) -> &purity::Poly {
+    pub fn purity(&self) -> &purity::Ref {
         &self.purity
     }
 
@@ -386,7 +386,7 @@ impl Fun {
         &self.top_fun
     }
 
-    pub fn purity(&self) -> &purity::Poly {
+    pub fn purity(&self) -> &purity::Ref {
         &self.top_fun.purity
     }
 

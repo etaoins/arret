@@ -18,7 +18,7 @@ use crate::ty::purity::Purity;
 ///
 /// Rust funs cannot capture pvars so this only needs to look at the pvars from the apply
 pub fn rust_fun_app_purity(
-    apply_pvar_purities: &HashMap<purity::PVarId, purity::Poly>,
+    apply_pvar_purities: &HashMap<purity::PVarId, purity::Ref>,
     rust_fun: &hir::rfi::Fun,
 ) -> Purity {
     let arret_fun_type = rust_fun.arret_fun_type();
@@ -31,9 +31,9 @@ pub fn rust_fun_app_purity(
     }
 
     match arret_fun_type.purity() {
-        purity::Poly::Fixed(purity) => *purity,
-        purity::Poly::Var(pvar_id) => {
-            if let purity::Poly::Fixed(purity) = apply_pvar_purities
+        purity::Ref::Fixed(purity) => *purity,
+        purity::Ref::Var(pvar_id) => {
+            if let purity::Ref::Fixed(purity) = apply_pvar_purities
                 .get(pvar_id)
                 .expect("Unable to find PVar when monomorphising Rust fun apply")
             {

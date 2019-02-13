@@ -284,14 +284,14 @@ fn unify_ty<M: ty::PM>(
     }
 }
 
-pub fn unify_purity_refs(purity1: &purity::Poly, purity2: &purity::Poly) -> purity::Poly {
+pub fn unify_purity_refs(purity1: &purity::Ref, purity2: &purity::Ref) -> purity::Ref {
     if purity1 == purity2 {
         return purity1.clone();
     }
 
     match (purity1, purity2) {
         // Pure is the "empty type" so this is a no-op
-        (purity::Poly::Fixed(Purity::Pure), other) | (other, purity::Poly::Fixed(Purity::Pure)) => {
+        (purity::Ref::Fixed(Purity::Pure), other) | (other, purity::Ref::Fixed(Purity::Pure)) => {
             other.clone()
         }
         _ => {
@@ -591,10 +591,10 @@ mod test {
         let purity_impure = Purity::Impure.into();
 
         let pvar_id1 = purity::PVarId::alloc();
-        let purity_var1 = purity::Poly::Var(pvar_id1);
+        let purity_var1 = purity::Ref::Var(pvar_id1);
 
         let pvar_id2 = purity::PVarId::alloc();
-        let purity_var2 = purity::Poly::Var(pvar_id2);
+        let purity_var2 = purity::Ref::Var(pvar_id2);
 
         assert_eq!(purity_pure, unify_purity_refs(&purity_pure, &purity_pure));
 

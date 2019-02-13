@@ -114,12 +114,12 @@ enum VarType {
 
 #[derive(Clone)]
 enum PurityVar {
-    Free(purity::Poly),
-    Known(purity::Poly),
+    Free(purity::Ref),
+    Known(purity::Ref),
 }
 
 impl PurityVar {
-    fn into_poly(self) -> purity::Poly {
+    fn into_poly(self) -> purity::Ref {
         match self {
             PurityVar::Free(poly) => poly,
             PurityVar::Known(poly) => poly,
@@ -163,7 +163,7 @@ fn str_for_poly(fcx: &FunCtx, poly: &ty::Ref<ty::Poly>) -> Box<str> {
     hir::str_for_ty_ref(&fcx.pvars, &fcx.tvars, poly).into_boxed_str()
 }
 
-fn unify_app_purity(pv: &mut PurityVar, app_purity: &purity::Poly) {
+fn unify_app_purity(pv: &mut PurityVar, app_purity: &purity::Ref) {
     if let PurityVar::Free(ref mut free_purity) = pv {
         *free_purity = ty::unify::unify_purity_refs(free_purity, &app_purity)
     };

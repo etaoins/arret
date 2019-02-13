@@ -83,7 +83,7 @@ trait Substitution {
     type OutputPM: ty::PM;
     type AsPolySubst: Substitution<InputPM = ty::Poly, OutputPM = ty::Poly>;
 
-    fn subst_purity_ref(&self, poly: &purity::Poly) -> purity::Poly;
+    fn subst_purity_ref(&self, poly: &purity::Ref) -> purity::Ref;
     fn subst_ty_ref(&self, input: &ty::Ref<Self::InputPM>) -> ty::Ref<Self::OutputPM>;
     fn as_poly_subst(&self) -> &Self::AsPolySubst;
 }
@@ -93,10 +93,10 @@ impl<'tvars> Substitution for TyArgs<ty::Poly> {
     type OutputPM = ty::Poly;
     type AsPolySubst = Self;
 
-    fn subst_purity_ref(&self, poly: &purity::Poly) -> purity::Poly {
+    fn subst_purity_ref(&self, poly: &purity::Ref) -> purity::Ref {
         match poly {
-            purity::Poly::Fixed(_) => poly.clone(),
-            purity::Poly::Var(pvar_id) => {
+            purity::Ref::Fixed(_) => poly.clone(),
+            purity::Ref::Var(pvar_id) => {
                 if let Some(selected) = self.pvar_purities().get(pvar_id) {
                     selected.clone()
                 } else {
@@ -131,7 +131,7 @@ impl Substitution for PolyIdentity {
     type OutputPM = ty::Poly;
     type AsPolySubst = Self;
 
-    fn subst_purity_ref(&self, poly: &purity::Poly) -> purity::Poly {
+    fn subst_purity_ref(&self, poly: &purity::Ref) -> purity::Ref {
         poly.clone()
     }
 
@@ -161,7 +161,7 @@ impl Substitution for MonoToPoly {
     type OutputPM = ty::Poly;
     type AsPolySubst = PolyIdentity;
 
-    fn subst_purity_ref(&self, poly: &purity::Poly) -> purity::Poly {
+    fn subst_purity_ref(&self, poly: &purity::Ref) -> purity::Ref {
         poly.clone()
     }
 
@@ -193,10 +193,10 @@ impl<'tyargs> Substitution for Monomorphise<'tyargs> {
     type OutputPM = ty::Mono;
     type AsPolySubst = PartialMonomorphise<'tyargs>;
 
-    fn subst_purity_ref(&self, poly: &purity::Poly) -> purity::Poly {
+    fn subst_purity_ref(&self, poly: &purity::Ref) -> purity::Ref {
         match poly {
-            purity::Poly::Fixed(_) => poly.clone(),
-            purity::Poly::Var(pvar_id) => self
+            purity::Ref::Fixed(_) => poly.clone(),
+            purity::Ref::Var(pvar_id) => self
                 .mono_ty_args
                 .pvar_purities()
                 .get(pvar_id)
@@ -231,10 +231,10 @@ impl<'tyargs> Substitution for PartialMonomorphise<'tyargs> {
     type OutputPM = ty::Poly;
     type AsPolySubst = Self;
 
-    fn subst_purity_ref(&self, poly: &purity::Poly) -> purity::Poly {
+    fn subst_purity_ref(&self, poly: &purity::Ref) -> purity::Ref {
         match poly {
-            purity::Poly::Fixed(_) => poly.clone(),
-            purity::Poly::Var(pvar_id) => {
+            purity::Ref::Fixed(_) => poly.clone(),
+            purity::Ref::Var(pvar_id) => {
                 if let Some(purity) = self.mono_ty_args.pvar_purities().get(pvar_id) {
                     purity.clone()
                 } else {
@@ -270,7 +270,7 @@ pub fn subst_poly_fun(pta: &TyArgs<ty::Poly>, fun: &ty::Fun) -> ty::Fun {
     subst_fun(pta, fun)
 }
 
-pub fn subst_purity(pta: &TyArgs<ty::Poly>, purity: &purity::Poly) -> purity::Poly {
+pub fn subst_purity(pta: &TyArgs<ty::Poly>, purity: &purity::Ref) -> purity::Ref {
     pta.subst_purity_ref(purity)
 }
 
