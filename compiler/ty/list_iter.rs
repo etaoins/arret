@@ -43,10 +43,8 @@ impl<'list, M: ty::PM> ListIterator<'list, M> {
     pub fn tail_type(self) -> ty::List<M> {
         ty::List::new(self.fixed.to_vec().into_boxed_slice(), self.rest.cloned())
     }
-}
 
-impl<'list> ListIterator<'list, ty::Poly> {
-    pub fn collect_rest(self, tvars: &ty::TVars) -> Option<ty::Ref<ty::Poly>> {
+    pub fn collect_rest(self, tvars: &ty::TVars) -> Option<ty::Ref<M>> {
         if self.fixed.is_empty() {
             return self.rest.cloned();
         }
