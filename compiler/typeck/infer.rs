@@ -160,7 +160,7 @@ fn try_to_bool(poly: &ty::Ref<ty::Poly>) -> Option<bool> {
 }
 
 fn str_for_poly(fcx: &FunCtx, poly: &ty::Ref<ty::Poly>) -> Box<str> {
-    hir::str_for_poly(&fcx.pvars, &fcx.tvars, poly).into_boxed_str()
+    hir::str_for_ty_ref(&fcx.pvars, &fcx.tvars, poly).into_boxed_str()
 }
 
 fn unify_app_purity(pv: &mut PurityVar, app_purity: &purity::Poly) {
@@ -1768,9 +1768,9 @@ fn ensure_main_type(
             .unwrap_or_else(|| EMPTY_SPAN.into());
 
         let expected_str =
-            hir::str_for_poly(&empty_pvars, &empty_tvars, &expected_main_type).into_boxed_str();
+            hir::str_for_ty_ref(&empty_pvars, &empty_tvars, &expected_main_type).into_boxed_str();
         let inferred_str =
-            hir::str_for_poly(&empty_pvars, &empty_tvars, inferred_main_type).into_boxed_str();
+            hir::str_for_ty_ref(&empty_pvars, &empty_tvars, inferred_main_type).into_boxed_str();
 
         return Err(Error::new_with_loc_trace(
             main_loc_trace,

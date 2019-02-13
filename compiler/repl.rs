@@ -121,7 +121,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
                         use crate::ty;
                         use crate::ty::purity;
 
-                        let poly_str = hir::str_for_poly(
+                        let poly_str = hir::str_for_ty_ref(
                             &purity::PVars::new(),
                             &ty::TVars::new(),
                             node.result_ty(),

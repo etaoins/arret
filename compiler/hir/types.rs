@@ -430,17 +430,17 @@ pub const TY_EXPORTS: &[(&str, Binding)] = &[
 /// Pushes the arguments for a list constructor on to the passed Vec
 ///
 /// This is used to share code between list and function types
-fn push_list_parts(
+fn push_list_parts<M: ty::PM>(
     pvars: &purity::PVars,
     tvars: &ty::TVars,
     list_parts: &mut Vec<String>,
-    list_poly: &ty::List<ty::Poly>,
+    list_ref: &ty::List<M>,
 ) {
-    for fixed in list_poly.fixed() {
-        list_parts.push(str_for_poly(pvars, tvars, fixed));
+    for fixed in list_ref.fixed() {
+        list_parts.push(str_for_ty_ref(pvars, tvars, fixed));
     }
-    if let Some(rest) = list_poly.rest() {
-        list_parts.push(str_for_poly(pvars, tvars, rest));
+    if let Some(rest) = list_ref.rest() {
+        list_parts.push(str_for_ty_ref(pvars, tvars, rest));
         list_parts.push("...".to_owned());
     }
 }
@@ -463,7 +463,7 @@ fn str_for_bounds(
         format!(
             "[{} {}]",
             tvar.source_name(),
-            str_for_poly(all_pvars, all_tvars, tvar.bound())
+            str_for_ty_ref(all_pvars, all_tvars, tvar.bound())
         )
     });
 
@@ -471,8 +471,8 @@ fn str_for_bounds(
     format!("#{{{}}}", all_parts.join(" "))
 }
 
-fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty::Poly>) -> String {
-    match poly_ty {
+fn str_for_ty<M: ty::PM>(pvars: &purity::PVars, tvars: &ty::TVars, ty: &ty::Ty<M>) -> String {
+    match ty {
         ty::Ty::Any => "Any".to_owned(),
         ty::Ty::Bool => "Bool".to_owned(),
         ty::Ty::Char => "Char".to_owned(),
@@ -486,23 +486,23 @@ fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty
         ty::Ty::LitSym(name) => format!("'{}", name),
         ty::Ty::Map(map) => format!(
             "(Map {} {})",
-            str_for_poly(pvars, tvars, map.key()),
-            str_for_poly(pvars, tvars, map.value())
+            str_for_ty_ref(pvars, tvars, map.key()),
+            str_for_ty_ref(pvars, tvars, map.value())
         ),
-        ty::Ty::Set(member) => format!("(Setof {})", str_for_poly(pvars, tvars, member)),
+        ty::Ty::Set(member) => format!("(Setof {})", str_for_ty_ref(pvars, tvars, member)),
         ty::Ty::Vector(members) => {
             let result_parts: Vec<String> = members
                 .iter()
-                .map(|member| format!(" {}", str_for_poly(pvars, tvars, member)))
+                .map(|member| format!(" {}", str_for_ty_ref(pvars, tvars, member)))
                 .collect();
 
             format!("(Vector{})", result_parts.join(""))
         }
-        ty::Ty::Vectorof(member) => format!("(Vectorof {})", str_for_poly(pvars, tvars, member)),
+        ty::Ty::Vectorof(member) => format!("(Vectorof {})", str_for_ty_ref(pvars, tvars, member)),
         ty::Ty::TopFun(top_fun) => format!(
             "(... {} {})",
             str_for_purity(pvars, top_fun.purity()),
-            str_for_poly(pvars, tvars, top_fun.ret())
+            str_for_ty_ref(pvars, tvars, top_fun.ret())
         ),
         ty::Ty::Fun(fun) => {
             let mut fun_parts = Vec::with_capacity(2);
@@ -512,7 +512,7 @@ fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty
 
             push_list_parts(&inner_pvars, &inner_tvars, &mut fun_parts, fun.params());
             fun_parts.push(str_for_purity(&inner_pvars, fun.purity()));
-            fun_parts.push(str_for_poly(&inner_pvars, &inner_tvars, fun.ret()));
+            fun_parts.push(str_for_ty_ref(&inner_pvars, &inner_tvars, fun.ret()));
 
             if fun.has_polymorphic_vars() {
                 format!(
@@ -529,7 +529,7 @@ fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty
         ty::Ty::Union(members) => {
             let member_strs: Vec<String> = members
                 .iter()
-                .map(|m| format!(" {}", str_for_poly(pvars, tvars, m)))
+                .map(|m| format!(" {}", str_for_ty_ref(pvars, tvars, m)))
                 .collect();
 
             format!("(U{})", member_strs.join(""))
@@ -537,7 +537,7 @@ fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty
         ty::Ty::Intersect(members) => {
             let member_strs: Vec<String> = members
                 .iter()
-                .map(|m| format!(" {}", str_for_poly(pvars, tvars, m)))
+                .map(|m| format!(" {}", str_for_ty_ref(pvars, tvars, m)))
                 .collect();
 
             format!("(∩{})", member_strs.join(""))
@@ -547,7 +547,7 @@ fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty
             // representation
             if list.fixed().is_empty() {
                 match list.rest() {
-                    Some(rest) => format!("(Listof {})", str_for_poly(pvars, tvars, rest)),
+                    Some(rest) => format!("(Listof {})", str_for_ty_ref(pvars, tvars, rest)),
                     None => "()".to_owned(),
                 }
             } else {
@@ -562,10 +562,14 @@ fn str_for_poly_ty(pvars: &purity::PVars, tvars: &ty::TVars, poly_ty: &ty::Ty<ty
     }
 }
 
-pub fn str_for_poly(pvars: &purity::PVars, tvars: &ty::TVars, poly: &ty::Ref<ty::Poly>) -> String {
-    match poly {
+pub fn str_for_ty_ref<M: ty::PM>(
+    pvars: &purity::PVars,
+    tvars: &ty::TVars,
+    ty_ref: &ty::Ref<M>,
+) -> String {
+    match ty_ref {
         ty::Ref::Var(tvar_id, _) => tvars[tvar_id].source_name().to_owned(),
-        ty::Ref::Fixed(poly_ty) => str_for_poly_ty(pvars, tvars, poly_ty),
+        ty::Ref::Fixed(ty) => str_for_ty(pvars, tvars, ty),
     }
 }
 
@@ -620,18 +624,19 @@ mod test {
         let expected_poly = expected.into();
         assert_eq!(expected_poly, poly_for_str(datum_str));
 
-        // Try to round trip this to make sure str_for_poly works
-        let recovered_str = str_for_poly(&purity::PVars::new(), &ty::TVars::new(), &expected_poly);
+        // Try to round trip this to make sure str_for_ty_tef works
+        let recovered_str =
+            str_for_ty_ref(&purity::PVars::new(), &ty::TVars::new(), &expected_poly);
         assert_eq!(expected_poly, poly_for_str(&recovered_str));
     }
 
-    /// This asserts that a type uses an exact str  [ing in str_for_poly
+    /// This asserts that a type uses an exact string in str_for_ty_ref
     ///
     /// This is to make sure we use e.g. `(Listof Int)` instead of `(List Int ...)`
     fn assert_exact_str_repr(datum_str: &str) {
         assert_eq!(
             datum_str,
-            str_for_poly(
+            str_for_ty_ref(
                 &purity::PVars::new(),
                 &ty::TVars::new(),
                 &poly_for_str(datum_str)
@@ -890,7 +895,7 @@ mod test {
     }
 
     #[test]
-    fn simpifying_str_for_poly() {
+    fn simpifying_str_for_ty_ref() {
         assert_exact_str_repr("(List Int Float)");
         assert_exact_str_repr("(List Int Float ...)");
         assert_exact_str_repr("(Listof Float)");

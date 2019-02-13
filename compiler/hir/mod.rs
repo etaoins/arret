@@ -177,8 +177,8 @@ pub struct Def<P: Phase> {
 }
 
 pub use self::loader::PackagePaths;
-pub use self::types::str_for_poly;
 pub use self::types::str_for_purity;
+pub use self::types::str_for_ty_ref;
 
 #[cfg(test)]
 pub use self::types::{

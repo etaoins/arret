@@ -113,7 +113,7 @@ where
                 format!(
                     "Rust type `{}` does not match declared Arret type of `{}`",
                     abi_type.to_rust_str(),
-                    types::str_for_poly(pvars, tvars, arret_poly),
+                    types::str_for_ty_ref(pvars, tvars, arret_poly),
                 )
                 .into_boxed_str(),
             ),
