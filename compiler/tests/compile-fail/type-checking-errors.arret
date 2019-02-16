@@ -77,4 +77,13 @@
 (def _ (map println! '(0 1 2 3)))
            ;^^^^^^^^ ERROR `(Any ... ->! ())` is not a `(Int -> Any)`
 
+; `input` is used both as a poly `Sym` and a poly `Num`
+(defn conflicting-poly-types #{[A Sym] [B Num]} (input
+                                                 [sym-is-foo? (A -> Bool)]
+                                                 [num-is-zero? (B -> Bool)]) -> ()
+  (sym-is-foo? input)
+  (num-is-zero? input)
+               ;^^^^^ ERROR inferred conflicting types `B` and `A`
+  ())
+
 (defn main! ())

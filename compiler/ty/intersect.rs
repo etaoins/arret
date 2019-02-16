@@ -285,7 +285,16 @@ pub fn intersect_ty_refs<M: ty::PM>(
             // We can invoke full intersection logic if we have fixed types
             non_subty_intersect(tvars, ty_ref1, ty1, ty_ref2, ty2)
         }
-        _ => Ok(flatten_ref_intersect(ty_ref1, ty_ref2)),
+        _ => {
+            let bound1 = ty_ref1.resolve_to_ty(tvars);
+            let bound2 = ty_ref2.resolve_to_ty(tvars);
+
+            // Make sure the bounds aren't disjoint
+            // We can't simply `non_subty_intersect` because the bounds may be subtypes
+            intersect_ty_refs(tvars, &bound1.clone().into(), &bound2.clone().into())?;
+
+            Ok(flatten_ref_intersect(ty_ref1, ty_ref2))
+        }
     }
 }
 
@@ -476,7 +485,7 @@ mod test {
     }
 
     #[test]
-    fn poly_vars() {
+    fn unbounded_poly_var() {
         let mut tvars = ty::TVars::new();
 
         let ptype1 = tvar_bounded_by(&mut tvars, ty::Ty::Any.into());
@@ -510,6 +519,30 @@ mod test {
             &any_sym,
             &ptype_intersect,
         );
+    }
+
+    #[test]
+    fn bounded_poly_vars() {
+        let mut tvars = ty::TVars::new();
+
+        let ptype1_any = tvar_bounded_by(&mut tvars, ty::Ty::Any.into());
+        let ptype2_sym = tvar_bounded_by(&mut tvars, ty::Ty::Sym.into());
+        let ptype3_str = tvar_bounded_by(&mut tvars, ty::Ty::Str.into());
+
+        let any_sym = poly_for_str("Sym");
+
+        assert_merged_poly(
+            &ty::Ty::Intersect(Box::new([ptype1_any.clone(), ptype2_sym.clone()])).into(),
+            &tvars,
+            &ptype1_any,
+            &ptype2_sym,
+        );
+
+        assert_merged_poly(&ptype2_sym, &tvars, &any_sym, &ptype2_sym);
+
+        // These have disjoint bounds
+        assert_disjoint_poly(&tvars, &ptype2_sym, &ptype3_str);
+        assert_disjoint_poly(&tvars, &ptype3_str, &any_sym);
     }
 
     #[test]
