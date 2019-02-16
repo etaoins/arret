@@ -4,10 +4,7 @@ use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
 
-/// Type arguments to a polymorphic function
-///
-/// These type arguments are still polymorphic which can happen if the bound refers to another
-/// type variable.
+/// Type arguments to a polymorphic function or substitution
 #[derive(PartialEq, Clone, Debug)]
 pub struct TyArgs<M: ty::PM> {
     pvar_purities: HashMap<purity::PVarId, purity::Ref>,
