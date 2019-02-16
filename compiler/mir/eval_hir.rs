@@ -358,19 +358,23 @@ impl EvalHirCtx {
         arret_fun: &value::ArretFun,
         apply_args: ApplyArgs<'_>,
     ) -> Result<Value> {
-        if let Some(outer_b) = b {
-            inliner::cond_inline(self, fcx, outer_b, span, ret_ty, arret_fun, apply_args)
-        } else {
-            // No builder; we need to inline
-            self.inline_arret_fun_app(
-                fcx,
-                b,
-                span,
-                arret_fun,
-                apply_args,
-                inliner::ApplyStack::new(),
-            )
+        if arret_fun.has_multiple_usages() {
+            if let Some(outer_b) = b {
+                return inliner::cond_inline(
+                    self, fcx, outer_b, span, ret_ty, arret_fun, apply_args,
+                );
+            }
         }
+
+        // Always inline
+        self.inline_arret_fun_app(
+            fcx,
+            b,
+            span,
+            arret_fun,
+            apply_args,
+            inliner::ApplyStack::new(),
+        )
     }
 
     fn eval_ty_pred_app(

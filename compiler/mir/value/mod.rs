@@ -33,6 +33,17 @@ pub struct ArretFun {
     pub fun_expr: Rc<hir::Fun<hir::Inferred>>,
 }
 
+impl ArretFun {
+    /// Indicates if this `ArretFun` is used in multiple places
+    ///
+    /// This is a heuristic; if a `Fun` is bound to a variable this will return true regardless
+    /// of the number of usages.
+    pub fn has_multiple_usages(&self) -> bool {
+        // This is a hack but has the benefit of not requiring a separate analysis pass
+        Rc::strong_count(&self.fun_expr) > 1
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct RegValue {
     pub reg: BuiltReg,
