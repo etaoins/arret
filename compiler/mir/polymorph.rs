@@ -25,6 +25,30 @@ impl PolymorphABI {
             has_rest: true,
         }
     }
+
+    /// Returns the ABI types of the params corresponding to Arret fixed params
+    pub fn arret_fixed_params(&self) -> impl DoubleEndedIterator<Item = &abitype::ABIType> {
+        let mut ops_param_iter = self.ops_abi.params.iter();
+
+        if self.has_closure {
+            ops_param_iter.next().unwrap();
+        }
+
+        if self.has_rest {
+            ops_param_iter.next_back().unwrap();
+        }
+
+        ops_param_iter
+    }
+
+    /// Returns the ABI type of the param corresponding to the Arret rest param, if any
+    pub fn arret_rest_param(&self) -> Option<&abitype::ABIType> {
+        if self.has_rest {
+            self.ops_abi.params.last()
+        } else {
+            None
+        }
+    }
 }
 
 impl From<callback::EntryPointABIType> for PolymorphABI {

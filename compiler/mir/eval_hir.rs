@@ -281,11 +281,8 @@ impl EvalHirCtx {
             polymorph_abi_for_arg_list_value(closure_reg.is_some(), &arg_list_value, ret_ty);
         let ret_abi = wanted_abi.ops_abi.ret.clone();
 
-        let mut arg_abi_types = wanted_abi.ops_abi.params.iter();
         let mut arg_regs: Vec<RegId> = vec![];
-
         if let Some(closure_reg) = closure_reg {
-            arg_abi_types.next();
             arg_regs.push(closure_reg.into());
         }
 
@@ -294,8 +291,8 @@ impl EvalHirCtx {
             b,
             span,
             arg_list_value,
-            arg_abi_types,
-            wanted_abi.has_rest,
+            wanted_abi.arret_fixed_params(),
+            wanted_abi.arret_rest_param(),
         ));
 
         let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);

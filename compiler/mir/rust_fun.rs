@@ -72,19 +72,19 @@ pub fn build_rust_fun_app(
     use crate::mir::value::from_reg::reg_to_value;
     use runtime::abitype::RetABIType;
 
-    let arg_abi_types = rust_fun
+    let mut arg_abi_types = rust_fun
         .params()
         .iter()
         .map(|param_abi_type| &param_abi_type.abi_type);
 
-    let arg_regs = build_save_arg_list_to_regs(
-        ehx,
-        b,
-        span,
-        arg_list_value,
-        arg_abi_types,
-        rust_fun.has_rest(),
-    );
+    let rest_abi_type = if rust_fun.has_rest() {
+        arg_abi_types.next_back()
+    } else {
+        None
+    };
+
+    let arg_regs =
+        build_save_arg_list_to_regs(ehx, b, span, arg_list_value, arg_abi_types, rest_abi_type);
 
     let purity_upper_bound = rust_fun_purity_upper_bound(rust_fun);
 

@@ -32,26 +32,14 @@ pub fn build_load_arg_list_value(b: &mut Builder, polymorph_abi: &PolymorphABI) 
         None
     };
 
-    let mut abi_params_iter = polymorph_abi.ops_abi.params.iter();
-
-    if closure_reg.is_some() {
-        abi_params_iter.next();
-    }
-
-    let rest_reg_value = if polymorph_abi.has_rest {
-        let abi_type = abi_params_iter.next_back().unwrap();
-
-        Some(Rc::new(value::RegValue::new(
-            b.alloc_local(),
-            abi_type.clone(),
-        )))
-    } else {
-        None
-    };
-
-    let fixed_reg_values = abi_params_iter
+    let fixed_reg_values = polymorph_abi
+        .arret_fixed_params()
         .map(|abi_type| Rc::new(value::RegValue::new(b.alloc_local(), abi_type.clone())))
         .collect::<Vec<Rc<value::RegValue>>>();
+
+    let rest_reg_value = polymorph_abi
+        .arret_rest_param()
+        .map(|abi_type| Rc::new(value::RegValue::new(b.alloc_local(), abi_type.clone())));
 
     let param_regs = closure_reg
         .into_iter()
@@ -81,21 +69,15 @@ pub fn build_save_arg_list_to_regs<'a>(
     b: &mut Builder,
     span: Span,
     arg_list_value: Value,
-    mut arg_abi_types: impl DoubleEndedIterator<Item = &'a abitype::ABIType>,
-    has_rest: bool,
+    fixed_abi_types: impl DoubleEndedIterator<Item = &'a abitype::ABIType>,
+    rest_abi_type: Option<&'a abitype::ABIType>,
 ) -> Vec<ops::RegId> {
     use crate::mir::value::build_reg::value_to_reg;
 
     let mut list_iter = arg_list_value.into_list_iter();
 
-    let rest_abi_type = if has_rest {
-        arg_abi_types.next_back()
-    } else {
-        None
-    };
-
     let mut arg_regs = vec![];
-    for abi_type in arg_abi_types {
+    for abi_type in fixed_abi_types {
         let fixed_value = list_iter.next_unchecked(b, span);
         let reg_id = value_to_reg(ehx, b, span, &fixed_value, &abi_type);
         arg_regs.push(reg_id.into());
