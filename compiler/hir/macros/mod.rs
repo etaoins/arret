@@ -3,7 +3,8 @@ mod expander;
 mod matcher;
 
 use std::collections::{HashMap, HashSet};
-use std::hash::{Hash, Hasher};
+
+use syntax::span::Span;
 
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::macros::checker::{check_rule, VarLinks};
@@ -13,9 +14,8 @@ use crate::hir::ns::{Ident, NsDatum};
 use crate::hir::prim::Prim;
 use crate::hir::scope::{Binding, Scope};
 use crate::hir::util::expect_ident;
-use syntax::span::Span;
 
-new_global_id_type!(MacroId);
+use crate::id_type::RcId;
 
 #[derive(PartialEq, Eq, Debug, Hash)]
 pub enum MacroVar {
@@ -90,24 +90,11 @@ pub struct Rule {
 
 #[derive(Debug)]
 pub struct Macro {
-    macro_id: MacroId,
     special_vars: SpecialVars,
     rules: Vec<Rule>,
 }
 
-impl PartialEq for Macro {
-    fn eq(&self, other: &Macro) -> bool {
-        self.macro_id == other.macro_id
-    }
-}
-
-impl Eq for Macro {}
-
-impl Hash for Macro {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.macro_id.hash(state);
-    }
-}
+pub type MacroId = RcId<Macro>;
 
 #[derive(Debug)]
 pub struct MatchData<'data> {
@@ -130,7 +117,6 @@ impl Macro {
         Macro {
             special_vars,
             rules,
-            macro_id: MacroId::alloc(),
         }
     }
 }

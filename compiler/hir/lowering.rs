@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
@@ -9,7 +8,7 @@ use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::exports::Exports;
 use crate::hir::import::lower_import_set;
 use crate::hir::loader::{load_module_by_name, LoadedModule, ModuleName, PackagePaths};
-use crate::hir::macros::{expand_macro, lower_macro_rules};
+use crate::hir::macros::{expand_macro, lower_macro_rules, MacroId};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum, NsId};
 use crate::hir::prim::Prim;
 use crate::hir::rfi;
@@ -127,7 +126,7 @@ fn lower_macro(scope: &mut Scope, self_datum: NsDatum, transformer_spec: NsDatum
     let mac = lower_macro_rules(scope, macro_rules_data)?;
 
     if scope.get(&self_ident) != Some(&Binding::Prim(Prim::Wildcard)) {
-        scope.insert_binding(self_span, self_ident, Binding::Macro(Rc::new(mac)))?;
+        scope.insert_binding(self_span, self_ident, Binding::Macro(MacroId::new(mac)))?;
     }
 
     Ok(())

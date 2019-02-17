@@ -4,7 +4,7 @@ use std::rc::Rc;
 use syntax::span::{Span, EMPTY_SPAN};
 
 use crate::hir::error::{Error, ErrorKind};
-use crate::hir::macros::Macro;
+use crate::hir::macros::MacroId;
 use crate::hir::ns::{Ident, NsDatum, NsId, NsIdCounter};
 use crate::hir::prim::Prim;
 use crate::hir::{types, VarId};
@@ -15,7 +15,7 @@ use crate::ty::purity;
 pub enum Binding {
     Var(VarId),
     Prim(Prim),
-    Macro(Rc<Macro>),
+    Macro(MacroId),
     Ty(ty::Ref<ty::Poly>),
     TyCons(types::TyCons),
     TyPred(ty::pred::TestTy),

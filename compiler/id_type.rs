@@ -121,7 +121,6 @@ macro_rules! new_counting_id_type {
 /// Traits such as `Hash`, `Eq`, `Ord` etc. are implemented in terms of the value's memory location.
 /// This means that the value returned by `RcId::new()` is considered equal to itself and its clones
 /// regardless of the value it points to.
-#[derive(Clone)]
 pub struct RcId<T> {
     inner: Rc<T>,
 }
@@ -130,6 +129,14 @@ impl<T> RcId<T> {
     pub fn new(value: T) -> Self {
         RcId {
             inner: Rc::new(value),
+        }
+    }
+}
+
+impl<T> Clone for RcId<T> {
+    fn clone(&self) -> Self {
+        RcId {
+            inner: self.inner.clone(),
         }
     }
 }
