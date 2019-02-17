@@ -249,16 +249,7 @@ impl EvalHirCtx {
     }
 
     fn eval_lit(&mut self, literal: &Datum) -> Value {
-        match literal {
-            Datum::List(_, elems) => {
-                let elem_values = elems.iter().map(|elem| self.eval_lit(elem)).collect();
-                Value::List(elem_values, None)
-            }
-            other => {
-                let boxed = reader::box_syntax_datum(self, other);
-                Value::Const(boxed)
-            }
-        }
+        Value::Const(reader::box_syntax_datum(self, literal))
     }
 
     pub(super) fn build_arret_fun_app(
