@@ -75,24 +75,11 @@ pub enum Value {
 
 impl Value {
     pub fn list_iter(&self) -> list::ListIterator {
-        use std::ops::Deref;
-        match self {
-            Value::List(fixed, Some(rest)) => {
-                list::ListIterator::new(fixed.clone().into_vec(), Some(rest.deref().clone()))
-            }
-            Value::List(fixed, None) => list::ListIterator::new(fixed.clone().into_vec(), None),
-            other => list::ListIterator::new(vec![], Some(other.clone())),
-        }
+        self.clone().into_list_iter()
     }
 
     pub fn into_list_iter(self) -> list::ListIterator {
-        match self {
-            Value::List(fixed, Some(rest)) => {
-                list::ListIterator::new(fixed.into_vec(), Some(*rest))
-            }
-            Value::List(fixed, None) => list::ListIterator::new(fixed.into_vec(), None),
-            other => list::ListIterator::new(vec![], Some(other)),
-        }
+        list::ListIterator::new(self)
     }
 }
 

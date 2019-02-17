@@ -32,10 +32,10 @@ pub struct ListIterator {
 }
 
 impl<'list> ListIterator {
-    pub fn new(fixed: Vec<Value>, rest: Option<Value>) -> ListIterator {
+    pub fn new(value: Value) -> ListIterator {
         ListIterator {
-            fixed: fixed.into_iter(),
-            rest,
+            fixed: Vec::new().into_iter(),
+            rest: Some(value),
         }
     }
 
@@ -169,7 +169,10 @@ mod test {
         let boxed_list =
             boxed::List::<boxed::Int>::from_values(&mut heap, elements.iter().cloned());
 
-        let mut iter = ListIterator::new(vec![], Some(Value::Const(boxed_list.as_any_ref())));
+        let mut iter = ListIterator {
+            fixed: Vec::new().into_iter(),
+            rest: Some(Value::Const(boxed_list.as_any_ref())),
+        };
 
         for expected in elements {
             let next_value = iter.next_unchecked(&mut None, EMPTY_SPAN);
@@ -197,7 +200,10 @@ mod test {
             })
             .collect();
 
-        let mut iter = ListIterator::new(element_values, None);
+        let mut iter = ListIterator {
+            fixed: element_values.into_iter(),
+            rest: None,
+        };
 
         for expected in elements {
             let next_value = iter.next_unchecked(&mut None, EMPTY_SPAN);
