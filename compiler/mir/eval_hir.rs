@@ -1055,6 +1055,7 @@ impl EvalHirCtx {
 
         let mut b = Builder::new();
         let span = arret_fun.span;
+        let fun_expr = &arret_fun.fun_expr;
 
         let LoadedArgList {
             closure_reg,
@@ -1068,12 +1069,25 @@ impl EvalHirCtx {
         // And loading its closure
         closure::load_from_closure_param(&mut fcx.local_values, &arret_fun.closure, closure_reg);
 
-        // TODO: Right now we're only polymorphic on the parameter's ABI types, not the function's
-        // actual type variables. While this should be correct it can result in suboptimal code
-        // generation. We should either be polymorphic over both or derive the polymorphic type
-        // variables from the ABI type.
-        let fun_expr = &arret_fun.fun_expr;
-        let ty_args = TyArgs::from_upper_bound(&fun_expr.pvar_ids, &fun_expr.tvar_ids);
+        // Try to refine our polymorphic type variables based on our requested op ABI
+        let mut stx = ty::select::SelectCtx::new(&fun_expr.pvar_ids, &fun_expr.tvar_ids);
+
+        // TODO: Our rest param's ABI type should be a list ABI type but this isn't guaranteed by
+        // our `OpsABI` representation. This makes including the rest param difficult.
+        for (fixed_destruc, wanted_param_abi) in fun_expr
+            .params
+            .fixed()
+            .iter()
+            .zip(wanted_abi.arret_fixed_params())
+        {
+            use crate::ty::conv_abi::ConvertableABIType;
+            stx.add_evidence(
+                &hir::destruc::poly_for_destruc(fixed_destruc),
+                &wanted_param_abi.to_ty_ref(),
+            );
+        }
+
+        let ty_args = stx.into_poly_ty_args();
 
         let mut some_b = Some(b);
         let app_result = self.inline_arret_fun_app(
