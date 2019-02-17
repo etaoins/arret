@@ -52,8 +52,8 @@ fn subtract_tys<M: ty::PM>(
 
                 subtract_ref_iters(
                     [
-                        ty::Ty::List(terminated_list).into(),
-                        ty::Ty::List(continued_list).into(),
+                        terminated_list.into(),
+                        continued_list.into(),
                     ].iter(),
                     subtrahend_ref,
                 )
@@ -71,12 +71,11 @@ pub fn subtract_ty_refs<M: ty::PM>(
 ) -> ty::Ref<M> {
     use crate::ty::intersect;
 
-    match ty::is_a::ty_ref_is_a(minuend_ref, subtrahend_ref) {
-        ty::is_a::Result::Yes => {
-            // No type remains
-            ty::Ty::Union(Box::new([])).into()
-        }
-        ty::is_a::Result::May => match (minuend_ref, subtrahend_ref) {
+    if ty::is_a::ty_ref_is_a(minuend_ref, subtrahend_ref) {
+        // No type remains
+        ty::Ty::Union(Box::new([])).into()
+    } else {
+        match (minuend_ref, subtrahend_ref) {
             (ty::Ref::Fixed(minuend_ty), ty::Ref::Fixed(subtrahend_ty)) => {
                 // We can substract directly
                 subtract_tys(minuend_ty, subtrahend_ref, subtrahend_ty)
@@ -91,10 +90,6 @@ pub fn subtract_ty_refs<M: ty::PM>(
                     .unwrap_or_else(|_| minuend_ref.clone())
             }
             _ => minuend_ref.clone(),
-        },
-        ty::is_a::Result::No => {
-            // Nothing to subtract
-            minuend_ref.clone()
         }
     }
 }

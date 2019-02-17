@@ -142,10 +142,10 @@ fn non_subty_intersect<M: ty::PM>(
         .into()),
 
         // Map type
-        (ty::Ty::Map(map1), ty::Ty::Map(map2)) => Ok(ty::Ty::Map(Box::new(ty::Map::new(
+        (ty::Ty::Map(map1), ty::Ty::Map(map2)) => Ok(ty::Map::new(
             intersect_ty_refs(map1.key(), map2.key())?,
             intersect_ty_refs(map1.value(), map2.value())?,
-        )))
+        )
         .into()),
 
         // Vector types
@@ -177,9 +177,7 @@ fn non_subty_intersect<M: ty::PM>(
         }
 
         // List types
-        (ty::Ty::List(list1), ty::Ty::List(list2)) => {
-            Ok(ty::Ty::List(intersect_list(list1, list2)?).into())
-        }
+        (ty::Ty::List(list1), ty::Ty::List(list2)) => Ok(intersect_list(list1, list2)?.into()),
 
         // Function types
         (ty::Ty::TopFun(top_fun1), ty::Ty::TopFun(top_fun2)) => {
@@ -261,9 +259,9 @@ pub fn intersect_ty_refs<M: ty::PM>(
     ty_ref1: &ty::Ref<M>,
     ty_ref2: &ty::Ref<M>,
 ) -> Result<ty::Ref<M>> {
-    if ty::is_a::ty_ref_is_a(ty_ref1, ty_ref2).to_bool() {
+    if ty::is_a::ty_ref_is_a(ty_ref1, ty_ref2) {
         return Ok(ty_ref1.clone());
-    } else if ty::is_a::ty_ref_is_a(ty_ref2, ty_ref1).to_bool() {
+    } else if ty::is_a::ty_ref_is_a(ty_ref2, ty_ref1) {
         return Ok(ty_ref2.clone());
     }
 
@@ -305,12 +303,12 @@ mod test {
         // This is the basic invariant we're testing - each of our merged type satisfies each of
         // our input types.
         assert_eq!(
-            ty::is_a::Result::Yes,
+            true,
             ty::is_a::ty_ref_is_a(expected, poly1),
             "The expected type does not definitely satisfy the first input type; the test is incorrect"
         );
         assert_eq!(
-            ty::is_a::Result::Yes,
+            true,
             ty::is_a::ty_ref_is_a(expected, poly2),
             "The expected type does not definitely satisfy the second input type; the test is incorrect"
         );

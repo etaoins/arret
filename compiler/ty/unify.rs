@@ -39,9 +39,9 @@ fn unify_ty_refs<M: ty::PM>(ref1: &ty::Ref<M>, ref2: &ty::Ref<M>) -> UnifiedTy<M
     if let (ty::Ref::Fixed(ty1), ty::Ref::Fixed(ty2)) = (&ref1, &ref2) {
         // We can invoke full simplfication logic if we have fixed types
         unify_ty(ref1, ty1, ref2, ty2)
-    } else if ty::is_a::ty_ref_is_a(ref1, ref2).to_bool() {
+    } else if ty::is_a::ty_ref_is_a(ref1, ref2) {
         UnifiedTy::Merged(ref2.clone())
-    } else if ty::is_a::ty_ref_is_a(ref2, ref1).to_bool() {
+    } else if ty::is_a::ty_ref_is_a(ref2, ref1) {
         UnifiedTy::Merged(ref1.clone())
     } else {
         // Leave these separate
@@ -176,9 +176,7 @@ fn unify_ty<M: ty::PM>(
             let unified_key_ref = unify_to_ty_ref(map1.key(), map2.key());
             let unified_val_ref = unify_to_ty_ref(map1.value(), map2.value());
 
-            UnifiedTy::Merged(
-                ty::Ty::Map(Box::new(ty::Map::new(unified_key_ref, unified_val_ref))).into(),
-            )
+            UnifiedTy::Merged(ty::Map::new(unified_key_ref, unified_val_ref).into())
         }
 
         // Vector types
@@ -251,7 +249,7 @@ fn unify_ty<M: ty::PM>(
         // List types
         (ty::Ty::List(list1), ty::Ty::List(list2)) => match unify_list(list1, list2) {
             UnifiedList::Discerned => UnifiedTy::Discerned,
-            UnifiedList::Merged(merged_list) => UnifiedTy::Merged(ty::Ty::List(merged_list).into()),
+            UnifiedList::Merged(merged_list) => UnifiedTy::Merged(merged_list.into()),
         },
 
         _ => UnifiedTy::Discerned,
@@ -356,14 +354,8 @@ mod test {
 
         // This is the basic invariant we're testing - each of our input types satsifies the merged
         // type
-        assert_eq!(
-            ty::is_a::Result::Yes,
-            ty::is_a::ty_ref_is_a(&poly1, &expected)
-        );
-        assert_eq!(
-            ty::is_a::Result::Yes,
-            ty::is_a::ty_ref_is_a(&poly2, &expected)
-        );
+        assert_eq!(true, ty::is_a::ty_ref_is_a(&poly1, &expected));
+        assert_eq!(true, ty::is_a::ty_ref_is_a(&poly2, &expected));
 
         assert_eq!(UnifiedTy::Merged(expected), unify_ty_refs(&poly1, &poly2));
     }

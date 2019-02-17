@@ -9,10 +9,11 @@ pub fn ty_ref_for_datum<M: ty::PM>(datum: &Datum) -> ty::Ref<M> {
         Datum::Int(_, _) => ty::Ty::Int,
         Datum::Float(_, _) => ty::Ty::Float,
         Datum::Str(_, _) => ty::Ty::Str,
-        Datum::List(_, vs) => ty::Ty::List(ty::List::new(
+        Datum::List(_, vs) => ty::List::new(
             vs.iter().map(|datum| ty_ref_for_datum(datum)).collect(),
             None,
-        )),
+        )
+        .into(),
         Datum::Vector(_, vs) => ty::Ty::Vector(vs.iter().map(|v| ty_ref_for_datum(v)).collect()),
         Datum::Set(_, vs) => {
             let unified_type = ty::unify::unify_ty_ref_iter(vs.iter().map(|v| ty_ref_for_datum(v)));
@@ -25,7 +26,7 @@ pub fn ty_ref_for_datum<M: ty::PM>(datum: &Datum) -> ty::Ref<M> {
             let unified_value =
                 ty::unify::unify_ty_ref_iter(vs.iter().map(|(_, v)| ty_ref_for_datum(v)));
 
-            ty::Ty::Map(Box::new(ty::Map::new(unified_key, unified_value)))
+            ty::Map::new(unified_key, unified_value).into()
         }
     })
     .into()

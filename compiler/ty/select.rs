@@ -125,7 +125,7 @@ impl<'vars> SelectCtx<'vars> {
 
     fn add_var_evidence(&mut self, tvar_id: &ty::TVarId, evidence_poly: &ty::Ref<ty::Poly>) {
         if self.selecting_tvar_ids.contains(tvar_id) {
-            if !ty::is_a::ty_ref_is_a(evidence_poly, tvar_id.bound()).to_bool() {
+            if !ty::is_a::ty_ref_is_a(evidence_poly, tvar_id.bound()) {
                 return;
             }
         } else {

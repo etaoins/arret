@@ -101,7 +101,7 @@ fn ensure_types_compatible<T>(
 where
     T: ty::conv_abi::ConvertableABIType,
 {
-    if ty::is_a::ty_ref_is_a(arret_poly, &abi_type.to_ty_ref()).to_bool() {
+    if ty::is_a::ty_ref_is_a(arret_poly, &abi_type.to_ty_ref()) {
         Ok(())
     } else {
         Err(Error::new(

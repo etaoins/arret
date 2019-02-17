@@ -47,7 +47,7 @@ pub fn type_for_decl_destruc(
             let guide_type_iter =
                 guide_type.and_then(|guide_type| ListIterator::try_new_from_ty_ref(guide_type));
 
-            ty::Ty::List(type_for_decl_list_destruc(list, guide_type_iter)).into()
+            type_for_decl_list_destruc(list, guide_type_iter).into()
         }
     }
 }

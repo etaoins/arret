@@ -153,13 +153,13 @@ fn lower_ty_cons_apply(
     mut arg_iter: NsDataIter,
 ) -> Result<ty::Ref<ty::Poly>> {
     Ok(match ty_cons {
-        TyCons::List => ty::Ty::List(lower_list_cons(scope, arg_iter)?).into(),
+        TyCons::List => lower_list_cons(scope, arg_iter)?.into(),
         TyCons::Listof => {
             let rest_datum = expect_one_arg(span, arg_iter)?;
             let rest_poly = lower_poly(scope, rest_datum)?;
             let list_poly = ty::List::new(Box::new([]), Some(rest_poly));
 
-            ty::Ty::List(list_poly).into()
+            list_poly.into()
         }
         TyCons::Vector => {
             let member_tys = arg_iter
@@ -182,7 +182,7 @@ fn lower_ty_cons_apply(
             expect_arg_count(span, 2, arg_iter.len())?;
             let key_ty = lower_poly(scope, arg_iter.next().unwrap())?;
             let value_ty = lower_poly(scope, arg_iter.next().unwrap())?;
-            ty::Ty::Map(Box::new(ty::Map::new(key_ty, value_ty))).into()
+            ty::Map::new(key_ty, value_ty).into()
         }
         TyCons::Union => {
             let member_tys = arg_iter
@@ -215,7 +215,7 @@ fn lower_literal(datum: NsDatum) -> Result<ty::Ref<ty::Poly>> {
         NsDatum::Ident(_, ident) => Ok(ty::Ty::LitSym(ident.name().into()).into()),
         NsDatum::List(_, vs) => {
             let fixed_literals = lower_literal_vec(vs.into_vec())?;
-            Ok(ty::Ty::List(ty::List::new(fixed_literals.into_boxed_slice(), None)).into())
+            Ok(ty::List::new(fixed_literals.into_boxed_slice(), None).into())
         }
         NsDatum::Vector(_, vs) => {
             let fixed_literals = lower_literal_vec(vs.into_vec())?;
@@ -280,7 +280,7 @@ pub fn lower_poly_data_iter(
 
     if data_len == 0 {
         // This is by analogy with () being self-evaluating in expressions
-        return Ok(ty::Ty::List(ty::List::empty()).into());
+        return Ok(ty::List::empty().into());
     }
 
     if scope.get_datum(&data_iter.as_slice()[0]) == Some(&Binding::Prim(Prim::All)) {
@@ -652,7 +652,7 @@ mod test {
     fn empty_list_literal() {
         let j = "()";
 
-        let expected = ty::Ty::List(ty::List::empty());
+        let expected = ty::List::empty().into();
         assert_ty_for_str(expected, j);
     }
 
@@ -660,10 +660,11 @@ mod test {
     fn quoted_list_literal() {
         let j = "'(true false)";
 
-        let expected = ty::Ty::List(ty::List::new(
+        let expected = ty::List::new(
             Box::new([ty::Ty::LitBool(true).into(), ty::Ty::LitBool(false).into()]),
             None,
-        ));
+        )
+        .into();
 
         assert_ty_for_str(expected, j);
     }
@@ -701,7 +702,7 @@ mod test {
         let j = "(Listof true)";
 
         let inner_poly = ty::Ty::LitBool(true).into();
-        let expected = ty::Ty::List(ty::List::new(Box::new([]), Some(inner_poly)));
+        let expected = ty::List::new(Box::new([]), Some(inner_poly)).into();
 
         assert_ty_for_str(expected, j);
     }
@@ -710,10 +711,11 @@ mod test {
     fn fixed_list_cons() {
         let j = "(List true false)";
 
-        let expected = ty::Ty::List(ty::List::new(
+        let expected = ty::List::new(
             Box::new([ty::Ty::LitBool(true).into(), ty::Ty::LitBool(false).into()]),
             None,
-        ));
+        )
+        .into();
 
         assert_ty_for_str(expected, j);
     }
@@ -722,10 +724,11 @@ mod test {
     fn rest_list_cons() {
         let j = "(List true false ...)";
 
-        let expected = ty::Ty::List(ty::List::new(
+        let expected = ty::List::new(
             Box::new([ty::Ty::LitBool(true).into()]),
             Some(ty::Ty::LitBool(false).into()),
-        ));
+        )
+        .into();
 
         assert_ty_for_str(expected, j);
     }
@@ -853,7 +856,7 @@ mod test {
 
         let key_ty = ty::Ty::LitBool(true);
         let value_ty = ty::Ty::LitBool(false);
-        let expected = ty::Ty::Map(Box::new(ty::Map::new(key_ty.into(), value_ty.into())));
+        let expected = ty::Map::new(key_ty.into(), value_ty.into()).into();
 
         assert_ty_for_str(expected, j);
     }

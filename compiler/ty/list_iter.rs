@@ -30,16 +30,6 @@ impl<'list, M: ty::PM> ListIterator<'list, M> {
         self.rest.is_some()
     }
 
-    pub fn next(&mut self) -> Option<&'list ty::Ref<M>> {
-        if self.fixed.is_empty() {
-            self.rest
-        } else {
-            let next = self.fixed.first();
-            self.fixed = &self.fixed[1..];
-            next
-        }
-    }
-
     pub fn tail_type(self) -> ty::List<M> {
         ty::List::new(self.fixed.to_vec().into_boxed_slice(), self.rest.cloned())
     }
@@ -55,5 +45,19 @@ impl<'list, M: ty::PM> ListIterator<'list, M> {
                 .cloned()
                 .chain(self.rest.cloned().into_iter()),
         ))
+    }
+}
+
+impl<'list, M: ty::PM> Iterator for ListIterator<'list, M> {
+    type Item = &'list ty::Ref<M>;
+
+    fn next(&mut self) -> Option<&'list ty::Ref<M>> {
+        if self.fixed.is_empty() {
+            self.rest
+        } else {
+            let next = self.fixed.first();
+            self.fixed = &self.fixed[1..];
+            next
+        }
     }
 }

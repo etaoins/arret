@@ -63,10 +63,9 @@ where
         ty::Ty::TyPred(test_ty) => ty::Ty::TyPred(*test_ty),
         ty::Ty::TopFun(top_fun) => subst_top_fun(stx, top_fun).into(),
         ty::Ty::Fun(fun) => subst_fun(stx, fun).into(),
-        ty::Ty::Map(map) => ty::Ty::Map(Box::new(ty::Map::new(
-            stx.subst_ty_ref(map.key()),
-            stx.subst_ty_ref(map.value()),
-        ))),
+        ty::Ty::Map(map) => {
+            ty::Map::new(stx.subst_ty_ref(map.key()), stx.subst_ty_ref(map.value())).into()
+        }
         ty::Ty::LitBool(val) => ty::Ty::LitBool(*val),
         ty::Ty::LitSym(val) => ty::Ty::LitSym(val.clone()),
         ty::Ty::Set(member) => ty::Ty::Set(Box::new(stx.subst_ty_ref(&member))),
@@ -74,7 +73,7 @@ where
         ty::Ty::Intersect(members) => ty::Ty::Intersect(subst_ty_ref_slice(stx, members)),
         ty::Ty::Vector(members) => ty::Ty::Vector(subst_ty_ref_slice(stx, members)),
         ty::Ty::Vectorof(member) => ty::Ty::Vectorof(Box::new(stx.subst_ty_ref(member))),
-        ty::Ty::List(list) => ty::Ty::List(subst_list(stx, list)),
+        ty::Ty::List(list) => subst_list(stx, list).into(),
     }
 }
 

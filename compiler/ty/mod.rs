@@ -183,7 +183,7 @@ pub enum Ty<M: PM> {
 impl<M: PM> Ty<M> {
     /// Returns the canonical unit type
     pub fn unit() -> Ty<M> {
-        Ty::List(List::new(Box::new([]), None))
+        List::empty().into()
     }
 
     /// Returns the canonical never type
@@ -209,6 +209,18 @@ impl<M: PM> Map<M> {
 
     pub fn value(&self) -> &Ref<M> {
         &self.value
+    }
+}
+
+impl<M: PM> From<Map<M>> for Ty<M> {
+    fn from(map: Map<M>) -> Self {
+        Ty::Map(Box::new(map))
+    }
+}
+
+impl<M: PM> From<Map<M>> for Ref<M> {
+    fn from(map: Map<M>) -> Self {
+        Ref::Fixed(Ty::Map(Box::new(map)))
     }
 }
 
@@ -258,6 +270,18 @@ impl<M: PM> List<M> {
 
     pub fn is_empty(&self) -> bool {
         self.fixed.is_empty() && self.rest.is_none()
+    }
+}
+
+impl<M: PM> From<List<M>> for Ty<M> {
+    fn from(list: List<M>) -> Self {
+        Ty::List(list)
+    }
+}
+
+impl<M: PM> From<List<M>> for Ref<M> {
+    fn from(list: List<M>) -> Self {
+        Ref::Fixed(Ty::List(list))
     }
 }
 

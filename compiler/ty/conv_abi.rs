@@ -17,10 +17,9 @@ fn type_tag_to_ty<M: ty::PM>(type_tag: boxed::TypeTag) -> ty::Ty<M> {
         TypeTag::False => ty::Ty::LitBool(false),
         TypeTag::Int => ty::Ty::Int,
         TypeTag::TopVector => ty::Ty::Vectorof(Box::new(ty::Ty::Any.into())),
-        TypeTag::Nil => ty::Ty::List(ty::List::empty()),
+        TypeTag::Nil => ty::List::empty().into(),
         TypeTag::TopPair => {
-            let list = ty::List::new(Box::new([ty::Ty::Any.into()]), Some(ty::Ty::Any.into()));
-            ty::Ty::List(list)
+            ty::List::new(Box::new([ty::Ty::Any.into()]), Some(ty::Ty::Any.into())).into()
         }
         TypeTag::FunThunk => ty::TopFun::new(Purity::Impure.into(), ty::Ty::Any.into()).into(),
     }
@@ -67,13 +66,11 @@ impl ConvertableABIType for abitype::BoxedABIType {
             BoxedABIType::Any => ty::Ty::Any.into(),
             BoxedABIType::Vector(member) => ty::Ty::Vectorof(Box::new(member.to_ty_ref())).into(),
             BoxedABIType::List(member) => {
-                let list = ty::List::new(Box::new([]), Some(member.to_ty_ref()));
-                ty::Ty::List(list).into()
+                ty::List::new(Box::new([]), Some(member.to_ty_ref())).into()
             }
             BoxedABIType::Pair(member) => {
                 let member_ty_ref: ty::Ref<M> = member.to_ty_ref();
-                let list = ty::List::new(Box::new([member_ty_ref.clone()]), Some(member_ty_ref));
-                ty::Ty::List(list).into()
+                ty::List::new(Box::new([member_ty_ref.clone()]), Some(member_ty_ref)).into()
             }
             BoxedABIType::DirectTagged(type_tag) => type_tag_to_ty(*type_tag).into(),
             BoxedABIType::Union(_, tags) => {
@@ -176,7 +173,7 @@ mod test {
         assert_eq!("boxed::TopList", boxed_abi_type.to_rust_str());
 
         let top_list_poly: ty::Ref<ty::Poly> =
-            ty::Ty::List(ty::List::new(Box::new([]), Some(ty::Ty::Any.into()))).into();
+            ty::List::new(Box::new([]), Some(ty::Ty::Any.into())).into();
 
         assert_eq!(top_list_poly, boxed_abi_type.to_ty_ref());
     }
@@ -190,11 +187,8 @@ mod test {
 
         assert_eq!("boxed::Pair<boxed::Int>", boxed_abi_type.to_rust_str());
 
-        let int_pair_poly: ty::Ref<ty::Poly> = ty::Ty::List(ty::List::new(
-            Box::new([ty::Ty::Int.into()]),
-            Some(ty::Ty::Int.into()),
-        ))
-        .into();
+        let int_pair_poly: ty::Ref<ty::Poly> =
+            ty::List::new(Box::new([ty::Ty::Int.into()]), Some(ty::Ty::Int.into())).into();
 
         assert_eq!(int_pair_poly, boxed_abi_type.to_ty_ref());
     }
@@ -221,7 +215,7 @@ mod test {
 
         assert_eq!("boxed::Nil", boxed_abi_type.to_rust_str());
 
-        let nil_poly: ty::Ref<ty::Poly> = ty::Ty::List(ty::List::empty()).into();
+        let nil_poly: ty::Ref<ty::Poly> = ty::List::empty().into();
         assert_eq!(nil_poly, boxed_abi_type.to_ty_ref());
     }
 
