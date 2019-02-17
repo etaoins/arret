@@ -12,12 +12,11 @@ pub mod subtract;
 pub mod ty_args;
 pub mod unify;
 
-use std::collections::BTreeMap;
 use std::fmt;
 use std::hash;
 use std::ops::Range;
 
-new_global_id_type!(TVarId);
+use crate::id_type::RcId;
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct TVar {
@@ -25,7 +24,8 @@ pub struct TVar {
     bound: Ref<Poly>,
 }
 
-pub type TVars = BTreeMap<TVarId, TVar>;
+pub type TVarId = RcId<TVar>;
+pub type TVarIds = Vec<TVarId>;
 
 impl TVar {
     pub fn new(source_name: Box<str>, bound: Ref<Poly>) -> TVar {
@@ -41,31 +41,16 @@ impl TVar {
     }
 }
 
-pub fn merge_tvars(outer: &TVars, inner: &TVars) -> TVars {
-    outer
-        .iter()
-        .map(|(tvar_id, tvar)| (*tvar_id, tvar.clone()))
-        .chain(inner.iter().map(|(tvar_id, tvar)| (*tvar_id, tvar.clone())))
-        .collect()
-}
-
-pub fn merge_three_tvars(one: &TVars, two: &TVars, three: &TVars) -> TVars {
-    one.iter()
-        .map(|(tvar_id, tvar)| (*tvar_id, tvar.clone()))
-        .chain(two.iter().map(|(tvar_id, tvar)| (*tvar_id, tvar.clone())))
-        .chain(three.iter().map(|(tvar_id, tvar)| (*tvar_id, tvar.clone())))
-        .collect()
-}
 /// Marker that determines if type variables are allowed within a type
 pub trait PM: PartialEq + Eq + Clone + Copy + Sized + fmt::Debug + hash::Hash {
     /// Resolves a possibly variable type to its bound
-    fn resolve_ref_to_ty<'ty>(tvars: &'ty TVars, ty_ref: &'ty Ref<Self>) -> &'ty Ty<Self>;
+    fn resolve_ref_to_ty(ty_ref: &Ref<Self>) -> &Ty<Self>;
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Mono {}
 impl PM for Mono {
-    fn resolve_ref_to_ty<'ty>(_tvars: &'ty TVars, ty_ref: &'ty Ref<Mono>) -> &'ty Ty<Mono> {
+    fn resolve_ref_to_ty(ty_ref: &Ref<Mono>) -> &Ty<Mono> {
         match ty_ref {
             Ref::Fixed(ty) => ty,
             Ref::Var(_, _) => unreachable!(),
@@ -76,16 +61,10 @@ impl PM for Mono {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct Poly {}
 impl PM for Poly {
-    fn resolve_ref_to_ty<'ty>(tvars: &'ty TVars, ty_ref: &'ty Ref<Poly>) -> &'ty Ty<Poly> {
+    fn resolve_ref_to_ty(ty_ref: &Ref<Poly>) -> &Ty<Poly> {
         match ty_ref {
             Ref::Fixed(ty) => ty,
-            Ref::Var(tvar_id, _) => Self::resolve_ref_to_ty(
-                tvars,
-                &tvars
-                    .get(tvar_id)
-                    .expect("TVar not found while resolving TVarId")
-                    .bound,
-            ),
+            Ref::Var(tvar_id, _) => Self::resolve_ref_to_ty(tvar_id.bound()),
         }
     }
 }
@@ -135,8 +114,8 @@ impl<M: PM> Ref<M> {
         }
     }
 
-    pub fn resolve_to_ty<'ty>(&'ty self, tvars: &'ty TVars) -> &'ty Ty<M> {
-        M::resolve_ref_to_ty(tvars, self)
+    pub fn resolve_to_ty(&self) -> &Ty<M> {
+        M::resolve_ref_to_ty(self)
     }
 
     pub fn is_never(&self) -> bool {
@@ -322,17 +301,22 @@ impl<M: PM> From<TopFun> for Ref<M> {
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct Fun {
-    pvars: purity::PVars,
-    tvars: TVars,
+    pvar_ids: purity::PVarIds,
+    tvar_ids: TVarIds,
     top_fun: TopFun,
     params: List<Poly>,
 }
 
 impl Fun {
-    pub fn new(pvars: purity::PVars, tvars: TVars, top_fun: TopFun, params: List<Poly>) -> Fun {
+    pub fn new(
+        pvar_ids: purity::PVarIds,
+        tvar_ids: TVarIds,
+        top_fun: TopFun,
+        params: List<Poly>,
+    ) -> Fun {
         Fun {
-            pvars,
-            tvars,
+            pvar_ids,
+            tvar_ids,
             top_fun,
             params,
         }
@@ -341,8 +325,8 @@ impl Fun {
     // Returns the `Fun` type for the `(main!)` function
     pub fn new_for_main() -> Fun {
         Self::new(
-            purity::PVars::new(),
-            TVars::new(),
+            purity::PVarIds::new(),
+            TVarIds::new(),
             TopFun::new(purity::Purity::Impure.into(), Ty::unit().into()),
             List::empty(),
         )
@@ -354,8 +338,8 @@ impl Fun {
     /// it does not support occurrence typing.
     pub fn new_for_ty_pred() -> Fun {
         Self::new(
-            purity::PVars::new(),
-            TVars::new(),
+            purity::PVarIds::new(),
+            TVarIds::new(),
             TopFun::new_for_pred(),
             List::new(Box::new([Ty::Any.into()]), None),
         )
@@ -367,19 +351,19 @@ impl Fun {
     /// however, it does not support occurrence typing.
     pub fn new_for_eq_pred() -> Fun {
         Self::new(
-            purity::PVars::new(),
-            TVars::new(),
+            purity::PVarIds::new(),
+            TVarIds::new(),
             TopFun::new_for_pred(),
             List::new(Box::new([Ty::Any.into(), Ty::Any.into()]), None),
         )
     }
 
-    pub fn pvars(&self) -> &purity::PVars {
-        &self.pvars
+    pub fn pvar_ids(&self) -> &[purity::PVarId] {
+        &self.pvar_ids
     }
 
-    pub fn tvars(&self) -> &TVars {
-        &self.tvars
+    pub fn tvar_ids(&self) -> &[TVarId] {
+        &self.tvar_ids
     }
 
     pub fn top_fun(&self) -> &TopFun {
@@ -399,13 +383,13 @@ impl Fun {
     }
 
     pub fn has_polymorphic_vars(&self) -> bool {
-        !self.pvars.is_empty() || !self.tvars.is_empty()
+        !self.pvar_ids.is_empty() || !self.tvar_ids.is_empty()
     }
 
-    pub fn with_polymorphic_vars(self, pvars: purity::PVars, tvars: TVars) -> Fun {
+    pub fn with_polymorphic_vars(self, pvar_ids: purity::PVarIds, tvar_ids: TVarIds) -> Fun {
         Fun {
-            pvars,
-            tvars,
+            pvar_ids,
+            tvar_ids,
             ..self
         }
     }

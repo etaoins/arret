@@ -118,14 +118,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
 
                 match kind {
                     EvalKind::Type => {
-                        use crate::ty;
-                        use crate::ty::purity;
-
-                        let poly_str = hir::str_for_ty_ref(
-                            &purity::PVars::new(),
-                            &ty::TVars::new(),
-                            node.result_ty(),
-                        );
+                        let poly_str = hir::str_for_ty_ref(node.result_ty());
                         Ok(EvaledLine::Expr(poly_str))
                     }
                     EvalKind::Value => {

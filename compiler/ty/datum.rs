@@ -15,22 +15,15 @@ pub fn ty_ref_for_datum<M: ty::PM>(datum: &Datum) -> ty::Ref<M> {
         )),
         Datum::Vector(_, vs) => ty::Ty::Vector(vs.iter().map(|v| ty_ref_for_datum(v)).collect()),
         Datum::Set(_, vs) => {
-            let unified_type = ty::unify::unify_ty_ref_iter(
-                &ty::TVars::new(),
-                vs.iter().map(|v| ty_ref_for_datum(v)),
-            );
+            let unified_type = ty::unify::unify_ty_ref_iter(vs.iter().map(|v| ty_ref_for_datum(v)));
             ty::Ty::Set(Box::new(unified_type))
         }
         Datum::Map(_, vs) => {
-            let unified_key = ty::unify::unify_ty_ref_iter(
-                &ty::TVars::new(),
-                vs.iter().map(|(k, _)| ty_ref_for_datum(k)),
-            );
+            let unified_key =
+                ty::unify::unify_ty_ref_iter(vs.iter().map(|(k, _)| ty_ref_for_datum(k)));
 
-            let unified_value = ty::unify::unify_ty_ref_iter(
-                &ty::TVars::new(),
-                vs.iter().map(|(_, v)| ty_ref_for_datum(v)),
-            );
+            let unified_value =
+                ty::unify::unify_ty_ref_iter(vs.iter().map(|(_, v)| ty_ref_for_datum(v)));
 
             ty::Ty::Map(Box::new(ty::Map::new(unified_key, unified_value)))
         }

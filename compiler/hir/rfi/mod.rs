@@ -12,7 +12,6 @@ use crate::hir::scope::Scope;
 use crate::hir::types;
 use crate::source::{SourceKind, SourceLoader};
 use crate::ty;
-use crate::ty::purity;
 
 use runtime::{abitype, binding};
 
@@ -95,8 +94,6 @@ pub struct Loader {
 /// The Arret types are strictly more expressive than the Rust types. This simply checks that the
 /// Arret type is more specific than the Rust type.
 fn ensure_types_compatible<T>(
-    pvars: &purity::PVars,
-    tvars: &ty::TVars,
     span: Span,
     arret_poly: &ty::Ref<ty::Poly>,
     abi_type: &T,
@@ -104,7 +101,7 @@ fn ensure_types_compatible<T>(
 where
     T: ty::conv_abi::ConvertableABIType,
 {
-    if ty::is_a::ty_ref_is_a(tvars, arret_poly, &abi_type.to_ty_ref()).to_bool() {
+    if ty::is_a::ty_ref_is_a(arret_poly, &abi_type.to_ty_ref()).to_bool() {
         Ok(())
     } else {
         Err(Error::new(
@@ -113,7 +110,7 @@ where
                 format!(
                     "Rust type `{}` does not match declared Arret type of `{}`",
                     abi_type.to_rust_str(),
-                    types::str_for_ty_ref(pvars, tvars, arret_poly),
+                    types::str_for_ty_ref(arret_poly),
                 )
                 .into_boxed_str(),
             ),
@@ -190,11 +187,11 @@ impl Loader {
             ));
         };
 
-        let pvars = poly_fun_type.pvars();
-        let tvars = poly_fun_type.tvars();
+        let pvar_ids = poly_fun_type.pvar_ids();
+        let tvar_ids = poly_fun_type.tvar_ids();
 
         // The Rust function signature should match the upper bound of the Arret type
-        let pta = ty::ty_args::TyArgs::from_upper_bound(pvars, tvars);
+        let pta = ty::ty_args::TyArgs::from_upper_bound(pvar_ids, tvar_ids);
         let upper_fun_type = ty::subst::subst_poly_fun(&pta, &*poly_fun_type);
 
         // Calculate how many parameters the Rust function should accept
@@ -224,7 +221,7 @@ impl Loader {
             let last_rust_param = abi_params_iter.next_back().unwrap();
 
             if let ABIType::Boxed(BoxedABIType::List(elem)) = &last_rust_param.abi_type {
-                ensure_types_compatible(pvars, tvars, span, arret_rest, *elem)?;
+                ensure_types_compatible(span, arret_rest, *elem)?;
             } else {
                 return Err(Error::new(
                     span,
@@ -237,19 +234,13 @@ impl Loader {
         for (arret_fixed_poly, rust_fixed_poly) in
             upper_fun_type.params().fixed().iter().zip(abi_params_iter)
         {
-            ensure_types_compatible(
-                pvars,
-                tvars,
-                span,
-                arret_fixed_poly,
-                &rust_fixed_poly.abi_type,
-            )?;
+            ensure_types_compatible(span, arret_fixed_poly, &rust_fixed_poly.abi_type)?;
         }
 
         // And the return type
         //
         // Note that we don't care about contravariance here; simply that the types are compatible
-        ensure_types_compatible(pvars, tvars, span, upper_fun_type.ret(), &rust_fun.ret)?;
+        ensure_types_compatible(span, upper_fun_type.ret(), &rust_fun.ret)?;
 
         Ok(Fun {
             rust_library_id,

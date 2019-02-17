@@ -79,7 +79,7 @@ impl ConvertableABIType for abitype::BoxedABIType {
             BoxedABIType::Union(_, tags) => {
                 let members = tags.iter().map(|type_tag| type_tag_to_ty(*type_tag).into());
 
-                ty::unify::unify_ty_ref_iter(&ty::TVars::new(), members)
+                ty::unify::unify_ty_ref_iter(members)
             }
         }
     }
@@ -134,8 +134,8 @@ impl ConvertableABIType for callback::EntryPointABIType {
         let param_list_ty = ty::List::new(fixed_param_ty_refs, None);
 
         ty::Fun::new(
-            purity::PVars::new(),
-            ty::TVars::new(),
+            purity::PVarIds::new(),
+            ty::TVarIds::new(),
             top_fun_ty,
             param_list_ty,
         )
@@ -237,8 +237,8 @@ mod test {
         );
 
         let arret_poly: ty::Ref<ty::Poly> = ty::Fun::new(
-            purity::PVars::new(),
-            ty::TVars::new(),
+            purity::PVarIds::new(),
+            ty::TVarIds::new(),
             ty::TopFun::new(Purity::Impure.into(), ty::Ty::Char.into()),
             ty::List::new(Box::new([ty::Ty::Int.into()]), None),
         )

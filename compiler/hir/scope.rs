@@ -55,7 +55,6 @@ impl Bindings {
 
 pub struct Scope {
     bindings: Rc<Bindings>,
-    tvars: ty::TVars,
     ns_id_counter: NsIdCounter,
 }
 
@@ -68,7 +67,6 @@ impl Scope {
                 parent: None,
                 allow_redef: false,
             }),
-            tvars: ty::TVars::new(),
             ns_id_counter: NsIdCounter::new(),
         }
     }
@@ -126,7 +124,6 @@ impl Scope {
                 parent: None,
                 allow_redef: false,
             }),
-            tvars: ty::TVars::new(),
             ns_id_counter: NsIdCounter::new(),
         }
     }
@@ -138,7 +135,6 @@ impl Scope {
                 parent: Some(parent.bindings.clone()),
                 allow_redef: false,
             }),
-            tvars: parent.tvars.clone(),
             ns_id_counter: parent.ns_id_counter.clone(),
         }
     }
@@ -232,14 +228,6 @@ impl Scope {
     /// Returns all bound idents
     pub fn bound_idents(&self) -> impl Iterator<Item = &Ident> {
         self.bindings().entries.iter().map(|(ident, _)| ident)
-    }
-
-    pub fn tvars(&self) -> &ty::TVars {
-        &self.tvars
-    }
-
-    pub fn tvars_mut(&mut self) -> &mut ty::TVars {
-        &mut self.tvars
     }
 
     /// Allocates a new ns_id

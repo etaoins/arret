@@ -142,7 +142,7 @@ fn lower_fun_cons(
         Ok(top_fun.into())
     } else {
         let params = lower_list_cons(scope, arg_iter)?;
-        Ok(ty::Fun::new(purity::PVars::new(), ty::TVars::new(), top_fun, params).into())
+        Ok(ty::Fun::new(purity::PVarIds::new(), ty::TVarIds::new(), top_fun, params).into())
     }
 }
 
@@ -189,7 +189,7 @@ fn lower_ty_cons_apply(
                 .map(|arg_datum| lower_poly(scope, arg_datum))
                 .collect::<Result<Vec<ty::Ref<ty::Poly>>>>()?;
 
-            ty::unify::unify_ty_ref_iter(scope.tvars(), member_tys.into_iter())
+            ty::unify::unify_ty_ref_iter(member_tys.into_iter())
         }
         #[cfg(test)]
         TyCons::RawU => {
@@ -330,24 +330,23 @@ pub fn lower_polymorphic_vars(
     polymorphic_var_data: NsDataIter,
     outer_scope: &Scope,
     inner_scope: &mut Scope,
-) -> Result<(purity::PVars, ty::TVars)> {
-    let mut pvars = purity::PVars::new();
-    let mut tvars = ty::TVars::new();
+) -> Result<(purity::PVarIds, ty::TVarIds)> {
+    let mut pvar_ids = purity::PVarIds::new();
+    let mut tvar_ids = ty::TVarIds::new();
 
     for var_datum in polymorphic_var_data {
         let PolymorphicVar { span, ident, kind } = lower_polymorphic_var(outer_scope, var_datum)?;
 
         let binding = match kind {
             PolymorphicVarKind::PVar(pvar) => {
-                let pvar_id = purity::PVarId::alloc();
-                pvars.insert(pvar_id, pvar);
+                let pvar_id = purity::PVarId::new(pvar);
+                pvar_ids.push(pvar_id.clone());
 
                 Binding::Purity(purity::Ref::Var(pvar_id))
             }
             PolymorphicVarKind::TVar(tvar) => {
-                let tvar_id = ty::TVarId::alloc();
-                tvars.insert(tvar_id, tvar.clone());
-                inner_scope.tvars_mut().insert(tvar_id, tvar);
+                let tvar_id = ty::TVarId::new(tvar);
+                tvar_ids.push(tvar_id.clone());
 
                 Binding::Ty(ty::Ref::Var(tvar_id, ty::Poly {}))
             }
@@ -358,7 +357,7 @@ pub fn lower_polymorphic_vars(
         inner_scope.insert_binding(span, ident, binding)?;
     }
 
-    Ok((pvars, tvars))
+    Ok((pvar_ids, tvar_ids))
 }
 
 pub fn try_lower_purity(scope: &Scope, datum: &NsDatum) -> Option<purity::Ref> {
@@ -430,40 +429,30 @@ pub const TY_EXPORTS: &[(&str, Binding)] = &[
 /// Pushes the arguments for a list constructor on to the passed Vec
 ///
 /// This is used to share code between list and function types
-fn push_list_parts<M: ty::PM>(
-    pvars: &purity::PVars,
-    tvars: &ty::TVars,
-    list_parts: &mut Vec<String>,
-    list_ref: &ty::List<M>,
-) {
+fn push_list_parts<M: ty::PM>(list_parts: &mut Vec<String>, list_ref: &ty::List<M>) {
     for fixed in list_ref.fixed() {
-        list_parts.push(str_for_ty_ref(pvars, tvars, fixed));
+        list_parts.push(str_for_ty_ref(fixed));
     }
     if let Some(rest) = list_ref.rest() {
-        list_parts.push(str_for_ty_ref(pvars, tvars, rest));
+        list_parts.push(str_for_ty_ref(rest));
         list_parts.push("...".to_owned());
     }
 }
 
-fn str_for_bounds(
-    all_pvars: &purity::PVars,
-    all_tvars: &ty::TVars,
-    bound_pvars: &purity::PVars,
-    bound_tvars: &ty::TVars,
-) -> String {
-    let pvar_parts = bound_pvars
-        .values()
-        .map(|pvar| format!("[{} ->!]", pvar.source_name()));
+fn str_for_bounds(bound_pvar_ids: &[purity::PVarId], bound_tvar_ids: &[ty::TVarId]) -> String {
+    let pvar_parts = bound_pvar_ids
+        .iter()
+        .map(|pvar_id| format!("[{} ->!]", pvar_id.source_name()));
 
-    let tvar_parts = bound_tvars.values().map(|tvar| {
-        if tvar.bound() == &ty::Ty::Any.into() {
-            return tvar.source_name().into();
+    let tvar_parts = bound_tvar_ids.iter().map(|tvar_id| {
+        if tvar_id.bound() == &ty::Ty::Any.into() {
+            return tvar_id.source_name().into();
         }
 
         format!(
             "[{} {}]",
-            tvar.source_name(),
-            str_for_ty_ref(all_pvars, all_tvars, tvar.bound())
+            tvar_id.source_name(),
+            str_for_ty_ref(tvar_id.bound())
         )
     });
 
@@ -471,7 +460,7 @@ fn str_for_bounds(
     format!("#{{{}}}", all_parts.join(" "))
 }
 
-fn str_for_ty<M: ty::PM>(pvars: &purity::PVars, tvars: &ty::TVars, ty: &ty::Ty<M>) -> String {
+fn str_for_ty<M: ty::PM>(ty: &ty::Ty<M>) -> String {
     match ty {
         ty::Ty::Any => "Any".to_owned(),
         ty::Ty::Bool => "Bool".to_owned(),
@@ -486,38 +475,35 @@ fn str_for_ty<M: ty::PM>(pvars: &purity::PVars, tvars: &ty::TVars, ty: &ty::Ty<M
         ty::Ty::LitSym(name) => format!("'{}", name),
         ty::Ty::Map(map) => format!(
             "(Map {} {})",
-            str_for_ty_ref(pvars, tvars, map.key()),
-            str_for_ty_ref(pvars, tvars, map.value())
+            str_for_ty_ref(map.key()),
+            str_for_ty_ref(map.value())
         ),
-        ty::Ty::Set(member) => format!("(Setof {})", str_for_ty_ref(pvars, tvars, member)),
+        ty::Ty::Set(member) => format!("(Setof {})", str_for_ty_ref(member)),
         ty::Ty::Vector(members) => {
             let result_parts: Vec<String> = members
                 .iter()
-                .map(|member| format!(" {}", str_for_ty_ref(pvars, tvars, member)))
+                .map(|member| format!(" {}", str_for_ty_ref(member)))
                 .collect();
 
             format!("(Vector{})", result_parts.join(""))
         }
-        ty::Ty::Vectorof(member) => format!("(Vectorof {})", str_for_ty_ref(pvars, tvars, member)),
+        ty::Ty::Vectorof(member) => format!("(Vectorof {})", str_for_ty_ref(member)),
         ty::Ty::TopFun(top_fun) => format!(
             "(... {} {})",
-            str_for_purity(pvars, top_fun.purity()),
-            str_for_ty_ref(pvars, tvars, top_fun.ret())
+            str_for_purity(top_fun.purity()),
+            str_for_ty_ref(top_fun.ret())
         ),
         ty::Ty::Fun(fun) => {
             let mut fun_parts = Vec::with_capacity(2);
 
-            let inner_pvars = purity::merge_pvars(pvars, fun.pvars());
-            let inner_tvars = ty::merge_tvars(tvars, fun.tvars());
-
-            push_list_parts(&inner_pvars, &inner_tvars, &mut fun_parts, fun.params());
-            fun_parts.push(str_for_purity(&inner_pvars, fun.purity()));
-            fun_parts.push(str_for_ty_ref(&inner_pvars, &inner_tvars, fun.ret()));
+            push_list_parts(&mut fun_parts, fun.params());
+            fun_parts.push(str_for_purity(fun.purity()));
+            fun_parts.push(str_for_ty_ref(fun.ret()));
 
             if fun.has_polymorphic_vars() {
                 format!(
                     "(All {} {})",
-                    str_for_bounds(&inner_pvars, &inner_tvars, fun.pvars(), fun.tvars()),
+                    str_for_bounds(fun.pvar_ids(), fun.tvar_ids()),
                     fun_parts.join(" ")
                 )
             } else {
@@ -529,7 +515,7 @@ fn str_for_ty<M: ty::PM>(pvars: &purity::PVars, tvars: &ty::TVars, ty: &ty::Ty<M
         ty::Ty::Union(members) => {
             let member_strs: Vec<String> = members
                 .iter()
-                .map(|m| format!(" {}", str_for_ty_ref(pvars, tvars, m)))
+                .map(|m| format!(" {}", str_for_ty_ref(m)))
                 .collect();
 
             format!("(U{})", member_strs.join(""))
@@ -537,7 +523,7 @@ fn str_for_ty<M: ty::PM>(pvars: &purity::PVars, tvars: &ty::TVars, ty: &ty::Ty<M
         ty::Ty::Intersect(members) => {
             let member_strs: Vec<String> = members
                 .iter()
-                .map(|m| format!(" {}", str_for_ty_ref(pvars, tvars, m)))
+                .map(|m| format!(" {}", str_for_ty_ref(m)))
                 .collect();
 
             format!("(∩{})", member_strs.join(""))
@@ -547,14 +533,14 @@ fn str_for_ty<M: ty::PM>(pvars: &purity::PVars, tvars: &ty::TVars, ty: &ty::Ty<M
             // representation
             if list.fixed().is_empty() {
                 match list.rest() {
-                    Some(rest) => format!("(Listof {})", str_for_ty_ref(pvars, tvars, rest)),
+                    Some(rest) => format!("(Listof {})", str_for_ty_ref(rest)),
                     None => "()".to_owned(),
                 }
             } else {
                 let mut list_parts = Vec::with_capacity(2);
 
                 list_parts.push("List".to_owned());
-                push_list_parts(pvars, tvars, &mut list_parts, list);
+                push_list_parts(&mut list_parts, list);
 
                 format!("({})", list_parts.join(" "),)
             }
@@ -562,22 +548,18 @@ fn str_for_ty<M: ty::PM>(pvars: &purity::PVars, tvars: &ty::TVars, ty: &ty::Ty<M
     }
 }
 
-pub fn str_for_ty_ref<M: ty::PM>(
-    pvars: &purity::PVars,
-    tvars: &ty::TVars,
-    ty_ref: &ty::Ref<M>,
-) -> String {
+pub fn str_for_ty_ref<M: ty::PM>(ty_ref: &ty::Ref<M>) -> String {
     match ty_ref {
-        ty::Ref::Var(tvar_id, _) => tvars[tvar_id].source_name().to_owned(),
-        ty::Ref::Fixed(ty) => str_for_ty(pvars, tvars, ty),
+        ty::Ref::Var(tvar_id, _) => tvar_id.source_name().to_owned(),
+        ty::Ref::Fixed(ty) => str_for_ty(ty),
     }
 }
 
-pub fn str_for_purity(pvars: &purity::PVars, purity: &purity::Ref) -> String {
+pub fn str_for_purity(purity: &purity::Ref) -> String {
     match purity {
         purity::Ref::Fixed(Purity::Pure) => "->".to_owned(),
         purity::Ref::Fixed(Purity::Impure) => "->!".to_owned(),
-        purity::Ref::Var(pvar_id) => pvars[pvar_id].source_name().into(),
+        purity::Ref::Var(pvar_id) => pvar_id.source_name().into(),
     }
 }
 
@@ -609,10 +591,8 @@ pub fn poly_for_str(datum_str: &str) -> ty::Ref<ty::Poly> {
 }
 
 #[cfg(test)]
-pub fn tvar_bounded_by(tvars: &mut ty::TVars, bound: ty::Ref<ty::Poly>) -> ty::Ref<ty::Poly> {
-    let tvar_id = ty::TVarId::alloc();
-    tvars.insert(tvar_id, ty::TVar::new("TVar".into(), bound));
-
+pub fn tvar_bounded_by(bound: ty::Ref<ty::Poly>) -> ty::Ref<ty::Poly> {
+    let tvar_id = ty::TVarId::new(ty::TVar::new("TVar".into(), bound));
     ty::Ref::Var(tvar_id, ty::Poly {})
 }
 
@@ -625,8 +605,7 @@ mod test {
         assert_eq!(expected_poly, poly_for_str(datum_str));
 
         // Try to round trip this to make sure str_for_ty_tef works
-        let recovered_str =
-            str_for_ty_ref(&purity::PVars::new(), &ty::TVars::new(), &expected_poly);
+        let recovered_str = str_for_ty_ref(&expected_poly);
         assert_eq!(expected_poly, poly_for_str(&recovered_str));
     }
 
@@ -634,14 +613,7 @@ mod test {
     ///
     /// This is to make sure we use e.g. `(Listof Int)` instead of `(List Int ...)`
     fn assert_exact_str_repr(datum_str: &str) {
-        assert_eq!(
-            datum_str,
-            str_for_ty_ref(
-                &purity::PVars::new(),
-                &ty::TVars::new(),
-                &poly_for_str(datum_str)
-            )
-        );
+        assert_eq!(datum_str, str_for_ty_ref(&poly_for_str(datum_str)));
     }
 
     #[test]
@@ -785,8 +757,8 @@ mod test {
         let j = "(-> true)";
 
         let expected = ty::Fun::new(
-            purity::PVars::new(),
-            ty::TVars::new(),
+            purity::PVarIds::new(),
+            ty::TVarIds::new(),
             ty::TopFun::new(Purity::Pure.into(), ty::Ty::LitBool(true).into()),
             ty::List::empty(),
         )
@@ -800,8 +772,8 @@ mod test {
         let j = "(->! true)";
 
         let expected = ty::Fun::new(
-            purity::PVars::new(),
-            ty::TVars::new(),
+            purity::PVarIds::new(),
+            ty::TVarIds::new(),
             ty::TopFun::new(Purity::Impure.into(), ty::Ty::LitBool(true).into()),
             ty::List::empty(),
         )
@@ -815,8 +787,8 @@ mod test {
         let j = "(false -> true)";
 
         let expected = ty::Fun::new(
-            purity::PVars::new(),
-            ty::TVars::new(),
+            purity::PVarIds::new(),
+            ty::TVarIds::new(),
             ty::TopFun::new(Purity::Pure.into(), ty::Ty::LitBool(true).into()),
             ty::List::new(Box::new([ty::Ty::LitBool(false).into()]), None),
         )
@@ -830,8 +802,8 @@ mod test {
         let j = "(Str Sym ... ->! true)";
 
         let expected = ty::Fun::new(
-            purity::PVars::new(),
-            ty::TVars::new(),
+            purity::PVarIds::new(),
+            ty::TVarIds::new(),
             ty::TopFun::new(Purity::Impure.into(), ty::Ty::LitBool(true).into()),
             ty::List::new(Box::new([ty::Ty::Str.into()]), Some(ty::Ty::Sym.into())),
         )

@@ -1,3 +1,6 @@
+use std::rc::Rc;
+use std::{fmt, hash, ops};
+
 /// Builds a new ID type based off indexing in to a Vec lookup table
 ///
 /// This stores the value internally at $ty (typically `u32`) while the interface uses `usize` to
@@ -111,4 +114,62 @@ macro_rules! new_counting_id_type {
             }
         }
     };
+}
+
+/// Reference-counted pointer that uses pointer identity
+///
+/// Traits such as `Hash`, `Eq`, `Ord` etc. are implemented in terms of the value's memory location.
+/// This means that the value returned by `RcId::new()` is considered equal to itself and its clones
+/// regardless of the value it points to.
+#[derive(Clone)]
+pub struct RcId<T> {
+    inner: Rc<T>,
+}
+
+impl<T> RcId<T> {
+    pub fn new(value: T) -> Self {
+        RcId {
+            inner: Rc::new(value),
+        }
+    }
+}
+
+impl<T> ops::Deref for RcId<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        self.inner.deref()
+    }
+}
+
+impl<T> PartialEq for RcId<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+impl<T> Eq for RcId<T> {}
+
+impl<T> hash::Hash for RcId<T> {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        state.write_usize(self.inner.as_ref() as *const T as usize)
+    }
+}
+
+impl<T> PartialOrd for RcId<T> {
+    fn partial_cmp(&self, other: &RcId<T>) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T> Ord for RcId<T> {
+    fn cmp(&self, other: &RcId<T>) -> std::cmp::Ordering {
+        (self.inner.as_ref() as *const T as usize).cmp(&(other.inner.as_ref() as *const T as usize))
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for RcId<T> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner.fmt(formatter)
+    }
 }

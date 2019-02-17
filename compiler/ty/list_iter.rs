@@ -44,13 +44,12 @@ impl<'list, M: ty::PM> ListIterator<'list, M> {
         ty::List::new(self.fixed.to_vec().into_boxed_slice(), self.rest.cloned())
     }
 
-    pub fn collect_rest(self, tvars: &ty::TVars) -> Option<ty::Ref<M>> {
+    pub fn collect_rest(self) -> Option<ty::Ref<M>> {
         if self.fixed.is_empty() {
             return self.rest.cloned();
         }
 
         Some(ty::unify::unify_ty_ref_iter(
-            tvars,
             self.fixed
                 .iter()
                 .cloned()

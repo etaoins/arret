@@ -116,20 +116,20 @@ fn merge_apply_ty_args_into_scope(
         .pvar_purities()
         .iter()
         .chain(apply_ty_args.pvar_purities().iter())
-        .map(|(k, v)| (*k, v.clone()))
+        .map(|(pvar_id, v)| (pvar_id.clone(), v.clone()))
         .collect();
 
     let tvar_types = scope
         .tvar_types()
         .iter()
-        .map(|(tvar_id, mono)| (*tvar_id, mono.clone()))
+        .map(|(tvar_id, mono)| (tvar_id.clone(), mono.clone()))
         .chain(
             apply_ty_args
                 .tvar_types()
                 .iter()
                 .map(|(tvar_id, poly_type)| {
                     let mono_ty = subst::monomorphise(subst_with, poly_type);
-                    (*tvar_id, mono_ty)
+                    (tvar_id.clone(), mono_ty)
                 }),
         )
         .collect();
@@ -1073,7 +1073,7 @@ impl EvalHirCtx {
         // generation. We should either be polymorphic over both or derive the polymorphic type
         // variables from the ABI type.
         let fun_expr = &arret_fun.fun_expr;
-        let ty_args = TyArgs::from_upper_bound(&fun_expr.pvars, &fun_expr.tvars);
+        let ty_args = TyArgs::from_upper_bound(&fun_expr.pvar_ids, &fun_expr.tvar_ids);
 
         let mut some_b = Some(b);
         let app_result = self.inline_arret_fun_app(

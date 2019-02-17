@@ -14,10 +14,8 @@ use crate::ty::ty_args::TyArgs;
 /// `pvar_purities` and `tvar_types` methods.
 #[derive(Clone, Debug)]
 pub struct SelectCtx<'vars> {
-    all_tvars: &'vars ty::TVars,
-
-    selecting_pvars: &'vars purity::PVars,
-    selecting_tvars: &'vars ty::TVars,
+    selecting_pvar_ids: &'vars [purity::PVarId],
+    selecting_tvar_ids: &'vars [ty::TVarId],
 
     pvar_purities: HashMap<purity::PVarId, purity::Ref>,
     tvar_types: HashMap<ty::TVarId, ty::Ref<ty::Poly>>,
@@ -25,14 +23,12 @@ pub struct SelectCtx<'vars> {
 
 impl<'vars> SelectCtx<'vars> {
     pub fn new(
-        all_tvars: &'vars ty::TVars,
-        selecting_pvars: &'vars purity::PVars,
-        selecting_tvars: &'vars ty::TVars,
+        selecting_pvar_ids: &'vars [purity::PVarId],
+        selecting_tvar_ids: &'vars [ty::TVarId],
     ) -> SelectCtx<'vars> {
         SelectCtx {
-            all_tvars,
-            selecting_pvars,
-            selecting_tvars,
+            selecting_pvar_ids,
+            selecting_tvar_ids,
             pvar_purities: HashMap::new(),
             tvar_types: HashMap::new(),
         }
@@ -63,7 +59,7 @@ impl<'vars> SelectCtx<'vars> {
         }
 
         if let Some(target_rest) = target_iter.next() {
-            if let Some(evidence_rest) = evidence_iter.collect_rest(self.all_tvars) {
+            if let Some(evidence_rest) = evidence_iter.collect_rest() {
                 self.add_evidence(target_rest, &evidence_rest);
             }
         }
@@ -127,20 +123,19 @@ impl<'vars> SelectCtx<'vars> {
         }
     }
 
-    fn add_var_evidence(&mut self, tvar_id: ty::TVarId, evidence_poly: &ty::Ref<ty::Poly>) {
-        if let Some(tvar) = self.selecting_tvars.get(&tvar_id) {
-            if !ty::is_a::ty_ref_is_a(self.all_tvars, evidence_poly, &tvar.bound).to_bool() {
+    fn add_var_evidence(&mut self, tvar_id: &ty::TVarId, evidence_poly: &ty::Ref<ty::Poly>) {
+        if self.selecting_tvar_ids.contains(tvar_id) {
+            if !ty::is_a::ty_ref_is_a(evidence_poly, tvar_id.bound()).to_bool() {
                 return;
             }
         } else {
             return;
         };
 
-        let all_tvars = &self.all_tvars;
         self.tvar_types
-            .entry(tvar_id)
+            .entry(tvar_id.clone())
             .and_modify(|existing| {
-                *existing = ty::unify::unify_to_ty_ref(all_tvars, existing, evidence_poly);
+                *existing = ty::unify::unify_to_ty_ref(existing, evidence_poly);
             })
             .or_insert_with(|| evidence_poly.clone());
     }
@@ -151,9 +146,9 @@ impl<'vars> SelectCtx<'vars> {
         evidence_poly: &ty::Ref<ty::Poly>,
     ) {
         match target_poly {
-            ty::Ref::Var(tvar_id, _) => self.add_var_evidence(*tvar_id, evidence_poly),
+            ty::Ref::Var(tvar_id, _) => self.add_var_evidence(tvar_id, evidence_poly),
             ty::Ref::Fixed(target_ty) => {
-                let evidence_ty = evidence_poly.resolve_to_ty(self.all_tvars);
+                let evidence_ty = evidence_poly.resolve_to_ty();
                 self.add_evidence_ty(target_ty, evidence_poly, evidence_ty)
             }
         }
@@ -170,12 +165,12 @@ impl<'vars> SelectCtx<'vars> {
             return;
         };
 
-        if !self.selecting_pvars.contains_key(&pvar_id) {
+        if !self.selecting_pvar_ids.contains(&pvar_id) {
             return;
         }
 
         self.pvar_purities
-            .entry(*pvar_id)
+            .entry(pvar_id.clone())
             .and_modify(|existing| {
                 *existing = ty::unify::unify_purity_refs(existing, evidence_purity);
             })
@@ -184,8 +179,8 @@ impl<'vars> SelectCtx<'vars> {
 
     pub fn into_poly_ty_args(self) -> TyArgs<ty::Poly> {
         let pvar_purities = self
-            .selecting_pvars
-            .keys()
+            .selecting_pvar_ids
+            .iter()
             .map(|pvar_id| {
                 let pvar_purity = self
                     .pvar_purities
@@ -193,21 +188,21 @@ impl<'vars> SelectCtx<'vars> {
                     .cloned()
                     .unwrap_or_else(|| Purity::Impure.into());
 
-                (*pvar_id, pvar_purity)
+                (pvar_id.clone(), pvar_purity)
             })
             .collect();
 
         let tvar_types = self
-            .selecting_tvars
+            .selecting_tvar_ids
             .iter()
-            .map(|(tvar_id, tvar)| {
+            .map(|tvar_id| {
                 let tvar_type = self
                     .tvar_types
                     .get(tvar_id)
                     .cloned()
-                    .unwrap_or_else(|| tvar.bound.clone());
+                    .unwrap_or_else(|| tvar_id.bound.clone());
 
-                (*tvar_id, tvar_type)
+                (tvar_id.clone(), tvar_type)
             })
             .collect();
 
@@ -226,8 +221,8 @@ mod test {
     struct TestScope {
         test_ns_id: NsId,
         scope: Scope,
-        pvars: purity::PVars,
-        tvars: ty::TVars,
+        pvar_ids: purity::PVarIds,
+        tvar_ids: ty::TVarIds,
     }
 
     impl TestScope {
@@ -244,7 +239,7 @@ mod test {
                 .map(|value| NsDatum::from_syntax_datum(test_ns_id, value))
                 .collect::<Vec<NsDatum>>();
 
-            let (pvars, tvars) = lower_polymorphic_vars(
+            let (pvar_ids, tvar_ids) = lower_polymorphic_vars(
                 polymorphic_data.into_iter(),
                 &outer_scope,
                 &mut inner_scope,
@@ -254,8 +249,8 @@ mod test {
             TestScope {
                 test_ns_id,
                 scope: inner_scope,
-                pvars,
-                tvars,
+                pvar_ids,
+                tvar_ids,
             }
         }
 
@@ -282,7 +277,7 @@ mod test {
         }
 
         fn select_ctx(&self) -> SelectCtx<'_> {
-            SelectCtx::new(&self.tvars, &self.pvars, &self.tvars)
+            SelectCtx::new(&self.pvar_ids, &self.tvar_ids)
         }
     }
 

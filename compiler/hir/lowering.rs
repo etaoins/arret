@@ -355,7 +355,7 @@ fn lower_fun(outer_scope: &Scope, span: Span, mut arg_iter: NsDataIter) -> Resul
         .ok_or_else(|| Error::new(span, ErrorKind::IllegalArg("parameter declaration missing")))?;
 
     // We can either begin with a set of type variables or a list of parameters
-    let (pvars, tvars) = if let NsDatum::Set(_, vs) = next_datum {
+    let (pvar_ids, tvar_ids) = if let NsDatum::Set(_, vs) = next_datum {
         next_datum = arg_iter.next().ok_or_else(|| {
             Error::new(
                 span,
@@ -365,7 +365,7 @@ fn lower_fun(outer_scope: &Scope, span: Span, mut arg_iter: NsDataIter) -> Resul
 
         lower_polymorphic_vars(vs.into_vec().into_iter(), outer_scope, &mut fun_scope)?
     } else {
-        (purity::PVars::new(), ty::TVars::new())
+        (purity::PVarIds::new(), ty::TVarIds::new())
     };
 
     // Pull out our params
@@ -401,8 +401,8 @@ fn lower_fun(outer_scope: &Scope, span: Span, mut arg_iter: NsDataIter) -> Resul
     Ok(Expr::new(
         span,
         ExprKind::Fun(Box::new(Fun {
-            pvars,
-            tvars,
+            pvar_ids,
+            tvar_ids,
             purity,
             params,
             ret_ty,
@@ -1063,8 +1063,8 @@ mod test {
         let expected = Expr::new(
             t2s(t),
             ExprKind::Fun(Box::new(Fun {
-                pvars: purity::PVars::new(),
-                tvars: ty::TVars::new(),
+                pvar_ids: purity::PVarIds::new(),
+                tvar_ids: ty::TVarIds::new(),
                 purity: DeclPurity::Free,
                 params: destruc::List::new(vec![], None),
                 ret_ty: DeclTy::Free,
@@ -1084,8 +1084,8 @@ mod test {
         let expected = Expr::new(
             t2s(t),
             ExprKind::Fun(Box::new(Fun {
-                pvars: purity::PVars::new(),
-                tvars: ty::TVars::new(),
+                pvar_ids: purity::PVarIds::new(),
+                tvar_ids: ty::TVarIds::new(),
                 purity: Purity::Pure.into(),
                 params: destruc::List::new(vec![], None),
                 ret_ty: DeclTy::Free,
@@ -1105,8 +1105,8 @@ mod test {
         let expected = Expr::new(
             t2s(t),
             ExprKind::Fun(Box::new(Fun {
-                pvars: purity::PVars::new(),
-                tvars: ty::TVars::new(),
+                pvar_ids: purity::PVarIds::new(),
+                tvar_ids: ty::TVarIds::new(),
                 purity: Purity::Pure.into(),
                 params: destruc::List::new(vec![], None),
                 ret_ty: ty::Ty::Int.into(),

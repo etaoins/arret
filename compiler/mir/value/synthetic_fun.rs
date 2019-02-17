@@ -31,8 +31,8 @@ pub fn eq_pred_arret_fun() -> value::ArretFun {
         env_ty_args: TyArgs::empty(),
         closure: Closure::empty(),
         fun_expr: Rc::new(hir::Fun {
-            pvars: purity::PVars::new(),
-            tvars: ty::TVars::new(),
+            pvar_ids: purity::PVarIds::new(),
+            tvar_ids: ty::TVarIds::new(),
 
             purity: Purity::Pure.into(),
             params: hir::destruc::List::new(fixed_params, None),
@@ -77,8 +77,8 @@ pub fn ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
         env_ty_args: TyArgs::empty(),
         closure: Closure::empty(),
         fun_expr: Rc::new(hir::Fun {
-            pvars: purity::PVars::new(),
-            tvars: ty::TVars::new(),
+            pvar_ids: purity::PVarIds::new(),
+            tvar_ids: ty::TVarIds::new(),
 
             purity: Purity::Pure.into(),
             params: hir::destruc::List::new(

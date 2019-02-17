@@ -39,8 +39,8 @@ where
 
     // TODO: This doesn't seem right
     ty::Fun::new(
-        purity::PVars::new(),
-        ty::TVars::new(),
+        purity::PVarIds::new(),
+        ty::TVarIds::new(),
         subst_top_fun(stx, fun.top_fun()),
         subst_list(poly_stx, fun.params()),
     )

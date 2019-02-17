@@ -4,7 +4,6 @@ use crate::ty;
 use crate::ty::list_iter::ListIterator;
 
 pub fn type_for_decl_list_destruc(
-    tvars: &ty::TVars,
     list: &destruc::List<hir::Lowered>,
     mut guide_type_iter: Option<ListIterator<'_, ty::Poly>>,
 ) -> ty::List<ty::Poly> {
@@ -17,14 +16,14 @@ pub fn type_for_decl_list_destruc(
             None
         };
 
-        fixed_polys.push(type_for_decl_destruc(tvars, fixed_destruc, guide_type));
+        fixed_polys.push(type_for_decl_destruc(fixed_destruc, guide_type));
     }
 
     let rest_poly = match list.rest() {
         Some(rest) => Some(match rest.ty() {
             hir::DeclTy::Known(poly) => poly.clone(),
             hir::DeclTy::Free => guide_type_iter
-                .and_then(|guide_type_iter| guide_type_iter.collect_rest(tvars))
+                .and_then(|guide_type_iter| guide_type_iter.collect_rest())
                 .unwrap_or_else(|| ty::Ty::Any.into()),
         }),
         None => None,
@@ -35,7 +34,6 @@ pub fn type_for_decl_list_destruc(
 
 /// Returns the required type for a destruc
 pub fn type_for_decl_destruc(
-    tvars: &ty::TVars,
     destruc: &destruc::Destruc<hir::Lowered>,
     guide_type: Option<&ty::Ref<ty::Poly>>,
 ) -> ty::Ref<ty::Poly> {
@@ -49,7 +47,7 @@ pub fn type_for_decl_destruc(
             let guide_type_iter =
                 guide_type.and_then(|guide_type| ListIterator::try_new_from_ty_ref(guide_type));
 
-            ty::Ty::List(type_for_decl_list_destruc(tvars, list, guide_type_iter)).into()
+            ty::Ty::List(type_for_decl_list_destruc(list, guide_type_iter)).into()
         }
     }
 }
