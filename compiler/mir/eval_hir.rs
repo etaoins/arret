@@ -182,8 +182,8 @@ impl EvalHirCtx {
         let mut iter = value.into_list_iter();
 
         for fixed_destruc in list.fixed() {
-            let guide_type = iter.next_unchecked(b, span).clone();
-            Self::destruc_value(b, var_values, fixed_destruc, guide_type);
+            let value = iter.next_unchecked(b, span);
+            Self::destruc_value(b, var_values, fixed_destruc, value);
         }
 
         if let Some(rest_destruc) = list.rest() {
