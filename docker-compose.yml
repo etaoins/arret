@@ -1,16 +1,8 @@
 version: '3.4'
 services:
-  full-compiler:
-    build:
-      context: .
-      target: full-compiler
-      args:
-        - rust_toolchain=stable
-
   repl:
     build:
       context: .
       target: repl
       args:
-        - rust_toolchain=stable
         - vcs_ref=${BUILDKITE_COMMIT}

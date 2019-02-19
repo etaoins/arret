@@ -1,15 +1,30 @@
+build-env: &build-env
+  plugins:
+    - seek-oss/docker-ecr-cache#v1.1.0:
+        target: build-deps
+        cache-on:
+          - Cargo.lock
+    - docker#v2.0.0
+
 steps:
   - label: ":cargo: Build & Test"
     command:
-      - /bin/sh -c "cargo build &&
-                    cargo test &&
-                    ./.buildkite/cross-i686.sh &&
-                    ./driver/tests/integration/run.sh target/debug/arret"
-    plugins:
-      - docker-compose#v2.6.0:
-          run: full-compiler
+      - cargo check --release
+      - cargo build
+      - cargo test
+      - ./.buildkite/cross-i686.sh
+      - ./driver/tests/integration/run.sh target/debug/arret
+    <<: *build-env
 
   - wait
+
+  - label: ":rust: Build (Rust Beta)"
+    branches: "master"
+    command:
+      - rustup default beta
+      - cargo check
+      - cargo check --release
+    <<: *build-env
 
   - label: ":rocket: Push REPL Image"
     branches: "master"
@@ -22,11 +37,3 @@ steps:
             repl:etaoins/arret:repl
           env:
             - BUILDKITE_COMMIT
-
-  - label: ":rust: Build (Rust Beta)"
-    branches: "master"
-    plugins:
-      - docker-compose#v2.6.0:
-          build: full-compiler
-          args:
-            - rust_toolchain=beta

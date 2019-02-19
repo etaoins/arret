@@ -1,6 +1,4 @@
-FROM debian:buster AS full-compiler
-
-ARG rust_toolchain=stable
+FROM debian:buster AS build-deps
 
 RUN \
   apt-get update && \
@@ -10,12 +8,17 @@ RUN \
 # Use Clang as it understands LLVM target triples
 RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang-7 100
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain $rust_toolchain
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 ENV PATH "/root/.cargo/bin:${PATH}"
 
 ADD . /opt/arret
 WORKDIR /opt/arret
 
+RUN cargo fetch
+
+###
+
+FROM build-deps as full-compiler
 RUN cargo build --release
 
 ###
