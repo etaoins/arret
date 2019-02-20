@@ -8,7 +8,7 @@ RUN \
 # Use Clang as it understands LLVM target triples
 RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang-7 100
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.32.0
 ENV PATH "/root/.cargo/bin:${PATH}"
 
 ADD . /opt/arret
