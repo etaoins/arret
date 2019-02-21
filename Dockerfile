@@ -1,4 +1,4 @@
-FROM debian:buster AS build-deps
+FROM ubuntu:18.04 AS build-deps
 
 RUN \
   apt-get update && \
@@ -23,7 +23,7 @@ RUN cargo build --release
 
 ###
 
-FROM debian:buster-slim AS repl
+FROM ubuntu:18.04 AS repl
 
 ARG vcs_ref
 
