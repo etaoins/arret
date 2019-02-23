@@ -1,4 +1,4 @@
-FROM ubuntu:18.04 AS build-deps
+FROM ubuntu:18.04 AS build-env
 
 RUN \
   apt-get update && \
@@ -11,14 +11,25 @@ RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang-7 100
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.32.0
 ENV PATH "/root/.cargo/bin:${PATH}"
 
-ADD . /opt/arret
+# These are the minimum required files for `cargo fetch`
+# This allows the `cargo fetch` to be cached between other source code changes
+ADD Cargo.toml Cargo.lock /opt/arret/
+ADD syntax/Cargo.toml /opt/arret/syntax/
+ADD runtime/Cargo.toml /opt/arret/runtime/
+ADD runtime-syntax/Cargo.toml /opt/arret/runtime-syntax/
+ADD rfi-derive/Cargo.toml /opt/arret/rfi-derive/
+ADD stdlib/rust/Cargo.toml /opt/arret/stdlib/rust/
+ADD compiler/Cargo.toml /opt/arret/compiler/
+ADD driver/Cargo.toml /opt/arret/driver/
+
 WORKDIR /opt/arret
 
 RUN cargo fetch
+ADD . /opt/arret
 
 ###
 
-FROM build-deps as full-compiler
+FROM build-env as full-compiler
 RUN cargo build --release
 
 ###

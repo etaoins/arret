@@ -1,5 +1,9 @@
 version: '3.4'
 services:
+  build-env:
+    build:
+      context: .
+      target: build-env
   repl:
     build:
       context: .

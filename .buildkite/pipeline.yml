@@ -1,7 +1,7 @@
-build-env: &build-env
+cached-ecr-build-env: &cached-ecr-build-env
   plugins:
     - seek-oss/docker-ecr-cache#v1.1.0:
-        target: build-deps
+        target: build-env
         cache-on:
           - Cargo.lock
     - docker#v2.0.0
@@ -14,7 +14,17 @@ steps:
       - cargo test
       - ./.buildkite/cross-i686.sh
       - ./driver/tests/integration/run.sh target/debug/arret
-    <<: *build-env
+    <<: *cached-ecr-build-env
+
+  - label: ":muscle: Test ARM64"
+    command: bash -c "cargo build &&
+                      cargo test &&
+                      ./driver/tests/integration/run.sh target/debug/arret"
+    plugins:
+      - docker-compose#v2.6.0:
+          run: build-env
+    agents:
+      queue: arm64
 
   - wait
 
@@ -24,7 +34,7 @@ steps:
       - rustup default beta
       - cargo check
       - cargo check --release
-    <<: *build-env
+    <<: *cached-ecr-build-env
 
   - label: ":rocket: Push REPL Image"
     branches: "master"
