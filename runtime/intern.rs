@@ -21,9 +21,25 @@ use std::{fmt, ptr, str};
 // but any 1 byte sequences are encoded directly. We can use these values freely without colliding
 // with inline names.
 const INLINE_FILL_BYTE: u8 = 0x80;
-const INDEXED_FLAG: u8 = 0x81;
+const LOCAL_INDEXED_FLAG: u8 = 0x81;
+const GLOBAL_INDEXED_FLAG: u8 = 0x82;
 
 const INLINE_SIZE: usize = 8;
+
+#[repr(C)]
+pub struct GlobalName {
+    name_byte_length: usize,
+    name_bytes: *const u8,
+}
+
+impl GlobalName {
+    fn as_str(&self) -> &str {
+        unsafe {
+            let byte_slice = std::slice::from_raw_parts(self.name_bytes, self.name_byte_length);
+            std::str::from_utf8_unchecked(byte_slice)
+        }
+    }
+}
 
 #[repr(align(8))]
 #[derive(Copy, Clone)]
@@ -62,7 +78,8 @@ pub union InternedSym {
 
 enum InternedRepr<'a> {
     Inline(&'a InternedInline),
-    Indexed(&'a InternedIndexed),
+    LocalIndexed(&'a InternedIndexed),
+    GlobalIndexed(&'a InternedIndexed),
 }
 
 impl InternedSym {
@@ -92,16 +109,26 @@ impl InternedSym {
         }
     }
 
+    pub unsafe fn from_global_index(index: u32) -> InternedSym {
+        InternedSym {
+            indexed: InternedIndexed {
+                flag_byte: GLOBAL_INDEXED_FLAG,
+                _padding: [0; 3],
+                name_idx: index,
+            },
+        }
+    }
+
     pub fn to_raw_u64(self) -> u64 {
         unsafe { self.raw }
     }
 
     fn repr(&self) -> InternedRepr<'_> {
         unsafe {
-            if self.indexed.flag_byte == INDEXED_FLAG {
-                InternedRepr::Indexed(&self.indexed)
-            } else {
-                InternedRepr::Inline(&self.inline)
+            match self.indexed.flag_byte {
+                LOCAL_INDEXED_FLAG => InternedRepr::LocalIndexed(&self.indexed),
+                GLOBAL_INDEXED_FLAG => InternedRepr::GlobalIndexed(&self.indexed),
+                _ => InternedRepr::Inline(&self.inline),
             }
         }
     }
@@ -126,7 +153,7 @@ impl Hash for InternedSym {
 impl fmt::Debug for InternedSym {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self.repr() {
-            InternedRepr::Indexed(indexed) => {
+            InternedRepr::LocalIndexed(indexed) | InternedRepr::GlobalIndexed(indexed) => {
                 // We don't have access to the `Interner` so we can't print our interned value
                 write!(formatter, "`{:x}", indexed.name_idx)
             }
@@ -142,14 +169,20 @@ pub struct Interner {
     name_to_idx: HashMap<Box<str>, u32>,
     /// Contains the highest static index + 1
     static_idx_watermark: u32,
+    global_names: *const GlobalName,
 }
 
 impl Interner {
     pub fn new() -> Interner {
+        Self::with_global_names(std::ptr::null())
+    }
+
+    pub fn with_global_names(global_names: *const GlobalName) -> Interner {
         Interner {
             names: vec![],
             name_to_idx: HashMap::new(),
             static_idx_watermark: 0,
+            global_names,
         }
     }
 
@@ -159,6 +192,10 @@ impl Interner {
     pub fn intern(&mut self, name: &str) -> InternedSym {
         if let Some(inline_interned) = InternedSym::try_from_inline_name(name) {
             return inline_interned;
+        };
+
+        if !self.global_names.is_null() {
+            unimplemented!("interning symbols with global interned names");
         }
 
         let index = self.name_to_idx.get(name).cloned().unwrap_or_else(|| {
@@ -171,7 +208,7 @@ impl Interner {
 
         InternedSym {
             indexed: InternedIndexed {
-                flag_byte: INDEXED_FLAG,
+                flag_byte: LOCAL_INDEXED_FLAG,
                 _padding: [0; 3],
                 name_idx: index,
             },
@@ -186,7 +223,7 @@ impl Interner {
     pub fn intern_static(&mut self, name: &str) -> InternedSym {
         let interned_sym = self.intern(name);
 
-        if let InternedRepr::Indexed(indexed_sym) = interned_sym.repr() {
+        if let InternedRepr::LocalIndexed(indexed_sym) = interned_sym.repr() {
             self.static_idx_watermark = indexed_sym.name_idx + 1;
         }
 
@@ -195,7 +232,11 @@ impl Interner {
 
     pub fn unintern<'a>(&'a self, interned: &'a InternedSym) -> &'a str {
         match interned.repr() {
-            InternedRepr::Indexed(indexed) => &self.names[indexed.name_idx as usize],
+            InternedRepr::LocalIndexed(indexed) => &self.names[indexed.name_idx as usize],
+            InternedRepr::GlobalIndexed(indexed) => unsafe {
+                let global_name = &*self.global_names.offset(indexed.name_idx as isize);
+                global_name.as_str()
+            },
             InternedRepr::Inline(inline) => inline.as_str(),
         }
     }
@@ -228,6 +269,7 @@ impl Interner {
             names,
             name_to_idx,
             static_idx_watermark,
+            global_names: self.global_names,
         }
     }
 }

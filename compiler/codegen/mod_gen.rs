@@ -1,14 +1,13 @@
 use std::collections::HashMap;
-use std::{env, ffi, ptr};
+use std::ffi;
 
-use llvm_sys::analysis::*;
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 use llvm_sys::LLVMLinkage;
 
-use runtime::intern::Interner;
+use runtime::intern;
 
 use crate::codegen::analysis::AnalysedMod;
 use crate::codegen::debug_info::DebugInfoBuilder;
@@ -22,9 +21,17 @@ pub struct ModCtx<'am, 'sl, 'interner> {
     analysed_mod: &'am AnalysedMod<'am>,
     di_builder: Option<DebugInfoBuilder<'sl>>,
     llvm_private_funs: HashMap<ops::PrivateFunId, LLVMValueRef>,
-    jit_interner: Option<&'interner mut Interner>,
+
+    jit_interner: Option<&'interner mut intern::Interner>,
+    global_interned_names: Vec<Box<str>>,
 
     function_pass_manager: LLVMPassManagerRef,
+}
+
+pub struct GeneratedMod {
+    pub llvm_module: LLVMModuleRef,
+    pub llvm_entry_fun: LLVMValueRef,
+    pub llvm_global_interned_names: LLVMValueRef,
 }
 
 impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
@@ -33,11 +40,11 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
     /// Note that the module name in LLVM is not arbitrary. For instance, in the ORC JIT it will
     /// shadow exported symbol names. This identifier should be as unique and descriptive as
     /// possible.
-    pub fn new(
+    fn new(
         tcx: &mut TargetCtx,
         name: &ffi::CStr,
         analysed_mod: &'am AnalysedMod<'am>,
-        jit_interner: Option<&'interner mut Interner>,
+        jit_interner: Option<&'interner mut intern::Interner>,
         debug_source_loader: Option<&'sl SourceLoader>,
     ) -> Self {
         use crate::codegen::fun_gen::declare_fun;
@@ -89,38 +96,29 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
             analysed_mod,
             di_builder,
             llvm_private_funs,
+
             jit_interner,
+            global_interned_names: vec![],
 
             function_pass_manager,
         }
     }
 
-    pub fn jit_interner(&mut self) -> &mut Option<&'interner mut Interner> {
-        &mut self.jit_interner
+    pub fn intern_name(&mut self, value: &str) -> intern::InternedSym {
+        if let Some(ref mut jit_interner) = self.jit_interner {
+            jit_interner.intern_static(value)
+        } else if let Some(interned_sym) = intern::InternedSym::try_from_inline_name(value) {
+            interned_sym
+        } else {
+            let global_index = self.global_interned_names.len();
+            self.global_interned_names.push(value.into());
+
+            unsafe { intern::InternedSym::from_global_index(global_index as u32) }
+        }
     }
 
     pub fn llvm_private_fun(&self, private_fun_id: ops::PrivateFunId) -> LLVMValueRef {
         self.llvm_private_funs[&private_fun_id]
-    }
-
-    pub fn llvm_entry_fun(&mut self, tcx: &mut TargetCtx) -> LLVMValueRef {
-        use crate::codegen::analysis::AnalysedFun;
-        use crate::codegen::fun_gen::{declare_fun, define_fun};
-
-        let AnalysedFun { ops_fun, captures } = self.analysed_mod.entry_fun();
-
-        let llvm_fun = declare_fun(tcx, self.module, ops_fun);
-        define_fun(tcx, self, ops_fun, captures, llvm_fun);
-
-        if let Some(ref mut di_builder) = self.di_builder {
-            di_builder.add_function_debug_info(
-                ops_fun.span,
-                ops_fun.source_name.as_ref(),
-                llvm_fun,
-            );
-        }
-
-        llvm_fun
     }
 
     pub fn get_global_or_insert<F>(
@@ -175,17 +173,37 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
         }
     }
 
-    pub fn di_builder(&mut self) -> Option<&mut DebugInfoBuilder<'sl>> {
-        self.di_builder.as_mut()
-    }
-
     /// Finalise the module and return the LLVMModuleRef
     ///
     /// This will verify the module's correctness and dump the LLVM IR to stdout if the
     /// `ARRET_DUMP_LLVM` environment variable is set
-    pub fn into_llvm_module(mut self, tcx: &mut TargetCtx) -> LLVMModuleRef {
+    fn into_generated_mod(mut self, tcx: &mut TargetCtx) -> GeneratedMod {
         use crate::codegen::analysis::AnalysedFun;
-        use crate::codegen::fun_gen::define_fun;
+        use crate::codegen::const_gen::gen_global_interned_names;
+        use crate::codegen::fun_gen::{declare_fun, define_fun};
+
+        // Define our entry fun
+        let AnalysedFun {
+            ops_fun: entry_ops_fun,
+            captures: entry_captures,
+        } = self.analysed_mod.entry_fun();
+
+        let llvm_entry_fun = declare_fun(tcx, self.module, entry_ops_fun);
+        define_fun(
+            tcx,
+            &mut self,
+            entry_ops_fun,
+            entry_captures,
+            llvm_entry_fun,
+        );
+
+        if let Some(ref mut di_builder) = self.di_builder {
+            di_builder.add_function_debug_info(
+                entry_ops_fun.span,
+                entry_ops_fun.source_name.as_ref(),
+                llvm_entry_fun,
+            );
+        }
 
         // Define all of our private funs
         for (private_fun_id, analysed_fun) in self.analysed_mod.private_funs() {
@@ -207,26 +225,29 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
             }
         }
 
+        let llvm_global_interned_names =
+            gen_global_interned_names(tcx, self.module, &self.global_interned_names);
+
         if let Some(ref mut di_builder) = self.di_builder {
             di_builder.finalise();
         }
 
-        unsafe {
-            let mut error: *mut libc::c_char = ptr::null_mut();
-
-            if env::var_os("ARRET_DUMP_LLVM").is_some() {
-                LLVMDumpModule(self.module);
-            }
-
-            LLVMVerifyModule(
-                self.module,
-                LLVMVerifierFailureAction::LLVMAbortProcessAction,
-                &mut error as *mut _,
-            );
-            LLVMDisposeMessage(error);
+        GeneratedMod {
+            llvm_module: self.module,
+            llvm_entry_fun,
+            llvm_global_interned_names,
         }
-        self.module
     }
+}
+
+pub fn gen_mod<'am, 'sl, 'interner>(
+    tcx: &mut TargetCtx,
+    name: &ffi::CStr,
+    analysed_mod: &'am AnalysedMod<'am>,
+    jit_interner: Option<&'interner mut intern::Interner>,
+    debug_source_loader: Option<&'sl SourceLoader>,
+) -> GeneratedMod {
+    ModCtx::new(tcx, name, analysed_mod, jit_interner, debug_source_loader).into_generated_mod(tcx)
 }
 
 impl Drop for ModCtx<'_, '_, '_> {

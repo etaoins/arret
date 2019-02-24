@@ -109,8 +109,8 @@ fn ty_is_a<M: ty::PM>(
 
         // Vector types
         (ty::Ty::Vector(sub_members), ty::Ty::Vector(par_members)) => {
-           (sub_members.len() == par_members.len()) &&
-                sub_members
+            (sub_members.len() == par_members.len())
+                && sub_members
                     .iter()
                     .zip(par_members.iter())
                     .all(|(sub_member, par_member)| ty_ref_is_a(sub_member, par_member))

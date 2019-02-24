@@ -16,7 +16,10 @@
 
 (defn test-sym-equality! ()
   (assert-eq (black-box! 'inline1) (black-box! 'inline1))
-  (assert-ne (black-box! 'inline1) (black-box! 'inline2)))
+  (assert-ne (black-box! 'inline1) (black-box! 'inline2))
+
+  (assert-eq (black-box! 'definitely-out-of-line1) (black-box! 'definitely-out-of-line1))
+  (assert-ne (black-box! 'definitely-out-of-line1) (black-box! 'definitely-out-of-line2)))
 
 (defn test-list-equality! ()
   (assert-eq (black-box! ()) (black-box! ()))
