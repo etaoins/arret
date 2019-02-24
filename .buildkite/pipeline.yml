@@ -6,6 +6,18 @@ cached-ecr-build-env: &cached-ecr-build-env
           - Cargo.lock
     - docker#v2.0.0
 
+push-repl-image-step: &push-repl-image-step
+  branches: "master"
+  plugins:
+    - docker-login#v2.0.1:
+        username: etaoins
+        password-env: DOCKER_HUB_PASSWORD
+    - docker-compose#v2.6.0:
+        push:
+          repl:etaoins/arret:repl
+        env:
+          - BUILDKITE_COMMIT
+
 steps:
   - label: ":cargo: Build & Test"
     command:
@@ -36,14 +48,10 @@ steps:
       - cargo check --release
     <<: *cached-ecr-build-env
 
-  - label: ":rocket: Push REPL Image"
-    branches: "master"
-    plugins:
-      - docker-login#v2.0.1:
-          username: etaoins
-          password-env: DOCKER_HUB_PASSWORD
-      - docker-compose#v2.6.0:
-          push:
-            repl:etaoins/arret:repl
-          env:
-            - BUILDKITE_COMMIT
+  - label: ":rocket: Push x86-64 REPL Image"
+    <<: *push-repl-image-step
+
+  - label: ":rocket: Push ARM64 REPL Image"
+    <<: *push-repl-image-step
+    agents:
+      queue: arm64
