@@ -353,15 +353,13 @@ impl TargetCtx {
             match abi_type {
                 ABIType::Bool => LLVMInt1TypeInContext(self.llx),
                 ABIType::Int => LLVMInt64TypeInContext(self.llx),
+                ABIType::Char => LLVMInt32TypeInContext(self.llx),
                 ABIType::Float => LLVMDoubleTypeInContext(self.llx),
                 ABIType::Boxed(boxed) => self.boxed_abi_to_llvm_ptr_type(boxed),
                 ABIType::Callback(entry_point_abi_type) => {
                     let entry_point_llvm_type =
                         self.callback_entry_point_llvm_type(entry_point_abi_type);
                     self.callback_llvm_type(entry_point_llvm_type)
-                }
-                other => {
-                    unimplemented!("ABI type: {:?}", other);
                 }
             }
         }
