@@ -7,7 +7,7 @@ use llvm_sys::target_machine::*;
 use llvm_sys::LLVMLinkage;
 
 use crate::codegen::analysis::AnalysedMod;
-use crate::codegen::mod_gen::ModCtx;
+use crate::codegen::mod_gen::{gen_mod, GeneratedMod};
 use crate::codegen::target_gen::TargetCtx;
 use crate::hir::rfi;
 use crate::mir;
@@ -62,7 +62,7 @@ impl Default for Options<'static> {
     }
 }
 
-fn task_receiver_llvm_type(tcx: &mut TargetCtx) -> LLVMTypeRef {
+fn arret_main_llvm_type(tcx: &mut TargetCtx) -> LLVMTypeRef {
     unsafe {
         let llvm_arg_types = &mut [tcx.task_llvm_ptr_type()];
 
@@ -100,7 +100,12 @@ fn program_to_module(
     unsafe {
         let analysed_mod = AnalysedMod::new(&program.private_funs, &program.main);
 
-        let mut mcx = ModCtx::new(
+        // Build our Arret funs
+        let GeneratedMod {
+            llvm_module,
+            llvm_entry_fun: llvm_arret_main,
+            llvm_global_interned_names,
+        } = gen_mod(
             tcx,
             CString::new("program").unwrap().as_ref(),
             &analysed_mod,
@@ -108,27 +113,24 @@ fn program_to_module(
             debug_source_loader,
         );
 
-        // And now the Arret main main
-        let llvm_arret_main = mcx.llvm_entry_fun(tcx);
         LLVMSetLinkage(llvm_arret_main, LLVMLinkage::LLVMPrivateLinkage);
 
         // Declare our C main
         let builder = LLVMCreateBuilderInContext(tcx.llx);
         let c_main = LLVMAddFunction(
-            mcx.module,
+            llvm_module,
             b"main\0".as_ptr() as *const _,
             c_main_llvm_type(tcx),
         );
-
-        if let Some(di_builder) = mcx.di_builder() {
-            di_builder.add_function_debug_info(program.main.span, Some(&"main".to_owned()), c_main);
-        }
 
         let bb = LLVMAppendBasicBlockInContext(tcx.llx, c_main, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
 
         // Declare arret_runtime_launch_task
-        let launch_task_llvm_arg_types = &mut [LLVMPointerType(task_receiver_llvm_type(tcx), 0)];
+        let launch_task_llvm_arg_types = &mut [
+            LLVMPointerType(tcx.global_interned_name_type(), 0),
+            LLVMPointerType(arret_main_llvm_type(tcx), 0),
+        ];
 
         let launch_task_llvm_type = LLVMFunctionType(
             LLVMVoidTypeInContext(tcx.llx),
@@ -139,12 +141,13 @@ fn program_to_module(
 
         // And launch the task from C main
         let launch_task_llvm_fun = LLVMAddFunction(
-            mcx.module,
+            llvm_module,
             "arret_runtime_launch_task\0".as_ptr() as *const _,
             launch_task_llvm_type,
         );
 
-        let launch_task_llvm_args = &mut [llvm_arret_main];
+        let launch_task_llvm_args = &mut [llvm_global_interned_names, llvm_arret_main];
+
         LLVMBuildCall(
             builder,
             launch_task_llvm_fun,
@@ -154,9 +157,9 @@ fn program_to_module(
         );
 
         LLVMBuildRet(builder, LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), 0, 0));
-
         LLVMDisposeBuilder(builder);
-        mcx.into_llvm_module(tcx)
+
+        llvm_module
     }
 }
 
@@ -196,7 +199,7 @@ pub fn gen_program(
 
     let mut tcx = TargetCtx::new(target_machine, llvm_opt);
     let module = program_to_module(&mut tcx, &program, debug_source_loader);
-    tcx.optimise_module(module);
+    tcx.finish_module(module);
 
     unsafe {
         let mut error: *mut libc::c_char = ptr::null_mut();

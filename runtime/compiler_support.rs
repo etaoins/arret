@@ -2,13 +2,14 @@ use std::{panic, process};
 
 use crate::boxed;
 use crate::boxed::refs::Gc;
+use crate::intern::GlobalName;
 use crate::task::Task;
 
 type TaskEntry = extern "C" fn(&mut Task);
 
 #[export_name = "arret_runtime_launch_task"]
-pub extern "C" fn launch_task(entry: TaskEntry) {
-    let mut task = Task::new();
+pub extern "C" fn launch_task(global_interned_names: *const GlobalName, entry: TaskEntry) {
+    let mut task = Task::with_global_interned_names(global_interned_names);
 
     if let Err(err) = panic::catch_unwind(panic::AssertUnwindSafe(|| entry(&mut task))) {
         if let Some(message) = err.downcast_ref::<String>() {

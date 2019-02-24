@@ -95,14 +95,7 @@ pub fn gen_boxed_sym(
     mcx: &mut ModCtx<'_, '_, '_>,
     value: &str,
 ) -> LLVMValueRef {
-    use runtime::intern::InternedSym;
-
-    let interned_sym = if let Some(jit_interner) = mcx.jit_interner() {
-        jit_interner.intern_static(value)
-    } else {
-        InternedSym::try_from_inline_name(value)
-            .expect("codegen for global indexed syms is not implemented")
-    };
+    let interned_sym = mcx.intern_name(value);
 
     unsafe {
         let type_tag = boxed::TypeTag::Sym;
@@ -126,6 +119,87 @@ pub fn gen_boxed_sym(
         annotate_private_global(global);
 
         global
+    }
+}
+
+pub fn gen_global_interned_names(
+    tcx: &mut TargetCtx,
+    llvm_module: LLVMModuleRef,
+    names: &[Box<str>],
+) -> LLVMValueRef {
+    unsafe {
+        if names.is_empty() {
+            return LLVMConstPointerNull(LLVMPointerType(tcx.global_interned_name_type(), 0));
+        }
+
+        let global_interned_name_llvm_type = tcx.global_interned_name_type();
+        let usize_llvm_type = tcx.usize_llvm_type();
+
+        let first_element_gep_indices = &mut [
+            LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), 0, 0),
+            LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), 0, 0),
+        ];
+
+        let mut llvm_names: Vec<LLVMValueRef> = names
+            .iter()
+            .map(|name| {
+                let llvm_name_string = LLVMConstStringInContext(
+                    tcx.llx,
+                    name.as_bytes().as_ptr() as *mut _,
+                    name.len() as u32,
+                    1,
+                );
+
+                let name_global_name =
+                    ffi::CString::new(format!("global_interned_name_{}", name)).unwrap();
+
+                let llvm_name_global = LLVMAddGlobal(
+                    llvm_module,
+                    LLVMTypeOf(llvm_name_string),
+                    name_global_name.as_ptr() as *const _,
+                );
+                LLVMSetInitializer(llvm_name_global, llvm_name_string);
+                annotate_private_global(llvm_name_global);
+
+                let llvm_name_string_ptr = LLVMConstGEP(
+                    llvm_name_global,
+                    first_element_gep_indices.as_mut_ptr(),
+                    first_element_gep_indices.len() as u32,
+                );
+
+                let llvm_name_members = &mut [
+                    LLVMConstInt(usize_llvm_type, name.len() as u64, 0),
+                    llvm_name_string_ptr,
+                ];
+
+                LLVMConstNamedStruct(
+                    global_interned_name_llvm_type,
+                    llvm_name_members.as_mut_ptr(),
+                    llvm_name_members.len() as u32,
+                )
+            })
+            .collect();
+
+        let llvm_names_value = LLVMConstArray(
+            global_interned_name_llvm_type,
+            llvm_names.as_mut_ptr(),
+            llvm_names.len() as u32,
+        );
+
+        let global = LLVMAddGlobal(
+            llvm_module,
+            LLVMTypeOf(llvm_names_value),
+            "global_interned_names\0".as_ptr() as *const _,
+        );
+
+        LLVMSetInitializer(global, llvm_names_value);
+        annotate_private_global(global);
+
+        LLVMConstGEP(
+            global,
+            first_element_gep_indices.as_mut_ptr(),
+            first_element_gep_indices.len() as u32,
+        )
     }
 }
 

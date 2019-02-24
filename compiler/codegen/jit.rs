@@ -12,7 +12,7 @@ use llvm_sys::orc::*;
 use llvm_sys::target_machine::*;
 
 use crate::codegen::analysis::AnalysedMod;
-use crate::codegen::mod_gen::ModCtx;
+use crate::codegen::mod_gen::{gen_mod, GeneratedMod};
 use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
 
@@ -96,30 +96,32 @@ impl JITCtx {
         // Create the module
         let analysed_mod = AnalysedMod::new(private_funs, fun);
 
-        let mut mcx = ModCtx::new(
-            tcx,
-            module_name_cstring.as_ref(),
-            &analysed_mod,
-            Some(interner),
-            None,
-        );
-
         unsafe {
-            let llvm_function = mcx.llvm_entry_fun(tcx);
+            // Generate our Arret funs
+            let GeneratedMod {
+                llvm_module,
+                llvm_entry_fun,
+                ..
+            } = gen_mod(
+                tcx,
+                module_name_cstring.as_ref(),
+                &analysed_mod,
+                Some(interner),
+                None,
+            );
 
             // We need to take ownership before we tranfer the module to ORC
             let mut function_name_len: usize = 0;
-            let function_name_ptr = LLVMGetValueName2(llvm_function, &mut function_name_len);
+            let function_name_ptr = LLVMGetValueName2(llvm_entry_fun, &mut function_name_len);
             let function_name = ffi::CStr::from_ptr(function_name_ptr).to_owned();
 
-            let module = mcx.into_llvm_module(tcx);
-            tcx.optimise_module(module);
+            tcx.finish_module(llvm_module);
 
             let mut orc_module: LLVMOrcModuleHandle = 0;
             if LLVMOrcAddEagerlyCompiledIR(
                 self.orc,
                 &mut orc_module,
-                module,
+                llvm_module,
                 Some(orc_sym_resolve),
                 self as *mut JITCtx as *mut _,
             ) != LLVMOrcErrorCode::LLVMOrcErrSuccess

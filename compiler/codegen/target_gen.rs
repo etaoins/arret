@@ -66,6 +66,7 @@ pub struct TargetCtx {
     box_header_type: Option<LLVMTypeRef>,
     boxed_inline_str_type: Option<LLVMTypeRef>,
     boxed_abi_types: HashMap<BoxedABIType, LLVMTypeRef>,
+    global_interned_name_type: Option<LLVMTypeRef>,
 
     boxed_dereferenceable_attr: LLVMAttributeRef,
     boxed_align_attr: LLVMAttributeRef,
@@ -114,6 +115,7 @@ impl TargetCtx {
                 box_header_type: None,
                 boxed_inline_str_type: None,
                 boxed_abi_types: HashMap::new(),
+                global_interned_name_type: None,
 
                 boxed_dereferenceable_attr: llvm_enum_attr_for_name(
                     llx,
@@ -174,6 +176,23 @@ impl TargetCtx {
 
             LLVMPointerType(llvm_type, 0)
         })
+    }
+
+    pub fn global_interned_name_type(&mut self) -> LLVMTypeRef {
+        let usize_llvm_type = self.usize_llvm_type();
+        let llx = self.llx;
+        *self
+            .global_interned_name_type
+            .get_or_insert_with(|| unsafe {
+                let llvm_i8 = LLVMInt8TypeInContext(llx);
+                let members = &mut [usize_llvm_type, LLVMPointerType(llvm_i8, 0)];
+
+                let llvm_type =
+                    LLVMStructCreateNamed(llx, b"global_interned_name\0".as_ptr() as *const _);
+                LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
+
+                llvm_type
+            })
     }
 
     pub fn closure_llvm_type(&mut self) -> LLVMTypeRef {
@@ -504,8 +523,27 @@ impl TargetCtx {
         }
     }
 
-    pub fn optimise_module(&mut self, module: LLVMModuleRef) {
+    pub fn finish_module(&mut self, module: LLVMModuleRef) {
+        use llvm_sys::analysis::*;
+        use std::{env, ptr};
+
         unsafe {
+            let mut error: *mut libc::c_char = ptr::null_mut();
+
+            // Dump
+            if env::var_os("ARRET_DUMP_LLVM").is_some() {
+                LLVMDumpModule(module);
+            }
+
+            // Verify
+            LLVMVerifyModule(
+                module,
+                LLVMVerifierFailureAction::LLVMAbortProcessAction,
+                &mut error as *mut _,
+            );
+            LLVMDisposeMessage(error);
+
+            // Optimise
             LLVMRunPassManager(self.module_pass_manager, module);
         }
     }
