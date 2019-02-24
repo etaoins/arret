@@ -150,14 +150,14 @@ mod test {
 
     #[test]
     fn bools() {
-        let mut heap = boxed::Heap::new();
+        let mut heap = boxed::Heap::empty();
         assert_write(&mut heap, "false", boxed::FALSE_INSTANCE.as_any_ref());
         assert_write(&mut heap, "true", boxed::TRUE_INSTANCE.as_any_ref());
     }
 
     #[test]
     fn ints() {
-        let mut heap = boxed::Heap::new();
+        let mut heap = boxed::Heap::empty();
 
         let boxed_zero = boxed::Int::new(&mut heap, 0);
         assert_write(&mut heap, "0", boxed_zero.as_any_ref());
@@ -171,7 +171,7 @@ mod test {
 
     #[test]
     fn floats() {
-        let mut heap = boxed::Heap::new();
+        let mut heap = boxed::Heap::empty();
 
         let test_floats = [
             ("0.0", 0.0),
@@ -193,7 +193,7 @@ mod test {
 
     #[test]
     fn sym() {
-        let mut heap = boxed::Heap::new();
+        let mut heap = boxed::Heap::empty();
 
         let boxed_foo = boxed::Sym::new(&mut heap, "foo");
         assert_write(&mut heap, "foo", boxed_foo.as_any_ref());
@@ -204,7 +204,7 @@ mod test {
 
     #[test]
     fn lists() {
-        let mut heap = boxed::Heap::new();
+        let mut heap = boxed::Heap::empty();
 
         let empty_list = boxed::List::<boxed::Int>::from_values(&mut heap, [].iter().cloned());
         assert_write(&mut heap, "()", empty_list.as_any_ref());
@@ -219,7 +219,7 @@ mod test {
 
     #[test]
     fn vectors() {
-        let mut heap = boxed::Heap::new();
+        let mut heap = boxed::Heap::empty();
 
         let empty_vector = boxed::Vector::<boxed::Int>::from_values(&mut heap, [].iter().cloned());
         assert_write(&mut heap, "[]", empty_vector.as_any_ref());
@@ -234,7 +234,7 @@ mod test {
 
     #[test]
     fn chars() {
-        let mut heap = boxed::Heap::new();
+        let mut heap = boxed::Heap::empty();
 
         let test_chars = [
             ("\\newline", '\n'),
@@ -255,7 +255,7 @@ mod test {
 
     #[test]
     fn strings() {
-        let mut heap = boxed::Heap::new();
+        let mut heap = boxed::Heap::empty();
 
         let test_strings = [
             (r#""""#, ""),

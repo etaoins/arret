@@ -17,12 +17,14 @@ enum RestLength {
 }
 
 fn const_to_reg(
+    ehx: &mut EvalHirCtx,
     b: &mut Builder,
     span: Span,
     any_ref: Gc<boxed::Any>,
     abi_type: &abitype::ABIType,
 ) -> BuiltReg {
     use crate::mir::ops::*;
+    use runtime::boxed::AsHeap;
 
     let subtype = any_ref.as_subtype();
 
@@ -57,6 +59,16 @@ fn const_to_reg(
 
             b.cast_boxed_cond(span, &from_abi_type, from_reg, to_abi_type.clone())
         }
+        (boxed::AnySubtype::Sym(sym_ref), abitype::ABIType::Boxed(to_abi_type)) => {
+            let from_abi_type = boxed::TypeTag::Sym.into();
+            let from_reg = b.push_reg(
+                span,
+                OpKind::ConstBoxedSym,
+                sym_ref.name(ehx.as_heap().interner()).into(),
+            );
+
+            b.cast_boxed_cond(span, &from_abi_type, from_reg, to_abi_type.clone())
+        }
         (boxed::AnySubtype::False(_), abitype::ABIType::Boxed(to_abi_type)) => {
             let from_abi_type = boxed::TypeTag::False.into();
             let from_reg = b.push_reg(span, OpKind::ConstBoxedFalse, ());
@@ -78,9 +90,15 @@ fn const_to_reg(
         (boxed::AnySubtype::TopPair(top_pair), abitype::ABIType::Boxed(to_abi_type)) => {
             let pair_ref = top_pair.as_pair();
 
-            let head_reg =
-                const_to_reg(b, span, pair_ref.head(), &abitype::BoxedABIType::Any.into());
+            let head_reg = const_to_reg(
+                ehx,
+                b,
+                span,
+                pair_ref.head(),
+                &abitype::BoxedABIType::Any.into(),
+            );
             let rest_reg = const_to_reg(
+                ehx,
                 b,
                 span,
                 pair_ref.rest().as_any_ref(),
@@ -380,7 +398,7 @@ pub fn value_to_reg(
 ) -> BuiltReg {
     match value {
         Value::Reg(reg_value) => reg_to_reg(ehx, b, span, reg_value, abi_type),
-        Value::Const(any_ref) => const_to_reg(b, span, *any_ref, abi_type),
+        Value::Const(any_ref) => const_to_reg(ehx, b, span, *any_ref, abi_type),
         Value::List(fixed, rest) => {
             if let abitype::ABIType::Boxed(boxed_abi_type) = abi_type {
                 list_to_reg(

@@ -216,7 +216,7 @@ mod test {
     fn equality() {
         use crate::boxed::Int;
 
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let boxed1 = Int::new(&mut heap, 1);
         let boxed2 = Int::new(&mut heap, 2);
@@ -234,7 +234,7 @@ mod test {
     fn fmt_debug() {
         use crate::boxed::Int;
 
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let forward_vec = Vector::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
 

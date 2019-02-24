@@ -171,7 +171,7 @@ mod test {
 
     #[test]
     fn equality() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let boxed_one1 = Str::new(&mut heap, "one");
         let boxed_one2 = Str::new(&mut heap, "one");
@@ -183,7 +183,7 @@ mod test {
 
     #[test]
     fn fmt_debug() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let boxed_one = Str::new(&mut heap, "one");
         assert_eq!(r#"Str("one")"#, format!("{:?}", boxed_one));
@@ -191,7 +191,7 @@ mod test {
 
     #[test]
     fn round_trip() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         for &test_str in &[
             "",

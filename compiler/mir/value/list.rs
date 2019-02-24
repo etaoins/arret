@@ -132,7 +132,7 @@ mod test {
 
     #[test]
     fn list_length() {
-        let mut heap = boxed::Heap::new();
+        let mut heap = boxed::Heap::empty();
         let elements = &[1, 2, 3];
 
         // Start with three fixed values
@@ -162,7 +162,7 @@ mod test {
 
     #[test]
     fn const_list_iter() {
-        let mut heap = boxed::Heap::new();
+        let mut heap = boxed::Heap::empty();
 
         let elements = &[1, 2, 3];
 
@@ -188,7 +188,7 @@ mod test {
 
     #[test]
     fn fixed_list_value_iter() {
-        let mut heap = boxed::Heap::new();
+        let mut heap = boxed::Heap::empty();
 
         let elements = &[1, 2, 3];
 

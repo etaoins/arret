@@ -8,23 +8,26 @@ use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 use llvm_sys::LLVMLinkage;
 
+use runtime::intern::Interner;
+
 use crate::codegen::analysis::AnalysedMod;
 use crate::codegen::debug_info::DebugInfoBuilder;
 use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
 use crate::source::SourceLoader;
 
-pub struct ModCtx<'am, 'sl> {
+pub struct ModCtx<'am, 'sl, 'interner> {
     pub module: LLVMModuleRef,
 
     analysed_mod: &'am AnalysedMod<'am>,
     di_builder: Option<DebugInfoBuilder<'sl>>,
     llvm_private_funs: HashMap<ops::PrivateFunId, LLVMValueRef>,
+    jit_interner: Option<&'interner mut Interner>,
 
     function_pass_manager: LLVMPassManagerRef,
 }
 
-impl<'am, 'sl> ModCtx<'am, 'sl> {
+impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
     /// Constructs a new module context with the given name
     ///
     /// Note that the module name in LLVM is not arbitrary. For instance, in the ORC JIT it will
@@ -34,8 +37,9 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
         tcx: &mut TargetCtx,
         name: &ffi::CStr,
         analysed_mod: &'am AnalysedMod<'am>,
+        jit_interner: Option<&'interner mut Interner>,
         debug_source_loader: Option<&'sl SourceLoader>,
-    ) -> ModCtx<'am, 'sl> {
+    ) -> Self {
         use crate::codegen::fun_gen::declare_fun;
         use llvm_sys::transforms::pass_manager_builder::*;
 
@@ -85,9 +89,14 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
             analysed_mod,
             di_builder,
             llvm_private_funs,
+            jit_interner,
 
             function_pass_manager,
         }
+    }
+
+    pub fn jit_interner(&mut self) -> &mut Option<&'interner mut Interner> {
+        &mut self.jit_interner
     }
 
     pub fn llvm_private_fun(&self, private_fun_id: ops::PrivateFunId) -> LLVMValueRef {
@@ -220,7 +229,7 @@ impl<'am, 'sl> ModCtx<'am, 'sl> {
     }
 }
 
-impl Drop for ModCtx<'_, '_> {
+impl Drop for ModCtx<'_, '_, '_> {
     fn drop(&mut self) {
         unsafe {
             LLVMDisposePassManager(self.function_pass_manager);

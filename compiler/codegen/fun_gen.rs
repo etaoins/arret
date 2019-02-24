@@ -72,7 +72,7 @@ pub(crate) fn declare_fun(
 
 pub(crate) fn define_fun(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_, '_>,
+    mcx: &mut ModCtx<'_, '_, '_>,
     fun: &ops::Fun,
     captures: &Captures,
     llvm_fun: LLVMValueRef,

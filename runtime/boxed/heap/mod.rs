@@ -93,15 +93,18 @@ impl Heap {
     /// Capacity of the initial segment and all overflow segments
     const DEFAULT_SEGMENT_CAPACITY: usize = 1024;
 
-    pub fn new() -> Heap {
-        Self::with_capacity(Self::DEFAULT_SEGMENT_CAPACITY)
+    // Default capacity of the Heap
+    pub const DEFAULT_CAPACITY: usize = Self::DEFAULT_SEGMENT_CAPACITY;
+
+    pub fn empty() -> Heap {
+        Self::new(Interner::new(), Self::DEFAULT_CAPACITY)
     }
 
-    pub fn with_capacity(count: usize) -> Heap {
+    pub fn new(interner: Interner, count: usize) -> Heap {
         Heap {
             current_segment: Segment::with_capacity(count),
             full_segments: vec![],
-            interner: Interner::new(),
+            interner,
             len_at_last_gc: 0,
         }
     }
@@ -140,6 +143,10 @@ impl Heap {
 
     pub fn interner(&self) -> &Interner {
         &self.interner
+    }
+
+    pub fn interner_mut(&mut self) -> &mut Interner {
+        &mut self.interner
     }
 
     /// Returns the number of allocated cells
@@ -181,12 +188,6 @@ impl Heap {
     }
 }
 
-impl Default for Heap {
-    fn default() -> Heap {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -195,7 +196,7 @@ mod test {
     fn basic_alloc() {
         use crate::boxed::Str;
 
-        let mut heap = Heap::with_capacity(1);
+        let mut heap = Heap::new(Interner::new(), 1);
 
         let string1 = Str::new(&mut heap, "HELLO");
         let string2 = Str::new(&mut heap, "WORLD");

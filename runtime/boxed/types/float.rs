@@ -72,7 +72,7 @@ mod test {
     fn calc_hash(value: f64) -> u64 {
         use std::collections::hash_map::DefaultHasher;
 
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
         let boxed_float = Float::new(&mut heap, value);
 
         let mut hasher = DefaultHasher::new();
@@ -87,7 +87,7 @@ mod test {
 
     #[test]
     fn equality() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let boxed_one1 = Float::new(&mut heap, 1.0);
         let boxed_one2 = Float::new(&mut heap, 1.0);
@@ -109,7 +109,7 @@ mod test {
 
     #[test]
     fn fmt_debug() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let boxed_one = Float::new(&mut heap, 1.0);
         assert_eq!("Float(1.0)", format!("{:?}", boxed_one));

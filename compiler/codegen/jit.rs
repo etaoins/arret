@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::{ffi, mem};
 
 use runtime::boxed;
+use runtime::intern::Interner;
 
 use libc;
 
@@ -76,6 +77,7 @@ impl JITCtx {
     pub fn compile_fun(
         &mut self,
         private_funs: &HashMap<ops::PrivateFunId, ops::Fun>,
+        interner: &mut Interner,
         fun: &ops::Fun,
     ) -> u64 {
         let tcx = &mut self.tcx;
@@ -94,7 +96,13 @@ impl JITCtx {
         // Create the module
         let analysed_mod = AnalysedMod::new(private_funs, fun);
 
-        let mut mcx = ModCtx::new(tcx, module_name_cstring.as_ref(), &analysed_mod, None);
+        let mut mcx = ModCtx::new(
+            tcx,
+            module_name_cstring.as_ref(),
+            &analysed_mod,
+            Some(interner),
+            None,
+        );
 
         unsafe {
             let llvm_function = mcx.llvm_entry_fun(tcx);

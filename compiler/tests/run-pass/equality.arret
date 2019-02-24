@@ -14,6 +14,10 @@
   (assert-ne (black-box! true) (black-box! false))
   (assert-eq (black-box! false) (black-box! false)))
 
+(defn test-sym-equality! ()
+  (assert-eq (black-box! 'inline1) (black-box! 'inline1))
+  (assert-ne (black-box! 'inline1) (black-box! 'inline2)))
+
 (defn test-list-equality! ()
   (assert-eq (black-box! ()) (black-box! ()))
   (assert-ne (black-box! ()) (black-box! '(1 2 3)))
@@ -36,6 +40,7 @@
 (defn main! ()
   (test-int-equality!)
   (test-bool-equality!)
+  (test-sym-equality!)
   (test-list-equality!)
   (test-nan-equality!)
   (test-float-zero-equality!)

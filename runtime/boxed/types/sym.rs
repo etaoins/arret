@@ -66,7 +66,7 @@ mod test {
 
     #[test]
     fn equality() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let boxed_one1 = Sym::new(&mut heap, "one");
         let boxed_one2 = Sym::new(&mut heap, "one");
@@ -78,7 +78,7 @@ mod test {
 
     #[test]
     fn fmt_debug() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let boxed_one = Sym::new(&mut heap, "one");
         assert_eq!(r#"Sym('one)"#, format!("{:?}", boxed_one));

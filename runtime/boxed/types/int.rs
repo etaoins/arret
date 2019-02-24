@@ -68,7 +68,7 @@ mod test {
 
     #[test]
     fn equality() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let boxed_one1 = Int::new(&mut heap, 1);
         let boxed_one2 = Int::new(&mut heap, 1);
@@ -80,7 +80,7 @@ mod test {
 
     #[test]
     fn fmt_debug() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let boxed_one = Int::new(&mut heap, 1);
         assert_eq!("Int(1)", format!("{:?}", boxed_one));

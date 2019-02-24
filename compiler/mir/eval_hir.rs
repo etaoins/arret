@@ -9,6 +9,7 @@ use runtime::boxed;
 use runtime::boxed::prelude::*;
 use runtime::boxed::refs::Gc;
 use runtime::callback::EntryPointABIType as CallbackEntryPointABIType;
+use runtime::intern::Interner;
 
 use runtime_syntax::reader;
 use syntax::datum::Datum;
@@ -417,7 +418,11 @@ impl EvalHirCtx {
 
             let wanted_abi = PolymorphABI::thunk_abi();
             let ops_fun = ops_for_rust_fun(self, EMPTY_SPAN, rust_fun, wanted_abi);
-            let address = self.thunk_jit.compile_fun(&self.private_funs, &ops_fun);
+            let address = self.thunk_jit.compile_fun(
+                &self.private_funs,
+                self.runtime_task.heap_mut().interner_mut(),
+                &ops_fun,
+            );
 
             mem::transmute(address as usize)
         };
@@ -924,7 +929,11 @@ impl EvalHirCtx {
             .ops_for_arret_fun(&arret_fun, wanted_abi)
             .expect("error during arret fun boxing");
 
-        let address = self.thunk_jit.compile_fun(&self.private_funs, &ops_fun);
+        let address = self.thunk_jit.compile_fun(
+            &self.private_funs,
+            self.runtime_task.heap_mut().interner_mut(),
+            &ops_fun,
+        );
         let entry = unsafe { mem::transmute(address as usize) };
 
         let closure = boxed::NIL_INSTANCE.as_any_ref();
@@ -1210,7 +1219,11 @@ impl EvalHirCtx {
         use runtime::boxed::collect;
         use std::mem;
 
-        let old_heap = mem::replace(self.runtime_task.heap_mut(), boxed::Heap::with_capacity(0));
+        let old_heap = mem::replace(
+            self.runtime_task.heap_mut(),
+            boxed::Heap::new(Interner::new(), 0),
+        );
+
         let mut strong_pass = collect::StrongPass::new(old_heap);
 
         // Move all of our global values to the new heap

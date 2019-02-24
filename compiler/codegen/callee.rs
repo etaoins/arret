@@ -10,7 +10,7 @@ use crate::mir::ops;
 
 pub fn gen_static_symbol_entry_point(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_, '_>,
+    mcx: &mut ModCtx<'_, '_, '_>,
     static_symbol: &ops::StaticSymbol,
 ) -> LLVMValueRef {
     use crate::codegen::analysis::escape::{infer_param_capture_kind, CaptureKind};

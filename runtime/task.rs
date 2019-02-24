@@ -3,6 +3,7 @@ use std::panic;
 use crate::binding::Never;
 use crate::boxed::prelude::*;
 use crate::boxed::Heap;
+use crate::intern::Interner;
 
 pub struct Task {
     heap: Heap,
@@ -11,7 +12,7 @@ pub struct Task {
 impl Task {
     pub fn new() -> Task {
         Task {
-            heap: Heap::with_capacity(32),
+            heap: Heap::new(Interner::new(), 32),
         }
     }
 

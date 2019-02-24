@@ -104,6 +104,7 @@ fn program_to_module(
             tcx,
             CString::new("program").unwrap().as_ref(),
             &analysed_mod,
+            None,
             debug_source_loader,
         );
 

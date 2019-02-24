@@ -101,7 +101,7 @@ mod test {
 
     #[test]
     fn equality() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let nil_closure = boxed::NIL_INSTANCE.as_any_ref();
         let boxed_identity1 = FunThunk::new(&mut heap, (nil_closure, identity_entry));

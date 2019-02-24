@@ -57,6 +57,7 @@ impl InternedInline {
 pub union InternedSym {
     indexed: InternedIndexed,
     inline: InternedInline,
+    raw: u64,
 }
 
 enum InternedRepr<'a> {
@@ -65,6 +66,36 @@ enum InternedRepr<'a> {
 }
 
 impl InternedSym {
+    /// Tries to return an inline interned Sym
+    ///
+    /// This can be accomplished without an `Interner` as we don't need to add a name to the
+    /// interner's index.
+    pub fn try_from_inline_name(name: &str) -> Option<InternedSym> {
+        if name.len() <= INLINE_SIZE {
+            let mut interned_inline = InternedInline {
+                name_bytes: [INLINE_FILL_BYTE; INLINE_SIZE],
+            };
+
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    name.as_ptr(),
+                    &mut interned_inline.name_bytes[0] as *mut u8,
+                    name.len(),
+                );
+            }
+
+            Some(InternedSym {
+                inline: interned_inline,
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn to_raw_u64(self) -> u64 {
+        unsafe { self.raw }
+    }
+
     fn repr(&self) -> InternedRepr<'_> {
         unsafe {
             if self.indexed.flag_byte == INDEXED_FLAG {
@@ -78,9 +109,7 @@ impl InternedSym {
 
 impl PartialEq for InternedSym {
     fn eq(&self, other: &InternedSym) -> bool {
-        // This simply compares our 8 byte representation directly
-        // LLVM is clever enough to compare using a single instruction on x86-64/ARM64
-        unsafe { self.inline.name_bytes == other.inline.name_bytes }
+        unsafe { self.raw == other.raw }
     }
 }
 
@@ -110,7 +139,9 @@ impl fmt::Debug for InternedSym {
 // or `HashMap` as they might reallocate. We can fix this later.
 pub struct Interner {
     names: Vec<Box<str>>,
-    name_to_idx: HashMap<Box<str>, usize>,
+    name_to_idx: HashMap<Box<str>, u32>,
+    /// Contains the highest static index + 1
+    static_idx_watermark: u32,
 }
 
 impl Interner {
@@ -118,49 +149,85 @@ impl Interner {
         Interner {
             names: vec![],
             name_to_idx: HashMap::new(),
+            static_idx_watermark: 0,
         }
     }
 
+    /// Interns a symbol with the given name
+    ///
+    /// The `InternedSym` must be referenced by a boxed `Sym` before the next GC cycle.
     pub fn intern(&mut self, name: &str) -> InternedSym {
-        if name.len() <= INLINE_SIZE {
-            let mut interned_inline = InternedInline {
-                name_bytes: [INLINE_FILL_BYTE; INLINE_SIZE],
-            };
-
-            unsafe {
-                ptr::copy_nonoverlapping(
-                    name.as_ptr(),
-                    &mut interned_inline.name_bytes[0] as *mut u8,
-                    name.len(),
-                );
-            }
-
-            InternedSym {
-                inline: interned_inline,
-            }
-        } else {
-            let index = self.name_to_idx.get(name).cloned().unwrap_or_else(|| {
-                let index = self.names.len();
-                self.names.push(name.into());
-                self.name_to_idx.insert(name.into(), index);
-
-                index
-            });
-
-            InternedSym {
-                indexed: InternedIndexed {
-                    flag_byte: INDEXED_FLAG,
-                    _padding: [0; 3],
-                    name_idx: index as u32,
-                },
-            }
+        if let Some(inline_interned) = InternedSym::try_from_inline_name(name) {
+            return inline_interned;
         }
+
+        let index = self.name_to_idx.get(name).cloned().unwrap_or_else(|| {
+            let index = self.names.len() as u32;
+            self.names.push(name.into());
+            self.name_to_idx.insert(name.into(), index);
+
+            index
+        });
+
+        InternedSym {
+            indexed: InternedIndexed {
+                flag_byte: INDEXED_FLAG,
+                _padding: [0; 3],
+                name_idx: index,
+            },
+        }
+    }
+
+    /// Interns a static symbol with the given name
+    ///
+    /// This should only be used where it's not possible to GC root the `InternedSym`. This is
+    /// currently only used by the JIT where we can't track `InternedSym` references in the
+    /// generated code.
+    pub fn intern_static(&mut self, name: &str) -> InternedSym {
+        let interned_sym = self.intern(name);
+
+        if let InternedRepr::Indexed(indexed_sym) = interned_sym.repr() {
+            self.static_idx_watermark = indexed_sym.name_idx + 1;
+        }
+
+        interned_sym
     }
 
     pub fn unintern<'a>(&'a self, interned: &'a InternedSym) -> &'a str {
         match interned.repr() {
             InternedRepr::Indexed(indexed) => &self.names[indexed.name_idx as usize],
             InternedRepr::Inline(inline) => inline.as_str(),
+        }
+    }
+
+    /// Returns a clone of this interner usable for garbage collection
+    ///
+    /// This preserves the index of all static `InternedSym`s
+    pub fn clone_for_collect_garbage(&self) -> Self {
+        if self.static_idx_watermark == 0 {
+            // Avoid iterating over our HashMap
+            return Self::new();
+        };
+
+        let static_idx_watermark = self.static_idx_watermark;
+
+        let names = self.names[0..static_idx_watermark as usize].to_vec();
+        let name_to_idx = self
+            .name_to_idx
+            .iter()
+            .filter_map(|(name, idx)| {
+                if *idx < self.static_idx_watermark {
+                    Some((name.clone(), *idx))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        Interner {
+            names,
+            name_to_idx,
+            static_idx_watermark,
         }
     }
 }
@@ -235,5 +302,41 @@ mod test {
             assert!(!previous_interneds.contains(&interned));
             previous_interneds.push(interned);
         }
+    }
+
+    #[test]
+    fn clone_for_collect_garbage() {
+        let mut interner = Interner::new();
+        interner.intern("one                ");
+        interner.intern("two                ");
+        interner.intern("three              ");
+
+        assert_eq!(3, interner.names.len());
+        assert_eq!(3, interner.name_to_idx.len());
+
+        // No static symbols; we should collect everything
+        interner = interner.clone_for_collect_garbage();
+        assert_eq!(0, interner.names.len());
+        assert_eq!(0, interner.name_to_idx.len());
+
+        interner.intern("one                ");
+        interner.intern_static("two         ");
+        interner.intern("three              ");
+
+        // We need to preserve the second symbol
+        interner = interner.clone_for_collect_garbage();
+        assert_eq!(2, interner.names.len());
+        assert_eq!(2, interner.name_to_idx.len());
+
+        // We should be able to "promote" an existing symbol to static
+        interner.intern("one-two-three-four");
+        interner.intern_static("one-two-three-four");
+
+        assert_eq!(3, interner.names.len());
+        assert_eq!(3, interner.name_to_idx.len());
+
+        interner = interner.clone_for_collect_garbage();
+        assert_eq!(3, interner.names.len());
+        assert_eq!(3, interner.name_to_idx.len());
     }
 }

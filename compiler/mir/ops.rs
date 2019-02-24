@@ -137,6 +137,7 @@ pub enum OpKind {
     ConstBoxedInt(RegId, i64),
     ConstBoxedFloat(RegId, f64),
     ConstBoxedStr(RegId, Box<str>),
+    ConstBoxedSym(RegId, Box<str>),
     ConstBoxedPair(RegId, BoxPairOp),
     ConstBoxedFunThunk(RegId, BoxFunThunkOp),
 
@@ -204,6 +205,7 @@ impl OpKind {
             | ConstBoxedInt(reg_id, _)
             | ConstBoxedFloat(reg_id, _)
             | ConstBoxedStr(reg_id, _)
+            | ConstBoxedSym(reg_id, _)
             | ConstBoxedPair(reg_id, _)
             | ConstBoxedFunThunk(reg_id, _)
             | AllocBoxedInt(reg_id, _)
@@ -247,6 +249,7 @@ impl OpKind {
             | ConstBoxedInt(_, _)
             | ConstBoxedFloat(_, _)
             | ConstBoxedStr(_, _)
+            | ConstBoxedSym(_, _)
             | RetVoid
             | Unreachable => {}
             ConstBoxedPair(_, box_pair_op) | AllocBoxedPair(_, box_pair_op) => {
@@ -374,6 +377,7 @@ impl OpKind {
             | ConstBoxedInt(_, _)
             | ConstBoxedFloat(_, _)
             | ConstBoxedStr(_, _)
+            | ConstBoxedSym(_, _)
             | ConstBoxedPair(_, _)
             | ConstBoxedFunThunk(_, _) => OpCategory::ConstBox,
 

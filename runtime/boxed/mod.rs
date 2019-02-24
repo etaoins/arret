@@ -440,7 +440,7 @@ mod test {
 
     #[test]
     fn downcast_ref() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let box_float = Float::new(&mut heap, 2.0);
         let box_float_as_any = box_float.as_any_ref();
@@ -451,7 +451,7 @@ mod test {
 
     #[test]
     fn as_tagged() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let box_float = Float::new(&mut heap, 2.0);
         let box_float_as_any = box_float.as_any_ref();
@@ -464,7 +464,7 @@ mod test {
 
     #[test]
     fn any_equality() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let box_two = Float::new(&mut heap, 2.0);
         let box_two_as_any = box_two.as_any_ref();
@@ -480,7 +480,7 @@ mod test {
 
     #[test]
     fn any_fmt_debug() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let boxed_one = Int::new(&mut heap, 1);
         let boxed_one_as_any = boxed_one.as_any_ref();
@@ -489,7 +489,7 @@ mod test {
 
     #[test]
     fn union_types() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let box_float = Float::new(&mut heap, 2.0);
         let box_float_as_any = box_float.as_any_ref();

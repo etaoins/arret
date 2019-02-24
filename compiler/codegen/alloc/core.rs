@@ -126,7 +126,7 @@ pub fn gen_alloced_box<T: boxed::DirectTagged>(
 /// This is the slow path; it is only used when our current heap segment is full.
 fn gen_runtime_heap_alloc(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_, '_>,
+    mcx: &mut ModCtx<'_, '_, '_>,
     builder: LLVMBuilderRef,
     llvm_task: LLVMValueRef,
     required_cells: usize,
@@ -197,7 +197,7 @@ fn gen_runtime_heap_alloc(
 /// fallback to the runtime.
 pub fn gen_active_alloc_for_atom(
     tcx: &mut TargetCtx,
-    mcx: &mut ModCtx<'_, '_>,
+    mcx: &mut ModCtx<'_, '_, '_>,
     builder: LLVMBuilderRef,
     llvm_task: LLVMValueRef,
     atom: &AllocAtom<'_>,

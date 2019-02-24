@@ -24,9 +24,11 @@ pub struct StrongPass {
 
 impl StrongPass {
     pub fn new(old_heap: Heap) -> StrongPass {
+        let interner = old_heap.interner().clone_for_collect_garbage();
+
         StrongPass {
             old_heap,
-            new_heap: Heap::new(),
+            new_heap: Heap::new(interner, Heap::DEFAULT_CAPACITY),
         }
     }
 
@@ -198,7 +200,7 @@ mod test {
     fn simple_collect() {
         use crate::boxed::{ConstructableFrom, Str};
 
-        let mut old_heap = Heap::new();
+        let mut old_heap = Heap::empty();
 
         let mut hello = Str::new(&mut old_heap, "HELLO");
         let mut world = Str::new(&mut old_heap, "WORLD");
@@ -243,7 +245,7 @@ mod test {
     fn sym_collect() {
         use crate::boxed::{ConstructableFrom, Sym};
 
-        let mut old_heap = Heap::new();
+        let mut old_heap = Heap::empty();
 
         let inline_name = "Hello";
         let indexed_name = "This is too long; it will be indexed to the heap's intern table";
@@ -270,7 +272,7 @@ mod test {
         const PAIR_CELLS: usize = mem::size_of::<Pair<Any>>() / mem::size_of::<Any>();
         const EXPECTED_HEAP_SIZE: usize = 3 + (3 * PAIR_CELLS);
 
-        let mut old_heap = Heap::new();
+        let mut old_heap = Heap::empty();
 
         let mut boxed_list = List::<Int>::from_values(&mut old_heap, [1, 2, 3].iter().cloned());
         assert_eq!(EXPECTED_HEAP_SIZE, old_heap.len());
@@ -300,7 +302,7 @@ mod test {
         let test_contents: [&[i64]; 4] = [&[], &[1], &[1, 2, 3], &[9, 8, 7, 6, 5, 4, 3, 2, 1, 0]];
 
         for &test_content in &test_contents {
-            let mut old_heap = Heap::new();
+            let mut old_heap = Heap::empty();
             let mut boxed_vec =
                 Vector::<Int>::from_values(&mut old_heap, test_content.iter().cloned());
 

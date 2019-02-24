@@ -64,7 +64,7 @@ mod test {
 
     #[test]
     fn equality() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let boxed_a1 = Char::new(&mut heap, 'a');
         let boxed_a2 = Char::new(&mut heap, 'a');
@@ -76,7 +76,7 @@ mod test {
 
     #[test]
     fn fmt_debug() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let boxed_a = Char::new(&mut heap, 'a');
         assert_eq!("Char('a')", format!("{:?}", boxed_a));

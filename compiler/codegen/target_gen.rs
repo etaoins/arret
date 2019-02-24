@@ -245,6 +245,10 @@ impl TargetCtx {
                     members.push(LLVMInt8TypeInContext(self.llx));
                     b"boxed_str\0".as_ptr()
                 }
+                BoxedABIType::DirectTagged(boxed::TypeTag::Sym) => {
+                    members.push(LLVMInt64TypeInContext(self.llx));
+                    b"boxed_sym\0".as_ptr()
+                }
                 BoxedABIType::DirectTagged(boxed::TypeTag::FunThunk) => {
                     members.push(self.closure_llvm_type());
                     members.push(LLVMPointerType(

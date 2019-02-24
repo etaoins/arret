@@ -354,7 +354,7 @@ mod test {
     fn equality() {
         use crate::boxed::Int;
 
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let forward_list1 = List::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
         let forward_list2 = List::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
@@ -366,7 +366,7 @@ mod test {
 
     #[test]
     fn fmt_debug() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
         let forward_list = List::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
 
         assert_eq!(
@@ -377,7 +377,7 @@ mod test {
 
     #[test]
     fn construct_and_iter() {
-        let mut heap = Heap::new();
+        let mut heap = Heap::empty();
 
         let boxed_list = List::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
 
