@@ -18,4 +18,8 @@
   (assert-fn-doesnt-contain-op :call (fn ([left Bool] [right Bool]) -> Bool
     (= left right)))
 
+  ; Chars can be directly compared
+  (assert-fn-doesnt-contain-op :call (fn ([left Char] [right Char]) -> Bool
+    (= left right)))
+
   ())

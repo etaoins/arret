@@ -128,6 +128,7 @@ pub enum OpKind {
     ConstInt64(RegId, i64),
     ConstFloat(RegId, f64),
     ConstUsize(RegId, usize),
+    ConstChar(RegId, char),
     ConstBool(RegId, bool),
     ConstTypeTag(RegId, boxed::TypeTag),
 
@@ -136,6 +137,7 @@ pub enum OpKind {
     ConstBoxedFalse(RegId, ()),
     ConstBoxedInt(RegId, i64),
     ConstBoxedFloat(RegId, f64),
+    ConstBoxedChar(RegId, char),
     ConstBoxedStr(RegId, Box<str>),
     ConstBoxedSym(RegId, Box<str>),
     ConstBoxedPair(RegId, BoxPairOp),
@@ -143,6 +145,7 @@ pub enum OpKind {
 
     AllocBoxedInt(RegId, RegId),
     AllocBoxedFloat(RegId, RegId),
+    AllocBoxedChar(RegId, RegId),
     AllocBoxedPair(RegId, BoxPairOp),
     AllocBoxedFunThunk(RegId, BoxFunThunkOp),
 
@@ -156,6 +159,7 @@ pub enum OpKind {
     LoadBoxedPairRest(RegId, RegId),
     LoadBoxedIntValue(RegId, RegId),
     LoadBoxedFloatValue(RegId, RegId),
+    LoadBoxedCharValue(RegId, RegId),
     LoadBoxedFunThunkClosure(RegId, RegId),
     Cond(CondOp),
 
@@ -163,6 +167,7 @@ pub enum OpKind {
 
     Add(RegId, BinaryOp),
     IntEqual(RegId, BinaryOp),
+    CharEqual(RegId, BinaryOp),
     FloatEqual(RegId, BinaryOp),
     BoxIdentical(RegId, BinaryOp),
     UsizeToInt64(RegId, RegId),
@@ -200,16 +205,19 @@ impl OpKind {
             | ConstInt64(reg_id, _)
             | ConstFloat(reg_id, _)
             | ConstUsize(reg_id, _)
+            | ConstChar(reg_id, _)
             | ConstBool(reg_id, _)
             | ConstTypeTag(reg_id, _)
             | ConstBoxedInt(reg_id, _)
             | ConstBoxedFloat(reg_id, _)
+            | ConstBoxedChar(reg_id, _)
             | ConstBoxedStr(reg_id, _)
             | ConstBoxedSym(reg_id, _)
             | ConstBoxedPair(reg_id, _)
             | ConstBoxedFunThunk(reg_id, _)
             | AllocBoxedInt(reg_id, _)
             | AllocBoxedFloat(reg_id, _)
+            | AllocBoxedChar(reg_id, _)
             | AllocBoxedPair(reg_id, _)
             | AllocBoxedFunThunk(reg_id, _)
             | ConstCastBoxed(reg_id, _)
@@ -221,10 +229,12 @@ impl OpKind {
             | LoadBoxedPairRest(reg_id, _)
             | LoadBoxedIntValue(reg_id, _)
             | LoadBoxedFloatValue(reg_id, _)
+            | LoadBoxedCharValue(reg_id, _)
             | LoadBoxedFunThunkClosure(reg_id, _)
             | Add(reg_id, _) => Some(*reg_id),
             IntEqual(reg_id, _)
             | FloatEqual(reg_id, _)
+            | CharEqual(reg_id, _)
             | BoxIdentical(reg_id, _)
             | UsizeToInt64(reg_id, _)
             | MakeCallback(reg_id, _) => Some(*reg_id),
@@ -244,10 +254,12 @@ impl OpKind {
             | ConstInt64(_, _)
             | ConstFloat(_, _)
             | ConstUsize(_, _)
+            | ConstChar(_, _)
             | ConstBool(_, _)
             | ConstTypeTag(_, _)
             | ConstBoxedInt(_, _)
             | ConstBoxedFloat(_, _)
+            | ConstBoxedChar(_, _)
             | ConstBoxedStr(_, _)
             | ConstBoxedSym(_, _)
             | RetVoid
@@ -268,6 +280,7 @@ impl OpKind {
             }
             AllocBoxedInt(_, reg_id)
             | AllocBoxedFloat(_, reg_id)
+            | AllocBoxedChar(_, reg_id)
             | ConstCastBoxed(
                 _,
                 CastBoxedOp {
@@ -293,6 +306,7 @@ impl OpKind {
             | LoadBoxedPairRest(_, reg_id)
             | LoadBoxedIntValue(_, reg_id)
             | LoadBoxedFloatValue(_, reg_id)
+            | LoadBoxedCharValue(_, reg_id)
             | LoadBoxedFunThunkClosure(_, reg_id)
             | UsizeToInt64(_, reg_id)
             | MakeCallback(
@@ -325,6 +339,7 @@ impl OpKind {
             Add(_, binary_op)
             | IntEqual(_, binary_op)
             | FloatEqual(_, binary_op)
+            | CharEqual(_, binary_op)
             | BoxIdentical(_, binary_op) => {
                 coll.extend([binary_op.lhs_reg, binary_op.rhs_reg].iter().cloned());
             }
@@ -368,6 +383,7 @@ impl OpKind {
             ConstInt64(_, _)
             | ConstFloat(_, _)
             | ConstUsize(_, _)
+            | ConstChar(_, _)
             | ConstBool(_, _)
             | ConstTypeTag(_, _) => OpCategory::ConstReg,
 
@@ -376,6 +392,7 @@ impl OpKind {
             | ConstBoxedFalse(_, _)
             | ConstBoxedInt(_, _)
             | ConstBoxedFloat(_, _)
+            | ConstBoxedChar(_, _)
             | ConstBoxedStr(_, _)
             | ConstBoxedSym(_, _)
             | ConstBoxedPair(_, _)
@@ -383,6 +400,7 @@ impl OpKind {
 
             AllocBoxedInt(_, _)
             | AllocBoxedFloat(_, _)
+            | AllocBoxedChar(_, _)
             | AllocBoxedPair(_, _)
             | AllocBoxedFunThunk(_, _) => OpCategory::AllocBoxed,
 
@@ -394,9 +412,14 @@ impl OpKind {
             | LoadBoxedPairRest(_, _)
             | LoadBoxedIntValue(_, _)
             | LoadBoxedFloatValue(_, _)
+            | LoadBoxedCharValue(_, _)
             | LoadBoxedFunThunkClosure(_, _) => OpCategory::MemLoad,
 
-            Add(_, _) | IntEqual(_, _) | FloatEqual(_, _) | BoxIdentical(_, _) => OpCategory::RegOp,
+            Add(_, _)
+            | IntEqual(_, _)
+            | FloatEqual(_, _)
+            | CharEqual(_, _)
+            | BoxIdentical(_, _) => OpCategory::RegOp,
 
             Ret(_) | RetVoid => OpCategory::Ret,
 

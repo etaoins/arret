@@ -260,6 +260,10 @@ impl TargetCtx {
                     members.push(LLVMDoubleTypeInContext(self.llx));
                     b"boxed_float\0".as_ptr()
                 }
+                BoxedABIType::DirectTagged(boxed::TypeTag::Char) => {
+                    members.push(LLVMInt32TypeInContext(self.llx));
+                    b"boxed_char\0".as_ptr()
+                }
                 BoxedABIType::DirectTagged(boxed::TypeTag::Str) => {
                     members.push(LLVMInt8TypeInContext(self.llx));
                     b"boxed_str\0".as_ptr()
@@ -470,6 +474,27 @@ impl TargetCtx {
                 self.invariant_load_md_kind_id,
                 self.empty_md_node,
             );
+        }
+    }
+
+    /// Adds range metadata to annotate our native `Char` type with valid Unicode codepoint ranges
+    pub fn add_char_codepoint_range_metadata(&mut self, llvm_value: LLVMValueRef) {
+        unsafe {
+            // Valid Unicode codepoints are effectively 21bit values with a hole in the middle
+            let llvm_char_type = LLVMInt32TypeInContext(self.llx);
+            let mut llvm_range_values: Vec<LLVMValueRef> = [0x0000, 0xD800, 0xE000, 0x11_0000]
+                .iter()
+                .map(|value| LLVMConstInt(llvm_char_type, *value as u64, 0))
+                .collect();
+
+            let codepoint_range_metadata = LLVMMDNodeInContext(
+                self.llx,
+                llvm_range_values.as_mut_ptr(),
+                llvm_range_values.len() as u32,
+            );
+            let range_md_kind_id = self.llvm_md_kind_id_for_name(b"range");
+
+            LLVMSetMetadata(llvm_value, range_md_kind_id, codepoint_range_metadata);
         }
     }
 

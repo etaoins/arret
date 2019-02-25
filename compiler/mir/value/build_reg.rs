@@ -35,6 +35,9 @@ fn const_to_reg(
         (boxed::AnySubtype::Float(float_ref), abitype::ABIType::Float) => {
             b.push_reg(span, OpKind::ConstFloat, float_ref.value())
         }
+        (boxed::AnySubtype::Char(char_ref), abitype::ABIType::Char) => {
+            b.push_reg(span, OpKind::ConstChar, char_ref.value())
+        }
         (boxed::AnySubtype::True(_), abitype::ABIType::Bool) => {
             b.push_reg(span, OpKind::ConstBool, true)
         }
@@ -50,6 +53,12 @@ fn const_to_reg(
         (boxed::AnySubtype::Float(float_ref), abitype::ABIType::Boxed(to_abi_type)) => {
             let from_abi_type = boxed::TypeTag::Float.into();
             let from_reg = b.push_reg(span, OpKind::ConstBoxedFloat, float_ref.value());
+
+            b.cast_boxed_cond(span, &from_abi_type, from_reg, to_abi_type.clone())
+        }
+        (boxed::AnySubtype::Char(char_ref), abitype::ABIType::Boxed(to_abi_type)) => {
+            let from_abi_type = boxed::TypeTag::Char.into();
+            let from_reg = b.push_reg(span, OpKind::ConstBoxedChar, char_ref.value());
 
             b.cast_boxed_cond(span, &from_abi_type, from_reg, to_abi_type.clone())
         }
@@ -229,6 +238,15 @@ pub fn reg_to_boxed_reg(
             let boxed_int_reg = b.push_reg(span, OpKind::AllocBoxedInt, reg_value.reg.into());
             b.cast_boxed_cond(span, &TypeTag::Int.into(), boxed_int_reg, to_boxed.clone())
         }
+        abitype::ABIType::Char => {
+            let boxed_char_reg = b.push_reg(span, OpKind::AllocBoxedChar, reg_value.reg.into());
+            b.cast_boxed_cond(
+                span,
+                &TypeTag::Char.into(),
+                boxed_char_reg,
+                to_boxed.clone(),
+            )
+        }
         abitype::ABIType::Float => {
             let boxed_float_reg = b.push_reg(span, OpKind::AllocBoxedFloat, reg_value.reg.into());
             b.cast_boxed_cond(
@@ -262,7 +280,9 @@ pub fn reg_to_boxed_reg(
                 .into()
             },
         ),
-        from => unimplemented!("reg {:?} to boxed reg {:?} conversion", from, to_boxed),
+        abitype::ABIType::Callback(_) => {
+            unimplemented!("callback to boxed reg {:?} conversion", to_boxed)
+        }
     }
 }
 
@@ -320,6 +340,11 @@ fn reg_to_reg(
             let boxed_float_reg =
                 b.cast_boxed_cond(span, from_boxed, reg_value.reg, TypeTag::Float.into());
             b.push_reg(span, OpKind::LoadBoxedFloatValue, boxed_float_reg.into())
+        }
+        (abitype::ABIType::Boxed(from_boxed), abitype::ABIType::Char) => {
+            let boxed_char_reg =
+                b.cast_boxed_cond(span, from_boxed, reg_value.reg, TypeTag::Char.into());
+            b.push_reg(span, OpKind::LoadBoxedCharValue, boxed_char_reg.into())
         }
         (abitype::ABIType::Boxed(from_boxed), abitype::ABIType::Bool) => {
             boxed_to_bool(b, span, from_boxed, reg_value.reg)
