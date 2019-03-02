@@ -17,6 +17,7 @@ steps:
     <<: *cached-ecr-build-env
 
   - label: ":muscle: Test ARM64"
+    branches: '!master'
     command: bash -c "cargo build &&
                       cargo test &&
                       ./driver/tests/integration/run.sh target/debug/arret"
