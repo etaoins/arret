@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use syntax::span::Span;
 
 use runtime::boxed;
@@ -21,9 +19,7 @@ pub fn length(
     let single_arg = iter.next_unchecked(b, span);
 
     if let Some(known_length) = list_value_length(&single_arg) {
-        return Ok(Some(Value::Const(
-            boxed::Int::new(ehx, known_length as i64).as_any_ref(),
-        )));
+        return Ok(Some(boxed::Int::new(ehx, known_length as i64).into()));
     }
 
     if let Some(b) = b {
@@ -43,10 +39,9 @@ pub fn length(
         let usize_length_reg = b.push_reg(span, OpKind::LoadBoxedListLength, list_reg.into());
         let i64_length_reg = b.push_reg(span, OpKind::UsizeToInt64, usize_length_reg.into());
 
-        return Ok(Some(Value::Reg(Rc::new(value::RegValue::new(
-            i64_length_reg,
-            abitype::ABIType::Int,
-        )))));
+        return Ok(Some(
+            value::RegValue::new(i64_length_reg, abitype::ABIType::Int).into(),
+        ));
     }
 
     Ok(None)

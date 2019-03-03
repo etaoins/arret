@@ -119,5 +119,5 @@ pub fn fn_op_categories(
     let category_list: Gc<boxed::List<boxed::Sym>> =
         boxed::List::from_values(ehx, categories.into_iter().map(op_category_to_string));
 
-    Ok(Some(Value::Const(category_list.as_any_ref())))
+    Ok(Some(category_list.into()))
 }

@@ -66,7 +66,7 @@ where
         // This could be useful; request the type
         let arret_ty = build_arret_ty();
         if let Some(any_ref) = mono_to_const(heap, &arret_ty) {
-            return Value::Const(any_ref);
+            return any_ref.into();
         }
 
         let old_type_tags = reg_value.possible_type_tags;

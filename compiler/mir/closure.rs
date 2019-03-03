@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use syntax::span::Span;
 
@@ -137,10 +136,7 @@ pub fn load_from_closure_param(
 
         local_values.insert(
             *var_id,
-            Value::Reg(Rc::new(value::RegValue::new(
-                closure_reg,
-                abitype::BoxedABIType::Any.into(),
-            ))),
+            value::RegValue::new(closure_reg, abitype::BoxedABIType::Any.into()).into(),
         );
     }
 }

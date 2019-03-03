@@ -2,7 +2,6 @@ use syntax::span::Span;
 
 use runtime::abitype;
 use runtime::boxed;
-use runtime::boxed::prelude::*;
 
 use crate::codegen::GenABI;
 use crate::mir::builder::{Builder, BuiltReg};
@@ -135,7 +134,7 @@ pub fn eval_equality(
     use crate::mir::value::types::possible_type_tags_for_value;
 
     if let Some(static_result) = values_statically_equal(ehx, left_value, right_value) {
-        return Value::Const(boxed::Bool::singleton_ref(static_result).as_any_ref());
+        return boxed::Bool::singleton_ref(static_result).into();
     }
 
     let b = if let Some(some_b) = b {

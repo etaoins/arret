@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::vec;
 
 use syntax::span::Span;
@@ -73,10 +72,10 @@ impl<'list> ListIterator {
                 self.rest = if tail.is_empty() {
                     None
                 } else {
-                    Some(Value::Const(tail.as_any_ref()))
+                    Some(tail.into())
                 };
 
-                Value::Const(const_pair.head())
+                const_pair.head().into()
             }
             Value::Reg(reg_value) => {
                 let b = b
@@ -110,15 +109,10 @@ impl<'list> ListIterator {
         let head_reg = b.push_reg(span, OpKind::LoadBoxedPairHead, current_rest_reg.into());
         let rest_reg = b.push_reg(span, OpKind::LoadBoxedPairRest, current_rest_reg.into());
 
-        self.rest = Some(Value::Reg(Rc::new(value::RegValue::new(
-            rest_reg,
-            abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
-        ))));
+        self.rest =
+            Some(value::RegValue::new(rest_reg, abitype::TOP_LIST_BOXED_ABI_TYPE.into()).into());
 
-        Value::Reg(Rc::new(value::RegValue::new(
-            head_reg,
-            abitype::BoxedABIType::Any.into(),
-        )))
+        value::RegValue::new(head_reg, abitype::BoxedABIType::Any.into()).into()
     }
 }
 
@@ -138,20 +132,14 @@ mod test {
         // Start with three fixed values
         let fixed_values = elements
             .iter()
-            .map(|element| {
-                let element_ref = boxed::Int::new(&mut heap, *element).as_any_ref();
-                Value::Const(element_ref)
-            })
+            .map(|element| boxed::Int::new(&mut heap, *element).into())
             .collect();
 
         // Have a constant list tail
         let boxed_list_tail =
             boxed::List::<boxed::Int>::from_values(&mut heap, elements.iter().cloned());
 
-        let const_list_tail = Value::List(
-            Box::new([]),
-            Some(Box::new(Value::Const(boxed_list_tail.as_any_ref()))),
-        );
+        let const_list_tail = Value::List(Box::new([]), Some(Box::new(boxed_list_tail.into())));
 
         // Add the fixed values (3 elements) to the constant tail (3 elements)
         let list_value = Value::List(fixed_values, Some(Box::new(const_list_tail)));
@@ -171,7 +159,7 @@ mod test {
 
         let mut iter = ListIterator {
             fixed: Vec::new().into_iter(),
-            rest: Some(Value::Const(boxed_list.as_any_ref())),
+            rest: Some(boxed_list.into()),
         };
 
         for expected in elements {
@@ -194,10 +182,7 @@ mod test {
 
         let element_values: Vec<Value> = elements
             .iter()
-            .map(|element| {
-                let element_ref = boxed::Int::new(&mut heap, *element).as_any_ref();
-                Value::Const(element_ref)
-            })
+            .map(|element| boxed::Int::new(&mut heap, *element).into())
             .collect();
 
         let mut iter = ListIterator {
