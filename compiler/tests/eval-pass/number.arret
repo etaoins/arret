@@ -11,6 +11,13 @@
   (assert-eq false (zero? ##Inf))
   (assert-eq false (zero? ##-Inf)))
 
+(defn test-nan? ()
+  (assert-eq false (nan? 10.0))
+  (assert-eq true (nan? ##NaN))
+  (assert-eq false (nan? ##Inf))
+  (assert-eq false (nan? ##-Inf)))
+
 (defn main! () ->! ()
   (test-zero?)
+  (test-nan?)
   ())
