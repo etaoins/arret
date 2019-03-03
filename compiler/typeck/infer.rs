@@ -781,16 +781,9 @@ impl<'types> RecursiveDefsCtx<'types> {
             rest_arg_expr,
         } = fun_app;
 
-        // The context used to select the type for our return value. It collects evidence from the
-        // parameters as they're evaluated.
-        let mut ret_stx = ty::select::SelectCtx::new(fun_type.pvar_ids(), fun_type.tvar_ids());
-
-        // The context used to select the types for our non-function parameters. Its initial
-        // evidence is the wanted return type which is used for backwards type propagation.
-        let mut non_fun_param_stx = ret_stx.clone();
-
-        // Add our return type information
-        non_fun_param_stx.add_evidence(fun_type.ret(), required_type);
+        // The context used to select the types for our non-function parameters
+        let mut non_fun_param_stx =
+            ty::select::SelectCtx::new(fun_type.pvar_ids(), fun_type.tvar_ids());
 
         if let PurityVar::Known(purity_type) = pv {
             // Add our purity information
@@ -854,9 +847,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
             is_divergent = is_divergent || fixed_arg_node.is_divergent();
 
-            ret_stx.add_evidence(param_type, fixed_arg_node.result_ty());
             fun_param_stx.add_evidence(param_type, fixed_arg_node.result_ty());
-
             inferred_fixed_arg_exprs.push((index, fixed_arg_node.expr));
         }
 
@@ -868,9 +859,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
             is_divergent = is_divergent || rest_arg_node.is_divergent();
 
-            ret_stx.add_evidence(&tail_type, rest_arg_node.result_ty());
             fun_param_stx.add_evidence(&tail_type, rest_arg_node.result_ty());
-
             Some(rest_arg_node.expr)
         } else if param_iter.fixed_len() > 0 {
             // We wanted more args!
@@ -882,7 +871,11 @@ impl<'types> RecursiveDefsCtx<'types> {
             None
         };
 
+        // The context used to select our return type. This includes the evidence gathered when
+        // visiting all parameters.
+        let mut ret_stx = fun_param_stx.clone();
         let fun_param_pta = fun_param_stx.into_poly_ty_args();
+
         for PendingFixedArg {
             index,
             param_type,
