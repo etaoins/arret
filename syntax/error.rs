@@ -36,6 +36,7 @@ pub enum ErrorKind {
     InvalidFloat,
     UnexpectedChar(char),
     UnevenMap,
+    InvalidArgLiteral,
 }
 
 pub type Result<T> = result::Result<T, Error>;
