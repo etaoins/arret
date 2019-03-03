@@ -10,8 +10,16 @@ use crate::pretty_print::pretty_print;
 
 pub mod list;
 use crate::list::*;
+
+pub mod math;
+use crate::math::*;
+
+pub mod number;
+use crate::number::*;
+
 pub mod testing;
 use crate::testing::*;
+
 pub mod write;
 use crate::write::*;
 
@@ -51,6 +59,13 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "cons" => stdlib_cons,
     "concat" => stdlib_concat,
     "member?" => stdlib_member_p,
+
+    "nan?" => stdlib_nan_p,
+    "+" => stdlib_add,
+    "*" => stdlib_mul,
+    "-" => stdlib_sub,
+    "/" => stdlib_div,
+
     "black-box" => stdlib_black_box,
     "black-box!" => stdlib_black_box_impure,
     "heap-alloc-count" => stdlib_heap_alloc_count,

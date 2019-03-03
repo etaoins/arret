@@ -1,7 +1,8 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-use crate::boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
+use crate::boxed::refs::Gc;
+use crate::boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header, Num};
 use crate::intern::Interner;
 
 #[repr(C, align(16))]
@@ -33,6 +34,10 @@ impl Float {
 
     pub fn value(&self) -> f64 {
         self.value
+    }
+
+    pub fn as_num(&self) -> Gc<Num> {
+        unsafe { Gc::new(&*(self as *const _ as *const Num)) }
     }
 }
 
