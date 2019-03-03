@@ -83,6 +83,18 @@ impl Value {
     }
 }
 
+impl<T: boxed::Boxed> From<Gc<T>> for Value {
+    fn from(boxed_ref: Gc<T>) -> Self {
+        Value::Const(boxed_ref.as_any_ref())
+    }
+}
+
+impl From<RegValue> for Value {
+    fn from(reg_value: RegValue) -> Self {
+        Value::Reg(Rc::new(reg_value))
+    }
+}
+
 pub fn visit_value_root(strong_pass: &mut boxed::collect::StrongPass, value: &mut Value) {
     match value {
         Value::Const(ref mut any_ref) => strong_pass.visit_box(any_ref),

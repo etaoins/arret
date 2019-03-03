@@ -22,11 +22,16 @@ pub use crate::boxed::types::vector::{TopVector, Vector};
 
 pub mod prelude {
     pub use super::AsHeap;
+    pub use super::Boxed;
     pub use super::ConstructableFrom;
     pub use super::Downcastable;
 }
 
-pub trait Boxed: Sized {}
+pub trait Boxed: Sized {
+    fn as_any_ref(&self) -> Gc<Any> {
+        unsafe { Gc::new(&*(self as *const Self as *const Any)) }
+    }
+}
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum BoxSize {
@@ -118,10 +123,6 @@ impl EncodeBoxedABIType for Any {
 
 pub trait Downcastable: Boxed {
     fn has_tag(type_tag: TypeTag) -> bool;
-
-    fn as_any_ref(&self) -> Gc<Any> {
-        unsafe { Gc::new(&*(self as *const Self as *const Any)) }
-    }
 }
 
 pub trait DirectTagged: Boxed {

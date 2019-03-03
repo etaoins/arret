@@ -250,7 +250,7 @@ impl EvalHirCtx {
     }
 
     fn eval_lit(&mut self, literal: &Datum) -> Value {
-        Value::Const(reader::box_syntax_datum(self, literal))
+        reader::box_syntax_datum(self, literal).into()
     }
 
     pub(super) fn build_arret_fun_app(
@@ -678,10 +678,7 @@ impl EvalHirCtx {
             },
         );
 
-        Value::Reg(Rc::new(value::RegValue::new(
-            ret_reg,
-            abitype::BoxedABIType::Any.into(),
-        )))
+        value::RegValue::new(ret_reg, abitype::BoxedABIType::Any.into()).into()
     }
 
     fn eval_value_app(
@@ -854,7 +851,7 @@ impl EvalHirCtx {
                             | possible_type_tags_for_value(&false_value),
                     };
 
-                    output_value = Value::Reg(Rc::new(reg_value));
+                    output_value = reg_value.into();
 
                     reg_phi = Some(ops::RegPhi {
                         output_reg: output_reg.into(),

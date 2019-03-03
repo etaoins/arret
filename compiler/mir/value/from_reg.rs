@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use runtime::abitype;
 use runtime::boxed;
 
@@ -24,12 +22,11 @@ pub fn reg_to_value(
     mono_to_const(heap, arret_ty)
         .map(Value::Const)
         .unwrap_or_else(|| {
-            let reg_value = value::RegValue {
+            value::RegValue {
                 reg,
                 abi_type: abi_type.clone(),
                 possible_type_tags: TypeTagSet::from(abi_type) & TypeTagSet::from(arret_ty),
-            };
-
-            Value::Reg(Rc::new(reg_value))
+            }
+            .into()
         })
 }
