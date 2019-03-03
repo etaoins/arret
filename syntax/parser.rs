@@ -284,6 +284,7 @@ impl<'de> Parser<'de> {
 
         match self.peek_char(ExpectedContent::Dispatch)? {
             '{' => self.parse_set(),
+            '(' => self.parse_anon_fun(),
             '#' => self.parse_symbolic_float(),
             _ => {
                 let (span, _) = self.capture_span(|s| s.consume_char(ExpectedContent::Dispatch));
@@ -358,6 +359,19 @@ impl<'de> Parser<'de> {
         // Cover the # in our span
         let adj_span = outer_span.with_lo(outer_span.lo - 1);
         contents.map(|contents| Datum::Set(adj_span, contents))
+    }
+
+    fn parse_anon_fun(&mut self) -> Result<Datum> {
+        use crate::anon_fun::convert_anon_fun;
+
+        let (outer_span, body_contents) =
+            self.capture_span(|s| s.parse_seq(')', ExpectedContent::List));
+
+        // Cover the # in our span
+        let adj_span = outer_span.with_lo(outer_span.lo - 1);
+        let body_contents = body_contents?;
+
+        convert_anon_fun(adj_span, body_contents.into_vec().into_iter())
     }
 
     fn parse_quote_escape(&mut self) -> Result<char> {
@@ -507,6 +521,7 @@ mod test {
             hi: v.len() as u32,
         }
     }
+
     #[test]
     fn bool_datum() {
         let j = "false";
