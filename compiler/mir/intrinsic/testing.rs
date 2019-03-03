@@ -10,14 +10,10 @@ use crate::mir::builder::Builder;
 use crate::mir::error;
 use crate::mir::error::{Error, Result};
 use crate::mir::eval_hir::EvalHirCtx;
-use crate::mir::intrinsic::Intrinsic;
 use crate::mir::ops;
 use crate::mir::polymorph::PolymorphABI;
 use crate::mir::value;
-use crate::mir::value::list::ListIterator;
 use crate::mir::value::Value;
-
-pub struct FnOpCategories {}
 
 fn ideal_polymorph_abi_for_arret_fun(arret_fun: &value::ArretFun) -> PolymorphABI {
     use crate::hir::destruc::poly_for_list_destruc;
@@ -96,33 +92,32 @@ fn op_category_to_string(category: ops::OpCategory) -> &'static str {
     }
 }
 
-impl Intrinsic for FnOpCategories {
-    fn eval_arg_list(
-        ehx: &mut EvalHirCtx,
-        b: &mut Option<Builder>,
-        span: Span,
-        mut iter: ListIterator,
-    ) -> Result<Option<Value>> {
-        let single_arg = iter.next_unchecked(b, span);
+pub fn fn_op_categories(
+    ehx: &mut EvalHirCtx,
+    b: &mut Option<Builder>,
+    span: Span,
+    arg_list_value: &Value,
+) -> Result<Option<Value>> {
+    let mut iter = arg_list_value.list_iter();
+    let single_arg = iter.next_unchecked(b, span);
 
-        let arret_fun = if let Value::ArretFun(arret_fun) = single_arg {
-            arret_fun
-        } else {
-            return Err(Error::Panic(error::Panic::new(
-                span,
-                "argument must be an Arret function".to_owned(),
-            )));
-        };
+    let arret_fun = if let Value::ArretFun(arret_fun) = single_arg {
+        arret_fun
+    } else {
+        return Err(Error::Panic(error::Panic::new(
+            span,
+            "argument must be an Arret function".to_owned(),
+        )));
+    };
 
-        let ideal_polymorph_abi = ideal_polymorph_abi_for_arret_fun(&arret_fun);
-        let ops_fun = ehx.ops_for_arret_fun(&arret_fun, ideal_polymorph_abi)?;
+    let ideal_polymorph_abi = ideal_polymorph_abi_for_arret_fun(&arret_fun);
+    let ops_fun = ehx.ops_for_arret_fun(&arret_fun, ideal_polymorph_abi)?;
 
-        let mut categories = BTreeSet::<ops::OpCategory>::new();
-        add_ops_categories(&mut categories, ops_fun.ops.iter());
+    let mut categories = BTreeSet::<ops::OpCategory>::new();
+    add_ops_categories(&mut categories, ops_fun.ops.iter());
 
-        let category_list: Gc<boxed::List<boxed::Sym>> =
-            boxed::List::from_values(ehx, categories.into_iter().map(op_category_to_string));
+    let category_list: Gc<boxed::List<boxed::Sym>> =
+        boxed::List::from_values(ehx, categories.into_iter().map(op_category_to_string));
 
-        Ok(Some(Value::Const(category_list.as_any_ref())))
-    }
+    Ok(Some(Value::Const(category_list.as_any_ref())))
 }

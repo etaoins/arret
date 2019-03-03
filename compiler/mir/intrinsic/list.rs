@@ -8,66 +8,60 @@ use runtime::boxed::prelude::*;
 use crate::mir::builder::Builder;
 use crate::mir::error::Result;
 use crate::mir::eval_hir::EvalHirCtx;
-use crate::mir::intrinsic::Intrinsic;
-use crate::mir::value::list::{list_value_length, ListIterator};
+use crate::mir::value::list::list_value_length;
 use crate::mir::Value;
 
-pub struct Length {}
+pub fn length(
+    ehx: &mut EvalHirCtx,
+    b: &mut Option<Builder>,
+    span: Span,
+    arg_list_value: &Value,
+) -> Result<Option<Value>> {
+    let mut iter = arg_list_value.list_iter();
+    let single_arg = iter.next_unchecked(b, span);
 
-impl Intrinsic for Length {
-    fn eval_arg_list(
-        ehx: &mut EvalHirCtx,
-        b: &mut Option<Builder>,
-        span: Span,
-        mut iter: ListIterator,
-    ) -> Result<Option<Value>> {
-        let single_arg = iter.next_unchecked(b, span);
-
-        if let Some(known_length) = list_value_length(&single_arg) {
-            return Ok(Some(Value::Const(
-                boxed::Int::new(ehx, known_length as i64).as_any_ref(),
-            )));
-        }
-
-        if let Some(b) = b {
-            use crate::mir::ops::*;
-            use crate::mir::value;
-            use crate::mir::value::build_reg::value_to_reg;
-            use runtime::abitype;
-
-            let list_reg = value_to_reg(
-                ehx,
-                b,
-                span,
-                &single_arg,
-                &abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
-            );
-
-            let usize_length_reg = b.push_reg(span, OpKind::LoadBoxedListLength, list_reg.into());
-            let i64_length_reg = b.push_reg(span, OpKind::UsizeToInt64, usize_length_reg.into());
-
-            return Ok(Some(Value::Reg(Rc::new(value::RegValue::new(
-                i64_length_reg,
-                abitype::ABIType::Int,
-            )))));
-        }
-
-        Ok(None)
+    if let Some(known_length) = list_value_length(&single_arg) {
+        return Ok(Some(Value::Const(
+            boxed::Int::new(ehx, known_length as i64).as_any_ref(),
+        )));
     }
+
+    if let Some(b) = b {
+        use crate::mir::ops::*;
+        use crate::mir::value;
+        use crate::mir::value::build_reg::value_to_reg;
+        use runtime::abitype;
+
+        let list_reg = value_to_reg(
+            ehx,
+            b,
+            span,
+            &single_arg,
+            &abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
+        );
+
+        let usize_length_reg = b.push_reg(span, OpKind::LoadBoxedListLength, list_reg.into());
+        let i64_length_reg = b.push_reg(span, OpKind::UsizeToInt64, usize_length_reg.into());
+
+        return Ok(Some(Value::Reg(Rc::new(value::RegValue::new(
+            i64_length_reg,
+            abitype::ABIType::Int,
+        )))));
+    }
+
+    Ok(None)
 }
 
-pub struct Cons {}
+pub fn cons(
+    _ehx: &mut EvalHirCtx,
+    b: &mut Option<Builder>,
+    span: Span,
+    arg_list_value: &Value,
+) -> Result<Option<Value>> {
+    let mut iter = arg_list_value.list_iter();
 
-impl Intrinsic for Cons {
-    fn eval_arg_list(
-        _ehx: &mut EvalHirCtx,
-        b: &mut Option<Builder>,
-        span: Span,
-        mut iter: ListIterator,
-    ) -> Result<Option<Value>> {
-        let head = iter.next_unchecked(b, span);
-        let rest = iter.next_unchecked(b, span);
+    let head = iter.next_unchecked(b, span);
+    let rest = iter.next_unchecked(b, span);
 
-        Ok(Some(Value::List(Box::new([head]), Some(Box::new(rest)))))
-    }
+    Ok(Some(Value::List(Box::new([head]), Some(Box::new(rest)))))
 }
