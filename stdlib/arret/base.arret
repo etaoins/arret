@@ -72,3 +72,10 @@
   (if (int? n)
     (= n 0)
     (= n 0.0)))
+
+(export ->>)
+(defmacro ->> (macro-rules
+  [(initial) initial]
+  [(initial (first-fn args ...) rest ...)
+    (->> (first-fn args ... initial) rest ...)]
+))
