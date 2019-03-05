@@ -1,4 +1,5 @@
 mod list;
+mod math;
 mod testing;
 
 use syntax::span::Span;
@@ -32,5 +33,7 @@ macro_rules! define_intrinsics {
 define_intrinsics! {
     "length" => list::length,
     "cons" => list::cons,
-    "fn-op-categories" => testing::fn_op_categories
+    "fn-op-categories" => testing::fn_op_categories,
+    "+" => math::add,
+    "*" => math::mul
 }

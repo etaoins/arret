@@ -1,0 +1,9 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn main! ()
+  ; This should just pass the value through directly
+  (assert-fn-doesnt-contain-op :call (fn ([n Num])
+    (+ (* n))))
+
+  ())
