@@ -101,14 +101,14 @@ pub fn stdlib_sub(
     }
 }
 
-#[rfi_derive::rust_fun("(Num Num ... -> Float)")]
-pub fn stdlib_div(initial_num: Gc<boxed::Num>, rest: Gc<boxed::List<boxed::Num>>) -> f64 {
+#[rfi_derive::rust_fun("(Float Float ... -> Float)")]
+pub fn stdlib_div(initial_float: f64, rest: Gc<boxed::List<boxed::Float>>) -> f64 {
     if rest.is_empty() {
-        initial_num.as_f64().recip()
+        initial_float.recip()
     } else {
-        let mut acc = initial_num.as_f64();
+        let mut acc = initial_float;
         for operand in rest.iter() {
-            acc /= operand.as_f64()
+            acc /= operand.value()
         }
 
         acc
