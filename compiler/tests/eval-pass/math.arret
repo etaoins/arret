@@ -44,13 +44,9 @@
   ())
 
 (defn test-div ()
-  (assert-eq 1.0 (/ 1))
   (assert-eq 1.0 (/ 1.0))
-
-  (assert-eq 0.5 (/ 2))
   (assert-eq 0.5 (/ 2.0))
-
-  (assert-eq 0.25 (/ 1 2 2))
+  (assert-eq 0.25 (/ 1.0 2.0 2.0))
 
   (assert-eq true (nan? (/ ##NaN)))
   (assert-eq true (nan? (/ 1.0 ##NaN)))

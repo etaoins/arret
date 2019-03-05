@@ -396,15 +396,6 @@ define_tagged_union!(Num, NumSubtype, NumMember, as_num_ref, {
     Float
 });
 
-impl Num {
-    pub fn as_f64(&self) -> f64 {
-        match self.as_subtype() {
-            NumSubtype::Int(int_ref) => int_ref.value() as f64,
-            NumSubtype::Float(float_ref) => float_ref.value(),
-        }
-    }
-}
-
 define_tagged_union!(Bool, BoolSubtype, BoolMember, as_bool_ref, { True, False });
 
 impl Bool {
