@@ -7,9 +7,7 @@
 
 Arret is pure functional, strongly typed language with Lisp-like syntax.
 It aims to combine the expressiveness of Lisp with guarantees provided by functional programming.
-Concurrency is provided through an Erlang-like model of actors communicating using message passing.
-
-Arret is a successor to [Llambda](https://github.com/etaoins/llambda) without the constraint of Scheme compatibility.
+Concurrency will be provided through an Erlang-like model of actors communicating using message passing.
 
 ## Installation
 
@@ -53,7 +51,7 @@ Hello, world!
 ### REPL
 
 The REPL provides an interactive environment for exploring Arret.
-It's supported as a first class concept in Arret; the REPL is just as powerful as the compiler.
+It's supported as a first class environment in Arret; the REPL is just as powerful as the compiler.
 
 ```text
 > cargo run repl
