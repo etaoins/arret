@@ -227,6 +227,14 @@ impl rustyline::highlight::Highlighter for ArretHelper {
             unexpected_eof_style.paint(hint).to_string().into()
         }
     }
+
+    fn highlight_char(&self, line: &str, _pos: usize) -> bool {
+        // Essentially any character can change highlighting:
+        //
+        // - Delimiters can change the structure of input
+        // - Identifier characters can make char literals (e.g. \newline) change validity
+        line.len() <= MAXIMUM_PARSED_LINE_LEN
+    }
 }
 
 impl rustyline::Helper for ArretHelper {}
