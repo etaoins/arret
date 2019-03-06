@@ -44,6 +44,9 @@ impl Task {
         //    binaries. With a normal `panic!` the panic count will be increment on the stdlib and
         //    decremented in the compiler. On the second panic the stdlib thinks it's already
         //    panicking and aborts. This is a hacky workaround.
+        //
+        // TODO: Fix panics uniformly and remove this method. If we panic inside e.g. Rust stdlib
+        // we won't follow this path.
         panic::resume_unwind(Box::new(message));
     }
 }

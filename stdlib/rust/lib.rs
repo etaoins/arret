@@ -61,6 +61,9 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "member?" => stdlib_member_p,
 
     "nan?" => stdlib_nan_p,
+    "float" => stdlib_float,
+    "int" => stdlib_int,
+
     "+" => stdlib_add,
     "*" => stdlib_mul,
     "-" => stdlib_sub,
