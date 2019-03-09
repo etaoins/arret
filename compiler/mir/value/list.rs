@@ -30,7 +30,7 @@ pub struct ListIterator {
     rest: Option<Value>,
 }
 
-impl<'list> ListIterator {
+impl ListIterator {
     pub fn new(value: Value) -> ListIterator {
         ListIterator {
             fixed: Vec::new().into_iter(),
