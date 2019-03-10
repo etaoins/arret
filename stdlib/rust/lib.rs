@@ -60,7 +60,6 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "concat" => stdlib_concat,
     "member?" => stdlib_member_p,
 
-    "nan?" => stdlib_nan_p,
     "float" => stdlib_float,
     "int" => stdlib_int,
 

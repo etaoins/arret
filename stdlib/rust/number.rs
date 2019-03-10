@@ -5,11 +5,6 @@ use runtime::task::Task;
 
 use rfi_derive;
 
-#[rfi_derive::rust_fun("(Float -> Bool)")]
-pub fn stdlib_nan_p(float: f64) -> bool {
-    float.is_nan()
-}
-
 #[rfi_derive::rust_fun("(Num -> Float)")]
 pub fn stdlib_float(input: Gc<boxed::Num>) -> f64 {
     match input.as_subtype() {
