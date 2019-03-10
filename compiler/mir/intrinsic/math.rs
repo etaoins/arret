@@ -1,3 +1,23 @@
+//! Intrinsics for math operations on numbers
+//!
+//! This strives to match the behaviour of the stdlib in term of operation and conversion order.
+//! For multi-operand math operations we behave as if we reduce our input pairwise from left to
+//! right. If either pairwise operand is a `Float` then both operands are converted to `Float` and
+//! the result is a `Float`. If both operands are `Int`s then we perform checked math to ensure
+//! the value doesn't overflow its `Int` result.
+//!
+//! The input-dependent result type makes it difficult for us to build operations on values that
+//! aren't definite `Int` or `Float` (i.e. `Num`). Once we encounter a known `Float` we can safely
+//! convert every remaining operand to `Float` with at most a single branch per operand. However, if
+//! we encounter an unknown `Num` along with another `Num` or `Int` we don't know the result type
+//! of the pairwise operation. This can produce a combinatorial explosion of branches.
+//!
+//! For this reason this code will return `None` if it encounters a `Num` before a `Float`. This
+//! will cause us to fallback to the stdlib at runtime.
+//!
+//! This also makes no attempt at simplification or strength reduction. The presumption is LLVM is
+//! much better at this than we are.
+
 use syntax::span::Span;
 
 use runtime::abitype;
@@ -11,6 +31,7 @@ use crate::mir::ops::{BinaryOp, OpKind, RegId};
 use crate::mir::value;
 use crate::mir::value::build_reg::value_to_reg;
 use crate::mir::value::list::SizedListIterator;
+use crate::mir::value::types::possible_type_tags_for_value;
 use crate::mir::value::Value;
 
 /// Represents a numerical operand of a known type
@@ -29,8 +50,6 @@ impl NumOperand {
         span: Span,
         value: Value,
     ) -> Option<NumOperand> {
-        use crate::mir::value::types::possible_type_tags_for_value;
-
         let possible_type_tags = possible_type_tags_for_value(&value);
 
         if possible_type_tags == boxed::TypeTag::Int.into() {
@@ -43,26 +62,123 @@ impl NumOperand {
             None
         }
     }
+}
 
-    /// Converts this operand in to a value
-    fn into_value(self) -> Value {
-        match self {
-            NumOperand::Int(built_reg) => {
-                value::RegValue::new(built_reg, abitype::ABIType::Int).into()
-            }
-            NumOperand::Float(built_reg) => {
-                value::RegValue::new(built_reg, abitype::ABIType::Float).into()
-            }
-        }
+/// Converts a value of type `Num` to a float reg
+fn num_value_to_float_reg(
+    ehx: &mut EvalHirCtx,
+    outer_b: &mut Builder,
+    span: Span,
+    value: &Value,
+) -> BuiltReg {
+    use crate::mir::ops::*;
+
+    let num_type_tags = [boxed::TypeTag::Int, boxed::TypeTag::Float]
+        .iter()
+        .collect();
+
+    let possible_type_tags = possible_type_tags_for_value(value) & num_type_tags;
+
+    if possible_type_tags == boxed::TypeTag::Float.into() {
+        value_to_reg(ehx, outer_b, span, &value, &abitype::ABIType::Float)
+    } else if possible_type_tags == boxed::TypeTag::Int.into() {
+        let int64_reg = value_to_reg(ehx, outer_b, span, value, &abitype::ABIType::Int);
+        outer_b.push_reg(span, OpKind::Int64ToFloat, int64_reg.into())
+    } else {
+        let boxed_any_reg = value_to_reg(
+            ehx,
+            outer_b,
+            span,
+            value,
+            &abitype::BoxedABIType::Any.into(),
+        )
+        .into();
+
+        let value_type_tag_reg = outer_b.push_reg(
+            span,
+            OpKind::LoadBoxedTypeTag,
+            LoadBoxedTypeTagOp {
+                subject_reg: boxed_any_reg,
+                possible_type_tags: num_type_tags,
+            },
+        );
+
+        let float_tag_reg = outer_b.push_reg(span, OpKind::ConstTypeTag, boxed::TypeTag::Float);
+
+        let is_float_reg = outer_b.push_reg(
+            span,
+            OpKind::IntEqual,
+            BinaryOp {
+                lhs_reg: value_type_tag_reg.into(),
+                rhs_reg: float_tag_reg.into(),
+            },
+        );
+
+        let mut is_float_b = Builder::new();
+        let is_float_result_reg =
+            value_to_reg(ehx, &mut is_float_b, span, &value, &abitype::ABIType::Float);
+
+        let mut is_int_b = Builder::new();
+        let int64_reg = value_to_reg(ehx, &mut is_int_b, span, value, &abitype::ABIType::Int);
+        let is_int_result_reg = is_int_b.push_reg(span, OpKind::Int64ToFloat, int64_reg.into());
+
+        let output_reg = RegId::alloc();
+        outer_b.push(
+            span,
+            OpKind::Cond(CondOp {
+                reg_phi: Some(RegPhi {
+                    output_reg,
+                    true_result_reg: is_float_result_reg.into(),
+                    false_result_reg: is_int_result_reg.into(),
+                }),
+                test_reg: is_float_reg.into(),
+                true_ops: is_float_b.into_ops(),
+                false_ops: is_int_b.into_ops(),
+            }),
+        );
+
+        BuiltReg::Local(output_reg)
     }
 }
 
-/// Folds a series of numerical operands with the given reducers for `Int` and `Float`s
-fn fold_operands<I, F>(
+/// Folds a series of numerical operands as `Float`s
+///
+/// This is used once we know our result will be a `Float`
+fn fold_float_operands<F>(
     ehx: &mut EvalHirCtx,
     b: &mut Builder,
     span: Span,
-    mut acc: NumOperand,
+    mut acc_float_reg: BuiltReg,
+    mut list_iter: SizedListIterator,
+    float_op: F,
+) -> Value
+where
+    F: Fn(RegId, BinaryOp) -> OpKind + Copy,
+{
+    while let Some(value) = list_iter.next(b, span) {
+        let operand_reg = num_value_to_float_reg(ehx, b, span, &value);
+
+        acc_float_reg = b.push_reg(
+            span,
+            float_op,
+            BinaryOp {
+                lhs_reg: acc_float_reg.into(),
+                rhs_reg: operand_reg.into(),
+            },
+        );
+    }
+
+    value::RegValue::new(acc_float_reg, abitype::ABIType::Float).into()
+}
+
+/// Folds a series of numerical operands with the given reducers for `Int` and `Float`s
+///
+/// This is used when the precise type of the result is still unknown
+fn fold_num_operands<I, F>(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    mut acc_int_reg: BuiltReg,
     mut list_iter: SizedListIterator,
     int64_op: I,
     float_op: F,
@@ -74,63 +190,35 @@ where
     while let Some(value) = list_iter.next(b, span) {
         let operand = NumOperand::try_from_value(ehx, b, span, value)?;
 
-        acc = match (acc, operand) {
-            (NumOperand::Int(lhs_reg), NumOperand::Int(rhs_reg)) => {
-                let result_reg = b.push_reg(
-                    span,
-                    int64_op,
-                    BinaryOp {
-                        lhs_reg: lhs_reg.into(),
-                        rhs_reg: rhs_reg.into(),
-                    },
-                );
-
-                NumOperand::Int(result_reg)
-            }
-            (NumOperand::Float(lhs_reg), NumOperand::Float(rhs_reg)) => {
-                let result_reg = b.push_reg(
-                    span,
-                    float_op,
-                    BinaryOp {
-                        lhs_reg: lhs_reg.into(),
-                        rhs_reg: rhs_reg.into(),
-                    },
-                );
-
-                NumOperand::Float(result_reg)
-            }
-            (NumOperand::Float(float_reg), NumOperand::Int(int_reg)) => {
-                let int_as_float_reg = b.push_reg(span, OpKind::Int64ToFloat, int_reg.into());
-
-                let result_reg = b.push_reg(
-                    span,
-                    float_op,
-                    BinaryOp {
-                        lhs_reg: float_reg.into(),
-                        rhs_reg: int_as_float_reg.into(),
-                    },
-                );
-
-                NumOperand::Float(result_reg)
-            }
-            (NumOperand::Int(int_reg), NumOperand::Float(float_reg)) => {
-                let int_as_float_reg = b.push_reg(span, OpKind::Int64ToFloat, int_reg.into());
+        acc_int_reg = match operand {
+            NumOperand::Int(operand_int_reg) => b.push_reg(
+                span,
+                int64_op,
+                BinaryOp {
+                    lhs_reg: acc_int_reg.into(),
+                    rhs_reg: operand_int_reg.into(),
+                },
+            ),
+            NumOperand::Float(operand_float_reg) => {
+                let int_as_float_reg = b.push_reg(span, OpKind::Int64ToFloat, acc_int_reg.into());
 
                 let result_reg = b.push_reg(
                     span,
                     float_op,
                     BinaryOp {
                         lhs_reg: int_as_float_reg.into(),
-                        rhs_reg: float_reg.into(),
+                        rhs_reg: operand_float_reg.into(),
                     },
                 );
 
-                NumOperand::Float(result_reg)
+                return Some(fold_float_operands(
+                    ehx, b, span, result_reg, list_iter, float_op,
+                ));
             }
         }
     }
 
-    Some(acc.into_value())
+    Some(value::RegValue::new(acc_int_reg, abitype::ABIType::Int).into())
 }
 
 /// Reduces a series of numerical operands with the given reducer ops for `Int` and `Float`s
@@ -149,9 +237,16 @@ where
     F: Fn(RegId, BinaryOp) -> OpKind + Copy,
 {
     let initial_value = list_iter.next(b, span).unwrap();
-    let acc = NumOperand::try_from_value(ehx, b, span, initial_value)?;
+    let initial_operand = NumOperand::try_from_value(ehx, b, span, initial_value)?;
 
-    fold_operands(ehx, b, span, acc, list_iter, int64_op, float_op)
+    match initial_operand {
+        NumOperand::Int(int_reg) => {
+            fold_num_operands(ehx, b, span, int_reg, list_iter, int64_op, float_op)
+        }
+        NumOperand::Float(float_reg) => Some(fold_float_operands(
+            ehx, b, span, float_reg, list_iter, float_op,
+        )),
+    }
 }
 
 /// Reduces a series of numerical operands with the given reducer ops for `Int` and `Float`s
@@ -174,10 +269,10 @@ where
     if list_iter.len() == 1 {
         // The associative math functions (`+` and `*`) act as the identity function with 1 arg.
         // We check here so even if the value doesn't have a definite type it's still returned.
-        return list_iter.next(b, span);
+        list_iter.next(b, span)
+    } else {
+        reduce_operands(ehx, b, span, list_iter, int64_op, float_op)
     }
-
-    reduce_operands(ehx, b, span, list_iter, int64_op, float_op)
 }
 
 pub fn add(
@@ -232,13 +327,13 @@ pub fn sub(
 
     if list_iter.len() == 1 {
         // Rewrite `(- x)` to `(- 0 x)`
-        let const_int_zero = NumOperand::Int(b.push_reg(span, OpKind::ConstInt64, 0));
+        let int_zero_reg = b.push_reg(span, OpKind::ConstInt64, 0);
 
-        Ok(fold_operands(
+        Ok(fold_num_operands(
             ehx,
             b,
             span,
-            const_int_zero,
+            int_zero_reg,
             list_iter,
             OpKind::Int64CheckedSub,
             OpKind::FloatSub,
@@ -273,7 +368,7 @@ pub fn div(
     let initial_reg = value_to_reg(ehx, b, span, &initial_value, &abitype::ABIType::Float);
 
     let result_reg = if list_iter.len() == 0 {
-        // Rewrite `(/ x)` to `(/ 1 x)`
+        // Rewrite `(/ x)` to `(/ 1.0 x)`
         let const_one_reg = b.push_reg(span, OpKind::ConstFloat, 1.0f64);
 
         b.push_reg(
