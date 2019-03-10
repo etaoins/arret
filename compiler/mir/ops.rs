@@ -171,6 +171,7 @@ pub enum OpKind {
     FloatEqual(RegId, BinaryOp),
     BoxIdentical(RegId, BinaryOp),
     UsizeToInt64(RegId, RegId),
+    Int64ToFloat(RegId, RegId),
 
     Ret(RegId),
     RetVoid,
@@ -237,6 +238,7 @@ impl OpKind {
             | CharEqual(reg_id, _)
             | BoxIdentical(reg_id, _)
             | UsizeToInt64(reg_id, _)
+            | Int64ToFloat(reg_id, _)
             | MakeCallback(reg_id, _) => Some(*reg_id),
             Cond(cond_op) => cond_op.reg_phi.clone().map(|reg_phi| reg_phi.output_reg),
             Ret(_) | RetVoid | Unreachable => None,
@@ -309,6 +311,7 @@ impl OpKind {
             | LoadBoxedCharValue(_, reg_id)
             | LoadBoxedFunThunkClosure(_, reg_id)
             | UsizeToInt64(_, reg_id)
+            | Int64ToFloat(_, reg_id)
             | MakeCallback(
                 _,
                 MakeCallbackOp {
@@ -419,7 +422,8 @@ impl OpKind {
             | IntEqual(_, _)
             | FloatEqual(_, _)
             | CharEqual(_, _)
-            | BoxIdentical(_, _) => OpCategory::RegOp,
+            | BoxIdentical(_, _)
+            | Int64ToFloat(_, _) => OpCategory::RegOp,
 
             Ret(_) | RetVoid => OpCategory::Ret,
 

@@ -598,6 +598,14 @@ impl EvalHirCtx {
         }
 
         if let Some(b) = b {
+            if let Some(intrinsic_name) = rust_fun.intrinsic_name() {
+                if let Some(value) =
+                    intrinsic::try_build(self, b, span, intrinsic_name, &arg_list_value)?
+                {
+                    return Ok(value);
+                }
+            }
+
             build_rust_fun_app(self, b, span, ret_ty, rust_fun, call_purity, arg_list_value)
         } else {
             panic!("Need builder for non-const function application");
