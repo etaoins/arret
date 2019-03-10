@@ -17,6 +17,13 @@
   (assert-eq false (nan? ##Inf))
   (assert-eq false (nan? ##-Inf)))
 
+
+(defn test-infinite? ()
+  (assert-eq false (infinite? 3.0))
+  (assert-eq true (infinite? ##Inf))
+  (assert-eq true (infinite? ##-Inf))
+  (assert-eq false (infinite? ##NaN)))
+
 (defn test-float ()
   (assert-eq 1.0 (float 1))
   (assert-eq 0.0 (float 0))
@@ -39,6 +46,7 @@
 (defn main! () ->! ()
   (test-zero?)
   (test-nan?)
+  (test-infinite?)
   (test-float)
   (test-int)
   ())

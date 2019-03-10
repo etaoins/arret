@@ -6,7 +6,7 @@
         sym? bool? num? int? float? char? list? vector? set? map? fn? nil?)
 
 (import [stdlib rust])
-(export length panic print! println! exit! cons map filter concat member? nan? int float + * - /)
+(export length panic print! println! exit! cons map filter concat member? int float + * - /)
 
 (export defn)
 (defmacro defn (macro-rules
@@ -72,6 +72,14 @@
   (if (int? n)
     (= n 0)
     (= n 0.0)))
+
+(export nan?)
+(defn nan? ([f Float])
+  (not (= f f)))
+
+(export infinite?)
+(defn infinite? ([f Float])
+  (or (= f ##Inf) (= f ##-Inf)))
 
 (export ->>)
 (defmacro ->> (macro-rules
