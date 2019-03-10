@@ -74,12 +74,16 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn list_iter(&self) -> list::ListIterator {
-        self.clone().into_list_iter()
+    pub fn unsized_list_iter(&self) -> list::UnsizedListIterator {
+        self.clone().into_unsized_list_iter()
     }
 
-    pub fn into_list_iter(self) -> list::ListIterator {
-        list::ListIterator::new(self)
+    pub fn into_unsized_list_iter(self) -> list::UnsizedListIterator {
+        list::UnsizedListIterator::new(self)
+    }
+
+    pub fn try_sized_list_iter(&self) -> Option<list::SizedListIterator> {
+        list::SizedListIterator::try_new(self)
     }
 }
 

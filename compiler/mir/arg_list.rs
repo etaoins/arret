@@ -74,7 +74,7 @@ pub fn build_save_arg_list_to_regs<'a>(
 ) -> Vec<ops::RegId> {
     use crate::mir::value::build_reg::value_to_reg;
 
-    let mut list_iter = arg_list_value.into_list_iter();
+    let mut list_iter = arg_list_value.into_unsized_list_iter();
 
     let mut arg_regs = vec![];
     for abi_type in fixed_abi_types {

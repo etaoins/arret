@@ -25,14 +25,14 @@ pub fn list_value_length(value: &Value) -> Option<usize> {
     }
 }
 
-pub struct ListIterator {
+pub struct UnsizedListIterator {
     fixed: vec::IntoIter<Value>,
     rest: Option<Value>,
 }
 
-impl ListIterator {
-    pub fn new(value: Value) -> ListIterator {
-        ListIterator {
+impl UnsizedListIterator {
+    pub fn new(value: Value) -> Self {
+        Self {
             fixed: Vec::new().into_iter(),
             rest: Some(value),
         }
@@ -116,6 +116,35 @@ impl ListIterator {
     }
 }
 
+pub struct SizedListIterator {
+    size: usize,
+    unsized_list_iterator: UnsizedListIterator,
+}
+
+impl SizedListIterator {
+    pub fn try_new(value: &Value) -> Option<Self> {
+        list_value_length(value).map(move |size| Self {
+            size,
+            unsized_list_iterator: UnsizedListIterator::new(value.clone()),
+        })
+    }
+}
+
+impl SizedListIterator {
+    pub fn next(&mut self, b: &mut impl TryToBuilder, span: Span) -> Option<Value> {
+        if self.size == 0 {
+            return None;
+        }
+
+        self.size -= 1;
+        Some(self.unsized_list_iterator.next_unchecked(b, span))
+    }
+
+    pub fn len(&self) -> usize {
+        self.size
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -149,7 +178,7 @@ mod test {
     }
 
     #[test]
-    fn const_list_iter() {
+    fn const_unsized_list_iter() {
         let mut heap = boxed::Heap::empty();
 
         let elements = &[1, 2, 3];
@@ -157,7 +186,7 @@ mod test {
         let boxed_list =
             boxed::List::<boxed::Int>::from_values(&mut heap, elements.iter().cloned());
 
-        let mut iter = ListIterator {
+        let mut iter = UnsizedListIterator {
             fixed: Vec::new().into_iter(),
             rest: Some(boxed_list.into()),
         };
@@ -175,7 +204,7 @@ mod test {
     }
 
     #[test]
-    fn fixed_list_value_iter() {
+    fn fixed_list_value_unsized_iter() {
         let mut heap = boxed::Heap::empty();
 
         let elements = &[1, 2, 3];
@@ -185,7 +214,7 @@ mod test {
             .map(|element| boxed::Int::new(&mut heap, *element).into())
             .collect();
 
-        let mut iter = ListIterator {
+        let mut iter = UnsizedListIterator {
             fixed: element_values.into_iter(),
             rest: None,
         };

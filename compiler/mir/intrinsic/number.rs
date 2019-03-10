@@ -14,7 +14,7 @@ pub fn int(
     span: Span,
     arg_list_value: &Value,
 ) -> Result<Option<Value>> {
-    let value = arg_list_value.list_iter().next_unchecked(b, span);
+    let value = arg_list_value.unsized_list_iter().next_unchecked(b, span);
 
     Ok(
         if possible_type_tags_for_value(&value) == TypeTag::Int.into() {
@@ -31,7 +31,7 @@ pub fn float(
     span: Span,
     arg_list_value: &Value,
 ) -> Result<Option<Value>> {
-    let value = arg_list_value.list_iter().next_unchecked(b, span);
+    let value = arg_list_value.unsized_list_iter().next_unchecked(b, span);
     let possible_type_tags = possible_type_tags_for_value(&value);
 
     Ok(if possible_type_tags == TypeTag::Float.into() {

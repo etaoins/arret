@@ -98,7 +98,7 @@ pub fn fn_op_categories(
     span: Span,
     arg_list_value: &Value,
 ) -> Result<Option<Value>> {
-    let mut iter = arg_list_value.list_iter();
+    let mut iter = arg_list_value.unsized_list_iter();
     let single_arg = iter.next_unchecked(b, span);
 
     let arret_fun = if let Value::ArretFun(arret_fun) = single_arg {

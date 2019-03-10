@@ -180,7 +180,7 @@ impl EvalHirCtx {
         list: &hir::destruc::List<hir::Inferred>,
         value: Value,
     ) {
-        let mut iter = value.into_list_iter();
+        let mut iter = value.into_unsized_list_iter();
 
         for fixed_destruc in list.fixed() {
             let value = iter.next_unchecked(b, span);
@@ -375,7 +375,7 @@ impl EvalHirCtx {
     ) -> Value {
         use crate::mir::typred::eval_ty_pred;
 
-        let subject_value = arg_list_value.list_iter().next_unchecked(b, span);
+        let subject_value = arg_list_value.unsized_list_iter().next_unchecked(b, span);
         eval_ty_pred(self, b, span, &subject_value, test_ty)
     }
 
@@ -387,7 +387,7 @@ impl EvalHirCtx {
     ) -> Value {
         use crate::mir::equality::eval_equality;
 
-        let mut iter = arg_list_value.list_iter();
+        let mut iter = arg_list_value.unsized_list_iter();
 
         let left_value = iter.next_unchecked(b, span);
         let right_value = iter.next_unchecked(b, span);

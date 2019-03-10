@@ -412,18 +412,6 @@ fn gen_op(
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }
-            OpKind::Add(reg, BinaryOp { lhs_reg, rhs_reg }) => {
-                let llvm_lhs = fcx.regs[lhs_reg];
-                let llvm_rhs = fcx.regs[rhs_reg];
-
-                let llvm_value = LLVMBuildNUWAdd(
-                    fcx.builder,
-                    llvm_lhs,
-                    llvm_rhs,
-                    "sum\0".as_ptr() as *const _,
-                );
-                fcx.regs.insert(*reg, llvm_value);
-            }
             OpKind::IntEqual(reg, BinaryOp { lhs_reg, rhs_reg })
             | OpKind::CharEqual(reg, BinaryOp { lhs_reg, rhs_reg }) => {
                 let llvm_lhs = fcx.regs[lhs_reg];
@@ -505,6 +493,105 @@ fn gen_op(
                 );
 
                 fcx.regs.insert(*reg, llvm_double);
+            }
+            OpKind::FloatAdd(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+
+                let llvm_value = LLVMBuildFAdd(
+                    fcx.builder,
+                    llvm_lhs,
+                    llvm_rhs,
+                    "float_sum\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::UsizeAdd(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+
+                let llvm_value = LLVMBuildNUWAdd(
+                    fcx.builder,
+                    llvm_lhs,
+                    llvm_rhs,
+                    "sum\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::Int64CheckedAdd(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+
+                // TODO: Check for overflow
+                let llvm_value = LLVMBuildAdd(
+                    fcx.builder,
+                    llvm_lhs,
+                    llvm_rhs,
+                    "sum\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::FloatMul(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+
+                let llvm_value = LLVMBuildFMul(
+                    fcx.builder,
+                    llvm_lhs,
+                    llvm_rhs,
+                    "float_product\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::Int64CheckedMul(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+
+                // TODO: Check for overflow
+                let llvm_value = LLVMBuildMul(
+                    fcx.builder,
+                    llvm_lhs,
+                    llvm_rhs,
+                    "product\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::FloatSub(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+
+                let llvm_value = LLVMBuildFSub(
+                    fcx.builder,
+                    llvm_lhs,
+                    llvm_rhs,
+                    "float_difference\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::Int64CheckedSub(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+
+                // TODO: Check for overflow
+                let llvm_value = LLVMBuildSub(
+                    fcx.builder,
+                    llvm_lhs,
+                    llvm_rhs,
+                    "difference\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::FloatDiv(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+
+                let llvm_value = LLVMBuildFDiv(
+                    fcx.builder,
+                    llvm_lhs,
+                    llvm_rhs,
+                    "float_quotient\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::MakeCallback(
                 reg,
