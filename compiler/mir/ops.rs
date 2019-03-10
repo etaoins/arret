@@ -165,13 +165,21 @@ pub enum OpKind {
 
     MakeCallback(RegId, MakeCallbackOp),
 
-    Add(RegId, BinaryOp),
     IntEqual(RegId, BinaryOp),
     CharEqual(RegId, BinaryOp),
     FloatEqual(RegId, BinaryOp),
     BoxIdentical(RegId, BinaryOp),
     UsizeToInt64(RegId, RegId),
     Int64ToFloat(RegId, RegId),
+
+    FloatAdd(RegId, BinaryOp),
+    UsizeAdd(RegId, BinaryOp),
+    Int64CheckedAdd(RegId, BinaryOp),
+    FloatMul(RegId, BinaryOp),
+    Int64CheckedMul(RegId, BinaryOp),
+    FloatSub(RegId, BinaryOp),
+    Int64CheckedSub(RegId, BinaryOp),
+    FloatDiv(RegId, BinaryOp),
 
     Ret(RegId),
     RetVoid,
@@ -232,7 +240,14 @@ impl OpKind {
             | LoadBoxedFloatValue(reg_id, _)
             | LoadBoxedCharValue(reg_id, _)
             | LoadBoxedFunThunkClosure(reg_id, _)
-            | Add(reg_id, _) => Some(*reg_id),
+            | FloatAdd(reg_id, _)
+            | UsizeAdd(reg_id, _)
+            | Int64CheckedAdd(reg_id, _)
+            | FloatMul(reg_id, _)
+            | Int64CheckedMul(reg_id, _)
+            | FloatSub(reg_id, _)
+            | Int64CheckedSub(reg_id, _)
+            | FloatDiv(reg_id, _) => Some(*reg_id),
             IntEqual(reg_id, _)
             | FloatEqual(reg_id, _)
             | CharEqual(reg_id, _)
@@ -339,7 +354,14 @@ impl OpKind {
                     op.kind().add_input_regs(coll);
                 }
             }
-            Add(_, binary_op)
+            FloatAdd(_, binary_op)
+            | UsizeAdd(_, binary_op)
+            | Int64CheckedAdd(_, binary_op)
+            | FloatMul(_, binary_op)
+            | Int64CheckedMul(_, binary_op)
+            | FloatSub(_, binary_op)
+            | Int64CheckedSub(_, binary_op)
+            | FloatDiv(_, binary_op)
             | IntEqual(_, binary_op)
             | FloatEqual(_, binary_op)
             | CharEqual(_, binary_op)
@@ -418,7 +440,14 @@ impl OpKind {
             | LoadBoxedCharValue(_, _)
             | LoadBoxedFunThunkClosure(_, _) => OpCategory::MemLoad,
 
-            Add(_, _)
+            FloatAdd(_, _)
+            | UsizeAdd(_, _)
+            | Int64CheckedAdd(_, _)
+            | FloatSub(_, _)
+            | Int64CheckedSub(_, _)
+            | FloatMul(_, _)
+            | Int64CheckedMul(_, _)
+            | FloatDiv(_, _)
             | IntEqual(_, _)
             | FloatEqual(_, _)
             | CharEqual(_, _)

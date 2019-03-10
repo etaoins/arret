@@ -190,7 +190,7 @@ fn list_to_reg(
                         let index_reg = b.push_reg(span, OpKind::ConstUsize, i + 1);
                         b.push_reg(
                             span,
-                            OpKind::Add,
+                            OpKind::UsizeAdd,
                             BinaryOp {
                                 lhs_reg: rest_length_reg.into(),
                                 rhs_reg: index_reg.into(),

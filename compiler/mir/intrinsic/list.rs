@@ -15,7 +15,7 @@ pub fn length(
     span: Span,
     arg_list_value: &Value,
 ) -> Result<Option<Value>> {
-    let mut iter = arg_list_value.list_iter();
+    let mut iter = arg_list_value.unsized_list_iter();
     let single_arg = iter.next_unchecked(b, span);
 
     if let Some(known_length) = list_value_length(&single_arg) {
@@ -53,7 +53,7 @@ pub fn cons(
     span: Span,
     arg_list_value: &Value,
 ) -> Result<Option<Value>> {
-    let mut iter = arg_list_value.list_iter();
+    let mut iter = arg_list_value.unsized_list_iter();
 
     let head = iter.next_unchecked(b, span);
     let rest = iter.next_unchecked(b, span);

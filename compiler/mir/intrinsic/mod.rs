@@ -61,6 +61,8 @@ define_eval_intrinsics! {
 define_build_intrinsics! {
     "+" => math::add,
     "*" => math::mul,
+    "-" => math::sub,
+    "/" => math::div,
     "int" => number::int,
     "float" => number::float
 }
