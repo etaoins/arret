@@ -1,12 +1,11 @@
-FROM ubuntu:18.04 AS build-env
+FROM fedora:29 AS build-env
 
 ARG LLVM_MAJOR=7
 ARG LLVM_VERSION=7.0.1
 ARG LLVM_ROOT=/opt/llvm-${LLVM_MAJOR}
 
-RUN apt-get update && \
-  apt-get -y install build-essential curl cmake ninja-build python && \
-  apt-get clean
+RUN dnf install -y curl cmake ninja-build gcc-c++ xz && \
+  dnf clean all
 
 WORKDIR /usr/src
 RUN curl http://releases.llvm.org/${LLVM_VERSION}/llvm-${LLVM_VERSION}.src.tar.xz -sS | \

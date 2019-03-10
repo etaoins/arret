@@ -7,7 +7,7 @@ cached-ecr-build-env: &cached-ecr-build-env
     - docker#v2.0.0
 
 steps:
-  - label: ":cargo: Test x86-64 & i686"
+  - label: ":ubuntu: Test x86-64 & i686"
     command:
       - cargo check --release
       - cargo build
@@ -27,7 +27,7 @@ steps:
     agents:
       queue: arm64
 
-  - label: ":cop: Test with LLVM Assertions"
+  - label: ":fedora: Test with LLVM Assertions"
     branches: '!master'
     command:
       - cargo build
