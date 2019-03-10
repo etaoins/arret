@@ -8,7 +8,7 @@ use crate::mir::Value;
 
 pub fn add(
     _ehx: &mut EvalHirCtx,
-    b: &mut Option<Builder>,
+    b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
 ) -> Result<Option<Value>> {
@@ -21,7 +21,7 @@ pub fn add(
 
 pub fn mul(
     _ehx: &mut EvalHirCtx,
-    b: &mut Option<Builder>,
+    b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
 ) -> Result<Option<Value>> {

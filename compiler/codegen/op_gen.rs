@@ -494,6 +494,18 @@ fn gen_op(
 
                 fcx.regs.insert(*reg, llvm_i64);
             }
+            OpKind::Int64ToFloat(reg, int64_reg) => {
+                let llvm_i64 = fcx.regs[int64_reg];
+
+                let llvm_double = LLVMBuildSIToFP(
+                    fcx.builder,
+                    llvm_i64,
+                    LLVMDoubleTypeInContext(tcx.llx),
+                    "i64_as_double\0".as_ptr() as *const _,
+                );
+
+                fcx.regs.insert(*reg, llvm_double);
+            }
             OpKind::MakeCallback(
                 reg,
                 MakeCallbackOp {
