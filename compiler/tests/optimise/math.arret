@@ -19,6 +19,9 @@
   (assert-fn-doesnt-contain-op :call (fn ([left Float] [right Float])
     (+ left right)))
 
+  (assert-fn-doesnt-contain-op :call (fn ([left Float] [right Num])
+    (+ left right)))
+
   (assert-fn-doesnt-contain-op :call (fn ([left Int] [right Int])
     (* left right)))
 
@@ -26,6 +29,9 @@
     (* left right)))
 
   (assert-fn-doesnt-contain-op :call (fn ([left Float] [right Float])
+    (* left right)))
+
+  (assert-fn-doesnt-contain-op :call (fn ([left Float] [right Num])
     (* left right)))
 
   (assert-fn-doesnt-contain-op :call (fn ([value Int])
@@ -41,6 +47,9 @@
     (- left right)))
 
   (assert-fn-doesnt-contain-op :call (fn ([left Float] [right Float])
+    (- left right)))
+
+  (assert-fn-doesnt-contain-op :call (fn ([left Float] [right Num])
     (- left right)))
 
   (assert-fn-doesnt-contain-op :call (fn ([value Float])
