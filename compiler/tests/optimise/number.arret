@@ -1,0 +1,13 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn main! ()
+  ; This should be the identity function for `Int`
+  (assert-fn-doesnt-contain-op :call (fn ([i Int])
+    (int i)))
+
+  ; This should be the identity function for `Float`
+  (assert-fn-doesnt-contain-op :call (fn ([f Float])
+    (float f)))
+
+  ())
