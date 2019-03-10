@@ -1,6 +1,7 @@
 mod list;
 mod math;
 mod testing;
+mod number;
 
 use syntax::span::Span;
 
@@ -35,5 +36,7 @@ define_intrinsics! {
     "cons" => list::cons,
     "fn-op-categories" => testing::fn_op_categories,
     "+" => math::add,
-    "*" => math::mul
+    "*" => math::mul,
+    "int" => number::int,
+    "float" => number::float
 }
