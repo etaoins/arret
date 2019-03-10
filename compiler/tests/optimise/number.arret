@@ -10,8 +10,10 @@
   (assert-fn-doesnt-contain-op :call (fn ([f Float])
     (float f)))
 
-  ; We can build specific MIR ops for this
+  ; We can build specific MIR ops for these
   (assert-fn-doesnt-contain-op :call (fn ([i Int])
     (float i)))
+  (assert-fn-doesnt-contain-op :call (fn ([n Num])
+    (float n)))
 
   ())
