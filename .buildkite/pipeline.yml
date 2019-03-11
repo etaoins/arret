@@ -7,12 +7,11 @@ cached-ecr-build-env: &cached-ecr-build-env
     - docker#v2.0.0
 
 steps:
-  - label: ":ubuntu: Test x86-64 & i686"
+  - label: ":ubuntu: Test x86-64"
     command:
       - cargo check --release
       - cargo build
       - cargo test
-      - ./.buildkite/cross-i686.sh
       - ./driver/tests/integration/run.sh target/debug/arret
     <<: *cached-ecr-build-env
 
@@ -27,11 +26,12 @@ steps:
     agents:
       queue: arm64
 
-  - label: ":fedora: Test with LLVM Assertions"
+  - label: ":fedora: Test LLVM Assert & i686"
     branches: '!master'
     command:
       - cargo build
       - cargo test
+      - ./.buildkite/cross-i686.sh
       - ./driver/tests/integration/run.sh target/debug/arret
     plugins:
       - seek-oss/docker-ecr-cache#v1.1.1:
