@@ -28,13 +28,24 @@
 
 (defn test-div ()
   (assert-eq 0.5 (/ (black-box! 2.0)))
-  (assert-eq 0.25 (/ 1.0 (black-box! 2.0) 2.0)))
+  (assert-eq 0.25 (/ 1.0 (black-box! 2.0) 2.0))
+  
+  ())
 
+(defn test-rem-mod ()
+  (assert-eq 3 (quot (black-box! 10) 3))
+  (assert-eq 1 (rem 10 (black-box! 3)))
+
+  (assert-eq -3 (quot (black-box! -10) (black-box! 3)))
+  (assert-eq -1 (rem (black-box! -10) 3))
+
+  ())
 
 (defn main! () ->! ()
   (test-add)
   (test-mul)
   (test-sub)
   (test-div)
+  (test-rem-mod)
 
   ())

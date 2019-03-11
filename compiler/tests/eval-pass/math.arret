@@ -66,6 +66,21 @@
 
   ())
 
+(defn test-rem-mod ()
+  (assert-eq 3 (quot 10 3))
+  (assert-eq 1 (rem 10 3))
+
+  (assert-eq 3 (quot 11 3))
+  (assert-eq 2 (rem 11 3))
+
+  (assert-eq 4 (quot 11 3))
+  (assert-eq 0 (rem 11 3))
+
+  (assert-eq -3 (quot -10 3))
+  (assert-eq -1 (rem -10 3))
+
+  ())
+
 (defn main! () ->! ()
   (test-add)
   (test-mul)

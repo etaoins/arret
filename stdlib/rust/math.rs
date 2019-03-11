@@ -114,3 +114,25 @@ pub fn stdlib_div(initial_float: f64, rest: Gc<boxed::List<boxed::Float>>) -> f6
         acc
     }
 }
+
+#[rfi_derive::rust_fun("(Int Int -> Int)")]
+pub fn stdlib_quot(task: &mut Task, numerator: i64, denominator: i64) -> i64 {
+    match numerator.checked_div(denominator) {
+        Some(result) => result,
+        None => {
+            task.panic("division by zero".to_owned());
+            unreachable!("returned from panic")
+        }
+    }
+}
+
+#[rfi_derive::rust_fun("(Int Int -> Int)")]
+pub fn stdlib_rem(task: &mut Task, numerator: i64, denominator: i64) -> i64 {
+    match numerator.checked_rem(denominator) {
+        Some(result) => result,
+        None => {
+            task.panic("division by zero".to_owned());
+            unreachable!("returned from panic")
+        }
+    }
+}
