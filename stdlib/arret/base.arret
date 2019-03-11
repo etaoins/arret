@@ -74,12 +74,20 @@
     (= n 0.0)))
 
 (export nan?)
-(defn nan? ([f Float])
+(defn nan? ([f Float]) -> Bool
   (not (= f f)))
 
 (export infinite?)
-(defn infinite? ([f Float])
+(defn infinite? ([f Float]) -> Bool
   (or (= f ##Inf) (= f ##-Inf)))
+
+(export inc)
+(defn inc ([i Int]) -> Int
+  (+ i 1))
+
+(export dec)
+(defn dec ([i Int]) -> Int
+  (- i 1))
 
 (export ->>)
 (defmacro ->> (macro-rules

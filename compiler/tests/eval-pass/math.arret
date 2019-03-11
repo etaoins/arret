@@ -53,10 +53,24 @@
 
   ())
 
+(defn test-inc-dec ()
+  (assert-eq -1 (inc -2))
+  (assert-eq 0 (inc -1))
+  (assert-eq 1 (inc 0))
+  (assert-eq 2 (inc 1))
+
+  (assert-eq -2 (dec -1))
+  (assert-eq -1 (dec 0))
+  (assert-eq 0 (dec 1))
+  (assert-eq 1 (dec 2))
+
+  ())
+
 (defn main! () ->! ()
   (test-add)
   (test-mul)
   (test-sub)
   (test-div)
+  (test-inc-dec)
 
   ())
