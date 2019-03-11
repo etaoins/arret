@@ -163,6 +163,17 @@ fn program_to_module(
     }
 }
 
+fn target_triple_to_cc_args(target_triple: &str) -> Vec<&str> {
+    // Try to use -m32 when possible for compatibility with GCC
+    if (cfg!(target_arch = "x86_64") && target_triple.starts_with("i686-"))
+        || (cfg!(target_arch = "aarch64") && target_triple.starts_with("arm"))
+    {
+        vec!["-m32"]
+    } else {
+        vec!["-target", target_triple]
+    }
+}
+
 /// Generates code for the program with the given output type
 ///
 /// codegen::initialise_llvm() must be called before this.
@@ -241,7 +252,7 @@ pub fn gen_program(
 
     if output_type == OutputType::Executable {
         let target_args = match target_triple {
-            Some(triple) => vec!["-target", triple],
+            Some(triple) => target_triple_to_cc_args(triple),
             None => vec![],
         };
 
