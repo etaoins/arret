@@ -5,10 +5,6 @@ set -e
 TARGET_TRIPLE=i686-unknown-linux-gnu
 . ./driver/tests/integration/config.sh
 
-apt-get -y install gcc-multilib file
-
-rustup target add $TARGET_TRIPLE
-
 # Cross-compile just stdlib
 cargo build --target $TARGET_TRIPLE -p stdlib
 

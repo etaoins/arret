@@ -4,7 +4,7 @@ ARG LLVM_MAJOR=7
 ARG LLVM_VERSION=7.0.1
 ARG LLVM_ROOT=/opt/llvm-${LLVM_MAJOR}
 
-RUN dnf install -y curl cmake ninja-build gcc-c++ xz && \
+RUN dnf install -y file cmake ninja-build gcc-c++ glibc-devel.i686 xz && \
   dnf clean all
 
 WORKDIR /usr/src
@@ -26,4 +26,6 @@ RUN ninja install && rm -Rf /usr/src/llvm-build
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.33.0
 
 ENV PATH "/root/.cargo/bin:${PATH}"
+RUN rustup target add i686-unknown-linux-gnu
+
 ENV LLVM_SYS_70_PREFIX "${LLVM_ROOT}"
