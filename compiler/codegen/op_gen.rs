@@ -593,6 +593,32 @@ fn gen_op(
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::Int64CheckedDiv(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+
+                // TODO: Check for overflow
+                let llvm_value = LLVMBuildSDiv(
+                    fcx.builder,
+                    llvm_lhs,
+                    llvm_rhs,
+                    "quot\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::Int64CheckedRem(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+
+                // TODO: Check for overflow
+                let llvm_value = LLVMBuildSRem(
+                    fcx.builder,
+                    llvm_lhs,
+                    llvm_rhs,
+                    "rem\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
             OpKind::MakeCallback(
                 reg,
                 MakeCallbackOp {

@@ -26,8 +26,8 @@ use runtime::boxed;
 use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::error::Result;
 use crate::mir::eval_hir::EvalHirCtx;
-use crate::mir::ops::{BinaryOp, OpKind, RegId};
 use crate::mir::intrinsic::number::num_value_to_float_reg;
+use crate::mir::ops::{BinaryOp, OpKind, RegId};
 
 use crate::mir::value;
 use crate::mir::value::build_reg::value_to_reg;
@@ -324,4 +324,54 @@ pub fn div(
     Ok(Some(
         value::RegValue::new(result_reg, abitype::ABIType::Float).into(),
     ))
+}
+
+fn int_division_op<I>(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    arg_list_value: &Value,
+    op_kind: I,
+) -> Result<Option<Value>>
+where
+    I: FnOnce(RegId, BinaryOp) -> OpKind,
+{
+    let mut iter = arg_list_value.unsized_list_iter();
+
+    let numer_value = iter.next_unchecked(b, span);
+    let numer_reg = value_to_reg(ehx, b, span, &numer_value, &abitype::ABIType::Int);
+
+    let denom_value = iter.next_unchecked(b, span);
+    let denom_reg = value_to_reg(ehx, b, span, &denom_value, &abitype::ABIType::Int);
+
+    let result_reg = b.push_reg(
+        span,
+        op_kind,
+        BinaryOp {
+            lhs_reg: numer_reg.into(),
+            rhs_reg: denom_reg.into(),
+        },
+    );
+
+    Ok(Some(
+        value::RegValue::new(result_reg, abitype::ABIType::Int).into(),
+    ))
+}
+
+pub fn quot(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    arg_list_value: &Value,
+) -> Result<Option<Value>> {
+    int_division_op(ehx, b, span, arg_list_value, OpKind::Int64CheckedDiv)
+}
+
+pub fn rem(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    arg_list_value: &Value,
+) -> Result<Option<Value>> {
+    int_division_op(ehx, b, span, arg_list_value, OpKind::Int64CheckedRem)
 }
