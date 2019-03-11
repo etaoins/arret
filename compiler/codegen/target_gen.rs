@@ -6,10 +6,11 @@ use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 use llvm_sys::{LLVMAttributeReturnIndex, LLVMLinkage};
 
-use runtime::abitype::{ABIType, BoxedABIType, RetABIType, TOP_LIST_BOXED_ABI_TYPE};
+use runtime::abitype::{ABIType, BoxedABIType, RetABIType};
 use runtime::boxed;
 use runtime::callback::EntryPointABIType as CallbackEntryPointABIType;
 
+use crate::codegen::box_layout::BoxLayout;
 use crate::codegen::GenABI;
 
 fn llvm_enum_attr_for_name(
@@ -65,7 +66,7 @@ pub struct TargetCtx {
     task_type: Option<LLVMTypeRef>,
     box_header_type: Option<LLVMTypeRef>,
     boxed_inline_str_type: Option<LLVMTypeRef>,
-    boxed_abi_types: HashMap<BoxedABIType, LLVMTypeRef>,
+    boxed_types: HashMap<BoxLayout, LLVMTypeRef>,
     global_interned_name_type: Option<LLVMTypeRef>,
 
     boxed_dereferenceable_attr: LLVMAttributeRef,
@@ -114,7 +115,7 @@ impl TargetCtx {
                 task_type: None,
                 box_header_type: None,
                 boxed_inline_str_type: None,
-                boxed_abi_types: HashMap::new(),
+                boxed_types: HashMap::new(),
                 global_interned_name_type: None,
 
                 boxed_dereferenceable_attr: llvm_enum_attr_for_name(
@@ -232,7 +233,9 @@ impl TargetCtx {
     }
 
     pub fn boxed_abi_to_llvm_struct_type(&mut self, boxed_abi_type: &BoxedABIType) -> LLVMTypeRef {
-        if let Some(llvm_struct) = self.boxed_abi_types.get(boxed_abi_type) {
+        let box_layout: BoxLayout = boxed_abi_type.into();
+
+        if let Some(llvm_struct) = self.boxed_types.get(&box_layout) {
             return *llvm_struct;
         }
 
@@ -240,70 +243,13 @@ impl TargetCtx {
             let llvm_header = self.box_header_llvm_type();
             let mut members = vec![llvm_header];
 
-            let type_name = match boxed_abi_type {
-                BoxedABIType::Any => {
-                    use std::mem;
+            box_layout.append_members(self, &mut members);
 
-                    let llvm_byte = LLVMInt8TypeInContext(self.llx);
-                    let padding_bytes =
-                        mem::size_of::<boxed::Any>() - mem::size_of::<boxed::Header>();
-
-                    members.push(LLVMArrayType(llvm_byte, padding_bytes as u32));
-                    b"any\0".as_ptr()
-                }
-                BoxedABIType::DirectTagged(boxed::TypeTag::Nil) => b"nil\0".as_ptr(),
-                BoxedABIType::DirectTagged(boxed::TypeTag::Int) => {
-                    members.push(LLVMInt64TypeInContext(self.llx));
-                    b"boxed_int\0".as_ptr()
-                }
-                BoxedABIType::DirectTagged(boxed::TypeTag::Float) => {
-                    members.push(LLVMDoubleTypeInContext(self.llx));
-                    b"boxed_float\0".as_ptr()
-                }
-                BoxedABIType::DirectTagged(boxed::TypeTag::Char) => {
-                    members.push(LLVMInt32TypeInContext(self.llx));
-                    b"boxed_char\0".as_ptr()
-                }
-                BoxedABIType::DirectTagged(boxed::TypeTag::Str) => {
-                    members.push(LLVMInt8TypeInContext(self.llx));
-                    b"boxed_str\0".as_ptr()
-                }
-                BoxedABIType::DirectTagged(boxed::TypeTag::Sym) => {
-                    members.push(LLVMInt64TypeInContext(self.llx));
-                    b"boxed_sym\0".as_ptr()
-                }
-                BoxedABIType::DirectTagged(boxed::TypeTag::FunThunk) => {
-                    members.push(self.closure_llvm_type());
-                    members.push(LLVMPointerType(
-                        self.fun_abi_to_llvm_type(&GenABI::thunk_abi()),
-                        0,
-                    ));
-                    b"boxed_fun_thunk\0".as_ptr()
-                }
-                BoxedABIType::Pair(_) | BoxedABIType::DirectTagged(boxed::TypeTag::TopPair) => {
-                    let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
-                    let llvm_any_list_ptr =
-                        self.boxed_abi_to_llvm_ptr_type(&TOP_LIST_BOXED_ABI_TYPE);
-
-                    members.push(self.usize_llvm_type());
-                    members.push(llvm_any_ptr);
-                    members.push(llvm_any_list_ptr);
-
-                    b"pair\0".as_ptr()
-                }
-                BoxedABIType::List(_) => {
-                    members.push(self.usize_llvm_type());
-                    b"list\0".as_ptr()
-                }
-                _ => b"opaque_boxed\0".as_ptr(),
-            };
-
-            let llvm_type = LLVMStructCreateNamed(self.llx, type_name as *const _);
+            let llvm_type =
+                LLVMStructCreateNamed(self.llx, box_layout.type_name().as_ptr() as *const _);
             LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
-            self.boxed_abi_types
-                .insert(boxed_abi_type.clone(), llvm_type);
-
+            self.boxed_types.insert(box_layout.clone(), llvm_type);
             llvm_type
         }
     }

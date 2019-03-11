@@ -1,5 +1,6 @@
 mod alloc;
 mod analysis;
+mod box_layout;
 mod callee;
 mod const_gen;
 mod debug_info;
