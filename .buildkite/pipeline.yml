@@ -9,17 +9,15 @@ cached-ecr-build-env: &cached-ecr-build-env
 steps:
   - label: ":ubuntu: Test x86-64"
     command:
+      - ./.buildkite/build-and-test.sh
+
+      - "echo '--- :sleuth_or_spy: Checking release'"
       - cargo check --release
-      - cargo build
-      - cargo test
-      - ./driver/tests/integration/run.sh target/debug/arret
     <<: *cached-ecr-build-env
 
   - label: ":muscle: Test ARM64"
     branches: '!master'
-    command: bash -c "cargo build &&
-                      cargo test &&
-                      ./driver/tests/integration/run.sh target/debug/arret"
+    command: ./.buildkite/build-and-test.sh
     plugins:
       - docker-compose#v2.6.0:
           run: build-env
@@ -29,10 +27,10 @@ steps:
   - label: ":fedora: Test LLVM Assert & i686"
     branches: '!master'
     command:
-      - cargo build
-      - cargo test
+      - ./.buildkite/build-and-test.sh
+
+      - "echo '--- :older_man: Testing i686 cross-compile'"
       - ./.buildkite/cross-i686.sh
-      - ./driver/tests/integration/run.sh target/debug/arret
     plugins:
       - seek-oss/docker-ecr-cache#v1.1.1:
           dockerfile: ./.buildkite/llvm-assert.Dockerfile
@@ -43,8 +41,13 @@ steps:
   - label: ":rust: Check (Rust Beta)"
     branches: "master"
     command:
+      - "echo '--- :rust: Installing Rust beta'"
       - rustup default beta
+
+      - "echo '--- :male_detective: Checking debug'"
       - cargo check
+
+      - "echo '--- :female-detective: Checking release'"
       - cargo check --release
     <<: *cached-ecr-build-env
 
