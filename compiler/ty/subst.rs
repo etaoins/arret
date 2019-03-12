@@ -199,7 +199,12 @@ impl<'tyargs> Substitution for Monomorphise<'tyargs> {
                 .mono_ty_args
                 .pvar_purities()
                 .get(pvar_id)
-                .expect("Unable to find purity argument during monomorphisation")
+                .unwrap_or_else(|| {
+                    panic!(
+                        "unable to find purity argument `{}` during monomorphisation",
+                        pvar_id.source_name()
+                    )
+                })
                 .clone(),
         }
     }
@@ -211,7 +216,12 @@ impl<'tyargs> Substitution for Monomorphise<'tyargs> {
                 .mono_ty_args
                 .tvar_types()
                 .get(tvar_id)
-                .expect("Unable to find type argument during monomorphisation")
+                .unwrap_or_else(|| {
+                    panic!(
+                        "unable to find type argument `{}` during monomorphisation",
+                        tvar_id.source_name()
+                    )
+                })
                 .clone(),
         }
     }
