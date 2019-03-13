@@ -39,6 +39,10 @@
 
   (assert-eq '(3) (filter #(= % 3) '(1 2 3 4))))
 
+(defn test-fold ()
+  (assert-eq 7 (fold + 1 '(1 2 3)))
+  (assert-eq 5.0 (fold + -1.0 '(1.0 2.0 3.0))))
+
 (defn test-concat ()
   (assert-eq '() (concat))
   (assert-eq '(1 2 3) (concat '(1 2 3)))
@@ -65,6 +69,7 @@
   (test-cons)
   (test-map)
   (test-filter)
+  (test-fold)
   (test-concat)
   (test-member)
   (test-threading)

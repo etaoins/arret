@@ -39,6 +39,22 @@ impl<'vars> SelectCtx<'vars> {
         self.add_evidence(target_top_fun.ret(), evidence_top_fun.ret());
     }
 
+    fn add_evidence_fun(&mut self, target_top_fun: &ty::TopFun, evidence_fun: &ty::Fun) {
+        // We have three options for dealing with polymorphic functions:
+        //
+        // 1. Do nothing and treat them normally. This can leak the evidence fun's polymorphic
+        //    return type in to the our selected type which results in an illegal type.
+        // 2. Do a recursive selection where we pass the known types from the target fun in to
+        //    the evidence fun and use that to calculate the return type. This is possible but
+        //    complex.
+        // 3. Do nothing and depend on the fact the target fun is probably already polymorphic
+        //    and expresses the type relationship we care about. This is the option implemented
+        //    below
+        if !evidence_fun.has_polymorphic_vars() {
+            self.add_evidence_top_fun(target_top_fun, evidence_fun.top_fun())
+        }
+    }
+
     fn add_evidence_list(
         &mut self,
         target_list: &ty::List<ty::Poly>,
@@ -101,14 +117,14 @@ impl<'vars> SelectCtx<'vars> {
                 self.add_evidence_top_fun(target_top_fun, evidence_top_fun);
             }
             (ty::Ty::TopFun(target_top_fun), ty::Ty::Fun(evidence_fun)) => {
-                self.add_evidence_top_fun(target_top_fun, evidence_fun.top_fun());
+                self.add_evidence_fun(target_top_fun, evidence_fun);
             }
             (ty::Ty::TopFun(target_top_fun), ty::Ty::TyPred(_))
             | (ty::Ty::TopFun(target_top_fun), ty::Ty::EqPred) => {
                 self.add_evidence_top_fun(target_top_fun, &ty::TopFun::new_for_pred());
             }
             (ty::Ty::Fun(target_fun), ty::Ty::Fun(evidence_fun)) => {
-                self.add_evidence_top_fun(target_fun.top_fun(), evidence_fun.top_fun());
+                self.add_evidence_fun(target_fun.top_fun(), evidence_fun);
             }
             (ty::Ty::Fun(target_fun), ty::Ty::TyPred(_))
             | (ty::Ty::Fun(target_fun), ty::Ty::EqPred) => {
@@ -568,6 +584,21 @@ mod test {
             &scope.poly_for_str("(false -> true)"),
         );
         assert_selected_type(&stx, &poly_a, &scope.poly_for_str("true"));
+    }
+
+    #[test]
+    fn top_fun_from_poly_fun() {
+        let scope = TestScope::new("Outer");
+        let poly_outer = scope.poly_for_str("Outer");
+
+        let mut stx = scope.select_ctx();
+
+        stx.add_evidence(
+            &scope.poly_for_str("(... -> Outer)"),
+            &scope.poly_for_str("(All #{[Inner Num]} Inner -> Inner)"),
+        );
+
+        assert_unselected_type(&stx, &poly_outer);
     }
 
     #[test]
