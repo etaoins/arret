@@ -53,6 +53,7 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "panic" => stdlib_panic,
     "map" => stdlib_map,
     "filter" => stdlib_filter,
+    "fold" => stdlib_fold,
     "print!" => stdlib_print,
     "println!" => stdlib_println,
     "exit!" => stdlib_exit,

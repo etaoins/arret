@@ -51,6 +51,20 @@ pub fn stdlib_filter(
     boxed::List::new(task, output_vec.into_iter())
 }
 
+#[rfi_derive::rust_fun("(All #{I O [->_ ->!]} (O I ->_ O) O (Listof I) ->_ O)")]
+pub fn stdlib_fold(
+    task: &mut Task,
+    folder: callback::Callback<
+        extern "C" fn(&mut Task, boxed::Closure, Gc<boxed::Any>, Gc<boxed::Any>) -> Gc<boxed::Any>,
+    >,
+    initial: Gc<boxed::Any>,
+    input: Gc<boxed::List<boxed::Any>>,
+) -> Gc<boxed::Any> {
+    input
+        .iter()
+        .fold(initial, |acc, elem| folder.apply(task, acc, elem))
+}
+
 #[rfi_derive::rust_fun("(All #{T} (Listof T) ... -> (Listof T))")]
 pub fn stdlib_concat(
     task: &mut Task,
