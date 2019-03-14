@@ -751,22 +751,16 @@ impl<'types> RecursiveDefsCtx<'types> {
     /// come from other parameters. We need to decide in which order to reveal the types which
     /// maximise the amount of useful information.
     ///
-    /// Firstly, we use the required type of the application itself as any evidence against a
-    /// polymorphic return type. For example, if our required type is `Int` and our return type is
-    /// `R` then `R` is an `Int`.
-    ///
-    /// We then visit every non-function fixed parameter and the rest parameter with the evidence
-    /// from the return type. We collect our evidence in to a staged selection context to ensure
-    /// if a type variable appears in multiple parameters they unify instead of supersede each
-    /// other.
+    /// Firstly, we visit every non-function fixed parameter and the rest parameter with the
+    /// evidence from the return type. We collect our evidence in to a staged selection context to
+    /// ensure if a type variable appears in multiple parameters they unify instead of supersede
+    /// each other.
     ///
     /// In the next phase we visit every function fixed parameter. This is done in a second phase
     /// as these functions frequently relate to both the type of the parameters and the return
     /// type (e.g. `map`).
     ///
-    /// The final phase selects the return type. This uses all the evidence collected above except
-    /// for the original evidence from the wanted return type. If the original evidence is included
-    /// we we typically "over-unify" whatever the wanted type was (e.g. `Any`).
+    /// The final phase selects the return type. This uses all the evidence collected above.
     fn visit_fun_app(
         &mut self,
         pv: &mut PurityVar,
