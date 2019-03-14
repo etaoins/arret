@@ -49,6 +49,29 @@ impl PolymorphABI {
             None
         }
     }
+
+    /// Returns the Arret type for our parameter list
+    pub fn param_ty_ref<M: ty::PM>(&self) -> ty::List<M> {
+        use crate::ty::conv_abi::ConvertableABIType;
+
+        let fixed_refs = self
+            .arret_fixed_params()
+            .map(|fixed_param_abi| fixed_param_abi.to_ty_ref())
+            .collect();
+
+        let rest_ref = match self.arret_rest_param() {
+            Some(abitype::ABIType::Boxed(abitype::BoxedABIType::List(memeber_abi_type))) => {
+                memeber_abi_type.to_ty_ref()
+            }
+            Some(other) => {
+                panic!("cannot determine member type for ABI rest list {:?}", other);
+            }
+            None => ty::Ty::never().into(),
+        };
+
+        // If our rest type uses a Pair this can have fixed members
+        ty::List::new(fixed_refs, rest_ref)
+    }
 }
 
 impl From<callback::EntryPointABIType> for PolymorphABI {
@@ -135,5 +158,37 @@ pub fn polymorph_abi_for_arg_list_value(
             // This isn't a list; we can't do anything useful with it
             fallback_polymorph_abi(has_closure, ret_ty)
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::hir;
+
+    #[test]
+    fn polymorph_abi_param_ty_ref() {
+        use runtime::abitype::EncodeBoxedABIType;
+        use runtime::boxed;
+
+        let thunk_param_poly = PolymorphABI::thunk_abi().param_ty_ref();
+        let expected_poly = hir::poly_for_str("(Listof Any)");
+        assert_eq!(expected_poly, thunk_param_poly.into());
+
+        let mul_param_poly = PolymorphABI {
+            ops_abi: ops::OpsABI {
+                params: Box::new([
+                    boxed::Num::BOXED_ABI_TYPE.into(),
+                    abitype::BoxedABIType::List(&boxed::Num::BOXED_ABI_TYPE).into(),
+                ]),
+                ret: boxed::Num::BOXED_ABI_TYPE.into(),
+            },
+            has_closure: false,
+            has_rest: true,
+        }
+        .param_ty_ref();
+
+        let expected_poly = hir::poly_for_str("(List Num Num ...)");
+        assert_eq!(expected_poly, mul_param_poly.into());
     }
 }
