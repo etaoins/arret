@@ -50,8 +50,11 @@ impl<'vars> SelectCtx<'vars> {
         // 3. Do nothing and depend on the fact the target fun is probably already polymorphic
         //    and expresses the type relationship we care about. This is the option implemented
         //    below
-        if !evidence_fun.has_polymorphic_vars() {
-            self.add_evidence_top_fun(target_top_fun, evidence_fun.top_fun())
+        if evidence_fun.pvar_ids().is_empty() {
+            self.add_evidence_purity(target_top_fun.purity(), evidence_fun.purity());
+        }
+        if evidence_fun.tvar_ids().is_empty() {
+            self.add_evidence(target_top_fun.ret(), evidence_fun.ret());
         }
     }
 
@@ -574,17 +577,20 @@ mod test {
 
     #[test]
     fn top_fun_from_poly_fun() {
-        let scope = TestScope::new("Outer");
+        let scope = TestScope::new("Outer [->_ ->!]");
         let poly_outer = scope.poly_for_str("Outer");
+        let poly_purity = scope.purity_for_str("->_");
 
         let mut stx = scope.select_ctx();
 
         stx.add_evidence(
-            &scope.poly_for_str("(... -> Outer)"),
+            &scope.poly_for_str("(... ->_ Outer)"),
+            // This has polymorphic types but monomorphic purity
             &scope.poly_for_str("(All #{[Inner Num]} Inner -> Inner)"),
         );
 
         assert_unselected_type(&stx, &poly_outer);
+        assert_selected_purity(&stx, &poly_purity, Purity::Pure);
     }
 
     #[test]
