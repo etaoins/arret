@@ -29,8 +29,8 @@ impl<'vars> SelectCtx<'vars> {
         SelectCtx {
             selecting_pvar_ids,
             selecting_tvar_ids,
-            pvar_purities: HashMap::new(),
-            tvar_types: HashMap::new(),
+            pvar_purities: HashMap::with_capacity(selecting_pvar_ids.len()),
+            tvar_types: HashMap::with_capacity(selecting_tvar_ids.len()),
         }
     }
 
@@ -189,36 +189,26 @@ impl<'vars> SelectCtx<'vars> {
             .or_insert_with(|| evidence_purity.clone());
     }
 
-    pub fn into_poly_ty_args(self) -> TyArgs<ty::Poly> {
-        let pvar_purities = self
-            .selecting_pvar_ids
-            .iter()
-            .map(|pvar_id| {
-                let pvar_purity = self
-                    .pvar_purities
-                    .get(pvar_id)
-                    .cloned()
-                    .unwrap_or_else(|| Purity::Impure.into());
+    pub fn into_poly_ty_args(mut self) -> TyArgs<ty::Poly> {
+        if self.selecting_pvar_ids.len() != self.pvar_purities.len() {
+            for pvar_id in self.selecting_pvar_ids {
+                if !self.pvar_purities.contains_key(pvar_id) {
+                    self.pvar_purities
+                        .insert(pvar_id.clone(), Purity::Impure.into());
+                }
+            }
+        }
 
-                (pvar_id.clone(), pvar_purity)
-            })
-            .collect();
+        if self.selecting_tvar_ids.len() != self.tvar_types.len() {
+            for tvar_id in self.selecting_tvar_ids {
+                if !self.tvar_types.contains_key(tvar_id) {
+                    self.tvar_types
+                        .insert(tvar_id.clone(), tvar_id.bound().clone());
+                }
+            }
+        }
 
-        let tvar_types = self
-            .selecting_tvar_ids
-            .iter()
-            .map(|tvar_id| {
-                let tvar_type = self
-                    .tvar_types
-                    .get(tvar_id)
-                    .cloned()
-                    .unwrap_or_else(|| tvar_id.bound.clone());
-
-                (tvar_id.clone(), tvar_type)
-            })
-            .collect();
-
-        TyArgs::new(pvar_purities, tvar_types)
+        TyArgs::new(self.pvar_purities, self.tvar_types)
     }
 }
 
