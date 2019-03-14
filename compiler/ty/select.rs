@@ -82,6 +82,33 @@ impl<'vars> SelectCtx<'vars> {
         }
     }
 
+    /// Adds evidence that the target is a never
+    ///
+    /// The propagates the never in to nested types
+    fn add_evidence_never(&mut self, target_ty: &ty::Ty<ty::Poly>) {
+        match target_ty {
+            ty::Ty::Set(target_member) | ty::Ty::Vectorof(target_member) => {
+                self.add_evidence(target_member, &ty::Ty::never().into());
+            }
+            ty::Ty::Map(target_map) => {
+                self.add_evidence(target_map.key(), &ty::Ty::never().into());
+                self.add_evidence(target_map.value(), &ty::Ty::never().into());
+            }
+            ty::Ty::List(target_list) => {
+                for target_fixed in target_list.fixed() {
+                    self.add_evidence(target_fixed, &ty::Ty::never().into());
+                }
+                self.add_evidence(target_list.rest(), &ty::Ty::never().into());
+            }
+            ty::Ty::Vector(target_members) => {
+                for target_member in target_members.iter() {
+                    self.add_evidence(target_member, &ty::Ty::never().into());
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn add_evidence_ty(
         &mut self,
         target_ty: &ty::Ty<ty::Poly>,
@@ -134,6 +161,11 @@ impl<'vars> SelectCtx<'vars> {
             (ty::Ty::Union(target_members), _) => {
                 for target_member in target_members.iter() {
                     self.add_evidence(target_member, evidence_poly);
+                }
+            }
+            (_, ty::Ty::Union(evidence_members)) => {
+                if evidence_members.is_empty() {
+                    self.add_evidence_never(target_ty);
                 }
             }
             _ => {}
