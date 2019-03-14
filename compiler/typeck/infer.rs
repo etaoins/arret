@@ -164,32 +164,20 @@ fn error_kind_for_type_error(
     sub_poly: &ty::Ref<ty::Poly>,
     parent_poly: &ty::Ref<ty::Poly>,
 ) -> ErrorKind {
-    let incorrect_ty_str = hir::str_for_ty_ref(&sub_poly).into_boxed_str();
-
     if let ty::Ref::Fixed(ty::Ty::TopFun(top_fun)) = parent_poly {
         let topmost_fun = ty::TopFun::new(Purity::Impure.into(), ty::Ty::Any.into()).into();
         let impure_top_fun = ty::TopFun::new(Purity::Impure.into(), top_fun.ret().clone()).into();
 
         if !ty::is_a::ty_ref_is_a(sub_poly, &topmost_fun) {
             // We aren't a function at all
-            return ErrorKind::IsNotFun(incorrect_ty_str);
+            return ErrorKind::IsNotFun(sub_poly.clone());
         } else if ty::is_a::ty_ref_is_a(sub_poly, &impure_top_fun) {
-            let purity_str = if top_fun.purity() == &Purity::Pure.into() {
-                // `->` might be confusing here
-                "pure".into()
-            } else {
-                format!("`{}`", hir::str_for_purity(top_fun.purity())).into()
-            };
-
             // We have the right return type but the wrong purity
-            return ErrorKind::IsNotPurity(incorrect_ty_str, purity_str);
+            return ErrorKind::IsNotPurity(sub_poly.clone(), top_fun.purity().clone());
         }
     }
 
-    ErrorKind::IsNotTy(
-        incorrect_ty_str,
-        hir::str_for_ty_ref(parent_poly).into_boxed_str(),
-    )
+    ErrorKind::IsNotTy(sub_poly.clone(), parent_poly.clone())
 }
 
 /// Ensures `sub_poly` is a subtype of `parent_poly`
@@ -226,8 +214,8 @@ fn member_type_for_poly_list(
             Error::new(
                 span,
                 ErrorKind::IsNotTy(
-                    hir::str_for_ty_ref(&poly_type).into_boxed_str(),
-                    "(Listof Any)".into(),
+                    poly_type.clone(),
+                    ty::List::new(Box::new([]), ty::Ty::Any.into()).into(),
                 ),
             )
         })?;
@@ -498,10 +486,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         ty::intersect::intersect_ty_refs(required_type, current_type).map_err(|_| {
             Error::new(
                 span,
-                ErrorKind::VarHasEmptyType(
-                    hir::str_for_ty_ref(required_type).into_boxed_str(),
-                    hir::str_for_ty_ref(current_type).into_boxed_str(),
-                ),
+                ErrorKind::VarHasEmptyType(required_type.clone(), current_type.clone()),
             )
         })
     }
@@ -1238,7 +1223,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         match revealed_fun_type.resolve_to_ty() {
             ty::Ty::TopFun(_) => Err(Error::new(
                 span,
-                ErrorKind::TopFunApply(hir::str_for_ty_ref(&revealed_fun_type).into_boxed_str()),
+                ErrorKind::TopFunApply(revealed_fun_type.clone()),
             )),
             ty::Ty::TyPred(test_ty) => {
                 let wanted_arity = WantedArity::new(1, false);
@@ -1660,12 +1645,9 @@ fn ensure_main_type(
             })
             .unwrap_or_else(|| EMPTY_SPAN.into());
 
-        let expected_str = hir::str_for_ty_ref(&expected_main_type).into_boxed_str();
-        let inferred_str = hir::str_for_ty_ref(inferred_main_type).into_boxed_str();
-
         return Err(Error::new_with_loc_trace(
             main_loc_trace,
-            ErrorKind::IsNotTy(inferred_str, expected_str),
+            ErrorKind::IsNotTy(inferred_main_type.clone(), expected_main_type),
         ));
     };
 
@@ -1777,7 +1759,10 @@ mod test {
         let t = "                        ^^^^^^^^^^^^^^^^^^^  ";
         let err = Error::new(
             t2s(t),
-            ErrorKind::IsNotTy("(Str -> true)".into(), "(Sym -> true)".into()),
+            ErrorKind::IsNotTy(
+                hir::poly_for_str("(Str -> true)"),
+                hir::poly_for_str("(Sym -> true)"),
+            ),
         );
         assert_type_error(&err, j);
 
@@ -1786,24 +1771,18 @@ mod test {
         let t = "                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^  ";
         let err = Error::new(
             t2s(t),
-            ErrorKind::IsNotTy("(Str -> true)".into(), "(Sym -> true)".into()),
+            ErrorKind::IsNotTy(
+                hir::poly_for_str("(Str -> true)"),
+                hir::poly_for_str("(Sym -> true)"),
+            ),
         );
         assert_type_error(&err, j);
 
         let j = "(fn ([x Str]) -> Sym x)";
         let t = "                     ^ ";
-        let err = Error::new(t2s(t), ErrorKind::IsNotTy("Str".into(), "Sym".into()));
-        assert_type_error(&err, j);
-
-        // Instantiating a polymorphic function
-        // We can't name polymorphic types so we need the (let) hack
-        assert_type_for_expr("()", "(let [[_ (Sym -> Sym)] (fn #{T} ([x T]) -> T x)])");
-
-        let j = "(let [[_ (Sym -> Str)] (fn #{T} ([x T]) -> T x)])";
-        let t = "                       ^^^^^^^^^^^^^^^^^^^^^^^^  ";
         let err = Error::new(
             t2s(t),
-            ErrorKind::IsNotTy("(All #{T} T -> T)".into(), "(Sym -> Str)".into()),
+            ErrorKind::IsNotTy(hir::poly_for_str("Str"), hir::poly_for_str("Sym")),
         );
         assert_type_error(&err, j);
     }
@@ -1890,7 +1869,7 @@ mod test {
 
         let err = Error::new(
             t2s(t),
-            ErrorKind::IsNotPurity("(->! false)".into(), "pure".into()),
+            ErrorKind::IsNotPurity(hir::poly_for_str("(->! false)"), Purity::Pure.into()),
         );
         assert_type_error(&err, j);
     }
