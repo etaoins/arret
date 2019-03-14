@@ -2,8 +2,12 @@ use std::error;
 use std::fmt;
 use std::fmt::Display;
 
-use crate::reporting::{Level, LocTrace, Reportable};
 use syntax::span::Span;
+
+use crate::hir;
+use crate::reporting::{Level, LocTrace, Reportable};
+use crate::ty;
+use crate::ty::purity;
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub struct WantedArity {
@@ -32,11 +36,11 @@ impl fmt::Display for WantedArity {
 
 #[derive(PartialEq, Debug)]
 pub enum ErrorKind {
-    IsNotTy(Box<str>, Box<str>),
-    IsNotFun(Box<str>),
-    IsNotPurity(Box<str>, Box<str>),
-    VarHasEmptyType(Box<str>, Box<str>),
-    TopFunApply(Box<str>),
+    IsNotTy(ty::Ref<ty::Poly>, ty::Ref<ty::Poly>),
+    IsNotFun(ty::Ref<ty::Poly>),
+    IsNotPurity(ty::Ref<ty::Poly>, purity::Ref),
+    VarHasEmptyType(ty::Ref<ty::Poly>, ty::Ref<ty::Poly>),
+    TopFunApply(ty::Ref<ty::Poly>),
     RecursiveType,
     DependsOnError,
     WrongArity(usize, WantedArity),
@@ -76,17 +80,38 @@ impl Reportable for Error {
 
     fn message(&self) -> String {
         match self.kind() {
-            ErrorKind::IsNotFun(ref sub) => format!("`{}` is not a function", sub),
-            ErrorKind::IsNotTy(ref sub, ref parent) => format!("`{}` is not a `{}`", sub, parent),
+            ErrorKind::IsNotFun(ref sub) => {
+                format!("`{}` is not a function", hir::str_for_ty_ref(sub))
+            }
+            ErrorKind::IsNotTy(ref sub, ref parent) => format!(
+                "`{}` is not a `{}`",
+                hir::str_for_ty_ref(sub),
+                hir::str_for_ty_ref(parent)
+            ),
             ErrorKind::IsNotPurity(ref fun, ref purity) => {
-                format!("function of type `{}` is not {}", fun, purity)
+                use crate::ty::purity::Purity;
+
+                let purity_str = if purity == &Purity::Pure.into() {
+                    // `->` might be confusing here
+                    "pure".into()
+                } else {
+                    format!("`{}`", hir::str_for_purity(purity))
+                };
+
+                format!(
+                    "function of type `{}` is not {}",
+                    hir::str_for_ty_ref(fun),
+                    purity_str
+                )
             }
-            ErrorKind::VarHasEmptyType(ref left, ref right) => {
-                format!("inferred conflicting types `{}` and `{}`", left, right)
-            }
+            ErrorKind::VarHasEmptyType(ref left, ref right) => format!(
+                "inferred conflicting types `{}` and `{}`",
+                hir::str_for_ty_ref(left),
+                hir::str_for_ty_ref(right)
+            ),
             ErrorKind::TopFunApply(ref top_fun) => format!(
                 "cannot determine parameter types for top function type `{}`",
-                top_fun
+                hir::str_for_ty_ref(top_fun)
             ),
             ErrorKind::WrongArity(have, ref wanted) => format!(
                 "incorrect number of arguments: wanted {}, have {}",
