@@ -43,7 +43,7 @@
   (assert-eq 5.0 (fold + -1.0 '(1.0 2.0 3.0))))
 
 (defn test-concat ()
-  (assert-eq '() (concat))
+  (assert-eq '() (ann (concat) '()))
   (assert-eq '(1 2 3) (concat '(1 2 3)))
   (assert-eq '(1 2 3 4 5 6) (concat '(1 2 3) '() '(4 5 6))))
 

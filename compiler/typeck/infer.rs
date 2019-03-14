@@ -860,6 +860,8 @@ impl<'types> RecursiveDefsCtx<'types> {
                 ErrorKind::WrongArity(supplied_arg_count, wanted_arity),
             ));
         } else {
+            // We can use the lack of a rest arg as type evidence
+            fun_param_stx.add_evidence(&param_iter.collect_rest(), &ty::Ty::never().into());
             None
         };
 
