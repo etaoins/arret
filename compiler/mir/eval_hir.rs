@@ -1077,20 +1077,9 @@ impl EvalHirCtx {
         // Try to refine our polymorphic type variables based on our requested op ABI
         let mut stx = ty::select::SelectCtx::new(&fun_expr.pvar_ids, &fun_expr.tvar_ids);
 
-        // TODO: Our rest param's ABI type should be a list ABI type but this isn't guaranteed by
-        // our `OpsABI` representation. This makes including the rest param difficult.
-        for (fixed_destruc, wanted_param_abi) in fun_expr
-            .params
-            .fixed()
-            .iter()
-            .zip(wanted_abi.arret_fixed_params())
-        {
-            use crate::ty::conv_abi::ConvertableABIType;
-            stx.add_evidence(
-                &hir::destruc::poly_for_destruc(fixed_destruc),
-                &wanted_param_abi.to_ty_ref(),
-            );
-        }
+        let fun_param_poly = hir::destruc::poly_for_list_destruc(&fun_expr.params);
+        let wanted_abi_poly = wanted_abi.param_ty_ref();
+        stx.add_evidence(&fun_param_poly.into(), &wanted_abi_poly.into());
 
         let ty_args = stx.into_poly_ty_args();
 
