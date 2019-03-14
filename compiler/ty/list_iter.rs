@@ -4,7 +4,7 @@ use crate::ty;
 #[derive(Clone)]
 pub struct ListIterator<'list, M: ty::PM> {
     fixed: &'list [ty::Ref<M>],
-    rest: Option<&'list ty::Ref<M>>,
+    rest: &'list ty::Ref<M>,
 }
 
 impl<'list, M: ty::PM> ListIterator<'list, M> {
@@ -27,24 +27,21 @@ impl<'list, M: ty::PM> ListIterator<'list, M> {
     }
 
     pub fn has_rest(&self) -> bool {
-        self.rest.is_some()
+        !self.rest.is_never()
     }
 
     pub fn tail_type(self) -> ty::List<M> {
-        ty::List::new(self.fixed.to_vec().into_boxed_slice(), self.rest.cloned())
+        ty::List::new(self.fixed.to_vec().into_boxed_slice(), self.rest.clone())
     }
 
-    pub fn collect_rest(self) -> Option<ty::Ref<M>> {
-        if self.fixed.is_empty() {
-            return self.rest.cloned();
-        }
+    pub fn collect_rest(self) -> ty::Ref<M> {
+        use std::iter;
 
-        Some(ty::unify::unify_ty_ref_iter(
-            self.fixed
-                .iter()
-                .cloned()
-                .chain(self.rest.cloned().into_iter()),
-        ))
+        if self.fixed.is_empty() {
+            self.rest.clone()
+        } else {
+            ty::unify::unify_ty_ref_iter(self.fixed.iter().chain(iter::once(self.rest)).cloned())
+        }
     }
 }
 
@@ -53,7 +50,11 @@ impl<'list, M: ty::PM> Iterator for ListIterator<'list, M> {
 
     fn next(&mut self) -> Option<&'list ty::Ref<M>> {
         if self.fixed.is_empty() {
-            self.rest
+            if self.rest.is_never() {
+                None
+            } else {
+                Some(self.rest)
+            }
         } else {
             let next = self.fixed.first();
             self.fixed = &self.fixed[1..];

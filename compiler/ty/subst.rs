@@ -15,7 +15,7 @@ where
 {
     ty::List::new(
         subst_ty_ref_slice(stx, list.fixed()),
-        list.rest().map(|r| stx.subst_ty_ref(r)),
+        stx.subst_ty_ref(list.rest()),
     )
 }
 

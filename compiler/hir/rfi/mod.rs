@@ -73,7 +73,7 @@ impl Fun {
     }
 
     pub fn has_rest(&self) -> bool {
-        self.arret_fun_type.params().rest().is_some()
+        !self.arret_fun_type.params().rest().is_never()
     }
 
     pub fn ret(&self) -> &'static abitype::RetABIType {
@@ -196,7 +196,7 @@ impl Loader {
 
         // Calculate how many parameters the Rust function should accept
         let expected_rust_params = upper_fun_type.params().fixed().len()
-            + upper_fun_type.params().rest().is_some() as usize;
+            + !upper_fun_type.params().rest().is_never() as usize;
 
         if expected_rust_params != rust_fun.params.len() {
             return Err(Error::new(
@@ -215,7 +215,8 @@ impl Loader {
         let mut abi_params_iter = rust_fun.params.iter();
 
         // If there are rest types ensure they're compatible
-        if let Some(arret_rest) = upper_fun_type.params().rest() {
+        let arret_rest = upper_fun_type.params().rest();
+        if !arret_rest.is_never() {
             use runtime::abitype::{ABIType, BoxedABIType};
 
             let last_rust_param = abi_params_iter.next_back().unwrap();

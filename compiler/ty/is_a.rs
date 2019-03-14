@@ -9,28 +9,18 @@ fn top_fun_is_a(sub_top_fun: &ty::TopFun, par_top_fun: &ty::TopFun) -> bool {
 }
 
 fn list_is_a<M: ty::PM>(sub_list: &ty::List<M>, par_list: &ty::List<M>) -> bool {
-    if (sub_list.fixed().len() > par_list.fixed().len()) && par_list.rest().is_none() {
+    if (sub_list.fixed().len() > par_list.fixed().len()) && par_list.rest().is_never() {
         // sub is longer than par
         return false;
     }
 
     if sub_list.fixed().len() < par_list.fixed().len() {
-        // sub is less specific due to less fixed typew
+        // sub is less specific due to less fixed types
         return false;
     }
 
-    if let Some(sub_rest) = sub_list.rest() {
-        match par_list.rest() {
-            Some(par_rest) => {
-                if !ty_ref_is_a(sub_rest, par_rest) {
-                    return false;
-                }
-            }
-            None => {
-                // Rest makes sub less specific
-                return false;
-            }
-        }
+    if !ty_ref_is_a(sub_list.rest(), par_list.rest()) {
+        return false;
     }
 
     // Compare our fixed types. If the par fixed ends early we'll use the par rest.

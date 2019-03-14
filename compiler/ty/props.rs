@@ -15,7 +15,7 @@ fn ty_has_subtypes<M: ty::PM>(ty: &ty::Ty<M>) -> bool {
         ty::Ty::Fun(fun) => {
             fun.purity() != &Purity::Pure.into()
                 || !fun.params().fixed().is_empty()
-                || fun.params().rest() != Some(&ty::Ty::Any.into())
+                || fun.params().rest() != &ty::Ty::Any.into()
                 || has_subtypes(fun.ret())
         }
         ty::Ty::Map(map) => has_subtypes(map.key()) || has_subtypes(map.value()),
@@ -24,7 +24,7 @@ fn ty_has_subtypes<M: ty::PM>(ty: &ty::Ty<M>) -> bool {
         ty::Ty::Union(members) => !members.is_empty(),
         ty::Ty::List(list) => {
             // Any arbitrary fixed length list is a subtype of a list with rest
-            list.rest().is_some() || list.fixed().iter().any(has_subtypes)
+            !list.rest().is_never() || list.fixed().iter().any(has_subtypes)
         }
         ty::Ty::Vectorof(_) => {
             // Any arbitrary fixed length vector is a subtype of this vector
@@ -48,7 +48,7 @@ fn ty_is_literal<M: ty::PM>(ty: &ty::Ty<M>) -> bool {
     match ty {
         ty::Ty::LitBool(_) | ty::Ty::LitSym(_) => true,
         ty::Ty::Vector(members) => members.iter().all(is_literal),
-        ty::Ty::List(list) => list.rest().is_none() && list.fixed().iter().all(is_literal),
+        ty::Ty::List(list) => list.rest().is_never() && list.fixed().iter().all(is_literal),
         _ => false,
     }
 }
