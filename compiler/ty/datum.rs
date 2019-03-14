@@ -11,7 +11,7 @@ pub fn ty_ref_for_datum<M: ty::PM>(datum: &Datum) -> ty::Ref<M> {
         Datum::Str(_, _) => ty::Ty::Str,
         Datum::List(_, vs) => ty::List::new(
             vs.iter().map(|datum| ty_ref_for_datum(datum)).collect(),
-            None,
+            ty::Ty::never().into(),
         )
         .into(),
         Datum::Vector(_, vs) => ty::Ty::Vector(vs.iter().map(|v| ty_ref_for_datum(v)).collect()),

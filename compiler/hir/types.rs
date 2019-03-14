@@ -116,8 +116,8 @@ fn lower_list_cons(scope: &Scope, mut arg_iter: NsDataIter) -> Result<ty::List<t
         .collect::<Result<Box<[ty::Ref<ty::Poly>]>>>()?;
 
     let rest_poly = match rest {
-        Some(rest_datum) => Some(lower_poly(scope, rest_datum)?),
-        None => None,
+        Some(rest_datum) => lower_poly(scope, rest_datum)?,
+        None => ty::Ty::never().into(),
     };
 
     Ok(ty::List::new(fixed_polys, rest_poly))
@@ -157,7 +157,7 @@ fn lower_ty_cons_apply(
         TyCons::Listof => {
             let rest_datum = expect_one_arg(span, arg_iter)?;
             let rest_poly = lower_poly(scope, rest_datum)?;
-            let list_poly = ty::List::new(Box::new([]), Some(rest_poly));
+            let list_poly = ty::List::new(Box::new([]), rest_poly);
 
             list_poly.into()
         }
@@ -215,7 +215,7 @@ fn lower_literal(datum: NsDatum) -> Result<ty::Ref<ty::Poly>> {
         NsDatum::Ident(_, ident) => Ok(ty::Ty::LitSym(ident.name().into()).into()),
         NsDatum::List(_, vs) => {
             let fixed_literals = lower_literal_vec(vs.into_vec())?;
-            Ok(ty::List::new(fixed_literals.into_boxed_slice(), None).into())
+            Ok(ty::List::new(fixed_literals.into_boxed_slice(), ty::Ty::never().into()).into())
         }
         NsDatum::Vector(_, vs) => {
             let fixed_literals = lower_literal_vec(vs.into_vec())?;
@@ -433,7 +433,9 @@ fn push_list_parts<M: ty::PM>(list_parts: &mut Vec<String>, list_ref: &ty::List<
     for fixed in list_ref.fixed() {
         list_parts.push(str_for_ty_ref(fixed));
     }
-    if let Some(rest) = list_ref.rest() {
+
+    let rest = list_ref.rest();
+    if !rest.is_never() {
         list_parts.push(str_for_ty_ref(rest));
         list_parts.push("...".to_owned());
     }
@@ -532,9 +534,10 @@ fn str_for_ty<M: ty::PM>(ty: &ty::Ty<M>) -> String {
             // While all list types can be expressed using `(List)` we try to find the shortest
             // representation
             if list.fixed().is_empty() {
-                match list.rest() {
-                    Some(rest) => format!("(Listof {})", str_for_ty_ref(rest)),
-                    None => "()".to_owned(),
+                if list.rest().is_never() {
+                    "()".to_owned()
+                } else {
+                    format!("(Listof {})", str_for_ty_ref(list.rest()))
                 }
             } else {
                 let mut list_parts = Vec::with_capacity(2);
@@ -662,7 +665,7 @@ mod test {
 
         let expected = ty::List::new(
             Box::new([ty::Ty::LitBool(true).into(), ty::Ty::LitBool(false).into()]),
-            None,
+            ty::Ty::never().into(),
         )
         .into();
 
@@ -702,7 +705,7 @@ mod test {
         let j = "(Listof true)";
 
         let inner_poly = ty::Ty::LitBool(true).into();
-        let expected = ty::List::new(Box::new([]), Some(inner_poly)).into();
+        let expected = ty::List::new(Box::new([]), inner_poly).into();
 
         assert_ty_for_str(expected, j);
     }
@@ -713,7 +716,7 @@ mod test {
 
         let expected = ty::List::new(
             Box::new([ty::Ty::LitBool(true).into(), ty::Ty::LitBool(false).into()]),
-            None,
+            ty::Ty::never().into(),
         )
         .into();
 
@@ -726,7 +729,7 @@ mod test {
 
         let expected = ty::List::new(
             Box::new([ty::Ty::LitBool(true).into()]),
-            Some(ty::Ty::LitBool(false).into()),
+            ty::Ty::LitBool(false).into(),
         )
         .into();
 
@@ -793,7 +796,10 @@ mod test {
             purity::PVarIds::new(),
             ty::TVarIds::new(),
             ty::TopFun::new(Purity::Pure.into(), ty::Ty::LitBool(true).into()),
-            ty::List::new(Box::new([ty::Ty::LitBool(false).into()]), None),
+            ty::List::new(
+                Box::new([ty::Ty::LitBool(false).into()]),
+                ty::Ty::never().into(),
+            ),
         )
         .into();
 
@@ -808,7 +814,7 @@ mod test {
             purity::PVarIds::new(),
             ty::TVarIds::new(),
             ty::TopFun::new(Purity::Impure.into(), ty::Ty::LitBool(true).into()),
-            ty::List::new(Box::new([ty::Ty::Str.into()]), Some(ty::Ty::Sym.into())),
+            ty::List::new(Box::new([ty::Ty::Str.into()]), ty::Ty::Sym.into()),
         )
         .into();
 

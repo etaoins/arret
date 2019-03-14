@@ -227,37 +227,34 @@ impl<M: PM> From<Map<M>> for Ref<M> {
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct List<M: PM> {
     fixed: Box<[Ref<M>]>,
-    rest: Option<Box<Ref<M>>>,
+    rest: Box<Ref<M>>,
 }
 
 impl<M: PM> List<M> {
-    pub fn new(fixed: Box<[Ref<M>]>, rest: Option<Ref<M>>) -> List<M> {
+    pub fn new(fixed: Box<[Ref<M>]>, rest: Ref<M>) -> List<M> {
         List {
             fixed,
-            rest: rest.map(Box::new),
+            rest: Box::new(rest),
         }
     }
 
     pub fn empty() -> List<M> {
-        List::new(Box::new([]), None)
+        List::new(Box::new([]), Ty::never().into())
     }
 
     pub fn fixed(&self) -> &[Ref<M>] {
         &self.fixed
     }
 
-    pub fn rest(&self) -> Option<&Ref<M>> {
-        match self.rest {
-            Some(ref rest) => Some(rest.as_ref()),
-            None => None,
-        }
+    pub fn rest(&self) -> &Ref<M> {
+        self.rest.as_ref()
     }
 
     fn size_range(&self) -> Range<usize> {
-        if self.rest.is_some() {
-            (self.fixed.len()..usize::max_value())
-        } else {
+        if self.rest.is_never() {
             (self.fixed.len()..self.fixed.len())
+        } else {
+            (self.fixed.len()..usize::max_value())
         }
     }
 
@@ -269,7 +266,7 @@ impl<M: PM> List<M> {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.fixed.is_empty() && self.rest.is_none()
+        self.fixed.is_empty() && self.rest.is_never()
     }
 }
 
@@ -365,7 +362,7 @@ impl Fun {
             purity::PVarIds::new(),
             TVarIds::new(),
             TopFun::new_for_pred(),
-            List::new(Box::new([Ty::Any.into()]), None),
+            List::new(Box::new([Ty::Any.into()]), Ty::never().into()),
         )
     }
 
@@ -378,7 +375,10 @@ impl Fun {
             purity::PVarIds::new(),
             TVarIds::new(),
             TopFun::new_for_pred(),
-            List::new(Box::new([Ty::Any.into(), Ty::Any.into()]), None),
+            List::new(
+                Box::new([Ty::Any.into(), Ty::Any.into()]),
+                Ty::never().into(),
+            ),
         )
     }
 

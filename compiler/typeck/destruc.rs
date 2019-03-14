@@ -20,13 +20,13 @@ pub fn type_for_decl_list_destruc(
     }
 
     let rest_poly = match list.rest() {
-        Some(rest) => Some(match rest.ty() {
+        Some(rest) => match rest.ty() {
             hir::DeclTy::Known(poly) => poly.clone(),
             hir::DeclTy::Free => guide_type_iter
-                .and_then(|guide_type_iter| guide_type_iter.collect_rest())
+                .map(|guide_type_iter| guide_type_iter.collect_rest())
                 .unwrap_or_else(|| ty::Ty::Any.into()),
-        }),
-        None => None,
+        },
+        None => ty::Ty::never().into(),
     };
 
     ty::List::new(fixed_polys.into_boxed_slice(), rest_poly)

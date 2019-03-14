@@ -36,19 +36,20 @@ fn subtract_tys<M: ty::PM>(
         (ty::Ty::List(minuend_list), ty::Ty::List(subtrahend_list))
             // Make sure this is even useful or else we can recurse splitting list types
             // indefinitely
-            if subtrahend_list.rest().is_none() && minuend_list.fixed().len() == subtrahend_list.fixed().len() =>
+            if subtrahend_list.rest().is_never() && minuend_list.fixed().len() == subtrahend_list.fixed().len() =>
         {
             // This is required for `(nil?)` to work correctly
-            if let Some(rest) = minuend_list.rest() {
+            let minued_rest = minuend_list.rest();
+            if !minued_rest.is_never() {
                 // This is the list type if we have no rest elements
                 let terminated_list =
-                    ty::List::new(minuend_list.fixed().to_vec().into_boxed_slice(), None);
+                    ty::List::new(minuend_list.fixed().to_vec().into_boxed_slice(), ty::Ty::never().into());
 
                 // This is the list type if we have at least one rest element
                 let mut continued_fixed = minuend_list.fixed().to_vec();
-                continued_fixed.push(rest.clone());
+                continued_fixed.push(minued_rest.clone());
                 let continued_list =
-                    ty::List::new(continued_fixed.into_boxed_slice(), Some(rest.clone()));
+                    ty::List::new(continued_fixed.into_boxed_slice(), minued_rest.clone());
 
                 subtract_ref_iters(
                     [

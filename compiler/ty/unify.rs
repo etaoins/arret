@@ -50,13 +50,11 @@ fn unify_ty_refs<M: ty::PM>(ref1: &ty::Ref<M>, ref2: &ty::Ref<M>) -> UnifiedTy<M
 }
 
 fn try_list_to_exact_pair<M: ty::PM>(list: &ty::List<M>) -> Option<&ty::Ref<M>> {
-    if let Some(ref rest) = list.rest {
-        if list.fixed.len() == 1 && &list.fixed[0] == rest.as_ref() {
-            return Some(rest);
-        }
+    if list.fixed.len() == 1 && &list.fixed[0] == list.rest.as_ref() {
+        Some(list.rest.as_ref())
+    } else {
+        None
     }
-
-    None
 }
 
 /// Unifies a member in to an existing vector of members
@@ -292,16 +290,15 @@ where
 pub fn unify_list<M: ty::PM>(list1: &ty::List<M>, list2: &ty::List<M>) -> UnifiedList<M> {
     if list1.is_empty() {
         if let Some(member) = try_list_to_exact_pair(list2) {
-            return UnifiedList::Merged(ty::List::new(Box::new([]), Some(member.clone())));
+            return UnifiedList::Merged(ty::List::new(Box::new([]), member.clone()));
         }
     } else if list2.is_empty() {
         if let Some(member) = try_list_to_exact_pair(list1) {
-            return UnifiedList::Merged(ty::List::new(Box::new([]), Some(member.clone())));
+            return UnifiedList::Merged(ty::List::new(Box::new([]), member.clone()));
         }
     }
 
     if list1.has_disjoint_arity(list2) {
-        // We can quickly check list lengths at runtime
         return UnifiedList::Discerned;
     }
 
@@ -318,19 +315,11 @@ pub fn unify_list<M: ty::PM>(list1: &ty::List<M>, list2: &ty::List<M>) -> Unifie
         merged_fixed.push(unify_to_ty_ref(fixed1, fixed2));
     }
 
-    let merged_rest = if fixed_iter1.len() > 0
-        || fixed_iter2.len() > 0
-        || list1.rest().is_some()
-        || list2.rest().is_some()
-    {
-        // Merge all remaining fixed and rest args together
-        let rest_iter = fixed_iter1
-            .chain(fixed_iter2.chain(list1.rest().into_iter().chain(list2.rest().into_iter())));
+    // Merge all remaining fixed and rest args together
+    let rest_iter = fixed_iter1
+        .chain(fixed_iter2.chain(iter::once(list1.rest()).chain(iter::once(list2.rest()))));
 
-        Some(unify_ty_ref_iter(rest_iter.cloned()))
-    } else {
-        None
-    };
+    let merged_rest = unify_ty_ref_iter(rest_iter.cloned());
 
     UnifiedList::Merged(ty::List::new(merged_fixed.into_boxed_slice(), merged_rest))
 }

@@ -232,9 +232,7 @@ fn member_type_for_poly_list(
             )
         })?;
 
-    Ok(ListIterator::new(list)
-        .collect_rest()
-        .unwrap_or_else(|| ty::Ty::Any.into()))
+    Ok(ListIterator::new(list).collect_rest())
 }
 
 /// Preserves expressions for their side effects
@@ -537,7 +535,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                     self.type_for_free_ref(&required_member_type, span, current_member_type)?;
 
                 self.free_ty_polys[free_ty_id.to_usize()] = new_free_type.clone();
-                let rest_list_type = ty::List::new(Box::new([]), Some(new_free_type)).into();
+                let rest_list_type = ty::List::new(Box::new([]), new_free_type).into();
 
                 // Make sure we didn't require a specific list type e.g. `(List Int Int Int)`
                 ensure_is_a(span, &rest_list_type, required_type)?;
@@ -1016,7 +1014,8 @@ impl<'types> RecursiveDefsCtx<'types> {
     ) -> Result<InferredNode> {
         use std::iter;
 
-        let wanted_subject_list_type = ty::List::new(Box::new([ty::Ty::Any.into()]), None).into();
+        let wanted_subject_list_type =
+            ty::List::new(Box::new([ty::Ty::Any.into()]), ty::Ty::never().into()).into();
 
         let subject_list_node =
             self.visit_expr(pv, &wanted_subject_list_type, subject_list_expr)?;
@@ -1455,10 +1454,7 @@ impl<'types> RecursiveDefsCtx<'types> {
     ) {
         let param_free_ty_id = if *rest.ty() == hir::DeclTy::Free {
             // Start with member type as a guide
-            let member_type = value_type_iter
-                .clone()
-                .collect_rest()
-                .unwrap_or_else(|| ty::Ty::Any.into());
+            let member_type = value_type_iter.clone().collect_rest();
 
             let free_ty_id = self.insert_free_ty(member_type);
             Some(free_ty_id).filter(|_| is_param)

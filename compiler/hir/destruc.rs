@@ -113,8 +113,8 @@ pub fn poly_for_list_destruc(list: &List<hir::Inferred>) -> ty::List<ty::Poly> {
     let fixed_polys = list.fixed().iter().map(poly_for_destruc).collect();
 
     let rest_poly = match list.rest() {
-        Some(rest) => Some(rest.ty().clone()),
-        None => None,
+        Some(rest) => rest.ty().clone(),
+        None => ty::Ty::never().into(),
     };
 
     ty::List::new(fixed_polys, rest_poly)

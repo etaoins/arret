@@ -75,9 +75,7 @@ impl<'vars> SelectCtx<'vars> {
         }
 
         if let Some(target_rest) = target_iter.next() {
-            if let Some(evidence_rest) = evidence_iter.collect_rest() {
-                self.add_evidence(target_rest, &evidence_rest);
-            }
+            self.add_evidence(target_rest, &evidence_iter.collect_rest());
         }
     }
 

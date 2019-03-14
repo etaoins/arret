@@ -247,11 +247,7 @@ pub fn intersect_list<M: ty::PM>(list1: &ty::List<M>, list2: &ty::List<M>) -> Re
         merged_fixed.push(merged_next);
     }
 
-    let merged_rest = match (list1.rest(), list2.rest()) {
-        (Some(rest1), Some(rest2)) => Some(intersect_ty_refs(rest1, rest2)?),
-        _ => None,
-    };
-
+    let merged_rest = intersect_ty_refs(list1.rest(), list2.rest())?;
     Ok(ty::List::new(merged_fixed.into_boxed_slice(), merged_rest))
 }
 

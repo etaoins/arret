@@ -38,10 +38,9 @@ fn ideal_polymorph_abi_for_arret_fun(arret_fun: &value::ArretFun) -> PolymorphAB
             specific_abi_type_for_ty_ref(&fixed_poly)
         }))
         .chain(
-            param_list_type
-                .rest()
-                .into_iter()
-                .map(|_| abitype::TOP_LIST_BOXED_ABI_TYPE.into()),
+            Some(abitype::TOP_LIST_BOXED_ABI_TYPE.into())
+                .filter(|_| !param_list_type.rest().is_never())
+                .into_iter(),
         )
         .collect();
 
@@ -55,7 +54,7 @@ fn ideal_polymorph_abi_for_arret_fun(arret_fun: &value::ArretFun) -> PolymorphAB
     PolymorphABI {
         ops_abi,
         has_closure,
-        has_rest: param_list_type.rest().is_some(),
+        has_rest: !param_list_type.rest().is_never(),
     }
 }
 
