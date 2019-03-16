@@ -64,6 +64,7 @@ pub fn is_literal<M: ty::PM>(ty_ref: &ty::Ref<M>) -> bool {
 mod test {
     use super::*;
     use crate::hir::poly_for_str;
+    use syntax::span::EMPTY_SPAN;
 
     fn str_has_subtypes(datum_str: &str) -> bool {
         let poly = poly_for_str(datum_str);
@@ -107,7 +108,7 @@ mod test {
 
         assert_eq!(false, str_has_subtypes("(RawU)"));
 
-        let tvar_id = ty::TVarId::new(ty::TVar::new("test".into(), ty::Ty::Any.into()));
+        let tvar_id = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "test".into(), ty::Ty::Any.into()));
         assert_eq!(true, has_subtypes(&ty::Ref::Var(tvar_id, ty::Poly {})));
     }
 
@@ -138,7 +139,7 @@ mod test {
         assert_eq!(false, str_is_literal("(Vectorof false)"));
         assert_eq!(true, str_is_literal("(Vector false true)"));
 
-        let tvar_id = ty::TVarId::new(ty::TVar::new("test".into(), ty::Ty::Any.into()));
+        let tvar_id = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "test".into(), ty::Ty::Any.into()));
         assert_eq!(false, is_literal(&ty::Ref::Var(tvar_id, ty::Poly {})));
     }
 }
