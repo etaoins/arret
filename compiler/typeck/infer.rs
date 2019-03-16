@@ -251,7 +251,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         var_to_type: &'types mut HashMap<hir::VarId, VarType>,
     ) -> RecursiveDefsCtx<'types> {
         // We do this in reverse order because we infer our defs in reverse order. This doesn't
-        // matter for correctness. However, presumably most definitions have more depedencies
+        // matter for correctness. However, presumably most definitions have more dependencies
         // before them than after them. Visiting them in forward order should cause less
         // recursive resolution.
         let input_defs = defs
@@ -873,7 +873,17 @@ impl<'types> RecursiveDefsCtx<'types> {
         inferred_fixed_arg_exprs.sort_unstable_by_key(|k| k.0);
         let inferred_fixed_arg_exprs = inferred_fixed_arg_exprs.into_iter().map(|e| e.1).collect();
 
-        let ret_pta = ret_stx.into_poly_ty_args();
+        let ret_pta = ret_stx
+            .into_complete_poly_ty_args()
+            .map_err(|error| match error {
+                ty::select::Error::UnselectedPVar(pvar_id) => {
+                    Error::new(span, ErrorKind::UnselectedPVar(pvar_id.clone()))
+                }
+                ty::select::Error::UnselectedTVar(tvar_id) => {
+                    Error::new(span, ErrorKind::UnselectedTVar(tvar_id.clone()))
+                }
+            })?;
+
         let ret_type = if is_divergent {
             ty::Ty::never().into()
         } else {
