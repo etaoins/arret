@@ -93,15 +93,9 @@ macro_rules! define_marker_ref {
             }
         }
 
-        impl<T: Boxed> $ref_name<T> {
-            fn into_gc_ref(self) -> Gc<T> {
-                Gc { inner: self.inner }
-            }
-        }
-
         impl<T: Boxed> From<$ref_name<T>> for Gc<T> {
             fn from(marker_ref: $ref_name<T>) -> Gc<T> {
-                marker_ref.into_gc_ref()
+                Gc { inner: marker_ref.inner }
             }
         }
     };
