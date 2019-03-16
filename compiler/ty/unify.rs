@@ -37,7 +37,7 @@ pub enum UnifiedList<M: ty::PM> {
 
 fn unify_ty_refs<M: ty::PM>(ref1: &ty::Ref<M>, ref2: &ty::Ref<M>) -> UnifiedTy<M> {
     if let (ty::Ref::Fixed(ty1), ty::Ref::Fixed(ty2)) = (&ref1, &ref2) {
-        // We can invoke full simplfication logic if we have fixed types
+        // We can invoke full simplification logic if we have fixed types
         unify_ty(ref1, ty1, ref2, ty2)
     } else if ty::is_a::ty_ref_is_a(ref1, ref2) {
         UnifiedTy::Merged(ref2.clone())
@@ -341,7 +341,7 @@ mod test {
         let poly1 = poly_for_str(ty_str1);
         let poly2 = poly_for_str(ty_str2);
 
-        // This is the basic invariant we're testing - each of our input types satsifies the merged
+        // This is the basic invariant we're testing - each of our input types satisfies the merged
         // type
         assert_eq!(true, ty::is_a::ty_ref_is_a(&poly1, &expected));
         assert_eq!(true, ty::is_a::ty_ref_is_a(&poly2, &expected));
@@ -524,13 +524,15 @@ mod test {
 
     #[test]
     fn purity_refs() {
+        use syntax::span::EMPTY_SPAN;
+
         let purity_pure = Purity::Pure.into();
         let purity_impure = Purity::Impure.into();
 
-        let pvar_id1 = purity::PVarId::new(purity::PVar::new("test".into()));
+        let pvar_id1 = purity::PVarId::new(purity::PVar::new(EMPTY_SPAN, "test".into()));
         let purity_var1 = purity::Ref::Var(pvar_id1);
 
-        let pvar_id2 = purity::PVarId::new(purity::PVar::new("test".into()));
+        let pvar_id2 = purity::PVarId::new(purity::PVar::new(EMPTY_SPAN, "test".into()));
         let purity_var2 = purity::Ref::Var(pvar_id2);
 
         assert_eq!(purity_pure, unify_purity_refs(&purity_pure, &purity_pure));

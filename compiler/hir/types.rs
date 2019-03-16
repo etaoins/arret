@@ -26,13 +26,12 @@ pub enum TyCons {
 
 pub enum PolymorphicVarKind {
     TVar(ty::TVar),
-    TFixed(ty::Ref<ty::Poly>),
     PVar(purity::PVar),
-    Pure,
+    TFixed(Span, ty::Ref<ty::Poly>),
+    Pure(Span),
 }
 
 pub struct PolymorphicVar {
-    pub span: Span,
     pub ident: Ident,
     pub kind: PolymorphicVarKind,
 }
@@ -44,9 +43,12 @@ fn lower_polymorphic_var(scope: &Scope, tvar_datum: NsDatum) -> Result<Polymorph
         NsDatum::Ident(span, ident) => {
             let source_name = ident.name().into();
             return Ok(PolymorphicVar {
-                span,
                 ident,
-                kind: PolymorphicVarKind::TVar(ty::TVar::new(source_name, ty::Ty::Any.into())),
+                kind: PolymorphicVarKind::TVar(ty::TVar::new(
+                    span,
+                    source_name,
+                    ty::Ty::Any.into(),
+                )),
             });
         }
         NsDatum::Vector(vector_span, vs) => {
@@ -61,18 +63,16 @@ fn lower_polymorphic_var(scope: &Scope, tvar_datum: NsDatum) -> Result<Polymorph
                 match try_lower_purity(scope, &bound_datum) {
                     Some(purity::Ref::Fixed(Purity::Impure)) => {
                         return Ok(PolymorphicVar {
-                            span,
                             ident,
-                            kind: PolymorphicVarKind::PVar(purity::PVar::new(source_name)),
+                            kind: PolymorphicVarKind::PVar(purity::PVar::new(span, source_name)),
                         });
                     }
                     Some(purity::Ref::Fixed(Purity::Pure)) => {
                         // Emulate bounding to pure in case the purity comes from e.g. a macro
                         // expansion
                         return Ok(PolymorphicVar {
-                            span,
                             ident,
-                            kind: PolymorphicVarKind::Pure,
+                            kind: PolymorphicVarKind::Pure(span),
                         });
                     }
                     Some(_) => {
@@ -87,12 +87,12 @@ fn lower_polymorphic_var(scope: &Scope, tvar_datum: NsDatum) -> Result<Polymorph
                         let bound_ty = lower_poly(scope, bound_datum)?;
 
                         let kind = if ty::props::has_subtypes(&bound_ty) {
-                            PolymorphicVarKind::TVar(ty::TVar::new(source_name, bound_ty))
+                            PolymorphicVarKind::TVar(ty::TVar::new(span, source_name, bound_ty))
                         } else {
-                            PolymorphicVarKind::TFixed(bound_ty)
+                            PolymorphicVarKind::TFixed(span, bound_ty)
                         };
 
-                        return Ok(PolymorphicVar { span, ident, kind });
+                        return Ok(PolymorphicVar { ident, kind });
                     }
                 }
             }
@@ -335,23 +335,33 @@ pub fn lower_polymorphic_vars(
     let mut tvar_ids = ty::TVarIds::new();
 
     for var_datum in polymorphic_var_data {
-        let PolymorphicVar { span, ident, kind } = lower_polymorphic_var(outer_scope, var_datum)?;
+        let PolymorphicVar { ident, kind } = lower_polymorphic_var(outer_scope, var_datum)?;
 
-        let binding = match kind {
+        let span;
+        let binding;
+        match kind {
             PolymorphicVarKind::PVar(pvar) => {
                 let pvar_id = purity::PVarId::new(pvar);
                 pvar_ids.push(pvar_id.clone());
 
-                Binding::Purity(purity::Ref::Var(pvar_id))
+                span = pvar_id.span();
+                binding = Binding::Purity(purity::Ref::Var(pvar_id))
             }
             PolymorphicVarKind::TVar(tvar) => {
                 let tvar_id = ty::TVarId::new(tvar);
                 tvar_ids.push(tvar_id.clone());
 
-                Binding::Ty(ty::Ref::Var(tvar_id, ty::Poly {}))
+                span = tvar_id.span();
+                binding = Binding::Ty(ty::Ref::Var(tvar_id, ty::Poly {}))
             }
-            PolymorphicVarKind::TFixed(poly) => Binding::Ty(poly),
-            PolymorphicVarKind::Pure => Binding::Purity(Purity::Pure.into()),
+            PolymorphicVarKind::TFixed(fixed_span, poly) => {
+                span = fixed_span;
+                binding = Binding::Ty(poly);
+            }
+            PolymorphicVarKind::Pure(pure_span) => {
+                span = pure_span;
+                binding = Binding::Purity(Purity::Pure.into());
+            }
         };
 
         inner_scope.insert_binding(span, ident, binding)?;
@@ -595,7 +605,9 @@ pub fn poly_for_str(datum_str: &str) -> ty::Ref<ty::Poly> {
 
 #[cfg(test)]
 pub fn tvar_bounded_by(bound: ty::Ref<ty::Poly>) -> ty::Ref<ty::Poly> {
-    let tvar_id = ty::TVarId::new(ty::TVar::new("TVar".into(), bound));
+    use syntax::span::EMPTY_SPAN;
+
+    let tvar_id = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "TVar".into(), bound));
     ty::Ref::Var(tvar_id, ty::Poly {})
 }
 

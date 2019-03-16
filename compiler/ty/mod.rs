@@ -16,10 +16,13 @@ use std::fmt;
 use std::hash;
 use std::ops::Range;
 
+use syntax::span::Span;
+
 use crate::id_type::RcId;
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct TVar {
+    span: Span,
     source_name: Box<str>,
     bound: Ref<Poly>,
 }
@@ -28,8 +31,12 @@ pub type TVarId = RcId<TVar>;
 pub type TVarIds = Vec<TVarId>;
 
 impl TVar {
-    pub fn new(source_name: Box<str>, bound: Ref<Poly>) -> TVar {
-        TVar { source_name, bound }
+    pub fn new(span: Span, source_name: Box<str>, bound: Ref<Poly>) -> TVar {
+        TVar { span, source_name, bound }
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
     }
 
     pub fn source_name(&self) -> &str {
