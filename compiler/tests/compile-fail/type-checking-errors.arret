@@ -86,4 +86,14 @@
                ;^^^^^ ERROR inferred conflicting types `B` and `A`
   ())
 
+(defn unselected-purity-variable ()
+  ((fn #{[->_ ->!]} ()))
+ ;^^^^^^^^^^^^^^^^^^^^^^ ERROR cannot determine purity of purity variable `->_` in this context
+  ())
+
+(defn unselected-type-variable ()
+  ((fn #{T} ()))
+ ;^^^^^^^^^^^^^^ ERROR cannot determine type of type variable `T` in this context
+  ())
+
 (defn main! ())

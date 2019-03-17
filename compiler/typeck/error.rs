@@ -44,6 +44,8 @@ pub enum ErrorKind {
     RecursiveType,
     DependsOnError,
     WrongArity(usize, WantedArity),
+    UnselectedPVar(purity::PVarId),
+    UnselectedTVar(ty::TVarId),
 }
 
 #[derive(PartialEq, Debug)]
@@ -123,11 +125,31 @@ impl Reportable for Error {
             ErrorKind::DependsOnError => {
                 "type cannot be determined due to previous error".to_owned()
             }
+            ErrorKind::UnselectedPVar(pvar_id) => format!(
+                "cannot determine purity of purity variable `{}` in this context",
+                pvar_id.source_name()
+            ),
+            ErrorKind::UnselectedTVar(pvar_id) => format!(
+                "cannot determine type of type variable `{}` in this context",
+                pvar_id.source_name()
+            ),
         }
     }
 
     fn loc_trace(&self) -> LocTrace {
         self.loc_trace.clone()
+    }
+
+    fn associated_report(&self) -> Option<Box<dyn Reportable>> {
+        match self.kind() {
+            ErrorKind::UnselectedPVar(pvar_id) => Some(Box::new(PVarDefHelp {
+                span: pvar_id.span(),
+            })),
+            ErrorKind::UnselectedTVar(tvar_id) => Some(Box::new(TVarDefHelp {
+                span: tvar_id.span(),
+            })),
+            _ => None,
+        }
     }
 }
 
@@ -140,5 +162,41 @@ impl error::Error for Error {
 impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+struct PVarDefHelp {
+    span: Span,
+}
+
+impl Reportable for PVarDefHelp {
+    fn level(&self) -> Level {
+        Level::Help
+    }
+
+    fn loc_trace(&self) -> LocTrace {
+        self.span.into()
+    }
+
+    fn message(&self) -> String {
+        "purity variable defined here".to_owned()
+    }
+}
+
+struct TVarDefHelp {
+    span: Span,
+}
+
+impl Reportable for TVarDefHelp {
+    fn level(&self) -> Level {
+        Level::Help
+    }
+
+    fn loc_trace(&self) -> LocTrace {
+        self.span.into()
+    }
+
+    fn message(&self) -> String {
+        "type variable defined here".to_owned()
     }
 }

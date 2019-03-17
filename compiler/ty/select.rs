@@ -6,6 +6,11 @@ use crate::ty::purity;
 use crate::ty::purity::Purity;
 use crate::ty::ty_args::TyArgs;
 
+pub enum Error<'vars> {
+    UnselectedPVar(&'vars purity::PVarId),
+    UnselectedTVar(&'vars ty::TVarId),
+}
+
 /// Selects a set of polymorphic variables for a function application
 ///
 /// This context is constructed with a set of purity and type variables the applied function is
@@ -224,6 +229,7 @@ impl<'vars> SelectCtx<'vars> {
             .or_insert_with(|| evidence_purity.clone());
     }
 
+    /// Creates a `TyArgs` instance with any unselected variables set to their bound
     pub fn into_poly_ty_args(mut self) -> TyArgs<ty::Poly> {
         if self.selecting_pvar_ids.len() != self.pvar_purities.len() {
             for pvar_id in self.selecting_pvar_ids {
@@ -244,6 +250,35 @@ impl<'vars> SelectCtx<'vars> {
         }
 
         TyArgs::new(self.pvar_purities, self.tvar_types)
+    }
+
+    /// Creates a `TyArgs` instance
+    ///
+    /// Any unselected polymorphic variables will return an error unless they have an non-`Any`
+    /// bound to use as a default.
+    pub fn into_complete_poly_ty_args(mut self) -> Result<TyArgs<ty::Poly>, Error<'vars>> {
+        if self.selecting_pvar_ids.len() != self.pvar_purities.len() {
+            for pvar_id in self.selecting_pvar_ids {
+                if !self.pvar_purities.contains_key(pvar_id) {
+                    return Err(Error::UnselectedPVar(pvar_id));
+                }
+            }
+        }
+
+        if self.selecting_tvar_ids.len() != self.tvar_types.len() {
+            for tvar_id in self.selecting_tvar_ids {
+                if !self.tvar_types.contains_key(tvar_id) {
+                    if tvar_id.bound() == &ty::Ty::Any.into() {
+                        return Err(Error::UnselectedTVar(tvar_id));
+                    }
+
+                    self.tvar_types
+                        .insert(tvar_id.clone(), tvar_id.bound().clone());
+                }
+            }
+        }
+
+        Ok(TyArgs::new(self.pvar_purities, self.tvar_types))
     }
 }
 
