@@ -32,7 +32,11 @@ pub type TVarIds = Vec<TVarId>;
 
 impl TVar {
     pub fn new(span: Span, source_name: Box<str>, bound: Ref<Poly>) -> TVar {
-        TVar { span, source_name, bound }
+        TVar {
+            span,
+            source_name,
+            bound,
+        }
     }
 
     pub fn span(&self) -> Span {

@@ -27,6 +27,7 @@ RUN ninja install && rm -Rf /usr/src/llvm-build
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.33.0
 
 ENV PATH "/root/.cargo/bin:${PATH}"
+RUN rustup component add rustfmt
 RUN rustup target add i686-unknown-linux-gnu
 
 ENV LLVM_SYS_70_PREFIX "${LLVM_ROOT}"
