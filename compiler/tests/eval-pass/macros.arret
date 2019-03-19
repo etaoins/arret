@@ -15,15 +15,11 @@
   (letmacro [swap (macro-rules [(x y) '(y x)])]
     (assert-eq (swap one two) '(two one)))
 
-  (letmacro [for (macro-rules #{in} [(x in y) [x y]])]
-    (assert-eq (for two in one) [two one]))
+  (letmacro [for (macro-rules [(x :in y) [x y]])]
+    (assert-eq (for two :in one) [two one]))
 
   (letmacro [return-ellipsis (macro-rules [() '(... ...)])]
     (assert-eq (return-ellipsis) '...))
-
-  (letmacro [m (macro-rules #{_} [(_) 'underscore][(a) a])]
-    (assert-eq (m 'not-underscore) 'not-underscore)
-    (assert-eq (m _) 'underscore))
 
   (letmacro [list-third (macro-rules [(_ _ x) x])]
     (assert-eq (list-third 'one 'two 'three) 'three))

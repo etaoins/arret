@@ -13,9 +13,6 @@
 (defmacro no-rules (macro-rules))
 (no-rules) ;~ ERROR no matching macro rule
 
-(defmacro _ (macro-rules #{a 1}))
-                            ;^ ERROR expected symbol
-
 (defmacro _ (macro-rules 1))
                         ;^ ERROR expected a macro rule vector
 
@@ -53,9 +50,9 @@
 (defmacro return-one (macro-rules [() 1]))
 (return-one extra-arg) ;~ ERROR no matching macro rule
 
-; Literal doesn't match
-(defmacro for (macro-rules #{in} [(x in y) [x y]]))
-(for 1 for 2) ;~ ERROR no matching macro rule
+; Keyword doesn't match
+(defmacro for (macro-rules [(x :in y) [x y]]))
+(for 1 :for 2) ;~ ERROR no matching macro rule
 
 (defmacro two-set? (macro-rules
   [(#{_ _}) false]

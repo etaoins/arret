@@ -11,7 +11,7 @@ use crate::hir::{types, VarId};
 use crate::ty;
 use crate::ty::purity;
 
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Binding {
     Var(VarId),
     Prim(Prim),

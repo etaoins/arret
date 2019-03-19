@@ -13,14 +13,13 @@ pub mod ty_args;
 pub mod unify;
 
 use std::fmt;
-use std::hash;
 use std::ops::Range;
 
 use syntax::span::Span;
 
 use crate::id_type::RcId;
 
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct TVar {
     span: Span,
     source_name: Box<str>,
@@ -53,12 +52,12 @@ impl TVar {
 }
 
 /// Marker that determines if type variables are allowed within a type
-pub trait PM: PartialEq + Eq + Clone + Copy + Sized + fmt::Debug + hash::Hash {
+pub trait PM: PartialEq + Clone + Copy + Sized + fmt::Debug {
     /// Resolves a possibly variable type to its bound
     fn resolve_ref_to_ty(ty_ref: &Ref<Self>) -> &Ty<Self>;
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Mono {}
 impl PM for Mono {
     fn resolve_ref_to_ty(ty_ref: &Ref<Mono>) -> &Ty<Mono> {
@@ -69,7 +68,7 @@ impl PM for Mono {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Poly {}
 impl PM for Poly {
     fn resolve_ref_to_ty(ty_ref: &Ref<Poly>) -> &Ty<Poly> {
@@ -80,7 +79,7 @@ impl PM for Poly {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Ref<M: PM> {
     Var(TVarId, M),
     Fixed(Ty<M>),
@@ -160,7 +159,7 @@ impl<M: PM> From<Ty<M>> for Ref<M> {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Ty<M: PM> {
     Any,
     Bool,
@@ -203,7 +202,7 @@ impl<M: PM> Ty<M> {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Map<M: PM> {
     key: Ref<M>,
     value: Ref<M>,
@@ -235,7 +234,7 @@ impl<M: PM> From<Map<M>> for Ref<M> {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct List<M: PM> {
     fixed: Box<[Ref<M>]>,
     rest: Box<Ref<M>>,
@@ -293,7 +292,7 @@ impl<M: PM> From<List<M>> for Ref<M> {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct TopFun {
     purity: purity::Ref,
     ret: Ref<Poly>,
@@ -331,7 +330,7 @@ impl<M: PM> From<TopFun> for Ref<M> {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Fun {
     pvar_ids: purity::PVarIds,
     tvar_ids: TVarIds,

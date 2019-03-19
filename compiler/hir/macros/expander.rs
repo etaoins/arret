@@ -1,9 +1,11 @@
+use std::collections::HashMap;
+
+use syntax::span::Span;
+
 use crate::hir::macros::checker::VarLinks;
-use crate::hir::macros::{MacroVar, MatchData, SpecialVars};
+use crate::hir::macros::{is_escaped_ellipsis, starts_with_zero_or_more, MatchData};
 use crate::hir::ns::{Ident, NsDatum, NsId};
 use crate::hir::scope::Scope;
-use std::collections::HashMap;
-use syntax::span::Span;
 
 struct ExpandCursor<'data, 'links> {
     match_data: &'data MatchData<'data>,
@@ -11,20 +13,15 @@ struct ExpandCursor<'data, 'links> {
     subtemplate_idx: usize,
 }
 
-struct ExpandCtx<'scope, 'svars> {
+struct ExpandCtx<'scope> {
     scope: &'scope mut Scope,
-    special_vars: &'svars SpecialVars,
     ns_mapping: HashMap<NsId, NsId>,
 }
 
-impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
-    fn new(
-        scope: &'scope mut Scope,
-        special_vars: &'svars SpecialVars,
-    ) -> ExpandCtx<'scope, 'svars> {
+impl<'scope> ExpandCtx<'scope> {
+    fn new(scope: &'scope mut Scope) -> Self {
         ExpandCtx {
             scope,
-            special_vars,
             ns_mapping: HashMap::new(),
         }
     }
@@ -35,9 +32,7 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
         span: Span,
         ident: &Ident,
     ) -> NsDatum {
-        let macro_var = MacroVar::from_ident(self.scope, ident);
-
-        if let Some(replacement) = cursor.match_data.vars.get(&macro_var) {
+        if let Some(replacement) = cursor.match_data.vars.get(ident) {
             return (*replacement).clone();
         }
 
@@ -93,10 +88,7 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
         let mut result: Vec<NsDatum> = vec![];
 
         while !templates.is_empty() {
-            if self
-                .special_vars
-                .starts_with_zero_or_more(self.scope, templates)
-            {
+            if starts_with_zero_or_more(self.scope, templates) {
                 let mut expanded = self.expand_zero_or_more(cursor, &templates[0]);
                 result.append(&mut expanded);
 
@@ -119,7 +111,7 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
         span: Span,
         templates: &[NsDatum],
     ) -> NsDatum {
-        if self.special_vars.is_escaped_ellipsis(self.scope, templates) {
+        if is_escaped_ellipsis(self.scope, templates) {
             templates[1].clone()
         } else {
             NsDatum::List(span, self.expand_slice(cursor, templates))
@@ -139,12 +131,11 @@ impl<'scope, 'svars> ExpandCtx<'scope, 'svars> {
 
 pub fn expand_rule<'data>(
     scope: &mut Scope,
-    special_vars: &SpecialVars,
     match_data: &'data MatchData<'data>,
     var_links: &VarLinks,
     template: &NsDatum,
 ) -> NsDatum {
-    let mut mcx = ExpandCtx::new(scope, special_vars);
+    let mut mcx = ExpandCtx::new(scope);
 
     let mut cursor = ExpandCursor {
         match_data,

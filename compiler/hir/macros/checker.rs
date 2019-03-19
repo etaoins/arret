@@ -1,11 +1,13 @@
 use std::collections::{HashMap, HashSet};
 use std::result;
 
-use crate::hir::error::{Error, ErrorKind, Result};
-use crate::hir::macros::{MacroVar, SpecialVars};
-use crate::hir::ns::{Ident, NsDatum};
-use crate::hir::scope::Scope;
 use syntax::span::{Span, EMPTY_SPAN};
+
+use crate::hir::error::{Error, ErrorKind, Result};
+use crate::hir::macros::{is_escaped_ellipsis, starts_with_zero_or_more};
+use crate::hir::ns::{Ident, NsDatum};
+use crate::hir::prim::Prim;
+use crate::hir::scope::{Binding, Scope};
 
 #[derive(PartialEq, Debug)]
 pub struct VarLinks {
@@ -24,14 +26,14 @@ impl VarLinks {
 }
 
 #[derive(Debug)]
-struct FoundVars {
+struct FoundVars<'data> {
     span: Span,
-    vars: HashSet<MacroVar>,
-    subs: Vec<FoundVars>,
+    vars: HashSet<&'data Ident>,
+    subs: Vec<FoundVars<'data>>,
 }
 
-impl FoundVars {
-    fn new(span: Span) -> FoundVars {
+impl<'data> FoundVars<'data> {
+    fn new(span: Span) -> Self {
         FoundVars {
             span,
             vars: HashSet::new(),
@@ -47,78 +49,70 @@ enum FindVarsInputType {
     Template,
 }
 
-struct FindVarsCtx<'scope, 'svars> {
+struct FindVarsCtx<'scope, 'data> {
     scope: &'scope Scope,
-    special_vars: &'svars SpecialVars,
     input_type: FindVarsInputType,
-    unbound_var_spans: Option<HashMap<Box<str>, Span>>,
+    var_spans: Option<HashMap<&'data Ident, Span>>,
 }
 
 type FindVarsResult = result::Result<(), Error>;
 
-impl<'scope, 'svars> FindVarsCtx<'scope, 'svars> {
-    fn new(
-        scope: &'scope Scope,
-        special_vars: &'svars SpecialVars,
-        input_type: FindVarsInputType,
-    ) -> FindVarsCtx<'scope, 'svars> {
-        let unbound_var_spans = if input_type == FindVarsInputType::Template {
-            // Duplicate bound vars are allowed in the template as they must all resolve to the
-            // same value.
+impl<'scope, 'data> FindVarsCtx<'scope, 'data> {
+    fn new(scope: &'scope Scope, input_type: FindVarsInputType) -> Self {
+        let var_spans = if input_type == FindVarsInputType::Template {
+            // Duplicate vars are allowed in the template as they must all resolve to the same
+            // value.
             None
         } else {
-            // This tracks the name of unbound variables and where they were first used (for error
+            // This tracks the name of variables and where they were first used (for error
             // reporting)
-            Some(HashMap::<Box<str>, Span>::new())
+            Some(HashMap::<&'data Ident, Span>::new())
         };
 
         FindVarsCtx {
             scope,
-            special_vars,
             input_type,
-            unbound_var_spans,
+            var_spans,
         }
     }
 
     fn visit_ident(
         &mut self,
-        pattern_vars: &mut FoundVars,
+        pattern_vars: &mut FoundVars<'data>,
         span: Span,
-        ident: &Ident,
+        ident: &'data Ident,
     ) -> FindVarsResult {
-        let macro_var = MacroVar::from_ident(self.scope, ident);
+        let binding = self.scope.get(ident);
 
-        if self.special_vars.is_literal(&macro_var) || self.special_vars.is_wildcard(&macro_var) {
-            // Not a variable
+        if binding == Some(&Binding::Prim(Prim::Wildcard)) {
+            // This is a wildcard
             return Ok(());
         }
 
-        if self.special_vars.is_ellipsis(&macro_var) {
+        if binding == Some(&Binding::Prim(Prim::Ellipsis)) {
             return Err(Error::new(
                 span,
                 ErrorKind::IllegalArg("ellipsis can only be used as part of a zero or more match"),
             ));
         }
 
-        if let Some(ref mut unbound_var_spans) = self.unbound_var_spans {
-            if let MacroVar::Unbound(ref name) = macro_var {
-                if let Some(old_span) = unbound_var_spans.insert(name.clone(), span) {
-                    return Err(Error::new(
-                        span,
-                        ErrorKind::DuplicateDef(old_span, name.clone()),
-                    ));
-                }
+        if let Some(ref mut var_spans) = self.var_spans {
+            if let Some(old_span) = var_spans.insert(ident, span) {
+                return Err(Error::new(
+                    span,
+                    ErrorKind::DuplicateDef(old_span, ident.name().into()),
+                ));
             }
         }
 
-        pattern_vars.vars.insert(macro_var);
+        pattern_vars.vars.insert(ident);
         Ok(())
     }
 
     fn visit_zero_or_more(
         &mut self,
-        pattern_vars: &mut FoundVars,
-        pattern: &NsDatum,
+        pattern_vars: &mut FoundVars<'data>,
+        pattern: &'data NsDatum,
     ) -> FindVarsResult {
         let mut sub_vars = FoundVars::new(pattern.span());
         self.visit_datum(&mut sub_vars, pattern)?;
@@ -127,7 +121,11 @@ impl<'scope, 'svars> FindVarsCtx<'scope, 'svars> {
         Ok(())
     }
 
-    fn visit_datum(&mut self, pattern_vars: &mut FoundVars, pattern: &NsDatum) -> FindVarsResult {
+    fn visit_datum(
+        &mut self,
+        pattern_vars: &mut FoundVars<'data>,
+        pattern: &'data NsDatum,
+    ) -> FindVarsResult {
         match pattern {
             NsDatum::Ident(span, ident) => self.visit_ident(pattern_vars, *span, ident),
             NsDatum::List(_, vs) => self.visit_list(pattern_vars, vs),
@@ -142,31 +140,23 @@ impl<'scope, 'svars> FindVarsCtx<'scope, 'svars> {
 
     fn visit_seq(
         &mut self,
-        pattern_vars: &mut FoundVars,
-        mut patterns: &[NsDatum],
+        pattern_vars: &mut FoundVars<'data>,
+        mut patterns: &'data [NsDatum],
     ) -> FindVarsResult {
         let mut zero_or_more_span: Option<Span> = None;
 
         while !patterns.is_empty() {
-            if self
-                .special_vars
-                .starts_with_zero_or_more(self.scope, patterns)
-            {
+            if starts_with_zero_or_more(self.scope, patterns) {
                 let pattern = &patterns[0];
 
                 // Make sure we don't have multiple zero or more matches in the same slice
                 if self.input_type == FindVarsInputType::Pattern {
-                    match zero_or_more_span {
-                        Some(old_span) => {
-                            // We've already had a zero-or-more match!
-                            return Err(Error::new(
-                                pattern.span(),
-                                ErrorKind::MultipleZeroOrMoreMatch(old_span),
-                            ));
-                        }
-                        None => {
-                            zero_or_more_span = Some(pattern.span());
-                        }
+                    if let Some(old_span) = zero_or_more_span.replace(pattern.span()) {
+                        // We've already had a zero-or-more match
+                        return Err(Error::new(
+                            pattern.span(),
+                            ErrorKind::MultipleZeroOrMoreMatch(old_span),
+                        ));
                     }
                 }
 
@@ -181,9 +171,13 @@ impl<'scope, 'svars> FindVarsCtx<'scope, 'svars> {
         Ok(())
     }
 
-    fn visit_list(&mut self, pattern_vars: &mut FoundVars, patterns: &[NsDatum]) -> FindVarsResult {
+    fn visit_list(
+        &mut self,
+        pattern_vars: &mut FoundVars<'data>,
+        patterns: &'data [NsDatum],
+    ) -> FindVarsResult {
         if self.input_type == FindVarsInputType::Template
-            && self.special_vars.is_escaped_ellipsis(self.scope, patterns)
+            && is_escaped_ellipsis(self.scope, patterns)
         {
             Ok(())
         } else {
@@ -193,9 +187,9 @@ impl<'scope, 'svars> FindVarsCtx<'scope, 'svars> {
 
     fn visit_set(
         &mut self,
-        pattern_vars: &mut FoundVars,
+        pattern_vars: &mut FoundVars<'data>,
         span: Span,
-        patterns: &[NsDatum],
+        patterns: &'data [NsDatum],
     ) -> FindVarsResult {
         if self.input_type == FindVarsInputType::Template {
             // Sets are expanded exactly as seq
@@ -204,10 +198,7 @@ impl<'scope, 'svars> FindVarsCtx<'scope, 'svars> {
 
         match patterns.len() {
             0 => Ok(()),
-            2 if self
-                .special_vars
-                .starts_with_zero_or_more(self.scope, patterns) =>
-            {
+            2 if starts_with_zero_or_more(self.scope, patterns) => {
                 self.visit_zero_or_more(pattern_vars, &patterns[0])
             }
             _ => Err(Error::new(
@@ -221,8 +212,8 @@ impl<'scope, 'svars> FindVarsCtx<'scope, 'svars> {
 fn link_found_vars(
     scope: &Scope,
     pattern_idx: usize,
-    pattern_vars: &FoundVars,
-    template_vars: &FoundVars,
+    pattern_vars: &FoundVars<'_>,
+    template_vars: &FoundVars<'_>,
 ) -> Result<VarLinks> {
     let subtemplates = template_vars
         .subs
@@ -241,7 +232,7 @@ fn link_found_vars(
                 .iter()
                 .enumerate()
                 .filter(|(_, pv)| !pv.vars.is_disjoint(&subtemplate_vars.vars))
-                .collect::<Vec<(usize, &FoundVars)>>();
+                .collect::<Vec<(usize, &FoundVars<'_>)>>();
 
             if possible_indices.is_empty() {
                 return Err(Error::new(
@@ -271,18 +262,14 @@ fn link_found_vars(
     })
 }
 
-pub fn check_rule(
-    scope: &Scope,
-    special_vars: &SpecialVars,
-    patterns: &[NsDatum],
-    template: &NsDatum,
-) -> Result<VarLinks> {
-    let mut fpvcx = FindVarsCtx::new(scope, special_vars, FindVarsInputType::Pattern);
+pub fn check_rule(scope: &Scope, patterns: &[NsDatum], template: &NsDatum) -> Result<VarLinks> {
+    let mut fpvcx = FindVarsCtx::new(scope, FindVarsInputType::Pattern);
+
     // We don't need to report the root span for the pattern
     let mut pattern_vars = FoundVars::new(EMPTY_SPAN);
     fpvcx.visit_seq(&mut pattern_vars, patterns)?;
 
-    let mut ftvcx = FindVarsCtx::new(scope, special_vars, FindVarsInputType::Template);
+    let mut ftvcx = FindVarsCtx::new(scope, FindVarsInputType::Template);
     let mut template_vars = FoundVars::new(template.span());
     ftvcx.visit_datum(&mut template_vars, template)?;
 
