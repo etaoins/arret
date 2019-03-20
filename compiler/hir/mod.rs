@@ -24,7 +24,7 @@ use crate::ty::purity;
 /// DeclTy is a type declared by a user
 ///
 /// The `Known` variant indicates the type is specified while `Free` indicates it must be inferred.
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum DeclTy {
     Known(ty::Ref<ty::Poly>),
     Free,
