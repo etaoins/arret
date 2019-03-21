@@ -73,4 +73,12 @@
   (letmacro [rebind-same-ident (macro-rules [() (quote (quote 2))])]
     (assert-eq (rebind-same-ident) ''2))
 
+  ; This ensures that unbound idents (`x`) are hygienic
+  (letmacro [set-x-to-inner (macro-rules [(body) (let [x :inner] body)])]
+    (assert-eq :outer (let [x :outer] (set-x-to-inner x))))
+
+  ; This ensures the bound idents (`+`) are hygenic
+  (letmacro [set-+-to-* (macro-rules [(body) (let [+ *] body)])]
+    (assert-eq 2 (set-+-to-* (+ 1 1))))
+
   ())
