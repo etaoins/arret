@@ -125,7 +125,7 @@ fn lower_macro(scope: &mut Scope, self_datum: NsDatum, transformer_spec: NsDatum
 
     let mac = lower_macro_rules(scope, macro_rules_data)?;
 
-    if scope.get(&self_ident) != Some(&Binding::Prim(Prim::Wildcard)) {
+    if self_ident.name() != "_" {
         scope.insert_binding(self_span, self_ident, Binding::Macro(MacroId::new(mac)))?;
     }
 
@@ -149,7 +149,7 @@ fn lower_type(scope: &mut Scope, self_datum: NsDatum, ty_datum: NsDatum) -> Resu
     let (ident, span) = expect_ident_and_span(self_datum)?;
     let ty = lower_poly(scope, ty_datum)?;
 
-    if scope.get(&ident) != Some(&Binding::Prim(Prim::Wildcard)) {
+    if ident.name() != "_" {
         scope.insert_binding(span, ident, Binding::Ty(ty))?;
     }
 
@@ -176,21 +176,14 @@ fn lower_ident_destruc(
     ident: Ident,
     decl_ty: DeclTy,
 ) -> Result<destruc::Scalar<Lowered>> {
-    match scope.get(&ident) {
-        Some(Binding::Prim(Prim::Wildcard)) => {
-            Ok(destruc::Scalar::new(None, ident.into_name(), decl_ty))
-        }
-        Some(Binding::Prim(Prim::Ellipsis)) => Err(Error::new(
-            span,
-            ErrorKind::IllegalArg("ellipsis can only be used to destructure the rest of a list"),
-        )),
-        _ => {
-            let var_id = VarId::alloc();
-            let source_name = ident.name().into();
+    if ident.name() == "_" {
+        Ok(destruc::Scalar::new(None, ident.into_name(), decl_ty))
+    } else {
+        let var_id = VarId::alloc();
+        let source_name = ident.name().into();
 
-            scope.insert_var(span, ident, var_id)?;
-            Ok(destruc::Scalar::new(Some(var_id), source_name, decl_ty))
-        }
+        scope.insert_var(span, ident, var_id)?;
+        Ok(destruc::Scalar::new(Some(var_id), source_name, decl_ty))
     }
 }
 
@@ -387,9 +380,11 @@ fn lower_fun(outer_scope: &Scope, span: Span, mut arg_iter: NsDataIter) -> Resul
             arg_iter.next();
             purity = poly_purity.into();
 
-            let ret_datum = arg_iter.next().unwrap();
-            if fun_scope.get_datum(&ret_datum) != Some(&Binding::Prim(Prim::Wildcard)) {
-                ret_ty = lower_poly(&fun_scope, ret_datum)?.into();
+            match arg_iter.next().unwrap() {
+                NsDatum::Ident(_, ref ident) if ident.name() == "_" => {}
+                ret_datum => {
+                    ret_ty = lower_poly(&fun_scope, ret_datum)?.into();
+                }
             }
         }
     }
@@ -443,9 +438,7 @@ fn lower_expr_prim_apply(
         }
         Prim::Do => lower_body(scope, span, arg_iter),
         Prim::CompileError => Err(lower_user_compile_error(span, arg_iter)),
-        Prim::Ellipsis | Prim::Wildcard | Prim::MacroRules | Prim::All => {
-            Err(Error::new(span, ErrorKind::PrimRef))
-        }
+        Prim::Ellipsis | Prim::MacroRules | Prim::All => Err(Error::new(span, ErrorKind::PrimRef)),
     }
 }
 
