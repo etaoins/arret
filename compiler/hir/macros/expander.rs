@@ -88,7 +88,7 @@ impl<'scope> ExpandCtx<'scope> {
         let mut result: Vec<NsDatum> = vec![];
 
         while !templates.is_empty() {
-            if starts_with_zero_or_more(self.scope, templates) {
+            if starts_with_zero_or_more(templates) {
                 let mut expanded = self.expand_zero_or_more(cursor, &templates[0]);
                 result.append(&mut expanded);
 
@@ -111,7 +111,7 @@ impl<'scope> ExpandCtx<'scope> {
         span: Span,
         templates: &[NsDatum],
     ) -> NsDatum {
-        if is_escaped_ellipsis(self.scope, templates) {
+        if is_escaped_ellipsis(templates) {
             templates[1].clone()
         } else {
             NsDatum::List(span, self.expand_slice(cursor, templates))

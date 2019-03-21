@@ -2,20 +2,17 @@ use std::result;
 
 use crate::hir::macros::{starts_with_zero_or_more, MatchData, Rule};
 use crate::hir::ns::{Ident, NsDatum};
-use crate::hir::scope::Scope;
 
-struct MatchCtx<'scope, 'data> {
-    scope: &'scope Scope,
+struct MatchCtx<'data> {
     match_data: MatchData<'data>,
 }
 
 type Result<T> = result::Result<T, ()>;
 type MatchVisitResult = result::Result<(), ()>;
 
-impl<'scope, 'data> MatchCtx<'scope, 'data> {
-    fn new(scope: &'scope Scope) -> Self {
+impl<'data> MatchCtx<'data> {
+    fn new() -> Self {
         MatchCtx {
-            scope,
             match_data: MatchData::new(),
         }
     }
@@ -62,7 +59,6 @@ impl<'scope, 'data> MatchCtx<'scope, 'data> {
             .iter()
             .map(|arg| {
                 let mut subcontext = MatchCtx {
-                    scope: self.scope,
                     match_data: MatchData::new(),
                 };
 
@@ -81,7 +77,7 @@ impl<'scope, 'data> MatchCtx<'scope, 'data> {
         mut args: &'data [NsDatum],
     ) -> MatchVisitResult {
         loop {
-            if starts_with_zero_or_more(self.scope, patterns) {
+            if starts_with_zero_or_more(patterns) {
                 let rest_patterns_len = patterns.len() - 2;
 
                 if args.len() < rest_patterns_len {
@@ -126,10 +122,9 @@ impl<'scope, 'data> MatchCtx<'scope, 'data> {
 }
 
 pub fn match_rule<'data>(
-    scope: &Scope,
     rule: &'data Rule,
     arg_data: &'data [NsDatum],
 ) -> Result<MatchData<'data>> {
-    let mcx = MatchCtx::new(scope);
+    let mcx = MatchCtx::new();
     mcx.visit_rule(rule, arg_data)
 }

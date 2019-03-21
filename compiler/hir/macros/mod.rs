@@ -11,8 +11,7 @@ use crate::hir::macros::checker::{check_rule, VarLinks};
 use crate::hir::macros::expander::expand_rule;
 use crate::hir::macros::matcher::match_rule;
 use crate::hir::ns::{Ident, NsDatum};
-use crate::hir::prim::Prim;
-use crate::hir::scope::{Binding, Scope};
+use crate::hir::scope::Scope;
 
 use crate::id_type::RcId;
 
@@ -52,25 +51,23 @@ impl Macro {
     }
 }
 
-fn is_ellipsis_datum(scope: &Scope, datum: &NsDatum) -> bool {
+fn is_ellipsis_datum(datum: &NsDatum) -> bool {
     if let NsDatum::Ident(_, ident) = datum {
-        scope.get(ident) == Some(&Binding::Prim(Prim::Ellipsis))
+        ident.name() == "..."
     } else {
         false
     }
 }
 
-fn starts_with_zero_or_more(scope: &Scope, data: &[NsDatum]) -> bool {
-    data.get(1)
-        .map(|d| is_ellipsis_datum(scope, d))
-        .unwrap_or(false)
+fn starts_with_zero_or_more(data: &[NsDatum]) -> bool {
+    data.get(1).map(|d| is_ellipsis_datum(d)).unwrap_or(false)
 }
 
-fn is_escaped_ellipsis(scope: &Scope, data: &[NsDatum]) -> bool {
-    data.len() == 2 && data.iter().all(|d| is_ellipsis_datum(scope, d))
+fn is_escaped_ellipsis(data: &[NsDatum]) -> bool {
+    data.len() == 2 && data.iter().all(|d| is_ellipsis_datum(d))
 }
 
-fn lower_macro_rule_datum(scope: &Scope, rule_datum: NsDatum) -> Result<Rule> {
+fn lower_macro_rule_datum(rule_datum: NsDatum) -> Result<Rule> {
     let (span, mut rule_values) = if let NsDatum::Vector(span, vs) = rule_datum {
         (span, vs.into_vec())
     } else {
@@ -99,7 +96,7 @@ fn lower_macro_rule_datum(scope: &Scope, rule_datum: NsDatum) -> Result<Rule> {
         ));
     };
 
-    let var_links = check_rule(scope, pattern.as_slice(), &template)?;
+    let var_links = check_rule(pattern.as_slice(), &template)?;
 
     Ok(Rule {
         pattern,
@@ -108,10 +105,10 @@ fn lower_macro_rule_datum(scope: &Scope, rule_datum: NsDatum) -> Result<Rule> {
     })
 }
 
-pub fn lower_macro_rules(scope: &Scope, macro_rules_data: Vec<NsDatum>) -> Result<Macro> {
+pub fn lower_macro_rules(macro_rules_data: Vec<NsDatum>) -> Result<Macro> {
     let rules = macro_rules_data
         .into_iter()
-        .map(|rule_datum| lower_macro_rule_datum(scope, rule_datum))
+        .map(lower_macro_rule_datum)
         .collect::<Result<Vec<Rule>>>()?;
 
     Ok(Macro::new(rules))
@@ -124,7 +121,7 @@ pub fn expand_macro(
     arg_data: &[NsDatum],
 ) -> Result<NsDatum> {
     for rule in &mac.rules {
-        let match_result = match_rule(scope, rule, arg_data);
+        let match_result = match_rule(rule, arg_data);
 
         if let Ok(match_data) = match_result {
             return Ok(expand_rule(
