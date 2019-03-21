@@ -82,13 +82,12 @@ impl<'scope, 'data> FindVarsCtx<'scope, 'data> {
         span: Span,
         ident: &'data Ident,
     ) -> FindVarsResult {
-        let binding = self.scope.get(ident);
-
-        if binding == Some(&Binding::Prim(Prim::Wildcard)) {
+        if ident.name() == "_" {
             // This is a wildcard
             return Ok(());
         }
 
+        let binding = self.scope.get(ident);
         if binding == Some(&Binding::Prim(Prim::Ellipsis)) {
             return Err(Error::new(
                 span,

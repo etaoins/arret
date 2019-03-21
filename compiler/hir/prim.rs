@@ -31,7 +31,6 @@ export_prims!(
     ("defmacro", DefMacro),
     ("letmacro", LetMacro),
     ("...", Ellipsis),
-    ("_", Wildcard),
     ("macro-rules", MacroRules),
     ("deftype", DefType),
     ("lettype", LetType),

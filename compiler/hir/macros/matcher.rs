@@ -2,8 +2,7 @@ use std::result;
 
 use crate::hir::macros::{starts_with_zero_or_more, MatchData, Rule};
 use crate::hir::ns::{Ident, NsDatum};
-use crate::hir::prim::Prim;
-use crate::hir::scope::{Binding, Scope};
+use crate::hir::scope::Scope;
 
 struct MatchCtx<'scope, 'data> {
     scope: &'scope Scope,
@@ -26,7 +25,7 @@ impl<'scope, 'data> MatchCtx<'scope, 'data> {
         pattern_ident: &'data Ident,
         arg: &'data NsDatum,
     ) -> MatchVisitResult {
-        if self.scope.get(pattern_ident) == Some(&Binding::Prim(Prim::Wildcard)) {
+        if pattern_ident.name() == "_" {
             // This is a wildcard; just discard
             Ok(())
         } else {
