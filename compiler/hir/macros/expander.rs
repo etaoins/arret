@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use syntax::span::Span;
 
 use crate::hir::macros::checker::VarLinks;
-use crate::hir::macros::{is_escaped_ellipsis, starts_with_zero_or_more, MatchData};
+use crate::hir::macros::{get_escaped_ident, starts_with_zero_or_more, MatchData};
 use crate::hir::ns::{Ident, NsDatum, NsId};
 use crate::hir::scope::Scope;
 
@@ -111,8 +111,8 @@ impl<'scope> ExpandCtx<'scope> {
         span: Span,
         templates: &[NsDatum],
     ) -> NsDatum {
-        if is_escaped_ellipsis(templates) {
-            templates[1].clone()
+        if let Some(ident) = get_escaped_ident(templates) {
+            NsDatum::Ident(span, ident.clone())
         } else {
             NsDatum::List(span, self.expand_slice(cursor, templates))
         }

@@ -1,6 +1,6 @@
 use std::result;
 
-use crate::hir::macros::{starts_with_zero_or_more, MatchData, Rule};
+use crate::hir::macros::{get_escaped_ident, starts_with_zero_or_more, MatchData, Rule};
 use crate::hir::ns::{Ident, NsDatum};
 
 struct MatchCtx<'data> {
@@ -8,7 +8,6 @@ struct MatchCtx<'data> {
 }
 
 type Result<T> = result::Result<T, ()>;
-type MatchVisitResult = result::Result<(), ()>;
 
 impl<'data> MatchCtx<'data> {
     fn new() -> Self {
@@ -17,76 +16,81 @@ impl<'data> MatchCtx<'data> {
         }
     }
 
-    fn visit_ident(
-        &mut self,
-        pattern_ident: &'data Ident,
-        arg: &'data NsDatum,
-    ) -> MatchVisitResult {
+    fn match_ident(&mut self, pattern_ident: &'data Ident, arg: &'data NsDatum) -> bool {
         if pattern_ident.name() == "_" {
             // This is a wildcard; just discard
-            Ok(())
         } else {
             self.match_data.vars.insert(pattern_ident, arg);
-            Ok(())
         }
+
+        true
     }
 
     // TODO: Maps
     #[allow(clippy::float_cmp)]
-    fn visit_datum(&mut self, pattern: &'data NsDatum, arg: &'data NsDatum) -> MatchVisitResult {
+    fn match_datum(&mut self, pattern: &'data NsDatum, arg: &'data NsDatum) -> bool {
         match (pattern, arg) {
-            (NsDatum::Ident(_, pattern_ident), arg) => self.visit_ident(pattern_ident, arg),
-            (NsDatum::Keyword(_, pv), NsDatum::Keyword(_, av)) if pv == av => Ok(()),
-            (NsDatum::List(_, pvs), NsDatum::List(_, avs)) => self.visit_slice(pvs, avs),
-            (NsDatum::Vector(_, pvs), NsDatum::Vector(_, avs)) => self.visit_slice(pvs, avs),
-            (NsDatum::Set(_, pvs), NsDatum::Set(_, avs)) => self.visit_slice(pvs, avs),
-            (NsDatum::Bool(_, pv), NsDatum::Bool(_, av)) if pv == av => Ok(()),
-            (NsDatum::Int(_, pv), NsDatum::Int(_, av)) if pv == av => Ok(()),
+            (NsDatum::Ident(_, pattern_ident), arg) => self.match_ident(pattern_ident, arg),
+            (NsDatum::Keyword(_, pv), NsDatum::Keyword(_, av)) => pv == av,
+            (NsDatum::List(_, pvs), NsDatum::List(_, avs)) => self.match_slice(pvs, avs),
+            (NsDatum::Vector(_, pvs), NsDatum::Vector(_, avs)) => self.match_slice(pvs, avs),
+            (NsDatum::Set(_, pvs), NsDatum::Set(_, avs)) => self.match_slice(pvs, avs),
+            (NsDatum::Bool(_, pv), NsDatum::Bool(_, av)) => pv == av,
+            (NsDatum::Int(_, pv), NsDatum::Int(_, av)) => pv == av,
             // Don't match NaNs against other NaNs. This is consistent with `=`.
-            (NsDatum::Float(_, pv), NsDatum::Float(_, av)) if pv == av => Ok(()),
-            (NsDatum::Char(_, pv), NsDatum::Char(_, av)) if pv == av => Ok(()),
-            (NsDatum::Str(_, pv), NsDatum::Str(_, av)) if pv == av => Ok(()),
-            _ => Err(()),
+            (NsDatum::Float(_, pv), NsDatum::Float(_, av)) => pv == av,
+            (NsDatum::Char(_, pv), NsDatum::Char(_, av)) => pv == av,
+            (NsDatum::Str(_, pv), NsDatum::Str(_, av)) => pv == av,
+            (NsDatum::List(_, pv), NsDatum::Ident(_, arg)) => {
+                if let Some(escaped_ident) = get_escaped_ident(pv) {
+                    escaped_ident.name() == arg.name()
+                } else {
+                    false
+                }
+            }
+            _ => false,
         }
     }
 
-    fn visit_zero_or_more(
-        &mut self,
-        pattern: &'data NsDatum,
-        args: &'data [NsDatum],
-    ) -> MatchVisitResult {
-        let submatch_data = args
+    fn match_zero_or_more(&mut self, pattern: &'data NsDatum, args: &'data [NsDatum]) -> bool {
+        let submatch_result = args
             .iter()
             .map(|arg| {
                 let mut subcontext = MatchCtx {
                     match_data: MatchData::new(),
                 };
 
-                subcontext.visit_datum(pattern, arg)?;
-                Ok(subcontext.match_data)
+                if !subcontext.match_datum(pattern, arg) {
+                    Err(())
+                } else {
+                    Ok(subcontext.match_data)
+                }
             })
-            .collect::<result::Result<Vec<MatchData<'data>>, ()>>()?;
+            .collect::<result::Result<Vec<MatchData<'data>>, ()>>();
 
-        self.match_data.subpatterns.push(submatch_data);
-        Ok(())
+        match submatch_result {
+            Ok(submatch_data) => {
+                self.match_data.subpatterns.push(submatch_data);
+                true
+            }
+            Err(()) => false,
+        }
     }
 
-    fn visit_slice(
-        &mut self,
-        mut patterns: &'data [NsDatum],
-        mut args: &'data [NsDatum],
-    ) -> MatchVisitResult {
+    fn match_slice(&mut self, mut patterns: &'data [NsDatum], mut args: &'data [NsDatum]) -> bool {
         loop {
             if starts_with_zero_or_more(patterns) {
                 let rest_patterns_len = patterns.len() - 2;
 
                 if args.len() < rest_patterns_len {
                     // Cannot match
-                    return Err(());
+                    break false;
                 }
 
                 let (zero_or_more_args, rest_args) = args.split_at(args.len() - rest_patterns_len);
-                self.visit_zero_or_more(&patterns[0], zero_or_more_args)?;
+                if !self.match_zero_or_more(&patterns[0], zero_or_more_args) {
+                    break false;
+                }
 
                 patterns = &patterns[2..];
                 args = rest_args;
@@ -95,15 +99,17 @@ impl<'data> MatchCtx<'data> {
                     (Some(pattern), Some(arg)) => (pattern, arg),
                     (None, None) => {
                         // Patterns and args ran out at the same time
-                        return Ok(());
+                        break true;
                     }
                     _ => {
                         // Mismatched lengths
-                        return Err(());
+                        break false;
                     }
                 };
 
-                self.visit_datum(pattern, arg)?;
+                if !self.match_datum(pattern, arg) {
+                    break false;
+                }
 
                 patterns = &patterns[1..];
                 args = &args[1..];
@@ -116,8 +122,11 @@ impl<'data> MatchCtx<'data> {
         rule: &'data Rule,
         arg_data: &'data [NsDatum],
     ) -> Result<MatchData<'data>> {
-        self.visit_slice(rule.pattern.as_slice(), arg_data)?;
-        Ok(self.match_data)
+        if self.match_slice(rule.pattern.as_slice(), arg_data) {
+            Ok(self.match_data)
+        } else {
+            Err(())
+        }
     }
 }
 

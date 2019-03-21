@@ -81,4 +81,12 @@
   (letmacro [set-+-to-* (macro-rules [(body) (let [+ *] body)])]
     (assert-eq 2 (set-+-to-* (+ 1 1))))
 
+  ; Use the `(... ident)` literal syntax
+  ; This uses `&` as it's a common candidate for a literal it could be an arbitrary symbol
+  (letmacro [match-literal-& (macro-rules
+                              [((... &)) '(... literal-ampersand)]
+                              [(&) '(... var-ampersand)])]
+    (assert-eq 'literal-ampersand (match-literal-& &))
+    (assert-eq 'var-ampersand (match-literal-& 1)))
+
   ())
