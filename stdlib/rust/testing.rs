@@ -32,7 +32,7 @@ pub fn stdlib_heap_alloc_count(
 }
 
 // TODO: This should return a `Set` once they're better supported
-#[rfi_derive::rust_fun("((... ->! Any) -> (Listof Sym))")]
+#[rfi_derive::rust_fun("((... ->! Any) -> (List & Sym))")]
 pub fn stdlib_fn_op_categories(_value: Gc<boxed::FunThunk>) -> Gc<boxed::List<boxed::Sym>> {
     panic!("cannot call `(fn-op-categories)` at runtime")
 }

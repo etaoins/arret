@@ -407,11 +407,11 @@ mod test {
     #[test]
     fn list_types() {
         assert_disjoint("(List Sym)", "(List Str)");
-        assert_merged("(List Sym Sym)", "(List Any Sym)", "(List Sym ...)");
+        assert_merged("(List Sym Sym)", "(List Any Sym)", "(List & Sym)");
         assert_merged(
             "(List false true)",
             "(List Bool true)",
-            "(List false Bool Any ...)",
+            "(List false Bool & Any)",
         );
 
         assert_disjoint("(List Sym Sym)", "(List Sym)");

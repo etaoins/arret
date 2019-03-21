@@ -14,7 +14,6 @@ use crate::ty::purity::Purity;
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum TyCons {
     List,
-    Listof,
     Vector,
     Vectorof,
     Set,
@@ -109,7 +108,7 @@ fn lower_polymorphic_var(scope: &Scope, tvar_datum: NsDatum) -> Result<Polymorph
 }
 
 fn lower_list_cons(scope: &Scope, mut arg_iter: NsDataIter) -> Result<ty::List<ty::Poly>> {
-    let rest = try_take_rest_arg(scope, &mut arg_iter);
+    let rest = try_take_rest_arg(&mut arg_iter);
 
     let fixed_polys = arg_iter
         .map(|fixed_datum| lower_poly(scope, fixed_datum))
@@ -154,13 +153,6 @@ fn lower_ty_cons_apply(
 ) -> Result<ty::Ref<ty::Poly>> {
     Ok(match ty_cons {
         TyCons::List => lower_list_cons(scope, arg_iter)?.into(),
-        TyCons::Listof => {
-            let rest_datum = expect_one_arg(span, arg_iter)?;
-            let rest_poly = lower_poly(scope, rest_datum)?;
-            let list_poly = ty::List::new(Box::new([]), rest_poly);
-
-            list_poly.into()
-        }
         TyCons::Vector => {
             let member_tys = arg_iter
                 .map(|arg_datum| lower_poly(scope, arg_datum))
@@ -411,7 +403,6 @@ pub const TY_EXPORTS: &[(&str, Binding)] = &[
     export_ty!("Num", ty::Ty::Num),
     export_ty!("Char", ty::Ty::Char),
     export_ty_cons!("List", TyCons::List),
-    export_ty_cons!("Listof", TyCons::Listof),
     export_ty_cons!("Vector", TyCons::Vector),
     export_ty_cons!("Vectorof", TyCons::Vectorof),
     export_ty_cons!("Setof", TyCons::Set),
@@ -446,8 +437,8 @@ fn push_list_parts<M: ty::PM>(list_parts: &mut Vec<String>, list_ref: &ty::List<
 
     let rest = list_ref.rest();
     if !rest.is_never() {
+        list_parts.push("&".to_owned());
         list_parts.push(str_for_ty_ref(rest));
-        list_parts.push("...".to_owned());
     }
 }
 
@@ -543,12 +534,8 @@ fn str_for_ty<M: ty::PM>(ty: &ty::Ty<M>) -> String {
         ty::Ty::List(list) => {
             // While all list types can be expressed using `(List)` we try to find the shortest
             // representation
-            if list.fixed().is_empty() {
-                if list.rest().is_never() {
-                    "()".to_owned()
-                } else {
-                    format!("(Listof {})", str_for_ty_ref(list.rest()))
-                }
+            if list.fixed().is_empty() && list.rest().is_never() {
+                "()".to_owned()
             } else {
                 let mut list_parts = Vec::with_capacity(2);
 
@@ -625,8 +612,6 @@ mod test {
     }
 
     /// This asserts that a type uses an exact string in str_for_ty_ref
-    ///
-    /// This is to make sure we use e.g. `(Listof Int)` instead of `(List Int ...)`
     fn assert_exact_str_repr(datum_str: &str) {
         assert_eq!(datum_str, str_for_ty_ref(&poly_for_str(datum_str)));
     }
@@ -713,16 +698,6 @@ mod test {
     }
 
     #[test]
-    fn listof_cons() {
-        let j = "(Listof true)";
-
-        let inner_poly = ty::Ty::LitBool(true).into();
-        let expected = ty::List::new(Box::new([]), inner_poly).into();
-
-        assert_ty_for_str(expected, j);
-    }
-
-    #[test]
     fn fixed_list_cons() {
         let j = "(List true false)";
 
@@ -737,7 +712,7 @@ mod test {
 
     #[test]
     fn rest_list_cons() {
-        let j = "(List true false ...)";
+        let j = "(List true & false)";
 
         let expected = ty::List::new(
             Box::new([ty::Ty::LitBool(true).into()]),
@@ -820,7 +795,7 @@ mod test {
 
     #[test]
     fn rest_impure_fun() {
-        let j = "(Str Sym ... ->! true)";
+        let j = "(Str & Sym ->! true)";
 
         let expected = ty::Fun::new(
             purity::PVarIds::new(),
@@ -890,9 +865,9 @@ mod test {
     #[test]
     fn simpifying_str_for_ty_ref() {
         assert_exact_str_repr("(List Int Float)");
-        assert_exact_str_repr("(List Int Float ...)");
-        assert_exact_str_repr("(Listof Float)");
-        assert_exact_str_repr("(Float Int ... -> Sym)");
+        assert_exact_str_repr("(List Int & Float)");
+        assert_exact_str_repr("(List & Float)");
+        assert_exact_str_repr("(Float & Int -> Sym)");
     }
 
     #[test]

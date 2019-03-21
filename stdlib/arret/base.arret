@@ -2,7 +2,7 @@
 (export def let fn if quote export ... defmacro letmacro macro-rules deftype compile-error do =)
 
 (import [arret internal types])
-(export Any Bool Str Sym Int Float Num Char List Listof Vector Vectorof Setof Map U -> ->! str?
+(export Any Bool Str Sym Int Float Num Char List Vector Vectorof Setof Map U -> ->! str? sym?
         sym? bool? num? int? float? char? list? vector? set? map? fn? nil?)
 
 (import [stdlib rust])
@@ -21,7 +21,7 @@
 ))
 
 (export list)
-(defn list #{A} ([l A] ...) -> (Listof A)
+(defn list #{A} (& [l A]) -> (List & A)
   l)
 
 (export when)
@@ -61,11 +61,11 @@
 ))
 
 (export first)
-(defn first #{T} (([head T] _ ...)) -> T
+(defn first #{T} (([head T] & _)) -> T
   head)
 
 (export rest)
-(defn rest #{T} ((_ [tail T] ...)) -> (Listof T)
+(defn rest #{T} ((_ & [tail T])) -> (List & T)
   tail)
 
 (export zero?)

@@ -492,8 +492,8 @@ mod test {
         let mut stx = scope.select_ctx();
 
         stx.add_evidence(
-            &scope.poly_for_str("(Listof A)"),
-            &scope.poly_for_str("(Listof true)"),
+            &scope.poly_for_str("(List & A)"),
+            &scope.poly_for_str("(List & true)"),
         );
         assert_selected_type(&stx, &poly_a, &scope.poly_for_str("true"));
     }
@@ -506,7 +506,7 @@ mod test {
         let mut stx = scope.select_ctx();
 
         stx.add_evidence(
-            &scope.poly_for_str("(Listof A)"),
+            &scope.poly_for_str("(List & A)"),
             &scope.poly_for_str("(List true false)"),
         );
         assert_selected_type(&stx, &poly_a, &scope.poly_for_str("Bool"));

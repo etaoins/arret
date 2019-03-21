@@ -4,7 +4,7 @@
 (def _ (not-enough-fixed))
       ;^^^^^^^^^^^^^^^^^^ ERROR incorrect number of arguments: wanted 1, have 0
 
-(defn not-enough-fixed-and-rest (_ _ ...) ())
+(defn not-enough-fixed-and-rest (_ & _) ())
 (def _ (not-enough-fixed-and-rest))
       ;^^^^^^^^^^^^^^^^^^^^^^^^^^^ ERROR incorrect number of arguments: wanted at least 1, have 0
 
@@ -22,10 +22,10 @@
   (x 5))
  ;^^^^^ ERROR cannot determine parameter types for top function type `(... -> Bool)`
 
- (defn apply-with-spread (_ [_ Int] _))
- (def _ (apply-with-spread '(1 2) ...))
+ (defn apply-with-rest (_ [_ Int] _))
+ (def _ (apply-with-rest & '(1 2)))
                            ;^^^^^ ERROR `(List Int Int)` is not a `(List Any Int Any)`
- (def _ (apply-with-spread '(1 2 3 4) ...))
+ (def _ (apply-with-rest & '(1 2 3 4)))
                            ;^^^^^^^^^ ERROR `(List Int Int Int Int)` is not a `(List Any Int Any)`
 
 (defn main! ())

@@ -32,10 +32,10 @@ impl Library {
 pub struct Fun {
     rust_library_id: RustLibraryId,
 
-    /// Name of this function if it corresponds to an instrinsic
+    /// Name of this function if it corresponds to an intrinsic
     ///
-    /// Intrinsics may have optimized partial evaluation in MIR. However, they should be
-    /// semantically equivalent to the non-instrinsic version.
+    /// Intrinsics may have optimised partial evaluation in MIR. However, they should be
+    /// semantically equivalent to the non-intrinsic version.
     intrinsic_name: Option<&'static str>,
 
     arret_fun_type: ty::Fun,
@@ -380,7 +380,7 @@ mod test {
     #[test]
     fn inexact_rust_fun_with_rest() {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
-            arret_type: "(Int ... -> false)",
+            arret_type: "(& Int -> false)",
             takes_task: false,
             params: &[ParamABIType {
                 abi_type: ABIType::Boxed(BoxedABIType::List(&BoxedABIType::DirectTagged(
@@ -427,7 +427,7 @@ mod test {
     #[test]
     fn polymorphic_rust_fun() {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
-            arret_type: "(All #{A} (List A Any ...) -> A)",
+            arret_type: "(All #{A} (List A & Any) -> A)",
             takes_task: false,
             params: &[ParamABIType {
                 abi_type: ABIType::Boxed(BoxedABIType::Pair(&BoxedABIType::Any)),
@@ -443,7 +443,7 @@ mod test {
     #[test]
     fn incompatible_polymorphic_rust_fun() {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
-            arret_type: "(All #{A} (List Any ...) -> A)",
+            arret_type: "(All #{A} (List & Any) -> A)",
             takes_task: false,
             params: &[ParamABIType {
                 abi_type: ABIType::Boxed(BoxedABIType::Pair(&BoxedABIType::Any)),
@@ -454,7 +454,7 @@ mod test {
         };
 
         let kind = ErrorKind::RustFunError(
-            "Rust type `Gc<boxed::Pair<boxed::Any>>` does not match declared Arret type of `(Listof Any)`".into(),
+            "Rust type `Gc<boxed::Pair<boxed::Any>>` does not match declared Arret type of `(List & Any)`".into(),
         );
         assert_binding_fun_error(&kind, &BINDING_RUST_FUN);
     }
@@ -496,7 +496,7 @@ mod test {
     #[test]
     fn non_list_rust_rest_param() {
         const BINDING_RUST_FUN: binding::RustFun = binding::RustFun {
-            arret_type: "(Int ... -> true)",
+            arret_type: "(& Int -> true)",
             takes_task: false,
             params: &[ParamABIType {
                 abi_type: ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int)),

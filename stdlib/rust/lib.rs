@@ -29,7 +29,7 @@ use runtime::boxed;
 use runtime::boxed::refs::Gc;
 use runtime::task::Task;
 
-#[rfi_derive::rust_fun("(Any ... -> (U))")]
+#[rfi_derive::rust_fun("(& Any -> (U))")]
 pub fn stdlib_panic(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Never {
     use std::str;
 

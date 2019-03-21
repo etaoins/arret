@@ -1,12 +1,12 @@
 (import [stdlib base])
 (import [stdlib test])
 
-(defn recursive-reverse #{T} ([lst (Listof T)]) -> (Listof T)
+(defn recursive-reverse #{T} ([lst (List & T)]) -> (List & T)
   (if (nil? lst)
     lst
     (concat (recursive-reverse (rest lst)) (list (first lst)))))
 
-(defn even-length? ([l (Listof Any)]) -> Bool
+(defn even-length? ([l (List & Any)]) -> Bool
   (if (nil? l)
     true
     (let [tail (rest l)]

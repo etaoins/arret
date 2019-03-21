@@ -9,7 +9,7 @@ use crate::ty;
 
 /// PolymorphABI annotates OpsABI with information about if a function expects a closure or rest
 ///
-/// This is information that's useful while generating MIR but can be discared when building Ops.
+/// This is information that's useful while generating MIR but can be discarded when building Ops.
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub struct PolymorphABI {
     pub ops_abi: ops::OpsABI,
@@ -172,7 +172,7 @@ mod test {
         use runtime::boxed;
 
         let thunk_param_poly = PolymorphABI::thunk_abi().param_ty_ref();
-        let expected_poly = hir::poly_for_str("(Listof Any)");
+        let expected_poly = hir::poly_for_str("(List & Any)");
         assert_eq!(expected_poly, thunk_param_poly.into());
 
         let mul_param_poly = PolymorphABI {
@@ -188,7 +188,7 @@ mod test {
         }
         .param_ty_ref();
 
-        let expected_poly = hir::poly_for_str("(List Num Num ...)");
+        let expected_poly = hir::poly_for_str("(List Num & Num)");
         assert_eq!(expected_poly, mul_param_poly.into());
     }
 }

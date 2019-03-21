@@ -18,7 +18,7 @@ fn visit_arg_literals(found_arity: &mut FoundArity, datum: Datum) -> Result<Datu
                         found_arity.fixed_args = std::cmp::max(found_arity.fixed_args, 1);
                         Ok(Datum::Sym(span, "%1".into()))
                     }
-                    "..." => {
+                    "&" => {
                         found_arity.has_rest = true;
                         Ok(Datum::Sym(span, name))
                     }
@@ -70,8 +70,8 @@ pub fn convert_anon_fun(outer_span: Span, body_data: impl Iterator<Item = Datum>
 
     if found_arity.has_rest {
         param_list.extend(
-            iter::once(Datum::Sym(outer_span, "%...".into()))
-                .chain(iter::once(Datum::Sym(outer_span, "...".into()))),
+            iter::once(Datum::Sym(outer_span, "&".into()))
+                .chain(iter::once(Datum::Sym(outer_span, "%&".into()))),
         );
     }
 
@@ -176,9 +176,9 @@ mod test {
 
     #[test]
     fn rest_fun() {
-        let j = "%1 %...";
-        let t = "^^     ";
-        let u = "   ^^^^";
+        let j = "%1 %&";
+        let t = "^^   ";
+        let u = "   ^^";
 
         let body_data = data_from_str(j).unwrap();
 
@@ -190,15 +190,15 @@ mod test {
                     EMPTY_SPAN,
                     Box::new([
                         Datum::Sym(EMPTY_SPAN, "%1".into()),
-                        Datum::Sym(EMPTY_SPAN, "%...".into()),
-                        Datum::Sym(EMPTY_SPAN, "...".into()),
+                        Datum::Sym(EMPTY_SPAN, "&".into()),
+                        Datum::Sym(EMPTY_SPAN, "%&".into()),
                     ]),
                 ),
                 Datum::List(
                     EMPTY_SPAN,
                     Box::new([
                         Datum::Sym(t2s(t), "%1".into()),
-                        Datum::Sym(t2s(u), "%...".into()),
+                        Datum::Sym(t2s(u), "%&".into()),
                     ]),
                 ),
             ]),

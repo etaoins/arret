@@ -56,7 +56,7 @@
     (panic "HERE"))
   5)
 
-(defn panics-inside-app () -> (Listof Any)
+(defn panics-inside-app () -> (List & Any)
   (list (panic "HERE") 2 3))
 
 (defn main! () ->! ()

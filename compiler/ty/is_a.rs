@@ -347,11 +347,11 @@ mod test {
     #[test]
     fn list_types() {
         let empty_list = poly_for_str("()");
-        let listof_any = poly_for_str("(Listof Any)");
-        let listof_int = poly_for_str("(Listof Int)");
+        let listof_any = poly_for_str("(List & Any)");
+        let listof_int = poly_for_str("(List & Int)");
         let two_ints_list = poly_for_str("(List Int Int)");
         let three_ints_list = poly_for_str("(List Int Int Int)");
-        let at_least_one_int_list = poly_for_str("(List Int Int ...)");
+        let at_least_one_int_list = poly_for_str("(List Int & Int)");
 
         assert_eq!(true, ty_ref_is_a(&empty_list, &listof_any));
         assert_eq!(false, ty_ref_is_a(&listof_any, &empty_list));
