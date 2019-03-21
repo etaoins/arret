@@ -6,8 +6,6 @@ use syntax::span::{Span, EMPTY_SPAN};
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::macros::{is_escaped_ellipsis, starts_with_zero_or_more};
 use crate::hir::ns::{Ident, NsDatum};
-use crate::hir::prim::Prim;
-use crate::hir::scope::{Binding, Scope};
 
 #[derive(PartialEq, Debug)]
 pub struct VarLinks {
@@ -49,16 +47,15 @@ enum FindVarsInputType {
     Template,
 }
 
-struct FindVarsCtx<'scope, 'data> {
-    scope: &'scope Scope,
+struct FindVarsCtx<'data> {
     input_type: FindVarsInputType,
     var_spans: Option<HashMap<&'data Ident, Span>>,
 }
 
 type FindVarsResult = result::Result<(), Error>;
 
-impl<'scope, 'data> FindVarsCtx<'scope, 'data> {
-    fn new(scope: &'scope Scope, input_type: FindVarsInputType) -> Self {
+impl<'data> FindVarsCtx<'data> {
+    fn new(input_type: FindVarsInputType) -> Self {
         let var_spans = if input_type == FindVarsInputType::Template {
             // Duplicate vars are allowed in the template as they must all resolve to the same
             // value.
@@ -70,7 +67,6 @@ impl<'scope, 'data> FindVarsCtx<'scope, 'data> {
         };
 
         FindVarsCtx {
-            scope,
             input_type,
             var_spans,
         }
@@ -87,8 +83,7 @@ impl<'scope, 'data> FindVarsCtx<'scope, 'data> {
             return Ok(());
         }
 
-        let binding = self.scope.get(ident);
-        if binding == Some(&Binding::Prim(Prim::Ellipsis)) {
+        if ident.name() == "..." {
             return Err(Error::new(
                 span,
                 ErrorKind::IllegalArg("ellipsis can only be used as part of a zero or more match"),
@@ -145,7 +140,7 @@ impl<'scope, 'data> FindVarsCtx<'scope, 'data> {
         let mut zero_or_more_span: Option<Span> = None;
 
         while !patterns.is_empty() {
-            if starts_with_zero_or_more(self.scope, patterns) {
+            if starts_with_zero_or_more(patterns) {
                 let pattern = &patterns[0];
 
                 // Make sure we don't have multiple zero or more matches in the same slice
@@ -175,9 +170,7 @@ impl<'scope, 'data> FindVarsCtx<'scope, 'data> {
         pattern_vars: &mut FoundVars<'data>,
         patterns: &'data [NsDatum],
     ) -> FindVarsResult {
-        if self.input_type == FindVarsInputType::Template
-            && is_escaped_ellipsis(self.scope, patterns)
-        {
+        if self.input_type == FindVarsInputType::Template && is_escaped_ellipsis(patterns) {
             Ok(())
         } else {
             self.visit_seq(pattern_vars, patterns)
@@ -197,7 +190,7 @@ impl<'scope, 'data> FindVarsCtx<'scope, 'data> {
 
         match patterns.len() {
             0 => Ok(()),
-            2 if starts_with_zero_or_more(self.scope, patterns) => {
+            2 if starts_with_zero_or_more(patterns) => {
                 self.visit_zero_or_more(pattern_vars, &patterns[0])
             }
             _ => Err(Error::new(
@@ -209,7 +202,6 @@ impl<'scope, 'data> FindVarsCtx<'scope, 'data> {
 }
 
 fn link_found_vars(
-    scope: &Scope,
     pattern_idx: usize,
     pattern_vars: &FoundVars<'_>,
     template_vars: &FoundVars<'_>,
@@ -251,7 +243,7 @@ fn link_found_vars(
 
             // Iterate over our subpatterns
             let (pattern_idx, subpattern_vars) = possible_indices[0];
-            link_found_vars(scope, pattern_idx, subpattern_vars, subtemplate_vars)
+            link_found_vars(pattern_idx, subpattern_vars, subtemplate_vars)
         })
         .collect::<Result<Vec<VarLinks>>>()?;
 
@@ -261,16 +253,16 @@ fn link_found_vars(
     })
 }
 
-pub fn check_rule(scope: &Scope, patterns: &[NsDatum], template: &NsDatum) -> Result<VarLinks> {
-    let mut fpvcx = FindVarsCtx::new(scope, FindVarsInputType::Pattern);
+pub fn check_rule(patterns: &[NsDatum], template: &NsDatum) -> Result<VarLinks> {
+    let mut fpvcx = FindVarsCtx::new(FindVarsInputType::Pattern);
 
     // We don't need to report the root span for the pattern
     let mut pattern_vars = FoundVars::new(EMPTY_SPAN);
     fpvcx.visit_seq(&mut pattern_vars, patterns)?;
 
-    let mut ftvcx = FindVarsCtx::new(scope, FindVarsInputType::Template);
+    let mut ftvcx = FindVarsCtx::new(FindVarsInputType::Template);
     let mut template_vars = FoundVars::new(template.span());
     ftvcx.visit_datum(&mut template_vars, template)?;
 
-    link_found_vars(scope, 0, &pattern_vars, &template_vars)
+    link_found_vars(0, &pattern_vars, &template_vars)
 }

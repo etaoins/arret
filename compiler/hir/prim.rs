@@ -30,7 +30,6 @@ export_prims!(
     ("export", Export),
     ("defmacro", DefMacro),
     ("letmacro", LetMacro),
-    ("...", Ellipsis),
     ("macro-rules", MacroRules),
     ("deftype", DefType),
     ("lettype", LetType),

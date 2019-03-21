@@ -134,15 +134,17 @@ fn lower_fun_cons(
 
     let top_fun = ty::TopFun::new(purity, ret_ty);
 
-    if arg_iter.len() == 1
-        && scope.get_datum(&arg_iter.as_slice()[0]) == Some(&Binding::Prim(Prim::Ellipsis))
-    {
-        // Top function type in the form `(... -> ReturnType)`
-        Ok(top_fun.into())
-    } else {
-        let params = lower_list_cons(scope, arg_iter)?;
-        Ok(ty::Fun::new(purity::PVarIds::new(), ty::TVarIds::new(), top_fun, params).into())
+    if arg_iter.len() == 1 {
+        if let NsDatum::Ident(_, ident) = &arg_iter.as_slice()[0] {
+            if ident.name() == "..." {
+                // Top function type in the form `(... -> ReturnType)`
+                return Ok(top_fun.into());
+            }
+        }
     }
+
+    let params = lower_list_cons(scope, arg_iter)?;
+    Ok(ty::Fun::new(purity::PVarIds::new(), ty::TVarIds::new(), top_fun, params).into())
 }
 
 fn lower_ty_cons_apply(
