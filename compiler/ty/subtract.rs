@@ -78,7 +78,7 @@ pub fn subtract_ty_refs<M: ty::PM>(
     } else {
         match (minuend_ref, subtrahend_ref) {
             (ty::Ref::Fixed(minuend_ty), ty::Ref::Fixed(subtrahend_ty)) => {
-                // We can substract directly
+                // We can subtract directly
                 subtract_tys(minuend_ty, subtrahend_ref, subtrahend_ty)
             }
             (ty::Ref::Var(_, _), ty::Ref::Fixed(subtrahend_ty)) => {
@@ -139,7 +139,7 @@ mod test {
 
     #[test]
     fn list_subtraction() {
-        assert_subtraction("(List Int Int ...)", "(Listof Int)", "()");
+        assert_subtraction("(List Int & Int)", "(List & Int)", "()");
     }
 
     #[test]

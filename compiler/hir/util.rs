@@ -1,27 +1,27 @@
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum};
-use crate::hir::prim::Prim;
-use crate::hir::scope::{Binding, Scope};
 use syntax::span::Span;
 
 /// Removes the rest argument from the passed iterator and returns it
 ///
-/// The rest argument is denoted by using `...` at the end of the data
-pub fn try_take_rest_arg(scope: &Scope, data_iter: &mut NsDataIter) -> Option<NsDatum> {
+/// The rest argument is denoted by using `&` before a final datum
+pub fn try_take_rest_arg(data_iter: &mut NsDataIter) -> Option<NsDatum> {
     let data_len = data_iter.len();
-
-    // This is gross becase we need to "peek" at the end of the iterator
-    let has_rest = data_len >= 2
-        && scope.get_datum(&data_iter.as_slice()[data_len - 1])
-            == Some(&Binding::Prim(Prim::Ellipsis));
-
-    if has_rest {
-        // Remove the ellipsis completely
-        data_iter.next_back();
-        Some(data_iter.next_back().unwrap())
-    } else {
-        None
+    if data_len < 2 {
+        return None;
     }
+
+    // This is gross because we need to "peek" at the end of the iterator
+    if let NsDatum::Ident(_, ident) = &data_iter.as_slice()[data_len - 2] {
+        if ident.name() == "&" {
+            let rest = data_iter.next_back();
+            // Remove the & completely
+            data_iter.next_back();
+            return rest;
+        }
+    }
+
+    None
 }
 
 pub fn expect_arg_count(

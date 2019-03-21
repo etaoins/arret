@@ -113,7 +113,7 @@ mod test {
         assert_abi_type_for_str(abitype::ABIType::Int, "Int");
         assert_abi_type_for_str(boxed::Num::BOXED_ABI_TYPE.into(), "Num");
 
-        assert_abi_type_for_str(boxed::TopList::BOXED_ABI_TYPE.into(), "(Listof Any)");
+        assert_abi_type_for_str(boxed::TopList::BOXED_ABI_TYPE.into(), "(List & Any)");
 
         assert_abi_type_for_str(abitype::ABIType::Char, "Char");
 

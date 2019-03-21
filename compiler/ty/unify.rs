@@ -4,7 +4,7 @@
 //! naive implementation to simply detect any duplicate or subtypes and remove them.
 //!
 //! However, while every type can be tested at runtime some type checks are very expensive. A
-//! pathological case would be testing if a long `(Listof Any)` is a `(Listof Int)`. We need to
+//! pathological case would be testing if a long `(List & Any)` is a `(List & Int)`. We need to
 //! allow these checks for completeness but they should be discouraged. To that end, any types
 //! that would be expensive to distinguish at runtime are merged by this code. This ensures in the
 //! general case it should be quick to test for individual members of a union.
@@ -480,18 +480,18 @@ mod test {
 
     #[test]
     fn list_types() {
-        assert_merged("(Listof Any)", "(List Any)", "(Listof Any)");
+        assert_merged("(List & Any)", "(List Any)", "(List & Any)");
         assert_discerned("(List Any)", "(List Any Any)");
         assert_merged("(List (RawU Sym Str))", "(List Sym)", "(List Str)");
-        assert_discerned("(List Str)", "(List Str Str Str ...)");
+        assert_discerned("(List Str)", "(List Str Str & Str)");
         assert_merged(
-            "(List Int (RawU Float Sym Str) ...)",
-            "(List Int Sym ...)",
-            "(List Int Float Str ...)",
+            "(List Int & (RawU Float Sym Str))",
+            "(List Int & Sym)",
+            "(List Int Float & Str)",
         );
 
-        assert_merged("(Listof Int)", "(List Int Int ...)", "(List)");
-        assert_merged("(Listof Sym)", "(List)", "(List Sym Sym ...)");
+        assert_merged("(List & Int)", "(List Int & Int)", "(List)");
+        assert_merged("(List & Sym)", "(List)", "(List Sym & Sym)");
     }
 
     #[test]

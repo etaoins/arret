@@ -54,15 +54,15 @@
 
 (defn bad-apply-in-return-position () -> ()
   (length '(1 2 3)))
-  ;^^^^^^ ERROR `((Listof Any) -> Int)` is not a `(... -> ())
+  ;^^^^^^ ERROR `((List & Any) -> Int)` is not a `(... -> ())
 
-(defn non-list-rest-type (x ...)
+(defn non-list-rest-type (& x)
   (ann x (Vector Any)))
-      ;^ ERROR `(Vector Any)` is not a `(Listof Any)`
+      ;^ ERROR `(Vector Any)` is not a `(List & Any)`
 
-(defn specific-rest-list-type (x ...)
+(defn specific-rest-list-type (& x)
   (ann x (List Int Int Int)))
-      ;^ ERROR `(Listof Int)` is not a `(List Int Int Int)`
+      ;^ ERROR `(List & Int)` is not a `(List Int Int Int)`
 
 ; The compiler should suppress this error as it's a cascade error
 (def depends-on-type-error specific-rest-list-type)
@@ -75,7 +75,7 @@
 
 ; Applying a fun with incorrect polymorphic purity inside a pure context
 (def _ (map println! '(0 1 2 3)))
-           ;^^^^^^^^ ERROR `(Any ... ->! ())` is not a `(Int -> Any)`
+           ;^^^^^^^^ ERROR `(& Any ->! ())` is not a `(Int -> Any)`
 
 ; `input` is used both as a poly `Sym` and a poly `Num`
 (defn conflicting-poly-types #{[A Sym] [B Num]} (input

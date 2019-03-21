@@ -216,7 +216,7 @@ fn lower_list_destruc(
     scope: &mut Scope,
     mut data_iter: NsDataIter,
 ) -> Result<destruc::List<Lowered>> {
-    let rest = try_take_rest_arg(scope, &mut data_iter);
+    let rest = try_take_rest_arg(&mut data_iter);
 
     let fixed_destrucs = data_iter
         .map(|v| lower_destruc(scope, v))
@@ -448,7 +448,7 @@ fn lower_expr_apply(
     fun_expr: Expr<Lowered>,
     mut arg_iter: NsDataIter,
 ) -> Result<Expr<Lowered>> {
-    let rest_arg_datum = try_take_rest_arg(scope, &mut arg_iter);
+    let rest_arg_datum = try_take_rest_arg(&mut arg_iter);
 
     let fixed_arg_exprs = arg_iter
         .map(|arg_datum| lower_expr(scope, arg_datum))
@@ -1132,11 +1132,11 @@ mod test {
 
     #[test]
     fn rest_expr_apply() {
-        let j = "(1 2 3 ...)";
-        let t = "^^^^^^^^^^^";
-        let u = " ^         ";
-        let v = "   ^       ";
-        let w = "     ^     ";
+        let j = "(1 2 & 3)";
+        let t = "^^^^^^^^^";
+        let u = " ^       ";
+        let v = "   ^     ";
+        let w = "       ^ ";
 
         let expected = Expr::new(
             t2s(t),

@@ -5,21 +5,21 @@
 (def _ (filter zero? '(0 1 2 3)))
 
 (defn take-exactly-three (_ _ _) false)
-(defn return-rest (x ...) x)
+(defn return-rest (& x) x)
 (defn polymorphic-identity-function #{T} ([x T]) x)
 
 (defn main! ()
   ; Stress test various ways of passing arguments
   (assert-eq false (take-exactly-three 1 2 3))
-  (assert-eq false (take-exactly-three '(1 2 3) ...))
-  (assert-eq false (take-exactly-three 1 2 '(3) ...))
+  (assert-eq false (take-exactly-three  & '(1 2 3)))
+  (assert-eq false (take-exactly-three 1 2 & '(3)))
 
   ; Make sure we select the return type correctly
   (let [[ret-str Str] (polymorphic-identity-function "Hello polymorphism!")]
     (assert-eq "Hello polymorphism!" ret-str))
 
   ; Make sure we can return our rest argument
-  (let [[rest-list (Listof Any)] (return-rest 1 2 3)]
+  (let [[rest-list (List & Any)] (return-rest 1 2 3)]
     (assert-eq '(1 2 3) rest-list))
 
   ; Treating functions as first-class values

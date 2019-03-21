@@ -1,7 +1,7 @@
 (import [stdlib base])
 (import [stdlib test])
 
-(defn recursive-member? ([item Any] [l (Listof Any)]) -> Bool
+(defn recursive-member? ([item Any] [l (List & Any)]) -> Bool
   (if (nil? l)
     false
     (or

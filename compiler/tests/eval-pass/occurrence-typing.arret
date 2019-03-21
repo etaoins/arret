@@ -30,10 +30,10 @@
     (ann input true)
     (ann input false)))
 
-(defn and-typing ([input (Listof Any)])
+(defn and-typing ([input (List & Any)])
   (if (and (list? input) (nil? input))
     (ann input ())
-    (ann input (List Any Any ...))))
+    (ann input (List Any & Any))))
 
 (defn or-typing ([input (U Sym Str Int)])
   (if (or (sym? input) (str? input))

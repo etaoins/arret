@@ -87,17 +87,17 @@ mod test {
         assert_eq!(true, str_has_subtypes("Sym"));
         assert_eq!(true, str_has_subtypes("Num"));
 
-        assert_eq!(false, str_has_subtypes("(Any ... -> true)"));
-        assert_eq!(true, str_has_subtypes("(Any ... ->! true)"));
+        assert_eq!(false, str_has_subtypes("(& Any -> true)"));
+        assert_eq!(true, str_has_subtypes("(& Any ->! true)"));
         assert_eq!(true, str_has_subtypes("(Any -> true)"));
-        assert_eq!(true, str_has_subtypes("(Int ... -> true)"));
-        assert_eq!(true, str_has_subtypes("(Any ... -> Any)"));
+        assert_eq!(true, str_has_subtypes("(& Int -> true)"));
+        assert_eq!(true, str_has_subtypes("(& Any -> Any)"));
 
         assert_eq!(true, str_has_subtypes("(Map Sym Int)"));
         assert_eq!(false, str_has_subtypes("(Map Float Int)"));
 
         assert_eq!(true, str_has_subtypes("(List Sym Int)"));
-        assert_eq!(true, str_has_subtypes("(List Str Int ...)"));
+        assert_eq!(true, str_has_subtypes("(List Str & Int)"));
         assert_eq!(false, str_has_subtypes("(List Str Int)"));
 
         assert_eq!(true, str_has_subtypes("(Setof Sym)"));
@@ -122,15 +122,15 @@ mod test {
         assert_eq!(false, str_is_literal("Str"));
         assert_eq!(false, str_is_literal("Sym"));
 
-        assert_eq!(false, str_is_literal("(Any ... -> true)"));
+        assert_eq!(false, str_is_literal("(& Any -> true)"));
 
         assert_eq!(false, str_is_literal("(Map Sym Int)"));
         assert_eq!(false, str_is_literal("(Map false true)"));
 
         assert_eq!(false, str_is_literal("(List Sym Int)"));
-        assert_eq!(false, str_is_literal("(List Str Int ...)"));
+        assert_eq!(false, str_is_literal("(List Str & Int)"));
         assert_eq!(true, str_is_literal("(List true false)"));
-        assert_eq!(false, str_is_literal("(List true false ...)"));
+        assert_eq!(false, str_is_literal("(List true & false)"));
         assert_eq!(true, str_is_literal("()"));
 
         assert_eq!(false, str_is_literal("(Setof ())"));

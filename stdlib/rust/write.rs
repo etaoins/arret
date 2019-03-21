@@ -11,7 +11,7 @@ use rfi_derive;
 
 use crate::pretty_print::pretty_print;
 
-#[rfi_derive::rust_fun("(Any ... ->! ())")]
+#[rfi_derive::rust_fun("(& Any ->! ())")]
 pub fn stdlib_print(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) {
     let mut output = io::stdout();
 
@@ -20,7 +20,7 @@ pub fn stdlib_print(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) {
     }
 }
 
-#[rfi_derive::rust_fun("(Any ... ->! ())")]
+#[rfi_derive::rust_fun("(& Any ->! ())")]
 pub fn stdlib_println(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) {
     let mut output = io::stdout();
 

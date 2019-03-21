@@ -9,7 +9,7 @@
 
 (defn test-first-rest ()
   (assert-eq 'one (ann (first '(one two three)) 'one))
-  (assert-eq '(two three) (ann (rest '(one two three)) (Listof Sym)))
+  (assert-eq '(two three) (ann (rest '(one two three)) (List & Sym)))
   (assert-eq () (ann (rest '(one)) '())))
 
 (defn test-cons ()

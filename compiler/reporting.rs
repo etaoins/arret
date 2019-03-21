@@ -203,7 +203,7 @@ impl Reportable for syntax::error::Error {
             ErrorKind::UnexpectedChar(c) => format!("unexpected `{}`", c),
             ErrorKind::UnevenMap => "map literal must have an even number of values".to_owned(),
             ErrorKind::InvalidArgLiteral => {
-                "arg literal must be `%`, `%{integer}` or `%...`".to_owned()
+                "arg literal must be `%`, `%{integer}` or `%&`".to_owned()
             }
         }
     }

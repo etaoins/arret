@@ -1805,11 +1805,11 @@ mod test {
         assert_type_for_expr("false", "(sym? false)");
 
         assert_type_for_expr("Int", "((fn #{A} ([value A]) -> A value) 1)");
-        assert_type_for_expr("'foo", "((fn #{A} ([value A]) -> A value) '(foo) ...)");
+        assert_type_for_expr("'foo", "((fn #{A} ([value A]) -> A value) & '(foo))");
 
         assert_type_for_expr(
-            "(Listof Bool)",
-            "((fn #{A} ([rest A] ...) -> (Listof A) rest) true false)",
+            "(List & Bool)",
+            "((fn #{A} (& [rest A]) -> (List & A) rest) true false)",
         );
 
         assert_type_for_expr(
@@ -1909,7 +1909,7 @@ mod test {
         assert_type_for_expr("Int", "(let [(x) '(1)] x)");
         assert_type_for_expr(
             "(List true false)",
-            "(let [(_ rest ...) '(1 true false)] rest)",
+            "(let [(_ & rest) '(1 true false)] rest)",
         );
     }
 
@@ -1920,9 +1920,9 @@ mod test {
 
     #[test]
     fn ty_pred() {
-        assert_type_for_expr("true", "(sym? '(foo) ...)");
+        assert_type_for_expr("true", "(sym? & '(foo))");
         assert_type_for_expr("true", "(sym? 'foo)");
-        assert_type_for_expr("false", "(int? '(foo) ...)");
+        assert_type_for_expr("false", "(int? & '(foo))");
         assert_type_for_expr("false", "(int? 'bar)");
     }
 
