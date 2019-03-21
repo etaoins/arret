@@ -4,7 +4,7 @@ use std::result;
 use syntax::span::{Span, EMPTY_SPAN};
 
 use crate::hir::error::{Error, ErrorKind, Result};
-use crate::hir::macros::{is_escaped_ellipsis, starts_with_zero_or_more};
+use crate::hir::macros::{get_escaped_ident, starts_with_zero_or_more};
 use crate::hir::ns::{Ident, NsDatum};
 
 #[derive(PartialEq, Debug)]
@@ -170,7 +170,8 @@ impl<'data> FindVarsCtx<'data> {
         pattern_vars: &mut FoundVars<'data>,
         patterns: &'data [NsDatum],
     ) -> FindVarsResult {
-        if self.input_type == FindVarsInputType::Template && is_escaped_ellipsis(patterns) {
+        if get_escaped_ident(patterns).is_some() {
+            // This isn't actually a list
             Ok(())
         } else {
             self.visit_seq(pattern_vars, patterns)

@@ -51,20 +51,23 @@ impl Macro {
     }
 }
 
-fn is_ellipsis_datum(datum: &NsDatum) -> bool {
-    if let NsDatum::Ident(_, ident) = datum {
+fn starts_with_zero_or_more(data: &[NsDatum]) -> bool {
+    if let Some(NsDatum::Ident(_, ident)) = data.get(1) {
         ident.name() == "..."
     } else {
         false
     }
 }
 
-fn starts_with_zero_or_more(data: &[NsDatum]) -> bool {
-    data.get(1).map(|d| is_ellipsis_datum(d)).unwrap_or(false)
-}
-
-fn is_escaped_ellipsis(data: &[NsDatum]) -> bool {
-    data.len() == 2 && data.iter().all(|d| is_ellipsis_datum(d))
+fn get_escaped_ident(data: &[NsDatum]) -> Option<&Ident> {
+    match data {
+        [NsDatum::Ident(_, ellipsis_ident), NsDatum::Ident(_, escaped_ident)]
+            if ellipsis_ident.name() == "..." =>
+        {
+            Some(escaped_ident)
+        }
+        _ => None,
+    }
 }
 
 fn lower_macro_rule_datum(rule_datum: NsDatum) -> Result<Rule> {
