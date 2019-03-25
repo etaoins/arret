@@ -1,14 +1,12 @@
-mod checker;
 mod expander;
+mod linker;
 mod matcher;
-
-use std::collections::HashMap;
 
 use syntax::span::Span;
 
 use crate::hir::error::{Error, ErrorKind, Result};
-use crate::hir::macros::checker::{check_rule, VarLinks};
 use crate::hir::macros::expander::expand_rule;
+use crate::hir::macros::linker::{link_rule_vars, VarLinks};
 use crate::hir::macros::matcher::match_rule;
 use crate::hir::ns::{Ident, NsDatum};
 use crate::hir::scope::Scope;
@@ -17,36 +15,20 @@ use crate::id_type::RcId;
 
 #[derive(PartialEq, Debug)]
 pub struct Rule {
-    pattern: Vec<NsDatum>,
+    pattern: Box<[NsDatum]>,
     template: NsDatum,
     var_links: VarLinks,
 }
 
 #[derive(Debug)]
 pub struct Macro {
-    rules: Vec<Rule>,
+    rules: Box<[Rule]>,
 }
 
 pub type MacroId = RcId<Macro>;
 
-#[derive(Debug)]
-pub struct MatchData<'data> {
-    vars: HashMap<&'data Ident, &'data NsDatum>,
-    // The outside vector is the subpatterns; the inside vector contains the zero or more matches
-    subpatterns: Vec<Vec<MatchData<'data>>>,
-}
-
-impl<'data> MatchData<'data> {
-    fn new() -> MatchData<'data> {
-        MatchData {
-            vars: HashMap::new(),
-            subpatterns: vec![],
-        }
-    }
-}
-
 impl Macro {
-    pub fn new(rules: Vec<Rule>) -> Macro {
+    pub fn new(rules: Box<[Rule]>) -> Macro {
         Macro { rules }
     }
 }
@@ -91,7 +73,7 @@ fn lower_macro_rule_datum(rule_datum: NsDatum) -> Result<Rule> {
     let pattern_datum = rule_values.pop().unwrap();
 
     let pattern = if let NsDatum::List(_, vs) = pattern_datum {
-        vs.into_vec()
+        vs
     } else {
         return Err(Error::new(
             pattern_datum.span(),
@@ -99,7 +81,7 @@ fn lower_macro_rule_datum(rule_datum: NsDatum) -> Result<Rule> {
         ));
     };
 
-    let var_links = check_rule(pattern.as_slice(), &template)?;
+    let var_links = link_rule_vars(&pattern, &template)?;
 
     Ok(Rule {
         pattern,
@@ -112,7 +94,7 @@ pub fn lower_macro_rules(macro_rules_data: Vec<NsDatum>) -> Result<Macro> {
     let rules = macro_rules_data
         .into_iter()
         .map(lower_macro_rule_datum)
-        .collect::<Result<Vec<Rule>>>()?;
+        .collect::<Result<Box<[Rule]>>>()?;
 
     Ok(Macro::new(rules))
 }
@@ -123,7 +105,7 @@ pub fn expand_macro(
     mac: &Macro,
     arg_data: &[NsDatum],
 ) -> Result<NsDatum> {
-    for rule in &mac.rules {
+    for rule in mac.rules.iter() {
         let match_result = match_rule(rule, arg_data);
 
         if let Ok(match_data) = match_result {
