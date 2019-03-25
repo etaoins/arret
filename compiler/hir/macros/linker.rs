@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::result;
 
 use syntax::span::{Span, EMPTY_SPAN};
@@ -7,18 +7,33 @@ use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::macros::{get_escaped_ident, starts_with_zero_or_more};
 use crate::hir::ns::{Ident, NsDatum};
 
+/// Precomputed links from variables in the template to the pattern
+///
+/// This internally uses an `u32` representation to save space but exposes a `usize` public
+/// interface to work better with indexing etc.
 #[derive(PartialEq, Debug)]
 pub struct VarLinks {
-    pattern_idx: usize,
-    subtemplates: Vec<VarLinks>,
+    subpattern_index: u32,
+    pattern_var_indices: Box<[Option<u32>]>,
+    subtemplates: Box<[VarLinks]>,
 }
 
 impl VarLinks {
-    pub fn pattern_idx(&self) -> usize {
-        self.pattern_idx
+    /// Index of the subpattern for this subtemplate
+    pub fn subpattern_index(&self) -> usize {
+        self.subpattern_index as usize
     }
 
-    pub fn subtemplates(&self) -> &Vec<VarLinks> {
+    /// Returns the pattern var index for a given template var index
+    ///
+    /// If the element is `Some` then it maps to a variable in the pattern. If it's `None` then it's
+    /// a literal ident.
+    pub fn pattern_var_index(&self, i: usize) -> Option<usize> {
+        self.pattern_var_indices[i].map(|i| i as usize)
+    }
+
+    /// Links for our subtemplates in visit order
+    pub fn subtemplates(&self) -> &[VarLinks] {
         &self.subtemplates
     }
 }
@@ -26,7 +41,7 @@ impl VarLinks {
 #[derive(Debug)]
 struct FoundVars<'data> {
     span: Span,
-    vars: HashSet<&'data Ident>,
+    vars: Vec<&'data Ident>,
     subs: Vec<FoundVars<'data>>,
 }
 
@@ -34,7 +49,7 @@ impl<'data> FoundVars<'data> {
     fn new(span: Span) -> Self {
         FoundVars {
             span,
-            vars: HashSet::new(),
+            vars: vec![],
             subs: vec![],
         }
     }
@@ -99,7 +114,7 @@ impl<'data> FindVarsCtx<'data> {
             }
         }
 
-        pattern_vars.vars.insert(ident);
+        pattern_vars.vars.push(ident);
         Ok(())
     }
 
@@ -203,10 +218,22 @@ impl<'data> FindVarsCtx<'data> {
 }
 
 fn link_found_vars(
-    pattern_idx: usize,
+    subpattern_index: usize,
     pattern_vars: &FoundVars<'_>,
     template_vars: &FoundVars<'_>,
 ) -> Result<VarLinks> {
+    let pattern_var_indices = template_vars
+        .vars
+        .iter()
+        .map(|template_var| {
+            pattern_vars
+                .vars
+                .iter()
+                .position(|pattern_var| pattern_var == template_var)
+                .map(|i| i as u32)
+        })
+        .collect();
+
     let subtemplates = template_vars
         .subs
         .iter()
@@ -223,7 +250,12 @@ fn link_found_vars(
                 .subs
                 .iter()
                 .enumerate()
-                .filter(|(_, pv)| !pv.vars.is_disjoint(&subtemplate_vars.vars))
+                .filter(|(_, subpattern_vars)| {
+                    subpattern_vars
+                        .vars
+                        .iter()
+                        .any(|subpattern_var| subtemplate_vars.vars.contains(subpattern_var))
+                })
                 .collect::<Vec<(usize, &FoundVars<'_>)>>();
 
             if possible_indices.is_empty() {
@@ -243,18 +275,19 @@ fn link_found_vars(
             }
 
             // Iterate over our subpatterns
-            let (pattern_idx, subpattern_vars) = possible_indices[0];
-            link_found_vars(pattern_idx, subpattern_vars, subtemplate_vars)
+            let (pattern_index, subpattern_vars) = possible_indices[0];
+            link_found_vars(pattern_index, subpattern_vars, subtemplate_vars)
         })
-        .collect::<Result<Vec<VarLinks>>>()?;
+        .collect::<Result<Box<[VarLinks]>>>()?;
 
     Ok(VarLinks {
-        pattern_idx,
+        subpattern_index: subpattern_index as u32,
+        pattern_var_indices,
         subtemplates,
     })
 }
 
-pub fn check_rule(patterns: &[NsDatum], template: &NsDatum) -> Result<VarLinks> {
+pub fn link_rule_vars(patterns: &[NsDatum], template: &NsDatum) -> Result<VarLinks> {
     let mut fpvcx = FindVarsCtx::new(FindVarsInputType::Pattern);
 
     // We don't need to report the root span for the pattern

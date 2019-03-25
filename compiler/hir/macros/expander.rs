@@ -2,15 +2,18 @@ use std::collections::HashMap;
 
 use syntax::span::Span;
 
-use crate::hir::macros::checker::VarLinks;
-use crate::hir::macros::{get_escaped_ident, starts_with_zero_or_more, MatchData};
+use crate::hir::macros::linker::VarLinks;
+use crate::hir::macros::matcher::MatchData;
+use crate::hir::macros::{get_escaped_ident, starts_with_zero_or_more};
 use crate::hir::ns::{Ident, NsDatum, NsId};
 use crate::hir::scope::Scope;
 
 struct ExpandCursor<'data, 'links> {
     match_data: &'data MatchData<'data>,
     var_links: &'links VarLinks,
-    subtemplate_idx: usize,
+
+    ident_index: usize,
+    subtemplate_index: usize,
 }
 
 struct ExpandCtx<'scope> {
@@ -28,12 +31,17 @@ impl<'scope> ExpandCtx<'scope> {
 
     fn expand_ident(
         &mut self,
-        cursor: &ExpandCursor<'_, '_>,
+        cursor: &mut ExpandCursor<'_, '_>,
         span: Span,
         ident: &Ident,
     ) -> NsDatum {
-        if let Some(replacement) = cursor.match_data.vars.get(ident) {
-            return (*replacement).clone();
+        if ident.name() != "_" {
+            let var_index = cursor.var_links.pattern_var_index(cursor.ident_index);
+            cursor.ident_index += 1;
+
+            if let Some(var_index) = var_index {
+                return cursor.match_data.var(var_index).clone();
+            }
         }
 
         // Rescope this ident
@@ -58,12 +66,12 @@ impl<'scope> ExpandCtx<'scope> {
         template: &NsDatum,
     ) -> Vec<NsDatum> {
         // Find our subpattern index from our subtemplate index
-        let subtemplate_idx = cursor.subtemplate_idx;
-        let subvar_links = &cursor.var_links.subtemplates()[subtemplate_idx];
-        let subpattern_idx = subvar_links.pattern_idx();
-        let submatches = &cursor.match_data.subpatterns[subpattern_idx];
+        let subtemplate_index = cursor.subtemplate_index;
+        let subvar_links = &cursor.var_links.subtemplates()[subtemplate_index];
+        let subpattern_index = subvar_links.subpattern_index();
+        let submatches = &cursor.match_data.subpattern(subpattern_index);
 
-        cursor.subtemplate_idx += 1;
+        cursor.subtemplate_index += 1;
 
         submatches
             .iter()
@@ -72,7 +80,9 @@ impl<'scope> ExpandCtx<'scope> {
                 let mut subcursor = ExpandCursor {
                     match_data: m,
                     var_links: subvar_links,
-                    subtemplate_idx: 0,
+
+                    ident_index: 0,
+                    subtemplate_index: 0,
                 };
 
                 self.expand_datum(&mut subcursor, template)
@@ -140,7 +150,9 @@ pub fn expand_rule<'data>(
     let mut cursor = ExpandCursor {
         match_data,
         var_links,
-        subtemplate_idx: 0,
+
+        ident_index: 0,
+        subtemplate_index: 0,
     };
 
     mcx.expand_datum(&mut cursor, template)

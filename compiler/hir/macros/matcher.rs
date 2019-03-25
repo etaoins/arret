@@ -1,7 +1,31 @@
 use std::result;
 
-use crate::hir::macros::{get_escaped_ident, starts_with_zero_or_more, MatchData, Rule};
+use crate::hir::macros::{get_escaped_ident, starts_with_zero_or_more, Rule};
 use crate::hir::ns::{Ident, NsDatum};
+
+#[derive(Debug)]
+pub struct MatchData<'data> {
+    vars: Vec<&'data NsDatum>,
+    // The outside vector is the subpatterns; the inside slice contains the zero or more matches
+    subpatterns: Vec<Box<[MatchData<'data>]>>,
+}
+
+impl<'data> MatchData<'data> {
+    fn new() -> MatchData<'data> {
+        MatchData {
+            vars: vec![],
+            subpatterns: vec![],
+        }
+    }
+
+    pub fn var(&self, i: usize) -> &'data NsDatum {
+        &self.vars[i]
+    }
+
+    pub fn subpattern(&self, i: usize) -> &[MatchData<'data>] {
+        &self.subpatterns[i]
+    }
+}
 
 struct MatchCtx<'data> {
     match_data: MatchData<'data>,
@@ -20,7 +44,7 @@ impl<'data> MatchCtx<'data> {
         if pattern_ident.name() == "_" {
             // This is a wildcard; just discard
         } else {
-            self.match_data.vars.insert(pattern_ident, arg);
+            self.match_data.vars.push(arg);
         }
 
         true
@@ -66,7 +90,7 @@ impl<'data> MatchCtx<'data> {
                     Ok(subcontext.match_data)
                 }
             })
-            .collect::<result::Result<Vec<MatchData<'data>>, ()>>();
+            .collect::<result::Result<Box<[MatchData<'data>]>, ()>>();
 
         match submatch_result {
             Ok(submatch_data) => {
@@ -122,7 +146,7 @@ impl<'data> MatchCtx<'data> {
         rule: &'data Rule,
         arg_data: &'data [NsDatum],
     ) -> Result<MatchData<'data>> {
-        if self.match_slice(rule.pattern.as_slice(), arg_data) {
+        if self.match_slice(&rule.pattern, arg_data) {
             Ok(self.match_data)
         } else {
             Err(())
