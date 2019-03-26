@@ -234,7 +234,7 @@ mod test {
                 false_ops,
             })
             .into(),
-            // However, the output of the cond is still used
+            // However, the output of the `Cond` is still used
             ops::OpKind::Ret(output_reg).into(),
         ]);
 

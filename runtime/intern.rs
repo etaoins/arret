@@ -86,7 +86,7 @@ impl InternedSym {
     /// Tries to return an inline interned Sym
     ///
     /// This can be accomplished without an `Interner` as we don't need to add a name to the
-    /// interner's index.
+    /// `Interner`'s index.
     pub fn try_from_inline_name(name: &str) -> Option<InternedSym> {
         if name.len() <= INLINE_SIZE {
             let mut interned_inline = InternedInline {
@@ -340,7 +340,7 @@ mod test {
             let interned = interner.intern(name);
             assert_eq!(name, interner.unintern(&interned));
 
-            // Make sure we don't equal any of our previous interneds
+            // Make sure we don't equal any of our previous interned symbols
             assert!(!previous_interneds.contains(&interned));
             previous_interneds.push(interned);
         }

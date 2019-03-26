@@ -44,7 +44,7 @@ impl<'scope> ExpandCtx<'scope> {
             }
         }
 
-        // Rescope this ident
+        // Re-scope this ident
         let old_ns_id = ident.ns_id();
 
         let scope = &mut self.scope;

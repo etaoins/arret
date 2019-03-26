@@ -20,11 +20,11 @@ pub fn plan_phi_abi_type(lhs: &Value, rhs: &Value) -> abitype::ABIType {
             // to the allocator which is one of the most expensive things we can do.
             //
             // If both values are boxed then create an boxed phi. This prevents us from "wasting"
-            // a box from prematurely unboxing it and then having to allocate to rebox it later.
+            // a box from prematurely unboxing it and then having to allocate to re-box it later.
             let both_boxed = [lhs, rhs].iter().all(|value| {
                 match value {
                     Value::Const(_) => {
-                        // Consts can be either boxed or unboxed
+                        // `Const`s can be either boxed or unboxed
                         // This effectively means "whatever the other value wants"
                         true
                     }

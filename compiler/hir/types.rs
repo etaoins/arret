@@ -429,7 +429,7 @@ pub const TY_EXPORTS: &[(&str, Binding)] = &[
     export_ty_cons!("RawU", TyCons::RawU),
 ];
 
-/// Pushes the arguments for a list constructor on to the passed Vec
+/// Pushes the arguments for a list constructor on to the passed `Vec`
 ///
 /// This is used to share code between list and function types
 fn push_list_parts<M: ty::PM>(list_parts: &mut Vec<String>, list_ref: &ty::List<M>) {
@@ -608,7 +608,7 @@ mod test {
         let expected_poly = expected.into();
         assert_eq!(expected_poly, poly_for_str(datum_str));
 
-        // Try to round trip this to make sure str_for_ty_tef works
+        // Try to round trip this to make sure str_for_ty_ref works
         let recovered_str = str_for_ty_ref(&expected_poly);
         assert_eq!(expected_poly, poly_for_str(&recovered_str));
     }
