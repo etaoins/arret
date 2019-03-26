@@ -1,7 +1,7 @@
 FROM fedora:29 AS build-env
 
-ARG LLVM_MAJOR=7
-ARG LLVM_VERSION=7.0.1
+ARG LLVM_MAJOR=8
+ARG LLVM_VERSION=8.0.0
 ARG LLVM_ROOT=/opt/llvm-${LLVM_MAJOR}
 
 RUN dnf install -y file cmake ninja-build gcc-c++ glibc-devel.i686 xz && \
