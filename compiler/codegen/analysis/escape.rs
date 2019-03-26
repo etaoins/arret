@@ -27,7 +27,7 @@ impl CaptureKind {
     }
 }
 
-/// Tracks the captures for all regs in a fucntion
+/// Tracks the captures for all regs in a function
 #[derive(Debug)]
 pub struct Captures {
     inner: HashMap<ops::RegId, CaptureKind>,

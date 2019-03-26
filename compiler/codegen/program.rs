@@ -176,7 +176,7 @@ fn target_triple_to_cc_args(target_triple: &str) -> Vec<&str> {
 
 /// Generates code for the program with the given output type
 ///
-/// codegen::initialise_llvm() must be called before this.
+/// `codegen::initialise_llvm()` must be called before this.
 pub fn gen_program(
     options: Options<'_>,
     rust_libraries: &[rfi::Library],

@@ -230,7 +230,7 @@ impl Scope {
         self.bindings().entries.iter().map(|(ident, _)| ident)
     }
 
-    /// Allocates a new ns_id
+    /// Allocates a new NsId
     ///
     /// This is not globally unique; it will only be unique in the current scope chain
     pub fn alloc_ns_id(&mut self) -> NsId {

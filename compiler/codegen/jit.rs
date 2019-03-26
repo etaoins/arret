@@ -110,7 +110,7 @@ impl JITCtx {
                 None,
             );
 
-            // We need to take ownership before we tranfer the module to ORC
+            // We need to take ownership before we transfer the module to ORC
             let mut function_name_len: usize = 0;
             let function_name_ptr = LLVMGetValueName2(llvm_entry_fun, &mut function_name_len);
             let function_name = ffi::CStr::from_ptr(function_name_ptr).to_owned();

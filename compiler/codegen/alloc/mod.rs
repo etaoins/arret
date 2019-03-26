@@ -18,7 +18,7 @@ pub enum BoxSource {
     Heap(boxed::BoxSize),
 }
 
-/// Contains the sub-plans for a condiditional branch
+/// Contains the sub-plans for a conditional branch
 #[derive(PartialEq, Debug)]
 pub struct CondPlan<'op> {
     true_subplan: Vec<AllocAtom<'op>>,

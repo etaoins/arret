@@ -200,7 +200,7 @@ impl<'data> FindVarsCtx<'data> {
         patterns: &'data [NsDatum],
     ) -> FindVarsResult {
         if self.input_type == FindVarsInputType::Template {
-            // Sets are expanded exactly as seq
+            // Sets are expanded the same way as any other sequence
             return self.visit_seq(pattern_vars, patterns);
         }
 

@@ -64,16 +64,16 @@ impl<'sl> DebugInfoBuilder<'sl> {
                 main_file_metadata,
                 producer.as_ptr(),
                 producer.as_bytes().len(),
-                optimised as i32,                                 // isOptimised
-                ptr::null(),                                      // Flags
-                0,                                                // FlagsLen
-                0,                                                // RuntimeVer,
-                ptr::null(),                                      // SplitName
-                0,                                                // SplitNameLen
-                LLVMDWARFEmissionKind::LLVMDWARFEmissionKindFull, //LLVMDWARFEmissionKind::LLVMDWARFEmissionKindLineTablesOnly,
-                0,                                                // DWOId
-                0,                                                // SplitDebugInlining
-                0,                                                // DebugInfoForProfiling
+                optimised as i32,                                 // `isOptimized`
+                ptr::null(),                                      // `Flags`
+                0,                                                // `FlagsLen`
+                0,                                                // `RuntimeVer`
+                ptr::null(),                                      // `SplitName`
+                0,                                                // `SplitNameLen`
+                LLVMDWARFEmissionKind::LLVMDWARFEmissionKindFull, // `LLVMDWARFEmissionKind::LLVMDWARFEmissionKindLineTablesOnly`,
+                0,                                                // `DWOId`
+                0,                                                // `SplitDebugInlining`
+                0,                                                // `DebugInfoForProfiling`
             );
         }
     }
@@ -147,7 +147,7 @@ impl<'sl> DebugInfoBuilder<'sl> {
 
             let function_metadata = LLVMDIBuilderCreateFunction(
                 self.llvm_dib,
-                file_metadata, // Scope
+                file_metadata, // `Scope`
                 c_source_name
                     .as_ref()
                     .map(|c_source_name| c_source_name.as_ptr())
@@ -161,11 +161,11 @@ impl<'sl> DebugInfoBuilder<'sl> {
                 file_metadata,
                 source_line as u32,
                 self.placeholder_subroutine_type(file_metadata),
-                source_name.is_none() as i32, // IsLocalToUnit
-                1,                            // IsDefinition
-                source_line as u32,           // ScopeLine
+                source_name.is_none() as i32, // `IsLocalToUnit`
+                1,                            // `IsDefinition`
+                source_line as u32,           // `ScopeLine`
                 LLVMDIFlags::LLVMDIFlagZero,
-                1, // IsOptimized
+                1, // `IsOptimized`
             );
 
             LLVMSetSubprogram(llvm_function, function_metadata);
