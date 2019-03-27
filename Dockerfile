@@ -2,7 +2,7 @@ FROM ubuntu:18.10 AS build-env
 
 RUN \
   apt-get update && \
-  apt-get -y install curl gcc zlib1g-dev libstdc++-7-dev llvm-7 llvm-7-dev && \
+  apt-get -y install curl gcc zlib1g-dev libstdc++-8-dev llvm-7 llvm-7-dev && \
   apt-get clean
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.33.0
