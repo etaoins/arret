@@ -1,4 +1,4 @@
-FROM ubuntu:18.04 AS build-env
+FROM ubuntu:18.10 AS build-env
 
 RUN \
   apt-get update && \
@@ -31,7 +31,7 @@ RUN cargo build --release
 
 ###
 
-FROM ubuntu:18.04 AS repl
+FROM ubuntu:18.10 AS repl
 
 ARG vcs_ref
 
