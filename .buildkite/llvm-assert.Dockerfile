@@ -1,4 +1,4 @@
-FROM fedora:29 AS build-env
+FROM fedora:29
 
 ARG LLVM_MAJOR=8
 ARG LLVM_VERSION=8.0.0
