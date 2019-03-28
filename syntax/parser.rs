@@ -36,7 +36,7 @@ fn is_whitespace(c: char) -> bool {
 pub fn is_identifier_char(c: char) -> bool {
     match c {
         'A'..='Z' | 'a'..='z' | '0'..='9' |
-        // Punctuation allowed at beginning of an identiifer
+        // Punctuation allowed at beginning of an identifier
         '.' | '*' | '+' | '!' | '-' | '_' | '?' | '$' | '%' | '&' | '=' | '<' | '>' | ':' |
         // Punctuation allowed anywhere
         '#' |
@@ -243,7 +243,7 @@ impl<'de> Parser<'de> {
             // Consume the \
             s.eat_bytes(1);
 
-            // Consume the characer name
+            // Consume the character name
             let (span, char_name) =
                 s.consume_until(|c| c == ')' || c == ']' || c == '}' || is_whitespace(c));
 
