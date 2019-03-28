@@ -3,7 +3,7 @@ use std::{error, fmt, result};
 use syntax::span::Span;
 
 use crate::mir::inliner::ApplyCookie;
-use crate::reporting::{Level, LocTrace, Reportable};
+use crate::reporting::{LocTrace, Reportable, Severity};
 
 #[derive(Debug, PartialEq)]
 pub struct Panic {
@@ -56,8 +56,8 @@ impl fmt::Display for Panic {
 }
 
 impl Reportable for Panic {
-    fn level(&self) -> Level {
-        Level::Error
+    fn severity(&self) -> Severity {
+        Severity::Error
     }
 
     fn message(&self) -> String {

@@ -10,7 +10,7 @@ use tempfile::NamedTempFile;
 use syntax::span::Span;
 
 use compiler::error::Error;
-use compiler::reporting::{report_to_stderr, Level, LocTrace, Reportable};
+use compiler::reporting::{report_to_stderr, LocTrace, Reportable, Severity};
 use compiler::SourceLoader;
 
 use std::alloc::System;
@@ -40,7 +40,7 @@ impl ExpectedSpan {
         match self {
             ExpectedSpan::Exact(span) => *span == actual_span,
             ExpectedSpan::StartRange(span_range) => {
-                let actual_span_start = actual_span.lo as usize;
+                let actual_span_start = actual_span.start() as usize;
                 actual_span_start >= span_range.start && actual_span_start < span_range.end
             }
         }
@@ -49,7 +49,7 @@ impl ExpectedSpan {
 
 #[derive(Debug)]
 struct ExpectedReport {
-    level: Level,
+    severity: Severity,
     message_prefix: String,
     span: ExpectedSpan,
 }
@@ -72,44 +72,43 @@ impl Reportable for ExpectedReport {
     fn loc_trace(&self) -> LocTrace {
         (match self.span {
             ExpectedSpan::Exact(span) => span,
-            ExpectedSpan::StartRange(ref span_range) => Span {
-                lo: span_range.start as u32,
-                hi: span_range.end as u32,
-            },
+            ExpectedSpan::StartRange(ref span_range) => {
+                Span::new(span_range.start as u32, span_range.end as u32)
+            }
         })
         .into()
     }
 
-    fn level(&self) -> Level {
-        Level::Help
+    fn severity(&self) -> Severity {
+        Severity::Help
     }
 
     fn message(&self) -> String {
         format!(
             "expected {} `{} ...`",
-            self.level.name(),
+            self.severity().to_str(),
             self.message_prefix
         )
     }
 }
 
-fn take_level(marker_string: &str) -> (Level, &str) {
-    for (prefix, level) in &[
-        (" ERROR ", Level::Error),
-        (" NOTE ", Level::Note),
-        (" HELP ", Level::Help),
+fn take_severity(marker_string: &str) -> (Severity, &str) {
+    for (prefix, severity) in &[
+        (" ERROR ", Severity::Error),
+        (" NOTE ", Severity::Note),
+        (" HELP ", Severity::Help),
     ] {
         if marker_string.starts_with(prefix) {
-            return (*level, &marker_string[prefix.len()..]);
+            return (*severity, &marker_string[prefix.len()..]);
         }
     }
 
-    panic!("Unknown level prefix for `{}`", marker_string)
+    panic!("Unknown severity prefix for `{}`", marker_string)
 }
 
 fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedReport> {
     let source = source_file.source();
-    let span_offset = source_file.span_offset();
+    let span_offset = source_file.span().start() as usize;
 
     let mut line_reports = source
         .match_indices(";~")
@@ -123,10 +122,10 @@ fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedR
 
             // Take from after the ;~ to the end of the line
             let marker_string = &source[index + 2..*end_of_line_index];
-            let (level, marker_string) = take_level(marker_string);
+            let (severity, marker_string) = take_severity(marker_string);
 
             ExpectedReport {
-                level,
+                severity,
                 message_prefix: marker_string.into(),
                 span: ExpectedSpan::StartRange(
                     span_offset + start_of_line_index..span_offset + index,
@@ -136,7 +135,7 @@ fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedR
         .collect::<Vec<ExpectedReport>>();
 
     let mut spanned_reports = source.match_indices(";^").map(|(index, _)| {
-        let span_length = source[index..].find(' ').expect("Cannot find level") - 1;
+        let span_length = source[index..].find(' ').expect("Cannot find severity") - 1;
 
         let start_of_line_index = &source[..index]
             .rfind('\n')
@@ -156,15 +155,15 @@ fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedR
 
         // Take from after the ;^^ to the end of the line
         let marker_string = &source[index + span_length + 1..*end_of_line_index];
-        let (level, marker_string) = take_level(marker_string);
+        let (severity, marker_string) = take_severity(marker_string);
 
         ExpectedReport {
-            level,
+            severity,
             message_prefix: marker_string.into(),
-            span: ExpectedSpan::Exact(Span {
-                lo: (span_offset + span_start) as u32,
-                hi: (span_offset + span_end) as u32,
-            }),
+            span: ExpectedSpan::Exact(Span::new(
+                (span_offset + span_start) as u32,
+                (span_offset + span_end) as u32,
+            )),
         }
     });
 
@@ -304,7 +303,7 @@ fn run_single_compile_fail_test(
     let _errlock = stderr.lock();
 
     for unexpected_report in unexpected_reports {
-        eprintln!("Unexpected {}:", unexpected_report.level().name());
+        eprintln!("Unexpected {}:", unexpected_report.severity().to_str());
         report_to_stderr(&source_loader, unexpected_report.as_ref());
     }
 

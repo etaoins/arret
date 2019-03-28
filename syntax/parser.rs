@@ -3,7 +3,7 @@ use crate::error::{Error, ErrorKind, ExpectedContent, Result};
 use crate::span::Span;
 use std;
 
-pub fn data_from_str_with_span_offset(s: &str, span_offset: usize) -> Result<Vec<Datum>> {
+pub fn data_from_str_with_span_offset(s: &str, span_offset: u32) -> Result<Vec<Datum>> {
     let mut parser = Parser::from_str(s, span_offset);
     parser.parse_data()
 }
@@ -12,7 +12,7 @@ pub fn data_from_str(s: &str) -> Result<Vec<Datum>> {
     data_from_str_with_span_offset(s, 0)
 }
 
-pub fn datum_from_str_with_span_offset(s: &str, span_offset: usize) -> Result<Datum> {
+pub fn datum_from_str_with_span_offset(s: &str, span_offset: u32) -> Result<Datum> {
     let mut parser = Parser::from_str(s, span_offset);
     parser.parse_datum()
 }
@@ -23,7 +23,7 @@ pub fn datum_from_str(s: &str) -> Result<Datum> {
 
 pub struct Parser<'de> {
     input: &'de str,
-    consumed_bytes: usize,
+    consumed_bytes: u32,
 }
 
 fn is_whitespace(c: char) -> bool {
@@ -47,23 +47,17 @@ pub fn is_identifier_char(c: char) -> bool {
 }
 
 impl<'de> Parser<'de> {
-    fn from_str(input: &'de str, consumed_bytes: usize) -> Self {
+    fn from_str(input: &'de str, span_offset: u32) -> Self {
         Parser {
             input,
-            consumed_bytes,
+            consumed_bytes: span_offset,
         }
     }
 
     fn eof_err(&self, ec: ExpectedContent) -> Error {
-        let eof_pos = (self.consumed_bytes + self.input.len()) as u32;
+        let eof_pos = self.consumed_bytes + (self.input.len() as u32);
 
-        Error::new(
-            Span {
-                lo: eof_pos,
-                hi: eof_pos,
-            },
-            ErrorKind::Eof(ec),
-        )
+        Error::new(Span::new(eof_pos, eof_pos), ErrorKind::Eof(ec))
     }
 
     fn peek_char(&mut self, ec: ExpectedContent) -> Result<char> {
@@ -76,7 +70,7 @@ impl<'de> Parser<'de> {
 
     fn eat_bytes(&mut self, count: usize) {
         self.input = &self.input[count..];
-        self.consumed_bytes += count;
+        self.consumed_bytes += count as u32;
     }
 
     fn consume_char(&mut self, ec: ExpectedContent) -> Result<char> {
@@ -128,7 +122,7 @@ impl<'de> Parser<'de> {
     where
         T: FnMut(char) -> bool,
     {
-        let lo = self.consumed_bytes as u32;
+        let start = self.consumed_bytes as u32;
         let last_index = self
             .input
             .find(predicate)
@@ -136,13 +130,9 @@ impl<'de> Parser<'de> {
         let (consumed, remaining_input) = self.input.split_at(last_index);
 
         self.input = remaining_input;
-        self.consumed_bytes += last_index;
+        self.consumed_bytes += last_index as u32;
 
-        let span = Span {
-            lo,
-            hi: (self.consumed_bytes as u32),
-        };
-
+        let span = Span::new(start, self.consumed_bytes as u32);
         (span, consumed)
     }
 
@@ -157,11 +147,11 @@ impl<'de> Parser<'de> {
     where
         F: FnOnce(&mut Parser<'_>) -> R,
     {
-        let lo = self.consumed_bytes as u32;
+        let start = self.consumed_bytes;
         let result = block(self);
-        let hi = self.consumed_bytes as u32;
+        let end = self.consumed_bytes;
 
-        (Span { lo, hi }, result)
+        (Span::new(start, end), result)
     }
 
     fn parse_num(&mut self) -> Result<Datum> {
@@ -222,7 +212,7 @@ impl<'de> Parser<'de> {
         };
 
         // Cover the initial #
-        let adj_span = span.with_lo(span.lo - 1);
+        let adj_span = span.with_start(span.start() - 1);
         Ok(Datum::Float(adj_span, float_value))
     }
 
@@ -288,7 +278,7 @@ impl<'de> Parser<'de> {
             '#' => self.parse_symbolic_float(),
             _ => {
                 let (span, _) = self.capture_span(|s| s.consume_char(ExpectedContent::Dispatch));
-                let adj_span = span.with_lo(span.lo - 1);
+                let adj_span = span.with_start(span.start() - 1);
 
                 Err(Error::new(adj_span, ErrorKind::UnsupportedDispatch))
             }
@@ -357,7 +347,7 @@ impl<'de> Parser<'de> {
         let (outer_span, contents) = self.capture_span(|s| s.parse_seq('}', ExpectedContent::Set));
 
         // Cover the # in our span
-        let adj_span = outer_span.with_lo(outer_span.lo - 1);
+        let adj_span = outer_span.with_start(outer_span.start() - 1);
         contents.map(|contents| Datum::Set(adj_span, contents))
     }
 
@@ -368,14 +358,14 @@ impl<'de> Parser<'de> {
             self.capture_span(|s| s.parse_seq(')', ExpectedContent::List));
 
         // Cover the # in our span
-        let adj_span = outer_span.with_lo(outer_span.lo - 1);
+        let adj_span = outer_span.with_start(outer_span.start() - 1);
         let body_contents = body_contents?;
 
         convert_anon_fun(adj_span, body_contents.into_vec().into_iter())
     }
 
     fn parse_quote_escape(&mut self) -> Result<char> {
-        let escape_lo = self.consumed_bytes as u32;
+        let escape_start = self.consumed_bytes as u32;
 
         match self.consume_char(ExpectedContent::QuoteEscape)? {
             't' => Ok('\t'),
@@ -398,10 +388,7 @@ impl<'de> Parser<'de> {
                     .ok_or_else(|| Error::new(span, ErrorKind::InvalidCodePoint))
             }
             _ => {
-                let span = Span {
-                    lo: escape_lo,
-                    hi: self.consumed_bytes as u32,
-                };
+                let span = Span::new(escape_start, self.consumed_bytes as u32);
                 Err(Error::new(span, ErrorKind::UnsupportedStringEscape))
             }
         }
@@ -516,10 +503,7 @@ mod test {
     use crate::span::t2s;
 
     fn whole_str_span(v: &str) -> Span {
-        Span {
-            lo: 0,
-            hi: v.len() as u32,
-        }
+        Span::new(0, v.len() as u32)
     }
 
     #[test]

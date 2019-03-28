@@ -161,7 +161,7 @@ impl Loader {
 
     fn process_rust_fun(
         &self,
-        span_offset: usize,
+        span_offset: u32,
         rust_library_id: RustLibraryId,
         entry_point: *const c_void,
         rust_fun: &'static binding::RustFun,
@@ -295,7 +295,7 @@ impl Loader {
                 let intrinsic_name = Some(*name).filter(|_| package_name == "stdlib");
 
                 let fun = self.process_rust_fun(
-                    source_loader.next_span_offset,
+                    source_loader.next_start_index(),
                     rust_library_id,
                     entry_point_address,
                     rust_fun,

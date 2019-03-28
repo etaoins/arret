@@ -1,6 +1,6 @@
 use std::{error, fmt, io, path, result};
 
-use crate::reporting::{Level, LocTrace, Reportable};
+use crate::reporting::{LocTrace, Reportable, Severity};
 
 use syntax::error::Error as SyntaxError;
 use syntax::span::{Span, EMPTY_SPAN};
@@ -68,8 +68,8 @@ impl Error {
 }
 
 impl Reportable for Error {
-    fn level(&self) -> Level {
-        Level::Error
+    fn severity(&self) -> Severity {
+        Severity::Error
     }
 
     fn message(&self) -> String {
@@ -159,8 +159,8 @@ struct FirstDefHelp {
 }
 
 impl Reportable for FirstDefHelp {
-    fn level(&self) -> Level {
-        Level::Help
+    fn severity(&self) -> Severity {
+        Severity::Help
     }
 
     fn loc_trace(&self) -> LocTrace {

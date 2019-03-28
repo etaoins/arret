@@ -5,7 +5,7 @@ use std::fmt::Display;
 use syntax::span::Span;
 
 use crate::hir;
-use crate::reporting::{Level, LocTrace, Reportable};
+use crate::reporting::{LocTrace, Reportable, Severity};
 use crate::ty;
 use crate::ty::purity;
 
@@ -76,8 +76,8 @@ impl Error {
 }
 
 impl Reportable for Error {
-    fn level(&self) -> Level {
-        Level::Error
+    fn severity(&self) -> Severity {
+        Severity::Error
     }
 
     fn message(&self) -> String {
@@ -170,8 +170,8 @@ struct PVarDefHelp {
 }
 
 impl Reportable for PVarDefHelp {
-    fn level(&self) -> Level {
-        Level::Help
+    fn severity(&self) -> Severity {
+        Severity::Help
     }
 
     fn loc_trace(&self) -> LocTrace {
@@ -188,8 +188,8 @@ struct TVarDefHelp {
 }
 
 impl Reportable for TVarDefHelp {
-    fn level(&self) -> Level {
-        Level::Help
+    fn severity(&self) -> Severity {
+        Severity::Help
     }
 
     fn loc_trace(&self) -> LocTrace {

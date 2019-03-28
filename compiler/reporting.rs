@@ -48,32 +48,32 @@ impl From<Span> for LocTrace {
     }
 }
 
-fn print_span_snippet(source_loader: &SourceLoader, level: Level, span: Span) {
-    print_source_snippet(source_loader, level, span)
+fn print_span_snippet(source_loader: &SourceLoader, severity: Severity, span: Span) {
+    print_source_snippet(source_loader, severity, span)
 }
 
-fn print_source_snippet(source_loader: &SourceLoader, level: Level, span: Span) {
+fn print_source_snippet(source_loader: &SourceLoader, severity: Severity, span: Span) {
     let border_style = Colour::Blue.bold();
 
-    let loc_lo = SourceLoc::from_span_point(source_loader, span.lo);
-    let loc_hi = SourceLoc::from_span_point(source_loader, span.hi);
+    let loc_start = SourceLoc::from_byte_index(source_loader, span.start());
+    let loc_end = SourceLoc::from_byte_index(source_loader, span.end());
 
     // The filename/line/column isn't useful for REPL input
-    let source_file = source_loader.source_file(loc_lo.source_file_id());
+    let source_file = source_loader.source_file(loc_start.source_file_id());
     if source_file.kind() != &SourceKind::Repl {
         eprintln!(
             "  {} {}:{}:{}",
             border_style.paint("-->"),
             source_file.kind(),
-            loc_lo.line() + 1,
-            loc_lo.column() + 1
+            loc_start.line() + 1,
+            loc_start.column() + 1
         );
     }
 
-    let line_number_text = format!("{}", loc_lo.line() + 1);
+    let line_number_text = format!("{}", loc_start.line() + 1);
     let line_number_chars = line_number_text.len();
 
-    let first_line = source_file.source_line(loc_lo.line());
+    let first_line = source_file.source_line(loc_start.line());
     let print_border_line = || {
         eprint!(
             "{: <1$} {2}",
@@ -95,24 +95,25 @@ fn print_source_snippet(source_loader: &SourceLoader, level: Level, span: Span) 
 
     print_border_line();
 
-    let chars =
-        if loc_lo.source_file_id() == loc_hi.source_file_id() && loc_lo.line() == loc_hi.line() {
-            cmp::max(loc_hi.column() - loc_lo.column(), 1)
-        } else {
-            1
-        };
+    let chars = if loc_start.source_file_id() == loc_end.source_file_id()
+        && loc_start.line() == loc_end.line()
+    {
+        cmp::max(loc_end.column() - loc_start.column(), 1)
+    } else {
+        1
+    };
 
-    let marker_style = level.colour().bold();
+    let marker_style = severity.colour().bold();
     eprintln!(
         "{: <1$}{2}",
         "",
-        loc_lo.column() + 1,
+        loc_start.column() + 1,
         marker_style.paint(iter::repeat("^").take(chars).collect::<String>())
     );
 }
 
 pub trait Reportable {
-    fn level(&self) -> Level;
+    fn severity(&self) -> Severity;
     fn message(&self) -> String;
     fn loc_trace(&self) -> LocTrace;
 
@@ -130,18 +131,18 @@ impl fmt::Debug for dyn Reportable {
 
 pub fn report_to_stderr(source_loader: &SourceLoader, report: &dyn Reportable) {
     let default_bold = Style::new().bold();
-    let level = report.level();
+    let severity = report.severity();
     let loc_trace = report.loc_trace();
 
     eprintln!(
         "{}: {}",
-        level.colour().bold().paint(level.name()),
+        severity.colour().bold().paint(severity.to_str()),
         default_bold.paint(report.message())
     );
 
     let origin = loc_trace.origin();
     if let Some(origin) = origin.to_non_empty() {
-        print_source_snippet(source_loader, level, origin);
+        print_source_snippet(source_loader, severity, origin);
     }
 
     if let Some(macro_invocation) = loc_trace.macro_invocation.to_non_empty() {
@@ -149,7 +150,7 @@ pub fn report_to_stderr(source_loader: &SourceLoader, report: &dyn Reportable) {
         // Showing the whole invocation would just be noise.
         if !macro_invocation.contains(origin) {
             eprintln!("{}", default_bold.paint("in this macro invocation"));
-            print_span_snippet(source_loader, Level::Note, macro_invocation);
+            print_span_snippet(source_loader, Severity::Note, macro_invocation);
         }
     }
 
@@ -162,26 +163,26 @@ pub fn report_to_stderr(source_loader: &SourceLoader, report: &dyn Reportable) {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum Level {
+pub enum Severity {
     Error,
     Note,
     Help,
 }
 
-impl Level {
-    pub fn name(self) -> &'static str {
+impl Severity {
+    pub fn to_str(self) -> &'static str {
         match self {
-            Level::Error => "error",
-            Level::Note => "note",
-            Level::Help => "help",
+            Severity::Error => "error",
+            Severity::Note => "note",
+            Severity::Help => "help",
         }
     }
 
     fn colour(self) -> Colour {
         match self {
-            Level::Error => Colour::Red,
-            Level::Note => Colour::Blue,
-            Level::Help => Colour::Cyan,
+            Severity::Error => Colour::Red,
+            Severity::Note => Colour::Blue,
+            Severity::Help => Colour::Cyan,
         }
     }
 }
@@ -212,8 +213,8 @@ impl Reportable for syntax::error::Error {
         self.span().into()
     }
 
-    fn level(&self) -> Level {
-        Level::Error
+    fn severity(&self) -> Severity {
+        Severity::Error
     }
 
     fn associated_report(&self) -> Option<Box<dyn Reportable>> {
@@ -236,8 +237,8 @@ struct ContentStartHelp {
 }
 
 impl Reportable for ContentStartHelp {
-    fn level(&self) -> Level {
-        Level::Help
+    fn severity(&self) -> Severity {
+        Severity::Help
     }
 
     fn loc_trace(&self) -> LocTrace {

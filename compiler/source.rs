@@ -27,24 +27,17 @@ impl fmt::Display for SourceKind {
 }
 
 pub struct SourceFile {
-    span_offset: usize,
+    span: Span,
     kind: SourceKind,
     source: String,
-    line_number_offsets: Vec<usize>,
+    line_number_offsets: Box<[u32]>,
 }
 
 new_indexing_id_type!(SourceFileId, usize);
 
 impl SourceFile {
-    pub fn span_offset(&self) -> usize {
-        self.span_offset
-    }
-
     pub fn span(&self) -> Span {
-        Span {
-            lo: self.span_offset as u32,
-            hi: (self.span_offset + self.source.len()) as u32,
-        }
+        self.span
     }
 
     pub fn kind(&self) -> &SourceKind {
@@ -61,14 +54,14 @@ impl SourceFile {
             .line_number_offsets
             .get(line + 1)
             .map(|offset| offset - 1) // Don't include the "\n"
-            .unwrap_or_else(|| self.source.len());
+            .unwrap_or_else(|| self.source.len() as u32);
 
-        &self.source[start..end]
+        &self.source[start as usize..end as usize]
     }
 
     pub fn parse(&self) -> Result<Vec<Datum>, syntax::error::Error> {
         use syntax::parser::data_from_str_with_span_offset;
-        data_from_str_with_span_offset(self.source(), self.span_offset())
+        data_from_str_with_span_offset(self.source(), self.span.start())
     }
 }
 
@@ -76,20 +69,29 @@ impl SourceFile {
 pub struct SourceLoader {
     source_files: Vec<SourceFile>,
     loaded_paths: HashMap<Box<path::Path>, SourceFileId>,
-    pub(crate) next_span_offset: usize,
 }
 
-fn build_line_number_offsets(input: &str) -> Vec<usize> {
+fn build_line_number_offsets(input: &str) -> Box<[u32]> {
     use std::iter;
 
     iter::once(0)
-        .chain(input.match_indices('\n').map(|(i, _)| i + 1))
+        .chain(input.match_indices('\n').map(|(i, _)| (i + 1) as u32))
         .collect()
 }
 
 impl SourceLoader {
     pub fn new() -> SourceLoader {
         Self::default()
+    }
+
+    pub fn next_start_index(&self) -> u32 {
+        let end_index = self
+            .source_files()
+            .last()
+            .map(|x| x.span().end())
+            .unwrap_or(0);
+
+        end_index + 1
     }
 
     pub fn load_path(&mut self, path: &path::Path) -> Result<SourceFileId, io::Error> {
@@ -107,13 +109,13 @@ impl SourceLoader {
     }
 
     pub fn load_string(&mut self, kind: SourceKind, source: String) -> SourceFileId {
-        let span_offset = self.next_span_offset;
-        self.next_span_offset = span_offset + source.len();
+        let span_offset = self.next_start_index();
+        let span = Span::new(span_offset, span_offset + (source.len() as u32));
 
         SourceFileId::new_entry_id(
             &mut self.source_files,
             SourceFile {
-                span_offset,
+                span,
                 kind,
                 line_number_offsets: build_line_number_offsets(&source),
                 source,
@@ -133,23 +135,22 @@ impl SourceLoader {
 #[derive(PartialEq, Debug)]
 pub struct SourceLoc {
     source_file_id: SourceFileId,
-    file_byte_offset: usize,
+    file_byte_offset: u32,
     line: usize,
     column: usize,
 }
 
 impl<'src> SourceLoc {
-    /// Calculates a source location from a span point
-    pub fn from_span_point(source_loader: &SourceLoader, point: u32) -> SourceLoc {
+    /// Calculates a source location from a byte index
+    pub fn from_byte_index(source_loader: &SourceLoader, point: u32) -> SourceLoc {
         let source_files = source_loader.source_files();
-        let point = point as usize;
 
         // Find the file we landed on
         let source_file_index = source_files
             .binary_search_by(|candidate_file| {
-                if point < candidate_file.span_offset() {
+                if point < candidate_file.span().start() {
                     cmp::Ordering::Greater
-                } else if point > (candidate_file.span_offset() + candidate_file.source().len()) {
+                } else if point > candidate_file.span().end() {
                     cmp::Ordering::Less
                 } else {
                     cmp::Ordering::Equal
@@ -160,7 +161,7 @@ impl<'src> SourceLoc {
         let source_file = &source_files[source_file_index];
 
         // Now find the line
-        let file_byte_offset = point - source_file.span_offset();
+        let file_byte_offset = point - source_file.span().start();
         let line = match source_file
             .line_number_offsets
             .binary_search(&file_byte_offset)
@@ -171,7 +172,7 @@ impl<'src> SourceLoc {
 
         let line_start = source_file.line_number_offsets[line];
 
-        let column = source_file.source()[line_start..file_byte_offset]
+        let column = source_file.source()[line_start as usize..file_byte_offset as usize]
             .chars()
             .count();
 
@@ -189,7 +190,7 @@ impl<'src> SourceLoc {
     }
 
     /// Returns the offset in bytes from the beginning of the file
-    pub fn file_byte_offset(&self) -> usize {
+    pub fn file_byte_offset(&self) -> u32 {
         self.file_byte_offset
     }
 
@@ -223,7 +224,7 @@ mod test {
 
         let test_cases = vec![
             (
-                0,
+                1,
                 SourceLoc {
                     source_file_id: first_file_id,
                     file_byte_offset: 0,
@@ -232,7 +233,7 @@ mod test {
                 },
             ),
             (
-                1,
+                2,
                 SourceLoc {
                     source_file_id: first_file_id,
                     file_byte_offset: 1,
@@ -241,7 +242,7 @@ mod test {
                 },
             ),
             (
-                2,
+                3,
                 SourceLoc {
                     source_file_id: first_file_id,
                     file_byte_offset: 2,
@@ -250,7 +251,7 @@ mod test {
                 },
             ),
             (
-                3,
+                4,
                 SourceLoc {
                     source_file_id: first_file_id,
                     file_byte_offset: 3,
@@ -259,7 +260,7 @@ mod test {
                 },
             ),
             (
-                6,
+                8,
                 SourceLoc {
                     source_file_id: second_file_id,
                     file_byte_offset: 0,
@@ -268,7 +269,7 @@ mod test {
                 },
             ),
             (
-                9,
+                11,
                 SourceLoc {
                     source_file_id: second_file_id,
                     file_byte_offset: 3,
@@ -279,7 +280,7 @@ mod test {
         ];
 
         for (point, expected) in test_cases {
-            assert_eq!(expected, SourceLoc::from_span_point(&source_loader, point));
+            assert_eq!(expected, SourceLoc::from_byte_index(&source_loader, point));
         }
     }
 }

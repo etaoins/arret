@@ -57,7 +57,7 @@ fn error_for_line(mut line: &str) -> Option<syntax::error::Error> {
         return None;
     }
 
-    datum_from_str_with_span_offset(line, span_offset).err()
+    datum_from_str_with_span_offset(line, span_offset as u32).err()
 }
 
 fn expected_content_for_line(line: &str) -> Option<syntax::error::ExpectedContent> {
@@ -198,8 +198,8 @@ impl rustyline::highlight::Highlighter for ArretHelper {
             return line.into();
         };
 
-        let error_start = error_span.lo as usize;
-        let error_end = error_span.hi as usize;
+        let error_start = error_span.start() as usize;
+        let error_end = error_span.end() as usize;
 
         let prefix = &line[0..error_start];
         let error = &line[error_start..error_end];
