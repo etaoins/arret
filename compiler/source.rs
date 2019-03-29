@@ -92,7 +92,7 @@ impl SourceLoader {
 
     pub fn next_start_index(&self) -> u32 {
         let end_index = self
-            .source_files()
+            .source_files
             .last()
             .map(|x| x.span().end())
             .unwrap_or(0);
@@ -128,10 +128,6 @@ impl SourceLoader {
         self.source_files.push(source_file.clone());
         source_file
     }
-
-    pub fn source_files(&self) -> &[RcId<SourceFile>] {
-        &self.source_files
-    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -145,7 +141,7 @@ pub struct SourceLoc {
 impl<'src> SourceLoc {
     /// Calculates a source location from a byte index
     pub fn from_byte_index(source_loader: &SourceLoader, point: u32) -> SourceLoc {
-        let source_files = source_loader.source_files();
+        let source_files = &source_loader.source_files;
 
         // Find the file we landed on
         let source_file_index = source_files
