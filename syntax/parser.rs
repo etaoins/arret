@@ -1,7 +1,6 @@
 use crate::datum::Datum;
 use crate::error::{Error, ErrorKind, ExpectedContent, Result};
 use crate::span::Span;
-use std;
 
 pub fn data_from_str_with_span_offset(s: &str, span_offset: u32) -> Result<Vec<Datum>> {
     let mut parser = Parser::from_str(s, span_offset);
@@ -285,7 +284,7 @@ impl<'de> Parser<'de> {
         }
     }
 
-    fn parse_seq<F>(&mut self, terminator: char, make_ec: F) -> Result<Box<[Datum]>>
+    fn parse_seq<F>(&mut self, terminator: char, make_ec: F) -> Result<Vec<Datum>>
     where
         F: FnOnce(Span) -> ExpectedContent,
     {
@@ -303,7 +302,7 @@ impl<'de> Parser<'de> {
             if next_char == terminator {
                 // End of the sequence
                 self.eat_bytes(1);
-                break Ok(content.into_boxed_slice());
+                break Ok(content);
             } else {
                 content.push(self.parse_datum_starting_with(next_char)?);
             }
@@ -313,14 +312,14 @@ impl<'de> Parser<'de> {
     fn parse_list(&mut self) -> Result<Datum> {
         let (outer_span, contents) = self.capture_span(|s| s.parse_seq(')', ExpectedContent::List));
 
-        contents.map(|contents| Datum::List(outer_span, contents))
+        contents.map(|contents| Datum::List(outer_span, contents.into()))
     }
 
     fn parse_vector(&mut self) -> Result<Datum> {
         let (outer_span, contents) =
             self.capture_span(|s| s.parse_seq(']', ExpectedContent::Vector));
 
-        contents.map(|contents| Datum::Vector(outer_span, contents))
+        contents.map(|contents| Datum::Vector(outer_span, contents.into()))
     }
 
     fn parse_map(&mut self) -> Result<Datum> {
@@ -334,7 +333,7 @@ impl<'de> Parser<'de> {
         }
 
         let mut paired_contents = Vec::with_capacity(unpaired_contents.len() / 2);
-        let mut unpaired_contents_iter = unpaired_contents.into_vec().into_iter();
+        let mut unpaired_contents_iter = unpaired_contents.into_iter();
         while let Some(key) = unpaired_contents_iter.next() {
             let value = unpaired_contents_iter.next().unwrap();
             paired_contents.push((key, value));
@@ -348,7 +347,7 @@ impl<'de> Parser<'de> {
 
         // Cover the # in our span
         let adj_span = outer_span.with_start(outer_span.start() - 1);
-        contents.map(|contents| Datum::Set(adj_span, contents))
+        contents.map(|contents| Datum::Set(adj_span, contents.into()))
     }
 
     fn parse_anon_fun(&mut self) -> Result<Datum> {
@@ -361,7 +360,7 @@ impl<'de> Parser<'de> {
         let adj_span = outer_span.with_start(outer_span.start() - 1);
         let body_contents = body_contents?;
 
-        convert_anon_fun(adj_span, body_contents.into_vec().into_iter())
+        convert_anon_fun(adj_span, body_contents.into_iter())
     }
 
     fn parse_quote_escape(&mut self) -> Result<char> {
@@ -417,7 +416,7 @@ impl<'de> Parser<'de> {
                 }
             }
         });
-        contents.map(|contents| Datum::Str(span, contents.into_boxed_str()))
+        contents.map(|contents| Datum::Str(span, contents.into()))
     }
 
     fn parse_identifier(&mut self) -> Result<Datum> {

@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::path;
 
+use syntax::datum::{DataStr, Datum};
+use syntax::span::Span;
+
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::rfi;
 use crate::source::SourceLoader;
-use syntax::datum::Datum;
-use syntax::span::Span;
 
 pub struct PackagePath {
     arret_base: Box<path::Path>,
@@ -58,9 +59,9 @@ impl PackagePaths {
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub struct ModuleName {
-    package_name: Box<str>,
-    path: Vec<Box<str>>,
-    terminal_name: Box<str>,
+    package_name: DataStr,
+    path: Vec<DataStr>,
+    terminal_name: DataStr,
 }
 
 #[derive(Debug)]
@@ -70,7 +71,7 @@ pub enum LoadedModule {
 }
 
 impl ModuleName {
-    pub fn new(package_name: Box<str>, path: Vec<Box<str>>, terminal_name: Box<str>) -> ModuleName {
+    pub fn new(package_name: DataStr, path: Vec<DataStr>, terminal_name: DataStr) -> ModuleName {
         ModuleName {
             package_name,
             path,
@@ -91,7 +92,7 @@ pub fn load_module_by_name(
     module_name: &ModuleName,
 ) -> Result<LoadedModule> {
     let package_path =
-        if let Some(package_path) = package_paths.paths.get(&module_name.package_name) {
+        if let Some(package_path) = package_paths.paths.get(module_name.package_name.as_ref()) {
             package_path
         } else {
             return Err(Error::new(span, ErrorKind::PackageNotFound));

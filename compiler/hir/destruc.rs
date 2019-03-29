@@ -1,6 +1,8 @@
+use syntax::datum::DataStr;
+use syntax::span::Span;
+
 use crate::hir;
 use crate::ty;
-use syntax::span::Span;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Destruc<P: hir::Phase> {
@@ -32,12 +34,12 @@ impl<P: hir::Phase> List<P> {
 pub struct Scalar<P: hir::Phase> {
     /// ID of the variable. If this is None it's treated as a wildcard.
     var_id: Option<hir::VarId>,
-    source_name: Box<str>,
+    source_name: DataStr,
     ty: P::DeclType,
 }
 
 impl<P: hir::Phase> Scalar<P> {
-    pub fn new(var_id: Option<hir::VarId>, source_name: Box<str>, ty: P::DeclType) -> Scalar<P> {
+    pub fn new(var_id: Option<hir::VarId>, source_name: DataStr, ty: P::DeclType) -> Scalar<P> {
         Scalar {
             var_id,
             source_name,

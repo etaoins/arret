@@ -15,6 +15,7 @@ pub mod unify;
 use std::fmt;
 use std::ops::Range;
 
+use syntax::datum::DataStr;
 use syntax::span::Span;
 
 use crate::id_type::RcId;
@@ -22,7 +23,7 @@ use crate::id_type::RcId;
 #[derive(PartialEq, Debug, Clone)]
 pub struct TVar {
     span: Span,
-    source_name: Box<str>,
+    source_name: DataStr,
     bound: Ref<Poly>,
 }
 
@@ -30,7 +31,7 @@ pub type TVarId = RcId<TVar>;
 pub type TVarIds = Vec<TVarId>;
 
 impl TVar {
-    pub fn new(span: Span, source_name: Box<str>, bound: Ref<Poly>) -> TVar {
+    pub fn new(span: Span, source_name: DataStr, bound: Ref<Poly>) -> TVar {
         TVar {
             span,
             source_name,
@@ -169,7 +170,7 @@ pub enum Ty<M: PM> {
     Int,
     Num,
     LitBool(bool),
-    LitSym(Box<str>),
+    LitSym(DataStr),
     Set(Box<Ref<M>>),
     Str,
     Sym,

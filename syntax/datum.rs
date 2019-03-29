@@ -1,4 +1,8 @@
+use std::rc::Rc;
+
 use crate::span::Span;
+
+pub type DataStr = Rc<str>;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Datum {
@@ -7,8 +11,8 @@ pub enum Datum {
     Int(Span, i64),
     Float(Span, f64),
     List(Span, Box<[Datum]>),
-    Str(Span, Box<str>),
-    Sym(Span, Box<str>),
+    Str(Span, DataStr),
+    Sym(Span, DataStr),
     Vector(Span, Box<[Datum]>),
     Map(Span, Box<[(Datum, Datum)]>),
     Set(Span, Box<[Datum]>),

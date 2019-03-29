@@ -1,5 +1,6 @@
 use std::vec;
-use syntax::datum::Datum;
+
+use syntax::datum::{DataStr, Datum};
 use syntax::span::Span;
 
 new_counting_id_type!(NsIdCounter, NsId);
@@ -7,11 +8,11 @@ new_counting_id_type!(NsIdCounter, NsId);
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Ident {
     ns_id: NsId,
-    name: Box<str>,
+    name: DataStr,
 }
 
 impl Ident {
-    pub fn new(ns_id: NsId, name: Box<str>) -> Ident {
+    pub fn new(ns_id: NsId, name: DataStr) -> Ident {
         Ident { ns_id, name }
     }
 
@@ -23,7 +24,7 @@ impl Ident {
         &self.name
     }
 
-    pub fn into_name(self) -> Box<str> {
+    pub fn into_name(self) -> DataStr {
         self.name
     }
 
@@ -42,8 +43,8 @@ pub enum NsDatum {
     Int(Span, i64),
     Float(Span, f64),
     List(Span, Box<[NsDatum]>),
-    Str(Span, Box<str>),
-    Keyword(Span, Box<str>),
+    Str(Span, DataStr),
+    Keyword(Span, DataStr),
     Ident(Span, Ident),
     Vector(Span, Box<[NsDatum]>),
     Map(Span, Box<[(NsDatum, NsDatum)]>),

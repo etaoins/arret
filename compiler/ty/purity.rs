@@ -1,3 +1,4 @@
+use syntax::datum::DataStr;
 use syntax::span::Span;
 
 use crate::id_type::RcId;
@@ -11,14 +12,14 @@ pub enum Purity {
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub struct PVar {
     span: Span,
-    source_name: Box<str>,
+    source_name: DataStr,
 }
 
 pub type PVarId = RcId<PVar>;
 pub type PVarIds = Vec<PVarId>;
 
 impl PVar {
-    pub fn new(span: Span, source_name: Box<str>) -> PVar {
+    pub fn new(span: Span, source_name: DataStr) -> PVar {
         PVar { span, source_name }
     }
 

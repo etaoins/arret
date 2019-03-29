@@ -1,11 +1,13 @@
 use std::result;
 
+use syntax::datum::DataStr;
+use syntax::span::Span;
+
 use crate::hir::error::{Error, ErrorKind};
 use crate::hir::exports::Exports;
 use crate::hir::loader::ModuleName;
 use crate::hir::ns::{NsDataIter, NsDatum};
 use crate::hir::util::{expect_arg_count, expect_ident, expect_ident_and_span, expect_one_arg};
-use syntax::span::Span;
 
 type Result<T> = result::Result<T, Vec<Error>>;
 
@@ -19,7 +21,7 @@ struct FilterInput {
     ///
     /// This is to support `(prefixed)`. For example, the terminal name of `[scheme base]` would be
     /// `base` and if `(prefixed)` was used it would prepend `base/` to all of its identifiers.
-    terminal_name: Box<str>,
+    terminal_name: DataStr,
 }
 
 struct LowerImportCtx<F>
@@ -40,7 +42,7 @@ where
 
         let package_name = name_idents.next().unwrap()?;
         let terminal_name = name_idents.next_back().unwrap()?;
-        let name_components = name_idents.collect::<result::Result<Vec<Box<str>>, Error>>()?;
+        let name_components = name_idents.collect::<result::Result<Vec<_>, Error>>()?;
 
         let module_name = ModuleName::new(package_name, name_components, terminal_name.clone());
         let exports = (self.load_module)(span, module_name)?;
@@ -153,7 +155,7 @@ where
                 let prefix_exports = filter_input
                     .exports
                     .into_iter()
-                    .map(|(name, binding)| (format!("{}{}", prefix_ident.name(), name).into_boxed_str(), binding))
+                    .map(|(name, binding)| (format!("{}{}", prefix_ident.name(), name).into(), binding))
                     .collect();
 
                 Ok(FilterInput {
@@ -170,7 +172,7 @@ where
 
                 let prefixed_exports = exports
                     .into_iter()
-                    .map(|(name, binding)| (format!("{}/{}", &terminal_name, name).into_boxed_str(), binding))
+                    .map(|(name, binding)| (format!("{}/{}", &terminal_name, name).into(), binding))
                     .collect();
 
                 Ok(FilterInput {

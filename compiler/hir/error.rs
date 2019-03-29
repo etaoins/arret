@@ -1,16 +1,17 @@
 use std::{error, fmt, io, path, result};
 
-use crate::reporting::{LocTrace, Reportable, Severity};
-
+use syntax::datum::DataStr;
 use syntax::error::Error as SyntaxError;
 use syntax::span::{Span, EMPTY_SPAN};
+
+use crate::reporting::{LocTrace, Reportable, Severity};
 
 #[derive(Debug, PartialEq)]
 pub enum ErrorKind {
     PrimRef,
     TyRef,
-    MacroRef(Box<str>),
-    UnboundSym(Box<str>),
+    MacroRef(DataStr),
+    UnboundSym(DataStr),
     WrongArgCount(usize),
     IllegalArg(&'static str),
     NoMainFun,
@@ -22,11 +23,11 @@ pub enum ErrorKind {
     PackageNotFound,
     ModuleNotFound(Box<path::Path>),
     NoMacroRule,
-    DuplicateDef(Span, Box<str>),
+    DuplicateDef(Span, DataStr),
     MultipleZeroOrMoreMatch(Span),
     NoVecDestruc,
     ValueAsTy,
-    UserError(Box<str>),
+    UserError(DataStr),
     ReadError(Box<path::Path>),
     SyntaxError(SyntaxError),
     RustFunError(Box<str>),
@@ -100,7 +101,7 @@ impl Reportable for Error {
                 "vectors can only be used in a destructure for type ascription in the form [name Type]".to_owned()
             }
             ErrorKind::ValueAsTy => "value cannot be used as a type".to_owned(),
-            ErrorKind::UserError(ref message) => message.clone().into_string(),
+            ErrorKind::UserError(ref message) => message.as_ref().to_owned(),
             ErrorKind::ReadError(ref filename) => format!("error reading `{}`", filename.to_string_lossy()),
             ErrorKind::SyntaxError(ref err) => err.message(),
             ErrorKind::RustFunError(ref message) => message.clone().into_string(),
