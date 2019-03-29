@@ -18,7 +18,7 @@ use std::ops::Range;
 use syntax::datum::DataStr;
 use syntax::span::Span;
 
-use crate::id_type::RcId;
+use crate::id_type::ArcId;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct TVar {
@@ -27,7 +27,7 @@ pub struct TVar {
     bound: Ref<Poly>,
 }
 
-pub type TVarId = RcId<TVar>;
+pub type TVarId = ArcId<TVar>;
 pub type TVarIds = Vec<TVarId>;
 
 impl TVar {

@@ -1,12 +1,12 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 use std::{cmp, fmt, fs, io, path};
 
 use syntax::datum::Datum;
 use syntax::span::Span;
 
-use crate::id_type::RcId;
+use crate::id_type::ArcId;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum SourceKind {
@@ -20,7 +20,7 @@ pub enum SourceKind {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct RfiModuleKind {
-    pub filename: Rc<path::Path>,
+    pub filename: Arc<path::Path>,
     pub fun_name: &'static str,
 }
 
@@ -80,9 +80,51 @@ impl fmt::Debug for SourceFile {
 }
 
 #[derive(Default)]
+struct SourceLoaderData {
+    source_files: Vec<ArcId<SourceFile>>,
+    loaded_paths: HashMap<Box<path::Path>, ArcId<SourceFile>>,
+}
+
+impl SourceLoaderData {
+    fn load_path(&mut self, path: &path::Path) -> Result<ArcId<SourceFile>, io::Error> {
+        if let Some(source_file) = self.loaded_paths.get(path) {
+            return Ok(source_file.clone());
+        }
+
+        let kind = SourceKind::File(path.to_string_lossy().to_string());
+        let source = fs::read_to_string(path)?;
+
+        let source_file = self.load_string(kind, source.into());
+        self.loaded_paths.insert(path.into(), source_file.clone());
+
+        Ok(source_file)
+    }
+
+    fn load_string(&mut self, kind: SourceKind, source: Cow<'static, str>) -> ArcId<SourceFile> {
+        let span_offset = self
+            .source_files
+            .last()
+            .map(|x| x.span().end())
+            .unwrap_or(0)
+            + 1;
+
+        let span = Span::new(span_offset, span_offset + (source.len() as u32));
+
+        let source_file = ArcId::new(SourceFile {
+            span,
+            kind,
+            line_number_offsets: build_line_number_offsets(&source),
+            source,
+        });
+
+        self.source_files.push(source_file.clone());
+        source_file
+    }
+}
+
+#[derive(Default)]
 pub struct SourceLoader {
-    source_files: Vec<RcId<SourceFile>>,
-    loaded_paths: HashMap<Box<path::Path>, RcId<SourceFile>>,
+    locked_data: RwLock<SourceLoaderData>,
 }
 
 fn build_line_number_offsets(input: &str) -> Box<[u32]> {
@@ -98,49 +140,18 @@ impl SourceLoader {
         Self::default()
     }
 
-    fn next_start_index(&self) -> u32 {
-        let end_index = self
-            .source_files
-            .last()
-            .map(|x| x.span().end())
-            .unwrap_or(0);
-
-        end_index + 1
+    pub fn load_path(&self, path: &path::Path) -> Result<ArcId<SourceFile>, io::Error> {
+        self.locked_data.write().unwrap().load_path(path)
     }
 
-    pub fn load_path(&mut self, path: &path::Path) -> Result<RcId<SourceFile>, io::Error> {
-        if let Some(source_file) = self.loaded_paths.get(path) {
-            return Ok(source_file.clone());
-        }
-
-        let kind = SourceKind::File(path.to_string_lossy().to_string());
-        let source = fs::read_to_string(path)?;
-
-        let source_file = self.load_string(kind, source.into());
-        self.loaded_paths.insert(path.into(), source_file.clone());
-
-        Ok(source_file)
-    }
-
-    pub fn load_string(&mut self, kind: SourceKind, source: Cow<'static, str>) -> RcId<SourceFile> {
-        let span_offset = self.next_start_index();
-        let span = Span::new(span_offset, span_offset + (source.len() as u32));
-
-        let source_file = RcId::new(SourceFile {
-            span,
-            kind,
-            line_number_offsets: build_line_number_offsets(&source),
-            source,
-        });
-
-        self.source_files.push(source_file.clone());
-        source_file
+    pub fn load_string(&self, kind: SourceKind, source: Cow<'static, str>) -> ArcId<SourceFile> {
+        self.locked_data.write().unwrap().load_string(kind, source)
     }
 }
 
 #[derive(PartialEq, Debug)]
 pub struct SourceLoc {
-    source_file: RcId<SourceFile>,
+    source_file: ArcId<SourceFile>,
     file_byte_offset: u32,
     line: usize,
     column: usize,
@@ -149,7 +160,8 @@ pub struct SourceLoc {
 impl<'src> SourceLoc {
     /// Calculates a source location from a byte index
     pub fn from_byte_index(source_loader: &SourceLoader, point: u32) -> SourceLoc {
-        let source_files = &source_loader.source_files;
+        let source_loader_data = source_loader.locked_data.read().unwrap();
+        let source_files = &source_loader_data.source_files;
 
         // Find the file we landed on
         let source_file_index = source_files
@@ -191,7 +203,7 @@ impl<'src> SourceLoc {
     }
 
     /// Returns the source file
-    pub fn source_file(&self) -> &RcId<SourceFile> {
+    pub fn source_file(&self) -> &ArcId<SourceFile> {
         &self.source_file
     }
 
@@ -217,7 +229,7 @@ mod test {
 
     #[test]
     fn calculate_source_loc() {
-        let mut source_loader = SourceLoader::new();
+        let source_loader = SourceLoader::new();
 
         let first_contents = "12\n34\n";
         let second_contents = "☃6";

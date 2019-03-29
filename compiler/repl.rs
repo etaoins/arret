@@ -38,7 +38,7 @@ pub enum EvaledLine {
 impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
     pub fn new(
         package_paths: &'pp PackagePaths,
-        source_loader: &'sl mut SourceLoader,
+        source_loader: &'sl SourceLoader,
         optimising: bool,
     ) -> ReplCtx<'pp, 'sl> {
         let ns_id = Scope::root_ns_id();
@@ -73,7 +73,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
     pub fn eval_line(&mut self, input: String, kind: EvalKind) -> Result<EvaledLine, Error> {
         use crate::hir::lowering::LoweredReplDatum;
 
-        let source_loader = self.lcx.source_loader_mut();
+        let source_loader = self.lcx.source_loader();
         let source_file = source_loader.load_string(SourceKind::Repl, input.into());
 
         let mut input_data = source_file.parse()?;
@@ -160,8 +160,8 @@ mod test {
         initialise_llvm(false);
 
         let package_paths = PackagePaths::test_paths(None);
-        let mut source_loader = SourceLoader::new();
-        let mut repl_ctx = ReplCtx::new(&package_paths, &mut source_loader, true);
+        let source_loader = SourceLoader::new();
+        let mut repl_ctx = ReplCtx::new(&package_paths, &source_loader, true);
 
         macro_rules! assert_empty {
             ($line:expr) => {

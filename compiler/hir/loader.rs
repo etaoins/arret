@@ -85,7 +85,7 @@ impl ModuleName {
 }
 
 pub fn load_module_by_name(
-    source_loader: &mut SourceLoader,
+    source_loader: &SourceLoader,
     rfi_loader: &mut rfi::Loader,
     span: Span,
     package_paths: &PackagePaths,
@@ -134,13 +134,13 @@ mod test {
     use syntax::span::EMPTY_SPAN;
 
     fn load_stdlib_module(name: &'static str) -> Result<LoadedModule> {
-        let mut source_loader = SourceLoader::new();
+        let source_loader = SourceLoader::new();
         let mut rfi_loader = rfi::Loader::new();
         let package_paths = PackagePaths::test_paths(None);
         let module_name = ModuleName::new("stdlib".into(), vec![], name.into());
 
         load_module_by_name(
-            &mut source_loader,
+            &source_loader,
             &mut rfi_loader,
             EMPTY_SPAN,
             &package_paths,

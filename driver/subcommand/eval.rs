@@ -3,11 +3,8 @@ use compiler::reporting::report_to_stderr;
 
 use crate::DriverConfig;
 
-fn try_eval_input_file(
-    cfg: &mut DriverConfig,
-    input_file: &compiler::SourceFile,
-) -> Result<(), Error> {
-    let hir = compiler::lower_program(&cfg.package_paths, &mut cfg.source_loader, input_file)?;
+fn try_eval_input_file(cfg: &DriverConfig, input_file: &compiler::SourceFile) -> Result<(), Error> {
+    let hir = compiler::lower_program(&cfg.package_paths, &cfg.source_loader, input_file)?;
     let inferred_defs = compiler::infer_program(hir.defs, hir.main_var_id)?;
 
     let mut ehx = compiler::EvalHirCtx::new(true);
@@ -19,7 +16,7 @@ fn try_eval_input_file(
     Ok(())
 }
 
-pub fn eval_input_file(cfg: &mut DriverConfig, input_file: &compiler::SourceFile) -> bool {
+pub fn eval_input_file(cfg: &DriverConfig, input_file: &compiler::SourceFile) -> bool {
     let result = try_eval_input_file(cfg, input_file);
 
     if let Err(Error(errs)) = result {

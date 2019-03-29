@@ -13,10 +13,7 @@ use compiler::error::Error;
 use compiler::reporting::{report_to_stderr, LocTrace, Reportable, Severity};
 use compiler::SourceLoader;
 
-use std::cell::RefCell;
 use std::{fs, path, process};
-
-thread_local!(static SOURCE_LOADER: RefCell<SourceLoader> = RefCell::new(SourceLoader::new()));
 
 #[derive(Clone, Copy, PartialEq)]
 enum TestType {
@@ -169,7 +166,7 @@ fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedR
 
 fn result_for_single_test(
     target_triple: Option<&str>,
-    source_loader: &mut SourceLoader,
+    source_loader: &SourceLoader,
     source_file: &compiler::SourceFile,
     test_type: TestType,
 ) -> Result<(), Error> {
@@ -226,7 +223,7 @@ fn result_for_single_test(
 
 fn run_single_pass_test(
     target_triple: Option<&str>,
-    source_loader: &mut SourceLoader,
+    source_loader: &SourceLoader,
     source_file: &compiler::SourceFile,
     test_type: TestType,
 ) -> bool {
@@ -251,7 +248,7 @@ fn run_single_pass_test(
 
 fn run_single_compile_fail_test(
     target_triple: Option<&str>,
-    source_loader: &mut SourceLoader,
+    source_loader: &SourceLoader,
     source_file: &compiler::SourceFile,
 ) -> bool {
     use std::io;
@@ -312,25 +309,25 @@ fn run_single_compile_fail_test(
 
 fn run_single_test(
     target_triple: Option<&str>,
+    source_loader: &SourceLoader,
     input_path: &path::Path,
     test_type: TestType,
 ) -> bool {
-    SOURCE_LOADER.with(|source_loader| {
-        let source_loader = &mut *source_loader.borrow_mut();
-        let source_file = source_loader.load_path(input_path).unwrap();
+    let source_file = source_loader.load_path(input_path).unwrap();
 
-        if test_type == TestType::CompileFail {
-            run_single_compile_fail_test(target_triple, source_loader, &source_file)
-        } else {
-            run_single_pass_test(target_triple, source_loader, &source_file, test_type)
-        }
-    })
+    if test_type == TestType::CompileFail {
+        run_single_compile_fail_test(target_triple, source_loader, &source_file)
+    } else {
+        run_single_pass_test(target_triple, source_loader, &source_file, test_type)
+    }
 }
 
 #[test]
 fn pass() {
     let target_triple =
         env::var_os("ARRET_TEST_TARGET_TRIPLE").map(|os_str| os_str.into_string().unwrap());
+
+    let source_loader = SourceLoader::new();
 
     use compiler::initialise_llvm;
     initialise_llvm(target_triple.is_some());
@@ -357,6 +354,7 @@ fn pass() {
 
             if !run_single_test(
                 target_triple.as_ref().map(|t| &**t),
+                &source_loader,
                 input_path.as_path(),
                 test_type,
             ) {

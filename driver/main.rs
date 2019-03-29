@@ -26,9 +26,9 @@ fn find_path_to_arret_root() -> path::PathBuf {
 }
 
 fn input_arg_to_source_file(
-    source_loader: &mut compiler::SourceLoader,
+    source_loader: &compiler::SourceLoader,
     input_param: &str,
-) -> compiler::RcId<compiler::SourceFile> {
+) -> compiler::ArcId<compiler::SourceFile> {
     if input_param == "-" {
         use std::io::prelude::*;
 
@@ -118,7 +118,7 @@ fn main() {
     let llvm_opt = !matches.is_present("NOOPT");
 
     if let Some(compile_matches) = matches.subcommand_matches("compile") {
-        let mut cfg = DriverConfig {
+        let cfg = DriverConfig {
             source_loader,
             package_paths: compiler::PackagePaths::with_stdlib(
                 &arret_target_dir,
@@ -128,7 +128,7 @@ fn main() {
         };
 
         let input_arg = compile_matches.value_of("INPUT").unwrap();
-        let input_file = input_arg_to_source_file(&mut cfg.source_loader, input_arg);
+        let input_file = input_arg_to_source_file(&cfg.source_loader, input_arg);
 
         let output_path = path::Path::new(
             if let Some(output_param) = compile_matches.value_of("OUTPUT") {
@@ -149,7 +149,7 @@ fn main() {
         initialise_llvm(target_triple.is_some());
 
         if !subcommand::compile::compile_input_file(
-            &mut cfg,
+            &cfg,
             &input_file,
             target_triple,
             &output_path,
@@ -158,7 +158,7 @@ fn main() {
             process::exit(2);
         }
     } else if let Some(repl_matches) = matches.subcommand_matches("repl") {
-        let mut cfg = DriverConfig {
+        let cfg = DriverConfig {
             source_loader,
             package_paths: compiler::PackagePaths::with_stdlib(&arret_target_dir, None),
             llvm_opt,
@@ -170,20 +170,20 @@ fn main() {
             .value_of("INCLUDE")
             .map(|include_param| path::Path::new(include_param).to_owned());
 
-        subcommand::repl::interactive_loop(&mut cfg, include_path);
+        subcommand::repl::interactive_loop(&cfg, include_path);
     } else if let Some(eval_matches) = matches.subcommand_matches("eval") {
-        let mut cfg = DriverConfig {
+        let cfg = DriverConfig {
             source_loader: compiler::SourceLoader::new(),
             package_paths: compiler::PackagePaths::with_stdlib(&arret_target_dir, None),
             llvm_opt,
         };
 
         let input_param = eval_matches.value_of("INPUT").unwrap();
-        let input_file = input_arg_to_source_file(&mut cfg.source_loader, input_param);
+        let input_file = input_arg_to_source_file(&cfg.source_loader, input_param);
 
         initialise_llvm(false);
 
-        if !subcommand::eval::eval_input_file(&mut cfg, &input_file) {
+        if !subcommand::eval::eval_input_file(&cfg, &input_file) {
             process::exit(2);
         }
     } else {

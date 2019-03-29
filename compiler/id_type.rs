@@ -1,7 +1,7 @@
-use std::rc::Rc;
+use std::sync::Arc;
 use std::{fmt, hash, ops};
 
-/// Builds a new ID type based off indexing in to a Vec lookup table
+/// Builds a new ID type based off indexing in to a `Vec` lookup table
 ///
 /// This stores the value internally at $ty (typically `u32`) while the interface uses `usize` to
 /// support easy indexing.
@@ -119,29 +119,29 @@ macro_rules! new_counting_id_type {
 /// Reference-counted pointer that uses pointer identity
 ///
 /// Traits such as `Hash`, `Eq`, `Ord` etc. are implemented in terms of the value's memory location.
-/// This means that the value returned by `RcId::new()` is considered equal to itself and its clones
-/// regardless of the value it points to.
-pub struct RcId<T> {
-    inner: Rc<T>,
+/// This means that the value returned by `ArcId::new()` is considered equal to itself and its
+/// clones regardless of the value it points to.
+pub struct ArcId<T> {
+    inner: Arc<T>,
 }
 
-impl<T> RcId<T> {
+impl<T> ArcId<T> {
     pub fn new(value: T) -> Self {
-        RcId {
-            inner: Rc::new(value),
+        ArcId {
+            inner: Arc::new(value),
         }
     }
 }
 
-impl<T> Clone for RcId<T> {
+impl<T> Clone for ArcId<T> {
     fn clone(&self) -> Self {
-        RcId {
+        ArcId {
             inner: self.inner.clone(),
         }
     }
 }
 
-impl<T> ops::Deref for RcId<T> {
+impl<T> ops::Deref for ArcId<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -149,33 +149,33 @@ impl<T> ops::Deref for RcId<T> {
     }
 }
 
-impl<T> PartialEq for RcId<T> {
+impl<T> PartialEq for ArcId<T> {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.inner, &other.inner)
+        Arc::ptr_eq(&self.inner, &other.inner)
     }
 }
 
-impl<T> Eq for RcId<T> {}
+impl<T> Eq for ArcId<T> {}
 
-impl<T> hash::Hash for RcId<T> {
+impl<T> hash::Hash for ArcId<T> {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         state.write_usize(self.inner.as_ref() as *const T as usize)
     }
 }
 
-impl<T> PartialOrd for RcId<T> {
-    fn partial_cmp(&self, other: &RcId<T>) -> Option<std::cmp::Ordering> {
+impl<T> PartialOrd for ArcId<T> {
+    fn partial_cmp(&self, other: &ArcId<T>) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T> Ord for RcId<T> {
-    fn cmp(&self, other: &RcId<T>) -> std::cmp::Ordering {
+impl<T> Ord for ArcId<T> {
+    fn cmp(&self, other: &ArcId<T>) -> std::cmp::Ordering {
         (self.inner.as_ref() as *const T as usize).cmp(&(other.inner.as_ref() as *const T as usize))
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for RcId<T> {
+impl<T: fmt::Debug> fmt::Debug for ArcId<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(formatter)
     }

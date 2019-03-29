@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::os::raw::c_void;
 use std::path;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use libloading;
 
@@ -258,7 +258,7 @@ impl Loader {
     pub fn load(
         &mut self,
         span: Span,
-        source_loader: &mut SourceLoader,
+        source_loader: &SourceLoader,
         native_base_path: &path::Path,
         target_base_path: &path::Path,
         package_name: &str,
@@ -280,7 +280,7 @@ impl Loader {
             &(**exports_symbol)
         };
 
-        let filename: Rc<path::Path> = native_path.clone().into();
+        let filename: Arc<path::Path> = native_path.clone().into();
         let module = exports
             .iter()
             .map(|(fun_name, rust_fun)| {

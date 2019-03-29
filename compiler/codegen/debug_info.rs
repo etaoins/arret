@@ -8,7 +8,7 @@ use llvm_sys::prelude::*;
 
 use syntax::span::Span;
 
-use crate::id_type::RcId;
+use crate::id_type::ArcId;
 use crate::source::{SourceFile, SourceKind, SourceLoader, SourceLoc};
 
 pub struct DebugInfoBuilder<'sl> {
@@ -16,7 +16,7 @@ pub struct DebugInfoBuilder<'sl> {
 
     source_loader: &'sl SourceLoader,
     current_dir: ffi::CString,
-    file_metadata: HashMap<RcId<SourceFile>, Option<LLVMMetadataRef>>,
+    file_metadata: HashMap<ArcId<SourceFile>, Option<LLVMMetadataRef>>,
 }
 
 impl<'sl> DebugInfoBuilder<'sl> {
@@ -79,7 +79,7 @@ impl<'sl> DebugInfoBuilder<'sl> {
         }
     }
 
-    pub fn file_metadata(&mut self, source_file: &RcId<SourceFile>) -> Option<LLVMMetadataRef> {
+    pub fn file_metadata(&mut self, source_file: &ArcId<SourceFile>) -> Option<LLVMMetadataRef> {
         if let Some(metadata) = self.file_metadata.get(source_file) {
             return *metadata;
         }

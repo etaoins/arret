@@ -6,13 +6,13 @@ use compiler::reporting::report_to_stderr;
 use crate::DriverConfig;
 
 fn try_compile_input_file(
-    cfg: &mut DriverConfig,
+    cfg: &DriverConfig,
     options: compiler::GenProgramOptions<'_>,
     input_file: &compiler::SourceFile,
     output_path: &path::Path,
     debug_info: bool,
 ) -> Result<(), Error> {
-    let hir = compiler::lower_program(&cfg.package_paths, &mut cfg.source_loader, input_file)?;
+    let hir = compiler::lower_program(&cfg.package_paths, &cfg.source_loader, input_file)?;
     let inferred_defs = compiler::infer_program(hir.defs, hir.main_var_id)?;
 
     let mut ehx = compiler::EvalHirCtx::new(true);
@@ -44,7 +44,7 @@ fn try_compile_input_file(
 }
 
 pub fn compile_input_file(
-    cfg: &mut DriverConfig,
+    cfg: &DriverConfig,
     input_file: &compiler::SourceFile,
     target_triple: Option<&str>,
     output_path: &path::Path,

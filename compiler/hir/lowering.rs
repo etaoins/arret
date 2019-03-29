@@ -34,7 +34,7 @@ struct LoweredModule {
 
 pub struct LoweringCtx<'pp, 'sl> {
     package_paths: &'pp PackagePaths,
-    source_loader: &'sl mut SourceLoader,
+    source_loader: &'sl SourceLoader,
 
     rfi_loader: rfi::Loader,
 
@@ -555,7 +555,7 @@ fn include_rfi_module(span: Span, rfi_module: rfi::Module) -> LoweredModule {
 impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
     pub fn new(
         package_paths: &'pp PackagePaths,
-        source_loader: &'sl mut SourceLoader,
+        source_loader: &'sl SourceLoader,
     ) -> LoweringCtx<'pp, 'sl> {
         use crate::hir::exports;
 
@@ -844,10 +844,6 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         self.source_loader
     }
 
-    pub fn source_loader_mut(&mut self) -> &mut SourceLoader {
-        self.source_loader
-    }
-
     pub fn lower_repl_datum(
         &mut self,
         scope: &mut Scope,
@@ -895,7 +891,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
 
 pub fn lower_program(
     package_paths: &PackagePaths,
-    source_loader: &mut SourceLoader,
+    source_loader: &SourceLoader,
     source_file: &SourceFile,
 ) -> Result<LoweredProgram, Vec<Error>> {
     let file_span = source_file.span();
@@ -954,8 +950,8 @@ fn module_for_str(data_str: &str) -> Result<LoweredModule> {
     program_data.append(&mut test_data);
 
     let package_paths = PackagePaths::test_paths(None);
-    let mut source_loader = SourceLoader::new();
-    let mut lcx = LoweringCtx::new(&package_paths, &mut source_loader);
+    let source_loader = SourceLoader::new();
+    let mut lcx = LoweringCtx::new(&package_paths, &source_loader);
 
     lcx.lower_module(&mut root_scope, program_data)
         .map_err(|mut errors| errors.remove(0))

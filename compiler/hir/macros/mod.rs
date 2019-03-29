@@ -11,7 +11,7 @@ use crate::hir::macros::matcher::match_rule;
 use crate::hir::ns::{Ident, NsDatum};
 use crate::hir::scope::Scope;
 
-use crate::id_type::RcId;
+use crate::id_type::ArcId;
 
 #[derive(PartialEq, Debug)]
 pub struct Rule {
@@ -25,7 +25,7 @@ pub struct Macro {
     rules: Box<[Rule]>,
 }
 
-pub type MacroId = RcId<Macro>;
+pub type MacroId = ArcId<Macro>;
 
 impl Macro {
     pub fn new(rules: Box<[Rule]>) -> Macro {
