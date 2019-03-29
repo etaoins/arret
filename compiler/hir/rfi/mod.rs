@@ -1,16 +1,18 @@
 use std::collections::HashMap;
 use std::os::raw::c_void;
 use std::path;
+use std::rc::Rc;
 
 use libloading;
 
+use syntax::datum::Datum;
 use syntax::span::Span;
 
 use crate::hir::error::{Error, ErrorKind};
 use crate::hir::ns::{NsDatum, NsId};
 use crate::hir::scope::Scope;
 use crate::hir::types;
-use crate::source::{SourceKind, SourceLoader};
+use crate::source::{RfiModuleKind, SourceKind, SourceLoader};
 use crate::ty;
 
 use runtime::{abitype, binding};
@@ -161,17 +163,13 @@ impl Loader {
 
     fn process_rust_fun(
         &self,
-        span_offset: u32,
+        arret_type_datum: Datum,
         rust_library_id: RustLibraryId,
         entry_point: *const c_void,
         rust_fun: &'static binding::RustFun,
         intrinsic_name: Option<&'static str>,
     ) -> Result<Fun, Error> {
-        use syntax::parser::datum_from_str_with_span_offset;
-
-        // Parse the declared Arret type as a datum
-        let syntax_datum = datum_from_str_with_span_offset(rust_fun.arret_type, span_offset)?;
-        let ns_datum = NsDatum::from_syntax_datum(self.type_ns_id, syntax_datum);
+        let ns_datum = NsDatum::from_syntax_datum(self.type_ns_id, arret_type_datum);
         let span = ns_datum.span();
 
         // Lower the Arret type using a fixed scope
@@ -282,43 +280,46 @@ impl Loader {
             &(**exports_symbol)
         };
 
+        let filename: Rc<path::Path> = native_path.clone().into();
         let module = exports
             .iter()
-            .map(|(name, rust_fun)| {
+            .map(|(fun_name, rust_fun)| {
                 let entry_point_address = unsafe {
                     *loaded
                         .get::<*const c_void>(rust_fun.symbol.as_bytes())
                         .map_err(map_io_err)?
                 };
 
+                // Parse the declared Arret type string as a datum
+                let kind = SourceKind::RfiModule(RfiModuleKind {
+                    filename: filename.clone(),
+                    fun_name,
+                });
+
+                let arret_type_source_file =
+                    source_loader.load_string(kind, rust_fun.arret_type.into());
+
+                let mut arret_type_data = arret_type_source_file.parse()?;
+                if arret_type_data.len() != 1 {
+                    return Err(Error::new(
+                        arret_type_source_file.span(),
+                        ErrorKind::RustFunError("expected exactly one Arret type datum".into()),
+                    ));
+                }
+                let arret_type_datum = arret_type_data.pop().unwrap();
+
                 // Treat every native function in the stdlib as an intrinsic
-                let intrinsic_name = Some(*name).filter(|_| package_name == "stdlib");
+                let intrinsic_name = Some(*fun_name).filter(|_| package_name == "stdlib");
 
                 let fun = self.process_rust_fun(
-                    source_loader.next_start_index(),
+                    arret_type_datum,
                     rust_library_id,
                     entry_point_address,
                     rust_fun,
                     intrinsic_name,
-                );
+                )?;
 
-                match fun {
-                    Ok(fun) => Ok((*name, fun)),
-                    Err(err) => {
-                        // This is a gross hack. We don't want to insert an entry in to the
-                        // `SourceLoader` for every Rust function. That requires at least one
-                        // memory allocation for the display name and extending the loaded sources.
-                        // Instead only "load" the string once there is an error. We parsed the
-                        // data with correct span offset already.
-                        let kind = SourceKind::RfiModule(
-                            native_path.to_string_lossy().into(),
-                            (*name).to_owned(),
-                        );
-
-                        source_loader.load_string(kind, rust_fun.arret_type.to_owned());
-                        Err(err)
-                    }
-                }
+                Ok((*fun_name, fun))
             })
             .collect::<Result<HashMap<&'static str, Fun>, Error>>()?;
 
@@ -338,15 +339,24 @@ impl Loader {
 #[cfg(test)]
 mod test {
     use super::*;
+
     use runtime::abitype::{ABIType, BoxedABIType, ParamABIType, ParamCapture, RetABIType};
     use runtime::boxed::TypeTag;
     use std::ptr;
+    use syntax::parser::datum_from_str;
 
     fn binding_fun_to_poly_type(rust_fun: &'static binding::RustFun) -> Result<ty::Fun, Error> {
         let loader = Loader::new();
+        let arret_type_datum = datum_from_str(rust_fun.arret_type).unwrap();
 
         loader
-            .process_rust_fun(0, RustLibraryId::new(0), ptr::null(), rust_fun, None)
+            .process_rust_fun(
+                arret_type_datum,
+                RustLibraryId::new(0),
+                ptr::null(),
+                rust_fun,
+                None,
+            )
             .map(|rfi_fun| rfi_fun.arret_fun_type)
     }
 

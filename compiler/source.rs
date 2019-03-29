@@ -1,4 +1,6 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::{cmp, fmt, fs, io, path};
 
 use syntax::datum::Datum;
@@ -13,7 +15,13 @@ pub enum SourceKind {
     /// Loaded from the REPL
     Repl,
     /// Loaded from an RFI module
-    RfiModule(String, String),
+    RfiModule(RfiModuleKind),
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct RfiModuleKind {
+    pub filename: Rc<path::Path>,
+    pub fun_name: &'static str,
 }
 
 impl fmt::Display for SourceKind {
@@ -21,8 +29,8 @@ impl fmt::Display for SourceKind {
         match self {
             SourceKind::File(filename) => write!(formatter, "{}", filename),
             SourceKind::Repl => write!(formatter, "<repl input>"),
-            SourceKind::RfiModule(filename, fun_name) => {
-                write!(formatter, "{}:{}", filename, fun_name)
+            SourceKind::RfiModule(RfiModuleKind { filename, fun_name }) => {
+                write!(formatter, "{}:{}", filename.to_string_lossy(), fun_name)
             }
         }
     }
@@ -31,7 +39,7 @@ impl fmt::Display for SourceKind {
 pub struct SourceFile {
     span: Span,
     kind: SourceKind,
-    source: String,
+    source: Cow<'static, str>,
     line_number_offsets: Box<[u32]>,
 }
 
@@ -90,7 +98,7 @@ impl SourceLoader {
         Self::default()
     }
 
-    pub fn next_start_index(&self) -> u32 {
+    fn next_start_index(&self) -> u32 {
         let end_index = self
             .source_files
             .last()
@@ -108,13 +116,13 @@ impl SourceLoader {
         let kind = SourceKind::File(path.to_string_lossy().to_string());
         let source = fs::read_to_string(path)?;
 
-        let source_file = self.load_string(kind, source);
+        let source_file = self.load_string(kind, source.into());
         self.loaded_paths.insert(path.into(), source_file.clone());
 
         Ok(source_file)
     }
 
-    pub fn load_string(&mut self, kind: SourceKind, source: String) -> RcId<SourceFile> {
+    pub fn load_string(&mut self, kind: SourceKind, source: Cow<'static, str>) -> RcId<SourceFile> {
         let span_offset = self.next_start_index();
         let span = Span::new(span_offset, span_offset + (source.len() as u32));
 
