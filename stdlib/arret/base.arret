@@ -3,7 +3,7 @@
 
 (import [arret internal types])
 (export Any Bool Str Sym Int Float Num Char List Vector Vectorof Setof Map U -> ->! str? sym?
-        sym? bool? num? int? float? char? list? vector? set? map? fn? nil?)
+        bool? num? int? float? char? list? vector? set? map? fn? nil?)
 
 (import [stdlib rust])
 (export length panic print! println! exit! cons map filter fold concat member? int float + * - /
