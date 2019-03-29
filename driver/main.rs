@@ -3,11 +3,7 @@
 
 mod subcommand;
 
-use std::alloc::System;
 use std::{env, path, process};
-
-#[global_allocator]
-static GLOBAL: System = System;
 
 const ARRET_FILE_EXTENSION: &str = ".arret";
 

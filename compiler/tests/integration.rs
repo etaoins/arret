@@ -13,12 +13,8 @@ use compiler::error::Error;
 use compiler::reporting::{report_to_stderr, LocTrace, Reportable, Severity};
 use compiler::SourceLoader;
 
-use std::alloc::System;
 use std::cell::RefCell;
 use std::{fs, path, process};
-
-#[global_allocator]
-static GLOBAL: System = System;
 
 thread_local!(static SOURCE_LOADER: RefCell<SourceLoader> = RefCell::new(SourceLoader::new()));
 
