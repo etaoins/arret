@@ -8,14 +8,15 @@ use llvm_sys::prelude::*;
 
 use syntax::span::Span;
 
-use crate::source::{SourceFileId, SourceKind, SourceLoader, SourceLoc};
+use crate::id_type::RcId;
+use crate::source::{SourceFile, SourceKind, SourceLoader, SourceLoc};
 
 pub struct DebugInfoBuilder<'sl> {
     pub llvm_dib: LLVMDIBuilderRef,
 
     source_loader: &'sl SourceLoader,
     current_dir: ffi::CString,
-    file_metadata: HashMap<SourceFileId, Option<LLVMMetadataRef>>,
+    file_metadata: HashMap<RcId<SourceFile>, Option<LLVMMetadataRef>>,
 }
 
 impl<'sl> DebugInfoBuilder<'sl> {
@@ -47,8 +48,8 @@ impl<'sl> DebugInfoBuilder<'sl> {
 
     fn add_compile_unit_metadata(&mut self, optimised: bool, main_span: Span) {
         let main_loc = SourceLoc::from_byte_index(self.source_loader, main_span.start());
-        let main_file_id = main_loc.source_file_id();
-        let main_file_metadata = if let Some(metadata) = self.file_metadata(main_file_id) {
+        let main_file = main_loc.source_file();
+        let main_file_metadata = if let Some(metadata) = self.file_metadata(main_file) {
             metadata
         } else {
             return;
@@ -78,12 +79,10 @@ impl<'sl> DebugInfoBuilder<'sl> {
         }
     }
 
-    pub fn file_metadata(&mut self, source_file_id: SourceFileId) -> Option<LLVMMetadataRef> {
-        if let Some(metadata) = self.file_metadata.get(&source_file_id) {
+    pub fn file_metadata(&mut self, source_file: &RcId<SourceFile>) -> Option<LLVMMetadataRef> {
+        if let Some(metadata) = self.file_metadata.get(source_file) {
             return *metadata;
         }
-
-        let source_file = self.source_loader.source_file(source_file_id);
 
         let metadata = if let SourceKind::File(ref filename) = source_file.kind() {
             ffi::CString::new(filename.as_bytes())
@@ -101,7 +100,7 @@ impl<'sl> DebugInfoBuilder<'sl> {
             None
         };
 
-        self.file_metadata.insert(source_file_id, metadata);
+        self.file_metadata.insert(source_file.clone(), metadata);
         metadata
     }
 
@@ -129,10 +128,10 @@ impl<'sl> DebugInfoBuilder<'sl> {
         llvm_function: LLVMValueRef,
     ) {
         let source_loc = SourceLoc::from_byte_index(self.source_loader, span.start());
-        let source_file_id = source_loc.source_file_id();
+        let source_file = source_loc.source_file();
         let source_line = source_loc.line();
 
-        let file_metadata = if let Some(file_metadata) = self.file_metadata(source_file_id) {
+        let file_metadata = if let Some(file_metadata) = self.file_metadata(source_file) {
             file_metadata
         } else {
             return;

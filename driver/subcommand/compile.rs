@@ -8,11 +8,11 @@ use crate::DriverConfig;
 fn try_compile_input_file(
     cfg: &mut DriverConfig,
     options: compiler::GenProgramOptions<'_>,
-    input_file_id: compiler::SourceFileId,
+    input_file: &compiler::SourceFile,
     output_path: &path::Path,
     debug_info: bool,
 ) -> Result<(), Error> {
-    let hir = compiler::lower_program(&cfg.package_paths, &mut cfg.source_loader, input_file_id)?;
+    let hir = compiler::lower_program(&cfg.package_paths, &mut cfg.source_loader, input_file)?;
     let inferred_defs = compiler::infer_program(hir.defs, hir.main_var_id)?;
 
     let mut ehx = compiler::EvalHirCtx::new(true);
@@ -45,7 +45,7 @@ fn try_compile_input_file(
 
 pub fn compile_input_file(
     cfg: &mut DriverConfig,
-    input_file_id: compiler::SourceFileId,
+    input_file: &compiler::SourceFile,
     target_triple: Option<&str>,
     output_path: &path::Path,
     debug_info: bool,
@@ -62,7 +62,7 @@ pub fn compile_input_file(
         .with_output_type(output_type)
         .with_llvm_opt(cfg.llvm_opt);
 
-    let result = try_compile_input_file(cfg, options, input_file_id, output_path, debug_info);
+    let result = try_compile_input_file(cfg, options, input_file, output_path, debug_info);
 
     if let Err(Error(errs)) = result {
         for err in errs {

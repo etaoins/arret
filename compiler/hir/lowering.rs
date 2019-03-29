@@ -3,6 +3,10 @@ use std::collections::HashMap;
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 
+use crate::source::{SourceFile, SourceLoader};
+use crate::ty;
+use crate::ty::purity;
+
 use crate::hir::destruc;
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::exports::Exports;
@@ -20,9 +24,6 @@ use crate::hir::util::{
 };
 use crate::hir::Lowered;
 use crate::hir::{App, Cond, DeclPurity, DeclTy, Def, Expr, ExprKind, Fun, Let, VarId};
-use crate::source::{SourceFileId, SourceLoader};
-use crate::ty;
-use crate::ty::purity;
 
 #[derive(Debug)]
 struct LoweredModule {
@@ -895,9 +896,8 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
 pub fn lower_program(
     package_paths: &PackagePaths,
     source_loader: &mut SourceLoader,
-    source_file_id: SourceFileId,
+    source_file: &SourceFile,
 ) -> Result<LoweredProgram, Vec<Error>> {
-    let source_file = source_loader.source_file(source_file_id);
     let file_span = source_file.span();
 
     let data = source_file.parse().map_err(|err| vec![err.into()])?;

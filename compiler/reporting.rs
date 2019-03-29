@@ -59,7 +59,7 @@ fn print_source_snippet(source_loader: &SourceLoader, severity: Severity, span: 
     let loc_end = SourceLoc::from_byte_index(source_loader, span.end());
 
     // The filename/line/column isn't useful for REPL input
-    let source_file = source_loader.source_file(loc_start.source_file_id());
+    let source_file = loc_start.source_file();
     if source_file.kind() != &SourceKind::Repl {
         eprintln!(
             "  {} {}:{}:{}",
@@ -95,13 +95,12 @@ fn print_source_snippet(source_loader: &SourceLoader, severity: Severity, span: 
 
     print_border_line();
 
-    let chars = if loc_start.source_file_id() == loc_end.source_file_id()
-        && loc_start.line() == loc_end.line()
-    {
-        cmp::max(loc_end.column() - loc_start.column(), 1)
-    } else {
-        1
-    };
+    let chars =
+        if loc_start.source_file() == loc_end.source_file() && loc_start.line() == loc_end.line() {
+            cmp::max(loc_end.column() - loc_start.column(), 1)
+        } else {
+            1
+        };
 
     let marker_style = severity.colour().bold();
     eprintln!(

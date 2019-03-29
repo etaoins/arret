@@ -25,10 +25,10 @@ fn find_path_to_arret_root() -> path::PathBuf {
     panic!("Unable to find the Arret root directory");
 }
 
-fn input_arg_to_source_file_id(
+fn input_arg_to_source_file(
     source_loader: &mut compiler::SourceLoader,
     input_param: &str,
-) -> compiler::SourceFileId {
+) -> compiler::RcId<compiler::SourceFile> {
     if input_param == "-" {
         use std::io::prelude::*;
 
@@ -125,7 +125,7 @@ fn main() {
         };
 
         let input_arg = compile_matches.value_of("INPUT").unwrap();
-        let input_file_id = input_arg_to_source_file_id(&mut cfg.source_loader, input_arg);
+        let input_file = input_arg_to_source_file(&mut cfg.source_loader, input_arg);
 
         let output_path = path::Path::new(
             if let Some(output_param) = compile_matches.value_of("OUTPUT") {
@@ -147,7 +147,7 @@ fn main() {
 
         if !subcommand::compile::compile_input_file(
             &mut cfg,
-            input_file_id,
+            &input_file,
             target_triple,
             &output_path,
             debug_info,
@@ -176,11 +176,11 @@ fn main() {
         };
 
         let input_param = eval_matches.value_of("INPUT").unwrap();
-        let input_file_id = input_arg_to_source_file_id(&mut cfg.source_loader, input_param);
+        let input_file = input_arg_to_source_file(&mut cfg.source_loader, input_param);
 
         initialise_llvm(false);
 
-        if !subcommand::eval::eval_input_file(&mut cfg, input_file_id) {
+        if !subcommand::eval::eval_input_file(&mut cfg, &input_file) {
             process::exit(2);
         }
     } else {

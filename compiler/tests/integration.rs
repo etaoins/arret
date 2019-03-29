@@ -170,12 +170,12 @@ fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedR
 fn result_for_single_test(
     target_triple: Option<&str>,
     source_loader: &mut SourceLoader,
-    source_file_id: compiler::SourceFileId,
+    source_file: &compiler::SourceFile,
     test_type: TestType,
 ) -> Result<(), Error> {
     let package_paths = compiler::PackagePaths::test_paths(target_triple);
 
-    let hir = compiler::lower_program(&package_paths, source_loader, source_file_id)?;
+    let hir = compiler::lower_program(&package_paths, source_loader, &source_file)?;
     let inferred_defs = compiler::infer_program(hir.defs, hir.main_var_id)?;
 
     let mut ehx = compiler::EvalHirCtx::new(true);
@@ -217,7 +217,7 @@ fn result_for_single_test(
         panic!(
             "unexpected status {} returned from compiled test {}",
             status,
-            source_loader.source_file(source_file_id).kind()
+            source_file.kind()
         );
     }
 
@@ -227,12 +227,12 @@ fn result_for_single_test(
 fn run_single_pass_test(
     target_triple: Option<&str>,
     source_loader: &mut SourceLoader,
-    source_file_id: compiler::SourceFileId,
+    source_file: &compiler::SourceFile,
     test_type: TestType,
 ) -> bool {
     use std::io;
 
-    let result = result_for_single_test(target_triple, source_loader, source_file_id, test_type);
+    let result = result_for_single_test(target_triple, source_loader, &source_file, test_type);
 
     if let Err(Error(errs)) = result {
         // Prevent concurrent writes to stderr
@@ -252,24 +252,24 @@ fn run_single_pass_test(
 fn run_single_compile_fail_test(
     target_triple: Option<&str>,
     source_loader: &mut SourceLoader,
-    source_file_id: compiler::SourceFileId,
+    source_file: &compiler::SourceFile,
 ) -> bool {
     use std::io;
 
     let result = result_for_single_test(
         target_triple,
         source_loader,
-        source_file_id,
+        source_file,
         TestType::CompileFail,
     );
 
-    let mut expected_reports = extract_expected_reports(source_loader.source_file(source_file_id));
+    let mut expected_reports = extract_expected_reports(source_file);
     let actual_reports = if let Err(Error(reports)) = result {
         reports
     } else {
         panic!(
             "Compilation unexpectedly succeeded for {}",
-            source_loader.source_file(source_file_id).kind()
+            source_file.kind()
         )
     };
 
@@ -317,12 +317,12 @@ fn run_single_test(
 ) -> bool {
     SOURCE_LOADER.with(|source_loader| {
         let source_loader = &mut *source_loader.borrow_mut();
-        let source_file_id = source_loader.load_path(input_path).unwrap();
+        let source_file = source_loader.load_path(input_path).unwrap();
 
         if test_type == TestType::CompileFail {
-            run_single_compile_fail_test(target_triple, source_loader, source_file_id)
+            run_single_compile_fail_test(target_triple, source_loader, &source_file)
         } else {
-            run_single_pass_test(target_triple, source_loader, source_file_id, test_type)
+            run_single_pass_test(target_triple, source_loader, &source_file, test_type)
         }
     })
 }

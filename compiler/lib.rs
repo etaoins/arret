@@ -18,6 +18,7 @@ pub use crate::codegen::initialise_llvm;
 pub use crate::codegen::program::{gen_program, Options as GenProgramOptions, OutputType};
 pub use crate::hir::lowering::lower_program;
 pub use crate::hir::PackagePaths;
+pub use crate::id_type::RcId;
 pub use crate::mir::eval_hir::{BuiltProgram, EvalHirCtx};
-pub use crate::source::{SourceFile, SourceFileId, SourceKind, SourceLoader, SourceLoc};
+pub use crate::source::{SourceFile, SourceKind, SourceLoader, SourceLoc};
 pub use crate::typeck::infer::infer_program;

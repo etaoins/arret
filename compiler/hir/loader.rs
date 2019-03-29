@@ -120,14 +120,11 @@ pub fn load_module_by_name(
         path_buf.push(format!("{}.arret", module_name.terminal_name));
         let path = path_buf.as_path();
 
-        let source_file_id = source_loader
+        let source_file = source_loader
             .load_path(path)
             .map_err(|err| Error::from_module_io(span, path, &err))?;
 
-        Ok(source_loader
-            .source_file(source_file_id)
-            .parse()
-            .map(LoadedModule::Source)?)
+        Ok(source_file.parse().map(LoadedModule::Source)?)
     }
 }
 

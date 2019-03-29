@@ -74,8 +74,7 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
         use crate::hir::lowering::LoweredReplDatum;
 
         let source_loader = self.lcx.source_loader_mut();
-        let source_id = source_loader.load_string(SourceKind::Repl, input);
-        let source_file = source_loader.source_file(source_id);
+        let source_file = source_loader.load_string(SourceKind::Repl, input);
 
         let mut input_data = source_file.parse()?;
 

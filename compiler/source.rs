@@ -4,6 +4,8 @@ use std::{cmp, fmt, fs, io, path};
 use syntax::datum::Datum;
 use syntax::span::Span;
 
+use crate::id_type::RcId;
+
 #[derive(PartialEq, Debug, Clone)]
 pub enum SourceKind {
     /// Loaded from a file with the given filename
@@ -32,8 +34,6 @@ pub struct SourceFile {
     source: String,
     line_number_offsets: Box<[u32]>,
 }
-
-new_indexing_id_type!(SourceFileId, usize);
 
 impl SourceFile {
     pub fn span(&self) -> Span {
@@ -65,10 +65,16 @@ impl SourceFile {
     }
 }
 
+impl fmt::Debug for SourceFile {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.kind.fmt(formatter)
+    }
+}
+
 #[derive(Default)]
 pub struct SourceLoader {
-    source_files: Vec<SourceFile>,
-    loaded_paths: HashMap<Box<path::Path>, SourceFileId>,
+    source_files: Vec<RcId<SourceFile>>,
+    loaded_paths: HashMap<Box<path::Path>, RcId<SourceFile>>,
 }
 
 fn build_line_number_offsets(input: &str) -> Box<[u32]> {
@@ -94,47 +100,43 @@ impl SourceLoader {
         end_index + 1
     }
 
-    pub fn load_path(&mut self, path: &path::Path) -> Result<SourceFileId, io::Error> {
-        if let Some(source_file_id) = self.loaded_paths.get(path) {
-            return Ok(*source_file_id);
+    pub fn load_path(&mut self, path: &path::Path) -> Result<RcId<SourceFile>, io::Error> {
+        if let Some(source_file) = self.loaded_paths.get(path) {
+            return Ok(source_file.clone());
         }
 
         let kind = SourceKind::File(path.to_string_lossy().to_string());
         let source = fs::read_to_string(path)?;
 
-        let source_file_id = self.load_string(kind, source);
-        self.loaded_paths.insert(path.into(), source_file_id);
+        let source_file = self.load_string(kind, source);
+        self.loaded_paths.insert(path.into(), source_file.clone());
 
-        Ok(source_file_id)
+        Ok(source_file)
     }
 
-    pub fn load_string(&mut self, kind: SourceKind, source: String) -> SourceFileId {
+    pub fn load_string(&mut self, kind: SourceKind, source: String) -> RcId<SourceFile> {
         let span_offset = self.next_start_index();
         let span = Span::new(span_offset, span_offset + (source.len() as u32));
 
-        SourceFileId::new_entry_id(
-            &mut self.source_files,
-            SourceFile {
-                span,
-                kind,
-                line_number_offsets: build_line_number_offsets(&source),
-                source,
-            },
-        )
+        let source_file = RcId::new(SourceFile {
+            span,
+            kind,
+            line_number_offsets: build_line_number_offsets(&source),
+            source,
+        });
+
+        self.source_files.push(source_file.clone());
+        source_file
     }
 
-    pub fn source_file(&self, id: SourceFileId) -> &SourceFile {
-        &self.source_files[id.to_usize()]
-    }
-
-    pub fn source_files(&self) -> &Vec<SourceFile> {
+    pub fn source_files(&self) -> &[RcId<SourceFile>] {
         &self.source_files
     }
 }
 
 #[derive(PartialEq, Debug)]
 pub struct SourceLoc {
-    source_file_id: SourceFileId,
+    source_file: RcId<SourceFile>,
     file_byte_offset: u32,
     line: usize,
     column: usize,
@@ -177,16 +179,16 @@ impl<'src> SourceLoc {
             .count();
 
         SourceLoc {
-            source_file_id: SourceFileId::new(source_file_index),
+            source_file: source_file.clone(),
             file_byte_offset,
             line,
             column,
         }
     }
 
-    /// Returns the source file ID
-    pub fn source_file_id(&self) -> SourceFileId {
-        self.source_file_id
+    /// Returns the source file
+    pub fn source_file(&self) -> &RcId<SourceFile> {
+        &self.source_file
     }
 
     /// Returns the offset in bytes from the beginning of the file
@@ -219,14 +221,14 @@ mod test {
         let first_kind = SourceKind::File("<first>".to_owned());
         let second_kind = SourceKind::File("<second>".to_owned());
 
-        let first_file_id = source_loader.load_string(first_kind, first_contents.into());
-        let second_file_id = source_loader.load_string(second_kind, second_contents.into());
+        let first_file = source_loader.load_string(first_kind, first_contents.into());
+        let second_file = source_loader.load_string(second_kind, second_contents.into());
 
         let test_cases = vec![
             (
                 1,
                 SourceLoc {
-                    source_file_id: first_file_id,
+                    source_file: first_file.clone(),
                     file_byte_offset: 0,
                     line: 0,
                     column: 0,
@@ -235,7 +237,7 @@ mod test {
             (
                 2,
                 SourceLoc {
-                    source_file_id: first_file_id,
+                    source_file: first_file.clone(),
                     file_byte_offset: 1,
                     line: 0,
                     column: 1,
@@ -244,7 +246,7 @@ mod test {
             (
                 3,
                 SourceLoc {
-                    source_file_id: first_file_id,
+                    source_file: first_file.clone(),
                     file_byte_offset: 2,
                     line: 0,
                     column: 2,
@@ -253,7 +255,7 @@ mod test {
             (
                 4,
                 SourceLoc {
-                    source_file_id: first_file_id,
+                    source_file: first_file,
                     file_byte_offset: 3,
                     line: 1,
                     column: 0,
@@ -262,7 +264,7 @@ mod test {
             (
                 8,
                 SourceLoc {
-                    source_file_id: second_file_id,
+                    source_file: second_file.clone(),
                     file_byte_offset: 0,
                     line: 0,
                     column: 0,
@@ -271,7 +273,7 @@ mod test {
             (
                 11,
                 SourceLoc {
-                    source_file_id: second_file_id,
+                    source_file: second_file,
                     file_byte_offset: 3,
                     line: 0,
                     column: 1,
