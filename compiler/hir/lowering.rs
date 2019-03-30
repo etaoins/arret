@@ -54,9 +54,14 @@ struct DeferredDef {
     value_datum: NsDatum,
 }
 
+struct DeferredExport {
+    span: Span,
+    ident: Ident,
+}
+
 enum DeferredModulePrim {
     Def(DeferredDef),
-    Export(Span, Ident),
+    Exports(Vec<DeferredExport>),
 }
 
 impl DeferredModulePrim {
@@ -639,7 +644,7 @@ impl<'ccx> LoweringCtx<'ccx> {
         scope: &mut Scope,
         applied_prim: AppliedPrim,
         mut arg_iter: NsDataIter,
-    ) -> Result<Vec<DeferredModulePrim>, Vec<Error>> {
+    ) -> Result<Option<DeferredModulePrim>, Vec<Error>> {
         let AppliedPrim { prim, ns_id, span } = applied_prim;
 
         match prim {
@@ -647,14 +652,14 @@ impl<'ccx> LoweringCtx<'ccx> {
                 let deferred_exports = arg_iter
                     .map(|datum| {
                         if let NsDatum::Ident(span, ident) = datum {
-                            Ok(DeferredModulePrim::Export(span, ident))
+                            Ok(DeferredExport { span, ident })
                         } else {
                             Err(Error::new(datum.span(), ErrorKind::ExpectedSym))
                         }
                     })
-                    .collect::<Result<Vec<DeferredModulePrim>>>()?;
+                    .collect::<Result<Vec<DeferredExport>>>()?;
 
-                Ok(deferred_exports)
+                Ok(Some(DeferredModulePrim::Exports(deferred_exports)))
             }
             Prim::Def => {
                 expect_arg_count(span, 2, arg_iter.len())?;
@@ -671,30 +676,11 @@ impl<'ccx> LoweringCtx<'ccx> {
                     value_datum,
                 };
 
-                Ok(vec![DeferredModulePrim::Def(deferred_def)])
+                Ok(Some(DeferredModulePrim::Def(deferred_def)))
             }
-            Prim::DefMacro => Ok(lower_defmacro(scope, span, arg_iter).map(|_| vec![])?),
-            Prim::DefType => Ok(lower_deftype(scope, span, arg_iter).map(|_| vec![])?),
-            Prim::Import => self.lower_import(scope, ns_id, arg_iter).map(|_| vec![]),
-            Prim::Do => {
-                let mut deferred_prims = vec![];
-                let mut errors = vec![];
-
-                for arg_datum in arg_iter {
-                    match self.lower_module_def(scope, arg_datum) {
-                        Ok(mut new_deferred_prims) => {
-                            deferred_prims.append(&mut new_deferred_prims)
-                        }
-                        Err(mut new_errors) => errors.append(&mut new_errors),
-                    }
-                }
-
-                if errors.is_empty() {
-                    Ok(deferred_prims)
-                } else {
-                    Err(errors)
-                }
-            }
+            Prim::DefMacro => Ok(lower_defmacro(scope, span, arg_iter).map(|_| None)?),
+            Prim::DefType => Ok(lower_deftype(scope, span, arg_iter).map(|_| None)?),
+            Prim::Import => self.lower_import(scope, ns_id, arg_iter).map(|_| None),
             Prim::CompileError => Err(vec![lower_user_compile_error(span, arg_iter)]),
             _ => Err(vec![Error::new(span, ErrorKind::NonDefInsideModule)]),
         }
@@ -704,7 +690,7 @@ impl<'ccx> LoweringCtx<'ccx> {
         &mut self,
         scope: &mut Scope,
         datum: NsDatum,
-    ) -> Result<Vec<DeferredModulePrim>, Vec<Error>> {
+    ) -> Result<Option<DeferredModulePrim>, Vec<Error>> {
         let span = datum.span();
 
         if let NsDatum::List(span, vs) = datum {
@@ -727,11 +713,7 @@ impl<'ccx> LoweringCtx<'ccx> {
 
                         return self
                             .lower_module_def(scope, expanded_datum)
-                            .map(|defs| {
-                                defs.into_iter()
-                                    .map(|def| def.with_macro_invocation_span(span))
-                                    .collect()
-                            })
+                            .map(|def| def.map(|def| def.with_macro_invocation_span(span)))
                             .map_err(|errs| {
                                 errs.into_iter()
                                     .map(|e| e.with_macro_invocation_span(span))
@@ -787,42 +769,48 @@ impl<'ccx> LoweringCtx<'ccx> {
         // - Imports, types and macros are resolved immediately and cannot refer to bindings later
         //   in the body
         // - Definitions are resolved after the module has been loaded
-        let mut deferred_prims = Vec::<DeferredModulePrim>::new();
+        let mut deferred_exports = Vec::<DeferredExport>::new();
+        let mut deferred_defs = Vec::<DeferredDef>::new();
 
         for input_datum in data {
             let ns_datum = NsDatum::from_syntax_datum(ns_id, input_datum);
             match self.lower_module_def(scope, ns_datum) {
-                Ok(mut new_deferred_prims) => {
-                    deferred_prims.append(&mut new_deferred_prims);
+                Ok(Some(DeferredModulePrim::Exports(mut exports))) => {
+                    deferred_exports.append(&mut exports);
                 }
+                Ok(Some(DeferredModulePrim::Def(deferred_def))) => {
+                    deferred_defs.push(deferred_def);
+                }
+                Ok(_) => {}
                 Err(mut new_errors) => {
                     errors.append(&mut new_errors);
                 }
             };
         }
 
-        // Process any exports at the end of the module
-        let mut exports = HashMap::new();
-        let mut defs = vec![];
-        for deferred_prim in deferred_prims {
-            match deferred_prim {
-                DeferredModulePrim::Export(span, ident) => match scope.get_or_err(span, &ident) {
-                    Ok(binding) => {
-                        exports.insert(ident.into_data_name(), binding.clone());
-                    }
-                    Err(err) => {
-                        errors.push(err);
-                    }
-                },
-                DeferredModulePrim::Def(deferred_def) => {
-                    match Self::resolve_deferred_def(scope, deferred_def) {
-                        Ok(def) => {
-                            defs.push(def);
-                        }
-                        Err(error) => {
-                            errors.push(error);
-                        }
-                    }
+        // Process any exports
+        let mut exports = HashMap::with_capacity(deferred_exports.len());
+        for deferred_export in deferred_exports {
+            let DeferredExport { span, ident } = deferred_export;
+            match scope.get_or_err(span, &ident) {
+                Ok(binding) => {
+                    exports.insert(ident.into_data_name(), binding.clone());
+                }
+                Err(err) => {
+                    errors.push(err);
+                }
+            };
+        }
+
+        // And now process any deferred defs
+        let mut defs = Vec::with_capacity(deferred_defs.len());
+        for deferred_def in deferred_defs {
+            match Self::resolve_deferred_def(scope, deferred_def) {
+                Ok(def) => {
+                    defs.push(def);
+                }
+                Err(error) => {
+                    errors.push(error);
                 }
             }
         }
@@ -857,7 +845,7 @@ impl<'ccx> LoweringCtx<'ccx> {
                         DeferredModulePrim::Def(deferred_def) => {
                             Self::resolve_deferred_def(scope, deferred_def).map_err(|err| vec![err])
                         }
-                        DeferredModulePrim::Export(_, _) => {
+                        DeferredModulePrim::Exports(_) => {
                             Err(vec![Error::new(datum.span(), ErrorKind::ExportInsideRepl)])
                         }
                     })
@@ -1181,18 +1169,6 @@ mod test {
         let j1 = "(export x y)";
         let j2 = "(def x y)";
         let j3 = "(def y x)";
-
-        let j = &[j1, j2, j3].join("");
-
-        let module = module_for_str(j).unwrap();
-        assert_eq!(2, module.exports.len());
-    }
-
-    #[test]
-    fn module_top_level_do() {
-        let j1 = "(export x y)";
-        let j2 = "(do (def x 1)";
-        let j3 = "    (def y 2))";
 
         let j = &[j1, j2, j3].join("");
 
