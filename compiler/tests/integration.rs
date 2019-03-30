@@ -17,7 +17,7 @@ use std::{fs, path, process};
 
 #[derive(Clone, Copy, PartialEq)]
 enum TestType {
-    CompileFail,
+    CompileError,
     RunPass,
     EvalPass,
 }
@@ -251,16 +251,17 @@ fn run_single_compile_fail_test(
 ) -> bool {
     use std::io;
 
-    let result = result_for_single_test(target_triple, ccx, source_file, TestType::CompileFail);
+    let result = result_for_single_test(target_triple, ccx, source_file, TestType::CompileError);
 
     let mut expected_reports = extract_expected_reports(source_file);
     let actual_reports = if let Err(Error(reports)) = result {
         reports
     } else {
-        panic!(
+        eprintln!(
             "Compilation unexpectedly succeeded for {}",
             source_file.kind()
-        )
+        );
+        return false;
     };
 
     let mut unexpected_reports = vec![];
@@ -308,7 +309,7 @@ fn run_single_test(
 ) -> bool {
     let source_file = ccx.source_loader().load_path(input_path).unwrap();
 
-    if test_type == TestType::CompileFail {
+    if test_type == TestType::CompileError {
         run_single_compile_fail_test(target_triple, ccx, &source_file)
     } else {
         run_single_pass_test(target_triple, ccx, &source_file, test_type)
@@ -316,7 +317,7 @@ fn run_single_test(
 }
 
 #[test]
-fn pass() {
+fn integration() {
     let target_triple =
         env::var_os("ARRET_TEST_TARGET_TRIPLE").map(|os_str| os_str.into_string().unwrap());
 
@@ -326,9 +327,9 @@ fn pass() {
     use compiler::initialise_llvm;
     initialise_llvm(target_triple.is_some());
 
-    let compile_fail_entries = fs::read_dir("./tests/compile-fail")
+    let compile_error_entries = fs::read_dir("./tests/compile-error")
         .unwrap()
-        .map(|entry| (entry, TestType::CompileFail));
+        .map(|entry| (entry, TestType::CompileError));
 
     let eval_entries = fs::read_dir("./tests/eval-pass")
         .unwrap()
@@ -339,7 +340,7 @@ fn pass() {
         .unwrap()
         .map(|entry| (entry, TestType::RunPass));
 
-    let failed_tests = compile_fail_entries
+    let failed_tests = compile_error_entries
         .chain(eval_entries)
         .chain(run_entries)
         .par_bridge()
@@ -360,6 +361,6 @@ fn pass() {
         .collect::<Vec<String>>();
 
     if !failed_tests.is_empty() {
-        panic!("pass tests failed: {}", failed_tests.join(", "))
+        panic!("integration tests failed: {}", failed_tests.join(", "))
     }
 }

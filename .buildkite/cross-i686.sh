@@ -14,8 +14,8 @@ cargo check --target $TARGET_TRIPLE
 echo '--- :older_man: Testing i686 cross-compile'
 cargo build --target $TARGET_TRIPLE -p stdlib
 
-# Only our "pass" tests will actually produce binaries for the target platform
-ARRET_TEST_TARGET_TRIPLE=$TARGET_TRIPLE cargo test -p compiler pass
+# Only our integration tests will actually produce binaries for the target platform
+ARRET_TEST_TARGET_TRIPLE=$TARGET_TRIPLE cargo test -p compiler integration
 
 # Build a standalone binary
 ./target/debug/arret compile --target $TARGET_TRIPLE "${HELLO_WORLD_SOURCE}" -o "${TEMP_HELLO_WORLD_BINARY}"
