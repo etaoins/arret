@@ -4,12 +4,12 @@ use runtime::abitype;
 use runtime::boxed;
 use runtime::boxed::refs::Gc;
 
-use crate::hir::rfi;
 use crate::mir::builder::Builder;
 use crate::mir::builder::BuiltReg;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::value;
 use crate::mir::value::Value;
+use crate::rfi;
 
 enum RestLength {
     Known(usize),

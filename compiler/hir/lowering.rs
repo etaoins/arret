@@ -4,6 +4,7 @@ use std::rc::Rc;
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 
+use crate::rfi;
 use crate::source::{SourceFile, SourceLoader};
 use crate::ty;
 use crate::ty::purity;
@@ -16,7 +17,6 @@ use crate::hir::loader::{load_module_by_name, LoadedModule, ModuleName, PackageP
 use crate::hir::macros::{expand_macro, lower_macro_rules, MacroId};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum, NsId};
 use crate::hir::prim::Prim;
-use crate::hir::rfi;
 use crate::hir::scope::{Binding, Scope};
 use crate::hir::types::lower_polymorphic_vars;
 use crate::hir::types::{lower_poly, try_lower_purity};

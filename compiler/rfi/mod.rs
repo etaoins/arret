@@ -8,10 +8,10 @@ use libloading;
 use syntax::datum::Datum;
 use syntax::span::Span;
 
+use crate::hir;
 use crate::hir::error::{Error, ErrorKind};
 use crate::hir::ns::{NsDatum, NsId};
 use crate::hir::scope::Scope;
-use crate::hir::types;
 use crate::source::{RfiModuleKind, SourceKind, SourceLoader};
 use crate::ty;
 
@@ -116,7 +116,7 @@ where
                 format!(
                     "Rust type `{}` does not match declared Arret type of `{}`",
                     abi_type.to_rust_str(),
-                    types::str_for_ty_ref(arret_poly),
+                    hir::str_for_ty_ref(arret_poly),
                 )
                 .into_boxed_str(),
             ),
@@ -176,7 +176,7 @@ impl Loader {
         let span = ns_datum.span();
 
         // Lower the Arret type using a fixed scope
-        let poly_type = types::lower_poly(&self.type_scope, ns_datum)?;
+        let poly_type = hir::lower_poly(&self.type_scope, ns_datum)?;
 
         // Ensure the type is actually a function type
         let poly_fun_type = if let ty::Ref::Fixed(ty::Ty::Fun(fun_type)) = poly_type {

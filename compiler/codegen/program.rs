@@ -10,8 +10,8 @@ use llvm_sys::LLVMLinkage;
 use crate::codegen::analysis::AnalysedMod;
 use crate::codegen::mod_gen::{gen_mod, GeneratedMod};
 use crate::codegen::target_gen::TargetCtx;
-use crate::hir::rfi;
 use crate::mir;
+use crate::rfi;
 use crate::SourceLoader;
 
 #[derive(Copy, Clone, PartialEq)]

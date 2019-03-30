@@ -10,6 +10,7 @@ mod hir;
 mod mir;
 pub mod repl;
 pub mod reporting;
+mod rfi;
 mod source;
 mod ty;
 mod typeck;

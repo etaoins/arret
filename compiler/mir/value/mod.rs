@@ -18,6 +18,7 @@ use crate::hir;
 use crate::mir::builder::BuiltReg;
 use crate::mir::closure::Closure;
 use crate::mir::tagset::TypeTagSet;
+use crate::rfi;
 use crate::ty;
 use crate::ty::ty_args::TyArgs;
 
@@ -67,7 +68,7 @@ pub enum Value {
     // This uses `Box<[]>` because we can't convert from a `Vec<>` to `Rc<[]>` without reallocating
     List(Box<[Value]>, Option<Box<Value>>),
     ArretFun(ArretFun),
-    RustFun(Rc<hir::rfi::Fun>),
+    RustFun(Rc<rfi::Fun>),
     TyPred(ty::pred::TestTy),
     EqPred,
     Reg(Rc<RegValue>),

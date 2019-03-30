@@ -6,8 +6,8 @@ use syntax::datum::DataStr;
 use syntax::span::Span;
 
 use crate::hir::error::{Error, ErrorKind, Result};
-use crate::hir::rfi;
 use crate::id_type::ArcId;
+use crate::rfi;
 use crate::source::{SourceFile, SourceLoader};
 
 pub struct PackagePath {

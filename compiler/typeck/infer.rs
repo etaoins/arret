@@ -4,7 +4,7 @@ use std::result;
 
 use crate::hir;
 use crate::hir::destruc;
-use crate::hir::rfi;
+use crate::rfi;
 use crate::ty;
 use crate::ty::list_iter::ListIterator;
 use crate::ty::purity;

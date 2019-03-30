@@ -23,6 +23,7 @@ use crate::mir::ops;
 use crate::mir::polymorph::PolymorphABI;
 use crate::mir::value;
 use crate::mir::{Expr, Value};
+use crate::rfi;
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::ty_args::TyArgs;
@@ -394,7 +395,7 @@ impl EvalHirCtx {
         eval_equality(self, b, span, &left_value, &right_value)
     }
 
-    pub fn rust_fun_to_jit_boxed(&mut self, rust_fun: Rc<hir::rfi::Fun>) -> Gc<boxed::FunThunk> {
+    pub fn rust_fun_to_jit_boxed(&mut self, rust_fun: Rc<rfi::Fun>) -> Gc<boxed::FunThunk> {
         let closure = boxed::NIL_INSTANCE.as_any_ref();
         let entry = self.jit_thunk_for_rust_fun(&rust_fun);
         let new_boxed = boxed::FunThunk::new(self, (closure, entry));
@@ -405,7 +406,7 @@ impl EvalHirCtx {
         new_boxed
     }
 
-    fn jit_thunk_for_rust_fun(&mut self, rust_fun: &hir::rfi::Fun) -> boxed::ThunkEntry {
+    fn jit_thunk_for_rust_fun(&mut self, rust_fun: &rfi::Fun) -> boxed::ThunkEntry {
         // Create a dynamic thunk to this Rust function if it doesn't exist
         if let Some(thunk) = self.rust_fun_thunks.get(&rust_fun.entry_point()) {
             return *thunk;
@@ -434,7 +435,7 @@ impl EvalHirCtx {
     ///
     /// This can be called multiple times with the same Rust fun. Calling it with a fun that's
     /// never used by the JIT is harmless
-    pub fn register_rust_fun_with_jit(&mut self, rust_fun: &hir::rfi::Fun) {
+    pub fn register_rust_fun_with_jit(&mut self, rust_fun: &rfi::Fun) {
         let symbol_cstring = ffi::CString::new(rust_fun.symbol()).unwrap();
 
         // Add the inner symbol
@@ -450,7 +451,7 @@ impl EvalHirCtx {
     fn id_for_rust_fun(
         &mut self,
         span: Span,
-        rust_fun: &hir::rfi::Fun,
+        rust_fun: &rfi::Fun,
         wanted_abi: PolymorphABI,
     ) -> ops::PrivateFunId {
         use crate::mir::rust_fun::ops_for_rust_fun;
@@ -477,7 +478,7 @@ impl EvalHirCtx {
         &mut self,
         b: &mut Builder,
         span: Span,
-        rust_fun: &hir::rfi::Fun,
+        rust_fun: &rfi::Fun,
     ) -> BuiltReg {
         use crate::mir::ops::*;
         use runtime::abitype;
@@ -502,7 +503,7 @@ impl EvalHirCtx {
         &mut self,
         b: &mut Builder,
         span: Span,
-        rust_fun: &hir::rfi::Fun,
+        rust_fun: &rfi::Fun,
         entry_point_abi: &CallbackEntryPointABIType,
     ) -> BuiltReg {
         use crate::mir::ops::*;
@@ -549,7 +550,7 @@ impl EvalHirCtx {
         b: &mut Option<Builder>,
         span: Span,
         ret_ty: &ty::Ref<ty::Mono>,
-        rust_fun: &hir::rfi::Fun,
+        rust_fun: &rfi::Fun,
         apply_args: ApplyArgs<'_>,
     ) -> Result<Value> {
         use crate::mir::intrinsic;

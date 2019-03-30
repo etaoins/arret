@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use syntax::span::Span;
 
 use crate::codegen::GenABI;
-use crate::hir;
 use crate::mir::builder::Builder;
 use crate::mir::error::{Error, Result};
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops;
 use crate::mir::polymorph::PolymorphABI;
 use crate::mir::value::Value;
+use crate::rfi;
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
@@ -19,7 +19,7 @@ use crate::ty::purity::Purity;
 /// Rust funs cannot capture pvars so this only needs to look at the pvars from the apply
 pub fn rust_fun_app_purity(
     apply_pvar_purities: &HashMap<purity::PVarId, purity::Ref>,
-    rust_fun: &hir::rfi::Fun,
+    rust_fun: &rfi::Fun,
 ) -> Purity {
     let arret_fun_type = rust_fun.arret_fun_type();
 
@@ -46,7 +46,7 @@ pub fn rust_fun_app_purity(
 }
 
 /// Returns the upper bound on the purity for a Rust fun
-pub fn rust_fun_purity_upper_bound(rust_fun: &hir::rfi::Fun) -> Purity {
+pub fn rust_fun_purity_upper_bound(rust_fun: &rfi::Fun) -> Purity {
     let arret_fun_type = rust_fun.arret_fun_type();
 
     if arret_fun_type.ret().is_never() {
@@ -63,7 +63,7 @@ pub fn build_rust_fun_app(
     b: &mut Builder,
     span: Span,
     ret_ty: &ty::Ref<ty::Mono>,
-    rust_fun: &hir::rfi::Fun,
+    rust_fun: &rfi::Fun,
     call_purity: Purity,
     arg_list_value: Value,
 ) -> Result<Value> {
@@ -124,7 +124,7 @@ pub fn build_rust_fun_app(
 pub fn ops_for_rust_fun(
     ehx: &mut EvalHirCtx,
     span: Span,
-    rust_fun: &hir::rfi::Fun,
+    rust_fun: &rfi::Fun,
     wanted_abi: PolymorphABI,
 ) -> ops::Fun {
     use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
