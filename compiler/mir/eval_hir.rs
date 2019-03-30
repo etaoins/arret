@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::ffi;
-use std::os::raw::c_void;
 use std::panic;
 use std::rc::Rc;
 
@@ -49,7 +48,7 @@ pub struct EvalHirCtx {
     rust_funs: HashMap<RustFunKey, ops::PrivateFunId>,
     arret_funs: HashMap<ArretFunKey, ops::PrivateFunId>,
 
-    rust_fun_thunks: HashMap<*const c_void, boxed::ThunkEntry>,
+    rust_fun_thunks: HashMap<usize, boxed::ThunkEntry>,
     thunk_fun_values: HashMap<Gc<boxed::FunThunk>, Value>,
     thunk_jit: codegen::jit::JITCtx,
 }

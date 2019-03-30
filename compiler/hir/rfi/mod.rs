@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::os::raw::c_void;
 use std::path;
 use std::sync::Arc;
 
@@ -41,7 +40,7 @@ pub struct Fun {
     params: &'static [abitype::ParamABIType],
     ret: &'static abitype::RetABIType,
     symbol: &'static str,
-    entry_point: *const c_void,
+    entry_point: usize,
 }
 
 impl Fun {
@@ -57,7 +56,7 @@ impl Fun {
         self.symbol
     }
 
-    pub fn entry_point(&self) -> *const c_void {
+    pub fn entry_point(&self) -> usize {
         self.entry_point
     }
 
@@ -159,7 +158,7 @@ impl Loader {
     fn process_rust_fun(
         &self,
         arret_type_datum: &Datum,
-        entry_point: *const c_void,
+        entry_point: usize,
         rust_fun: &'static binding::RustFun,
         intrinsic_name: Option<&'static str>,
     ) -> Result<Fun, Error> {
@@ -276,7 +275,7 @@ impl Loader {
             .map(|(fun_name, rust_fun)| {
                 let entry_point_address = unsafe {
                     *loaded
-                        .get::<*const c_void>(rust_fun.symbol.as_bytes())
+                        .get::<usize>(rust_fun.symbol.as_bytes())
                         .map_err(map_io_err)?
                 };
 
@@ -332,7 +331,6 @@ mod test {
 
     use runtime::abitype::{ABIType, BoxedABIType, ParamABIType, ParamCapture, RetABIType};
     use runtime::boxed::TypeTag;
-    use std::ptr;
     use syntax::parser::datum_from_str;
 
     fn binding_fun_to_poly_type(rust_fun: &'static binding::RustFun) -> Result<ty::Fun, Error> {
@@ -340,7 +338,7 @@ mod test {
         let arret_type_datum = datum_from_str(rust_fun.arret_type).unwrap();
 
         loader
-            .process_rust_fun(&arret_type_datum, ptr::null(), rust_fun, None)
+            .process_rust_fun(&arret_type_datum, 0, rust_fun, None)
             .map(|rfi_fun| rfi_fun.arret_fun_type)
     }
 
