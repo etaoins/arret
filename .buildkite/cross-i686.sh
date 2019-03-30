@@ -5,7 +5,13 @@ set -e
 TARGET_TRIPLE=i686-unknown-linux-gnu
 . ./driver/tests/integration/config.sh
 
-# Cross-compile just stdlib
+# Check to ensure the compiler would build on i686. This ensure we're not making assumptions about
+# e.g. pointer width
+echo '--- :older_woman: Checking i686 debug'
+cargo check --target $TARGET_TRIPLE
+
+# Cross-compile just stdlib. Otherwise we would need a 32bit LLVM etc.
+echo '--- :older_man: Testing i686 cross-compile'
 cargo build --target $TARGET_TRIPLE -p stdlib
 
 # Only our "pass" tests will actually produce binaries for the target platform

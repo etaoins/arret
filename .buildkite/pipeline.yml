@@ -32,7 +32,6 @@ steps:
       - "echo '--- :prettier: Checking rustfmt'"
       - cargo fmt -- --check
 
-      - "echo '--- :older_man: Testing i686 cross-compile'"
       - ./.buildkite/cross-i686.sh
     plugins:
       - seek-oss/docker-ecr-cache#v1.1.3:
