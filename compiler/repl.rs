@@ -1,3 +1,5 @@
+use syntax::datum::DataStr;
+
 use crate::error::Error;
 use crate::hir;
 use crate::hir::scope::Scope;
@@ -53,12 +55,12 @@ impl<'ccx> ReplCtx<'ccx> {
     }
 
     /// Returns all names bound in the root scope and namespace
-    pub fn bound_names(&self) -> impl Iterator<Item = &str> {
+    pub fn bound_names(&self) -> impl Iterator<Item = &DataStr> {
         let ns_id = self.ns_id;
 
         self.scope.bound_idents().filter_map(move |ident| {
             if ident.ns_id() == ns_id {
-                Some(ident.name())
+                Some(ident.data_name())
             } else {
                 None
             }

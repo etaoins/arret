@@ -8,12 +8,12 @@ new_counting_id_type!(NsIdCounter, NsId);
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Ident {
     ns_id: NsId,
-    name: DataStr,
+    data_name: DataStr,
 }
 
 impl Ident {
-    pub fn new(ns_id: NsId, name: DataStr) -> Ident {
-        Ident { ns_id, name }
+    pub fn new(ns_id: NsId, data_name: DataStr) -> Ident {
+        Ident { ns_id, data_name }
     }
 
     pub fn ns_id(&self) -> NsId {
@@ -21,17 +21,21 @@ impl Ident {
     }
 
     pub fn name(&self) -> &str {
-        &self.name
+        &self.data_name
     }
 
-    pub fn into_name(self) -> DataStr {
-        self.name
+    pub fn data_name(&self) -> &DataStr {
+        &self.data_name
+    }
+
+    pub fn into_data_name(self) -> DataStr {
+        self.data_name
     }
 
     pub fn with_ns_id(&self, new_ns_id: NsId) -> Ident {
         Ident {
             ns_id: new_ns_id,
-            name: self.name.clone(),
+            data_name: self.data_name.clone(),
         }
     }
 }
@@ -104,7 +108,7 @@ impl NsDatum {
             NsDatum::Float(span, v) => Datum::Float(span, v),
             NsDatum::Str(span, v) => Datum::Str(span, v),
             NsDatum::Keyword(span, v) => Datum::Sym(span, v),
-            NsDatum::Ident(span, v) => Datum::Sym(span, v.into_name()),
+            NsDatum::Ident(span, v) => Datum::Sym(span, v.into_data_name()),
             NsDatum::List(span, vs) => Datum::List(span, Self::map_nsdata(vs)),
             NsDatum::Vector(span, vs) => Datum::Vector(span, Self::map_nsdata(vs)),
             NsDatum::Set(span, vs) => Datum::Set(span, Self::map_nsdata(vs)),

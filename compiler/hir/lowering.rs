@@ -177,7 +177,7 @@ fn lower_ident_destruc(
     decl_ty: DeclTy,
 ) -> Result<destruc::Scalar<Lowered>> {
     if ident.name() == "_" {
-        Ok(destruc::Scalar::new(None, ident.into_name(), decl_ty))
+        Ok(destruc::Scalar::new(None, ident.into_data_name(), decl_ty))
     } else {
         let var_id = VarId::alloc();
         let source_name = ident.name().into();
@@ -480,7 +480,10 @@ fn lower_expr(scope: &Scope, datum: NsDatum) -> Result<Expr<Lowered>> {
             Binding::Ty(_) | Binding::TyCons(_) | Binding::Purity(_) => {
                 Err(Error::new(span, ErrorKind::TyRef))
             }
-            Binding::Macro(_) => Err(Error::new(span, ErrorKind::MacroRef(ident.into_name()))),
+            Binding::Macro(_) => Err(Error::new(
+                span,
+                ErrorKind::MacroRef(ident.into_data_name()),
+            )),
         },
         NsDatum::List(span, vs) => {
             let mut data_iter = vs.into_vec().into_iter();
@@ -805,7 +808,7 @@ impl<'ccx> LoweringCtx<'ccx> {
             match deferred_prim {
                 DeferredModulePrim::Export(span, ident) => match scope.get_or_err(span, &ident) {
                     Ok(binding) => {
-                        exports.insert(ident.into_name(), binding.clone());
+                        exports.insert(ident.into_data_name(), binding.clone());
                     }
                     Err(err) => {
                         errors.push(err);

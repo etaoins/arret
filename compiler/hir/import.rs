@@ -38,7 +38,7 @@ where
     fn lower_module_import(&mut self, span: Span, name_data: Vec<NsDatum>) -> Result<FilterInput> {
         let mut name_idents = name_data
             .into_iter()
-            .map(|datum| expect_ident(datum).map(|ident| ident.into_name()));
+            .map(|datum| expect_ident(datum).map(|ident| ident.into_data_name()));
 
         let package_name = name_idents.next().unwrap()?;
         let terminal_name = name_idents.next_back().unwrap()?;
@@ -68,11 +68,11 @@ where
                         let (ident, span) = expect_ident_and_span(arg_datum)?;
 
                         if let Some(binding) = inner_exports.get(ident.name()) {
-                            Ok((ident.into_name(), binding.clone()))
+                            Ok((ident.into_data_name(), binding.clone()))
                         } else {
                             Err(Error::new(
                                 span,
-                                ErrorKind::UnboundSym(ident.into_name()),
+                                ErrorKind::UnboundSym(ident.into_data_name()),
                             ))
                         }
                     })
@@ -93,7 +93,7 @@ where
                     if except_exports.remove(ident.name()).is_none() {
                         errors.push(Error::new(
                             span,
-                            ErrorKind::UnboundSym(ident.into_name()),
+                            ErrorKind::UnboundSym(ident.into_data_name()),
                         ));
                     }
                 }
@@ -120,12 +120,12 @@ where
 
                         match rename_exports.remove(from_ident.name()) {
                             Some(binding) => {
-                                rename_exports.insert(to_ident.into_name(), binding);
+                                rename_exports.insert(to_ident.into_data_name(), binding);
                             }
                             None => {
                                 errors.push(Error::new(
                                     from_span,
-                                    ErrorKind::UnboundSym(from_ident.into_name()),
+                                    ErrorKind::UnboundSym(from_ident.into_data_name()),
                                 ));
                             }
                         }

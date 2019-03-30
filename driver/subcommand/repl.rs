@@ -7,6 +7,8 @@ use ansi_term::{Colour, Style};
 use directories;
 use rustyline;
 
+use syntax::datum::DataStr;
+
 use compiler;
 use compiler::CompileCtx;
 
@@ -70,15 +72,15 @@ fn expected_content_for_line(line: &str) -> Option<syntax::error::ExpectedConten
 }
 
 struct ArretHelper {
-    all_names: Vec<String>,
+    all_names: Vec<DataStr>,
 }
 
 impl ArretHelper {
-    fn new<'a>(names_iter: impl Iterator<Item = &'a str>) -> ArretHelper {
+    fn new<'a>(names_iter: impl Iterator<Item = &'a DataStr>) -> ArretHelper {
         let mut all_names = names_iter
-            .chain(UNBOUND_COMPLETIONS.iter().cloned())
-            .map(|s| s.to_owned())
-            .collect::<Vec<String>>();
+            .cloned()
+            .chain(UNBOUND_COMPLETIONS.iter().map(|unbound| (*unbound).into()))
+            .collect::<Vec<DataStr>>();
 
         all_names.sort();
 
