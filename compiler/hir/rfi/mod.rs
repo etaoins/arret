@@ -17,8 +17,6 @@ use crate::ty;
 
 use runtime::{abitype, binding};
 
-new_indexing_id_type!(RustLibraryId, u32);
-
 pub struct Library {
     _loaded: libloading::Library,
     target_path: Box<path::Path>,
@@ -32,8 +30,6 @@ impl Library {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Fun {
-    rust_library_id: RustLibraryId,
-
     /// Name of this function if it corresponds to an intrinsic
     ///
     /// Intrinsics may have optimised partial evaluation in MIR. However, they should be
@@ -44,7 +40,6 @@ pub struct Fun {
     takes_task: bool,
     params: &'static [abitype::ParamABIType],
     ret: &'static abitype::RetABIType,
-    // TODO: Use ! once its stable
     symbol: &'static str,
     entry_point: *const c_void,
 }
@@ -164,7 +159,6 @@ impl Loader {
     fn process_rust_fun(
         &self,
         arret_type_datum: &Datum,
-        rust_library_id: RustLibraryId,
         entry_point: *const c_void,
         rust_fun: &'static binding::RustFun,
         intrinsic_name: Option<&'static str>,
@@ -242,8 +236,6 @@ impl Loader {
         ensure_types_compatible(span, upper_fun_type.ret(), &rust_fun.ret)?;
 
         Ok(Fun {
-            rust_library_id,
-
             intrinsic_name,
 
             arret_fun_type: *poly_fun_type,
@@ -268,8 +260,6 @@ impl Loader {
 
         let map_io_err = |err| Error::from_module_io(span, &native_path, &err);
         let loaded = libloading::Library::new(&native_path).map_err(map_io_err)?;
-
-        let rust_library_id = RustLibraryId::new(self.rust_libraries.len());
 
         let exports_symbol_name = format!("ARRET_{}_RUST_EXPORTS", package_name.to_uppercase());
         let exports: binding::RustExports = unsafe {
@@ -314,7 +304,6 @@ impl Loader {
 
                 let fun = self.process_rust_fun(
                     arret_type_datum,
-                    rust_library_id,
                     entry_point_address,
                     rust_fun,
                     intrinsic_name,
@@ -351,13 +340,7 @@ mod test {
         let arret_type_datum = datum_from_str(rust_fun.arret_type).unwrap();
 
         loader
-            .process_rust_fun(
-                &arret_type_datum,
-                RustLibraryId::new(0),
-                ptr::null(),
-                rust_fun,
-                None,
-            )
+            .process_rust_fun(&arret_type_datum, ptr::null(), rust_fun, None)
             .map(|rfi_fun| rfi_fun.arret_fun_type)
     }
 
