@@ -5,7 +5,7 @@ use std::result;
 
 use crate::span::Span;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Error {
     span: Span,
     pub(crate) kind: ErrorKind,
@@ -25,7 +25,7 @@ impl Error {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ErrorKind {
     Eof(ExpectedContent),
     UnsupportedDispatch,

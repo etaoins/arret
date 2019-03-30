@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::path;
 
-use syntax::datum::{DataStr, Datum};
+use syntax::datum::DataStr;
 use syntax::span::Span;
 
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::rfi;
-use crate::source::SourceLoader;
+use crate::id_type::ArcId;
+use crate::source::{SourceFile, SourceLoader};
 
 pub struct PackagePath {
     arret_base: Box<path::Path>,
@@ -66,7 +67,7 @@ pub struct ModuleName {
 
 #[derive(Debug)]
 pub enum LoadedModule {
-    Source(Vec<Datum>),
+    Source(ArcId<SourceFile>),
     Rust(rfi::Module),
 }
 
@@ -124,7 +125,7 @@ pub fn load_module_by_name(
             .load_path(path)
             .map_err(|err| Error::from_module_io(span, path, &err))?;
 
-        Ok(source_file.parse().map(LoadedModule::Source)?)
+        Ok(LoadedModule::Source(source_file))
     }
 }
 
@@ -153,7 +154,7 @@ mod test {
         let loaded_module = load_stdlib_module("base").unwrap();
 
         if let LoadedModule::Source(data) = loaded_module {
-            assert!(!data.is_empty());
+            assert!(!data.parsed().unwrap().is_empty());
         } else {
             panic!("Did not get source module; got {:?}", loaded_module);
         }

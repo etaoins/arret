@@ -76,13 +76,12 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
         let source_loader = self.lcx.source_loader();
         let source_file = source_loader.load_string(SourceKind::Repl, input.into());
 
-        let mut input_data = source_file.parse()?;
-
-        let input_datum = match input_data.len() {
-            0 => {
+        let input_data = source_file.parsed()?;
+        let input_datum = match input_data {
+            [] => {
                 return Ok(EvaledLine::EmptyInput);
             }
-            1 => input_data.pop().unwrap(),
+            [input_datum] => input_datum,
             _ => {
                 use crate::hir::error::{Error, ErrorKind};
                 let extra_span = input_data[1].span();

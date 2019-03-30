@@ -163,7 +163,7 @@ impl Loader {
 
     fn process_rust_fun(
         &self,
-        arret_type_datum: Datum,
+        arret_type_datum: &Datum,
         rust_library_id: RustLibraryId,
         entry_point: *const c_void,
         rust_fun: &'static binding::RustFun,
@@ -299,14 +299,15 @@ impl Loader {
                 let arret_type_source_file =
                     source_loader.load_string(kind, rust_fun.arret_type.into());
 
-                let mut arret_type_data = arret_type_source_file.parse()?;
-                if arret_type_data.len() != 1 {
-                    return Err(Error::new(
-                        arret_type_source_file.span(),
-                        ErrorKind::RustFunError("expected exactly one Arret type datum".into()),
-                    ));
-                }
-                let arret_type_datum = arret_type_data.pop().unwrap();
+                let arret_type_datum = match arret_type_source_file.parsed()? {
+                    [arret_type_datum] => arret_type_datum,
+                    _ => {
+                        return Err(Error::new(
+                            arret_type_source_file.span(),
+                            ErrorKind::RustFunError("expected exactly one Arret type datum".into()),
+                        ));
+                    }
+                };
 
                 // Treat every native function in the stdlib as an intrinsic
                 let intrinsic_name = Some(*fun_name).filter(|_| package_name == "stdlib");
@@ -351,7 +352,7 @@ mod test {
 
         loader
             .process_rust_fun(
-                arret_type_datum,
+                &arret_type_datum,
                 RustLibraryId::new(0),
                 ptr::null(),
                 rust_fun,

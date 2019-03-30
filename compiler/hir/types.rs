@@ -588,8 +588,7 @@ pub fn poly_for_str(datum_str: &str) -> ty::Ref<ty::Poly> {
     let scope = Scope::new_with_entries(prim_entries);
 
     let test_datum = datum_from_str(datum_str).unwrap();
-
-    lower_poly(&scope, NsDatum::from_syntax_datum(test_ns_id, test_datum)).unwrap()
+    lower_poly(&scope, NsDatum::from_syntax_datum(test_ns_id, &test_datum)).unwrap()
 }
 
 #[cfg(test)]

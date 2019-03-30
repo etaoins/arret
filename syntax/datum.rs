@@ -1,8 +1,8 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::span::Span;
 
-pub type DataStr = Rc<str>;
+pub type DataStr = Arc<str>;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Datum {

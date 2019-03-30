@@ -603,7 +603,10 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                 self.package_paths,
                 &module_name,
             )? {
-                LoadedModule::Source(module_data) => self.lower_module(scope, module_data)?,
+                LoadedModule::Source(source_file) => {
+                    let module_data = source_file.parsed().map_err(|err| vec![err.into()])?;
+                    self.lower_module(scope, module_data)?
+                }
                 LoadedModule::Rust(rfi_module) => include_rfi_module(span, rfi_module),
             }
         };
@@ -766,7 +769,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
     fn lower_module(
         &mut self,
         scope: &mut Scope,
-        data: Vec<Datum>,
+        data: &[Datum],
     ) -> Result<LoweredModule, Vec<Error>> {
         let ns_id = scope.alloc_ns_id();
         let mut errors: Vec<Error> = vec![];
@@ -896,7 +899,7 @@ pub fn lower_program(
 ) -> Result<LoweredProgram, Vec<Error>> {
     let file_span = source_file.span();
 
-    let data = source_file.parse().map_err(|err| vec![err.into()])?;
+    let data = source_file.parsed().map_err(|err| vec![err.into()])?;
 
     let mut root_scope = Scope::empty();
     let mut lcx = LoweringCtx::new(package_paths, source_loader);
@@ -953,7 +956,7 @@ fn module_for_str(data_str: &str) -> Result<LoweredModule> {
     let source_loader = SourceLoader::new();
     let mut lcx = LoweringCtx::new(&package_paths, &source_loader);
 
-    lcx.lower_module(&mut root_scope, program_data)
+    lcx.lower_module(&mut root_scope, &program_data)
         .map_err(|mut errors| errors.remove(0))
 }
 
@@ -965,7 +968,7 @@ pub fn expr_for_str(data_str: &str) -> Expr<Lowered> {
     let scope = Scope::new_with_primitives();
 
     let test_datum = datum_from_str(data_str).unwrap();
-    let test_nsdatum = NsDatum::from_syntax_datum(test_ns_id, test_datum);
+    let test_nsdatum = NsDatum::from_syntax_datum(test_ns_id, &test_datum);
 
     lower_expr(&scope, test_nsdatum).unwrap()
 }

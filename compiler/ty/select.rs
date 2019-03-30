@@ -307,7 +307,7 @@ mod test {
 
             let polymorphic_data = data_from_str(polymorphic_str)
                 .unwrap()
-                .into_iter()
+                .iter()
                 .map(|value| NsDatum::from_syntax_datum(test_ns_id, value))
                 .collect::<Vec<NsDatum>>();
 
@@ -332,7 +332,7 @@ mod test {
 
             lower_poly(
                 &self.scope,
-                NsDatum::from_syntax_datum(self.test_ns_id, test_datum),
+                NsDatum::from_syntax_datum(self.test_ns_id, &test_datum),
             )
             .unwrap()
         }
@@ -343,7 +343,7 @@ mod test {
 
             try_lower_purity(
                 &self.scope,
-                &NsDatum::from_syntax_datum(self.test_ns_id, test_datum),
+                &NsDatum::from_syntax_datum(self.test_ns_id, &test_datum),
             )
             .unwrap()
         }

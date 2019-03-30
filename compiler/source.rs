@@ -39,8 +39,10 @@ impl fmt::Display for SourceKind {
 pub struct SourceFile {
     span: Span,
     kind: SourceKind,
+
     source: Cow<'static, str>,
     line_number_offsets: Box<[u32]>,
+    parsed: Result<Vec<Datum>, syntax::error::Error>,
 }
 
 impl SourceFile {
@@ -67,9 +69,11 @@ impl SourceFile {
         &self.source[start as usize..end as usize]
     }
 
-    pub fn parse(&self) -> Result<Vec<Datum>, syntax::error::Error> {
-        use syntax::parser::data_from_str_with_span_offset;
-        data_from_str_with_span_offset(self.source(), self.span.start())
+    pub fn parsed(&self) -> Result<&[Datum], syntax::error::Error> {
+        match &self.parsed {
+            Ok(data) => Ok(data),
+            Err(err) => Err(err.clone()),
+        }
     }
 }
 
@@ -101,6 +105,8 @@ impl SourceLoaderData {
     }
 
     fn load_string(&mut self, kind: SourceKind, source: Cow<'static, str>) -> ArcId<SourceFile> {
+        use syntax::parser::data_from_str_with_span_offset;
+
         let span_offset = self
             .source_files
             .last()
@@ -109,12 +115,15 @@ impl SourceLoaderData {
             + 1;
 
         let span = Span::new(span_offset, span_offset + (source.len() as u32));
+        let parsed = data_from_str_with_span_offset(&source, span_offset);
 
         let source_file = ArcId::new(SourceFile {
             span,
             kind,
+
             line_number_offsets: build_line_number_offsets(&source),
             source,
+            parsed,
         });
 
         self.source_files.push(source_file.clone());

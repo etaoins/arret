@@ -254,7 +254,7 @@ mod test {
         let test_ns_id = Scope::root_ns_id();
 
         let import_set_datum =
-            NsDatum::from_syntax_datum(test_ns_id, datum_from_str(datum).unwrap());
+            NsDatum::from_syntax_datum(test_ns_id, &datum_from_str(datum).unwrap());
 
         lower_import_set(import_set_datum, |_, module_name| {
             if module_name == ModuleName::new("lib".into(), vec![], "test".into()) {

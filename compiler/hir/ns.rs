@@ -52,34 +52,32 @@ pub enum NsDatum {
 }
 
 impl NsDatum {
-    fn map_syntax_data(ns_id: NsId, vs: Box<[Datum]>) -> Box<[NsDatum]> {
-        vs.into_vec()
-            .into_iter()
+    fn map_syntax_data(ns_id: NsId, vs: &[Datum]) -> Box<[NsDatum]> {
+        vs.iter()
             .map(|v| Self::from_syntax_datum(ns_id, v))
             .collect()
     }
 
-    pub fn from_syntax_datum(ns_id: NsId, value: Datum) -> NsDatum {
+    pub fn from_syntax_datum(ns_id: NsId, value: &Datum) -> NsDatum {
         match value {
-            Datum::Bool(span, v) => NsDatum::Bool(span, v),
-            Datum::Char(span, v) => NsDatum::Char(span, v),
-            Datum::Int(span, v) => NsDatum::Int(span, v),
-            Datum::Float(span, v) => NsDatum::Float(span, v),
-            Datum::Str(span, v) => NsDatum::Str(span, v),
+            Datum::Bool(span, v) => NsDatum::Bool(*span, *v),
+            Datum::Char(span, v) => NsDatum::Char(*span, *v),
+            Datum::Int(span, v) => NsDatum::Int(*span, *v),
+            Datum::Float(span, v) => NsDatum::Float(*span, *v),
+            Datum::Str(span, v) => NsDatum::Str(*span, v.clone()),
             Datum::Sym(span, v) => {
                 if v.starts_with(':') {
-                    NsDatum::Keyword(span, v)
+                    NsDatum::Keyword(*span, v.clone())
                 } else {
-                    NsDatum::Ident(span, Ident::new(ns_id, v))
+                    NsDatum::Ident(*span, Ident::new(ns_id, v.clone()))
                 }
             }
-            Datum::List(span, vs) => NsDatum::List(span, Self::map_syntax_data(ns_id, vs)),
-            Datum::Vector(span, vs) => NsDatum::Vector(span, Self::map_syntax_data(ns_id, vs)),
-            Datum::Set(span, vs) => NsDatum::Set(span, Self::map_syntax_data(ns_id, vs)),
+            Datum::List(span, vs) => NsDatum::List(*span, Self::map_syntax_data(ns_id, vs)),
+            Datum::Vector(span, vs) => NsDatum::Vector(*span, Self::map_syntax_data(ns_id, vs)),
+            Datum::Set(span, vs) => NsDatum::Set(*span, Self::map_syntax_data(ns_id, vs)),
             Datum::Map(span, vs) => NsDatum::Map(
-                span,
-                vs.into_vec()
-                    .into_iter()
+                *span,
+                vs.iter()
                     .map(|(k, v)| {
                         (
                             NsDatum::from_syntax_datum(ns_id, k),
