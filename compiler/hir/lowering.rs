@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
@@ -37,6 +38,7 @@ pub struct LoweringCtx<'pp, 'sl> {
     source_loader: &'sl SourceLoader,
 
     rfi_loader: rfi::Loader,
+    rust_libraries: Vec<Rc<rfi::Library>>,
 
     module_exports: HashMap<ModuleName, Exports>,
     module_defs: Vec<Vec<Def<Lowered>>>,
@@ -44,7 +46,7 @@ pub struct LoweringCtx<'pp, 'sl> {
 
 pub struct LoweredProgram {
     pub defs: Vec<Vec<Def<Lowered>>>,
-    pub rust_libraries: Vec<rfi::Library>,
+    pub rust_libraries: Vec<Rc<rfi::Library>>,
     pub main_var_id: VarId,
 }
 
@@ -518,44 +520,6 @@ fn lower_expr(scope: &Scope, datum: NsDatum) -> Result<Expr<Lowered>> {
     }
 }
 
-fn include_rfi_module(span: Span, rfi_module: rfi::Module) -> LoweredModule {
-    use syntax::datum::DataStr;
-
-    let mut exports = HashMap::new();
-    let mut defs = vec![];
-
-    exports.reserve(rfi_module.len());
-    defs.reserve(rfi_module.len());
-
-    let var_ids = VarId::alloc_iter(rfi_module.len());
-    for ((fun_name, rust_fun), var_id) in rfi_module.into_iter().zip(var_ids) {
-        let fun_name_data_str: DataStr = fun_name.into();
-
-        let def = Def {
-            span,
-            macro_invocation_span: EMPTY_SPAN,
-            destruc: destruc::Destruc::Scalar(
-                span,
-                destruc::Scalar::new(
-                    Some(var_id),
-                    fun_name_data_str.clone(),
-                    ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into(),
-                ),
-            ),
-            value_expr: Expr::new(span, ExprKind::RustFun(Box::new(rust_fun))),
-        };
-
-        defs.push(def);
-        exports.insert(fun_name_data_str, Binding::Var(var_id));
-    }
-
-    LoweredModule {
-        defs,
-        exports,
-        ns_id: None,
-    }
-}
-
 impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
     pub fn new(
         package_paths: &'pp PackagePaths,
@@ -581,6 +545,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             source_loader,
 
             rfi_loader: rfi::Loader::new(),
+            rust_libraries: vec![],
 
             module_exports,
             module_defs: vec![],
@@ -611,12 +576,54 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
                     let module_data = source_file.parsed().map_err(|err| vec![err.into()])?;
                     self.lower_module(scope, module_data)?
                 }
-                LoadedModule::Rust(rfi_module) => include_rfi_module(span, rfi_module),
+                LoadedModule::Rust(rfi_library) => self.include_rfi_library(span, rfi_library),
             }
         };
 
         self.module_defs.push(defs);
         Ok(self.module_exports.entry(module_name).or_insert(exports))
+    }
+
+    fn include_rfi_library(&mut self, span: Span, rfi_library: Rc<rfi::Library>) -> LoweredModule {
+        use syntax::datum::DataStr;
+
+        let exported_funs = rfi_library.exported_funs();
+
+        let mut exports = HashMap::new();
+        let mut defs = vec![];
+
+        exports.reserve(exported_funs.len());
+        defs.reserve(exported_funs.len());
+
+        let var_ids = VarId::alloc_iter(exported_funs.len());
+        for ((fun_name, rust_fun), var_id) in exported_funs.iter().zip(var_ids) {
+            let fun_name_data_str: DataStr = (*fun_name).into();
+
+            let def = Def {
+                span,
+                macro_invocation_span: EMPTY_SPAN,
+                destruc: destruc::Destruc::Scalar(
+                    span,
+                    destruc::Scalar::new(
+                        Some(var_id),
+                        fun_name_data_str.clone(),
+                        ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into(),
+                    ),
+                ),
+                value_expr: Expr::new(span, ExprKind::RustFun(Box::new(rust_fun.clone()))),
+            };
+
+            defs.push(def);
+            exports.insert(fun_name_data_str, Binding::Var(var_id));
+        }
+
+        self.rust_libraries.push(rfi_library);
+
+        LoweredModule {
+            defs,
+            exports,
+            ns_id: None,
+        }
     }
 
     fn lower_import(
@@ -920,7 +927,7 @@ pub fn lower_program(
 
     Ok(LoweredProgram {
         defs: lcx.module_defs,
-        rust_libraries: lcx.rfi_loader.into_rust_libraries(),
+        rust_libraries: lcx.rust_libraries,
         main_var_id,
     })
 }

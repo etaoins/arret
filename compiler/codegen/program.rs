@@ -1,4 +1,5 @@
 use std::ffi::{CStr, CString};
+use std::rc::Rc;
 use std::{fs, path, process, ptr};
 
 use llvm_sys::core::*;
@@ -179,7 +180,7 @@ fn target_triple_to_cc_args(target_triple: &str) -> Vec<&str> {
 /// `codegen::initialise_llvm()` must be called before this.
 pub fn gen_program(
     options: Options<'_>,
-    rust_libraries: &[rfi::Library],
+    rust_libraries: &[Rc<rfi::Library>],
     program: &mir::BuiltProgram,
     output_file: &path::Path,
     debug_source_loader: Option<&SourceLoader>,

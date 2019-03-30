@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path;
+use std::rc::Rc;
 
 use syntax::datum::DataStr;
 use syntax::span::Span;
@@ -68,7 +69,7 @@ pub struct ModuleName {
 #[derive(Debug)]
 pub enum LoadedModule {
     Source(ArcId<SourceFile>),
-    Rust(rfi::Module),
+    Rust(Rc<rfi::Library>),
 }
 
 impl ModuleName {
@@ -166,7 +167,7 @@ mod test {
         let loaded_module = load_stdlib_module("rust").unwrap();
 
         if let LoadedModule::Rust(rfi_module) = loaded_module {
-            assert!(!rfi_module.is_empty());
+            assert!(!rfi_module.exported_funs().is_empty());
         } else {
             panic!("Did not get Rust module; got {:?}", loaded_module);
         }

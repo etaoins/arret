@@ -1,6 +1,7 @@
 use std::collections::HashMap;
-use std::path;
+use std::rc::Rc;
 use std::sync::Arc;
+use std::{fmt, path};
 
 use libloading;
 
@@ -19,11 +20,22 @@ use runtime::{abitype, binding};
 pub struct Library {
     _loaded: libloading::Library,
     target_path: Box<path::Path>,
+    exported_funs: HashMap<&'static str, Fun>,
 }
 
 impl Library {
     pub fn target_path(&self) -> &path::Path {
         &self.target_path
+    }
+
+    pub fn exported_funs(&self) -> &HashMap<&'static str, Fun> {
+        &self.exported_funs
+    }
+}
+
+impl fmt::Debug for Library {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "rfi::Library({})", self.target_path.to_string_lossy())
     }
 }
 
@@ -77,12 +89,10 @@ impl Fun {
     }
 }
 
-pub type Module = HashMap<&'static str, Fun>;
-
 pub struct Loader {
     type_ns_id: NsId,
     type_scope: Scope,
-    rust_libraries: Vec<Library>,
+    native_rust_libraries: HashMap<Box<path::Path>, Rc<Library>>,
 }
 
 /// Ensure that the specified Arret type is compatible with the corresponding Rust type
@@ -151,7 +161,7 @@ impl Loader {
         Loader {
             type_ns_id: Scope::root_ns_id(),
             type_scope: Scope::new_with_primitives(),
-            rust_libraries: vec![],
+            native_rust_libraries: HashMap::new(),
         }
     }
 
@@ -253,7 +263,7 @@ impl Loader {
         native_base_path: &path::Path,
         target_base_path: &path::Path,
         package_name: &str,
-    ) -> Result<HashMap<&'static str, Fun>, Error> {
+    ) -> Result<Rc<Library>, Error> {
         let native_path = build_rfi_lib_path(native_base_path, package_name, LibType::Dynamic);
         let target_path = build_rfi_lib_path(target_base_path, package_name, LibType::Static);
 
@@ -270,7 +280,7 @@ impl Loader {
         };
 
         let filename: Arc<path::Path> = native_path.clone().into();
-        let module = exports
+        let exported_funs = exports
             .iter()
             .map(|(fun_name, rust_fun)| {
                 let entry_point_address = unsafe {
@@ -312,16 +322,16 @@ impl Loader {
             })
             .collect::<Result<HashMap<&'static str, Fun>, Error>>()?;
 
-        self.rust_libraries.push(Library {
+        let library = Rc::new(Library {
             _loaded: loaded,
             target_path: target_path.into_boxed_path(),
+            exported_funs,
         });
 
-        Ok(module)
-    }
+        self.native_rust_libraries
+            .insert(native_path.into(), library.clone());
 
-    pub fn into_rust_libraries(self) -> Vec<Library> {
-        self.rust_libraries
+        Ok(library)
     }
 }
 
