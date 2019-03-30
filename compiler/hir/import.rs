@@ -19,7 +19,7 @@ struct FilterInput {
 
     /// The terminal name of the module the exports came from
     ///
-    /// This is to support `(prefixed)`. For example, the terminal name of `[scheme base]` would be
+    /// This is to support `(prefixed)`. For example, the terminal name of `[stdlib base]` would be
     /// `base` and if `(prefixed)` was used it would prepend `base/` to all of its identifiers.
     terminal_name: DataStr,
 }
