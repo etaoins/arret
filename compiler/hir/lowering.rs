@@ -519,6 +519,8 @@ fn lower_expr(scope: &Scope, datum: NsDatum) -> Result<Expr<Lowered>> {
 }
 
 fn include_rfi_module(span: Span, rfi_module: rfi::Module) -> LoweredModule {
+    use syntax::datum::DataStr;
+
     let mut exports = HashMap::new();
     let mut defs = vec![];
 
@@ -526,7 +528,9 @@ fn include_rfi_module(span: Span, rfi_module: rfi::Module) -> LoweredModule {
     defs.reserve(rfi_module.len());
 
     let var_ids = VarId::alloc_iter(rfi_module.len());
-    for ((name, rust_fun), var_id) in rfi_module.into_iter().zip(var_ids) {
+    for ((fun_name, rust_fun), var_id) in rfi_module.into_iter().zip(var_ids) {
+        let fun_name_data_str: DataStr = fun_name.into();
+
         let def = Def {
             span,
             macro_invocation_span: EMPTY_SPAN,
@@ -534,7 +538,7 @@ fn include_rfi_module(span: Span, rfi_module: rfi::Module) -> LoweredModule {
                 span,
                 destruc::Scalar::new(
                     Some(var_id),
-                    name.into(),
+                    fun_name_data_str.clone(),
                     ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into(),
                 ),
             ),
@@ -542,7 +546,7 @@ fn include_rfi_module(span: Span, rfi_module: rfi::Module) -> LoweredModule {
         };
 
         defs.push(def);
-        exports.insert(name.into(), Binding::Var(var_id));
+        exports.insert(fun_name_data_str, Binding::Var(var_id));
     }
 
     LoweredModule {
