@@ -46,7 +46,7 @@ steps:
       - "echo '--- :rust: Installing Rust beta'"
       - rustup default beta
 
-      - "echo '--- :male_detective: Checking debug'"
+      - "echo '--- :male-detective: Checking debug'"
       - cargo check
 
       - "echo '--- :female-detective: Checking release'"
