@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use syntax::datum::DataStr;
 use syntax::span::Span;
@@ -8,7 +8,8 @@ use syntax::span::Span;
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::id_type::ArcId;
 use crate::rfi;
-use crate::source::{SourceFile, SourceLoader};
+use crate::source::SourceFile;
+use crate::CompileCtx;
 
 pub struct PackagePath {
     arret_base: Box<path::Path>,
@@ -69,7 +70,7 @@ pub struct ModuleName {
 #[derive(Debug)]
 pub enum LoadedModule {
     Source(ArcId<SourceFile>),
-    Rust(Rc<rfi::Library>),
+    Rust(Arc<rfi::Library>),
 }
 
 impl ModuleName {
@@ -87,24 +88,25 @@ impl ModuleName {
 }
 
 pub fn load_module_by_name(
-    source_loader: &SourceLoader,
-    rfi_loader: &mut rfi::Loader,
+    ccx: &CompileCtx,
     span: Span,
-    package_paths: &PackagePaths,
     module_name: &ModuleName,
 ) -> Result<LoadedModule> {
-    let package_path =
-        if let Some(package_path) = package_paths.paths.get(module_name.package_name.as_ref()) {
-            package_path
-        } else {
-            return Err(Error::new(span, ErrorKind::PackageNotFound));
-        };
+    let package_path = if let Some(package_path) = ccx
+        .package_paths()
+        .paths
+        .get(module_name.package_name.as_ref())
+    {
+        package_path
+    } else {
+        return Err(Error::new(span, ErrorKind::PackageNotFound));
+    };
 
     if module_name.is_rfi() {
-        rfi_loader
+        ccx.rfi_loader()
             .load(
                 span,
-                source_loader,
+                ccx.source_loader(),
                 &package_path.native_rust_base,
                 &package_path.target_rust_base,
                 &module_name.package_name,
@@ -122,7 +124,8 @@ pub fn load_module_by_name(
         path_buf.push(format!("{}.arret", module_name.terminal_name));
         let path = path_buf.as_path();
 
-        let source_file = source_loader
+        let source_file = ccx
+            .source_loader
             .load_path(path)
             .map_err(|err| Error::from_module_io(span, path, &err))?;
 
@@ -136,18 +139,10 @@ mod test {
     use syntax::span::EMPTY_SPAN;
 
     fn load_stdlib_module(name: &'static str) -> Result<LoadedModule> {
-        let source_loader = SourceLoader::new();
-        let mut rfi_loader = rfi::Loader::new();
-        let package_paths = PackagePaths::test_paths(None);
+        let ccx = CompileCtx::new(PackagePaths::test_paths(None), true);
         let module_name = ModuleName::new("stdlib".into(), vec![], name.into());
 
-        load_module_by_name(
-            &source_loader,
-            &mut rfi_loader,
-            EMPTY_SPAN,
-            &package_paths,
-            &module_name,
-        )
+        load_module_by_name(&ccx, EMPTY_SPAN, &module_name)
     }
 
     #[test]

@@ -5,13 +5,9 @@ mod subcommand;
 
 use std::{env, path, process};
 
-const ARRET_FILE_EXTENSION: &str = ".arret";
+use compiler::CompileCtx;
 
-pub struct DriverConfig {
-    source_loader: compiler::SourceLoader,
-    package_paths: compiler::PackagePaths,
-    llvm_opt: bool,
-}
+const ARRET_FILE_EXTENSION: &str = ".arret";
 
 fn find_path_to_arret_root() -> path::PathBuf {
     let current_dir = env::current_dir().expect("Cannot determine current directory");
@@ -114,21 +110,18 @@ fn main() {
         .get_matches();
 
     let arret_target_dir = find_path_to_arret_root();
-    let source_loader = compiler::SourceLoader::new();
-    let llvm_opt = !matches.is_present("NOOPT");
+    let enable_optimisations = !matches.is_present("NOOPT");
 
     if let Some(compile_matches) = matches.subcommand_matches("compile") {
-        let cfg = DriverConfig {
-            source_loader,
-            package_paths: compiler::PackagePaths::with_stdlib(
-                &arret_target_dir,
-                compile_matches.value_of("TARGET"),
-            ),
-            llvm_opt,
-        };
+        let package_paths = compiler::PackagePaths::with_stdlib(
+            &arret_target_dir,
+            compile_matches.value_of("TARGET"),
+        );
+
+        let ccx = CompileCtx::new(package_paths, enable_optimisations);
 
         let input_arg = compile_matches.value_of("INPUT").unwrap();
-        let input_file = input_arg_to_source_file(&cfg.source_loader, input_arg);
+        let input_file = input_arg_to_source_file(ccx.source_loader(), input_arg);
 
         let output_path = path::Path::new(
             if let Some(output_param) = compile_matches.value_of("OUTPUT") {
@@ -149,7 +142,7 @@ fn main() {
         initialise_llvm(target_triple.is_some());
 
         if !subcommand::compile::compile_input_file(
-            &cfg,
+            &ccx,
             &input_file,
             target_triple,
             &output_path,
@@ -158,11 +151,8 @@ fn main() {
             process::exit(2);
         }
     } else if let Some(repl_matches) = matches.subcommand_matches("repl") {
-        let cfg = DriverConfig {
-            source_loader,
-            package_paths: compiler::PackagePaths::with_stdlib(&arret_target_dir, None),
-            llvm_opt,
-        };
+        let package_paths = compiler::PackagePaths::with_stdlib(&arret_target_dir, None);
+        let ccx = CompileCtx::new(package_paths, enable_optimisations);
 
         initialise_llvm(false);
 
@@ -170,20 +160,17 @@ fn main() {
             .value_of("INCLUDE")
             .map(|include_param| path::Path::new(include_param).to_owned());
 
-        subcommand::repl::interactive_loop(&cfg, include_path);
+        subcommand::repl::interactive_loop(&ccx, include_path);
     } else if let Some(eval_matches) = matches.subcommand_matches("eval") {
-        let cfg = DriverConfig {
-            source_loader: compiler::SourceLoader::new(),
-            package_paths: compiler::PackagePaths::with_stdlib(&arret_target_dir, None),
-            llvm_opt,
-        };
+        let package_paths = compiler::PackagePaths::with_stdlib(&arret_target_dir, None);
+        let ccx = CompileCtx::new(package_paths, enable_optimisations);
 
         let input_param = eval_matches.value_of("INPUT").unwrap();
-        let input_file = input_arg_to_source_file(&cfg.source_loader, input_param);
+        let input_file = input_arg_to_source_file(ccx.source_loader(), input_param);
 
         initialise_llvm(false);
 
-        if !subcommand::eval::eval_input_file(&cfg, &input_file) {
+        if !subcommand::eval::eval_input_file(&ccx, &input_file) {
             process::exit(2);
         }
     } else {

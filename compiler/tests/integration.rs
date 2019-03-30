@@ -11,7 +11,7 @@ use syntax::span::Span;
 
 use compiler::error::Error;
 use compiler::reporting::{report_to_stderr, LocTrace, Reportable, Severity};
-use compiler::SourceLoader;
+use compiler::CompileCtx;
 
 use std::{fs, path, process};
 
@@ -166,13 +166,11 @@ fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedR
 
 fn result_for_single_test(
     target_triple: Option<&str>,
-    source_loader: &SourceLoader,
+    ccx: &CompileCtx,
     source_file: &compiler::SourceFile,
     test_type: TestType,
 ) -> Result<(), Error> {
-    let package_paths = compiler::PackagePaths::test_paths(target_triple);
-
-    let hir = compiler::lower_program(&package_paths, source_loader, &source_file)?;
+    let hir = compiler::lower_program(ccx, &source_file)?;
     let inferred_defs = compiler::infer_program(hir.defs, hir.main_var_id)?;
 
     let mut ehx = compiler::EvalHirCtx::new(true);
@@ -223,13 +221,13 @@ fn result_for_single_test(
 
 fn run_single_pass_test(
     target_triple: Option<&str>,
-    source_loader: &SourceLoader,
+    ccx: &CompileCtx,
     source_file: &compiler::SourceFile,
     test_type: TestType,
 ) -> bool {
     use std::io;
 
-    let result = result_for_single_test(target_triple, source_loader, &source_file, test_type);
+    let result = result_for_single_test(target_triple, ccx, &source_file, test_type);
 
     if let Err(Error(errs)) = result {
         // Prevent concurrent writes to stderr
@@ -237,7 +235,7 @@ fn run_single_pass_test(
         let _errlock = stderr.lock();
 
         for err in errs {
-            report_to_stderr(source_loader, &*err);
+            report_to_stderr(ccx.source_loader(), &*err);
         }
 
         false
@@ -248,17 +246,12 @@ fn run_single_pass_test(
 
 fn run_single_compile_fail_test(
     target_triple: Option<&str>,
-    source_loader: &SourceLoader,
+    ccx: &CompileCtx,
     source_file: &compiler::SourceFile,
 ) -> bool {
     use std::io;
 
-    let result = result_for_single_test(
-        target_triple,
-        source_loader,
-        source_file,
-        TestType::CompileFail,
-    );
+    let result = result_for_single_test(target_triple, ccx, source_file, TestType::CompileFail);
 
     let mut expected_reports = extract_expected_reports(source_file);
     let actual_reports = if let Err(Error(reports)) = result {
@@ -297,11 +290,11 @@ fn run_single_compile_fail_test(
 
     for unexpected_report in unexpected_reports {
         eprintln!("Unexpected {}:", unexpected_report.severity().to_str());
-        report_to_stderr(&source_loader, unexpected_report.as_ref());
+        report_to_stderr(ccx.source_loader(), unexpected_report.as_ref());
     }
 
     for expected_report in expected_reports {
-        report_to_stderr(&source_loader, &expected_report);
+        report_to_stderr(ccx.source_loader(), &expected_report);
     }
 
     false
@@ -309,16 +302,16 @@ fn run_single_compile_fail_test(
 
 fn run_single_test(
     target_triple: Option<&str>,
-    source_loader: &SourceLoader,
+    ccx: &CompileCtx,
     input_path: &path::Path,
     test_type: TestType,
 ) -> bool {
-    let source_file = source_loader.load_path(input_path).unwrap();
+    let source_file = ccx.source_loader().load_path(input_path).unwrap();
 
     if test_type == TestType::CompileFail {
-        run_single_compile_fail_test(target_triple, source_loader, &source_file)
+        run_single_compile_fail_test(target_triple, ccx, &source_file)
     } else {
-        run_single_pass_test(target_triple, source_loader, &source_file, test_type)
+        run_single_pass_test(target_triple, ccx, &source_file, test_type)
     }
 }
 
@@ -327,7 +320,8 @@ fn pass() {
     let target_triple =
         env::var_os("ARRET_TEST_TARGET_TRIPLE").map(|os_str| os_str.into_string().unwrap());
 
-    let source_loader = SourceLoader::new();
+    let package_paths = compiler::PackagePaths::test_paths(target_triple.as_ref().map(|t| &**t));
+    let ccx = compiler::CompileCtx::new(package_paths, true);
 
     use compiler::initialise_llvm;
     initialise_llvm(target_triple.is_some());
@@ -354,7 +348,7 @@ fn pass() {
 
             if !run_single_test(
                 target_triple.as_ref().map(|t| &**t),
-                &source_loader,
+                &ccx,
                 input_path.as_path(),
                 test_type,
             ) {

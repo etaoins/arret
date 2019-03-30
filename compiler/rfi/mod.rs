@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::{fmt, path};
 
 use libloading;
@@ -92,7 +91,7 @@ impl Fun {
 pub struct Loader {
     type_ns_id: NsId,
     type_scope: Scope,
-    native_rust_libraries: HashMap<Box<path::Path>, Rc<Library>>,
+    native_rust_libraries: Mutex<HashMap<Box<path::Path>, Arc<Library>>>,
 }
 
 /// Ensure that the specified Arret type is compatible with the corresponding Rust type
@@ -161,7 +160,7 @@ impl Loader {
         Loader {
             type_ns_id: Scope::root_ns_id(),
             type_scope: Scope::new_with_primitives(),
-            native_rust_libraries: HashMap::new(),
+            native_rust_libraries: Mutex::new(HashMap::new()),
         }
     }
 
@@ -257,14 +256,20 @@ impl Loader {
     }
 
     pub fn load(
-        &mut self,
+        &self,
         span: Span,
         source_loader: &SourceLoader,
         native_base_path: &path::Path,
         target_base_path: &path::Path,
         package_name: &str,
-    ) -> Result<Rc<Library>, Error> {
+    ) -> Result<Arc<Library>, Error> {
+        let mut native_rust_libraries = self.native_rust_libraries.lock().unwrap();
         let native_path = build_rfi_lib_path(native_base_path, package_name, LibType::Dynamic);
+
+        if let Some(library) = native_rust_libraries.get(native_path.as_path()) {
+            return Ok(library.clone());
+        }
+
         let target_path = build_rfi_lib_path(target_base_path, package_name, LibType::Static);
 
         let map_io_err = |err| Error::from_module_io(span, &native_path, &err);
@@ -322,14 +327,13 @@ impl Loader {
             })
             .collect::<Result<HashMap<&'static str, Fun>, Error>>()?;
 
-        let library = Rc::new(Library {
+        let library = Arc::new(Library {
             _loaded: loaded,
             target_path: target_path.into_boxed_path(),
             exported_funs,
         });
 
-        self.native_rust_libraries
-            .insert(native_path.into(), library.clone());
+        native_rust_libraries.insert(native_path.into(), library.clone());
 
         Ok(library)
     }

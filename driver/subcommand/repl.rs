@@ -8,8 +8,7 @@ use directories;
 use rustyline;
 
 use compiler;
-
-use crate::DriverConfig;
+use compiler::CompileCtx;
 
 const PROMPT: &str = "arret> ";
 
@@ -276,14 +275,13 @@ fn parse_command(mut line: String) -> ParsedCommand {
     }
 }
 
-pub fn interactive_loop(cfg: &DriverConfig, include_path: Option<path::PathBuf>) {
+pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
     use compiler::repl::{EvalKind, EvaledLine};
     use rustyline;
     use rustyline::error::ReadlineError;
 
     // Setup our REPL backend
-    let mut repl_ctx =
-        compiler::repl::ReplCtx::new(&cfg.package_paths, &cfg.source_loader, cfg.llvm_opt);
+    let mut repl_ctx = compiler::repl::ReplCtx::new(ccx);
 
     // Setup Rustyline
     let mut rl = rustyline::Editor::<ArretHelper>::new();
@@ -291,7 +289,7 @@ pub fn interactive_loop(cfg: &DriverConfig, include_path: Option<path::PathBuf>)
     // Import [stdlib base] so we have most useful things defined
     let initial_import = "(import [stdlib base])".to_owned();
     if let Err(err) = repl_ctx.eval_line(initial_import, EvalKind::Value) {
-        report_all_to_stderr(repl_ctx.source_loader(), &err);
+        report_all_to_stderr(ccx.source_loader(), &err);
     }
     rl.set_helper(Some(ArretHelper::new(repl_ctx.bound_names())));
 
@@ -300,7 +298,7 @@ pub fn interactive_loop(cfg: &DriverConfig, include_path: Option<path::PathBuf>)
         let include_file = fs::File::open(include_path).unwrap();
         for include_line in BufReader::new(include_file).lines() {
             if let Err(err) = repl_ctx.eval_line(include_line.unwrap(), EvalKind::Value) {
-                report_all_to_stderr(repl_ctx.source_loader(), &err);
+                report_all_to_stderr(ccx.source_loader(), &err);
             }
         }
     }
@@ -347,7 +345,7 @@ pub fn interactive_loop(cfg: &DriverConfig, include_path: Option<path::PathBuf>)
                         println!("{} {}", expr_arrow_style.paint("=>"), value);
                     }
                     Err(err) => {
-                        report_all_to_stderr(repl_ctx.source_loader(), &err);
+                        report_all_to_stderr(ccx.source_loader(), &err);
                     }
                 }
             }

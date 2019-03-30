@@ -1,15 +1,17 @@
 use crate::error::Error;
 use crate::hir;
 use crate::hir::scope::Scope;
-use crate::{PackagePaths, SourceKind, SourceLoader};
+use crate::CompileCtx;
+use crate::{SourceKind, SourceLoader};
 
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::typeck::infer::InferCtx;
 
-pub struct ReplCtx<'pp, 'sl> {
+pub struct ReplCtx<'ccx> {
     scope: Scope,
     ns_id: hir::ns::NsId,
-    lcx: hir::lowering::LoweringCtx<'pp, 'sl>,
+    source_loader: &'ccx SourceLoader,
+    lcx: hir::lowering::LoweringCtx<'ccx>,
     icx: InferCtx,
     ehx: EvalHirCtx,
 }
@@ -35,26 +37,19 @@ pub enum EvaledLine {
     Expr(String),
 }
 
-impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
-    pub fn new(
-        package_paths: &'pp PackagePaths,
-        source_loader: &'sl SourceLoader,
-        optimising: bool,
-    ) -> ReplCtx<'pp, 'sl> {
+impl<'ccx> ReplCtx<'ccx> {
+    pub fn new(ccx: &'ccx CompileCtx) -> Self {
         let ns_id = Scope::root_ns_id();
         let scope = Scope::new_repl();
 
         ReplCtx {
             scope,
             ns_id,
-            lcx: hir::lowering::LoweringCtx::new(package_paths, source_loader),
+            source_loader: ccx.source_loader(),
+            lcx: hir::lowering::LoweringCtx::new(ccx),
             icx: InferCtx::new(),
-            ehx: EvalHirCtx::new(optimising),
+            ehx: EvalHirCtx::new(ccx.enable_optimisations()),
         }
-    }
-
-    pub fn source_loader(&self) -> &SourceLoader {
-        self.lcx.source_loader()
     }
 
     /// Returns all names bound in the root scope and namespace
@@ -73,8 +68,9 @@ impl<'pp, 'sl> ReplCtx<'pp, 'sl> {
     pub fn eval_line(&mut self, input: String, kind: EvalKind) -> Result<EvaledLine, Error> {
         use crate::hir::lowering::LoweredReplDatum;
 
-        let source_loader = self.lcx.source_loader();
-        let source_file = source_loader.load_string(SourceKind::Repl, input.into());
+        let source_file = self
+            .source_loader
+            .load_string(SourceKind::Repl, input.into());
 
         let input_data = source_file.parsed()?;
         let input_datum = match input_data {
@@ -155,12 +151,12 @@ mod test {
 
     #[test]
     fn basic_session() {
-        use crate::initialise_llvm;
+        use crate::{initialise_llvm, PackagePaths};
+
         initialise_llvm(false);
 
-        let package_paths = PackagePaths::test_paths(None);
-        let source_loader = SourceLoader::new();
-        let mut repl_ctx = ReplCtx::new(&package_paths, &source_loader, true);
+        let ccx = CompileCtx::new(PackagePaths::test_paths(None), true);
+        let mut repl_ctx = ReplCtx::new(&ccx);
 
         macro_rules! assert_empty {
             ($line:expr) => {

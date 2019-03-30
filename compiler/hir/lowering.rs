@@ -1,19 +1,20 @@
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use syntax::datum::Datum;
 use syntax::span::{Span, EMPTY_SPAN};
 
 use crate::rfi;
-use crate::source::{SourceFile, SourceLoader};
+use crate::source::SourceFile;
 use crate::ty;
 use crate::ty::purity;
+use crate::CompileCtx;
 
 use crate::hir::destruc;
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::exports::Exports;
 use crate::hir::import::lower_import_set;
-use crate::hir::loader::{load_module_by_name, LoadedModule, ModuleName, PackagePaths};
+use crate::hir::loader::{load_module_by_name, LoadedModule, ModuleName};
 use crate::hir::macros::{expand_macro, lower_macro_rules, MacroId};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum, NsId};
 use crate::hir::prim::Prim;
@@ -33,20 +34,16 @@ struct LoweredModule {
     ns_id: Option<NsId>,
 }
 
-pub struct LoweringCtx<'pp, 'sl> {
-    package_paths: &'pp PackagePaths,
-    source_loader: &'sl SourceLoader,
-
-    rfi_loader: rfi::Loader,
-    rust_libraries: Vec<Rc<rfi::Library>>,
-
+pub struct LoweringCtx<'ccx> {
+    ccx: &'ccx CompileCtx,
+    rust_libraries: Vec<Arc<rfi::Library>>,
     module_exports: HashMap<ModuleName, Exports>,
     module_defs: Vec<Vec<Def<Lowered>>>,
 }
 
 pub struct LoweredProgram {
     pub defs: Vec<Vec<Def<Lowered>>>,
-    pub rust_libraries: Vec<Rc<rfi::Library>>,
+    pub rust_libraries: Vec<Arc<rfi::Library>>,
     pub main_var_id: VarId,
 }
 
@@ -520,11 +517,8 @@ fn lower_expr(scope: &Scope, datum: NsDatum) -> Result<Expr<Lowered>> {
     }
 }
 
-impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
-    pub fn new(
-        package_paths: &'pp PackagePaths,
-        source_loader: &'sl SourceLoader,
-    ) -> LoweringCtx<'pp, 'sl> {
+impl<'ccx> LoweringCtx<'ccx> {
+    pub fn new(ccx: &'ccx CompileCtx) -> Self {
         use crate::hir::exports;
 
         let mut module_exports = HashMap::with_capacity(2);
@@ -540,13 +534,9 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
             exports::tys_exports(),
         );
 
-        LoweringCtx {
-            package_paths,
-            source_loader,
-
-            rfi_loader: rfi::Loader::new(),
+        Self {
+            ccx,
             rust_libraries: vec![],
-
             module_exports,
             module_defs: vec![],
         }
@@ -565,13 +555,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         }
 
         let LoweredModule { exports, defs, .. } = {
-            match load_module_by_name(
-                self.source_loader,
-                &mut self.rfi_loader,
-                span,
-                self.package_paths,
-                &module_name,
-            )? {
+            match load_module_by_name(self.ccx, span, &module_name)? {
                 LoadedModule::Source(source_file) => {
                     let module_data = source_file.parsed().map_err(|err| vec![err.into()])?;
                     self.lower_module(scope, module_data)?
@@ -584,7 +568,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
         Ok(self.module_exports.entry(module_name).or_insert(exports))
     }
 
-    fn include_rfi_library(&mut self, span: Span, rfi_library: Rc<rfi::Library>) -> LoweredModule {
+    fn include_rfi_library(&mut self, span: Span, rfi_library: Arc<rfi::Library>) -> LoweredModule {
         use syntax::datum::DataStr;
 
         let exported_funs = rfi_library.exported_funs();
@@ -853,11 +837,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
 }
 
 // REPL interface
-impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
-    pub fn source_loader(&self) -> &SourceLoader {
-        self.source_loader
-    }
-
+impl<'ccx> LoweringCtx<'ccx> {
     pub fn lower_repl_datum(
         &mut self,
         scope: &mut Scope,
@@ -904,8 +884,7 @@ impl<'pp, 'sl> LoweringCtx<'pp, 'sl> {
 }
 
 pub fn lower_program(
-    package_paths: &PackagePaths,
-    source_loader: &SourceLoader,
+    ccx: &CompileCtx,
     source_file: &SourceFile,
 ) -> Result<LoweredProgram, Vec<Error>> {
     let file_span = source_file.span();
@@ -913,7 +892,7 @@ pub fn lower_program(
     let data = source_file.parsed().map_err(|err| vec![err.into()])?;
 
     let mut root_scope = Scope::empty();
-    let mut lcx = LoweringCtx::new(package_paths, source_loader);
+    let mut lcx = LoweringCtx::new(ccx);
     let root_module = lcx.lower_module(&mut root_scope, data)?;
 
     lcx.module_defs.push(root_module.defs);
@@ -952,6 +931,7 @@ fn import_statement_for_module(names: &[&'static str]) -> Datum {
 
 #[cfg(test)]
 fn module_for_str(data_str: &str) -> Result<LoweredModule> {
+    use crate::PackagePaths;
     use syntax::parser::data_from_str;
 
     let mut root_scope = Scope::empty();
@@ -963,9 +943,8 @@ fn module_for_str(data_str: &str) -> Result<LoweredModule> {
     ];
     program_data.append(&mut test_data);
 
-    let package_paths = PackagePaths::test_paths(None);
-    let source_loader = SourceLoader::new();
-    let mut lcx = LoweringCtx::new(&package_paths, &source_loader);
+    let ccx = CompileCtx::new(PackagePaths::test_paths(None), true);
+    let mut lcx = LoweringCtx::new(&ccx);
 
     lcx.lower_module(&mut root_scope, &program_data)
         .map_err(|mut errors| errors.remove(0))

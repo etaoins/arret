@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use syntax::span::{Span, EMPTY_SPAN};
 
@@ -30,7 +30,7 @@ struct SpannedBinding {
 
 struct Bindings {
     entries: HashMap<Ident, SpannedBinding>,
-    parent: Option<Rc<Bindings>>,
+    parent: Option<Arc<Bindings>>,
 
     /// Allow redefinition of bindings
     ///
@@ -54,7 +54,7 @@ impl Bindings {
 }
 
 pub struct Scope {
-    bindings: Rc<Bindings>,
+    bindings: Arc<Bindings>,
     ns_id_counter: NsIdCounter,
 }
 
@@ -62,7 +62,7 @@ impl Scope {
     /// Creates an empty root scope
     pub fn empty() -> Scope {
         Scope {
-            bindings: Rc::new(Bindings {
+            bindings: Arc::new(Bindings {
                 entries: HashMap::new(),
                 parent: None,
                 allow_redef: false,
@@ -119,7 +119,7 @@ impl Scope {
             .collect::<HashMap<Ident, SpannedBinding>>();
 
         Scope {
-            bindings: Rc::new(Bindings {
+            bindings: Arc::new(Bindings {
                 entries,
                 parent: None,
                 allow_redef: false,
@@ -130,7 +130,7 @@ impl Scope {
 
     pub fn new_child(parent: &Scope) -> Scope {
         Scope {
-            bindings: Rc::new(Bindings {
+            bindings: Arc::new(Bindings {
                 entries: HashMap::new(),
                 parent: Some(parent.bindings.clone()),
                 allow_redef: false,
@@ -243,6 +243,6 @@ impl Scope {
 
     fn bindings_mut(&mut self) -> &mut Bindings {
         // This is also important to keep our `ns_alloc_id` invariant
-        Rc::get_mut(&mut self.bindings).expect("Cannot mutate non-leaf scope")
+        Arc::get_mut(&mut self.bindings).expect("Cannot mutate non-leaf scope")
     }
 }
