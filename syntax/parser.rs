@@ -20,8 +20,8 @@ pub fn datum_from_str(s: &str) -> Result<Datum> {
     datum_from_str_with_span_offset(s, 0)
 }
 
-pub struct Parser<'de> {
-    input: &'de str,
+pub struct Parser<'input> {
+    input: &'input str,
     consumed_bytes: u32,
 }
 
@@ -45,8 +45,8 @@ pub fn is_identifier_char(c: char) -> bool {
     }
 }
 
-impl<'de> Parser<'de> {
-    fn from_str(input: &'de str, span_offset: u32) -> Self {
+impl<'input> Parser<'input> {
+    fn from_str(input: &'input str, span_offset: u32) -> Self {
         Parser {
             input,
             consumed_bytes: span_offset,
