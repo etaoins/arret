@@ -307,7 +307,7 @@ fn run_single_test(
     input_path: &path::Path,
     test_type: TestType,
 ) -> bool {
-    let source_file = ccx.source_loader().load_path(input_path).unwrap();
+    let source_file = ccx.source_loader().load_path_uncached(input_path).unwrap();
 
     if test_type == TestType::CompileError {
         run_single_compile_fail_test(target_triple, ccx, &source_file)

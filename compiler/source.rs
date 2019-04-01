@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::{cmp, fmt, fs, io, path};
 
 use syntax::datum::Datum;
@@ -84,56 +84,9 @@ impl fmt::Debug for SourceFile {
 }
 
 #[derive(Default)]
-struct SourceLoaderData {
-    source_files: Vec<ArcId<SourceFile>>,
-    loaded_paths: HashMap<Box<path::Path>, ArcId<SourceFile>>,
-}
-
-impl SourceLoaderData {
-    fn load_path(&mut self, path: &path::Path) -> Result<ArcId<SourceFile>, io::Error> {
-        if let Some(source_file) = self.loaded_paths.get(path) {
-            return Ok(source_file.clone());
-        }
-
-        let kind = SourceKind::File(path.to_string_lossy().to_string());
-        let source = fs::read_to_string(path)?;
-
-        let source_file = self.load_string(kind, source.into());
-        self.loaded_paths.insert(path.into(), source_file.clone());
-
-        Ok(source_file)
-    }
-
-    fn load_string(&mut self, kind: SourceKind, source: Cow<'static, str>) -> ArcId<SourceFile> {
-        use syntax::parser::data_from_str_with_span_offset;
-
-        let span_offset = self
-            .source_files
-            .last()
-            .map(|x| x.span().end())
-            .unwrap_or(0)
-            + 1;
-
-        let span = Span::new(span_offset, span_offset + (source.len() as u32));
-        let parsed = data_from_str_with_span_offset(&source, span_offset);
-
-        let source_file = ArcId::new(SourceFile {
-            span,
-            kind,
-
-            line_number_offsets: build_line_number_offsets(&source),
-            source,
-            parsed,
-        });
-
-        self.source_files.push(source_file.clone());
-        source_file
-    }
-}
-
-#[derive(Default)]
 pub struct SourceLoader {
-    locked_data: RwLock<SourceLoaderData>,
+    source_files: RwLock<Vec<ArcId<SourceFile>>>,
+    loaded_paths: Mutex<HashMap<Box<path::Path>, ArcId<SourceFile>>>,
 }
 
 fn build_line_number_offsets(input: &str) -> Box<[u32]> {
@@ -150,11 +103,45 @@ impl SourceLoader {
     }
 
     pub fn load_path(&self, path: &path::Path) -> Result<ArcId<SourceFile>, io::Error> {
-        self.locked_data.write().unwrap().load_path(path)
+        let mut loaded_paths = self.loaded_paths.lock().unwrap();
+
+        if let Some(source_file) = loaded_paths.get(path) {
+            return Ok(source_file.clone());
+        }
+
+        let source_file = self.load_path_uncached(path)?;
+        loaded_paths.insert(path.into(), source_file.clone());
+
+        Ok(source_file)
+    }
+
+    pub fn load_path_uncached(&self, path: &path::Path) -> Result<ArcId<SourceFile>, io::Error> {
+        let kind = SourceKind::File(path.to_string_lossy().to_string());
+        let source = fs::read_to_string(path)?;
+
+        Ok(self.load_string(kind, source.into()))
     }
 
     pub fn load_string(&self, kind: SourceKind, source: Cow<'static, str>) -> ArcId<SourceFile> {
-        self.locked_data.write().unwrap().load_string(kind, source)
+        use syntax::parser::data_from_str_with_span_offset;
+
+        let mut source_files = self.source_files.write().unwrap();
+        let span_offset = source_files.last().map(|x| x.span().end()).unwrap_or(0) + 1;
+
+        let span = Span::new(span_offset, span_offset + (source.len() as u32));
+        let parsed = data_from_str_with_span_offset(&source, span_offset);
+
+        let source_file = ArcId::new(SourceFile {
+            span,
+            kind,
+
+            line_number_offsets: build_line_number_offsets(&source),
+            source,
+            parsed,
+        });
+
+        source_files.push(source_file.clone());
+        source_file
     }
 }
 
@@ -169,8 +156,7 @@ pub struct SourceLoc {
 impl<'src> SourceLoc {
     /// Calculates a source location from a byte index
     pub fn from_byte_index(source_loader: &SourceLoader, point: u32) -> SourceLoc {
-        let source_loader_data = source_loader.locked_data.read().unwrap();
-        let source_files = &source_loader_data.source_files;
+        let source_files = source_loader.source_files.read().unwrap();
 
         // Find the file we landed on
         let source_file_index = source_files
