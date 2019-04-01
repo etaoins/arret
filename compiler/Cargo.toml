@@ -9,7 +9,7 @@ path = "lib.rs"
 crate-type = ["lib"]
 
 [dependencies]
-llvm-sys = "70"
+llvm-sys = "80"
 libc = "0.2"
 ansi_term = "0.11"
 libloading = "0.5"
