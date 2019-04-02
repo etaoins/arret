@@ -17,7 +17,7 @@
 ; emulates `apply` from R7RS and Clojure
 (export apply)
 (defmacro apply (macro-rules
-  [(fun fixed ... rest) (fun fixed ... rest (... ...))]
+  [(fun fixed ... rest) (fun fixed ... & rest)]
 ))
 
 (export list)
