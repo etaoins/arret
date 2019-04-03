@@ -63,7 +63,7 @@ impl<'scope, 'parent> ExpandCtx<'scope, 'parent> {
         let new_ident = ident.with_ns_id(*new_ns_id);
 
         if let Some(binding) = binding {
-            let _ = scope.insert_binding(span, new_ident.clone(), binding);
+            scope.replace_binding(span, new_ident.clone(), binding);
         };
 
         NsDatum::Ident(span, new_ident)

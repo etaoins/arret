@@ -132,6 +132,7 @@ impl<'parent> Scope<'parent> {
             .ok_or_else(|| Error::new(span, ErrorKind::UnboundSym(ident.name().into())))
     }
 
+    /// Inserts a new binding if it doesn't exist or redefinition is allowed
     pub fn insert_binding(
         &mut self,
         span: Span,
@@ -173,6 +174,11 @@ impl<'parent> Scope<'parent> {
             }
         }
         Ok(())
+    }
+
+    /// Unconditionally replaces a binding
+    pub fn replace_binding(&mut self, span: Span, ident: Ident, binding: Binding) {
+        self.entries.insert(ident, SpannedBinding { span, binding });
     }
 
     pub fn insert_var(&mut self, span: Span, ident: Ident, var_id: VarId) -> Result<(), Error> {
