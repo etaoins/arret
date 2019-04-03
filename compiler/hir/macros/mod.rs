@@ -52,7 +52,11 @@ fn get_escaped_ident(data: &[NsDatum]) -> Option<&Ident> {
     }
 }
 
-fn lower_macro_rule_datum(scope: &Scope, self_ident: &Ident, rule_datum: NsDatum) -> Result<Rule> {
+fn lower_macro_rule_datum(
+    scope: &Scope<'_>,
+    self_ident: &Ident,
+    rule_datum: NsDatum,
+) -> Result<Rule> {
     let (span, mut rule_values) = if let NsDatum::Vector(span, vs) = rule_datum {
         (span, vs.into_vec())
     } else {
@@ -91,7 +95,7 @@ fn lower_macro_rule_datum(scope: &Scope, self_ident: &Ident, rule_datum: NsDatum
 }
 
 pub fn lower_macro_rules(
-    scope: &Scope,
+    scope: &Scope<'_>,
     self_ident: &Ident,
     macro_rules_data: Vec<NsDatum>,
 ) -> Result<Macro> {
@@ -103,8 +107,8 @@ pub fn lower_macro_rules(
     Ok(Macro::new(rules))
 }
 
-pub fn expand_macro(
-    scope: &mut Scope,
+pub fn expand_macro<'s, 'p>(
+    scope: &'s mut Scope<'p>,
     invocation_span: Span,
     mac: &MacroId,
     arg_data: &[NsDatum],

@@ -226,7 +226,7 @@ impl<'data> FindVarsCtx<'data> {
 }
 
 fn link_template_ident(
-    scope: &Scope,
+    scope: &Scope<'_>,
     self_ident: &Ident,
     template_ident: &Ident,
     pattern_idents: &[&Ident],
@@ -247,7 +247,7 @@ fn link_template_ident(
 }
 
 fn link_found_vars(
-    scope: &Scope,
+    scope: &Scope<'_>,
     self_ident: &Ident,
     subpattern_index: usize,
     pattern_vars: &FoundVars<'_>,
@@ -321,7 +321,7 @@ fn link_found_vars(
 }
 
 pub fn link_rule_vars(
-    scope: &Scope,
+    scope: &Scope<'_>,
     self_ident: &Ident,
     patterns: &[NsDatum],
     template: &NsDatum,

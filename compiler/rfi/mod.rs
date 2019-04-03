@@ -90,7 +90,7 @@ impl Fun {
 
 pub struct Loader {
     type_ns_id: NsId,
-    type_scope: Scope,
+    type_scope: Scope<'static>,
     native_rust_libraries: Mutex<HashMap<Box<path::Path>, Arc<Library>>>,
 }
 

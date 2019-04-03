@@ -35,7 +35,7 @@ pub struct PolymorphicVar {
     pub kind: PolymorphicVarKind,
 }
 
-fn lower_polymorphic_var(scope: &Scope, tvar_datum: NsDatum) -> Result<PolymorphicVar> {
+fn lower_polymorphic_var(scope: &Scope<'_>, tvar_datum: NsDatum) -> Result<PolymorphicVar> {
     let span = tvar_datum.span();
 
     match tvar_datum {
@@ -107,7 +107,7 @@ fn lower_polymorphic_var(scope: &Scope, tvar_datum: NsDatum) -> Result<Polymorph
     ))
 }
 
-fn lower_list_cons(scope: &Scope, mut arg_iter: NsDataIter) -> Result<ty::List<ty::Poly>> {
+fn lower_list_cons(scope: &Scope<'_>, mut arg_iter: NsDataIter) -> Result<ty::List<ty::Poly>> {
     let rest = try_take_rest_arg(&mut arg_iter);
 
     let fixed_polys = arg_iter
@@ -123,7 +123,7 @@ fn lower_list_cons(scope: &Scope, mut arg_iter: NsDataIter) -> Result<ty::List<t
 }
 
 fn lower_fun_cons(
-    scope: &Scope,
+    scope: &Scope<'_>,
     purity: purity::Ref,
     mut arg_iter: NsDataIter,
 ) -> Result<ty::Ref<ty::Poly>> {
@@ -148,7 +148,7 @@ fn lower_fun_cons(
 }
 
 fn lower_ty_cons_apply(
-    scope: &Scope,
+    scope: &Scope<'_>,
     span: Span,
     ty_cons: TyCons,
     mut arg_iter: NsDataIter,
@@ -222,7 +222,7 @@ fn lower_literal(datum: NsDatum) -> Result<ty::Ref<ty::Poly>> {
     }
 }
 
-fn lower_ident(scope: &Scope, span: Span, ident: &Ident) -> Result<ty::Ref<ty::Poly>> {
+fn lower_ident(scope: &Scope<'_>, span: Span, ident: &Ident) -> Result<ty::Ref<ty::Poly>> {
     match scope.get_or_err(span, ident)? {
         Binding::Ty(ty) => Ok(ty.clone()),
         Binding::TyPred(test_ty) => Ok(ty::Ty::TyPred(*test_ty).into()),
@@ -232,7 +232,7 @@ fn lower_ident(scope: &Scope, span: Span, ident: &Ident) -> Result<ty::Ref<ty::P
 }
 
 fn lower_polymorphic_poly(
-    scope: &Scope,
+    scope: &Scope<'_>,
     span: Span,
     mut data_iter: NsDataIter,
 ) -> Result<ty::Ref<ty::Poly>> {
@@ -266,7 +266,7 @@ fn lower_polymorphic_poly(
 }
 
 pub fn lower_poly_data_iter(
-    scope: &Scope,
+    scope: &Scope<'_>,
     span: Span,
     mut data_iter: NsDataIter,
 ) -> Result<ty::Ref<ty::Poly>> {
@@ -311,7 +311,7 @@ pub fn lower_poly_data_iter(
     ))
 }
 
-pub fn lower_poly(scope: &Scope, datum: NsDatum) -> Result<ty::Ref<ty::Poly>> {
+pub fn lower_poly(scope: &Scope<'_>, datum: NsDatum) -> Result<ty::Ref<ty::Poly>> {
     match datum {
         NsDatum::List(span, vs) => lower_poly_data_iter(scope, span, vs.into_vec().into_iter()),
         NsDatum::Ident(span, ident) => lower_ident(scope, span, &ident),
@@ -322,8 +322,8 @@ pub fn lower_poly(scope: &Scope, datum: NsDatum) -> Result<ty::Ref<ty::Poly>> {
 /// Lowers a set of polymorphic variables defined in `outer_scope` and places them in `inner_scope`
 pub fn lower_polymorphic_vars(
     polymorphic_var_data: NsDataIter,
-    outer_scope: &Scope,
-    inner_scope: &mut Scope,
+    outer_scope: &Scope<'_>,
+    inner_scope: &mut Scope<'_>,
 ) -> Result<(purity::PVarIds, ty::TVarIds)> {
     let mut pvar_ids = purity::PVarIds::new();
     let mut tvar_ids = ty::TVarIds::new();
@@ -364,7 +364,7 @@ pub fn lower_polymorphic_vars(
     Ok((pvar_ids, tvar_ids))
 }
 
-pub fn try_lower_purity(scope: &Scope, datum: &NsDatum) -> Option<purity::Ref> {
+pub fn try_lower_purity(scope: &Scope<'_>, datum: &NsDatum) -> Option<purity::Ref> {
     scope.get_datum(datum).and_then(|binding| match binding {
         Binding::Purity(purity) => Some(purity.clone()),
         _ => None,

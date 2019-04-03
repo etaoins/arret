@@ -10,7 +10,7 @@ use crate::mir::eval_hir::EvalHirCtx;
 use crate::typeck::infer::InferCtx;
 
 pub struct ReplCtx<'ccx> {
-    scope: Scope,
+    scope: Scope<'static>,
     ns_id: hir::ns::NsId,
     source_loader: &'ccx SourceLoader,
     lcx: hir::lowering::LoweringCtx<'ccx>,

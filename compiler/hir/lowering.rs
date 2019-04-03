@@ -104,7 +104,11 @@ fn lower_user_compile_error(span: Span, arg_iter: NsDataIter) -> Error {
     }
 }
 
-fn lower_macro(scope: &mut Scope, self_datum: NsDatum, transformer_spec: NsDatum) -> Result<()> {
+fn lower_macro(
+    scope: &mut Scope<'_>,
+    self_datum: NsDatum,
+    transformer_spec: NsDatum,
+) -> Result<()> {
     let (self_ident, self_span) = expect_ident_and_span(self_datum)?;
 
     let macro_rules_data = if let NsDatum::List(span, vs) = transformer_spec {
@@ -137,7 +141,7 @@ fn lower_macro(scope: &mut Scope, self_datum: NsDatum, transformer_spec: NsDatum
     Ok(())
 }
 
-fn lower_defmacro(scope: &mut Scope, span: Span, mut arg_iter: NsDataIter) -> Result<()> {
+fn lower_defmacro(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) -> Result<()> {
     expect_arg_count(span, 2, arg_iter.len())?;
 
     let self_datum = arg_iter.next().unwrap();
@@ -146,11 +150,11 @@ fn lower_defmacro(scope: &mut Scope, span: Span, mut arg_iter: NsDataIter) -> Re
     lower_macro(scope, self_datum, transformer_spec)
 }
 
-fn lower_letmacro(scope: &Scope, span: Span, arg_iter: NsDataIter) -> Result<Expr<Lowered>> {
+fn lower_letmacro(scope: &Scope<'_>, span: Span, arg_iter: NsDataIter) -> Result<Expr<Lowered>> {
     lower_let_like(scope, span, arg_iter, lower_macro, |expr, _| expr)
 }
 
-fn lower_type(scope: &mut Scope, self_datum: NsDatum, ty_datum: NsDatum) -> Result<()> {
+fn lower_type(scope: &mut Scope<'_>, self_datum: NsDatum, ty_datum: NsDatum) -> Result<()> {
     let (ident, span) = expect_ident_and_span(self_datum)?;
     let ty = lower_poly(scope, ty_datum)?;
 
@@ -161,7 +165,7 @@ fn lower_type(scope: &mut Scope, self_datum: NsDatum, ty_datum: NsDatum) -> Resu
     Ok(())
 }
 
-fn lower_deftype(scope: &mut Scope, span: Span, mut arg_iter: NsDataIter) -> Result<()> {
+fn lower_deftype(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) -> Result<()> {
     expect_arg_count(span, 2, arg_iter.len())?;
 
     let self_datum = arg_iter.next().unwrap();
@@ -170,13 +174,13 @@ fn lower_deftype(scope: &mut Scope, span: Span, mut arg_iter: NsDataIter) -> Res
     lower_type(scope, self_datum, ty_datum)
 }
 
-fn lower_lettype(scope: &Scope, span: Span, arg_iter: NsDataIter) -> Result<Expr<Lowered>> {
+fn lower_lettype(scope: &Scope<'_>, span: Span, arg_iter: NsDataIter) -> Result<Expr<Lowered>> {
     lower_let_like(scope, span, arg_iter, lower_type, |expr, _| expr)
 }
 
 /// Lowers an identifier in to a scalar destruc with the passed type
 fn lower_ident_destruc(
-    scope: &mut Scope,
+    scope: &mut Scope<'_>,
     span: Span,
     ident: Ident,
     decl_ty: DeclTy,
@@ -193,7 +197,7 @@ fn lower_ident_destruc(
 }
 
 fn lower_scalar_destruc(
-    scope: &mut Scope,
+    scope: &mut Scope<'_>,
     destruc_datum: NsDatum,
 ) -> Result<destruc::Scalar<Lowered>> {
     match destruc_datum {
@@ -218,7 +222,7 @@ fn lower_scalar_destruc(
 }
 
 fn lower_list_destruc(
-    scope: &mut Scope,
+    scope: &mut Scope<'_>,
     mut data_iter: NsDataIter,
 ) -> Result<destruc::List<Lowered>> {
     let rest = try_take_rest_arg(&mut data_iter);
@@ -235,7 +239,10 @@ fn lower_list_destruc(
     Ok(destruc::List::new(fixed_destrucs, rest_destruc))
 }
 
-fn lower_destruc(scope: &mut Scope, destruc_datum: NsDatum) -> Result<destruc::Destruc<Lowered>> {
+fn lower_destruc(
+    scope: &mut Scope<'_>,
+    destruc_datum: NsDatum,
+) -> Result<destruc::Destruc<Lowered>> {
     match destruc_datum {
         NsDatum::Ident(span, _) | NsDatum::Vector(span, _) => {
             lower_scalar_destruc(scope, destruc_datum)
@@ -253,14 +260,14 @@ fn lower_destruc(scope: &mut Scope, destruc_datum: NsDatum) -> Result<destruc::D
 }
 
 fn lower_let_like<B, C, O>(
-    outer_scope: &Scope,
+    outer_scope: &Scope<'_>,
     span: Span,
     mut arg_iter: NsDataIter,
     binder: B,
     fold_output: C,
 ) -> Result<Expr<Lowered>>
 where
-    B: Fn(&mut Scope, NsDatum, NsDatum) -> Result<O>,
+    B: Fn(&mut Scope<'_>, NsDatum, NsDatum) -> Result<O>,
     C: Fn(Expr<Lowered>, O) -> Expr<Lowered>,
 {
     let bindings_datum = arg_iter
@@ -297,7 +304,7 @@ where
     Ok(outputs.into_iter().rfold(body_expr, fold_output))
 }
 
-fn lower_body(scope: &Scope, span: Span, body_data: NsDataIter) -> Result<Expr<Lowered>> {
+fn lower_body(scope: &Scope<'_>, span: Span, body_data: NsDataIter) -> Result<Expr<Lowered>> {
     let mut flattened_exprs = vec![];
 
     for body_datum in body_data {
@@ -321,7 +328,7 @@ fn lower_body(scope: &Scope, span: Span, body_data: NsDataIter) -> Result<Expr<L
     }
 }
 
-fn lower_let(scope: &Scope, span: Span, arg_iter: NsDataIter) -> Result<Expr<Lowered>> {
+fn lower_let(scope: &Scope<'_>, span: Span, arg_iter: NsDataIter) -> Result<Expr<Lowered>> {
     lower_let_like(
         scope,
         span,
@@ -344,7 +351,11 @@ fn lower_let(scope: &Scope, span: Span, arg_iter: NsDataIter) -> Result<Expr<Low
     )
 }
 
-fn lower_fun(outer_scope: &Scope, span: Span, mut arg_iter: NsDataIter) -> Result<Expr<Lowered>> {
+fn lower_fun(
+    outer_scope: &Scope<'_>,
+    span: Span,
+    mut arg_iter: NsDataIter,
+) -> Result<Expr<Lowered>> {
     let mut fun_scope = Scope::new_child(outer_scope);
 
     let mut next_datum = arg_iter
@@ -411,7 +422,7 @@ fn lower_fun(outer_scope: &Scope, span: Span, mut arg_iter: NsDataIter) -> Resul
 }
 
 fn lower_expr_prim_apply(
-    scope: &Scope,
+    scope: &Scope<'_>,
     span: Span,
     prim: Prim,
     mut arg_iter: NsDataIter,
@@ -448,7 +459,7 @@ fn lower_expr_prim_apply(
 }
 
 fn lower_expr_apply(
-    scope: &Scope,
+    scope: &Scope<'_>,
     span: Span,
     fun_expr: Expr<Lowered>,
     mut arg_iter: NsDataIter,
@@ -475,7 +486,7 @@ fn lower_expr_apply(
     ))
 }
 
-fn lower_expr(scope: &Scope, datum: NsDatum) -> Result<Expr<Lowered>> {
+fn lower_expr(scope: &Scope<'_>, datum: NsDatum) -> Result<Expr<Lowered>> {
     match datum {
         NsDatum::Ident(span, ident) => match scope.get_or_err(span, &ident)? {
             Binding::Var(id) => Ok(Expr::new(span, ExprKind::Ref(*id))),
@@ -615,7 +626,7 @@ impl<'ccx> LoweringCtx<'ccx> {
 
     fn lower_import(
         &mut self,
-        scope: &mut Scope,
+        scope: &mut Scope<'_>,
         ns_id: NsId,
         arg_iter: NsDataIter,
     ) -> Result<(), Vec<Error>> {
@@ -636,7 +647,7 @@ impl<'ccx> LoweringCtx<'ccx> {
 
     fn lower_module_prim_apply(
         &mut self,
-        scope: &mut Scope,
+        scope: &mut Scope<'_>,
         applied_prim: AppliedPrim,
         mut arg_iter: NsDataIter,
     ) -> Result<Option<DeferredModulePrim>, Vec<Error>> {
@@ -683,7 +694,7 @@ impl<'ccx> LoweringCtx<'ccx> {
 
     fn lower_module_def(
         &mut self,
-        scope: &mut Scope,
+        scope: &mut Scope<'_>,
         datum: NsDatum,
     ) -> Result<Option<DeferredModulePrim>, Vec<Error>> {
         let span = datum.span();
@@ -725,7 +736,7 @@ impl<'ccx> LoweringCtx<'ccx> {
         Err(vec![Error::new(span, ErrorKind::NonDefInsideModule)])
     }
 
-    fn resolve_deferred_def(scope: &Scope, deferred_def: DeferredDef) -> Result<Def<Lowered>> {
+    fn resolve_deferred_def(scope: &Scope<'_>, deferred_def: DeferredDef) -> Result<Def<Lowered>> {
         let DeferredDef {
             span,
             macro_invocation_span,
@@ -833,7 +844,7 @@ impl<'ccx> LoweringCtx<'ccx> {
 impl<'ccx> LoweringCtx<'ccx> {
     pub fn lower_repl_datum(
         &mut self,
-        scope: &mut Scope,
+        scope: &mut Scope<'_>,
         datum: NsDatum,
     ) -> Result<LoweredReplDatum, Vec<Error>> {
         use std::mem;

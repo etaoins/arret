@@ -16,13 +16,13 @@ struct ExpandCursor<'data, 'links> {
     subtemplate_index: usize,
 }
 
-struct ExpandCtx<'scope> {
-    scope: &'scope mut Scope,
+struct ExpandCtx<'scope, 'parent> {
+    scope: &'scope mut Scope<'parent>,
     ns_mapping: HashMap<NsId, NsId>,
 }
 
-impl<'scope> ExpandCtx<'scope> {
-    fn new(scope: &'scope mut Scope) -> Self {
+impl<'scope, 'parent> ExpandCtx<'scope, 'parent> {
+    fn new(scope: &'scope mut Scope<'parent>) -> Self {
         ExpandCtx {
             scope,
             ns_mapping: HashMap::new(),
@@ -158,8 +158,8 @@ impl<'scope> ExpandCtx<'scope> {
     }
 }
 
-pub fn expand_rule<'data>(
-    scope: &mut Scope,
+pub fn expand_rule<'scope, 'parent, 'data>(
+    scope: &'scope mut Scope<'parent>,
     self_mac: &MacroId,
     match_data: &'data MatchData<'data>,
     var_links: &VarLinks,

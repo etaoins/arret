@@ -292,7 +292,7 @@ mod test {
 
     struct TestScope {
         test_ns_id: NsId,
-        scope: Scope,
+        scope: Scope<'static>,
         pvar_ids: purity::PVarIds,
         tvar_ids: ty::TVarIds,
     }
@@ -303,7 +303,7 @@ mod test {
 
             let test_ns_id = Scope::root_ns_id();
             let outer_scope = Scope::new_with_primitives();
-            let mut inner_scope = Scope::new_child(&outer_scope);
+            let mut inner_scope = Scope::new_with_primitives();
 
             let polymorphic_data = data_from_str(polymorphic_str)
                 .unwrap()

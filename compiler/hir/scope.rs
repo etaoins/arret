@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use syntax::span::{Span, EMPTY_SPAN};
 
@@ -28,9 +27,11 @@ struct SpannedBinding {
     binding: Binding,
 }
 
-struct Bindings {
+pub struct Scope<'parent> {
+    ns_id_counter: NsIdCounter,
+
     entries: HashMap<Ident, SpannedBinding>,
-    parent: Option<Arc<Bindings>>,
+    parent: Option<&'parent Scope<'parent>>,
 
     /// Allow redefinition of bindings
     ///
@@ -38,36 +39,14 @@ struct Bindings {
     allow_redef: bool,
 }
 
-impl Bindings {
-    fn get(&self, ident: &Ident) -> Option<&Binding> {
-        match self.entries.get(ident) {
-            Some(e) => Some(&e.binding),
-            None => {
-                if let Some(ref parent) = self.parent {
-                    parent.get(ident)
-                } else {
-                    None
-                }
-            }
-        }
-    }
-}
-
-pub struct Scope {
-    bindings: Arc<Bindings>,
-    ns_id_counter: NsIdCounter,
-}
-
-impl Scope {
+impl<'parent> Scope<'parent> {
     /// Creates an empty root scope
-    pub fn empty() -> Scope {
+    pub fn empty() -> Scope<'static> {
         Scope {
-            bindings: Arc::new(Bindings {
-                entries: HashMap::new(),
-                parent: None,
-                allow_redef: false,
-            }),
             ns_id_counter: NsIdCounter::new(),
+            entries: HashMap::new(),
+            parent: None,
+            allow_redef: false,
         }
     }
 
@@ -78,18 +57,18 @@ impl Scope {
     /// Creates a new REPL scope containing `import`
     ///
     /// This scope is special as it allows redefinitions at the root level.
-    pub fn new_repl() -> Scope {
+    pub fn new_repl() -> Scope<'static> {
         use std::iter;
 
         let entries = iter::once(("import".into(), Binding::Prim(Prim::Import)));
         let mut scope = Self::new_with_entries(entries);
-        scope.bindings_mut().allow_redef = true;
+        scope.allow_redef = true;
 
         scope
     }
 
     /// Creates a new root scope containing all primitives and types
-    pub fn new_with_primitives() -> Scope {
+    pub fn new_with_primitives() -> Scope<'static> {
         use crate::hir::prim::PRIM_EXPORTS;
         use crate::hir::types::TY_EXPORTS;
 
@@ -102,7 +81,7 @@ impl Scope {
     }
 
     /// Creates a new root scope with entries
-    pub fn new_with_entries<I>(entries: I) -> Scope
+    pub fn new_with_entries<I>(entries: I) -> Scope<'static>
     where
         I: Iterator<Item = (Box<str>, Binding)>,
     {
@@ -119,23 +98,19 @@ impl Scope {
             .collect::<HashMap<Ident, SpannedBinding>>();
 
         Scope {
-            bindings: Arc::new(Bindings {
-                entries,
-                parent: None,
-                allow_redef: false,
-            }),
             ns_id_counter: NsIdCounter::new(),
+            entries,
+            parent: None,
+            allow_redef: false,
         }
     }
 
-    pub fn new_child(parent: &Scope) -> Scope {
+    pub fn new_child(parent: &'parent Scope<'parent>) -> Scope<'parent> {
         Scope {
-            bindings: Arc::new(Bindings {
-                entries: HashMap::new(),
-                parent: Some(parent.bindings.clone()),
-                allow_redef: false,
-            }),
             ns_id_counter: parent.ns_id_counter.clone(),
+            entries: HashMap::new(),
+            parent: Some(parent),
+            allow_redef: false,
         }
     }
 
@@ -152,13 +127,18 @@ impl Scope {
 
     /// Returns the binding for a given ident if it exists
     pub fn get<'a>(&'a self, ident: &Ident) -> Option<&'a Binding> {
-        self.bindings().get(ident)
+        self.entries.get(ident).map(|e| &e.binding).or_else(|| {
+            if let Some(ref parent) = self.parent {
+                parent.get(ident)
+            } else {
+                None
+            }
+        })
     }
 
     /// Returns the binding for a given ident if it exists, otherwise returns an error
     pub fn get_or_err<'a>(&'a self, span: Span, ident: &Ident) -> Result<&'a Binding, Error> {
-        self.bindings()
-            .get(ident)
+        self.get(ident)
             .ok_or_else(|| Error::new(span, ErrorKind::UnboundSym(ident.name().into())))
     }
 
@@ -177,16 +157,15 @@ impl Scope {
         I: Iterator<Item = (Ident, Binding)>,
     {
         use std::collections::hash_map::Entry;
-        let bindings = self.bindings_mut();
 
-        bindings.entries.reserve(new_bindings.size_hint().0);
+        self.entries.reserve(new_bindings.size_hint().0);
 
         for (ident, binding) in new_bindings {
             let entry = SpannedBinding { span, binding };
 
-            match bindings.entries.entry(ident) {
+            match self.entries.entry(ident) {
                 Entry::Occupied(mut occupied) => {
-                    if bindings.allow_redef {
+                    if self.allow_redef {
                         occupied.insert(entry);
                     } else {
                         return Err(Error::new(
@@ -212,7 +191,7 @@ impl Scope {
 
     /// Returns all bound idents
     pub fn bound_idents(&self) -> impl Iterator<Item = &Ident> {
-        self.bindings().entries.iter().map(|(ident, _)| ident)
+        self.entries.iter().map(|(ident, _)| ident)
     }
 
     /// Allocates a new NsId
@@ -220,14 +199,5 @@ impl Scope {
     /// This is not globally unique; it will only be unique in the current scope chain
     pub fn alloc_ns_id(&mut self) -> NsId {
         self.ns_id_counter.alloc()
-    }
-
-    fn bindings(&self) -> &Bindings {
-        &self.bindings
-    }
-
-    fn bindings_mut(&mut self) -> &mut Bindings {
-        // This is also important to keep our `ns_alloc_id` invariant
-        Arc::get_mut(&mut self.bindings).expect("Cannot mutate non-leaf scope")
     }
 }
