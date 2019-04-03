@@ -31,7 +31,7 @@ use crate::hir::{App, Cond, DeclPurity, DeclTy, Def, Expr, ExprKind, Fun, Let, V
 struct LoweredModule {
     defs: Vec<Def<Lowered>>,
     exports: Exports,
-    ns_id: Option<NsId>,
+    main_var_id: Option<VarId>,
 }
 
 pub struct LoweringCtx<'ccx> {
@@ -550,12 +550,7 @@ impl<'ccx> LoweringCtx<'ccx> {
         }
     }
 
-    fn load_module(
-        &mut self,
-        scope: &mut Scope,
-        span: Span,
-        module_name: ModuleName,
-    ) -> Result<&Exports, Vec<Error>> {
+    fn load_module(&mut self, span: Span, module_name: ModuleName) -> Result<&Exports, Vec<Error>> {
         // TODO: An if-let or match here will cause the borrow to live past the return. This
         // prevents us from doing the insert below. We need to do a two-phase check instead.
         if self.module_exports.contains_key(&module_name) {
@@ -566,7 +561,7 @@ impl<'ccx> LoweringCtx<'ccx> {
             match load_module_by_name(self.ccx, span, &module_name)? {
                 LoadedModule::Source(source_file) => {
                     let module_data = source_file.parsed().map_err(|err| vec![err.into()])?;
-                    self.lower_module(scope, module_data)?
+                    self.lower_module(module_data)?
                 }
                 LoadedModule::Rust(rfi_library) => self.include_rfi_library(span, rfi_library),
             }
@@ -614,7 +609,7 @@ impl<'ccx> LoweringCtx<'ccx> {
         LoweredModule {
             defs,
             exports,
-            ns_id: None,
+            main_var_id: None,
         }
     }
 
@@ -628,7 +623,7 @@ impl<'ccx> LoweringCtx<'ccx> {
             let span = arg_datum.span();
 
             let bindings = lower_import_set(arg_datum, |span, module_name| {
-                Ok(self.load_module(scope, span, module_name)?.clone())
+                Ok(self.load_module(span, module_name)?.clone())
             })?
             .into_iter()
             .map(|(name, binding)| (Ident::new(ns_id, name), binding));
@@ -746,13 +741,9 @@ impl<'ccx> LoweringCtx<'ccx> {
         })
     }
 
-    fn lower_module(
-        &mut self,
-        scope: &mut Scope,
-        data: &[Datum],
-    ) -> Result<LoweredModule, Vec<Error>> {
+    fn lower_module(&mut self, data: &[Datum]) -> Result<LoweredModule, Vec<Error>> {
+        let mut scope = Scope::empty();
         let ns_id = scope.alloc_ns_id();
-        let mut errors: Vec<Error> = vec![];
 
         // The default scope only consists of (import)
         scope
@@ -762,6 +753,9 @@ impl<'ccx> LoweringCtx<'ccx> {
                 Binding::Prim(Prim::Import),
             )
             .unwrap();
+
+        // Build up a list of errors to return at once
+        let mut errors: Vec<Error> = vec![];
 
         // Extract all of our definitions.
         //
@@ -774,7 +768,7 @@ impl<'ccx> LoweringCtx<'ccx> {
 
         for input_datum in data {
             let ns_datum = NsDatum::from_syntax_datum(ns_id, input_datum);
-            match self.lower_module_def(scope, ns_datum) {
+            match self.lower_module_def(&mut scope, ns_datum) {
                 Ok(Some(DeferredModulePrim::Exports(mut exports))) => {
                     deferred_exports.append(&mut exports);
                 }
@@ -805,7 +799,7 @@ impl<'ccx> LoweringCtx<'ccx> {
         // And now process any deferred defs
         let mut defs = Vec::with_capacity(deferred_defs.len());
         for deferred_def in deferred_defs {
-            match Self::resolve_deferred_def(scope, deferred_def) {
+            match Self::resolve_deferred_def(&scope, deferred_def) {
                 Ok(def) => {
                     defs.push(def);
                 }
@@ -815,11 +809,19 @@ impl<'ccx> LoweringCtx<'ccx> {
             }
         }
 
+        // Try to find `main!`. If we're not the root module this will be ignored.
+        let main_ident = Ident::new(ns_id, "main!".into());
+        let main_var_id = if let Some(Binding::Var(var_id)) = scope.get(&main_ident) {
+            Some(*var_id)
+        } else {
+            None
+        };
+
         if errors.is_empty() {
             Ok(LoweredModule {
                 defs,
                 exports,
-                ns_id: Some(ns_id),
+                main_var_id,
             })
         } else {
             Err(errors)
@@ -882,15 +884,13 @@ pub fn lower_program(
 
     let data = source_file.parsed().map_err(|err| vec![err.into()])?;
 
-    let mut root_scope = Scope::empty();
     let mut lcx = LoweringCtx::new(ccx);
-    let root_module = lcx.lower_module(&mut root_scope, data)?;
+    let root_module = lcx.lower_module(data)?;
 
     lcx.module_defs.push(root_module.defs);
 
-    let main_ident = Ident::new(root_module.ns_id.unwrap(), "main!".into());
-    let main_var_id = if let Some(Binding::Var(var_id)) = root_scope.get(&main_ident) {
-        *var_id
+    let main_var_id = if let Some(var_id) = root_module.main_var_id {
+        var_id
     } else {
         return Err(vec![Error::new(file_span, ErrorKind::NoMainFun)]);
     };
@@ -925,8 +925,6 @@ fn module_for_str(data_str: &str) -> Result<LoweredModule> {
     use crate::PackagePaths;
     use syntax::parser::data_from_str;
 
-    let mut root_scope = Scope::empty();
-
     let mut test_data = data_from_str(data_str).unwrap();
     let mut program_data = vec![
         import_statement_for_module(&["arret", "internal", "primitives"]),
@@ -937,7 +935,7 @@ fn module_for_str(data_str: &str) -> Result<LoweredModule> {
     let ccx = CompileCtx::new(PackagePaths::test_paths(None), true);
     let mut lcx = LoweringCtx::new(&ccx);
 
-    lcx.lower_module(&mut root_scope, &program_data)
+    lcx.lower_module(&program_data)
         .map_err(|mut errors| errors.remove(0))
 }
 
