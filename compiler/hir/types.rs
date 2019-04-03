@@ -40,7 +40,7 @@ fn lower_polymorphic_var(scope: &Scope<'_>, tvar_datum: NsDatum) -> Result<Polym
 
     match tvar_datum {
         NsDatum::Ident(span, ident) => {
-            let source_name = ident.name().into();
+            let source_name = ident.name().clone();
             return Ok(PolymorphicVar {
                 ident,
                 kind: PolymorphicVarKind::TVar(ty::TVar::new(
@@ -57,7 +57,7 @@ fn lower_polymorphic_var(scope: &Scope<'_>, tvar_datum: NsDatum) -> Result<Polym
                 let bound_datum = arg_data.pop().unwrap();
                 let (ident, span) = expect_ident_and_span(arg_data.pop().unwrap())?;
 
-                let source_name = ident.name().into();
+                let source_name = ident.name().clone();
 
                 match try_lower_purity(scope, &bound_datum) {
                     Some(purity::Ref::Fixed(Purity::Impure)) => {
@@ -136,7 +136,7 @@ fn lower_fun_cons(
 
     if arg_iter.len() == 1 {
         if let NsDatum::Ident(_, ident) = &arg_iter.as_slice()[0] {
-            if ident.name() == "..." {
+            if ident.is_ellipsis() {
                 // Top function type in the form `(... -> ReturnType)`
                 return Ok(top_fun.into());
             }
@@ -206,7 +206,7 @@ fn lower_literal(datum: NsDatum) -> Result<ty::Ref<ty::Poly>> {
     match datum {
         NsDatum::Bool(_, v) => Ok(ty::Ty::LitBool(v).into()),
         NsDatum::Keyword(_, name) => Ok(ty::Ty::LitSym(name).into()),
-        NsDatum::Ident(_, ident) => Ok(ty::Ty::LitSym(ident.name().into()).into()),
+        NsDatum::Ident(_, ident) => Ok(ty::Ty::LitSym(ident.into_name()).into()),
         NsDatum::List(_, vs) => {
             let fixed_literals = lower_literal_vec(vs.into_vec())?;
             Ok(ty::List::new(fixed_literals.into_boxed_slice(), ty::Ty::never().into()).into())

@@ -101,12 +101,12 @@ impl<'data> FindVarsCtx<'data> {
         span: Span,
         ident: &'data Ident,
     ) -> FindVarsResult {
-        if ident.name() == "_" {
+        if ident.is_underscore() {
             // This is a wildcard
             return Ok(());
         }
 
-        if ident.name() == "..." {
+        if ident.is_ellipsis() {
             return Err(Error::new(
                 span,
                 ErrorKind::IllegalArg("ellipsis can only be used as part of a zero or more match"),
@@ -117,7 +117,7 @@ impl<'data> FindVarsCtx<'data> {
             if let Some(old_span) = var_spans.insert(ident, span) {
                 return Err(Error::new(
                     span,
-                    ErrorKind::DuplicateDef(old_span, ident.name().into()),
+                    ErrorKind::DuplicateDef(old_span, ident.name().clone()),
                 ));
             }
         }

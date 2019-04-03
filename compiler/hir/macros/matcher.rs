@@ -41,7 +41,7 @@ impl<'data> MatchCtx<'data> {
     }
 
     fn match_ident(&mut self, pattern_ident: &'data Ident, arg: &'data NsDatum) -> bool {
-        if pattern_ident.name() == "_" {
+        if pattern_ident.is_underscore() {
             // This is a wildcard; just discard
         } else {
             self.match_data.vars.push(arg);

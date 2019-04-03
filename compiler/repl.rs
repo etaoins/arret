@@ -55,7 +55,7 @@ impl<'ccx> ReplCtx<'ccx> {
     pub fn bound_names(&self) -> impl Iterator<Item = &DataStr> {
         self.scope.bound_idents().filter_map(move |ident| {
             if ident.ns_id() == Scope::root_ns_id() {
-                Some(ident.data_name())
+                Some(ident.name())
             } else {
                 None
             }

@@ -13,7 +13,7 @@ pub fn try_take_rest_arg(data_iter: &mut NsDataIter) -> Option<NsDatum> {
 
     // This is gross because we need to "peek" at the end of the iterator
     if let NsDatum::Ident(_, ident) = &data_iter.as_slice()[data_len - 2] {
-        if ident.name() == "&" {
+        if ident.is_ampersand() {
             let rest = data_iter.next_back();
             // Remove the & completely
             data_iter.next_back();

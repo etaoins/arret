@@ -35,7 +35,7 @@ impl Macro {
 
 fn starts_with_zero_or_more(data: &[NsDatum]) -> bool {
     if let Some(NsDatum::Ident(_, ident)) = data.get(1) {
-        ident.name() == "..."
+        ident.is_ellipsis()
     } else {
         false
     }
@@ -44,7 +44,7 @@ fn starts_with_zero_or_more(data: &[NsDatum]) -> bool {
 fn get_escaped_ident(data: &[NsDatum]) -> Option<&Ident> {
     match data {
         [NsDatum::Ident(_, ellipsis_ident), NsDatum::Ident(_, escaped_ident)]
-            if ellipsis_ident.name() == "..." =>
+            if ellipsis_ident.is_ellipsis() =>
         {
             Some(escaped_ident)
         }

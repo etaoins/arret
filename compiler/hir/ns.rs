@@ -22,16 +22,24 @@ impl Ident {
         self.ns_id
     }
 
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &DataStr {
         &self.data_name
     }
 
-    pub fn data_name(&self) -> &DataStr {
-        &self.data_name
-    }
-
-    pub fn into_data_name(self) -> DataStr {
+    pub fn into_name(self) -> DataStr {
         self.data_name
+    }
+
+    pub fn is_underscore(&self) -> bool {
+        self.data_name.as_ref() == "_"
+    }
+
+    pub fn is_ellipsis(&self) -> bool {
+        self.data_name.as_ref() == "..."
+    }
+
+    pub fn is_ampersand(&self) -> bool {
+        self.data_name.as_ref() == "&"
     }
 
     pub fn with_ns_id(&self, new_ns_id: NsId) -> Ident {
@@ -103,7 +111,7 @@ impl NsDatum {
             NsDatum::Float(span, v) => Datum::Float(span, v),
             NsDatum::Str(span, v) => Datum::Str(span, v),
             NsDatum::Keyword(span, v) => Datum::Sym(span, v),
-            NsDatum::Ident(span, v) => Datum::Sym(span, v.into_data_name()),
+            NsDatum::Ident(span, v) => Datum::Sym(span, v.into_name()),
             NsDatum::List(span, vs) => Datum::List(span, Self::map_nsdata(vs)),
             NsDatum::Vector(span, vs) => Datum::Vector(span, Self::map_nsdata(vs)),
             NsDatum::Set(span, vs) => Datum::Set(span, Self::map_nsdata(vs)),

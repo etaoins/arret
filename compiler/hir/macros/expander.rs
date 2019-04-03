@@ -36,7 +36,7 @@ impl<'scope, 'parent> ExpandCtx<'scope, 'parent> {
         span: Span,
         ident: &Ident,
     ) -> NsDatum {
-        let binding = if ident.name() != "_" {
+        let binding = if !ident.is_underscore() {
             let template_ident = cursor.var_links.template_ident(cursor.ident_index);
             cursor.ident_index += 1;
 

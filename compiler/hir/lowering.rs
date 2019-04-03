@@ -134,7 +134,7 @@ fn lower_macro(
 
     let mac = lower_macro_rules(scope, &self_ident, macro_rules_data)?;
 
-    if self_ident.name() != "_" {
+    if !self_ident.is_underscore() {
         scope.insert_binding(self_span, self_ident, Binding::Macro(MacroId::new(mac)))?;
     }
 
@@ -158,7 +158,7 @@ fn lower_type(scope: &mut Scope<'_>, self_datum: NsDatum, ty_datum: NsDatum) -> 
     let (ident, span) = expect_ident_and_span(self_datum)?;
     let ty = lower_poly(scope, ty_datum)?;
 
-    if ident.name() != "_" {
+    if !ident.is_underscore() {
         scope.insert_binding(span, ident, Binding::Ty(ty))?;
     }
 
@@ -185,11 +185,11 @@ fn lower_ident_destruc(
     ident: Ident,
     decl_ty: DeclTy,
 ) -> Result<destruc::Scalar<Lowered>> {
-    if ident.name() == "_" {
-        Ok(destruc::Scalar::new(None, ident.into_data_name(), decl_ty))
+    if ident.is_underscore() {
+        Ok(destruc::Scalar::new(None, ident.into_name(), decl_ty))
     } else {
         let var_id = VarId::alloc();
-        let source_name = ident.name().into();
+        let source_name = ident.name().clone();
 
         scope.insert_var(span, ident, var_id)?;
         Ok(destruc::Scalar::new(Some(var_id), source_name, decl_ty))
@@ -397,7 +397,7 @@ fn lower_fun(
             purity = poly_purity.into();
 
             match arg_iter.next().unwrap() {
-                NsDatum::Ident(_, ref ident) if ident.name() == "_" => {}
+                NsDatum::Ident(_, ref ident) if ident.is_underscore() => {}
                 ret_datum => {
                     ret_ty = lower_poly(&fun_scope, ret_datum)?.into();
                 }
@@ -496,10 +496,7 @@ fn lower_expr(scope: &Scope<'_>, datum: NsDatum) -> Result<Expr<Lowered>> {
             Binding::Ty(_) | Binding::TyCons(_) | Binding::Purity(_) => {
                 Err(Error::new(span, ErrorKind::TyRef))
             }
-            Binding::Macro(_) => Err(Error::new(
-                span,
-                ErrorKind::MacroRef(ident.into_data_name()),
-            )),
+            Binding::Macro(_) => Err(Error::new(span, ErrorKind::MacroRef(ident.into_name()))),
         },
         NsDatum::List(span, vs) => {
             let mut data_iter = vs.into_vec().into_iter();
@@ -791,7 +788,7 @@ impl<'ccx> LoweringCtx<'ccx> {
             let DeferredExport { span, ident } = deferred_export;
             match scope.get_or_err(span, &ident) {
                 Ok(binding) => {
-                    exports.insert(ident.into_data_name(), binding.clone());
+                    exports.insert(ident.into_name(), binding.clone());
                 }
                 Err(err) => {
                     errors.push(err);
