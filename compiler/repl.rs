@@ -11,7 +11,6 @@ use crate::typeck::infer::InferCtx;
 
 pub struct ReplCtx<'ccx> {
     scope: Scope<'static>,
-    ns_id: hir::ns::NsId,
     source_loader: &'ccx SourceLoader,
     lcx: hir::lowering::LoweringCtx<'ccx>,
     icx: InferCtx,
@@ -41,12 +40,10 @@ pub enum EvaledLine {
 
 impl<'ccx> ReplCtx<'ccx> {
     pub fn new(ccx: &'ccx CompileCtx) -> Self {
-        let ns_id = Scope::root_ns_id();
         let scope = Scope::new_repl();
 
         ReplCtx {
             scope,
-            ns_id,
             source_loader: ccx.source_loader(),
             lcx: hir::lowering::LoweringCtx::new(ccx),
             icx: InferCtx::new(),
@@ -56,10 +53,8 @@ impl<'ccx> ReplCtx<'ccx> {
 
     /// Returns all names bound in the root scope and namespace
     pub fn bound_names(&self) -> impl Iterator<Item = &DataStr> {
-        let ns_id = self.ns_id;
-
         self.scope.bound_idents().filter_map(move |ident| {
-            if ident.ns_id() == ns_id {
+            if ident.ns_id() == Scope::root_ns_id() {
                 Some(ident.data_name())
             } else {
                 None
@@ -95,7 +90,7 @@ impl<'ccx> ReplCtx<'ccx> {
             self.ehx.collect_garbage();
         }
 
-        let ns_datum = hir::ns::NsDatum::from_syntax_datum(self.ns_id, input_datum);
+        let ns_datum = hir::ns::NsDatum::from_syntax_datum(input_datum);
 
         match self.lcx.lower_repl_datum(&mut self.scope, ns_datum)? {
             LoweredReplDatum::Defs(defs) => {

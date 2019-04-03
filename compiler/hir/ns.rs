@@ -3,6 +3,8 @@ use std::vec;
 use syntax::datum::{DataStr, Datum};
 use syntax::span::Span;
 
+use crate::hir::scope::Scope;
+
 new_counting_id_type!(NsIdCounter, NsId);
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -56,13 +58,11 @@ pub enum NsDatum {
 }
 
 impl NsDatum {
-    fn map_syntax_data(ns_id: NsId, vs: &[Datum]) -> Box<[NsDatum]> {
-        vs.iter()
-            .map(|v| Self::from_syntax_datum(ns_id, v))
-            .collect()
+    fn map_syntax_data(vs: &[Datum]) -> Box<[NsDatum]> {
+        vs.iter().map(Self::from_syntax_datum).collect()
     }
 
-    pub fn from_syntax_datum(ns_id: NsId, value: &Datum) -> NsDatum {
+    pub fn from_syntax_datum(value: &Datum) -> NsDatum {
         match value {
             Datum::Bool(span, v) => NsDatum::Bool(*span, *v),
             Datum::Char(span, v) => NsDatum::Char(*span, *v),
@@ -73,21 +73,16 @@ impl NsDatum {
                 if v.starts_with(':') {
                     NsDatum::Keyword(*span, v.clone())
                 } else {
-                    NsDatum::Ident(*span, Ident::new(ns_id, v.clone()))
+                    NsDatum::Ident(*span, Ident::new(Scope::root_ns_id(), v.clone()))
                 }
             }
-            Datum::List(span, vs) => NsDatum::List(*span, Self::map_syntax_data(ns_id, vs)),
-            Datum::Vector(span, vs) => NsDatum::Vector(*span, Self::map_syntax_data(ns_id, vs)),
-            Datum::Set(span, vs) => NsDatum::Set(*span, Self::map_syntax_data(ns_id, vs)),
+            Datum::List(span, vs) => NsDatum::List(*span, Self::map_syntax_data(vs)),
+            Datum::Vector(span, vs) => NsDatum::Vector(*span, Self::map_syntax_data(vs)),
+            Datum::Set(span, vs) => NsDatum::Set(*span, Self::map_syntax_data(vs)),
             Datum::Map(span, vs) => NsDatum::Map(
                 *span,
                 vs.iter()
-                    .map(|(k, v)| {
-                        (
-                            NsDatum::from_syntax_datum(ns_id, k),
-                            NsDatum::from_syntax_datum(ns_id, v),
-                        )
-                    })
+                    .map(|(k, v)| (NsDatum::from_syntax_datum(k), NsDatum::from_syntax_datum(v)))
                     .collect(),
             ),
         }

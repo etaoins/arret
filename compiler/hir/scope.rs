@@ -40,50 +40,14 @@ pub struct Scope<'parent> {
 }
 
 impl<'parent> Scope<'parent> {
-    /// Creates an empty root scope
-    pub fn empty() -> Scope<'static> {
-        Scope {
-            ns_id_counter: NsIdCounter::new(),
-            entries: HashMap::new(),
-            parent: None,
-            allow_redef: false,
-        }
-    }
-
     pub fn root_ns_id() -> NsId {
         NsId::new(0)
-    }
-
-    /// Creates a new REPL scope containing `import`
-    ///
-    /// This scope is special as it allows redefinitions at the root level.
-    pub fn new_repl() -> Scope<'static> {
-        use std::iter;
-
-        let entries = iter::once(("import".into(), Binding::Prim(Prim::Import)));
-        let mut scope = Self::new_with_entries(entries);
-        scope.allow_redef = true;
-
-        scope
-    }
-
-    /// Creates a new root scope containing all primitives and types
-    pub fn new_with_primitives() -> Scope<'static> {
-        use crate::hir::prim::PRIM_EXPORTS;
-        use crate::hir::types::TY_EXPORTS;
-
-        let entries = PRIM_EXPORTS
-            .iter()
-            .chain(TY_EXPORTS.iter())
-            .map(|(name, binding)| ((*name).into(), binding.clone()));
-
-        Self::new_with_entries(entries)
     }
 
     /// Creates a new root scope with entries
     pub fn new_with_entries<I>(entries: I) -> Scope<'static>
     where
-        I: Iterator<Item = (Box<str>, Binding)>,
+        I: Iterator<Item = (&'static str, Binding)>,
     {
         let entries = entries
             .map(|(name, binding)| {
@@ -103,6 +67,32 @@ impl<'parent> Scope<'parent> {
             parent: None,
             allow_redef: false,
         }
+    }
+
+    /// Creates a new REPL scope containing `import`
+    ///
+    /// This scope is special as it allows redefinitions at the root level.
+    pub fn new_repl() -> Scope<'static> {
+        use std::iter;
+
+        let entries = iter::once(("import", Binding::Prim(Prim::Import)));
+        let mut scope = Self::new_with_entries(entries);
+        scope.allow_redef = true;
+
+        scope
+    }
+
+    /// Creates a new root scope containing all primitives and types
+    pub fn new_with_primitives() -> Scope<'static> {
+        use crate::hir::prim::PRIM_EXPORTS;
+        use crate::hir::types::TY_EXPORTS;
+
+        let entries = PRIM_EXPORTS
+            .iter()
+            .chain(TY_EXPORTS.iter())
+            .map(|(name, binding)| (*name, binding.clone()));
+
+        Self::new_with_entries(entries)
     }
 
     pub fn new_child(parent: &'parent Scope<'parent>) -> Scope<'parent> {

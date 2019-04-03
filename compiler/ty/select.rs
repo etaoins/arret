@@ -285,13 +285,12 @@ impl<'vars> SelectCtx<'vars> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::hir::ns::{NsDatum, NsId};
+    use crate::hir::ns::NsDatum;
     use crate::hir::scope::Scope;
     use crate::ty::purity::Purity;
     use syntax::parser::{data_from_str, datum_from_str};
 
     struct TestScope {
-        test_ns_id: NsId,
         scope: Scope<'static>,
         pvar_ids: purity::PVarIds,
         tvar_ids: ty::TVarIds,
@@ -301,14 +300,13 @@ mod test {
         fn new(polymorphic_str: &str) -> TestScope {
             use crate::hir::lower_polymorphic_vars;
 
-            let test_ns_id = Scope::root_ns_id();
             let outer_scope = Scope::new_with_primitives();
             let mut inner_scope = Scope::new_with_primitives();
 
             let polymorphic_data = data_from_str(polymorphic_str)
                 .unwrap()
                 .iter()
-                .map(|value| NsDatum::from_syntax_datum(test_ns_id, value))
+                .map(NsDatum::from_syntax_datum)
                 .collect::<Vec<NsDatum>>();
 
             let (pvar_ids, tvar_ids) = lower_polymorphic_vars(
@@ -319,7 +317,6 @@ mod test {
             .unwrap();
 
             TestScope {
-                test_ns_id,
                 scope: inner_scope,
                 pvar_ids,
                 tvar_ids,
@@ -330,22 +327,14 @@ mod test {
             use crate::hir::lower_poly;
             let test_datum = datum_from_str(poly_str).unwrap();
 
-            lower_poly(
-                &self.scope,
-                NsDatum::from_syntax_datum(self.test_ns_id, &test_datum),
-            )
-            .unwrap()
+            lower_poly(&self.scope, NsDatum::from_syntax_datum(&test_datum)).unwrap()
         }
 
         fn purity_for_str(&self, poly_str: &str) -> purity::Ref {
             use crate::hir::try_lower_purity;
             let test_datum = datum_from_str(poly_str).unwrap();
 
-            try_lower_purity(
-                &self.scope,
-                &NsDatum::from_syntax_datum(self.test_ns_id, &test_datum),
-            )
-            .unwrap()
+            try_lower_purity(&self.scope, &NsDatum::from_syntax_datum(&test_datum)).unwrap()
         }
 
         fn select_ctx(&self) -> SelectCtx<'_> {

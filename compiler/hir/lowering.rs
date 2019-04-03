@@ -753,17 +753,9 @@ impl<'ccx> LoweringCtx<'ccx> {
     }
 
     fn lower_module(&mut self, data: &[Datum]) -> Result<LoweredModule, Vec<Error>> {
-        let mut scope = Scope::empty();
-        let ns_id = scope.alloc_ns_id();
-
         // The default scope only consists of (import)
-        scope
-            .insert_binding(
-                EMPTY_SPAN,
-                Ident::new(ns_id, "import".into()),
-                Binding::Prim(Prim::Import),
-            )
-            .unwrap();
+        let mut scope =
+            Scope::new_with_entries(std::iter::once(("import", Binding::Prim(Prim::Import))));
 
         // Build up a list of errors to return at once
         let mut errors: Vec<Error> = vec![];
@@ -778,7 +770,7 @@ impl<'ccx> LoweringCtx<'ccx> {
         let mut deferred_defs = Vec::<DeferredDef>::new();
 
         for input_datum in data {
-            let ns_datum = NsDatum::from_syntax_datum(ns_id, input_datum);
+            let ns_datum = NsDatum::from_syntax_datum(input_datum);
             match self.lower_module_def(&mut scope, ns_datum) {
                 Ok(Some(DeferredModulePrim::Exports(mut exports))) => {
                     deferred_exports.append(&mut exports);
@@ -821,7 +813,7 @@ impl<'ccx> LoweringCtx<'ccx> {
         }
 
         // Try to find `main!`. If we're not the root module this will be ignored.
-        let main_ident = Ident::new(ns_id, "main!".into());
+        let main_ident = Ident::new(Scope::root_ns_id(), "main!".into());
         let main_var_id = if let Some(Binding::Var(var_id)) = scope.get(&main_ident) {
             Some(*var_id)
         } else {
@@ -954,11 +946,10 @@ fn module_for_str(data_str: &str) -> Result<LoweredModule> {
 pub fn expr_for_str(data_str: &str) -> Expr<Lowered> {
     use syntax::parser::datum_from_str;
 
-    let test_ns_id = Scope::root_ns_id();
     let scope = Scope::new_with_primitives();
 
     let test_datum = datum_from_str(data_str).unwrap();
-    let test_nsdatum = NsDatum::from_syntax_datum(test_ns_id, &test_datum);
+    let test_nsdatum = NsDatum::from_syntax_datum(&test_datum);
 
     lower_expr(&scope, test_nsdatum).unwrap()
 }

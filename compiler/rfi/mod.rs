@@ -9,7 +9,7 @@ use syntax::span::Span;
 
 use crate::hir;
 use crate::hir::error::{Error, ErrorKind};
-use crate::hir::ns::{NsDatum, NsId};
+use crate::hir::ns::NsDatum;
 use crate::hir::scope::Scope;
 use crate::source::{RfiModuleKind, SourceKind, SourceLoader};
 use crate::ty;
@@ -89,7 +89,6 @@ impl Fun {
 }
 
 pub struct Loader {
-    type_ns_id: NsId,
     type_scope: Scope<'static>,
     native_rust_libraries: Mutex<HashMap<Box<path::Path>, Arc<Library>>>,
 }
@@ -158,7 +157,6 @@ fn build_rfi_lib_path(base: &path::Path, package_name: &str, lib_type: LibType) 
 impl Loader {
     pub fn new() -> Loader {
         Loader {
-            type_ns_id: Scope::root_ns_id(),
             type_scope: Scope::new_with_primitives(),
             native_rust_libraries: Mutex::new(HashMap::new()),
         }
@@ -171,7 +169,7 @@ impl Loader {
         rust_fun: &'static binding::RustFun,
         intrinsic_name: Option<&'static str>,
     ) -> Result<Fun, Error> {
-        let ns_datum = NsDatum::from_syntax_datum(self.type_ns_id, arret_type_datum);
+        let ns_datum = NsDatum::from_syntax_datum(arret_type_datum);
         let span = ns_datum.span();
 
         // Lower the Arret type using a fixed scope

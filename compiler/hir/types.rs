@@ -578,17 +578,16 @@ pub fn poly_for_str(datum_str: &str) -> ty::Ref<ty::Poly> {
                 // Using `U` in tests is very dubious as it invokes a lot of type system logic. It's
                 // easy to write tautological tests due to `U` creating a simplified type. Rename to
                 // `UnifyingU` so it's clear what's happening.
-                ("UnifyingU".into(), binding.clone())
+                ("UnifyingU", binding.clone())
             } else {
-                ((*name).into(), binding.clone())
+                (*name, binding.clone())
             }
         });
 
-    let test_ns_id = Scope::root_ns_id();
     let scope = Scope::new_with_entries(prim_entries);
 
     let test_datum = datum_from_str(datum_str).unwrap();
-    lower_poly(&scope, NsDatum::from_syntax_datum(test_ns_id, &test_datum)).unwrap()
+    lower_poly(&scope, NsDatum::from_syntax_datum(&test_datum)).unwrap()
 }
 
 #[cfg(test)]
