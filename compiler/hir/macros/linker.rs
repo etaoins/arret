@@ -6,30 +6,38 @@ use syntax::span::{Span, EMPTY_SPAN};
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::macros::{get_escaped_ident, starts_with_zero_or_more};
 use crate::hir::ns::{Ident, NsDatum};
+use crate::hir::scope::{Binding, Scope};
+
+/// Indicates the meaning of a given ident in the template
+#[derive(PartialEq, Debug)]
+pub enum TemplateIdent {
+    /// Refers to a template variable with a given index
+    SubpatternVar(usize),
+    /// Ident of the macro being expanded
+    SelfIdent,
+    /// Ident bound to the given binding
+    Bound(Binding),
+    /// Unbound ident
+    Unbound,
+}
 
 /// Precomputed links from variables in the template to the pattern
-///
-/// This internally uses an `u32` representation to save space but exposes a `usize` public
-/// interface to work better with indexing etc.
 #[derive(PartialEq, Debug)]
 pub struct VarLinks {
-    subpattern_index: u32,
-    pattern_var_indices: Box<[Option<u32>]>,
+    subpattern_index: usize,
+    template_idents: Box<[TemplateIdent]>,
     subtemplates: Box<[VarLinks]>,
 }
 
 impl VarLinks {
     /// Index of the subpattern for this subtemplate
     pub fn subpattern_index(&self) -> usize {
-        self.subpattern_index as usize
+        self.subpattern_index
     }
 
-    /// Returns the pattern var index for a given template var index
-    ///
-    /// If the element is `Some` then it maps to a variable in the pattern. If it's `None` then it's
-    /// a literal ident.
-    pub fn pattern_var_index(&self, i: usize) -> Option<usize> {
-        self.pattern_var_indices[i].map(|i| i as usize)
+    /// Returns the template ident for the given index
+    pub fn template_ident(&self, i: usize) -> &TemplateIdent {
+        &self.template_idents[i]
     }
 
     /// Links for our subtemplates in visit order
@@ -41,7 +49,7 @@ impl VarLinks {
 #[derive(Debug)]
 struct FoundVars<'data> {
     span: Span,
-    vars: Vec<&'data Ident>,
+    idents: Vec<&'data Ident>,
     subs: Vec<FoundVars<'data>>,
 }
 
@@ -49,7 +57,7 @@ impl<'data> FoundVars<'data> {
     fn new(span: Span) -> Self {
         FoundVars {
             span,
-            vars: vec![],
+            idents: vec![],
             subs: vec![],
         }
     }
@@ -114,7 +122,7 @@ impl<'data> FindVarsCtx<'data> {
             }
         }
 
-        pattern_vars.vars.push(ident);
+        pattern_vars.idents.push(ident);
         Ok(())
     }
 
@@ -217,20 +225,39 @@ impl<'data> FindVarsCtx<'data> {
     }
 }
 
+fn link_template_ident(
+    scope: &Scope,
+    self_ident: &Ident,
+    template_ident: &Ident,
+    pattern_idents: &[&Ident],
+) -> TemplateIdent {
+    // First, see if this corresponds to a var in the pattern
+    if let Some(subpattern_index) = pattern_idents
+        .iter()
+        .position(|pattern_ident| *pattern_ident == template_ident)
+    {
+        TemplateIdent::SubpatternVar(subpattern_index)
+    } else if template_ident == self_ident {
+        TemplateIdent::SelfIdent
+    } else if let Some(binding) = scope.get(template_ident) {
+        TemplateIdent::Bound(binding.clone())
+    } else {
+        TemplateIdent::Unbound
+    }
+}
+
 fn link_found_vars(
+    scope: &Scope,
+    self_ident: &Ident,
     subpattern_index: usize,
     pattern_vars: &FoundVars<'_>,
     template_vars: &FoundVars<'_>,
 ) -> Result<VarLinks> {
-    let pattern_var_indices = template_vars
-        .vars
+    let template_idents = template_vars
+        .idents
         .iter()
-        .map(|template_var| {
-            pattern_vars
-                .vars
-                .iter()
-                .position(|pattern_var| pattern_var == template_var)
-                .map(|i| i as u32)
+        .map(|template_ident| {
+            link_template_ident(scope, self_ident, template_ident, &pattern_vars.idents)
         })
         .collect();
 
@@ -238,7 +265,7 @@ fn link_found_vars(
         .subs
         .iter()
         .map(|subtemplate_vars| {
-            if subtemplate_vars.vars.is_empty() {
+            if subtemplate_vars.idents.is_empty() {
                 return Err(Error::new(
                     template_vars.span,
                     ErrorKind::IllegalArg("subtemplate does not include any macro variables"),
@@ -252,9 +279,9 @@ fn link_found_vars(
                 .enumerate()
                 .filter(|(_, subpattern_vars)| {
                     subpattern_vars
-                        .vars
+                        .idents
                         .iter()
-                        .any(|subpattern_var| subtemplate_vars.vars.contains(subpattern_var))
+                        .any(|subpattern_var| subtemplate_vars.idents.contains(subpattern_var))
                 })
                 .collect::<Vec<(usize, &FoundVars<'_>)>>();
 
@@ -276,18 +303,29 @@ fn link_found_vars(
 
             // Iterate over our subpatterns
             let (pattern_index, subpattern_vars) = possible_indices[0];
-            link_found_vars(pattern_index, subpattern_vars, subtemplate_vars)
+            link_found_vars(
+                scope,
+                self_ident,
+                pattern_index,
+                subpattern_vars,
+                subtemplate_vars,
+            )
         })
         .collect::<Result<Box<[VarLinks]>>>()?;
 
     Ok(VarLinks {
-        subpattern_index: subpattern_index as u32,
-        pattern_var_indices,
+        subpattern_index,
+        template_idents,
         subtemplates,
     })
 }
 
-pub fn link_rule_vars(patterns: &[NsDatum], template: &NsDatum) -> Result<VarLinks> {
+pub fn link_rule_vars(
+    scope: &Scope,
+    self_ident: &Ident,
+    patterns: &[NsDatum],
+    template: &NsDatum,
+) -> Result<VarLinks> {
     let mut fpvcx = FindVarsCtx::new(FindVarsInputType::Pattern);
 
     // We don't need to report the root span for the pattern
@@ -298,5 +336,5 @@ pub fn link_rule_vars(patterns: &[NsDatum], template: &NsDatum) -> Result<VarLin
     let mut template_vars = FoundVars::new(template.span());
     ftvcx.visit_datum(&mut template_vars, template)?;
 
-    link_found_vars(0, &pattern_vars, &template_vars)
+    link_found_vars(scope, self_ident, 0, &pattern_vars, &template_vars)
 }

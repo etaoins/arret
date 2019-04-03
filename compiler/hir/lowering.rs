@@ -128,7 +128,7 @@ fn lower_macro(scope: &mut Scope, self_datum: NsDatum, transformer_spec: NsDatum
         ));
     };
 
-    let mac = lower_macro_rules(macro_rules_data)?;
+    let mac = lower_macro_rules(scope, &self_ident, macro_rules_data)?;
 
     if self_ident.name() != "_" {
         scope.insert_binding(self_span, self_ident, Binding::Macro(MacroId::new(mac)))?;

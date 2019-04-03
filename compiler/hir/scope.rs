@@ -210,21 +210,6 @@ impl Scope {
         self.insert_binding(span, ident, Binding::Var(var_id))
     }
 
-    // This is used to rebind variables to fresh locations when expanding macros
-    pub fn rebind(
-        &mut self,
-        span: Span,
-        old_ident: &Ident,
-        new_ident: &Ident,
-    ) -> Result<(), Error> {
-        if let Some(old_binding) = self.get(old_ident) {
-            let new_binding = old_binding.clone();
-            self.insert_binding(span, new_ident.clone(), new_binding)
-        } else {
-            Ok(())
-        }
-    }
-
     /// Returns all bound idents
     pub fn bound_idents(&self) -> impl Iterator<Item = &Ident> {
         self.bindings().entries.iter().map(|(ident, _)| ident)

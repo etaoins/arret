@@ -52,7 +52,7 @@ fn get_escaped_ident(data: &[NsDatum]) -> Option<&Ident> {
     }
 }
 
-fn lower_macro_rule_datum(rule_datum: NsDatum) -> Result<Rule> {
+fn lower_macro_rule_datum(scope: &Scope, self_ident: &Ident, rule_datum: NsDatum) -> Result<Rule> {
     let (span, mut rule_values) = if let NsDatum::Vector(span, vs) = rule_datum {
         (span, vs.into_vec())
     } else {
@@ -81,7 +81,7 @@ fn lower_macro_rule_datum(rule_datum: NsDatum) -> Result<Rule> {
         ));
     };
 
-    let var_links = link_rule_vars(&pattern, &template)?;
+    let var_links = link_rule_vars(scope, self_ident, &pattern, &template)?;
 
     Ok(Rule {
         pattern,
@@ -90,10 +90,14 @@ fn lower_macro_rule_datum(rule_datum: NsDatum) -> Result<Rule> {
     })
 }
 
-pub fn lower_macro_rules(macro_rules_data: Vec<NsDatum>) -> Result<Macro> {
+pub fn lower_macro_rules(
+    scope: &Scope,
+    self_ident: &Ident,
+    macro_rules_data: Vec<NsDatum>,
+) -> Result<Macro> {
     let rules = macro_rules_data
         .into_iter()
-        .map(lower_macro_rule_datum)
+        .map(|rule_datum| lower_macro_rule_datum(scope, self_ident, rule_datum))
         .collect::<Result<Box<[Rule]>>>()?;
 
     Ok(Macro::new(rules))
@@ -102,7 +106,7 @@ pub fn lower_macro_rules(macro_rules_data: Vec<NsDatum>) -> Result<Macro> {
 pub fn expand_macro(
     scope: &mut Scope,
     invocation_span: Span,
-    mac: &Macro,
+    mac: &MacroId,
     arg_data: &[NsDatum],
 ) -> Result<NsDatum> {
     for rule in mac.rules.iter() {
@@ -111,6 +115,7 @@ pub fn expand_macro(
         if let Ok(match_data) = match_result {
             return Ok(expand_rule(
                 scope,
+                mac,
                 &match_data,
                 &rule.var_links,
                 &rule.template,

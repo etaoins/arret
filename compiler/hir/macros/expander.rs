@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use syntax::span::Span;
 
-use crate::hir::macros::linker::VarLinks;
+use crate::hir::macros::linker::{TemplateIdent, VarLinks};
 use crate::hir::macros::matcher::MatchData;
-use crate::hir::macros::{get_escaped_ident, starts_with_zero_or_more};
+use crate::hir::macros::{get_escaped_ident, starts_with_zero_or_more, MacroId};
 use crate::hir::ns::{Ident, NsDatum, NsId};
-use crate::hir::scope::Scope;
+use crate::hir::scope::{Binding, Scope};
 
 struct ExpandCursor<'data, 'links> {
     match_data: &'data MatchData<'data>,
@@ -31,22 +31,29 @@ impl<'scope> ExpandCtx<'scope> {
 
     fn expand_ident(
         &mut self,
+        self_mac: &MacroId,
         cursor: &mut ExpandCursor<'_, '_>,
         span: Span,
         ident: &Ident,
     ) -> NsDatum {
-        if ident.name() != "_" {
-            let var_index = cursor.var_links.pattern_var_index(cursor.ident_index);
+        let binding = if ident.name() != "_" {
+            let template_ident = cursor.var_links.template_ident(cursor.ident_index);
             cursor.ident_index += 1;
 
-            if let Some(var_index) = var_index {
-                return cursor.match_data.var(var_index).clone();
+            match template_ident {
+                TemplateIdent::SubpatternVar(var_index) => {
+                    return cursor.match_data.var(*var_index).clone();
+                }
+                TemplateIdent::SelfIdent => Some(Binding::Macro(self_mac.clone())),
+                TemplateIdent::Bound(binding) => Some(binding.clone()),
+                TemplateIdent::Unbound => None,
             }
-        }
+        } else {
+            None
+        };
 
         // Re-scope this ident
         let old_ns_id = ident.ns_id();
-
         let scope = &mut self.scope;
         let new_ns_id = self
             .ns_mapping
@@ -54,14 +61,17 @@ impl<'scope> ExpandCtx<'scope> {
             .or_insert_with(|| scope.alloc_ns_id());
 
         let new_ident = ident.with_ns_id(*new_ns_id);
-        // If the same bound identifier occurs multiple times in the expansion this can error
-        let _ = scope.rebind(span, ident, &new_ident);
+
+        if let Some(binding) = binding {
+            let _ = scope.insert_binding(span, new_ident.clone(), binding);
+        };
 
         NsDatum::Ident(span, new_ident)
     }
 
     fn expand_zero_or_more(
         &mut self,
+        self_mac: &MacroId,
         cursor: &mut ExpandCursor<'_, '_>,
         template: &NsDatum,
     ) -> Vec<NsDatum> {
@@ -85,13 +95,14 @@ impl<'scope> ExpandCtx<'scope> {
                     subtemplate_index: 0,
                 };
 
-                self.expand_datum(&mut subcursor, template)
+                self.expand_datum(self_mac, &mut subcursor, template)
             })
             .collect()
     }
 
     fn expand_slice(
         &mut self,
+        self_mac: &MacroId,
         cursor: &mut ExpandCursor<'_, '_>,
         mut templates: &[NsDatum],
     ) -> Box<[NsDatum]> {
@@ -99,13 +110,13 @@ impl<'scope> ExpandCtx<'scope> {
 
         while !templates.is_empty() {
             if starts_with_zero_or_more(templates) {
-                let mut expanded = self.expand_zero_or_more(cursor, &templates[0]);
+                let mut expanded = self.expand_zero_or_more(self_mac, cursor, &templates[0]);
                 result.append(&mut expanded);
 
                 // Skip the ellipsis as well
                 templates = &templates[2..];
             } else {
-                let expanded = self.expand_datum(cursor, &templates[0]);
+                let expanded = self.expand_datum(self_mac, cursor, &templates[0]);
                 result.push(expanded);
 
                 templates = &templates[1..];
@@ -117,6 +128,7 @@ impl<'scope> ExpandCtx<'scope> {
 
     fn expand_list(
         &mut self,
+        self_mac: &MacroId,
         cursor: &mut ExpandCursor<'_, '_>,
         span: Span,
         templates: &[NsDatum],
@@ -124,16 +136,23 @@ impl<'scope> ExpandCtx<'scope> {
         if let Some(ident) = get_escaped_ident(templates) {
             NsDatum::Ident(span, ident.clone())
         } else {
-            NsDatum::List(span, self.expand_slice(cursor, templates))
+            NsDatum::List(span, self.expand_slice(self_mac, cursor, templates))
         }
     }
 
-    fn expand_datum(&mut self, cursor: &mut ExpandCursor<'_, '_>, template: &NsDatum) -> NsDatum {
+    fn expand_datum(
+        &mut self,
+        self_mac: &MacroId,
+        cursor: &mut ExpandCursor<'_, '_>,
+        template: &NsDatum,
+    ) -> NsDatum {
         match template {
-            NsDatum::Ident(span, ident) => self.expand_ident(cursor, *span, ident),
-            NsDatum::List(span, vs) => self.expand_list(cursor, *span, vs),
-            NsDatum::Vector(span, vs) => NsDatum::Vector(*span, self.expand_slice(cursor, vs)),
-            NsDatum::Set(span, vs) => NsDatum::Set(*span, self.expand_slice(cursor, vs)),
+            NsDatum::Ident(span, ident) => self.expand_ident(self_mac, cursor, *span, ident),
+            NsDatum::List(span, vs) => self.expand_list(self_mac, cursor, *span, vs),
+            NsDatum::Vector(span, vs) => {
+                NsDatum::Vector(*span, self.expand_slice(self_mac, cursor, vs))
+            }
+            NsDatum::Set(span, vs) => NsDatum::Set(*span, self.expand_slice(self_mac, cursor, vs)),
             other => other.clone(),
         }
     }
@@ -141,6 +160,7 @@ impl<'scope> ExpandCtx<'scope> {
 
 pub fn expand_rule<'data>(
     scope: &mut Scope,
+    self_mac: &MacroId,
     match_data: &'data MatchData<'data>,
     var_links: &VarLinks,
     template: &NsDatum,
@@ -155,5 +175,5 @@ pub fn expand_rule<'data>(
         subtemplate_index: 0,
     };
 
-    mcx.expand_datum(&mut cursor, template)
+    mcx.expand_datum(self_mac, &mut cursor, template)
 }
