@@ -1,6 +1,6 @@
 cached-ecr-build-env: &cached-ecr-build-env
   plugins:
-    - seek-oss/docker-ecr-cache#v1.1.3:
+    - seek-oss/docker-ecr-cache#v1.1.5:
         target: build-env
         cache-on:
           - Cargo.lock
@@ -34,7 +34,7 @@ steps:
 
       - ./.buildkite/cross-i686.sh
     plugins:
-      - seek-oss/docker-ecr-cache#v1.1.3:
+      - seek-oss/docker-ecr-cache#v1.1.5:
           dockerfile: ./.buildkite/llvm-assert.Dockerfile
       - docker#v3.0.1
 
