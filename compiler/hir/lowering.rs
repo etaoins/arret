@@ -81,20 +81,6 @@ pub enum LoweredReplDatum {
     Defs(Vec<Vec<Def<Lowered>>>),
 }
 
-#[derive(Clone, Copy)]
-struct AppliedPrim {
-    /// Primitive that was applied
-    prim: Prim,
-
-    /// Namespace the primitive identifier was in
-    ///
-    /// This is the namespace which (import) will place the new identifiers
-    ns_id: NsId,
-
-    /// Span of the entire application
-    span: Span,
-}
-
 // This would be less ugly as Result<!> once it's stabilised
 fn lower_user_compile_error(span: Span, arg_iter: NsDataIter) -> Error {
     match expect_one_arg(span, arg_iter) {
@@ -645,11 +631,11 @@ impl<'ccx> LoweringCtx<'ccx> {
     fn lower_module_prim_apply(
         &mut self,
         scope: &mut Scope<'_>,
-        applied_prim: AppliedPrim,
+        span: Span,
+        ns_id: NsId,
+        prim: Prim,
         mut arg_iter: NsDataIter,
     ) -> Result<Option<DeferredModulePrim>, Vec<Error>> {
-        let AppliedPrim { prim, ns_id, span } = applied_prim;
-
         match prim {
             Prim::Export => {
                 let deferred_exports = arg_iter
@@ -702,13 +688,13 @@ impl<'ccx> LoweringCtx<'ccx> {
             if let Some(NsDatum::Ident(fn_span, ref ident)) = data_iter.next() {
                 match scope.get_or_err(fn_span, ident)? {
                     Binding::Prim(prim) => {
-                        let applied_prim = AppliedPrim {
-                            prim: *prim,
-                            ns_id: ident.ns_id(),
+                        return self.lower_module_prim_apply(
+                            scope,
                             span,
-                        };
-
-                        return self.lower_module_prim_apply(scope, applied_prim, data_iter);
+                            ident.ns_id(),
+                            *prim,
+                            data_iter,
+                        );
                     }
                     Binding::Macro(mac) => {
                         let expanded_datum =
