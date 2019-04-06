@@ -96,4 +96,13 @@
  ;^^^^^^^^^^^^^^ ERROR cannot determine type of type variable `T` in this context
   ())
 
+; Make sure we still type check the branches
+(defn divergent-cond-test () -> Sym
+  (if (panic "Divergent")
+    ; This isn't a `Sym` but we should allow it as it's never returned
+    true
+    ; This isn't well-typed because a test must be a `Bool`
+    (if 'foo 1 2)))
+        ;^^^ ERROR `'foo` is not a `Bool`
+
 (defn main! ())

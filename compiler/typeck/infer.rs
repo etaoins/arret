@@ -328,19 +328,18 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         let test_required_type = &ty::Ty::Bool.into();
         let test_node = self.visit_expr(pv, test_required_type, test_expr)?;
-
-        if test_node.is_divergent() {
-            // Test diverged; we don't need the branches
-            return Ok(test_node);
-        }
         let test_known_bool = try_to_bool(test_node.result_ty());
 
         // If a branch isn't taken it doesn't need to match the type of the cond expression
         let any_type = &ty::Ty::Any.into();
-        let (true_required_type, false_required_type) = match test_known_bool {
-            Some(true) => (required_type, any_type),
-            Some(false) => (any_type, required_type),
-            None => (required_type, required_type),
+        let (true_required_type, false_required_type) = if test_node.is_divergent() {
+            (any_type, any_type)
+        } else {
+            match test_known_bool {
+                Some(true) => (required_type, any_type),
+                Some(false) => (any_type, required_type),
+                None => (required_type, required_type),
+            }
         };
 
         // Patch our occurrence types in to the `var_to_type` and restore it after. We avoid
@@ -387,6 +386,11 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         let true_node = true_result?;
         let false_node = false_result?;
+
+        if test_node.is_divergent() {
+            // Test diverged; we don't need the branches
+            return Ok(test_node);
+        }
 
         // If the test is static then we can significantly optimise
         match test_known_bool {
