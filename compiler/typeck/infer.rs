@@ -11,6 +11,7 @@ use crate::ty::purity;
 use crate::ty::purity::Purity;
 use crate::ty::ty_args::TyArgs;
 use crate::typeck;
+use crate::typeck::dce::expr_can_side_effect;
 use crate::typeck::error::{Error, ErrorKind, WantedArity};
 
 use syntax::datum::Datum;
@@ -239,6 +240,7 @@ fn keep_exprs_for_side_effects(
         kind: hir::ExprKind::Do(
             side_effect_exprs
                 .into_iter()
+                .filter(expr_can_side_effect)
                 .chain(iter::once(value_expr))
                 .collect(),
         ),
@@ -555,16 +557,17 @@ impl<'types> RecursiveDefsCtx<'types> {
         };
 
         let mut is_divergent = false;
-        let mut inferred_exprs = exprs
-            .into_iter()
-            .map(|non_terminal_expr| {
-                // The type of this expression doesn't matter; its value is discarded
-                let node = self.visit_expr(pv, &ty::Ty::Any.into(), non_terminal_expr)?;
-                is_divergent = is_divergent || node.is_divergent();
+        let mut inferred_exprs = Vec::with_capacity(exprs.len() + 1);
+        for non_terminal_expr in exprs {
+            let was_divergent = is_divergent;
+            // The type of this expression doesn't matter; its value is discarded
+            let node = self.visit_expr(pv, &ty::Ty::Any.into(), non_terminal_expr)?;
 
-                Ok(node.expr)
-            })
-            .collect::<Result<Vec<hir::Expr<hir::Inferred>>>>()?;
+            is_divergent = was_divergent || node.is_divergent();
+            if !was_divergent && expr_can_side_effect(&node.expr) {
+                inferred_exprs.push(node.expr);
+            }
+        }
 
         if is_divergent {
             self.visit_expr(pv, &ty::Ty::Any.into(), terminal_expr)?;
