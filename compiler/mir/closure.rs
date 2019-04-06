@@ -7,20 +7,20 @@ use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::value::Value;
 
-type ValueVec = Vec<(hir::VarId, Value)>;
+type Values = Box<[(hir::VarId, Value)]>;
 
 /// Tracks the constant and free values captured by an expression
 #[derive(Clone, Debug)]
 pub struct Closure {
-    pub const_values: ValueVec,
-    pub free_values: ValueVec,
+    pub const_values: Values,
+    pub free_values: Values,
 }
 
 impl Closure {
     pub fn empty() -> Closure {
         Closure {
-            const_values: vec![],
-            free_values: vec![],
+            const_values: Box::new([]),
+            free_values: Box::new([]),
         }
     }
 }
@@ -29,7 +29,7 @@ fn can_reference_local_regs(value: &Value) -> bool {
     match value {
         Value::Const(_) | Value::EqPred | Value::TyPred(_) | Value::RustFun(_) => false,
         Value::Reg(_) => true,
-        Value::ArretFun(arret_fun) => !arret_fun.closure.free_values.is_empty(),
+        Value::ArretFun(arret_fun) => !arret_fun.closure().free_values.is_empty(),
         Value::List(fixed, rest) => {
             let mut inner_values = fixed.iter().chain(rest.iter().map(|x| x.as_ref()));
             !inner_values.any(can_reference_local_regs)
@@ -62,13 +62,13 @@ pub fn calculate_closure(
     }
 
     // Determine which captures are constants
-    let (free_values, const_values) = captured_values
+    let (free_values, const_values): (Vec<_>, Vec<_>) = captured_values
         .into_iter()
         .partition(|(_, value)| can_reference_local_regs(value));
 
     Closure {
-        const_values,
-        free_values,
+        const_values: const_values.into_boxed_slice(),
+        free_values: free_values.into_boxed_slice(),
     }
 }
 

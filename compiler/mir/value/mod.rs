@@ -1,3 +1,4 @@
+mod arret_fun;
 pub mod build_reg;
 pub mod from_reg;
 pub mod list;
@@ -8,43 +9,16 @@ pub mod types;
 
 use std::rc::Rc;
 
-use syntax::datum::DataStr;
-use syntax::span::Span;
-
 use runtime::abitype;
 use runtime::boxed;
 use runtime::boxed::refs::Gc;
 
-use crate::hir;
 use crate::mir::builder::BuiltReg;
-use crate::mir::closure::Closure;
 use crate::mir::tagset::TypeTagSet;
 use crate::rfi;
 use crate::ty;
-use crate::ty::ty_args::TyArgs;
 
-new_global_id_type!(ArretFunId);
-
-#[derive(Clone, Debug)]
-pub struct ArretFun {
-    pub id: ArretFunId,
-    pub span: Span,
-    pub source_name: Option<DataStr>,
-    pub env_ty_args: TyArgs<ty::Mono>,
-    pub closure: Closure,
-    pub fun_expr: Rc<hir::Fun<hir::Inferred>>,
-}
-
-impl ArretFun {
-    /// Indicates if this `ArretFun` is used in multiple places
-    ///
-    /// This is a heuristic; if a `Fun` is bound to a variable this will return true regardless
-    /// of the number of usages.
-    pub fn has_multiple_usages(&self) -> bool {
-        // This is a hack but has the benefit of not requiring a separate analysis pass
-        Rc::strong_count(&self.fun_expr) > 1
-    }
-}
+pub use arret_fun::{ArretFun, ArretFunId};
 
 #[derive(Clone, Debug)]
 pub struct RegValue {
@@ -113,10 +87,10 @@ pub fn visit_value_root(strong_pass: &mut boxed::collect::StrongPass, value: &mu
             }
         }
         Value::ArretFun(ref mut arret_fun) => {
-            for (_, value) in &mut arret_fun.closure.const_values {
+            for (_, value) in arret_fun.closure_mut().const_values.iter_mut() {
                 visit_value_root(strong_pass, value);
             }
-            for (_, value) in &mut arret_fun.closure.free_values {
+            for (_, value) in arret_fun.closure_mut().free_values.iter_mut() {
                 visit_value_root(strong_pass, value);
             }
         }

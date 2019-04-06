@@ -267,7 +267,7 @@ impl EvalHirCtx {
         use crate::mir::polymorph::polymorph_abi_for_arg_list_value;
         use crate::mir::ret_value::ret_reg_to_value;
 
-        let closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure);
+        let closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure());
 
         let wanted_abi =
             polymorph_abi_for_arg_list_value(closure_reg.is_some(), &arg_list_value, ret_ty);
@@ -290,7 +290,7 @@ impl EvalHirCtx {
         let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
 
         // TODO: Support polymorphic purity
-        let impure = arret_fun.fun_expr.purity != purity::Purity::Pure.into();
+        let impure = arret_fun.fun_expr().purity != purity::Purity::Pure.into();
 
         let ret_reg = b.push_reg(
             span,
@@ -314,11 +314,11 @@ impl EvalHirCtx {
         apply_args: ApplyArgs<'_>,
         inliner_stack: inliner::ApplyStack,
     ) -> Result<Value> {
-        let fun_expr = &arret_fun.fun_expr;
+        let fun_expr = arret_fun.fun_expr();
 
         let mut inner_fcx = FunCtx {
             mono_ty_args: merge_apply_ty_args_into_scope(
-                &arret_fun.env_ty_args,
+                arret_fun.env_ty_args(),
                 apply_args.ty_args,
                 &outer_fcx.mono_ty_args,
             ),
@@ -702,7 +702,7 @@ impl EvalHirCtx {
             Value::ArretFun(arret_fun) => {
                 use crate::mir::closure;
 
-                closure::load_from_current_fun(&mut fcx.local_values, &arret_fun.closure);
+                closure::load_from_current_fun(&mut fcx.local_values, arret_fun.closure());
                 self.eval_arret_fun_app(fcx, b, span, ret_ty, &arret_fun, apply_args)
             }
             Value::RustFun(rust_fun) => {
@@ -901,21 +901,20 @@ impl EvalHirCtx {
         &mut self,
         fcx: &mut FunCtx,
         span: Span,
-        fun_expr: Rc<hir::Fun<hir::Inferred>>,
+        fun_expr: hir::Fun<hir::Inferred>,
         source_name: Option<&DataStr>,
     ) -> Value {
         use crate::mir::closure;
 
         let closure = closure::calculate_closure(&fcx.local_values, &fun_expr.body_expr);
 
-        Value::ArretFun(value::ArretFun {
-            id: value::ArretFunId::alloc(),
+        Value::ArretFun(value::ArretFun::new(
             span,
-            source_name: source_name.cloned(),
-            env_ty_args: fcx.mono_ty_args.clone(),
+            source_name.cloned(),
+            fcx.mono_ty_args.clone(),
             closure,
             fun_expr,
-        })
+        ))
     }
 
     pub fn arret_fun_to_jit_boxed(
@@ -925,7 +924,7 @@ impl EvalHirCtx {
         use std::mem;
 
         // If we have non-const (i.e. "free") values in our closure we can't be const
-        if !arret_fun.closure.free_values.is_empty() {
+        if !arret_fun.closure().free_values.is_empty() {
             return None;
         }
 
@@ -958,7 +957,7 @@ impl EvalHirCtx {
         wanted_abi: PolymorphABI,
     ) -> ops::PrivateFunId {
         let arret_fun_key = ArretFunKey {
-            arret_fun_id: arret_fun.id,
+            arret_fun_id: arret_fun.id(),
             polymorph_abi: wanted_abi.clone(),
         };
 
@@ -992,7 +991,7 @@ impl EvalHirCtx {
         let wanted_abi = PolymorphABI::thunk_abi();
         let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
 
-        let closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure);
+        let closure_reg = closure::save_to_closure_reg(self, b, span, arret_fun.closure());
 
         if let Some(closure_reg) = closure_reg {
             b.push_reg(
@@ -1032,7 +1031,7 @@ impl EvalHirCtx {
         let wanted_abi = entry_point_abi.clone().into();
         let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
 
-        let closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure)
+        let closure_reg = closure::save_to_closure_reg(self, b, span, arret_fun.closure())
             .unwrap_or_else(|| {
                 let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
                 b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any)
@@ -1059,8 +1058,8 @@ impl EvalHirCtx {
         use crate::mir::ret_value::build_value_ret;
 
         let mut b = Builder::new();
-        let span = arret_fun.span;
-        let fun_expr = &arret_fun.fun_expr;
+        let span = arret_fun.span();
+        let fun_expr = arret_fun.fun_expr();
 
         let LoadedArgList {
             closure_reg,
@@ -1069,10 +1068,10 @@ impl EvalHirCtx {
         } = build_load_arg_list_value(&mut b, &wanted_abi);
 
         // Start by taking the type args from the fun's enclosing environment
-        let mut fcx = FunCtx::with_mono_ty_args(arret_fun.env_ty_args.clone());
+        let mut fcx = FunCtx::with_mono_ty_args(arret_fun.env_ty_args().clone());
 
         // And loading its closure
-        closure::load_from_closure_param(&mut fcx.local_values, &arret_fun.closure, closure_reg);
+        closure::load_from_closure_param(&mut fcx.local_values, arret_fun.closure(), closure_reg);
 
         // Try to refine our polymorphic type variables based on our requested op ABI
         let mut stx = ty::select::SelectCtx::new(&fun_expr.pvar_ids, &fun_expr.tvar_ids);
@@ -1100,8 +1099,8 @@ impl EvalHirCtx {
         build_value_ret(self, &mut b, span, app_result, &wanted_abi.ops_abi.ret);
 
         Ok(optimise_fun(ops::Fun {
-            span: arret_fun.span,
-            source_name: arret_fun.source_name.clone(),
+            span: arret_fun.span(),
+            source_name: arret_fun.source_name().clone(),
 
             abi: wanted_abi.ops_abi,
             param_regs,
@@ -1261,7 +1260,7 @@ impl EvalHirCtx {
             ExprKind::Lit(literal) => Ok(self.eval_lit(literal)),
             ExprKind::Do(exprs) => self.eval_do(fcx, b, &exprs),
             ExprKind::Fun(fun_expr) => {
-                Ok(self.eval_arret_fun(fcx, span, Rc::new(fun_expr.as_ref().clone()), source_name))
+                Ok(self.eval_arret_fun(fcx, span, fun_expr.as_ref().clone(), source_name))
             }
             ExprKind::RustFun(rust_fun) => Ok(Value::RustFun(Rc::new(rust_fun.as_ref().clone()))),
             ExprKind::TyPred(test_ty) => Ok(Value::TyPred(*test_ty)),
@@ -1300,7 +1299,7 @@ impl EvalHirCtx {
         use crate::hir::ExprKind;
         match expr.kind {
             ExprKind::Fun(fun_expr) => {
-                Ok(self.eval_arret_fun(fcx, expr.span, fun_expr.into(), source_name))
+                Ok(self.eval_arret_fun(fcx, expr.span, *fun_expr, source_name))
             }
             ExprKind::RustFun(rust_fun) => Ok(Value::RustFun(rust_fun.into())),
             _ => self.eval_expr_with_source_name(fcx, b, &expr, source_name),

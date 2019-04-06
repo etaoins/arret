@@ -28,7 +28,7 @@ pub struct ApplyCookie {
 impl ApplyCookie {
     pub fn new(arret_fun: &value::ArretFun, arg_list_value: &Value) -> Self {
         ApplyCookie {
-            arret_fun_id: arret_fun.id,
+            arret_fun_id: arret_fun.id(),
             arg_hash: hash_for_arg_list_value(arg_list_value),
         }
     }
@@ -151,7 +151,7 @@ fn calc_inline_preference_factor(
     arg_list_value: &Value,
 ) -> OpCostFactor {
     inline_preference_factor_for_arg_list_value(arg_list_value)
-        * inline_preference_factor_for_closure(&arret_fun.closure)
+        * inline_preference_factor_for_closure(arret_fun.closure())
 }
 
 /// Hashes the passed value, poorly
@@ -191,8 +191,8 @@ fn hash_value<H: Hasher>(value: &Value, state: &mut H) {
         Value::ArretFun(arret_fun) => {
             state.write_u8(5);
 
-            state.write_usize(arret_fun.closure.const_values.len());
-            for (_, const_value) in arret_fun.closure.const_values.iter() {
+            state.write_usize(arret_fun.closure().const_values.len());
+            for (_, const_value) in arret_fun.closure().const_values.iter() {
                 hash_value(const_value, state);
             }
         }
@@ -264,7 +264,7 @@ pub(super) fn cond_inline<'a>(
         let abort_to = apply_stack
             .entries
             .iter()
-            .find(|apply_cookie| apply_cookie.arret_fun_id == arret_fun.id);
+            .find(|apply_cookie| apply_cookie.arret_fun_id == arret_fun.id());
 
         if let Some(abort_to) = abort_to {
             return Err(Error::AbortRecursion(*abort_to));

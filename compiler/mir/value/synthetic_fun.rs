@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use syntax::span::EMPTY_SPAN;
 
 use crate::hir;
@@ -24,13 +22,12 @@ pub fn eq_pred_arret_fun() -> value::ArretFun {
         })
         .collect();
 
-    value::ArretFun {
-        id: value::ArretFunId::alloc(),
-        span: EMPTY_SPAN,
-        source_name: Some("=".into()),
-        env_ty_args: TyArgs::empty(),
-        closure: Closure::empty(),
-        fun_expr: Rc::new(hir::Fun {
+    value::ArretFun::new(
+        EMPTY_SPAN,
+        Some("=".into()),
+        TyArgs::empty(),
+        Closure::empty(),
+        hir::Fun {
             pvar_ids: purity::PVarIds::new(),
             tvar_ids: ty::TVarIds::new(),
 
@@ -63,20 +60,19 @@ pub fn eq_pred_arret_fun() -> value::ArretFun {
                     rest_arg_expr: None,
                 })),
             },
-        }),
-    }
+        },
+    )
 }
 
 pub fn ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
     let subject_var_id = hir::VarId::alloc();
 
-    value::ArretFun {
-        id: value::ArretFunId::alloc(),
-        span: EMPTY_SPAN,
-        source_name: Some(test_ty.to_str().into()),
-        env_ty_args: TyArgs::empty(),
-        closure: Closure::empty(),
-        fun_expr: Rc::new(hir::Fun {
+    value::ArretFun::new(
+        EMPTY_SPAN,
+        Some(test_ty.to_str().into()),
+        TyArgs::empty(),
+        Closure::empty(),
+        hir::Fun {
             pvar_ids: purity::PVarIds::new(),
             tvar_ids: ty::TVarIds::new(),
 
@@ -112,6 +108,6 @@ pub fn ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
                     rest_arg_expr: None,
                 })),
             },
-        }),
-    }
+        },
+    )
 }
