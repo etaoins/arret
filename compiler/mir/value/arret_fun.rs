@@ -11,13 +11,18 @@ use crate::ty::ty_args::TyArgs;
 new_global_id_type!(ArretFunId);
 
 #[derive(Clone, Debug)]
-pub struct ArretFun {
+struct ArretFunConsts {
     id: ArretFunId,
     span: Span,
     source_name: Option<DataStr>,
     env_ty_args: TyArgs<ty::Mono>,
+    fun_expr: hir::Fun<hir::Inferred>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ArretFun {
+    consts: Rc<ArretFunConsts>,
     closure: Closure,
-    fun_expr: Rc<hir::Fun<hir::Inferred>>,
 }
 
 impl ArretFun {
@@ -29,29 +34,31 @@ impl ArretFun {
         fun_expr: hir::Fun<hir::Inferred>,
     ) -> Self {
         Self {
-            id: ArretFunId::alloc(),
-            span,
-            source_name,
-            env_ty_args,
+            consts: Rc::new(ArretFunConsts {
+                id: ArretFunId::alloc(),
+                span,
+                source_name,
+                env_ty_args,
+                fun_expr,
+            }),
             closure,
-            fun_expr: Rc::new(fun_expr),
         }
     }
 
     pub fn id(&self) -> ArretFunId {
-        self.id
+        self.consts.id
     }
 
     pub fn span(&self) -> Span {
-        self.span
+        self.consts.span
     }
 
     pub fn source_name(&self) -> &Option<DataStr> {
-        &self.source_name
+        &self.consts.source_name
     }
 
     pub fn env_ty_args(&self) -> &TyArgs<ty::Mono> {
-        &self.env_ty_args
+        &self.consts.env_ty_args
     }
 
     pub fn closure(&self) -> &Closure {
@@ -63,7 +70,7 @@ impl ArretFun {
     }
 
     pub fn fun_expr(&self) -> &hir::Fun<hir::Inferred> {
-        &self.fun_expr
+        &self.consts.fun_expr
     }
 
     /// Indicates if this `ArretFun` is used in multiple places
@@ -72,6 +79,6 @@ impl ArretFun {
     /// of the number of usages.
     pub fn has_multiple_usages(&self) -> bool {
         // This is a hack but has the benefit of not requiring a separate analysis pass
-        Rc::strong_count(&self.fun_expr) > 1
+        Rc::strong_count(&self.consts) > 1
     }
 }
