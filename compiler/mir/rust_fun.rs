@@ -156,7 +156,7 @@ pub fn ops_for_rust_fun(
 
     optimise_fun(ops::Fun {
         span,
-        source_name: Some(fun_symbol),
+        source_name: Some(fun_symbol.into()),
 
         abi: wanted_abi.ops_abi,
         params: param_regs,

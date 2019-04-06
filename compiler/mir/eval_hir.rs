@@ -11,7 +11,7 @@ use runtime::callback::EntryPointABIType as CallbackEntryPointABIType;
 use runtime::intern::Interner;
 
 use runtime_syntax::reader;
-use syntax::datum::Datum;
+use syntax::datum::{DataStr, Datum};
 use syntax::span::{Span, EMPTY_SPAN};
 
 use crate::codegen;
@@ -206,7 +206,7 @@ impl EvalHirCtx {
         }
     }
 
-    fn destruc_source_name(destruc: &hir::destruc::Destruc<hir::Inferred>) -> Option<&str> {
+    fn destruc_source_name(destruc: &hir::destruc::Destruc<hir::Inferred>) -> Option<&DataStr> {
         use crate::hir::destruc::Destruc;
 
         match destruc {
@@ -902,7 +902,7 @@ impl EvalHirCtx {
         fcx: &mut FunCtx,
         span: Span,
         fun_expr: Rc<hir::Fun<hir::Inferred>>,
-        source_name: Option<&str>,
+        source_name: Option<&DataStr>,
     ) -> Value {
         use crate::mir::closure;
 
@@ -911,7 +911,7 @@ impl EvalHirCtx {
         Value::ArretFun(value::ArretFun {
             id: value::ArretFunId::alloc(),
             span,
-            source_name: source_name.map(ToOwned::to_owned),
+            source_name: source_name.cloned(),
             env_ty_args: fcx.mono_ty_args.clone(),
             closure,
             fun_expr,
@@ -1145,7 +1145,7 @@ impl EvalHirCtx {
 
         optimise_fun(ops::Fun {
             span: EMPTY_SPAN,
-            source_name: Some("callback_to_thunk_adapter".to_owned()),
+            source_name: Some("callback_to_thunk_adapter".into()),
 
             abi: wanted_abi.ops_abi,
             params: param_regs,
@@ -1251,7 +1251,7 @@ impl EvalHirCtx {
         fcx: &mut FunCtx,
         b: &mut Option<Builder>,
         expr: &Expr,
-        source_name: Option<&str>,
+        source_name: Option<&DataStr>,
     ) -> Result<Value> {
         use crate::mir::value::types::value_with_arret_ty;
         let span = expr.span;
@@ -1295,7 +1295,7 @@ impl EvalHirCtx {
         fcx: &mut FunCtx,
         b: &mut Option<Builder>,
         expr: Expr,
-        source_name: Option<&str>,
+        source_name: Option<&DataStr>,
     ) -> Result<Value> {
         use crate::hir::ExprKind;
         match expr.kind {

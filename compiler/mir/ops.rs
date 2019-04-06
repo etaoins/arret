@@ -1,7 +1,8 @@
 use runtime::abitype;
 use runtime::boxed;
-
 use runtime::callback;
+
+use syntax::datum::DataStr;
 use syntax::span::Span;
 
 use crate::codegen::GenABI;
@@ -495,7 +496,7 @@ impl Op {
 
 pub struct Fun {
     pub span: Span,
-    pub source_name: Option<String>,
+    pub source_name: Option<DataStr>,
 
     pub abi: OpsABI,
     pub params: Box<[RegId]>,

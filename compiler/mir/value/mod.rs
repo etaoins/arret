@@ -8,6 +8,7 @@ pub mod types;
 
 use std::rc::Rc;
 
+use syntax::datum::DataStr;
 use syntax::span::Span;
 
 use runtime::abitype;
@@ -28,7 +29,7 @@ new_global_id_type!(ArretFunId);
 pub struct ArretFun {
     pub id: ArretFunId,
     pub span: Span,
-    pub source_name: Option<String>,
+    pub source_name: Option<DataStr>,
     pub env_ty_args: TyArgs<ty::Mono>,
     pub closure: Closure,
     pub fun_expr: Rc<hir::Fun<hir::Inferred>>,

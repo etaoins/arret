@@ -27,7 +27,7 @@ pub fn eq_pred_arret_fun() -> value::ArretFun {
     value::ArretFun {
         id: value::ArretFunId::alloc(),
         span: EMPTY_SPAN,
-        source_name: Some("=".to_owned()),
+        source_name: Some("=".into()),
         env_ty_args: TyArgs::empty(),
         closure: Closure::empty(),
         fun_expr: Rc::new(hir::Fun {
@@ -73,7 +73,7 @@ pub fn ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
     value::ArretFun {
         id: value::ArretFunId::alloc(),
         span: EMPTY_SPAN,
-        source_name: Some(test_ty.to_str().to_owned()),
+        source_name: Some(test_ty.to_str().into()),
         env_ty_args: TyArgs::empty(),
         closure: Closure::empty(),
         fun_expr: Rc::new(hir::Fun {

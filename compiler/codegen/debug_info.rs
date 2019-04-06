@@ -6,6 +6,7 @@ use llvm_sys::core::*;
 use llvm_sys::debuginfo::*;
 use llvm_sys::prelude::*;
 
+use syntax::datum::DataStr;
 use syntax::span::Span;
 
 use crate::id_type::ArcId;
@@ -124,7 +125,7 @@ impl<'sl> DebugInfoBuilder<'sl> {
     pub fn add_function_debug_info(
         &mut self,
         span: Span,
-        source_name: Option<&String>,
+        source_name: Option<&DataStr>,
         llvm_function: LLVMValueRef,
     ) {
         let source_loc = SourceLoc::from_byte_index(self.source_loader, span.start());

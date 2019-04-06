@@ -51,7 +51,7 @@ impl<P: hir::Phase> Scalar<P> {
         &self.var_id
     }
 
-    pub fn source_name(&self) -> &str {
+    pub fn source_name(&self) -> &DataStr {
         &self.source_name
     }
 
