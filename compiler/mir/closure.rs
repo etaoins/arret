@@ -27,14 +27,13 @@ impl Closure {
 
 fn can_reference_local_regs(value: &Value) -> bool {
     match value {
-        Value::Const(_)
-        | Value::EqPred
-        | Value::TyPred(_)
-        | Value::RustFun(_)
-        // TODO: Is this correct? My intuition is that the `ArretFun` would have to come from a
-        // nested expression so we would already have accounted for any values it closes over.
-        | Value::ArretFun(_) => false,
-        _ => true,
+        Value::Const(_) | Value::EqPred | Value::TyPred(_) | Value::RustFun(_) => false,
+        Value::Reg(_) => true,
+        Value::ArretFun(arret_fun) => !arret_fun.closure.free_values.is_empty(),
+        Value::List(fixed, rest) => {
+            let mut inner_values = fixed.iter().chain(rest.iter().map(|x| x.as_ref()));
+            !inner_values.any(can_reference_local_regs)
+        }
     }
 }
 
@@ -63,8 +62,7 @@ pub fn calculate_closure(
     }
 
     // Determine which captures are constants
-    type ValueVec = Vec<(hir::VarId, Value)>;
-    let (free_values, const_values): (ValueVec, ValueVec) = captured_values
+    let (free_values, const_values) = captured_values
         .into_iter()
         .partition(|(_, value)| can_reference_local_regs(value));
 
