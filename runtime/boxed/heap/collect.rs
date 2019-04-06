@@ -178,7 +178,7 @@ impl WeakPass {
     fn new_heap_any_ref_for(&self, box_ref: Gc<Any>) -> Option<Gc<Any>> {
         match box_ref.header.alloc_type {
             AllocType::Const | AllocType::Stack => {
-                // These are managed by the GC; their pointer remains valid
+                // These aren't managed by the GC; their pointer remains valid
                 Some(box_ref)
             }
             AllocType::HeapForward16 | AllocType::HeapForward32 => {
