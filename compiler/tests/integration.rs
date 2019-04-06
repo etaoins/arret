@@ -42,7 +42,7 @@ impl ExpectedSpan {
 
 #[derive(Debug)]
 struct ExpectedReport {
-    severity: Severity,
+    expected_severity: Severity,
     message_prefix: String,
     span: ExpectedSpan,
 }
@@ -79,7 +79,7 @@ impl Reportable for ExpectedReport {
     fn message(&self) -> String {
         format!(
             "expected {} `{} ...`",
-            self.severity().to_str(),
+            self.expected_severity.to_str(),
             self.message_prefix
         )
     }
@@ -118,7 +118,7 @@ fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedR
             let (severity, marker_string) = take_severity(marker_string);
 
             ExpectedReport {
-                severity,
+                expected_severity: severity,
                 message_prefix: marker_string.into(),
                 span: ExpectedSpan::StartRange(
                     span_offset + start_of_line_index..span_offset + index,
@@ -151,7 +151,7 @@ fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedR
         let (severity, marker_string) = take_severity(marker_string);
 
         ExpectedReport {
-            severity,
+            expected_severity: severity,
             message_prefix: marker_string.into(),
             span: ExpectedSpan::Exact(Span::new(
                 (span_offset + span_start) as u32,
