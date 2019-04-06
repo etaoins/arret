@@ -30,8 +30,7 @@ pub fn gen_static_symbol_entry_point(
             function_type,
             function_name.as_bytes_with_nul(),
             |function| {
-                // LLVM param attributes are 1 indexed
-                let param_attr_offset = 1 + (abi.takes_task as usize);
+                let param_attr_offset = abi.takes_task as usize;
 
                 for (index, param_abi_type) in abi.params.iter().enumerate() {
                     if let ABIType::Boxed(_) = param_abi_type.abi_type {

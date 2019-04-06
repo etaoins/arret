@@ -457,11 +457,12 @@ impl TargetCtx {
                 self.readonly_attr,
                 self.noalias_attr,
             ] {
-                LLVMAddAttributeAtIndex(function, param_index, common_attr);
+                // Parameters are offset by 1
+                LLVMAddAttributeAtIndex(function, param_index + 1, common_attr);
             }
 
             if no_capture {
-                LLVMAddAttributeAtIndex(function, param_index, self.nocapture_attr);
+                LLVMAddAttributeAtIndex(function, param_index + 1, self.nocapture_attr);
             }
         }
     }

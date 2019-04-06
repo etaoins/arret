@@ -159,7 +159,7 @@ pub fn ops_for_rust_fun(
         source_name: Some(fun_symbol.into()),
 
         abi: wanted_abi.ops_abi,
-        params: param_regs,
+        param_regs,
         ops: b.into_ops(),
     })
 }

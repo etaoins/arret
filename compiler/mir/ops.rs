@@ -499,7 +499,7 @@ pub struct Fun {
     pub source_name: Option<DataStr>,
 
     pub abi: OpsABI,
-    pub params: Box<[RegId]>,
+    pub param_regs: Box<[RegId]>,
     pub ops: Box<[Op]>,
 }
 

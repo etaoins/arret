@@ -176,7 +176,7 @@ impl<'of> ProgramCaptureCtx<'of> {
                         if !self.recursing_private_funs.contains(private_fun_id) {
                             let callee_captures = self.captures_for_private_fun_id(*private_fun_id);
 
-                            for (arg_reg, param_reg) in args.iter().zip(ops_fun.params.iter()) {
+                            for (arg_reg, param_reg) in args.iter().zip(ops_fun.param_regs.iter()) {
                                 captures.add(*arg_reg, callee_captures.get(*param_reg));
                             }
                         } else {
@@ -304,7 +304,7 @@ mod test {
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: RetABIType::Void,
             },
-            params: Box::new([param_reg]),
+            param_regs: Box::new([param_reg]),
             ops: Box::new([]),
         };
 
@@ -324,7 +324,7 @@ mod test {
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::Int.into(),
             },
-            params: Box::new([capture_reg]),
+            param_regs: Box::new([capture_reg]),
             ops: Box::new([ops::OpKind::Ret(capture_reg).into()]),
         };
 
@@ -345,7 +345,7 @@ mod test {
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::TopPair.into(),
             },
-            params: Box::new([param_reg]),
+            param_regs: Box::new([param_reg]),
             ops: Box::new([
                 ops::OpKind::AllocBoxedPair(
                     ret_reg,
@@ -378,7 +378,7 @@ mod test {
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::TopPair.into(),
             },
-            params: Box::new([param_reg]),
+            param_regs: Box::new([param_reg]),
             ops: Box::new([
                 ops::OpKind::Call(
                     ret_reg,
@@ -453,7 +453,7 @@ mod test {
                 ]),
                 ret: boxed::TypeTag::Int.into(),
             },
-            params: Box::new([param_reg1]),
+            param_regs: Box::new([param_reg1]),
             ops: Box::new([
                 ops::OpKind::Call(
                     unused_reg,
@@ -504,7 +504,7 @@ mod test {
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::TopPair.into(),
             },
-            params: Box::new([param_reg]),
+            param_regs: Box::new([param_reg]),
             ops: Box::new([
                 ops::OpKind::Cond(ops::CondOp {
                     reg_phi: Some(ops::RegPhi {

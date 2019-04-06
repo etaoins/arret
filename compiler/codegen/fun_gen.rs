@@ -83,31 +83,24 @@ pub(crate) fn define_fun(
 
     let alloc_plan = plan_allocs(&captures, &fun.ops);
 
-    // Determine which params we captured
-    let param_captures: Vec<CaptureKind> = fun
-        .params
-        .iter()
-        .map(|param_reg| captures.get(*param_reg))
-        .collect();
-
     unsafe {
         let builder = LLVMCreateBuilderInContext(tcx.llx);
         let bb = LLVMAppendBasicBlockInContext(tcx.llx, llvm_fun, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
 
         let mut fcx = FunCtx::new(llvm_fun, builder, LLVMGetParam(llvm_fun, 0));
+        fcx.regs.reserve(fun.param_regs.len());
 
-        for (param_index, reg) in fun.params.iter().enumerate() {
+        for (param_index, (reg, param_abi_type)) in
+            fun.param_regs.iter().zip(fun.abi.params.iter()).enumerate()
+        {
+            // Our implicit task param shifts our params by 1
             let llvm_offset = (1 + param_index) as u32;
             fcx.regs.insert(*reg, LLVMGetParam(llvm_fun, llvm_offset));
-        }
 
-        // Our task is an implicit parameter
-        for (param_index, param_abi_type) in fun.abi.params.iter().enumerate() {
             if let ABIType::Boxed(_) = param_abi_type {
-                let no_capture = param_captures[param_index] == CaptureKind::Never;
-
-                tcx.add_boxed_param_attrs(llvm_fun, (1 + param_index + 1) as u32, no_capture);
+                let no_capture = captures.get(*reg) == CaptureKind::Never;
+                tcx.add_boxed_param_attrs(llvm_fun, llvm_offset, no_capture);
             }
         }
 

@@ -1104,7 +1104,7 @@ impl EvalHirCtx {
             source_name: arret_fun.source_name.clone(),
 
             abi: wanted_abi.ops_abi,
-            params: param_regs,
+            param_regs,
             ops: b.into_ops(),
         }))
     }
@@ -1148,7 +1148,7 @@ impl EvalHirCtx {
             source_name: Some("callback_to_thunk_adapter".into()),
 
             abi: wanted_abi.ops_abi,
-            params: param_regs,
+            param_regs,
             ops: b.into_ops(),
         })
     }
