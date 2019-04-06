@@ -17,7 +17,6 @@ fn gen_op(
     fcx: &mut FunCtx,
     alloc_atom: &alloc::AllocAtom<'_>,
     active_alloc: &mut alloc::ActiveAlloc,
-    op_index: usize,
     op: &Op,
 ) {
     unsafe {
@@ -319,7 +318,7 @@ fn gen_op(
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Cond(cond_op) => {
-                let cond_alloc_plan = &alloc_atom.cond_plans()[&op_index];
+                let cond_alloc_plan = active_alloc.next_cond_plan(alloc_atom);
                 gen_cond(tcx, mcx, fcx, cond_op, cond_alloc_plan);
             }
             OpKind::AllocBoxedInt(reg, int_reg) => {
@@ -801,8 +800,8 @@ pub(crate) fn gen_alloc_atom(
         &alloc_atom,
     );
 
-    for (op_index, op) in alloc_atom.ops().iter().enumerate() {
-        gen_op(tcx, mcx, fcx, alloc_atom, &mut active_alloc, op_index, &op);
+    for op in alloc_atom.ops() {
+        gen_op(tcx, mcx, fcx, alloc_atom, &mut active_alloc, &op);
     }
 
     assert!(

@@ -73,13 +73,10 @@ pub fn plan_allocs<'op>(captures: &Captures, ops: &'op [ops::Op]) -> Vec<AllocAt
             ..
         }) = op.kind()
         {
-            current_atom.push_cond_plan(
-                current_atom.ops().len(),
-                CondPlan {
-                    true_subplan: plan_allocs(captures, true_ops),
-                    false_subplan: plan_allocs(captures, false_ops),
-                },
-            );
+            current_atom.push_cond_plan(CondPlan {
+                true_subplan: plan_allocs(captures, true_ops),
+                false_subplan: plan_allocs(captures, false_ops),
+            });
         } else if let Some(AllocInfo {
             output_reg,
             box_size,
@@ -135,12 +132,12 @@ mod test {
         let expected_atoms = vec![
             AllocAtom {
                 box_sources: [(reg1, BoxSource::Stack)].iter().cloned().collect(),
-                cond_plans: HashMap::new(),
+                cond_plans: vec![],
                 ops: vec![&input_ops[0], &input_ops[1]],
             },
             AllocAtom {
                 box_sources: HashMap::new(),
-                cond_plans: HashMap::new(),
+                cond_plans: vec![],
                 ops: vec![&input_ops[2]],
             },
             AllocAtom {
@@ -148,7 +145,7 @@ mod test {
                     .iter()
                     .cloned()
                     .collect(),
-                cond_plans: HashMap::new(),
+                cond_plans: vec![],
                 ops: vec![&input_ops[3], &input_ops[4]],
             },
         ];

@@ -322,6 +322,7 @@ pub fn gen_active_alloc_for_atom(
             box_slots,
             total_cells: required_cells,
             used_cells: 0,
+            cond_op_index: 0,
         }
     }
 }

@@ -39,25 +39,21 @@ impl<'op> CondPlan<'op> {
 #[derive(PartialEq, Debug)]
 pub struct AllocAtom<'op> {
     box_sources: HashMap<ops::RegId, BoxSource>,
-    cond_plans: HashMap<usize, CondPlan<'op>>,
+    cond_plans: Vec<CondPlan<'op>>,
     ops: Vec<&'op ops::Op>,
 }
 
 impl<'op> AllocAtom<'op> {
-    fn new() -> AllocAtom<'op> {
-        AllocAtom {
+    fn new() -> Self {
+        Self {
             box_sources: HashMap::new(),
-            cond_plans: HashMap::new(),
+            cond_plans: vec![],
             ops: vec![],
         }
     }
 
     pub fn box_sources(&self) -> &HashMap<ops::RegId, BoxSource> {
         &self.box_sources
-    }
-
-    pub fn cond_plans(&self) -> &HashMap<usize, CondPlan<'op>> {
-        &self.cond_plans
     }
 
     pub fn ops(&self) -> &[&'op ops::Op] {
@@ -72,8 +68,8 @@ impl<'op> AllocAtom<'op> {
         self.box_sources.insert(output_reg, box_source);
     }
 
-    fn push_cond_plan(&mut self, op_index: usize, cond_plan: CondPlan<'op>) {
-        self.cond_plans.insert(op_index, cond_plan);
+    fn push_cond_plan(&mut self, cond_plan: CondPlan<'op>) {
+        self.cond_plans.push(cond_plan);
     }
 
     fn push_op(&mut self, op: &'op ops::Op) {
@@ -85,6 +81,7 @@ pub struct ActiveAlloc {
     box_slots: LLVMValueRef,
     total_cells: usize,
     used_cells: usize,
+    cond_op_index: usize,
 }
 
 impl ActiveAlloc {
@@ -93,10 +90,18 @@ impl ActiveAlloc {
             box_slots: ptr::null_mut(),
             total_cells: 0,
             used_cells: 0,
+            cond_op_index: 0,
         }
     }
 
     pub fn is_empty(&self) -> bool {
         self.total_cells == self.used_cells
+    }
+
+    pub fn next_cond_plan<'a, 'op>(&mut self, atom: &'a AllocAtom<'op>) -> &'a CondPlan<'op> {
+        let cond_plan = &atom.cond_plans[self.cond_op_index];
+        self.cond_op_index += 1;
+
+        cond_plan
     }
 }
