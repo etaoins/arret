@@ -793,6 +793,8 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         let mut fun_fixed_args: Vec<PendingFixedArg<'_>> = vec![];
         let mut non_fun_fixed_args: Vec<PendingFixedArg<'_>> = vec![];
+        let mut inferred_fixed_arg_exprs: Vec<(usize, hir::Expr<hir::Inferred>)> =
+            Vec::with_capacity(fixed_arg_exprs.len());
 
         // Pre-visit our fixed args and categorise them as fun and non-fun
         for (index, fixed_arg_expr) in fixed_arg_exprs.into_iter().enumerate() {
@@ -815,8 +817,6 @@ impl<'types> RecursiveDefsCtx<'types> {
                 non_fun_fixed_args.push(pending_fixed_arg);
             }
         }
-
-        let mut inferred_fixed_arg_exprs: Vec<(usize, hir::Expr<hir::Inferred>)> = vec![];
 
         for PendingFixedArg {
             index,

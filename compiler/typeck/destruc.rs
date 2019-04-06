@@ -7,17 +7,19 @@ pub fn type_for_decl_list_destruc(
     list: &destruc::List<hir::Lowered>,
     mut guide_type_iter: Option<ListIterator<'_, ty::Poly>>,
 ) -> ty::List<ty::Poly> {
-    let mut fixed_polys = vec![];
+    let fixed_polys = list
+        .fixed()
+        .iter()
+        .map(|fixed_destruc| {
+            let guide_type = if let Some(guide_type_iter) = guide_type_iter.as_mut() {
+                guide_type_iter.next()
+            } else {
+                None
+            };
 
-    for fixed_destruc in list.fixed() {
-        let guide_type = if let Some(guide_type_iter) = guide_type_iter.as_mut() {
-            guide_type_iter.next()
-        } else {
-            None
-        };
-
-        fixed_polys.push(type_for_decl_destruc(fixed_destruc, guide_type));
-    }
+            type_for_decl_destruc(fixed_destruc, guide_type)
+        })
+        .collect();
 
     let rest_poly = match list.rest() {
         Some(rest) => match rest.ty() {
@@ -29,7 +31,7 @@ pub fn type_for_decl_list_destruc(
         None => ty::Ty::never().into(),
     };
 
-    ty::List::new(fixed_polys.into_boxed_slice(), rest_poly)
+    ty::List::new(fixed_polys, rest_poly)
 }
 
 /// Returns the required type for a destruc

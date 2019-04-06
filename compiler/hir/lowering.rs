@@ -570,11 +570,8 @@ impl<'ccx> LoweringCtx<'ccx> {
 
         let exported_funs = rfi_library.exported_funs();
 
-        let mut exports = HashMap::new();
-        let mut defs = vec![];
-
-        exports.reserve(exported_funs.len());
-        defs.reserve(exported_funs.len());
+        let mut exports = HashMap::with_capacity(exported_funs.len());
+        let mut defs = Vec::with_capacity(exported_funs.len());
 
         let var_ids = VarId::alloc_iter(exported_funs.len());
         for ((fun_name, rust_fun), var_id) in exported_funs.iter().zip(var_ids) {
