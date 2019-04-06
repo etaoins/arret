@@ -263,7 +263,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             .map(|(idx, hir_def)| {
                 let def_id = InputDefId::new(idx);
 
-                typeck::destruc::visit_vars(&hir_def.destruc, |var_id, decl_type| {
+                typeck::destruc::visit_vars(&hir_def.destruc, &mut |var_id, decl_type| {
                     let var_type = match decl_type {
                         hir::DeclTy::Known(poly_type) => VarType::Known(poly_type.clone()),
                         hir::DeclTy::Free => {
@@ -1316,7 +1316,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         let required_destruc_type = typeck::destruc::type_for_decl_destruc(&destruc, None);
 
         // Pre-bind our variables to deal with recursive definitions
-        let self_var_id = typeck::destruc::visit_vars(&destruc, |var_id, decl_type| {
+        let self_var_id = typeck::destruc::visit_vars(&destruc, &mut |var_id, decl_type| {
             let var_type = match decl_type {
                 hir::DeclTy::Known(poly_type) => VarType::Known(poly_type.clone()),
                 hir::DeclTy::Free => VarType::Recursive,
@@ -1529,7 +1529,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         let mut pv = PurityVar::Known(Purity::Pure.into());
 
         // Mark all of our free typed variable as recursive
-        let self_var_id = typeck::destruc::visit_vars(&destruc, |var_id, decl_type| {
+        let self_var_id = typeck::destruc::visit_vars(&destruc, &mut |var_id, decl_type| {
             if *decl_type == hir::DeclTy::Free {
                 self.var_to_type.insert(var_id, VarType::Recursive);
             }
@@ -1545,7 +1545,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             Ok(value_node) => value_node,
             Err(error) => {
                 // Mark this def as an error so we can suppress cascade errors
-                typeck::destruc::visit_vars(&destruc, |var_id, _| {
+                typeck::destruc::visit_vars(&destruc, &mut |var_id, _| {
                     self.var_to_type.insert(var_id, VarType::Error);
                 });
                 return Err(error);

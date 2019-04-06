@@ -52,54 +52,40 @@ pub fn type_for_decl_destruc(
     }
 }
 
-struct VisitVarCtx<F>
+fn visit_scalar_vars<F>(scalar: &destruc::Scalar<hir::Lowered>, visitor: &mut F)
 where
     F: FnMut(hir::VarId, &hir::DeclTy) -> (),
 {
-    visitor: F,
-}
-
-impl<F> VisitVarCtx<F>
-where
-    F: FnMut(hir::VarId, &hir::DeclTy) -> (),
-{
-    fn visit_scalar_vars(&mut self, scalar: &destruc::Scalar<hir::Lowered>) {
-        if let Some(var_id) = scalar.var_id() {
-            (self.visitor)(*var_id, scalar.ty());
-        }
-    }
-
-    fn visit_vars(&mut self, destruc: &destruc::Destruc<hir::Lowered>) {
-        match destruc {
-            destruc::Destruc::Scalar(_, ref scalar) => {
-                self.visit_scalar_vars(scalar);
-            }
-            destruc::Destruc::List(_, ref list) => {
-                for fixed in list.fixed() {
-                    self.visit_vars(fixed);
-                }
-
-                if let Some(rest) = list.rest() {
-                    self.visit_scalar_vars(rest);
-                }
-            }
-        }
+    if let Some(var_id) = scalar.var_id() {
+        visitor(*var_id, scalar.ty());
     }
 }
 
 /// Visits the variables in the passed destruc with the given visitor function
 ///
 /// If the root destruc is scalar its VarId will be returned, otherwise None
-pub fn visit_vars<F>(destruc: &destruc::Destruc<hir::Lowered>, visitor: F) -> Option<hir::VarId>
+pub fn visit_vars<F>(
+    destruc: &destruc::Destruc<hir::Lowered>,
+    visitor: &mut F,
+) -> Option<hir::VarId>
 where
     F: FnMut(hir::VarId, &hir::DeclTy) -> (),
 {
-    let mut vcx = VisitVarCtx { visitor };
-    vcx.visit_vars(destruc);
+    match destruc {
+        destruc::Destruc::Scalar(_, ref scalar) => {
+            visit_scalar_vars(scalar, visitor);
+            *scalar.var_id()
+        }
+        destruc::Destruc::List(_, ref list) => {
+            for fixed in list.fixed() {
+                visit_vars(fixed, visitor);
+            }
 
-    if let destruc::Destruc::Scalar(_, scalar) = destruc {
-        *scalar.var_id()
-    } else {
-        None
+            if let Some(rest) = list.rest() {
+                visit_scalar_vars(rest, visitor);
+            }
+
+            None
+        }
     }
 }
