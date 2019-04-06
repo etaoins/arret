@@ -16,7 +16,7 @@ use crate::ty::purity;
 use crate::ty::purity::Purity;
 
 #[derive(Debug, PartialEq)]
-pub enum UnifiedTy<M: ty::PM> {
+enum UnifiedTy<M: ty::PM> {
     /// The types are distinct and have no clean simplification
     ///
     /// An example would be Str and Sym.
