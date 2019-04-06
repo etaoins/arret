@@ -1318,8 +1318,6 @@ impl EvalHirCtx {
 
     /// Evaluates the main function of a program
     pub fn eval_main_fun(&mut self, main_var_id: hir::VarId) -> Result<()> {
-        use syntax::span::EMPTY_SPAN;
-
         let mut fcx = FunCtx::new();
         let main_value = self.eval_ref(&fcx, main_var_id);
         let empty_list_value = Value::List(Box::new([]), None);

@@ -923,7 +923,6 @@ impl<'types> RecursiveDefsCtx<'types> {
         subject_expr: hir::Expr<hir::Lowered>,
     ) -> Result<InferredNode> {
         use std::iter;
-        use syntax::datum::Datum;
 
         let subject_var_id = if let hir::ExprKind::Ref(var_id) = &subject_expr.kind {
             Some(*var_id)
@@ -1079,7 +1078,6 @@ impl<'types> RecursiveDefsCtx<'types> {
     ) -> Result<InferredNode> {
         use crate::ty::props::is_literal;
         use std::iter;
-        use syntax::datum::Datum;
 
         let left_var_id = if let hir::ExprKind::Ref(var_id) = &left_expr.kind {
             Some(*var_id)
@@ -1639,7 +1637,6 @@ fn ensure_main_type(
 
     if !ty::is_a::ty_ref_is_a(inferred_main_type, &expected_main_type) {
         use crate::reporting::LocTrace;
-        use syntax::span::EMPTY_SPAN;
 
         // Try to find where `(main!)` was defined
         let main_loc_trace = complete_defs

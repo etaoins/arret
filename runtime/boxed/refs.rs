@@ -103,16 +103,16 @@ macro_rules! define_marker_ref {
     };
 }
 
-/// Special marker ref for parameters that are explicitly not captured
-///
-/// This can be used for performance-sensitive functions where the compiler cannot prove the
-/// parameter can't be captured.
+// Special marker ref for parameters that are explicitly not captured
+//
+// This can be used for performance-sensitive functions where the compiler cannot prove the
+// parameter can't be captured.
 define_marker_ref!(NoCapture);
 
-/// Special marker ref for parameters that are explicitly captured
-///
-/// Capturing GC managed values is usually not allowed as the captured values become invisible
-/// to the garage collector and will become invalid on the next collection cycle. This is intended
-/// for use by special runtime functions that expose their captured values to the collector via an
-/// internal mechanism.
+// Special marker ref for parameters that are explicitly captured
+//
+// Capturing GC managed values is usually not allowed as the captured values become invisible
+// to the garage collector and will become invalid on the next collection cycle. This is intended
+// for use by special runtime functions that expose their captured values to the collector via an
+// internal mechanism.
 define_marker_ref!(Capture);
