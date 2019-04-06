@@ -125,7 +125,7 @@ pub fn load_module_by_name(
         let path = path_buf.as_path();
 
         let source_file = ccx
-            .source_loader
+            .source_loader()
             .load_path(path)
             .map_err(|err| Error::from_module_io(span, path, &err))?;
 
