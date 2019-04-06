@@ -410,7 +410,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                         test_node
                             .type_conds
                             .into_iter()
-                            .map(|type_cond| type_cond.reversed())
+                            .map(VarTypeCond::reversed)
                             .collect()
                     } else {
                         vec![]
@@ -616,17 +616,15 @@ impl<'types> RecursiveDefsCtx<'types> {
             }
         });
 
-        let required_top_fun_type = required_fun_type
-            .map(|fun_type| fun_type.top_fun())
-            .or_else(|| {
-                required_type.find_member(|t| {
-                    if let ty::Ty::TopFun(top_fun) = t {
-                        Some(top_fun.as_ref())
-                    } else {
-                        None
-                    }
-                })
-            });
+        let required_top_fun_type = required_fun_type.map(ty::Fun::top_fun).or_else(|| {
+            required_type.find_member(|t| {
+                if let ty::Ty::TopFun(top_fun) = t {
+                    Some(top_fun.as_ref())
+                } else {
+                    None
+                }
+            })
+        });
 
         let initial_param_type: ty::List<ty::Poly> = typeck::destruc::type_for_decl_list_destruc(
             &decl_fun.params,

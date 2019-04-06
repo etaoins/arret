@@ -43,7 +43,7 @@ pub fn build_load_arg_list_value(b: &mut Builder, polymorph_abi: &PolymorphABI) 
 
     let param_regs = closure_reg
         .into_iter()
-        .map(|built_reg| built_reg.into())
+        .map(Into::into)
         .chain(
             fixed_reg_values
                 .iter()

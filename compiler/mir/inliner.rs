@@ -128,7 +128,7 @@ fn inline_preference_factor_for_arg_list_value(arg_list_value: &Value) -> OpCost
     match arg_list_value {
         Value::List(fixed, rest) => fixed
             .iter()
-            .chain(rest.iter().map(|rest| rest.as_ref()))
+            .chain(rest.iter().map(AsRef::as_ref))
             .map(inline_preference_factor_for_value)
             .product(),
         Value::Const(_) => 1.5,

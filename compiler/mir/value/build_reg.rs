@@ -431,7 +431,7 @@ pub fn value_to_reg(
                     b,
                     span,
                     fixed,
-                    rest.as_ref().map(|rest| rest.as_ref()),
+                    rest.as_ref().map(AsRef::as_ref),
                     boxed_abi_type,
                 )
             } else {

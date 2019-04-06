@@ -99,7 +99,7 @@ impl NsDatum {
     fn map_nsdata(vs: Box<[NsDatum]>) -> Box<[Datum]> {
         vs.into_vec()
             .into_iter()
-            .map(|v| v.into_syntax_datum())
+            .map(NsDatum::into_syntax_datum)
             .collect()
     }
 

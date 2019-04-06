@@ -6,7 +6,7 @@ use syntax::span::Span;
 use crate::hir::error::{Error, ErrorKind};
 use crate::hir::exports::Exports;
 use crate::hir::loader::ModuleName;
-use crate::hir::ns::{NsDataIter, NsDatum};
+use crate::hir::ns::{Ident, NsDataIter, NsDatum};
 use crate::hir::util::{expect_arg_count, expect_ident, expect_ident_and_span, expect_one_arg};
 
 type Result<T> = result::Result<T, Vec<Error>>;
@@ -38,7 +38,7 @@ where
     fn lower_module_import(&mut self, span: Span, name_data: Vec<NsDatum>) -> Result<FilterInput> {
         let mut name_idents = name_data
             .into_iter()
-            .map(|datum| expect_ident(datum).map(|ident| ident.into_name()));
+            .map(|datum| expect_ident(datum).map(Ident::into_name));
 
         let package_name = name_idents.next().unwrap()?;
         let terminal_name = name_idents.next_back().unwrap()?;

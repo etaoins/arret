@@ -177,7 +177,7 @@ impl rustyline::hint::Hinter for ArretHelper {
                 ExpectedContent::Set(_) | ExpectedContent::Map(_) => Some("}"),
                 _ => None,
             })
-            .map(|s| s.to_owned())
+            .map(ToOwned::to_owned)
     }
 }
 

@@ -49,7 +49,9 @@ pub fn compile_input_file(
     output_path: &path::Path,
     debug_info: bool,
 ) -> bool {
-    let output_type = match output_path.extension().and_then(|e| e.to_str()) {
+    use std::ffi;
+
+    let output_type = match output_path.extension().and_then(ffi::OsStr::to_str) {
         Some("ll") => compiler::OutputType::LLVMIR,
         Some("s") => compiler::OutputType::Assembly,
         Some("o") => compiler::OutputType::Object,

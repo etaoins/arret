@@ -6,7 +6,7 @@ use crate::boxed::refs::Gc;
 use crate::boxed::{AllocType, Any, ConstructableFrom};
 use crate::intern::Interner;
 
-/// Represents an allocated segement of garbage collected memory
+/// Represents an allocated segment of garbage collected memory
 ///
 /// This has a gross pointer-based representation to allow use as a bump allocator from generated
 /// native code.
@@ -153,7 +153,7 @@ impl Heap {
     ///
     /// This is slow; it should only be used for testing purposes
     pub fn len(&self) -> usize {
-        let full_len: usize = self.full_segments.iter().map(|s| s.len()).sum();
+        let full_len: usize = self.full_segments.iter().map(Segment::len).sum();
         self.current_segment.len() + full_len
     }
 

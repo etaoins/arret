@@ -911,7 +911,7 @@ impl EvalHirCtx {
         Value::ArretFun(value::ArretFun {
             id: value::ArretFunId::alloc(),
             span,
-            source_name: source_name.map(|source_name| source_name.to_owned()),
+            source_name: source_name.map(ToOwned::to_owned),
             env_ty_args: fcx.mono_ty_args.clone(),
             closure,
             fun_expr,

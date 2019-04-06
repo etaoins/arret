@@ -56,7 +56,7 @@ impl PolymorphABI {
 
         let fixed_refs = self
             .arret_fixed_params()
-            .map(|fixed_param_abi| fixed_param_abi.to_ty_ref())
+            .map(ConvertableABIType::to_ty_ref)
             .collect();
 
         let rest_ref = match self.arret_rest_param() {
@@ -139,7 +139,7 @@ fn list_polymorph_abi(
     }
 }
 
-/// Recommends a polymorph ABI for a given list value and ret trype
+/// Recommends a polymorph ABI for a given list value and ret type
 pub fn polymorph_abi_for_arg_list_value(
     has_closure: bool,
     arg_list_value: &Value,

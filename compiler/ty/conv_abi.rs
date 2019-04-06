@@ -123,7 +123,7 @@ impl ConvertableABIType for callback::EntryPointABIType {
         let fixed_param_ty_refs = self
             .params
             .iter()
-            .map(|abi_type| abi_type.to_ty_ref())
+            .map(ConvertableABIType::to_ty_ref)
             .collect();
 
         let param_list_ty = ty::List::new(fixed_param_ty_refs, ty::Ty::never().into());

@@ -23,7 +23,7 @@ pub fn type_for_decl_list_destruc(
         Some(rest) => match rest.ty() {
             hir::DeclTy::Known(poly) => poly.clone(),
             hir::DeclTy::Free => guide_type_iter
-                .map(|guide_type_iter| guide_type_iter.collect_rest())
+                .map(ListIterator::collect_rest)
                 .unwrap_or_else(|| ty::Ty::Any.into()),
         },
         None => ty::Ty::never().into(),
