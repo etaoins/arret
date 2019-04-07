@@ -1,4 +1,4 @@
-use std::mem;
+use std::{mem, ptr};
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
@@ -53,7 +53,7 @@ fn gen_stack_alloced_box<T: boxed::DirectTagged>(
 fn gen_heap_alloced_box<T: boxed::DirectTagged>(
     tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,
-    active_alloc: &mut ActiveAlloc,
+    active_alloc: &mut ActiveAlloc<'_>,
     box_size: boxed::BoxSize,
     value_name: &[u8],
 ) -> LLVMValueRef {
@@ -109,7 +109,7 @@ fn gen_heap_alloced_box<T: boxed::DirectTagged>(
 pub fn gen_alloced_box<T: boxed::DirectTagged>(
     tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,
-    active_alloc: &mut ActiveAlloc,
+    active_alloc: &mut ActiveAlloc<'_>,
     box_source: BoxSource,
     value_name: &[u8],
 ) -> LLVMValueRef {
@@ -195,18 +195,18 @@ fn gen_runtime_heap_alloc(
 ///
 /// This will first attempt a bump allocation on the task's current segment. If that fails it will
 /// fallback to the runtime.
-pub fn gen_active_alloc_for_atom(
+pub fn atom_into_active_alloc<'op>(
     tcx: &mut TargetCtx,
     mcx: &mut ModCtx<'_, '_, '_>,
     builder: LLVMBuilderRef,
     llvm_task: LLVMValueRef,
-    atom: &AllocAtom<'_>,
-) -> ActiveAlloc {
+    atom: AllocAtom<'op>,
+) -> ActiveAlloc<'op> {
     use runtime::abitype;
 
     let required_cells = atom
         .box_sources
-        .values()
+        .iter()
         .map(|box_source| match box_source {
             BoxSource::Stack => 0,
             BoxSource::Heap(box_size) => box_size.cell_count(),
@@ -214,7 +214,14 @@ pub fn gen_active_alloc_for_atom(
         .sum();
 
     if required_cells == 0 {
-        return ActiveAlloc::empty();
+        return ActiveAlloc {
+            box_slots: ptr::null_mut(),
+            total_cells: 0,
+            used_cells: 0,
+
+            box_source_iter: atom.box_sources.into_iter(),
+            cond_plan_iter: atom.cond_plans.into_iter(),
+        };
     }
 
     unsafe {
@@ -322,7 +329,9 @@ pub fn gen_active_alloc_for_atom(
             box_slots,
             total_cells: required_cells,
             used_cells: 0,
-            cond_op_index: 0,
+
+            box_source_iter: atom.box_sources.into_iter(),
+            cond_plan_iter: atom.cond_plans.into_iter(),
         }
     }
 }

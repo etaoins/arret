@@ -109,7 +109,7 @@ pub(crate) fn define_fun(
         }
 
         for alloc_atom in alloc_plan {
-            op_gen::gen_alloc_atom(tcx, mcx, &mut fcx, &alloc_atom);
+            op_gen::gen_alloc_atom(tcx, mcx, &mut fcx, alloc_atom);
         }
 
         mcx.optimise_function(llvm_fun);

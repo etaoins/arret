@@ -58,13 +58,13 @@ pub fn plan_allocs<'op>(captures: &Captures, ops: &'op [ops::Op]) -> Vec<AllocAt
     use std::mem;
 
     let mut atoms = vec![];
-    let mut current_atom = AllocAtom::new();
+    let mut current_atom = AllocAtom::new(&ops[0..]);
 
-    for op in ops {
+    for (i, op) in ops.iter().enumerate() {
         let checkpointing_op = op_needs_heap_checkpoint(op);
 
         if checkpointing_op && !current_atom.is_empty() {
-            atoms.push(mem::replace(&mut current_atom, AllocAtom::new()));
+            atoms.push(mem::replace(&mut current_atom, AllocAtom::new(&ops[i..])));
         }
 
         if let ops::OpKind::Cond(ops::CondOp {
@@ -73,7 +73,7 @@ pub fn plan_allocs<'op>(captures: &Captures, ops: &'op [ops::Op]) -> Vec<AllocAt
             ..
         }) = op.kind()
         {
-            current_atom.push_cond_plan(CondPlan {
+            current_atom.cond_plans.push(CondPlan {
                 true_subplan: plan_allocs(captures, true_ops),
                 false_subplan: plan_allocs(captures, false_ops),
             });
@@ -83,16 +83,19 @@ pub fn plan_allocs<'op>(captures: &Captures, ops: &'op [ops::Op]) -> Vec<AllocAt
         }) = op_alloc_info(op)
         {
             if captures.get(output_reg) == CaptureKind::Never {
-                current_atom.push_box_source(output_reg, BoxSource::Stack);
+                current_atom.box_sources.push(BoxSource::Stack);
             } else {
-                current_atom.push_box_source(output_reg, BoxSource::Heap(box_size));
+                current_atom.box_sources.push(BoxSource::Heap(box_size));
             }
         }
 
-        current_atom.push_op(op);
+        current_atom.push_op();
 
         if checkpointing_op {
-            atoms.push(mem::replace(&mut current_atom, AllocAtom::new()));
+            atoms.push(mem::replace(
+                &mut current_atom,
+                AllocAtom::new(&ops[i + 1..]),
+            ));
         }
     }
 
@@ -106,7 +109,6 @@ pub fn plan_allocs<'op>(captures: &Captures, ops: &'op [ops::Op]) -> Vec<AllocAt
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::collections::HashMap;
 
     #[test]
     fn empty_ops() {
@@ -131,22 +133,22 @@ mod test {
 
         let expected_atoms = vec![
             AllocAtom {
-                box_sources: [(reg1, BoxSource::Stack)].iter().cloned().collect(),
+                box_sources: vec![BoxSource::Stack],
                 cond_plans: vec![],
-                ops: vec![&input_ops[0], &input_ops[1]],
+                ops_base: &input_ops[0..],
+                ops_count: 2,
             },
             AllocAtom {
-                box_sources: HashMap::new(),
+                box_sources: vec![],
                 cond_plans: vec![],
-                ops: vec![&input_ops[2]],
+                ops_base: &input_ops[2..],
+                ops_count: 1,
             },
             AllocAtom {
-                box_sources: [(reg3, BoxSource::Stack), (reg4, BoxSource::Stack)]
-                    .iter()
-                    .cloned()
-                    .collect(),
+                box_sources: vec![BoxSource::Stack, BoxSource::Stack],
                 cond_plans: vec![],
-                ops: vec![&input_ops[3], &input_ops[4]],
+                ops_base: &input_ops[3..],
+                ops_count: 2,
             },
         ];
 

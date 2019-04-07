@@ -21,7 +21,7 @@ pub struct FunThunkInput {
 pub fn gen_alloc_int(
     tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,
-    active_alloc: &mut ActiveAlloc,
+    active_alloc: &mut ActiveAlloc<'_>,
     box_source: BoxSource,
     llvm_int_value: LLVMValueRef,
 ) -> LLVMValueRef {
@@ -40,7 +40,7 @@ pub fn gen_alloc_int(
 pub fn gen_alloc_char(
     tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,
-    active_alloc: &mut ActiveAlloc,
+    active_alloc: &mut ActiveAlloc<'_>,
     box_source: BoxSource,
     llvm_char_value: LLVMValueRef,
 ) -> LLVMValueRef {
@@ -68,7 +68,7 @@ pub fn gen_alloc_char(
 pub fn gen_alloc_float(
     tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,
-    active_alloc: &mut ActiveAlloc,
+    active_alloc: &mut ActiveAlloc<'_>,
     box_source: BoxSource,
     llvm_float_value: LLVMValueRef,
 ) -> LLVMValueRef {
@@ -96,7 +96,7 @@ pub fn gen_alloc_float(
 pub fn gen_alloc_boxed_pair(
     tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,
-    active_alloc: &mut ActiveAlloc,
+    active_alloc: &mut ActiveAlloc<'_>,
     box_source: BoxSource,
     input: &PairInput,
 ) -> LLVMValueRef {
@@ -138,7 +138,7 @@ pub fn gen_alloc_boxed_pair(
 pub fn gen_alloc_boxed_fun_thunk(
     tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,
-    active_alloc: &mut ActiveAlloc,
+    active_alloc: &mut ActiveAlloc<'_>,
     box_source: BoxSource,
     input: &FunThunkInput,
 ) -> LLVMValueRef {

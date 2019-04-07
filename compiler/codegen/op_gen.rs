@@ -15,8 +15,7 @@ fn gen_op(
     tcx: &mut TargetCtx,
     mcx: &mut ModCtx<'_, '_, '_>,
     fcx: &mut FunCtx,
-    alloc_atom: &alloc::AllocAtom<'_>,
-    active_alloc: &mut alloc::ActiveAlloc,
+    active_alloc: &mut alloc::ActiveAlloc<'_>,
     op: &Op,
 ) {
     unsafe {
@@ -318,11 +317,11 @@ fn gen_op(
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Cond(cond_op) => {
-                let cond_alloc_plan = active_alloc.next_cond_plan(alloc_atom);
+                let cond_alloc_plan = active_alloc.next_cond_plan();
                 gen_cond(tcx, mcx, fcx, cond_op, cond_alloc_plan);
             }
             OpKind::AllocBoxedInt(reg, int_reg) => {
-                let box_source = alloc_atom.box_sources()[reg];
+                let box_source = active_alloc.next_box_source();
 
                 let llvm_int = fcx.regs[int_reg];
                 let llvm_alloced = alloc::types::gen_alloc_int(
@@ -336,7 +335,7 @@ fn gen_op(
                 fcx.regs.insert(*reg, llvm_alloced);
             }
             OpKind::AllocBoxedFloat(reg, float_reg) => {
-                let box_source = alloc_atom.box_sources()[reg];
+                let box_source = active_alloc.next_box_source();
 
                 let llvm_float = fcx.regs[float_reg];
                 let llvm_alloced = alloc::types::gen_alloc_float(
@@ -350,7 +349,7 @@ fn gen_op(
                 fcx.regs.insert(*reg, llvm_alloced);
             }
             OpKind::AllocBoxedChar(reg, char_reg) => {
-                let box_source = alloc_atom.box_sources()[reg];
+                let box_source = active_alloc.next_box_source();
 
                 let llvm_char = fcx.regs[char_reg];
                 let llvm_alloced = alloc::types::gen_alloc_char(
@@ -371,7 +370,7 @@ fn gen_op(
                     length_reg,
                 },
             ) => {
-                let box_source = alloc_atom.box_sources()[reg];
+                let box_source = active_alloc.next_box_source();
 
                 let input = alloc::types::PairInput {
                     llvm_head: fcx.regs[head_reg],
@@ -395,7 +394,7 @@ fn gen_op(
                     callee,
                 },
             ) => {
-                let box_source = alloc_atom.box_sources()[reg];
+                let box_source = active_alloc.next_box_source();
 
                 let input = alloc::types::FunThunkInput {
                     llvm_closure: fcx.regs[closure_reg],
@@ -658,23 +657,24 @@ fn gen_cond_branch(
     mcx: &mut ModCtx<'_, '_, '_>,
     fcx: &mut FunCtx,
     block: LLVMBasicBlockRef,
-    alloc_plan: &[alloc::AllocAtom<'_>],
+    alloc_plan: Vec<alloc::AllocAtom<'_>>,
     cont_block: LLVMBasicBlockRef,
 ) {
     unsafe {
         LLVMPositionBuilderAtEnd(fcx.builder, block);
 
+        // We can't branch if we terminated
+        let will_terminate = alloc_plan
+            .last()
+            .and_then(|alloc_atom| alloc_atom.ops().last())
+            .filter(|op| op.kind().is_terminator())
+            .is_some();
+
         for alloc_atom in alloc_plan {
             gen_alloc_atom(tcx, mcx, fcx, alloc_atom);
         }
 
-        // We can't branch if we terminated
-        if alloc_plan
-            .last()
-            .and_then(|alloc_atom| alloc_atom.ops().last())
-            .filter(|op| op.kind().is_terminator())
-            .is_none()
-        {
+        if !will_terminate {
             LLVMBuildBr(fcx.builder, cont_block);
         }
     }
@@ -685,11 +685,16 @@ fn gen_cond(
     mcx: &mut ModCtx<'_, '_, '_>,
     fcx: &mut FunCtx,
     cond_op: &CondOp,
-    cond_alloc_plan: &alloc::CondPlan<'_>,
+    cond_alloc_plan: alloc::CondPlan<'_>,
 ) {
     let CondOp {
         reg_phi, test_reg, ..
     } = cond_op;
+
+    let alloc::CondPlan {
+        true_subplan: true_alloc_subplan,
+        false_subplan: false_alloc_subplan,
+    } = cond_alloc_plan;
 
     unsafe {
         let true_block = LLVMAppendBasicBlockInContext(
@@ -711,24 +716,10 @@ fn gen_cond(
         let test_llvm = fcx.regs[test_reg];
         LLVMBuildCondBr(fcx.builder, test_llvm, true_block, false_block);
 
-        gen_cond_branch(
-            tcx,
-            mcx,
-            fcx,
-            true_block,
-            cond_alloc_plan.true_subplan(),
-            cont_block,
-        );
+        gen_cond_branch(tcx, mcx, fcx, true_block, true_alloc_subplan, cont_block);
         let mut final_true_block = LLVMGetInsertBlock(fcx.builder);
 
-        gen_cond_branch(
-            tcx,
-            mcx,
-            fcx,
-            false_block,
-            cond_alloc_plan.false_subplan(),
-            cont_block,
-        );
+        gen_cond_branch(tcx, mcx, fcx, false_block, false_alloc_subplan, cont_block);
         let mut final_false_block = LLVMGetInsertBlock(fcx.builder);
 
         LLVMPositionBuilderAtEnd(fcx.builder, cont_block);
@@ -790,18 +781,14 @@ pub(crate) fn gen_alloc_atom(
     tcx: &mut TargetCtx,
     mcx: &mut ModCtx<'_, '_, '_>,
     fcx: &mut FunCtx,
-    alloc_atom: &alloc::AllocAtom<'_>,
+    alloc_atom: alloc::AllocAtom<'_>,
 ) {
-    let mut active_alloc = alloc::core::gen_active_alloc_for_atom(
-        tcx,
-        mcx,
-        fcx.builder,
-        fcx.current_task,
-        &alloc_atom,
-    );
+    let ops = alloc_atom.ops();
+    let mut active_alloc =
+        alloc::core::atom_into_active_alloc(tcx, mcx, fcx.builder, fcx.current_task, alloc_atom);
 
-    for op in alloc_atom.ops() {
-        gen_op(tcx, mcx, fcx, alloc_atom, &mut active_alloc, &op);
+    for op in ops {
+        gen_op(tcx, mcx, fcx, &mut active_alloc, &op);
     }
 
     assert!(
