@@ -59,7 +59,7 @@ impl<T: Boxed> Pair<T> {
         self.rest
     }
 
-    pub fn as_list(&self) -> Gc<List<T>> {
+    pub fn as_list_ref(&self) -> Gc<List<T>> {
         unsafe { Gc::new(&*(self as *const _ as *const List<T>)) }
     }
 }
@@ -89,7 +89,7 @@ where
     T: Boxed + fmt::Debug,
 {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        self.as_list().fmt(formatter)
+        self.as_list_ref().fmt(formatter)
     }
 }
 
@@ -145,7 +145,9 @@ impl<T: Boxed> List<T> {
         tail: Gc<List<T>>,
     ) -> Gc<List<T>> {
         // TODO: This is naive; we could use a single multi-cell allocation instead
-        elems.rfold(tail, |tail, elem| Pair::new(heap, (elem, tail)).as_list())
+        elems.rfold(tail, |tail, elem| {
+            Pair::new(heap, (elem, tail)).as_list_ref()
+        })
     }
 
     /// Creates a list from the passed element constructor input
