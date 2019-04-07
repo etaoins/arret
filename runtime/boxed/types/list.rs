@@ -59,19 +59,13 @@ impl<T: Boxed> Pair<T> {
     }
 }
 
-impl<T> PartialEq for Pair<T>
-where
-    T: Boxed + PartialEq,
-{
+impl<T: Boxed> PartialEq for Pair<T> {
     fn eq(&self, rhs: &Pair<T>) -> bool {
         (self.head == rhs.head) && (self.rest == rhs.rest)
     }
 }
 
-impl<T> Hash for Pair<T>
-where
-    T: Boxed + Hash,
-{
+impl<T: Boxed> Hash for Pair<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         TypeTag::Pair.hash(state);
         self.head().hash(state);
@@ -79,10 +73,7 @@ where
     }
 }
 
-impl<T> fmt::Debug for Pair<T>
-where
-    T: Boxed + fmt::Debug,
-{
+impl<T: Boxed> fmt::Debug for Pair<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         self.as_list_ref().fmt(formatter)
     }
@@ -113,6 +104,21 @@ pub struct List<T: Boxed = Any> {
     header: Header,
     list_length: usize,
     phantom: PhantomData<T>,
+}
+
+impl<T: Boxed> Boxed for List<T> {}
+
+impl DistinctTagged for List<Any> {
+    fn has_tag(type_tag: TypeTag) -> bool {
+        [TypeTag::Pair, TypeTag::Nil].contains(&type_tag)
+    }
+}
+
+impl<T: Boxed> EncodeBoxedABIType for List<T>
+where
+    T: EncodeBoxedABIType,
+{
+    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::List(&T::BOXED_ABI_TYPE);
 }
 
 pub enum ListSubtype<'a, T: Boxed>
@@ -187,19 +193,13 @@ impl<T: Boxed> List<T> {
     }
 }
 
-impl<T> PartialEq for List<T>
-where
-    T: Boxed + PartialEq,
-{
+impl<T: Boxed> PartialEq for List<T> {
     fn eq(&self, other: &List<T>) -> bool {
         self.iter().eq(other.iter())
     }
 }
 
-impl<T> Hash for List<T>
-where
-    T: Boxed + Hash,
-{
+impl<T: Boxed> Hash for List<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self.as_subtype() {
             ListSubtype::Pair(pair) => pair.hash(state),
@@ -208,30 +208,12 @@ where
     }
 }
 
-impl<T> fmt::Debug for List<T>
-where
-    T: Boxed + fmt::Debug,
-{
+impl<T: Boxed> fmt::Debug for List<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         formatter.write_str("List(")?;
         formatter.debug_list().entries(self.iter()).finish()?;
         formatter.write_str(")")
     }
-}
-
-impl<T: Boxed> Boxed for List<T> {}
-
-impl DistinctTagged for List<Any> {
-    fn has_tag(type_tag: TypeTag) -> bool {
-        [TypeTag::Pair, TypeTag::Nil].contains(&type_tag)
-    }
-}
-
-impl<T: Boxed> EncodeBoxedABIType for List<T>
-where
-    T: EncodeBoxedABIType,
-{
-    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::List(&T::BOXED_ABI_TYPE);
 }
 
 pub struct ListIterator<T: Boxed> {

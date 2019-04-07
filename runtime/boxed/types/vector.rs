@@ -111,19 +111,13 @@ impl<T: Boxed> Vector<T> {
     }
 }
 
-impl<T: Boxed> PartialEq for Vector<T>
-where
-    T: PartialEq,
-{
+impl<T: Boxed> PartialEq for Vector<T> {
     fn eq(&self, other: &Vector<T>) -> bool {
         self.iter().eq(other.iter())
     }
 }
 
-impl<T: Boxed> fmt::Debug for Vector<T>
-where
-    T: fmt::Debug,
-{
+impl<T: Boxed> fmt::Debug for Vector<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         formatter.write_str("Vector(")?;
         formatter.debug_list().entries(self.iter()).finish()?;

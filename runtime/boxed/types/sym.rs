@@ -13,7 +13,6 @@ pub struct Sym {
 }
 
 impl Boxed for Sym {}
-
 impl UniqueTagged for Sym {}
 
 impl<'a> ConstructableFrom<&'a str> for Sym {

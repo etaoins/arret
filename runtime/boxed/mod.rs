@@ -99,7 +99,7 @@ impl Header {
     }
 }
 
-pub trait Boxed: Sized + Hash + PartialEq {
+pub trait Boxed: Sized + Hash + PartialEq + fmt::Debug {
     fn as_any_ref(&self) -> Gc<Any> {
         unsafe { Gc::new(&*(self as *const Self as *const Any)) }
     }
@@ -160,12 +160,6 @@ pub trait ConstructableFrom<T>: Boxed {
         heap.as_heap_mut().new_box::<Self, T>(value)
     }
 }
-
-/// Marks that this type is a subtype of `T`
-pub trait SubtypeOf<T: Boxed> {}
-
-/// Blanket implementation that indicates all boxed types are subtypes of `Any`
-impl<T: Boxed> SubtypeOf<Any> for T {}
 
 macro_rules! define_const_tagged_boxes {
     ($($name:ident),*) => {
@@ -295,7 +289,6 @@ macro_rules! define_supertype {
                     None
                 }
             }
-
         }
 
         impl Hash for $name {
