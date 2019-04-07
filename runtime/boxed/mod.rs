@@ -206,7 +206,7 @@ macro_rules! define_const_tagged_boxes {
             }
         )*
 
-        define_supertype!(Any, AnySubtype, as_any_ref, { $($name),* });
+        define_supertype!(Any, AnySubtype, DistinctTagged, as_any_ref, { $($name),* });
     }
 }
 
@@ -229,7 +229,6 @@ macro_rules! define_singleton_box {
         }
 
         impl Boxed for $type_name {}
-
         impl UniqueTagged for $type_name {}
 
         #[export_name = $export_name]
@@ -257,13 +256,18 @@ macro_rules! define_singleton_box {
 }
 
 macro_rules! define_supertype {
-    ($name:ident, $subtype_enum:ident, $as_enum_ref:ident, { $($member:ident),* }) => {
+    ($name:ident, $subtype_enum:ident, $subtype_trait:ident, $as_enum_ref:ident, { $($member:ident),* }) => {
         #[repr(C, align(16))]
         pub struct $name {
             header: Header,
         }
 
-        impl Boxed for $name {
+        impl Boxed for $name {}
+
+        impl DistinctTagged for $name {
+            fn has_tag(type_tag: TypeTag) -> bool {
+                [$( TypeTag::$member ),*].contains(&type_tag)
+            }
         }
 
         impl $name {
@@ -282,12 +286,16 @@ macro_rules! define_supertype {
                     }
                 }
             }
-        }
 
-        impl DistinctTagged for $name {
-            fn has_tag(type_tag: TypeTag) -> bool {
-                [$( TypeTag::$member ),*].contains(&type_tag)
+            pub fn downcast_ref<T: $subtype_trait>(&self) -> Option<Gc<T>>
+            {
+                if T::has_tag(self.header.type_tag) {
+                    Some(unsafe { Gc::new(&*(self as *const $name as *const T)) })
+                } else {
+                    None
+                }
             }
+
         }
 
         impl Hash for $name {
@@ -343,8 +351,10 @@ macro_rules! define_supertype {
 }
 
 macro_rules! define_tagged_union {
-    ($name:ident, $subtype_enum:ident, $as_enum_ref:ident, { $($member:ident),* }) => {
-        define_supertype!($name, $subtype_enum, $as_enum_ref, { $($member),* });
+    ($name:ident, $subtype_enum:ident, $subtype_trait:ident, $as_enum_ref:ident, { $($member:ident),* }) => {
+        define_supertype!($name, $subtype_enum, $subtype_trait, $as_enum_ref, { $($member),* });
+
+        pub trait $subtype_trait : DistinctTagged {}
 
         $(
             impl $member {
@@ -353,7 +363,7 @@ macro_rules! define_tagged_union {
                 }
             }
 
-            impl SubtypeOf<$name> for $member {}
+            impl $subtype_trait for $member {}
         )*
 
         impl EncodeBoxedABIType for $name {
@@ -381,12 +391,12 @@ define_const_tagged_boxes! {
 define_singleton_box!(True, TRUE_INSTANCE, "ARRET_TRUE");
 define_singleton_box!(False, FALSE_INSTANCE, "ARRET_FALSE");
 
-define_tagged_union!(Num, NumSubtype, as_num_ref, {
+define_tagged_union!(Num, NumSubtype, NumMember, as_num_ref, {
     Int,
     Float
 });
 
-define_tagged_union!(Bool, BoolSubtype, as_bool_ref, { True, False });
+define_tagged_union!(Bool, BoolSubtype, BoolMember, as_bool_ref, { True, False });
 
 impl Bool {
     pub fn singleton_ref(value: bool) -> Gc<Bool> {

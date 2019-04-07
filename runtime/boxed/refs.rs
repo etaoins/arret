@@ -2,7 +2,7 @@ use std::ops::Deref;
 use std::ptr;
 use std::{fmt, hash};
 
-use crate::boxed::{Boxed, DistinctTagged, SubtypeOf};
+use crate::boxed::Boxed;
 
 /// Reference to a garbage collected value
 ///
@@ -38,17 +38,6 @@ impl<T: Boxed> Gc<T> {
     pub unsafe fn cast<U: Boxed>(self) -> Gc<U> {
         Gc {
             inner: self.inner.cast::<U>(),
-        }
-    }
-
-    pub fn downcast_ref<U>(self) -> Option<Gc<U>>
-    where
-        U: SubtypeOf<T> + DistinctTagged,
-    {
-        if U::has_tag(self.header().type_tag) {
-            Some(unsafe { self.cast::<U>() })
-        } else {
-            None
         }
     }
 
