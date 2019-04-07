@@ -24,7 +24,7 @@ fn const_to_reg(
     abi_type: &abitype::ABIType,
 ) -> BuiltReg {
     use crate::mir::ops::*;
-    use runtime::boxed::AsHeap;
+    use runtime::boxed::prelude::*;
 
     let subtype = any_ref.as_subtype();
 
@@ -96,9 +96,7 @@ fn const_to_reg(
 
             b.cast_boxed_cond(span, &from_abi_type, from_reg, to_abi_type.clone())
         }
-        (boxed::AnySubtype::TopPair(top_pair), abitype::ABIType::Boxed(to_abi_type)) => {
-            let pair_ref = top_pair.as_pair();
-
+        (boxed::AnySubtype::Pair(pair_ref), abitype::ABIType::Boxed(to_abi_type)) => {
             let head_reg = const_to_reg(
                 ehx,
                 b,
@@ -127,7 +125,7 @@ fn const_to_reg(
 
             b.cast_boxed_cond(
                 span,
-                &boxed::TypeTag::TopPair.into(),
+                &boxed::TypeTag::Pair.into(),
                 from_reg,
                 to_abi_type.clone(),
             )

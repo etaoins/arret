@@ -38,7 +38,7 @@ pub fn possible_type_tags_for_value(value: &Value) -> TypeTagSet {
         Value::List(fixed, rest) => {
             if !fixed.is_empty() {
                 // Non-empty list
-                boxed::TypeTag::TopPair.into()
+                boxed::TypeTag::Pair.into()
             } else if let Some(tail) = rest {
                 possible_type_tags_for_value(tail)
             } else {

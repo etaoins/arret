@@ -16,11 +16,9 @@ fn type_tag_to_ty<M: ty::PM>(type_tag: boxed::TypeTag) -> ty::Ty<M> {
         TypeTag::True => ty::Ty::LitBool(true),
         TypeTag::False => ty::Ty::LitBool(false),
         TypeTag::Int => ty::Ty::Int,
-        TypeTag::TopVector => ty::Ty::Vectorof(Box::new(ty::Ty::Any.into())),
+        TypeTag::Vector => ty::Ty::Vectorof(Box::new(ty::Ty::Any.into())),
         TypeTag::Nil => ty::List::empty().into(),
-        TypeTag::TopPair => {
-            ty::List::new(Box::new([ty::Ty::Any.into()]), ty::Ty::Any.into()).into()
-        }
+        TypeTag::Pair => ty::List::new(Box::new([ty::Ty::Any.into()]), ty::Ty::Any.into()).into(),
         TypeTag::FunThunk => ty::TopFun::new(Purity::Impure.into(), ty::Ty::Any.into()).into(),
     }
 }
@@ -70,7 +68,7 @@ impl ConvertableABIType for abitype::BoxedABIType {
                 let member_ty_ref: ty::Ref<M> = member.to_ty_ref();
                 ty::List::new(Box::new([member_ty_ref.clone()]), member_ty_ref).into()
             }
-            BoxedABIType::DirectTagged(type_tag) => type_tag_to_ty(*type_tag).into(),
+            BoxedABIType::UniqueTagged(type_tag) => type_tag_to_ty(*type_tag).into(),
             BoxedABIType::Union(_, tags) => {
                 let members = tags.iter().map(|type_tag| type_tag_to_ty(*type_tag).into());
 
@@ -87,7 +85,7 @@ impl ConvertableABIType for abitype::BoxedABIType {
             BoxedABIType::Vector(member) => format!("boxed::Vector<{}>", member.to_rust_str()),
             BoxedABIType::List(member) => format!("boxed::List<{}>", member.to_rust_str()),
             BoxedABIType::Pair(member) => format!("boxed::Pair<{}>", member.to_rust_str()),
-            BoxedABIType::DirectTagged(type_tag) => format!("boxed::{}", type_tag.to_str()),
+            BoxedABIType::UniqueTagged(type_tag) => format!("boxed::{}", type_tag.to_str()),
             BoxedABIType::Union(name, _) => format!("boxed::{}", name),
         }
     }
@@ -159,22 +157,6 @@ impl ConvertableABIType for callback::EntryPointABIType {
 #[cfg(test)]
 mod test {
     use super::*;
-
-    #[test]
-    fn top_list_abi_type() {
-        use runtime::abitype::EncodeBoxedABIType;
-        use runtime::boxed;
-
-        // `TopList` is actually a union type in the ABI
-        let boxed_abi_type = <boxed::TopList as EncodeBoxedABIType>::BOXED_ABI_TYPE;
-
-        assert_eq!("boxed::TopList", boxed_abi_type.to_rust_str());
-
-        let top_list_poly: ty::Ref<ty::Poly> =
-            ty::List::new(Box::new([]), ty::Ty::Any.into()).into();
-
-        assert_eq!(top_list_poly, boxed_abi_type.to_ty_ref());
-    }
 
     #[test]
     fn pair_abi_type() {

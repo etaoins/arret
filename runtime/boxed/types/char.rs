@@ -1,7 +1,7 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-use crate::boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
+use crate::boxed::*;
 use crate::intern::Interner;
 
 #[repr(C, align(16))]
@@ -9,6 +9,14 @@ pub struct Char {
     header: Header,
     value: char,
 }
+
+impl Boxed for Char {
+    fn header(&self) -> Header {
+        self.header
+    }
+}
+
+impl UniqueTagged for Char {}
 
 impl ConstructableFrom<char> for Char {
     fn size_for_value(_: &char) -> BoxSize {

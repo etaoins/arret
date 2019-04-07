@@ -343,7 +343,7 @@ mod test {
 
             abi: ops::OpsABI {
                 params: Box::new([boxed::TypeTag::Int.into()]),
-                ret: boxed::TypeTag::TopPair.into(),
+                ret: boxed::TypeTag::Pair.into(),
             },
             param_regs: Box::new([param_reg]),
             ops: Box::new([
@@ -376,7 +376,7 @@ mod test {
 
             abi: ops::OpsABI {
                 params: Box::new([boxed::TypeTag::Int.into()]),
-                ret: boxed::TypeTag::TopPair.into(),
+                ret: boxed::TypeTag::Pair.into(),
             },
             param_regs: Box::new([param_reg]),
             ops: Box::new([
@@ -502,7 +502,7 @@ mod test {
 
             abi: ops::OpsABI {
                 params: Box::new([boxed::TypeTag::Int.into()]),
-                ret: boxed::TypeTag::TopPair.into(),
+                ret: boxed::TypeTag::Pair.into(),
             },
             param_regs: Box::new([param_reg]),
             ops: Box::new([

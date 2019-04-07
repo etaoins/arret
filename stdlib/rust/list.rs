@@ -18,8 +18,8 @@ pub fn stdlib_cons(
     task: &mut Task,
     head: Gc<boxed::Any>,
     tail: Gc<boxed::List<boxed::Any>>,
-) -> Gc<boxed::TopPair> {
-    boxed::Pair::new(task, (head, tail)).as_top_pair()
+) -> Gc<boxed::Pair<boxed::Any>> {
+    boxed::Pair::new(task, (head, tail))
 }
 
 #[rfi_derive::rust_fun("(All #{I O [->_ ->!]} (I ->_ O) (List & I) ->_ (List & O))")]

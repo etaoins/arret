@@ -6,7 +6,7 @@ use crate::callback;
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum BoxedABIType {
     Any,
-    DirectTagged(boxed::TypeTag),
+    UniqueTagged(boxed::TypeTag),
     Union(&'static str, &'static [boxed::TypeTag]),
     Vector(&'static BoxedABIType),
     List(&'static BoxedABIType),

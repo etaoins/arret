@@ -15,21 +15,30 @@ pub use crate::boxed::types::char::Char;
 pub use crate::boxed::types::float::Float;
 pub use crate::boxed::types::fun::{Closure, FunThunk, ThunkEntry};
 pub use crate::boxed::types::int::Int;
-pub use crate::boxed::types::list::{List, Nil, Pair, TopPair, NIL_INSTANCE};
+pub use crate::boxed::types::list::{List, Nil, Pair, NIL_INSTANCE};
 pub use crate::boxed::types::str::Str;
 pub use crate::boxed::types::sym::Sym;
-pub use crate::boxed::types::vector::{TopVector, Vector};
+pub use crate::boxed::types::vector::Vector;
 
 pub mod prelude {
     pub use super::AsHeap;
     pub use super::Boxed;
     pub use super::ConstructableFrom;
-    pub use super::Downcastable;
+    pub use super::DistinctTagged;
 }
 
-pub trait Boxed: Sized {
-    fn as_any_ref(&self) -> Gc<Any> {
-        unsafe { Gc::new(&*(self as *const Self as *const Any)) }
+pub trait AsHeap {
+    fn as_heap(&self) -> &Heap;
+    fn as_heap_mut(&mut self) -> &mut Heap;
+}
+
+impl AsHeap for Heap {
+    fn as_heap(&self) -> &Heap {
+        self
+    }
+
+    fn as_heap_mut(&mut self) -> &mut Heap {
+        self
     }
 }
 
@@ -90,68 +99,49 @@ impl Header {
     }
 }
 
-impl TypeTag {
-    pub fn into_const_header(self) -> Header {
-        Header::new(self, AllocType::Const)
-    }
-}
-
-#[repr(C, align(16))]
-pub struct Any {
-    header: Header,
-}
-
-impl Any {
-    pub fn header(&self) -> Header {
-        self.header
+pub trait Boxed: Sized + Hash + PartialEq {
+    fn as_any_ref(&self) -> Gc<Any> {
+        unsafe { Gc::new(&*(self as *const Self as *const Any)) }
     }
 
-    pub fn downcast_ref<T: Downcastable>(&self) -> Option<Gc<T>> {
-        if T::has_tag(self.header.type_tag) {
-            Some(unsafe { Gc::new(&*(self as *const Any as *const T)) })
-        } else {
-            None
-        }
-    }
+    fn header(&self) -> Header;
 }
-
-impl Boxed for Any {}
 
 impl EncodeBoxedABIType for Any {
     const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Any;
 }
 
-pub trait Downcastable: Boxed {
-    fn has_tag(type_tag: TypeTag) -> bool;
-}
-
-pub trait DirectTagged: Boxed {
+/// Marks that this boxed struct has a specific constant type tag
+///
+/// For example, `Vector<Str>` is `ConstTagged` because it always has a type tag of `Vector`. As a
+/// counterexample, `Num` is not because it could either have an `Int` or `Float` type tag.
+///
+/// In mathematical terms this can be thought of as the struct being surjective to the type tag.
+pub trait ConstTagged: Boxed {
     const TYPE_TAG: TypeTag;
 }
 
-impl<T: DirectTagged> EncodeBoxedABIType for T {
-    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::DirectTagged(T::TYPE_TAG);
+/// Indicates that this boxed struct does not share type tags with unrelated types
+///
+/// For example, `Num` is `DistinctTagged` because it only shares type tags with `Any`, `Float` and
+/// `Int` which are all either subtypes or supertypes. As a counterexample, `Vector<Str>` is not
+/// because it shares a type tag with `Vector<Sym>`
+///
+/// In mathematical terms this can be thought of as the struct being injective to the type tag
+pub trait DistinctTagged: Boxed {
+    fn has_tag(type_tag: TypeTag) -> bool;
 }
 
-impl<T: DirectTagged> Downcastable for T {
-    fn has_tag(type_tag: TypeTag) -> bool {
-        Self::TYPE_TAG == type_tag
-    }
-}
+/// Marks that every boxed value with `TYPE_TAG` corresponds to this boxed struct
+///
+/// For example, `Str` is `UniqueTagged` because no other struct has the type tag of `Str`. As a
+/// counterexample, `Vector<Str>` is not because it shares a type tag with `Vector<Sym>`.
+///
+/// In mathematical terms this can be thought of as the struct being bijective with the type tag.
+pub trait UniqueTagged: ConstTagged + DistinctTagged {}
 
-pub trait AsHeap {
-    fn as_heap(&self) -> &Heap;
-    fn as_heap_mut(&mut self) -> &mut Heap;
-}
-
-impl AsHeap for Heap {
-    fn as_heap(&self) -> &Heap {
-        self
-    }
-
-    fn as_heap_mut(&mut self) -> &mut Heap {
-        self
-    }
+impl<T: UniqueTagged> EncodeBoxedABIType for T {
+    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::UniqueTagged(T::TYPE_TAG);
 }
 
 pub trait ConstructableFrom<T>: Boxed {
@@ -169,7 +159,13 @@ pub trait ConstructableFrom<T>: Boxed {
     }
 }
 
-macro_rules! define_direct_tagged_boxes {
+/// Marks that this type is a subtype of `T`
+pub trait SubtypeOf<T: Boxed> {}
+
+/// Blanket implementation that indicates all boxed types are subtypes of `Any`
+impl<T: Boxed> SubtypeOf<Any> for T {}
+
+macro_rules! define_const_tagged_boxes {
     ($($name:ident),*) => {
         #[repr(u8)]
         #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
@@ -196,85 +192,29 @@ macro_rules! define_direct_tagged_boxes {
             }
         }
 
-        #[derive(PartialEq, Debug)]
-        pub enum AnySubtype<'a> {
-            $( $name(&'a $name) ),*
-        }
-
         $(
-            impl Boxed for $name {}
-
-            impl DirectTagged for $name {
+            impl ConstTagged for $name {
                 const TYPE_TAG: TypeTag = TypeTag::$name;
+            }
+
+            impl DistinctTagged for $name {
+                fn has_tag(type_tag: TypeTag) -> bool {
+                    Self::TYPE_TAG == type_tag
+                }
             }
         )*
 
-        impl Any {
-            pub fn as_subtype(&self) -> AnySubtype<'_> {
-                match self.header.type_tag {
-                    $(
-                        TypeTag::$name => {
-                            AnySubtype::$name(unsafe {
-                                &*(self as *const Any as *const $name)
-                            })
-                        }
-                    )*
-                }
-            }
-        }
-
-        impl Drop for Any {
-            fn drop(&mut self) {
-                // Cast to the correct type so Rust knows which Drop implementation to call
-                match self.header.type_tag {
-                    $(
-                        TypeTag::$name => {
-                            unsafe {
-                                ptr::drop_in_place(self as *mut Any as *mut $name);
-                            }
-                        }
-                    )*
-                }
-
-            }
-        }
-
-        impl fmt::Debug for Any {
-            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-                match self.as_subtype() {
-                    $(
-                        AnySubtype::$name(subtype) => {
-                            subtype.fmt(formatter)
-                        }
-                    )*
-                }
-            }
-        }
-
-        impl Hash for Any {
-            fn hash<H: Hasher>(&self, state: &mut H) {
-                match self.as_subtype() {
-                    $(
-                        AnySubtype::$name(subtype) => {
-                            subtype.hash(state)
-                        }
-                    )*
-                }
-            }
-        }
-
+        define_supertype!(Any, AnySubtype, as_any_ref, { $($name),* });
     }
 }
 
 impl TypeTag {
     pub fn into_boxed_abi_type(self) -> BoxedABIType {
-        BoxedABIType::DirectTagged(self)
+        BoxedABIType::UniqueTagged(self)
     }
-}
 
-impl PartialEq for Any {
-    fn eq(&self, rhs: &Any) -> bool {
-        self.as_subtype() == rhs.as_subtype()
+    pub fn into_const_header(self) -> Header {
+        Header::new(self, AllocType::Const)
     }
 }
 
@@ -285,6 +225,14 @@ macro_rules! define_singleton_box {
         pub struct $type_name {
             header: Header,
         }
+
+        impl Boxed for $type_name {
+            fn header(&self) -> Header {
+                self.header
+            }
+        }
+
+        impl UniqueTagged for $type_name {}
 
         #[export_name = $export_name]
         pub static $static_name: $type_name = $type_name {
@@ -310,23 +258,22 @@ macro_rules! define_singleton_box {
     };
 }
 
-macro_rules! define_tagged_union {
-    ($name:ident, $subtype_enum:ident, $member_trait:ident, $as_enum_ref:ident, { $($member:ident),* }) => {
+macro_rules! define_supertype {
+    ($name:ident, $subtype_enum:ident, $as_enum_ref:ident, { $($member:ident),* }) => {
         #[repr(C, align(16))]
         pub struct $name {
             header: Header,
         }
 
-        impl $name {
-            pub fn downcast_ref<T: $member_trait>(&self) -> Option<Gc<T>> {
-                if T::has_tag(self.header.type_tag) {
-                    Some(unsafe { Gc::new(&*(self as *const $name as *const T)) })
-                } else {
-                    None
-                }
+        impl Boxed for $name {
+            fn header(&self) -> Header {
+                self.header
             }
+        }
 
+        impl $name {
             pub fn as_subtype(&self) -> $subtype_enum<'_> {
+                #[allow(unreachable_patterns)]
                 match self.header.type_tag {
                     $(
                         TypeTag::$member => {
@@ -342,61 +289,109 @@ macro_rules! define_tagged_union {
             }
         }
 
-        impl Boxed for $name {}
+        impl DistinctTagged for $name {
+            fn has_tag(type_tag: TypeTag) -> bool {
+                [$( TypeTag::$member ),*].contains(&type_tag)
+            }
+        }
+
+        impl Hash for $name {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                match self.as_subtype() {
+                    $(
+                        $subtype_enum::$member(subtype) => {
+                            subtype.hash(state)
+                        }
+                    )*
+                }
+            }
+        }
+
+        impl PartialEq for $name {
+            fn eq(&self, rhs: &Self) -> bool {
+                self.as_subtype() == rhs.as_subtype()
+            }
+        }
+
+        impl fmt::Debug for $name {
+            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+                match self.as_subtype() {
+                    $(
+                        $subtype_enum::$member(subtype) => {
+                            subtype.fmt(formatter)
+                        }
+                    )*
+                }
+            }
+        }
+
+        impl Drop for $name {
+            fn drop(&mut self) {
+                // Cast to the correct type so Rust knows which Drop implementation to call
+                match self.as_subtype() {
+                    $(
+                        $subtype_enum::$member(subtype) => {
+                            unsafe {
+                                ptr::drop_in_place(subtype as *const $member as *mut $member);
+                            }
+                        }
+                    )*
+                }
+            }
+        }
+
+        #[derive(PartialEq, Debug)]
+        pub enum $subtype_enum<'a> {
+            $( $member(&'a $member) ),*
+        }
+    }
+}
+
+macro_rules! define_tagged_union {
+    ($name:ident, $subtype_enum:ident, $as_enum_ref:ident, { $($member:ident),* }) => {
+        define_supertype!($name, $subtype_enum, $as_enum_ref, { $($member),* });
+
+        $(
+            impl $member {
+                pub fn $as_enum_ref(&self) -> Gc<$name> {
+                    unsafe { Gc::new(&*(self as *const Self as *const $name)) }
+                }
+            }
+
+            impl SubtypeOf<$name> for $member {}
+        )*
 
         impl EncodeBoxedABIType for $name {
             const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Union(stringify!($name), &[
                 $( $member::TYPE_TAG ),*
             ]);
         }
-
-        pub trait $member_trait : Downcastable {}
-
-        impl Downcastable for $name {
-            fn has_tag(type_tag: TypeTag) -> bool {
-                [$( TypeTag::$member ),*].contains(&type_tag)
-            }
-        }
-
-        $(
-            impl $member_trait for $member {}
-
-            impl $member {
-                pub fn $as_enum_ref(&self) -> Gc<$name> {
-                    unsafe { Gc::new(&*(self as *const Self as *const $name)) }
-                }
-            }
-        )*
-
-        pub enum $subtype_enum<'a> {
-            $( $member(&'a $member) ),*
-        }
     };
 }
 
-define_direct_tagged_boxes! {
+define_const_tagged_boxes! {
     Float,
     Int,
     Char,
     Str,
     Sym,
-    TopPair,
+    Pair,
     Nil,
     True,
     False,
-    TopVector,
+    Vector,
     FunThunk
 }
 
 define_singleton_box!(True, TRUE_INSTANCE, "ARRET_TRUE");
 define_singleton_box!(False, FALSE_INSTANCE, "ARRET_FALSE");
 
-define_tagged_union!(Num, NumSubtype, NumMember, as_num_ref, {
+define_tagged_union!(Num, NumSubtype, as_num_ref, {
     Int,
     Float
 });
 
-define_tagged_union!(Bool, BoolSubtype, BoolMember, as_bool_ref, { True, False });
+define_tagged_union!(Bool, BoolSubtype, as_bool_ref, { True, False });
 
 impl Bool {
     pub fn singleton_ref(value: bool) -> Gc<Bool> {
@@ -412,17 +407,6 @@ impl Bool {
             BoolSubtype::True(_) => true,
             BoolSubtype::False(_) => false,
         }
-    }
-}
-
-define_tagged_union!(TopList, TopListSubtype, TopListMember, as_top_list_ref, {
-    TopPair,
-    Nil
-});
-
-impl TopList {
-    pub fn as_list(&self) -> Gc<List<Any>> {
-        unsafe { Gc::new(&*(self as *const TopList as *const List<Any>)) }
     }
 }
 

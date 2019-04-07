@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 use std::{fmt, mem};
 
 use crate::boxed::refs::Gc;
-use crate::boxed::{AllocType, Any, BoxSize, ConstructableFrom, DirectTagged, Header};
+use crate::boxed::*;
 use crate::intern::Interner;
 use crate::task;
 
@@ -16,6 +16,14 @@ pub struct FunThunk {
     pub(crate) closure: Closure,
     entry: ThunkEntry,
 }
+
+impl Boxed for FunThunk {
+    fn header(&self) -> Header {
+        self.header
+    }
+}
+
+impl UniqueTagged for FunThunk {}
 
 type FunThunkInput = (Closure, ThunkEntry);
 
@@ -78,7 +86,6 @@ mod test {
     use super::*;
     use crate::boxed;
     use crate::boxed::heap::Heap;
-    use crate::boxed::prelude::*;
     use std::mem;
 
     extern "C" fn identity_entry(_: &mut task::Task, _closure: Closure, rest: Gc<Any>) -> Gc<Any> {

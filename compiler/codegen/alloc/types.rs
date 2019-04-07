@@ -107,7 +107,7 @@ pub fn gen_alloc_boxed_pair(
     } = input;
 
     unsafe {
-        let alloced_pair = gen_alloced_box::<boxed::TopPair>(
+        let alloced_pair = gen_alloced_box::<boxed::Pair>(
             tcx,
             builder,
             active_alloc,

@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::{fmt, mem, ptr};
 
-use crate::boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
+use crate::boxed::*;
 use crate::intern::Interner;
 
 #[repr(C, align(16))]
@@ -11,6 +11,14 @@ pub struct Str {
     inline_byte_length: u8,
     padding: [u8; Str::MAX_INLINE_BYTES],
 }
+
+impl Boxed for Str {
+    fn header(&self) -> Header {
+        self.header
+    }
+}
+
+impl UniqueTagged for Str {}
 
 impl Str {
     pub const MAX_INLINE_BYTES: usize = 29;

@@ -374,7 +374,7 @@ mod test {
                 abi_type: ABIType::Int,
                 capture: ParamCapture::Never,
             }],
-            ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))),
+            ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::UniqueTagged(TypeTag::Int))),
             symbol: "",
         };
 
@@ -387,7 +387,7 @@ mod test {
             arret_type: "(& Int -> false)",
             takes_task: false,
             params: &[ParamABIType {
-                abi_type: ABIType::Boxed(BoxedABIType::List(&BoxedABIType::DirectTagged(
+                abi_type: ABIType::Boxed(BoxedABIType::List(&BoxedABIType::UniqueTagged(
                     TypeTag::Int,
                 ))),
                 capture: ParamCapture::Auto,
@@ -469,7 +469,7 @@ mod test {
             arret_type: "(unbound)",
             takes_task: false,
             params: &[ParamABIType {
-                abi_type: ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int)),
+                abi_type: ABIType::Boxed(BoxedABIType::UniqueTagged(TypeTag::Int)),
                 capture: ParamCapture::Auto,
             }],
             ret: RetABIType::Inhabited(ABIType::Bool),
@@ -486,7 +486,7 @@ mod test {
             arret_type: "Str",
             takes_task: false,
             params: &[ParamABIType {
-                abi_type: ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int)),
+                abi_type: ABIType::Boxed(BoxedABIType::UniqueTagged(TypeTag::Int)),
                 capture: ParamCapture::Auto,
             }],
             ret: RetABIType::Inhabited(ABIType::Bool),
@@ -503,7 +503,7 @@ mod test {
             arret_type: "(& Int -> true)",
             takes_task: false,
             params: &[ParamABIType {
-                abi_type: ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int)),
+                abi_type: ABIType::Boxed(BoxedABIType::UniqueTagged(TypeTag::Int)),
                 capture: ParamCapture::Auto,
             }],
             ret: RetABIType::Inhabited(ABIType::Bool),
@@ -529,7 +529,7 @@ mod test {
                     capture: ParamCapture::Never,
                 },
             ],
-            ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))),
+            ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::UniqueTagged(TypeTag::Int))),
             symbol: "",
         };
 
@@ -547,7 +547,7 @@ mod test {
                 abi_type: ABIType::Int,
                 capture: ParamCapture::Never,
             }],
-            ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))),
+            ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::UniqueTagged(TypeTag::Int))),
             symbol: "",
         };
 
@@ -566,7 +566,7 @@ mod test {
                 abi_type: ABIType::Int,
                 capture: ParamCapture::Never,
             }],
-            ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::DirectTagged(TypeTag::Int))),
+            ret: RetABIType::Inhabited(ABIType::Boxed(BoxedABIType::UniqueTagged(TypeTag::Int))),
             symbol: "",
         };
 

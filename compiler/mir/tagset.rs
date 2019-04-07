@@ -95,14 +95,14 @@ where
                 ty::Ty::Fun(_) | ty::Ty::TopFun(_) | ty::Ty::TyPred(_) | ty::Ty::EqPred => {
                     TypeTag::FunThunk.into()
                 }
-                ty::Ty::Vector(_) | ty::Ty::Vectorof(_) => TypeTag::TopVector.into(),
+                ty::Ty::Vector(_) | ty::Ty::Vectorof(_) => TypeTag::Vector.into(),
                 ty::Ty::List(list) => {
                     if list.is_empty() {
                         TypeTag::Nil.into()
                     } else if !list.fixed().is_empty() {
-                        TypeTag::TopPair.into()
+                        TypeTag::Pair.into()
                     } else {
-                        [TypeTag::Nil, TypeTag::TopPair].iter().collect()
+                        [TypeTag::Nil, TypeTag::Pair].iter().collect()
                     }
                 }
                 ty::Ty::Union(members) => members
@@ -125,10 +125,10 @@ impl<'a> From<&'a abitype::BoxedABIType> for TypeTagSet {
 
         match boxed_abi_type {
             BoxedABIType::Any => TypeTagSet::all(),
-            BoxedABIType::DirectTagged(type_tag) => (*type_tag).into(),
-            BoxedABIType::List(_) => [TypeTag::TopPair, TypeTag::Nil].iter().collect(),
-            BoxedABIType::Pair(_) => TypeTag::TopPair.into(),
-            BoxedABIType::Vector(_) => TypeTag::TopVector.into(),
+            BoxedABIType::UniqueTagged(type_tag) => (*type_tag).into(),
+            BoxedABIType::List(_) => [TypeTag::Pair, TypeTag::Nil].iter().collect(),
+            BoxedABIType::Pair(_) => TypeTag::Pair.into(),
+            BoxedABIType::Vector(_) => TypeTag::Vector.into(),
             BoxedABIType::Union(_, type_tags) => type_tags.iter().collect(),
         }
     }
@@ -188,9 +188,9 @@ mod test {
     #[test]
     fn basic_operations() {
         let empty_set = TypeTagSet::new();
-        let list_set: TypeTagSet = [TypeTag::Nil, TypeTag::TopPair].iter().cloned().collect();
+        let list_set: TypeTagSet = [TypeTag::Nil, TypeTag::Pair].iter().cloned().collect();
         let nil_sym_set: TypeTagSet = [TypeTag::Nil, TypeTag::Sym].iter().cloned().collect();
-        let pair_set: TypeTagSet = TypeTag::TopPair.into();
+        let pair_set: TypeTagSet = TypeTag::Pair.into();
         let nil_set: TypeTagSet = TypeTag::Nil.into();
         let full_set = TypeTagSet::all();
 
@@ -222,7 +222,7 @@ mod test {
         use std::collections::HashSet;
 
         let empty_set = TypeTagSet::new();
-        let list_set: TypeTagSet = [TypeTag::Nil, TypeTag::TopPair].iter().collect();
+        let list_set: TypeTagSet = [TypeTag::Nil, TypeTag::Pair].iter().collect();
         let nil_set: TypeTagSet = TypeTag::Nil.into();
         let full_set = TypeTagSet::all();
 
@@ -234,7 +234,7 @@ mod test {
 
         let list_hash_set: HashSet<TypeTag> = list_set.into_iter().collect();
         assert_eq!(2, list_hash_set.len());
-        assert!(list_hash_set.contains(&TypeTag::TopPair));
+        assert!(list_hash_set.contains(&TypeTag::Pair));
         assert!(list_hash_set.contains(&TypeTag::Nil));
 
         assert_eq!(ALL_TYPE_TAGS.len(), full_set.into_iter().count());

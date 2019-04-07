@@ -19,8 +19,8 @@ pub fn list_value_length(value: &Value) -> Option<usize> {
             }
         }
         Value::Const(any_ref) => any_ref
-            .downcast_ref::<boxed::TopList>()
-            .map(|top_list| top_list.as_list().len()),
+            .downcast_ref::<boxed::List<boxed::Any>>()
+            .map(|list_ref| list_ref.len()),
         _ => None,
     }
 }
@@ -64,9 +64,8 @@ impl UnsizedListIterator {
                 use runtime::boxed;
 
                 let const_pair = any_ref
-                    .downcast_ref::<boxed::TopPair>()
-                    .expect("tried to pop off non-pair constant")
-                    .as_pair();
+                    .downcast_ref::<boxed::Pair<boxed::Any>>()
+                    .expect("tried to pop off non-pair constant");
 
                 let tail = const_pair.rest();
                 self.rest = if tail.is_empty() {

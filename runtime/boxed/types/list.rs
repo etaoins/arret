@@ -5,20 +5,22 @@ use std::{fmt, mem};
 
 use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
 use crate::boxed::refs::Gc;
-use crate::boxed::{
-    AllocType, Any, AsHeap, BoxSize, Boxed, ConstructableFrom, DirectTagged, Header, TypeTag,
-};
+use crate::boxed::*;
 use crate::intern::Interner;
 
 #[repr(C, align(16))]
-pub struct Pair<T: Boxed> {
+pub struct Pair<T: Boxed = Any> {
     header: Header,
     list_length: usize,
     pub(crate) head: Gc<T>,
     pub(crate) rest: Gc<List<T>>,
 }
 
-impl<T: Boxed> Boxed for Pair<T> {}
+impl<T: Boxed> Boxed for Pair<T> {
+    fn header(&self) -> Header {
+        self.header
+    }
+}
 
 impl<T: Boxed> EncodeBoxedABIType for Pair<T>
 where
@@ -28,8 +30,37 @@ where
 }
 
 impl<T: Boxed> Pair<T> {
+    pub fn size() -> BoxSize {
+        // TODO: It'd be nice to expose this as const BOX_SIZE: BoxSize once `if` is allowed in
+        // const contexts
+        if mem::size_of::<Self>() == 16 {
+            BoxSize::Size16
+        } else if mem::size_of::<Self>() == 32 {
+            BoxSize::Size32
+        } else {
+            unreachable!("Unsupported pair size!")
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.list_length
+    }
+
+    pub fn is_empty(&self) -> bool {
+        // This is to make Clippy happy since we have `len`
+        false
+    }
+
+    pub fn head(&self) -> Gc<T> {
+        self.head
+    }
+
+    pub fn rest(&self) -> Gc<List<T>> {
+        self.rest
+    }
+
     pub fn as_list(&self) -> Gc<List<T>> {
-        unsafe { Gc::new(self as *const Self as *const List<T>) }
+        unsafe { Gc::new(&*(self as *const _ as *const List<T>)) }
     }
 }
 
@@ -47,7 +78,7 @@ where
     T: Boxed + Hash,
 {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        TypeTag::TopPair.hash(state);
+        TypeTag::Pair.hash(state);
         self.head().hash(state);
         self.rest().hash(state);
     }
@@ -66,13 +97,13 @@ type PairInput<T> = (Gc<T>, Gc<List<T>>);
 
 impl<T: Boxed> ConstructableFrom<PairInput<T>> for Pair<T> {
     fn size_for_value(_: &PairInput<T>) -> BoxSize {
-        TopPair::size()
+        Self::size()
     }
 
     fn construct(value: PairInput<T>, alloc_type: AllocType, _: &mut Interner) -> Pair<T> {
         Pair {
             header: Header {
-                type_tag: TypeTag::TopPair,
+                type_tag: TypeTag::Pair,
                 alloc_type,
             },
             head: value.0,
@@ -82,33 +113,8 @@ impl<T: Boxed> ConstructableFrom<PairInput<T>> for Pair<T> {
     }
 }
 
-impl<T: Boxed> Pair<T> {
-    pub fn len(&self) -> usize {
-        self.list_length
-    }
-
-    pub fn is_empty(&self) -> bool {
-        // This is to make Clippy happy since we have `len`
-        false
-    }
-
-    pub fn head(&self) -> Gc<T> {
-        self.head
-    }
-
-    pub fn rest(&self) -> Gc<List<T>> {
-        self.rest
-    }
-}
-
-impl Pair<Any> {
-    pub fn as_top_pair(&self) -> Gc<TopPair> {
-        unsafe { Gc::new(&*(self as *const _ as *const TopPair)) }
-    }
-}
-
 #[repr(C, align(16))]
-pub struct List<T: Boxed> {
+pub struct List<T: Boxed = Any> {
     header: Header,
     list_length: usize,
     phantom: PhantomData<T>,
@@ -132,7 +138,7 @@ impl<T: Boxed> List<T> {
         Self::new_with_tail(heap, elems, Self::empty())
     }
 
-    /// Creates a list with a head of `elems` and the specifed tail list
+    /// Creates a list with a head of `elems` and the specified tail list
     pub fn new_with_tail(
         heap: &mut impl AsHeap,
         elems: impl DoubleEndedIterator<Item = Gc<T>>,
@@ -159,7 +165,7 @@ impl<T: Boxed> List<T> {
 
     pub fn as_subtype(&self) -> ListSubtype<'_, T> {
         match self.header.type_tag {
-            TypeTag::TopPair => {
+            TypeTag::Pair => {
                 ListSubtype::Pair(unsafe { &*(self as *const List<T> as *const Pair<T>) })
             }
             TypeTag::Nil => ListSubtype::Nil,
@@ -175,10 +181,6 @@ impl<T: Boxed> List<T> {
 
     pub fn is_empty(&self) -> bool {
         self.header.type_tag == TypeTag::Nil
-    }
-
-    pub fn as_any_ref(&self) -> Gc<Any> {
-        unsafe { Gc::new(&*(self as *const Self as *const Any)) }
     }
 
     pub fn iter(&self) -> ListIterator<T> {
@@ -220,7 +222,17 @@ where
     }
 }
 
-impl<T: Boxed> Boxed for List<T> {}
+impl<T: Boxed> Boxed for List<T> {
+    fn header(&self) -> Header {
+        self.header
+    }
+}
+
+impl DistinctTagged for List<Any> {
+    fn has_tag(type_tag: TypeTag) -> bool {
+        [TypeTag::Pair, TypeTag::Nil].contains(&type_tag)
+    }
+}
 
 impl<T: Boxed> EncodeBoxedABIType for List<T>
 where
@@ -237,7 +249,7 @@ impl<T: Boxed> Iterator for ListIterator<T> {
     type Item = Gc<T>;
 
     fn next(&mut self) -> Option<Gc<T>> {
-        // If we use `head` directy the borrow checker gets suspicious
+        // If we use `head` directly the borrow checker gets suspicious
         let head = unsafe { &*(self.head.as_ptr()) };
 
         match head.as_subtype() {
@@ -258,50 +270,6 @@ impl<T: Boxed> ExactSizeIterator for ListIterator<T> {}
 impl<T: Boxed> FusedIterator for ListIterator<T> {}
 
 #[repr(C, align(16))]
-pub struct TopPair {
-    header: Header,
-    list_length: usize,
-    head: Gc<Any>,
-    rest: Gc<List<Any>>,
-}
-
-impl TopPair {
-    pub fn size() -> BoxSize {
-        // TODO: It'd be nice to expose this as const BOX_SIZE: BoxSize once `if` is allowed in
-        // const contexts
-        if mem::size_of::<Self>() == 16 {
-            BoxSize::Size16
-        } else if mem::size_of::<Self>() == 32 {
-            BoxSize::Size32
-        } else {
-            unreachable!("Unsupported pair size!")
-        }
-    }
-
-    pub fn as_pair(&self) -> Gc<Pair<Any>> {
-        unsafe { Gc::new(&*(self as *const TopPair as *const Pair<Any>)) }
-    }
-}
-
-impl PartialEq for TopPair {
-    fn eq(&self, rhs: &TopPair) -> bool {
-        self.as_pair() == rhs.as_pair()
-    }
-}
-
-impl Hash for TopPair {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_pair().hash(state);
-    }
-}
-
-impl fmt::Debug for TopPair {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        self.as_pair().fmt(formatter)
-    }
-}
-
-#[repr(C, align(16))]
 #[derive(Debug)]
 pub struct Nil {
     header: Header,
@@ -311,11 +279,19 @@ pub struct Nil {
 #[export_name = "ARRET_NIL"]
 pub static NIL_INSTANCE: Nil = Nil {
     header: Header {
-        type_tag: Nil::TYPE_TAG,
+        type_tag: TypeTag::Nil,
         alloc_type: AllocType::Const,
     },
     list_length: 0,
 };
+
+impl Boxed for Nil {
+    fn header(&self) -> Header {
+        self.header
+    }
+}
+
+impl UniqueTagged for Nil {}
 
 impl PartialEq for Nil {
     fn eq(&self, _: &Nil) -> bool {

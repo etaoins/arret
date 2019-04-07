@@ -25,7 +25,7 @@ pub fn gen_boxed_pair(
     llvm_length: LLVMValueRef,
 ) -> LLVMValueRef {
     unsafe {
-        let type_tag = boxed::TypeTag::TopPair;
+        let type_tag = boxed::TypeTag::Pair;
         let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
 
         let members = &mut [
@@ -40,7 +40,7 @@ pub fn gen_boxed_pair(
 
         let global = LLVMAddGlobal(mcx.module, llvm_type, "const_pair\0".as_ptr() as *const _);
         LLVMSetInitializer(global, llvm_value);
-        LLVMSetAlignment(global, mem::align_of::<boxed::TopPair>() as u32);
+        LLVMSetAlignment(global, mem::align_of::<boxed::Pair>() as u32);
 
         annotate_private_global(global);
         global

@@ -44,7 +44,7 @@ fn op_alloc_info(op: &ops::Op) -> Option<AllocInfo> {
         }),
         OpKind::AllocBoxedPair(output_reg, _) => Some(AllocInfo {
             output_reg: *output_reg,
-            box_size: boxed::TopPair::size(),
+            box_size: boxed::Pair::<boxed::Any>::size(),
         }),
         OpKind::AllocBoxedFunThunk(output_reg, _) => Some(AllocInfo {
             output_reg: *output_reg,

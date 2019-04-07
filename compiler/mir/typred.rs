@@ -31,10 +31,8 @@ fn type_tags_for_test_ty(test_ty: ty::pred::TestTy) -> TypeTagSet {
         TestTy::Num => [boxed::TypeTag::Int, boxed::TypeTag::Float]
             .iter()
             .collect(),
-        TestTy::List => [boxed::TypeTag::TopPair, boxed::TypeTag::Nil]
-            .iter()
-            .collect(),
-        TestTy::Vector => boxed::TypeTag::TopVector.into(),
+        TestTy::List => [boxed::TypeTag::Pair, boxed::TypeTag::Nil].iter().collect(),
+        TestTy::Vector => boxed::TypeTag::Vector.into(),
         TestTy::Map => {
             unimplemented!("maps");
         }

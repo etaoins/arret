@@ -27,7 +27,7 @@ fn init_alloced_box_header(
     }
 }
 
-fn gen_stack_alloced_box<T: boxed::DirectTagged>(
+fn gen_stack_alloced_box<T: boxed::ConstTagged>(
     tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,
     value_name: &[u8],
@@ -50,7 +50,7 @@ fn gen_stack_alloced_box<T: boxed::DirectTagged>(
     }
 }
 
-fn gen_heap_alloced_box<T: boxed::DirectTagged>(
+fn gen_heap_alloced_box<T: boxed::ConstTagged>(
     tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,
     active_alloc: &mut ActiveAlloc<'_>,
@@ -106,7 +106,7 @@ fn gen_heap_alloced_box<T: boxed::DirectTagged>(
     }
 }
 
-pub fn gen_alloced_box<T: boxed::DirectTagged>(
+pub fn gen_alloced_box<T: boxed::ConstTagged>(
     tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,
     active_alloc: &mut ActiveAlloc<'_>,

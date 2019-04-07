@@ -7,9 +7,9 @@ use crate::ty;
 
 fn specific_boxed_abi_type_for_type_tag(type_tag: TypeTag) -> abitype::BoxedABIType {
     match type_tag {
-        TypeTag::TopPair => abitype::BoxedABIType::Pair(&abitype::BoxedABIType::Any),
-        TypeTag::TopVector => abitype::BoxedABIType::Vector(&abitype::BoxedABIType::Any),
-        other_tag => abitype::BoxedABIType::DirectTagged(other_tag),
+        TypeTag::Pair => abitype::BoxedABIType::Pair(&abitype::BoxedABIType::Any),
+        TypeTag::Vector => abitype::BoxedABIType::Vector(&abitype::BoxedABIType::Any),
+        other_tag => abitype::BoxedABIType::UniqueTagged(other_tag),
     }
 }
 
@@ -29,8 +29,8 @@ fn specific_boxed_abi_type_for_type_tags(possible_type_tags: TypeTagSet) -> abit
     if possible_type_tags.len() == 1 {
         let single_type_tag = possible_type_tags.into_iter().next().unwrap();
         specific_boxed_abi_type_for_type_tag(single_type_tag)
-    } else if possible_type_tags == [TypeTag::TopPair, TypeTag::Nil].iter().collect() {
-        boxed::TopList::BOXED_ABI_TYPE
+    } else if possible_type_tags == [TypeTag::Pair, TypeTag::Nil].iter().collect() {
+        boxed::List::<boxed::Any>::BOXED_ABI_TYPE
     } else if possible_type_tags == [TypeTag::Float, TypeTag::Int].iter().collect() {
         boxed::Num::BOXED_ABI_TYPE
     } else if possible_type_tags == [TypeTag::True, TypeTag::False].iter().collect() {
@@ -113,7 +113,10 @@ mod test {
         assert_abi_type_for_str(abitype::ABIType::Int, "Int");
         assert_abi_type_for_str(boxed::Num::BOXED_ABI_TYPE.into(), "Num");
 
-        assert_abi_type_for_str(boxed::TopList::BOXED_ABI_TYPE.into(), "(List & Any)");
+        assert_abi_type_for_str(
+            boxed::List::<boxed::Any>::BOXED_ABI_TYPE.into(),
+            "(List & Any)",
+        );
 
         assert_abi_type_for_str(abitype::ABIType::Char, "Char");
 

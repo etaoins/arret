@@ -12,14 +12,18 @@ const MAX_32BYTE_INLINE_LENGTH: usize = ((32 - 8) / mem::size_of::<Gc<Any>>());
 const MAX_INLINE_LENGTH: usize = MAX_32BYTE_INLINE_LENGTH;
 
 #[repr(C, align(16))]
-pub struct Vector<T: Boxed> {
+pub struct Vector<T: Boxed = Any> {
     header: Header,
     inline_length: u32,
     padding: [u8; 24],
     phantom: marker::PhantomData<T>,
 }
 
-impl<T: Boxed> Boxed for Vector<T> {}
+impl<T: Boxed> Boxed for Vector<T> {
+    fn header(&self) -> Header {
+        self.header
+    }
+}
 
 impl<'a, T: Boxed> ConstructableFrom<&'a [Gc<T>]> for Vector<T> {
     fn size_for_value(values: &&[Gc<T>]) -> BoxSize {
@@ -34,7 +38,7 @@ impl<'a, T: Boxed> ConstructableFrom<&'a [Gc<T>]> for Vector<T> {
 
     fn construct(values: &[Gc<T>], alloc_type: AllocType, _: &mut Interner) -> Vector<T> {
         let header = Header {
-            type_tag: TypeTag::TopVector,
+            type_tag: TypeTag::Vector,
             alloc_type,
         };
 
@@ -91,10 +95,6 @@ impl<T: Boxed> Vector<T> {
 
     pub fn is_empty(&self) -> bool {
         self.inline_length == 0
-    }
-
-    pub fn as_any_ref(&self) -> Gc<Any> {
-        unsafe { Gc::new(&*(self as *const Self as *const Any)) }
     }
 
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &Gc<T>> {
@@ -164,38 +164,13 @@ where
     Large(&'a LargeVector<T>),
 }
 
-#[repr(C, align(16))]
-pub struct TopVector {
-    header: Header,
-}
-
-impl TopVector {
-    pub fn as_vector(&self) -> Gc<Vector<Any>> {
-        unsafe { Gc::new(&*(self as *const TopVector as *const Vector<Any>)) }
-    }
-}
-
-impl PartialEq for TopVector {
-    fn eq(&self, rhs: &TopVector) -> bool {
-        self.as_vector() == rhs.as_vector()
-    }
-}
-
-impl Hash for TopVector {
+impl<T: Boxed> Hash for Vector<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let vector = self.as_vector();
-
-        TypeTag::TopVector.hash(state);
-        state.write_usize(vector.len());
-        for value in vector.iter() {
+        TypeTag::Vector.hash(state);
+        state.write_usize(self.len());
+        for value in self.iter() {
             value.hash(state);
         }
-    }
-}
-
-impl fmt::Debug for TopVector {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        self.as_vector().fmt(formatter)
     }
 }
 

@@ -120,7 +120,7 @@ impl StrongPass {
                     let new_interned_name = self.new_heap.interner.intern(sym_name);
                     sym_ref.interned = new_interned_name;
                 }
-                TypeTag::TopPair => {
+                TypeTag::Pair => {
                     let pair_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Pair<Any>) };
 
                     self.visit_box(&mut pair_ref.head);
@@ -130,7 +130,7 @@ impl StrongPass {
                         unsafe { &mut *(&mut pair_ref.rest as *mut Gc<List<Any>> as *mut Gc<Any>) };
                     continue;
                 }
-                TypeTag::TopVector => {
+                TypeTag::Vector => {
                     let vec_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Vector<Any>) };
 
                     for elem_ref in vec_ref.values_mut() {

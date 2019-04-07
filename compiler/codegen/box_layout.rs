@@ -19,7 +19,7 @@ pub enum BoxLayout {
     Num,
     List,
     Union,
-    DirectTagged(boxed::TypeTag),
+    ConstTagged(boxed::TypeTag),
 }
 
 impl BoxLayout {
@@ -34,17 +34,17 @@ impl BoxLayout {
             BoxLayout::Num => b"boxed_num\0",
             BoxLayout::List => b"boxed_list\0",
             BoxLayout::Union => b"boxed_union\0",
-            BoxLayout::DirectTagged(TypeTag::Nil) => b"boxed_nil\0",
-            BoxLayout::DirectTagged(TypeTag::True) => b"boxed_true\0",
-            BoxLayout::DirectTagged(TypeTag::False) => b"boxed_false\0",
-            BoxLayout::DirectTagged(TypeTag::Int) => b"boxed_int\0",
-            BoxLayout::DirectTagged(TypeTag::Float) => b"boxed_float\0",
-            BoxLayout::DirectTagged(TypeTag::Char) => b"boxed_char\0",
-            BoxLayout::DirectTagged(TypeTag::Str) => b"boxed_str\0",
-            BoxLayout::DirectTagged(TypeTag::Sym) => b"boxed_sym\0",
-            BoxLayout::DirectTagged(TypeTag::FunThunk) => b"boxed_fun_thunk\0",
-            BoxLayout::DirectTagged(TypeTag::TopPair) => b"boxed_pair\0",
-            BoxLayout::DirectTagged(TypeTag::TopVector) => b"boxed_vector\0",
+            BoxLayout::ConstTagged(TypeTag::Nil) => b"boxed_nil\0",
+            BoxLayout::ConstTagged(TypeTag::True) => b"boxed_true\0",
+            BoxLayout::ConstTagged(TypeTag::False) => b"boxed_false\0",
+            BoxLayout::ConstTagged(TypeTag::Int) => b"boxed_int\0",
+            BoxLayout::ConstTagged(TypeTag::Float) => b"boxed_float\0",
+            BoxLayout::ConstTagged(TypeTag::Char) => b"boxed_char\0",
+            BoxLayout::ConstTagged(TypeTag::Str) => b"boxed_str\0",
+            BoxLayout::ConstTagged(TypeTag::Sym) => b"boxed_sym\0",
+            BoxLayout::ConstTagged(TypeTag::FunThunk) => b"boxed_fun_thunk\0",
+            BoxLayout::ConstTagged(TypeTag::Pair) => b"boxed_pair\0",
+            BoxLayout::ConstTagged(TypeTag::Vector) => b"boxed_vector\0",
         }
     }
 
@@ -63,28 +63,28 @@ impl BoxLayout {
 
                     members.push(LLVMArrayType(llvm_byte, padding_bytes as u32));
                 }
-                BoxLayout::DirectTagged(TypeTag::Int) => {
+                BoxLayout::ConstTagged(TypeTag::Int) => {
                     members.push(LLVMInt64TypeInContext(tcx.llx));
                 }
-                BoxLayout::DirectTagged(TypeTag::Float) => {
+                BoxLayout::ConstTagged(TypeTag::Float) => {
                     members.push(LLVMDoubleTypeInContext(tcx.llx));
                 }
-                BoxLayout::DirectTagged(TypeTag::Char) => {
+                BoxLayout::ConstTagged(TypeTag::Char) => {
                     members.push(LLVMInt32TypeInContext(tcx.llx));
                 }
-                BoxLayout::DirectTagged(TypeTag::Str) => {
+                BoxLayout::ConstTagged(TypeTag::Str) => {
                     members.push(LLVMInt8TypeInContext(tcx.llx));
                 }
-                BoxLayout::DirectTagged(TypeTag::Sym) => {
+                BoxLayout::ConstTagged(TypeTag::Sym) => {
                     members.push(LLVMInt64TypeInContext(tcx.llx));
                 }
-                BoxLayout::DirectTagged(TypeTag::FunThunk) => {
+                BoxLayout::ConstTagged(TypeTag::FunThunk) => {
                     members.extend_from_slice(&[
                         tcx.closure_llvm_type(),
                         LLVMPointerType(tcx.fun_abi_to_llvm_type(&GenABI::thunk_abi()), 0),
                     ]);
                 }
-                BoxLayout::DirectTagged(TypeTag::TopPair) => {
+                BoxLayout::ConstTagged(TypeTag::Pair) => {
                     let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
                     let llvm_any_list_ptr =
                         tcx.boxed_abi_to_llvm_ptr_type(&TOP_LIST_BOXED_ABI_TYPE);
@@ -98,10 +98,10 @@ impl BoxLayout {
                 BoxLayout::List => {
                     members.push(tcx.usize_llvm_type());
                 }
-                BoxLayout::DirectTagged(TypeTag::Nil)
-                | BoxLayout::DirectTagged(TypeTag::True)
-                | BoxLayout::DirectTagged(TypeTag::False)
-                | BoxLayout::DirectTagged(TypeTag::TopVector)
+                BoxLayout::ConstTagged(TypeTag::Nil)
+                | BoxLayout::ConstTagged(TypeTag::True)
+                | BoxLayout::ConstTagged(TypeTag::False)
+                | BoxLayout::ConstTagged(TypeTag::Vector)
                 | BoxLayout::Bool
                 | BoxLayout::Num
                 | BoxLayout::Union => {}
@@ -120,9 +120,9 @@ impl From<&BoxedABIType> for BoxLayout {
             &boxed::Bool::BOXED_ABI_TYPE => BoxLayout::Bool,
             BoxedABIType::Union(_, _) => BoxLayout::Union,
 
-            BoxedABIType::DirectTagged(type_tag) => BoxLayout::DirectTagged(*type_tag),
-            BoxedABIType::Pair(_) => BoxLayout::DirectTagged(TypeTag::TopPair),
-            BoxedABIType::Vector(_) => BoxLayout::DirectTagged(TypeTag::TopVector),
+            BoxedABIType::UniqueTagged(type_tag) => BoxLayout::ConstTagged(*type_tag),
+            BoxedABIType::Pair(_) => BoxLayout::ConstTagged(TypeTag::Pair),
+            BoxedABIType::Vector(_) => BoxLayout::ConstTagged(TypeTag::Vector),
         }
     }
 }

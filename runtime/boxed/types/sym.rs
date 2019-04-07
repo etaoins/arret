@@ -1,7 +1,7 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-use crate::boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header};
+use crate::boxed::*;
 use crate::intern::{InternedSym, Interner};
 
 #[repr(C, align(16))]
@@ -11,6 +11,14 @@ pub struct Sym {
     // indexed symbols in new heaps
     pub(crate) interned: InternedSym,
 }
+
+impl Boxed for Sym {
+    fn header(&self) -> Header {
+        self.header
+    }
+}
+
+impl UniqueTagged for Sym {}
 
 impl<'a> ConstructableFrom<&'a str> for Sym {
     fn size_for_value(_: &&str) -> BoxSize {

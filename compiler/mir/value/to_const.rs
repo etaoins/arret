@@ -18,8 +18,8 @@ pub fn list_to_const(
     let rest_box = match rest {
         Some(rest) => {
             let rest_boxed = value_to_const(ehx, rest)?;
-            if let Some(top_list) = rest_boxed.downcast_ref::<boxed::TopList>() {
-                top_list.as_list()
+            if let Some(list_ref) = rest_boxed.downcast_ref::<boxed::List<boxed::Any>>() {
+                list_ref
             } else {
                 panic!("Attempted to build list with non-list tail");
             }

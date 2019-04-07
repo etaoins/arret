@@ -2,7 +2,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 
 use crate::boxed::refs::Gc;
-use crate::boxed::{AllocType, BoxSize, ConstructableFrom, DirectTagged, Header, Num};
+use crate::boxed::*;
 use crate::intern::Interner;
 
 #[repr(C, align(16))]
@@ -10,6 +10,14 @@ pub struct Float {
     header: Header,
     value: f64,
 }
+
+impl Boxed for Float {
+    fn header(&self) -> Header {
+        self.header
+    }
+}
+
+impl UniqueTagged for Float {}
 
 impl ConstructableFrom<f64> for Float {
     fn size_for_value(_: &f64) -> BoxSize {
