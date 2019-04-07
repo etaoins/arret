@@ -10,12 +10,7 @@ pub struct Char {
     value: char,
 }
 
-impl Boxed for Char {
-    fn header(&self) -> Header {
-        self.header
-    }
-}
-
+impl Boxed for Char {}
 impl UniqueTagged for Char {}
 
 impl ConstructableFrom<char> for Char {

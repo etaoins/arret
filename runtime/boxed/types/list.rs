@@ -16,12 +16,7 @@ pub struct Pair<T: Boxed = Any> {
     pub(crate) rest: Gc<List<T>>,
 }
 
-impl<T: Boxed> Boxed for Pair<T> {
-    fn header(&self) -> Header {
-        self.header
-    }
-}
-
+impl<T: Boxed> Boxed for Pair<T> {}
 impl<T: Boxed> EncodeBoxedABIType for Pair<T>
 where
     T: EncodeBoxedABIType,
@@ -224,11 +219,7 @@ where
     }
 }
 
-impl<T: Boxed> Boxed for List<T> {
-    fn header(&self) -> Header {
-        self.header
-    }
-}
+impl<T: Boxed> Boxed for List<T> {}
 
 impl DistinctTagged for List<Any> {
     fn has_tag(type_tag: TypeTag) -> bool {
@@ -287,12 +278,7 @@ pub static NIL_INSTANCE: Nil = Nil {
     list_length: 0,
 };
 
-impl Boxed for Nil {
-    fn header(&self) -> Header {
-        self.header
-    }
-}
-
+impl Boxed for Nil {}
 impl UniqueTagged for Nil {}
 
 impl PartialEq for Nil {

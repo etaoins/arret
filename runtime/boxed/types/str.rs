@@ -12,12 +12,7 @@ pub struct Str {
     padding: [u8; Str::MAX_INLINE_BYTES],
 }
 
-impl Boxed for Str {
-    fn header(&self) -> Header {
-        self.header
-    }
-}
-
+impl Boxed for Str {}
 impl UniqueTagged for Str {}
 
 impl Str {

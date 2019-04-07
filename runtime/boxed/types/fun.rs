@@ -17,12 +17,7 @@ pub struct FunThunk {
     entry: ThunkEntry,
 }
 
-impl Boxed for FunThunk {
-    fn header(&self) -> Header {
-        self.header
-    }
-}
-
+impl Boxed for FunThunk {}
 impl UniqueTagged for FunThunk {}
 
 type FunThunkInput = (Closure, ThunkEntry);

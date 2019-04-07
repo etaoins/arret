@@ -11,12 +11,7 @@ pub struct Int {
     value: i64,
 }
 
-impl Boxed for Int {
-    fn header(&self) -> Header {
-        self.header
-    }
-}
-
+impl Boxed for Int {}
 impl UniqueTagged for Int {}
 
 impl ConstructableFrom<i64> for Int {

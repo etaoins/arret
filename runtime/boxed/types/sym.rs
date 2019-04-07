@@ -12,11 +12,7 @@ pub struct Sym {
     pub(crate) interned: InternedSym,
 }
 
-impl Boxed for Sym {
-    fn header(&self) -> Header {
-        self.header
-    }
-}
+impl Boxed for Sym {}
 
 impl UniqueTagged for Sym {}
 

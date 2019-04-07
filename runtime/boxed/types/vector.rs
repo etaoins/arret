@@ -19,11 +19,7 @@ pub struct Vector<T: Boxed = Any> {
     phantom: marker::PhantomData<T>,
 }
 
-impl<T: Boxed> Boxed for Vector<T> {
-    fn header(&self) -> Header {
-        self.header
-    }
-}
+impl<T: Boxed> Boxed for Vector<T> {}
 
 impl<'a, T: Boxed> ConstructableFrom<&'a [Gc<T>]> for Vector<T> {
     fn size_for_value(values: &&[Gc<T>]) -> BoxSize {

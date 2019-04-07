@@ -11,12 +11,7 @@ pub struct Float {
     value: f64,
 }
 
-impl Boxed for Float {
-    fn header(&self) -> Header {
-        self.header
-    }
-}
-
+impl Boxed for Float {}
 impl UniqueTagged for Float {}
 
 impl ConstructableFrom<f64> for Float {

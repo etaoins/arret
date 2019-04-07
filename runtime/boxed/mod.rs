@@ -104,7 +104,9 @@ pub trait Boxed: Sized + Hash + PartialEq {
         unsafe { Gc::new(&*(self as *const Self as *const Any)) }
     }
 
-    fn header(&self) -> Header;
+    fn header(&self) -> Header {
+        self.as_any_ref().header
+    }
 }
 
 impl EncodeBoxedABIType for Any {
@@ -226,11 +228,7 @@ macro_rules! define_singleton_box {
             header: Header,
         }
 
-        impl Boxed for $type_name {
-            fn header(&self) -> Header {
-                self.header
-            }
-        }
+        impl Boxed for $type_name {}
 
         impl UniqueTagged for $type_name {}
 
@@ -266,9 +264,6 @@ macro_rules! define_supertype {
         }
 
         impl Boxed for $name {
-            fn header(&self) -> Header {
-                self.header
-            }
         }
 
         impl $name {
