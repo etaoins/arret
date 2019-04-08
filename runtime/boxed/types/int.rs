@@ -16,10 +16,7 @@ impl UniqueTagged for Int {}
 impl Int {
     pub fn new(heap: &mut impl AsHeap, value: i64) -> Gc<Int> {
         heap.as_heap_mut().place_box(Int {
-            header: Header {
-                type_tag: Self::TYPE_TAG,
-                alloc_type: Self::size().to_heap_alloc_type(),
-            },
+            header: Self::TYPE_TAG.to_heap_header(Self::size()),
             value,
         })
     }

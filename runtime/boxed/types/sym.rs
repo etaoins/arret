@@ -21,12 +21,13 @@ impl Sym {
         let interned = heap.interner_mut().intern(value);
 
         heap.place_box(Sym {
-            header: Header {
-                type_tag: Self::TYPE_TAG,
-                alloc_type: AllocType::Heap16,
-            },
+            header: Self::TYPE_TAG.to_heap_header(Self::size()),
             interned,
         })
+    }
+
+    pub fn size() -> BoxSize {
+        BoxSize::Size16
     }
 
     pub fn name<'a>(&'a self, interner: &'a Interner) -> &'a str {

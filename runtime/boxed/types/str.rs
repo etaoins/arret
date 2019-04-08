@@ -18,23 +18,20 @@ impl Str {
     pub const MAX_INLINE_BYTES: usize = 29;
 
     pub fn new(heap: &mut impl AsHeap, value: &str) -> Gc<Str> {
-        let alloc_type = match value.len() {
-            0..=13 => AllocType::Heap16,
-            14..=Str::MAX_INLINE_BYTES => AllocType::Heap32,
+        let box_size = match value.len() {
+            0..=13 => BoxSize::Size16,
+            14..=Str::MAX_INLINE_BYTES => BoxSize::Size32,
             _ => {
                 // Too big to fit inline; this needs to be shared
                 if mem::size_of::<Arc<str>>() <= 8 {
-                    AllocType::Heap16
+                    BoxSize::Size16
                 } else {
-                    AllocType::Heap32
+                    BoxSize::Size32
                 }
             }
         };
 
-        let header = Header {
-            type_tag: Self::TYPE_TAG,
-            alloc_type,
-        };
+        let header = Self::TYPE_TAG.to_heap_header(box_size);
 
         let boxed = unsafe {
             if value.len() > Str::MAX_INLINE_BYTES {

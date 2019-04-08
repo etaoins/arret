@@ -26,10 +26,7 @@ where
 impl<T: Boxed> Pair<T> {
     pub fn new(heap: &mut impl AsHeap, head: Gc<T>, rest: Gc<List<T>>) -> Gc<Pair<T>> {
         heap.as_heap_mut().place_box(Pair {
-            header: Header {
-                type_tag: TypeTag::Pair,
-                alloc_type: Self::size().to_heap_alloc_type(),
-            },
+            header: Pair::TYPE_TAG.to_heap_header(Self::size()),
             head,
             rest,
             list_length: rest.len() + 1,

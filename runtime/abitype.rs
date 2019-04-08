@@ -128,7 +128,7 @@ impl EncodeRetABIType for Never {
 
 impl From<boxed::TypeTag> for BoxedABIType {
     fn from(type_tag: boxed::TypeTag) -> BoxedABIType {
-        type_tag.into_boxed_abi_type()
+        type_tag.to_boxed_abi_type()
     }
 }
 
@@ -140,7 +140,7 @@ impl BoxedABIType {
 
 impl From<boxed::TypeTag> for ABIType {
     fn from(type_tag: boxed::TypeTag) -> ABIType {
-        type_tag.into_boxed_abi_type().into_abi_type()
+        type_tag.to_boxed_abi_type().into_abi_type()
     }
 }
 
@@ -171,7 +171,7 @@ impl ABIType {
 impl From<boxed::TypeTag> for ParamABIType {
     fn from(type_tag: boxed::TypeTag) -> ParamABIType {
         type_tag
-            .into_boxed_abi_type()
+            .to_boxed_abi_type()
             .into_abi_type()
             .into_param_abi_type()
     }
@@ -192,7 +192,7 @@ impl From<ABIType> for ParamABIType {
 impl From<boxed::TypeTag> for RetABIType {
     fn from(type_tag: boxed::TypeTag) -> RetABIType {
         type_tag
-            .into_boxed_abi_type()
+            .to_boxed_abi_type()
             .into_abi_type()
             .into_ret_abi_type()
     }

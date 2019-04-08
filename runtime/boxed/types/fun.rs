@@ -22,10 +22,7 @@ impl UniqueTagged for FunThunk {}
 impl FunThunk {
     pub fn new(heap: &mut impl AsHeap, closure: Closure, entry: ThunkEntry) -> Gc<FunThunk> {
         heap.as_heap_mut().place_box(FunThunk {
-            header: Header {
-                type_tag: Self::TYPE_TAG,
-                alloc_type: Self::size().to_heap_alloc_type(),
-            },
+            header: Self::TYPE_TAG.to_heap_header(Self::size()),
             closure,
             entry,
         })

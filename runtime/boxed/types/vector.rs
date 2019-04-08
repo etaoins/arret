@@ -3,7 +3,7 @@ use std::{fmt, marker, mem};
 
 use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
 use crate::boxed::refs::Gc;
-use crate::boxed::{AllocType, Any, AsHeap, Boxed, Header, Heap, TypeTag};
+use crate::boxed::*;
 
 const MAX_16BYTE_INLINE_LENGTH: usize = ((16 - 8) / mem::size_of::<Gc<Any>>());
 const MAX_32BYTE_INLINE_LENGTH: usize = ((32 - 8) / mem::size_of::<Gc<Any>>());
@@ -22,18 +22,15 @@ impl<T: Boxed> Boxed for Vector<T> {}
 
 impl<T: Boxed> Vector<T> {
     pub fn new(heap: &mut impl AsHeap, values: &[Gc<T>]) -> Gc<Vector<T>> {
-        let alloc_type = if values.len() <= MAX_16BYTE_INLINE_LENGTH {
+        let box_size = if values.len() <= MAX_16BYTE_INLINE_LENGTH {
             // 1 cell inline
-            AllocType::Heap16
+            BoxSize::Size16
         } else {
             // 2 cell inline or large
-            AllocType::Heap32
+            BoxSize::Size32
         };
 
-        let header = Header {
-            type_tag: TypeTag::Vector,
-            alloc_type,
-        };
+        let header = Vector::TYPE_TAG.to_heap_header(box_size);
 
         let boxed = unsafe {
             if values.len() <= MAX_INLINE_LENGTH {

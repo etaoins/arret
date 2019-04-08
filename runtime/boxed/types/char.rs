@@ -15,10 +15,7 @@ impl UniqueTagged for Char {}
 impl Char {
     pub fn new(heap: &mut impl AsHeap, value: char) -> Gc<Char> {
         heap.as_heap_mut().place_box(Char {
-            header: Header {
-                type_tag: Self::TYPE_TAG,
-                alloc_type: Self::size().to_heap_alloc_type(),
-            },
+            header: Self::TYPE_TAG.to_heap_header(Self::size()),
             value,
         })
     }

@@ -365,7 +365,7 @@ impl TargetCtx {
             let llvm_type = self.boxed_abi_to_llvm_struct_type(&type_tag.into());
             let global = LLVMAddGlobal(module, llvm_type, name.as_ptr() as *const _);
 
-            let members = &mut [self.llvm_box_header(type_tag.into_const_header())];
+            let members = &mut [self.llvm_box_header(type_tag.to_const_header())];
 
             let llvm_value =
                 LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);

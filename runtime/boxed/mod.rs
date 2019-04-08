@@ -183,12 +183,16 @@ macro_rules! define_const_tagged_boxes {
 }
 
 impl TypeTag {
-    pub fn into_boxed_abi_type(self) -> BoxedABIType {
+    pub fn to_boxed_abi_type(self) -> BoxedABIType {
         BoxedABIType::UniqueTagged(self)
     }
 
-    pub fn into_const_header(self) -> Header {
+    pub fn to_const_header(self) -> Header {
         Header::new(self, AllocType::Const)
+    }
+
+    pub fn to_heap_header(self, box_size: BoxSize) -> Header {
+        Header::new(self, box_size.to_heap_alloc_type())
     }
 }
 

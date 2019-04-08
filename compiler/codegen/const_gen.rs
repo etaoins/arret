@@ -29,7 +29,7 @@ pub fn gen_boxed_pair(
         let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
 
         let members = &mut [
-            tcx.llvm_box_header(type_tag.into_const_header()),
+            tcx.llvm_box_header(type_tag.to_const_header()),
             llvm_length,
             llvm_head,
             llvm_rest,
@@ -63,7 +63,7 @@ pub fn gen_boxed_inline_str(
         let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
 
         let members = &mut [
-            tcx.llvm_box_header(type_tag.into_const_header()),
+            tcx.llvm_box_header(type_tag.to_const_header()),
             LLVMConstInt(llvm_i8, value.len() as u64, 0),
             LLVMConstStringInContext(
                 tcx.llx,
@@ -103,7 +103,7 @@ pub fn gen_boxed_sym(
         let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
 
         let members = &mut [
-            tcx.llvm_box_header(type_tag.into_const_header()),
+            tcx.llvm_box_header(type_tag.to_const_header()),
             LLVMConstInt(llvm_i64, interned_sym.to_raw_u64(), 0),
         ];
         let boxed_llvm_value =
@@ -217,7 +217,7 @@ pub fn gen_boxed_int(
 
         let global = mcx.get_global_or_insert(llvm_type, box_name.as_bytes_with_nul(), || {
             let members = &mut [
-                tcx.llvm_box_header(type_tag.into_const_header()),
+                tcx.llvm_box_header(type_tag.to_const_header()),
                 LLVMConstInt(llvm_i64, value as u64, 1),
             ];
 
@@ -241,7 +241,7 @@ pub fn gen_boxed_float(
         let llvm_double = LLVMDoubleTypeInContext(tcx.llx);
 
         let members = &mut [
-            tcx.llvm_box_header(type_tag.into_const_header()),
+            tcx.llvm_box_header(type_tag.to_const_header()),
             LLVMConstReal(llvm_double, value),
         ];
 
@@ -271,7 +271,7 @@ pub fn gen_boxed_char(
 
         let global = mcx.get_global_or_insert(llvm_type, box_name.as_bytes_with_nul(), || {
             let members = &mut [
-                tcx.llvm_box_header(type_tag.into_const_header()),
+                tcx.llvm_box_header(type_tag.to_const_header()),
                 LLVMConstInt(llvm_i32, value as u64, 1),
             ];
 
@@ -299,7 +299,7 @@ pub fn gen_boxed_fun_thunk(
         let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
 
         let members = &mut [
-            tcx.llvm_box_header(type_tag.into_const_header()),
+            tcx.llvm_box_header(type_tag.to_const_header()),
             llvm_closure,
             llvm_entry_point,
         ];
