@@ -17,10 +17,14 @@ impl Char {
         heap.as_heap_mut().place_box(Char {
             header: Header {
                 type_tag: Self::TYPE_TAG,
-                alloc_type: AllocType::Heap16,
+                alloc_type: Self::size().to_heap_alloc_type(),
             },
             value,
         })
+    }
+
+    pub fn size() -> BoxSize {
+        BoxSize::Size16
     }
 
     pub fn value(&self) -> char {
