@@ -206,14 +206,14 @@ mod test {
     fn lists() {
         let mut heap = boxed::Heap::empty();
 
-        let empty_list = boxed::List::<boxed::Int>::from_values(&mut heap, [].iter().cloned());
+        let empty_list = boxed::List::from_values(&mut heap, [].iter().cloned(), boxed::Int::new);
         assert_write(&mut heap, "()", empty_list.as_any_ref());
 
-        let one_list = boxed::List::<boxed::Int>::from_values(&mut heap, [1].iter().cloned());
+        let one_list = boxed::List::from_values(&mut heap, [1].iter().cloned(), boxed::Int::new);
         assert_write(&mut heap, "(1)", one_list.as_any_ref());
 
         let three_list =
-            boxed::List::<boxed::Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
+            boxed::List::from_values(&mut heap, [1, 2, 3].iter().cloned(), boxed::Int::new);
         assert_write(&mut heap, "(1 2 3)", three_list.as_any_ref());
     }
 
@@ -221,14 +221,16 @@ mod test {
     fn vectors() {
         let mut heap = boxed::Heap::empty();
 
-        let empty_vector = boxed::Vector::<boxed::Int>::from_values(&mut heap, [].iter().cloned());
+        let empty_vector =
+            boxed::Vector::from_values(&mut heap, [].iter().cloned(), boxed::Int::new);
         assert_write(&mut heap, "[]", empty_vector.as_any_ref());
 
-        let one_vector = boxed::Vector::<boxed::Int>::from_values(&mut heap, [1].iter().cloned());
+        let one_vector =
+            boxed::Vector::from_values(&mut heap, [1].iter().cloned(), boxed::Int::new);
         assert_write(&mut heap, "[1]", one_vector.as_any_ref());
 
         let three_vector =
-            boxed::Vector::<boxed::Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
+            boxed::Vector::from_values(&mut heap, [1, 2, 3].iter().cloned(), boxed::Int::new);
         assert_write(&mut heap, "[1 2 3]", three_vector.as_any_ref());
     }
 

@@ -194,12 +194,10 @@ impl WeakPass {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::boxed::{Int, List};
+    use crate::boxed::{Int, List, Str};
 
     #[test]
     fn simple_collect() {
-        use crate::boxed::{ConstructableFrom, Str};
-
         let mut old_heap = Heap::empty();
 
         let mut hello = Str::new(&mut old_heap, "HELLO");
@@ -243,7 +241,7 @@ mod test {
 
     #[test]
     fn sym_collect() {
-        use crate::boxed::{ConstructableFrom, Sym};
+        use crate::boxed::Sym;
 
         let mut old_heap = Heap::empty();
 
@@ -274,7 +272,7 @@ mod test {
 
         let mut old_heap = Heap::empty();
 
-        let mut boxed_list = List::<Int>::from_values(&mut old_heap, [1, 2, 3].iter().cloned());
+        let mut boxed_list = List::from_values(&mut old_heap, [1, 2, 3].iter().cloned(), Int::new);
         assert_eq!(EXPECTED_HEAP_SIZE, old_heap.len());
 
         assert_eq!(3, boxed_list.len());
@@ -304,7 +302,7 @@ mod test {
         for &test_content in &test_contents {
             let mut old_heap = Heap::empty();
             let mut boxed_vec =
-                Vector::<Int>::from_values(&mut old_heap, test_content.iter().cloned());
+                Vector::from_values(&mut old_heap, test_content.iter().cloned(), Int::new);
 
             let mut all_strong = StrongPass::new(old_heap);
             all_strong.visit_box(&mut boxed_vec);

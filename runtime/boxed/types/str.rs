@@ -3,7 +3,6 @@ use std::sync::Arc;
 use std::{fmt, mem, ptr};
 
 use crate::boxed::*;
-use crate::intern::Interner;
 
 #[repr(C, align(16))]
 pub struct Str {
@@ -18,49 +17,26 @@ impl UniqueTagged for Str {}
 impl Str {
     pub const MAX_INLINE_BYTES: usize = 29;
 
-    fn is_inline(&self) -> bool {
-        self.inline_byte_length <= Str::MAX_INLINE_BYTES as u8
-    }
-
-    fn as_repr(&self) -> Repr<'_> {
-        if self.is_inline() {
-            Repr::Inline(unsafe { &*(self as *const Str as *const InlineStr) })
-        } else {
-            Repr::Shared(unsafe { &*(self as *const Str as *const SharedStr) })
-        }
-    }
-
-    pub fn as_str(&self) -> &str {
-        match self.as_repr() {
-            Repr::Inline(inline) => inline.as_str(),
-            Repr::Shared(shared) => shared.shared_str.as_ref(),
-        }
-    }
-}
-
-impl<'a> ConstructableFrom<&'a str> for Str {
-    fn size_for_value(value: &&str) -> BoxSize {
-        match value.len() {
-            0..=13 => BoxSize::Size16,
-            14..=Str::MAX_INLINE_BYTES => BoxSize::Size32,
+    pub fn new(heap: &mut impl AsHeap, value: &str) -> Gc<Str> {
+        let alloc_type = match value.len() {
+            0..=13 => AllocType::Heap16,
+            14..=Str::MAX_INLINE_BYTES => AllocType::Heap32,
             _ => {
                 // Too big to fit inline; this needs to be shared
                 if mem::size_of::<Arc<str>>() <= 8 {
-                    BoxSize::Size16
+                    AllocType::Heap16
                 } else {
-                    BoxSize::Size32
+                    AllocType::Heap32
                 }
             }
-        }
-    }
+        };
 
-    fn construct(value: &str, alloc_type: AllocType, _: &mut Interner) -> Str {
         let header = Header {
             type_tag: Self::TYPE_TAG,
             alloc_type,
         };
 
-        unsafe {
+        let boxed = unsafe {
             if value.len() > Str::MAX_INLINE_BYTES {
                 let shared_str = SharedStr {
                     header,
@@ -84,6 +60,27 @@ impl<'a> ConstructableFrom<&'a str> for Str {
 
                 mem::transmute(inline_str)
             }
+        };
+
+        heap.as_heap_mut().place_box(boxed)
+    }
+
+    fn is_inline(&self) -> bool {
+        self.inline_byte_length <= Str::MAX_INLINE_BYTES as u8
+    }
+
+    fn as_repr(&self) -> Repr<'_> {
+        if self.is_inline() {
+            Repr::Inline(unsafe { &*(self as *const Str as *const InlineStr) })
+        } else {
+            Repr::Shared(unsafe { &*(self as *const Str as *const SharedStr) })
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        match self.as_repr() {
+            Repr::Inline(inline) => inline.as_str(),
+            Repr::Shared(shared) => shared.shared_str.as_ref(),
         }
     }
 }

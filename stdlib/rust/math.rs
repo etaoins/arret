@@ -1,7 +1,6 @@
 use runtime::binding::*;
 
 use runtime::boxed;
-use runtime::boxed::prelude::*;
 use runtime::boxed::refs::Gc;
 use runtime::task::Task;
 

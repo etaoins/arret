@@ -3,7 +3,7 @@ pub mod collect;
 use std::{cmp, mem, ptr};
 
 use crate::boxed::refs::Gc;
-use crate::boxed::{AllocType, Any, ConstructableFrom};
+use crate::boxed::{AllocType, Any, Boxed};
 use crate::intern::Interner;
 
 /// Represents an allocated segment of garbage collected memory
@@ -161,30 +161,25 @@ impl Heap {
         self.current_segment.len() == 0 && self.full_segments.is_empty()
     }
 
-    /// Constructs a new boxed value on the heap
-    pub fn new_box<B, V>(&mut self, value: V) -> Gc<B>
-    where
-        B: ConstructableFrom<V>,
-    {
-        let heap_size = B::size_for_value(&value);
+    /// Places a new boxed value on the heap
+    pub fn place_box<T: Boxed>(&mut self, boxed: T) -> Gc<T> {
+        let heap_size = boxed
+            .header()
+            .alloc_type()
+            .to_heap_box_size()
+            .expect("non-heap alloc type");
+
         let needed_cells = heap_size.cell_count();
 
         let insert_at = self.alloc_cells(needed_cells);
-        let alloc_type = heap_size.to_heap_alloc_type();
-
-        let stack_box = B::construct(value, alloc_type, &mut self.interner);
 
         unsafe {
-            ptr::copy_nonoverlapping(
-                &stack_box as *const B as *const Any,
-                insert_at,
-                needed_cells,
-            );
+            ptr::copy_nonoverlapping(&boxed as *const T as *const Any, insert_at, needed_cells);
         }
 
         // Make sure we don't drop the stack version
-        mem::forget(stack_box);
-        unsafe { Gc::new(insert_at as *const B) }
+        mem::forget(boxed);
+        unsafe { Gc::new(insert_at as *const T) }
     }
 }
 

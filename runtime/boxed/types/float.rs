@@ -3,7 +3,6 @@ use std::hash::{Hash, Hasher};
 
 use crate::boxed::refs::Gc;
 use crate::boxed::*;
-use crate::intern::Interner;
 
 #[repr(C, align(16))]
 pub struct Float {
@@ -14,23 +13,17 @@ pub struct Float {
 impl Boxed for Float {}
 impl UniqueTagged for Float {}
 
-impl ConstructableFrom<f64> for Float {
-    fn size_for_value(_: &f64) -> BoxSize {
-        BoxSize::Size16
-    }
-
-    fn construct(value: f64, alloc_type: AllocType, _: &mut Interner) -> Float {
-        Float {
+impl Float {
+    pub fn new(heap: &mut impl AsHeap, value: f64) -> Gc<Float> {
+        heap.as_heap_mut().place_box(Float {
             header: Header {
                 type_tag: Self::TYPE_TAG,
-                alloc_type,
+                alloc_type: Self::size().to_heap_alloc_type(),
             },
             value,
-        }
+        })
     }
-}
 
-impl Float {
     pub fn size() -> BoxSize {
         BoxSize::Size16
     }

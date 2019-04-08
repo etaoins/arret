@@ -6,7 +6,6 @@ use std::{fmt, mem};
 use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
 use crate::boxed::refs::Gc;
 use crate::boxed::*;
-use crate::intern::Interner;
 
 #[repr(C, align(16))]
 pub struct Pair<T: Boxed = Any> {
@@ -25,9 +24,19 @@ where
 }
 
 impl<T: Boxed> Pair<T> {
+    pub fn new(heap: &mut impl AsHeap, head: Gc<T>, rest: Gc<List<T>>) -> Gc<Pair<T>> {
+        heap.as_heap_mut().place_box(Pair {
+            header: Header {
+                type_tag: TypeTag::Pair,
+                alloc_type: Self::size().to_heap_alloc_type(),
+            },
+            head,
+            rest,
+            list_length: rest.len() + 1,
+        })
+    }
+
     pub fn size() -> BoxSize {
-        // TODO: It'd be nice to expose this as const BOX_SIZE: BoxSize once `if` is allowed in
-        // const contexts
         if mem::size_of::<Self>() == 16 {
             BoxSize::Size16
         } else if mem::size_of::<Self>() == 32 {
@@ -79,26 +88,6 @@ impl<T: Boxed> fmt::Debug for Pair<T> {
     }
 }
 
-type PairInput<T> = (Gc<T>, Gc<List<T>>);
-
-impl<T: Boxed> ConstructableFrom<PairInput<T>> for Pair<T> {
-    fn size_for_value(_: &PairInput<T>) -> BoxSize {
-        Self::size()
-    }
-
-    fn construct(value: PairInput<T>, alloc_type: AllocType, _: &mut Interner) -> Pair<T> {
-        Pair {
-            header: Header {
-                type_tag: TypeTag::Pair,
-                alloc_type,
-            },
-            head: value.0,
-            rest: value.1,
-            list_length: value.1.len() + 1,
-        }
-    }
-}
-
 #[repr(C, align(16))]
 pub struct List<T: Boxed = Any> {
     header: Header,
@@ -146,24 +135,26 @@ impl<T: Boxed> List<T> {
         tail: Gc<List<T>>,
     ) -> Gc<List<T>> {
         // TODO: This is naive; we could use a single multi-cell allocation instead
-        elems.rfold(tail, |tail, elem| {
-            Pair::new(heap, (elem, tail)).as_list_ref()
-        })
-    }
-
-    /// Creates a list from the passed element constructor input
-    ///
-    /// This can potentially be faster than constructing the list and elements separately.
-    pub fn from_values<V>(heap: &mut impl AsHeap, values: impl Iterator<Item = V>) -> Gc<List<T>>
-    where
-        T: ConstructableFrom<V>,
-    {
-        let elems = values.map(|v| T::new(heap, v)).collect::<Vec<Gc<T>>>();
-        Self::new(heap, elems.into_iter())
+        elems.rfold(tail, |tail, elem| Pair::new(heap, elem, tail).as_list_ref())
     }
 
     pub fn empty() -> Gc<List<T>> {
         unsafe { Gc::new(&NIL_INSTANCE as *const Nil as *const List<T>) }
+    }
+
+    /// Creates a list by constructing an iterator of values
+    pub fn from_values<V, F>(
+        heap: &mut impl AsHeap,
+        values: impl Iterator<Item = V>,
+        cons: F,
+    ) -> Gc<List<T>>
+    where
+        F: Fn(&mut Heap, V) -> Gc<T>,
+    {
+        let heap = heap.as_heap_mut();
+
+        let elems: Vec<Gc<T>> = values.map(|v| cons(heap, v)).collect();
+        Self::new(heap, elems.into_iter())
     }
 
     pub fn as_subtype(&self) -> ListSubtype<'_, T> {
@@ -302,9 +293,9 @@ mod test {
 
         let mut heap = Heap::empty();
 
-        let forward_list1 = List::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
-        let forward_list2 = List::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
-        let reverse_list = List::<Int>::from_values(&mut heap, [3, 2, 1].iter().cloned());
+        let forward_list1 = List::from_values(&mut heap, [1, 2, 3].iter().cloned(), Int::new);
+        let forward_list2 = List::from_values(&mut heap, [1, 2, 3].iter().cloned(), Int::new);
+        let reverse_list = List::from_values(&mut heap, [3, 2, 1].iter().cloned(), Int::new);
 
         assert_ne!(forward_list1, reverse_list);
         assert_eq!(forward_list1, forward_list2);
@@ -313,7 +304,7 @@ mod test {
     #[test]
     fn fmt_debug() {
         let mut heap = Heap::empty();
-        let forward_list = List::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
+        let forward_list = List::from_values(&mut heap, [1, 2, 3].iter().cloned(), Int::new);
 
         assert_eq!(
             "List([Int(1), Int(2), Int(3)])",
@@ -325,7 +316,7 @@ mod test {
     fn construct_and_iter() {
         let mut heap = Heap::empty();
 
-        let boxed_list = List::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
+        let boxed_list = List::from_values(&mut heap, [1, 2, 3].iter().cloned(), Int::new);
 
         let mut boxed_list_iter = boxed_list.iter();
         assert_eq!(3, boxed_list_iter.len());

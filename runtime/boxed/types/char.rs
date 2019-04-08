@@ -2,7 +2,6 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 
 use crate::boxed::*;
-use crate::intern::Interner;
 
 #[repr(C, align(16))]
 pub struct Char {
@@ -13,23 +12,17 @@ pub struct Char {
 impl Boxed for Char {}
 impl UniqueTagged for Char {}
 
-impl ConstructableFrom<char> for Char {
-    fn size_for_value(_: &char) -> BoxSize {
-        BoxSize::Size16
-    }
-
-    fn construct(value: char, alloc_type: AllocType, _: &mut Interner) -> Char {
-        Char {
+impl Char {
+    pub fn new(heap: &mut impl AsHeap, value: char) -> Gc<Char> {
+        heap.as_heap_mut().place_box(Char {
             header: Header {
                 type_tag: Self::TYPE_TAG,
-                alloc_type,
+                alloc_type: AllocType::Heap16,
             },
             value,
-        }
+        })
     }
-}
 
-impl Char {
     pub fn value(&self) -> char {
         self.value
     }

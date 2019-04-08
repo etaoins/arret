@@ -165,7 +165,7 @@ mod test {
 
         // Have a constant list tail
         let boxed_list_tail =
-            boxed::List::<boxed::Int>::from_values(&mut heap, elements.iter().cloned());
+            boxed::List::from_values(&mut heap, elements.iter().cloned(), boxed::Int::new);
 
         let const_list_tail = Value::List(Box::new([]), Some(Box::new(boxed_list_tail.into())));
 
@@ -183,7 +183,7 @@ mod test {
         let elements = &[1, 2, 3];
 
         let boxed_list =
-            boxed::List::<boxed::Int>::from_values(&mut heap, elements.iter().cloned());
+            boxed::List::from_values(&mut heap, elements.iter().cloned(), boxed::Int::new);
 
         let mut iter = UnsizedListIterator {
             fixed: Vec::new().into_iter(),

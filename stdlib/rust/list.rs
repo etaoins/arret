@@ -1,7 +1,6 @@
 use runtime::binding::*;
 
 use runtime::boxed;
-use runtime::boxed::prelude::*;
 use runtime::boxed::refs::Gc;
 use runtime::callback;
 use runtime::task::Task;
@@ -19,7 +18,7 @@ pub fn stdlib_cons(
     head: Gc<boxed::Any>,
     tail: Gc<boxed::List<boxed::Any>>,
 ) -> Gc<boxed::Pair<boxed::Any>> {
-    boxed::Pair::new(task, (head, tail))
+    boxed::Pair::new(task, head, tail)
 }
 
 #[rfi_derive::rust_fun("(All #{I O [->_ ->!]} (I ->_ O) (List & I) ->_ (List & O))")]

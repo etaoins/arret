@@ -3,7 +3,6 @@ use std::hash::{Hash, Hasher};
 
 use crate::boxed::refs::Gc;
 use crate::boxed::*;
-use crate::intern::Interner;
 
 #[repr(C, align(16))]
 pub struct Int {
@@ -14,23 +13,17 @@ pub struct Int {
 impl Boxed for Int {}
 impl UniqueTagged for Int {}
 
-impl ConstructableFrom<i64> for Int {
-    fn size_for_value(_: &i64) -> BoxSize {
-        Self::size()
-    }
-
-    fn construct(value: i64, alloc_type: AllocType, _: &mut Interner) -> Int {
-        Int {
+impl Int {
+    pub fn new(heap: &mut impl AsHeap, value: i64) -> Gc<Int> {
+        heap.as_heap_mut().place_box(Int {
             header: Header {
                 type_tag: Self::TYPE_TAG,
-                alloc_type,
+                alloc_type: Self::size().to_heap_alloc_type(),
             },
             value,
-        }
+        })
     }
-}
 
-impl Int {
     pub fn size() -> BoxSize {
         BoxSize::Size16
     }

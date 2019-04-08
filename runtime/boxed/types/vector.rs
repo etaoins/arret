@@ -3,8 +3,7 @@ use std::{fmt, marker, mem};
 
 use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
 use crate::boxed::refs::Gc;
-use crate::boxed::{AllocType, Any, AsHeap, BoxSize, Boxed, ConstructableFrom, Header, TypeTag};
-use crate::intern::Interner;
+use crate::boxed::{AllocType, Any, AsHeap, Boxed, Header, Heap, TypeTag};
 
 const MAX_16BYTE_INLINE_LENGTH: usize = ((16 - 8) / mem::size_of::<Gc<Any>>());
 const MAX_32BYTE_INLINE_LENGTH: usize = ((32 - 8) / mem::size_of::<Gc<Any>>());
@@ -21,24 +20,22 @@ pub struct Vector<T: Boxed = Any> {
 
 impl<T: Boxed> Boxed for Vector<T> {}
 
-impl<'a, T: Boxed> ConstructableFrom<&'a [Gc<T>]> for Vector<T> {
-    fn size_for_value(values: &&[Gc<T>]) -> BoxSize {
-        if values.len() <= MAX_16BYTE_INLINE_LENGTH {
+impl<T: Boxed> Vector<T> {
+    pub fn new(heap: &mut impl AsHeap, values: &[Gc<T>]) -> Gc<Vector<T>> {
+        let alloc_type = if values.len() <= MAX_16BYTE_INLINE_LENGTH {
             // 1 cell inline
-            BoxSize::Size16
+            AllocType::Heap16
         } else {
             // 2 cell inline or large
-            BoxSize::Size32
-        }
-    }
+            AllocType::Heap32
+        };
 
-    fn construct(values: &[Gc<T>], alloc_type: AllocType, _: &mut Interner) -> Vector<T> {
         let header = Header {
             type_tag: TypeTag::Vector,
             alloc_type,
         };
 
-        unsafe {
+        let boxed = unsafe {
             if values.len() <= MAX_INLINE_LENGTH {
                 let mut inline_vec: InlineVector<T> = InlineVector {
                     header,
@@ -57,16 +54,22 @@ impl<'a, T: Boxed> ConstructableFrom<&'a [Gc<T>]> for Vector<T> {
 
                 mem::transmute(large_vec)
             }
-        }
-    }
-}
+        };
 
-impl<T: Boxed> Vector<T> {
-    pub fn from_values<V>(heap: &mut impl AsHeap, values: impl Iterator<Item = V>) -> Gc<Vector<T>>
+        heap.as_heap_mut().place_box(boxed)
+    }
+
+    pub fn from_values<V, F>(
+        heap: &mut impl AsHeap,
+        values: impl Iterator<Item = V>,
+        cons: F,
+    ) -> Gc<Vector<T>>
     where
-        T: ConstructableFrom<V>,
+        F: Fn(&mut Heap, V) -> Gc<T>,
     {
-        let elems = values.map(|v| T::new(heap, v)).collect::<Vec<Gc<T>>>();
+        let heap = heap.as_heap_mut();
+
+        let elems: Vec<Gc<T>> = values.map(|v| cons(heap, v)).collect();
         Self::new(heap, elems.as_slice())
     }
 
@@ -201,7 +204,7 @@ mod test {
 
         let mut heap = Heap::empty();
 
-        let forward_vec = Vector::<Int>::from_values(&mut heap, [1, 2, 3].iter().cloned());
+        let forward_vec = Vector::from_values(&mut heap, [1, 2, 3].iter().cloned(), Int::new);
 
         assert_eq!(
             "Vector([Int(1), Int(2), Int(3)])",

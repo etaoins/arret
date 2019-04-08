@@ -15,23 +15,20 @@ pub struct Sym {
 impl Boxed for Sym {}
 impl UniqueTagged for Sym {}
 
-impl<'a> ConstructableFrom<&'a str> for Sym {
-    fn size_for_value(_: &&str) -> BoxSize {
-        BoxSize::Size16
-    }
+impl Sym {
+    pub fn new(heap: &mut impl AsHeap, value: &str) -> Gc<Sym> {
+        let heap = heap.as_heap_mut();
+        let interned = heap.interner_mut().intern(value);
 
-    fn construct(value: &'a str, alloc_type: AllocType, interner: &mut Interner) -> Sym {
-        Sym {
+        heap.place_box(Sym {
             header: Header {
                 type_tag: Self::TYPE_TAG,
-                alloc_type,
+                alloc_type: AllocType::Heap16,
             },
-            interned: interner.intern(value),
-        }
+            interned,
+        })
     }
-}
 
-impl Sym {
     pub fn name<'a>(&'a self, interner: &'a Interner) -> &'a str {
         interner.unintern(&self.interned)
     }

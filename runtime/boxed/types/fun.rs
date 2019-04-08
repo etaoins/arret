@@ -3,7 +3,6 @@ use std::{fmt, mem};
 
 use crate::boxed::refs::Gc;
 use crate::boxed::*;
-use crate::intern::Interner;
 use crate::task;
 
 pub type Closure = Gc<Any>;
@@ -20,26 +19,18 @@ pub struct FunThunk {
 impl Boxed for FunThunk {}
 impl UniqueTagged for FunThunk {}
 
-type FunThunkInput = (Closure, ThunkEntry);
-
-impl ConstructableFrom<FunThunkInput> for FunThunk {
-    fn size_for_value(_: &FunThunkInput) -> BoxSize {
-        Self::size()
-    }
-
-    fn construct(value: FunThunkInput, alloc_type: AllocType, _: &mut Interner) -> FunThunk {
-        FunThunk {
+impl FunThunk {
+    pub fn new(heap: &mut impl AsHeap, closure: Closure, entry: ThunkEntry) -> Gc<FunThunk> {
+        heap.as_heap_mut().place_box(FunThunk {
             header: Header {
                 type_tag: Self::TYPE_TAG,
-                alloc_type,
+                alloc_type: Self::size().to_heap_alloc_type(),
             },
-            closure: value.0,
-            entry: value.1,
-        }
+            closure,
+            entry,
+        })
     }
-}
 
-impl FunThunk {
     pub fn size() -> BoxSize {
         if mem::size_of::<Self>() == 16 {
             BoxSize::Size16
@@ -106,9 +97,9 @@ mod test {
         let mut heap = Heap::empty();
 
         let nil_closure = boxed::NIL_INSTANCE.as_any_ref();
-        let boxed_identity1 = FunThunk::new(&mut heap, (nil_closure, identity_entry));
-        let boxed_identity2 = FunThunk::new(&mut heap, (nil_closure, identity_entry));
-        let boxed_return = FunThunk::new(&mut heap, (nil_closure, return_42_entry));
+        let boxed_identity1 = FunThunk::new(&mut heap, nil_closure, identity_entry);
+        let boxed_identity2 = FunThunk::new(&mut heap, nil_closure, identity_entry);
+        let boxed_return = FunThunk::new(&mut heap, nil_closure, return_42_entry);
 
         assert_ne!(boxed_identity1, boxed_return);
         // We use pointer identity for now

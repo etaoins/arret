@@ -7,7 +7,6 @@ use std::{fmt, ptr};
 
 use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
 use crate::boxed::refs::Gc;
-use crate::intern::Interner;
 
 pub use crate::boxed::heap::collect;
 pub use crate::boxed::heap::Heap;
@@ -23,7 +22,6 @@ pub use crate::boxed::types::vector::Vector;
 pub mod prelude {
     pub use super::AsHeap;
     pub use super::Boxed;
-    pub use super::ConstructableFrom;
     pub use super::DistinctTagged;
 }
 
@@ -73,6 +71,16 @@ pub enum AllocType {
     Heap32,
     HeapForward16,
     HeapForward32,
+}
+
+impl AllocType {
+    pub fn to_heap_box_size(self) -> Option<BoxSize> {
+        match self {
+            AllocType::Heap16 => Some(BoxSize::Size16),
+            AllocType::Heap32 => Some(BoxSize::Size32),
+            _ => None,
+        }
+    }
 }
 
 #[repr(C)]
@@ -144,21 +152,6 @@ pub trait UniqueTagged: ConstTagged + DistinctTagged {}
 
 impl<T: UniqueTagged> EncodeBoxedABIType for T {
     const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::UniqueTagged(T::TYPE_TAG);
-}
-
-pub trait ConstructableFrom<T>: Boxed {
-    /// Returns the size of the box required to hold the specific value
-    ///
-    /// This is used to more tightly pack boxes on the heap. It is always safe to return a larger
-    /// value than required.
-    fn size_for_value(value: &T) -> BoxSize;
-
-    /// Creates a new instance for the given value and box header
-    fn construct(value: T, alloc_type: AllocType, interner: &mut Interner) -> Self;
-
-    fn new(heap: &mut impl AsHeap, value: T) -> Gc<Self> {
-        heap.as_heap_mut().new_box::<Self, T>(value)
-    }
 }
 
 macro_rules! define_const_tagged_boxes {

@@ -398,7 +398,7 @@ impl EvalHirCtx {
     pub fn rust_fun_to_jit_boxed(&mut self, rust_fun: Rc<rfi::Fun>) -> Gc<boxed::FunThunk> {
         let closure = boxed::NIL_INSTANCE.as_any_ref();
         let entry = self.jit_thunk_for_rust_fun(&rust_fun);
-        let new_boxed = boxed::FunThunk::new(self, (closure, entry));
+        let new_boxed = boxed::FunThunk::new(self, closure, entry);
 
         let rust_fun_value = Value::RustFun(rust_fun);
         self.thunk_fun_values.insert(new_boxed, rust_fun_value);
@@ -941,7 +941,7 @@ impl EvalHirCtx {
         let entry = unsafe { mem::transmute(address as usize) };
 
         let closure = boxed::NIL_INSTANCE.as_any_ref();
-        let new_boxed = boxed::FunThunk::new(self, (closure, entry));
+        let new_boxed = boxed::FunThunk::new(self, closure, entry);
 
         let arret_fun_value = Value::ArretFun(arret_fun.clone());
         self.thunk_fun_values.insert(new_boxed, arret_fun_value);

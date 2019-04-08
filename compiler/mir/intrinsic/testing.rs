@@ -112,8 +112,11 @@ pub fn fn_op_categories(
     let mut categories = BTreeSet::<ops::OpCategory>::new();
     add_ops_categories(&mut categories, ops_fun.ops.iter());
 
-    let category_list: Gc<boxed::List<boxed::Sym>> =
-        boxed::List::from_values(ehx, categories.into_iter().map(op_category_to_string));
+    let category_list = boxed::List::from_values(
+        ehx,
+        categories.into_iter().map(op_category_to_string),
+        boxed::Sym::new,
+    );
 
     Ok(Some(category_list.into()))
 }
