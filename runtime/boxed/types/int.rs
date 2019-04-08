@@ -31,10 +31,6 @@ impl Int {
     pub fn value(&self) -> i64 {
         self.value
     }
-
-    pub fn as_num(&self) -> Gc<Num> {
-        unsafe { Gc::new(&*(self as *const _ as *const Num)) }
-    }
 }
 
 impl PartialEq for Int {

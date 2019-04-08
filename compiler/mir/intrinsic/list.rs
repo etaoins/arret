@@ -1,7 +1,6 @@
 use syntax::span::Span;
 
 use runtime::boxed;
-use runtime::boxed::prelude::*;
 
 use crate::mir::builder::Builder;
 use crate::mir::error::Result;

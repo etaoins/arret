@@ -4,7 +4,6 @@ use syntax::span::Span;
 
 use runtime::abitype;
 use runtime::boxed;
-use runtime::boxed::refs::Gc;
 
 use crate::mir::builder::Builder;
 use crate::mir::error;

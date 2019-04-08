@@ -54,12 +54,12 @@ where
             boxed::NumSubtype::Float(float_ref) => {
                 // Switch to float
                 let float_acc = float_reduce(int_acc as f64, float_ref.value());
-                return fold_float_op(task, operands_iter, float_acc, float_reduce).as_num();
+                return fold_float_op(task, operands_iter, float_acc, float_reduce).as_num_ref();
             }
         }
     }
 
-    boxed::Int::new(task, int_acc).as_num()
+    boxed::Int::new(task, int_acc).as_num_ref()
 }
 
 #[rfi_derive::rust_fun("(All #{[N Num]} & N -> N)")]
@@ -85,16 +85,16 @@ pub fn stdlib_sub(
     match initial_num.as_subtype() {
         boxed::NumSubtype::Int(int_ref) => {
             if rest.is_empty() {
-                boxed::Int::new(task, -int_ref.value()).as_num()
+                boxed::Int::new(task, -int_ref.value()).as_num_ref()
             } else {
                 fold_num_op(task, rest.iter(), int_ref.value(), i64::sub, f64::sub)
             }
         }
         boxed::NumSubtype::Float(float_ref) => {
             if rest.is_empty() {
-                boxed::Float::new(task, -float_ref.value()).as_num()
+                boxed::Float::new(task, -float_ref.value()).as_num_ref()
             } else {
-                fold_float_op(task, rest.iter(), float_ref.value(), f64::sub).as_num()
+                fold_float_op(task, rest.iter(), float_ref.value(), f64::sub).as_num_ref()
             }
         }
     }
