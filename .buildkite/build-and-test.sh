@@ -1,6 +1,9 @@
 #!/bin/sh
 set -eu
 
+# Deny warnings on CI
+export RUSTFLAGS="-D warnings"
+
 echo '--- :cargo: Compiling debug'
 cargo build
 
