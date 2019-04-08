@@ -183,6 +183,21 @@ impl Heap {
     }
 }
 
+pub trait AsHeap {
+    fn as_heap(&self) -> &Heap;
+    fn as_heap_mut(&mut self) -> &mut Heap;
+}
+
+impl AsHeap for Heap {
+    fn as_heap(&self) -> &Heap {
+        self
+    }
+
+    fn as_heap_mut(&mut self) -> &mut Heap {
+        self
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

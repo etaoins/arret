@@ -9,7 +9,7 @@ use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
 use crate::boxed::refs::Gc;
 
 pub use crate::boxed::heap::collect;
-pub use crate::boxed::heap::Heap;
+pub use crate::boxed::heap::{AsHeap, Heap};
 pub use crate::boxed::types::char::Char;
 pub use crate::boxed::types::float::Float;
 pub use crate::boxed::types::fun::{Closure, FunThunk, ThunkEntry};
@@ -23,21 +23,6 @@ pub mod prelude {
     pub use super::AsHeap;
     pub use super::Boxed;
     pub use super::DistinctTagged;
-}
-
-pub trait AsHeap {
-    fn as_heap(&self) -> &Heap;
-    fn as_heap_mut(&mut self) -> &mut Heap;
-}
-
-impl AsHeap for Heap {
-    fn as_heap(&self) -> &Heap {
-        self
-    }
-
-    fn as_heap_mut(&mut self) -> &mut Heap {
-        self
-    }
 }
 
 #[derive(PartialEq, Debug, Copy, Clone)]
