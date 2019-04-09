@@ -76,8 +76,7 @@ Compiled programs have a `(main!)` function as their entry point:
 (import [stdlib base])
 
 (defn main! ()
-  (println! "Hello, world!")
-  ())
+  (println! "Hello, world!"))
 ```
 
 These can be compiled to a static binary by running Arret with the path name:
