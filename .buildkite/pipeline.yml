@@ -65,3 +65,16 @@ steps:
           env:
             - BUILDKITE_COMMIT
 
+  - label: ":books: Update Rustdoc"
+    branches: "master"
+    command:
+      - "echo '--- :book: Building rustdoc'"
+      - cargo doc
+
+      - "echo '--- :rust: Installing awscli'"
+      - DEBIAN_FRONTEND=noninteractive apt-get -y install awscli
+
+      - ./.buildkite/sync-rustdoc.sh
+    <<: *cached-ecr-build-env
+    concurrency_group: 'update-rustdoc'
+    concurrency: 1
