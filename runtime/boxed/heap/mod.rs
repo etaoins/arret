@@ -6,7 +6,7 @@ use crate::boxed::refs::Gc;
 use crate::boxed::{AllocType, Any, Boxed};
 use crate::intern::Interner;
 
-/// Represents an allocated segment of garbage collected memory
+/// Allocated segment of garbage collected memory
 ///
 /// This has a gross pointer-based representation to allow use as a bump allocator from generated
 /// native code.
@@ -17,6 +17,7 @@ pub struct Segment {
     backing_vec: Vec<Any>,
 }
 
+/// Heap of garbage collected boxes
 #[repr(C)]
 pub struct Heap {
     current_segment: Segment,
@@ -40,7 +41,7 @@ impl Segment {
 
     /// Returns contiguous memory for holding `count` cells
     ///
-    /// If the segment is full this will return None
+    /// If the segment is full this will return `None`
     fn alloc_cells(&mut self, count: usize) -> Option<*mut Any> {
         let current_next = self.next;
         let new_next = unsafe { self.next.add(count) };
@@ -93,13 +94,15 @@ impl Heap {
     /// Capacity of the initial segment and all overflow segments
     const DEFAULT_SEGMENT_CAPACITY: usize = 1024;
 
-    // Default capacity of the Heap
-    pub const DEFAULT_CAPACITY: usize = Self::DEFAULT_SEGMENT_CAPACITY;
+    /// Default capacity of the heap
+    const DEFAULT_CAPACITY: usize = Self::DEFAULT_SEGMENT_CAPACITY;
 
+    /// Returns an empty heap with a default capacity
     pub fn empty() -> Heap {
         Self::new(Interner::new(), Self::DEFAULT_CAPACITY)
     }
 
+    /// Returns a new hep with the given symbol interner and capacity
     pub fn new(interner: Interner, count: usize) -> Heap {
         Heap {
             current_segment: Segment::with_capacity(count),
@@ -109,7 +112,7 @@ impl Heap {
         }
     }
 
-    /// Indicates if this Heap should be garbage collected
+    /// Hints if this heap should be garbage collected
     ///
     /// This is a heuristic based on the number of allocations since the last GC cycle.
     pub fn should_collect(&self) -> bool {
@@ -141,22 +144,23 @@ impl Heap {
         alloc
     }
 
+    /// Returns the symbol interner associated with this heap
     pub fn interner(&self) -> &Interner {
         &self.interner
     }
 
+    /// Returns a mutable reference to the symbol interner associated with this heap
     pub fn interner_mut(&mut self) -> &mut Interner {
         &mut self.interner
     }
 
     /// Returns the number of allocated cells
-    ///
-    /// This is slow; it should only be used for testing purposes
     pub fn len(&self) -> usize {
         let full_len: usize = self.full_segments.iter().map(Segment::len).sum();
         self.current_segment.len() + full_len
     }
 
+    /// Returns true if the heap contains no boxes
     pub fn is_empty(&self) -> bool {
         self.current_segment.len() == 0 && self.full_segments.is_empty()
     }
@@ -183,8 +187,12 @@ impl Heap {
     }
 }
 
+/// Object that can be used as a heap
 pub trait AsHeap {
+    /// Returns this object as a heap
     fn as_heap(&self) -> &Heap;
+
+    /// Returns this object as a mutable heap
     fn as_heap_mut(&mut self) -> &mut Heap;
 }
 

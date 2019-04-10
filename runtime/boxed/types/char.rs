@@ -3,6 +3,10 @@ use std::hash::{Hash, Hasher};
 
 use crate::boxed::*;
 
+/// Boxed Unicode character
+///
+/// This corresponds more precisely to a
+/// [Unicode scalar value](http://www.unicode.org/glossary/#unicode_scalar_value).
 #[repr(C, align(16))]
 pub struct Char {
     header: Header,
@@ -13,6 +17,7 @@ impl Boxed for Char {}
 impl UniqueTagged for Char {}
 
 impl Char {
+    /// Constructs a new character
     pub fn new(heap: &mut impl AsHeap, value: char) -> Gc<Char> {
         heap.as_heap_mut().place_box(Char {
             header: Self::TYPE_TAG.to_heap_header(Self::size()),
@@ -20,10 +25,12 @@ impl Char {
         })
     }
 
+    /// Returns the box size for characters
     pub fn size() -> BoxSize {
         BoxSize::Size16
     }
 
+    /// Returns the unboxed value of this character
     pub fn value(&self) -> char {
         self.value
     }

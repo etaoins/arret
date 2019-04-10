@@ -4,6 +4,7 @@ use std::hash::{Hash, Hasher};
 use crate::boxed::refs::Gc;
 use crate::boxed::*;
 
+/// Boxed 64bit signed integer
 #[repr(C, align(16))]
 pub struct Int {
     header: Header,
@@ -14,6 +15,7 @@ impl Boxed for Int {}
 impl UniqueTagged for Int {}
 
 impl Int {
+    /// Constructs a new integer
     pub fn new(heap: &mut impl AsHeap, value: i64) -> Gc<Int> {
         heap.as_heap_mut().place_box(Int {
             header: Self::TYPE_TAG.to_heap_header(Self::size()),
@@ -21,10 +23,12 @@ impl Int {
         })
     }
 
+    /// Returns the box size for integers
     pub fn size() -> BoxSize {
         BoxSize::Size16
     }
 
+    /// Returns the unboxed value of this integer
     pub fn value(&self) -> i64 {
         self.value
     }

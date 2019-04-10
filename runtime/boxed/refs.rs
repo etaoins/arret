@@ -1,3 +1,7 @@
+//! References to boxed values
+//!
+//! These are all transparent; they're used for either readability or marker traits.
+
 use std::ops::Deref;
 use std::ptr;
 use std::{fmt, hash};
@@ -12,7 +16,7 @@ pub struct Gc<T: Boxed> {
     inner: ptr::NonNull<T>,
 }
 
-/// Manual Clone implementation to work around Rust issue #26925
+// Manual Clone implementation to work around Rust issue #26925
 impl<T: Boxed> Clone for Gc<T> {
     fn clone(&self) -> Self {
         Gc { inner: self.inner }
@@ -29,22 +33,26 @@ impl<T: Boxed> Deref for Gc<T> {
 }
 
 impl<T: Boxed> Gc<T> {
+    /// Returns a new instance wrapping a pointer to a garbage collected box
     pub unsafe fn new(ptr: *const T) -> Gc<T> {
         Gc {
             inner: ptr::NonNull::new_unchecked(ptr as *mut T),
         }
     }
 
+    /// Unchecked cast to the passed type
     pub unsafe fn cast<U: Boxed>(self) -> Gc<U> {
         Gc {
             inner: self.inner.cast::<U>(),
         }
     }
 
+    /// Returns a pointer to the garbage collected box
     pub fn as_ptr(self) -> *const T {
         self.inner.as_ptr()
     }
 
+    /// Returns a mutable to the garbage collected box
     pub(super) fn as_mut_ptr(self) -> *mut T {
         self.inner.as_ptr()
     }
@@ -74,7 +82,11 @@ where
 }
 
 macro_rules! define_marker_ref {
-    ($ref_name:ident) => {
+    (
+        $(#[$docs:meta])*
+        $ref_name:ident
+    ) => {
+        $(#[$docs])*
         #[repr(transparent)]
         pub struct $ref_name<T: Boxed> {
             inner: ptr::NonNull<T>,
@@ -97,16 +109,20 @@ macro_rules! define_marker_ref {
     };
 }
 
-// Special marker ref for parameters that are explicitly not captured
-//
-// This can be used for performance-sensitive functions where the compiler cannot prove the
-// parameter can't be captured.
-define_marker_ref!(NoCapture);
+define_marker_ref!(
+    /// Special marker ref for parameters that are explicitly not captured
+    ///
+    /// This can be used for performance-sensitive functions where the compiler cannot prove the
+    /// parameter can't be captured.
+    NoCapture
+);
 
-// Special marker ref for parameters that are explicitly captured
-//
-// Capturing GC managed values is usually not allowed as the captured values become invisible
-// to the garage collector and will become invalid on the next collection cycle. This is intended
-// for use by special runtime functions that expose their captured values to the collector via an
-// internal mechanism.
-define_marker_ref!(Capture);
+define_marker_ref!(
+    /// Special marker ref for parameters that are explicitly captured
+    ///
+    /// Capturing GC managed values is usually not allowed as the captured values become invisible
+    /// to the garbage collector and will become invalid on the next collection cycle. This is
+    /// intended for use by special runtime functions that expose their captured values to the
+    /// collector via an internal mechanism.
+    Capture
+);

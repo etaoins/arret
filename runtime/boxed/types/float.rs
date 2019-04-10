@@ -4,6 +4,7 @@ use std::hash::{Hash, Hasher};
 use crate::boxed::refs::Gc;
 use crate::boxed::*;
 
+/// Boxed 64bit floating point value
 #[repr(C, align(16))]
 pub struct Float {
     header: Header,
@@ -14,6 +15,7 @@ impl Boxed for Float {}
 impl UniqueTagged for Float {}
 
 impl Float {
+    /// Constructs a new float
     pub fn new(heap: &mut impl AsHeap, value: f64) -> Gc<Float> {
         heap.as_heap_mut().place_box(Float {
             header: Self::TYPE_TAG.to_heap_header(Self::size()),
@@ -21,10 +23,12 @@ impl Float {
         })
     }
 
+    /// Returns the box size for floats
     pub fn size() -> BoxSize {
         BoxSize::Size16
     }
 
+    /// Returns the unboxed value of this float
     pub fn value(&self) -> f64 {
         self.value
     }

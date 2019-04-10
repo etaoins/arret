@@ -5,10 +5,13 @@ use crate::boxed::refs::Gc;
 use crate::boxed::*;
 use crate::task;
 
+/// Opaque type for a function's closure
 pub type Closure = Gc<Any>;
 
+/// Entry point for executing a function
 pub type ThunkEntry = extern "C" fn(&mut task::Task, Closure, Gc<Any>) -> Gc<Any>;
 
+/// Boxed function value with an optional closure
 #[repr(C, align(16))]
 pub struct FunThunk {
     header: Header,
@@ -20,6 +23,7 @@ impl Boxed for FunThunk {}
 impl UniqueTagged for FunThunk {}
 
 impl FunThunk {
+    /// Constructs a new function value with the given closure and entry point
     pub fn new(heap: &mut impl AsHeap, closure: Closure, entry: ThunkEntry) -> Gc<FunThunk> {
         heap.as_heap_mut().place_box(FunThunk {
             header: Self::TYPE_TAG.to_heap_header(Self::size()),
@@ -28,6 +32,7 @@ impl FunThunk {
         })
     }
 
+    /// Returns the box size for functions
     pub fn size() -> BoxSize {
         if mem::size_of::<Self>() == 16 {
             BoxSize::Size16
@@ -38,6 +43,7 @@ impl FunThunk {
         }
     }
 
+    /// Applies this function on the passed task with the given arguments
     pub fn apply(&self, task: &mut task::Task, arg_list: Gc<Any>) -> Gc<Any> {
         (self.entry)(task, self.closure, arg_list)
     }

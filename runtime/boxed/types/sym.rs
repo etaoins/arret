@@ -4,6 +4,9 @@ use std::hash::{Hash, Hasher};
 use crate::boxed::*;
 use crate::intern::{InternedSym, Interner};
 
+/// Interned symbol
+///
+/// Symbols are immutable strings typically used as keywords or identifiers.
 #[repr(C, align(16))]
 pub struct Sym {
     header: Header,
@@ -16,6 +19,7 @@ impl Boxed for Sym {}
 impl UniqueTagged for Sym {}
 
 impl Sym {
+    /// Constructs a new symbol with a specified name
     pub fn new(heap: &mut impl AsHeap, value: &str) -> Gc<Sym> {
         let heap = heap.as_heap_mut();
         let interned = heap.interner_mut().intern(value);
@@ -26,10 +30,15 @@ impl Sym {
         })
     }
 
+    /// Returns the box size for symbols
     pub fn size() -> BoxSize {
         BoxSize::Size16
     }
 
+    /// Returns the name of the symbol
+    ///
+    /// `interner` is required to unintern the name. It must be the same interner used to construct
+    /// the symbol.
     pub fn name<'a>(&'a self, interner: &'a Interner) -> &'a str {
         interner.unintern(&self.interned)
     }

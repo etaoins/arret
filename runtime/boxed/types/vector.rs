@@ -10,6 +10,9 @@ const MAX_32BYTE_INLINE_LENGTH: usize = ((32 - 8) / mem::size_of::<Gc<Any>>());
 
 const MAX_INLINE_LENGTH: usize = MAX_32BYTE_INLINE_LENGTH;
 
+/// Immutable vector of boxed values
+///
+/// This allows random access to any of its values.
 #[repr(C, align(16))]
 pub struct Vector<T: Boxed = Any> {
     header: Header,
@@ -21,6 +24,7 @@ pub struct Vector<T: Boxed = Any> {
 impl<T: Boxed> Boxed for Vector<T> {}
 
 impl<T: Boxed> Vector<T> {
+    /// Constructs a new vector with the passed boxed values
     pub fn new(heap: &mut impl AsHeap, values: &[Gc<T>]) -> Gc<Vector<T>> {
         let box_size = if values.len() <= MAX_16BYTE_INLINE_LENGTH {
             // 1 cell inline
@@ -56,6 +60,7 @@ impl<T: Boxed> Vector<T> {
         heap.as_heap_mut().place_box(boxed)
     }
 
+    /// Constructs a vector by constructing an iterator of values
     pub fn from_values<V, F>(
         heap: &mut impl AsHeap,
         values: impl Iterator<Item = V>,
@@ -82,6 +87,7 @@ impl<T: Boxed> Vector<T> {
         }
     }
 
+    /// Returns the length of the vector
     pub fn len(&self) -> usize {
         match self.as_repr() {
             Repr::Inline(inline) => inline.inline_length as usize,
@@ -89,10 +95,12 @@ impl<T: Boxed> Vector<T> {
         }
     }
 
+    /// Returns true if the vector is empty
     pub fn is_empty(&self) -> bool {
         self.inline_length == 0
     }
 
+    /// Returns an iterator over the vector
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &Gc<T>> {
         match self.as_repr() {
             Repr::Inline(inline) => inline.values[0..self.len()].iter(),

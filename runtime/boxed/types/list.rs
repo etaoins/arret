@@ -7,6 +7,7 @@ use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
 use crate::boxed::refs::Gc;
 use crate::boxed::*;
 
+/// Non-empty list
 #[repr(C, align(16))]
 pub struct Pair<T: Boxed = Any> {
     header: Header,
@@ -24,6 +25,7 @@ where
 }
 
 impl<T: Boxed> Pair<T> {
+    /// Constructs a pair with the given `head` and `rest`
     pub fn new(heap: &mut impl AsHeap, head: Gc<T>, rest: Gc<List<T>>) -> Gc<Pair<T>> {
         heap.as_heap_mut().place_box(Pair {
             header: Pair::TYPE_TAG.to_heap_header(Self::size()),
@@ -33,6 +35,7 @@ impl<T: Boxed> Pair<T> {
         })
     }
 
+    /// Returns the box size for pairs
     pub fn size() -> BoxSize {
         if mem::size_of::<Self>() == 16 {
             BoxSize::Size16
@@ -43,23 +46,30 @@ impl<T: Boxed> Pair<T> {
         }
     }
 
+    /// Returns the length of the list this pair is the head of
+    ///
+    /// Note that this must be at least 1.
     pub fn len(&self) -> usize {
         self.list_length
     }
 
+    /// Returns false
     pub fn is_empty(&self) -> bool {
         // This is to make Clippy happy since we have `len`
         false
     }
 
+    /// Returns the head value
     pub fn head(&self) -> Gc<T> {
         self.head
     }
 
+    /// Returns the tail list
     pub fn rest(&self) -> Gc<List<T>> {
         self.rest
     }
 
+    /// Casts this pair to a non-empty list
     pub fn as_list_ref(&self) -> Gc<List<T>> {
         unsafe { Gc::new(&*(self as *const _ as *const List<T>)) }
     }
@@ -85,6 +95,10 @@ impl<T: Boxed> fmt::Debug for Pair<T> {
     }
 }
 
+/// List of boxed values
+///
+/// This allows O(n) access to its elements. It has the benefit of allowing constant time prepends
+/// while sharing the tail of the existing list.
 #[repr(C, align(16))]
 pub struct List<T: Boxed = Any> {
     header: Header,
@@ -107,6 +121,7 @@ where
     const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::List(&T::BOXED_ABI_TYPE);
 }
 
+/// Possible subtypes of `List`
 pub enum ListSubtype<'a, T: Boxed>
 where
     T: 'a,
@@ -116,7 +131,7 @@ where
 }
 
 impl<T: Boxed> List<T> {
-    /// Creates a new fixed sized list containing the passed `elems`
+    /// Constructs a new fixed sized list containing the passed `elems`
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         heap: &mut impl AsHeap,
@@ -125,7 +140,7 @@ impl<T: Boxed> List<T> {
         Self::new_with_tail(heap, elems, Self::empty())
     }
 
-    /// Creates a list with a head of `elems` and the specified tail list
+    /// Constructs a list with a head of `elems` and the specified tail list
     pub fn new_with_tail(
         heap: &mut impl AsHeap,
         elems: impl DoubleEndedIterator<Item = Gc<T>>,
@@ -135,6 +150,7 @@ impl<T: Boxed> List<T> {
         elems.rfold(tail, |tail, elem| Pair::new(heap, elem, tail).as_list_ref())
     }
 
+    /// Returns an empty list
     pub fn empty() -> Gc<List<T>> {
         unsafe { Gc::new(&NIL_INSTANCE as *const Nil as *const List<T>) }
     }
@@ -154,6 +170,7 @@ impl<T: Boxed> List<T> {
         Self::new(heap, elems.into_iter())
     }
 
+    /// Returns a subtype of this list based on its type tag
     pub fn as_subtype(&self) -> ListSubtype<'_, T> {
         match self.header.type_tag {
             TypeTag::Pair => {
@@ -166,14 +183,17 @@ impl<T: Boxed> List<T> {
         }
     }
 
+    /// Returns the length of the list
     pub fn len(&self) -> usize {
         self.list_length
     }
 
+    /// Returns true if the list is empty
     pub fn is_empty(&self) -> bool {
         self.header.type_tag == TypeTag::Nil
     }
 
+    /// Returns an iterator to the list's values
     pub fn iter(&self) -> ListIterator<T> {
         ListIterator {
             head: unsafe { Gc::new(self as *const Self) },
@@ -232,6 +252,7 @@ impl<T: Boxed> Iterator for ListIterator<T> {
 impl<T: Boxed> ExactSizeIterator for ListIterator<T> {}
 impl<T: Boxed> FusedIterator for ListIterator<T> {}
 
+/// Empty list
 #[repr(C, align(16))]
 #[derive(Debug)]
 pub struct Nil {
@@ -239,6 +260,7 @@ pub struct Nil {
     list_length: usize,
 }
 
+/// Static constant instance of `Nil`
 #[export_name = "ARRET_NIL"]
 pub static NIL_INSTANCE: Nil = Nil {
     header: Header {

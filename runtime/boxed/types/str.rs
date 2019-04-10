@@ -4,6 +4,7 @@ use std::{fmt, mem, ptr};
 
 use crate::boxed::*;
 
+/// String value encoded as UTF-8
 #[repr(C, align(16))]
 pub struct Str {
     header: Header,
@@ -15,8 +16,10 @@ impl Boxed for Str {}
 impl UniqueTagged for Str {}
 
 impl Str {
+    /// Maximum number of bytes that can be stored directly in the ox
     pub const MAX_INLINE_BYTES: usize = 29;
 
+    /// Constructs a new string
     pub fn new(heap: &mut impl AsHeap, value: &str) -> Gc<Str> {
         let box_size = match value.len() {
             0..=13 => BoxSize::Size16,
@@ -74,6 +77,7 @@ impl Str {
         }
     }
 
+    /// Returns the string's content as a slice
     pub fn as_str(&self) -> &str {
         match self.as_repr() {
             Repr::Inline(inline) => inline.as_str(),

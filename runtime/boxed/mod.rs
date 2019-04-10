@@ -1,3 +1,16 @@
+#![warn(missing_docs)]
+
+//! Boxed values and heaps
+//!
+//! This contains the implementation of our garbage collector and the types it can manage. Some
+//! types (such as `Int` and `Float`) have corresponding unboxed representations and are only boxed
+//! for the purposes of runtime dynamic typing. Complex values (such as `Vector` and `Sym`) have no
+//! unboxed representation.
+//!
+//! Boxes can also be placed on the stack on in static constants instead of the heap. This is of
+//! limited value to Rust code but is frequently used by the compiler to avoid the overhead of
+//! allocation and garbage collection.
+
 mod heap;
 pub mod refs;
 mod types;
@@ -19,19 +32,24 @@ pub use crate::boxed::types::str::Str;
 pub use crate::boxed::types::sym::Sym;
 pub use crate::boxed::types::vector::Vector;
 
+/// Prelude of common traits useful for working with boxed values
 pub mod prelude {
     pub use super::AsHeap;
     pub use super::Boxed;
     pub use super::DistinctTagged;
 }
 
+/// Size of a boxed value in bytes
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum BoxSize {
+    /// 16 byte boxed value
     Size16,
+    /// 32 byte boxed value
     Size32,
 }
 
 impl BoxSize {
+    /// Returns the number of 16 byte cells required by this box size
     pub fn cell_count(self) -> usize {
         match self {
             BoxSize::Size16 => 1,
@@ -39,6 +57,7 @@ impl BoxSize {
         }
     }
 
+    /// Returns the corresponding AllocType if this box was allocated on the heap
     pub fn to_heap_alloc_type(self) -> AllocType {
         match self {
             BoxSize::Size16 => AllocType::Heap16,
@@ -47,18 +66,32 @@ impl BoxSize {
     }
 }
 
+/// Allocation type for boxed values
 #[repr(u8)]
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum AllocType {
+    /// Static constant value
     Const,
+    /// Stack allocated value of unknown length
     Stack,
+    /// Heap allocated 16 byte value
     Heap16,
+    /// Heap allocated 32 byte value
     Heap32,
+
+    /// Box pointing to a new 16 byte heap location
+    ///
+    /// This is a temporary type used during garbage collection.
     HeapForward16,
+
+    /// Box pointing to a new 32 byte heap location
+    ///
+    /// This is a temporary type used during garbage collection.
     HeapForward32,
 }
 
 impl AllocType {
+    /// Returns the corresponding `BoxSize` if this type is heap allocated
     pub fn to_heap_box_size(self) -> Option<BoxSize> {
         match self {
             AllocType::Heap16 => Some(BoxSize::Size16),
@@ -68,6 +101,7 @@ impl AllocType {
     }
 }
 
+/// Header for common boxed value metadata
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Header {
@@ -76,6 +110,7 @@ pub struct Header {
 }
 
 impl Header {
+    /// Returns a new header for the given type tag and allocation type
     pub fn new(type_tag: TypeTag, alloc_type: AllocType) -> Header {
         Header {
             type_tag,
@@ -83,20 +118,28 @@ impl Header {
         }
     }
 
+    /// Returns the constant type tag for this value
     pub fn type_tag(self) -> TypeTag {
         self.type_tag
     }
 
+    /// Return the allocation type for this value
     pub fn alloc_type(self) -> AllocType {
         self.alloc_type
     }
 }
 
+/// Boxed value
+///
+/// Boxes can be allocated on the stack, heap or a static constant. Every box is tagged with a
+/// top-level type.
 pub trait Boxed: Sized + Hash + PartialEq + fmt::Debug {
+    /// Casts this value to an `Any` reference
     fn as_any_ref(&self) -> Gc<Any> {
         unsafe { Gc::new(&*(self as *const Self as *const Any)) }
     }
 
+    /// Returns the header of the box
     fn header(&self) -> Header {
         self.as_any_ref().header
     }
@@ -113,6 +156,7 @@ impl EncodeBoxedABIType for Any {
 ///
 /// In mathematical terms this can be thought of as the struct being surjective to the type tag.
 pub trait ConstTagged: Boxed {
+    /// Type tag for values of this type
     const TYPE_TAG: TypeTag;
 }
 
@@ -124,6 +168,7 @@ pub trait ConstTagged: Boxed {
 ///
 /// In mathematical terms this can be thought of as the struct being injective to the type tag
 pub trait DistinctTagged: Boxed {
+    /// Returns if the passed type tag corresponds to this type
     fn has_tag(type_tag: TypeTag) -> bool;
 }
 
@@ -141,10 +186,14 @@ impl<T: UniqueTagged> EncodeBoxedABIType for T {
 
 macro_rules! define_const_tagged_boxes {
     ($($name:ident),*) => {
+        /// Tag byte identifying top-level types
         #[repr(u8)]
         #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
         pub enum TypeTag {
-            $( $name ),*
+            $(
+                #[allow(missing_docs)]
+                $name
+            ),*
         }
 
         /// Static list of all possible type tags
@@ -155,6 +204,7 @@ macro_rules! define_const_tagged_boxes {
         ];
 
         impl TypeTag {
+            /// Returns a string representation for the type
             pub fn to_str(&self) -> &'static str {
                 match self {
                     $(
@@ -178,26 +228,39 @@ macro_rules! define_const_tagged_boxes {
             }
         )*
 
-        define_supertype!(Any, AnySubtype, DistinctTagged, as_any_ref, { $($name),* });
+        define_supertype!(
+            /// Supertype of all boxed types
+            Any,
+            AnySubtype, DistinctTagged, as_any_ref, { $($name),* });
     }
 }
 
 impl TypeTag {
+    /// Returns the boxed ABI type corresponding to this type tag
     pub fn to_boxed_abi_type(self) -> BoxedABIType {
         BoxedABIType::UniqueTagged(self)
     }
 
+    /// Returns a header for a constant boxed values of this type
     pub fn to_const_header(self) -> Header {
         Header::new(self, AllocType::Const)
     }
 
+    /// Returns a header for heap allocated values of this type and size
     pub fn to_heap_header(self, box_size: BoxSize) -> Header {
         Header::new(self, box_size.to_heap_alloc_type())
     }
 }
 
 macro_rules! define_singleton_box {
-    ($type_name:ident, $static_name:ident, $export_name:expr) => {
+    (
+        $(#[$struct_docs:meta])*
+        $type_name:ident,
+        $(#[$static_docs:meta])*
+        $static_name:ident,
+        $export_name:expr
+    ) => {
+        $(#[$struct_docs])*
         #[repr(C, align(16))]
         #[derive(Debug)]
         pub struct $type_name {
@@ -207,6 +270,7 @@ macro_rules! define_singleton_box {
         impl Boxed for $type_name {}
         impl UniqueTagged for $type_name {}
 
+        $(#[$static_docs])*
         #[export_name = $export_name]
         pub static $static_name: $type_name = $type_name {
             header: Header {
@@ -232,7 +296,12 @@ macro_rules! define_singleton_box {
 }
 
 macro_rules! define_supertype {
-    ($name:ident, $subtype_enum:ident, $subtype_trait:ident, $as_enum_ref:ident, { $($member:ident),* }) => {
+    (
+        $(#[$docs:meta])*
+        $name:ident,
+        $subtype_enum:ident, $subtype_trait:ident, $as_enum_ref:ident, { $($member:ident),* }
+    ) => {
+        $(#[$docs])*
         #[repr(C, align(16))]
         pub struct $name {
             header: Header,
@@ -247,6 +316,7 @@ macro_rules! define_supertype {
         }
 
         impl $name {
+            /// Returns a subtype of this value based on its type tag
             pub fn as_subtype(&self) -> $subtype_enum<'_> {
                 #[allow(unreachable_patterns)]
                 match self.header.type_tag {
@@ -263,6 +333,7 @@ macro_rules! define_supertype {
                 }
             }
 
+            /// Tries to downcast this reference to a subtype based on its type tag
             pub fn downcast_ref<T: $subtype_trait>(&self) -> Option<Gc<T>>
             {
                 if T::has_tag(self.header.type_tag) {
@@ -318,21 +389,37 @@ macro_rules! define_supertype {
             }
         }
 
+        /// Possible subtypes of this supertype
         #[derive(PartialEq, Debug)]
         pub enum $subtype_enum<'a> {
-            $( $member(&'a $member) ),*
+            $(
+                #[allow(missing_docs)]
+                $member(&'a $member)
+            ),*
         }
     }
 }
 
 macro_rules! define_tagged_union {
-    ($name:ident, $subtype_enum:ident, $subtype_trait:ident, $as_enum_ref:ident, { $($member:ident),* }) => {
-        define_supertype!($name, $subtype_enum, $subtype_trait, $as_enum_ref, { $($member),* });
+    (
+        $(#[$struct_docs:meta])*
+        $name:ident,
+        $(#[$subtype_docs:meta])*
+        $subtype_enum:ident,
+        $subtype_trait:ident, $as_enum_ref:ident, { $($member:ident),* }
+    ) => {
+        define_supertype!(
+            $(#[$struct_docs])*
+            $name,
+            $subtype_enum, $subtype_trait, $as_enum_ref, { $($member),* }
+        );
 
+        $(#[$subtype_docs])*
         pub trait $subtype_trait : DistinctTagged {}
 
         $(
             impl $member {
+                /// Casts this value to its supertype
                 pub fn $as_enum_ref(&self) -> Gc<$name> {
                     unsafe { Gc::new(&*(self as *const Self as *const $name)) }
                 }
@@ -363,17 +450,46 @@ define_const_tagged_boxes! {
     FunThunk
 }
 
-define_singleton_box!(True, TRUE_INSTANCE, "ARRET_TRUE");
-define_singleton_box!(False, FALSE_INSTANCE, "ARRET_FALSE");
+define_singleton_box!(
+    /// Boolean true
+    True,
+    /// Static constant instance of `True`
+    TRUE_INSTANCE,
+    "ARRET_TRUE"
+);
 
-define_tagged_union!(Num, NumSubtype, NumMember, as_num_ref, {
-    Int,
-    Float
-});
+define_singleton_box!(
+    /// Boolean false
+    False,
+    /// Static constant instance of `False`
+    FALSE_INSTANCE,
+    "ARRET_FALSE"
+);
 
-define_tagged_union!(Bool, BoolSubtype, BoolMember, as_bool_ref, { True, False });
+define_tagged_union!(
+    /// Union of numeric types
+    Num,
+    /// Possible subtypes of `Num`
+    NumSubtype,
+    NumMember, as_num_ref, {
+        Int,
+        Float
+    }
+);
+
+define_tagged_union!(
+    /// Union of boolean types
+    Bool,
+    /// Possible subtypes of `Bool`
+    BoolSubtype,
+    BoolMember, as_bool_ref, {
+        True,
+        False
+    }
+);
 
 impl Bool {
+    /// Returns the singleton box corresponding the boolean value
     pub fn singleton_ref(value: bool) -> Gc<Bool> {
         if value {
             TRUE_INSTANCE.as_bool_ref()
@@ -382,6 +498,7 @@ impl Bool {
         }
     }
 
+    /// Returns the unboxed value of this boolean
     pub fn as_bool(&self) -> bool {
         match self.as_subtype() {
             BoolSubtype::True(_) => true,

@@ -1,3 +1,8 @@
+//! Functionality for garbage collecting heaps
+//!
+//! This is a basic tracing, moving garbage collector. It doesn't support generations or concurrent
+//! collection. Every collection starts with a strong pass followed by an optional weak pass.
+
 use std::ptr;
 
 use crate::boxed::heap::Heap;
@@ -12,7 +17,7 @@ struct ForwardingCell {
     new_location: Gc<Any>,
 }
 
-/// Represents a collection of strong references an old `Heap` in to a new `Heap`
+/// Strong pass from an old `Heap` in to a new `Heap`
 ///
 /// `visit_box` should be called for each GC root that needs to be moved to the new heap. Once all
 /// roots have been visited `into_new_heap` will return the new `Heap` or `into_weak_pass` will
@@ -23,6 +28,7 @@ pub struct StrongPass {
 }
 
 impl StrongPass {
+    /// Consumes an existing `Heap` to begin a garbage collection pass
     pub fn new(old_heap: Heap) -> StrongPass {
         let interner = old_heap.interner().clone_for_collect_garbage();
 
@@ -32,6 +38,7 @@ impl StrongPass {
         }
     }
 
+    /// Continues as a weak reference pass
     pub fn into_weak_pass(self) -> WeakPass {
         WeakPass {
             _old_heap: self.old_heap,
@@ -39,6 +46,7 @@ impl StrongPass {
         }
     }
 
+    /// Finishes garbage collection by returning the new `Heap`
     pub fn into_new_heap(self) -> Heap {
         let mut new_heap = self.new_heap;
         new_heap.save_len_at_gc();
@@ -80,6 +88,7 @@ impl StrongPass {
         *box_ref = unsafe { Gc::new(dest_location) };
     }
 
+    /// Visits a garbage collected box as a strong root
     pub fn visit_box<T: Boxed>(&mut self, box_ref: &mut Gc<T>) {
         let any_box_ref = unsafe { &mut *(box_ref as *mut _ as *mut Gc<Any>) };
         self.visit_any_box(any_box_ref);
@@ -152,7 +161,7 @@ impl StrongPass {
     }
 }
 
-/// Represents a the weak pass of a collection to a new `Heap`
+/// Weak pass of a collection to a new `Heap`
 ///
 /// This will return the location of cells that have been moved to the new heap or `None` for
 /// cells that were not visited during the strong pass.
@@ -163,12 +172,17 @@ pub struct WeakPass {
 }
 
 impl WeakPass {
+    /// Finishes garbage collection by returning the new `Heap`
     pub fn into_new_heap(self) -> Heap {
         let mut new_heap = self.new_heap;
         new_heap.save_len_at_gc();
         new_heap
     }
 
+    /// Visits a garbage collected box
+    ///
+    /// If the box was moved during the strong pass its new location will be returned. Otherwise,
+    /// `None` will be returned.
     pub fn new_heap_ref_for<T: Boxed>(&self, boxed: Gc<T>) -> Option<Gc<T>> {
         let any_boxed = unsafe { boxed.cast::<Any>() };
         self.new_heap_any_ref_for(any_boxed)
