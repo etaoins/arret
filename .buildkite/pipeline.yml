@@ -19,7 +19,7 @@ steps:
     branches: '!master'
     command: ./.buildkite/build-and-test.sh
     plugins:
-      - docker-compose#v3.0.1:
+      - docker-compose#v3.0.2:
           run: build-env
     agents:
       queue: arm64
