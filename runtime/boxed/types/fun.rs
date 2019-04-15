@@ -6,12 +6,22 @@ use crate::boxed::*;
 use crate::task;
 
 /// Opaque type for a function's closure
+///
+/// This has a meaning specific to the implementation of the function. This may be a dummy value
+/// (typically [`Nil`]) for functions without a closure, a single boxed value or a collection of
+/// multiple boxed values. The only external contract is that it must be a boxed value to allow for
+/// garbage collection.
 pub type Closure = Gc<Any>;
 
 /// Entry point for executing a function
 pub type ThunkEntry = extern "C" fn(&mut task::Task, Closure, Gc<Any>) -> Gc<Any>;
 
 /// Boxed function value with an optional closure
+///
+/// This is typically used in places where functions are used as values or stored in collections.
+/// For example, placing a function in a list will create a `FunThunk`. When taking an function as a
+/// parameter to an RFI function it's typically better to use a typed
+/// [`callback::Callback`](crate::callback::Callback).
 #[repr(C, align(16))]
 pub struct FunThunk {
     header: Header,

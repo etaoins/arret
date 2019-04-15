@@ -1,3 +1,8 @@
+//! Type encoding for Rust types
+//!
+//! This is a system of traits used to encode Rust types in a form understandable by the Arret
+//! compiler. It's used to ensure type safety across the RFI boundary.
+
 use crate::binding::Never;
 use crate::boxed;
 use crate::boxed::refs;

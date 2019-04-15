@@ -1,21 +1,21 @@
+//! Interned symbols
+//!
+//! This uses a fixed 8 byte representation for interned symbol. They are associated with a
+//! particular `Interner` instance which can return the original [`str`] name of the symbol.
+//! Interned symbols from the same `Interner` can be compared directly without a reference to
+//! the `Interner` instance.
+//!
+//! Symbol names of 8 bytes or less are encoded directly in the `InternedSym`` instance without
+//! storing the name in the `Interner`. They are padded with a constant invalid UTF-8 sequence so
+//! the length of the inline name can be recovered.
+//!
+//! The encoding for names larger than 8 bytes uses an index in to a [`Vec`] stored in the
+//! `Interner`. The indexed representation is invalid UTF-8 so it cannot collide with a valid
+//! symbol name.
+
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::{fmt, ptr, str};
-
-///! Interned symbols
-///!
-///! This uses a fixed 8 byte representation for interned symbol. They are associated with a
-///! particular `Interner` instance which can return the original `str` name of the symbol.
-///! Interned symbols from the same `Interner` can be compared directly without a reference to
-///! the `Interner` instance.
-///!
-///! Symbol names of 8 bytes or less are encoded directly in the `InternedSym` instance without
-///! storing the name in the `Interner`. They are padded with a constant invalid UTF-8 sequence so
-///! the length of the inline name can be recovered.
-///!
-///! The encoding for names larger than 8 bytes uses an index in to a `Vec` stored in the
-///! `Interner`. The indexed representation is invalid UTF-8 so it cannot collide with a valid
-///! symbol name.
 
 // UTF-8 sequences cannot start with 10xxxxxxx. This is pattern for the last continuation byte,
 // but any 1 byte sequences are encoded directly. We can use these values freely without colliding
@@ -85,8 +85,8 @@ enum InternedRepr<'a> {
 impl InternedSym {
     /// Tries to return an inline interned Sym
     ///
-    /// This can be accomplished without an `Interner` as we don't need to add a name to the
-    /// `Interner`'s index.
+    /// This can be accomplished without an [`Interner`] as we don't need to add a name to the
+    /// [`Interner`]'s index.
     pub fn try_from_inline_name(name: &str) -> Option<InternedSym> {
         if name.len() <= INLINE_SIZE {
             let mut interned_inline = InternedInline {
@@ -217,8 +217,8 @@ impl Interner {
 
     /// Interns a static symbol with the given name
     ///
-    /// This should only be used where it's not possible to GC root the `InternedSym`. This is
-    /// currently only used by the JIT where we can't track `InternedSym` references in the
+    /// This should only be used where it's not possible to GC root the [`InternedSym`]. This is
+    /// currently only used by the JIT where we can't track [`InternedSym`] references in the
     /// generated code.
     pub fn intern_static(&mut self, name: &str) -> InternedSym {
         let interned_sym = self.intern(name);
@@ -243,8 +243,8 @@ impl Interner {
 
     /// Returns a clone of this interner usable for garbage collection
     ///
-    /// This preserves the index of all static `InternedSym`s
-    pub fn clone_for_collect_garbage(&self) -> Self {
+    /// This preserves the index of all static [`InternedSym`]s.
+    pub(crate) fn clone_for_collect_garbage(&self) -> Self {
         if self.static_idx_watermark == 0 {
             // Avoid iterating over our HashMap
             return Self::new();

@@ -1,3 +1,7 @@
+#![warn(missing_docs)]
+
+//! Isolated tasks of execution
+
 use std::panic;
 
 use crate::binding::Never;
@@ -5,6 +9,11 @@ use crate::boxed::prelude::*;
 use crate::boxed::Heap;
 use crate::intern::{GlobalName, Interner};
 
+/// Isolated task of execution
+///
+/// All Arret and RFI code must run inside a task. It provides a dedicated garbage collected
+/// [`Heap`] as well as an isolation boundary against panics. A task is inherently single threaded;
+/// it's not possible for one task to be executing on multiple threads at the same time.
 pub struct Task {
     heap: Heap,
 }
@@ -12,29 +21,32 @@ pub struct Task {
 impl Task {
     const DEFAULT_CAPACITY: usize = 32;
 
+    /// Creates a new empty task
     pub fn new() -> Task {
         Task {
             heap: Heap::new(Interner::new(), Self::DEFAULT_CAPACITY),
         }
     }
 
-    pub fn with_global_interned_names(names: *const GlobalName) -> Task {
+    pub(crate) fn with_global_interned_names(names: *const GlobalName) -> Task {
         Task {
             heap: Heap::new(Interner::with_global_names(names), Self::DEFAULT_CAPACITY),
         }
     }
 
+    /// Returns this task's dedicated heap
     pub fn heap(&self) -> &Heap {
         &self.heap
     }
 
+    /// Returns a mutable reference to this task's dedicated heap
     pub fn heap_mut(&mut self) -> &mut Heap {
         &mut self.heap
     }
 
     /// Panics the current task
     ///
-    /// This destroys the current task and invokes any cleanup required
+    /// This destroys the current task and invokes any cleanup required.
     pub fn panic(&mut self, message: String) -> Never {
         // Using `resume_unwind` accomplishes two things:
         //

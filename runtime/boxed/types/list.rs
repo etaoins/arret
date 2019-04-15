@@ -121,7 +121,7 @@ where
     const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::List(&T::BOXED_ABI_TYPE);
 }
 
-/// Possible subtypes of `List`
+/// Possible subtypes of [`List`]
 pub enum ListSubtype<'a, T: Boxed>
 where
     T: 'a,
@@ -260,7 +260,7 @@ pub struct Nil {
     list_length: usize,
 }
 
-/// Static constant instance of `Nil`
+/// Static constant instance of [`Nil`]
 #[export_name = "ARRET_NIL"]
 pub static NIL_INSTANCE: Nil = Nil {
     header: Header {

@@ -68,8 +68,12 @@ steps:
   - label: ":books: Update Rustdoc"
     branches: "master"
     command:
+      # We need Nightly for intra-Rustdoc links. This is what crates.io uses as well.
+      - "echo '--- :rust: Installing Rust nightly'"
+      - rustup default nightly
+
       - "echo '--- :book: Building rustdoc'"
-      - cargo doc
+      - cargo doc --no-deps
 
       - "echo '--- :rust: Installing awscli'"
       - DEBIAN_FRONTEND=noninteractive apt-get -y install awscli

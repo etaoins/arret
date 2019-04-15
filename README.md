@@ -9,6 +9,10 @@ Arret is pure functional, strongly typed language with Lisp-like syntax.
 It aims to combine the expressiveness of Lisp with guarantees provided by functional programming.
 Concurrency will be provided through an Erlang-like model of actors communicating using message passing.
 
+The Arret compiler and parts of its standard library are written in Rust.
+The mechanism for calling Rust code from Arret is referred to as the Rust Function Interface or RFI.
+Documentation for the [`runtime` module](https://rustdoc.arret-lang.org/runtime/index.html) describes the core concepts of the RFI.
+
 ## Installation
 
 ### Docker REPL Image

@@ -57,7 +57,7 @@ impl BoxSize {
         }
     }
 
-    /// Returns the corresponding AllocType if this box was allocated on the heap
+    /// Returns the corresponding `AllocType` if this box was allocated on the heap
     pub fn to_heap_alloc_type(self) -> AllocType {
         match self {
             BoxSize::Size16 => AllocType::Heap16,
@@ -151,8 +151,8 @@ impl EncodeBoxedABIType for Any {
 
 /// Marks that this boxed struct has a specific constant type tag
 ///
-/// For example, `Vector<Str>` is `ConstTagged` because it always has a type tag of `Vector`. As a
-/// counterexample, `Num` is not because it could either have an `Int` or `Float` type tag.
+/// For example, [`Vector<Str>`] is `ConstTagged` because it always has a type tag of `Vector`. As
+/// a counterexample, [`Num`] is not because it could either have an `Int` or `Float` type tag.
 ///
 /// In mathematical terms this can be thought of as the struct being surjective to the type tag.
 pub trait ConstTagged: Boxed {
@@ -162,9 +162,9 @@ pub trait ConstTagged: Boxed {
 
 /// Indicates that this boxed struct does not share type tags with unrelated types
 ///
-/// For example, `Num` is `DistinctTagged` because it only shares type tags with `Any`, `Float` and
-/// `Int` which are all either subtypes or supertypes. As a counterexample, `Vector<Str>` is not
-/// because it shares a type tag with `Vector<Sym>`
+/// For example, [`Num`] is `DistinctTagged` because it only shares type tags with `Any`, `Float`
+/// and `Int` which are all either subtypes or supertypes. As a counterexample, [`Vector<Str>`] is
+/// not because it shares a type tag with [`Vector<Sym>`].
 ///
 /// In mathematical terms this can be thought of as the struct being injective to the type tag
 pub trait DistinctTagged: Boxed {
@@ -174,8 +174,8 @@ pub trait DistinctTagged: Boxed {
 
 /// Marks that every boxed value with `TYPE_TAG` corresponds to this boxed struct
 ///
-/// For example, `Str` is `UniqueTagged` because no other struct has the type tag of `Str`. As a
-/// counterexample, `Vector<Str>` is not because it shares a type tag with `Vector<Sym>`.
+/// For example, [`Str`] is `UniqueTagged` because no other struct has the type tag of `Str`. As a
+/// counterexample, p`Vector<Str>`] is not because it shares a type tag with `Vector<Sym>`.
 ///
 /// In mathematical terms this can be thought of as the struct being bijective with the type tag.
 pub trait UniqueTagged: ConstTagged + DistinctTagged {}
@@ -453,7 +453,7 @@ define_const_tagged_boxes! {
 define_singleton_box!(
     /// Boolean true
     True,
-    /// Static constant instance of `True`
+    /// Static constant instance of [`True`]
     TRUE_INSTANCE,
     "ARRET_TRUE"
 );
@@ -461,7 +461,7 @@ define_singleton_box!(
 define_singleton_box!(
     /// Boolean false
     False,
-    /// Static constant instance of `False`
+    /// Static constant instance of [`False`]
     FALSE_INSTANCE,
     "ARRET_FALSE"
 );
@@ -469,7 +469,7 @@ define_singleton_box!(
 define_tagged_union!(
     /// Union of numeric types
     Num,
-    /// Possible subtypes of `Num`
+    /// Possible subtypes of [`Num`]
     NumSubtype,
     NumMember, as_num_ref, {
         Int,
@@ -480,7 +480,7 @@ define_tagged_union!(
 define_tagged_union!(
     /// Union of boolean types
     Bool,
-    /// Possible subtypes of `Bool`
+    /// Possible subtypes of [`Bool`]
     BoolSubtype,
     BoolMember, as_bool_ref, {
         True,

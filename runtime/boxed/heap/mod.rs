@@ -41,7 +41,7 @@ impl Segment {
 
     /// Returns contiguous memory for holding `count` cells
     ///
-    /// If the segment is full this will return `None`
+    /// If the segment is full this will return [`None`]
     fn alloc_cells(&mut self, count: usize) -> Option<*mut Any> {
         let current_next = self.next;
         let new_next = unsafe { self.next.add(count) };
@@ -102,7 +102,7 @@ impl Heap {
         Self::new(Interner::new(), Self::DEFAULT_CAPACITY)
     }
 
-    /// Returns a new hep with the given symbol interner and capacity
+    /// Returns a new heap with the given symbol interner and capacity
     pub fn new(interner: Interner, count: usize) -> Heap {
         Heap {
             current_segment: Segment::with_capacity(count),
@@ -124,7 +124,7 @@ impl Heap {
         self.len_at_last_gc = self.len();
     }
 
-    /// Allocates space for contiguous `count` cells
+    /// Allocates space for `count` contiguous cells
     pub fn alloc_cells(&mut self, count: usize) -> *mut Any {
         if let Some(alloc) = self.current_segment.alloc_cells(count) {
             return alloc;

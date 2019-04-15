@@ -1,7 +1,16 @@
+#![warn(missing_docs)]
+
+//! Typed callback functions
+
 use crate::abitype;
 use crate::boxed;
 use crate::task::Task;
 
+/// Typed callback function
+///
+/// This is typically when taking a callback as a parameter to an RFI function. This is not a
+/// proper boxed value and can neither be stored in a collection or returned as a value. For those
+/// cases [`boxed::FunThunk`] should be used instead.
 #[repr(C)]
 pub struct Callback<F>
 where
@@ -15,34 +24,37 @@ impl<F> Callback<F>
 where
     F: EncodeEntryPointABIType,
 {
-    pub fn new(closure: boxed::Closure, entry_point: F) -> Callback<F> {
-        Callback {
-            closure,
-            entry_point,
-        }
-    }
-
+    /// Returns the closure for this callback
     pub fn closure(&self) -> boxed::Closure {
         self.closure
     }
 
+    /// Returns the entry point to the callback's implementation
+    ///
+    /// This would typically be used via `apply`.
     pub fn entry_point(&self) -> F {
         self.entry_point
     }
 }
 
+/// Encoding of an entry point's ABI type
+///
+/// This is used internally by the compiler as a mechanism for reflecting the Rust function type.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct EntryPointABIType {
     /// Types of the entry point's parameters
     ///
-    /// This is not a ParamABIType as captures should be determined by the callback implementation,
-    /// not the callback's type.
+    /// This is not an [`abitype::ParamABIType`] as captures should be determined by the callback
+    /// implementation, not the callback's type.
     pub params: &'static [abitype::ABIType],
 
+    /// Type of the entry point's return value
     pub ret: abitype::RetABIType,
 }
 
+/// Trait used to encode a Rust function type as an [`EntryPointABIType`]
 pub trait EncodeEntryPointABIType: Copy {
+    /// Corresponding [`EntryPointABIType`] for this Rust function type
     const ENTRY_POINT_ABI_TYPE: EntryPointABIType;
 }
 
@@ -64,6 +76,10 @@ macro_rules! define_generic_entry_point {
             R: abitype::EncodeRetABIType,
             $( $generic_param: abitype::EncodeABIType ),*
         {
+            /// Applies this callback inside the given [`Task`] and returns its value
+            ///
+            /// It's important that the callback was created inside the passed `task` or undefined
+            /// behaviour may result.
             #[allow(unused)]
             #[allow(non_snake_case)]
             #[allow(clippy::too_many_arguments)]
