@@ -31,7 +31,7 @@ fn can_reference_local_regs(value: &Value) -> bool {
         Value::Reg(_) => true,
         Value::ArretFun(arret_fun) => !arret_fun.closure().free_values.is_empty(),
         Value::List(fixed, rest) => {
-            let mut inner_values = fixed.iter().chain(rest.iter().map(|x| x.as_ref()));
+            let mut inner_values = fixed.iter().chain(rest.iter().map(AsRef::as_ref));
             !inner_values.any(can_reference_local_regs)
         }
     }
