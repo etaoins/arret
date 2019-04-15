@@ -624,7 +624,8 @@ impl EvalHirCtx {
         use crate::mir::value::to_const::value_to_const;
 
         if let Some(actual_value) = self.thunk_fun_values.get(&fun_thunk) {
-            return self.eval_value_app(fcx, b, span, ret_ty, &actual_value.clone(), apply_args);
+            let actual_value = actual_value.clone();
+            return self.eval_value_app(fcx, b, span, ret_ty, &actual_value, apply_args);
         }
 
         if b.is_some() {

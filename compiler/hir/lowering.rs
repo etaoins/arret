@@ -685,17 +685,18 @@ impl<'ccx> LoweringCtx<'ccx> {
             if let Some(NsDatum::Ident(fn_span, ref ident)) = data_iter.next() {
                 match scope.get_or_err(fn_span, ident)? {
                     Binding::Prim(prim) => {
+                        let prim = *prim;
                         return self.lower_module_prim_apply(
                             scope,
                             span,
                             ident.ns_id(),
-                            *prim,
+                            prim,
                             data_iter,
                         );
                     }
                     Binding::Macro(mac) => {
-                        let expanded_datum =
-                            expand_macro(scope, span, &mac.clone(), data_iter.as_slice())?;
+                        let mac = &mac.clone();
+                        let expanded_datum = expand_macro(scope, span, &mac, data_iter.as_slice())?;
 
                         return self
                             .lower_module_def(scope, expanded_datum)
