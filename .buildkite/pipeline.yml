@@ -64,6 +64,8 @@ steps:
             repl:etaoins/arret:repl
           env:
             - BUILDKITE_COMMIT
+    concurrency_group: 'push-repl-image'
+    concurrency: 1
 
   - label: ":books: Update Rustdoc"
     branches: "master"
