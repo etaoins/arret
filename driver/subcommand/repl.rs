@@ -279,7 +279,6 @@ fn parse_command(mut line: String) -> ParsedCommand {
 
 pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
     use compiler::repl::{EvalKind, EvaledLine};
-    use rustyline;
     use rustyline::error::ReadlineError;
 
     // Setup our REPL backend
