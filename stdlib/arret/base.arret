@@ -90,6 +90,14 @@
 (defn dec ([i Int]) -> Int
   (- i 1))
 
+(export true?)
+(defn true? ([v Any]) -> Bool
+  (= true v))
+
+(export false?)
+(defn false? ([v Any]) -> Bool
+  (= false v))
+
 (export ->>)
 (defmacro ->> (macro-rules
   [(initial) initial]

@@ -156,6 +156,10 @@ pub fn eval_equality(
     .iter()
     .collect();
 
+    // TODO: Optimise comparing bools:
+    // - When comparing a bool to `true` we can directly return the other bool
+    // - We should be able to compare two native bools without boxing them
+
     let result_reg = if common_type_tags.is_subset(boxed_singleton_type_tags) {
         // We an do a direct pointer comparison
         build_native_compare(
