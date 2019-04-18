@@ -59,7 +59,7 @@ steps:
       - docker-login#v2.0.1:
           username: etaoins
           password-env: DOCKER_HUB_PASSWORD
-      - docker-compose#v3.0.0:
+      - docker-compose#v3.0.2:
           push:
             repl:etaoins/arret:repl
           env:
