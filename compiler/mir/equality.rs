@@ -268,6 +268,16 @@ pub fn eval_equality(
             &abitype::ABIType::Char,
             OpKind::CharEqual,
         )
+    } else if all_type_tags == boxed::TypeTag::Sym.into() {
+        build_native_compare(
+            ehx,
+            b,
+            span,
+            left_value,
+            right_value,
+            &abitype::ABIType::InternedSym,
+            OpKind::InternedSymEqual,
+        )
     } else if all_type_tags == boxed::TypeTag::Float.into() {
         build_native_compare(
             ehx,

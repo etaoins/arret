@@ -33,4 +33,8 @@
   (assert-fn-doesnt-contain-op :reg-op (fn ([v Bool]) -> Bool
     (= true v)))
 
+  ; Syms can be directly compared
+  (assert-native-compare-fn (fn ([left Sym] [right Sym]) -> Bool
+    (= left right)))
+
   ())

@@ -20,13 +20,39 @@ pub enum BoxedABIType {
 
 pub const TOP_LIST_BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::List(&BoxedABIType::Any);
 
+/// Encoded type for any boxed or unboxed value
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum ABIType {
+    /// Unboxed boolean value
+    ///
+    /// This is identical to [`bool`] in Rust and C++
     Bool,
+
+    /// Unboxed character value
+    ///
+    /// This is identical to [`char`] in Rust and `wchar_t` in C++
     Char,
+
+    /// Unboxed 64bit float
+    ///
+    /// This is identical to [`f64`] in Rust and `double` in C++
     Float,
+
+    /// Unboxed signed 64bit integer
+    ///
+    /// This is identical to in [`i64`] in Rust and `std::int64_t` in C++
     Int,
+
+    /// Interned integer for a `Sym`
+    ///
+    /// While this corresponds to [`InternedSym`](crate::intern::InternedSym) it's currently only
+    /// used internally by the compiler.
+    InternedSym,
+
+    /// [Boxed value](crate::boxed)
     Boxed(BoxedABIType),
+
+    /// [Callback function](crate::callback)
     Callback(&'static callback::EntryPointABIType),
 }
 

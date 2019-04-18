@@ -143,6 +143,7 @@ impl<'a> From<&'a abitype::ABIType> for TypeTagSet {
             ABIType::Float => TypeTag::Float.into(),
             ABIType::Char => TypeTag::Char.into(),
             ABIType::Bool => [TypeTag::True, TypeTag::False].iter().collect(),
+            ABIType::InternedSym => TypeTag::Sym.into(),
             ABIType::Boxed(boxed_abi_type) => boxed_abi_type.into(),
             ABIType::Callback(_) => TypeTag::FunThunk.into(),
         }

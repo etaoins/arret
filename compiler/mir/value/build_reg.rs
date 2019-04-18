@@ -44,6 +44,11 @@ fn const_to_reg(
         (boxed::AnySubtype::False(_), abitype::ABIType::Bool) => {
             b.push_reg(span, OpKind::ConstBool, false)
         }
+        (boxed::AnySubtype::Sym(sym_ref), abitype::ABIType::InternedSym) => b.push_reg(
+            span,
+            OpKind::ConstInternedSym,
+            sym_ref.name(ehx.as_heap().interner()).into(),
+        ),
         (boxed::AnySubtype::Int(int_ref), abitype::ABIType::Boxed(to_abi_type)) => {
             let from_abi_type = boxed::TypeTag::Int.into();
             let from_reg = b.push_reg(span, OpKind::ConstBoxedInt, int_ref.value());
@@ -278,8 +283,13 @@ pub fn reg_to_boxed_reg(
                 .into()
             },
         ),
+        // The following are ephemeral unboxed types. They cannot be returned from functions and
+        // should never need to be boxed.
         abitype::ABIType::Callback(_) => {
             unimplemented!("callback to boxed reg {:?} conversion", to_boxed)
+        }
+        abitype::ABIType::InternedSym => {
+            unimplemented!("interned sym to boxed reg {:?} conversion", to_boxed)
         }
     }
 }
@@ -346,6 +356,11 @@ fn reg_to_reg(
         }
         (abitype::ABIType::Boxed(from_boxed), abitype::ABIType::Bool) => {
             boxed_to_bool(b, span, from_boxed, reg_value.reg)
+        }
+        (abitype::ABIType::Boxed(from_boxed), abitype::ABIType::InternedSym) => {
+            let boxed_sym_reg =
+                b.cast_boxed_cond(span, from_boxed, reg_value.reg, TypeTag::Sym.into());
+            b.push_reg(span, OpKind::LoadBoxedSymInterned, boxed_sym_reg.into())
         }
         (abitype::ABIType::Boxed(from_boxed), abitype::ABIType::Callback(entry_point_abi)) => {
             ehx.thunk_reg_to_callback_reg(b, span, from_boxed, reg_value.reg, entry_point_abi)

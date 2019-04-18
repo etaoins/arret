@@ -54,6 +54,15 @@ fn gen_op(
                 let llvm_value = LLVMConstInt(LLVMInt1TypeInContext(tcx.llx), *value as u64, 1);
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::ConstInternedSym(reg, value) => {
+                let interned_sym = mcx.intern_name(value);
+                let llvm_value = LLVMConstInt(
+                    LLVMInt64TypeInContext(tcx.llx),
+                    interned_sym.to_raw_u64(),
+                    1,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
             OpKind::ConstTypeTag(reg, type_tag) => {
                 let llvm_value = LLVMConstInt(LLVMInt8TypeInContext(tcx.llx), *type_tag as u64, 1);
                 fcx.regs.insert(*reg, llvm_value);
@@ -267,6 +276,24 @@ fn gen_op(
 
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::LoadBoxedSymInterned(reg, boxed_sym_reg) => {
+                let llvm_boxed_sym = fcx.regs[boxed_sym_reg];
+                let value_ptr = LLVMBuildStructGEP(
+                    fcx.builder,
+                    llvm_boxed_sym,
+                    1,
+                    b"interned_sym_ptr\0".as_ptr() as *const _,
+                );
+
+                let llvm_value = LLVMBuildLoad(
+                    fcx.builder,
+                    value_ptr,
+                    "interned_sym\0".as_ptr() as *const _,
+                );
+                tcx.add_invariant_load_metadata(llvm_value);
+
+                fcx.regs.insert(*reg, llvm_value);
+            }
             OpKind::LoadBoxedFloatValue(reg, boxed_float_reg) => {
                 let llvm_boxed_float = fcx.regs[boxed_float_reg];
                 let value_ptr = LLVMBuildStructGEP(
@@ -412,7 +439,8 @@ fn gen_op(
             }
             OpKind::IntEqual(reg, BinaryOp { lhs_reg, rhs_reg })
             | OpKind::BoolEqual(reg, BinaryOp { lhs_reg, rhs_reg })
-            | OpKind::CharEqual(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+            | OpKind::CharEqual(reg, BinaryOp { lhs_reg, rhs_reg })
+            | OpKind::InternedSymEqual(reg, BinaryOp { lhs_reg, rhs_reg }) => {
                 let llvm_lhs = fcx.regs[lhs_reg];
                 let llvm_rhs = fcx.regs[rhs_reg];
 
