@@ -2,6 +2,7 @@ use syntax::span::Span;
 
 use runtime::abitype;
 use runtime::boxed;
+use runtime::boxed::prelude::*;
 
 use crate::codegen::GenABI;
 use crate::mir::builder::{Builder, BuiltReg};
@@ -81,6 +82,81 @@ where
     )
 }
 
+/// Builds a comparison between two values known to be boolean
+fn build_bool_equality(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    left_value: &Value,
+    right_value: &Value,
+) -> Value {
+    enum ValueClass {
+        ConstTrue,
+        Boxed,
+        Other,
+    };
+
+    fn classify_value(value: &Value) -> ValueClass {
+        match value {
+            Value::Const(any_ref) if any_ref == &boxed::TRUE_INSTANCE.as_any_ref() => {
+                ValueClass::ConstTrue
+            }
+            Value::Reg(reg_value) => {
+                if let abitype::ABIType::Boxed(_) = &reg_value.abi_type {
+                    ValueClass::Boxed
+                } else {
+                    ValueClass::Other
+                }
+            }
+            _ => ValueClass::Other,
+        }
+    }
+
+    let left_class = classify_value(left_value);
+    let right_class = classify_value(left_value);
+
+    let result_reg = match (left_class, right_class) {
+        // Comparing a boolean to constant true can be simplified to a no-op
+        (ValueClass::ConstTrue, _) => {
+            return right_value.clone();
+        }
+        (_, ValueClass::ConstTrue) => {
+            return left_value.clone();
+        }
+        (ValueClass::Boxed, ValueClass::Boxed) => {
+            // If both values are boxed we can just compare the pointers
+            build_native_compare(
+                ehx,
+                b,
+                span,
+                left_value,
+                right_value,
+                &abitype::BoxedABIType::Any.into(),
+                OpKind::BoxIdentical,
+            )
+        }
+        _ => {
+            // Fall back to a native comparison of the unboxed values
+            build_native_compare(
+                ehx,
+                b,
+                span,
+                left_value,
+                right_value,
+                &abitype::ABIType::Bool,
+                OpKind::BoolEqual,
+            )
+        }
+    };
+
+    reg_to_value(
+        ehx,
+        result_reg,
+        &abitype::ABIType::Bool,
+        &ty::Ty::Bool.into(),
+    )
+}
+
 /// Determines if two values are statically equal
 pub fn values_statically_equal(
     ehx: &mut EvalHirCtx,
@@ -146,8 +222,13 @@ pub fn eval_equality(
     let left_type_tags = possible_type_tags_for_value(left_value);
     let right_type_tags = possible_type_tags_for_value(right_value);
     let all_type_tags = left_type_tags | right_type_tags;
-    let common_type_tags = left_type_tags & right_type_tags;
 
+    if all_type_tags == abitype::ABIType::Bool.into() {
+        // Build a specialised comparison for `Bool`
+        return build_bool_equality(ehx, b, span, left_value, right_value);
+    }
+
+    let common_type_tags = left_type_tags & right_type_tags;
     let boxed_singleton_type_tags: TypeTagSet = [
         boxed::TypeTag::True,
         boxed::TypeTag::False,
@@ -155,10 +236,6 @@ pub fn eval_equality(
     ]
     .iter()
     .collect();
-
-    // TODO: Optimise comparing bools:
-    // - When comparing a bool to `true` we can directly return the other bool
-    // - We should be able to compare two native bools without boxing them
 
     let result_reg = if common_type_tags.is_subset(boxed_singleton_type_tags) {
         // We an do a direct pointer comparison

@@ -167,6 +167,7 @@ pub enum OpKind {
     MakeCallback(RegId, MakeCallbackOp),
 
     IntEqual(RegId, BinaryOp),
+    BoolEqual(RegId, BinaryOp),
     CharEqual(RegId, BinaryOp),
     FloatEqual(RegId, BinaryOp),
     BoxIdentical(RegId, BinaryOp),
@@ -254,8 +255,9 @@ impl OpKind {
             | Int64CheckedDiv(reg_id, _)
             | Int64CheckedRem(reg_id, _) => Some(*reg_id),
             IntEqual(reg_id, _)
-            | FloatEqual(reg_id, _)
+            | BoolEqual(reg_id, _)
             | CharEqual(reg_id, _)
+            | FloatEqual(reg_id, _)
             | BoxIdentical(reg_id, _)
             | UsizeToInt64(reg_id, _)
             | Int64ToFloat(reg_id, _)
@@ -370,8 +372,9 @@ impl OpKind {
             | Int64CheckedDiv(_, binary_op)
             | Int64CheckedRem(_, binary_op)
             | IntEqual(_, binary_op)
-            | FloatEqual(_, binary_op)
+            | BoolEqual(_, binary_op)
             | CharEqual(_, binary_op)
+            | FloatEqual(_, binary_op)
             | BoxIdentical(_, binary_op) => {
                 coll.extend([binary_op.lhs_reg, binary_op.rhs_reg].iter().cloned());
             }
@@ -458,8 +461,9 @@ impl OpKind {
             | Int64CheckedDiv(_, _)
             | Int64CheckedRem(_, _)
             | IntEqual(_, _)
-            | FloatEqual(_, _)
+            | BoolEqual(_, _)
             | CharEqual(_, _)
+            | FloatEqual(_, _)
             | BoxIdentical(_, _)
             | Int64ToFloat(_, _) => OpCategory::RegOp,
 

@@ -411,6 +411,7 @@ fn gen_op(
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::IntEqual(reg, BinaryOp { lhs_reg, rhs_reg })
+            | OpKind::BoolEqual(reg, BinaryOp { lhs_reg, rhs_reg })
             | OpKind::CharEqual(reg, BinaryOp { lhs_reg, rhs_reg }) => {
                 let llvm_lhs = fcx.regs[lhs_reg];
                 let llvm_rhs = fcx.regs[rhs_reg];

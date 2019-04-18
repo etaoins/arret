@@ -149,6 +149,12 @@ impl<'a> From<&'a abitype::ABIType> for TypeTagSet {
     }
 }
 
+impl From<abitype::ABIType> for TypeTagSet {
+    fn from(abi_type: abitype::ABIType) -> TypeTagSet {
+        (&abi_type).into()
+    }
+}
+
 impl iter::FromIterator<TypeTag> for TypeTagSet {
     fn from_iter<I: IntoIterator<Item = TypeTag>>(iter: I) -> TypeTagSet {
         let mut type_tag_set = TypeTagSet::new();
