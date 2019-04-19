@@ -36,20 +36,20 @@ pub fn list_to_const(
 ///
 /// Regs do not have a constant value at compile type; they will return None
 pub fn value_to_const(ehx: &mut EvalHirCtx, value: &Value) -> Option<Gc<boxed::Any>> {
-    use crate::mir::value::synthetic_fun::{eq_pred_arret_fun, ty_pred_arret_fun};
-
     match value {
         Value::Const(boxed) => Some(*boxed),
         Value::List(fixed, Some(rest)) => list_to_const(ehx, fixed, Some(&*rest)),
         Value::List(fixed, None) => list_to_const(ehx, fixed, None),
-        Value::TyPred(test_ty) => ehx
-            .arret_fun_to_jit_boxed(&ty_pred_arret_fun(*test_ty))
-            .map(|f| f.as_any_ref()),
-
-        Value::EqPred => ehx
-            .arret_fun_to_jit_boxed(&eq_pred_arret_fun())
-            .map(|f| f.as_any_ref()),
-
+        Value::TyPred(test_ty) => {
+            let ty_pred_arret_fun = ehx.synthetic_funs().ty_pred_arret_fun(*test_ty).clone();
+            ehx.arret_fun_to_jit_boxed(&ty_pred_arret_fun)
+                .map(|f| f.as_any_ref())
+        }
+        Value::EqPred => {
+            let eq_pred_arret_fun = ehx.synthetic_funs().eq_pred_arret_fun().clone();
+            ehx.arret_fun_to_jit_boxed(&eq_pred_arret_fun)
+                .map(|f| f.as_any_ref())
+        }
         Value::ArretFun(ref arret_fun) => ehx
             .arret_fun_to_jit_boxed(arret_fun)
             .map(|f| f.as_any_ref()),

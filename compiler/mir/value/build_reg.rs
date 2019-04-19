@@ -453,12 +453,12 @@ pub fn value_to_reg(
         }
         Value::ArretFun(ref arret_fun) => arret_fun_to_reg(ehx, b, span, arret_fun, abi_type),
         Value::TyPred(test_ty) => {
-            use crate::mir::value::synthetic_fun::ty_pred_arret_fun;
-            arret_fun_to_reg(ehx, b, span, &ty_pred_arret_fun(*test_ty), abi_type)
+            let ty_pred_arret_fun = ehx.synthetic_funs().ty_pred_arret_fun(*test_ty).clone();
+            arret_fun_to_reg(ehx, b, span, &ty_pred_arret_fun, abi_type)
         }
         Value::EqPred => {
-            use crate::mir::value::synthetic_fun::eq_pred_arret_fun;
-            arret_fun_to_reg(ehx, b, span, &eq_pred_arret_fun(), abi_type)
+            let eq_pred_arret_fun = ehx.synthetic_funs().eq_pred_arret_fun().clone();
+            arret_fun_to_reg(ehx, b, span, &eq_pred_arret_fun, abi_type)
         }
         Value::RustFun(ref rust_fun) => rust_fun_to_reg(ehx, b, span, rust_fun, abi_type),
     }

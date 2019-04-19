@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use syntax::span::EMPTY_SPAN;
 
 use crate::hir;
@@ -8,7 +9,7 @@ use crate::ty::purity;
 use crate::ty::purity::Purity;
 use crate::ty::ty_args::TyArgs;
 
-pub fn eq_pred_arret_fun() -> value::ArretFun {
+fn new_eq_pred_arret_fun() -> value::ArretFun {
     let left_var_id = hir::VarId::alloc();
     let right_var_id = hir::VarId::alloc();
 
@@ -64,7 +65,7 @@ pub fn eq_pred_arret_fun() -> value::ArretFun {
     )
 }
 
-pub fn ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
+fn new_ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
     let subject_var_id = hir::VarId::alloc();
 
     value::ArretFun::new(
@@ -110,4 +111,27 @@ pub fn ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
             },
         },
     )
+}
+
+#[derive(Default)]
+pub struct SyntheticFuns {
+    eq_pred_arret_fun: Option<value::ArretFun>,
+    ty_pred_arret_fun: HashMap<ty::pred::TestTy, value::ArretFun>,
+}
+
+impl SyntheticFuns {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn eq_pred_arret_fun(&mut self) -> &value::ArretFun {
+        self.eq_pred_arret_fun
+            .get_or_insert_with(new_eq_pred_arret_fun)
+    }
+
+    pub fn ty_pred_arret_fun(&mut self, test_ty: ty::pred::TestTy) -> &value::ArretFun {
+        self.ty_pred_arret_fun
+            .entry(test_ty)
+            .or_insert_with(|| new_ty_pred_arret_fun(test_ty))
+    }
 }

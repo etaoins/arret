@@ -22,6 +22,7 @@ use crate::mir::inliner;
 use crate::mir::ops;
 use crate::mir::polymorph::PolymorphABI;
 use crate::mir::value;
+use crate::mir::value::synthetic_fun::SyntheticFuns;
 use crate::mir::{Expr, Value};
 use crate::rfi;
 use crate::ty;
@@ -48,6 +49,7 @@ pub struct EvalHirCtx {
     private_funs: HashMap<ops::PrivateFunId, ops::Fun>,
     rust_funs: HashMap<RustFunKey, ops::PrivateFunId>,
     arret_funs: HashMap<ArretFunKey, ops::PrivateFunId>,
+    synthetic_funs: SyntheticFuns,
 
     rust_fun_thunks: HashMap<usize, boxed::ThunkEntry>,
     thunk_fun_values: HashMap<Gc<boxed::FunThunk>, Value>,
@@ -156,6 +158,7 @@ impl EvalHirCtx {
             private_funs: HashMap::new(),
             rust_funs: HashMap::new(),
             arret_funs: HashMap::new(),
+            synthetic_funs: SyntheticFuns::new(),
 
             rust_fun_thunks: HashMap::new(),
             thunk_fun_values: HashMap::new(),
@@ -251,6 +254,10 @@ impl EvalHirCtx {
 
     fn eval_lit(&mut self, literal: &Datum) -> Value {
         reader::box_syntax_datum(self, literal).into()
+    }
+
+    pub(super) fn synthetic_funs(&mut self) -> &mut SyntheticFuns {
+        &mut self.synthetic_funs
     }
 
     pub(super) fn build_arret_fun_app(
