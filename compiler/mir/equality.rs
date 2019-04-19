@@ -179,11 +179,15 @@ pub fn values_statically_equal(
                 None
             }
         }
-        (Value::RustFun(left_fun), Value::RustFun(right_fun)) => {
-            Some(left_fun.symbol() == right_fun.symbol())
-        }
-        (Value::EqPred, Value::EqPred) => Some(true),
-        (Value::TyPred(left_ty), Value::TyPred(right_ty)) => Some(left_ty == right_ty),
+        // Functions never compare equal
+        (Value::ArretFun(_), _)
+        | (_, Value::ArretFun(_))
+        | (Value::RustFun(_), _)
+        | (_, Value::RustFun(_))
+        | (Value::TyPred(_), _)
+        | (_, Value::TyPred(_))
+        | (Value::EqPred, _)
+        | (_, Value::EqPred) => Some(false),
         _ => {
             if let Some(const_left) = value_to_const(ehx, left_value) {
                 if let Some(const_right) = value_to_const(ehx, right_value) {
@@ -222,13 +226,18 @@ pub fn eval_equality(
     let left_type_tags = possible_type_tags_for_value(left_value);
     let right_type_tags = possible_type_tags_for_value(right_value);
     let all_type_tags = left_type_tags | right_type_tags;
+    let common_type_tags = left_type_tags & right_type_tags;
+
+    if [left_type_tags, right_type_tags].contains(&boxed::TypeTag::FunThunk.into()) {
+        // Functions always compare false
+        return boxed::FALSE_INSTANCE.as_any_ref().into();
+    }
 
     if all_type_tags == abitype::ABIType::Bool.into() {
         // Build a specialised comparison for `Bool`
         return build_bool_equality(ehx, b, span, left_value, right_value);
     }
 
-    let common_type_tags = left_type_tags & right_type_tags;
     let boxed_singleton_type_tags: TypeTagSet = [
         boxed::TypeTag::True,
         boxed::TypeTag::False,

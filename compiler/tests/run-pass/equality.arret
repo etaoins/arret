@@ -5,28 +5,28 @@
   ; This is very tempting to simpify to `true` but that's not valid for NaN
   (= arg arg))
 
-(defn test-int-equality! ()
+(defn test-int-equality! () ->! ()
   (assert-eq (black-box! 1) (black-box! 1))
   (assert-ne (black-box! 1) (black-box! 2)))
 
-(defn test-bool-equality! ()
+(defn test-bool-equality! () ->! ()
   (assert-eq (black-box! true) (black-box! true))
   (assert-ne (black-box! true) (black-box! false))
   (assert-eq (black-box! false) (black-box! false)))
 
-(defn test-sym-equality! ()
+(defn test-sym-equality! () ->! ()
   (assert-eq (black-box! 'inline1) (black-box! 'inline1))
   (assert-ne (black-box! 'inline1) (black-box! 'inline2))
 
   (assert-eq (black-box! 'definitely-out-of-line1) (black-box! 'definitely-out-of-line1))
   (assert-ne (black-box! 'definitely-out-of-line1) (black-box! 'definitely-out-of-line2)))
 
-(defn test-list-equality! ()
+(defn test-list-equality! () ->! ()
   (assert-eq (black-box! ()) (black-box! ()))
   (assert-ne (black-box! ()) (black-box! '(1 2 3)))
   (assert-eq true ((black-box! =) (black-box! ()) (black-box! ()))))
 
-(defn test-nan-equality! ()
+(defn test-nan-equality! () ->! ()
   (assert-eq false (= ##NaN ##NaN))
   (assert-eq false ((black-box! =) ##NaN ##NaN))
   (assert-eq false (= (black-box! ##NaN) (black-box! ##NaN)))
@@ -34,18 +34,33 @@
 
   (assert-eq false (arg-is-self-equal (black-box! ##NaN))))
 
-(defn test-float-zero-equality! ()
+(defn test-float-zero-equality! () ->! ()
   (assert-eq true (= 0.0 -0.0))
   (assert-eq true ((black-box! =) -0.0 0.0))
   (assert-eq true (= (black-box! 0.0) (black-box! -0.0)))
   (assert-eq true ((black-box! =) (black-box! -0.0) (black-box! 0.0))))
 
-
-(defn test-char-equality! ()
+(defn test-char-equality! () ->! ()
   (assert-eq (black-box! \space) (black-box! \space))
   (assert-eq \space (black-box! \space))
   (assert-ne (black-box! \newline) \space)
   (assert-ne (black-box! \newline) (black-box! \space)))
+
+; Make sure functions never compare equal
+(defn test-fn-equality! () ->! ()
+  ; Synthetic fun
+  (assert-ne = =)
+  ; Rust fun
+  (assert-ne + +)
+  ; Self fun 
+  (assert-ne test-fn-equality! test-fn-equality!)
+  ; Arret fun
+  (assert-ne test-sym-equality! test-sym-equality!)
+
+  (assert-eq false ((black-box! =) = =))
+  (assert-eq false ((black-box! =) + +))
+  (assert-eq false ((black-box! =) test-fn-equality! test-fn-equality!))
+  (assert-eq false ((black-box! =) test-sym-equality! test-sym-equality!)))
 
 (defn main! ()
   (test-int-equality!)
@@ -55,5 +70,6 @@
   (test-nan-equality!)
   (test-float-zero-equality!)
   (test-char-equality!)
+  (test-fn-equality!)
 
   ())

@@ -37,4 +37,8 @@
   (assert-native-compare-fn (fn ([left Sym] [right Sym]) -> Bool
     (= left right)))
 
+  ; Fns can be directly compared because they're always inequal
+  (assert-native-compare-fn (fn ([left (... -> Any)] [right (... -> Any)]) -> Bool
+    (= left right)))
+
   ())

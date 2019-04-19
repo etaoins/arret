@@ -60,8 +60,9 @@ impl FunThunk {
 }
 
 impl PartialEq for FunThunk {
-    fn eq(&self, other: &FunThunk) -> bool {
-        self as *const _ == other as *const _
+    fn eq(&self, _: &FunThunk) -> bool {
+        // There is no reliable way to compare functions so they're always inequal
+        false
     }
 }
 
