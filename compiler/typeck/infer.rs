@@ -32,11 +32,18 @@ impl InferredNode {
         let type_conds = if poly_type == ty::Ty::Bool.into() {
             // This seems useless but it allows occurrence typing to work if this type
             // flows through another node such as `(do)` or `(let)`
-            vec![VarTypeCond {
-                var_id,
-                type_if_true: ty::Ty::LitBool(true).into(),
-                type_if_false: ty::Ty::LitBool(false).into(),
-            }]
+            vec![
+                VarTypeCond {
+                    when: NodeBool::True,
+                    override_var_id: var_id,
+                    override_type: ty::Ty::LitBool(true).into(),
+                },
+                VarTypeCond {
+                    when: NodeBool::False,
+                    override_var_id: var_id,
+                    override_type: ty::Ty::LitBool(false).into(),
+                },
+            ]
         } else {
             vec![]
         };
@@ -64,18 +71,32 @@ impl InferredNode {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum NodeBool {
+    True,
+    False,
+}
+
+impl NodeBool {
+    fn inverted(self) -> NodeBool {
+        match self {
+            NodeBool::True => NodeBool::False,
+            NodeBool::False => NodeBool::True,
+        }
+    }
+}
+
 struct VarTypeCond {
-    var_id: hir::VarId,
-    type_if_true: ty::Ref<ty::Poly>,
-    type_if_false: ty::Ref<ty::Poly>,
+    when: NodeBool,
+    override_var_id: hir::VarId,
+    override_type: ty::Ref<ty::Poly>,
 }
 
 impl VarTypeCond {
     fn reversed(self) -> VarTypeCond {
         VarTypeCond {
-            var_id: self.var_id,
-            type_if_true: self.type_if_false,
-            type_if_false: self.type_if_true,
+            when: self.when.inverted(),
+            ..self
         }
     }
 }
@@ -310,6 +331,49 @@ impl<'types> RecursiveDefsCtx<'types> {
         })
     }
 
+    /// Calls the passed function with var types overridden by the specified type conds
+    ///
+    /// The var types will be restored after the function returns.
+    fn with_type_conds_applied<F, R>(
+        &mut self,
+        type_conds: &[VarTypeCond],
+        node_bool: NodeBool,
+        inner: F,
+    ) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let restore_var_types = type_conds
+            .iter()
+            .filter(|tc| tc.when == node_bool)
+            .map(|type_cond| {
+                let VarTypeCond {
+                    override_var_id,
+                    ref override_type,
+                    ..
+                } = *type_cond;
+
+                (
+                    override_var_id,
+                    self.var_to_type
+                        .insert(override_var_id, VarType::Known(override_type.clone()))
+                        .unwrap(),
+                )
+            })
+            .collect::<Vec<(hir::VarId, VarType)>>();
+
+        let result = inner(self);
+
+        // Restore the original types
+        // We need to use `rev()` to make sure we restore the original type if multiple conds
+        // applied to a single var.
+        for (var_id, original_var_type) in restore_var_types.into_iter().rev() {
+            self.var_to_type.insert(var_id, original_var_type);
+        }
+
+        result
+    }
+
     fn visit_cond(
         &mut self,
         pv: &mut PurityVar,
@@ -342,50 +406,15 @@ impl<'types> RecursiveDefsCtx<'types> {
             }
         };
 
-        // Patch our occurrence types in to the `var_to_type` and restore it after. We avoid
-        // `?`ing our results until the end to make sure the original types are properly restored.
-        let restore_var_types = test_node
-            .type_conds
-            .iter()
-            .map(|type_cond| {
-                let VarTypeCond {
-                    var_id,
-                    ref type_if_true,
-                    ..
-                } = *type_cond;
+        let true_node =
+            self.with_type_conds_applied(&test_node.type_conds, NodeBool::True, |s| {
+                s.visit_expr(pv, true_required_type, true_expr)
+            })?;
 
-                (
-                    var_id,
-                    self.var_to_type
-                        .insert(var_id, VarType::Known(type_if_true.clone()))
-                        .unwrap(),
-                )
-            })
-            .collect::<Vec<(hir::VarId, VarType)>>();
-
-        let true_result = self.visit_expr(pv, true_required_type, true_expr);
-
-        // Now set the false branch types
-        for type_cond in test_node.type_conds.iter() {
-            let VarTypeCond {
-                var_id,
-                ref type_if_false,
-                ..
-            } = *type_cond;
-
-            self.var_to_type
-                .insert(var_id, VarType::Known(type_if_false.clone()));
-        }
-
-        let false_result = self.visit_expr(pv, false_required_type, false_expr);
-
-        // Restore the original types
-        for (var_id, original_var_type) in restore_var_types {
-            self.var_to_type.insert(var_id, original_var_type);
-        }
-
-        let true_node = true_result?;
-        let false_node = false_result?;
+        let false_node =
+            self.with_type_conds_applied(&test_node.type_conds, NodeBool::False, |s| {
+                s.visit_expr(pv, false_required_type, false_expr)
+            })?;
 
         if test_node.is_divergent() {
             // Test diverged; we don't need the branches
@@ -410,8 +439,8 @@ impl<'types> RecursiveDefsCtx<'types> {
                 let false_node_bool = try_to_bool(false_node.result_ty());
                 let true_node_bool = try_to_bool(true_node.result_ty());
 
-                // This is an analog of (not). We can flip the test's type condition
-                let mut type_conds =
+                let mut type_conds: Vec<VarTypeCond> =
+                    // This is an analog of `(not)`. We can flip the test's type condition.
                     if true_node_bool == Some(false) && false_node_bool == Some(true) {
                         test_node
                             .type_conds
@@ -419,11 +448,25 @@ impl<'types> RecursiveDefsCtx<'types> {
                             .map(VarTypeCond::reversed)
                             .collect()
                     } else {
-                        vec![]
+                        test_node
+                            .type_conds
+                            .into_iter()
+                            .filter(|type_cond| {
+                                // If the false node is statically false then the result being true
+                                // implies the test was true. The reverse applies to the true node.
+                                // This is required for `(and)`ing conds on multiple vars.
+                                match type_cond.when {
+                                    NodeBool::True => false_node_bool == Some(false),
+                                    NodeBool::False => true_node_bool == Some(true)
+                                }
+                            })
+                            .collect()
                     };
 
-                // If the false branch is always false we can move an occurrence typing from the
-                // true branch upwards. The same reasoning applies for the true branch.
+                // If the false branch is always false we can move the occurrence typing from the
+                // true branch upwards. The same reasoning applies for the true branch. Note that
+                // this may override conds that we brought in from our test node. These should
+                // already have the outer occurrence typing applied so they will be more specific.
                 if false_node_bool == Some(false) {
                     type_conds.extend(true_node.type_conds);
                 }
@@ -974,11 +1017,18 @@ impl<'types> RecursiveDefsCtx<'types> {
 
                     let type_if_false = ty::subtract::subtract_ty_refs(subject_poly, &test_poly);
 
-                    vec![VarTypeCond {
-                        var_id,
-                        type_if_true,
-                        type_if_false,
-                    }]
+                    vec![
+                        VarTypeCond {
+                            when: NodeBool::True,
+                            override_var_id: var_id,
+                            override_type: type_if_true,
+                        },
+                        VarTypeCond {
+                            when: NodeBool::False,
+                            override_var_id: var_id,
+                            override_type: type_if_false,
+                        },
+                    ]
                 } else {
                     vec![]
                 };
@@ -1153,32 +1203,40 @@ impl<'types> RecursiveDefsCtx<'types> {
         let mut type_conds = vec![];
 
         if let Some(left_var_id) = left_var_id {
-            let type_if_false = if right_is_literal {
-                ty::subtract::subtract_ty_refs(left_ty, right_ty)
-            } else {
-                left_ty.clone()
-            };
-
             type_conds.push(VarTypeCond {
-                var_id: left_var_id,
-                type_if_true: intersected_type.clone(),
-                type_if_false,
+                when: NodeBool::True,
+                override_var_id: left_var_id,
+                override_type: intersected_type.clone(),
             });
+
+            if right_is_literal {
+                let subtracted_type = ty::subtract::subtract_ty_refs(left_ty, right_ty);
+
+                type_conds.push(VarTypeCond {
+                    when: NodeBool::False,
+                    override_var_id: left_var_id,
+                    override_type: subtracted_type,
+                });
+            }
         }
 
         if let Some(right_var_id) = right_var_id {
-            let type_if_false = if left_is_literal {
-                ty::subtract::subtract_ty_refs(right_ty, left_ty)
-            } else {
-                right_ty.clone()
-            };
-
             type_conds.push(VarTypeCond {
-                var_id: right_var_id,
-                type_if_true: intersected_type,
-                type_if_false,
+                when: NodeBool::True,
+                override_var_id: right_var_id,
+                override_type: intersected_type.clone(),
             });
-        };
+
+            if left_is_literal {
+                let subtracted_type = ty::subtract::subtract_ty_refs(right_ty, left_ty);
+
+                type_conds.push(VarTypeCond {
+                    when: NodeBool::False,
+                    override_var_id: right_var_id,
+                    override_type: subtracted_type,
+                });
+            }
+        }
 
         let result_ty = if is_divergent {
             ty::Ty::never().into()

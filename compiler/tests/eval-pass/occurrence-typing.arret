@@ -30,10 +30,15 @@
     (ann input true)
     (ann input false)))
 
-(defn and-typing ([input (List & Any)])
-  (if (and (list? input) (nil? input))
-    (ann input ())
-    (ann input (List Any & Any))))
+(defn same-var-and-typing ([lst (U (List & Any) false)]) -> (U Any false)
+  (if (and (list? lst) (not (nil? lst)))
+    (first lst)
+    false))
+
+(defn two-var-and-typing ([left Num] [right Num])
+  (when (and (int? left) (float? right))
+    (ann left Int)
+    (ann right Float)))
 
 (defn or-typing ([input (U Sym Str Int)])
   (if (or (sym? input) (str? input))
