@@ -6,8 +6,8 @@
         bool? num? int? float? char? list? vector? set? map? fn? nil?)
 
 (import [stdlib rust])
-(export length panic print! println! exit! cons map filter fold concat member? int float + * - /
-        rem quot)
+(export length panic print! println! exit! cons map filter every? fold concat member? int float + *
+        - / rem quot)
 
 (export defn)
 (defmacro defn (macro-rules

@@ -50,6 +50,15 @@ pub fn stdlib_filter(
     boxed::List::new(task, output_vec.into_iter())
 }
 
+#[rfi_derive::rust_fun("(All #{T [->_ ->!]} (T ->_ Bool) (List & T) ->_ Bool)")]
+pub fn stdlib_every_p(
+    task: &mut Task,
+    pred: callback::Callback<extern "C" fn(&mut Task, boxed::Closure, Gc<boxed::Any>) -> bool>,
+    input: Gc<boxed::List<boxed::Any>>,
+) -> bool {
+    input.iter().all(|elem| pred.apply(task, elem))
+}
+
 #[rfi_derive::rust_fun("(All #{I O [->_ ->!]} (O I ->_ O) O (List & I) ->_ O)")]
 pub fn stdlib_fold(
     task: &mut Task,
