@@ -11,6 +11,21 @@ use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
 use crate::codegen::{alloc, const_gen};
 
+fn gen_int_equal(fcx: &mut FunCtx, reg: RegId, binary_op: &BinaryOp, reg_name: &str) {
+    unsafe {
+        fcx.regs.insert(
+            reg,
+            LLVMBuildICmp(
+                fcx.builder,
+                LLVMIntPredicate::LLVMIntEQ,
+                fcx.regs[&binary_op.lhs_reg],
+                fcx.regs[&binary_op.rhs_reg],
+                reg_name.as_ptr() as *const _,
+            ),
+        );
+    }
+}
+
 fn gen_op(
     tcx: &mut TargetCtx,
     mcx: &mut ModCtx<'_, '_, '_>,
@@ -437,21 +452,18 @@ fn gen_op(
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }
-            OpKind::IntEqual(reg, BinaryOp { lhs_reg, rhs_reg })
-            | OpKind::BoolEqual(reg, BinaryOp { lhs_reg, rhs_reg })
-            | OpKind::CharEqual(reg, BinaryOp { lhs_reg, rhs_reg })
-            | OpKind::InternedSymEqual(reg, BinaryOp { lhs_reg, rhs_reg }) => {
-                let llvm_lhs = fcx.regs[lhs_reg];
-                let llvm_rhs = fcx.regs[rhs_reg];
-
-                let llvm_value = LLVMBuildICmp(
-                    fcx.builder,
-                    LLVMIntPredicate::LLVMIntEQ,
-                    llvm_lhs,
-                    llvm_rhs,
-                    "int_equal\0".as_ptr() as *const _,
-                );
-                fcx.regs.insert(*reg, llvm_value);
+            OpKind::IntEqual(reg, binary_op) => gen_int_equal(fcx, *reg, binary_op, "int_equal\0"),
+            OpKind::BoolEqual(reg, binary_op) => {
+                gen_int_equal(fcx, *reg, binary_op, "bool_equal\0")
+            }
+            OpKind::CharEqual(reg, binary_op) => {
+                gen_int_equal(fcx, *reg, binary_op, "char_equal\0")
+            }
+            OpKind::InternedSymEqual(reg, binary_op) => {
+                gen_int_equal(fcx, *reg, binary_op, "interned_sym_equal\0")
+            }
+            OpKind::TypeTagEqual(reg, binary_op) => {
+                gen_int_equal(fcx, *reg, binary_op, "type_tag_equal\0")
             }
             OpKind::FloatEqual(reg, BinaryOp { lhs_reg, rhs_reg }) => {
                 let llvm_lhs = fcx.regs[lhs_reg];

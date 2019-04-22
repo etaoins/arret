@@ -172,6 +172,7 @@ pub enum OpKind {
     BoolEqual(RegId, BinaryOp),
     CharEqual(RegId, BinaryOp),
     InternedSymEqual(RegId, BinaryOp),
+    TypeTagEqual(RegId, BinaryOp),
     FloatEqual(RegId, BinaryOp),
     BoxIdentical(RegId, BinaryOp),
     UsizeToInt64(RegId, RegId),
@@ -263,6 +264,7 @@ impl OpKind {
             | BoolEqual(reg_id, _)
             | CharEqual(reg_id, _)
             | InternedSymEqual(reg_id, _)
+            | TypeTagEqual(reg_id, _)
             | FloatEqual(reg_id, _)
             | BoxIdentical(reg_id, _)
             | UsizeToInt64(reg_id, _)
@@ -383,6 +385,7 @@ impl OpKind {
             | BoolEqual(_, binary_op)
             | CharEqual(_, binary_op)
             | InternedSymEqual(_, binary_op)
+            | TypeTagEqual(_, binary_op)
             | FloatEqual(_, binary_op)
             | BoxIdentical(_, binary_op) => {
                 coll.extend([binary_op.lhs_reg, binary_op.rhs_reg].iter().cloned());
@@ -475,6 +478,7 @@ impl OpKind {
             | BoolEqual(_, _)
             | CharEqual(_, _)
             | InternedSymEqual(_, _)
+            | TypeTagEqual(_, _)
             | FloatEqual(_, _)
             | BoxIdentical(_, _)
             | Int64ToFloat(_, _) => OpCategory::RegOp,

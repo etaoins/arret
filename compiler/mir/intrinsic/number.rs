@@ -55,7 +55,7 @@ pub fn num_value_to_float_reg(
 
         let is_float_reg = outer_b.push_reg(
             span,
-            OpKind::IntEqual,
+            OpKind::TypeTagEqual,
             BinaryOp {
                 lhs_reg: value_type_tag_reg.into(),
                 rhs_reg: float_tag_reg.into(),

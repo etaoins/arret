@@ -96,7 +96,7 @@ pub fn eval_ty_pred(
 
             let is_test_tag = b.push_reg(
                 span,
-                OpKind::IntEqual,
+                OpKind::TypeTagEqual,
                 BinaryOp {
                     lhs_reg: subject_type_tag_reg.into(),
                     rhs_reg: test_tag_reg.into(),

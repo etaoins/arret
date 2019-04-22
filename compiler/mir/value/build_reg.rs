@@ -318,7 +318,7 @@ fn boxed_to_bool(
 
     b.push_reg(
         span,
-        OpKind::IntEqual,
+        OpKind::TypeTagEqual,
         BinaryOp {
             lhs_reg: boxed_type_tag_reg.into(),
             rhs_reg: true_type_tag_reg.into(),
