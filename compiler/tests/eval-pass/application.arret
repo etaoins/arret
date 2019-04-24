@@ -8,6 +8,9 @@
 (defn return-rest (& x) x)
 (defn polymorphic-identity-function #{T} ([x T]) x)
 
+(defn invert-pred #{[->_ ->!] T} ([pred (T ->_ Bool)] [input T]) ->_ Bool
+  (false? (pred input)))
+
 (defn main! ()
   ; Stress test various ways of passing arguments
   (assert-eq false (take-exactly-three 1 2 3))
@@ -29,5 +32,8 @@
 
   ; Treating functions as first-class values
   (assert-eq '(1 2 3) ((black-box return-rest) 1 2 3))
+
+  ; Make sure we can apply functions with polymorphic purity
+  (assert-eq false (invert-pred int? 5))
 
   ())

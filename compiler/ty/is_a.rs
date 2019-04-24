@@ -157,7 +157,9 @@ fn tvar_id_is_bounded_by(sub_tvar_id: &ty::TVarId, parent_tvar_id: &ty::TVarId) 
 }
 
 fn purity_ref_is_a(sub: &purity::Ref, parent: &purity::Ref) -> bool {
-    sub == parent || parent == &purity::Ref::Fixed(Purity::Impure)
+    sub == &purity::Ref::Fixed(Purity::Pure)
+        || sub == parent
+        || parent == &purity::Ref::Fixed(Purity::Impure)
 }
 
 fn inst_polymorphic_fun(sub_fun: &ty::Fun, par_top_fun: &ty::TopFun) -> ty::Fun {
@@ -615,9 +617,12 @@ mod test {
     #[test]
     fn polymorphic_purity_funs() {
         let poly_purity_fun = poly_for_str("(All #{[->_ ->!]} (->_ Str) ->_ Str)");
+        // This is the upper bound of `poly_purity_fun
+        let mono_purity_fun = poly_for_str("((->! Str) -> Str)");
         let top_to_str_fun = poly_for_str("(... -> Str)");
 
         assert_eq!(true, ty_ref_is_a(&poly_purity_fun, &top_to_str_fun));
+        assert_eq!(true, ty_ref_is_a(&mono_purity_fun, &poly_purity_fun));
         assert_eq!(false, ty_ref_is_a(&top_to_str_fun, &poly_purity_fun));
     }
 }
