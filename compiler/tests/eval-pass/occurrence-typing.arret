@@ -50,6 +50,12 @@
     (ann input Sym)
     (ann input Str)))
 
+(defn partial-not-typing ([input (U Sym Str)] [other-bool Bool])
+  ; This doesn't correspond to a logical operation such as `(and)` or `(not)`; it's just tested for
+  ; completeness
+  (when (if (str? input) false other-bool)
+    (ann input Sym)))
+
 (defn unbounded-generic-typing #{T} ([input T]) -> T
   (if (str? input)
     (ann input Str)

@@ -77,15 +77,6 @@ enum NodeBool {
     False,
 }
 
-impl NodeBool {
-    fn inverted(self) -> NodeBool {
-        match self {
-            NodeBool::True => NodeBool::False,
-            NodeBool::False => NodeBool::True,
-        }
-    }
-}
-
 struct VarTypeCond {
     when: NodeBool,
     override_var_id: hir::VarId,
@@ -93,11 +84,8 @@ struct VarTypeCond {
 }
 
 impl VarTypeCond {
-    fn reversed(self) -> VarTypeCond {
-        VarTypeCond {
-            when: self.when.inverted(),
-            ..self
-        }
+    fn with_when(self, when: NodeBool) -> VarTypeCond {
+        VarTypeCond { when, ..self }
     }
 }
 
@@ -439,29 +427,34 @@ impl<'types> RecursiveDefsCtx<'types> {
                 let false_node_bool = try_to_bool(false_node.result_ty());
                 let true_node_bool = try_to_bool(true_node.result_ty());
 
-                let mut type_conds: Vec<VarTypeCond> =
-                    // This is an analog of `(not)`. We can flip the test's type condition.
-                    if true_node_bool == Some(false) && false_node_bool == Some(true) {
-                        test_node
-                            .type_conds
-                            .into_iter()
-                            .map(VarTypeCond::reversed)
-                            .collect()
-                    } else {
-                        test_node
-                            .type_conds
-                            .into_iter()
-                            .filter(|type_cond| {
-                                // If the false node is statically false then the result being true
-                                // implies the test was true. The reverse applies to the true node.
-                                // This is required for `(and)`ing conds on multiple vars.
-                                match type_cond.when {
-                                    NodeBool::True => false_node_bool == Some(false),
-                                    NodeBool::False => true_node_bool == Some(true)
-                                }
-                            })
-                            .collect()
-                    };
+                let mut type_conds: Vec<VarTypeCond> = test_node
+                    .type_conds
+                    .into_iter()
+                    .filter_map(|type_cond| match type_cond.when {
+                        NodeBool::True => {
+                            if false_node_bool == Some(false) {
+                                // If the false node is always false then our result type being
+                                // true implies the test was true
+                                Some(type_cond.with_when(NodeBool::True))
+                            } else if false_node_bool == Some(true) {
+                                // If the false node is always true then our result type being
+                                // false implies the test was true
+                                Some(type_cond.with_when(NodeBool::False))
+                            } else {
+                                None
+                            }
+                        }
+                        NodeBool::False => {
+                            if true_node_bool == Some(true) {
+                                Some(type_cond.with_when(NodeBool::False))
+                            } else if true_node_bool == Some(false) {
+                                Some(type_cond.with_when(NodeBool::True))
+                            } else {
+                                None
+                            }
+                        }
+                    })
+                    .collect();
 
                 // If the false branch is always false we can move the occurrence typing from the
                 // true branch upwards. The same reasoning applies for the true branch. Note that
