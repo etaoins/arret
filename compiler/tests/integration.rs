@@ -14,10 +14,16 @@ use compiler::reporting::{report_to_stderr, LocTrace, Reportable, Severity};
 use compiler::CompileCtx;
 
 #[derive(Clone, Copy, PartialEq)]
+enum RunType {
+    Pass,
+    Error,
+}
+
+#[derive(Clone, Copy, PartialEq)]
 enum TestType {
     CompileError,
-    RunPass,
     EvalPass,
+    Run(RunType),
 }
 
 #[derive(Debug)]
@@ -176,19 +182,19 @@ fn result_for_single_test(
         ehx.consume_def(inferred_def)?;
     }
 
-    // Try evaluating
-    ehx.eval_main_fun(hir.main_var_id)?;
-
-    if test_type != TestType::RunPass {
-        return Ok(());
+    // Try evaluating if we're not supposed to panic
+    if test_type != TestType::Run(RunType::Error) {
+        ehx.eval_main_fun(hir.main_var_id)?;
     }
+
+    let run_type = if let TestType::Run(run_type) = test_type {
+        run_type
+    } else {
+        return Ok(());
+    };
 
     // And now compiling and running
     let mir_program = ehx.into_built_program(hir.main_var_id)?;
-    if mir_program.is_empty() {
-        return Ok(());
-    }
-
     let output_path = NamedTempFile::new().unwrap().into_temp_path();
 
     let gen_program_opts =
@@ -202,16 +208,32 @@ fn result_for_single_test(
         None,
     );
 
-    let status = process::Command::new(output_path.as_os_str())
-        .status()
-        .unwrap();
+    let mut process = process::Command::new(output_path.as_os_str());
 
-    if !status.success() {
-        panic!(
-            "unexpected status {} returned from compiled test {}",
-            status,
-            source_file.kind()
-        );
+    match run_type {
+        RunType::Pass => {
+            let status = process.status().unwrap();
+            if !status.success() {
+                panic!(
+                    "unexpected status {} returned from integration test {}",
+                    status,
+                    source_file.kind()
+                );
+            }
+        }
+        RunType::Error => {
+            // Discard our panic output
+            let status = process.stderr(process::Stdio::null()).status().unwrap();
+
+            // Code 1 is used by panic. This makes sure we didn't e.g. SIGSEGV.
+            if status.code() != Some(1) {
+                panic!(
+                    "unexpected status {} returned from integration test {}",
+                    status,
+                    source_file.kind()
+                );
+            }
+        }
     }
 
     Ok(())
@@ -347,18 +369,23 @@ fn integration() {
         .unwrap()
         .filter_map(|entry| entry_to_test_tuple(entry, TestType::CompileError));
 
-    let eval_entries = fs::read_dir("./tests/eval-pass")
+    let eval_pass_entries = fs::read_dir("./tests/eval-pass")
         .unwrap()
         .chain(fs::read_dir("./tests/optimise").unwrap())
         .filter_map(|entry| entry_to_test_tuple(entry, TestType::EvalPass));
 
-    let run_entries = fs::read_dir("./tests/run-pass")
+    let run_pass_entries = fs::read_dir("./tests/run-pass")
         .unwrap()
-        .filter_map(|entry| entry_to_test_tuple(entry, TestType::RunPass));
+        .filter_map(|entry| entry_to_test_tuple(entry, TestType::Run(RunType::Pass)));
+
+    let run_error_entries = fs::read_dir("./tests/run-error")
+        .unwrap()
+        .filter_map(|entry| entry_to_test_tuple(entry, TestType::Run(RunType::Error)));
 
     let failed_tests = compile_error_entries
-        .chain(eval_entries)
-        .chain(run_entries)
+        .chain(eval_pass_entries)
+        .chain(run_pass_entries)
+        .chain(run_error_entries)
         .par_bridge()
         .filter_map(|(input_path, test_type)| {
             if !run_single_test(
