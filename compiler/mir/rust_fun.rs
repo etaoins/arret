@@ -14,10 +14,27 @@ use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
 
+fn resolve_ref_to_purity(
+    outer_pvar_purities: &HashMap<purity::PVarId, purity::Ref>,
+    apply_pvar_purities: &HashMap<purity::PVarId, purity::Ref>,
+    poly: &purity::Ref,
+) -> Purity {
+    match poly {
+        purity::Ref::Fixed(purity) => *purity,
+        purity::Ref::Var(pvar_id) => {
+            let inner_ref = apply_pvar_purities
+                .get(&pvar_id)
+                .or_else(|| outer_pvar_purities.get(&pvar_id))
+                .expect("Unable to find PVar when monomorphising Rust fun apply");
+
+            resolve_ref_to_purity(outer_pvar_purities, apply_pvar_purities, inner_ref)
+        }
+    }
+}
+
 /// Returns the purity for a Rust fun application
-///
-/// Rust funs cannot capture pvars so this only needs to look at the pvars from the apply
 pub fn rust_fun_app_purity(
+    outer_pvar_purities: &HashMap<purity::PVarId, purity::Ref>,
     apply_pvar_purities: &HashMap<purity::PVarId, purity::Ref>,
     rust_fun: &rfi::Fun,
 ) -> Purity {
@@ -30,19 +47,11 @@ pub fn rust_fun_app_purity(
         return Purity::Impure;
     }
 
-    match arret_fun_type.purity() {
-        purity::Ref::Fixed(purity) => *purity,
-        purity::Ref::Var(pvar_id) => {
-            if let purity::Ref::Fixed(purity) = apply_pvar_purities
-                .get(pvar_id)
-                .expect("Unable to find PVar when monomorphising Rust fun apply")
-            {
-                *purity
-            } else {
-                panic!("found polymorphic purity during Rust fun apply");
-            }
-        }
-    }
+    resolve_ref_to_purity(
+        outer_pvar_purities,
+        apply_pvar_purities,
+        arret_fun_type.purity(),
+    )
 }
 
 /// Returns the upper bound on the purity for a Rust fun

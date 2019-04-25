@@ -554,6 +554,7 @@ impl EvalHirCtx {
 
     fn eval_rust_fun_app(
         &mut self,
+        fcx: &mut FunCtx,
         b: &mut Option<Builder>,
         span: Span,
         ret_ty: &ty::Ref<ty::Mono>,
@@ -566,10 +567,13 @@ impl EvalHirCtx {
 
         let ApplyArgs {
             list_value: arg_list_value,
-            ty_args,
+            ty_args: apply_ty_args,
         } = apply_args;
 
-        let call_purity = rust_fun_app_purity(ty_args.pvar_purities(), rust_fun);
+        let outer_purities = fcx.mono_ty_args.pvar_purities();
+        let apply_purities = apply_ty_args.pvar_purities();
+
+        let call_purity = rust_fun_app_purity(outer_purities, apply_purities, rust_fun);
         let can_const_eval = b.is_none() || (call_purity == purity::Purity::Pure);
 
         if let Some(intrinsic_name) = rust_fun.intrinsic_name() {
@@ -714,7 +718,7 @@ impl EvalHirCtx {
                 self.eval_arret_fun_app(fcx, b, span, ret_ty, &arret_fun, apply_args)
             }
             Value::RustFun(rust_fun) => {
-                self.eval_rust_fun_app(b, span, ret_ty, &rust_fun, apply_args)
+                self.eval_rust_fun_app(fcx, b, span, ret_ty, &rust_fun, apply_args)
             }
             Value::TyPred(test_ty) => {
                 Ok(self.eval_ty_pred_app(b, span, &apply_args.list_value, *test_ty))

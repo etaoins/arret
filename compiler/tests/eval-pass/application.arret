@@ -11,6 +11,10 @@
 (defn invert-pred #{[->_ ->!] T} ([pred (T ->_ Bool)] [input T]) ->_ Bool
   (false? (pred input)))
 
+(defn wrapped-every? #{[->_ ->!] T} ([pred (T ->_ Bool)] [lst (List & T)]) ->_ Bool
+  ; This is forcing `(every?)` to have the same polymorphic purity as the outer function
+  (every? pred lst))
+
 (defn main! ()
   ; Stress test various ways of passing arguments
   (assert-eq false (take-exactly-three 1 2 3))
@@ -35,5 +39,8 @@
 
   ; Make sure we can apply functions with polymorphic purity
   (assert-eq false (invert-pred int? 5))
+
+  ; Polymorphic purity Rust fun apply inside a polymorphic purity Arret fun
+  (assert-eq true (wrapped-every? (fn (_) true) '(1 2 3)))
 
   ())
