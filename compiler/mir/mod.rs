@@ -1,3 +1,4 @@
+mod app_purity;
 mod arg_list;
 mod builder;
 mod closure;

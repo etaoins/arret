@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use syntax::span::Span;
 
 use crate::codegen::GenABI;
@@ -11,48 +9,7 @@ use crate::mir::polymorph::PolymorphABI;
 use crate::mir::value::Value;
 use crate::rfi;
 use crate::ty;
-use crate::ty::purity;
 use crate::ty::purity::Purity;
-
-fn resolve_ref_to_purity(
-    outer_pvar_purities: &HashMap<purity::PVarId, purity::Ref>,
-    apply_pvar_purities: &HashMap<purity::PVarId, purity::Ref>,
-    poly: &purity::Ref,
-) -> Purity {
-    match poly {
-        purity::Ref::Fixed(purity) => *purity,
-        purity::Ref::Var(pvar_id) => {
-            let inner_ref = apply_pvar_purities
-                .get(&pvar_id)
-                .or_else(|| outer_pvar_purities.get(&pvar_id))
-                .expect("Unable to find PVar when monomorphising Rust fun apply");
-
-            resolve_ref_to_purity(outer_pvar_purities, apply_pvar_purities, inner_ref)
-        }
-    }
-}
-
-/// Returns the purity for a Rust fun application
-pub fn rust_fun_app_purity(
-    outer_pvar_purities: &HashMap<purity::PVarId, purity::Ref>,
-    apply_pvar_purities: &HashMap<purity::PVarId, purity::Ref>,
-    rust_fun: &rfi::Fun,
-) -> Purity {
-    let arret_fun_type = rust_fun.arret_fun_type();
-
-    if arret_fun_type.ret().is_never() {
-        // This is a hack for things like `panic`. Pure funs are allowed to panic but if they
-        // return `(U)` they're likely only called to terminate the program. Without this `panic`
-        // would be optimised away.
-        return Purity::Impure;
-    }
-
-    resolve_ref_to_purity(
-        outer_pvar_purities,
-        apply_pvar_purities,
-        arret_fun_type.purity(),
-    )
-}
 
 /// Returns the upper bound on the purity for a Rust fun
 pub fn rust_fun_purity_upper_bound(rust_fun: &rfi::Fun) -> Purity {

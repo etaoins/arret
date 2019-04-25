@@ -26,7 +26,7 @@ use crate::mir::value::synthetic_fun::SyntheticFuns;
 use crate::mir::{Expr, Value};
 use crate::rfi;
 use crate::ty;
-use crate::ty::purity;
+use crate::ty::purity::Purity;
 use crate::ty::ty_args::TyArgs;
 
 #[derive(PartialEq, Eq, Hash)]
@@ -266,18 +266,24 @@ impl EvalHirCtx {
         span: Span,
         ret_ty: &ty::Ref<ty::Mono>,
         arret_fun: &value::ArretFun,
-        arg_list_value: Value,
+        apply_args: &ApplyArgs<'_>,
     ) -> Result<Value> {
+        use crate::mir::app_purity::fun_app_purity;
         use crate::mir::arg_list::build_save_arg_list_to_regs;
         use crate::mir::closure;
         use crate::mir::ops::*;
         use crate::mir::polymorph::polymorph_abi_for_arg_list_value;
         use crate::mir::ret_value::ret_reg_to_value;
 
+        let ApplyArgs {
+            list_value: arg_list_value,
+            ty_args: apply_ty_args,
+        } = apply_args;
+
         let closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure());
 
         let wanted_abi =
-            polymorph_abi_for_arg_list_value(closure_reg.is_some(), &arg_list_value, ret_ty);
+            polymorph_abi_for_arg_list_value(closure_reg.is_some(), arg_list_value, ret_ty);
         let ret_abi = wanted_abi.ops_abi.ret.clone();
 
         let mut arg_regs: Vec<RegId> = vec![];
@@ -289,22 +295,30 @@ impl EvalHirCtx {
             self,
             b,
             span,
-            arg_list_value,
+            arg_list_value.clone(),
             wanted_abi.arret_fixed_params(),
             wanted_abi.arret_rest_param(),
         ));
 
         let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
 
-        // TODO: Support polymorphic purity
-        let impure = arret_fun.fun_expr().purity != purity::Purity::Pure.into();
+        let outer_purities = arret_fun.env_ty_args().pvar_purities();
+        let apply_purities = apply_ty_args.pvar_purities();
+        let fun_expr = arret_fun.fun_expr();
+
+        let app_purity = fun_app_purity(
+            outer_purities,
+            apply_purities,
+            &fun_expr.purity,
+            &fun_expr.ret_ty,
+        );
 
         let ret_reg = b.push_reg(
             span,
             OpKind::Call,
             CallOp {
                 callee: Callee::PrivateFun(private_fun_id),
-                impure,
+                impure: app_purity == Purity::Impure,
                 args: arg_regs.into_boxed_slice(),
             },
         );
@@ -561,8 +575,9 @@ impl EvalHirCtx {
         rust_fun: &rfi::Fun,
         apply_args: ApplyArgs<'_>,
     ) -> Result<Value> {
+        use crate::mir::app_purity::fun_app_purity;
         use crate::mir::intrinsic;
-        use crate::mir::rust_fun::{build_rust_fun_app, rust_fun_app_purity};
+        use crate::mir::rust_fun::build_rust_fun_app;
         use crate::mir::value::to_const::value_to_const;
 
         let ApplyArgs {
@@ -572,9 +587,16 @@ impl EvalHirCtx {
 
         let outer_purities = fcx.mono_ty_args.pvar_purities();
         let apply_purities = apply_ty_args.pvar_purities();
+        let arret_fun_type = rust_fun.arret_fun_type();
 
-        let call_purity = rust_fun_app_purity(outer_purities, apply_purities, rust_fun);
-        let can_const_eval = b.is_none() || (call_purity == purity::Purity::Pure);
+        let call_purity = fun_app_purity(
+            outer_purities,
+            apply_purities,
+            arret_fun_type.purity(),
+            arret_fun_type.ret(),
+        );
+
+        let can_const_eval = b.is_none() || (call_purity == Purity::Pure);
 
         if let Some(intrinsic_name) = rust_fun.intrinsic_name() {
             // Attempt specialised evaluation

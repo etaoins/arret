@@ -244,13 +244,7 @@ pub(super) fn cond_inline<'a>(
 
     // We need to build an out-of-line call in every case
     let mut call_b = Builder::new();
-    let call_result = ehx.build_arret_fun_app(
-        &mut call_b,
-        span,
-        ret_ty,
-        arret_fun,
-        apply_args.list_value.clone(),
-    );
+    let call_result = ehx.build_arret_fun_app(&mut call_b, span, ret_ty, arret_fun, &apply_args);
     let call_ops = call_b.into_ops();
 
     let apply_cookie = ApplyCookie::new(arret_fun, &apply_args.list_value);
