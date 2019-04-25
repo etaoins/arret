@@ -1,67 +1,67 @@
 (import [stdlib base])
 (import [stdlib test])
 
-(defn main! ()
+(defn main! () ->! ()
   ; This should just pass the value through directly
-  (assert-fn-doesnt-contain-op :call (fn ([n Num])
+  (assert-fn-doesnt-contain-op! :call (fn ([n Num])
     (+ (* n))))
 
   ;
   ; These should all be converted to MIR ops
   ;
 
-  (assert-fn-doesnt-contain-op :call (fn ([left Int] [right Int])
+  (assert-fn-doesnt-contain-op! :call (fn ([left Int] [right Int])
     (+ left right)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([left Int] [right Float])
+  (assert-fn-doesnt-contain-op! :call (fn ([left Int] [right Float])
     (+ left right)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([left Float] [right Float])
+  (assert-fn-doesnt-contain-op! :call (fn ([left Float] [right Float])
     (+ left right)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([left Float] [right Num])
+  (assert-fn-doesnt-contain-op! :call (fn ([left Float] [right Num])
     (+ left right)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([left Int] [right Int])
+  (assert-fn-doesnt-contain-op! :call (fn ([left Int] [right Int])
     (* left right)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([left Int] [right Float])
+  (assert-fn-doesnt-contain-op! :call (fn ([left Int] [right Float])
     (* left right)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([left Float] [right Float])
+  (assert-fn-doesnt-contain-op! :call (fn ([left Float] [right Float])
     (* left right)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([left Float] [right Num])
+  (assert-fn-doesnt-contain-op! :call (fn ([left Float] [right Num])
     (* left right)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([value Int])
+  (assert-fn-doesnt-contain-op! :call (fn ([value Int])
     (- value)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([value Float])
+  (assert-fn-doesnt-contain-op! :call (fn ([value Float])
     (- value)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([left Int] [right Int])
+  (assert-fn-doesnt-contain-op! :call (fn ([left Int] [right Int])
     (- left right)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([left Int] [right Float])
+  (assert-fn-doesnt-contain-op! :call (fn ([left Int] [right Float])
     (- left right)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([left Float] [right Float])
+  (assert-fn-doesnt-contain-op! :call (fn ([left Float] [right Float])
     (- left right)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([left Float] [right Num])
+  (assert-fn-doesnt-contain-op! :call (fn ([left Float] [right Num])
     (- left right)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([value Float])
+  (assert-fn-doesnt-contain-op! :call (fn ([value Float])
     (/ value)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([left Float] [right Float])
+  (assert-fn-doesnt-contain-op! :call (fn ([left Float] [right Float])
     (/ left right)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([left Int] [right Int])
+  (assert-fn-doesnt-contain-op! :call (fn ([left Int] [right Int])
     (quot left right)))
 
-  (assert-fn-doesnt-contain-op :call (fn ([left Int] [right Int])
+  (assert-fn-doesnt-contain-op! :call (fn ([left Int] [right Int])
     (rem left right)))
 
   ())

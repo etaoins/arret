@@ -1,19 +1,17 @@
 (import [stdlib base])
 (import [stdlib test])
 
-(defn main! ()
+(defn main! () ->! ()
   ; This should be the identity function for `Int`
-  (assert-fn-doesnt-contain-op :call (fn ([i Int])
+  (assert-fn-doesnt-contain-op! :call (fn ([i Int])
     (int i)))
 
   ; This should be the identity function for `Float`
-  (assert-fn-doesnt-contain-op :call (fn ([f Float])
+  (assert-fn-doesnt-contain-op! :call (fn ([f Float])
     (float f)))
 
   ; We can build specific MIR ops for these
-  (assert-fn-doesnt-contain-op :call (fn ([i Int])
+  (assert-fn-doesnt-contain-op! :call (fn ([i Int])
     (float i)))
-  (assert-fn-doesnt-contain-op :call (fn ([n Num])
-    (float n)))
-
-  ())
+  (assert-fn-doesnt-contain-op! :call (fn ([n Num])
+    (float n))))

@@ -5,37 +5,37 @@
 (defmacro _ (macro-rules))
 (defmacro _ (macro-rules))
 
-(defn main! ()
+(defn main! () ->! ()
   (letmacro [return-one (macro-rules [() 'one])]
-    (assert-eq (return-one) 'one))
+    (assert-eq! (return-one) 'one))
 
   (letmacro [identity (macro-rules [(x) x])]
-    (assert-eq (identity 'one) 'one))
+    (assert-eq! (identity 'one) 'one))
 
   (letmacro [swap (macro-rules [(x y) '(y x)])]
-    (assert-eq (swap one two) '(two one)))
+    (assert-eq! (swap one two) '(two one)))
 
   (letmacro [for (macro-rules [(x :in y) [x y]])]
-    (assert-eq (for two :in one) [two one]))
+    (assert-eq! (for two :in one) [two one]))
 
   (letmacro [return-ellipsis (macro-rules [() '(... ...)])]
-    (assert-eq (return-ellipsis) '...))
+    (assert-eq! (return-ellipsis) '...))
 
   (letmacro [list-third (macro-rules [(_ _ x) x])]
-    (assert-eq (list-third 'one 'two 'three) 'three))
+    (assert-eq! (list-third 'one 'two 'three) 'three))
 
   (letmacro [vector-second (macro-rules [([_ x _]) x])]
-    (assert-eq (vector-second ['one 'two 'three]) 'two))
+    (assert-eq! (vector-second ['one 'two 'three]) 'two))
 
   (letmacro [recurse (macro-rules [() 'end] [(_) (recurse)])]
-    (assert-eq (recurse 1) 'end))
+    (assert-eq! (recurse 1) 'end))
 
   (letmacro [empty-set? (macro-rules [(#{}) true] [(#{_ ...}) false])]
-    (assert-eq (empty-set? #{}) true)
-    (assert-eq (empty-set? #{one}) false))
+    (assert-eq! (empty-set? #{}) true)
+    (assert-eq! (empty-set? #{one}) false))
 
   (letmacro [set->list (macro-rules [(#{v ...}) '(v ...)])]
-    (assert-eq (set->list #{one two three}) '(one two three)))
+    (assert-eq! (set->list #{one two three}) '(one two three)))
 
   (letmacro [num->name (macro-rules
                          [(1) 'one-int]
@@ -46,47 +46,45 @@
                          [(3.0) 'three-float]
                          [(##NaN) 'not-a-number]
                          [(_) 'no-match])]
-    (assert-eq (num->name 1) 'one-int)
-    (assert-eq (num->name 2) 'two-int)
-    (assert-eq (num->name 3) 'three-int)
-    (assert-eq (num->name 1.0) 'one-float)
-    (assert-eq (num->name 2.0) 'two-float)
-    (assert-eq (num->name 3.0) 'three-float)
-    
+    (assert-eq! (num->name 1) 'one-int)
+    (assert-eq! (num->name 2) 'two-int)
+    (assert-eq! (num->name 3) 'three-int)
+    (assert-eq! (num->name 1.0) 'one-float)
+    (assert-eq! (num->name 2.0) 'two-float)
+    (assert-eq! (num->name 3.0) 'three-float)
+
     ; NaNs never match
-    (assert-eq (num->name ##NaN) 'no-match))
+    (assert-eq! (num->name ##NaN) 'no-match))
 
   (letmacro [return-all (macro-rules [(values ...) '(values ...)])]
-    (assert-eq (return-all one two three) '(one two three)))
+    (assert-eq! (return-all one two three) '(one two three)))
 
   (letmacro [mid (macro-rules [([_ vals ... _]) [true vals ... false]])]
-    (assert-eq (mid [one two three four]) [true two three false]))
+    (assert-eq! (mid [one two three four]) [true two three false]))
 
   (letmacro [combine-lists (macro-rules [((l ...) (r ...)) [r ... l ...]])]
-    (assert-eq (combine-lists (one two) (three four)) [three four one two]))
+    (assert-eq! (combine-lists (one two) (three four)) [three four one two]))
 
   (letmacro [nested-patterns (macro-rules [((a b rest ...) ...) [(rest ... b a) ...]])]
-    (assert-eq
+    (assert-eq!
       (nested-patterns (one two three four) (five six))
       [(three four two one) (six five)]))
 
   (letmacro [rebind-same-ident (macro-rules [() (quote (quote 2))])]
-    (assert-eq (rebind-same-ident) ''2))
+    (assert-eq! (rebind-same-ident) ''2))
 
   ; This ensures that unbound idents (`x`) are hygienic
   (letmacro [set-x-to-inner (macro-rules [(body) (let [x :inner] body)])]
-    (assert-eq :outer (let [x :outer] (set-x-to-inner x))))
+    (assert-eq! :outer (let [x :outer] (set-x-to-inner x))))
 
   ; This ensures the bound idents (`+`) are hygenic
   (letmacro [set-+-to-* (macro-rules [(body) (let [+ *] body)])]
-    (assert-eq 2 (set-+-to-* (+ 1 1))))
+    (assert-eq! 2 (set-+-to-* (+ 1 1))))
 
   ; Use the `(... ident)` literal syntax
   ; This uses `&` as it's a common candidate for a literal it could be an arbitrary symbol
   (letmacro [match-literal-& (macro-rules
                               [((... &)) '(... literal-ampersand)]
                               [(&) '(... var-ampersand)])]
-    (assert-eq 'literal-ampersand (match-literal-& &))
-    (assert-eq 'var-ampersand (match-literal-& 1)))
-
-  ())
+    (assert-eq! 'literal-ampersand (match-literal-& &))
+    (assert-eq! 'var-ampersand (match-literal-& 1))))

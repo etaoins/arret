@@ -15,19 +15,17 @@
 
   ())
 
-(defn main! ()
-  (assert-eq true (fn? (black-box! return-const)))
-  (assert-eq 1 ((return-const 1)))
-  (assert-eq 2 (((black-box! return-const) 2)))
-  (assert-eq 3 ((return-const (black-box! 3))))
-  (assert-eq 4 (((black-box! return-const) (black-box! 4))))
+(defn main! () ->! ()
+  (assert-eq! true (fn? (black-box! return-const)))
+  (assert-eq! 1 ((return-const 1)))
+  (assert-eq! 2 (((black-box! return-const) 2)))
+  (assert-eq! 3 ((return-const (black-box! 3))))
+  (assert-eq! 4 (((black-box! return-const) (black-box! 4))))
 
-  (assert-eq true (fn? (black-box! generic-return-const)))
-  (assert-eq 1 ((generic-return-const 1)))
-  (assert-eq 2 (((black-box! generic-return-const) 2)))
-  (assert-eq 3 ((generic-return-const (black-box! 3))))
-  (assert-eq 4 (((black-box! generic-return-const) (black-box! 4))))
+  (assert-eq! true (fn? (black-box! generic-return-const)))
+  (assert-eq! 1 ((generic-return-const 1)))
+  (assert-eq! 2 (((black-box! generic-return-const) 2)))
+  (assert-eq! 3 ((generic-return-const (black-box! 3))))
+  (assert-eq! 4 (((black-box! generic-return-const) (black-box! 4))))
 
-  (recapture-inner-temporary!)
-
-  ())
+  (recapture-inner-temporary!))

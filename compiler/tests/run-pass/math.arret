@@ -1,45 +1,35 @@
 (import [stdlib base])
 (import [stdlib test])
 
-(defn test-add ()
-  (assert-eq 4 (+ (black-box! 4)))
+(defn test-add () ->! ()
+  (assert-eq! 4 (+ (black-box! 4)))
 
-  (assert-eq 7 (+ 4 (black-box! 3)))
-  (assert-eq 7.0 (+ (black-box! 4.0) 3))
+  (assert-eq! 7 (+ 4 (black-box! 3)))
+  (assert-eq! 7.0 (+ (black-box! 4.0) 3)))
 
-  ())
+(defn test-mul () ->! ()
+  (assert-eq! 4 (* (black-box! 4)))
 
-(defn test-mul ()
-  (assert-eq 4 (* (black-box! 4)))
+  (assert-eq! 12 (* (black-box! 4) 3))
+  (assert-eq! 12.0 (* 4.0 (black-box! 3))))
 
-  (assert-eq 12 (* (black-box! 4) 3))
-  (assert-eq 12.0 (* 4.0 (black-box! 3)))
+(defn test-sub () ->! ()
+  (assert-eq! -3.0 (- (black-box! 3.0)))
+  (assert-eq! 3 (- (black-box! -3)))
 
-  ())
+  (assert-eq! 4 (- (black-box! 7) 3))
+  (assert-eq! 4.0 (- 7 (black-box! 3.0))))
 
-(defn test-sub ()
-  (assert-eq -3.0 (- (black-box! 3.0)))
-  (assert-eq 3 (- (black-box! -3)))
+(defn test-div () ->! ()
+  (assert-eq! 0.5 (/ (black-box! 2.0)))
+  (assert-eq! 0.25 (/ 1.0 (black-box! 2.0) 2.0)))
 
-  (assert-eq 4 (- (black-box! 7) 3))
-  (assert-eq 4.0 (- 7 (black-box! 3.0)))
+(defn test-rem-mod () ->! ()
+  (assert-eq! 3 (quot (black-box! 10) 3))
+  (assert-eq! 1 (rem 10 (black-box! 3)))
 
-  ())
-
-(defn test-div ()
-  (assert-eq 0.5 (/ (black-box! 2.0)))
-  (assert-eq 0.25 (/ 1.0 (black-box! 2.0) 2.0))
-  
-  ())
-
-(defn test-rem-mod ()
-  (assert-eq 3 (quot (black-box! 10) 3))
-  (assert-eq 1 (rem 10 (black-box! 3)))
-
-  (assert-eq -3 (quot (black-box! -10) (black-box! 3)))
-  (assert-eq -1 (rem (black-box! -10) 3))
-
-  ())
+  (assert-eq! -3 (quot (black-box! -10) (black-box! 3)))
+  (assert-eq! -1 (rem (black-box! -10) 3)))
 
 (defn main! () ->! ()
   (test-add)

@@ -29,8 +29,7 @@ use runtime::boxed;
 use runtime::boxed::refs::Gc;
 use runtime::task::Task;
 
-#[rfi_derive::rust_fun("(& Any -> (U))")]
-pub fn stdlib_panic(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Never {
+pub fn panic_common(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Never {
     use std::str;
 
     let mut output = Vec::<u8>::new();
@@ -42,6 +41,16 @@ pub fn stdlib_panic(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Nev
     task.panic(message)
 }
 
+#[rfi_derive::rust_fun("(& Any -> (U))")]
+pub fn stdlib_panic(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Never {
+    panic_common(task, values)
+}
+
+#[rfi_derive::rust_fun("(& Any ->! (U))")]
+pub fn stdlib_panic_impure(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Never {
+    panic_common(task, values)
+}
+
 #[rfi_derive::rust_fun("(Int ->! (U))")]
 pub fn stdlib_exit(exit_code: i64) {
     use std::process::exit;
@@ -51,6 +60,7 @@ pub fn stdlib_exit(exit_code: i64) {
 define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "length" => stdlib_length,
     "panic" => stdlib_panic,
+    "panic!" => stdlib_panic_impure,
     "map" => stdlib_map,
     "filter" => stdlib_filter,
     "every?" => stdlib_every_p,

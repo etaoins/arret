@@ -15,32 +15,30 @@
   ; This is forcing `(every?)` to have the same polymorphic purity as the outer function
   (every? pred lst))
 
-(defn main! ()
+(defn main! () ->! ()
   ; Stress test various ways of passing arguments
-  (assert-eq false (take-exactly-three 1 2 3))
-  (assert-eq false (take-exactly-three  & '(1 2 3)))
-  (assert-eq false (take-exactly-three 1 2 & '(3)))
+  (assert-eq! false (take-exactly-three 1 2 3))
+  (assert-eq! false (take-exactly-three  & '(1 2 3)))
+  (assert-eq! false (take-exactly-three 1 2 & '(3)))
 
   ; And the `(apply)` macro
-  (assert-eq false (apply take-exactly-three 1 2 3 '()))
-  (assert-eq false (apply take-exactly-three '(1 2 3)))
-  (assert-eq false (apply take-exactly-three 1 2 '(3)))
+  (assert-eq! false (apply take-exactly-three 1 2 3 '()))
+  (assert-eq! false (apply take-exactly-three '(1 2 3)))
+  (assert-eq! false (apply take-exactly-three 1 2 '(3)))
 
   ; Make sure we select the return type correctly
   (let [[ret-str Str] (polymorphic-identity-function "Hello polymorphism!")]
-    (assert-eq "Hello polymorphism!" ret-str))
+    (assert-eq! "Hello polymorphism!" ret-str))
 
   ; Make sure we can return our rest argument
   (let [[rest-list (List & Any)] (return-rest 1 2 3)]
-    (assert-eq '(1 2 3) rest-list))
+    (assert-eq! '(1 2 3) rest-list))
 
   ; Treating functions as first-class values
-  (assert-eq '(1 2 3) ((black-box return-rest) 1 2 3))
+  (assert-eq! '(1 2 3) ((black-box return-rest) 1 2 3))
 
   ; Make sure we can apply functions with polymorphic purity
-  (assert-eq false (invert-pred int? 5))
+  (assert-eq! false (invert-pred int? 5))
 
   ; Polymorphic purity Rust fun apply inside a polymorphic purity Arret fun
-  (assert-eq true (wrapped-every? (fn (_) true) '(1 2 3)))
-
-  ())
+  (assert-eq! true (wrapped-every? (fn (_) true) '(1 2 3))))

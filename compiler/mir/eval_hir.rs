@@ -306,12 +306,7 @@ impl EvalHirCtx {
         let apply_purities = apply_ty_args.pvar_purities();
         let fun_expr = arret_fun.fun_expr();
 
-        let app_purity = fun_app_purity(
-            outer_purities,
-            apply_purities,
-            &fun_expr.purity,
-            &fun_expr.ret_ty,
-        );
+        let app_purity = fun_app_purity(outer_purities, apply_purities, &fun_expr.purity);
 
         let ret_reg = b.push_reg(
             span,
@@ -589,12 +584,7 @@ impl EvalHirCtx {
         let apply_purities = apply_ty_args.pvar_purities();
         let arret_fun_type = rust_fun.arret_fun_type();
 
-        let call_purity = fun_app_purity(
-            outer_purities,
-            apply_purities,
-            arret_fun_type.purity(),
-            arret_fun_type.ret(),
-        );
+        let call_purity = fun_app_purity(outer_purities, apply_purities, arret_fun_type.purity());
 
         let can_const_eval = b.is_none() || (call_purity == Purity::Pure);
 

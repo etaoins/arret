@@ -1,10 +1,10 @@
 (import [stdlib base])
 (import [stdlib test])
 
-(defn main! ()
+(defn main! () ->! ()
   ; Make sure we pass a constant list when calling `(member?)`
   ; This is stupid but we've broken it in the past
-  (assert-fn-doesnt-contain-op :alloc-boxed (fn ([needle Any])
+  (assert-fn-doesnt-contain-op! :alloc-boxed (fn ([needle Any])
     (member? needle '("cat" "dog" "fish"))))
 
   ())

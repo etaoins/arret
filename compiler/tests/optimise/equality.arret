@@ -1,44 +1,42 @@
 (import [stdlib base])
 (import [stdlib test])
 
-(defmacro assert-native-compare-fn (macro-rules
+(defmacro assert-native-compare-fn! (macro-rules
   [(f)
     (do
-      (assert-fn-doesnt-contain-op :call f)
-      (assert-fn-doesnt-contain-op :const-box f)
-      (assert-fn-doesnt-contain-op :alloc-boxed f))]))
+      (assert-fn-doesnt-contain-op! :call f)
+      (assert-fn-doesnt-contain-op! :const-box f)
+      (assert-fn-doesnt-contain-op! :alloc-boxed f))]))
 
-(defn main! ()
+(defn main! () ->! ()
   ; This requires calling in to the runtime
-  (assert-fn-contains-op :call (fn ([left Any] [right Any]) -> Bool
+  (assert-fn-contains-op! :call (fn ([left Any] [right Any]) -> Bool
     (= left right)))
 
   ; Ints can be directly compared
-  (assert-native-compare-fn (fn ([left Int] [right Int]) -> Bool
+  (assert-native-compare-fn! (fn ([left Int] [right Int]) -> Bool
     (= left right)))
 
   ; Floats can be directly compared
-  (assert-native-compare-fn (fn ([left Float] [right Float]) -> Bool
+  (assert-native-compare-fn! (fn ([left Float] [right Float]) -> Bool
     (= left right)))
 
   ; Bools can be directly compared
-  (assert-native-compare-fn (fn ([left Bool] [right Bool]) -> Bool
+  (assert-native-compare-fn! (fn ([left Bool] [right Bool]) -> Bool
     (= left right)))
 
   ; Chars can be directly compared
-  (assert-native-compare-fn (fn ([left Char] [right Char]) -> Bool
+  (assert-native-compare-fn! (fn ([left Char] [right Char]) -> Bool
     (= left right)))
 
   ; This should be optimised away entirely
-  (assert-fn-doesnt-contain-op :reg-op (fn ([v Bool]) -> Bool
+  (assert-fn-doesnt-contain-op! :reg-op (fn ([v Bool]) -> Bool
     (= true v)))
 
   ; Syms can be directly compared
-  (assert-native-compare-fn (fn ([left Sym] [right Sym]) -> Bool
+  (assert-native-compare-fn! (fn ([left Sym] [right Sym]) -> Bool
     (= left right)))
 
   ; Fns can be directly compared because they're always inequal
-  (assert-native-compare-fn (fn ([left (... -> Any)] [right (... -> Any)]) -> Bool
-    (= left right)))
-
-  ())
+  (assert-native-compare-fn! (fn ([left (... -> Any)] [right (... -> Any)]) -> Bool
+    (= left right))))

@@ -1,7 +1,7 @@
 (import [stdlib base])
 (import [stdlib test])
 
-(defn main! ()
+(defn main! () ->! ()
   ; This is dumb but it makes us produce a binary
   (print! "")
 
