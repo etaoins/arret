@@ -99,7 +99,12 @@ fn report_all_to_stderr(source_loader: &compiler::SourceLoader, err: &compiler::
 impl rustyline::completion::Completer for ArretHelper {
     type Candidate = String;
 
-    fn complete(&self, line: &str, pos: usize) -> rustyline::Result<(usize, Vec<String>)> {
+    fn complete(
+        &self,
+        line: &str,
+        pos: usize,
+        _: &rustyline::Context<'_>,
+    ) -> rustyline::Result<(usize, Vec<String>)> {
         use syntax::parser::is_identifier_char;
 
         let prefix_start = line[0..pos]
@@ -139,7 +144,7 @@ impl rustyline::completion::Completer for ArretHelper {
 }
 
 impl rustyline::hint::Hinter for ArretHelper {
-    fn hint(&self, line: &str, pos: usize) -> Option<String> {
+    fn hint(&self, line: &str, pos: usize, _: &rustyline::Context<'_>) -> Option<String> {
         use syntax::error::ExpectedContent;
         use syntax::parser::is_identifier_char;
 
