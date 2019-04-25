@@ -1,8 +1,8 @@
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
 
-use std::env;
 use std::ops::Range;
+use std::{env, fs, io, path, process};
 
 use rayon::prelude::*;
 use tempfile::NamedTempFile;
@@ -12,8 +12,6 @@ use syntax::span::Span;
 use compiler::error::Error;
 use compiler::reporting::{report_to_stderr, LocTrace, Reportable, Severity};
 use compiler::CompileCtx;
-
-use std::{fs, path, process};
 
 #[derive(Clone, Copy, PartialEq)]
 enum TestType {
@@ -316,6 +314,24 @@ fn run_single_test(
     }
 }
 
+fn entry_to_test_tuple(
+    entry: io::Result<fs::DirEntry>,
+    test_type: TestType,
+) -> Option<(path::PathBuf, TestType)> {
+    let entry = entry.unwrap();
+
+    if !entry
+        .file_name()
+        .to_str()
+        .map(|file_name| !file_name.starts_with('.') && file_name.ends_with(".arret"))
+        .unwrap_or(false)
+    {
+        return None;
+    }
+
+    Some((entry.path(), test_type))
+}
+
 #[test]
 fn integration() {
     let target_triple =
@@ -329,24 +345,22 @@ fn integration() {
 
     let compile_error_entries = fs::read_dir("./tests/compile-error")
         .unwrap()
-        .map(|entry| (entry, TestType::CompileError));
+        .filter_map(|entry| entry_to_test_tuple(entry, TestType::CompileError));
 
     let eval_entries = fs::read_dir("./tests/eval-pass")
         .unwrap()
         .chain(fs::read_dir("./tests/optimise").unwrap())
-        .map(|entry| (entry, TestType::EvalPass));
+        .filter_map(|entry| entry_to_test_tuple(entry, TestType::EvalPass));
 
     let run_entries = fs::read_dir("./tests/run-pass")
         .unwrap()
-        .map(|entry| (entry, TestType::RunPass));
+        .filter_map(|entry| entry_to_test_tuple(entry, TestType::RunPass));
 
     let failed_tests = compile_error_entries
         .chain(eval_entries)
         .chain(run_entries)
         .par_bridge()
-        .filter_map(|(entry, test_type)| {
-            let input_path = entry.unwrap().path();
-
+        .filter_map(|(input_path, test_type)| {
             if !run_single_test(
                 target_triple.as_ref().map(|t| &**t),
                 &ccx,
