@@ -1,11 +1,11 @@
-FROM ubuntu:18.10 AS build-env
+FROM ubuntu:19.04 AS build-env
 
 RUN \
   apt-get update && \
   apt-get -y install curl gcc zlib1g-dev libstdc++-8-dev llvm-7 llvm-7-dev && \
   apt-get clean
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.34.0
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.34.1
 ENV PATH "/root/.cargo/bin:${PATH}"
 
 # These are the minimum required files for `cargo fetch`
@@ -31,7 +31,7 @@ RUN cargo build --release
 
 ###
 
-FROM ubuntu:18.10 AS repl
+FROM ubuntu:19.04 AS repl
 
 ARG vcs_ref
 

@@ -24,7 +24,7 @@ RUN cmake \
   ../llvm-${LLVM_VERSION}.src
 
 RUN ninja install && rm -Rf /usr/src/llvm-build
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.34.0
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.34.1
 
 ENV PATH "/root/.cargo/bin:${PATH}"
 RUN rustup component add rustfmt
