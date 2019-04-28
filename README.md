@@ -11,7 +11,7 @@ The [language design documentation](./docs/language-design.md) has a high-level 
 
 The Arret compiler and parts of its standard library are written in Rust.
 The mechanism for calling Rust code from Arret is referred to as the Rust Function Interface or RFI.
-Documentation for the [`arrret_runtime` module](https://rustdoc.arret-lang.org/arret_runtime/index.html) describes the core concepts of the RFI.
+Documentation for the [`arret_runtime` crate](https://rustdoc.arret-lang.org/arret_runtime/index.html) describes the core concepts of the RFI.
 
 ## Installation
 
