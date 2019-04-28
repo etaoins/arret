@@ -521,13 +521,13 @@ mod test {
         // function
         assert_merged_poly(&pidentity_fun, &pidentity_fun, &top_pure_fun);
 
-        // The intersection of the pure identity function and the impure string function is the
-        // identity function
-        // TODO: This seems like it should be (Str -> Str)
+        // The intersection of the pure identity function and the impure bool identity function is
+        // the identity function
+        // TODO: This seems like it should be `(All #{[A Bool]} A -> A)`
         assert_merged_poly(&pidentity_fun, &pidentity_fun, &pidentity_impure_bool_fun);
 
         // These have no subtype relationship
-        // TODO: This also seems like it should be (Str -> Str)
+        // TODO: This also seems like it should be `(All #{[A Bool]} A -> A)`
         assert_disjoint_poly(&pidentity_impure_bool_fun, &top_pure_fun);
     }
 
