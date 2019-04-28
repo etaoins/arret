@@ -56,6 +56,14 @@ pub fn specific_abi_type_for_ty_ref<M: ty::PM>(ty_ref: &ty::Ref<M>) -> abitype::
     specific_abi_type_for_type_tags(ty_ref.into())
 }
 
+pub fn specific_ret_abi_type_for_ty_ref<M: ty::PM>(ty_ref: &ty::Ref<M>) -> abitype::RetABIType {
+    if ty_ref == &ty::List::empty().into() {
+        abitype::RetABIType::Void
+    } else {
+        specific_abi_type_for_type_tags(ty_ref.into()).into()
+    }
+}
+
 fn specific_type_for_values<'v, F, T>(
     possible_values: impl Iterator<Item = &'v Value>,
     tagset_to_type: F,
