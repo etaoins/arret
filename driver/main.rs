@@ -56,7 +56,7 @@ fn main() {
             Arg::with_name("NOOPT")
                 .long("no-llvm-opt")
                 .takes_value(false)
-                .help("Disable LLVM optimisation"),
+                .help("Disables LLVM optimisation"),
         )
         .subcommand(
             SubCommand::with_name("compile")
@@ -83,7 +83,7 @@ fn main() {
                     Arg::with_name("TARGET")
                         .long("target")
                         .value_name("TRIPLE")
-                        .help("Generate code for the given target"),
+                        .help("Generates code for the given target"),
                 ),
         )
         .subcommand(
@@ -104,7 +104,7 @@ fn main() {
                         .short("i")
                         .long("include")
                         .value_name("FILE")
-                        .help("file to preload before starting REPL"),
+                        .help("Preloads a file before starting REPL"),
                 ),
         )
         .get_matches();

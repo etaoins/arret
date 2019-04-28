@@ -272,9 +272,9 @@ fn parse_command(mut line: String) -> ParsedCommand {
         HELP_COMMAND => {
             println!("Available REPL commands:");
             println!();
-            println!("/help                  print this summary");
-            println!("/type <expression>     evaluate the type of the given expression");
-            println!("/quit                  exit the REPL");
+            println!("/help                 Prints this summary");
+            println!("/type <expression>    Evaluates the type of the given expression");
+            println!("/quit                 Exits the REPL");
             ParsedCommand::Other
         }
         QUIT_COMMAND => ParsedCommand::Quit,
