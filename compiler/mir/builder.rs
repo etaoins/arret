@@ -1,8 +1,8 @@
 use std::fmt;
 
 use crate::mir::ops::{CastBoxedOp, CondOp, Op, OpKind, RegId, RegPhi};
-use runtime::abitype;
-use syntax::span::Span;
+use arret_runtime::abitype;
+use arret_syntax::span::Span;
 
 pub struct Builder {
     ops: Vec<Op>,

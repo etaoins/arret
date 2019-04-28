@@ -1,11 +1,9 @@
-use runtime::binding::*;
-use runtime::boxed;
-use runtime::boxed::refs::Gc;
-use runtime::task::Task;
+use arret_runtime::binding::*;
+use arret_runtime::boxed;
+use arret_runtime::boxed::refs::Gc;
+use arret_runtime::task::Task;
 
-use rfi_derive;
-
-#[rfi_derive::rust_fun("(Num -> Float)")]
+#[arret_rfi_derive::rust_fun("(Num -> Float)")]
 pub fn stdlib_float(input: Gc<boxed::Num>) -> f64 {
     match input.as_subtype() {
         boxed::NumSubtype::Int(int_ref) => int_ref.value() as f64,
@@ -13,7 +11,7 @@ pub fn stdlib_float(input: Gc<boxed::Num>) -> f64 {
     }
 }
 
-#[rfi_derive::rust_fun("(Num -> Int)")]
+#[arret_rfi_derive::rust_fun("(Num -> Int)")]
 pub fn stdlib_int(task: &mut Task, input: Gc<boxed::Num>) -> i64 {
     match input.as_subtype() {
         boxed::NumSubtype::Int(int_ref) => int_ref.value(),

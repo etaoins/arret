@@ -7,11 +7,11 @@ use std::{env, fs, io, path, process};
 use rayon::prelude::*;
 use tempfile::NamedTempFile;
 
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
-use compiler::error::Error;
-use compiler::reporting::{report_to_stderr, LocTrace, Reportable, Severity};
-use compiler::CompileCtx;
+use arret_compiler::error::Error;
+use arret_compiler::reporting::{report_to_stderr, LocTrace, Reportable, Severity};
+use arret_compiler::CompileCtx;
 
 #[derive(Clone, Copy, PartialEq)]
 enum RunType {
@@ -103,7 +103,7 @@ fn take_severity(marker_string: &str) -> (Severity, &str) {
     panic!("Unknown severity prefix for `{}`", marker_string)
 }
 
-fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedReport> {
+fn extract_expected_reports(source_file: &arret_compiler::SourceFile) -> Vec<ExpectedReport> {
     let source = source_file.source();
     let span_offset = source_file.span().start() as usize;
 
@@ -171,13 +171,13 @@ fn extract_expected_reports(source_file: &compiler::SourceFile) -> Vec<ExpectedR
 fn result_for_single_test(
     target_triple: Option<&str>,
     ccx: &CompileCtx,
-    source_file: &compiler::SourceFile,
+    source_file: &arret_compiler::SourceFile,
     test_type: TestType,
 ) -> Result<(), Error> {
-    let hir = compiler::lower_program(ccx, &source_file)?;
-    let inferred_defs = compiler::infer_program(hir.defs, hir.main_var_id)?;
+    let hir = arret_compiler::lower_program(ccx, &source_file)?;
+    let inferred_defs = arret_compiler::infer_program(hir.defs, hir.main_var_id)?;
 
-    let mut ehx = compiler::EvalHirCtx::new(true);
+    let mut ehx = arret_compiler::EvalHirCtx::new(true);
     for inferred_def in inferred_defs {
         ehx.consume_def(inferred_def)?;
     }
@@ -197,10 +197,10 @@ fn result_for_single_test(
     let mir_program = ehx.into_built_program(hir.main_var_id)?;
     let output_path = NamedTempFile::new().unwrap().into_temp_path();
 
-    let gen_program_opts =
-        compiler::GenProgramOptions::new().with_target_triple(target_triple.as_ref().map(|x| &**x));
+    let gen_program_opts = arret_compiler::GenProgramOptions::new()
+        .with_target_triple(target_triple.as_ref().map(|x| &**x));
 
-    compiler::gen_program(
+    arret_compiler::gen_program(
         gen_program_opts,
         &hir.rust_libraries,
         &mir_program,
@@ -242,7 +242,7 @@ fn result_for_single_test(
 fn run_single_pass_test(
     target_triple: Option<&str>,
     ccx: &CompileCtx,
-    source_file: &compiler::SourceFile,
+    source_file: &arret_compiler::SourceFile,
     test_type: TestType,
 ) -> bool {
     use std::io;
@@ -267,7 +267,7 @@ fn run_single_pass_test(
 fn run_single_compile_fail_test(
     target_triple: Option<&str>,
     ccx: &CompileCtx,
-    source_file: &compiler::SourceFile,
+    source_file: &arret_compiler::SourceFile,
 ) -> bool {
     use std::io;
 
@@ -359,10 +359,11 @@ fn integration() {
     let target_triple =
         env::var_os("ARRET_TEST_TARGET_TRIPLE").map(|os_str| os_str.into_string().unwrap());
 
-    let package_paths = compiler::PackagePaths::test_paths(target_triple.as_ref().map(|t| &**t));
-    let ccx = compiler::CompileCtx::new(package_paths, true);
+    let package_paths =
+        arret_compiler::PackagePaths::test_paths(target_triple.as_ref().map(|t| &**t));
+    let ccx = arret_compiler::CompileCtx::new(package_paths, true);
 
-    use compiler::initialise_llvm;
+    use arret_compiler::initialise_llvm;
     initialise_llvm(target_triple.is_some());
 
     let compile_error_entries = fs::read_dir("./tests/compile-error")

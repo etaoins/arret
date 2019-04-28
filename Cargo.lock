@@ -38,12 +38,61 @@ name = "arret"
 version = "0.1.0"
 dependencies = [
  "ansi_term 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "arret-compiler 0.1.0",
+ "arret-syntax 0.1.0",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "compiler 0.1.0",
  "directories 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustyline 4.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "syntax 0.1.0",
 ]
+
+[[package]]
+name = "arret-compiler"
+version = "0.1.0"
+dependencies = [
+ "ansi_term 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "arret-runtime 0.1.0",
+ "arret-runtime-syntax 0.1.0",
+ "arret-syntax 0.1.0",
+ "libc 0.2.51 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libloading 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "llvm-sys 70.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rayon 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tempfile 3.0.7 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "arret-rfi-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2 0.4.28 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 0.6.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 0.15.33 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "arret-runtime"
+version = "0.1.0"
+
+[[package]]
+name = "arret-runtime-syntax"
+version = "0.1.0"
+dependencies = [
+ "arret-runtime 0.1.0",
+ "arret-syntax 0.1.0",
+]
+
+[[package]]
+name = "arret-stdlib"
+version = "0.1.0"
+dependencies = [
+ "arret-rfi-derive 0.1.0",
+ "arret-runtime 0.1.0",
+ "arret-runtime-syntax 0.1.0",
+]
+
+[[package]]
+name = "arret-syntax"
+version = "0.1.0"
 
 [[package]]
 name = "atty"
@@ -126,21 +175,6 @@ version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitflags 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "compiler"
-version = "0.1.0"
-dependencies = [
- "ansi_term 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "libc 0.2.51 (registry+https://github.com/rust-lang/crates.io-index)",
- "libloading 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "llvm-sys 70.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "rayon 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "runtime 0.1.0",
- "runtime-syntax 0.1.0",
- "syntax 0.1.0",
- "tempfile 3.0.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -481,27 +515,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rfi-derive"
-version = "0.1.0"
-dependencies = [
- "proc-macro2 0.4.28 (registry+https://github.com/rust-lang/crates.io-index)",
- "quote 0.6.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "syn 0.15.33 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "runtime"
-version = "0.1.0"
-
-[[package]]
-name = "runtime-syntax"
-version = "0.1.0"
-dependencies = [
- "runtime 0.1.0",
- "syntax 0.1.0",
-]
-
-[[package]]
 name = "rustc-demangle"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -554,15 +567,6 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "stdlib"
-version = "0.1.0"
-dependencies = [
- "rfi-derive 0.1.0",
- "runtime 0.1.0",
- "runtime-syntax 0.1.0",
-]
-
-[[package]]
 name = "strsim"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -587,10 +591,6 @@ dependencies = [
  "syn 0.15.33 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-xid 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
-
-[[package]]
-name = "syntax"
-version = "0.1.0"
 
 [[package]]
 name = "tempfile"

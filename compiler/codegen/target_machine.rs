@@ -1,7 +1,5 @@
 use std::{ffi, mem, ptr};
 
-use libc;
-
 use llvm_sys::core::*;
 use llvm_sys::target_machine::*;
 

@@ -1,8 +1,8 @@
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
-use runtime::abitype;
-use runtime::boxed;
-use runtime::boxed::prelude::*;
+use arret_runtime::abitype;
+use arret_runtime::boxed;
+use arret_runtime::boxed::prelude::*;
 
 use crate::codegen::GenABI;
 use crate::mir::builder::{Builder, BuiltReg};

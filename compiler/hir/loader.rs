@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::path;
 use std::sync::Arc;
 
-use syntax::datum::DataStr;
-use syntax::span::Span;
+use arret_syntax::datum::DataStr;
+use arret_syntax::span::Span;
 
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::id_type::ArcId;
@@ -136,7 +136,7 @@ pub fn load_module_by_name(
 #[cfg(test)]
 mod test {
     use super::*;
-    use syntax::span::EMPTY_SPAN;
+    use arret_syntax::span::EMPTY_SPAN;
 
     fn load_stdlib_module(name: &'static str) -> Result<LoadedModule> {
         let ccx = CompileCtx::new(PackagePaths::test_paths(None), true);

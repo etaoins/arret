@@ -1,5 +1,5 @@
-use runtime::abitype;
-use syntax::span::Span;
+use arret_runtime::abitype;
+use arret_syntax::span::Span;
 
 use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::error::{Error, Result};

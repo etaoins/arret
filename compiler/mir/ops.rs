@@ -1,9 +1,9 @@
-use runtime::abitype;
-use runtime::boxed;
-use runtime::callback;
+use arret_runtime::abitype;
+use arret_runtime::boxed;
+use arret_runtime::callback;
 
-use syntax::datum::DataStr;
-use syntax::span::Span;
+use arret_syntax::datum::DataStr;
+use arret_syntax::span::Span;
 
 use crate::codegen::GenABI;
 use crate::mir::tagset::TypeTagSet;
@@ -531,7 +531,7 @@ mod test {
 
     impl From<OpKind> for Op {
         fn from(op_kind: OpKind) -> Self {
-            use syntax::span::EMPTY_SPAN;
+            use arret_syntax::span::EMPTY_SPAN;
             Op::new(EMPTY_SPAN, op_kind)
         }
     }

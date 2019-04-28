@@ -1,4 +1,4 @@
-use syntax::datum::DataStr;
+use arret_syntax::datum::DataStr;
 
 use crate::error::Error;
 use crate::hir;
@@ -114,7 +114,7 @@ impl<'ccx> ReplCtx<'ccx> {
                     }
                     EvalKind::Value => {
                         use crate::mir::eval_hir::FunCtx;
-                        use runtime_syntax::writer;
+                        use arret_runtime_syntax::writer;
                         use std::str;
 
                         // Evaluate the expression

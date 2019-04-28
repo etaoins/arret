@@ -2,10 +2,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::{fmt, path};
 
-use libloading;
-
-use syntax::datum::Datum;
-use syntax::span::Span;
+use arret_syntax::datum::Datum;
+use arret_syntax::span::Span;
 
 use crate::hir;
 use crate::hir::error::{Error, ErrorKind};
@@ -14,7 +12,7 @@ use crate::hir::scope::Scope;
 use crate::source::{RfiModuleKind, SourceKind, SourceLoader};
 use crate::ty;
 
-use runtime::{abitype, binding};
+use arret_runtime::{abitype, binding};
 
 pub struct Library {
     _loaded: libloading::Library,
@@ -215,7 +213,7 @@ impl Loader {
         // If there are rest types ensure they're compatible
         let arret_rest = upper_fun_type.params().rest();
         if !arret_rest.is_never() {
-            use runtime::abitype::{ABIType, BoxedABIType};
+            use arret_runtime::abitype::{ABIType, BoxedABIType};
 
             let last_rust_param = abi_params_iter.next_back().unwrap();
 
@@ -341,9 +339,9 @@ impl Loader {
 mod test {
     use super::*;
 
-    use runtime::abitype::{ABIType, BoxedABIType, ParamABIType, ParamCapture, RetABIType};
-    use runtime::boxed::TypeTag;
-    use syntax::parser::datum_from_str;
+    use arret_runtime::abitype::{ABIType, BoxedABIType, ParamABIType, ParamCapture, RetABIType};
+    use arret_runtime::boxed::TypeTag;
+    use arret_syntax::parser::datum_from_str;
 
     fn binding_fun_to_poly_type(rust_fun: &'static binding::RustFun) -> Result<ty::Fun, Error> {
         let loader = Loader::new();

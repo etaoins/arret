@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use syntax::datum::Datum;
-use syntax::span::{Span, EMPTY_SPAN};
+use arret_syntax::datum::Datum;
+use arret_syntax::span::{Span, EMPTY_SPAN};
 
 use crate::rfi;
 use crate::source::SourceFile;
@@ -566,7 +566,7 @@ impl<'ccx> LoweringCtx<'ccx> {
     }
 
     fn include_rfi_library(&mut self, span: Span, rfi_library: Arc<rfi::Library>) -> LoweredModule {
-        use syntax::datum::DataStr;
+        use arret_syntax::datum::DataStr;
 
         let exported_funs = rfi_library.exported_funs();
 
@@ -907,7 +907,7 @@ fn import_statement_for_module(names: &[&'static str]) -> Datum {
 #[cfg(test)]
 fn module_for_str(data_str: &str) -> Result<LoweredModule> {
     use crate::PackagePaths;
-    use syntax::parser::data_from_str;
+    use arret_syntax::parser::data_from_str;
 
     let mut test_data = data_from_str(data_str).unwrap();
     let mut program_data = vec![
@@ -925,7 +925,7 @@ fn module_for_str(data_str: &str) -> Result<LoweredModule> {
 
 #[cfg(test)]
 pub fn expr_for_str(data_str: &str) -> Expr<Lowered> {
-    use syntax::parser::datum_from_str;
+    use arret_syntax::parser::datum_from_str;
 
     let scope = Scope::new_with_primitives();
 
@@ -939,7 +939,7 @@ pub fn expr_for_str(data_str: &str) -> Expr<Lowered> {
 mod test {
     use super::*;
     use crate::ty::purity::Purity;
-    use syntax::span::t2s;
+    use arret_syntax::span::t2s;
 
     #[test]
     fn self_quoting_bool() {

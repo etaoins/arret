@@ -1,7 +1,7 @@
 use std::vec;
 
-use syntax::datum::{DataStr, Datum};
-use syntax::span::Span;
+use arret_syntax::datum::{DataStr, Datum};
+use arret_syntax::span::Span;
 
 use crate::hir::scope::Scope;
 

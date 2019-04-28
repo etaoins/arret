@@ -1,4 +1,4 @@
-use runtime::abitype;
+use arret_runtime::abitype;
 
 use crate::mir::value::Value;
 

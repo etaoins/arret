@@ -13,8 +13,8 @@ impl Error {
     }
 }
 
-impl From<syntax::error::Error> for Error {
-    fn from(syntax_err: syntax::error::Error) -> Error {
+impl From<arret_syntax::error::Error> for Error {
+    fn from(syntax_err: arret_syntax::error::Error) -> Error {
         Error(vec![Box::new(syntax_err)])
     }
 }

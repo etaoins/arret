@@ -1,9 +1,9 @@
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 
-use runtime::abitype::{BoxedABIType, EncodeBoxedABIType, TOP_LIST_BOXED_ABI_TYPE};
-use runtime::boxed;
-use runtime::boxed::TypeTag;
+use arret_runtime::abitype::{BoxedABIType, EncodeBoxedABIType, TOP_LIST_BOXED_ABI_TYPE};
+use arret_runtime::boxed;
+use arret_runtime::boxed::TypeTag;
 
 use crate::codegen::target_gen::TargetCtx;
 use crate::codegen::GenABI;

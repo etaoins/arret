@@ -1,6 +1,6 @@
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
-use runtime::boxed;
+use arret_runtime::boxed;
 
 use crate::mir::builder::Builder;
 use crate::mir::error::Result;
@@ -25,7 +25,7 @@ pub fn length(
         use crate::mir::ops::*;
         use crate::mir::value;
         use crate::mir::value::build_reg::value_to_reg;
-        use runtime::abitype;
+        use arret_runtime::abitype;
 
         let list_reg = value_to_reg(
             ehx,

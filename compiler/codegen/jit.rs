@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 use std::{ffi, mem};
 
-use runtime::boxed;
-use runtime::intern::Interner;
-
-use libc;
+use arret_runtime::boxed;
+use arret_runtime::intern::Interner;
 
 use llvm_sys::core::*;
 use llvm_sys::execution_engine::*;
@@ -41,7 +39,7 @@ impl JITCtx {
         #[allow(clippy::fn_to_numeric_cast)]
         unsafe {
             use crate::codegen::target_machine::create_target_machine;
-            use runtime::compiler_support;
+            use arret_runtime::compiler_support;
 
             LLVMLinkInMCJIT();
 

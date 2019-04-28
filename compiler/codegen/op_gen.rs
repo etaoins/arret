@@ -2,7 +2,7 @@ use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::{LLVMIntPredicate, LLVMRealPredicate};
 
-use runtime::boxed;
+use arret_runtime::boxed;
 
 use crate::mir::ops::*;
 

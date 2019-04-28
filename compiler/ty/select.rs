@@ -288,7 +288,7 @@ mod test {
     use crate::hir::ns::NsDatum;
     use crate::hir::scope::Scope;
     use crate::ty::purity::Purity;
-    use syntax::parser::{data_from_str, datum_from_str};
+    use arret_syntax::parser::{data_from_str, datum_from_str};
 
     struct TestScope {
         scope: Scope<'static>,

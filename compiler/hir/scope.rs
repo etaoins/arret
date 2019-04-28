@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use syntax::span::{Span, EMPTY_SPAN};
+use arret_syntax::span::{Span, EMPTY_SPAN};
 
 use crate::hir::error::{Error, ErrorKind};
 use crate::hir::macros::MacroId;

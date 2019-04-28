@@ -21,15 +21,15 @@ fn arg_is_task(arg: &syn::ArgCaptured) -> bool {
     };
 }
 
-/// Annotates a Rust function to be exported via `runtime::define_rust_module!`
+/// Annotates a Rust function to be exported via `arret_runtime::define_rust_module!`
 ///
 /// This takes a single metadata string containing the full Arret type of the function. This is used
-/// to express concepts in Arret that don't exist in Rust. These include rest arguments and
-/// function purity.
+/// to express concepts in Arret that don't exist in Rust. These include rest arguments and function
+/// purity.
 ///
-/// The annotated Rust function must take a `runtime::task::Task` as its first parameter. An attempt
-/// will be made to encode the types of the remaining parameters but only certain primitive types
-/// and `runtime::boxed` values are allowed.
+/// The annotated Rust function must take a `arret_runtime::task::Task` as its first parameter. An
+/// attempt will be made to encode the types of the remaining parameters but only certain primitive
+/// types and `arret_runtime::boxed` values are allowed.
 #[proc_macro_attribute]
 pub fn rust_fun(
     attrs: proc_macro::TokenStream,
@@ -91,9 +91,9 @@ pub fn rust_fun(
             arret_type: #arret_type,
             takes_task: #takes_task,
             params: &[#(
-                <#param_types as ::runtime::abitype::EncodeABIType>::PARAM_ABI_TYPE
+                <#param_types as ::arret_runtime::abitype::EncodeABIType>::PARAM_ABI_TYPE
             ),*],
-            ret: <#ret_type as ::runtime::abitype::EncodeRetABIType>::RET_ABI_TYPE,
+            ret: <#ret_type as ::arret_runtime::abitype::EncodeRetABIType>::RET_ABI_TYPE,
             symbol: #entry_point_name,
         };
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::result;
 
-use syntax::span::{Span, EMPTY_SPAN};
+use arret_syntax::span::{Span, EMPTY_SPAN};
 
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::macros::{get_escaped_ident, starts_with_zero_or_more};

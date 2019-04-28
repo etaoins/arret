@@ -1,7 +1,7 @@
 use std::result;
 
-use syntax::datum::DataStr;
-use syntax::span::Span;
+use arret_syntax::datum::DataStr;
+use arret_syntax::span::Span;
 
 use crate::hir::error::{Error, ErrorKind};
 use crate::hir::exports::Exports;
@@ -245,11 +245,11 @@ mod test {
     use super::*;
     use crate::hir::prim::Prim;
     use crate::hir::scope::Binding;
+    use arret_syntax::span::{t2s, EMPTY_SPAN};
     use std::collections::HashMap;
-    use syntax::span::{t2s, EMPTY_SPAN};
 
     fn exports_for_import_set(datum: &str) -> Result<Exports> {
-        use syntax::parser::datum_from_str;
+        use arret_syntax::parser::datum_from_str;
 
         let import_set_datum = NsDatum::from_syntax_datum(&datum_from_str(datum).unwrap());
 

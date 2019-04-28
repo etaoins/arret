@@ -7,7 +7,7 @@ use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 use llvm_sys::LLVMLinkage;
 
-use runtime::intern;
+use arret_runtime::intern;
 
 use crate::codegen::analysis::AnalysedMod;
 use crate::codegen::debug_info::DebugInfoBuilder;

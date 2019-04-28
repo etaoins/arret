@@ -1,5 +1,5 @@
-use runtime::abitype;
-use runtime::boxed;
+use arret_runtime::abitype;
+use arret_runtime::boxed;
 
 use crate::mir::builder::BuiltReg;
 use crate::mir::tagset::TypeTagSet;

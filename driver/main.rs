@@ -5,7 +5,7 @@ mod subcommand;
 
 use std::{env, path, process};
 
-use compiler::CompileCtx;
+use arret_compiler::CompileCtx;
 
 const ARRET_FILE_EXTENSION: &str = ".arret";
 
@@ -22,9 +22,9 @@ fn find_path_to_arret_root() -> path::PathBuf {
 }
 
 fn input_arg_to_source_file(
-    source_loader: &compiler::SourceLoader,
+    source_loader: &arret_compiler::SourceLoader,
     input_param: &str,
-) -> compiler::ArcId<compiler::SourceFile> {
+) -> arret_compiler::ArcId<arret_compiler::SourceFile> {
     if input_param == "-" {
         use std::io::prelude::*;
 
@@ -32,7 +32,7 @@ fn input_arg_to_source_file(
         std::io::stdin().read_to_string(&mut input_string).unwrap();
 
         source_loader.load_string(
-            compiler::SourceKind::File("stdin".to_owned()),
+            arret_compiler::SourceKind::File("stdin".to_owned()),
             input_string.into(),
         )
     } else {
@@ -45,8 +45,8 @@ fn input_arg_to_source_file(
 }
 
 fn main() {
+    use arret_compiler::initialise_llvm;
     use clap::{crate_version, App, AppSettings, Arg, SubCommand};
-    use compiler::initialise_llvm;
 
     let matches = App::new("arret")
         .version(crate_version!())
@@ -113,7 +113,7 @@ fn main() {
     let enable_optimisations = !matches.is_present("NOOPT");
 
     if let Some(compile_matches) = matches.subcommand_matches("compile") {
-        let package_paths = compiler::PackagePaths::with_stdlib(
+        let package_paths = arret_compiler::PackagePaths::with_stdlib(
             &arret_target_dir,
             compile_matches.value_of("TARGET"),
         );
@@ -151,7 +151,7 @@ fn main() {
             process::exit(2);
         }
     } else if let Some(repl_matches) = matches.subcommand_matches("repl") {
-        let package_paths = compiler::PackagePaths::with_stdlib(&arret_target_dir, None);
+        let package_paths = arret_compiler::PackagePaths::with_stdlib(&arret_target_dir, None);
         let ccx = CompileCtx::new(package_paths, enable_optimisations);
 
         initialise_llvm(false);
@@ -162,7 +162,7 @@ fn main() {
 
         subcommand::repl::interactive_loop(&ccx, include_path);
     } else if let Some(eval_matches) = matches.subcommand_matches("eval") {
-        let package_paths = compiler::PackagePaths::with_stdlib(&arret_target_dir, None);
+        let package_paths = arret_compiler::PackagePaths::with_stdlib(&arret_target_dir, None);
         let ccx = CompileCtx::new(package_paths, enable_optimisations);
 
         let input_param = eval_matches.value_of("INPUT").unwrap();

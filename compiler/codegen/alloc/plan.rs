@@ -1,4 +1,4 @@
-use runtime::boxed;
+use arret_runtime::boxed;
 
 use crate::codegen::alloc::{AllocAtom, BoxSource, CondPlan};
 use crate::codegen::analysis::escape::{CaptureKind, Captures};

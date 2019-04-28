@@ -1,8 +1,8 @@
 use std::io::{Result, Write};
 
-use runtime::boxed;
-use runtime::boxed::prelude::*;
-use runtime::boxed::refs::Gc;
+use arret_runtime::boxed;
+use arret_runtime::boxed::prelude::*;
+use arret_runtime::boxed::refs::Gc;
 
 macro_rules! process_escaped_chars {
     ($w:ident, $source:ident, $( $pattern:pat => $escape:expr ),*) => {
@@ -61,7 +61,7 @@ fn write_boxed_seq(
 /// Writes a representation of the passed box to the writer
 #[allow(clippy::float_cmp)]
 pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any>) -> Result<()> {
-    use runtime::boxed::AnySubtype;
+    use arret_runtime::boxed::AnySubtype;
 
     match any_ref.as_subtype() {
         AnySubtype::True(_) => write!(w, "true"),
@@ -135,7 +135,7 @@ mod test {
 
     fn assert_write(heap: &mut boxed::Heap, expected: &'static str, any_ref: Gc<boxed::Any>) {
         use crate::reader;
-        use syntax::parser::datum_from_str;
+        use arret_syntax::parser::datum_from_str;
 
         let first_output = string_for_boxed(heap, any_ref);
         assert_eq!(expected, first_output);

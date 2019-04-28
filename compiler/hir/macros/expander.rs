@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
 use crate::hir::macros::linker::{TemplateIdent, VarLinks};
 use crate::hir::macros::matcher::MatchData;

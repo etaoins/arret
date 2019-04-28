@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use syntax::datum::DataStr;
+use arret_syntax::datum::DataStr;
 
 use crate::hir::prim::PRIM_EXPORTS;
 use crate::hir::scope::Binding;

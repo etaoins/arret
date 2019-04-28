@@ -3,16 +3,15 @@ use std::ffi;
 use std::panic;
 use std::rc::Rc;
 
-use runtime;
-use runtime::boxed;
-use runtime::boxed::prelude::*;
-use runtime::boxed::refs::Gc;
-use runtime::callback::EntryPointABIType as CallbackEntryPointABIType;
-use runtime::intern::Interner;
+use arret_runtime::boxed;
+use arret_runtime::boxed::prelude::*;
+use arret_runtime::boxed::refs::Gc;
+use arret_runtime::callback::EntryPointABIType as CallbackEntryPointABIType;
+use arret_runtime::intern::Interner;
 
-use runtime_syntax::reader;
-use syntax::datum::{DataStr, Datum};
-use syntax::span::{Span, EMPTY_SPAN};
+use arret_runtime_syntax::reader;
+use arret_syntax::datum::{DataStr, Datum};
+use arret_syntax::span::{Span, EMPTY_SPAN};
 
 use crate::codegen;
 use crate::hir;
@@ -42,7 +41,7 @@ struct ArretFunKey {
 }
 
 pub struct EvalHirCtx {
-    runtime_task: runtime::task::Task,
+    runtime_task: arret_runtime::task::Task,
     global_values: HashMap<hir::VarId, Value>,
 
     private_fun_id_counter: ops::PrivateFunIdCounter,
@@ -151,7 +150,7 @@ impl EvalHirCtx {
         let thunk_jit = codegen::jit::JITCtx::new(optimising);
 
         EvalHirCtx {
-            runtime_task: runtime::task::Task::new(),
+            runtime_task: arret_runtime::task::Task::new(),
             global_values: HashMap::new(),
 
             private_fun_id_counter: ops::PrivateFunIdCounter::new(),
@@ -502,7 +501,7 @@ impl EvalHirCtx {
         rust_fun: &rfi::Fun,
     ) -> BuiltReg {
         use crate::mir::ops::*;
-        use runtime::abitype;
+        use arret_runtime::abitype;
 
         let wanted_abi = PolymorphABI::thunk_abi();
         let private_fun_id = self.id_for_rust_fun(span, rust_fun, wanted_abi);
@@ -528,7 +527,7 @@ impl EvalHirCtx {
         entry_point_abi: &CallbackEntryPointABIType,
     ) -> BuiltReg {
         use crate::mir::ops::*;
-        use runtime::abitype;
+        use arret_runtime::abitype;
 
         let wanted_abi = entry_point_abi.clone().into();
         let private_fun_id = self.id_for_rust_fun(span, rust_fun, wanted_abi);
@@ -682,7 +681,7 @@ impl EvalHirCtx {
     ) -> Value {
         use crate::mir::ops::*;
         use crate::mir::value::build_reg::value_to_reg;
-        use runtime::abitype;
+        use arret_runtime::abitype;
 
         let fun_boxed_abi_type =
             if let abitype::ABIType::Boxed(ref fun_boxed_abi_type) = fun_reg_value.abi_type {
@@ -861,7 +860,7 @@ impl EvalHirCtx {
         use crate::mir::value::build_reg::value_to_reg;
         use crate::mir::value::plan_phi::*;
         use crate::mir::value::types::possible_type_tags_for_value;
-        use runtime::abitype;
+        use arret_runtime::abitype;
 
         let test_reg = value_to_reg(self, b, span, test_value, &abitype::ABIType::Bool);
 
@@ -1020,7 +1019,7 @@ impl EvalHirCtx {
     ) -> BuiltReg {
         use crate::mir::closure;
         use crate::mir::ops::*;
-        use runtime::abitype;
+        use arret_runtime::abitype;
 
         let wanted_abi = PolymorphABI::thunk_abi();
         let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
@@ -1060,7 +1059,7 @@ impl EvalHirCtx {
     ) -> BuiltReg {
         use crate::mir::closure;
         use crate::mir::ops::*;
-        use runtime::abitype;
+        use arret_runtime::abitype;
 
         let wanted_abi = entry_point_abi.clone().into();
         let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
@@ -1150,7 +1149,7 @@ impl EvalHirCtx {
         use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
         use crate::mir::optimise::optimise_fun;
         use crate::mir::ret_value::build_value_ret;
-        use runtime::abitype;
+        use arret_runtime::abitype;
 
         let wanted_abi = entry_point_abi.into();
 
@@ -1190,12 +1189,12 @@ impl EvalHirCtx {
         &mut self,
         b: &mut Builder,
         span: Span,
-        thunk_reg_abi_type: &::runtime::abitype::BoxedABIType,
+        thunk_reg_abi_type: &arret_runtime::abitype::BoxedABIType,
         thunk_reg: BuiltReg,
         entry_point_abi: &CallbackEntryPointABIType,
     ) -> BuiltReg {
         use crate::mir::ops::*;
-        use runtime::abitype;
+        use arret_runtime::abitype;
 
         // Closures are of type `Any`
         let closure_reg = b.cast_boxed_cond(
@@ -1243,7 +1242,7 @@ impl EvalHirCtx {
 
     /// Collect any boxed values that are no longer reachable
     pub fn collect_garbage(&mut self) {
-        use runtime::boxed::collect;
+        use arret_runtime::boxed::collect;
         use std::mem;
 
         let old_heap = mem::replace(
@@ -1372,7 +1371,7 @@ impl EvalHirCtx {
 
     /// Builds the main function of the program
     pub fn into_built_program(mut self, main_var_id: hir::VarId) -> Result<BuiltProgram> {
-        use runtime::abitype;
+        use arret_runtime::abitype;
 
         let fcx = FunCtx::new();
         let main_value = self.eval_ref(&fcx, main_var_id);

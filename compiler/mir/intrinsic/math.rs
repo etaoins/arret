@@ -18,10 +18,10 @@
 //! This also makes no attempt at simplification or strength reduction. The presumption is LLVM is
 //! much better at this than we are.
 
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
-use runtime::abitype;
-use runtime::boxed;
+use arret_runtime::abitype;
+use arret_runtime::boxed;
 
 use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::error::Result;

@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
-use runtime::boxed;
-use runtime::boxed::prelude::*;
-use runtime::boxed::refs::Gc;
+use arret_runtime::boxed;
+use arret_runtime::boxed::prelude::*;
+use arret_runtime::boxed::refs::Gc;
 
 use crate::mir::tagset::TypeTagSet;
 use crate::mir::value::{RegValue, Value};

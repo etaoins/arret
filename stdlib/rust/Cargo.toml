@@ -1,5 +1,5 @@
 [package]
-name = "stdlib"
+name = "arret-stdlib"
 version = "0.1.0"
 edition = "2018"
 authors = ["Ryan Cumming <etaoins@gmail.com>"]
@@ -10,6 +10,6 @@ path = "lib.rs"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-runtime = { path = "../../runtime" }
-runtime-syntax = { path = "../../runtime-syntax" }
-rfi-derive = { path = "../../rfi-derive" }
+arret-runtime = { path = "../../runtime" }
+arret-runtime-syntax = { path = "../../runtime-syntax" }
+arret-rfi-derive = { path = "../../rfi-derive" }

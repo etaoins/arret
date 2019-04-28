@@ -1,20 +1,20 @@
 use std::path;
 
-use compiler::error::Error;
-use compiler::reporting::report_to_stderr;
-use compiler::CompileCtx;
+use arret_compiler::error::Error;
+use arret_compiler::reporting::report_to_stderr;
+use arret_compiler::CompileCtx;
 
 fn try_compile_input_file(
     ccx: &CompileCtx,
-    options: compiler::GenProgramOptions<'_>,
-    input_file: &compiler::SourceFile,
+    options: arret_compiler::GenProgramOptions<'_>,
+    input_file: &arret_compiler::SourceFile,
     output_path: &path::Path,
     debug_info: bool,
 ) -> Result<(), Error> {
-    let hir = compiler::lower_program(ccx, input_file)?;
-    let inferred_defs = compiler::infer_program(hir.defs, hir.main_var_id)?;
+    let hir = arret_compiler::lower_program(ccx, input_file)?;
+    let inferred_defs = arret_compiler::infer_program(hir.defs, hir.main_var_id)?;
 
-    let mut ehx = compiler::EvalHirCtx::new(true);
+    let mut ehx = arret_compiler::EvalHirCtx::new(true);
     for inferred_def in inferred_defs {
         ehx.consume_def(inferred_def)?;
     }
@@ -31,7 +31,7 @@ fn try_compile_input_file(
         None
     };
 
-    compiler::gen_program(
+    arret_compiler::gen_program(
         options,
         &hir.rust_libraries,
         &mir_program,
@@ -44,7 +44,7 @@ fn try_compile_input_file(
 
 pub fn compile_input_file(
     ccx: &CompileCtx,
-    input_file: &compiler::SourceFile,
+    input_file: &arret_compiler::SourceFile,
     target_triple: Option<&str>,
     output_path: &path::Path,
     debug_info: bool,
@@ -52,13 +52,13 @@ pub fn compile_input_file(
     use std::ffi;
 
     let output_type = match output_path.extension().and_then(ffi::OsStr::to_str) {
-        Some("ll") => compiler::OutputType::LLVMIR,
-        Some("s") => compiler::OutputType::Assembly,
-        Some("o") => compiler::OutputType::Object,
-        _ => compiler::OutputType::Executable,
+        Some("ll") => arret_compiler::OutputType::LLVMIR,
+        Some("s") => arret_compiler::OutputType::Assembly,
+        Some("o") => arret_compiler::OutputType::Object,
+        _ => arret_compiler::OutputType::Executable,
     };
 
-    let options = compiler::GenProgramOptions::new()
+    let options = arret_compiler::GenProgramOptions::new()
         .with_target_triple(target_triple)
         .with_output_type(output_type)
         .with_llvm_opt(ccx.enable_optimisations());

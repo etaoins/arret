@@ -1,12 +1,12 @@
-use runtime::callback;
-use runtime::{abitype, boxed};
+use arret_runtime::callback;
+use arret_runtime::{abitype, boxed};
 
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
 
 fn type_tag_to_ty<M: ty::PM>(type_tag: boxed::TypeTag) -> ty::Ty<M> {
-    use runtime::boxed::TypeTag;
+    use arret_runtime::boxed::TypeTag;
 
     match type_tag {
         TypeTag::Float => ty::Ty::Float,
@@ -30,7 +30,7 @@ pub trait ConvertableABIType {
 
 impl ConvertableABIType for abitype::ABIType {
     fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M> {
-        use runtime::abitype::ABIType;
+        use arret_runtime::abitype::ABIType;
 
         match self {
             ABIType::Bool => ty::Ty::Bool.into(),
@@ -44,7 +44,7 @@ impl ConvertableABIType for abitype::ABIType {
     }
 
     fn to_rust_str(&self) -> String {
-        use runtime::abitype::ABIType;
+        use arret_runtime::abitype::ABIType;
 
         match self {
             ABIType::Bool => "bool".to_owned(),
@@ -60,7 +60,7 @@ impl ConvertableABIType for abitype::ABIType {
 
 impl ConvertableABIType for abitype::BoxedABIType {
     fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M> {
-        use runtime::abitype::BoxedABIType;
+        use arret_runtime::abitype::BoxedABIType;
 
         match self {
             BoxedABIType::Any => ty::Ty::Any.into(),
@@ -80,7 +80,7 @@ impl ConvertableABIType for abitype::BoxedABIType {
     }
 
     fn to_rust_str(&self) -> String {
-        use runtime::abitype::BoxedABIType;
+        use arret_runtime::abitype::BoxedABIType;
 
         match self {
             BoxedABIType::Any => "boxed::Any".to_owned(),
@@ -95,7 +95,7 @@ impl ConvertableABIType for abitype::BoxedABIType {
 
 impl ConvertableABIType for abitype::RetABIType {
     fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M> {
-        use runtime::abitype::RetABIType;
+        use arret_runtime::abitype::RetABIType;
 
         match self {
             RetABIType::Void => ty::Ty::unit().into(),
@@ -105,7 +105,7 @@ impl ConvertableABIType for abitype::RetABIType {
     }
 
     fn to_rust_str(&self) -> String {
-        use runtime::abitype::RetABIType;
+        use arret_runtime::abitype::RetABIType;
 
         match self {
             RetABIType::Void => "()".to_owned(),
@@ -162,8 +162,8 @@ mod test {
 
     #[test]
     fn pair_abi_type() {
-        use runtime::abitype::EncodeBoxedABIType;
-        use runtime::boxed;
+        use arret_runtime::abitype::EncodeBoxedABIType;
+        use arret_runtime::boxed;
 
         let boxed_abi_type = <boxed::Pair<boxed::Int> as EncodeBoxedABIType>::BOXED_ABI_TYPE;
 
@@ -177,8 +177,8 @@ mod test {
 
     #[test]
     fn bool_abi_type() {
-        use runtime::abitype::EncodeBoxedABIType;
-        use runtime::boxed;
+        use arret_runtime::abitype::EncodeBoxedABIType;
+        use arret_runtime::boxed;
 
         let boxed_abi_type = <boxed::Bool as EncodeBoxedABIType>::BOXED_ABI_TYPE;
 
@@ -190,8 +190,8 @@ mod test {
 
     #[test]
     fn nil_abi_type() {
-        use runtime::abitype::EncodeBoxedABIType;
-        use runtime::boxed;
+        use arret_runtime::abitype::EncodeBoxedABIType;
+        use arret_runtime::boxed;
 
         let boxed_abi_type = <boxed::Nil as EncodeBoxedABIType>::BOXED_ABI_TYPE;
 
@@ -203,7 +203,7 @@ mod test {
 
     #[test]
     fn callback_abi_type() {
-        use runtime::task;
+        use arret_runtime::task;
 
         let entry_point_abi_type = <extern "C" fn(&mut task::Task, boxed::Closure, i64) -> char as callback::EncodeEntryPointABIType>::ENTRY_POINT_ABI_TYPE;
 

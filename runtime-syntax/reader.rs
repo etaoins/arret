@@ -1,8 +1,8 @@
-use syntax::datum::Datum;
+use arret_syntax::datum::Datum;
 
-use runtime::boxed;
-use runtime::boxed::prelude::*;
-use runtime::boxed::refs::Gc;
+use arret_runtime::boxed;
+use arret_runtime::boxed::prelude::*;
+use arret_runtime::boxed::refs::Gc;
 
 /// Places a syntax datum on a box heap
 pub fn box_syntax_datum(heap: &mut impl boxed::AsHeap, datum: &Datum) -> Gc<boxed::Any> {

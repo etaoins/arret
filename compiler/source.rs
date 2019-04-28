@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 use std::{cmp, fmt, fs, io, path};
 
-use syntax::datum::Datum;
-use syntax::span::Span;
+use arret_syntax::datum::Datum;
+use arret_syntax::span::Span;
 
 use crate::id_type::ArcId;
 
@@ -42,7 +42,7 @@ pub struct SourceFile {
 
     source: Cow<'static, str>,
     line_number_offsets: Box<[u32]>,
-    parsed: Result<Vec<Datum>, syntax::error::Error>,
+    parsed: Result<Vec<Datum>, arret_syntax::error::Error>,
 }
 
 impl SourceFile {
@@ -69,7 +69,7 @@ impl SourceFile {
         &self.source[start as usize..end as usize]
     }
 
-    pub fn parsed(&self) -> Result<&[Datum], syntax::error::Error> {
+    pub fn parsed(&self) -> Result<&[Datum], arret_syntax::error::Error> {
         match &self.parsed {
             Ok(data) => Ok(data),
             Err(err) => Err(err.clone()),
@@ -123,7 +123,7 @@ impl SourceLoader {
     }
 
     pub fn load_string(&self, kind: SourceKind, source: Cow<'static, str>) -> ArcId<SourceFile> {
-        use syntax::parser::data_from_str_with_span_offset;
+        use arret_syntax::parser::data_from_str_with_span_offset;
 
         let mut source_files = self.source_files.write().unwrap();
         let span_offset = source_files.last().map(|x| x.span().end()).unwrap_or(0) + 1;

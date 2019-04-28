@@ -4,13 +4,10 @@ use std::io::BufReader;
 use std::{fs, path};
 
 use ansi_term::{Colour, Style};
-use directories;
-use rustyline;
 
-use syntax::datum::DataStr;
+use arret_syntax::datum::DataStr;
 
-use compiler;
-use compiler::CompileCtx;
+use arret_compiler::CompileCtx;
 
 const PROMPT: &str = "arret> ";
 
@@ -38,8 +35,8 @@ const UNBOUND_COMPLETIONS: &[&str] = &[
     "##-Inf",
 ];
 
-fn error_for_line(mut line: &str) -> Option<syntax::error::Error> {
-    use syntax::parser::datum_from_str_with_span_offset;
+fn error_for_line(mut line: &str) -> Option<arret_syntax::error::Error> {
+    use arret_syntax::parser::datum_from_str_with_span_offset;
 
     let span_offset = if line.starts_with(TYPE_ONLY_PREFIX) {
         line = &line[TYPE_ONLY_PREFIX.len()..];
@@ -61,9 +58,9 @@ fn error_for_line(mut line: &str) -> Option<syntax::error::Error> {
     datum_from_str_with_span_offset(line, span_offset as u32).err()
 }
 
-fn expected_content_for_line(line: &str) -> Option<syntax::error::ExpectedContent> {
+fn expected_content_for_line(line: &str) -> Option<arret_syntax::error::ExpectedContent> {
     error_for_line(line).and_then(|error| {
-        if let syntax::error::ErrorKind::Eof(expected_content) = error.kind() {
+        if let arret_syntax::error::ErrorKind::Eof(expected_content) = error.kind() {
             Some(*expected_content)
         } else {
             None
@@ -88,8 +85,11 @@ impl ArretHelper {
     }
 }
 
-fn report_all_to_stderr(source_loader: &compiler::SourceLoader, err: &compiler::error::Error) {
-    use compiler::reporting::report_to_stderr;
+fn report_all_to_stderr(
+    source_loader: &arret_compiler::SourceLoader,
+    err: &arret_compiler::error::Error,
+) {
+    use arret_compiler::reporting::report_to_stderr;
 
     for reportable in err.reports() {
         report_to_stderr(source_loader, reportable.as_ref())
@@ -105,7 +105,7 @@ impl rustyline::completion::Completer for ArretHelper {
         pos: usize,
         _: &rustyline::Context<'_>,
     ) -> rustyline::Result<(usize, Vec<String>)> {
-        use syntax::parser::is_identifier_char;
+        use arret_syntax::parser::is_identifier_char;
 
         let prefix_start = line[0..pos]
             .rfind(|c| !is_identifier_char(c))
@@ -145,8 +145,8 @@ impl rustyline::completion::Completer for ArretHelper {
 
 impl rustyline::hint::Hinter for ArretHelper {
     fn hint(&self, line: &str, pos: usize, _: &rustyline::Context<'_>) -> Option<String> {
-        use syntax::error::ExpectedContent;
-        use syntax::parser::is_identifier_char;
+        use arret_syntax::error::ExpectedContent;
+        use arret_syntax::parser::is_identifier_char;
 
         let expected_content = expected_content_for_line(line);
 
@@ -190,7 +190,7 @@ impl rustyline::highlight::Highlighter for ArretHelper {
     fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
         // See if we have an error
         let error_span = error_for_line(line).and_then(|error| {
-            if let syntax::error::ErrorKind::Eof(ec) = error.kind() {
+            if let arret_syntax::error::ErrorKind::Eof(ec) = error.kind() {
                 // We'll already be hinting at the end of the line so point to the opening char
                 ec.open_char_span()
             } else {
@@ -221,7 +221,7 @@ impl rustyline::highlight::Highlighter for ArretHelper {
     }
 
     fn highlight_hint<'h>(&self, hint: &'h str) -> Cow<'h, str> {
-        use syntax::parser::is_identifier_char;
+        use arret_syntax::parser::is_identifier_char;
 
         if hint.chars().next().map(is_identifier_char) == Some(true) {
             // This is a name completion
@@ -283,11 +283,11 @@ fn parse_command(mut line: String) -> ParsedCommand {
 }
 
 pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
-    use compiler::repl::{EvalKind, EvaledLine};
+    use arret_compiler::repl::{EvalKind, EvaledLine};
     use rustyline::error::ReadlineError;
 
     // Setup our REPL backend
-    let mut repl_ctx = compiler::repl::ReplCtx::new(ccx);
+    let mut repl_ctx = arret_compiler::repl::ReplCtx::new(ccx);
 
     // Setup Rustyline
     let mut rl = rustyline::Editor::<ArretHelper>::new();

@@ -2,8 +2,8 @@
 #![warn(rust_2018_idioms)]
 
 #[macro_use]
-extern crate runtime;
-use rfi_derive;
+extern crate arret_runtime;
+use arret_rfi_derive;
 
 mod pretty_print;
 use crate::pretty_print::pretty_print;
@@ -23,11 +23,11 @@ use crate::testing::*;
 pub mod write;
 use crate::write::*;
 
-use runtime::binding::*;
+use arret_runtime::binding::*;
 
-use runtime::boxed;
-use runtime::boxed::refs::Gc;
-use runtime::task::Task;
+use arret_runtime::boxed;
+use arret_runtime::boxed::refs::Gc;
+use arret_runtime::task::Task;
 
 pub fn panic_common(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Never {
     use std::str;
@@ -41,17 +41,17 @@ pub fn panic_common(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Nev
     task.panic(message)
 }
 
-#[rfi_derive::rust_fun("(& Any -> (U))")]
+#[arret_rfi_derive::rust_fun("(& Any -> (U))")]
 pub fn stdlib_panic(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Never {
     panic_common(task, values)
 }
 
-#[rfi_derive::rust_fun("(& Any ->! (U))")]
+#[arret_rfi_derive::rust_fun("(& Any ->! (U))")]
 pub fn stdlib_panic_impure(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Never {
     panic_common(task, values)
 }
 
-#[rfi_derive::rust_fun("(Int ->! (U))")]
+#[arret_rfi_derive::rust_fun("(Int ->! (U))")]
 pub fn stdlib_exit(exit_code: i64) {
     use std::process::exit;
     exit(exit_code as i32);

@@ -1,4 +1,4 @@
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
 use crate::codegen::GenABI;
 use crate::mir::builder::Builder;
@@ -36,7 +36,7 @@ pub fn build_rust_fun_app(
     use crate::mir::arg_list::build_save_arg_list_to_regs;
     use crate::mir::ops::*;
     use crate::mir::value::from_reg::reg_to_value;
-    use runtime::abitype::RetABIType;
+    use arret_runtime::abitype::RetABIType;
 
     let mut arg_abi_types = rust_fun
         .params()

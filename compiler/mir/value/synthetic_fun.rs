@@ -1,5 +1,5 @@
+use arret_syntax::span::EMPTY_SPAN;
 use std::collections::HashMap;
-use syntax::span::EMPTY_SPAN;
 
 use crate::hir;
 use crate::mir::closure::Closure;

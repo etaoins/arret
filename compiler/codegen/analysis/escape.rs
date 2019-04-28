@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use runtime::abitype::{ABIType, ParamABIType, ParamCapture, RetABIType};
+use arret_runtime::abitype::{ABIType, ParamABIType, ParamCapture, RetABIType};
 
 use crate::codegen::GenABI;
 use crate::mir::ops;
@@ -270,8 +270,8 @@ pub fn calc_program_captures(
 #[cfg(test)]
 mod test {
     use super::*;
-    use runtime::boxed;
-    use syntax::span::EMPTY_SPAN;
+    use arret_runtime::boxed;
+    use arret_syntax::span::EMPTY_SPAN;
 
     fn calc_single_fun_captures(fun: &ops::Fun) -> Captures {
         calc_program_captures(&HashMap::new(), fun).entry_fun_captures

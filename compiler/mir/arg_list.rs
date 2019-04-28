@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
-use runtime::abitype;
+use arret_runtime::abitype;
 
 use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::eval_hir::EvalHirCtx;

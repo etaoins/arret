@@ -1,5 +1,5 @@
-use syntax::datum::DataStr;
-use syntax::span::Span;
+use arret_syntax::datum::DataStr;
+use arret_syntax::span::Span;
 
 use crate::id_type::ArcId;
 

@@ -14,7 +14,7 @@ pub fn gen_static_symbol_entry_point(
     static_symbol: &ops::StaticSymbol,
 ) -> LLVMValueRef {
     use crate::codegen::analysis::escape::{infer_param_capture_kind, CaptureKind};
-    use runtime::abitype::{ABIType, RetABIType};
+    use arret_runtime::abitype::{ABIType, RetABIType};
 
     let ops::StaticSymbol {
         abi,

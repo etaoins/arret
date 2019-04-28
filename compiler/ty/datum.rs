@@ -1,5 +1,5 @@
 use crate::ty;
-use syntax::datum::Datum;
+use arret_syntax::datum::Datum;
 
 pub fn ty_ref_for_datum<M: ty::PM>(datum: &Datum) -> ty::Ref<M> {
     (match datum {
@@ -38,7 +38,7 @@ mod test {
     use crate::hir::poly_for_str;
 
     fn assert_poly_for_str(ty_str: &str, datum_str: &str) {
-        use syntax::parser::datum_from_str;
+        use arret_syntax::parser::datum_from_str;
         let datum = datum_from_str(datum_str).unwrap();
 
         assert_eq!(poly_for_str(ty_str), ty_ref_for_datum(&datum));

@@ -1,6 +1,6 @@
-use runtime::boxed;
-use runtime::boxed::prelude::*;
-use runtime::boxed::refs::Gc;
+use arret_runtime::boxed;
+use arret_runtime::boxed::prelude::*;
+use arret_runtime::boxed::refs::Gc;
 
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::value::Value;

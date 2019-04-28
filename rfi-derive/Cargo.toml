@@ -1,5 +1,5 @@
 [package]
-name = "rfi-derive"
+name = "arret-rfi-derive"
 version = "0.1.0"
 edition = "2018"
 authors = ["Ryan Cumming <etaoins@gmail.com>"]

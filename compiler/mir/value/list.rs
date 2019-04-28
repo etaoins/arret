@@ -1,13 +1,13 @@
 use std::vec;
 
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
 use crate::mir::builder::{Builder, TryToBuilder};
 use crate::mir::value;
 use crate::mir::value::Value;
 
 pub fn list_value_length(value: &Value) -> Option<usize> {
-    use runtime::boxed;
+    use arret_runtime::boxed;
 
     match value {
         Value::List(fixed, rest) => {
@@ -61,7 +61,7 @@ impl UnsizedListIterator {
                 self.next_unchecked(b, span)
             }
             Value::Const(any_ref) => {
-                use runtime::boxed;
+                use arret_runtime::boxed;
 
                 let const_pair = any_ref
                     .downcast_ref::<boxed::Pair<boxed::Any>>()
@@ -100,7 +100,7 @@ impl UnsizedListIterator {
     ) -> Value {
         use crate::mir::ops::*;
         use crate::mir::value::build_reg::reg_to_boxed_reg;
-        use runtime::abitype;
+        use arret_runtime::abitype;
 
         let needed_pair_type = abitype::BoxedABIType::Pair(&abitype::BoxedABIType::Any);
         let current_rest_reg = reg_to_boxed_reg(b, span, &current_rest_value, &needed_pair_type);
@@ -148,9 +148,9 @@ impl SizedListIterator {
 mod test {
     use super::*;
 
-    use runtime::boxed;
-    use runtime::boxed::prelude::*;
-    use syntax::span::EMPTY_SPAN;
+    use arret_runtime::boxed;
+    use arret_runtime::boxed::prelude::*;
+    use arret_syntax::span::EMPTY_SPAN;
 
     #[test]
     fn list_length() {

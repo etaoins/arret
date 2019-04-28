@@ -6,8 +6,7 @@ use std::iter;
 use ansi_term::Colour;
 use ansi_term::Style;
 
-use syntax;
-use syntax::span::{Span, EMPTY_SPAN};
+use arret_syntax::span::{Span, EMPTY_SPAN};
 
 use crate::source::{SourceKind, SourceLoader, SourceLoc};
 
@@ -186,9 +185,9 @@ impl Severity {
     }
 }
 
-impl Reportable for syntax::error::Error {
+impl Reportable for arret_syntax::error::Error {
     fn message(&self) -> String {
-        use syntax::error::ErrorKind;
+        use arret_syntax::error::ErrorKind;
 
         match self.kind() {
             ErrorKind::Eof(ref ec) => {
@@ -217,7 +216,7 @@ impl Reportable for syntax::error::Error {
     }
 
     fn associated_report(&self) -> Option<Box<dyn Reportable>> {
-        if let syntax::error::ErrorKind::Eof(ref ec) = self.kind() {
+        if let arret_syntax::error::ErrorKind::Eof(ref ec) = self.kind() {
             if let Some(open_char_span) = ec.open_char_span() {
                 return Some(Box::new(ContentStartHelp {
                     expected_content: *ec,
@@ -231,7 +230,7 @@ impl Reportable for syntax::error::Error {
 }
 
 struct ContentStartHelp {
-    expected_content: syntax::error::ExpectedContent,
+    expected_content: arret_syntax::error::ExpectedContent,
     open_char_span: Span,
 }
 

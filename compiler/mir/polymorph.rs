@@ -1,7 +1,7 @@
 use std::iter;
 
-use runtime::abitype;
-use runtime::callback;
+use arret_runtime::abitype;
+use arret_runtime::callback;
 
 use crate::mir::ops;
 use crate::mir::value::Value;
@@ -168,8 +168,8 @@ mod test {
 
     #[test]
     fn polymorph_abi_param_ty_ref() {
-        use runtime::abitype::EncodeBoxedABIType;
-        use runtime::boxed;
+        use arret_runtime::abitype::EncodeBoxedABIType;
+        use arret_runtime::boxed;
 
         let thunk_param_poly = PolymorphABI::thunk_abi().param_ty_ref();
         let expected_poly = hir::poly_for_str("(List & Any)");

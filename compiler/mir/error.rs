@@ -1,6 +1,6 @@
 use std::{error, fmt, result};
 
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
 use crate::mir::inliner::ApplyCookie;
 use crate::reporting::{LocTrace, Reportable, Severity};

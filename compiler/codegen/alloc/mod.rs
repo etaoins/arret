@@ -2,7 +2,7 @@ use std::vec;
 
 use llvm_sys::prelude::*;
 
-use runtime::boxed;
+use arret_runtime::boxed;
 
 use crate::mir::ops;
 

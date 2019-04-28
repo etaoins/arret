@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
 use crate::hir;
 use crate::mir::builder::{Builder, BuiltReg};
@@ -82,7 +82,7 @@ pub fn save_to_closure_reg(
     match closure.free_values.first() {
         Some((_, value)) => {
             use crate::mir::value::build_reg::value_to_reg;
-            use runtime::abitype;
+            use arret_runtime::abitype;
 
             Some(value_to_reg(
                 ehx,
@@ -114,7 +114,7 @@ pub fn load_from_closure_param(
     closure_reg: Option<BuiltReg>,
 ) {
     use crate::mir::value;
-    use runtime::abitype;
+    use arret_runtime::abitype;
 
     if closure.free_values.len() > 1 {
         // We can either place these in a list or wait for record support

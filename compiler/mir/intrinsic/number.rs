@@ -1,7 +1,7 @@
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
-use runtime::abitype;
-use runtime::boxed;
+use arret_runtime::abitype;
+use arret_runtime::boxed;
 
 use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::error::Result;

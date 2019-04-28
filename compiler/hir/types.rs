@@ -1,4 +1,4 @@
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum};
@@ -568,7 +568,7 @@ pub fn str_for_purity(purity: &purity::Ref) -> String {
 #[cfg(test)]
 pub fn poly_for_str(datum_str: &str) -> ty::Ref<ty::Poly> {
     use crate::hir::prim::PRIM_EXPORTS;
-    use syntax::parser::datum_from_str;
+    use arret_syntax::parser::datum_from_str;
 
     let prim_entries = PRIM_EXPORTS
         .iter()
@@ -592,7 +592,7 @@ pub fn poly_for_str(datum_str: &str) -> ty::Ref<ty::Poly> {
 
 #[cfg(test)]
 pub fn tvar_bounded_by(bound: ty::Ref<ty::Poly>) -> ty::Ref<ty::Poly> {
-    use syntax::span::EMPTY_SPAN;
+    use arret_syntax::span::EMPTY_SPAN;
 
     let tvar_id = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "TVar".into(), bound));
     ty::Ref::Var(tvar_id, ty::Poly {})

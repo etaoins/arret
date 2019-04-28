@@ -4,7 +4,7 @@ use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::{LLVMLinkage, LLVMUnnamedAddr};
 
-use runtime::boxed;
+use arret_runtime::boxed;
 
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;

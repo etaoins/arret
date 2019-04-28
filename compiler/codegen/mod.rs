@@ -13,7 +13,7 @@ mod range_md;
 pub(crate) mod target_gen;
 mod target_machine;
 
-use runtime::abitype;
+use arret_runtime::abitype;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct GenABI {

@@ -79,7 +79,7 @@ pub(crate) fn define_fun(
 ) {
     use crate::codegen::alloc::plan::plan_allocs;
     use crate::codegen::op_gen;
-    use runtime::abitype::{ABIType, RetABIType};
+    use arret_runtime::abitype::{ABIType, RetABIType};
 
     let alloc_plan = plan_allocs(&captures, &fun.ops);
 

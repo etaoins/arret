@@ -1,10 +1,10 @@
-use runtime::binding::*;
+use arret_runtime::binding::*;
 
-use runtime::boxed;
-use runtime::boxed::refs::Gc;
-use runtime::task::Task;
+use arret_runtime::boxed;
+use arret_runtime::boxed::refs::Gc;
+use arret_runtime::task::Task;
 
-use rfi_derive;
+use arret_rfi_derive;
 
 fn fold_float_op<FR>(
     task: &mut Task,
@@ -62,19 +62,19 @@ where
     boxed::Int::new(task, int_acc).as_num_ref()
 }
 
-#[rfi_derive::rust_fun("(All #{[N Num]} & N -> N)")]
+#[arret_rfi_derive::rust_fun("(All #{[N Num]} & N -> N)")]
 pub fn stdlib_add(task: &mut Task, operands: Gc<boxed::List<boxed::Num>>) -> Gc<boxed::Num> {
     use std::ops::Add;
     fold_num_op(task, operands.iter(), 0, i64::add, f64::add)
 }
 
-#[rfi_derive::rust_fun("(All #{[N Num]} & N -> N)")]
+#[arret_rfi_derive::rust_fun("(All #{[N Num]} & N -> N)")]
 pub fn stdlib_mul(task: &mut Task, operands: Gc<boxed::List<boxed::Num>>) -> Gc<boxed::Num> {
     use std::ops::Mul;
     fold_num_op(task, operands.iter(), 1, i64::mul, f64::mul)
 }
 
-#[rfi_derive::rust_fun("(All #{[N Num]} N & N -> N)")]
+#[arret_rfi_derive::rust_fun("(All #{[N Num]} N & N -> N)")]
 pub fn stdlib_sub(
     task: &mut Task,
     initial_num: Gc<boxed::Num>,
@@ -100,7 +100,7 @@ pub fn stdlib_sub(
     }
 }
 
-#[rfi_derive::rust_fun("(Float & Float -> Float)")]
+#[arret_rfi_derive::rust_fun("(Float & Float -> Float)")]
 pub fn stdlib_div(initial_float: f64, rest: Gc<boxed::List<boxed::Float>>) -> f64 {
     if rest.is_empty() {
         initial_float.recip()
@@ -114,7 +114,7 @@ pub fn stdlib_div(initial_float: f64, rest: Gc<boxed::List<boxed::Float>>) -> f6
     }
 }
 
-#[rfi_derive::rust_fun("(Int Int -> Int)")]
+#[arret_rfi_derive::rust_fun("(Int Int -> Int)")]
 pub fn stdlib_quot(task: &mut Task, numerator: i64, denominator: i64) -> i64 {
     match numerator.checked_div(denominator) {
         Some(result) => result,
@@ -125,7 +125,7 @@ pub fn stdlib_quot(task: &mut Task, numerator: i64, denominator: i64) -> i64 {
     }
 }
 
-#[rfi_derive::rust_fun("(Int Int -> Int)")]
+#[arret_rfi_derive::rust_fun("(Int Int -> Int)")]
 pub fn stdlib_rem(task: &mut Task, numerator: i64, denominator: i64) -> i64 {
     match numerator.checked_rem(denominator) {
         Some(result) => result,

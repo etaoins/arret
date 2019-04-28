@@ -1,17 +1,15 @@
 use std::io;
 use std::io::prelude::*;
 
-use runtime::binding::*;
+use arret_runtime::binding::*;
 
-use runtime::boxed;
-use runtime::boxed::refs::Gc;
-use runtime::task::Task;
-
-use rfi_derive;
+use arret_runtime::boxed;
+use arret_runtime::boxed::refs::Gc;
+use arret_runtime::task::Task;
 
 use crate::pretty_print::pretty_print;
 
-#[rfi_derive::rust_fun("(& Any ->! ())")]
+#[arret_rfi_derive::rust_fun("(& Any ->! ())")]
 pub fn stdlib_print(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) {
     let mut output = io::stdout();
 
@@ -20,7 +18,7 @@ pub fn stdlib_print(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) {
     }
 }
 
-#[rfi_derive::rust_fun("(& Any ->! ())")]
+#[arret_rfi_derive::rust_fun("(& Any ->! ())")]
 pub fn stdlib_println(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) {
     let mut output = io::stdout();
 

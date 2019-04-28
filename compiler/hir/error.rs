@@ -1,8 +1,8 @@
 use std::{error, fmt, io, path, result};
 
-use syntax::datum::DataStr;
-use syntax::error::Error as SyntaxError;
-use syntax::span::{Span, EMPTY_SPAN};
+use arret_syntax::datum::DataStr;
+use arret_syntax::error::Error as SyntaxError;
+use arret_syntax::span::{Span, EMPTY_SPAN};
 
 use crate::reporting::{LocTrace, Reportable, Severity};
 

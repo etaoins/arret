@@ -1,5 +1,5 @@
-use runtime::abitype;
-use runtime::boxed::TypeTag;
+use arret_runtime::abitype;
+use arret_runtime::boxed::TypeTag;
 
 use crate::mir::tagset::TypeTagSet;
 use crate::mir::value::Value;
@@ -23,8 +23,8 @@ fn specific_abi_type_for_type_tag(type_tag: TypeTag) -> abitype::ABIType {
 }
 
 fn specific_boxed_abi_type_for_type_tags(possible_type_tags: TypeTagSet) -> abitype::BoxedABIType {
-    use runtime::abitype::EncodeBoxedABIType;
-    use runtime::boxed;
+    use arret_runtime::abitype::EncodeBoxedABIType;
+    use arret_runtime::boxed;
 
     if possible_type_tags.len() == 1 {
         let single_type_tag = possible_type_tags.into_iter().next().unwrap();
@@ -95,8 +95,8 @@ pub fn specific_abi_type_for_value(value: &Value) -> abitype::ABIType {
 mod test {
     use super::*;
     use crate::hir::poly_for_str;
-    use runtime::abitype::EncodeBoxedABIType;
-    use runtime::boxed;
+    use arret_runtime::abitype::EncodeBoxedABIType;
+    use arret_runtime::boxed;
 
     fn assert_abi_type_for_str(abi_type: abitype::ABIType, ty_str: &'static str) {
         let poly = poly_for_str(ty_str);

@@ -1,8 +1,8 @@
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
-use runtime::abitype;
-use runtime::boxed;
-use runtime::boxed::refs::Gc;
+use arret_runtime::abitype;
+use arret_runtime::boxed;
+use arret_runtime::boxed::refs::Gc;
 
 use crate::mir::builder::Builder;
 use crate::mir::builder::BuiltReg;
@@ -24,7 +24,7 @@ fn const_to_reg(
     abi_type: &abitype::ABIType,
 ) -> BuiltReg {
     use crate::mir::ops::*;
-    use runtime::boxed::prelude::*;
+    use arret_runtime::boxed::prelude::*;
 
     let subtype = any_ref.as_subtype();
 
@@ -153,7 +153,7 @@ fn list_to_reg(
 ) -> BuiltReg {
     use crate::mir::ops::*;
     use crate::mir::value::list::list_value_length;
-    use runtime::abitype::TOP_LIST_BOXED_ABI_TYPE;
+    use arret_runtime::abitype::TOP_LIST_BOXED_ABI_TYPE;
 
     let tail_reg = if let Some(rest) = rest {
         value_to_reg(
@@ -231,7 +231,7 @@ pub fn reg_to_boxed_reg(
     to_boxed: &abitype::BoxedABIType,
 ) -> BuiltReg {
     use crate::mir::ops::*;
-    use runtime::boxed::TypeTag;
+    use arret_runtime::boxed::TypeTag;
 
     match &reg_value.abi_type {
         abitype::ABIType::Boxed(from_boxed) => {
@@ -301,7 +301,7 @@ fn boxed_to_bool(
     boxed_reg: BuiltReg,
 ) -> BuiltReg {
     use crate::mir::ops::*;
-    use runtime::boxed::TypeTag;
+    use arret_runtime::boxed::TypeTag;
 
     let boxed_any_reg = b.cast_boxed_cond(span, from_boxed, boxed_reg, abitype::BoxedABIType::Any);
 
@@ -334,7 +334,7 @@ fn reg_to_reg(
     abi_type: &abitype::ABIType,
 ) -> BuiltReg {
     use crate::mir::ops::*;
-    use runtime::boxed::TypeTag;
+    use arret_runtime::boxed::TypeTag;
 
     match (&reg_value.abi_type, abi_type) {
         (from, to) if from == to => reg_value.reg,
@@ -375,7 +375,7 @@ fn thunk_reg_to_reg(
     boxed_thunk_reg: BuiltReg,
     boxed_abi_type: &abitype::BoxedABIType,
 ) -> BuiltReg {
-    use runtime::boxed::TypeTag;
+    use arret_runtime::boxed::TypeTag;
 
     b.cast_boxed_cond(
         span,

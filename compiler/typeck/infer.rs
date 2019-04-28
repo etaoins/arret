@@ -1,4 +1,3 @@
-use std;
 use std::collections::HashMap;
 use std::result;
 
@@ -14,8 +13,8 @@ use crate::typeck;
 use crate::typeck::dce::expr_can_side_effect;
 use crate::typeck::error::{Error, ErrorKind, WantedArity};
 
-use syntax::datum::Datum;
-use syntax::span::{Span, EMPTY_SPAN};
+use arret_syntax::datum::Datum;
+use arret_syntax::span::{Span, EMPTY_SPAN};
 
 type Result<T> = result::Result<T, Error>;
 
@@ -1746,7 +1745,7 @@ pub fn infer_program(
 mod test {
     use super::*;
     use crate::hir::lowering::expr_for_str;
-    use syntax::span::t2s;
+    use arret_syntax::span::t2s;
 
     fn type_for_expr(
         required_type: &ty::Ref<ty::Poly>,

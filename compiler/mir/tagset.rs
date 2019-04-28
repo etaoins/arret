@@ -1,8 +1,8 @@
 use std::{iter, ops};
 
 use crate::ty;
-use runtime::abitype;
-use runtime::boxed::{TypeTag, ALL_TYPE_TAGS};
+use arret_runtime::abitype;
+use arret_runtime::boxed::{TypeTag, ALL_TYPE_TAGS};
 
 const INNER_BITS: u8 = 32;
 type Inner = u32;
@@ -121,7 +121,7 @@ where
 
 impl<'a> From<&'a abitype::BoxedABIType> for TypeTagSet {
     fn from(boxed_abi_type: &'a abitype::BoxedABIType) -> TypeTagSet {
-        use runtime::abitype::BoxedABIType;
+        use arret_runtime::abitype::BoxedABIType;
 
         match boxed_abi_type {
             BoxedABIType::Any => TypeTagSet::all(),
@@ -136,7 +136,7 @@ impl<'a> From<&'a abitype::BoxedABIType> for TypeTagSet {
 
 impl<'a> From<&'a abitype::ABIType> for TypeTagSet {
     fn from(abi_type: &'a abitype::ABIType) -> TypeTagSet {
-        use runtime::abitype::ABIType;
+        use arret_runtime::abitype::ABIType;
 
         match abi_type {
             ABIType::Int => TypeTag::Int.into(),

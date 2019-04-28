@@ -1,5 +1,5 @@
 [package]
-name = "compiler"
+name = "arret-compiler"
 version = "0.1.0"
 edition = "2018"
 authors = ["Ryan Cumming <etaoins@gmail.com>"]
@@ -13,9 +13,9 @@ llvm-sys = "70"
 libc = "0.2"
 ansi_term = "0.11"
 libloading = "0.5"
-syntax = { path = "../syntax" }
-runtime = { path = "../runtime" }
-runtime-syntax = { path = "../runtime-syntax" }
+arret-syntax = { path = "../syntax" }
+arret-runtime = { path = "../runtime" }
+arret-runtime-syntax = { path = "../runtime-syntax" }
 
 [dev-dependencies]
 rayon = "1"

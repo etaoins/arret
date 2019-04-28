@@ -1,5 +1,5 @@
 [package]
-name = "runtime-syntax"
+name = "arret-runtime-syntax"
 version = "0.1.0"
 edition = "2018"
 authors = ["Ryan Cumming <etaoins@gmail.com>"]
@@ -9,5 +9,5 @@ path = "lib.rs"
 crate-type = ["lib"]
 
 [dependencies]
-syntax = { path = "../syntax" }
-runtime = { path = "../runtime" }
+arret-syntax = { path = "../syntax" }
+arret-runtime = { path = "../runtime" }

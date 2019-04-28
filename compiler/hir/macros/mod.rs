@@ -2,7 +2,7 @@ mod expander;
 mod linker;
 mod matcher;
 
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::macros::expander::expand_rule;

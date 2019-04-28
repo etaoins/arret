@@ -2,7 +2,7 @@ use std::error;
 use std::fmt;
 use std::fmt::Display;
 
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
 use crate::hir;
 use crate::reporting::{LocTrace, Reportable, Severity};

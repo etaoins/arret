@@ -1,5 +1,5 @@
 [package]
-name = "syntax"
+name = "arret-syntax"
 version = "0.1.0"
 edition = "2018"
 authors = ["Ryan Cumming <etaoins@gmail.com>"]

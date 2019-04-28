@@ -1,7 +1,7 @@
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 
-use runtime::boxed;
+use arret_runtime::boxed;
 
 use crate::codegen::alloc::core::gen_alloced_box;
 use crate::codegen::alloc::{ActiveAlloc, BoxSource};

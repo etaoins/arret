@@ -2,8 +2,8 @@ use crate::boxed::prelude::*;
 
 use std::io::prelude::*;
 
-use runtime::boxed;
-use runtime::boxed::refs::Gc;
+use arret_runtime::boxed;
+use arret_runtime::boxed::refs::Gc;
 
 pub fn pretty_print(write: &mut dyn Write, heap: &impl AsHeap, value: Gc<boxed::Any>) {
     match value.as_subtype() {
@@ -22,7 +22,7 @@ pub fn pretty_print(write: &mut dyn Write, heap: &impl AsHeap, value: Gc<boxed::
                 .unwrap();
         }
         _ => {
-            runtime_syntax::writer::write_boxed(write, heap.as_heap(), value).unwrap();
+            arret_runtime_syntax::writer::write_boxed(write, heap.as_heap(), value).unwrap();
         }
     }
 }

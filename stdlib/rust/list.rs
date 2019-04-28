@@ -1,18 +1,16 @@
-use runtime::binding::*;
+use arret_runtime::binding::*;
 
-use runtime::boxed;
-use runtime::boxed::refs::Gc;
-use runtime::callback;
-use runtime::task::Task;
+use arret_runtime::boxed;
+use arret_runtime::boxed::refs::Gc;
+use arret_runtime::callback;
+use arret_runtime::task::Task;
 
-use rfi_derive;
-
-#[rfi_derive::rust_fun("((List & Any) -> Int)")]
+#[arret_rfi_derive::rust_fun("((List & Any) -> Int)")]
 pub fn stdlib_length(input: Gc<boxed::List<boxed::Any>>) -> i64 {
     input.len() as i64
 }
 
-#[rfi_derive::rust_fun("(All #{H T} H (List & T) -> (List H & T))")]
+#[arret_rfi_derive::rust_fun("(All #{H T} H (List & T) -> (List H & T))")]
 pub fn stdlib_cons(
     task: &mut Task,
     head: Gc<boxed::Any>,
@@ -21,7 +19,7 @@ pub fn stdlib_cons(
     boxed::Pair::new(task, head, tail)
 }
 
-#[rfi_derive::rust_fun("(All #{I O [->_ ->!]} (I ->_ O) (List & I) ->_ (List & O))")]
+#[arret_rfi_derive::rust_fun("(All #{I O [->_ ->!]} (I ->_ O) (List & I) ->_ (List & O))")]
 pub fn stdlib_map(
     task: &mut Task,
     mapper: callback::Callback<
@@ -36,7 +34,7 @@ pub fn stdlib_map(
     boxed::List::new(task, output_vec.into_iter())
 }
 
-#[rfi_derive::rust_fun("(All #{T [->_ ->!]} (T ->_ Bool) (List & T) ->_ (List & T))")]
+#[arret_rfi_derive::rust_fun("(All #{T [->_ ->!]} (T ->_ Bool) (List & T) ->_ (List & T))")]
 pub fn stdlib_filter(
     task: &mut Task,
     filter: callback::Callback<extern "C" fn(&mut Task, boxed::Closure, Gc<boxed::Any>) -> bool>,
@@ -50,7 +48,7 @@ pub fn stdlib_filter(
     boxed::List::new(task, output_vec.into_iter())
 }
 
-#[rfi_derive::rust_fun("(All #{T [->_ ->!]} (T ->_ Bool) (List & T) ->_ Bool)")]
+#[arret_rfi_derive::rust_fun("(All #{T [->_ ->!]} (T ->_ Bool) (List & T) ->_ Bool)")]
 pub fn stdlib_every_p(
     task: &mut Task,
     pred: callback::Callback<extern "C" fn(&mut Task, boxed::Closure, Gc<boxed::Any>) -> bool>,
@@ -59,7 +57,7 @@ pub fn stdlib_every_p(
     input.iter().all(|elem| pred.apply(task, elem))
 }
 
-#[rfi_derive::rust_fun("(All #{I O [->_ ->!]} (O I ->_ O) O (List & I) ->_ O)")]
+#[arret_rfi_derive::rust_fun("(All #{I O [->_ ->!]} (O I ->_ O) O (List & I) ->_ O)")]
 pub fn stdlib_fold(
     task: &mut Task,
     folder: callback::Callback<
@@ -73,7 +71,7 @@ pub fn stdlib_fold(
         .fold(initial, |acc, elem| folder.apply(task, acc, elem))
 }
 
-#[rfi_derive::rust_fun("(All #{T} & (List & T) -> (List & T))")]
+#[arret_rfi_derive::rust_fun("(All #{T} & (List & T) -> (List & T))")]
 pub fn stdlib_concat(
     task: &mut Task,
     lists: Gc<boxed::List<boxed::List<boxed::Any>>>,
@@ -92,7 +90,7 @@ pub fn stdlib_concat(
     boxed::List::new_with_tail(task, head_values.into_iter(), list_iter.next().unwrap())
 }
 
-#[rfi_derive::rust_fun("(Any (List & Any) -> Bool)")]
+#[arret_rfi_derive::rust_fun("(Any (List & Any) -> Bool)")]
 pub fn stdlib_member_p(needle: Gc<boxed::Any>, haystack: Gc<boxed::List<boxed::Any>>) -> bool {
     haystack.iter().any(|member| member == needle)
 }

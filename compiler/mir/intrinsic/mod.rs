@@ -3,7 +3,7 @@ mod math;
 mod number;
 mod testing;
 
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
 use crate::mir::builder::Builder;
 use crate::mir::error::Result;

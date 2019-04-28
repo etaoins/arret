@@ -4,7 +4,7 @@ use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::{LLVMAttributeFunctionIndex, LLVMAttributeReturnIndex, LLVMIntPredicate};
 
-use runtime::boxed;
+use arret_runtime::boxed;
 
 use crate::codegen::alloc::{ActiveAlloc, AllocAtom, BoxSource};
 use crate::codegen::mod_gen::ModCtx;
@@ -131,7 +131,7 @@ fn gen_runtime_heap_alloc(
     llvm_task: LLVMValueRef,
     required_cells: usize,
 ) -> LLVMValueRef {
-    use runtime::abitype;
+    use arret_runtime::abitype;
 
     unsafe {
         let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
@@ -202,7 +202,7 @@ pub fn atom_into_active_alloc<'op>(
     llvm_task: LLVMValueRef,
     atom: AllocAtom<'op>,
 ) -> ActiveAlloc<'op> {
-    use runtime::abitype;
+    use arret_runtime::abitype;
 
     let required_cells = atom
         .box_sources

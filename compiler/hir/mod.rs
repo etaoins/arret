@@ -12,10 +12,8 @@ mod types;
 mod util;
 pub(crate) mod visitor;
 
-use std;
-
-use syntax::datum::Datum;
-use syntax::span::Span;
+use arret_syntax::datum::Datum;
+use arret_syntax::span::Span;
 
 use crate::rfi;
 use crate::ty;

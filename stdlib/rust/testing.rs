@@ -1,24 +1,22 @@
-use runtime::binding::*;
+use arret_runtime::binding::*;
 
-use runtime::boxed;
-use runtime::boxed::prelude::*;
-use runtime::boxed::refs::Gc;
-use runtime::callback;
-use runtime::task::Task;
+use arret_runtime::boxed;
+use arret_runtime::boxed::prelude::*;
+use arret_runtime::boxed::refs::Gc;
+use arret_runtime::callback;
+use arret_runtime::task::Task;
 
-use rfi_derive;
-
-#[rfi_derive::rust_fun("(All #{T} T -> T)")]
+#[arret_rfi_derive::rust_fun("(All #{T} T -> T)")]
 pub fn stdlib_black_box(value: Gc<boxed::Any>) -> Gc<boxed::Any> {
     value
 }
 
-#[rfi_derive::rust_fun("(All #{T} T ->! T)")]
+#[arret_rfi_derive::rust_fun("(All #{T} T ->! T)")]
 pub fn stdlib_black_box_impure(value: Gc<boxed::Any>) -> Gc<boxed::Any> {
     value
 }
 
-#[rfi_derive::rust_fun("(All #{[->_ ->!] T} (->_ T) ->_ (List Int T))")]
+#[arret_rfi_derive::rust_fun("(All #{[->_ ->!] T} (->_ T) ->_ (List Int T))")]
 pub fn stdlib_heap_alloc_count(
     task: &mut Task,
     block: callback::Callback<extern "C" fn(&mut Task, boxed::Closure) -> Gc<boxed::Any>>,
@@ -32,7 +30,7 @@ pub fn stdlib_heap_alloc_count(
 }
 
 // TODO: This should return a `Set` once they're better supported
-#[rfi_derive::rust_fun("((... ->! Any) -> (List & Sym))")]
+#[arret_rfi_derive::rust_fun("((... ->! Any) -> (List & Sym))")]
 pub fn stdlib_fn_op_categories(_value: Gc<boxed::FunThunk>) -> Gc<boxed::List<boxed::Sym>> {
     panic!("cannot call `(fn-op-categories)` at runtime")
 }

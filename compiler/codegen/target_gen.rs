@@ -6,9 +6,9 @@ use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 use llvm_sys::{LLVMAttributeReturnIndex, LLVMLinkage};
 
-use runtime::abitype::{ABIType, BoxedABIType, RetABIType};
-use runtime::boxed;
-use runtime::callback::EntryPointABIType as CallbackEntryPointABIType;
+use arret_runtime::abitype::{ABIType, BoxedABIType, RetABIType};
+use arret_runtime::boxed;
+use arret_runtime::callback::EntryPointABIType as CallbackEntryPointABIType;
 
 use crate::codegen::box_layout::BoxLayout;
 use crate::codegen::GenABI;

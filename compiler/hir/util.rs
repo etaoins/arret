@@ -1,6 +1,6 @@
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum};
-use syntax::span::Span;
+use arret_syntax::span::Span;
 
 /// Removes the rest argument from the passed iterator and returns it
 ///
