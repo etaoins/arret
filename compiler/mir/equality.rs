@@ -8,6 +8,7 @@ use crate::codegen::GenABI;
 use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops::*;
+use crate::mir::tagset::TypeTagSet;
 use crate::mir::value::build_reg::value_to_reg;
 use crate::mir::value::from_reg::reg_to_value;
 use crate::mir::value::to_const::value_to_const;
@@ -167,17 +168,45 @@ pub fn values_statically_equal(
         (Value::Reg(left_reg), Value::Reg(right_reg)) => {
             if [left_reg, right_reg]
                 .iter()
-                .all(|reg| reg.possible_type_tags.contains(boxed::TypeTag::Float))
+                .any(|reg| reg.possible_type_tags == boxed::TypeTag::FunThunk.into())
             {
-                // Either side could be NaN
+                // Functions are equal to nothing, including themselves
+                return Some(false);
+            }
+
+            if left_reg.reg.into_reg_id() != right_reg.reg.into_reg_id() {
+                // We can't determine if these are statically equal
                 return None;
             }
 
-            if left_reg.reg.into_reg_id() == right_reg.reg.into_reg_id() {
-                Some(true)
-            } else {
-                None
+            for partial_equal_type_tag in TypeTagSet::all().into_iter().filter(|type_tag| {
+                match type_tag {
+                    // Functions never compare equal
+                    boxed::TypeTag::FunThunk => true,
+                    // NaN != NaN
+                    boxed::TypeTag::Float => true,
+                    // Can contain partial equal values
+                    boxed::TypeTag::Pair | boxed::TypeTag::Vector => true,
+                    // The rest can be compared. Add them explicitly so we will be forced to
+                    // classify new types
+                    boxed::TypeTag::Int
+                    | boxed::TypeTag::Char
+                    | boxed::TypeTag::Str
+                    | boxed::TypeTag::Sym
+                    | boxed::TypeTag::True
+                    | boxed::TypeTag::False
+                    | boxed::TypeTag::Nil => false,
+                }
+            }) {
+                if [left_reg, right_reg]
+                    .iter()
+                    .all(|reg| reg.possible_type_tags.contains(partial_equal_type_tag))
+                {
+                    return None;
+                }
             }
+
+            Some(true)
         }
         // Functions never compare equal
         (Value::ArretFun(_), _)
@@ -210,7 +239,6 @@ pub fn eval_equality(
     left_value: &Value,
     right_value: &Value,
 ) -> Value {
-    use crate::mir::tagset::TypeTagSet;
     use crate::mir::value::types::possible_type_tags_for_value;
 
     if let Some(static_result) = values_statically_equal(ehx, left_value, right_value) {

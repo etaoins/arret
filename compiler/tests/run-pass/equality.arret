@@ -24,7 +24,11 @@
 (defn test-list-equality! () ->! ()
   (assert-eq! (black-box! ()) (black-box! ()))
   (assert-ne! (black-box! ()) (black-box! '(1 2 3)))
-  (assert-eq! true ((black-box! =) (black-box! ()) (black-box! ()))))
+  (assert-eq! true ((black-box! =) (black-box! ()) (black-box! ())))
+
+  ; Same variable list containing NaN
+  (let [nan-list (black-box! '(##NaN))]
+    (assert-ne! nan-list nan-list)))
 
 (defn test-nan-equality! () ->! ()
   (assert-eq! false (= ##NaN ##NaN))
@@ -56,6 +60,9 @@
   (assert-ne! test-fn-equality! test-fn-equality!)
   ; Arret fun
   (assert-ne! test-sym-equality! test-sym-equality!)
+  ; Same variable fun
+  (let [anon-fun (black-box! (fn ()))]
+    (assert-ne! anon-fun anon-fun))
 
   (assert-eq! false ((black-box! =) = =))
   (assert-eq! false ((black-box! =) + +))
