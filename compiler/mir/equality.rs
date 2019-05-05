@@ -293,7 +293,16 @@ pub fn eval_equality(
             left_value,
             right_value,
             &abitype::ABIType::Int,
-            OpKind::IntEqual,
+            |reg_id, BinaryOp { lhs_reg, rhs_reg }| {
+                OpKind::IntCompare(
+                    reg_id,
+                    CompareOp {
+                        comparison: Comparison::Eq,
+                        lhs_reg,
+                        rhs_reg,
+                    },
+                )
+            },
         )
     } else if all_type_tags == boxed::TypeTag::Char.into() {
         build_native_compare(
@@ -323,7 +332,16 @@ pub fn eval_equality(
             left_value,
             right_value,
             &abitype::ABIType::Float,
-            OpKind::FloatEqual,
+            |reg_id, BinaryOp { lhs_reg, rhs_reg }| {
+                OpKind::FloatCompare(
+                    reg_id,
+                    CompareOp {
+                        comparison: Comparison::Eq,
+                        lhs_reg,
+                        rhs_reg,
+                    },
+                )
+            },
         )
     } else {
         runtime_compare(ehx, b, span, left_value, right_value)

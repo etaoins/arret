@@ -11,15 +11,42 @@ use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
 use crate::codegen::{alloc, const_gen};
 
-fn gen_int_equal(fcx: &mut FunCtx, reg: RegId, binary_op: &BinaryOp, reg_name: &str) {
+fn comparison_to_llvm_int_pred(comparison: Comparison) -> LLVMIntPredicate {
+    match comparison {
+        Comparison::Lt => LLVMIntPredicate::LLVMIntSLT,
+        Comparison::Le => LLVMIntPredicate::LLVMIntSLE,
+        Comparison::Eq => LLVMIntPredicate::LLVMIntEQ,
+        Comparison::Gt => LLVMIntPredicate::LLVMIntSGT,
+        Comparison::Ge => LLVMIntPredicate::LLVMIntSGE,
+    }
+}
+
+fn comparison_to_llvm_real_pred(comparison: Comparison) -> LLVMRealPredicate {
+    match comparison {
+        Comparison::Lt => LLVMRealPredicate::LLVMRealOLT,
+        Comparison::Le => LLVMRealPredicate::LLVMRealOLE,
+        Comparison::Eq => LLVMRealPredicate::LLVMRealOEQ,
+        Comparison::Gt => LLVMRealPredicate::LLVMRealOGT,
+        Comparison::Ge => LLVMRealPredicate::LLVMRealOGE,
+    }
+}
+
+fn gen_int_compare(
+    fcx: &mut FunCtx,
+    reg: RegId,
+    comparison: Comparison,
+    lhs_reg: RegId,
+    rhs_reg: RegId,
+    reg_name: &str,
+) {
     unsafe {
         fcx.regs.insert(
             reg,
             LLVMBuildICmp(
                 fcx.builder,
-                LLVMIntPredicate::LLVMIntEQ,
-                fcx.regs[&binary_op.lhs_reg],
-                fcx.regs[&binary_op.rhs_reg],
+                comparison_to_llvm_int_pred(comparison),
+                fcx.regs[&lhs_reg],
+                fcx.regs[&rhs_reg],
                 reg_name.as_ptr() as *const _,
             ),
         );
@@ -452,29 +479,77 @@ fn gen_op(
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }
-            OpKind::IntEqual(reg, binary_op) => gen_int_equal(fcx, *reg, binary_op, "int_equal\0"),
-            OpKind::BoolEqual(reg, binary_op) => {
-                gen_int_equal(fcx, *reg, binary_op, "bool_equal\0")
+            OpKind::IntCompare(
+                reg,
+                CompareOp {
+                    comparison,
+                    lhs_reg,
+                    rhs_reg,
+                },
+            ) => {
+                let reg_name = if comparison == &Comparison::Eq {
+                    "int_equal\0"
+                } else {
+                    "int_compare\0"
+                };
+
+                gen_int_compare(fcx, *reg, *comparison, *lhs_reg, *rhs_reg, reg_name)
             }
-            OpKind::CharEqual(reg, binary_op) => {
-                gen_int_equal(fcx, *reg, binary_op, "char_equal\0")
-            }
-            OpKind::InternedSymEqual(reg, binary_op) => {
-                gen_int_equal(fcx, *reg, binary_op, "interned_sym_equal\0")
-            }
-            OpKind::TypeTagEqual(reg, binary_op) => {
-                gen_int_equal(fcx, *reg, binary_op, "type_tag_equal\0")
-            }
-            OpKind::FloatEqual(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+            OpKind::BoolEqual(reg, BinaryOp { lhs_reg, rhs_reg }) => gen_int_compare(
+                fcx,
+                *reg,
+                Comparison::Eq,
+                *lhs_reg,
+                *rhs_reg,
+                "bool_equal\0",
+            ),
+            OpKind::CharEqual(reg, BinaryOp { lhs_reg, rhs_reg }) => gen_int_compare(
+                fcx,
+                *reg,
+                Comparison::Eq,
+                *lhs_reg,
+                *rhs_reg,
+                "char_equal\0",
+            ),
+            OpKind::InternedSymEqual(reg, BinaryOp { lhs_reg, rhs_reg }) => gen_int_compare(
+                fcx,
+                *reg,
+                Comparison::Eq,
+                *lhs_reg,
+                *rhs_reg,
+                "interned_sym_equal\0",
+            ),
+            OpKind::TypeTagEqual(reg, BinaryOp { lhs_reg, rhs_reg }) => gen_int_compare(
+                fcx,
+                *reg,
+                Comparison::Eq,
+                *lhs_reg,
+                *rhs_reg,
+                "type_tag_equal\0",
+            ),
+            OpKind::FloatCompare(
+                reg,
+                CompareOp {
+                    comparison,
+                    lhs_reg,
+                    rhs_reg,
+                },
+            ) => {
                 let llvm_lhs = fcx.regs[lhs_reg];
                 let llvm_rhs = fcx.regs[rhs_reg];
 
+                let reg_name = if comparison == &Comparison::Eq {
+                    "float_equal\0"
+                } else {
+                    "float_compare\0"
+                };
+
                 let llvm_value = LLVMBuildFCmp(
                     fcx.builder,
-                    LLVMRealPredicate::LLVMRealOLE,
+                    comparison_to_llvm_real_pred(*comparison),
                     llvm_lhs,
                     llvm_rhs,
-                    "float_equal\0".as_ptr() as *const _,
+                    reg_name.as_ptr() as *const _,
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }

@@ -113,6 +113,13 @@ pub struct BinaryOp {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct CompareOp {
+    pub comparison: Comparison,
+    pub lhs_reg: RegId,
+    pub rhs_reg: RegId,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct LoadBoxedTypeTagOp {
     pub subject_reg: RegId,
     pub possible_type_tags: TypeTagSet,
@@ -122,6 +129,15 @@ pub struct LoadBoxedTypeTagOp {
 pub struct MakeCallbackOp {
     pub closure_reg: RegId,
     pub callee: Callee,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum Comparison {
+    Lt,
+    Le,
+    Eq,
+    Gt,
+    Ge,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -168,15 +184,16 @@ pub enum OpKind {
 
     MakeCallback(RegId, MakeCallbackOp),
 
-    IntEqual(RegId, BinaryOp),
     BoolEqual(RegId, BinaryOp),
     CharEqual(RegId, BinaryOp),
     InternedSymEqual(RegId, BinaryOp),
     TypeTagEqual(RegId, BinaryOp),
-    FloatEqual(RegId, BinaryOp),
     BoxIdentical(RegId, BinaryOp),
     UsizeToInt64(RegId, RegId),
     Int64ToFloat(RegId, RegId),
+
+    IntCompare(RegId, CompareOp),
+    FloatCompare(RegId, CompareOp),
 
     FloatAdd(RegId, BinaryOp),
     UsizeAdd(RegId, BinaryOp),
@@ -260,12 +277,12 @@ impl OpKind {
             | FloatDiv(reg_id, _)
             | Int64CheckedDiv(reg_id, _)
             | Int64CheckedRem(reg_id, _) => Some(*reg_id),
-            IntEqual(reg_id, _)
+            IntCompare(reg_id, _)
             | BoolEqual(reg_id, _)
             | CharEqual(reg_id, _)
             | InternedSymEqual(reg_id, _)
             | TypeTagEqual(reg_id, _)
-            | FloatEqual(reg_id, _)
+            | FloatCompare(reg_id, _)
             | BoxIdentical(reg_id, _)
             | UsizeToInt64(reg_id, _)
             | Int64ToFloat(reg_id, _)
@@ -381,14 +398,15 @@ impl OpKind {
             | FloatDiv(_, binary_op)
             | Int64CheckedDiv(_, binary_op)
             | Int64CheckedRem(_, binary_op)
-            | IntEqual(_, binary_op)
             | BoolEqual(_, binary_op)
             | CharEqual(_, binary_op)
             | InternedSymEqual(_, binary_op)
             | TypeTagEqual(_, binary_op)
-            | FloatEqual(_, binary_op)
             | BoxIdentical(_, binary_op) => {
                 coll.extend([binary_op.lhs_reg, binary_op.rhs_reg].iter().cloned());
+            }
+            IntCompare(_, compare_op) | FloatCompare(_, compare_op) => {
+                coll.extend([compare_op.lhs_reg, compare_op.rhs_reg].iter().cloned());
             }
         }
     }
@@ -474,12 +492,12 @@ impl OpKind {
             | FloatDiv(_, _)
             | Int64CheckedDiv(_, _)
             | Int64CheckedRem(_, _)
-            | IntEqual(_, _)
+            | IntCompare(_, _)
             | BoolEqual(_, _)
             | CharEqual(_, _)
             | InternedSymEqual(_, _)
             | TypeTagEqual(_, _)
-            | FloatEqual(_, _)
+            | FloatCompare(_, _)
             | BoxIdentical(_, _)
             | Int64ToFloat(_, _) => OpCategory::RegOp,
 
