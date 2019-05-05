@@ -2,7 +2,6 @@
 (import [stdlib test])
 
 (defn test-add () ->! ()
-  (assert-eq! 0 (+))
   (assert-eq! 4 (+ 4))
 
   (assert-eq! 7 (+ 4 3))
@@ -14,7 +13,6 @@
   (assert-eq! true (nan? (+ 1.0 ##NaN))))
 
 (defn test-mul () ->! ()
-  (assert-eq! 1 (*))
   (assert-eq! 4 (* 4))
 
   (assert-eq! 12 (* 4 3))

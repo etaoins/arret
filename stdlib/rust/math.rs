@@ -8,7 +8,7 @@ use arret_rfi_derive;
 
 fn fold_float_op<FR>(
     task: &mut Task,
-    operands_iter: impl ExactSizeIterator<Item = Gc<boxed::Num>>,
+    operands_iter: impl Iterator<Item = Gc<boxed::Num>>,
     initial_value: f64,
     float_reduce: FR,
 ) -> Gc<boxed::Float>
@@ -34,7 +34,7 @@ where
 
 fn fold_num_op<IR, FR>(
     task: &mut Task,
-    mut operands_iter: impl ExactSizeIterator<Item = Gc<boxed::Num>>,
+    mut operands_iter: impl Iterator<Item = Gc<boxed::Num>>,
     initial_value: i64,
     int_reduce: IR,
     float_reduce: FR,
@@ -62,16 +62,40 @@ where
     boxed::Int::new(task, int_acc).as_num_ref()
 }
 
-#[arret_rfi_derive::rust_fun("(All #{[N Num]} & N -> N)")]
-pub fn stdlib_add(task: &mut Task, operands: Gc<boxed::List<boxed::Num>>) -> Gc<boxed::Num> {
+#[arret_rfi_derive::rust_fun("(All #{[N Num]} N & N -> N)")]
+pub fn stdlib_add(
+    task: &mut Task,
+    initial_num: Gc<boxed::Num>,
+    rest: Gc<boxed::List<boxed::Num>>,
+) -> Gc<boxed::Num> {
+    use std::iter;
     use std::ops::Add;
-    fold_num_op(task, operands.iter(), 0, i64::add, f64::add)
+
+    fold_num_op(
+        task,
+        iter::once(initial_num).chain(rest.iter()),
+        0,
+        i64::add,
+        f64::add,
+    )
 }
 
-#[arret_rfi_derive::rust_fun("(All #{[N Num]} & N -> N)")]
-pub fn stdlib_mul(task: &mut Task, operands: Gc<boxed::List<boxed::Num>>) -> Gc<boxed::Num> {
+#[arret_rfi_derive::rust_fun("(All #{[N Num]} N & N -> N)")]
+pub fn stdlib_mul(
+    task: &mut Task,
+    initial_num: Gc<boxed::Num>,
+    rest: Gc<boxed::List<boxed::Num>>,
+) -> Gc<boxed::Num> {
+    use std::iter;
     use std::ops::Mul;
-    fold_num_op(task, operands.iter(), 1, i64::mul, f64::mul)
+
+    fold_num_op(
+        task,
+        iter::once(initial_num).chain(rest.iter()),
+        1,
+        i64::mul,
+        f64::mul,
+    )
 }
 
 #[arret_rfi_derive::rust_fun("(All #{[N Num]} N & N -> N)")]
