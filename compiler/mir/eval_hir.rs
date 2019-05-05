@@ -92,8 +92,15 @@ pub struct BuiltProgram {
 }
 
 impl BuiltProgram {
+    /// Returns true if the program always executes successfully with no output or side effects
     pub fn is_empty(&self) -> bool {
-        self.private_funs.is_empty() && self.main.ops.len() == 1
+        match self.main.ops.as_ref() {
+            [ops::Op {
+                kind: ops::OpKind::RetVoid,
+                ..
+            }] => true,
+            _ => false,
+        }
     }
 }
 
