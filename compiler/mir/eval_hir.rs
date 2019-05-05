@@ -51,7 +51,8 @@ pub struct EvalHirCtx {
     synthetic_funs: SyntheticFuns,
 
     rust_fun_thunks: HashMap<usize, boxed::ThunkEntry>,
-    thunk_fun_values: HashMap<Gc<boxed::FunThunk>, Value>,
+    // This uses pointers because `FunThunk` is always inequal to itself
+    thunk_fun_values: HashMap<*const boxed::FunThunk, Value>,
     thunk_jit: codegen::jit::JITCtx,
 }
 
@@ -428,7 +429,8 @@ impl EvalHirCtx {
         let new_boxed = boxed::FunThunk::new(self, closure, entry);
 
         let rust_fun_value = Value::RustFun(rust_fun);
-        self.thunk_fun_values.insert(new_boxed, rust_fun_value);
+        self.thunk_fun_values
+            .insert(new_boxed.as_ptr(), rust_fun_value);
 
         new_boxed
     }
@@ -662,13 +664,13 @@ impl EvalHirCtx {
     ) -> Result<Value> {
         use crate::mir::value::to_const::value_to_const;
 
-        if let Some(actual_value) = self.thunk_fun_values.get(&fun_thunk) {
+        if let Some(actual_value) = self.thunk_fun_values.get(&fun_thunk.as_ptr()) {
             let actual_value = actual_value.clone();
             return self.eval_value_app(fcx, b, span, ret_ty, &actual_value, apply_args);
         }
 
         if b.is_some() {
-            unimplemented!("attempt to apply unknown fun thunk during compile phase");
+            panic!("attempt to apply unknown fun thunk during compile phase");
         }
 
         let const_arg_list =
@@ -984,7 +986,8 @@ impl EvalHirCtx {
         let new_boxed = boxed::FunThunk::new(self, closure, entry);
 
         let arret_fun_value = Value::ArretFun(arret_fun.clone());
-        self.thunk_fun_values.insert(new_boxed, arret_fun_value);
+        self.thunk_fun_values
+            .insert(new_boxed.as_ptr(), arret_fun_value);
         Some(new_boxed)
     }
 
@@ -1275,10 +1278,10 @@ impl EvalHirCtx {
         let old_thunk_fun_values = mem::replace(&mut self.thunk_fun_values, HashMap::new());
         self.thunk_fun_values = old_thunk_fun_values
             .into_iter()
-            .filter_map(|(fun_thunk, value)| {
+            .filter_map(|(fun_thunk, value)| unsafe {
                 weak_pass
-                    .new_heap_ref_for(fun_thunk)
-                    .map(|new_fun_thunk| (new_fun_thunk, value))
+                    .new_heap_ref_for(Gc::new(fun_thunk))
+                    .map(|new_fun_thunk| (new_fun_thunk.as_ptr(), value))
             })
             .collect();
 
