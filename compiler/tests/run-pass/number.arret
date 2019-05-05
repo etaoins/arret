@@ -1,14 +1,62 @@
 (import [stdlib base])
 (import [stdlib test])
 
+(defn test-zero? () ->! ()
+  (assert-eq! true (zero? 0))
+  (assert-eq! true (zero? (black-box! 0.0)))
+
+  (assert-eq! false (zero? 10))
+  (assert-eq! false (zero? (black-box! 10.0)))
+  (assert-eq! false (zero? ##NaN))
+  (assert-eq! false (zero? (black-box! ##Inf)))
+  (assert-eq! false (zero? ##-Inf)))
+
+(defn test-nan? () ->! ()
+  (assert-eq! false (nan? 10.0))
+  (assert-eq! true (nan? (black-box! ##NaN)))
+  (assert-eq! true (nan? ##NaN))
+  (assert-eq! false (nan? ##Inf))
+  (assert-eq! false (nan? (black-box! ##-Inf))))
+
+(defn test-infinite? () ->! ()
+  (assert-eq! false (infinite? 3.0))
+  (assert-eq! true (infinite? (black-box! ##Inf)))
+  (assert-eq! true (infinite? ##-Inf))
+  (assert-eq! false (infinite? ##NaN)))
+
+(defn test-float () ->! ()
+  (assert-eq! 1.0 (float 1))
+  (assert-eq! 0.0 (float (black-box! 0)))
+  (assert-eq! -1.0 (float -1))
+
+  (assert-eq! 1.0 (float (black-box! 1.0)))
+  (assert-eq! 0.0 (float 0.0))
+  (assert-eq! -1.0 (float -1.0)))
+
+(defn test-int () ->! ()
+  (assert-eq! 1 (int (black-box! 1)))
+  (assert-eq! 0 (int 0))
+  (assert-eq! -1 (int -1))
+
+  ; TODO: Test error cases
+  (assert-eq! 1 (int 1.0))
+  (assert-eq! 0 (int (black-box! 0.0)))
+  (assert-eq! -1 (int -1.0)))
+
 (defn test-comparisons () ->! ()
-  (assert-eq! true (< (black-box! -1)))
-  (assert-eq! true (> (black-box! ##NaN)))
+  ; These are all always true
+  (assert-eq! true (< -1))
+  (assert-eq! true (<= (black-box! 0)))
+  (assert-eq! true (== 1.0))
+  (assert-eq! true (> (black-box! -1.0)))
+  (assert-eq! true (>= ##NaN))
 
   ; NaNs always compare false
-  (assert-eq! false (< (black-box! ##NaN) ##NaN))
-  (assert-eq! false (<= ##NaN (black-box! ##NaN)))
+  (assert-eq! false (< ##NaN (black-box! ##NaN)))
+  (assert-eq! false (<= (black-box! ##NaN) ##NaN))
   (assert-eq! false (== (black-box! ##NaN) (black-box! ##NaN)))
+  (assert-eq! false (> ##NaN ##NaN))
+  (assert-eq! false (>= ##NaN ##NaN))
 
   (assert-eq! true (< 1 2.0 (black-box! 3)))
   (assert-eq! true (<= 1 (black-box! 2.0) 3))
@@ -16,15 +64,34 @@
   (assert-eq! false (> (black-box! 1) 2.0 3))
   (assert-eq! false (>= (black-box! 1) 2.0 (black-box! 3)))
 
-  (assert-eq! false (< (black-box! 1) (black-box! 2) 2.0))
+  (assert-eq! false (< 1 (black-box! 2) (black-box! 2.0)))
   (assert-eq! true (<= (black-box! 1) (black-box! 2) (black-box! 2.0)))
+  (assert-eq! false (== 1 2 2.0))
+  (assert-eq! false (> 1 2 (black-box! 2.0)))
+  (assert-eq! false (>= 1 (black-box! 2) 2.0))
 
-  (assert-eq! false (> (black-box! 2) (black-box! 2) 1.0))
-  (assert-eq! true (>= (black-box! 2) (black-box! 2) (black-box! 1.0)))
-
+  (assert-eq! false (< (black-box! 1) (black-box! 1.0)))
+  (assert-eq! true (<= 1 (black-box! 1.0)))
   (assert-eq! true (== (black-box! 1) 1.0))
-  (assert-eq! true (== 1 (black-box! 1.0)))
-  (assert-eq! true (== (black-box! 1) (black-box! 1.0))))
+  (assert-eq! false (> (black-box! 1) (black-box! 1.0)))
+  (assert-eq! true (>= 1 1.0))
+
+  (assert-eq! false (< ##Inf (black-box! ##-Inf)))
+  (assert-eq! false (<= (black-box! ##Inf) ##-Inf))
+  (assert-eq! false (== (black-box! ##Inf) (black-box! ##-Inf)))
+  (assert-eq! true (> ##Inf (black-box! ##-Inf)))
+  (assert-eq! true (>= (black-box! ##Inf) ##-Inf))
+
+  (assert-eq! false (< ##Inf (black-box! ##-Inf) (black-box! ##-Inf)))
+  (assert-eq! false (<= (black-box! ##Inf) ##-Inf ##-Inf))
+  (assert-eq! false (== (black-box! ##Inf) (black-box! ##-Inf) (black-box! ##-Inf)))
+  (assert-eq! false (> ##Inf ##-Inf (black-box! ##-Inf)))
+  (assert-eq! true (>= ##Inf ##-Inf ##-Inf)))
 
 (defn main! () ->! ()
+  (test-zero?)
+  (test-nan?)
+  (test-infinite?)
+  (test-float)
+  (test-int)
   (test-comparisons))

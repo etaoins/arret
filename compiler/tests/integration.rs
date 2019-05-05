@@ -22,7 +22,7 @@ enum RunType {
 #[derive(Clone, Copy, PartialEq)]
 enum TestType {
     CompileError,
-    EvalPass,
+    Optimise,
     Run(RunType),
 }
 
@@ -376,10 +376,9 @@ fn integration() {
         .unwrap()
         .filter_map(|entry| entry_to_test_tuple(entry, TestType::CompileError));
 
-    let eval_pass_entries = fs::read_dir("./tests/eval-pass")
+    let optimise_entries = fs::read_dir("./tests/optimise")
         .unwrap()
-        .chain(fs::read_dir("./tests/optimise").unwrap())
-        .filter_map(|entry| entry_to_test_tuple(entry, TestType::EvalPass));
+        .filter_map(|entry| entry_to_test_tuple(entry, TestType::Optimise));
 
     let run_pass_entries = fs::read_dir("./tests/run-pass")
         .unwrap()
@@ -390,7 +389,7 @@ fn integration() {
         .filter_map(|entry| entry_to_test_tuple(entry, TestType::Run(RunType::Error)));
 
     let failed_tests = compile_error_entries
-        .chain(eval_pass_entries)
+        .chain(optimise_entries)
         .chain(run_pass_entries)
         .chain(run_error_entries)
         .par_bridge()

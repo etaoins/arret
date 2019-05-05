@@ -95,4 +95,4 @@ These can be compiled to a static binary by running Arret with the path name:
 
 The Arret language is still rapidly evolving.
 This makes it impractical to provide accurate documentation of the language and standard library.
-However, the test programs in [eval-pass](compiler/tests/eval-pass) and [run-pass](compiler/tests/run-pass) give complex examples of working Arret code.
+However, the test programs in [run-pass](compiler/tests/run-pass) give examples of working Arret code.
