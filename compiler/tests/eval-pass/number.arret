@@ -42,10 +42,56 @@
   (assert-eq! 0 (int 0.0))
   (assert-eq! -1 (int -1.0)))
 
+(defn test-comparisons () ->! ()
+  ; These are all always true
+  (assert-eq! true (< -1))
+  (assert-eq! true (<= 0))
+  (assert-eq! true (== 1.0))
+  (assert-eq! true (> -1.0))
+  (assert-eq! true (>= ##NaN))
+
+  ; NaNs always compare false
+  (assert-eq! false (< ##NaN ##NaN))
+  (assert-eq! false (<= ##NaN ##NaN))
+  (assert-eq! false (== ##NaN ##NaN))
+  (assert-eq! false (> ##NaN ##NaN))
+  (assert-eq! false (>= ##NaN ##NaN))
+
+  (assert-eq! true (< 1 2.0 3))
+  (assert-eq! true (<= 1 2.0 3))
+  (assert-eq! false (== 1 2.0 3))
+  (assert-eq! false (> 1 2.0 3))
+  (assert-eq! false (>= 1 2.0 3))
+
+  (assert-eq! false (< 1 2 2.0))
+  (assert-eq! true (<= 1 2 2.0))
+  (assert-eq! false (== 1 2 2.0))
+  (assert-eq! false (> 1 2 2.0))
+  (assert-eq! false (>= 1 2 2.0))
+
+  (assert-eq! false (< 1 1.0))
+  (assert-eq! true (<= 1 1.0))
+  (assert-eq! true (== 1 1.0))
+  (assert-eq! false (> 1 1.0))
+  (assert-eq! true (>= 1 1.0))
+
+  (assert-eq! false (< ##Inf ##-Inf))
+  (assert-eq! false (<= ##Inf ##-Inf))
+  (assert-eq! false (== ##Inf ##-Inf))
+  (assert-eq! true (> ##Inf ##-Inf))
+  (assert-eq! true (>= ##Inf ##-Inf))
+
+  (assert-eq! false (< ##Inf ##-Inf ##-Inf))
+  (assert-eq! false (<= ##Inf ##-Inf ##-Inf))
+  (assert-eq! false (== ##Inf ##-Inf ##-Inf))
+  (assert-eq! false (> ##Inf ##-Inf ##-Inf))
+  (assert-eq! true (>= ##Inf ##-Inf ##-Inf)))
+
 (defn main! () ->! ()
   (test-zero?)
   (test-nan?)
   (test-infinite?)
   (test-float)
   (test-int)
+  (test-comparisons)
   ())

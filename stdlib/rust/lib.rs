@@ -74,6 +74,11 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
 
     "float" => stdlib_float,
     "int" => stdlib_int,
+    "<" => stdlib_num_lt,
+    "<=" => stdlib_num_le,
+    "==" => stdlib_num_eq,
+    ">" => stdlib_num_gt,
+    ">=" => stdlib_num_ge,
 
     "+" => stdlib_add,
     "*" => stdlib_mul,

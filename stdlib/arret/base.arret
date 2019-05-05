@@ -7,7 +7,7 @@
 
 (import [stdlib rust])
 (export length panic panic! print! println! exit! cons map filter every? fold concat member? int
-        float + * - / rem quot)
+        float < <= == > >= + * - / rem quot)
 
 (export defn)
 (defmacro defn (macro-rules
