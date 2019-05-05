@@ -1,0 +1,7 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn main! () ->! ()
+  ; Even if the outer function is impure we should optimise inner pure applications
+  (assert-fn-doesnt-contain-op! :call (fn () ->! Bool
+    (every? (fn (_) false) '(1 2 3)))))

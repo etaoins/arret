@@ -803,8 +803,10 @@ impl<'types> RecursiveDefsCtx<'types> {
             ty::select::SelectCtx::new(fun_type.pvar_ids(), fun_type.tvar_ids());
 
         if let PurityVar::Known(purity_type) = pv {
-            // Add our purity information
-            non_fun_param_stx.add_evidence_purity(fun_type.purity(), purity_type);
+            if purity_type != &Purity::Impure.into() {
+                // Add our purity information
+                non_fun_param_stx.add_evidence_purity(fun_type.purity(), purity_type);
+            }
         }
 
         // The context used to select the types for our function parameters. This includes the

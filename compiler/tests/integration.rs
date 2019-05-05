@@ -195,6 +195,12 @@ fn result_for_single_test(
 
     // And now compiling and running
     let mir_program = ehx.into_built_program(hir.main_var_id)?;
+
+    if mir_program.is_empty() {
+        // Don't bother building
+        return Ok(());
+    }
+
     let output_path = NamedTempFile::new().unwrap().into_temp_path();
 
     let gen_program_opts = arret_compiler::GenProgramOptions::new()
