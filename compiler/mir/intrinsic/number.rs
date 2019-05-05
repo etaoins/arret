@@ -2,91 +2,153 @@ use arret_syntax::span::Span;
 
 use arret_runtime::abitype;
 use arret_runtime::boxed;
+use arret_runtime::boxed::prelude::*;
 
 use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::error::Result;
 use crate::mir::eval_hir::EvalHirCtx;
+use crate::mir::intrinsic::num_utils::{num_value_to_float_reg, NumOperand};
+use crate::mir::ops::Comparison;
+use crate::mir::tagset::TypeTagSet;
 
 use crate::mir::value;
-use crate::mir::value::build_reg::value_to_reg;
+use crate::mir::value::list::SizedListIterator;
 use crate::mir::value::types::possible_type_tags_for_value;
 use crate::mir::value::Value;
 
-/// Converts a value of type `Num` to a float reg
-pub fn num_value_to_float_reg(
+fn build_operand_pair_compare(
     ehx: &mut EvalHirCtx,
-    outer_b: &mut Builder,
+    b: &mut Builder,
     span: Span,
-    value: &Value,
-) -> BuiltReg {
+    left_value: &Value,
+    right_value: &Value,
+    comparison: Comparison,
+) -> Option<BuiltReg> {
     use crate::mir::ops::*;
 
-    let num_type_tags = [boxed::TypeTag::Int, boxed::TypeTag::Float]
-        .iter()
-        .collect();
+    let left_num_operand = NumOperand::try_from_value(ehx, b, span, left_value)?;
+    let right_num_operand = NumOperand::try_from_value(ehx, b, span, right_value)?;
 
-    let possible_type_tags = possible_type_tags_for_value(value) & num_type_tags;
+    match (left_num_operand, right_num_operand) {
+        (NumOperand::Int(left_int_reg), NumOperand::Int(right_int_reg)) => Some(b.push_reg(
+            span,
+            OpKind::IntCompare,
+            CompareOp {
+                comparison,
+                lhs_reg: left_int_reg.into(),
+                rhs_reg: right_int_reg.into(),
+            },
+        )),
+        (NumOperand::Float(left_float_reg), NumOperand::Int(right_int_reg)) => {
+            let right_float_reg = b.push_reg(span, OpKind::Int64ToFloat, right_int_reg.into());
+            Some(b.push_reg(
+                span,
+                OpKind::FloatCompare,
+                CompareOp {
+                    comparison,
+                    lhs_reg: left_float_reg.into(),
+                    rhs_reg: right_float_reg.into(),
+                },
+            ))
+        }
+        (NumOperand::Int(left_int_reg), NumOperand::Float(right_float_reg)) => {
+            let left_float_reg = b.push_reg(span, OpKind::Int64ToFloat, left_int_reg.into());
+            Some(b.push_reg(
+                span,
+                OpKind::FloatCompare,
+                CompareOp {
+                    comparison,
+                    lhs_reg: left_float_reg.into(),
+                    rhs_reg: right_float_reg.into(),
+                },
+            ))
+        }
+        (NumOperand::Float(left_float_reg), NumOperand::Float(right_float_reg)) => {
+            Some(b.push_reg(
+                span,
+                OpKind::FloatCompare,
+                CompareOp {
+                    comparison,
+                    lhs_reg: left_float_reg.into(),
+                    rhs_reg: right_float_reg.into(),
+                },
+            ))
+        }
+    }
+}
 
-    if possible_type_tags == boxed::TypeTag::Float.into() {
-        value_to_reg(ehx, outer_b, span, &value, &abitype::ABIType::Float)
-    } else if possible_type_tags == boxed::TypeTag::Int.into() {
-        let int64_reg = value_to_reg(ehx, outer_b, span, value, &abitype::ABIType::Int);
-        outer_b.push_reg(span, OpKind::Int64ToFloat, int64_reg.into())
+fn build_operand_iter_compare(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    left_value: &Value,
+    rest_iter: &mut SizedListIterator,
+    comparison: Comparison,
+) -> Option<BuiltReg> {
+    use crate::mir::ops::*;
+
+    let right_value = rest_iter.next(b, span).unwrap();
+    let compare_result_reg =
+        build_operand_pair_compare(ehx, b, span, left_value, &right_value, comparison)?;
+
+    let combined_result_reg;
+    if rest_iter.is_empty() {
+        // We're terminal, this is simple
+        combined_result_reg = compare_result_reg;
     } else {
-        let boxed_any_reg = value_to_reg(
+        let mut rest_b = Builder::new();
+        let rest_result_reg = build_operand_iter_compare(
             ehx,
-            outer_b,
+            &mut rest_b,
             span,
-            value,
-            &abitype::BoxedABIType::Any.into(),
-        )
-        .into();
+            &right_value,
+            rest_iter,
+            comparison,
+        )?;
 
-        let value_type_tag_reg = outer_b.push_reg(
-            span,
-            OpKind::LoadBoxedTypeTag,
-            LoadBoxedTypeTagOp {
-                subject_reg: boxed_any_reg,
-                possible_type_tags: num_type_tags,
-            },
-        );
-
-        let float_tag_reg = outer_b.push_reg(span, OpKind::ConstTypeTag, boxed::TypeTag::Float);
-
-        let is_float_reg = outer_b.push_reg(
-            span,
-            OpKind::TypeTagEqual,
-            BinaryOp {
-                lhs_reg: value_type_tag_reg.into(),
-                rhs_reg: float_tag_reg.into(),
-            },
-        );
-
-        let mut is_float_b = Builder::new();
-        let is_float_result_reg =
-            value_to_reg(ehx, &mut is_float_b, span, &value, &abitype::ABIType::Float);
-
-        let mut is_int_b = Builder::new();
-        let int64_reg = value_to_reg(ehx, &mut is_int_b, span, value, &abitype::ABIType::Int);
-        let is_int_result_reg = is_int_b.push_reg(span, OpKind::Int64ToFloat, int64_reg.into());
-
-        let output_reg = RegId::alloc();
-        outer_b.push(
+        combined_result_reg = b.alloc_local();
+        b.push(
             span,
             OpKind::Cond(CondOp {
                 reg_phi: Some(RegPhi {
-                    output_reg,
-                    true_result_reg: is_float_result_reg.into(),
-                    false_result_reg: is_int_result_reg.into(),
+                    output_reg: combined_result_reg.into(),
+                    true_result_reg: rest_result_reg.into(),
+                    // This is known false
+                    false_result_reg: compare_result_reg.into(),
                 }),
-                test_reg: is_float_reg.into(),
-                true_ops: is_float_b.into_ops(),
-                false_ops: is_int_b.into_ops(),
+                test_reg: compare_result_reg.into(),
+                true_ops: rest_b.into_ops(),
+                false_ops: Box::new([]),
             }),
         );
+    };
 
-        BuiltReg::Local(output_reg)
+    Some(combined_result_reg)
+}
+
+fn compare_operand_list(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    arg_list_value: &Value,
+    comparison: Comparison,
+) -> Option<Value> {
+    let mut list_iter = arg_list_value.try_sized_list_iter()?;
+    if list_iter.len() == 1 {
+        return Some(boxed::TRUE_INSTANCE.as_any_ref().into());
     }
+
+    let left_value = list_iter.next(b, span).unwrap();
+    build_operand_iter_compare(ehx, b, span, &left_value, &mut list_iter, comparison).map(
+        |result_reg| {
+            (value::RegValue {
+                reg: result_reg,
+                abi_type: abitype::ABIType::Bool,
+                possible_type_tags: TypeTagSet::from(abitype::ABIType::Bool),
+            })
+            .into()
+        },
+    )
 }
 
 pub fn int(
@@ -120,5 +182,80 @@ pub fn float(
             abitype::ABIType::Float,
         )
         .into(),
+    ))
+}
+
+pub fn num_lt(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    arg_list_value: &Value,
+) -> Result<Option<Value>> {
+    Ok(compare_operand_list(
+        ehx,
+        b,
+        span,
+        arg_list_value,
+        Comparison::Lt,
+    ))
+}
+
+pub fn num_le(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    arg_list_value: &Value,
+) -> Result<Option<Value>> {
+    Ok(compare_operand_list(
+        ehx,
+        b,
+        span,
+        arg_list_value,
+        Comparison::Le,
+    ))
+}
+
+pub fn num_eq(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    arg_list_value: &Value,
+) -> Result<Option<Value>> {
+    Ok(compare_operand_list(
+        ehx,
+        b,
+        span,
+        arg_list_value,
+        Comparison::Eq,
+    ))
+}
+
+pub fn num_gt(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    arg_list_value: &Value,
+) -> Result<Option<Value>> {
+    Ok(compare_operand_list(
+        ehx,
+        b,
+        span,
+        arg_list_value,
+        Comparison::Gt,
+    ))
+}
+
+pub fn num_ge(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    arg_list_value: &Value,
+) -> Result<Option<Value>> {
+    Ok(compare_operand_list(
+        ehx,
+        b,
+        span,
+        arg_list_value,
+        Comparison::Ge,
     ))
 }

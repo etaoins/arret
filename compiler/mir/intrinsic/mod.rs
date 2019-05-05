@@ -1,5 +1,6 @@
 mod list;
 mod math;
+mod num_utils;
 mod number;
 mod testing;
 
@@ -67,5 +68,10 @@ define_build_intrinsics! {
     "rem" => math::rem,
 
     "int" => number::int,
-    "float" => number::float
+    "float" => number::float,
+    "<" => number::num_lt,
+    "<=" => number::num_le,
+    "==" => number::num_eq,
+    ">" => number::num_gt,
+    ">=" => number::num_ge
 }

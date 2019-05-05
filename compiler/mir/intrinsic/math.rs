@@ -21,49 +21,17 @@
 use arret_syntax::span::Span;
 
 use arret_runtime::abitype;
-use arret_runtime::boxed;
 
 use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::error::Result;
 use crate::mir::eval_hir::EvalHirCtx;
-use crate::mir::intrinsic::number::num_value_to_float_reg;
+use crate::mir::intrinsic::num_utils::{num_value_to_float_reg, NumOperand};
 use crate::mir::ops::{BinaryOp, OpKind, RegId};
 
 use crate::mir::value;
 use crate::mir::value::build_reg::value_to_reg;
 use crate::mir::value::list::SizedListIterator;
-use crate::mir::value::types::possible_type_tags_for_value;
 use crate::mir::value::Value;
-
-/// Represents a numerical operand of a known type
-enum NumOperand {
-    Int(BuiltReg),
-    Float(BuiltReg),
-}
-
-impl NumOperand {
-    /// Attempts to build numerical operand from a value
-    ///
-    /// If the value isn't a definite `Int` or `Float` this will return `None`
-    fn try_from_value(
-        ehx: &mut EvalHirCtx,
-        b: &mut Builder,
-        span: Span,
-        value: Value,
-    ) -> Option<NumOperand> {
-        let possible_type_tags = possible_type_tags_for_value(&value);
-
-        if possible_type_tags == boxed::TypeTag::Int.into() {
-            let int64_reg = value_to_reg(ehx, b, span, &value, &abitype::ABIType::Int);
-            Some(NumOperand::Int(int64_reg))
-        } else if possible_type_tags == boxed::TypeTag::Float.into() {
-            let float_reg = value_to_reg(ehx, b, span, &value, &abitype::ABIType::Float);
-            Some(NumOperand::Float(float_reg))
-        } else {
-            None
-        }
-    }
-}
 
 /// Folds a series of numerical operands as `Float`s
 ///
@@ -112,7 +80,7 @@ where
     F: Fn(RegId, BinaryOp) -> OpKind + Copy,
 {
     while let Some(value) = list_iter.next(b, span) {
-        let operand = NumOperand::try_from_value(ehx, b, span, value)?;
+        let operand = NumOperand::try_from_value(ehx, b, span, &value)?;
 
         acc_int_reg = match operand {
             NumOperand::Int(operand_int_reg) => b.push_reg(
@@ -161,7 +129,7 @@ where
     F: Fn(RegId, BinaryOp) -> OpKind + Copy,
 {
     let initial_value = list_iter.next(b, span).unwrap();
-    let initial_operand = NumOperand::try_from_value(ehx, b, span, initial_value)?;
+    let initial_operand = NumOperand::try_from_value(ehx, b, span, &initial_value)?;
 
     match initial_operand {
         NumOperand::Int(int_reg) => {
@@ -291,7 +259,7 @@ pub fn div(
     let initial_value = list_iter.next(b, span).unwrap();
     let initial_reg = value_to_reg(ehx, b, span, &initial_value, &abitype::ABIType::Float);
 
-    let result_reg = if list_iter.len() == 0 {
+    let result_reg = if list_iter.is_empty() {
         // Rewrite `(/ x)` to `(/ 1.0 x)`
         let const_one_reg = b.push_reg(span, OpKind::ConstFloat, 1.0f64);
 

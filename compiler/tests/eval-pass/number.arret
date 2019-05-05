@@ -93,5 +93,4 @@
   (test-infinite?)
   (test-float)
   (test-int)
-  (test-comparisons)
-  ())
+  (test-comparisons))
