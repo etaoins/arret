@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use arret_syntax::span::{Span, EMPTY_SPAN};
+use arret_syntax::span::Span;
 
 use crate::hir::error::{Error, ErrorKind};
 use crate::hir::macros::MacroId;
@@ -23,7 +23,7 @@ pub enum Binding {
 }
 
 struct SpannedBinding {
-    span: Span,
+    span: Option<Span>,
     binding: Binding,
 }
 
@@ -54,7 +54,7 @@ impl<'parent> Scope<'parent> {
                 (
                     Ident::new(Self::root_ns_id(), (*name).into()),
                     SpannedBinding {
-                        span: EMPTY_SPAN,
+                        span: None,
                         binding: binding.clone(),
                     },
                 )
@@ -152,7 +152,10 @@ impl<'parent> Scope<'parent> {
         self.entries.reserve(new_bindings.size_hint().0);
 
         for (ident, binding) in new_bindings {
-            let entry = SpannedBinding { span, binding };
+            let entry = SpannedBinding {
+                span: Some(span),
+                binding,
+            };
 
             match self.entries.entry(ident) {
                 Entry::Occupied(mut occupied) => {
@@ -178,7 +181,13 @@ impl<'parent> Scope<'parent> {
 
     /// Unconditionally replaces a binding
     pub fn replace_binding(&mut self, span: Span, ident: Ident, binding: Binding) {
-        self.entries.insert(ident, SpannedBinding { span, binding });
+        self.entries.insert(
+            ident,
+            SpannedBinding {
+                span: Some(span),
+                binding,
+            },
+        );
     }
 
     pub fn insert_var(&mut self, span: Span, ident: Ident, var_id: VarId) -> Result<(), Error> {

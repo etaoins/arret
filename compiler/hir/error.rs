@@ -2,7 +2,7 @@ use std::{error, fmt, io, path, result};
 
 use arret_syntax::datum::DataStr;
 use arret_syntax::error::Error as SyntaxError;
-use arret_syntax::span::{Span, EMPTY_SPAN};
+use arret_syntax::span::Span;
 
 use crate::reporting::{LocTrace, Reportable, Severity};
 
@@ -23,7 +23,7 @@ pub enum ErrorKind {
     PackageNotFound,
     ModuleNotFound(Box<path::Path>),
     NoMacroRule,
-    DuplicateDef(Span, DataStr),
+    DuplicateDef(Option<Span>, DataStr),
     MultipleZeroOrMoreMatch(Span),
     NoVecDestruc,
     ValueAsTy,
@@ -115,15 +115,7 @@ impl Reportable for Error {
 
     fn associated_report(&self) -> Option<Box<dyn Reportable>> {
         match self.kind {
-            ErrorKind::DuplicateDef(span, _) => {
-                if span == EMPTY_SPAN {
-                    // Some definitions (e.g. `import`) are magically inserted in to the scope. They
-                    // won't have a span.
-                    None
-                } else {
-                    Some(Box::new(FirstDefHelp { span }))
-                }
-            }
+            ErrorKind::DuplicateDef(Some(span), _) => Some(Box::new(FirstDefHelp { span })),
             ErrorKind::MultipleZeroOrMoreMatch(span) => Some(Box::new(FirstDefHelp { span })),
             ErrorKind::SyntaxError(ref err) => err.associated_report(),
             _ => None,

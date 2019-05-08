@@ -117,7 +117,7 @@ impl<'data> FindVarsCtx<'data> {
             if let Some(old_span) = var_spans.insert(ident, span) {
                 return Err(Error::new(
                     span,
-                    ErrorKind::DuplicateDef(old_span, ident.name().clone()),
+                    ErrorKind::DuplicateDef(Some(old_span), ident.name().clone()),
                 ));
             }
         }
