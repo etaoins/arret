@@ -1,2 +1,8 @@
 /target/
 /.git
+
+# These are build files that aren't needed inside the Docker container. Ignore them so we don't
+# trigger a recompile when experimenting with Docker
+/.dockerignore
+/docker-compose.yml
+/Dockerfile
