@@ -2,7 +2,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arret_syntax::datum::Datum;
-use arret_syntax::span::{Span, EMPTY_SPAN};
+use arret_syntax::span::Span;
+
+#[cfg(test)]
+use arret_syntax::span::EMPTY_SPAN;
 
 use crate::rfi;
 use crate::source::SourceFile;
@@ -284,13 +287,13 @@ where
         outputs.push(binder(&mut scope, target_datum, value_datum)?);
     }
 
-    let body_expr = lower_body(&scope, EMPTY_SPAN, arg_iter)?;
+    let body_expr = lower_body(&scope, arg_iter)?;
 
     // This is to build nested `Let` expressions. Types/macros don't need this
     Ok(outputs.into_iter().rfold(body_expr, fold_output))
 }
 
-fn lower_body(scope: &Scope<'_>, span: Span, body_data: NsDataIter) -> Result<Expr<Lowered>> {
+fn lower_body(scope: &Scope<'_>, body_data: NsDataIter) -> Result<Expr<Lowered>> {
     let mut flattened_exprs = vec![];
 
     for body_datum in body_data {
@@ -310,7 +313,7 @@ fn lower_body(scope: &Scope<'_>, span: Span, body_data: NsDataIter) -> Result<Ex
     if flattened_exprs.len() == 1 {
         Ok(flattened_exprs.pop().unwrap())
     } else {
-        Ok(Expr::new(span, ExprKind::Do(flattened_exprs)))
+        Ok(ExprKind::Do(flattened_exprs).into())
     }
 }
 
@@ -325,14 +328,13 @@ fn lower_let(scope: &Scope<'_>, span: Span, arg_iter: NsDataIter) -> Result<Expr
             Ok((destruc, value_expr))
         },
         |body_expr, (destruc, value_expr)| {
-            Expr::new(
+            ExprKind::Let(Box::new(Let {
                 span,
-                ExprKind::Let(Box::new(Let {
-                    destruc,
-                    value_expr,
-                    body_expr,
-                })),
-            )
+                destruc,
+                value_expr,
+                body_expr,
+            }))
+            .into()
         },
     )
 }
@@ -392,19 +394,18 @@ fn lower_fun(
     }
 
     // Extract the body
-    let body_expr = lower_body(&fun_scope, EMPTY_SPAN, arg_iter)?;
+    let body_expr = lower_body(&fun_scope, arg_iter)?;
 
-    Ok(Expr::new(
+    Ok(ExprKind::Fun(Box::new(Fun {
         span,
-        ExprKind::Fun(Box::new(Fun {
-            pvar_ids,
-            tvar_ids,
-            purity,
-            params,
-            ret_ty,
-            body_expr,
-        })),
-    ))
+        pvar_ids,
+        tvar_ids,
+        purity,
+        params,
+        ret_ty,
+        body_expr,
+    }))
+    .into())
 }
 
 fn lower_expr_prim_apply(
@@ -429,16 +430,15 @@ fn lower_expr_prim_apply(
         Prim::If => {
             expect_arg_count(span, 3, arg_iter.len())?;
 
-            Ok(Expr::new(
+            Ok(ExprKind::Cond(Box::new(Cond {
                 span,
-                ExprKind::Cond(Box::new(Cond {
-                    test_expr: lower_expr(scope, arg_iter.next().unwrap())?,
-                    true_expr: lower_expr(scope, arg_iter.next().unwrap())?,
-                    false_expr: lower_expr(scope, arg_iter.next().unwrap())?,
-                })),
-            ))
+                test_expr: lower_expr(scope, arg_iter.next().unwrap())?,
+                true_expr: lower_expr(scope, arg_iter.next().unwrap())?,
+                false_expr: lower_expr(scope, arg_iter.next().unwrap())?,
+            }))
+            .into())
         }
-        Prim::Do => lower_body(scope, span, arg_iter),
+        Prim::Do => lower_body(scope, arg_iter),
         Prim::CompileError => Err(lower_user_compile_error(span, arg_iter)),
         Prim::MacroRules | Prim::All => Err(Error::new(span, ErrorKind::PrimRef)),
     }
@@ -461,23 +461,22 @@ fn lower_expr_apply(
         None => None,
     };
 
-    Ok(Expr::new(
+    Ok(ExprKind::App(Box::new(App {
         span,
-        ExprKind::App(Box::new(App {
-            fun_expr,
-            ty_args: (),
-            fixed_arg_exprs,
-            rest_arg_expr,
-        })),
-    ))
+        fun_expr,
+        ty_args: (),
+        fixed_arg_exprs,
+        rest_arg_expr,
+    }))
+    .into())
 }
 
 fn lower_expr(scope: &Scope<'_>, datum: NsDatum) -> Result<Expr<Lowered>> {
     match datum {
         NsDatum::Ident(span, ident) => match scope.get_or_err(span, &ident)? {
-            Binding::Var(id) => Ok(Expr::new(span, ExprKind::Ref(*id))),
-            Binding::TyPred(test_ty) => Ok(Expr::new(span, ExprKind::TyPred(*test_ty))),
-            Binding::EqPred => Ok(Expr::new(span, ExprKind::EqPred)),
+            Binding::Var(id) => Ok(ExprKind::Ref(span, *id).into()),
+            Binding::TyPred(test_ty) => Ok(ExprKind::TyPred(span, *test_ty).into()),
+            Binding::EqPred => Ok(ExprKind::EqPred(span).into()),
             Binding::Prim(_) => Err(Error::new(span, ErrorKind::PrimRef)),
             Binding::Ty(_) | Binding::TyCons(_) | Binding::Purity(_) => {
                 Err(Error::new(span, ErrorKind::TyRef))
@@ -505,7 +504,7 @@ fn lower_expr(scope: &Scope<'_>, datum: NsDatum) -> Result<Expr<Lowered>> {
                             expand_macro(&mut macro_scope, span, mac, data_iter.as_slice())?;
 
                         return lower_expr(&macro_scope, expanded_datum)
-                            .map(|expr| Expr::new(span, ExprKind::MacroExpand(Box::new(expr))))
+                            .map(|expr| ExprKind::MacroExpand(span, Box::new(expr)).into())
                             .map_err(|e| e.with_macro_invocation_span(span));
                     }
                     _ => {}
@@ -588,7 +587,7 @@ impl<'ccx> LoweringCtx<'ccx> {
                         ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into(),
                     ),
                 ),
-                value_expr: Expr::new(span, ExprKind::RustFun(Box::new(rust_fun.clone()))),
+                value_expr: ExprKind::RustFun(Box::new(rust_fun.clone())).into(),
             };
 
             defs.push(def);
@@ -996,14 +995,13 @@ mod test {
         let destruc =
             destruc::Destruc::Scalar(t2s(t), destruc::Scalar::new(None, "_".into(), DeclTy::Free));
 
-        let expected = Expr::new(
-            t2s(u),
-            ExprKind::Let(Box::new(Let {
-                destruc,
-                value_expr: Datum::Int(t2s(v), 1).into(),
-                body_expr: Expr::new(EMPTY_SPAN, ExprKind::Do(vec![])),
-            })),
-        );
+        let expected: Expr<_> = ExprKind::Let(Box::new(Let {
+            span: t2s(u),
+            destruc,
+            value_expr: Datum::Int(t2s(v), 1).into(),
+            body_expr: ExprKind::Do(vec![]).into(),
+        }))
+        .into();
 
         assert_eq!(expected, expr_for_str(j));
     }
@@ -1013,17 +1011,16 @@ mod test {
         let j = "(fn ())";
         let t = "^^^^^^^";
 
-        let expected = Expr::new(
-            t2s(t),
-            ExprKind::Fun(Box::new(Fun {
-                pvar_ids: purity::PVarIds::new(),
-                tvar_ids: ty::TVarIds::new(),
-                purity: DeclPurity::Free,
-                params: destruc::List::new(vec![], None),
-                ret_ty: DeclTy::Free,
-                body_expr: Expr::new(EMPTY_SPAN, ExprKind::Do(vec![])),
-            })),
-        );
+        let expected: Expr<_> = ExprKind::Fun(Box::new(Fun {
+            span: t2s(t),
+            pvar_ids: purity::PVarIds::new(),
+            tvar_ids: ty::TVarIds::new(),
+            purity: DeclPurity::Free,
+            params: destruc::List::new(vec![], None),
+            ret_ty: DeclTy::Free,
+            body_expr: ExprKind::Do(vec![]).into(),
+        }))
+        .into();
 
         assert_eq!(expected, expr_for_str(j));
     }
@@ -1034,17 +1031,16 @@ mod test {
         let t = "^^^^^^^^^^^^^^";
         let u = "            ^ ";
 
-        let expected = Expr::new(
-            t2s(t),
-            ExprKind::Fun(Box::new(Fun {
-                pvar_ids: purity::PVarIds::new(),
-                tvar_ids: ty::TVarIds::new(),
-                purity: Purity::Pure.into(),
-                params: destruc::List::new(vec![], None),
-                ret_ty: DeclTy::Free,
-                body_expr: Datum::Int(t2s(u), 1).into(),
-            })),
-        );
+        let expected: Expr<_> = ExprKind::Fun(Box::new(Fun {
+            span: t2s(t),
+            pvar_ids: purity::PVarIds::new(),
+            tvar_ids: ty::TVarIds::new(),
+            purity: Purity::Pure.into(),
+            params: destruc::List::new(vec![], None),
+            ret_ty: DeclTy::Free,
+            body_expr: Datum::Int(t2s(u), 1).into(),
+        }))
+        .into();
 
         assert_eq!(expected, expr_for_str(j));
     }
@@ -1055,17 +1051,16 @@ mod test {
         let t = "^^^^^^^^^^^^^^^^";
         let u = "              ^ ";
 
-        let expected = Expr::new(
-            t2s(t),
-            ExprKind::Fun(Box::new(Fun {
-                pvar_ids: purity::PVarIds::new(),
-                tvar_ids: ty::TVarIds::new(),
-                purity: Purity::Pure.into(),
-                params: destruc::List::new(vec![], None),
-                ret_ty: ty::Ty::Int.into(),
-                body_expr: Datum::Int(t2s(u), 1).into(),
-            })),
-        );
+        let expected: Expr<_> = ExprKind::Fun(Box::new(Fun {
+            span: t2s(t),
+            pvar_ids: purity::PVarIds::new(),
+            tvar_ids: ty::TVarIds::new(),
+            purity: Purity::Pure.into(),
+            params: destruc::List::new(vec![], None),
+            ret_ty: ty::Ty::Int.into(),
+            body_expr: Datum::Int(t2s(u), 1).into(),
+        }))
+        .into();
 
         assert_eq!(expected, expr_for_str(j));
     }
@@ -1078,15 +1073,14 @@ mod test {
         let v = "   ^   ";
         let w = "     ^ ";
 
-        let expected = Expr::new(
-            t2s(t),
-            ExprKind::App(Box::new(App {
-                fun_expr: Datum::Int(t2s(u), 1).into(),
-                ty_args: (),
-                fixed_arg_exprs: vec![Datum::Int(t2s(v), 2).into(), Datum::Int(t2s(w), 3).into()],
-                rest_arg_expr: None,
-            })),
-        );
+        let expected: Expr<_> = ExprKind::App(Box::new(App {
+            span: t2s(t),
+            fun_expr: Datum::Int(t2s(u), 1).into(),
+            ty_args: (),
+            fixed_arg_exprs: vec![Datum::Int(t2s(v), 2).into(), Datum::Int(t2s(w), 3).into()],
+            rest_arg_expr: None,
+        }))
+        .into();
 
         assert_eq!(expected, expr_for_str(j));
     }
@@ -1099,15 +1093,14 @@ mod test {
         let v = "   ^     ";
         let w = "       ^ ";
 
-        let expected = Expr::new(
-            t2s(t),
-            ExprKind::App(Box::new(App {
-                fun_expr: Datum::Int(t2s(u), 1).into(),
-                ty_args: (),
-                fixed_arg_exprs: vec![Datum::Int(t2s(v), 2).into()],
-                rest_arg_expr: Some(Datum::Int(t2s(w), 3).into()),
-            })),
-        );
+        let expected: Expr<_> = ExprKind::App(Box::new(App {
+            span: t2s(t),
+            fun_expr: Datum::Int(t2s(u), 1).into(),
+            ty_args: (),
+            fixed_arg_exprs: vec![Datum::Int(t2s(v), 2).into()],
+            rest_arg_expr: Some(Datum::Int(t2s(w), 3).into()),
+        }))
+        .into();
 
         assert_eq!(expected, expr_for_str(j));
     }
@@ -1120,14 +1113,13 @@ mod test {
         let v = "         ^   ";
         let w = "           ^ ";
 
-        let expected = Expr::new(
-            t2s(t),
-            ExprKind::Cond(Box::new(Cond {
-                test_expr: Expr::new(t2s(u), ExprKind::Lit(Datum::Bool(t2s(u), true))),
-                true_expr: Expr::new(t2s(v), ExprKind::Lit(Datum::Int(t2s(v), 1))),
-                false_expr: Expr::new(t2s(w), ExprKind::Lit(Datum::Int(t2s(w), 2))),
-            })),
-        );
+        let expected: Expr<_> = ExprKind::Cond(Box::new(Cond {
+            span: t2s(t),
+            test_expr: ExprKind::Lit(Datum::Bool(t2s(u), true)).into(),
+            true_expr: ExprKind::Lit(Datum::Int(t2s(v), 1)).into(),
+            false_expr: ExprKind::Lit(Datum::Int(t2s(w), 2)).into(),
+        }))
+        .into();
 
         assert_eq!(expected, expr_for_str(j));
     }
@@ -1138,10 +1130,8 @@ mod test {
         let t = "                                     ^^^^^ ";
         let u = "                                ^          ";
 
-        let expected = Expr::new(
-            t2s(t),
-            ExprKind::MacroExpand(Box::new(Datum::Int(t2s(u), 1).into())),
-        );
+        let expected: Expr<_> =
+            ExprKind::MacroExpand(t2s(t), Box::new(Datum::Int(t2s(u), 1).into())).into();
         assert_eq!(expected, expr_for_str(j));
     }
 
@@ -1162,7 +1152,7 @@ mod test {
         let j = "bool?";
         let t = "^^^^^";
 
-        let expected = Expr::new(t2s(t), ExprKind::TyPred(ty::pred::TestTy::Bool));
+        let expected: Expr<_> = ExprKind::TyPred(t2s(t), ty::pred::TestTy::Bool).into();
         assert_eq!(expected, expr_for_str(j));
     }
 
@@ -1171,7 +1161,7 @@ mod test {
         let j = "=";
         let t = "^";
 
-        let expected = Expr::new(t2s(t), ExprKind::EqPred);
+        let expected: Expr<_> = ExprKind::EqPred(t2s(t)).into();
         assert_eq!(expected, expr_for_str(j));
     }
 }

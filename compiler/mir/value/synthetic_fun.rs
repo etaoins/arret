@@ -24,11 +24,12 @@ fn new_eq_pred_arret_fun() -> value::ArretFun {
         .collect();
 
     value::ArretFun::new(
-        EMPTY_SPAN,
         Some("=".into()),
         TyArgs::empty(),
         Closure::empty(),
         hir::Fun {
+            span: EMPTY_SPAN,
+
             pvar_ids: purity::PVarIds::new(),
             tvar_ids: ty::TVarIds::new(),
 
@@ -37,25 +38,22 @@ fn new_eq_pred_arret_fun() -> value::ArretFun {
             ret_ty: ty::Ty::Bool.into(),
 
             body_expr: hir::Expr {
-                span: EMPTY_SPAN,
                 result_ty: ty::Ty::Bool.into(),
                 kind: hir::ExprKind::App(Box::new(hir::App {
+                    span: EMPTY_SPAN,
                     fun_expr: hir::Expr {
-                        span: EMPTY_SPAN,
                         result_ty: ty::Ty::EqPred.into(),
-                        kind: hir::ExprKind::EqPred,
+                        kind: hir::ExprKind::EqPred(EMPTY_SPAN),
                     },
                     ty_args: TyArgs::empty(),
                     fixed_arg_exprs: vec![
                         hir::Expr {
-                            span: EMPTY_SPAN,
                             result_ty: ty::Ty::Any.into(),
-                            kind: hir::ExprKind::Ref(left_var_id),
+                            kind: hir::ExprKind::Ref(EMPTY_SPAN, left_var_id),
                         },
                         hir::Expr {
-                            span: EMPTY_SPAN,
                             result_ty: ty::Ty::Any.into(),
-                            kind: hir::ExprKind::Ref(right_var_id),
+                            kind: hir::ExprKind::Ref(EMPTY_SPAN, right_var_id),
                         },
                     ],
                     rest_arg_expr: None,
@@ -69,11 +67,12 @@ fn new_ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
     let subject_var_id = hir::VarId::alloc();
 
     value::ArretFun::new(
-        EMPTY_SPAN,
         Some(test_ty.to_str().into()),
         TyArgs::empty(),
         Closure::empty(),
         hir::Fun {
+            span: EMPTY_SPAN,
+
             pvar_ids: purity::PVarIds::new(),
             tvar_ids: ty::TVarIds::new(),
 
@@ -92,19 +91,17 @@ fn new_ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
             ret_ty: ty::Ty::Bool.into(),
 
             body_expr: hir::Expr {
-                span: EMPTY_SPAN,
                 result_ty: ty::Ty::Bool.into(),
                 kind: hir::ExprKind::App(Box::new(hir::App {
+                    span: EMPTY_SPAN,
                     fun_expr: hir::Expr {
-                        span: EMPTY_SPAN,
                         result_ty: ty::Ty::TyPred(test_ty).into(),
-                        kind: hir::ExprKind::TyPred(test_ty),
+                        kind: hir::ExprKind::TyPred(EMPTY_SPAN, test_ty),
                     },
                     ty_args: TyArgs::empty(),
                     fixed_arg_exprs: vec![hir::Expr {
-                        span: EMPTY_SPAN,
                         result_ty: ty::Ty::Any.into(),
-                        kind: hir::ExprKind::Ref(subject_var_id),
+                        kind: hir::ExprKind::Ref(EMPTY_SPAN, subject_var_id),
                     }],
                     rest_arg_expr: None,
                 })),

@@ -49,9 +49,8 @@ impl InferredNode {
 
         InferredNode {
             expr: hir::Expr {
-                span,
                 result_ty: poly_type,
-                kind: hir::ExprKind::Ref(var_id),
+                kind: hir::ExprKind::Ref(span, var_id),
             },
             type_conds,
         }
@@ -243,7 +242,6 @@ fn keep_exprs_for_side_effects(
     use std::iter;
 
     hir::Expr {
-        span: EMPTY_SPAN,
         result_ty: value_expr.result_ty.clone(),
         kind: hir::ExprKind::Do(
             side_effect_exprs
@@ -310,7 +308,6 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         Ok(InferredNode {
             expr: hir::Expr {
-                span: datum.span(),
                 result_ty: lit_type,
                 kind: hir::ExprKind::Lit(datum),
             },
@@ -365,12 +362,12 @@ impl<'types> RecursiveDefsCtx<'types> {
         &mut self,
         pv: &mut PurityVar,
         required_type: &ty::Ref<ty::Poly>,
-        span: Span,
         cond: hir::Cond<hir::Lowered>,
     ) -> Result<InferredNode> {
         use std::iter;
 
         let hir::Cond {
+            span,
             test_expr,
             true_expr,
             false_expr,
@@ -468,9 +465,9 @@ impl<'types> RecursiveDefsCtx<'types> {
 
                 Ok(InferredNode {
                     expr: hir::Expr {
-                        span,
                         result_ty,
                         kind: hir::ExprKind::Cond(Box::new(hir::Cond {
+                            span,
                             test_expr: test_node.expr,
                             true_expr: true_node.expr,
                             false_expr: false_node.expr,
@@ -493,9 +490,8 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         Ok(InferredNode {
             expr: hir::Expr {
-                span,
                 result_ty: pred_type,
-                kind: hir::ExprKind::TyPred(test_ty),
+                kind: hir::ExprKind::TyPred(span, test_ty),
             },
             type_conds: vec![],
         })
@@ -507,9 +503,8 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         Ok(InferredNode {
             expr: hir::Expr {
-                span,
                 result_ty: pred_type,
-                kind: hir::ExprKind::EqPred,
+                kind: hir::ExprKind::EqPred(span),
             },
             type_conds: vec![],
         })
@@ -579,7 +574,6 @@ impl<'types> RecursiveDefsCtx<'types> {
         &mut self,
         pv: &mut PurityVar,
         required_type: &ty::Ref<ty::Poly>,
-        span: Span,
         mut exprs: Vec<hir::Expr<hir::Lowered>>,
     ) -> Result<InferredNode> {
         let terminal_expr = if let Some(terminal_expr) = exprs.pop() {
@@ -587,7 +581,6 @@ impl<'types> RecursiveDefsCtx<'types> {
         } else {
             return Ok(InferredNode {
                 expr: hir::Expr {
-                    span,
                     result_ty: ty::Ty::unit().into(),
                     kind: hir::ExprKind::Do(vec![]),
                 },
@@ -613,7 +606,6 @@ impl<'types> RecursiveDefsCtx<'types> {
 
             Ok(InferredNode {
                 expr: hir::Expr {
-                    span,
                     result_ty: ty::Ty::never().into(),
                     kind: hir::ExprKind::Do(inferred_exprs),
                 },
@@ -626,7 +618,6 @@ impl<'types> RecursiveDefsCtx<'types> {
 
             Ok(InferredNode {
                 expr: hir::Expr {
-                    span,
                     result_ty,
                     kind: hir::ExprKind::Do(inferred_exprs),
                 },
@@ -643,10 +634,11 @@ impl<'types> RecursiveDefsCtx<'types> {
     fn visit_fun(
         &mut self,
         required_type: &ty::Ref<ty::Poly>,
-        span: Span,
         decl_fun: hir::Fun<hir::Lowered>,
         self_var_id: Option<hir::VarId>,
     ) -> Result<InferredNode> {
+        let span = decl_fun.span;
+
         // This is set to false if we encounter any free types in our params or ret
         let mut decl_tys_are_known = true;
 
@@ -746,6 +738,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         .into();
 
         let revealed_fun = hir::Fun::<hir::Inferred> {
+            span,
             pvar_ids: decl_fun.pvar_ids,
             tvar_ids: decl_fun.tvar_ids,
             purity: revealed_purity,
@@ -758,7 +751,6 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         Ok(InferredNode {
             expr: hir::Expr {
-                span,
                 result_ty: revealed_type,
                 kind: hir::ExprKind::Fun(Box::new(revealed_fun)),
             },
@@ -940,9 +932,9 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         Ok(InferredNode {
             expr: hir::Expr {
-                span,
                 result_ty: ret_type,
                 kind: hir::ExprKind::App(Box::new(hir::App {
+                    span,
                     fun_expr,
                     ty_args: ret_pta,
                     fixed_arg_exprs: inferred_fixed_arg_exprs,
@@ -966,7 +958,7 @@ impl<'types> RecursiveDefsCtx<'types> {
     ) -> Result<InferredNode> {
         use std::iter;
 
-        let subject_var_id = if let hir::ExprKind::Ref(var_id) = &subject_expr.kind {
+        let subject_var_id = if let hir::ExprKind::Ref(_, var_id) = &subject_expr.kind {
             Some(*var_id)
         } else {
             None
@@ -989,7 +981,6 @@ impl<'types> RecursiveDefsCtx<'types> {
                     expr: keep_exprs_for_side_effects(
                         iter::once(subject_node.expr),
                         hir::Expr {
-                            span,
                             result_ty,
                             kind: hir::ExprKind::Lit(Datum::Bool(span, known_result)),
                         },
@@ -1029,9 +1020,9 @@ impl<'types> RecursiveDefsCtx<'types> {
 
                 Ok(InferredNode {
                     expr: hir::Expr {
-                        span,
                         result_ty: poly_type,
                         kind: hir::ExprKind::App(Box::new(hir::App {
+                            span,
                             fun_expr,
                             ty_args: TyArgs::empty(),
                             fixed_arg_exprs: vec![subject_node.expr],
@@ -1081,7 +1072,6 @@ impl<'types> RecursiveDefsCtx<'types> {
                     expr: keep_exprs_for_side_effects(
                         iter::once(subject_list_node.expr),
                         hir::Expr {
-                            span,
                             result_ty,
                             kind: hir::ExprKind::Lit(Datum::Bool(span, known_bool)),
                         },
@@ -1099,9 +1089,9 @@ impl<'types> RecursiveDefsCtx<'types> {
 
                 Ok(InferredNode {
                     expr: hir::Expr {
-                        span,
                         result_ty: poly_type,
                         kind: hir::ExprKind::App(Box::new(hir::App {
+                            span,
                             fun_expr,
                             ty_args: TyArgs::empty(),
                             fixed_arg_exprs: vec![],
@@ -1128,13 +1118,13 @@ impl<'types> RecursiveDefsCtx<'types> {
         use crate::ty::props::is_literal;
         use std::iter;
 
-        let left_var_id = if let hir::ExprKind::Ref(var_id) = &left_expr.kind {
+        let left_var_id = if let hir::ExprKind::Ref(_, var_id) = &left_expr.kind {
             Some(*var_id)
         } else {
             None
         };
 
-        let right_var_id = if let hir::ExprKind::Ref(var_id) = &right_expr.kind {
+        let right_var_id = if let hir::ExprKind::Ref(_, var_id) = &right_expr.kind {
             Some(*var_id)
         } else {
             None
@@ -1162,7 +1152,6 @@ impl<'types> RecursiveDefsCtx<'types> {
                 expr: keep_exprs_for_side_effects(
                     iter::once(left_node.expr).chain(iter::once(right_node.expr)),
                     hir::Expr {
-                        span,
                         result_ty,
                         kind: hir::ExprKind::Lit(Datum::Bool(span, true)),
                     },
@@ -1184,7 +1173,6 @@ impl<'types> RecursiveDefsCtx<'types> {
                     expr: keep_exprs_for_side_effects(
                         iter::once(left_node.expr).chain(iter::once(right_node.expr)),
                         hir::Expr {
-                            span,
                             result_ty,
                             kind: hir::ExprKind::Lit(Datum::Bool(span, false)),
                         },
@@ -1240,9 +1228,9 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         Ok(InferredNode {
             expr: hir::Expr {
-                span,
                 result_ty,
                 kind: hir::ExprKind::App(Box::new(hir::App {
+                    span,
                     fun_expr,
                     ty_args: TyArgs::empty(),
                     fixed_arg_exprs: vec![left_node.expr, right_node.expr],
@@ -1257,10 +1245,10 @@ impl<'types> RecursiveDefsCtx<'types> {
         &mut self,
         pv: &mut PurityVar,
         required_type: &ty::Ref<ty::Poly>,
-        span: Span,
         app: hir::App<hir::Lowered>,
     ) -> Result<InferredNode> {
         let hir::App {
+            span,
             fun_expr,
             mut fixed_arg_exprs,
             rest_arg_expr,
@@ -1356,10 +1344,10 @@ impl<'types> RecursiveDefsCtx<'types> {
         &mut self,
         pv: &mut PurityVar,
         required_type: &ty::Ref<ty::Poly>,
-        span: Span,
         hir_let: hir::Let<hir::Lowered>,
     ) -> Result<InferredNode> {
         let hir::Let {
+            span,
             destruc,
             value_expr,
             body_expr,
@@ -1394,9 +1382,9 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         Ok(InferredNode {
             expr: hir::Expr {
-                span,
                 result_ty,
                 kind: hir::ExprKind::Let(Box::new(hir::Let {
+                    span,
                     destruc: destruc::subst_destruc(&mut inferred_free_types, destruc),
                     value_expr: value_node.expr,
                     body_expr: body_node.expr,
@@ -1409,9 +1397,10 @@ impl<'types> RecursiveDefsCtx<'types> {
     fn visit_rust_fun(
         &self,
         required_type: &ty::Ref<ty::Poly>,
-        span: Span,
         rust_fun: Box<rfi::Fun>,
     ) -> Result<InferredNode> {
+        let span = rust_fun.span();
+
         // Rust functions have their types validated by the RFI system when they're loaded
         // We just need to make sure we satisfy `required_type` and convert to an `InferredNode`
         let poly_type = ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into();
@@ -1419,7 +1408,6 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         Ok(InferredNode {
             expr: hir::Expr {
-                span,
                 result_ty: poly_type,
                 kind: hir::ExprKind::RustFun(rust_fun),
             },
@@ -1434,27 +1422,24 @@ impl<'types> RecursiveDefsCtx<'types> {
         expr: hir::Expr<hir::Lowered>,
         self_var_id: Option<hir::VarId>,
     ) -> Result<InferredNode> {
-        let hir::Expr { span, kind, .. } = expr;
-
         use crate::hir::ExprKind;
-        match kind {
+        match expr.kind {
             ExprKind::Lit(datum) => self.visit_lit(required_type, datum),
-            ExprKind::Cond(cond) => self.visit_cond(pv, required_type, span, *cond),
-            ExprKind::Do(exprs) => self.visit_do(pv, required_type, span, exprs),
-            ExprKind::Fun(fun) => self.visit_fun(required_type, span, *fun, self_var_id),
-            ExprKind::RustFun(rust_fun) => self.visit_rust_fun(required_type, span, rust_fun),
-            ExprKind::TyPred(test_type) => self.visit_ty_pred(required_type, span, test_type),
-            ExprKind::EqPred => self.visit_eq_pred(required_type, span),
-            ExprKind::Let(hir_let) => self.visit_let(pv, required_type, span, *hir_let),
-            ExprKind::Ref(var_id) => self.visit_ref(required_type, span, var_id),
-            ExprKind::App(app) => self.visit_app(pv, required_type, span, *app),
-            ExprKind::MacroExpand(inner_expr) => self
+            ExprKind::Cond(cond) => self.visit_cond(pv, required_type, *cond),
+            ExprKind::Do(exprs) => self.visit_do(pv, required_type, exprs),
+            ExprKind::Fun(fun) => self.visit_fun(required_type, *fun, self_var_id),
+            ExprKind::RustFun(rust_fun) => self.visit_rust_fun(required_type, rust_fun),
+            ExprKind::TyPred(span, test_type) => self.visit_ty_pred(required_type, span, test_type),
+            ExprKind::EqPred(span) => self.visit_eq_pred(required_type, span),
+            ExprKind::Let(hir_let) => self.visit_let(pv, required_type, *hir_let),
+            ExprKind::Ref(span, var_id) => self.visit_ref(required_type, span, var_id),
+            ExprKind::App(app) => self.visit_app(pv, required_type, *app),
+            ExprKind::MacroExpand(span, inner_expr) => self
                 .visit_expr_with_self_var_id(pv, required_type, *inner_expr, self_var_id)
                 .map(|inferred| InferredNode {
                     expr: hir::Expr {
-                        span,
                         result_ty: inferred.expr.result_ty.clone(),
-                        kind: ExprKind::MacroExpand(Box::new(inferred.expr)),
+                        kind: ExprKind::MacroExpand(span, Box::new(inferred.expr)),
                     },
                     ..inferred
                 })

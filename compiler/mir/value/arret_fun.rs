@@ -1,7 +1,6 @@
 use std::rc::Rc;
 
 use arret_syntax::datum::DataStr;
-use arret_syntax::span::Span;
 
 use crate::hir;
 use crate::mir::closure::Closure;
@@ -13,7 +12,6 @@ new_global_id_type!(ArretFunId);
 #[derive(Clone, Debug)]
 struct ArretFunConsts {
     id: ArretFunId,
-    span: Span,
     source_name: Option<DataStr>,
     env_ty_args: TyArgs<ty::Mono>,
     fun_expr: hir::Fun<hir::Inferred>,
@@ -27,7 +25,6 @@ pub struct ArretFun {
 
 impl ArretFun {
     pub fn new(
-        span: Span,
         source_name: Option<DataStr>,
         env_ty_args: TyArgs<ty::Mono>,
         closure: Closure,
@@ -36,7 +33,6 @@ impl ArretFun {
         Self {
             consts: Rc::new(ArretFunConsts {
                 id: ArretFunId::alloc(),
-                span,
                 source_name,
                 env_ty_args,
                 fun_expr,
@@ -47,10 +43,6 @@ impl ArretFun {
 
     pub fn id(&self) -> ArretFunId {
         self.consts.id
-    }
-
-    pub fn span(&self) -> Span {
-        self.consts.span
     }
 
     pub fn source_name(&self) -> &Option<DataStr> {

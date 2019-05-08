@@ -35,14 +35,14 @@ where
                 visit_exprs(&expr, visitor);
             }
         }
-        ExprKind::MacroExpand(expr) => {
+        ExprKind::MacroExpand(_, expr) => {
             visit_exprs(expr, visitor);
         }
-        ExprKind::Ref(_)
+        ExprKind::Ref(_, _)
         | ExprKind::Lit(_)
         | ExprKind::RustFun(_)
-        | ExprKind::TyPred(_)
-        | ExprKind::EqPred => {
+        | ExprKind::TyPred(_, _)
+        | ExprKind::EqPred(_) => {
             // Terminal expression
         }
     };

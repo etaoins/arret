@@ -49,7 +49,7 @@ pub fn calculate_closure(
     if !local_values.is_empty() {
         // Look for references to variables inside the function
         hir::visitor::visit_exprs(&capturing_expr, &mut |expr| {
-            if let hir::ExprKind::Ref(var_id) = &expr.kind {
+            if let hir::ExprKind::Ref(_, var_id) = &expr.kind {
                 // Avoiding cloning the value if we've already captured
                 if !captured_values.contains_key(var_id) {
                     if let Some(value) = local_values.get(var_id) {
