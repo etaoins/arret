@@ -6,7 +6,7 @@ use std::iter;
 use ansi_term::Colour;
 use ansi_term::Style;
 
-use arret_syntax::span::{Span, EMPTY_SPAN};
+use arret_syntax::span::Span;
 
 use crate::source::{SourceKind, SourceLoader, SourceLoc};
 
@@ -14,11 +14,11 @@ use crate::source::{SourceKind, SourceLoader, SourceLoc};
 #[derive(Debug, PartialEq, Clone)]
 pub struct LocTrace {
     origin: Span,
-    macro_invocation: Span,
+    macro_invocation: Option<Span>,
 }
 
 impl LocTrace {
-    pub fn new(origin: Span, macro_invocation: Span) -> LocTrace {
+    pub fn new(origin: Span, macro_invocation: Option<Span>) -> LocTrace {
         LocTrace {
             origin,
             macro_invocation,
@@ -27,7 +27,7 @@ impl LocTrace {
 
     pub fn with_macro_invocation(self, macro_invocation: Span) -> LocTrace {
         LocTrace {
-            macro_invocation,
+            macro_invocation: Some(macro_invocation),
             ..self
         }
     }
@@ -36,14 +36,14 @@ impl LocTrace {
         self.origin
     }
 
-    pub fn macro_invocation(&self) -> Span {
+    pub fn macro_invocation(&self) -> Option<Span> {
         self.macro_invocation
     }
 }
 
 impl From<Span> for LocTrace {
     fn from(span: Span) -> LocTrace {
-        LocTrace::new(span, EMPTY_SPAN)
+        LocTrace::new(span, None)
     }
 }
 
@@ -143,7 +143,7 @@ pub fn report_to_stderr(source_loader: &SourceLoader, report: &dyn Reportable) {
         print_source_snippet(source_loader, severity, origin);
     }
 
-    if let Some(macro_invocation) = loc_trace.macro_invocation.to_non_empty() {
+    if let Some(macro_invocation) = loc_trace.macro_invocation {
         // Frequently errors will point to the macro arguments.
         // Showing the whole invocation would just be noise.
         if !macro_invocation.contains(origin) {

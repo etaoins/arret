@@ -49,7 +49,7 @@ pub struct LoweredProgram {
 
 struct DeferredDef {
     span: Span,
-    macro_invocation_span: Span,
+    macro_invocation_span: Option<Span>,
     destruc: destruc::Destruc<Lowered>,
     value_datum: NsDatum,
 }
@@ -68,7 +68,7 @@ impl DeferredModulePrim {
     fn with_macro_invocation_span(self, span: Span) -> DeferredModulePrim {
         match self {
             DeferredModulePrim::Def(deferred_def) => DeferredModulePrim::Def(DeferredDef {
-                macro_invocation_span: span,
+                macro_invocation_span: Some(span),
                 ..deferred_def
             }),
             other => other,
@@ -579,7 +579,7 @@ impl<'ccx> LoweringCtx<'ccx> {
 
             let def = Def {
                 span,
-                macro_invocation_span: EMPTY_SPAN,
+                macro_invocation_span: None,
                 destruc: destruc::Destruc::Scalar(
                     span,
                     destruc::Scalar::new(
@@ -657,7 +657,7 @@ impl<'ccx> LoweringCtx<'ccx> {
 
                 let deferred_def = DeferredDef {
                     span,
-                    macro_invocation_span: EMPTY_SPAN,
+                    macro_invocation_span: None,
                     destruc,
                     value_datum,
                 };

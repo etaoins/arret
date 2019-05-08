@@ -169,7 +169,7 @@ pub enum ExprKind<P: Phase> {
 #[derive(PartialEq, Debug)]
 pub struct Def<P: Phase> {
     pub span: Span,
-    pub macro_invocation_span: Span,
+    pub macro_invocation_span: Option<Span>,
     pub destruc: destruc::Destruc<P>,
     pub value_expr: Expr<P>,
 }

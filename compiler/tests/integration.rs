@@ -53,15 +53,18 @@ struct ExpectedReport {
 
 impl ExpectedReport {
     fn matches(&self, actual_report: &dyn Reportable) -> bool {
-        let loc_trace = actual_report.loc_trace();
-        let candidate_spans = &[loc_trace.origin(), loc_trace.macro_invocation()];
+        use std::iter;
 
-        candidate_spans.iter().any(|candidate_span| {
-            self.span.matches(*candidate_span)
-                && actual_report
-                    .message()
-                    .starts_with(&self.message_prefix[..])
-        })
+        let loc_trace = actual_report.loc_trace();
+
+        iter::once(&loc_trace.origin())
+            .chain(loc_trace.macro_invocation().iter())
+            .any(|candidate_span| {
+                self.span.matches(*candidate_span)
+                    && actual_report
+                        .message()
+                        .starts_with(&self.message_prefix[..])
+            })
     }
 }
 
