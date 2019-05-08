@@ -446,7 +446,7 @@ impl EvalHirCtx {
             use std::mem;
 
             let wanted_abi = PolymorphABI::thunk_abi();
-            let ops_fun = ops_for_rust_fun(self, EMPTY_SPAN, rust_fun, wanted_abi);
+            let ops_fun = ops_for_rust_fun(self, rust_fun, wanted_abi);
             let address = self.thunk_jit.compile_fun(
                 &self.private_funs,
                 self.runtime_task.heap_mut().interner_mut(),
@@ -479,7 +479,6 @@ impl EvalHirCtx {
     /// This will return a cached ID if available
     fn id_for_rust_fun(
         &mut self,
-        span: Span,
         rust_fun: &rfi::Fun,
         wanted_abi: PolymorphABI,
     ) -> ops::PrivateFunId {
@@ -497,7 +496,7 @@ impl EvalHirCtx {
         let private_fun_id = self.private_fun_id_counter.alloc();
         self.rust_funs.insert(rust_fun_key, private_fun_id);
 
-        let ops_fun = ops_for_rust_fun(self, span, rust_fun, wanted_abi);
+        let ops_fun = ops_for_rust_fun(self, rust_fun, wanted_abi);
         self.private_funs.insert(private_fun_id, ops_fun);
 
         private_fun_id
@@ -513,7 +512,7 @@ impl EvalHirCtx {
         use arret_runtime::abitype;
 
         let wanted_abi = PolymorphABI::thunk_abi();
-        let private_fun_id = self.id_for_rust_fun(span, rust_fun, wanted_abi);
+        let private_fun_id = self.id_for_rust_fun(rust_fun, wanted_abi);
 
         let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
         let closure_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
@@ -539,7 +538,7 @@ impl EvalHirCtx {
         use arret_runtime::abitype;
 
         let wanted_abi = entry_point_abi.clone().into();
-        let private_fun_id = self.id_for_rust_fun(span, rust_fun, wanted_abi);
+        let private_fun_id = self.id_for_rust_fun(rust_fun, wanted_abi);
 
         let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
         let closure_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);

@@ -89,7 +89,6 @@ pub fn build_rust_fun_app(
 
 pub fn ops_for_rust_fun(
     ehx: &mut EvalHirCtx,
-    span: Span,
     rust_fun: &rfi::Fun,
     wanted_abi: PolymorphABI,
 ) -> ops::Fun {
@@ -98,6 +97,8 @@ pub fn ops_for_rust_fun(
     use crate::mir::ret_value::build_value_ret;
 
     let mut b = Builder::new();
+    let span = rust_fun.span();
+
     let fun_symbol = format!("{}_adapter", rust_fun.symbol());
 
     let LoadedArgList {

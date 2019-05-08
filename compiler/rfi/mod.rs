@@ -44,6 +44,7 @@ pub struct Fun {
     /// semantically equivalent to the non-intrinsic version.
     intrinsic_name: Option<&'static str>,
 
+    span: Span,
     arret_fun_type: ty::Fun,
     takes_task: bool,
     params: &'static [abitype::ParamABIType],
@@ -55,6 +56,10 @@ pub struct Fun {
 impl Fun {
     pub fn intrinsic_name(&self) -> Option<&'static str> {
         self.intrinsic_name
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
     }
 
     pub fn arret_fun_type(&self) -> &ty::Fun {
@@ -242,6 +247,7 @@ impl Loader {
         Ok(Fun {
             intrinsic_name,
 
+            span: arret_type_datum.span(),
             arret_fun_type: *poly_fun_type,
             takes_task: rust_fun.takes_task,
             params: rust_fun.params,
