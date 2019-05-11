@@ -6,7 +6,7 @@ use std::iter;
 use ansi_term::Colour;
 use ansi_term::Style;
 
-use arret_syntax::span::Span;
+use arret_syntax::span::{Span, EMPTY_SPAN};
 
 use crate::source::{SourceKind, SourceLoader, SourceLoc};
 
@@ -139,7 +139,7 @@ pub fn report_to_stderr(source_loader: &SourceLoader, report: &dyn Reportable) {
     );
 
     let origin = loc_trace.origin();
-    if let Some(origin) = origin.to_non_empty() {
+    if origin != EMPTY_SPAN {
         print_source_snippet(source_loader, severity, origin);
     }
 
