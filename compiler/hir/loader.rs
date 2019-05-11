@@ -159,7 +159,9 @@ mod test {
     #[test]
     fn load_stdlib_rust() {
         // Ensure we can locate and load the module. The RFI itself is tested separately.
-        let loaded_module = load_stdlib_module("rust").unwrap();
+        let loaded_module = load_stdlib_module("rust").expect(
+            "unable to load stdlib library; you may need to `cargo build` before running tests",
+        );
 
         if let LoadedModule::Rust(rfi_module) = loaded_module {
             assert!(!rfi_module.exported_funs().is_empty());

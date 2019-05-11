@@ -207,7 +207,9 @@ mod test {
 
         repl_ctx
             .eval_line("(import [stdlib base])".to_owned(), EvalKind::Value)
-            .unwrap();
+            .expect(
+                "unable to load stdlib library; you may need to `cargo build` before running tests",
+            );
 
         // Make sure we can references vars from the imported module
         assert_type!("true", "(int? 5)");
