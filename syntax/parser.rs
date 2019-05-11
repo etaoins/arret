@@ -1,23 +1,23 @@
 use crate::datum::Datum;
 use crate::error::{Error, ErrorKind, ExpectedContent, Result};
-use crate::span::Span;
+use crate::span::{ByteIndex, Span};
 
-pub fn data_from_str_with_span_offset(s: &str, span_offset: u32) -> Result<Vec<Datum>> {
+pub fn data_from_str_with_span_offset(s: &str, span_offset: ByteIndex) -> Result<Vec<Datum>> {
     let mut parser = Parser::from_str(s, span_offset);
     parser.parse_data()
 }
 
 pub fn data_from_str(s: &str) -> Result<Vec<Datum>> {
-    data_from_str_with_span_offset(s, 0)
+    data_from_str_with_span_offset(s, ByteIndex(0))
 }
 
-pub fn datum_from_str_with_span_offset(s: &str, span_offset: u32) -> Result<Datum> {
+pub fn datum_from_str_with_span_offset(s: &str, span_offset: ByteIndex) -> Result<Datum> {
     let mut parser = Parser::from_str(s, span_offset);
     parser.parse_datum()
 }
 
 pub fn datum_from_str(s: &str) -> Result<Datum> {
-    datum_from_str_with_span_offset(s, 0)
+    datum_from_str_with_span_offset(s, ByteIndex(0))
 }
 
 pub struct Parser<'input> {
@@ -46,17 +46,20 @@ pub fn is_identifier_char(c: char) -> bool {
 }
 
 impl<'input> Parser<'input> {
-    fn from_str(input: &'input str, span_offset: u32) -> Self {
+    fn from_str(input: &'input str, span_offset: ByteIndex) -> Self {
         Parser {
             input,
-            consumed_bytes: span_offset,
+            consumed_bytes: span_offset.0,
         }
     }
 
     fn eof_err(&self, ec: ExpectedContent) -> Error {
         let eof_pos = self.consumed_bytes + (self.input.len() as u32);
 
-        Error::new(Span::new(eof_pos, eof_pos), ErrorKind::Eof(ec))
+        Error::new(
+            Span::new(ByteIndex(eof_pos), ByteIndex(eof_pos)),
+            ErrorKind::Eof(ec),
+        )
     }
 
     fn peek_char(&mut self, ec: ExpectedContent) -> Result<char> {
@@ -131,7 +134,7 @@ impl<'input> Parser<'input> {
         self.input = remaining_input;
         self.consumed_bytes += last_index as u32;
 
-        let span = Span::new(start, self.consumed_bytes as u32);
+        let span = Span::new(ByteIndex(start), ByteIndex(self.consumed_bytes as u32));
         (span, consumed)
     }
 
@@ -150,7 +153,7 @@ impl<'input> Parser<'input> {
         let result = block(self);
         let end = self.consumed_bytes;
 
-        (Span::new(start, end), result)
+        (Span::new(ByteIndex(start), ByteIndex(end)), result)
     }
 
     fn parse_num(&mut self) -> Result<Datum> {
@@ -211,7 +214,7 @@ impl<'input> Parser<'input> {
         };
 
         // Cover the initial #
-        let adj_span = span.with_start(span.start() - 1);
+        let adj_span = span.with_start(ByteIndex(span.start().0 - 1));
         Ok(Datum::Float(adj_span, float_value))
     }
 
@@ -277,7 +280,7 @@ impl<'input> Parser<'input> {
             '#' => self.parse_symbolic_float(),
             _ => {
                 let (span, _) = self.capture_span(|s| s.consume_char(ExpectedContent::Dispatch));
-                let adj_span = span.with_start(span.start() - 1);
+                let adj_span = span.with_start(ByteIndex(span.start().0 - 1));
 
                 Err(Error::new(adj_span, ErrorKind::UnsupportedDispatch))
             }
@@ -346,7 +349,7 @@ impl<'input> Parser<'input> {
         let (outer_span, contents) = self.capture_span(|s| s.parse_seq('}', ExpectedContent::Set));
 
         // Cover the # in our span
-        let adj_span = outer_span.with_start(outer_span.start() - 1);
+        let adj_span = outer_span.with_start(ByteIndex(outer_span.start().0 - 1));
         contents.map(|contents| Datum::Set(adj_span, contents.into()))
     }
 
@@ -357,7 +360,7 @@ impl<'input> Parser<'input> {
             self.capture_span(|s| s.parse_seq(')', ExpectedContent::List));
 
         // Cover the # in our span
-        let adj_span = outer_span.with_start(outer_span.start() - 1);
+        let adj_span = outer_span.with_start(ByteIndex(outer_span.start().0 - 1));
         let body_contents = body_contents?;
 
         convert_anon_fun(adj_span, body_contents.into_iter())
@@ -387,7 +390,10 @@ impl<'input> Parser<'input> {
                     .ok_or_else(|| Error::new(span, ErrorKind::InvalidCodePoint))
             }
             _ => {
-                let span = Span::new(escape_start, self.consumed_bytes as u32);
+                let span = Span::new(
+                    ByteIndex(escape_start),
+                    ByteIndex(self.consumed_bytes as u32),
+                );
                 Err(Error::new(span, ErrorKind::UnsupportedStringEscape))
             }
         }
@@ -502,7 +508,7 @@ mod test {
     use crate::span::t2s;
 
     fn whole_str_span(v: &str) -> Span {
-        Span::new(0, v.len() as u32)
+        Span::new(ByteIndex(0), ByteIndex(v.len() as u32))
     }
 
     #[test]

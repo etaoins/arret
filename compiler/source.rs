@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::{cmp, fmt, fs, io, path};
 
 use arret_syntax::datum::Datum;
-use arret_syntax::span::Span;
+use arret_syntax::span::{ByteIndex, Span};
 
 use crate::id_type::ArcId;
 
@@ -126,10 +126,14 @@ impl SourceLoader {
         use arret_syntax::parser::data_from_str_with_span_offset;
 
         let mut source_files = self.source_files.write().unwrap();
-        let span_offset = source_files.last().map(|x| x.span().end()).unwrap_or(0) + 1;
+        let span_offset = source_files.last().map(|x| x.span().end().0).unwrap_or(0) + 1;
 
-        let span = Span::new(span_offset, span_offset + (source.len() as u32));
-        let parsed = data_from_str_with_span_offset(&source, span_offset);
+        let span = Span::new(
+            ByteIndex(span_offset),
+            ByteIndex(span_offset + (source.len() as u32)),
+        );
+
+        let parsed = data_from_str_with_span_offset(&source, ByteIndex(span_offset));
 
         let source_file = ArcId::new(SourceFile {
             span,
@@ -155,7 +159,7 @@ pub struct SourceLoc {
 
 impl<'src> SourceLoc {
     /// Calculates a source location from a byte index
-    pub fn from_byte_index(source_loader: &SourceLoader, point: u32) -> SourceLoc {
+    pub fn from_byte_index(source_loader: &SourceLoader, point: ByteIndex) -> SourceLoc {
         let source_files = source_loader.source_files.read().unwrap();
 
         // Find the file we landed on
@@ -174,7 +178,7 @@ impl<'src> SourceLoc {
         let source_file = &source_files[source_file_index];
 
         // Now find the line
-        let file_byte_offset = point - source_file.span().start();
+        let file_byte_offset = point.0 - source_file.span().start().0;
         let line = match source_file
             .line_number_offsets
             .binary_search(&file_byte_offset)
@@ -293,7 +297,10 @@ mod test {
         ];
 
         for (point, expected) in test_cases {
-            assert_eq!(expected, SourceLoc::from_byte_index(&source_loader, point));
+            assert_eq!(
+                expected,
+                SourceLoc::from_byte_index(&source_loader, ByteIndex(point))
+            );
         }
     }
 }

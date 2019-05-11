@@ -7,7 +7,7 @@ use std::{env, fs, io, path, process};
 use rayon::prelude::*;
 use tempfile::NamedTempFile;
 
-use arret_syntax::span::Span;
+use arret_syntax::span::{ByteIndex, Span};
 
 use arret_compiler::error::Error;
 use arret_compiler::reporting::{report_to_stderr, LocTrace, Reportable, Severity};
@@ -29,7 +29,7 @@ enum TestType {
 #[derive(Debug)]
 enum ExpectedSpan {
     Exact(Span),
-    StartRange(Range<usize>),
+    StartRange(Range<ByteIndex>),
 }
 
 impl ExpectedSpan {
@@ -37,7 +37,7 @@ impl ExpectedSpan {
         match self {
             ExpectedSpan::Exact(span) => *span == actual_span,
             ExpectedSpan::StartRange(span_range) => {
-                let actual_span_start = actual_span.start() as usize;
+                let actual_span_start = actual_span.start();
                 actual_span_start >= span_range.start && actual_span_start < span_range.end
             }
         }
@@ -72,9 +72,7 @@ impl Reportable for ExpectedReport {
     fn loc_trace(&self) -> LocTrace {
         (match self.span {
             ExpectedSpan::Exact(span) => span,
-            ExpectedSpan::StartRange(ref span_range) => {
-                Span::new(span_range.start as u32, span_range.end as u32)
-            }
+            ExpectedSpan::StartRange(ref span_range) => Span::new(span_range.start, span_range.end),
         })
         .into()
     }
@@ -108,7 +106,7 @@ fn take_severity(marker_string: &str) -> (Severity, &str) {
 
 fn extract_expected_reports(source_file: &arret_compiler::SourceFile) -> Vec<ExpectedReport> {
     let source = source_file.source();
-    let span_offset = source_file.span().start() as usize;
+    let span_offset = source_file.span().start().0;
 
     let mut line_reports = source
         .match_indices(";~")
@@ -128,7 +126,8 @@ fn extract_expected_reports(source_file: &arret_compiler::SourceFile) -> Vec<Exp
                 expected_severity: severity,
                 message_prefix: marker_string.into(),
                 span: ExpectedSpan::StartRange(
-                    span_offset + start_of_line_index..span_offset + index,
+                    ByteIndex(span_offset + (*start_of_line_index as u32))
+                        ..ByteIndex(span_offset + (index as u32)),
                 ),
             }
         })
@@ -161,8 +160,8 @@ fn extract_expected_reports(source_file: &arret_compiler::SourceFile) -> Vec<Exp
             expected_severity: severity,
             message_prefix: marker_string.into(),
             span: ExpectedSpan::Exact(Span::new(
-                (span_offset + span_start) as u32,
-                (span_offset + span_end) as u32,
+                ByteIndex(span_offset + (span_start as u32)),
+                ByteIndex(span_offset + (span_end as u32)),
             )),
         }
     });

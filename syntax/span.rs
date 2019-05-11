@@ -1,25 +1,34 @@
 use std::fmt;
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash)]
+pub struct ByteIndex(pub u32);
+
+impl ByteIndex {
+    pub fn to_usize(self) -> usize {
+        self.0 as usize
+    }
+}
+
 #[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Copy)]
 pub struct Span {
-    start: u32,
-    end: u32,
+    start: ByteIndex,
+    end: ByteIndex,
 }
 
 impl Span {
-    pub fn new(start: u32, end: u32) -> Span {
+    pub fn new(start: ByteIndex, end: ByteIndex) -> Span {
         Span { start, end }
     }
 
-    pub fn start(self) -> u32 {
+    pub fn start(self) -> ByteIndex {
         self.start
     }
 
-    pub fn end(self) -> u32 {
+    pub fn end(self) -> ByteIndex {
         self.end
     }
 
-    pub fn with_start(self, start: u32) -> Span {
+    pub fn with_start(self, start: ByteIndex) -> Span {
         Span {
             start,
             end: self.end,
@@ -44,23 +53,26 @@ impl fmt::Debug for Span {
         if self.start == self.end {
             write!(f, "Span[]")
         } else {
-            write!(f, "Span[{}:{}]", self.start, self.end)
+            write!(f, "Span[{}:{}]", self.start.0, self.end.0)
         }
     }
 }
 
-pub const EMPTY_SPAN: Span = Span { start: 0, end: 0 };
+pub const EMPTY_SPAN: Span = Span {
+    start: ByteIndex(0),
+    end: ByteIndex(0),
+};
 
 // This isn't #[cfg(test)] because it's used in other crates
 pub fn t2s(v: &str) -> Span {
     if let Some(zero_size_off) = v.find('>') {
         let byte_pos = (zero_size_off + 1) as u32;
 
-        return Span::new(byte_pos, byte_pos);
+        return Span::new(ByteIndex(byte_pos), ByteIndex(byte_pos));
     }
 
     let start = v.find('^').expect("Positioning character not found") as u32;
     let end = v.rfind('^').map(|i| i + 1).unwrap() as u32;
 
-    Span::new(start, end)
+    Span::new(ByteIndex(start), ByteIndex(end))
 }

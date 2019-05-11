@@ -6,6 +6,7 @@ use std::{fs, path};
 use ansi_term::{Colour, Style};
 
 use arret_syntax::datum::DataStr;
+use arret_syntax::span::ByteIndex;
 
 use arret_compiler::CompileCtx;
 
@@ -55,7 +56,7 @@ fn error_for_line(mut line: &str) -> Option<arret_syntax::error::Error> {
         return None;
     }
 
-    datum_from_str_with_span_offset(line, span_offset as u32).err()
+    datum_from_str_with_span_offset(line, ByteIndex(span_offset as u32)).err()
 }
 
 fn expected_content_for_line(line: &str) -> Option<arret_syntax::error::ExpectedContent> {
@@ -204,8 +205,8 @@ impl rustyline::highlight::Highlighter for ArretHelper {
             return line.into();
         };
 
-        let error_start = error_span.start() as usize;
-        let error_end = error_span.end() as usize;
+        let error_start = error_span.start().to_usize();
+        let error_end = error_span.end().to_usize();
 
         let prefix = &line[0..error_start];
         let error = &line[error_start..error_end];
