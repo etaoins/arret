@@ -9,7 +9,7 @@ pub enum Purity {
     Impure,
 }
 
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct PVar {
     span: Span,
     source_name: DataStr,
