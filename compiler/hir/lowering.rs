@@ -21,7 +21,7 @@ use crate::hir::loader::{load_module_by_name, LoadedModule, ModuleName};
 use crate::hir::macros::{expand_macro, lower_macro_rules, MacroId};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum, NsId};
 use crate::hir::prim::Prim;
-use crate::hir::scope::{Binding, BindingClass, Scope};
+use crate::hir::scope::{Binding, Scope};
 use crate::hir::types::lower_polymorphic_vars;
 use crate::hir::types::{lower_poly, try_lower_purity};
 use crate::hir::util::{
@@ -238,7 +238,7 @@ fn lower_destruc(
         NsDatum::List(span, vs) => lower_list_destruc(scope, vs.into_vec().into_iter())
             .map(|list_destruc| destruc::Destruc::List(span, list_destruc)),
 
-        NsDatum::Keyword(span, _) => Err(Error::new(span, ErrorKind::KeywordDestruc)),
+        NsDatum::Keyword(span, _) => Err(Error::new(span, ErrorKind::ExpectedSym("keyword"))),
         _ => Err(Error::new(destruc_datum.span(), ErrorKind::BadListDestruc)),
     }
 }
@@ -261,7 +261,10 @@ where
     let bindings_data = if let NsDatum::Vector(_, vs) = bindings_datum {
         vs.into_vec()
     } else {
-        return Err(Error::new(bindings_datum.span(), ErrorKind::BindingsNotVec));
+        return Err(Error::new(
+            bindings_datum.span(),
+            ErrorKind::BindingsNotVec(bindings_datum.description()),
+        ));
     };
 
     let mut scope = Scope::new_child(outer_scope);
@@ -354,7 +357,10 @@ fn lower_fun(
     let params = match next_datum {
         NsDatum::List(_, vs) => lower_list_destruc(&mut fun_scope, vs.into_vec().into_iter())?,
         other => {
-            return Err(Error::new(other.span(), ErrorKind::ExpectedParamList));
+            return Err(Error::new(
+                other.span(),
+                ErrorKind::ExpectedParamList(other.description()),
+            ));
         }
     };
 
@@ -423,10 +429,9 @@ fn lower_expr_prim_apply(
         }
         Prim::Do => lower_body(scope, arg_iter),
         Prim::CompileError => Err(lower_user_compile_error(span, arg_iter)),
-        Prim::MacroRules | Prim::All => Err(Error::new(
-            span,
-            ErrorKind::ExpectedValue(BindingClass::Prim),
-        )),
+        Prim::MacroRules | Prim::All => {
+            Err(Error::new(span, ErrorKind::ExpectedValue("primitive")))
+        }
     }
 }
 
@@ -463,7 +468,10 @@ fn lower_expr(scope: &Scope<'_>, datum: NsDatum) -> Result<Expr<Lowered>> {
             Binding::Var(id) => Ok(ExprKind::Ref(span, *id).into()),
             Binding::TyPred(test_ty) => Ok(ExprKind::TyPred(span, *test_ty).into()),
             Binding::EqPred => Ok(ExprKind::EqPred(span).into()),
-            other => Err(Error::new(span, ErrorKind::ExpectedValue(other.to_class()))),
+            other => Err(Error::new(
+                span,
+                ErrorKind::ExpectedValue(other.description()),
+            )),
         },
         NsDatum::List(span, vs) => {
             let mut data_iter = vs.into_vec().into_iter();
@@ -618,11 +626,8 @@ impl<'ccx> LoweringCtx<'ccx> {
             Prim::Export => {
                 let deferred_exports = arg_iter
                     .map(|datum| {
-                        if let NsDatum::Ident(span, ident) = datum {
-                            Ok(DeferredExport { span, ident })
-                        } else {
-                            Err(Error::new(datum.span(), ErrorKind::ExpectedSym))
-                        }
+                        let (ident, span) = expect_ident_and_span(datum)?;
+                        Ok(DeferredExport { span, ident })
                     })
                     .collect::<Result<Vec<DeferredExport>>>()?;
 

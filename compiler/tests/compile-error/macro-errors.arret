@@ -1,7 +1,7 @@
 (import [arret internal primitives])
 
 (defmacro 1 (macro-rules))
-         ;^ ERROR expected symbol
+         ;^ ERROR expected symbol, found integer
 
 (defmacro a b) ;~ ERROR macro specification must be a list
 (defmacro a (macro-fn)) ;~ ERROR unsupported macro type

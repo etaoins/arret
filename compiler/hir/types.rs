@@ -97,7 +97,7 @@ fn lower_polymorphic_var(scope: &Scope<'_>, tvar_datum: NsDatum) -> Result<Polym
     Err(Error::new(
         span,
         ErrorKind::IllegalArg(
-            "polymorphic variables must be either an identifier or [identifier Type]",
+            "polymorphic variables must be either an identifier or `[identifier Type]`",
         ),
     ))
 }
@@ -219,7 +219,7 @@ fn lower_ident(scope: &Scope<'_>, span: Span, ident: &Ident) -> Result<ty::Ref<t
         Binding::Ty(ty) => Ok(ty.clone()),
         Binding::TyPred(test_ty) => Ok(ty::Ty::TyPred(*test_ty).into()),
         Binding::EqPred => Ok(ty::Ty::EqPred.into()),
-        other => Err(Error::new(span, ErrorKind::ExpectedTy(other.to_class()))),
+        other => Err(Error::new(span, ErrorKind::ExpectedTy(other.description()))),
     }
 }
 
@@ -294,7 +294,7 @@ pub fn lower_poly_data_iter(
         Binding::TyCons(ty_cons) => lower_ty_cons_apply(scope, span, *ty_cons, data_iter),
         other => Err(Error::new(
             ident_span,
-            ErrorKind::ExpectedTyCons(other.to_class()),
+            ErrorKind::ExpectedTyCons(other.description()),
         )),
     }
 }

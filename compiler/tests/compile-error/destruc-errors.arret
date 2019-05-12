@@ -10,17 +10,17 @@
     ;^^^^^^^ ERROR vectors can only be used in a destructure in the form `[name Type]`
 
 (def [1 Int] 1)
-     ;^ ERROR expected symbol
+     ;^ ERROR expected symbol, found integer
 
 (def 1 1)
     ;^ ERROR unsupported destructuring binding
 
 (def :foo 1)
-    ;^^^^ ERROR keywords cannot be used as variable names
+    ;^^^^ ERROR expected symbol, found keyword
 
 ; Double type annotation
 (def [[x Int] Int] 1)
-     ;^^^^^^^ ERROR expected symbol
+     ;^^^^^^^ ERROR expected symbol, found vector
 
 (def bad-param-destruc
   (fn (1)))
@@ -28,4 +28,4 @@
 
 (def keyword-param-destruc
   (fn (:foo)))
-      ;^^^^ ERROR keywords cannot be used as variable names
+      ;^^^^ ERROR expected symbol, found keyword

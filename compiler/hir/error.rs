@@ -6,30 +6,19 @@ use arret_syntax::datum::DataStr;
 use arret_syntax::error::Error as SyntaxError;
 use arret_syntax::span::Span;
 
-use crate::hir::scope::BindingClass;
 use crate::reporting::{diagnostic_for_syntax_error, LocTrace};
-
-fn binding_class_to_str(class: BindingClass) -> &'static str {
-    match class {
-        BindingClass::Value => "value",
-        BindingClass::Prim => "primitive",
-        BindingClass::Ty => "type",
-        BindingClass::TyCons => "type constructor",
-        BindingClass::Purity => "purity",
-        BindingClass::Macro => "macro",
-    }
-}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ErrorKind {
-    ExpectedValue(BindingClass),
-    ExpectedTy(BindingClass),
-    ExpectedTyCons(BindingClass),
+    ExpectedValue(&'static str),
+    ExpectedTy(&'static str),
+    ExpectedTyCons(&'static str),
+    ExpectedSym(&'static str),
+    ExpectedParamList(&'static str),
     UnboundIdent(DataStr),
     WrongArgCount(usize),
     IllegalArg(&'static str),
     NoMainFun,
-    ExpectedSym,
     DefOutsideBody,
     ExportOutsideModule,
     NonDefInsideModule,
@@ -44,16 +33,14 @@ pub enum ErrorKind {
     ReadError(Box<path::Path>),
     SyntaxError(SyntaxError),
     RustFunError(Box<str>),
-    KeywordDestruc,
     BadListDestruc,
     BadRestDestruc,
     NoBindingVec,
-    BindingsNotVec,
+    BindingsNotVec(&'static str),
     UnevenBindingVec,
     UnsupportedLiteralType,
     VarPurityBound,
     NoParamDecl,
-    ExpectedParamList,
     UnsupportedImportFilter,
     MacroMultiPatternRef(Box<[Span]>),
     MacroNoPatternRef,
@@ -100,23 +87,33 @@ impl From<Error> for Diagnostic {
         let origin = error.loc_trace.origin();
 
         let diagnostic = match error.kind() {
-            ErrorKind::ExpectedValue(class) => Diagnostic::new_error(format!(
-                "cannot take the value of a {}",
-                binding_class_to_str(*class)
-            ))
-            .with_label(Label::new_primary(origin).with_message("expected value")),
+            ErrorKind::ExpectedValue(found) => {
+                Diagnostic::new_error(format!("cannot take the value of a {}", found))
+                    .with_label(Label::new_primary(origin).with_message("expected value"))
+            }
 
-            ErrorKind::ExpectedTy(class) => Diagnostic::new_error(format!(
-                "{} cannot be used as a type",
-                binding_class_to_str(*class)
-            ))
-            .with_label(Label::new_primary(origin).with_message("expected type")),
+            ErrorKind::ExpectedTy(found) => {
+                Diagnostic::new_error(format!("{} cannot be used as a type", found))
+                    .with_label(Label::new_primary(origin).with_message("expected type"))
+            }
 
-            ErrorKind::ExpectedTyCons(class) => Diagnostic::new_error(format!(
-                "{} cannot be used as a type constructor",
-                binding_class_to_str(*class)
+            ErrorKind::ExpectedTyCons(found) => {
+                Diagnostic::new_error(format!("{} cannot be used as a type constructor", found))
+                    .with_label(
+                        Label::new_primary(origin).with_message("expected type constructor"),
+                    )
+            }
+
+            ErrorKind::ExpectedSym(found) => {
+                Diagnostic::new_error(format!("expected symbol, found {}", found))
+                    .with_label(Label::new_primary(origin).with_message("expected symbol"))
+            }
+
+            ErrorKind::ExpectedParamList(found) => Diagnostic::new_error(format!(
+                "expected parameter declaration list, found {}",
+                found
             ))
-            .with_label(Label::new_primary(origin).with_message("expected type constructor")),
+            .with_label(Label::new_primary(origin).with_message("expected parameter list")),
 
             ErrorKind::UnboundIdent(ref ident) => {
                 Diagnostic::new_error(format!("unable to resolve `{}`", ident))
@@ -138,8 +135,6 @@ impl From<Error> for Diagnostic {
                 // TODO: This makes it hard to give rich diagnostics. This should be deprecated.
                 Diagnostic::new_error(*description).with_label(Label::new_primary(origin))
             }
-            ErrorKind::ExpectedSym => Diagnostic::new_error("expected symbol")
-                .with_label(Label::new_primary(origin).with_message("expected symbol")),
 
             ErrorKind::DefOutsideBody => Diagnostic::new_error("definition outside module body")
                 .with_label(Label::new_primary(origin).with_message("not at top-level of module")),
@@ -234,11 +229,6 @@ impl From<Error> for Diagnostic {
                 )
             }
 
-            ErrorKind::KeywordDestruc => {
-                Diagnostic::new_error("keywords cannot be used as variable names")
-                    .with_label(Label::new_primary(origin).with_message("expected symbol"))
-            }
-
             ErrorKind::BadListDestruc => Diagnostic::new_error("unsupported destructuring binding")
                 .with_label(
                     Label::new_primary(origin)
@@ -254,8 +244,10 @@ impl From<Error> for Diagnostic {
             ErrorKind::NoBindingVec => Diagnostic::new_error("binding vector expected")
                 .with_label(Label::new_primary(origin).with_message("expected vector argument")),
 
-            ErrorKind::BindingsNotVec => Diagnostic::new_error("binding vector expected")
-                .with_label(Label::new_primary(origin).with_message("vector expected")),
+            ErrorKind::BindingsNotVec(found) => {
+                Diagnostic::new_error(format!("binding vector expected, found {}", found))
+                    .with_label(Label::new_primary(origin).with_message("vector expected"))
+            }
 
             ErrorKind::UnevenBindingVec => {
                 Diagnostic::new_error("binding vector must have an even number of forms")
@@ -277,11 +269,6 @@ impl From<Error> for Diagnostic {
                 .with_label(
                     Label::new_primary(origin).with_message("expected parameter list argument"),
                 ),
-
-            ErrorKind::ExpectedParamList => {
-                Diagnostic::new_error("parameter declaration is not a list")
-                    .with_label(Label::new_primary(origin).with_message("expected list"))
-            }
 
             ErrorKind::UnsupportedImportFilter => {
                 Diagnostic::new_error("unsupported import filter").with_label(

@@ -7,4 +7,4 @@
       ;^^^^^^^^^ ERROR parameter declaration missing
 
 (def _ (fn []))
-          ;^^ ERROR parameter declaration is not a list
+          ;^^ ERROR expected parameter declaration list, found empty vector

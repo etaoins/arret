@@ -140,6 +140,31 @@ impl NsDatum {
             | NsDatum::Map(span, _) => *span,
         }
     }
+
+    pub fn description(&self) -> &'static str {
+        match self {
+            NsDatum::Bool(_, true) => "boolean true",
+            NsDatum::Bool(_, false) => "boolean false",
+            NsDatum::Char(_, _) => "character",
+            NsDatum::Int(_, _) => "integer",
+            NsDatum::Float(_, _) => "floating point number",
+            NsDatum::Str(_, _) => "string",
+            NsDatum::Keyword(_, _) => "keyword",
+            NsDatum::Ident(_, _) => "symbol",
+
+            NsDatum::List(_, vs) if vs.is_empty() => "empty list",
+            NsDatum::List(_, _) => "list",
+
+            NsDatum::Vector(_, vs) if vs.is_empty() => "empty vector",
+            NsDatum::Vector(_, _) => "vector",
+
+            NsDatum::Set(_, vs) if vs.is_empty() => "empty set",
+            NsDatum::Set(_, _) => "set",
+
+            NsDatum::Map(_, vs) if vs.is_empty() => "empty map",
+            NsDatum::Map(_, _) => "map",
+        }
+    }
 }
 
 /// Iterator for NsDatum used inside the HIR

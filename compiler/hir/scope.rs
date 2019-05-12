@@ -10,17 +10,6 @@ use crate::hir::{types, VarId};
 use crate::ty;
 use crate::ty::purity;
 
-/// High-level category of a binding used for error reporting
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum BindingClass {
-    Value,
-    Prim,
-    Macro,
-    Ty,
-    TyCons,
-    Purity,
-}
-
 #[derive(Clone, PartialEq, Debug)]
 pub enum Binding {
     Var(VarId),
@@ -34,14 +23,14 @@ pub enum Binding {
 }
 
 impl Binding {
-    pub fn to_class(&self) -> BindingClass {
+    pub fn description(&self) -> &'static str {
         match self {
-            Binding::Var(_) | Binding::TyPred(_) | Binding::EqPred => BindingClass::Value,
-            Binding::Prim(_) => BindingClass::Prim,
-            Binding::Macro(_) => BindingClass::Macro,
-            Binding::Ty(_) => BindingClass::Ty,
-            Binding::TyCons(_) => BindingClass::TyCons,
-            Binding::Purity(_) => BindingClass::Purity,
+            Binding::Var(_) | Binding::TyPred(_) | Binding::EqPred => "value",
+            Binding::Prim(_) => "primitive",
+            Binding::Macro(_) => "macro",
+            Binding::Ty(_) => "type",
+            Binding::TyCons(_) => "type constructor",
+            Binding::Purity(_) => "purity",
         }
     }
 }
