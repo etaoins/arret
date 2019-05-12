@@ -256,15 +256,12 @@ where
 {
     let bindings_datum = arg_iter
         .next()
-        .ok_or_else(|| Error::new(span, ErrorKind::IllegalArg("bindings declaration missing")))?;
+        .ok_or_else(|| Error::new(span, ErrorKind::NoBindingVec))?;
 
     let bindings_data = if let NsDatum::Vector(_, vs) = bindings_datum {
         vs.into_vec()
     } else {
-        return Err(Error::new(
-            bindings_datum.span(),
-            ErrorKind::IllegalArg("binding vector expected"),
-        ));
+        return Err(Error::new(bindings_datum.span(), ErrorKind::BindingsNotVec));
     };
 
     let mut scope = Scope::new_child(outer_scope);
@@ -272,12 +269,9 @@ where
 
     let mut bindings_iter = bindings_data.into_iter();
     while let Some(target_datum) = bindings_iter.next() {
-        let value_datum = bindings_iter.next().ok_or_else(|| {
-            Error::new(
-                target_datum.span(),
-                ErrorKind::IllegalArg("binding vector must have an even number of forms"),
-            )
-        })?;
+        let value_datum = bindings_iter
+            .next()
+            .ok_or_else(|| Error::new(target_datum.span(), ErrorKind::UnevenBindingVec))?;
 
         outputs.push(binder(&mut scope, target_datum, value_datum)?);
     }

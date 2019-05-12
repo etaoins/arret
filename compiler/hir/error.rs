@@ -36,6 +36,9 @@ pub enum ErrorKind {
     KeywordDestruc,
     BadListDestruc,
     BadRestDestruc,
+    NoBindingVec,
+    BindingsNotVec,
+    UnevenBindingVec,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -219,6 +222,17 @@ impl From<Error> for Diagnostic {
                     Label::new_primary(origin)
                         .with_message("expected variable name or `[name Type]`"),
                 ),
+
+            ErrorKind::NoBindingVec => Diagnostic::new_error("binding vector expected")
+                .with_label(Label::new_primary(origin).with_message("expected vector argument")),
+
+            ErrorKind::BindingsNotVec => Diagnostic::new_error("binding vector expected")
+                .with_label(Label::new_primary(origin).with_message("vector expected")),
+
+            ErrorKind::UnevenBindingVec => {
+                Diagnostic::new_error("binding vector must have an even number of forms")
+                    .with_label(Label::new_primary(origin).with_message("extra binding form"))
+            }
         };
 
         error.loc_trace.label_macro_invocation(diagnostic)
