@@ -36,7 +36,7 @@ pub enum ErrorKind {
     ExportInsideRepl,
     PackageNotFound,
     ModuleNotFound(Box<path::Path>),
-    NoMacroRule,
+    NoMacroRule(Box<[Span]>),
     DuplicateDef(Option<Span>, DataStr),
     MultipleZeroOrMoreMatch(Span),
     NoVecDestruc,
@@ -184,8 +184,13 @@ impl From<Error> for Diagnostic {
             ))
             .with_label(Label::new_primary(origin).with_message("at this import")),
 
-            ErrorKind::NoMacroRule => Diagnostic::new_error("no matching macro rule")
-                .with_label(Label::new_primary(origin).with_message("at this macro invocation")),
+            ErrorKind::NoMacroRule(pattern_spans) => {
+                Diagnostic::new_error("no matching macro rule")
+                    .with_label(Label::new_primary(origin).with_message("at this macro invocation"))
+                    .with_labels(pattern_spans.iter().map(|pattern_span| {
+                        Label::new_secondary(*pattern_span).with_message("unmatched macro rule")
+                    }))
+            }
 
             ErrorKind::MultipleZeroOrMoreMatch(first_zero_or_more_span) => {
                 Diagnostic::new_error("multiple zero or more matches in the same sequence")

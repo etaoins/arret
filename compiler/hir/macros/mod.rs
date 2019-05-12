@@ -15,6 +15,7 @@ use crate::id_type::ArcId;
 
 #[derive(PartialEq, Debug)]
 pub struct Rule {
+    pattern_span: Span,
     pattern: Box<[NsDatum]>,
     template: NsDatum,
     var_links: VarLinks,
@@ -76,8 +77,8 @@ fn lower_macro_rule_datum(
     let template = rule_values.pop().unwrap();
     let pattern_datum = rule_values.pop().unwrap();
 
-    let pattern = if let NsDatum::List(_, vs) = pattern_datum {
-        vs
+    let (pattern_span, pattern) = if let NsDatum::List(span, vs) = pattern_datum {
+        (span, vs)
     } else {
         return Err(Error::new(
             pattern_datum.span(),
@@ -88,6 +89,7 @@ fn lower_macro_rule_datum(
     let var_links = link_rule_vars(scope, self_ident, &pattern, &template)?;
 
     Ok(Rule {
+        pattern_span,
         pattern,
         template,
         var_links,
@@ -127,5 +129,8 @@ pub fn expand_macro<'s, 'p>(
         }
     }
 
-    Err(Error::new(invocation_span, ErrorKind::NoMacroRule))
+    Err(Error::new(
+        invocation_span,
+        ErrorKind::NoMacroRule(mac.rules.iter().map(|rule| rule.pattern_span).collect()),
+    ))
 }
