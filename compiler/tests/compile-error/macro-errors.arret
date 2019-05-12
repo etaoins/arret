@@ -33,7 +33,7 @@
 
 (defmacro m (macro-rules
   [((list1 ...) (list2 ...)) ([list1 list2] ...)]
-                            ;^^^^^^^^^^^^^^^^^^^ ERROR subtemplate references macro variables from multiple subpatterns
+                            ;^^^^^^^^^^^^^^^^^^^ ERROR template references macro variables from multiple patterns
 ))
 
 (defmacro m (macro-rules

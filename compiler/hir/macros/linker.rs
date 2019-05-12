@@ -293,11 +293,14 @@ fn link_found_vars(
                     ),
                 ));
             } else if possible_indices.len() > 1 {
+                let sub_var_spans = possible_indices
+                    .iter()
+                    .map(|(_, subpattern_vars)| subpattern_vars.span)
+                    .collect();
+
                 return Err(Error::new(
                     template_vars.span,
-                    ErrorKind::IllegalArg(
-                        "subtemplate references macro variables from multiple subpatterns",
-                    ),
+                    ErrorKind::MacroMultiPatternRef(sub_var_spans),
                 ));
             }
 

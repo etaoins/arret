@@ -55,6 +55,7 @@ pub enum ErrorKind {
     NoParamDecl,
     ExpectedParamList,
     UnsupportedImportFilter,
+    MacroMultiPatternRef(Box<[Span]>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -281,6 +282,15 @@ impl From<Error> for Diagnostic {
                         "expected `only`, `except`, `rename`, `prefix` or `prefixed`",
                     ),
                 )
+            }
+
+            ErrorKind::MacroMultiPatternRef(sub_var_spans) => {
+                Diagnostic::new_error("template references macro variables from multiple patterns")
+                    .with_label(Label::new_primary(origin).with_message("source template"))
+                    .with_labels(sub_var_spans.iter().map(|sub_var_span| {
+                        Label::new_secondary(*sub_var_span)
+                            .with_message("referenced macro variable")
+                    }))
             }
         };
 
