@@ -268,7 +268,7 @@ fn link_found_vars(
             if subtemplate_vars.idents.is_empty() {
                 return Err(Error::new(
                     template_vars.span,
-                    ErrorKind::IllegalArg("subtemplate does not include any macro variables"),
+                    ErrorKind::MacroNoTemplateVars,
                 ));
             }
 
@@ -286,12 +286,7 @@ fn link_found_vars(
                 .collect::<Vec<(usize, &FoundVars<'_>)>>();
 
             if possible_indices.is_empty() {
-                return Err(Error::new(
-                    template_vars.span,
-                    ErrorKind::IllegalArg(
-                        "subtemplate does not reference macro variables from any subpattern",
-                    ),
-                ));
+                return Err(Error::new(template_vars.span, ErrorKind::MacroNoPatternRef));
             } else if possible_indices.len() > 1 {
                 let sub_var_spans = possible_indices
                     .iter()

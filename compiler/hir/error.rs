@@ -56,6 +56,8 @@ pub enum ErrorKind {
     ExpectedParamList,
     UnsupportedImportFilter,
     MacroMultiPatternRef(Box<[Span]>),
+    MacroNoPatternRef,
+    MacroNoTemplateVars,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -289,14 +291,32 @@ impl From<Error> for Diagnostic {
                 )
             }
 
-            ErrorKind::MacroMultiPatternRef(sub_var_spans) => {
-                Diagnostic::new_error("template references macro variables from multiple patterns")
-                    .with_label(Label::new_primary(origin).with_message("source template"))
-                    .with_labels(sub_var_spans.iter().map(|sub_var_span| {
-                        Label::new_secondary(*sub_var_span)
-                            .with_message("referenced macro variable")
-                    }))
+            ErrorKind::MacroMultiPatternRef(sub_var_spans) => Diagnostic::new_error(
+                "subtemplate references macro variables from multiple subpatterns",
+            )
+            .with_label(
+                Label::new_primary(origin)
+                    .with_message("subtemplate references multiple subpatterns"),
+            )
+            .with_labels(sub_var_spans.iter().map(|sub_var_span| {
+                Label::new_secondary(*sub_var_span).with_message("referenced macro variable")
+            })),
+
+            ErrorKind::MacroNoTemplateVars => {
+                Diagnostic::new_error("subtemplate does not include any macro variables")
+                    .with_label(
+                        Label::new_primary(origin)
+                            .with_message("subtemplate includes no variables"),
+                    )
             }
+
+            ErrorKind::MacroNoPatternRef => Diagnostic::new_error(
+                "subtemplate does not reference macro variables from any subpattern",
+            )
+            .with_label(
+                Label::new_primary(origin)
+                    .with_message("subtemplate does not reference subpatterns"),
+            ),
         };
 
         error.loc_trace.label_macro_invocation(diagnostic)
