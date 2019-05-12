@@ -1,10 +1,13 @@
 use arret_syntax::datum::DataStr;
 
-use crate::error::Error;
+use codespan::FileName;
+use codespan_reporting::{Diagnostic, Label};
+
 use crate::hir;
 use crate::hir::scope::Scope;
+use crate::reporting::{diagnostic_for_syntax_error, errors_to_diagnostics};
 use crate::CompileCtx;
-use crate::{SourceKind, SourceLoader};
+use crate::SourceLoader;
 
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::typeck::infer::InferCtx;
@@ -62,27 +65,31 @@ impl<'ccx> ReplCtx<'ccx> {
         })
     }
 
-    pub fn eval_line(&mut self, input: String, kind: EvalKind) -> Result<EvaledLine, Error> {
+    pub fn eval_line(
+        &mut self,
+        input: String,
+        kind: EvalKind,
+    ) -> Result<EvaledLine, Vec<Diagnostic>> {
         use crate::hir::lowering::LoweredReplDatum;
 
         let source_file = self
             .source_loader
-            .load_string(SourceKind::Repl, input.into());
+            .load_string(FileName::Virtual("repl".into()), input.into());
 
-        let input_data = source_file.parsed()?;
+        let input_data = source_file
+            .parsed()
+            .map_err(|err| vec![diagnostic_for_syntax_error(&err)])?;
+
         let input_datum = match input_data {
             [] => {
                 return Ok(EvaledLine::EmptyInput);
             }
             [input_datum] => input_datum,
             _ => {
-                use crate::hir::error::{Error, ErrorKind};
                 let extra_span = input_data[1].span();
 
-                return Err(Error(vec![Box::new(Error::new(
-                    extra_span,
-                    ErrorKind::IllegalArg("unexpected trailing datum"),
-                ))]));
+                return Err(vec![Diagnostic::new_error("unexpected trailing datum")
+                    .with_label(Label::new_primary(extra_span))]);
             }
         };
 
@@ -92,10 +99,17 @@ impl<'ccx> ReplCtx<'ccx> {
 
         let ns_datum = hir::ns::NsDatum::from_syntax_datum(input_datum);
 
-        match self.lcx.lower_repl_datum(&mut self.scope, ns_datum)? {
+        match self
+            .lcx
+            .lower_repl_datum(&mut self.scope, ns_datum)
+            .map_err(errors_to_diagnostics)?
+        {
             LoweredReplDatum::Defs(defs) => {
                 for recursive_defs in defs {
-                    let inferred_defs = self.icx.infer_defs(recursive_defs)?;
+                    let inferred_defs = self
+                        .icx
+                        .infer_defs(recursive_defs)
+                        .map_err(errors_to_diagnostics)?;
 
                     for inferred_def in inferred_defs {
                         self.ehx.consume_def(inferred_def)?;

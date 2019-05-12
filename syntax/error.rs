@@ -5,6 +5,7 @@ use std::result;
 
 use crate::span::Span;
 
+/// (Spanned)[`Span`] syntax error
 #[derive(Debug, Clone, PartialEq)]
 pub struct Error {
     span: Span,
@@ -25,6 +26,15 @@ impl Error {
     }
 }
 
+impl error::Error for Error {}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.kind().message())
+    }
+}
+
+/// Syntax error without (span)[`Span`] information
 #[derive(Debug, Clone, PartialEq)]
 pub enum ErrorKind {
     Eof(ExpectedContent),
@@ -39,19 +49,29 @@ pub enum ErrorKind {
     InvalidArgLiteral,
 }
 
+impl ErrorKind {
+    /// Returns a string describing the error
+    pub fn message(&self) -> String {
+        match self {
+            ErrorKind::Eof(ref ec) => {
+                format!("unexpected end of file while parsing {}", ec.description())
+            }
+            ErrorKind::UnsupportedDispatch => "unsupported dispatch".to_owned(),
+            ErrorKind::UnsupportedChar => "unsupported character".to_owned(),
+            ErrorKind::InvalidCodePoint => "invalid code point".to_owned(),
+            ErrorKind::UnsupportedStringEscape => "unsupported string escape".to_owned(),
+            ErrorKind::IntegerOverflow => "integer literal does not fit in i64".to_owned(),
+            ErrorKind::InvalidFloat => "unable to parse float".to_owned(),
+            ErrorKind::UnexpectedChar(c) => format!("unexpected `{}`", c),
+            ErrorKind::UnevenMap => "map literal must have an even number of values".to_owned(),
+            ErrorKind::InvalidArgLiteral => {
+                "arg literal must be `%`, `%{integer}` or `%&`".to_owned()
+            }
+        }
+    }
+}
+
 pub type Result<T> = result::Result<T, Error>;
-
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        "Reader error"
-    }
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ExpectedContent {

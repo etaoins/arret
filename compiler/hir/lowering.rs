@@ -863,7 +863,7 @@ pub fn lower_program(
     ccx: &CompileCtx,
     source_file: &SourceFile,
 ) -> Result<LoweredProgram, Vec<Error>> {
-    let file_span = source_file.span();
+    let file_span = source_file.file_map().span();
 
     let data = source_file.parsed().map_err(|err| vec![err.into()])?;
 

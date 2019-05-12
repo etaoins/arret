@@ -8,7 +8,7 @@ use ansi_term::{Colour, Style};
 use arret_syntax::datum::DataStr;
 use arret_syntax::span::ByteIndex;
 
-use arret_compiler::CompileCtx;
+use arret_compiler::{emit_diagnostics_to_stderr, CompileCtx};
 
 const PROMPT: &str = "arret> ";
 
@@ -83,17 +83,6 @@ impl ArretHelper {
         all_names.sort();
 
         ArretHelper { all_names }
-    }
-}
-
-fn report_all_to_stderr(
-    source_loader: &arret_compiler::SourceLoader,
-    err: &arret_compiler::error::Error,
-) {
-    use arret_compiler::reporting::report_to_stderr;
-
-    for reportable in err.reports() {
-        report_to_stderr(source_loader, reportable.as_ref())
     }
 }
 
@@ -295,8 +284,8 @@ pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
 
     // Import [stdlib base] so we have most useful things defined
     let initial_import = "(import [stdlib base])".to_owned();
-    if let Err(err) = repl_ctx.eval_line(initial_import, EvalKind::Value) {
-        report_all_to_stderr(ccx.source_loader(), &err);
+    if let Err(diagnostics) = repl_ctx.eval_line(initial_import, EvalKind::Value) {
+        emit_diagnostics_to_stderr(ccx.source_loader(), diagnostics);
     }
     rl.set_helper(Some(ArretHelper::new(repl_ctx.bound_names())));
 
@@ -304,8 +293,8 @@ pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
     if let Some(include_path) = include_path {
         let include_file = fs::File::open(include_path).unwrap();
         for include_line in BufReader::new(include_file).lines() {
-            if let Err(err) = repl_ctx.eval_line(include_line.unwrap(), EvalKind::Value) {
-                report_all_to_stderr(ccx.source_loader(), &err);
+            if let Err(diagnostics) = repl_ctx.eval_line(include_line.unwrap(), EvalKind::Value) {
+                emit_diagnostics_to_stderr(ccx.source_loader(), diagnostics);
             }
         }
     }
@@ -351,8 +340,8 @@ pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
                     Ok(EvaledLine::Expr(value)) => {
                         println!("{} {}", expr_arrow_style.paint("=>"), value);
                     }
-                    Err(err) => {
-                        report_all_to_stderr(ccx.source_loader(), &err);
+                    Err(diagnostics) => {
+                        emit_diagnostics_to_stderr(ccx.source_loader(), diagnostics);
                     }
                 }
             }

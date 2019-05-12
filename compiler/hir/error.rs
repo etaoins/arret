@@ -1,10 +1,12 @@
 use std::{error, fmt, io, path, result};
 
+use codespan_reporting::{Diagnostic, Label};
+
 use arret_syntax::datum::DataStr;
 use arret_syntax::error::Error as SyntaxError;
 use arret_syntax::span::Span;
 
-use crate::reporting::{LocTrace, Reportable, Severity};
+use crate::reporting::{diagnostic_for_syntax_error, LocTrace};
 
 #[derive(Debug, PartialEq)]
 pub enum ErrorKind {
@@ -66,21 +68,15 @@ impl Error {
             ..self
         }
     }
-}
 
-impl Reportable for Error {
-    fn severity(&self) -> Severity {
-        Severity::Error
-    }
-
-    fn message(&self) -> String {
-        match self.kind {
+    pub fn message(&self) -> String {
+        match self.kind() {
             ErrorKind::PrimRef => "cannot take the value of a primitive".to_owned(),
             ErrorKind::TyRef => "cannot take the value of a type".to_owned(),
             ErrorKind::MacroRef(ref sym) => format!("cannot take the value of macro: `{}`", sym),
             ErrorKind::UnboundSym(ref sym) => format!("unable to resolve symbol: `{}`", sym),
             ErrorKind::WrongArgCount(expected) => format!("wrong arg count; expected {}", expected),
-            ErrorKind::IllegalArg(description) => description.to_owned(),
+            ErrorKind::IllegalArg(description) => (*description).to_owned(),
             ErrorKind::ExpectedSym => "expected symbol".to_owned(),
             ErrorKind::DefOutsideBody => "(def) outside module body".to_owned(),
             ErrorKind::DuplicateDef(_, ref sym) => format!("duplicate definition: `{}`", sym),
@@ -103,35 +99,39 @@ impl Reportable for Error {
             ErrorKind::ValueAsTy => "value cannot be used as a type".to_owned(),
             ErrorKind::UserError(ref message) => message.as_ref().to_owned(),
             ErrorKind::ReadError(ref filename) => format!("error reading `{}`", filename.to_string_lossy()),
-            ErrorKind::SyntaxError(ref err) => err.message(),
+            ErrorKind::SyntaxError(ref err) => err.kind().message(),
             ErrorKind::RustFunError(ref message) => message.clone().into_string(),
             ErrorKind::NoMainFun => "no main! function defined in root module".to_owned()
         }
     }
+}
 
-    fn loc_trace(&self) -> LocTrace {
-        self.loc_trace.clone()
-    }
+impl From<Error> for Diagnostic {
+    fn from(error: Error) -> Diagnostic {
+        if let ErrorKind::SyntaxError(syntax_error) = error.kind() {
+            // Just proxy this
+            return diagnostic_for_syntax_error(syntax_error);
+        }
 
-    fn associated_report(&self) -> Option<Box<dyn Reportable>> {
-        match self.kind {
-            ErrorKind::DuplicateDef(Some(span), _) => Some(Box::new(FirstDefHelp { span })),
-            ErrorKind::MultipleZeroOrMoreMatch(span) => Some(Box::new(FirstDefHelp { span })),
-            ErrorKind::SyntaxError(ref err) => err.associated_report(),
-            _ => None,
+        let diagnostic =
+            Diagnostic::new_error(error.message()).with_labels(error.loc_trace.to_labels());
+
+        // Add any secondary labels
+        match error.kind {
+            ErrorKind::DuplicateDef(Some(span), _) | ErrorKind::MultipleZeroOrMoreMatch(span) => {
+                diagnostic
+                    .with_label(Label::new_secondary(span).with_message("first definition here"))
+            }
+            _ => diagnostic,
         }
     }
 }
 
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        "Lowering error"
-    }
-}
+impl error::Error for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        f.write_str(&self.message())
     }
 }
 
@@ -144,23 +144,5 @@ impl From<SyntaxError> for Error {
 impl From<Error> for Vec<Error> {
     fn from(error: Error) -> Vec<Error> {
         vec![error]
-    }
-}
-
-struct FirstDefHelp {
-    span: Span,
-}
-
-impl Reportable for FirstDefHelp {
-    fn severity(&self) -> Severity {
-        Severity::Help
-    }
-
-    fn loc_trace(&self) -> LocTrace {
-        self.span.into()
-    }
-
-    fn message(&self) -> String {
-        "first definition here".to_owned()
     }
 }

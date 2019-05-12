@@ -1,9 +1,11 @@
 use std::{error, fmt, result};
 
+use codespan_reporting::Diagnostic;
+
 use arret_syntax::span::Span;
 
 use crate::mir::inliner::ApplyCookie;
-use crate::reporting::{LocTrace, Reportable, Severity};
+use crate::reporting::LocTrace;
 
 #[derive(Debug, PartialEq)]
 pub struct Panic {
@@ -41,30 +43,39 @@ impl Error {
             other => other,
         }
     }
-}
 
-impl error::Error for Panic {
-    fn description(&self) -> &str {
-        "Panic during HIR evaluation"
+    pub fn message(&self) -> String {
+        match self {
+            Error::Panic(panic) => panic.message.clone(),
+            Error::AbortRecursion(_) => "internal recursion abort".to_owned(),
+            Error::Diverged => "internal divergence".to_owned(),
+        }
     }
 }
+
+impl From<Error> for Diagnostic {
+    fn from(error: Error) -> Diagnostic {
+        if let Error::Panic(panic) = error {
+            return Diagnostic::new_error(panic.message).with_labels(panic.loc_trace.to_labels());
+        }
+
+        panic!(
+            "attempted to convert an internal {:?} flow control error to a diagnostic",
+            error
+        );
+    }
+}
+
+impl From<Error> for Vec<Diagnostic> {
+    fn from(error: Error) -> Vec<Diagnostic> {
+        vec![error.into()]
+    }
+}
+
+impl error::Error for Panic {}
 
 impl fmt::Display for Panic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl Reportable for Panic {
-    fn severity(&self) -> Severity {
-        Severity::Error
-    }
-
-    fn message(&self) -> String {
-        self.message.clone()
-    }
-
-    fn loc_trace(&self) -> LocTrace {
-        self.loc_trace.clone()
+        f.write_str(&self.message)
     }
 }

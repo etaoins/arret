@@ -4,14 +4,13 @@
 use std::ops::Range;
 use std::{env, fs, io, path, process};
 
+use codespan_reporting::{Diagnostic, Label, LabelStyle, Severity};
 use rayon::prelude::*;
 use tempfile::NamedTempFile;
 
 use arret_syntax::span::{ByteIndex, Span};
 
-use arret_compiler::error::Error;
-use arret_compiler::reporting::{report_to_stderr, LocTrace, Reportable, Severity};
-use arret_compiler::CompileCtx;
+use arret_compiler::{emit_diagnostics_to_stderr, errors_to_diagnostics, CompileCtx};
 
 #[derive(Clone, Copy, PartialEq)]
 enum RunType {
@@ -45,47 +44,37 @@ impl ExpectedSpan {
 }
 
 #[derive(Debug)]
-struct ExpectedReport {
+struct ExpectedDiagnostic {
     expected_severity: Severity,
     message_prefix: String,
     span: ExpectedSpan,
 }
 
-impl ExpectedReport {
-    fn matches(&self, actual_report: &dyn Reportable) -> bool {
-        use std::iter;
+impl ExpectedDiagnostic {
+    fn matches(&self, actual: &Diagnostic) -> bool {
+        if self.expected_severity != actual.severity {
+            return false;
+        }
 
-        let loc_trace = actual_report.loc_trace();
+        if !actual.message.starts_with(&self.message_prefix[..]) {
+            return false;
+        }
 
-        iter::once(&loc_trace.origin())
-            .chain(loc_trace.macro_invocation().iter())
-            .any(|candidate_span| {
-                self.span.matches(*candidate_span)
-                    && actual_report
-                        .message()
-                        .starts_with(&self.message_prefix[..])
-            })
+        actual
+            .labels
+            .iter()
+            .any(|candidate_label| self.span.matches(candidate_label.span))
     }
-}
 
-impl Reportable for ExpectedReport {
-    fn loc_trace(&self) -> LocTrace {
-        (match self.span {
+    /// Returns a diagnostic for reporting missing expectation
+    fn to_error_diagnostic(&self) -> Diagnostic {
+        let span = match self.span {
             ExpectedSpan::Exact(span) => span,
             ExpectedSpan::StartRange(ref span_range) => Span::new(span_range.start, span_range.end),
-        })
-        .into()
-    }
+        };
 
-    fn severity(&self) -> Severity {
-        Severity::Help
-    }
-
-    fn message(&self) -> String {
-        format!(
-            "expected {} `{} ...`",
-            self.expected_severity.to_str(),
-            self.message_prefix
+        Diagnostic::new_error(format!("expected {}", self.expected_severity.to_str(),)).with_label(
+            Label::new_primary(span).with_message(format!("{} ...", self.message_prefix)),
         )
     }
 }
@@ -93,6 +82,7 @@ impl Reportable for ExpectedReport {
 fn take_severity(marker_string: &str) -> (Severity, &str) {
     for (prefix, severity) in &[
         (" ERROR ", Severity::Error),
+        (" WARNING ", Severity::Warning),
         (" NOTE ", Severity::Note),
         (" HELP ", Severity::Help),
     ] {
@@ -104,14 +94,18 @@ fn take_severity(marker_string: &str) -> (Severity, &str) {
     panic!("Unknown severity prefix for `{}`", marker_string)
 }
 
-fn extract_expected_reports(source_file: &arret_compiler::SourceFile) -> Vec<ExpectedReport> {
-    let source = source_file.source();
-    let span_offset = source_file.span().start().0;
+fn extract_expected_diagnostics(
+    source_file: &arret_compiler::SourceFile,
+) -> Vec<ExpectedDiagnostic> {
+    let file_map = source_file.file_map();
 
-    let mut line_reports = source
+    let source = file_map.src();
+    let span_offset = file_map.span().start().0;
+
+    source
         .match_indices(";~")
         .map(|(index, _)| {
-            let start_of_line_index = &source[..index].rfind('\n').unwrap_or(0);
+            let start_of_line_index = &source[..index].rfind('\n').map(|i| i + 1).unwrap_or(0);
 
             let end_of_line_index = &source[index..]
                 .find('\n')
@@ -122,7 +116,7 @@ fn extract_expected_reports(source_file: &arret_compiler::SourceFile) -> Vec<Exp
             let marker_string = &source[index + 2..*end_of_line_index];
             let (severity, marker_string) = take_severity(marker_string);
 
-            ExpectedReport {
+            ExpectedDiagnostic {
                 expected_severity: severity,
                 message_prefix: marker_string.into(),
                 span: ExpectedSpan::StartRange(
@@ -131,43 +125,40 @@ fn extract_expected_reports(source_file: &arret_compiler::SourceFile) -> Vec<Exp
                 ),
             }
         })
-        .collect::<Vec<ExpectedReport>>();
+        .chain(source.match_indices(";^").map(|(index, _)| {
+            let span_length = source[index..].find(' ').expect("Cannot find severity") - 1;
 
-    let mut spanned_reports = source.match_indices(";^").map(|(index, _)| {
-        let span_length = source[index..].find(' ').expect("Cannot find severity") - 1;
+            let start_of_line_index = &source[..index]
+                .rfind('\n')
+                .expect("Cannot have a spanned error on first line");
 
-        let start_of_line_index = &source[..index]
-            .rfind('\n')
-            .expect("Cannot have a spanned error on first line");
+            let start_of_previous_line_index =
+                &source[..*start_of_line_index].rfind('\n').unwrap_or(0);
 
-        let start_of_previous_line_index = &source[..*start_of_line_index].rfind('\n').unwrap_or(0);
+            let end_of_line_index = &source[index..]
+                .find('\n')
+                .map(|i| i + index)
+                .unwrap_or_else(|| source.len());
 
-        let end_of_line_index = &source[index..]
-            .find('\n')
-            .map(|i| i + index)
-            .unwrap_or_else(|| source.len());
+            let span_line_offset = index - start_of_line_index + 1;
 
-        let span_line_offset = index - start_of_line_index + 1;
+            let span_start = start_of_previous_line_index + span_line_offset;
+            let span_end = span_start + span_length;
 
-        let span_start = start_of_previous_line_index + span_line_offset;
-        let span_end = span_start + span_length;
+            // Take from after the ;^^ to the end of the line
+            let marker_string = &source[index + span_length + 1..*end_of_line_index];
+            let (severity, marker_string) = take_severity(marker_string);
 
-        // Take from after the ;^^ to the end of the line
-        let marker_string = &source[index + span_length + 1..*end_of_line_index];
-        let (severity, marker_string) = take_severity(marker_string);
-
-        ExpectedReport {
-            expected_severity: severity,
-            message_prefix: marker_string.into(),
-            span: ExpectedSpan::Exact(Span::new(
-                ByteIndex(span_offset + (span_start as u32)),
-                ByteIndex(span_offset + (span_end as u32)),
-            )),
-        }
-    });
-
-    line_reports.extend(&mut spanned_reports);
-    line_reports
+            ExpectedDiagnostic {
+                expected_severity: severity,
+                message_prefix: marker_string.into(),
+                span: ExpectedSpan::Exact(Span::new(
+                    ByteIndex(span_offset + (span_start as u32)),
+                    ByteIndex(span_offset + (span_end as u32)),
+                )),
+            }
+        }))
+        .collect()
 }
 
 fn result_for_single_test(
@@ -175,9 +166,11 @@ fn result_for_single_test(
     ccx: &CompileCtx,
     source_file: &arret_compiler::SourceFile,
     test_type: TestType,
-) -> Result<(), Error> {
-    let hir = arret_compiler::lower_program(ccx, &source_file)?;
-    let inferred_defs = arret_compiler::infer_program(hir.defs, hir.main_var_id)?;
+) -> Result<(), Vec<Diagnostic>> {
+    let hir = arret_compiler::lower_program(ccx, &source_file).map_err(errors_to_diagnostics)?;
+
+    let inferred_defs =
+        arret_compiler::infer_program(hir.defs, hir.main_var_id).map_err(errors_to_diagnostics)?;
 
     let mut ehx = arret_compiler::EvalHirCtx::new(true);
     for inferred_def in inferred_defs {
@@ -225,7 +218,7 @@ fn result_for_single_test(
                 panic!(
                     "unexpected status {} returned from integration test {}",
                     status,
-                    source_file.kind()
+                    source_file.file_map().name()
                 );
             }
         }
@@ -238,7 +231,7 @@ fn result_for_single_test(
                 panic!(
                     "unexpected status {} returned from integration test {}",
                     status,
-                    source_file.kind()
+                    source_file.file_map().name()
                 );
             }
         }
@@ -253,19 +246,10 @@ fn run_single_pass_test(
     source_file: &arret_compiler::SourceFile,
     test_type: TestType,
 ) -> bool {
-    use std::io;
-
     let result = result_for_single_test(target_triple, ccx, &source_file, test_type);
 
-    if let Err(Error(errs)) = result {
-        // Prevent concurrent writes to stderr
-        let stderr = io::stderr();
-        let _errlock = stderr.lock();
-
-        for err in errs {
-            report_to_stderr(ccx.source_loader(), &*err);
-        }
-
+    if let Err(diagnostics) = result {
+        emit_diagnostics_to_stderr(ccx.source_loader(), diagnostics);
         false
     } else {
         true
@@ -277,55 +261,65 @@ fn run_single_compile_fail_test(
     ccx: &CompileCtx,
     source_file: &arret_compiler::SourceFile,
 ) -> bool {
-    use std::io;
-
     let result = result_for_single_test(target_triple, ccx, source_file, TestType::CompileError);
 
-    let mut expected_reports = extract_expected_reports(source_file);
-    let actual_reports = if let Err(Error(reports)) = result {
-        reports
+    let mut expected_diags = extract_expected_diagnostics(source_file);
+    let actual_diags = if let Err(diags) = result {
+        diags
     } else {
         eprintln!(
             "Compilation unexpectedly succeeded for {}",
-            source_file.kind()
+            source_file.file_map().name()
         );
         return false;
     };
 
-    let mut unexpected_reports = vec![];
+    let mut unexpected_diags = vec![];
 
-    for actual_report in actual_reports.into_iter() {
-        let expected_report_index = expected_reports
+    for actual_diag in actual_diags.into_iter() {
+        let expected_report_index = expected_diags
             .iter()
-            .position(|expected_report| expected_report.matches(actual_report.as_ref()));
+            .position(|expected_report| expected_report.matches(&actual_diag));
 
         match expected_report_index {
             Some(index) => {
-                expected_reports.swap_remove(index);
+                expected_diags.swap_remove(index);
             }
             None => {
-                unexpected_reports.push(actual_report);
+                unexpected_diags.push(actual_diag);
             }
         }
     }
 
-    if unexpected_reports.is_empty() && expected_reports.is_empty() {
+    if unexpected_diags.is_empty() && expected_diags.is_empty() {
         return true;
     }
 
-    // Prevent concurrent writes to stderr
-    let stderr = io::stderr();
-    let _errlock = stderr.lock();
+    let all_diags = unexpected_diags
+        .into_iter()
+        .map(|unexpected_diag| {
+            let error_diag =
+                Diagnostic::new_error(format!("unexpected {}", unexpected_diag.severity.to_str()));
 
-    for unexpected_report in unexpected_reports {
-        eprintln!("Unexpected {}:", unexpected_report.severity().to_str());
-        report_to_stderr(ccx.source_loader(), unexpected_report.as_ref());
-    }
+            if let Some(span) = unexpected_diag
+                .labels
+                .iter()
+                .find(|label| label.style == LabelStyle::Primary)
+                .map(|label| label.span)
+            {
+                error_diag
+                    .with_label(Label::new_primary(span).with_message(unexpected_diag.message))
+            } else {
+                error_diag
+            }
+        })
+        .chain(
+            expected_diags
+                .into_iter()
+                .map(|expected_diag| expected_diag.to_error_diagnostic()),
+        );
 
-    for expected_report in expected_reports {
-        report_to_stderr(ccx.source_loader(), &expected_report);
-    }
-
+    emit_diagnostics_to_stderr(ccx.source_loader(), all_diags);
     false
 }
 

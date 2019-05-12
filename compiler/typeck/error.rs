@@ -2,10 +2,12 @@ use std::error;
 use std::fmt;
 use std::fmt::Display;
 
+use codespan_reporting::{Diagnostic, Label};
+
 use arret_syntax::span::Span;
 
 use crate::hir;
-use crate::reporting::{LocTrace, Reportable, Severity};
+use crate::reporting::LocTrace;
 use crate::ty;
 use crate::ty::purity;
 
@@ -73,14 +75,8 @@ impl Error {
             ..self
         }
     }
-}
 
-impl Reportable for Error {
-    fn severity(&self) -> Severity {
-        Severity::Error
-    }
-
-    fn message(&self) -> String {
+    pub fn message(&self) -> String {
         match self.kind() {
             ErrorKind::IsNotFun(ref sub) => {
                 format!("`{}` is not a function", hir::str_for_ty_ref(sub))
@@ -135,68 +131,35 @@ impl Reportable for Error {
             ),
         }
     }
+}
 
-    fn loc_trace(&self) -> LocTrace {
-        self.loc_trace.clone()
-    }
+impl From<Error> for Diagnostic {
+    fn from(error: Error) -> Diagnostic {
+        let diagnostic =
+            Diagnostic::new_error(error.message()).with_labels(error.loc_trace.to_labels());
 
-    fn associated_report(&self) -> Option<Box<dyn Reportable>> {
-        match self.kind() {
-            ErrorKind::UnselectedPVar(pvar_id) => Some(Box::new(PVarDefHelp {
-                span: pvar_id.span(),
-            })),
-            ErrorKind::UnselectedTVar(tvar_id) => Some(Box::new(TVarDefHelp {
-                span: tvar_id.span(),
-            })),
-            _ => None,
+        match error.kind() {
+            ErrorKind::UnselectedPVar(pvar_id) => diagnostic.with_label(
+                Label::new_secondary(pvar_id.span()).with_message("purity variable defined here"),
+            ),
+            ErrorKind::UnselectedTVar(tvar_id) => diagnostic.with_label(
+                Label::new_secondary(tvar_id.span()).with_message("type variable defined here"),
+            ),
+            _ => diagnostic,
         }
     }
 }
 
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        "Type check error"
+impl From<Error> for Vec<Diagnostic> {
+    fn from(error: Error) -> Vec<Diagnostic> {
+        vec![error.into()]
     }
 }
+
+impl error::Error for Error {}
 
 impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-struct PVarDefHelp {
-    span: Span,
-}
-
-impl Reportable for PVarDefHelp {
-    fn severity(&self) -> Severity {
-        Severity::Help
-    }
-
-    fn loc_trace(&self) -> LocTrace {
-        self.span.into()
-    }
-
-    fn message(&self) -> String {
-        "purity variable defined here".to_owned()
-    }
-}
-
-struct TVarDefHelp {
-    span: Span,
-}
-
-impl Reportable for TVarDefHelp {
-    fn severity(&self) -> Severity {
-        Severity::Help
-    }
-
-    fn loc_trace(&self) -> LocTrace {
-        self.span.into()
-    }
-
-    fn message(&self) -> String {
-        "type variable defined here".to_owned()
+        f.write_str(&self.message())
     }
 }

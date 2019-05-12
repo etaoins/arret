@@ -1,8 +1,8 @@
 use std::path;
 
-use arret_compiler::error::Error;
-use arret_compiler::reporting::report_to_stderr;
-use arret_compiler::CompileCtx;
+use codespan_reporting::Diagnostic;
+
+use arret_compiler::{emit_diagnostics_to_stderr, errors_to_diagnostics, CompileCtx};
 
 fn try_compile_input_file(
     ccx: &CompileCtx,
@@ -10,9 +10,11 @@ fn try_compile_input_file(
     input_file: &arret_compiler::SourceFile,
     output_path: &path::Path,
     debug_info: bool,
-) -> Result<(), Error> {
-    let hir = arret_compiler::lower_program(ccx, input_file)?;
-    let inferred_defs = arret_compiler::infer_program(hir.defs, hir.main_var_id)?;
+) -> Result<(), Vec<Diagnostic>> {
+    let hir = arret_compiler::lower_program(ccx, input_file).map_err(errors_to_diagnostics)?;
+
+    let inferred_defs =
+        arret_compiler::infer_program(hir.defs, hir.main_var_id).map_err(errors_to_diagnostics)?;
 
     let mut ehx = arret_compiler::EvalHirCtx::new(true);
     for inferred_def in inferred_defs {
@@ -65,10 +67,8 @@ pub fn compile_input_file(
 
     let result = try_compile_input_file(ccx, options, input_file, output_path, debug_info);
 
-    if let Err(Error(errs)) = result {
-        for err in errs {
-            report_to_stderr(ccx.source_loader(), &*err);
-        }
+    if let Err(diagnostics) = result {
+        emit_diagnostics_to_stderr(ccx.source_loader(), diagnostics);
         false
     } else {
         true

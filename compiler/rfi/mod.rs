@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::{fmt, path};
 
+use codespan::FileName;
+
 use arret_syntax::datum::Datum;
 use arret_syntax::span::Span;
 
@@ -9,7 +11,7 @@ use crate::hir;
 use crate::hir::error::{Error, ErrorKind};
 use crate::hir::ns::NsDatum;
 use crate::hir::scope::Scope;
-use crate::source::{RfiModuleKind, SourceKind, SourceLoader};
+use crate::source::SourceLoader;
 use crate::ty;
 
 use arret_runtime::{abitype, binding};
@@ -297,19 +299,18 @@ impl Loader {
                 };
 
                 // Parse the declared Arret type string as a datum
-                let kind = SourceKind::RfiModule(RfiModuleKind {
-                    filename: filename.clone(),
-                    fun_name,
-                });
+                let file_map_name = FileName::Virtual(
+                    format!("{}:{}", filename.to_string_lossy(), fun_name).into(),
+                );
 
                 let arret_type_source_file =
-                    source_loader.load_string(kind, rust_fun.arret_type.into());
+                    source_loader.load_string(file_map_name, rust_fun.arret_type.into());
 
                 let arret_type_datum = match arret_type_source_file.parsed()? {
                     [arret_type_datum] => arret_type_datum,
                     _ => {
                         return Err(Error::new(
-                            arret_type_source_file.span(),
+                            arret_type_source_file.file_map().span(),
                             ErrorKind::RustFunError("expected exactly one Arret type datum".into()),
                         ));
                     }

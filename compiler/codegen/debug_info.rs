@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::os::unix::ffi::OsStrExt;
 use std::{env, ffi, ptr};
 
+use codespan::FileName;
+
 use llvm_sys::core::*;
 use llvm_sys::debuginfo::*;
 use llvm_sys::prelude::*;
@@ -9,15 +11,14 @@ use llvm_sys::prelude::*;
 use arret_syntax::datum::DataStr;
 use arret_syntax::span::Span;
 
-use crate::id_type::ArcId;
-use crate::source::{SourceFile, SourceKind, SourceLoader, SourceLoc};
+use crate::source::{FileMap, SourceLoader};
 
 pub struct DebugInfoBuilder<'sl> {
     pub llvm_dib: LLVMDIBuilderRef,
 
     source_loader: &'sl SourceLoader,
     current_dir: ffi::CString,
-    file_metadata: HashMap<ArcId<SourceFile>, Option<LLVMMetadataRef>>,
+    file_metadata: HashMap<FileName, Option<LLVMMetadataRef>>,
 }
 
 impl<'sl> DebugInfoBuilder<'sl> {
@@ -48,9 +49,17 @@ impl<'sl> DebugInfoBuilder<'sl> {
     }
 
     fn add_compile_unit_metadata(&mut self, optimised: bool, main_span: Span) {
-        let main_loc = SourceLoc::from_byte_index(self.source_loader, main_span.start());
-        let main_file = main_loc.source_file();
-        let main_file_metadata = if let Some(metadata) = self.file_metadata(main_file) {
+        let main_span_start = main_span.start();
+
+        let code_map = self.source_loader.code_map();
+        let main_file_map = if let Some(file_map) = code_map.find_file(main_span_start) {
+            file_map
+        } else {
+            return;
+        };
+
+        let main_file_metadata = if let Some(metadata) = self.file_metadata(main_file_map.as_ref())
+        {
             metadata
         } else {
             return;
@@ -80,13 +89,13 @@ impl<'sl> DebugInfoBuilder<'sl> {
         }
     }
 
-    pub fn file_metadata(&mut self, source_file: &ArcId<SourceFile>) -> Option<LLVMMetadataRef> {
-        if let Some(metadata) = self.file_metadata.get(source_file) {
+    pub fn file_metadata(&mut self, file_map: &FileMap) -> Option<LLVMMetadataRef> {
+        if let Some(metadata) = self.file_metadata.get(file_map.name()) {
             return *metadata;
         }
 
-        let metadata = if let SourceKind::File(ref filename) = source_file.kind() {
-            ffi::CString::new(filename.as_bytes())
+        let metadata = if let FileName::Real(ref filename) = file_map.name() {
+            ffi::CString::new(filename.to_string_lossy().as_bytes())
                 .ok()
                 .map(|c_filename| unsafe {
                     LLVMDIBuilderCreateFile(
@@ -101,7 +110,7 @@ impl<'sl> DebugInfoBuilder<'sl> {
             None
         };
 
-        self.file_metadata.insert(source_file.clone(), metadata);
+        self.file_metadata.insert(file_map.name().clone(), metadata);
         metadata
     }
 
@@ -128,11 +137,23 @@ impl<'sl> DebugInfoBuilder<'sl> {
         source_name: Option<&DataStr>,
         llvm_function: LLVMValueRef,
     ) {
-        let source_loc = SourceLoc::from_byte_index(self.source_loader, span.start());
-        let source_file = source_loc.source_file();
-        let source_line = source_loc.line();
+        let span_start = span.start();
 
-        let file_metadata = if let Some(file_metadata) = self.file_metadata(source_file) {
+        let code_map = self.source_loader.code_map();
+
+        let file_map = if let Some(file_map) = code_map.find_file(span_start) {
+            file_map
+        } else {
+            return;
+        };
+
+        let line_index = if let Ok((line_index, _)) = file_map.location(span_start) {
+            line_index
+        } else {
+            return;
+        };
+
+        let file_metadata = if let Some(file_metadata) = self.file_metadata(file_map.as_ref()) {
             file_metadata
         } else {
             return;
@@ -159,11 +180,11 @@ impl<'sl> DebugInfoBuilder<'sl> {
                 linkage_name_ptr,
                 linkage_name_len,
                 file_metadata,
-                source_line as u32,
+                line_index.number().0 as u32,
                 self.placeholder_subroutine_type(file_metadata),
                 source_name.is_none() as i32, // `IsLocalToUnit`
                 1,                            // `IsDefinition`
-                source_line as u32,           // `ScopeLine`
+                line_index.number().0 as u32, // `ScopeLine`
                 LLVMDIFlags::LLVMDIFlagZero,
                 1, // `IsOptimized`
             );
