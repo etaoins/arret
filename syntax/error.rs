@@ -44,7 +44,7 @@ pub enum ErrorKind {
     UnsupportedStringEscape,
     IntegerOverflow,
     InvalidFloat,
-    UnexpectedChar(char),
+    UnexpectedChar(char, ExpectedContent),
     UnevenMap,
     InvalidArgLiteral,
 }
@@ -62,7 +62,9 @@ impl ErrorKind {
             ErrorKind::UnsupportedStringEscape => "unsupported string escape".to_owned(),
             ErrorKind::IntegerOverflow => "integer literal does not fit in i64".to_owned(),
             ErrorKind::InvalidFloat => "unable to parse float".to_owned(),
-            ErrorKind::UnexpectedChar(c) => format!("unexpected `{}`", c),
+            ErrorKind::UnexpectedChar(c, ec) => {
+                format!("unexpected `{}` while parsing {}", c, ec.description())
+            }
             ErrorKind::UnevenMap => "map literal must have an even number of values".to_owned(),
             ErrorKind::InvalidArgLiteral => {
                 "arg literal must be `%`, `%{integer}` or `%&`".to_owned()
@@ -88,6 +90,7 @@ pub enum ExpectedContent {
 }
 
 impl ExpectedContent {
+    /// Returns a description of the content that was expected
     pub fn description(&self) -> &'static str {
         match self {
             ExpectedContent::List(_) => "list",
@@ -103,6 +106,19 @@ impl ExpectedContent {
         }
     }
 
+    /// Returns the character expected to close an open sequence or string
+    pub fn expected_close_char(&self) -> Option<char> {
+        match self {
+            ExpectedContent::List(_) => Some(')'),
+            ExpectedContent::Vector(_) => Some(']'),
+            ExpectedContent::Set(_) => Some('}'),
+            ExpectedContent::Map(_) => Some('}'),
+            ExpectedContent::String(_) => Some('"'),
+            _ => None,
+        }
+    }
+
+    /// Returns the character opening the sequence or string
     pub fn open_char_span(&self) -> Option<Span> {
         match self {
             ExpectedContent::List(span)

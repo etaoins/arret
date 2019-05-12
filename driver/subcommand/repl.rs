@@ -166,13 +166,8 @@ impl rustyline::hint::Hinter for ArretHelper {
         }
 
         expected_content
-            .and_then(|expected_content| match expected_content {
-                ExpectedContent::List(_) => Some(")"),
-                ExpectedContent::Vector(_) => Some("]"),
-                ExpectedContent::Set(_) | ExpectedContent::Map(_) => Some("}"),
-                _ => None,
-            })
-            .map(ToOwned::to_owned)
+            .and_then(|ec| ec.expected_close_char())
+            .map(|c| c.to_string())
     }
 }
 

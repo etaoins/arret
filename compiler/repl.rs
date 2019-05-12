@@ -89,7 +89,9 @@ impl<'ccx> ReplCtx<'ccx> {
                 let extra_span = input_data[1].span();
 
                 return Err(vec![Diagnostic::new_error("unexpected trailing datum")
-                    .with_label(Label::new_primary(extra_span))]);
+                    .with_label(
+                        Label::new_primary(extra_span).with_message("trailing datum"),
+                    )]);
             }
         };
 

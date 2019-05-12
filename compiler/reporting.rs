@@ -60,22 +60,46 @@ pub fn errors_to_diagnostics<E: Into<Diagnostic>>(errors: Vec<E>) -> Vec<Diagnos
     errors.into_iter().map(Into::into).collect()
 }
 
-/// Returns a diagnostic for the passed syntax errror
-pub fn diagnostic_for_syntax_error(error: &arret_syntax::error::Error) -> Diagnostic {
-    let message = error.kind().message();
-    let diagnostic = Diagnostic::new_error(message);
+fn diagnostic_with_expected_content_labels(
+    diagnostic: Diagnostic,
+    origin: Span,
+    ec: arret_syntax::error::ExpectedContent,
+) -> Diagnostic {
+    let primary_label_message = match ec.expected_close_char() {
+        Some('"') => "expected `\"`".to_owned(),
+        Some(sequence_close_char) => format!("expected datum or `{}`", sequence_close_char),
+        None => "expected datum".to_owned(),
+    };
 
-    if let arret_syntax::error::ErrorKind::Eof(ref ec) = error.kind() {
-        if let Some(open_char_span) = ec.open_char_span() {
-            // Add a secondary label
-            return diagnostic.with_label(
-                Label::new_secondary(open_char_span)
-                    .with_message(format!("{} starts here", ec.description())),
-            );
-        }
+    let diagnostic =
+        diagnostic.with_label(Label::new_primary(origin).with_message(primary_label_message));
+
+    if let Some(open_char_span) = ec.open_char_span() {
+        diagnostic.with_label(
+            Label::new_secondary(open_char_span)
+                .with_message(format!("{} starts here", ec.description())),
+        )
+    } else {
+        diagnostic
     }
+}
 
-    diagnostic
+/// Returns a diagnostic for the passed syntax errror
+///
+/// This is required because `arret-syntax` doesn't depend on `codespan-reporting`. It requires
+/// its consumers to handle reporting themselves.
+pub fn diagnostic_for_syntax_error(error: &arret_syntax::error::Error) -> Diagnostic {
+    use arret_syntax::error::ErrorKind;
+
+    let origin = error.span();
+    let diagnostic = Diagnostic::new_error(error.kind().message());
+
+    match error.kind() {
+        ErrorKind::Eof(ec) | ErrorKind::UnexpectedChar(_, ec) => {
+            diagnostic_with_expected_content_labels(diagnostic, origin, *ec)
+        }
+        _ => diagnostic.with_label(Label::new_primary(origin).with_message("syntax error")),
+    }
 }
 
 /// Emits a series of diagnostics to standard error

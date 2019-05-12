@@ -225,7 +225,7 @@ impl<'input> Parser<'input> {
             | Err(Error {
                 kind: ErrorKind::Eof(_),
                 ..
-            }) => self.parse_identifier(),
+            }) => self.parse_identifier(ExpectedContent::Identifier),
             Err(other) => Err(other),
         }
     }
@@ -307,7 +307,7 @@ impl<'input> Parser<'input> {
                 self.eat_bytes(1);
                 break Ok(content);
             } else {
-                content.push(self.parse_datum_starting_with(next_char)?);
+                content.push(self.parse_datum_starting_with(next_char, ec)?);
             }
         }
     }
@@ -425,13 +425,12 @@ impl<'input> Parser<'input> {
         contents.map(|contents| Datum::Str(span, contents.into()))
     }
 
-    fn parse_identifier(&mut self) -> Result<Datum> {
+    fn parse_identifier(&mut self, ec: ExpectedContent) -> Result<Datum> {
         let (span, content) = self.consume_while(is_identifier_char);
 
         if content.is_empty() {
-            let (span, next_char) =
-                self.capture_span(|s| s.consume_char(ExpectedContent::Identifier));
-            return Err(Error::new(span, ErrorKind::UnexpectedChar(next_char?)));
+            let (span, next_char) = self.capture_span(|s| s.consume_char(ec));
+            return Err(Error::new(span, ErrorKind::UnexpectedChar(next_char?, ec)));
         }
 
         match content {
@@ -459,7 +458,7 @@ impl<'input> Parser<'input> {
         })
     }
 
-    fn parse_datum_starting_with(&mut self, c: char) -> Result<Datum> {
+    fn parse_datum_starting_with(&mut self, c: char, ec: ExpectedContent) -> Result<Datum> {
         match c {
             '(' => self.parse_list(),
             '[' => self.parse_vector(),
@@ -470,13 +469,15 @@ impl<'input> Parser<'input> {
             '"' => self.parse_string(),
             '\\' => self.parse_char(),
             '#' => self.parse_dispatch(),
-            _ => self.parse_identifier(),
+            _ => self.parse_identifier(ec),
         }
     }
 
     fn parse_datum(&mut self) -> Result<Datum> {
-        let start_char = self.skip_until_non_whitespace(ExpectedContent::Datum)?;
-        self.parse_datum_starting_with(start_char)
+        let ec = ExpectedContent::Datum;
+
+        let start_char = self.skip_until_non_whitespace(ec)?;
+        self.parse_datum_starting_with(start_char, ec)
     }
 
     fn parse_data(&mut self) -> Result<Vec<Datum>> {
@@ -583,7 +584,19 @@ mod test {
 
         let j = ")";
         let t = "^";
-        let err = Error::new(t2s(t), ErrorKind::UnexpectedChar(')'));
+        let err = Error::new(
+            t2s(t),
+            ErrorKind::UnexpectedChar(')', ExpectedContent::Datum),
+        );
+        assert_eq!(err, datum_from_str(j).unwrap_err());
+
+        let j = "(]";
+        let t = "^ ";
+        let u = " ^";
+        let err = Error::new(
+            t2s(u),
+            ErrorKind::UnexpectedChar(']', ExpectedContent::List(t2s(t))),
+        );
         assert_eq!(err, datum_from_str(j).unwrap_err());
     }
 
@@ -621,7 +634,10 @@ mod test {
 
         let j = "]";
         let t = "^";
-        let err = Error::new(t2s(t), ErrorKind::UnexpectedChar(']'));
+        let err = Error::new(
+            t2s(t),
+            ErrorKind::UnexpectedChar(']', ExpectedContent::Datum),
+        );
         assert_eq!(err, datum_from_str(j).unwrap_err());
     }
 
@@ -982,7 +998,10 @@ mod test {
 
         let j = "(true)))";
         let t = "      ^ ";
-        let err = Error::new(t2s(t), ErrorKind::UnexpectedChar(')'));
+        let err = Error::new(
+            t2s(t),
+            ErrorKind::UnexpectedChar(')', ExpectedContent::Datum),
+        );
         assert_eq!(err, data_from_str(j).unwrap_err());
 
         let j = "(true";
