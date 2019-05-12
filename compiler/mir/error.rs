@@ -1,6 +1,6 @@
 use std::{error, fmt, result};
 
-use codespan_reporting::Diagnostic;
+use codespan_reporting::{Diagnostic, Label};
 
 use arret_syntax::span::Span;
 
@@ -43,20 +43,16 @@ impl Error {
             other => other,
         }
     }
-
-    pub fn message(&self) -> String {
-        match self {
-            Error::Panic(panic) => panic.message.clone(),
-            Error::AbortRecursion(_) => "internal recursion abort".to_owned(),
-            Error::Diverged => "internal divergence".to_owned(),
-        }
-    }
 }
 
 impl From<Error> for Diagnostic {
     fn from(error: Error) -> Diagnostic {
         if let Error::Panic(panic) = error {
-            return Diagnostic::new_error(panic.message).with_labels(panic.loc_trace.to_labels());
+            let diagnostic = Diagnostic::new_error(panic.message).with_label(
+                Label::new_primary(panic.loc_trace.origin()).with_message("panicked here"),
+            );
+
+            return panic.loc_trace.label_macro_invocation(diagnostic);
         }
 
         panic!(
