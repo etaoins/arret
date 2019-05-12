@@ -6,13 +6,25 @@ use arret_syntax::datum::DataStr;
 use arret_syntax::error::Error as SyntaxError;
 use arret_syntax::span::Span;
 
+use crate::hir::scope::BindingClass;
 use crate::reporting::{diagnostic_for_syntax_error, LocTrace};
+
+fn binding_class_to_str(class: BindingClass) -> &'static str {
+    match class {
+        BindingClass::Value => "value",
+        BindingClass::Prim => "primitive",
+        BindingClass::Ty => "type",
+        BindingClass::TyCons => "type constructor",
+        BindingClass::Purity => "purity",
+        BindingClass::Macro => "macro",
+    }
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ErrorKind {
-    PrimRef,
-    TyRef,
-    MacroRef(DataStr),
+    ExpectedValue(BindingClass),
+    ExpectedTy(BindingClass),
+    ExpectedTyCons(BindingClass),
     UnboundIdent(DataStr),
     WrongArgCount(usize),
     IllegalArg(&'static str),
@@ -28,7 +40,6 @@ pub enum ErrorKind {
     DuplicateDef(Option<Span>, DataStr),
     MultipleZeroOrMoreMatch(Span),
     NoVecDestruc,
-    ValueAsTy,
     UserError(DataStr),
     ReadError(Box<path::Path>),
     SyntaxError(SyntaxError),
@@ -39,6 +50,8 @@ pub enum ErrorKind {
     NoBindingVec,
     BindingsNotVec,
     UnevenBindingVec,
+    UnsupportedLiteralType,
+    VarPurityBound,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -81,16 +94,23 @@ impl From<Error> for Diagnostic {
         let origin = error.loc_trace.origin();
 
         let diagnostic = match error.kind() {
-            ErrorKind::PrimRef => Diagnostic::new_error("cannot take the value of a primitive")
-                .with_label(Label::new_primary(origin).with_message("value expected")),
+            ErrorKind::ExpectedValue(class) => Diagnostic::new_error(format!(
+                "cannot take the value of a {}",
+                binding_class_to_str(*class)
+            ))
+            .with_label(Label::new_primary(origin).with_message("expected value")),
 
-            ErrorKind::TyRef => Diagnostic::new_error("cannot take the value of a type")
-                .with_label(Label::new_primary(origin).with_message("value expected")),
+            ErrorKind::ExpectedTy(class) => Diagnostic::new_error(format!(
+                "{} cannot be used as a type",
+                binding_class_to_str(*class)
+            ))
+            .with_label(Label::new_primary(origin).with_message("expected type")),
 
-            ErrorKind::MacroRef(ref sym) => {
-                Diagnostic::new_error(format!("cannot take the value of macro `{}`", sym))
-                    .with_label(Label::new_primary(origin).with_message("value expected"))
-            }
+            ErrorKind::ExpectedTyCons(class) => Diagnostic::new_error(format!(
+                "{} cannot be used as a type constructor",
+                binding_class_to_str(*class)
+            ))
+            .with_label(Label::new_primary(origin).with_message("expected type constructor")),
 
             ErrorKind::UnboundIdent(ref ident) => {
                 Diagnostic::new_error(format!("unable to resolve `{}`", ident))
@@ -179,9 +199,6 @@ impl From<Error> for Diagnostic {
             )
             .with_label(Label::new_primary(origin).with_message("unexpected vector")),
 
-            ErrorKind::ValueAsTy => Diagnostic::new_error("value cannot be used as a type")
-                .with_label(Label::new_primary(origin).with_message("type expected")),
-
             ErrorKind::UserError(ref message) => Diagnostic::new_error(message.as_ref())
                 .with_label(Label::new_primary(origin).with_message("user error raised here")),
 
@@ -232,6 +249,17 @@ impl From<Error> for Diagnostic {
             ErrorKind::UnevenBindingVec => {
                 Diagnostic::new_error("binding vector must have an even number of forms")
                     .with_label(Label::new_primary(origin).with_message("extra binding form"))
+            }
+
+            ErrorKind::UnsupportedLiteralType => Diagnostic::new_error("unsupported literal type")
+                .with_label(
+                    Label::new_primary(origin)
+                        .with_message("expected boolean, symbol, keyword, list or vector"),
+                ),
+
+            ErrorKind::VarPurityBound => {
+                Diagnostic::new_error("purity variables cannot be bound by other variables")
+                    .with_label(Label::new_primary(origin).with_message("expected `->` or `->!`"))
             }
         };
 

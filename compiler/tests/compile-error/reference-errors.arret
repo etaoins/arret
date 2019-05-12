@@ -7,10 +7,10 @@
       ;^^^ ERROR cannot take the value of a type
 
 (def _ List)
-      ;^^^^ ERROR cannot take the value of a type
+      ;^^^^ ERROR cannot take the value of a type constructor
 
 (def _ ->!)
-      ;^^^ ERROR cannot take the value of a type
+      ;^^^ ERROR cannot take the value of a purity
 
 (def _ fn)
       ;^^ ERROR cannot take the value of a primitive

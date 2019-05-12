@@ -21,7 +21,7 @@ use crate::hir::loader::{load_module_by_name, LoadedModule, ModuleName};
 use crate::hir::macros::{expand_macro, lower_macro_rules, MacroId};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum, NsId};
 use crate::hir::prim::Prim;
-use crate::hir::scope::{Binding, Scope};
+use crate::hir::scope::{Binding, BindingClass, Scope};
 use crate::hir::types::lower_polymorphic_vars;
 use crate::hir::types::{lower_poly, try_lower_purity};
 use crate::hir::util::{
@@ -429,7 +429,10 @@ fn lower_expr_prim_apply(
         }
         Prim::Do => lower_body(scope, arg_iter),
         Prim::CompileError => Err(lower_user_compile_error(span, arg_iter)),
-        Prim::MacroRules | Prim::All => Err(Error::new(span, ErrorKind::PrimRef)),
+        Prim::MacroRules | Prim::All => Err(Error::new(
+            span,
+            ErrorKind::ExpectedValue(BindingClass::Prim),
+        )),
     }
 }
 
@@ -466,11 +469,7 @@ fn lower_expr(scope: &Scope<'_>, datum: NsDatum) -> Result<Expr<Lowered>> {
             Binding::Var(id) => Ok(ExprKind::Ref(span, *id).into()),
             Binding::TyPred(test_ty) => Ok(ExprKind::TyPred(span, *test_ty).into()),
             Binding::EqPred => Ok(ExprKind::EqPred(span).into()),
-            Binding::Prim(_) => Err(Error::new(span, ErrorKind::PrimRef)),
-            Binding::Ty(_) | Binding::TyCons(_) | Binding::Purity(_) => {
-                Err(Error::new(span, ErrorKind::TyRef))
-            }
-            Binding::Macro(_) => Err(Error::new(span, ErrorKind::MacroRef(ident.into_name()))),
+            other => Err(Error::new(span, ErrorKind::ExpectedValue(other.to_class()))),
         },
         NsDatum::List(span, vs) => {
             let mut data_iter = vs.into_vec().into_iter();

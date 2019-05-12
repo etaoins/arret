@@ -7,16 +7,16 @@
            ;^^^^^^^ ERROR unable to resolve `unbound`
 
 (deftype _ quote)
-          ;^^^^^ ERROR value cannot be used as a type
+          ;^^^^^ ERROR primitive cannot be used as a type
 
 (deftype _ 1)
-          ;^ ERROR only boolean and symbol type literal atoms are supported
+          ;^ ERROR unsupported literal type
 
 (deftype _ '(1))
-            ;^ ERROR only boolean and symbol type literal atoms are supported
+            ;^ ERROR unsupported literal type
 
 (deftype _ [1])
-           ;^ ERROR only boolean and symbol type literal atoms are supported
+           ;^ ERROR unsupported literal type
 
 (deftype _ (->))
-           ;^^ ERROR type constructor expected
+           ;^^ ERROR purity cannot be used as a type constructor

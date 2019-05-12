@@ -50,7 +50,7 @@ fn lower_polymorphic_var(scope: &Scope<'_>, tvar_datum: NsDatum) -> Result<Polym
                 )),
             });
         }
-        NsDatum::Vector(vector_span, vs) => {
+        NsDatum::Vector(_, vs) => {
             let mut arg_data = vs.into_vec();
 
             if arg_data.len() == 2 {
@@ -75,12 +75,7 @@ fn lower_polymorphic_var(scope: &Scope<'_>, tvar_datum: NsDatum) -> Result<Polym
                         });
                     }
                     Some(_) => {
-                        return Err(Error::new(
-                            vector_span,
-                            ErrorKind::IllegalArg(
-                                "Purity variables do not support variable bounds",
-                            ),
-                        ));
+                        return Err(Error::new(bound_datum.span(), ErrorKind::VarPurityBound));
                     }
                     None => {
                         let bound_ty = lower_poly(scope, bound_datum)?;
@@ -215,10 +210,7 @@ fn lower_literal(datum: NsDatum) -> Result<ty::Ref<ty::Poly>> {
             let fixed_literals = lower_literal_vec(vs.into_vec())?;
             Ok(ty::Ty::Vector(fixed_literals.into_boxed_slice()).into())
         }
-        _ => Err(Error::new(
-            datum.span(),
-            ErrorKind::IllegalArg("only boolean and symbol type literal atoms are supported"),
-        )),
+        _ => Err(Error::new(datum.span(), ErrorKind::UnsupportedLiteralType)),
     }
 }
 
@@ -227,7 +219,7 @@ fn lower_ident(scope: &Scope<'_>, span: Span, ident: &Ident) -> Result<ty::Ref<t
         Binding::Ty(ty) => Ok(ty.clone()),
         Binding::TyPred(test_ty) => Ok(ty::Ty::TyPred(*test_ty).into()),
         Binding::EqPred => Ok(ty::Ty::EqPred.into()),
-        _ => Err(Error::new(span, ErrorKind::ValueAsTy)),
+        other => Err(Error::new(span, ErrorKind::ExpectedTy(other.to_class()))),
     }
 }
 
@@ -292,23 +284,19 @@ pub fn lower_poly_data_iter(
     }
 
     let fn_datum = data_iter.next().unwrap();
+    let (ident, ident_span) = expect_ident_and_span(fn_datum)?;
 
-    if let NsDatum::Ident(ident_span, ref ident) = fn_datum {
-        match scope.get_or_err(ident_span, ident)? {
-            Binding::Prim(Prim::Quote) => {
-                let literal_datum = expect_one_arg(span, data_iter)?;
-                return lower_literal(literal_datum);
-            }
-            Binding::TyCons(ty_cons) => {
-                return lower_ty_cons_apply(scope, span, *ty_cons, data_iter);
-            }
-            _ => {}
+    match scope.get_or_err(ident_span, &ident)? {
+        Binding::Prim(Prim::Quote) => {
+            let literal_datum = expect_one_arg(span, data_iter)?;
+            lower_literal(literal_datum)
         }
+        Binding::TyCons(ty_cons) => lower_ty_cons_apply(scope, span, *ty_cons, data_iter),
+        other => Err(Error::new(
+            ident_span,
+            ErrorKind::ExpectedTyCons(other.to_class()),
+        )),
     }
-    Err(Error::new(
-        fn_datum.span(),
-        ErrorKind::IllegalArg("type constructor expected"),
-    ))
 }
 
 pub fn lower_poly(scope: &Scope<'_>, datum: NsDatum) -> Result<ty::Ref<ty::Poly>> {
