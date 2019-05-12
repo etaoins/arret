@@ -56,6 +56,7 @@ where
     fn lower_import_filter(
         &mut self,
         apply_span: Span,
+        filter_span: Span,
         filter_name: &str,
         filter_input: FilterInput,
         arg_iter: NsDataIter,
@@ -70,10 +71,7 @@ where
                         if let Some(binding) = inner_exports.get(ident.name()) {
                             Ok((ident.into_name(), binding.clone()))
                         } else {
-                            Err(Error::new(
-                                span,
-                                ErrorKind::UnboundIdent(ident.into_name()),
-                            ))
+                            Err(Error::new(span, ErrorKind::UnboundIdent(ident.into_name())))
                         }
                     })
                     .collect::<result::Result<Exports, Error>>()?;
@@ -91,10 +89,7 @@ where
                     let (ident, span) = expect_ident_and_span(arg_datum)?;
 
                     if except_exports.remove(ident.name()).is_none() {
-                        errors.push(Error::new(
-                            span,
-                            ErrorKind::UnboundIdent(ident.into_name()),
-                        ));
+                        errors.push(Error::new(span, ErrorKind::UnboundIdent(ident.into_name())));
                     }
                 }
 
@@ -142,9 +137,7 @@ where
                 } else {
                     Err(vec![Error::new(
                         arg_datum.span(),
-                        ErrorKind::IllegalArg(
-                            "(rename) expects a map of identifier renames",
-                        ),
+                        ErrorKind::IllegalArg("(rename) expects a map of identifier renames"),
                     )])
                 }
             }
@@ -155,7 +148,9 @@ where
                 let prefix_exports = filter_input
                     .exports
                     .into_iter()
-                    .map(|(name, binding)| (format!("{}{}", prefix_ident.name(), name).into(), binding))
+                    .map(|(name, binding)| {
+                        (format!("{}{}", prefix_ident.name(), name).into(), binding)
+                    })
                     .collect();
 
                 Ok(FilterInput {
@@ -181,10 +176,8 @@ where
                 })
             }
             _ => Err(vec![Error::new(
-                apply_span,
-                ErrorKind::IllegalArg(
-                    "unknown import filter; must be `only`, `except`, `rename`, `prefix` or `prefixed`"
-                ),
+                filter_span,
+                ErrorKind::UnsupportedImportFilter,
             )]),
         }
     }
@@ -207,12 +200,14 @@ where
 
                 // Each filter requires a filter identifier and an inner import set
                 if filter_iter.len() >= 2 {
-                    let filter_ident = expect_ident(filter_iter.next().unwrap())?;
+                    let (filter_ident, filter_span) =
+                        expect_ident_and_span(filter_iter.next().unwrap())?;
                     let inner_import_datum = filter_iter.next().unwrap();
 
                     let filter_input = self.lower_import_set(inner_import_datum)?;
                     return self.lower_import_filter(
                         span,
+                        filter_span,
                         filter_ident.name(),
                         filter_input,
                         filter_iter,

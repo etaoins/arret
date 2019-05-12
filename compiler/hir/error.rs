@@ -54,6 +54,7 @@ pub enum ErrorKind {
     VarPurityBound,
     NoParamDecl,
     ExpectedParamList,
+    UnsupportedImportFilter,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -272,6 +273,14 @@ impl From<Error> for Diagnostic {
             ErrorKind::ExpectedParamList => {
                 Diagnostic::new_error("parameter declaration is not a list")
                     .with_label(Label::new_primary(origin).with_message("expected list"))
+            }
+
+            ErrorKind::UnsupportedImportFilter => {
+                Diagnostic::new_error("unsupported import filter").with_label(
+                    Label::new_primary(origin).with_message(
+                        "expected `only`, `except`, `rename`, `prefix` or `prefixed`",
+                    ),
+                )
             }
         };
 

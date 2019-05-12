@@ -3,6 +3,9 @@
 (import (only [stdlib base] do))
        ;^^^^^^^^^^^^^^^^^^^^^^^ ERROR duplicate definition
 
+(import (unknown [stdlib base]))
+        ;^^^^^^^ ERROR unsupported import filter
+
 1                    ;~ ERROR value at top-level of module body
 'foo                 ;~ ERROR value at top-level of module body
 (list)               ;~ ERROR value at top-level of module body
