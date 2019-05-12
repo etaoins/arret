@@ -132,15 +132,17 @@ fn extract_expected_diagnostics(
                 .rfind('\n')
                 .expect("Cannot have a spanned error on first line");
 
-            let start_of_previous_line_index =
-                &source[..*start_of_line_index].rfind('\n').unwrap_or(0);
+            let start_of_previous_line_index = &source[..*start_of_line_index]
+                .rfind('\n')
+                .map(|i| i + 1)
+                .unwrap_or(0);
 
             let end_of_line_index = &source[index..]
                 .find('\n')
                 .map(|i| i + index)
                 .unwrap_or_else(|| source.len());
 
-            let span_line_offset = index - start_of_line_index + 1;
+            let span_line_offset = index - start_of_line_index;
 
             let span_start = start_of_previous_line_index + span_line_offset;
             let span_end = span_start + span_length;
