@@ -36,7 +36,7 @@ impl fmt::Display for WantedArity {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum ErrorKind {
     IsNotTy(ty::Ref<ty::Poly>, ty::Ref<ty::Poly>),
     IsNotFun(ty::Ref<ty::Poly>),
@@ -50,7 +50,7 @@ pub enum ErrorKind {
     UnselectedTVar(ty::TVarId),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Error {
     loc_trace: LocTrace,
     kind: ErrorKind,
@@ -75,17 +75,26 @@ impl Error {
             ..self
         }
     }
+}
 
-    pub fn message(&self) -> String {
-        match self.kind() {
-            ErrorKind::IsNotFun(ref sub) => {
-                format!("`{}` is not a function", hir::str_for_ty_ref(sub))
-            }
-            ErrorKind::IsNotTy(ref sub, ref parent) => format!(
-                "`{}` is not a `{}`",
-                hir::str_for_ty_ref(sub),
-                hir::str_for_ty_ref(parent)
-            ),
+impl From<Error> for Diagnostic {
+    fn from(error: Error) -> Diagnostic {
+        let origin = error.loc_trace.origin();
+
+        let diagnostic = match error.kind() {
+            ErrorKind::IsNotFun(ref sub) => Diagnostic::new_error(format!(
+                "expected function, found `{}`",
+                hir::str_for_ty_ref(sub)
+            ))
+            .with_label(Label::new_primary(origin).with_message("application requires function")),
+
+            ErrorKind::IsNotTy(ref sub, ref parent) => Diagnostic::new_error("mismatched types")
+                .with_label(Label::new_primary(origin).with_message(format!(
+                    "`{}` is not a `{}`",
+                    hir::str_for_ty_ref(sub),
+                    hir::str_for_ty_ref(parent)
+                ))),
+
             ErrorKind::IsNotPurity(ref fun, ref purity) => {
                 use crate::ty::purity::Purity;
 
@@ -96,57 +105,74 @@ impl Error {
                     format!("`{}`", hir::str_for_purity(purity))
                 };
 
-                format!(
-                    "function of type `{}` is not {}",
-                    hir::str_for_ty_ref(fun),
-                    purity_str
+                Diagnostic::new_error("mismatched purities").with_label(
+                    Label::new_primary(origin).with_message(format!(
+                        "function of type `{}` is not {}",
+                        hir::str_for_ty_ref(fun),
+                        purity_str
+                    )),
                 )
             }
-            ErrorKind::VarHasEmptyType(ref left, ref right) => format!(
+
+            ErrorKind::VarHasEmptyType(ref left, ref right) => Diagnostic::new_error(
+                "type annotation needed",
+            )
+            .with_label(Label::new_primary(origin).with_message(format!(
                 "inferred conflicting types `{}` and `{}`",
                 hir::str_for_ty_ref(left),
                 hir::str_for_ty_ref(right)
-            ),
-            ErrorKind::TopFunApply(ref top_fun) => format!(
-                "cannot determine parameter types for top function type `{}`",
+            ))),
+
+            ErrorKind::TopFunApply(ref top_fun) => Diagnostic::new_error(format!(
+                "cannot determine parameter types for `{}`",
                 hir::str_for_ty_ref(top_fun)
-            ),
-            ErrorKind::WrongArity(have, ref wanted) => format!(
-                "incorrect number of arguments: wanted {}, have {}",
-                wanted, have
-            ),
-            ErrorKind::RecursiveType => {
-                "recursive usage requires explicit type annotation".to_owned()
+            ))
+            .with_label(Label::new_primary(origin).with_message("at this application")),
+
+            ErrorKind::WrongArity(have, ref wanted) => {
+                let label_message = if wanted.fixed_len == 1 {
+                    format!("expected {} argument", wanted)
+                } else {
+                    format!("expected {} arguments", wanted)
+                };
+
+                Diagnostic::new_error(format!(
+                    "incorrect number of arguments: wanted {}, have {}",
+                    wanted, have
+                ))
+                .with_label(Label::new_primary(origin).with_message(label_message))
             }
+
+            ErrorKind::RecursiveType => Diagnostic::new_error("type annotation needed").with_label(
+                Label::new_primary(origin)
+                    .with_message("recursive usage requires explicit type annotation".to_owned()),
+            ),
+
             ErrorKind::DependsOnError => {
-                "type cannot be determined due to previous error".to_owned()
+                Diagnostic::new_error("type cannot be determined due to previous error")
+                    .with_label(Label::new_primary(origin))
             }
-            ErrorKind::UnselectedPVar(pvar_id) => format!(
-                "cannot determine purity of purity variable `{}` in this context",
-                pvar_id.source_name()
-            ),
-            ErrorKind::UnselectedTVar(pvar_id) => format!(
-                "cannot determine type of type variable `{}` in this context",
-                pvar_id.source_name()
-            ),
-        }
-    }
-}
 
-impl From<Error> for Diagnostic {
-    fn from(error: Error) -> Diagnostic {
-        let diagnostic =
-            Diagnostic::new_error(error.message()).with_labels(error.loc_trace.to_labels());
-
-        match error.kind() {
-            ErrorKind::UnselectedPVar(pvar_id) => diagnostic.with_label(
+            ErrorKind::UnselectedPVar(pvar_id) => Diagnostic::new_error(format!(
+                "cannot determine purity of purity variable `{}`",
+                pvar_id.source_name()
+            ))
+            .with_label(Label::new_primary(origin).with_message("at this application"))
+            .with_label(
                 Label::new_secondary(pvar_id.span()).with_message("purity variable defined here"),
             ),
-            ErrorKind::UnselectedTVar(tvar_id) => diagnostic.with_label(
+
+            ErrorKind::UnselectedTVar(tvar_id) => Diagnostic::new_error(format!(
+                "cannot determine type of type variable `{}`",
+                tvar_id.source_name()
+            ))
+            .with_label(Label::new_primary(origin).with_message("at this application"))
+            .with_label(
                 Label::new_secondary(tvar_id.span()).with_message("type variable defined here"),
             ),
-            _ => diagnostic,
-        }
+        };
+
+        error.loc_trace.label_macro_invocation(diagnostic)
     }
 }
 
@@ -160,6 +186,7 @@ impl error::Error for Error {}
 
 impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.message())
+        let diagnostic: Diagnostic = self.clone().into();
+        f.write_str(&diagnostic.message)
     }
 }

@@ -47,6 +47,18 @@ impl LocTrace {
             _ => vec![primary_label],
         }
     }
+
+    pub fn label_macro_invocation(&self, diagnostic: Diagnostic) -> Diagnostic {
+        match self.macro_invocation {
+            Some(macro_invocation_span) if !macro_invocation_span.contains(self.origin) => {
+                let macro_invocation_label = Label::new_secondary(macro_invocation_span)
+                    .with_message("in this macro invocation");
+
+                diagnostic.with_label(macro_invocation_label)
+            }
+            _ => diagnostic,
+        }
+    }
 }
 
 impl From<Span> for LocTrace {

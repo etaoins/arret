@@ -20,12 +20,12 @@
 
 (defn apply-top-fun ([x (... -> Bool)])
   (x 5))
- ;^^^^^ ERROR cannot determine parameter types for top function type `(... -> Bool)`
+ ;^^^^^ ERROR cannot determine parameter types for `(... -> Bool)`
 
  (defn apply-with-rest (_ [_ Int] _))
  (def _ (apply-with-rest & '(1 2)))
-                           ;^^^^^ ERROR `(List Int Int)` is not a `(List Any Int Any)`
+                           ;^^^^^ ERROR mismatched types
  (def _ (apply-with-rest & '(1 2 3 4)))
-                           ;^^^^^^^^^ ERROR `(List Int Int Int Int)` is not a `(List Any Int Any)`
+                           ;^^^^^^^^^ ERROR mismatched types
 
 (defn main! ())
