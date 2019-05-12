@@ -203,10 +203,7 @@ fn lower_scalar_destruc(
             let (ident, span) = expect_ident_and_span(data.pop().unwrap())?;
             lower_ident_destruc(scope, span, ident, ty.into())
         }
-        _ => Err(Error::new(
-            destruc_datum.span(),
-            ErrorKind::IllegalArg("expected a variable name or [name Type]"),
-        )),
+        _ => Err(Error::new(destruc_datum.span(), ErrorKind::BadRestDestruc)),
     }
 }
 
@@ -237,14 +234,12 @@ fn lower_destruc(
             lower_scalar_destruc(scope, destruc_datum)
                 .map(|scalar| destruc::Destruc::Scalar(span, scalar))
         }
+
         NsDatum::List(span, vs) => lower_list_destruc(scope, vs.into_vec().into_iter())
             .map(|list_destruc| destruc::Destruc::List(span, list_destruc)),
-        _ => Err(Error::new(
-            destruc_datum.span(),
-            ErrorKind::IllegalArg(
-                "values can only be bound to variables or destructured into lists",
-            ),
-        )),
+
+        NsDatum::Keyword(span, _) => Err(Error::new(span, ErrorKind::KeywordDestruc)),
+        _ => Err(Error::new(destruc_datum.span(), ErrorKind::BadListDestruc)),
     }
 }
 

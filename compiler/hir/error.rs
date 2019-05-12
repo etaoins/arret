@@ -33,6 +33,9 @@ pub enum ErrorKind {
     ReadError(Box<path::Path>),
     SyntaxError(SyntaxError),
     RustFunError(Box<str>),
+    KeywordDestruc,
+    BadListDestruc,
+    BadRestDestruc,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -169,7 +172,7 @@ impl From<Error> for Diagnostic {
             }
 
             ErrorKind::NoVecDestruc => Diagnostic::new_error(
-                "vectors can only be used in a destructure in the form [name Type]",
+                "vectors can only be used in a destructure in the form `[name Type]`",
             )
             .with_label(Label::new_primary(origin).with_message("unexpected vector")),
 
@@ -199,6 +202,23 @@ impl From<Error> for Diagnostic {
                     Label::new_primary(origin).with_message("main! function expected in this file"),
                 )
             }
+
+            ErrorKind::KeywordDestruc => {
+                Diagnostic::new_error("keywords cannot be used as variable names")
+                    .with_label(Label::new_primary(origin).with_message("expected symbol"))
+            }
+
+            ErrorKind::BadListDestruc => Diagnostic::new_error("unsupported destructuring binding")
+                .with_label(
+                    Label::new_primary(origin)
+                        .with_message("expected variable name, list or `[name Type]`"),
+                ),
+
+            ErrorKind::BadRestDestruc => Diagnostic::new_error("unsupported rest destructuring")
+                .with_label(
+                    Label::new_primary(origin)
+                        .with_message("expected variable name or `[name Type]`"),
+                ),
         };
 
         error.loc_trace.label_macro_invocation(diagnostic)

@@ -4,20 +4,28 @@
        ;^ ERROR unable to resolve `y`
 
 (def [x / y] [1 2 3])
-    ;^^^^^^^ ERROR vectors can only be used in a destructure in the form [name Type]
+    ;^^^^^^^ ERROR vectors can only be used in a destructure in the form `[name Type]`
 
 (def [x y z] [1 2 3 4])
-    ;^^^^^^^ ERROR vectors can only be used in a destructure in the form [name Type]
+    ;^^^^^^^ ERROR vectors can only be used in a destructure in the form `[name Type]`
 
 (def [1 Int] 1)
      ;^ ERROR expected symbol
 
 (def 1 1)
-    ;^ ERROR values can only be bound to variables or destructured into lists
+    ;^ ERROR unsupported destructuring binding
 
 (def :foo 1)
-    ;^^^^ ERROR values can only be bound to variables or destructured into lists
+    ;^^^^ ERROR keywords cannot be used as variable names
 
 ; Double type annotation
 (def [[x Int] Int] 1)
      ;^^^^^^^ ERROR expected symbol
+
+(def bad-param-destruc
+  (fn (1)))
+      ;^ ERROR unsupported destructuring binding
+
+(def keyword-param-destruc
+  (fn (:foo)))
+      ;^^^^ ERROR keywords cannot be used as variable names

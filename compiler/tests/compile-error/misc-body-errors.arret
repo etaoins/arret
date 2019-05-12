@@ -16,14 +16,6 @@
   (fn))
  ;^^^^ ERROR parameter declaration missing
 
-(def bad-param-destruc
-  (fn (1)))
-      ;^ ERROR values can only be bound to variables or destructured into lists
-
-(def keyword-param-destruc
-  (fn (:foo)))
-      ;^^^^ ERROR values can only be bound to variables or destructured into lists
-
 (def duplicate-param
   (fn (x x)))
         ;^ ERROR duplicate definition
