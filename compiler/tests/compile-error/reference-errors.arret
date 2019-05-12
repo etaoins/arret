@@ -1,7 +1,7 @@
 (import [stdlib base])
 
 (def _ nopenopenope)
-      ;^^^^^^^^^^^^ ERROR unable to resolve symbol
+      ;^^^^^^^^^^^^ ERROR unable to resolve `nopenopenope`
 
 (def _ Str)
       ;^^^ ERROR cannot take the value of a type

@@ -1,13 +1,13 @@
 (import [stdlib base])
 
 (def [x y] [1 2])
-       ;^ ERROR unable to resolve symbol: `y`
+       ;^ ERROR unable to resolve `y`
 
 (def [x / y] [1 2 3])
-    ;^^^^^^^ ERROR vectors can only be used in a destructure for type ascription in the form [name Type]
+    ;^^^^^^^ ERROR vectors can only be used in a destructure in the form [name Type]
 
 (def [x y z] [1 2 3 4])
-    ;^^^^^^^ ERROR vectors can only be used in a destructure for type ascription in the form [name Type]
+    ;^^^^^^^ ERROR vectors can only be used in a destructure in the form [name Type]
 
 (def [1 Int] 1)
      ;^ ERROR expected symbol

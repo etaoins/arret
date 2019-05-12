@@ -129,7 +129,7 @@ impl<'parent> Scope<'parent> {
     /// Returns the binding for a given ident if it exists, otherwise returns an error
     pub fn get_or_err<'a>(&'a self, span: Span, ident: &Ident) -> Result<&'a Binding, Error> {
         self.get(ident)
-            .ok_or_else(|| Error::new(span, ErrorKind::UnboundSym(ident.name().clone())))
+            .ok_or_else(|| Error::new(span, ErrorKind::UnboundIdent(ident.name().clone())))
     }
 
     /// Inserts a new binding if it doesn't exist or redefinition is allowed

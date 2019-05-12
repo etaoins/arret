@@ -1,10 +1,10 @@
 (import [stdlib base])
 
 (deftype _ unbound)
-          ;^^^^^^^ ERROR unable to resolve symbol: `unbound`
+          ;^^^^^^^ ERROR unable to resolve `unbound`
 
 (deftype _ (unbound))
-           ;^^^^^^^ ERROR unable to resolve symbol: `unbound`
+           ;^^^^^^^ ERROR unable to resolve `unbound`
 
 (deftype _ quote)
           ;^^^^^ ERROR value cannot be used as a type

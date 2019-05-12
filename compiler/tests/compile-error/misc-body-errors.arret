@@ -2,11 +2,11 @@
 
 (defn too-many-quote-args ()
   (quote 1 2 3))
- ;^^^^^^^^^^^^^ ERROR wrong arg count; expected 1
+ ;^^^^^^^^^^^^^ ERROR wrong argument count; expected 1
 
 (defn def-in-body-context ()
   (def foo 1))
- ;^^^^^^^^^^^ ERROR (def) outside module body
+ ;^^^^^^^^^^^ ERROR definition outside module body
 
 (defn let-without-binding-vector ()
   (let x 1))

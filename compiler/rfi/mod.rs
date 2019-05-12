@@ -481,7 +481,7 @@ mod test {
             symbol: "",
         };
 
-        let kind = ErrorKind::UnboundSym("unbound".into());
+        let kind = ErrorKind::UnboundIdent("unbound".into());
         assert_binding_fun_error(&kind, &BINDING_RUST_FUN);
     }
 
