@@ -337,16 +337,13 @@ fn lower_fun(
 
     let mut next_datum = arg_iter
         .next()
-        .ok_or_else(|| Error::new(span, ErrorKind::IllegalArg("parameter declaration missing")))?;
+        .ok_or_else(|| Error::new(span, ErrorKind::NoParamDecl))?;
 
     // We can either begin with a set of type variables or a list of parameters
     let (pvar_ids, tvar_ids) = if let NsDatum::Set(_, vs) = next_datum {
-        next_datum = arg_iter.next().ok_or_else(|| {
-            Error::new(
-                span,
-                ErrorKind::IllegalArg("type variables should be followed by parameters"),
-            )
-        })?;
+        next_datum = arg_iter
+            .next()
+            .ok_or_else(|| Error::new(span, ErrorKind::NoParamDecl))?;
 
         lower_polymorphic_vars(vs.into_vec().into_iter(), outer_scope, &mut fun_scope)?
     } else {
@@ -356,11 +353,8 @@ fn lower_fun(
     // Pull out our params
     let params = match next_datum {
         NsDatum::List(_, vs) => lower_list_destruc(&mut fun_scope, vs.into_vec().into_iter())?,
-        _ => {
-            return Err(Error::new(
-                span,
-                ErrorKind::IllegalArg("parameter list expected"),
-            ));
+        other => {
+            return Err(Error::new(other.span(), ErrorKind::ExpectedParamList));
         }
     };
 

@@ -52,6 +52,8 @@ pub enum ErrorKind {
     UnevenBindingVec,
     UnsupportedLiteralType,
     VarPurityBound,
+    NoParamDecl,
+    ExpectedParamList,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -260,6 +262,16 @@ impl From<Error> for Diagnostic {
             ErrorKind::VarPurityBound => {
                 Diagnostic::new_error("purity variables cannot be bound by other variables")
                     .with_label(Label::new_primary(origin).with_message("expected `->` or `->!`"))
+            }
+
+            ErrorKind::NoParamDecl => Diagnostic::new_error("parameter declaration missing")
+                .with_label(
+                    Label::new_primary(origin).with_message("expected parameter list argument"),
+                ),
+
+            ErrorKind::ExpectedParamList => {
+                Diagnostic::new_error("parameter declaration is not a list")
+                    .with_label(Label::new_primary(origin).with_message("expected list"))
             }
         };
 

@@ -1,0 +1,10 @@
+(import [stdlib base])
+
+(def _ (fn))
+      ;^^^^ ERROR parameter declaration missing
+
+(def _ (fn #{A}))
+      ;^^^^^^^^^ ERROR parameter declaration missing
+
+(def _ (fn []))
+          ;^^ ERROR parameter declaration is not a list
