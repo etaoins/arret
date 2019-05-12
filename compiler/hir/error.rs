@@ -116,8 +116,16 @@ impl From<Error> for Diagnostic {
             .with_label(Label::new_primary(origin).with_message("expected parameter list")),
 
             ErrorKind::UnboundIdent(ref ident) => {
-                Diagnostic::new_error(format!("unable to resolve `{}`", ident))
-                    .with_label(Label::new_primary(origin).with_message("not found in this scope"))
+                let diagnostic = Diagnostic::new_error(format!("unable to resolve `{}`", ident))
+                    .with_label(Label::new_primary(origin).with_message("not found in this scope"));
+
+                if ident.as_ref() == "nil" {
+                    diagnostic.with_label(Label::new_secondary(origin).with_message(
+                        "Arret does not have a distinct `nil` value; consider using `()` instead",
+                    ))
+                } else {
+                    diagnostic
+                }
             }
 
             ErrorKind::WrongArgCount(expected) => {
