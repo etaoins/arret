@@ -63,14 +63,14 @@ fn lower_macro_rule_datum(
     } else {
         return Err(Error::new(
             rule_datum.span(),
-            ErrorKind::IllegalArg("expected a macro rule vector"),
+            ErrorKind::ExpectedMacroRuleVec(rule_datum.description()),
         ));
     };
 
     if rule_values.len() != 2 {
         return Err(Error::new(
             span,
-            ErrorKind::IllegalArg("expected a macro rule vector with two elements"),
+            ErrorKind::WrongMacroRuleVecCount(rule_values.len()),
         ));
     }
 
@@ -82,7 +82,7 @@ fn lower_macro_rule_datum(
     } else {
         return Err(Error::new(
             pattern_datum.span(),
-            ErrorKind::IllegalArg("expected a macro rule pattern list"),
+            ErrorKind::ExpectedMacroRulePatternList(pattern_datum.description()),
         ));
     };
 

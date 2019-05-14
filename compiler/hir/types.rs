@@ -94,12 +94,7 @@ fn lower_polymorphic_var(scope: &Scope<'_>, tvar_datum: NsDatum) -> Result<Polym
         _ => {}
     }
 
-    Err(Error::new(
-        span,
-        ErrorKind::IllegalArg(
-            "polymorphic variables must be either an identifier or `[identifier Type]`",
-        ),
-    ))
+    Err(Error::new(span, ErrorKind::BadPolyVarDecl))
 }
 
 fn lower_list_cons(scope: &Scope<'_>, mut arg_iter: NsDataIter) -> Result<ty::List<ty::Poly>> {

@@ -24,9 +24,7 @@ use crate::hir::prim::Prim;
 use crate::hir::scope::{Binding, Scope};
 use crate::hir::types::lower_polymorphic_vars;
 use crate::hir::types::{lower_poly, try_lower_purity};
-use crate::hir::util::{
-    expect_arg_count, expect_ident_and_span, expect_one_arg, try_take_rest_arg,
-};
+use crate::hir::util::{expect_ident_and_span, expect_one_arg, try_take_rest_arg};
 use crate::hir::Lowered;
 use crate::hir::{App, Cond, DeclPurity, DeclTy, Def, Expr, ExprKind, Fun, Let, VarId};
 
@@ -88,7 +86,10 @@ pub enum LoweredReplDatum {
 fn lower_user_compile_error(span: Span, arg_iter: NsDataIter) -> Error {
     match expect_one_arg(span, arg_iter) {
         Ok(NsDatum::Str(_, user_message)) => Error::new(span, ErrorKind::UserError(user_message)),
-        Ok(_) => Error::new(span, ErrorKind::IllegalArg("string expected")),
+        Ok(other) => Error::new(
+            other.span(),
+            ErrorKind::ExpectedCompileErrorString(other.description()),
+        ),
         Err(error) => error,
     }
 }
@@ -103,13 +104,14 @@ fn lower_macro(
     let macro_rules_data = if let NsDatum::List(span, vs) = transformer_spec {
         let mut transformer_data = vs.into_vec();
 
-        if transformer_data.first().and_then(|d| scope.get_datum(d))
-            != Some(&Binding::Prim(Prim::MacroRules))
-        {
-            return Err(Error::new(
-                span,
-                ErrorKind::IllegalArg("unsupported macro type"),
-            ));
+        let macro_type_datum = if let Some(macro_type_datum) = transformer_data.first() {
+            macro_type_datum
+        } else {
+            return Err(Error::new(span, ErrorKind::NoMacroType));
+        };
+
+        if scope.get_datum(macro_type_datum) != Some(&Binding::Prim(Prim::MacroRules)) {
+            return Err(Error::new(macro_type_datum.span(), ErrorKind::BadMacroType));
         }
 
         transformer_data.remove(0);
@@ -117,7 +119,7 @@ fn lower_macro(
     } else {
         return Err(Error::new(
             transformer_spec.span(),
-            ErrorKind::IllegalArg("macro specification must be a list"),
+            ErrorKind::ExpectedMacroSpecList(transformer_spec.description()),
         ));
     };
 
@@ -131,7 +133,12 @@ fn lower_macro(
 }
 
 fn lower_defmacro(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) -> Result<()> {
-    expect_arg_count(span, 2, arg_iter.len())?;
+    if arg_iter.len() != 2 {
+        return Err(Error::new(
+            span,
+            ErrorKind::WrongDefLikeArgCount("defmacro"),
+        ));
+    }
 
     let self_datum = arg_iter.next().unwrap();
     let transformer_spec = arg_iter.next().unwrap();
@@ -155,7 +162,9 @@ fn lower_type(scope: &mut Scope<'_>, self_datum: NsDatum, ty_datum: NsDatum) -> 
 }
 
 fn lower_deftype(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) -> Result<()> {
-    expect_arg_count(span, 2, arg_iter.len())?;
+    if arg_iter.len() != 2 {
+        return Err(Error::new(span, ErrorKind::WrongDefLikeArgCount("deftype")));
+    }
 
     let self_datum = arg_iter.next().unwrap();
     let ty_datum = arg_iter.next().unwrap();
@@ -417,7 +426,9 @@ fn lower_expr_prim_apply(
         }
         Prim::Fun => lower_fun(scope, span, arg_iter),
         Prim::If => {
-            expect_arg_count(span, 3, arg_iter.len())?;
+            if arg_iter.len() != 3 {
+                return Err(Error::new(span, ErrorKind::WrongCondArgCount));
+            }
 
             Ok(ExprKind::Cond(Box::new(Cond {
                 span,
@@ -634,7 +645,12 @@ impl<'ccx> LoweringCtx<'ccx> {
                 Ok(Some(DeferredModulePrim::Exports(deferred_exports)))
             }
             Prim::Def => {
-                expect_arg_count(span, 2, arg_iter.len())?;
+                if arg_iter.len() != 2 {
+                    return Err(vec![Error::new(
+                        span,
+                        ErrorKind::WrongDefLikeArgCount("def"),
+                    )]);
+                }
 
                 let destruc_datum = arg_iter.next().unwrap();
                 let destruc = lower_destruc(scope, destruc_datum)?;

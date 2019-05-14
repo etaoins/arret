@@ -4,7 +4,7 @@ use std::result;
 use arret_syntax::span::{Span, EMPTY_SPAN};
 
 use crate::hir::error::{Error, ErrorKind, Result};
-use crate::hir::macros::{get_escaped_ident, starts_with_zero_or_more};
+use crate::hir::macros::starts_with_zero_or_more;
 use crate::hir::ns::{Ident, NsDatum};
 use crate::hir::scope::{Binding, Scope};
 
@@ -107,10 +107,7 @@ impl<'data> FindVarsCtx<'data> {
         }
 
         if ident.is_ellipsis() {
-            return Err(Error::new(
-                span,
-                ErrorKind::IllegalArg("ellipsis can only be used as part of a zero or more match"),
-            ));
+            return Err(Error::new(span, ErrorKind::MacroBadEllipsis));
         }
 
         if let Some(ref mut var_spans) = self.var_spans {
@@ -193,11 +190,19 @@ impl<'data> FindVarsCtx<'data> {
         pattern_vars: &mut FoundVars<'data>,
         patterns: &'data [NsDatum],
     ) -> FindVarsResult {
-        if get_escaped_ident(patterns).is_some() {
-            // This isn't actually a list
-            Ok(())
-        } else {
-            self.visit_seq(pattern_vars, patterns)
+        match patterns {
+            [NsDatum::Ident(_, ellipsis_ident), escaped_datum] if ellipsis_ident.is_ellipsis() => {
+                if let NsDatum::Ident(_, _) = escaped_datum {
+                    // This isn't actually a list
+                    Ok(())
+                } else {
+                    Err(Error::new(
+                        escaped_datum.span(),
+                        ErrorKind::ExpectedMacroEllipsisEscape(escaped_datum.description()),
+                    ))
+                }
+            }
+            _ => self.visit_seq(pattern_vars, patterns),
         }
     }
 
@@ -217,10 +222,7 @@ impl<'data> FindVarsCtx<'data> {
             2 if starts_with_zero_or_more(patterns) => {
                 self.visit_zero_or_more(pattern_vars, &patterns[0])
             }
-            _ => Err(Error::new(
-                span,
-                ErrorKind::IllegalArg("set patterns must either be empty or a zero or more match"),
-            )),
+            _ => Err(Error::new(span, ErrorKind::MacroBadSetPattern)),
         }
     }
 }

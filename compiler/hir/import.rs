@@ -217,12 +217,7 @@ where
             _ => {}
         }
 
-        Err(vec![Error::new(
-            span,
-            ErrorKind::IllegalArg(
-                "import set must either be a module name vector or an applied filter",
-            ),
-        )])
+        Err(vec![Error::new(span, ErrorKind::BadImportSet)])
     }
 }
 

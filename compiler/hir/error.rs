@@ -15,8 +15,15 @@ pub enum ErrorKind {
     ExpectedTyCons(&'static str),
     ExpectedSym(&'static str),
     ExpectedParamList(&'static str),
+    ExpectedMacroSpecList(&'static str),
+    ExpectedMacroRuleVec(&'static str),
+    ExpectedMacroRulePatternList(&'static str),
+    ExpectedMacroEllipsisEscape(&'static str),
+    ExpectedCompileErrorString(&'static str),
     UnboundIdent(DataStr),
     WrongArgCount(usize),
+    WrongCondArgCount,
+    WrongDefLikeArgCount(&'static str),
     IllegalArg(&'static str),
     NoMainFun,
     DefOutsideBody,
@@ -38,6 +45,7 @@ pub enum ErrorKind {
     NoBindingVec,
     BindingsNotVec(&'static str),
     UnevenBindingVec,
+    BadPolyVarDecl,
     UnsupportedLiteralType,
     VarPurityBound,
     NoParamDecl,
@@ -45,6 +53,12 @@ pub enum ErrorKind {
     MacroMultiPatternRef(Box<[Span]>),
     MacroNoPatternRef,
     MacroNoTemplateVars,
+    MacroBadEllipsis,
+    MacroBadSetPattern,
+    WrongMacroRuleVecCount(usize),
+    NoMacroType,
+    BadMacroType,
+    BadImportSet,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -115,6 +129,36 @@ impl From<Error> for Diagnostic {
             ))
             .with_label(Label::new_primary(origin).with_message("expected parameter list")),
 
+            ErrorKind::ExpectedMacroSpecList(found) => Diagnostic::new_error(format!(
+                "expected macro specification list, found {}",
+                found
+            ))
+            .with_label(Label::new_primary(origin).with_message("expected `(macro-rules ...)`")),
+
+            ErrorKind::ExpectedMacroRuleVec(found) => {
+                Diagnostic::new_error(format!("expected macro rule vector, found {}", found))
+                    .with_label(
+                        Label::new_primary(origin).with_message("expected `[pattern template]`"),
+                    )
+            }
+
+            ErrorKind::ExpectedMacroRulePatternList(found) => {
+                Diagnostic::new_error(format!("expected macro rule pattern list, found {}", found))
+                    .with_label(
+                        Label::new_primary(origin).with_message("expected macro rule pattern list"),
+                    )
+            }
+
+            ErrorKind::ExpectedMacroEllipsisEscape(found) => {
+                Diagnostic::new_error(format!("expected macro symbol to escape, found {}", found))
+                    .with_label(Label::new_primary(origin).with_message("expected symbol"))
+            }
+
+            ErrorKind::ExpectedCompileErrorString(found) => {
+                Diagnostic::new_error(format!("expected error message string, found {}", found))
+                    .with_label(Label::new_primary(origin).with_message("expected string"))
+            }
+
             ErrorKind::UnboundIdent(ref ident) => {
                 let diagnostic = Diagnostic::new_error(format!("unable to resolve `{}`", ident))
                     .with_label(Label::new_primary(origin).with_message("not found in this scope"));
@@ -138,6 +182,26 @@ impl From<Error> for Diagnostic {
                 Diagnostic::new_error(format!("wrong argument count; expected {}", expected))
                     .with_label(Label::new_primary(origin).with_message(label_message))
             }
+
+            ErrorKind::WrongCondArgCount => {
+                Diagnostic::new_error("wrong argument count; expected 3").with_label(
+                    Label::new_primary(origin)
+                        .with_message("expected `(if test-expr true-expr false-expr)`"),
+                )
+            }
+
+            ErrorKind::WrongDefLikeArgCount(name) => {
+                Diagnostic::new_error("wrong argument count; expected 2").with_label(
+                    Label::new_primary(origin)
+                        .with_message(format!("expected `({} name definition)`", name)),
+                )
+            }
+
+            ErrorKind::WrongMacroRuleVecCount(found) => Diagnostic::new_error(format!(
+                "expected macro rule vector with 2 elements, found {}",
+                found
+            ))
+            .with_label(Label::new_primary(origin).with_message("expected `[pattern template]`")),
 
             ErrorKind::IllegalArg(description) => {
                 // TODO: This makes it hard to give rich diagnostics. This should be deprecated.
@@ -262,6 +326,13 @@ impl From<Error> for Diagnostic {
                     .with_label(Label::new_primary(origin).with_message("extra binding form"))
             }
 
+            ErrorKind::BadPolyVarDecl => {
+                Diagnostic::new_error("bad polymorphic variable declaration").with_label(
+                    Label::new_primary(origin)
+                        .with_message("expected polymorphic variable name or `[name Bound]`"),
+                )
+            }
+
             ErrorKind::UnsupportedLiteralType => Diagnostic::new_error("unsupported literal type")
                 .with_label(
                     Label::new_primary(origin)
@@ -311,6 +382,30 @@ impl From<Error> for Diagnostic {
             .with_label(
                 Label::new_primary(origin)
                     .with_message("subtemplate does not reference subpatterns"),
+            ),
+
+            ErrorKind::MacroBadEllipsis => {
+                Diagnostic::new_error("unexpected ellipsis in macro rule")
+                    .with_label(Label::new_primary(origin).with_message("expected `var ...`"))
+            }
+
+            ErrorKind::MacroBadSetPattern => {
+                Diagnostic::new_error("set patterns must either be empty or a zero or more match")
+                    .with_label(
+                        Label::new_primary(origin).with_message("expected `#{}` or `#{var ...}`"),
+                    )
+            }
+
+            ErrorKind::NoMacroType => Diagnostic::new_error("missing macro type").with_label(
+                Label::new_primary(origin).with_message("expected `(macro-rules ...)`"),
+            ),
+
+            ErrorKind::BadMacroType => Diagnostic::new_error("unsupported macro type")
+                .with_label(Label::new_primary(origin).with_message("expected `macro-rules`")),
+
+            ErrorKind::BadImportSet => Diagnostic::new_error("bad import set").with_label(
+                Label::new_primary(origin)
+                    .with_message("expected module name vector or applied filter"),
             ),
         };
 

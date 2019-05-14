@@ -6,6 +6,9 @@
 (import (unknown [stdlib base]))
         ;^^^^^^^ ERROR unsupported import filter
 
+(import 4)
+       ;^ ERROR bad import set
+
 1                    ;~ ERROR value at top-level of module body
 'foo                 ;~ ERROR value at top-level of module body
 (list)               ;~ ERROR value at top-level of module body
@@ -16,6 +19,8 @@
        ;^^^^^^^ ERROR unable to resolve `unbound`
 
 (compile-error "Some message") ;~ ERROR Some message
+(compile-error 1234)
+              ;^^^^ ERROR expected error message string, found integer
 
 (def x 1)
 (def x 2)

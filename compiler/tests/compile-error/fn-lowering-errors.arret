@@ -8,3 +8,6 @@
 
 (def _ (fn []))
           ;^^ ERROR expected parameter declaration list, found empty vector
+
+(def _ (fn #{123} ()))
+            ;^^^ ERROR bad polymorphic variable declaration
