@@ -1,7 +1,7 @@
 (import [stdlib base])
 
 ; Explicitly don't export `fn-op-categories`; make callers use our assertions instead
-(import (only [stdlib rust] black-box black-box! heap-alloc-count fn-op-categories))
+(import (:only [stdlib rust] black-box black-box! heap-alloc-count fn-op-categories))
 (export black-box black-box! heap-alloc-count)
 
 (export assert-eq!)

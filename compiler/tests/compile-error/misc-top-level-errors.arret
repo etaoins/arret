@@ -1,10 +1,10 @@
 (import [stdlib base])
 
-(import (only [stdlib base] do))
-       ;^^^^^^^^^^^^^^^^^^^^^^^ ERROR duplicate definition
+(import (:only [stdlib base] do))
+       ;^^^^^^^^^^^^^^^^^^^^^^^^ ERROR duplicate definition
 
 (import (unknown [stdlib base]))
-        ;^^^^^^^ ERROR unsupported import filter
+        ;^^^^^^^ ERROR expected import filter keyword, found symbol
 
 (import 4)
        ;^ ERROR bad import set

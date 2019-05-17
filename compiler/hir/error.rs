@@ -21,6 +21,7 @@ pub enum ErrorKind {
     ExpectedMacroRulePatternList(&'static str),
     ExpectedMacroEllipsisEscape(&'static str),
     ExpectedCompileErrorString(&'static str),
+    ExpectedImportFilterKeyword(&'static str),
     UnboundIdent(DataStr),
     WrongArgCount(usize),
     WrongCondArgCount,
@@ -168,6 +169,13 @@ impl From<Error> for Diagnostic {
             ErrorKind::ExpectedCompileErrorString(found) => {
                 Diagnostic::new_error(format!("expected error message string, found {}", found))
                     .with_label(Label::new_primary(origin).with_message("expected string"))
+            }
+
+            ErrorKind::ExpectedImportFilterKeyword(found) => {
+                Diagnostic::new_error(format!("expected import filter keyword, found {}", found))
+                    .with_label(Label::new_primary(origin).with_message(
+                        "expected `:only`, `:exclude`, `:rename`, `:prefix` or `:prefixed`",
+                    ))
             }
 
             ErrorKind::UnboundIdent(ref ident) => {
@@ -370,7 +378,7 @@ impl From<Error> for Diagnostic {
             ErrorKind::UnsupportedImportFilter => {
                 Diagnostic::new_error("unsupported import filter").with_label(
                     Label::new_primary(origin).with_message(
-                        "expected `only`, `except`, `rename`, `prefix` or `prefixed`",
+                        "expected `:only`, `:exclude`, `:rename`, `:prefix` or `:prefixed`",
                     ),
                 )
             }

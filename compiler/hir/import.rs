@@ -53,7 +53,7 @@ where
         })
     }
 
-    fn lower_import_filter(
+    fn lower_import_filter_apply(
         &mut self,
         apply_span: Span,
         filter_span: Span,
@@ -62,7 +62,7 @@ where
         arg_iter: NsDataIter,
     ) -> Result<FilterInput> {
         match filter_name {
-            "only" => {
+            ":only" => {
                 let inner_exports = filter_input.exports;
                 let only_exports = arg_iter
                     .map(|arg_datum| {
@@ -81,28 +81,28 @@ where
                     terminal_name: filter_input.terminal_name,
                 })
             }
-            "except" => {
-                let mut except_exports = filter_input.exports;
+            ":exclude" => {
+                let mut exclude_exports = filter_input.exports;
                 let mut errors = vec![];
 
                 for arg_datum in arg_iter {
                     let (ident, span) = expect_ident_and_span(arg_datum)?;
 
-                    if except_exports.remove(ident.name()).is_none() {
+                    if exclude_exports.remove(ident.name()).is_none() {
                         errors.push(Error::new(span, ErrorKind::UnboundIdent(ident.into_name())));
                     }
                 }
 
                 if errors.is_empty() {
                     Ok(FilterInput {
-                        exports: except_exports,
+                        exports: exclude_exports,
                         terminal_name: filter_input.terminal_name,
                     })
                 } else {
                     Err(errors)
                 }
             }
-            "rename" => {
+            ":rename" => {
                 let arg_datum = expect_one_arg(apply_span, arg_iter)?;
 
                 if let NsDatum::Map(_, vs) = arg_datum {
@@ -137,11 +137,11 @@ where
                 } else {
                     Err(vec![Error::new(
                         arg_datum.span(),
-                        ErrorKind::IllegalArg("(rename) expects a map of identifier renames"),
+                        ErrorKind::IllegalArg("(:rename) expects a map of identifier renames"),
                     )])
                 }
             }
-            "prefix" => {
+            ":prefix" => {
                 let prefix_datum = expect_one_arg(apply_span, arg_iter)?;
                 let prefix_ident = expect_ident(prefix_datum)?;
 
@@ -158,7 +158,7 @@ where
                     terminal_name: filter_input.terminal_name,
                 })
             }
-            "prefixed" => {
+            ":prefixed" => {
                 expect_arg_count(apply_span, 0, arg_iter.len())?;
                 let FilterInput {
                     exports,
@@ -182,6 +182,34 @@ where
         }
     }
 
+    fn lower_import_filter_list(
+        &mut self,
+        span: Span,
+        mut member_iter: NsDataIter,
+    ) -> Result<FilterInput> {
+        let filter_datum = member_iter.next().unwrap();
+
+        let (filter_span, filter_name) = if let NsDatum::Keyword(span, name) = filter_datum {
+            (span, name)
+        } else {
+            return Err(vec![Error::new(
+                filter_datum.span(),
+                ErrorKind::ExpectedImportFilterKeyword(filter_datum.description()),
+            )]);
+        };
+
+        let inner_import_datum = member_iter.next().unwrap();
+
+        let filter_input = self.lower_import_set(inner_import_datum)?;
+        self.lower_import_filter_apply(
+            span,
+            filter_span,
+            filter_name.as_ref(),
+            filter_input,
+            member_iter,
+        )
+    }
+
     fn lower_import_set(&mut self, import_set_datum: NsDatum) -> Result<FilterInput> {
         let span = import_set_datum.span();
         match import_set_datum {
@@ -196,22 +224,11 @@ where
                 return self.lower_module_import(span, vs.into_vec());
             }
             NsDatum::List(_, vs) => {
-                let mut filter_iter = vs.into_vec().into_iter();
+                let member_iter = vs.into_vec().into_iter();
 
-                // Each filter requires a filter identifier and an inner import set
-                if filter_iter.len() >= 2 {
-                    let (filter_ident, filter_span) =
-                        expect_ident_and_span(filter_iter.next().unwrap())?;
-                    let inner_import_datum = filter_iter.next().unwrap();
-
-                    let filter_input = self.lower_import_set(inner_import_datum)?;
-                    return self.lower_import_filter(
-                        span,
-                        filter_span,
-                        filter_ident.name(),
-                        filter_input,
-                        filter_iter,
-                    );
+                // Each filter requires a filter keyword and an inner import set
+                if member_iter.len() >= 2 {
+                    return self.lower_import_filter_list(span, member_iter);
                 }
             }
             _ => {}
@@ -275,29 +292,29 @@ mod test {
 
     #[test]
     fn only_filter() {
-        let j = "(only [lib test] quote)";
+        let j = "(:only [lib test] quote)";
         let exports = exports_for_import_set(j).unwrap();
 
         assert_eq!(exports["quote"], Binding::Prim(Prim::Quote));
         assert_eq!(false, exports.contains_key("if"));
 
-        let j = "(only [lib test] quote ifz)";
-        let t = "                       ^^^ ";
+        let j = "(:only [lib test] quote ifz)";
+        let t = "                        ^^^ ";
         let err = vec![Error::new(t2s(t), ErrorKind::UnboundIdent("ifz".into()))];
 
         assert_eq!(err, exports_for_import_set(j).unwrap_err());
     }
 
     #[test]
-    fn except_filter() {
-        let j = "(except [lib test] if)";
+    fn exclude_filter() {
+        let j = "(:exclude [lib test] if)";
         let exports = exports_for_import_set(j).unwrap();
 
         assert_eq!(exports["quote"], Binding::Prim(Prim::Quote));
         assert_eq!(false, exports.contains_key("if"));
 
-        let j = "(except [lib test] ifz)";
-        let t = "                   ^^^ ";
+        let j = "(:exclude [lib test] ifz)";
+        let t = "                     ^^^ ";
         let err = vec![Error::new(t2s(t), ErrorKind::UnboundIdent("ifz".into()))];
 
         assert_eq!(err, exports_for_import_set(j).unwrap_err());
@@ -305,14 +322,14 @@ mod test {
 
     #[test]
     fn rename_filter() {
-        let j = "(rename [lib test] {quote new-quote, if new-if})";
+        let j = "(:rename [lib test] {quote new-quote, if new-if})";
         let exports = exports_for_import_set(j).unwrap();
 
         assert_eq!(exports["new-quote"], Binding::Prim(Prim::Quote));
         assert_eq!(exports["new-if"], Binding::Prim(Prim::If));
 
-        let j = "(rename [lib test] {ifz new-ifz})";
-        let t = "                    ^^^          ";
+        let j = "(:rename [lib test] {ifz new-ifz})";
+        let t = "                     ^^^          ";
         let err = vec![Error::new(t2s(t), ErrorKind::UnboundIdent("ifz".into()))];
 
         assert_eq!(err, exports_for_import_set(j).unwrap_err());
@@ -320,7 +337,7 @@ mod test {
 
     #[test]
     fn prefix_filter() {
-        let j = "(prefix [lib test] new-)";
+        let j = "(:prefix [lib test] new-)";
         let exports = exports_for_import_set(j).unwrap();
 
         assert_eq!(exports["new-quote"], Binding::Prim(Prim::Quote));
@@ -329,7 +346,7 @@ mod test {
 
     #[test]
     fn prefixed_filter() {
-        let j = "(prefixed [lib test])";
+        let j = "(:prefixed [lib test])";
         let exports = exports_for_import_set(j).unwrap();
 
         assert_eq!(exports["test/quote"], Binding::Prim(Prim::Quote));
