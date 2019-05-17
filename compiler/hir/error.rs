@@ -15,6 +15,7 @@ pub enum ErrorKind {
     ExpectedTyCons(&'static str),
     ExpectedSym(&'static str),
     ExpectedParamList(&'static str),
+    ExpectedPolyVarsDecl(&'static str),
     ExpectedMacroSpecList(&'static str),
     ExpectedMacroRuleVec(&'static str),
     ExpectedMacroRulePatternList(&'static str),
@@ -49,6 +50,7 @@ pub enum ErrorKind {
     UnsupportedLiteralType,
     VarPurityBound,
     NoParamDecl,
+    NoPolyVarsDecl,
     UnsupportedImportFilter,
     MacroMultiPatternRef(Box<[Span]>),
     MacroNoPatternRef,
@@ -59,6 +61,7 @@ pub enum ErrorKind {
     NoMacroType,
     BadMacroType,
     BadImportSet,
+    NonFunPolyTy,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -128,6 +131,14 @@ impl From<Error> for Diagnostic {
                 found
             ))
             .with_label(Label::new_primary(origin).with_message("expected parameter list")),
+
+            ErrorKind::ExpectedPolyVarsDecl(found) => Diagnostic::new_error(format!(
+                "expected polymorphic variable set, found {}",
+                found
+            ))
+            .with_label(
+                Label::new_primary(origin).with_message("expected polymorphic variable set"),
+            ),
 
             ErrorKind::ExpectedMacroSpecList(found) => Diagnostic::new_error(format!(
                 "expected macro specification list, found {}",
@@ -349,6 +360,13 @@ impl From<Error> for Diagnostic {
                     Label::new_primary(origin).with_message("expected parameter list argument"),
                 ),
 
+            ErrorKind::NoPolyVarsDecl => {
+                Diagnostic::new_error("polymorphic variable declaration missing").with_label(
+                    Label::new_primary(origin)
+                        .with_message("expected polymorphic variable set argument"),
+                )
+            }
+
             ErrorKind::UnsupportedImportFilter => {
                 Diagnostic::new_error("unsupported import filter").with_label(
                     Label::new_primary(origin).with_message(
@@ -407,6 +425,9 @@ impl From<Error> for Diagnostic {
                 Label::new_primary(origin)
                     .with_message("expected module name vector or applied filter"),
             ),
+
+            ErrorKind::NonFunPolyTy => Diagnostic::new_error("polymorphism on non-function type")
+                .with_label(Label::new_primary(origin).with_message("expected function type")),
         };
 
         error.loc_trace.label_macro_invocation(diagnostic)

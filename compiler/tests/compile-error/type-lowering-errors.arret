@@ -20,3 +20,15 @@
 
 (deftype _ (->))
            ;^^ ERROR purity cannot be used as a type constructor
+
+; This isn't public yet but still test it
+(import (only [arret internal primitives] All))
+
+(deftype _ (All))
+          ;^^^^^ ERROR polymorphic variable declaration missing
+
+(deftype _ (All []))
+               ;^^ ERROR expected polymorphic variable set, found empty vector
+
+(deftype _ (All #{} List Int))
+          ;^^^^^^^^^^^^^^^^^^ ERROR polymorphism on non-function type

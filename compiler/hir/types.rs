@@ -223,13 +223,18 @@ fn lower_polymorphic_poly(
     span: Span,
     mut data_iter: NsDataIter,
 ) -> Result<ty::Ref<ty::Poly>> {
-    let polymorphic_vars_datum = data_iter.next().unwrap();
+    let polymorphic_vars_datum = if let Some(datum) = data_iter.next() {
+        datum
+    } else {
+        return Err(Error::new(span, ErrorKind::NoPolyVarsDecl));
+    };
+
     let polymorphic_var_data = if let NsDatum::Set(_, vs) = polymorphic_vars_datum {
         vs
     } else {
         return Err(Error::new(
             polymorphic_vars_datum.span(),
-            ErrorKind::IllegalArg("polymorphic variable set expected"),
+            ErrorKind::ExpectedPolyVarsDecl(polymorphic_vars_datum.description()),
         ));
     };
 
@@ -245,10 +250,7 @@ fn lower_polymorphic_poly(
     if let ty::Ref::Fixed(ty::Ty::Fun(fun)) = inner_poly {
         Ok(ty::Ty::Fun(Box::new(fun.with_polymorphic_vars(pvars, tvars))).into())
     } else {
-        return Err(Error::new(
-            span,
-            ErrorKind::IllegalArg("polymorphism only supported by function type"),
-        ));
+        return Err(Error::new(span, ErrorKind::NonFunPolyTy));
     }
 }
 
