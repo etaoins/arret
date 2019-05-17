@@ -7,7 +7,7 @@ use crate::hir::error::{Error, ErrorKind};
 use crate::hir::exports::Exports;
 use crate::hir::loader::ModuleName;
 use crate::hir::ns::{Ident, NsDataIter, NsDatum};
-use crate::hir::util::{expect_arg_count, expect_ident, expect_ident_and_span, expect_one_arg};
+use crate::hir::util::{expect_ident, expect_ident_and_span};
 
 type Result<T> = result::Result<T, Vec<Error>>;
 
@@ -59,7 +59,7 @@ where
         filter_span: Span,
         filter_name: &str,
         filter_input: FilterInput,
-        arg_iter: NsDataIter,
+        mut arg_iter: NsDataIter,
     ) -> Result<FilterInput> {
         match filter_name {
             ":only" => {
@@ -103,8 +103,11 @@ where
                 }
             }
             ":rename" => {
-                let arg_datum = expect_one_arg(apply_span, arg_iter)?;
+                if arg_iter.len() != 1 {
+                    return Err(vec![Error::new(apply_span, ErrorKind::WrongArgCount(2))]);
+                }
 
+                let arg_datum = arg_iter.next().unwrap();
                 if let NsDatum::Map(_, vs) = arg_datum {
                     let mut rename_exports = filter_input.exports;
                     let mut errors = vec![];
@@ -137,12 +140,16 @@ where
                 } else {
                     Err(vec![Error::new(
                         arg_datum.span(),
-                        ErrorKind::IllegalArg("(:rename) expects a map of identifier renames"),
+                        ErrorKind::ExpectedImportRenameMap(arg_datum.description()),
                     )])
                 }
             }
             ":prefix" => {
-                let prefix_datum = expect_one_arg(apply_span, arg_iter)?;
+                if arg_iter.len() != 1 {
+                    return Err(vec![Error::new(apply_span, ErrorKind::WrongArgCount(2))]);
+                }
+
+                let prefix_datum = arg_iter.next().unwrap();
                 let prefix_ident = expect_ident(prefix_datum)?;
 
                 let prefix_exports = filter_input
@@ -159,7 +166,10 @@ where
                 })
             }
             ":prefixed" => {
-                expect_arg_count(apply_span, 0, arg_iter.len())?;
+                if arg_iter.len() != 0 {
+                    return Err(vec![Error::new(apply_span, ErrorKind::WrongArgCount(1))]);
+                }
+
                 let FilterInput {
                     exports,
                     terminal_name,
@@ -215,10 +225,7 @@ where
         match import_set_datum {
             NsDatum::Vector(_, vs) => {
                 if vs.len() < 2 {
-                    return Err(vec![Error::new(
-                        span,
-                        ErrorKind::IllegalArg("module name requires a least two elements"),
-                    )]);
+                    return Err(vec![Error::new(span, ErrorKind::ShortModuleName)]);
                 }
 
                 return self.lower_module_import(span, vs.into_vec());

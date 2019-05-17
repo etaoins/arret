@@ -6,6 +6,18 @@
 (import (unknown [stdlib base]))
         ;^^^^^^^ ERROR expected import filter keyword, found symbol
 
+(import (:rename [stdlib base] true))
+                              ;^^^^ ERROR expected identifier rename map, found boolean true
+
+(import (:rename [stdlib base] {foo bar} 1))
+       ;^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ERROR wrong argument count; expected 2
+
+(import (:prefix [stdlib base] test- 1))
+       ;^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ERROR wrong argument count; expected 2
+
+(import (:prefixed [stdlib base] 1))
+       ;^^^^^^^^^^^^^^^^^^^^^^^^^^^ ERROR wrong argument count; expected 1
+
 (import 4)
        ;^ ERROR bad import set
 

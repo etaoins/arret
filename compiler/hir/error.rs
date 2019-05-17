@@ -22,11 +22,11 @@ pub enum ErrorKind {
     ExpectedMacroEllipsisEscape(&'static str),
     ExpectedCompileErrorString(&'static str),
     ExpectedImportFilterKeyword(&'static str),
+    ExpectedImportRenameMap(&'static str),
     UnboundIdent(DataStr),
     WrongArgCount(usize),
     WrongCondArgCount,
     WrongDefLikeArgCount(&'static str),
-    IllegalArg(&'static str),
     NoMainFun,
     DefOutsideBody,
     ExportOutsideModule,
@@ -63,6 +63,7 @@ pub enum ErrorKind {
     BadMacroType,
     BadImportSet,
     NonFunPolyTy,
+    ShortModuleName,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -178,6 +179,13 @@ impl From<Error> for Diagnostic {
                     ))
             }
 
+            ErrorKind::ExpectedImportRenameMap(found) => {
+                Diagnostic::new_error(format!("expected identifier rename map, found {}", found))
+                    .with_label(
+                        Label::new_primary(origin).with_message("expected identifier rename map"),
+                    )
+            }
+
             ErrorKind::UnboundIdent(ref ident) => {
                 let diagnostic = Diagnostic::new_error(format!("unable to resolve `{}`", ident))
                     .with_label(Label::new_primary(origin).with_message("not found in this scope"));
@@ -221,11 +229,6 @@ impl From<Error> for Diagnostic {
                 found
             ))
             .with_label(Label::new_primary(origin).with_message("expected `[pattern template]`")),
-
-            ErrorKind::IllegalArg(description) => {
-                // TODO: This makes it hard to give rich diagnostics. This should be deprecated.
-                Diagnostic::new_error(*description).with_label(Label::new_primary(origin))
-            }
 
             ErrorKind::DefOutsideBody => Diagnostic::new_error("definition outside module body")
                 .with_label(Label::new_primary(origin).with_message("not at top-level of module")),
@@ -436,6 +439,12 @@ impl From<Error> for Diagnostic {
 
             ErrorKind::NonFunPolyTy => Diagnostic::new_error("polymorphism on non-function type")
                 .with_label(Label::new_primary(origin).with_message("expected function type")),
+
+            ErrorKind::ShortModuleName => {
+                Diagnostic::new_error("module name requires a least two components").with_label(
+                    Label::new_primary(origin).with_message("expected vector of 2 or more symbols"),
+                )
+            }
         };
 
         error.loc_trace.label_macro_invocation(diagnostic)
