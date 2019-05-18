@@ -485,7 +485,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         span: Span,
         test_ty: ty::pred::TestTy,
     ) -> Result<InferredNode> {
-        let pred_type = ty::Ty::TyPred(test_ty).into();
+        let pred_type = ty::Ty::TyPred(test_ty.clone()).into();
         ensure_is_a(span, &pred_type, required_type)?;
 
         Ok(InferredNode {
@@ -953,7 +953,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         pv: &mut PurityVar,
         span: Span,
         fun_expr: hir::Expr<hir::Inferred>,
-        test_ty: ty::pred::TestTy,
+        test_ty: &ty::pred::TestTy,
         subject_expr: hir::Expr<hir::Lowered>,
     ) -> Result<InferredNode> {
         use std::iter;
@@ -1045,7 +1045,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         pv: &mut PurityVar,
         span: Span,
         fun_expr: hir::Expr<hir::Inferred>,
-        test_ty: ty::pred::TestTy,
+        test_ty: &ty::pred::TestTy,
         subject_list_expr: hir::Expr<hir::Lowered>,
     ) -> Result<InferredNode> {
         use std::iter;
@@ -1284,19 +1284,13 @@ impl<'types> RecursiveDefsCtx<'types> {
                 match (fixed_arg_exprs.len(), rest_arg_expr) {
                     (1, None) => {
                         let subject_expr = fixed_arg_exprs.pop().unwrap();
-                        self.visit_fixed_ty_pred_app(
-                            pv,
-                            span,
-                            fun_node.expr,
-                            *test_ty,
-                            subject_expr,
-                        )
+                        self.visit_fixed_ty_pred_app(pv, span, fun_node.expr, test_ty, subject_expr)
                     }
                     (0, Some(subject_list_expr)) => self.visit_rest_ty_pred_app(
                         pv,
                         span,
                         fun_node.expr,
-                        *test_ty,
+                        test_ty,
                         subject_list_expr,
                     ),
                     (supplied_arg_count, _) => Err(Error::new(

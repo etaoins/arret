@@ -41,7 +41,11 @@ pub fn value_to_const(ehx: &mut EvalHirCtx, value: &Value) -> Option<Gc<boxed::A
         Value::List(fixed, Some(rest)) => list_to_const(ehx, fixed, Some(&*rest)),
         Value::List(fixed, None) => list_to_const(ehx, fixed, None),
         Value::TyPred(test_ty) => {
-            let ty_pred_arret_fun = ehx.synthetic_funs().ty_pred_arret_fun(*test_ty).clone();
+            let ty_pred_arret_fun = ehx
+                .synthetic_funs()
+                .ty_pred_arret_fun(test_ty.clone())
+                .clone();
+
             ehx.arret_fun_to_jit_boxed(&ty_pred_arret_fun)
                 .map(|f| f.as_any_ref())
         }

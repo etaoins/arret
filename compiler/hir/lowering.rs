@@ -477,7 +477,7 @@ fn lower_expr(scope: &Scope<'_>, datum: NsDatum) -> Result<Expr<Lowered>> {
     match datum {
         NsDatum::Ident(span, ident) => match scope.get_or_err(span, &ident)? {
             Binding::Var(id) => Ok(ExprKind::Ref(span, *id).into()),
-            Binding::TyPred(test_ty) => Ok(ExprKind::TyPred(span, *test_ty).into()),
+            Binding::TyPred(test_ty) => Ok(ExprKind::TyPred(span, test_ty.clone()).into()),
             Binding::EqPred => Ok(ExprKind::EqPred(span).into()),
             other => Err(Error::new(
                 span,

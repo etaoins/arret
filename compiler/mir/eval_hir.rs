@@ -399,7 +399,7 @@ impl EvalHirCtx {
         b: &mut Option<Builder>,
         span: Span,
         arg_list_value: &Value,
-        test_ty: ty::pred::TestTy,
+        test_ty: &ty::pred::TestTy,
     ) -> Value {
         use crate::mir::typred::eval_ty_pred;
 
@@ -750,7 +750,7 @@ impl EvalHirCtx {
                 self.eval_rust_fun_app(fcx, b, span, ret_ty, &rust_fun, apply_args)
             }
             Value::TyPred(test_ty) => {
-                Ok(self.eval_ty_pred_app(b, span, &apply_args.list_value, *test_ty))
+                Ok(self.eval_ty_pred_app(b, span, &apply_args.list_value, test_ty))
             }
             Value::EqPred => Ok(self.eval_eq_pred_app(b, span, &apply_args.list_value)),
             Value::Const(boxed_fun) => match boxed_fun.as_subtype() {
@@ -1300,7 +1300,7 @@ impl EvalHirCtx {
                 Ok(self.eval_arret_fun(fcx, fun_expr.as_ref().clone(), source_name))
             }
             ExprKind::RustFun(rust_fun) => Ok(Value::RustFun(Rc::new(rust_fun.as_ref().clone()))),
-            ExprKind::TyPred(_, test_ty) => Ok(Value::TyPred(*test_ty)),
+            ExprKind::TyPred(_, test_ty) => Ok(Value::TyPred(test_ty.clone())),
             ExprKind::EqPred(_) => Ok(Value::EqPred),
             ExprKind::Ref(_, var_id) => Ok(self.eval_ref(fcx, *var_id)),
             ExprKind::Let(hir_let) => self.eval_let(fcx, b, hir_let),

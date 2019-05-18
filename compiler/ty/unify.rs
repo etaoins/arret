@@ -14,6 +14,8 @@ use std::iter;
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
+use crate::ty::record;
+use crate::ty::ty_args::TyArgs;
 
 #[derive(Debug, PartialEq)]
 enum UnifiedTy<M: ty::PM> {
@@ -127,6 +129,113 @@ fn unify_fun<M: ty::PM>(fun1: &ty::Fun, fun2: &ty::Fun) -> UnifiedTy<M> {
             }
         }
     }
+}
+
+fn unify_record_field_purities<M: ty::PM>(
+    variance: record::Variance,
+    pvar_id: &purity::PVarId,
+    ty_args1: &TyArgs<M>,
+    ty_args2: &TyArgs<M>,
+) -> purity::Ref {
+    use crate::ty::intersect::intersect_purity_refs;
+    use crate::ty::is_a::purity_refs_equivalent;
+
+    let purity_ref1 = &ty_args1.pvar_purities()[pvar_id];
+    let purity_ref2 = &ty_args2.pvar_purities()[pvar_id];
+
+    match variance {
+        record::Variance::Covariant => unify_purity_refs(purity_ref1, purity_ref2),
+        record::Variance::Contravariant => intersect_purity_refs(purity_ref1, purity_ref2),
+        record::Variance::Invariant => {
+            if purity_refs_equivalent(purity_ref1, purity_ref2) {
+                purity_ref1.clone()
+            } else {
+                Purity::Impure.into()
+            }
+        }
+    }
+}
+
+fn unify_record_field_ty_refs<M: ty::PM>(
+    variance: record::Variance,
+    tvar_id: &ty::TVarId,
+    ty_args1: &TyArgs<M>,
+    ty_args2: &TyArgs<M>,
+) -> UnifiedTy<M> {
+    use crate::ty::intersect::intersect_ty_refs;
+    use crate::ty::is_a::ty_refs_equivalent;
+
+    let ty_ref1 = &ty_args1.tvar_types()[tvar_id];
+    let ty_ref2 = &ty_args2.tvar_types()[tvar_id];
+
+    match variance {
+        record::Variance::Covariant => unify_ty_refs(ty_ref1, ty_ref2),
+        record::Variance::Contravariant => match intersect_ty_refs(ty_ref1, ty_ref2) {
+            Ok(intersected) => UnifiedTy::Merged(intersected),
+            Err(_) => UnifiedTy::Discerned,
+        },
+        record::Variance::Invariant => {
+            if ty_refs_equivalent(ty_ref1, ty_ref2) {
+                UnifiedTy::Merged(ty_ref1.clone())
+            } else {
+                UnifiedTy::Discerned
+            }
+        }
+    }
+}
+
+fn unify_record_instance<M: ty::PM>(
+    instance1: &record::Instance<M>,
+    instance2: &record::Instance<M>,
+) -> UnifiedTy<M> {
+    use crate::ty::record::PolyParam;
+    use std::collections::HashMap;
+
+    if instance1.cons() != instance2.cons() {
+        return UnifiedTy::Discerned;
+    }
+
+    let mut merged_pvar_purities = HashMap::new();
+    let mut merged_tvar_types = HashMap::new();
+
+    for poly_param in instance1.cons().poly_params() {
+        match poly_param {
+            PolyParam::PVar(variance, pvar_id) => {
+                merged_pvar_purities.insert(
+                    pvar_id.clone(),
+                    unify_record_field_purities(
+                        *variance,
+                        pvar_id,
+                        instance1.ty_args(),
+                        instance2.ty_args(),
+                    ),
+                );
+            }
+            PolyParam::TVar(variance, tvar_id) => {
+                let unified_ty = unify_record_field_ty_refs(
+                    *variance,
+                    tvar_id,
+                    instance1.ty_args(),
+                    instance2.ty_args(),
+                );
+
+                match unified_ty {
+                    UnifiedTy::Merged(merged) => {
+                        merged_tvar_types.insert(tvar_id.clone(), merged);
+                    }
+                    UnifiedTy::Discerned => return UnifiedTy::Discerned,
+                }
+            }
+        }
+    }
+
+    UnifiedTy::Merged(
+        record::Instance::new(
+            instance1.cons().clone(),
+            TyArgs::new(merged_pvar_purities, merged_tvar_types),
+        )
+        .into(),
+    )
 }
 
 fn unify_ty<M: ty::PM>(
@@ -250,6 +359,11 @@ fn unify_ty<M: ty::PM>(
             UnifiedList::Merged(merged_list) => UnifiedTy::Merged(merged_list.into()),
         },
 
+        // Record types
+        (ty::Ty::Record(instance1), ty::Ty::Record(instance2)) => {
+            unify_record_instance(instance1, instance2)
+        }
+
         _ => UnifiedTy::Discerned,
     }
 }
@@ -328,6 +442,7 @@ pub fn unify_list<M: ty::PM>(list1: &ty::List<M>, list2: &ty::List<M>) -> Unifie
 mod test {
     use super::*;
     use crate::hir::{poly_for_str, tvar_bounded_by};
+    use arret_syntax::span::EMPTY_SPAN;
 
     fn assert_discerned(ty_str1: &str, ty_str2: &str) {
         let poly1 = poly_for_str(ty_str1);
@@ -582,6 +697,110 @@ mod test {
         assert_eq!(
             UnifiedTy::Merged(ptype1_unbounded.clone()),
             unify_ty_refs(&ptype1_unbounded, &ptype2_bounded_by_1,)
+        );
+    }
+
+    #[test]
+    fn record_instances() {
+        use crate::id_type::ArcId;
+        use crate::ty::ty_args::TyArgs;
+        use std::collections::HashMap;
+
+        let tvar1 = ty::TVarId::new(ty::TVar::new(
+            EMPTY_SPAN,
+            "tvar1".into(),
+            ty::Ty::Any.into(),
+        ));
+        let tvar2 = ty::TVarId::new(ty::TVar::new(
+            EMPTY_SPAN,
+            "tvar2".into(),
+            ty::Ty::Any.into(),
+        ));
+
+        let cons1 = ArcId::new(record::Cons::new(
+            EMPTY_SPAN,
+            "cons1".into(),
+            Box::new([record::PolyParam::TVar(
+                record::Variance::Covariant,
+                tvar1.clone(),
+            )]),
+            Box::new([record::Field::new(
+                "cons1-field1".into(),
+                tvar1.clone().into(),
+            )]),
+        ));
+
+        let cons2 = ArcId::new(record::Cons::new(
+            EMPTY_SPAN,
+            "cons2".into(),
+            Box::new([
+                record::PolyParam::TVar(record::Variance::Covariant, tvar1.clone()),
+                record::PolyParam::TVar(record::Variance::Contravariant, tvar2.clone()),
+            ]),
+            Box::new([
+                record::Field::new("cons2-covariant".into(), tvar1.clone().into()),
+                record::Field::new("cons2-contravariant".into(), tvar2.clone().into()),
+            ]),
+        ));
+
+        let float_instance1_poly: ty::Ref<ty::Poly> = record::Instance::new(
+            cons1.clone(),
+            TyArgs::new(
+                HashMap::new(),
+                std::iter::once((tvar1.clone(), ty::Ty::Float.into())).collect(),
+            ),
+        )
+        .into();
+
+        let float_bool_instance2_poly: ty::Ref<ty::Poly> = record::Instance::new(
+            cons2.clone(),
+            TyArgs::new(
+                HashMap::new(),
+                std::iter::once((tvar1.clone(), ty::Ty::Float.into()))
+                    .chain(std::iter::once((tvar2.clone(), ty::Ty::Bool.into())))
+                    .collect(),
+            ),
+        )
+        .into();
+
+        let int_false_instance2_poly: ty::Ref<ty::Poly> = record::Instance::new(
+            cons2.clone(),
+            TyArgs::new(
+                HashMap::new(),
+                std::iter::once((tvar1.clone(), ty::Ty::Int.into()))
+                    .chain(std::iter::once((
+                        tvar2.clone(),
+                        ty::Ty::LitBool(false).into(),
+                    )))
+                    .collect(),
+            ),
+        )
+        .into();
+
+        let num_false_instance2_poly: ty::Ref<ty::Poly> = record::Instance::new(
+            cons2.clone(),
+            TyArgs::new(
+                HashMap::new(),
+                std::iter::once((tvar1.clone(), ty::Ty::Num.into()))
+                    .chain(std::iter::once((
+                        tvar2.clone(),
+                        ty::Ty::LitBool(false).into(),
+                    )))
+                    .collect(),
+            ),
+        )
+        .into();
+
+        // Different record constructors
+        assert_eq!(
+            UnifiedTy::Discerned,
+            unify_ty_refs(&float_instance1_poly, &float_bool_instance2_poly)
+        );
+
+        // Different instances of same constructor
+        assert_eq!(
+            UnifiedTy::Merged(num_false_instance2_poly),
+            unify_ty_refs(&int_false_instance2_poly, &float_bool_instance2_poly)
         );
     }
 }

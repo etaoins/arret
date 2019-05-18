@@ -1,5 +1,6 @@
 use crate::ty;
 use crate::ty::purity;
+use crate::ty::record;
 use crate::ty::ty_args::TyArgs;
 
 fn subst_ty_ref_slice<S>(stx: &S, inputs: &[ty::Ref<S::InputPM>]) -> Box<[ty::Ref<S::OutputPM>]>
@@ -16,6 +17,33 @@ where
     ty::List::new(
         subst_ty_ref_slice(stx, list.fixed()),
         stx.subst_ty_ref(list.rest()),
+    )
+}
+
+fn subst_record_instance<S>(
+    stx: &S,
+    instance: &record::Instance<S::InputPM>,
+) -> record::Instance<S::OutputPM>
+where
+    S: Substitution,
+{
+    let subst_pvar_purities = instance
+        .ty_args()
+        .pvar_purities()
+        .iter()
+        .map(|(pvar_id, purity_ref)| (pvar_id.clone(), stx.subst_purity_ref(purity_ref)))
+        .collect();
+
+    let subst_tvar_types = instance
+        .ty_args()
+        .tvar_types()
+        .iter()
+        .map(|(tvar_id, ty_ref)| (tvar_id.clone(), stx.subst_ty_ref(ty_ref)))
+        .collect();
+
+    record::Instance::new(
+        instance.cons().clone(),
+        TyArgs::new(subst_pvar_purities, subst_tvar_types),
     )
 }
 
@@ -60,7 +88,7 @@ where
         ty::Ty::Str => ty::Ty::Str,
         ty::Ty::Sym => ty::Ty::Sym,
         ty::Ty::EqPred => ty::Ty::EqPred,
-        ty::Ty::TyPred(test_ty) => ty::Ty::TyPred(*test_ty),
+        ty::Ty::TyPred(test_ty) => ty::Ty::TyPred(test_ty.clone()),
         ty::Ty::TopFun(top_fun) => subst_top_fun(stx, top_fun).into(),
         ty::Ty::Fun(fun) => subst_fun(stx, fun).into(),
         ty::Ty::Map(map) => {
@@ -74,6 +102,8 @@ where
         ty::Ty::Vector(members) => ty::Ty::Vector(subst_ty_ref_slice(stx, members)),
         ty::Ty::Vectorof(member) => ty::Ty::Vectorof(Box::new(stx.subst_ty_ref(member))),
         ty::Ty::List(list) => subst_list(stx, list).into(),
+        ty::Ty::TopRecord(cons) => ty::Ty::TopRecord(cons.clone()),
+        ty::Ty::Record(instance) => ty::Ty::Record(Box::new(subst_record_instance(stx, instance))),
     }
 }
 

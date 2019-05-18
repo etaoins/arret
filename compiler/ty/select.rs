@@ -4,6 +4,7 @@ use crate::ty;
 use crate::ty::list_iter::ListIterator;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
+use crate::ty::record;
 use crate::ty::ty_args::TyArgs;
 
 pub enum Error<'vars> {
@@ -60,6 +61,26 @@ impl<'vars> SelectCtx<'vars> {
         }
         if evidence_fun.tvar_ids().is_empty() {
             self.add_evidence(target_top_fun.ret(), evidence_fun.ret());
+        }
+    }
+
+    fn add_evidence_record(
+        &mut self,
+        target_instance: &record::Instance<ty::Poly>,
+        evidence_instance: &record::Instance<ty::Poly>,
+    ) {
+        if target_instance.cons() != evidence_instance.cons() {
+            return;
+        }
+
+        for (pvar_id, target_purity) in target_instance.ty_args().pvar_purities().iter() {
+            let evidence_purity = &evidence_instance.ty_args().pvar_purities()[pvar_id];
+            self.add_evidence_purity(target_purity, evidence_purity);
+        }
+
+        for (tvar_id, target_poly) in target_instance.ty_args().tvar_types().iter() {
+            let evidence_poly = &evidence_instance.ty_args().tvar_types()[tvar_id];
+            self.add_evidence(target_poly, evidence_poly);
         }
     }
 
@@ -162,6 +183,9 @@ impl<'vars> SelectCtx<'vars> {
             (ty::Ty::Fun(target_fun), ty::Ty::TyPred(_))
             | (ty::Ty::Fun(target_fun), ty::Ty::EqPred) => {
                 self.add_evidence_top_fun(target_fun.top_fun(), &ty::TopFun::new_for_pred());
+            }
+            (ty::Ty::Record(target_instance), ty::Ty::Record(evidence_instance)) => {
+                self.add_evidence_record(target_instance, evidence_instance)
             }
             (ty::Ty::Union(target_members), _) => {
                 for target_member in target_members.iter() {

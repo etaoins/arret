@@ -14,7 +14,7 @@ use crate::mir::value::Value;
 use crate::ty;
 
 /// Returns a set of type tags that would satisfy the type predicate
-fn type_tags_for_test_ty(test_ty: ty::pred::TestTy) -> TypeTagSet {
+fn type_tags_for_test_ty(test_ty: &ty::pred::TestTy) -> TypeTagSet {
     use crate::ty::pred::TestTy;
 
     match test_ty {
@@ -39,6 +39,9 @@ fn type_tags_for_test_ty(test_ty: ty::pred::TestTy) -> TypeTagSet {
         TestTy::Set => {
             unimplemented!("sets");
         }
+        TestTy::TopRecord(_) => {
+            unimplemented!("records");
+        }
     }
 }
 
@@ -47,7 +50,7 @@ pub fn eval_ty_pred(
     b: &mut Option<Builder>,
     span: Span,
     subject_value: &Value,
-    test_ty: ty::pred::TestTy,
+    test_ty: &ty::pred::TestTy,
 ) -> Value {
     use crate::mir::value::types::possible_type_tags_for_value;
 

@@ -453,7 +453,11 @@ pub fn value_to_reg(
         }
         Value::ArretFun(ref arret_fun) => arret_fun_to_reg(ehx, b, span, arret_fun, abi_type),
         Value::TyPred(test_ty) => {
-            let ty_pred_arret_fun = ehx.synthetic_funs().ty_pred_arret_fun(*test_ty).clone();
+            let ty_pred_arret_fun = ehx
+                .synthetic_funs()
+                .ty_pred_arret_fun(test_ty.clone())
+                .clone();
+
             arret_fun_to_reg(ehx, b, span, &ty_pred_arret_fun, abi_type)
         }
         Value::EqPred => {

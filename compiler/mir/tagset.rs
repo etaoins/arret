@@ -113,7 +113,9 @@ where
                     .iter()
                     .map(TypeTagSet::from)
                     .fold(TypeTagSet::new(), |a, b| a & b),
-                ty::Ty::Map(_) | ty::Ty::Set(_) => unimplemented!("no corresponding type tag"),
+                ty::Ty::Map(_) | ty::Ty::Set(_) | ty::Ty::TopRecord(_) | ty::Ty::Record(_) => {
+                    unimplemented!("no corresponding type tag")
+                }
             })
             .unwrap_or_else(TypeTagSet::all)
     }

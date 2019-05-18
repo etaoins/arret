@@ -43,3 +43,9 @@ impl From<Purity> for Ref {
         Ref::Fixed(purity)
     }
 }
+
+impl From<PVarId> for Ref {
+    fn from(pvar_id: PVarId) -> Self {
+        Ref::Var(pvar_id)
+    }
+}

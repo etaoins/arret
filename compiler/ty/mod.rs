@@ -6,6 +6,7 @@ pub mod list_iter;
 pub mod pred;
 pub mod props;
 pub mod purity;
+pub mod record;
 pub mod select;
 pub mod subst;
 pub mod subtract;
@@ -160,6 +161,12 @@ impl<M: PM> From<Ty<M>> for Ref<M> {
     }
 }
 
+impl From<TVarId> for Ref<Poly> {
+    fn from(tvar_id: TVarId) -> Self {
+        Ref::Var(tvar_id, Poly {})
+    }
+}
+
 #[derive(PartialEq, Debug, Clone)]
 pub enum Ty<M: PM> {
     Any,
@@ -189,6 +196,10 @@ pub enum Ty<M: PM> {
 
     // List types
     List(List<M>),
+
+    // Record types
+    TopRecord(record::ConsId),
+    Record(Box<record::Instance<M>>),
 }
 
 impl<M: PM> Ty<M> {

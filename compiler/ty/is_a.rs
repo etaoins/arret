@@ -2,6 +2,7 @@ use crate::ty;
 use crate::ty::list_iter::ListIterator;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
+use crate::ty::record;
 
 fn top_fun_is_a(sub_top_fun: &ty::TopFun, par_top_fun: &ty::TopFun) -> bool {
     purity_ref_is_a(sub_top_fun.purity(), par_top_fun.purity())
@@ -29,6 +30,43 @@ fn list_is_a<M: ty::PM>(sub_list: &ty::List<M>, par_list: &ty::List<M>) -> bool 
         .iter()
         .zip(ListIterator::new(par_list))
         .all(|(sub, par)| ty_ref_is_a(sub, par))
+}
+
+fn record_field_is_a<F, R>(variance: record::Variance, is_a: &F, sub: &R, par: &R) -> bool
+where
+    F: Fn(&R, &R) -> bool,
+{
+    match variance {
+        record::Variance::Covariant => is_a(sub, par),
+        record::Variance::Contravariant => is_a(par, sub),
+        record::Variance::Invariant => is_a(sub, par) && is_a(par, sub),
+    }
+}
+
+fn record_instance_is_a<M: ty::PM>(
+    sub_instance: &record::Instance<M>,
+    par_instance: &record::Instance<M>,
+) -> bool {
+    // Make sure they came from the same constructor and satisfy their params
+    sub_instance.cons() == par_instance.cons()
+        && sub_instance
+            .cons()
+            .poly_params()
+            .iter()
+            .all(|poly_param| match poly_param {
+                record::PolyParam::PVar(variance, pvar_id) => record_field_is_a(
+                    *variance,
+                    &purity_ref_is_a,
+                    &sub_instance.ty_args().pvar_purities()[pvar_id],
+                    &par_instance.ty_args().pvar_purities()[pvar_id],
+                ),
+                record::PolyParam::TVar(variance, tvar_id) => record_field_is_a(
+                    *variance,
+                    &ty_ref_is_a,
+                    &sub_instance.ty_args().tvar_types()[tvar_id],
+                    &par_instance.ty_args().tvar_types()[tvar_id],
+                ),
+            })
 }
 
 fn monomorphic_fun_is_a(sub_fun: &ty::Fun, par_fun: &ty::Fun) -> bool {
@@ -141,6 +179,19 @@ fn ty_is_a<M: ty::PM>(
         // List types
         (ty::Ty::List(sub_list), ty::Ty::List(par_list)) => list_is_a(sub_list, par_list),
 
+        // Record types
+        (ty::Ty::Record(sub_instance), ty::Ty::Record(par_instance)) => {
+            record_instance_is_a(sub_instance, par_instance)
+        }
+        (ty::Ty::TopRecord(sub_cons), ty::Ty::TopRecord(par_cons)) => sub_cons == par_cons,
+        (ty::Ty::Record(sub_instance), ty::Ty::TopRecord(par_cons)) => {
+            sub_instance.cons() == par_cons
+        }
+        (ty::Ty::TopRecord(sub_cons), ty::Ty::Record(par_instance)) => {
+            // If the top record has no polymorphic params then it only has one instance
+            sub_cons == par_instance.cons() && sub_cons.poly_params().is_empty()
+        }
+
         _ => false,
     }
 }
@@ -212,10 +263,28 @@ pub fn ty_ref_is_a<M: ty::PM>(sub: &ty::Ref<M>, parent: &ty::Ref<M>) -> bool {
     ty_is_a(sub, sub_ty, parent, parent_ty)
 }
 
+/// Determines if two type references are equivalent
+///
+/// Our type system has no canonical union order, allows top record types with only a single
+/// possible instance, etc. This makes normal `PartialEq` unreliable for determining if the type
+/// system would treat two types identically. This function is more expensive but can reliably
+/// detect equivalent types with different representations.
+pub fn ty_refs_equivalent<M: ty::PM>(ty_ref1: &ty::Ref<M>, ty_ref2: &ty::Ref<M>) -> bool {
+    ty_ref_is_a(ty_ref1, ty_ref2) && ty_ref_is_a(ty_ref2, ty_ref1)
+}
+
+/// Determines if two purity refs are equivalent
+///
+/// This is for symmetry with [`ty_refs_equivalent`]
+pub fn purity_refs_equivalent(purity_ref1: &purity::Ref, purity_ref2: &purity::Ref) -> bool {
+    purity_ref1 == purity_ref2
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::hir::{poly_for_str, tvar_bounded_by};
+    use arret_syntax::span::EMPTY_SPAN;
 
     #[test]
     fn sym_types() {
@@ -624,5 +693,114 @@ mod test {
         assert_eq!(true, ty_ref_is_a(&poly_purity_fun, &top_to_str_fun));
         assert_eq!(true, ty_ref_is_a(&mono_purity_fun, &poly_purity_fun));
         assert_eq!(false, ty_ref_is_a(&top_to_str_fun, &poly_purity_fun));
+    }
+
+    #[test]
+    fn distinct_record_cons_instances() {
+        use crate::id_type::ArcId;
+        use crate::ty::ty_args::TyArgs;
+
+        let cons1 = ArcId::new(record::Cons::new(
+            EMPTY_SPAN,
+            "cons1".into(),
+            Box::new([]),
+            Box::new([]),
+        ));
+
+        let cons2 = ArcId::new(record::Cons::new(
+            EMPTY_SPAN,
+            "cons2".into(),
+            Box::new([]),
+            Box::new([]),
+        ));
+
+        let instance1_poly: ty::Ref<ty::Poly> =
+            record::Instance::new(cons1, TyArgs::empty()).into();
+        let instance2_poly: ty::Ref<ty::Poly> =
+            record::Instance::new(cons2, TyArgs::empty()).into();
+
+        // Different record constructors
+        assert_eq!(false, ty_ref_is_a(&instance1_poly, &instance2_poly));
+        assert_eq!(false, ty_ref_is_a(&instance2_poly, &instance1_poly));
+    }
+
+    #[test]
+    fn same_cons_record_instances() {
+        use crate::id_type::ArcId;
+        use crate::ty::ty_args::TyArgs;
+        use std::collections::HashMap;
+
+        let tvar1 = ty::TVarId::new(ty::TVar::new(
+            EMPTY_SPAN,
+            "tvar1".into(),
+            ty::Ty::Any.into(),
+        ));
+        let tvar2 = ty::TVarId::new(ty::TVar::new(
+            EMPTY_SPAN,
+            "tvar2".into(),
+            ty::Ty::Any.into(),
+        ));
+        let tvar3 = ty::TVarId::new(ty::TVar::new(
+            EMPTY_SPAN,
+            "tvar3".into(),
+            ty::Ty::Any.into(),
+        ));
+
+        let cons = ArcId::new(record::Cons::new(
+            EMPTY_SPAN,
+            "cons".into(),
+            Box::new([
+                record::PolyParam::TVar(record::Variance::Covariant, tvar1.clone()),
+                record::PolyParam::TVar(record::Variance::Contravariant, tvar2.clone()),
+                record::PolyParam::TVar(record::Variance::Invariant, tvar3.clone()),
+            ]),
+            Box::new([
+                record::Field::new("covariant".into(), tvar1.clone().into()),
+                record::Field::new("contravariant".into(), tvar2.clone().into()),
+                record::Field::new("invariant".into(), tvar3.clone().into()),
+            ]),
+        ));
+
+        let num_num_num_instance_poly: ty::Ref<ty::Poly> = record::Instance::new(
+            cons.clone(),
+            TyArgs::new(
+                HashMap::new(),
+                std::iter::once((tvar1.clone(), ty::Ty::Num.into()))
+                    .chain(std::iter::once((tvar2.clone(), ty::Ty::Num.into())))
+                    .chain(std::iter::once((tvar3.clone(), ty::Ty::Num.into())))
+                    .collect(),
+            ),
+        )
+        .into();
+
+        let int_any_num_instance_poly: ty::Ref<ty::Poly> = record::Instance::new(
+            cons.clone(),
+            TyArgs::new(
+                HashMap::new(),
+                std::iter::once((tvar1.clone(), ty::Ty::Int.into()))
+                    .chain(std::iter::once((tvar2.clone(), ty::Ty::Any.into())))
+                    .chain(std::iter::once((tvar3.clone(), ty::Ty::Num.into())))
+                    .collect(),
+            ),
+        )
+        .into();
+
+        assert_eq!(
+            true,
+            ty_ref_is_a(&int_any_num_instance_poly, &num_num_num_instance_poly)
+        );
+        assert_eq!(
+            false,
+            ty_ref_is_a(&num_num_num_instance_poly, &int_any_num_instance_poly)
+        );
+
+        assert_eq!(
+            true,
+            ty_ref_is_a(&num_num_num_instance_poly, &num_num_num_instance_poly)
+        );
+        assert_eq!(
+            true,
+            ty_ref_is_a(&int_any_num_instance_poly, &int_any_num_instance_poly)
+        );
     }
 }

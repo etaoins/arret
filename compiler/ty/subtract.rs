@@ -99,6 +99,11 @@ pub fn subtract_ty_refs<M: ty::PM>(
 mod test {
     use super::*;
     use crate::hir::{poly_for_str, tvar_bounded_by};
+    use crate::id_type::ArcId;
+    use crate::ty::record;
+    use crate::ty::ty_args::TyArgs;
+    use arret_syntax::span::EMPTY_SPAN;
+    use std::collections::HashMap;
 
     fn assert_subtraction(expected_str: &str, minuend_str: &str, subrahend_str: &str) {
         let expected_poly = poly_for_str(expected_str);
@@ -168,6 +173,45 @@ mod test {
         assert_eq!(
             ptype3_int_intersect,
             subtract_ty_refs(&ptype3_num, &any_float)
+        );
+    }
+
+    #[test]
+    fn poly_record_type() {
+        let tvar = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into()));
+
+        // Polymorphic record constructor and top type
+        let poly_record_cons = ArcId::new(record::Cons::new(
+            EMPTY_SPAN,
+            "record_cons".into(),
+            Box::new([record::PolyParam::TVar(
+                record::Variance::Covariant,
+                tvar.clone(),
+            )]),
+            Box::new([record::Field::new("num".into(), tvar.clone().into())]),
+        ));
+
+        let top_record_ref: ty::Ref<ty::Poly> = poly_record_cons.clone().into();
+
+        // Instance parameterised with an `Int`
+        let mut int_tvars = HashMap::new();
+        int_tvars.insert(tvar.clone(), ty::Ty::Int.into());
+        let int_ty_args = TyArgs::new(HashMap::new(), int_tvars);
+
+        let int_instance_ref: ty::Ref<ty::Poly> =
+            record::Instance::new(poly_record_cons.clone(), int_ty_args).into();
+
+        // Top record minus an instance is the top record
+        assert_eq!(
+            top_record_ref.clone(),
+            subtract_ty_refs(&top_record_ref, &int_instance_ref)
+        );
+
+        // Instance minus the top record is nothing
+        let never_ref: ty::Ref<ty::Poly> = ty::Ty::never().into();
+        assert_eq!(
+            never_ref,
+            subtract_ty_refs(&int_instance_ref, &top_record_ref)
         );
     }
 }

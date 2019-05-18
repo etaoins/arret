@@ -67,7 +67,7 @@ fn new_ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
     let subject_var_id = hir::VarId::alloc();
 
     value::ArretFun::new(
-        Some(test_ty.to_str().into()),
+        Some(test_ty.to_string().into()),
         TyArgs::empty(),
         Closure::empty(),
         hir::Fun {
@@ -95,7 +95,7 @@ fn new_ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
                 kind: hir::ExprKind::App(Box::new(hir::App {
                     span: EMPTY_SPAN,
                     fun_expr: hir::Expr {
-                        result_ty: ty::Ty::TyPred(test_ty).into(),
+                        result_ty: ty::Ty::TyPred(test_ty.clone()).into(),
                         kind: hir::ExprKind::TyPred(EMPTY_SPAN, test_ty),
                     },
                     ty_args: TyArgs::empty(),
@@ -128,7 +128,7 @@ impl SyntheticFuns {
 
     pub fn ty_pred_arret_fun(&mut self, test_ty: ty::pred::TestTy) -> &value::ArretFun {
         self.ty_pred_arret_fun
-            .entry(test_ty)
+            .entry(test_ty.clone())
             .or_insert_with(|| new_ty_pred_arret_fun(test_ty))
     }
 }

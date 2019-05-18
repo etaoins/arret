@@ -6,6 +6,8 @@ use crate::ty;
 use crate::ty::list_iter::ListIterator;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
+use crate::ty::record;
+use crate::ty::ty_args::TyArgs;
 
 #[derive(PartialEq, Debug)]
 pub enum Error {
@@ -46,14 +48,6 @@ fn unify_list(
     match ty::unify::unify_list(list1, list2) {
         ty::unify::UnifiedList::Merged(merged) => Ok(merged),
         ty::unify::UnifiedList::Discerned => Err(Error::Disjoint),
-    }
-}
-
-fn intersect_purity_refs(purity1: &purity::Ref, purity2: &purity::Ref) -> purity::Ref {
-    if purity1 == purity2 {
-        purity1.clone()
-    } else {
-        Purity::Pure.into()
     }
 }
 
@@ -101,6 +95,103 @@ where
         acc = intersect_ty_refs(&acc, &ty_ref)?;
     }
     Ok(acc)
+}
+
+fn intersect_record_field_purities<M: ty::PM>(
+    variance: record::Variance,
+    pvar_id: &purity::PVarId,
+    ty_args1: &TyArgs<M>,
+    ty_args2: &TyArgs<M>,
+) -> Result<purity::Ref> {
+    use crate::ty::is_a::purity_refs_equivalent;
+    use crate::ty::unify::unify_purity_refs;
+
+    let purity_ref1 = &ty_args1.pvar_purities()[pvar_id];
+    let purity_ref2 = &ty_args2.pvar_purities()[pvar_id];
+
+    match variance {
+        record::Variance::Covariant => Ok(intersect_purity_refs(purity_ref1, purity_ref2)),
+        record::Variance::Contravariant => Ok(unify_purity_refs(purity_ref1, purity_ref2)),
+        record::Variance::Invariant => {
+            if purity_refs_equivalent(purity_ref1, purity_ref2) {
+                Ok(purity_ref1.clone())
+            } else {
+                Err(Error::Disjoint)
+            }
+        }
+    }
+}
+
+fn intersect_record_field_ty_refs<M: ty::PM>(
+    variance: record::Variance,
+    tvar_id: &ty::TVarId,
+    ty_args1: &TyArgs<M>,
+    ty_args2: &TyArgs<M>,
+) -> Result<ty::Ref<M>> {
+    use crate::ty::is_a::ty_refs_equivalent;
+    use crate::ty::unify::unify_to_ty_ref;
+
+    let ty_ref1 = &ty_args1.tvar_types()[tvar_id];
+    let ty_ref2 = &ty_args2.tvar_types()[tvar_id];
+
+    match variance {
+        record::Variance::Covariant => intersect_ty_refs(ty_ref1, ty_ref2),
+        record::Variance::Contravariant => Ok(unify_to_ty_ref(ty_ref1, ty_ref2)),
+        record::Variance::Invariant => {
+            if ty_refs_equivalent(ty_ref1, ty_ref2) {
+                Ok(ty_ref1.clone())
+            } else {
+                Err(Error::Disjoint)
+            }
+        }
+    }
+}
+
+fn intersect_record_instance<M: ty::PM>(
+    instance1: &record::Instance<M>,
+    instance2: &record::Instance<M>,
+) -> Result<record::Instance<M>> {
+    use crate::ty::record::PolyParam;
+    use std::collections::HashMap;
+
+    if instance1.cons() != instance2.cons() {
+        return Err(Error::Disjoint);
+    }
+
+    let mut merged_pvar_purities = HashMap::new();
+    let mut merged_tvar_types = HashMap::new();
+
+    for poly_param in instance1.cons().poly_params() {
+        match poly_param {
+            PolyParam::PVar(variance, pvar_id) => {
+                merged_pvar_purities.insert(
+                    pvar_id.clone(),
+                    intersect_record_field_purities(
+                        *variance,
+                        pvar_id,
+                        instance1.ty_args(),
+                        instance2.ty_args(),
+                    )?,
+                );
+            }
+            PolyParam::TVar(variance, tvar_id) => {
+                merged_tvar_types.insert(
+                    tvar_id.clone(),
+                    intersect_record_field_ty_refs(
+                        *variance,
+                        tvar_id,
+                        instance1.ty_args(),
+                        instance2.ty_args(),
+                    )?,
+                );
+            }
+        }
+    }
+
+    Ok(record::Instance::new(
+        instance1.cons().clone(),
+        TyArgs::new(merged_pvar_purities, merged_tvar_types),
+    ))
 }
 
 /// Intersects two types under the assumption that they are not subtypes
@@ -224,6 +315,9 @@ fn non_subty_intersect<M: ty::PM>(
                 .into())
             }
         }
+        (ty::Ty::Record(instance1), ty::Ty::Record(instance2)) => {
+            Ok(ty::Ty::Record(Box::new(intersect_record_instance(instance1, instance2)?)).into())
+        }
         (_, _) => Err(Error::Disjoint),
     }
 }
@@ -279,10 +373,19 @@ pub fn intersect_ty_refs<M: ty::PM>(
     }
 }
 
+pub fn intersect_purity_refs(purity1: &purity::Ref, purity2: &purity::Ref) -> purity::Ref {
+    if purity1 == purity2 {
+        purity1.clone()
+    } else {
+        Purity::Pure.into()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::hir::{poly_for_str, tvar_bounded_by};
+    use arret_syntax::span::EMPTY_SPAN;
 
     fn assert_disjoint_poly(poly1: &ty::Ref<ty::Poly>, poly2: &ty::Ref<ty::Poly>) {
         assert_eq!(
@@ -537,5 +640,121 @@ mod test {
         assert_merged_iter("Sym", &["Sym"]);
         assert_merged_iter("true", &["true", "Bool"]);
         assert_disjoint_iter(&["true", "false"]);
+    }
+
+    #[test]
+    fn record_instances() {
+        use crate::id_type::ArcId;
+        use crate::ty::ty_args::TyArgs;
+        use std::collections::HashMap;
+
+        let tvar1 = ty::TVarId::new(ty::TVar::new(
+            EMPTY_SPAN,
+            "tvar1".into(),
+            ty::Ty::Any.into(),
+        ));
+        let tvar2 = ty::TVarId::new(ty::TVar::new(
+            EMPTY_SPAN,
+            "tvar2".into(),
+            ty::Ty::Any.into(),
+        ));
+
+        let cons1 = ArcId::new(record::Cons::new(
+            EMPTY_SPAN,
+            "cons1".into(),
+            Box::new([record::PolyParam::TVar(
+                record::Variance::Covariant,
+                tvar1.clone(),
+            )]),
+            Box::new([record::Field::new(
+                "cons1-field1".into(),
+                tvar1.clone().into(),
+            )]),
+        ));
+
+        let cons2 = ArcId::new(record::Cons::new(
+            EMPTY_SPAN,
+            "cons2".into(),
+            Box::new([
+                record::PolyParam::TVar(record::Variance::Covariant, tvar1.clone()),
+                record::PolyParam::TVar(record::Variance::Contravariant, tvar2.clone()),
+            ]),
+            Box::new([
+                record::Field::new("cons2-covariant".into(), tvar1.clone().into()),
+                record::Field::new("cons2-contravariant".into(), tvar2.clone().into()),
+            ]),
+        ));
+
+        let float_instance1_poly: ty::Ref<ty::Poly> = record::Instance::new(
+            cons1.clone(),
+            TyArgs::new(
+                HashMap::new(),
+                std::iter::once((tvar1.clone(), ty::Ty::Float.into())).collect(),
+            ),
+        )
+        .into();
+
+        let float_true_instance2_poly: ty::Ref<ty::Poly> = record::Instance::new(
+            cons2.clone(),
+            TyArgs::new(
+                HashMap::new(),
+                std::iter::once((tvar1.clone(), ty::Ty::Float.into()))
+                    .chain(std::iter::once((
+                        tvar2.clone(),
+                        ty::Ty::LitBool(true).into(),
+                    )))
+                    .collect(),
+            ),
+        )
+        .into();
+
+        let int_true_instance2_poly: ty::Ref<ty::Poly> = record::Instance::new(
+            cons2.clone(),
+            TyArgs::new(
+                HashMap::new(),
+                std::iter::once((tvar1.clone(), ty::Ty::Int.into()))
+                    .chain(std::iter::once((
+                        tvar2.clone(),
+                        ty::Ty::LitBool(true).into(),
+                    )))
+                    .collect(),
+            ),
+        )
+        .into();
+
+        let int_bool_instance2_poly: ty::Ref<ty::Poly> = record::Instance::new(
+            cons2.clone(),
+            TyArgs::new(
+                HashMap::new(),
+                std::iter::once((tvar1.clone(), ty::Ty::Int.into()))
+                    .chain(std::iter::once((tvar2.clone(), ty::Ty::Bool.into())))
+                    .collect(),
+            ),
+        )
+        .into();
+
+        let num_bool_instance2_poly: ty::Ref<ty::Poly> = record::Instance::new(
+            cons2.clone(),
+            TyArgs::new(
+                HashMap::new(),
+                std::iter::once((tvar1.clone(), ty::Ty::Num.into()))
+                    .chain(std::iter::once((tvar2.clone(), ty::Ty::Bool.into())))
+                    .collect(),
+            ),
+        )
+        .into();
+
+        // Different record constructors
+        assert_disjoint_poly(&float_instance1_poly, &float_true_instance2_poly);
+
+        // Disjoint record instances
+        assert_disjoint_poly(&float_true_instance2_poly, &int_bool_instance2_poly);
+
+        // Intersectable record types
+        assert_merged_poly(
+            &int_bool_instance2_poly,
+            &int_true_instance2_poly,
+            &num_bool_instance2_poly,
+        )
     }
 }

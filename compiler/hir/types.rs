@@ -10,6 +10,7 @@ use crate::hir::util::{
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
+use crate::ty::record;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum TyCons {
@@ -212,7 +213,7 @@ fn lower_literal(datum: NsDatum) -> Result<ty::Ref<ty::Poly>> {
 fn lower_ident(scope: &Scope<'_>, span: Span, ident: &Ident) -> Result<ty::Ref<ty::Poly>> {
     match scope.get_or_err(span, ident)? {
         Binding::Ty(ty) => Ok(ty.clone()),
-        Binding::TyPred(test_ty) => Ok(ty::Ty::TyPred(*test_ty).into()),
+        Binding::TyPred(test_ty) => Ok(ty::Ty::TyPred(test_ty.clone()).into()),
         Binding::EqPred => Ok(ty::Ty::EqPred.into()),
         other => Err(Error::new(span, ErrorKind::ExpectedTy(other.description()))),
     }
@@ -324,14 +325,14 @@ pub fn lower_polymorphic_vars(
                 pvar_ids.push(pvar_id.clone());
 
                 span = pvar_id.span();
-                binding = Binding::Purity(purity::Ref::Var(pvar_id))
+                binding = Binding::Purity(pvar_id.into())
             }
             PolymorphicVarKind::TVar(tvar) => {
                 let tvar_id = ty::TVarId::new(tvar);
                 tvar_ids.push(tvar_id.clone());
 
                 span = tvar_id.span();
-                binding = Binding::Ty(ty::Ref::Var(tvar_id, ty::Poly {}))
+                binding = Binding::Ty(tvar_id.into())
             }
             PolymorphicVarKind::TFixed(fixed_span, poly) => {
                 span = fixed_span;
@@ -450,6 +451,18 @@ fn str_for_bounds(bound_pvar_ids: &[purity::PVarId], bound_tvar_ids: &[ty::TVarI
     format!("#{{{}}}", all_parts.join(" "))
 }
 
+fn str_for_record_poly_arg<M: ty::PM>(
+    instance: &record::Instance<M>,
+    poly_param: &record::PolyParam,
+) -> String {
+    let ty_args = instance.ty_args();
+
+    match poly_param {
+        record::PolyParam::PVar(_, pvar_id) => str_for_purity(&ty_args.pvar_purities()[pvar_id]),
+        record::PolyParam::TVar(_, tvar_id) => str_for_ty_ref(&ty_args.tvar_types()[tvar_id]),
+    }
+}
+
 fn str_for_ty<M: ty::PM>(ty: &ty::Ty<M>) -> String {
     match ty {
         ty::Ty::Any => "Any".to_owned(),
@@ -500,7 +513,7 @@ fn str_for_ty<M: ty::PM>(ty: &ty::Ty<M>) -> String {
                 format!("({})", fun_parts.join(" "))
             }
         }
-        ty::Ty::TyPred(test_ty) => test_ty.to_str().to_owned(),
+        ty::Ty::TyPred(test_ty) => test_ty.to_string(),
         ty::Ty::EqPred => "=".to_owned(),
         ty::Ty::Union(members) => {
             let member_strs: Vec<String> = members
@@ -529,8 +542,23 @@ fn str_for_ty<M: ty::PM>(ty: &ty::Ty<M>) -> String {
                 list_parts.push("List".to_owned());
                 push_list_parts(&mut list_parts, list);
 
-                format!("({})", list_parts.join(" "),)
+                format!("({})", list_parts.join(" "))
             }
+        }
+        ty::Ty::TopRecord(record_cons) => format!("({} ...)", record_cons.name()),
+        ty::Ty::Record(instance) => {
+            let record_cons = instance.cons();
+
+            let record_parts: Vec<String> = std::iter::once(record_cons.name().to_string())
+                .chain(
+                    record_cons
+                        .poly_params()
+                        .iter()
+                        .map(|poly_param| str_for_record_poly_arg(instance, poly_param)),
+                )
+                .collect();
+
+            format!("({})", record_parts.join(" "))
         }
     }
 }
@@ -580,12 +608,16 @@ pub fn tvar_bounded_by(bound: ty::Ref<ty::Poly>) -> ty::Ref<ty::Poly> {
     use arret_syntax::span::EMPTY_SPAN;
 
     let tvar_id = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "TVar".into(), bound));
-    ty::Ref::Var(tvar_id, ty::Poly {})
+    tvar_id.into()
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::id_type::ArcId;
+    use crate::ty::ty_args::TyArgs;
+    use arret_syntax::span::EMPTY_SPAN;
+    use std::collections::HashMap;
 
     fn assert_ty_for_str(expected: ty::Ty<ty::Poly>, datum_str: &str) {
         let expected_poly = expected.into();
@@ -858,5 +890,51 @@ mod test {
     #[test]
     fn polymorphic_fun_str() {
         assert_exact_str_repr("(All #{[->? ->!] A [B Bool] C} B C ->? A)");
+    }
+
+    #[test]
+    fn mono_record_type() {
+        let mono_record_cons = ArcId::new(record::Cons::new(
+            EMPTY_SPAN,
+            "MonoCons".into(),
+            Box::new([]),
+            Box::new([record::Field::new("num".into(), ty::Ty::Num.into())]),
+        ));
+
+        let top_record_ref: ty::Ref<ty::Poly> = mono_record_cons.clone().into();
+        assert_eq!("(MonoCons ...)", str_for_ty_ref(&top_record_ref));
+
+        let int_record_instance_ref: ty::Ref<ty::Poly> =
+            record::Instance::new(mono_record_cons.clone(), TyArgs::empty()).into();
+        assert_eq!("(MonoCons)", str_for_ty_ref(&int_record_instance_ref));
+    }
+
+    #[test]
+    fn poly_record_type() {
+        let tvar = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into()));
+
+        let poly_record_cons = ArcId::new(record::Cons::new(
+            EMPTY_SPAN,
+            "PolyCons".into(),
+            Box::new([record::PolyParam::TVar(
+                record::Variance::Covariant,
+                tvar.clone(),
+            )]),
+            Box::new([record::Field::new("num".into(), tvar.clone().into())]),
+        ));
+
+        // Top record type
+        let top_record_ref: ty::Ref<ty::Poly> = poly_record_cons.clone().into();
+        assert_eq!("(PolyCons ...)", str_for_ty_ref(&top_record_ref));
+
+        // Instance parameterised with an `Int`
+        let mut int_tvars = HashMap::new();
+        int_tvars.insert(tvar.clone(), ty::Ty::Int.into());
+        let int_ty_args = TyArgs::new(HashMap::new(), int_tvars);
+
+        let poly_record_instance_ref: ty::Ref<ty::Poly> =
+            record::Instance::new(poly_record_cons.clone(), int_ty_args).into();
+
+        assert_eq!("(PolyCons Int)", str_for_ty_ref(&poly_record_instance_ref));
     }
 }

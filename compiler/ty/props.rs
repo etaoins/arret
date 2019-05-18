@@ -1,9 +1,16 @@
 use crate::ty;
 use crate::ty::purity::Purity;
+use crate::ty::record;
 
 fn ty_has_subtypes<M: ty::PM>(ty: &ty::Ty<M>) -> bool {
     match ty {
-        ty::Ty::Any | ty::Ty::Bool | ty::Ty::Num | ty::Ty::Sym | ty::Ty::TopFun(_) => true,
+        ty::Ty::Any
+        | ty::Ty::Bool
+        | ty::Ty::Num
+        | ty::Ty::Sym
+        | ty::Ty::TopFun(_)
+        | ty::Ty::TopRecord(_) => true,
+
         ty::Ty::Char
         | ty::Ty::Float
         | ty::Ty::Int
@@ -12,6 +19,7 @@ fn ty_has_subtypes<M: ty::PM>(ty: &ty::Ty<M>) -> bool {
         | ty::Ty::Str
         | ty::Ty::TyPred(_)
         | ty::Ty::EqPred => false,
+
         ty::Ty::Fun(fun) => {
             fun.purity() != &Purity::Pure.into()
                 || !fun.params().fixed().is_empty()
@@ -26,6 +34,14 @@ fn ty_has_subtypes<M: ty::PM>(ty: &ty::Ty<M>) -> bool {
             // Any arbitrary fixed length list is a subtype of a list with rest
             !list.rest().is_never() || list.fixed().iter().any(has_subtypes)
         }
+
+        // Any record type supporting variance has subtypes
+        ty::Ty::Record(instance) => instance
+            .cons()
+            .poly_params()
+            .iter()
+            .any(|poly_param| poly_param.variance() != record::Variance::Invariant),
+
         ty::Ty::Vectorof(_) => {
             // Any arbitrary fixed length vector is a subtype of this vector
             true
@@ -64,6 +80,9 @@ pub fn is_literal<M: ty::PM>(ty_ref: &ty::Ref<M>) -> bool {
 mod test {
     use super::*;
     use crate::hir::poly_for_str;
+    use crate::id_type::ArcId;
+    use crate::ty::record;
+    use crate::ty::ty_args::TyArgs;
     use arret_syntax::span::EMPTY_SPAN;
 
     fn str_has_subtypes(datum_str: &str) -> bool {
@@ -109,7 +128,7 @@ mod test {
         assert_eq!(false, str_has_subtypes("(RawU)"));
 
         let tvar_id = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "test".into(), ty::Ty::Any.into()));
-        assert_eq!(true, has_subtypes(&ty::Ref::Var(tvar_id, ty::Poly {})));
+        assert_eq!(true, has_subtypes(&tvar_id.into()));
     }
 
     #[test]
@@ -140,6 +159,43 @@ mod test {
         assert_eq!(true, str_is_literal("(Vector false true)"));
 
         let tvar_id = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "test".into(), ty::Ty::Any.into()));
-        assert_eq!(false, is_literal(&ty::Ref::Var(tvar_id, ty::Poly {})));
+        assert_eq!(false, is_literal(&tvar_id.into()));
+    }
+
+    #[test]
+    fn mono_record_type() {
+        let mono_record_cons = ArcId::new(record::Cons::new(
+            EMPTY_SPAN,
+            "record_cons".into(),
+            Box::new([]),
+            Box::new([record::Field::new("num".into(), ty::Ty::Num.into())]),
+        ));
+
+        let int_record_instance_ref: ty::Ref<ty::Poly> =
+            record::Instance::new(mono_record_cons.clone(), TyArgs::empty()).into();
+
+        assert_eq!(false, has_subtypes(&int_record_instance_ref));
+        assert_eq!(false, is_literal(&int_record_instance_ref));
+    }
+
+    #[test]
+    fn poly_record_type() {
+        let tvar = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into()));
+
+        let poly_record_cons = ArcId::new(record::Cons::new(
+            EMPTY_SPAN,
+            "record_cons".into(),
+            Box::new([record::PolyParam::TVar(
+                record::Variance::Covariant,
+                tvar.clone(),
+            )]),
+            Box::new([record::Field::new("num".into(), tvar.into())]),
+        ));
+
+        let poly_record_instance_ref: ty::Ref<ty::Poly> =
+            record::Instance::new(poly_record_cons.clone(), TyArgs::empty()).into();
+
+        assert_eq!(true, has_subtypes(&poly_record_instance_ref));
+        assert_eq!(false, is_literal(&poly_record_instance_ref));
     }
 }
