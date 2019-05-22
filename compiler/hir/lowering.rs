@@ -11,6 +11,7 @@ use crate::rfi;
 use crate::source::SourceFile;
 use crate::ty;
 use crate::ty::purity;
+use crate::ty::record;
 use crate::CompileCtx;
 
 use crate::hir::destruc;
@@ -170,6 +171,86 @@ fn lower_deftype(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) ->
     let ty_datum = arg_iter.next().unwrap();
 
     lower_type(scope, self_datum, ty_datum)
+}
+
+fn lower_record_field_decl(scope: &mut Scope<'_>, field_datum: NsDatum) -> Result<record::Field> {
+    let datum_description = field_datum.description();
+
+    let (ident_span, ident, poly) = match field_datum {
+        NsDatum::Ident(span, ident) => (span, ident, ty::Ty::Any.into()),
+        NsDatum::Vector(vector_span, vs) => {
+            let mut data = vs.into_vec();
+
+            if data.len() != 2 {
+                return Err(Error::new(
+                    vector_span,
+                    ErrorKind::ExpectedRecordFieldDecl(datum_description),
+                ));
+            }
+
+            let poly = lower_poly(scope, data.pop().unwrap())?;
+            let (ident, ident_span) = expect_ident_and_span(data.pop().unwrap())?;
+
+            (ident_span, ident, poly)
+        }
+        other => {
+            return Err(Error::new(
+                other.span(),
+                ErrorKind::ExpectedRecordFieldDecl(datum_description),
+            ));
+        }
+    };
+
+    if ident.is_underscore() {
+        return Err(Error::new(ident_span, ErrorKind::AnonymousRecordField));
+    }
+
+    Ok(record::Field::new(ident.into_name(), poly))
+}
+
+fn lower_defrecord(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) -> Result<()> {
+    use crate::id_type::ArcId;
+    use crate::ty::ty_args::TyArgs;
+
+    if arg_iter.len() != 2 {
+        return Err(Error::new(
+            span,
+            ErrorKind::WrongDefLikeArgCount("defrecord"),
+        ));
+    }
+
+    let self_datum = arg_iter.next().unwrap();
+
+    // TODO: Support using list syntax here to define polymorphic records
+    let (ident, ident_span) = expect_ident_and_span(self_datum)?;
+
+    let fields_datum = arg_iter.next().unwrap();
+    let fields_data = if let NsDatum::List(_, vs) = fields_datum {
+        vs
+    } else {
+        return Err(Error::new(
+            fields_datum.span(),
+            ErrorKind::ExpectedRecordFieldList(fields_datum.description()),
+        ));
+    };
+
+    let fields = fields_data
+        .into_vec()
+        .into_iter()
+        .map(|field_datum| lower_record_field_decl(scope, field_datum))
+        .collect::<Result<Box<_>>>()?;
+
+    // We only support lowering monomorphic records so create a constructor with a singleton instance
+    let record_cons = ArcId::new(record::Cons::new(
+        span,
+        ident.name().clone(),
+        Box::new([]),
+        fields,
+    ));
+    let record_instance = record::Instance::new(record_cons, TyArgs::empty());
+
+    // TODO: This only adds the type, not the constructor, field accessors, etc.
+    scope.insert_binding(ident_span, ident, Binding::Ty(record_instance.into()))
 }
 
 fn lower_lettype(scope: &Scope<'_>, span: Span, arg_iter: NsDataIter) -> Result<Expr<Lowered>> {
@@ -413,7 +494,7 @@ fn lower_expr_prim_apply(
     mut arg_iter: NsDataIter,
 ) -> Result<Expr<Lowered>> {
     match prim {
-        Prim::Def | Prim::DefMacro | Prim::DefType | Prim::Import => {
+        Prim::Def | Prim::DefMacro | Prim::DefType | Prim::Import | Prim::DefRecord => {
             Err(Error::new(span, ErrorKind::DefOutsideBody))
         }
         Prim::Let => lower_let(scope, span, arg_iter),
@@ -668,6 +749,7 @@ impl<'ccx> LoweringCtx<'ccx> {
             }
             Prim::DefMacro => Ok(lower_defmacro(scope, span, arg_iter).map(|_| None)?),
             Prim::DefType => Ok(lower_deftype(scope, span, arg_iter).map(|_| None)?),
+            Prim::DefRecord => Ok(lower_defrecord(scope, span, arg_iter).map(|_| None)?),
             Prim::Import => self.lower_import(scope, ns_id, arg_iter).map(|_| None),
             Prim::CompileError => Err(vec![lower_user_compile_error(span, arg_iter)]),
             _ => Err(vec![Error::new(span, ErrorKind::NonDefInsideModule)]),

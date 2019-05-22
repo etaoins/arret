@@ -23,6 +23,8 @@ pub enum ErrorKind {
     ExpectedCompileErrorString(&'static str),
     ExpectedImportFilterKeyword(&'static str),
     ExpectedImportRenameMap(&'static str),
+    ExpectedRecordFieldList(&'static str),
+    ExpectedRecordFieldDecl(&'static str),
     UnboundIdent(DataStr),
     WrongArgCount(usize),
     WrongCondArgCount,
@@ -64,6 +66,7 @@ pub enum ErrorKind {
     BadImportSet,
     NonFunPolyTy,
     ShortModuleName,
+    AnonymousRecordField,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -185,6 +188,21 @@ impl From<Error> for Diagnostic {
                         Label::new_primary(origin).with_message("expected identifier rename map"),
                     )
             }
+
+            ErrorKind::ExpectedRecordFieldList(found) => {
+                Diagnostic::new_error(format!("expected record field list, found {}", found))
+                    .with_label(
+                        Label::new_primary(origin).with_message("expected record field list"),
+                    )
+            }
+
+            ErrorKind::ExpectedRecordFieldDecl(found) => Diagnostic::new_error(format!(
+                "expected record field declaration, found {}",
+                found
+            ))
+            .with_label(
+                Label::new_primary(origin).with_message("expected record field declaration"),
+            ),
 
             ErrorKind::UnboundIdent(ref ident) => {
                 let diagnostic = Diagnostic::new_error(format!("unable to resolve `{}`", ident))
@@ -445,6 +463,11 @@ impl From<Error> for Diagnostic {
                     Label::new_primary(origin).with_message("expected vector of 2 or more symbols"),
                 )
             }
+
+            ErrorKind::AnonymousRecordField => Diagnostic::new_error(
+                "anonymous record fields are not supported",
+            )
+            .with_label(Label::new_primary(origin).with_message("expected record field name")),
         };
 
         error.loc_trace.label_macro_invocation(diagnostic)

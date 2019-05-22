@@ -33,6 +33,7 @@ export_prims!(
     ("macro-rules", MacroRules),
     ("deftype", DefType),
     ("lettype", LetType),
+    ("defrecord", DefRecord),
     ("compile-error", CompileError),
     ("All", All)
 );

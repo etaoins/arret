@@ -1,0 +1,18 @@
+(import [stdlib base])
+
+(defrecord foo) ;~ ERROR wrong argument count; expected 2
+
+(defrecord :keyword ())
+          ;^^^^^^^^ ERROR expected symbol, found keyword
+
+(defrecord _ [])
+            ;^^ ERROR expected record field list, found empty vector
+
+(defrecord foo (_))
+               ;^ ERROR anonymous record fields are not supported
+
+(defrecord foo (1))
+               ;^ ERROR expected record field declaration, found integer
+
+(defrecord foo ([]))
+               ;^^ ERROR expected record field declaration, found empty vector
