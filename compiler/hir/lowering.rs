@@ -210,7 +210,6 @@ fn lower_record_field_decl(scope: &mut Scope<'_>, field_datum: NsDatum) -> Resul
 
 fn lower_defrecord(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) -> Result<()> {
     use crate::id_type::ArcId;
-    use crate::ty::ty_args::TyArgs;
 
     if arg_iter.len() != 2 {
         return Err(Error::new(
@@ -247,10 +246,9 @@ fn lower_defrecord(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) 
         Box::new([]),
         fields,
     ));
-    let record_instance = record::Instance::new(record_cons, TyArgs::empty());
 
-    // TODO: This only adds the type, not the constructor, field accessors, etc.
-    scope.insert_binding(ident_span, ident, Binding::Ty(record_instance.into()))
+    // TODO: This does not add record accessors
+    scope.insert_binding(ident_span, ident, Binding::RecordCons(record_cons))
 }
 
 fn lower_lettype(scope: &Scope<'_>, span: Span, arg_iter: NsDataIter) -> Result<Expr<Lowered>> {
@@ -560,6 +558,10 @@ fn lower_expr(scope: &Scope<'_>, datum: NsDatum) -> Result<Expr<Lowered>> {
             Binding::Var(id) => Ok(ExprKind::Ref(span, *id).into()),
             Binding::TyPred(test_ty) => Ok(ExprKind::TyPred(span, test_ty.clone()).into()),
             Binding::EqPred => Ok(ExprKind::EqPred(span).into()),
+            Binding::RecordCons(record_cons) => {
+                // This acts as a value in a value context
+                Ok(ExprKind::RecordCons(span, record_cons.clone()).into())
+            }
             other => Err(Error::new(
                 span,
                 ErrorKind::ExpectedValue(other.description()),

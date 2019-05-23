@@ -42,7 +42,8 @@ where
         | ExprKind::Lit(_)
         | ExprKind::RustFun(_)
         | ExprKind::TyPred(_, _)
-        | ExprKind::EqPred(_) => {
+        | ExprKind::EqPred(_)
+        | ExprKind::RecordCons(_, _) => {
             // Terminal expression
         }
     };

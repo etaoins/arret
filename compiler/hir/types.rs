@@ -11,6 +11,7 @@ use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
 use crate::ty::record;
+use crate::ty::ty_args::TyArgs;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum TyCons {
@@ -215,6 +216,10 @@ fn lower_ident(scope: &Scope<'_>, span: Span, ident: &Ident) -> Result<ty::Ref<t
         Binding::Ty(ty) => Ok(ty.clone()),
         Binding::TyPred(test_ty) => Ok(ty::Ty::TyPred(test_ty.clone()).into()),
         Binding::EqPred => Ok(ty::Ty::EqPred.into()),
+        Binding::RecordCons(record_cons) if record_cons.poly_params().is_empty() => {
+            // Record constructors without parameters can be referred to by just their name
+            Ok(record::Instance::new(record_cons.clone(), TyArgs::empty()).into())
+        }
         other => Err(Error::new(span, ErrorKind::ExpectedTy(other.description()))),
     }
 }
@@ -615,7 +620,6 @@ pub fn tvar_bounded_by(bound: ty::Ref<ty::Poly>) -> ty::Ref<ty::Poly> {
 mod test {
     use super::*;
     use crate::id_type::ArcId;
-    use crate::ty::ty_args::TyArgs;
     use arret_syntax::span::EMPTY_SPAN;
     use std::collections::HashMap;
 

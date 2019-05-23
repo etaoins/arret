@@ -1302,6 +1302,7 @@ impl EvalHirCtx {
             ExprKind::RustFun(rust_fun) => Ok(Value::RustFun(Rc::new(rust_fun.as_ref().clone()))),
             ExprKind::TyPred(_, test_ty) => Ok(Value::TyPred(test_ty.clone())),
             ExprKind::EqPred(_) => Ok(Value::EqPred),
+            ExprKind::RecordCons(_, _) => unimplemented!("record value constructor"),
             ExprKind::Ref(_, var_id) => Ok(self.eval_ref(fcx, *var_id)),
             ExprKind::Let(hir_let) => self.eval_let(fcx, b, hir_let),
             ExprKind::App(app) => self.eval_app(fcx, b, &expr.result_ty, app),

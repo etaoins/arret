@@ -8,6 +8,7 @@ use crate::ty;
 use crate::ty::list_iter::ListIterator;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
+use crate::ty::record;
 use crate::ty::ty_args::TyArgs;
 use crate::typeck;
 use crate::typeck::dce::expr_can_side_effect;
@@ -505,6 +506,24 @@ impl<'types> RecursiveDefsCtx<'types> {
             expr: hir::Expr {
                 result_ty: pred_type,
                 kind: hir::ExprKind::EqPred(span),
+            },
+            type_conds: vec![],
+        })
+    }
+
+    fn visit_record_cons(
+        &self,
+        required_type: &ty::Ref<ty::Poly>,
+        span: Span,
+        record_cons: record::ConsId,
+    ) -> Result<InferredNode> {
+        let value_cons_fun_type = record::Cons::value_cons_fun_type(&record_cons).into();
+        ensure_is_a(span, &value_cons_fun_type, required_type)?;
+
+        Ok(InferredNode {
+            expr: hir::Expr {
+                result_ty: value_cons_fun_type,
+                kind: hir::ExprKind::RecordCons(span, record_cons),
             },
             type_conds: vec![],
         })
@@ -1425,6 +1444,9 @@ impl<'types> RecursiveDefsCtx<'types> {
             ExprKind::RustFun(rust_fun) => self.visit_rust_fun(required_type, rust_fun),
             ExprKind::TyPred(span, test_type) => self.visit_ty_pred(required_type, span, test_type),
             ExprKind::EqPred(span) => self.visit_eq_pred(required_type, span),
+            ExprKind::RecordCons(span, record_cons) => {
+                self.visit_record_cons(required_type, span, record_cons)
+            }
             ExprKind::Let(hir_let) => self.visit_let(pv, required_type, *hir_let),
             ExprKind::Ref(span, var_id) => self.visit_ref(required_type, span, var_id),
             ExprKind::App(app) => self.visit_app(pv, required_type, *app),

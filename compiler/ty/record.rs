@@ -4,6 +4,7 @@ use arret_syntax::span::Span;
 use crate::id_type::ArcId;
 use crate::ty;
 use crate::ty::purity;
+use crate::ty::purity::Purity;
 use crate::ty::ty_args::TyArgs;
 
 /// Record field of a record constructor
@@ -115,6 +116,26 @@ impl Cons {
     /// Returns an ordered list of fields of every record type instance
     pub fn fields(&self) -> &[Field] {
         self.fields.as_ref()
+    }
+
+    /// Returns the type of the value constructor function
+    pub fn value_cons_fun_type(cons_id: &ConsId) -> ty::Fun {
+        if !cons_id.poly_params().is_empty() {
+            unimplemented!("polymorphic record value constructors");
+        }
+
+        let ret_type = Instance::new(cons_id.clone(), TyArgs::empty()).into();
+        let top_fun = ty::TopFun::new(Purity::Pure.into(), ret_type);
+
+        let params = ty::List::new(
+            cons_id
+                .fields
+                .iter()
+                .map(|field| field.ty_ref.clone())
+                .collect(),
+            ty::Ty::never().into(),
+        );
+        ty::Fun::new(vec![], vec![], top_fun, params)
     }
 }
 

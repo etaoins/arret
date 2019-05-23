@@ -18,6 +18,7 @@ use arret_syntax::span::Span;
 use crate::rfi;
 use crate::ty;
 use crate::ty::purity;
+use crate::ty::record;
 
 /// DeclTy is a type declared by a user
 ///
@@ -152,6 +153,7 @@ pub enum ExprKind<P: Phase> {
     Ref(Span, VarId),
     TyPred(Span, ty::pred::TestTy),
     EqPred(Span),
+    RecordCons(Span, record::ConsId),
     Do(Vec<Expr<P>>),
 
     /// Used for tracing macro expansion for error report and debug information

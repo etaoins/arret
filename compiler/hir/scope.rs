@@ -9,6 +9,7 @@ use crate::hir::prim::Prim;
 use crate::hir::{types, VarId};
 use crate::ty;
 use crate::ty::purity;
+use crate::ty::record;
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum Binding {
@@ -19,6 +20,8 @@ pub enum Binding {
     TyCons(types::TyCons),
     TyPred(ty::pred::TestTy),
     EqPred,
+    // This works as both a type constructor and value constructor depending on the context it's used
+    RecordCons(record::ConsId),
     Purity(purity::Ref),
 }
 
@@ -30,6 +33,7 @@ impl Binding {
             Binding::Macro(_) => "macro",
             Binding::Ty(_) => "type",
             Binding::TyCons(_) => "type constructor",
+            Binding::RecordCons(_) => "record constructor",
             Binding::Purity(_) => "purity",
         }
     }
