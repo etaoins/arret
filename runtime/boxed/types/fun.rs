@@ -97,7 +97,6 @@ mod test {
         _closure: Closure,
         _rest: Gc<Any>,
     ) -> Gc<Any> {
-        use crate::boxed::Int;
         Int::new(task, 32).as_any_ref()
     }
 
