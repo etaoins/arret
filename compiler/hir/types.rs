@@ -26,8 +26,8 @@ pub enum TyCons {
 }
 
 pub enum PolymorphicVarKind {
-    TVar(ty::TVar),
-    PVar(purity::PVar),
+    TVar(ty::TVarId),
+    PVar(purity::PVarId),
     TFixed(Span, ty::Ref<ty::Poly>),
     Pure(Span),
 }
@@ -136,7 +136,7 @@ fn lower_fun_cons(
     }
 
     let params = lower_list_cons(scope, arg_iter)?;
-    Ok(ty::Fun::new(purity::PVarIds::new(), ty::TVarIds::new(), top_fun, params).into())
+    Ok(ty::Fun::new(purity::PVars::new(), ty::TVars::new(), top_fun, params).into())
 }
 
 fn lower_ty_cons_apply(
@@ -315,9 +315,9 @@ pub fn lower_polymorphic_vars(
     polymorphic_var_data: NsDataIter,
     outer_scope: &Scope<'_>,
     inner_scope: &mut Scope<'_>,
-) -> Result<(purity::PVarIds, ty::TVarIds)> {
-    let mut pvar_ids = purity::PVarIds::new();
-    let mut tvar_ids = ty::TVarIds::new();
+) -> Result<(purity::PVars, ty::TVars)> {
+    let mut pvars = purity::PVars::new();
+    let mut tvars = ty::TVars::new();
 
     for var_datum in polymorphic_var_data {
         let PolymorphicVar { ident, kind } = lower_polymorphic_var(outer_scope, var_datum)?;
@@ -326,18 +326,16 @@ pub fn lower_polymorphic_vars(
         let binding;
         match kind {
             PolymorphicVarKind::PVar(pvar) => {
-                let pvar_id = purity::PVarId::new(pvar);
-                pvar_ids.push(pvar_id.clone());
+                pvars.push(pvar.clone());
 
-                span = pvar_id.span();
-                binding = Binding::Purity(pvar_id.into())
+                span = pvar.span();
+                binding = Binding::Purity(pvar.into())
             }
             PolymorphicVarKind::TVar(tvar) => {
-                let tvar_id = ty::TVarId::new(tvar);
-                tvar_ids.push(tvar_id.clone());
+                tvars.push(tvar.clone());
 
-                span = tvar_id.span();
-                binding = Binding::Ty(tvar_id.into())
+                span = tvar.span();
+                binding = Binding::Ty(tvar.into())
             }
             PolymorphicVarKind::TFixed(fixed_span, poly) => {
                 span = fixed_span;
@@ -352,7 +350,7 @@ pub fn lower_polymorphic_vars(
         inner_scope.insert_binding(span, ident, binding)?;
     }
 
-    Ok((pvar_ids, tvar_ids))
+    Ok((pvars, tvars))
 }
 
 pub fn try_lower_purity(scope: &Scope<'_>, datum: &NsDatum) -> Option<purity::Ref> {
@@ -435,21 +433,17 @@ fn push_list_parts<M: ty::PM>(list_parts: &mut Vec<String>, list_ref: &ty::List<
     }
 }
 
-fn str_for_bounds(bound_pvar_ids: &[purity::PVarId], bound_tvar_ids: &[ty::TVarId]) -> String {
-    let pvar_parts = bound_pvar_ids
+fn str_for_bounds(bound_pvars: &[purity::PVarId], bound_tvars: &[ty::TVarId]) -> String {
+    let pvar_parts = bound_pvars
         .iter()
-        .map(|pvar_id| format!("[{} ->!]", pvar_id.source_name()));
+        .map(|pvar| format!("[{} ->!]", pvar.source_name()));
 
-    let tvar_parts = bound_tvar_ids.iter().map(|tvar_id| {
-        if tvar_id.bound() == &ty::Ty::Any.into() {
-            return tvar_id.source_name().into();
+    let tvar_parts = bound_tvars.iter().map(|tvar| {
+        if tvar.bound() == &ty::Ty::Any.into() {
+            return tvar.source_name().into();
         }
 
-        format!(
-            "[{} {}]",
-            tvar_id.source_name(),
-            str_for_ty_ref(tvar_id.bound())
-        )
+        format!("[{} {}]", tvar.source_name(), str_for_ty_ref(tvar.bound()))
     });
 
     let all_parts = pvar_parts.chain(tvar_parts).collect::<Vec<String>>();
@@ -463,8 +457,8 @@ fn str_for_record_poly_arg<M: ty::PM>(
     let ty_args = instance.ty_args();
 
     match poly_param {
-        record::PolyParam::PVar(_, pvar_id) => str_for_purity(&ty_args.pvar_purities()[pvar_id]),
-        record::PolyParam::TVar(_, tvar_id) => str_for_ty_ref(&ty_args.tvar_types()[tvar_id]),
+        record::PolyParam::PVar(_, pvar) => str_for_purity(&ty_args.pvar_purities()[pvar]),
+        record::PolyParam::TVar(_, tvar) => str_for_ty_ref(&ty_args.tvar_types()[tvar]),
     }
 }
 
@@ -511,7 +505,7 @@ fn str_for_ty<M: ty::PM>(ty: &ty::Ty<M>) -> String {
             if fun.has_polymorphic_vars() {
                 format!(
                     "(All {} {})",
-                    str_for_bounds(fun.pvar_ids(), fun.tvar_ids()),
+                    str_for_bounds(fun.pvars(), fun.tvars()),
                     fun_parts.join(" ")
                 )
             } else {
@@ -570,7 +564,7 @@ fn str_for_ty<M: ty::PM>(ty: &ty::Ty<M>) -> String {
 
 pub fn str_for_ty_ref<M: ty::PM>(ty_ref: &ty::Ref<M>) -> String {
     match ty_ref {
-        ty::Ref::Var(tvar_id, _) => tvar_id.source_name().to_owned(),
+        ty::Ref::Var(tvar, _) => tvar.source_name().to_owned(),
         ty::Ref::Fixed(ty) => str_for_ty(ty),
     }
 }
@@ -579,7 +573,7 @@ pub fn str_for_purity(purity: &purity::Ref) -> String {
     match purity {
         purity::Ref::Fixed(Purity::Pure) => "->".to_owned(),
         purity::Ref::Fixed(Purity::Impure) => "->!".to_owned(),
-        purity::Ref::Var(pvar_id) => pvar_id.source_name().into(),
+        purity::Ref::Var(pvar) => pvar.source_name().into(),
     }
 }
 
@@ -612,8 +606,7 @@ pub fn poly_for_str(datum_str: &str) -> ty::Ref<ty::Poly> {
 pub fn tvar_bounded_by(bound: ty::Ref<ty::Poly>) -> ty::Ref<ty::Poly> {
     use arret_syntax::span::EMPTY_SPAN;
 
-    let tvar_id = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "TVar".into(), bound));
-    tvar_id.into()
+    ty::TVar::new(EMPTY_SPAN, "TVar".into(), bound).into()
 }
 
 #[cfg(test)]
@@ -770,8 +763,8 @@ mod test {
         let j = "(-> true)";
 
         let expected = ty::Fun::new(
-            purity::PVarIds::new(),
-            ty::TVarIds::new(),
+            purity::PVars::new(),
+            ty::TVars::new(),
             ty::TopFun::new(Purity::Pure.into(), ty::Ty::LitBool(true).into()),
             ty::List::empty(),
         )
@@ -785,8 +778,8 @@ mod test {
         let j = "(->! true)";
 
         let expected = ty::Fun::new(
-            purity::PVarIds::new(),
-            ty::TVarIds::new(),
+            purity::PVars::new(),
+            ty::TVars::new(),
             ty::TopFun::new(Purity::Impure.into(), ty::Ty::LitBool(true).into()),
             ty::List::empty(),
         )
@@ -800,8 +793,8 @@ mod test {
         let j = "(false -> true)";
 
         let expected = ty::Fun::new(
-            purity::PVarIds::new(),
-            ty::TVarIds::new(),
+            purity::PVars::new(),
+            ty::TVars::new(),
             ty::TopFun::new(Purity::Pure.into(), ty::Ty::LitBool(true).into()),
             ty::List::new(
                 Box::new([ty::Ty::LitBool(false).into()]),
@@ -818,8 +811,8 @@ mod test {
         let j = "(Str & Sym ->! true)";
 
         let expected = ty::Fun::new(
-            purity::PVarIds::new(),
-            ty::TVarIds::new(),
+            purity::PVars::new(),
+            ty::TVars::new(),
             ty::TopFun::new(Purity::Impure.into(), ty::Ty::LitBool(true).into()),
             ty::List::new(Box::new([ty::Ty::Str.into()]), ty::Ty::Sym.into()),
         )
@@ -914,7 +907,7 @@ mod test {
 
     #[test]
     fn poly_record_type() {
-        let tvar = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into()));
+        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into());
 
         let poly_record_cons = record::Cons::new(
             EMPTY_SPAN,

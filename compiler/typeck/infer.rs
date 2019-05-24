@@ -718,8 +718,8 @@ impl<'types> RecursiveDefsCtx<'types> {
             hir::DeclPurity::Known(poly_purity) => {
                 if let (Some(self_var_id), true) = (self_var_id, decl_tys_are_known) {
                     let self_type = ty::Fun::new(
-                        decl_fun.pvar_ids.clone(),
-                        decl_fun.tvar_ids.clone(),
+                        decl_fun.pvars.clone(),
+                        decl_fun.tvars.clone(),
                         ty::TopFun::new(poly_purity.clone(), wanted_ret_type.clone()),
                         initial_param_type,
                     )
@@ -749,8 +749,8 @@ impl<'types> RecursiveDefsCtx<'types> {
         let revealed_param_type = hir::destruc::poly_for_list_destruc(&revealed_param_destruc);
 
         let revealed_type = ty::Fun::new(
-            decl_fun.pvar_ids.clone(),
-            decl_fun.tvar_ids.clone(),
+            decl_fun.pvars.clone(),
+            decl_fun.tvars.clone(),
             ty::TopFun::new(revealed_purity.clone(), revealed_ret_type.clone()),
             revealed_param_type,
         )
@@ -758,8 +758,8 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         let revealed_fun = hir::Fun::<hir::Inferred> {
             span,
-            pvar_ids: decl_fun.pvar_ids,
-            tvar_ids: decl_fun.tvar_ids,
+            pvars: decl_fun.pvars,
+            tvars: decl_fun.tvars,
             purity: revealed_purity,
             params: revealed_param_destruc,
             ret_ty: revealed_ret_type.clone(),
@@ -810,8 +810,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         } = fun_app;
 
         // The context used to select the types for our non-function parameters
-        let mut non_fun_param_stx =
-            ty::select::SelectCtx::new(fun_type.pvar_ids(), fun_type.tvar_ids());
+        let mut non_fun_param_stx = ty::select::SelectCtx::new(fun_type.pvars(), fun_type.tvars());
 
         if let PurityVar::Known(purity_type) = pv {
             if purity_type != &Purity::Impure.into() {
@@ -929,11 +928,11 @@ impl<'types> RecursiveDefsCtx<'types> {
         let ret_pta = ret_stx
             .into_complete_poly_ty_args()
             .map_err(|error| match error {
-                ty::select::Error::UnselectedPVar(pvar_id) => {
-                    Error::new(span, ErrorKind::UnselectedPVar(pvar_id.clone()))
+                ty::select::Error::UnselectedPVar(pvar) => {
+                    Error::new(span, ErrorKind::UnselectedPVar(pvar.clone()))
                 }
-                ty::select::Error::UnselectedTVar(tvar_id) => {
-                    Error::new(span, ErrorKind::UnselectedTVar(tvar_id.clone()))
+                ty::select::Error::UnselectedTVar(tvar) => {
+                    Error::new(span, ErrorKind::UnselectedTVar(tvar.clone()))
                 }
             })?;
 

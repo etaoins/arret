@@ -177,7 +177,7 @@ mod test {
 
     #[test]
     fn poly_record_type() {
-        let tvar = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into()));
+        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into());
 
         // Polymorphic record constructor and top type
         let poly_record_cons = record::Cons::new(

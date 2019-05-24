@@ -30,8 +30,8 @@ fn new_eq_pred_arret_fun() -> value::ArretFun {
         hir::Fun {
             span: EMPTY_SPAN,
 
-            pvar_ids: purity::PVarIds::new(),
-            tvar_ids: ty::TVarIds::new(),
+            pvars: purity::PVars::new(),
+            tvars: ty::TVars::new(),
 
             purity: Purity::Pure.into(),
             params: hir::destruc::List::new(fixed_params, None),
@@ -73,8 +73,8 @@ fn new_ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
         hir::Fun {
             span: EMPTY_SPAN,
 
-            pvar_ids: purity::PVarIds::new(),
-            tvar_ids: ty::TVarIds::new(),
+            pvars: purity::PVars::new(),
+            tvars: ty::TVars::new(),
 
             purity: Purity::Pure.into(),
             params: hir::destruc::List::new(

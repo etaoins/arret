@@ -54,17 +54,17 @@ fn record_instance_is_a<M: ty::PM>(
             .poly_params()
             .iter()
             .all(|poly_param| match poly_param {
-                record::PolyParam::PVar(variance, pvar_id) => record_field_is_a(
+                record::PolyParam::PVar(variance, pvar) => record_field_is_a(
                     *variance,
                     &purity_ref_is_a,
-                    &sub_instance.ty_args().pvar_purities()[pvar_id],
-                    &par_instance.ty_args().pvar_purities()[pvar_id],
+                    &sub_instance.ty_args().pvar_purities()[pvar],
+                    &par_instance.ty_args().pvar_purities()[pvar],
                 ),
-                record::PolyParam::TVar(variance, tvar_id) => record_field_is_a(
+                record::PolyParam::TVar(variance, tvar) => record_field_is_a(
                     *variance,
                     &ty_ref_is_a,
-                    &sub_instance.ty_args().tvar_types()[tvar_id],
-                    &par_instance.ty_args().tvar_types()[tvar_id],
+                    &sub_instance.ty_args().tvar_types()[tvar],
+                    &par_instance.ty_args().tvar_types()[tvar],
                 ),
             })
 }
@@ -196,14 +196,14 @@ fn ty_is_a<M: ty::PM>(
     }
 }
 
-fn tvar_id_is_bounded_by(sub_tvar_id: &ty::TVarId, parent_tvar_id: &ty::TVarId) -> bool {
-    if sub_tvar_id == parent_tvar_id {
+fn tvar_is_bounded_by(sub_tvar: &ty::TVarId, parent_tvar: &ty::TVarId) -> bool {
+    if sub_tvar == parent_tvar {
         return true;
     }
 
-    match &sub_tvar_id.bound {
+    match &sub_tvar.bound {
         ty::Ref::Fixed(_) => false,
-        ty::Ref::Var(tvar_id, _) => tvar_id_is_bounded_by(tvar_id, parent_tvar_id),
+        ty::Ref::Var(tvar, _) => tvar_is_bounded_by(tvar, parent_tvar),
     }
 }
 
@@ -214,7 +214,7 @@ fn purity_ref_is_a(sub: &purity::Ref, parent: &purity::Ref) -> bool {
 }
 
 fn inst_polymorphic_fun(sub_fun: &ty::Fun, par_top_fun: &ty::TopFun) -> ty::Fun {
-    let mut stx = ty::select::SelectCtx::new(sub_fun.pvar_ids(), sub_fun.tvar_ids());
+    let mut stx = ty::select::SelectCtx::new(sub_fun.pvars(), sub_fun.tvars());
 
     stx.add_evidence(sub_fun.ret(), &par_top_fun.ret());
     stx.add_evidence_purity(sub_fun.purity(), &par_top_fun.purity());
@@ -224,13 +224,13 @@ fn inst_polymorphic_fun(sub_fun: &ty::Fun, par_top_fun: &ty::TopFun) -> ty::Fun 
 }
 
 pub fn ty_ref_is_a<M: ty::PM>(sub: &ty::Ref<M>, parent: &ty::Ref<M>) -> bool {
-    if let ty::Ref::Var(parent_tvar_id, _) = parent {
+    if let ty::Ref::Var(parent_tvar, _) = parent {
         // Typically `parent_is_bound` makes the best result for a polymorphic parent `May`.
         // These are overrides for cases where they can be `Yes`.
         match sub {
-            ty::Ref::Var(sub_tvar_id, _) => {
+            ty::Ref::Var(sub_tvar, _) => {
                 // Are we either the same var our bounded by the same var?
-                if tvar_id_is_bounded_by(sub_tvar_id, parent_tvar_id) {
+                if tvar_is_bounded_by(sub_tvar, parent_tvar) {
                     return true;
                 }
             }
@@ -718,21 +718,9 @@ mod test {
         use crate::ty::ty_args::TyArgs;
         use std::collections::HashMap;
 
-        let tvar1 = ty::TVarId::new(ty::TVar::new(
-            EMPTY_SPAN,
-            "tvar1".into(),
-            ty::Ty::Any.into(),
-        ));
-        let tvar2 = ty::TVarId::new(ty::TVar::new(
-            EMPTY_SPAN,
-            "tvar2".into(),
-            ty::Ty::Any.into(),
-        ));
-        let tvar3 = ty::TVarId::new(ty::TVar::new(
-            EMPTY_SPAN,
-            "tvar3".into(),
-            ty::Ty::Any.into(),
-        ));
+        let tvar1 = ty::TVar::new(EMPTY_SPAN, "tvar1".into(), ty::Ty::Any.into());
+        let tvar2 = ty::TVar::new(EMPTY_SPAN, "tvar2".into(), ty::Ty::Any.into());
+        let tvar3 = ty::TVar::new(EMPTY_SPAN, "tvar3".into(), ty::Ty::Any.into());
 
         let cons = record::Cons::new(
             EMPTY_SPAN,

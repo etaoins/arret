@@ -16,11 +16,11 @@ pub struct PVar {
 }
 
 pub type PVarId = ArcId<PVar>;
-pub type PVarIds = Vec<PVarId>;
+pub type PVars = Vec<PVarId>;
 
 impl PVar {
-    pub fn new(span: Span, source_name: DataStr) -> PVar {
-        PVar { span, source_name }
+    pub fn new(span: Span, source_name: DataStr) -> PVarId {
+        PVarId::new(PVar { span, source_name })
     }
 
     pub fn span(&self) -> Span {
@@ -45,7 +45,7 @@ impl From<Purity> for Ref {
 }
 
 impl From<PVarId> for Ref {
-    fn from(pvar_id: PVarId) -> Self {
-        Ref::Var(pvar_id)
+    fn from(pvar: PVarId) -> Self {
+        Ref::Var(pvar)
     }
 }

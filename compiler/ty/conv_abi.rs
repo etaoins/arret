@@ -129,8 +129,8 @@ impl ConvertableABIType for callback::EntryPointABIType {
         let param_list_ty = ty::List::new(fixed_param_ty_refs, ty::Ty::never().into());
 
         ty::Fun::new(
-            purity::PVarIds::new(),
-            ty::TVarIds::new(),
+            purity::PVars::new(),
+            ty::TVars::new(),
             top_fun_ty,
             param_list_ty,
         )
@@ -213,8 +213,8 @@ mod test {
         );
 
         let arret_poly: ty::Ref<ty::Poly> = ty::Fun::new(
-            purity::PVarIds::new(),
-            ty::TVarIds::new(),
+            purity::PVars::new(),
+            ty::TVars::new(),
             ty::TopFun::new(Purity::Impure.into(), ty::Ty::Char.into()),
             ty::List::new(Box::new([ty::Ty::Int.into()]), ty::Ty::never().into()),
         )

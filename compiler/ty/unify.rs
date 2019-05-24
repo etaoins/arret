@@ -117,8 +117,8 @@ fn unify_fun<M: ty::PM>(fun1: &ty::Fun, fun2: &ty::Fun) -> UnifiedTy<M> {
         match ty::intersect::intersect_list(fun1.params(), fun2.params()) {
             Ok(unified_params) => UnifiedTy::Merged(
                 ty::Fun::new(
-                    purity::PVarIds::new(),
-                    ty::TVarIds::new(),
+                    purity::PVars::new(),
+                    ty::TVars::new(),
                     ty::TopFun::new(unified_purity, unified_ret),
                     unified_params,
                 )
@@ -133,15 +133,15 @@ fn unify_fun<M: ty::PM>(fun1: &ty::Fun, fun2: &ty::Fun) -> UnifiedTy<M> {
 
 fn unify_record_field_purities<M: ty::PM>(
     variance: record::Variance,
-    pvar_id: &purity::PVarId,
+    pvar: &purity::PVarId,
     ty_args1: &TyArgs<M>,
     ty_args2: &TyArgs<M>,
 ) -> purity::Ref {
     use crate::ty::intersect::intersect_purity_refs;
     use crate::ty::is_a::purity_refs_equivalent;
 
-    let purity_ref1 = &ty_args1.pvar_purities()[pvar_id];
-    let purity_ref2 = &ty_args2.pvar_purities()[pvar_id];
+    let purity_ref1 = &ty_args1.pvar_purities()[pvar];
+    let purity_ref2 = &ty_args2.pvar_purities()[pvar];
 
     match variance {
         record::Variance::Covariant => unify_purity_refs(purity_ref1, purity_ref2),
@@ -158,15 +158,15 @@ fn unify_record_field_purities<M: ty::PM>(
 
 fn unify_record_field_ty_refs<M: ty::PM>(
     variance: record::Variance,
-    tvar_id: &ty::TVarId,
+    tvar: &ty::TVarId,
     ty_args1: &TyArgs<M>,
     ty_args2: &TyArgs<M>,
 ) -> UnifiedTy<M> {
     use crate::ty::intersect::intersect_ty_refs;
     use crate::ty::is_a::ty_refs_equivalent;
 
-    let ty_ref1 = &ty_args1.tvar_types()[tvar_id];
-    let ty_ref2 = &ty_args2.tvar_types()[tvar_id];
+    let ty_ref1 = &ty_args1.tvar_types()[tvar];
+    let ty_ref2 = &ty_args2.tvar_types()[tvar];
 
     match variance {
         record::Variance::Covariant => unify_ty_refs(ty_ref1, ty_ref2),
@@ -200,28 +200,28 @@ fn unify_record_instance<M: ty::PM>(
 
     for poly_param in instance1.cons().poly_params() {
         match poly_param {
-            PolyParam::PVar(variance, pvar_id) => {
+            PolyParam::PVar(variance, pvar) => {
                 merged_pvar_purities.insert(
-                    pvar_id.clone(),
+                    pvar.clone(),
                     unify_record_field_purities(
                         *variance,
-                        pvar_id,
+                        pvar,
                         instance1.ty_args(),
                         instance2.ty_args(),
                     ),
                 );
             }
-            PolyParam::TVar(variance, tvar_id) => {
+            PolyParam::TVar(variance, tvar) => {
                 let unified_ty = unify_record_field_ty_refs(
                     *variance,
-                    tvar_id,
+                    tvar,
                     instance1.ty_args(),
                     instance2.ty_args(),
                 );
 
                 match unified_ty {
                     UnifiedTy::Merged(merged) => {
-                        merged_tvar_types.insert(tvar_id.clone(), merged);
+                        merged_tvar_types.insert(tvar.clone(), merged);
                     }
                     UnifiedTy::Discerned => return UnifiedTy::Discerned,
                 }
@@ -644,11 +644,11 @@ mod test {
         let purity_pure = Purity::Pure.into();
         let purity_impure = Purity::Impure.into();
 
-        let pvar_id1 = purity::PVarId::new(purity::PVar::new(EMPTY_SPAN, "test".into()));
-        let purity_var1 = purity::Ref::Var(pvar_id1);
+        let pvar1 = purity::PVar::new(EMPTY_SPAN, "test".into());
+        let purity_var1 = purity::Ref::Var(pvar1);
 
-        let pvar_id2 = purity::PVarId::new(purity::PVar::new(EMPTY_SPAN, "test".into()));
-        let purity_var2 = purity::Ref::Var(pvar_id2);
+        let pvar2 = purity::PVar::new(EMPTY_SPAN, "test".into());
+        let purity_var2 = purity::Ref::Var(pvar2);
 
         assert_eq!(purity_pure, unify_purity_refs(&purity_pure, &purity_pure));
 
@@ -705,16 +705,8 @@ mod test {
         use crate::ty::ty_args::TyArgs;
         use std::collections::HashMap;
 
-        let tvar1 = ty::TVarId::new(ty::TVar::new(
-            EMPTY_SPAN,
-            "tvar1".into(),
-            ty::Ty::Any.into(),
-        ));
-        let tvar2 = ty::TVarId::new(ty::TVar::new(
-            EMPTY_SPAN,
-            "tvar2".into(),
-            ty::Ty::Any.into(),
-        ));
+        let tvar1 = ty::TVar::new(EMPTY_SPAN, "tvar1".into(), ty::Ty::Any.into());
+        let tvar2 = ty::TVar::new(EMPTY_SPAN, "tvar2".into(), ty::Ty::Any.into());
 
         let cons1 = record::Cons::new(
             EMPTY_SPAN,

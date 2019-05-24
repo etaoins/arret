@@ -153,22 +153,22 @@ impl From<Error> for Diagnostic {
                     .with_label(Label::new_primary(origin))
             }
 
-            ErrorKind::UnselectedPVar(pvar_id) => Diagnostic::new_error(format!(
+            ErrorKind::UnselectedPVar(pvar) => Diagnostic::new_error(format!(
                 "cannot determine purity of purity variable `{}`",
-                pvar_id.source_name()
+                pvar.source_name()
             ))
             .with_label(Label::new_primary(origin).with_message("at this application"))
             .with_label(
-                Label::new_secondary(pvar_id.span()).with_message("purity variable defined here"),
+                Label::new_secondary(pvar.span()).with_message("purity variable defined here"),
             ),
 
-            ErrorKind::UnselectedTVar(tvar_id) => Diagnostic::new_error(format!(
+            ErrorKind::UnselectedTVar(tvar) => Diagnostic::new_error(format!(
                 "cannot determine type of type variable `{}`",
-                tvar_id.source_name()
+                tvar.source_name()
             ))
             .with_label(Label::new_primary(origin).with_message("at this application"))
             .with_label(
-                Label::new_secondary(tvar_id.span()).with_message("type variable defined here"),
+                Label::new_secondary(tvar.span()).with_message("type variable defined here"),
             ),
         };
 

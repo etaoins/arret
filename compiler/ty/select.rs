@@ -20,8 +20,8 @@ pub enum Error<'vars> {
 /// `pvar_purities` and `tvar_types` methods.
 #[derive(Clone, Debug)]
 pub struct SelectCtx<'vars> {
-    selecting_pvar_ids: &'vars [purity::PVarId],
-    selecting_tvar_ids: &'vars [ty::TVarId],
+    selecting_pvars: &'vars [purity::PVarId],
+    selecting_tvars: &'vars [ty::TVarId],
 
     pvar_purities: HashMap<purity::PVarId, purity::Ref>,
     tvar_types: HashMap<ty::TVarId, ty::Ref<ty::Poly>>,
@@ -29,14 +29,14 @@ pub struct SelectCtx<'vars> {
 
 impl<'vars> SelectCtx<'vars> {
     pub fn new(
-        selecting_pvar_ids: &'vars [purity::PVarId],
-        selecting_tvar_ids: &'vars [ty::TVarId],
+        selecting_pvars: &'vars [purity::PVarId],
+        selecting_tvars: &'vars [ty::TVarId],
     ) -> SelectCtx<'vars> {
         SelectCtx {
-            selecting_pvar_ids,
-            selecting_tvar_ids,
-            pvar_purities: HashMap::with_capacity(selecting_pvar_ids.len()),
-            tvar_types: HashMap::with_capacity(selecting_tvar_ids.len()),
+            selecting_pvars,
+            selecting_tvars,
+            pvar_purities: HashMap::with_capacity(selecting_pvars.len()),
+            tvar_types: HashMap::with_capacity(selecting_tvars.len()),
         }
     }
 
@@ -56,10 +56,10 @@ impl<'vars> SelectCtx<'vars> {
         // 3. Do nothing and depend on the fact the target fun is probably already polymorphic
         //    and expresses the type relationship we care about. This is the option implemented
         //    below
-        if evidence_fun.pvar_ids().is_empty() {
+        if evidence_fun.pvars().is_empty() {
             self.add_evidence_purity(target_top_fun.purity(), evidence_fun.purity());
         }
-        if evidence_fun.tvar_ids().is_empty() {
+        if evidence_fun.tvars().is_empty() {
             self.add_evidence(target_top_fun.ret(), evidence_fun.ret());
         }
     }
@@ -73,13 +73,13 @@ impl<'vars> SelectCtx<'vars> {
             return;
         }
 
-        for (pvar_id, target_purity) in target_instance.ty_args().pvar_purities().iter() {
-            let evidence_purity = &evidence_instance.ty_args().pvar_purities()[pvar_id];
+        for (pvar, target_purity) in target_instance.ty_args().pvar_purities().iter() {
+            let evidence_purity = &evidence_instance.ty_args().pvar_purities()[pvar];
             self.add_evidence_purity(target_purity, evidence_purity);
         }
 
-        for (tvar_id, target_poly) in target_instance.ty_args().tvar_types().iter() {
-            let evidence_poly = &evidence_instance.ty_args().tvar_types()[tvar_id];
+        for (tvar, target_poly) in target_instance.ty_args().tvar_types().iter() {
+            let evidence_poly = &evidence_instance.ty_args().tvar_types()[tvar];
             self.add_evidence(target_poly, evidence_poly);
         }
     }
@@ -201,15 +201,15 @@ impl<'vars> SelectCtx<'vars> {
         }
     }
 
-    fn add_var_evidence(&mut self, tvar_id: &ty::TVarId, evidence_poly: &ty::Ref<ty::Poly>) {
-        if !self.selecting_tvar_ids.contains(tvar_id)
-            || !ty::is_a::ty_ref_is_a(evidence_poly, tvar_id.bound())
+    fn add_var_evidence(&mut self, tvar: &ty::TVarId, evidence_poly: &ty::Ref<ty::Poly>) {
+        if !self.selecting_tvars.contains(tvar)
+            || !ty::is_a::ty_ref_is_a(evidence_poly, tvar.bound())
         {
             return;
         }
 
         self.tvar_types
-            .entry(tvar_id.clone())
+            .entry(tvar.clone())
             .and_modify(|existing| {
                 *existing = ty::unify::unify_to_ty_ref(existing, evidence_poly);
             })
@@ -222,7 +222,7 @@ impl<'vars> SelectCtx<'vars> {
         evidence_poly: &ty::Ref<ty::Poly>,
     ) {
         match target_poly {
-            ty::Ref::Var(tvar_id, _) => self.add_var_evidence(tvar_id, evidence_poly),
+            ty::Ref::Var(tvar, _) => self.add_var_evidence(tvar, evidence_poly),
             ty::Ref::Fixed(target_ty) => {
                 let evidence_ty = evidence_poly.resolve_to_ty();
                 self.add_evidence_ty(target_ty, evidence_poly, evidence_ty)
@@ -235,18 +235,18 @@ impl<'vars> SelectCtx<'vars> {
         target_purity: &purity::Ref,
         evidence_purity: &purity::Ref,
     ) {
-        let pvar_id = if let purity::Ref::Var(pvar_id) = target_purity {
-            pvar_id
+        let pvar = if let purity::Ref::Var(pvar) = target_purity {
+            pvar
         } else {
             return;
         };
 
-        if !self.selecting_pvar_ids.contains(&pvar_id) {
+        if !self.selecting_pvars.contains(&pvar) {
             return;
         }
 
         self.pvar_purities
-            .entry(pvar_id.clone())
+            .entry(pvar.clone())
             .and_modify(|existing| {
                 *existing = ty::unify::unify_purity_refs(existing, evidence_purity);
             })
@@ -255,20 +255,19 @@ impl<'vars> SelectCtx<'vars> {
 
     /// Creates a `TyArgs` instance with any unselected variables set to their bound
     pub fn into_poly_ty_args(mut self) -> TyArgs<ty::Poly> {
-        if self.selecting_pvar_ids.len() != self.pvar_purities.len() {
-            for pvar_id in self.selecting_pvar_ids {
-                if !self.pvar_purities.contains_key(pvar_id) {
+        if self.selecting_pvars.len() != self.pvar_purities.len() {
+            for pvar in self.selecting_pvars {
+                if !self.pvar_purities.contains_key(pvar) {
                     self.pvar_purities
-                        .insert(pvar_id.clone(), Purity::Impure.into());
+                        .insert(pvar.clone(), Purity::Impure.into());
                 }
             }
         }
 
-        if self.selecting_tvar_ids.len() != self.tvar_types.len() {
-            for tvar_id in self.selecting_tvar_ids {
-                if !self.tvar_types.contains_key(tvar_id) {
-                    self.tvar_types
-                        .insert(tvar_id.clone(), tvar_id.bound().clone());
+        if self.selecting_tvars.len() != self.tvar_types.len() {
+            for tvar in self.selecting_tvars {
+                if !self.tvar_types.contains_key(tvar) {
+                    self.tvar_types.insert(tvar.clone(), tvar.bound().clone());
                 }
             }
         }
@@ -281,23 +280,22 @@ impl<'vars> SelectCtx<'vars> {
     /// Any unselected polymorphic variables will return an error unless they have an non-`Any`
     /// bound to use as a default.
     pub fn into_complete_poly_ty_args(mut self) -> Result<TyArgs<ty::Poly>, Error<'vars>> {
-        if self.selecting_pvar_ids.len() != self.pvar_purities.len() {
-            for pvar_id in self.selecting_pvar_ids {
-                if !self.pvar_purities.contains_key(pvar_id) {
-                    return Err(Error::UnselectedPVar(pvar_id));
+        if self.selecting_pvars.len() != self.pvar_purities.len() {
+            for pvar in self.selecting_pvars {
+                if !self.pvar_purities.contains_key(pvar) {
+                    return Err(Error::UnselectedPVar(pvar));
                 }
             }
         }
 
-        if self.selecting_tvar_ids.len() != self.tvar_types.len() {
-            for tvar_id in self.selecting_tvar_ids {
-                if !self.tvar_types.contains_key(tvar_id) {
-                    if tvar_id.bound() == &ty::Ty::Any.into() {
-                        return Err(Error::UnselectedTVar(tvar_id));
+        if self.selecting_tvars.len() != self.tvar_types.len() {
+            for tvar in self.selecting_tvars {
+                if !self.tvar_types.contains_key(tvar) {
+                    if tvar.bound() == &ty::Ty::Any.into() {
+                        return Err(Error::UnselectedTVar(tvar));
                     }
 
-                    self.tvar_types
-                        .insert(tvar_id.clone(), tvar_id.bound().clone());
+                    self.tvar_types.insert(tvar.clone(), tvar.bound().clone());
                 }
             }
         }
@@ -316,8 +314,8 @@ mod test {
 
     struct TestScope {
         scope: Scope<'static>,
-        pvar_ids: purity::PVarIds,
-        tvar_ids: ty::TVarIds,
+        pvars: purity::PVars,
+        tvars: ty::TVars,
     }
 
     impl TestScope {
@@ -333,7 +331,7 @@ mod test {
                 .map(NsDatum::from_syntax_datum)
                 .collect::<Vec<NsDatum>>();
 
-            let (pvar_ids, tvar_ids) = lower_polymorphic_vars(
+            let (pvars, tvars) = lower_polymorphic_vars(
                 polymorphic_data.into_iter(),
                 &outer_scope,
                 &mut inner_scope,
@@ -342,8 +340,8 @@ mod test {
 
             TestScope {
                 scope: inner_scope,
-                pvar_ids,
-                tvar_ids,
+                pvars,
+                tvars,
             }
         }
 
@@ -362,18 +360,18 @@ mod test {
         }
 
         fn select_ctx(&self) -> SelectCtx<'_> {
-            SelectCtx::new(&self.pvar_ids, &self.tvar_ids)
+            SelectCtx::new(&self.pvars, &self.tvars)
         }
     }
 
     fn assert_unselected_type(ctx: &SelectCtx<'_>, poly_var: &ty::Ref<ty::Poly>) {
-        let tvar_id = if let ty::Ref::Var(tvar_id, _) = poly_var {
-            tvar_id
+        let tvar = if let ty::Ref::Var(tvar, _) = poly_var {
+            tvar
         } else {
             panic!("Can't find tvar ID")
         };
 
-        assert_eq!(None, ctx.tvar_types.get(&tvar_id));
+        assert_eq!(None, ctx.tvar_types.get(&tvar));
     }
 
     fn assert_selected_type(
@@ -381,23 +379,23 @@ mod test {
         poly_var: &ty::Ref<ty::Poly>,
         selected_poly: &ty::Ref<ty::Poly>,
     ) {
-        let tvar_id = if let ty::Ref::Var(tvar_id, _) = poly_var {
-            tvar_id
+        let tvar = if let ty::Ref::Var(tvar, _) = poly_var {
+            tvar
         } else {
             panic!("Can't find tvar ID")
         };
 
-        assert_eq!(Some(selected_poly), ctx.tvar_types.get(&tvar_id));
+        assert_eq!(Some(selected_poly), ctx.tvar_types.get(&tvar));
     }
 
     fn assert_unselected_purity(ctx: &SelectCtx<'_>, poly_var: &purity::Ref) {
-        let pvar_id = if let purity::Ref::Var(pvar_id) = poly_var {
-            pvar_id
+        let pvar = if let purity::Ref::Var(pvar) = poly_var {
+            pvar
         } else {
             panic!("Can't find pvar ID")
         };
 
-        assert_eq!(None, ctx.pvar_purities.get(&pvar_id));
+        assert_eq!(None, ctx.pvar_purities.get(&pvar));
     }
 
     fn assert_selected_purity(
@@ -405,15 +403,15 @@ mod test {
         poly_var: &purity::Ref,
         selected_purity: Purity,
     ) {
-        let pvar_id = if let purity::Ref::Var(pvar_id) = poly_var {
-            pvar_id
+        let pvar = if let purity::Ref::Var(pvar) = poly_var {
+            pvar
         } else {
             panic!("Can't find pvar ID")
         };
 
         assert_eq!(
             Some(&purity::Ref::Fixed(selected_purity)),
-            ctx.pvar_purities.get(&pvar_id)
+            ctx.pvar_purities.get(&pvar)
         );
     }
 

@@ -11,10 +11,10 @@ fn resolve_ref_to_purity(
 ) -> Purity {
     match poly {
         purity::Ref::Fixed(purity) => *purity,
-        purity::Ref::Var(pvar_id) => {
+        purity::Ref::Var(pvar) => {
             let inner_ref = apply_pvar_purities
-                .get(&pvar_id)
-                .or_else(|| outer_pvar_purities.get(&pvar_id))
+                .get(&pvar)
+                .or_else(|| outer_pvar_purities.get(&pvar))
                 .expect("Unable to find PVar determining fun apply purity");
 
             resolve_ref_to_purity(outer_pvar_purities, apply_pvar_purities, inner_ref)

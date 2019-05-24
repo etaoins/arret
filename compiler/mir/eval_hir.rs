@@ -126,22 +126,17 @@ fn merge_apply_ty_args_into_scope(
         .pvar_purities()
         .iter()
         .chain(apply_ty_args.pvar_purities().iter())
-        .map(|(pvar_id, v)| (pvar_id.clone(), v.clone()))
+        .map(|(pvar, v)| (pvar.clone(), v.clone()))
         .collect();
 
     let tvar_types = scope
         .tvar_types()
         .iter()
-        .map(|(tvar_id, mono)| (tvar_id.clone(), mono.clone()))
-        .chain(
-            apply_ty_args
-                .tvar_types()
-                .iter()
-                .map(|(tvar_id, poly_type)| {
-                    let mono_ty = subst::monomorphise(subst_with, poly_type);
-                    (tvar_id.clone(), mono_ty)
-                }),
-        )
+        .map(|(tvar, mono)| (tvar.clone(), mono.clone()))
+        .chain(apply_ty_args.tvar_types().iter().map(|(tvar, poly_type)| {
+            let mono_ty = subst::monomorphise(subst_with, poly_type);
+            (tvar.clone(), mono_ty)
+        }))
         .collect();
 
     TyArgs::new(pvar_purities, tvar_types)
@@ -1112,7 +1107,7 @@ impl EvalHirCtx {
         closure::load_from_closure_param(&mut fcx.local_values, arret_fun.closure(), closure_reg);
 
         // Try to refine our polymorphic type variables based on our requested op ABI
-        let mut stx = ty::select::SelectCtx::new(&fun_expr.pvar_ids, &fun_expr.tvar_ids);
+        let mut stx = ty::select::SelectCtx::new(&fun_expr.pvars, &fun_expr.tvars);
 
         let fun_param_poly = hir::destruc::poly_for_list_destruc(&fun_expr.params);
         let wanted_abi_poly = wanted_abi.param_ty_ref();

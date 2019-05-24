@@ -40,15 +40,15 @@ impl<M: ty::PM> TyArgs<M> {
 
 impl TyArgs<ty::Poly> {
     /// Returns the args for the passed pvars/tvars where all args are set to their upper bound
-    pub fn from_upper_bound(pvar_ids: &[purity::PVarId], tvar_ids: &[ty::TVarId]) -> Self {
-        let pvar_purities = pvar_ids
+    pub fn from_upper_bound(pvars: &[purity::PVarId], tvars: &[ty::TVarId]) -> Self {
+        let pvar_purities = pvars
             .iter()
-            .map(|pvar_id| (pvar_id.clone(), Purity::Impure.into()))
+            .map(|pvar| (pvar.clone(), Purity::Impure.into()))
             .collect();
 
-        let tvar_types = tvar_ids
+        let tvar_types = tvars
             .iter()
-            .map(|tvar_id| (tvar_id.clone(), tvar_id.bound.clone()))
+            .map(|tvar| (tvar.clone(), tvar.bound.clone()))
             .collect();
 
         Self {

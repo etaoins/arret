@@ -23,7 +23,7 @@ fn ideal_polymorph_abi_for_arret_fun(arret_fun: &value::ArretFun) -> PolymorphAB
     let has_closure = !arret_fun.closure().free_values.is_empty();
 
     let fun_expr = arret_fun.fun_expr();
-    let upper_bound = TyArgs::from_upper_bound(&fun_expr.pvar_ids, &fun_expr.tvar_ids);
+    let upper_bound = TyArgs::from_upper_bound(&fun_expr.pvars, &fun_expr.tvars);
     let param_list_type = poly_for_list_destruc(&fun_expr.params);
 
     let params = Some(abitype::BoxedABIType::Any.into())

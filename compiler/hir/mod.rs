@@ -95,8 +95,8 @@ new_global_id_type!(VarId);
 pub struct Fun<P: Phase> {
     pub span: Span,
 
-    pub pvar_ids: purity::PVarIds,
-    pub tvar_ids: ty::TVarIds,
+    pub pvars: purity::PVars,
+    pub tvars: ty::TVars,
 
     pub purity: P::Purity,
     pub params: destruc::List<P>,

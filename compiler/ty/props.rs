@@ -126,8 +126,8 @@ mod test {
 
         assert_eq!(false, str_has_subtypes("(RawU)"));
 
-        let tvar_id = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "test".into(), ty::Ty::Any.into()));
-        assert_eq!(true, has_subtypes(&tvar_id.into()));
+        let tvar = ty::TVar::new(EMPTY_SPAN, "test".into(), ty::Ty::Any.into());
+        assert_eq!(true, has_subtypes(&tvar.into()));
     }
 
     #[test]
@@ -157,8 +157,8 @@ mod test {
         assert_eq!(false, str_is_literal("(Vectorof false)"));
         assert_eq!(true, str_is_literal("(Vector false true)"));
 
-        let tvar_id = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "test".into(), ty::Ty::Any.into()));
-        assert_eq!(false, is_literal(&tvar_id.into()));
+        let tvar = ty::TVar::new(EMPTY_SPAN, "test".into(), ty::Ty::Any.into());
+        assert_eq!(false, is_literal(&tvar.into()));
     }
 
     #[test]
@@ -179,7 +179,7 @@ mod test {
 
     #[test]
     fn poly_record_type() {
-        let tvar = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into()));
+        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into());
 
         let poly_record_cons = record::Cons::new(
             EMPTY_SPAN,

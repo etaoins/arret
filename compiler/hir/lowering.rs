@@ -424,14 +424,14 @@ fn lower_fun(
         .ok_or_else(|| Error::new(span, ErrorKind::NoParamDecl))?;
 
     // We can either begin with a set of type variables or a list of parameters
-    let (pvar_ids, tvar_ids) = if let NsDatum::Set(_, vs) = next_datum {
+    let (pvars, tvars) = if let NsDatum::Set(_, vs) = next_datum {
         next_datum = arg_iter
             .next()
             .ok_or_else(|| Error::new(span, ErrorKind::NoParamDecl))?;
 
         lower_polymorphic_vars(vs.into_vec().into_iter(), outer_scope, &mut fun_scope)?
     } else {
-        (purity::PVarIds::new(), ty::TVarIds::new())
+        (purity::PVars::new(), ty::TVars::new())
     };
 
     // Pull out our params
@@ -468,8 +468,8 @@ fn lower_fun(
 
     Ok(ExprKind::Fun(Box::new(Fun {
         span,
-        pvar_ids,
-        tvar_ids,
+        pvars,
+        tvars,
         purity,
         params,
         ret_ty,
@@ -1093,8 +1093,8 @@ mod test {
 
         let expected: Expr<_> = ExprKind::Fun(Box::new(Fun {
             span: t2s(t),
-            pvar_ids: purity::PVarIds::new(),
-            tvar_ids: ty::TVarIds::new(),
+            pvars: purity::PVars::new(),
+            tvars: ty::TVars::new(),
             purity: DeclPurity::Free,
             params: destruc::List::new(vec![], None),
             ret_ty: DeclTy::Free,
@@ -1113,8 +1113,8 @@ mod test {
 
         let expected: Expr<_> = ExprKind::Fun(Box::new(Fun {
             span: t2s(t),
-            pvar_ids: purity::PVarIds::new(),
-            tvar_ids: ty::TVarIds::new(),
+            pvars: purity::PVars::new(),
+            tvars: ty::TVars::new(),
             purity: Purity::Pure.into(),
             params: destruc::List::new(vec![], None),
             ret_ty: DeclTy::Free,
@@ -1133,8 +1133,8 @@ mod test {
 
         let expected: Expr<_> = ExprKind::Fun(Box::new(Fun {
             span: t2s(t),
-            pvar_ids: purity::PVarIds::new(),
-            tvar_ids: ty::TVarIds::new(),
+            pvars: purity::PVars::new(),
+            tvars: ty::TVars::new(),
             purity: Purity::Pure.into(),
             params: destruc::List::new(vec![], None),
             ret_ty: ty::Ty::Int.into(),
