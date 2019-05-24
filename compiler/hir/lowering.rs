@@ -173,7 +173,7 @@ fn lower_deftype(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) ->
     lower_type(scope, self_datum, ty_datum)
 }
 
-fn lower_record_field_decl(scope: &mut Scope<'_>, field_datum: NsDatum) -> Result<record::Field> {
+fn lower_record_field_decl(scope: &Scope<'_>, field_datum: NsDatum) -> Result<record::Field> {
     let datum_description = field_datum.description();
 
     let (ident_span, ident, poly) = match field_datum {
