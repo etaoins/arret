@@ -80,7 +80,6 @@ pub fn is_literal<M: ty::PM>(ty_ref: &ty::Ref<M>) -> bool {
 mod test {
     use super::*;
     use crate::hir::poly_for_str;
-    use crate::id_type::ArcId;
     use crate::ty::record;
     use crate::ty::ty_args::TyArgs;
     use arret_syntax::span::EMPTY_SPAN;
@@ -164,12 +163,12 @@ mod test {
 
     #[test]
     fn mono_record_type() {
-        let mono_record_cons = ArcId::new(record::Cons::new(
+        let mono_record_cons = record::Cons::new(
             EMPTY_SPAN,
             "record_cons".into(),
             Box::new([]),
             Box::new([record::Field::new("num".into(), ty::Ty::Num.into())]),
-        ));
+        );
 
         let int_record_instance_ref: ty::Ref<ty::Poly> =
             record::Instance::new(mono_record_cons.clone(), TyArgs::empty()).into();
@@ -182,7 +181,7 @@ mod test {
     fn poly_record_type() {
         let tvar = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into()));
 
-        let poly_record_cons = ArcId::new(record::Cons::new(
+        let poly_record_cons = record::Cons::new(
             EMPTY_SPAN,
             "record_cons".into(),
             Box::new([record::PolyParam::TVar(
@@ -190,7 +189,7 @@ mod test {
                 tvar.clone(),
             )]),
             Box::new([record::Field::new("num".into(), tvar.into())]),
-        ));
+        );
 
         let poly_record_instance_ref: ty::Ref<ty::Poly> =
             record::Instance::new(poly_record_cons.clone(), TyArgs::empty()).into();

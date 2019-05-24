@@ -19,7 +19,7 @@ use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::exports::Exports;
 use crate::hir::import::lower_import_set;
 use crate::hir::loader::{load_module_by_name, LoadedModule, ModuleName};
-use crate::hir::macros::{expand_macro, lower_macro_rules, MacroId};
+use crate::hir::macros::{expand_macro, lower_macro_rules};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum, NsId};
 use crate::hir::prim::Prim;
 use crate::hir::scope::{Binding, Scope};
@@ -127,7 +127,7 @@ fn lower_macro(
     let mac = lower_macro_rules(scope, &self_ident, macro_rules_data)?;
 
     if !self_ident.is_underscore() {
-        scope.insert_binding(self_span, self_ident, Binding::Macro(MacroId::new(mac)))?;
+        scope.insert_binding(self_span, self_ident, Binding::Macro(mac))?;
     }
 
     Ok(())
@@ -209,8 +209,6 @@ fn lower_record_field_decl(scope: &mut Scope<'_>, field_datum: NsDatum) -> Resul
 }
 
 fn lower_defrecord(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) -> Result<()> {
-    use crate::id_type::ArcId;
-
     if arg_iter.len() != 2 {
         return Err(Error::new(
             span,
@@ -240,12 +238,7 @@ fn lower_defrecord(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) 
         .collect::<Result<Box<_>>>()?;
 
     // We only support lowering monomorphic records so create a constructor with a singleton instance
-    let record_cons = ArcId::new(record::Cons::new(
-        span,
-        ident.name().clone(),
-        Box::new([]),
-        fields,
-    ));
+    let record_cons = record::Cons::new(span, ident.name().clone(), Box::new([]), fields);
 
     // TODO: This does not add record accessors
     scope.insert_binding(ident_span, ident, Binding::RecordCons(record_cons))

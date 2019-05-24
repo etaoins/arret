@@ -29,8 +29,8 @@ pub struct Macro {
 pub type MacroId = ArcId<Macro>;
 
 impl Macro {
-    pub fn new(rules: Box<[Rule]>) -> Macro {
-        Macro { rules }
+    pub fn new(rules: Box<[Rule]>) -> MacroId {
+        MacroId::new(Macro { rules })
     }
 }
 
@@ -100,7 +100,7 @@ pub fn lower_macro_rules(
     scope: &Scope<'_>,
     self_ident: &Ident,
     macro_rules_data: Vec<NsDatum>,
-) -> Result<Macro> {
+) -> Result<MacroId> {
     let rules = macro_rules_data
         .into_iter()
         .map(|rule_datum| lower_macro_rule_datum(scope, self_ident, rule_datum))

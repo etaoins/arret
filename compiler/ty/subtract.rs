@@ -99,7 +99,6 @@ pub fn subtract_ty_refs<M: ty::PM>(
 mod test {
     use super::*;
     use crate::hir::{poly_for_str, tvar_bounded_by};
-    use crate::id_type::ArcId;
     use crate::ty::record;
     use crate::ty::ty_args::TyArgs;
     use arret_syntax::span::EMPTY_SPAN;
@@ -181,7 +180,7 @@ mod test {
         let tvar = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into()));
 
         // Polymorphic record constructor and top type
-        let poly_record_cons = ArcId::new(record::Cons::new(
+        let poly_record_cons = record::Cons::new(
             EMPTY_SPAN,
             "record_cons".into(),
             Box::new([record::PolyParam::TVar(
@@ -189,7 +188,7 @@ mod test {
                 tvar.clone(),
             )]),
             Box::new([record::Field::new("num".into(), tvar.clone().into())]),
-        ));
+        );
 
         let top_record_ref: ty::Ref<ty::Poly> = poly_record_cons.clone().into();
 

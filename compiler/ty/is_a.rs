@@ -697,22 +697,11 @@ mod test {
 
     #[test]
     fn distinct_record_cons_instances() {
-        use crate::id_type::ArcId;
         use crate::ty::ty_args::TyArgs;
 
-        let cons1 = ArcId::new(record::Cons::new(
-            EMPTY_SPAN,
-            "cons1".into(),
-            Box::new([]),
-            Box::new([]),
-        ));
+        let cons1 = record::Cons::new(EMPTY_SPAN, "cons1".into(), Box::new([]), Box::new([]));
 
-        let cons2 = ArcId::new(record::Cons::new(
-            EMPTY_SPAN,
-            "cons2".into(),
-            Box::new([]),
-            Box::new([]),
-        ));
+        let cons2 = record::Cons::new(EMPTY_SPAN, "cons2".into(), Box::new([]), Box::new([]));
 
         let instance1_poly: ty::Ref<ty::Poly> =
             record::Instance::new(cons1, TyArgs::empty()).into();
@@ -726,7 +715,6 @@ mod test {
 
     #[test]
     fn same_cons_record_instances() {
-        use crate::id_type::ArcId;
         use crate::ty::ty_args::TyArgs;
         use std::collections::HashMap;
 
@@ -746,7 +734,7 @@ mod test {
             ty::Ty::Any.into(),
         ));
 
-        let cons = ArcId::new(record::Cons::new(
+        let cons = record::Cons::new(
             EMPTY_SPAN,
             "cons".into(),
             Box::new([
@@ -759,7 +747,7 @@ mod test {
                 record::Field::new("contravariant".into(), tvar2.clone().into()),
                 record::Field::new("invariant".into(), tvar3.clone().into()),
             ]),
-        ));
+        );
 
         let num_num_num_instance_poly: ty::Ref<ty::Poly> = record::Instance::new(
             cons.clone(),

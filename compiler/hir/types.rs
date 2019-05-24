@@ -619,7 +619,6 @@ pub fn tvar_bounded_by(bound: ty::Ref<ty::Poly>) -> ty::Ref<ty::Poly> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::id_type::ArcId;
     use arret_syntax::span::EMPTY_SPAN;
     use std::collections::HashMap;
 
@@ -898,12 +897,12 @@ mod test {
 
     #[test]
     fn mono_record_type() {
-        let mono_record_cons = ArcId::new(record::Cons::new(
+        let mono_record_cons = record::Cons::new(
             EMPTY_SPAN,
             "MonoCons".into(),
             Box::new([]),
             Box::new([record::Field::new("num".into(), ty::Ty::Num.into())]),
-        ));
+        );
 
         let top_record_ref: ty::Ref<ty::Poly> = mono_record_cons.clone().into();
         assert_eq!("(MonoCons ...)", str_for_ty_ref(&top_record_ref));
@@ -917,7 +916,7 @@ mod test {
     fn poly_record_type() {
         let tvar = ty::TVarId::new(ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into()));
 
-        let poly_record_cons = ArcId::new(record::Cons::new(
+        let poly_record_cons = record::Cons::new(
             EMPTY_SPAN,
             "PolyCons".into(),
             Box::new([record::PolyParam::TVar(
@@ -925,7 +924,7 @@ mod test {
                 tvar.clone(),
             )]),
             Box::new([record::Field::new("num".into(), tvar.clone().into())]),
-        ));
+        );
 
         // Top record type
         let top_record_ref: ty::Ref<ty::Poly> = poly_record_cons.clone().into();

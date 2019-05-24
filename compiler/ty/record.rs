@@ -86,13 +86,13 @@ impl Cons {
         name: DataStr,
         poly_params: Box<[PolyParam]>,
         fields: Box<[Field]>,
-    ) -> Self {
-        Self {
+    ) -> ConsId {
+        ConsId::new(Self {
             span,
             name,
             poly_params,
             fields,
-        }
+        })
     }
 
     /// Returns the span where the constructor was defined

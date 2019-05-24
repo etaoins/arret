@@ -644,7 +644,6 @@ mod test {
 
     #[test]
     fn record_instances() {
-        use crate::id_type::ArcId;
         use crate::ty::ty_args::TyArgs;
         use std::collections::HashMap;
 
@@ -659,7 +658,7 @@ mod test {
             ty::Ty::Any.into(),
         ));
 
-        let cons1 = ArcId::new(record::Cons::new(
+        let cons1 = record::Cons::new(
             EMPTY_SPAN,
             "cons1".into(),
             Box::new([record::PolyParam::TVar(
@@ -670,9 +669,9 @@ mod test {
                 "cons1-field1".into(),
                 tvar1.clone().into(),
             )]),
-        ));
+        );
 
-        let cons2 = ArcId::new(record::Cons::new(
+        let cons2 = record::Cons::new(
             EMPTY_SPAN,
             "cons2".into(),
             Box::new([
@@ -683,7 +682,7 @@ mod test {
                 record::Field::new("cons2-covariant".into(), tvar1.clone().into()),
                 record::Field::new("cons2-contravariant".into(), tvar2.clone().into()),
             ]),
-        ));
+        );
 
         let float_instance1_poly: ty::Ref<ty::Poly> = record::Instance::new(
             cons1.clone(),

@@ -308,22 +308,12 @@ mod test {
 
     #[test]
     fn top_record_test_ty() {
-        use crate::id_type::ArcId;
         use crate::ty::ty_args::TyArgs;
 
-        let cons = ArcId::new(record::Cons::new(
-            EMPTY_SPAN,
-            "cons".into(),
-            Box::new([]),
-            Box::new([]),
-        ));
+        let cons = record::Cons::new(EMPTY_SPAN, "cons".into(), Box::new([]), Box::new([]));
 
-        let other_cons = ArcId::new(record::Cons::new(
-            EMPTY_SPAN,
-            "other_cons".into(),
-            Box::new([]),
-            Box::new([]),
-        ));
+        let other_cons =
+            record::Cons::new(EMPTY_SPAN, "other_cons".into(), Box::new([]), Box::new([]));
 
         let test_ty = TestTy::TopRecord(cons.clone());
 
