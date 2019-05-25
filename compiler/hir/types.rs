@@ -458,7 +458,9 @@ fn str_for_record_poly_arg<M: ty::PM>(
 
     match poly_param {
         record::PolyParam::PVar(_, pvar) => str_for_purity(&ty_args.pvar_purities()[pvar]),
+        record::PolyParam::PFixed => str_for_purity(&Purity::Pure.into()),
         record::PolyParam::TVar(_, tvar) => str_for_ty_ref(&ty_args.tvar_types()[tvar]),
+        record::PolyParam::TFixed(fixed_poly) => str_for_ty_ref(fixed_poly),
     }
 }
 
@@ -912,10 +914,10 @@ mod test {
         let poly_record_cons = record::Cons::new(
             EMPTY_SPAN,
             "PolyCons".into(),
-            Box::new([record::PolyParam::TVar(
-                record::Variance::Covariant,
-                tvar.clone(),
-            )]),
+            Box::new([
+                record::PolyParam::PFixed,
+                record::PolyParam::TVar(record::Variance::Covariant, tvar.clone()),
+            ]),
             Box::new([record::Field::new("num".into(), tvar.clone().into())]),
         );
 
@@ -931,6 +933,9 @@ mod test {
         let poly_record_instance_ref: ty::Ref<ty::Poly> =
             record::Instance::new(poly_record_cons.clone(), int_ty_args).into();
 
-        assert_eq!("(PolyCons Int)", str_for_ty_ref(&poly_record_instance_ref));
+        assert_eq!(
+            "(PolyCons -> Int)",
+            str_for_ty_ref(&poly_record_instance_ref)
+        );
     }
 }

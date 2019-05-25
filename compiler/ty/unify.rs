@@ -226,6 +226,7 @@ fn unify_record_instance<M: ty::PM>(
                     UnifiedTy::Discerned => return UnifiedTy::Discerned,
                 }
             }
+            PolyParam::PFixed | PolyParam::TFixed(_) => {}
         }
     }
 

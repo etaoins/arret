@@ -54,8 +54,15 @@ pub enum Variance {
 /// appear in the same parameter list and their ordering is important.
 #[derive(PartialEq, Debug, Clone)]
 pub enum PolyParam {
+    /// Polymorphic purity variable
     PVar(Variance, purity::PVarId),
+    /// Declared polymorphic purity fixed to `Pure`
+    PFixed,
+
+    /// Polymorphic type variable
     TVar(Variance, ty::TVarId),
+    /// Declared polymorphic type fixed to a known type
+    TFixed(ty::Ref<ty::Poly>),
 }
 
 impl PolyParam {
@@ -63,6 +70,9 @@ impl PolyParam {
         match self {
             PolyParam::PVar(variance, _) => *variance,
             PolyParam::TVar(variance, _) => *variance,
+            // This is arbitrary as every instance will have the same value. `Invariant` is
+            // probably the least confusing thing to return.
+            PolyParam::PFixed | PolyParam::TFixed(_) => Variance::Invariant,
         }
     }
 }
@@ -135,6 +145,7 @@ impl Cons {
                 PolyParam::TVar(_, tvar_id) => {
                     tvar_types.insert(tvar_id.clone(), tvar_id.clone().into());
                 }
+                PolyParam::PFixed | PolyParam::TFixed(_) => {}
             }
         }
 
