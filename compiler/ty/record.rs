@@ -132,18 +132,23 @@ impl Cons {
     pub fn value_cons_fun_type(cons_id: &ConsId) -> ty::Fun {
         use std::collections::HashMap;
 
+        let mut pvars = purity::PVars::new();
         let mut pvar_purities = HashMap::new();
+
+        let mut tvars = ty::TVars::new();
         let mut tvar_types = HashMap::new();
 
         // Create an identity map of our polymorphic variables. When we substitute in the selected
         // types the keys will stay the same while the values will be replaced.
         for poly_param in cons_id.poly_params() {
             match poly_param {
-                PolyParam::PVar(_, pvar_id) => {
-                    pvar_purities.insert(pvar_id.clone(), pvar_id.clone().into());
+                PolyParam::PVar(_, pvar) => {
+                    pvars.push(pvar.clone());
+                    pvar_purities.insert(pvar.clone(), pvar.clone().into());
                 }
-                PolyParam::TVar(_, tvar_id) => {
-                    tvar_types.insert(tvar_id.clone(), tvar_id.clone().into());
+                PolyParam::TVar(_, tvar) => {
+                    tvars.push(tvar.clone());
+                    tvar_types.insert(tvar.clone(), tvar.clone().into());
                 }
                 PolyParam::Pure | PolyParam::TFixed(_) => {}
             }
@@ -161,7 +166,7 @@ impl Cons {
                 .collect(),
             ty::Ty::never().into(),
         );
-        ty::Fun::new(vec![], vec![], top_fun, params)
+        ty::Fun::new(pvars, tvars, top_fun, params)
     }
 }
 
