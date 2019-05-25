@@ -406,45 +406,23 @@ pub fn lower_poly(scope: &Scope<'_>, datum: NsDatum) -> Result<ty::Ref<ty::Poly>
     }
 }
 
-/// Lowers a set of polymorphic variables defined in `outer_scope` and places them in `inner_scope`
-fn lower_polymorphic_vars<F>(
-    outer_scope: &Scope<'_>,
-    inner_scope: &mut Scope<'_>,
-    polymorphic_var_data: NsDataIter,
-    on_polymorphic_var: &mut F,
-) -> Result<()>
-where
-    F: FnMut(&PolymorphicVar) -> (),
-{
-    for var_datum in polymorphic_var_data {
-        let LoweredPolymorphicVar {
-            ident,
-            polymorphic_var,
-        } = lower_polymorphic_var(outer_scope, var_datum)?;
-        on_polymorphic_var(&polymorphic_var);
-
-        let span;
-        let binding;
-        match polymorphic_var {
-            PolymorphicVar::PVar(pvar) => {
-                span = pvar.span();
-                binding = Binding::Purity(pvar.into())
-            }
-            PolymorphicVar::TVar(tvar) => {
-                span = tvar.span();
-                binding = Binding::Ty(tvar.into())
-            }
-            PolymorphicVar::TFixed(fixed_span, poly) => {
-                span = fixed_span;
-                binding = Binding::Ty(poly);
-            }
-            PolymorphicVar::Pure(pure_span) => {
-                span = pure_span;
-                binding = Binding::Purity(Purity::Pure.into());
-            }
+fn bind_polymorphic_vars(
+    scope: &mut Scope<'_>,
+    lowered_poly_vars: Vec<LoweredPolymorphicVar>,
+) -> Result<()> {
+    for LoweredPolymorphicVar {
+        ident,
+        polymorphic_var,
+    } in lowered_poly_vars
+    {
+        let (span, binding) = match polymorphic_var {
+            PolymorphicVar::PVar(pvar) => (pvar.span(), Binding::Purity(pvar.into())),
+            PolymorphicVar::TVar(tvar) => (tvar.span(), Binding::Ty(tvar.into())),
+            PolymorphicVar::TFixed(fixed_span, poly) => (fixed_span, Binding::Ty(poly)),
+            PolymorphicVar::Pure(pure_span) => (pure_span, Binding::Purity(Purity::Pure.into())),
         };
 
-        inner_scope.insert_binding(span, ident, binding)?;
+        scope.insert_binding(span, ident, binding)?;
     }
 
     Ok(())
@@ -459,11 +437,12 @@ pub fn lower_polymorphic_var_set(
     let mut pvars = purity::PVars::new();
     let mut tvars = ty::TVars::new();
 
-    lower_polymorphic_vars(
-        outer_scope,
-        inner_scope,
-        polymorphic_var_data,
-        &mut |polymorphic_var| match polymorphic_var {
+    let lowered_poly_vars = polymorphic_var_data
+        .map(|var_datum| lower_polymorphic_var(outer_scope, var_datum))
+        .collect::<Result<Vec<LoweredPolymorphicVar>>>()?;
+
+    for lowered_poly_var in lowered_poly_vars.iter() {
+        match &lowered_poly_var.polymorphic_var {
             PolymorphicVar::PVar(pvar) => {
                 pvars.push(pvar.clone());
             }
@@ -471,9 +450,10 @@ pub fn lower_polymorphic_var_set(
                 tvars.push(tvar.clone());
             }
             PolymorphicVar::Pure(_) | PolymorphicVar::TFixed(_, _) => {}
-        },
-    )?;
+        }
+    }
 
+    bind_polymorphic_vars(inner_scope, lowered_poly_vars)?;
     Ok((pvars, tvars))
 }
 
@@ -485,11 +465,12 @@ pub fn lower_record_ty_cons_params(
 ) -> Result<(Box<[record::PolyParam]>)> {
     let mut poly_params = Vec::with_capacity(param_data.len());
 
-    lower_polymorphic_vars(
-        outer_scope,
-        inner_scope,
-        param_data,
-        &mut |polymorphic_var| match polymorphic_var {
+    let lowered_poly_vars = param_data
+        .map(|var_datum| lower_polymorphic_var(outer_scope, var_datum))
+        .collect::<Result<Vec<LoweredPolymorphicVar>>>()?;
+
+    for lowered_poly_var in lowered_poly_vars.iter() {
+        match &lowered_poly_var.polymorphic_var {
             PolymorphicVar::PVar(pvar) => {
                 // TODO: Support variance
                 poly_params.push(record::PolyParam::PVar(
@@ -510,9 +491,10 @@ pub fn lower_record_ty_cons_params(
             PolymorphicVar::TFixed(span, fixed_poly) => {
                 poly_params.push(record::PolyParam::TFixed(*span, fixed_poly.clone()));
             }
-        },
-    )?;
+        }
+    }
 
+    bind_polymorphic_vars(inner_scope, lowered_poly_vars)?;
     Ok(poly_params.into_boxed_slice())
 }
 
