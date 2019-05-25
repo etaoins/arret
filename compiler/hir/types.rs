@@ -25,16 +25,16 @@ pub enum TyCons {
     RawU,
 }
 
-pub enum PolymorphicVarKind {
+enum PolymorphicVarKind {
     TVar(ty::TVarId),
     PVar(purity::PVarId),
     TFixed(Span, ty::Ref<ty::Poly>),
     Pure(Span),
 }
 
-pub struct PolymorphicVar {
-    pub ident: Ident,
-    pub kind: PolymorphicVarKind,
+struct PolymorphicVar {
+    ident: Ident,
+    kind: PolymorphicVarKind,
 }
 
 fn lower_polymorphic_var(scope: &Scope<'_>, tvar_datum: NsDatum) -> Result<PolymorphicVar> {
