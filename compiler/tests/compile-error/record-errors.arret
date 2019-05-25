@@ -3,7 +3,7 @@
 (defrecord foo) ;~ ERROR wrong argument count; expected 2
 
 (defrecord :keyword ())
-          ;^^^^^^^^ ERROR expected symbol, found keyword
+          ;^^^^^^^^ ERROR expected record type constuctor declaration, found keyword
 
 (defrecord _ [])
             ;^^ ERROR expected record field list, found empty vector

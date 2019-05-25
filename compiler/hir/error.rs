@@ -23,6 +23,7 @@ pub enum ErrorKind {
     ExpectedCompileErrorString(&'static str),
     ExpectedImportFilterKeyword(&'static str),
     ExpectedImportRenameMap(&'static str),
+    ExpectedRecordTyConsDecl(&'static str),
     ExpectedRecordFieldList(&'static str),
     ExpectedRecordFieldDecl(&'static str),
     UnboundIdent(DataStr),
@@ -188,6 +189,15 @@ impl From<Error> for Diagnostic {
                         Label::new_primary(origin).with_message("expected identifier rename map"),
                     )
             }
+
+            ErrorKind::ExpectedRecordTyConsDecl(found) => Diagnostic::new_error(format!(
+                "expected record type constuctor declaration, found {}",
+                found
+            ))
+            .with_label(
+                Label::new_primary(origin)
+                    .with_message("expected symbol or polymorphic constructor list"),
+            ),
 
             ErrorKind::ExpectedRecordFieldList(found) => {
                 Diagnostic::new_error(format!("expected record field list, found {}", found))

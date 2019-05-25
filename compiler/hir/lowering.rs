@@ -219,7 +219,18 @@ fn lower_defrecord(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) 
     let self_datum = arg_iter.next().unwrap();
 
     // TODO: Support using list syntax here to define polymorphic records
-    let (ident, ident_span) = expect_ident_and_span(self_datum)?;
+    let (ident_span, ident) = match self_datum {
+        NsDatum::Ident(span, ident) => (span, ident),
+        NsDatum::List(_, _) => {
+            unimplemented!("polymorphic record type constructor declaration");
+        }
+        other => {
+            return Err(Error::new(
+                other.span(),
+                ErrorKind::ExpectedRecordTyConsDecl(other.description()),
+            ));
+        }
+    };
 
     let fields_datum = arg_iter.next().unwrap();
     let fields_data = if let NsDatum::List(_, vs) = fields_datum {
