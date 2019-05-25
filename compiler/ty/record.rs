@@ -120,11 +120,26 @@ impl Cons {
 
     /// Returns the type of the value constructor function
     pub fn value_cons_fun_type(cons_id: &ConsId) -> ty::Fun {
-        if !cons_id.poly_params().is_empty() {
-            unimplemented!("polymorphic record value constructors");
+        use std::collections::HashMap;
+
+        let mut pvar_purities = HashMap::new();
+        let mut tvar_types = HashMap::new();
+
+        // Create an identity map of our polymorphic variables. When we substitute in the selected
+        // types the keys will stay the same while the values will be replaced.
+        for poly_param in cons_id.poly_params() {
+            match poly_param {
+                PolyParam::PVar(_, pvar_id) => {
+                    pvar_purities.insert(pvar_id.clone(), pvar_id.clone().into());
+                }
+                PolyParam::TVar(_, tvar_id) => {
+                    tvar_types.insert(tvar_id.clone(), tvar_id.clone().into());
+                }
+            }
         }
 
-        let ret_type = Instance::new(cons_id.clone(), TyArgs::empty()).into();
+        let ty_args = TyArgs::new(pvar_purities, tvar_types);
+        let ret_type = Instance::new(cons_id.clone(), ty_args).into();
         let top_fun = ty::TopFun::new(Purity::Pure.into(), ret_type);
 
         let params = ty::List::new(
