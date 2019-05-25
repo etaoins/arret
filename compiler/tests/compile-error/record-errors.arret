@@ -16,3 +16,6 @@
 
 (defrecord foo ([]))
                ;^^ ERROR expected record field declaration, found empty vector
+
+(defrecord (Foo 1) ())
+               ;^ ERROR bad polymorphic variable declaration

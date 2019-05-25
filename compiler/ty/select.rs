@@ -320,7 +320,7 @@ mod test {
 
     impl TestScope {
         fn new(polymorphic_str: &str) -> TestScope {
-            use crate::hir::lower_polymorphic_vars;
+            use crate::hir::lower_polymorphic_var_set;
 
             let outer_scope = Scope::new_with_primitives();
             let mut inner_scope = Scope::new_with_primitives();
@@ -331,10 +331,10 @@ mod test {
                 .map(NsDatum::from_syntax_datum)
                 .collect::<Vec<NsDatum>>();
 
-            let (pvars, tvars) = lower_polymorphic_vars(
-                polymorphic_data.into_iter(),
+            let (pvars, tvars) = lower_polymorphic_var_set(
                 &outer_scope,
                 &mut inner_scope,
+                polymorphic_data.into_iter(),
             )
             .unwrap();
 

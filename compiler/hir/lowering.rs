@@ -23,8 +23,9 @@ use crate::hir::macros::{expand_macro, lower_macro_rules};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum, NsId};
 use crate::hir::prim::Prim;
 use crate::hir::scope::{Binding, Scope};
-use crate::hir::types::lower_polymorphic_vars;
-use crate::hir::types::{lower_poly, try_lower_purity};
+use crate::hir::types::{
+    lower_poly, lower_polymorphic_var_set, lower_record_ty_cons_params, try_lower_purity,
+};
 use crate::hir::util::{expect_ident_and_span, expect_one_arg, try_take_rest_arg};
 use crate::hir::Lowered;
 use crate::hir::{App, Cond, DeclPurity, DeclTy, Def, Expr, ExprKind, Fun, Let, VarId};
@@ -208,7 +209,11 @@ fn lower_record_field_decl(scope: &Scope<'_>, field_datum: NsDatum) -> Result<re
     Ok(record::Field::new(ident.into_name(), poly))
 }
 
-fn lower_defrecord(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) -> Result<()> {
+fn lower_defrecord(
+    outer_scope: &mut Scope<'_>,
+    span: Span,
+    mut arg_iter: NsDataIter,
+) -> Result<()> {
     if arg_iter.len() != 2 {
         return Err(Error::new(
             span,
@@ -217,17 +222,35 @@ fn lower_defrecord(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) 
     }
 
     let self_datum = arg_iter.next().unwrap();
+    let self_description = self_datum.description();
 
-    // TODO: Support using list syntax here to define polymorphic records
+    let mut inner_scope = Scope::new_child(outer_scope);
+
+    let mut poly_params: Box<[record::PolyParam]> = Box::new([]);
     let (ident_span, ident) = match self_datum {
         NsDatum::Ident(span, ident) => (span, ident),
-        NsDatum::List(_, _) => {
-            unimplemented!("polymorphic record type constructor declaration");
+        NsDatum::List(span, vs) => {
+            let mut param_data_iter = vs.into_vec().into_iter();
+
+            let name_datum = if let Some(name_datum) = param_data_iter.next() {
+                name_datum
+            } else {
+                return Err(Error::new(
+                    span,
+                    ErrorKind::ExpectedRecordTyConsDecl(self_description),
+                ));
+            };
+
+            let (ident, ident_span) = expect_ident_and_span(name_datum)?;
+            poly_params =
+                lower_record_ty_cons_params(outer_scope, &mut inner_scope, param_data_iter)?;
+
+            (ident_span, ident)
         }
         other => {
             return Err(Error::new(
                 other.span(),
-                ErrorKind::ExpectedRecordTyConsDecl(other.description()),
+                ErrorKind::ExpectedRecordTyConsDecl(self_description),
             ));
         }
     };
@@ -245,14 +268,14 @@ fn lower_defrecord(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) 
     let fields = fields_data
         .into_vec()
         .into_iter()
-        .map(|field_datum| lower_record_field_decl(scope, field_datum))
+        .map(|field_datum| lower_record_field_decl(&inner_scope, field_datum))
         .collect::<Result<Box<_>>>()?;
 
     // We only support lowering monomorphic records so create a constructor with a singleton instance
-    let record_cons = record::Cons::new(span, ident.name().clone(), Box::new([]), fields);
+    let record_cons = record::Cons::new(span, ident.name().clone(), poly_params, fields);
 
-    // TODO: This does not add record accessors
-    scope.insert_binding(ident_span, ident, Binding::RecordCons(record_cons))
+    // TODO: This does not add field accessors
+    outer_scope.insert_binding(ident_span, ident, Binding::RecordCons(record_cons))
 }
 
 fn lower_lettype(scope: &Scope<'_>, span: Span, arg_iter: NsDataIter) -> Result<Expr<Lowered>> {
@@ -440,7 +463,7 @@ fn lower_fun(
             .next()
             .ok_or_else(|| Error::new(span, ErrorKind::NoParamDecl))?;
 
-        lower_polymorphic_vars(vs.into_vec().into_iter(), outer_scope, &mut fun_scope)?
+        lower_polymorphic_var_set(outer_scope, &mut fun_scope, vs.into_vec().into_iter())?
     } else {
         (purity::PVars::new(), ty::TVars::new())
     };
