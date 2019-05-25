@@ -271,7 +271,6 @@ fn lower_defrecord(
         .map(|field_datum| lower_record_field_decl(&inner_scope, field_datum))
         .collect::<Result<Box<_>>>()?;
 
-    // We only support lowering monomorphic records so create a constructor with a singleton instance
     let record_cons = record::Cons::new(span, ident.name().clone(), poly_params, fields);
 
     // TODO: This does not add field accessors
