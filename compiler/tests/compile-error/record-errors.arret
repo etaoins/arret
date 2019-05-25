@@ -19,3 +19,26 @@
 
 (defrecord (Foo 1) ())
                ;^ ERROR bad polymorphic variable declaration
+
+(defrecord (Point [N Num]) ([x Num] [y Num]))
+
+(def [_ (Point Int Float)] (Pair 1 2.0))
+       ;^^^^^^^^^^^^^^^^^ ERROR wrong argument count; expected 1
+
+(def [_ (Point Bool)] (Pair true))
+              ;^^^^ ERROR mismatched types
+
+; These polymorphic variables are actually fixed to a single type
+(defrecord (FixedPolyRecord [A Int] [->_ ->]) ([pred (A ->_ Bool)]))
+
+(def [_ (FixedPolyRecord Float ->)] 1)
+                        ;^^^^^ ERROR mismatched types
+
+(def [_ (FixedPolyRecord Int ->!)] 1)
+                            ;^^^ ERROR mismatched purities
+
+(def [_ (FixedPolyRecord Int Int)] 1)
+                            ;^^^ ERROR type cannot be used as a purity
+
+(def [_ (FixedPolyRecord Int [])] 1)
+                            ;^^ ERROR empty vector cannot be used as a purity

@@ -185,7 +185,7 @@ fn intersect_record_instance<M: ty::PM>(
                     )?,
                 );
             }
-            PolyParam::Pure | PolyParam::TFixed(_) => {}
+            PolyParam::Pure(_) | PolyParam::TFixed(_, _) => {}
         }
     }
 

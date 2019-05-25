@@ -6,7 +6,29 @@ use arret_syntax::datum::DataStr;
 use arret_syntax::error::Error as SyntaxError;
 use arret_syntax::span::Span;
 
+use crate::hir::types::{str_for_purity, str_for_ty_ref};
 use crate::reporting::{diagnostic_for_syntax_error, LocTrace};
+use crate::ty;
+use crate::ty::purity;
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct PolyArgIsNotTy {
+    pub arg_type: ty::Ref<ty::Poly>,
+    pub param_bound: ty::Ref<ty::Poly>,
+    pub param_span: Span,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct PolyArgIsNotPure {
+    pub arg_purity: purity::Ref,
+    pub param_span: Span,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ExpectedPurityPolyArg {
+    pub found: &'static str,
+    pub param_span: Span,
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ErrorKind {
@@ -68,6 +90,9 @@ pub enum ErrorKind {
     NonFunPolyTy,
     ShortModuleName,
     AnonymousRecordField,
+    PolyArgIsNotTy(Box<PolyArgIsNotTy>),
+    PolyArgIsNotPure(Box<PolyArgIsNotPure>),
+    ExpectedPurityPolyArg(Box<ExpectedPurityPolyArg>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -107,9 +132,10 @@ impl Error {
 
 impl From<Error> for Diagnostic {
     fn from(error: Error) -> Diagnostic {
-        let origin = error.loc_trace.origin();
+        let Error { loc_trace, kind } = error;
+        let origin = loc_trace.origin();
 
-        let diagnostic = match error.kind() {
+        let diagnostic = match kind {
             ErrorKind::ExpectedValue(found) => {
                 Diagnostic::new_error(format!("cannot take the value of a {}", found))
                     .with_label(Label::new_primary(origin).with_message("expected value"))
@@ -228,7 +254,7 @@ impl From<Error> for Diagnostic {
             }
 
             ErrorKind::WrongArgCount(expected) => {
-                let label_message = if *expected == 1 {
+                let label_message = if expected == 1 {
                     "expected 1 argument".to_owned()
                 } else {
                     format!("expected {} arguments", expected)
@@ -270,7 +296,7 @@ impl From<Error> for Diagnostic {
 
                 if let Some(first_def_span) = first_def_span {
                     diagnostic.with_label(
-                        Label::new_secondary(*first_def_span).with_message("first definition here"),
+                        Label::new_secondary(first_def_span).with_message("first definition here"),
                     )
                 } else {
                     diagnostic
@@ -317,7 +343,7 @@ impl From<Error> for Diagnostic {
                         Label::new_primary(origin).with_message("second zero or more match"),
                     )
                     .with_label(
-                        Label::new_secondary(*first_zero_or_more_span)
+                        Label::new_secondary(first_zero_or_more_span)
                             .with_message("first zero or more match"),
                     )
             }
@@ -478,9 +504,57 @@ impl From<Error> for Diagnostic {
                 "anonymous record fields are not supported",
             )
             .with_label(Label::new_primary(origin).with_message("expected record field name")),
+
+            ErrorKind::PolyArgIsNotTy(boxed_details) => {
+                let PolyArgIsNotTy {
+                    arg_type,
+                    param_bound,
+                    param_span,
+                } = *boxed_details;
+
+                Diagnostic::new_error("mismatched types")
+                    .with_label(Label::new_primary(origin).with_message(format!(
+                        "`{}` does not satisfy the lower bound of `{}`",
+                        str_for_ty_ref(&arg_type),
+                        str_for_ty_ref(&param_bound)
+                    )))
+                    .with_label(
+                        Label::new_secondary(param_span)
+                            .with_message("type parameter declared here"),
+                    )
+            }
+
+            ErrorKind::PolyArgIsNotPure(boxed_details) => {
+                let PolyArgIsNotPure {
+                    arg_purity,
+                    param_span,
+                } = *boxed_details;
+                Diagnostic::new_error("mismatched purities")
+                    .with_label(
+                        Label::new_primary(origin)
+                            .with_message(
+                                format!("`{}` is not pure", str_for_purity(&arg_purity),),
+                            ),
+                    )
+                    .with_label(
+                        Label::new_secondary(param_span)
+                            .with_message("purity parameter declared here"),
+                    )
+            }
+
+            ErrorKind::ExpectedPurityPolyArg(boxed_details) => {
+                let ExpectedPurityPolyArg { found, param_span } = *boxed_details;
+
+                Diagnostic::new_error(format!("{} cannot be used as a purity", found))
+                    .with_label(Label::new_primary(origin).with_message("expected purity"))
+                    .with_label(
+                        Label::new_secondary(param_span)
+                            .with_message("purity parameter declared here"),
+                    )
+            }
         };
 
-        error.loc_trace.label_macro_invocation(diagnostic)
+        loc_trace.label_macro_invocation(diagnostic)
     }
 }
 

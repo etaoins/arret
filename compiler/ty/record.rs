@@ -57,12 +57,12 @@ pub enum PolyParam {
     /// Polymorphic purity variable
     PVar(Variance, purity::PVarId),
     /// Declared polymorphic purity fixed to `Pure`
-    Pure,
+    Pure(Span),
 
     /// Polymorphic type variable
     TVar(Variance, ty::TVarId),
     /// Declared polymorphic type fixed to a known type
-    TFixed(ty::Ref<ty::Poly>),
+    TFixed(Span, ty::Ref<ty::Poly>),
 }
 
 impl PolyParam {
@@ -72,7 +72,7 @@ impl PolyParam {
             PolyParam::TVar(variance, _) => *variance,
             // This is arbitrary as every instance will have the same value. `Invariant` is
             // probably the least confusing thing to return.
-            PolyParam::Pure | PolyParam::TFixed(_) => Variance::Invariant,
+            PolyParam::Pure(_) | PolyParam::TFixed(_, _) => Variance::Invariant,
         }
     }
 }
@@ -150,7 +150,7 @@ impl Cons {
                     tvars.push(tvar.clone());
                     tvar_types.insert(tvar.clone(), tvar.clone().into());
                 }
-                PolyParam::Pure | PolyParam::TFixed(_) => {}
+                PolyParam::Pure(_) | PolyParam::TFixed(_, _) => {}
             }
         }
 

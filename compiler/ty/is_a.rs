@@ -66,7 +66,7 @@ fn record_instance_is_a<M: ty::PM>(
                     &sub_instance.ty_args().tvar_types()[tvar],
                     &par_instance.ty_args().tvar_types()[tvar],
                 ),
-                record::PolyParam::Pure | record::PolyParam::TFixed(_) => true,
+                record::PolyParam::Pure(_) | record::PolyParam::TFixed(_, _) => true,
             })
 }
 

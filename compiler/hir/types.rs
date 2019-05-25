@@ -1,6 +1,8 @@
 use arret_syntax::span::Span;
 
-use crate::hir::error::{Error, ErrorKind, Result};
+use crate::hir::error::{
+    Error, ErrorKind, ExpectedPurityPolyArg, PolyArgIsNotPure, PolyArgIsNotTy, Result,
+};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum};
 use crate::hir::prim::Prim;
 use crate::hir::scope::{Binding, Scope};
@@ -196,6 +198,90 @@ fn lower_ty_cons_apply(
     })
 }
 
+fn lower_record_ty_cons_purity_arg(
+    scope: &Scope<'_>,
+    param_span: Span,
+    arg_datum: &NsDatum,
+) -> Result<purity::Ref> {
+    (match arg_datum {
+        NsDatum::Ident(span, ident) => match scope.get_or_err(*span, ident)? {
+            Binding::Purity(purity) => Ok(purity.clone()),
+            other => Err(other.description()),
+        },
+        other => Err(other.description()),
+    })
+    .map_err(|found| {
+        let details = Box::new(ExpectedPurityPolyArg { found, param_span });
+        Error::new(arg_datum.span(), ErrorKind::ExpectedPurityPolyArg(details))
+    })
+}
+
+fn lower_record_ty_cons_apply(
+    scope: &Scope<'_>,
+    span: Span,
+    record_cons: &record::ConsId,
+    arg_iter: NsDataIter,
+) -> Result<ty::Ref<ty::Poly>> {
+    use crate::ty::is_a::{ty_ref_is_a, ty_refs_equivalent};
+    use std::collections::HashMap;
+
+    expect_arg_count(span, record_cons.poly_params().len(), arg_iter.len())?;
+
+    let mut pvar_purities = HashMap::new();
+    let mut tvar_types = HashMap::new();
+
+    for (poly_param, arg_datum) in record_cons.poly_params().iter().zip(arg_iter) {
+        let arg_span = arg_datum.span();
+
+        match poly_param {
+            record::PolyParam::PVar(_, pvar) => {
+                let purity_ref = lower_record_ty_cons_purity_arg(scope, pvar.span(), &arg_datum)?;
+                pvar_purities.insert(pvar.clone(), purity_ref);
+            }
+            record::PolyParam::Pure(span) => {
+                let purity_ref = lower_record_ty_cons_purity_arg(scope, *span, &arg_datum)?;
+
+                if purity_ref != Purity::Pure.into() {
+                    let details = Box::new(PolyArgIsNotPure {
+                        arg_purity: purity_ref,
+                        param_span: *span,
+                    });
+
+                    return Err(Error::new(arg_span, ErrorKind::PolyArgIsNotPure(details)));
+                }
+            }
+            record::PolyParam::TVar(_, tvar) => {
+                let arg_type = lower_poly(scope, arg_datum)?;
+                if !ty_ref_is_a(&arg_type, tvar.bound()) {
+                    let details = Box::new(PolyArgIsNotTy {
+                        arg_type,
+                        param_bound: tvar.bound().clone(),
+                        param_span: tvar.span(),
+                    });
+
+                    return Err(Error::new(arg_span, ErrorKind::PolyArgIsNotTy(details)));
+                }
+
+                tvar_types.insert(tvar.clone(), arg_type);
+            }
+            record::PolyParam::TFixed(span, fixed_poly) => {
+                let arg_type = lower_poly(scope, arg_datum)?;
+                if !ty_refs_equivalent(&arg_type, &fixed_poly) {
+                    let details = Box::new(PolyArgIsNotTy {
+                        arg_type,
+                        param_bound: fixed_poly.clone(),
+                        param_span: *span,
+                    });
+
+                    return Err(Error::new(arg_span, ErrorKind::PolyArgIsNotTy(details)));
+                }
+            }
+        }
+    }
+
+    Ok(record::Instance::new(record_cons.clone(), TyArgs::new(pvar_purities, tvar_types)).into())
+}
+
 fn lower_literal_vec(literal_data: Vec<NsDatum>) -> Result<Vec<ty::Ref<ty::Poly>>> {
     literal_data.into_iter().map(lower_literal).collect()
 }
@@ -301,6 +387,10 @@ fn lower_poly_data_iter(
             lower_literal(literal_datum)
         }
         Binding::TyCons(ty_cons) => lower_ty_cons_apply(scope, span, *ty_cons, data_iter),
+        // This acts as a type constructor in a type constructor context
+        Binding::RecordCons(record_cons) => {
+            lower_record_ty_cons_apply(scope, span, record_cons, data_iter)
+        }
         other => Err(Error::new(
             ident_span,
             ErrorKind::ExpectedTyCons(other.description()),
@@ -407,8 +497,8 @@ pub fn lower_record_ty_cons_params(
                     pvar.clone(),
                 ));
             }
-            PolymorphicVar::Pure(_) => {
-                poly_params.push(record::PolyParam::Pure);
+            PolymorphicVar::Pure(span) => {
+                poly_params.push(record::PolyParam::Pure(*span));
             }
             PolymorphicVar::TVar(tvar) => {
                 // TODO: Support variance
@@ -417,8 +507,8 @@ pub fn lower_record_ty_cons_params(
                     tvar.clone(),
                 ));
             }
-            PolymorphicVar::TFixed(_, fixed_poly) => {
-                poly_params.push(record::PolyParam::TFixed(fixed_poly.clone()));
+            PolymorphicVar::TFixed(span, fixed_poly) => {
+                poly_params.push(record::PolyParam::TFixed(*span, fixed_poly.clone()));
             }
         },
     )?;
@@ -531,9 +621,9 @@ fn str_for_record_poly_arg<M: ty::PM>(
 
     match poly_param {
         record::PolyParam::PVar(_, pvar) => str_for_purity(&ty_args.pvar_purities()[pvar]),
-        record::PolyParam::Pure => str_for_purity(&Purity::Pure.into()),
+        record::PolyParam::Pure(_) => str_for_purity(&Purity::Pure.into()),
         record::PolyParam::TVar(_, tvar) => str_for_ty_ref(&ty_args.tvar_types()[tvar]),
-        record::PolyParam::TFixed(fixed_poly) => str_for_ty_ref(fixed_poly),
+        record::PolyParam::TFixed(_, fixed_poly) => str_for_ty_ref(fixed_poly),
     }
 }
 
@@ -988,7 +1078,7 @@ mod test {
             EMPTY_SPAN,
             "PolyCons".into(),
             Box::new([
-                record::PolyParam::Pure,
+                record::PolyParam::Pure(EMPTY_SPAN),
                 record::PolyParam::TVar(record::Variance::Covariant, tvar.clone()),
             ]),
             Box::new([record::Field::new("num".into(), tvar.clone().into())]),
