@@ -260,7 +260,7 @@ fn lower_polymorphic_poly(
     }
 }
 
-pub fn lower_poly_data_iter(
+fn lower_poly_data_iter(
     scope: &Scope<'_>,
     span: Span,
     mut data_iter: NsDataIter,
