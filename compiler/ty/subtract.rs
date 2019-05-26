@@ -98,11 +98,15 @@ pub fn subtract_ty_refs<M: ty::PM>(
 #[cfg(test)]
 mod test {
     use super::*;
+
+    use std::collections::HashMap;
+
+    use arret_syntax::span::EMPTY_SPAN;
+
     use crate::hir::{poly_for_str, tvar_bounded_by};
     use crate::ty::record;
     use crate::ty::ty_args::TyArgs;
-    use arret_syntax::span::EMPTY_SPAN;
-    use std::collections::HashMap;
+    use crate::ty::var_usage::Variance;
 
     fn assert_subtraction(expected_str: &str, minuend_str: &str, subrahend_str: &str) {
         let expected_poly = poly_for_str(expected_str);
@@ -184,7 +188,7 @@ mod test {
             EMPTY_SPAN,
             "record_cons".into(),
             Some(Box::new([record::PolyParam::TVar(
-                record::Variance::Covariant,
+                Variance::Covariant,
                 tvar.clone(),
             )])),
             Box::new([record::Field::new("num".into(), tvar.clone().into())]),

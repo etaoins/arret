@@ -1,7 +1,7 @@
 use arret_syntax::span::Span;
 
 use crate::hir::error::{
-    Error, ErrorKind, ExpectedPurityPolyArg, PolyArgIsNotPure, PolyArgIsNotTy, Result,
+    Error, ErrorKind, ExpectedPolyPurityArg, PolyArgIsNotPure, PolyArgIsNotTy, Result,
 };
 use crate::hir::ns::{Ident, NsDataIter, NsDatum};
 use crate::hir::prim::Prim;
@@ -25,7 +25,8 @@ pub enum TyCons {
     RawU,
 }
 
-enum PolymorphicVar {
+#[derive(Clone)]
+pub enum PolymorphicVar {
     TVar(ty::TVarId),
     PVar(purity::PVarId),
     TFixed(Span, ty::Ref<ty::Poly>),
@@ -56,18 +57,18 @@ fn lower_polymorphic_var(scope: &Scope<'_>, tvar_datum: NsDatum) -> Result<Lower
                 )),
             });
         }
-        NsDatum::Vector(_, vs) => {
+        NsDatum::Vector(vector_span, vs) => {
             let mut arg_data = vs.into_vec();
 
             if arg_data.len() == 2 {
                 let bound_datum = arg_data.pop().unwrap();
-                let (span, ident) = expect_spanned_ident(
+                let (ident_span, ident) = expect_spanned_ident(
                     arg_data.pop().unwrap(),
                     "new polymorphic parameter name",
                 )?;
 
                 if ident.is_underscore() {
-                    return Err(Error::new(span, ErrorKind::AnonymousPolymorphicParam));
+                    return Err(Error::new(ident_span, ErrorKind::AnonymousPolymorphicParam));
                 }
 
                 let source_name = ident.name().clone();
@@ -76,7 +77,7 @@ fn lower_polymorphic_var(scope: &Scope<'_>, tvar_datum: NsDatum) -> Result<Lower
                         return Ok(LoweredPolymorphicVar {
                             ident,
                             polymorphic_var: PolymorphicVar::PVar(purity::PVar::new(
-                                span,
+                                vector_span,
                                 source_name,
                             )),
                         });
@@ -86,7 +87,7 @@ fn lower_polymorphic_var(scope: &Scope<'_>, tvar_datum: NsDatum) -> Result<Lower
                         // expansion
                         return Ok(LoweredPolymorphicVar {
                             ident,
-                            polymorphic_var: PolymorphicVar::Pure(span),
+                            polymorphic_var: PolymorphicVar::Pure(vector_span),
                         });
                     }
                     Some(_) => {
@@ -96,9 +97,9 @@ fn lower_polymorphic_var(scope: &Scope<'_>, tvar_datum: NsDatum) -> Result<Lower
                         let bound_ty = lower_poly(scope, bound_datum)?;
 
                         let polymorphic_var = if ty::props::has_subtypes(&bound_ty) {
-                            PolymorphicVar::TVar(ty::TVar::new(span, source_name, bound_ty))
+                            PolymorphicVar::TVar(ty::TVar::new(vector_span, source_name, bound_ty))
                         } else {
-                            PolymorphicVar::TFixed(span, bound_ty)
+                            PolymorphicVar::TFixed(vector_span, bound_ty)
                         };
 
                         return Ok(LoweredPolymorphicVar {
@@ -219,8 +220,8 @@ fn lower_record_ty_cons_purity_arg(
         other => Err(other.description()),
     })
     .map_err(|found| {
-        let details = Box::new(ExpectedPurityPolyArg { found, param_span });
-        Error::new(arg_datum.span(), ErrorKind::ExpectedPurityPolyArg(details))
+        let details = Box::new(ExpectedPolyPurityArg { found, param_span });
+        Error::new(arg_datum.span(), ErrorKind::ExpectedPolyPurityArg(details))
     })
 }
 
@@ -432,6 +433,8 @@ fn bind_polymorphic_vars(
 }
 
 /// Lowers a set of polymorphic variables defined in `outer_scope` and places them in `inner_scope`
+///
+/// This is used for functions and function types
 pub fn lower_polymorphic_var_set(
     outer_scope: &Scope<'_>,
     inner_scope: &mut Scope<'_>,
@@ -460,45 +463,25 @@ pub fn lower_polymorphic_var_set(
     Ok((pvars, tvars))
 }
 
-/// Lowers a list record type constructor params
-pub fn lower_record_ty_cons_params(
+/// Lowers a list of polymorphic variables defined in `outer_scope` and places them in `inner_scope`
+///
+/// This is used for record types
+pub fn lower_polymorphic_var_list(
     outer_scope: &Scope<'_>,
     inner_scope: &mut Scope<'_>,
     param_data: NsDataIter,
-) -> Result<(Box<[record::PolyParam]>)> {
-    let mut poly_params = Vec::with_capacity(param_data.len());
-
+) -> Result<Box<[PolymorphicVar]>> {
     let lowered_poly_vars = param_data
         .map(|var_datum| lower_polymorphic_var(outer_scope, var_datum))
         .collect::<Result<Vec<LoweredPolymorphicVar>>>()?;
 
-    for lowered_poly_var in lowered_poly_vars.iter() {
-        match &lowered_poly_var.polymorphic_var {
-            PolymorphicVar::PVar(pvar) => {
-                // TODO: Support variance
-                poly_params.push(record::PolyParam::PVar(
-                    record::Variance::Invariant,
-                    pvar.clone(),
-                ));
-            }
-            PolymorphicVar::Pure(span) => {
-                poly_params.push(record::PolyParam::Pure(*span));
-            }
-            PolymorphicVar::TVar(tvar) => {
-                // TODO: Support variance
-                poly_params.push(record::PolyParam::TVar(
-                    record::Variance::Invariant,
-                    tvar.clone(),
-                ));
-            }
-            PolymorphicVar::TFixed(span, fixed_poly) => {
-                poly_params.push(record::PolyParam::TFixed(*span, fixed_poly.clone()));
-            }
-        }
-    }
+    let poly_vars = lowered_poly_vars
+        .iter()
+        .map(|lpv| lpv.polymorphic_var.clone())
+        .collect();
 
     bind_polymorphic_vars(inner_scope, lowered_poly_vars)?;
-    Ok(poly_params.into_boxed_slice())
+    Ok(poly_vars)
 }
 
 pub fn try_lower_purity(scope: &Scope<'_>, datum: &NsDatum) -> Option<purity::Ref> {
@@ -767,6 +750,7 @@ pub fn tvar_bounded_by(bound: ty::Ref<ty::Poly>) -> ty::Ref<ty::Poly> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::ty::var_usage::Variance;
     use arret_syntax::span::EMPTY_SPAN;
     use std::collections::HashMap;
 
@@ -1069,7 +1053,7 @@ mod test {
             "PolyCons".into(),
             Some(Box::new([
                 record::PolyParam::Pure(EMPTY_SPAN),
-                record::PolyParam::TVar(record::Variance::Covariant, tvar.clone()),
+                record::PolyParam::TVar(Variance::Covariant, tvar.clone()),
             ])),
             Box::new([record::Field::new("num".into(), tvar.clone().into())]),
         );

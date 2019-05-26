@@ -3,6 +3,7 @@ use crate::ty::list_iter::ListIterator;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
 use crate::ty::record;
+use crate::ty::var_usage::Variance;
 
 fn top_fun_is_a(sub_top_fun: &ty::TopFun, par_top_fun: &ty::TopFun) -> bool {
     purity_ref_is_a(sub_top_fun.purity(), par_top_fun.purity())
@@ -32,14 +33,14 @@ fn list_is_a<M: ty::PM>(sub_list: &ty::List<M>, par_list: &ty::List<M>) -> bool 
         .all(|(sub, par)| ty_ref_is_a(sub, par))
 }
 
-fn record_field_is_a<F, R>(variance: record::Variance, is_a: &F, sub: &R, par: &R) -> bool
+fn record_field_is_a<F, R>(variance: Variance, is_a: &F, sub: &R, par: &R) -> bool
 where
     F: Fn(&R, &R) -> bool,
 {
     match variance {
-        record::Variance::Covariant => is_a(sub, par),
-        record::Variance::Contravariant => is_a(par, sub),
-        record::Variance::Invariant => is_a(sub, par) && is_a(par, sub),
+        Variance::Covariant => is_a(sub, par),
+        Variance::Contravariant => is_a(par, sub),
+        Variance::Invariant => is_a(sub, par) && is_a(par, sub),
     }
 }
 
@@ -726,9 +727,9 @@ mod test {
             EMPTY_SPAN,
             "cons".into(),
             Some(Box::new([
-                record::PolyParam::TVar(record::Variance::Covariant, tvar1.clone()),
-                record::PolyParam::TVar(record::Variance::Contravariant, tvar2.clone()),
-                record::PolyParam::TVar(record::Variance::Invariant, tvar3.clone()),
+                record::PolyParam::TVar(Variance::Covariant, tvar1.clone()),
+                record::PolyParam::TVar(Variance::Contravariant, tvar2.clone()),
+                record::PolyParam::TVar(Variance::Invariant, tvar3.clone()),
             ])),
             Box::new([
                 record::Field::new("covariant".into(), tvar1.clone().into()),

@@ -7,6 +7,7 @@ pub(crate) mod lowering;
 mod macros;
 pub(crate) mod ns;
 mod prim;
+mod records;
 pub(crate) mod scope;
 mod types;
 mod util;

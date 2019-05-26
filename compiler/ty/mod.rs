@@ -12,6 +12,7 @@ pub mod subst;
 pub mod subtract;
 pub mod ty_args;
 pub mod unify;
+pub mod var_usage;
 
 use std::fmt;
 use std::ops::Range;

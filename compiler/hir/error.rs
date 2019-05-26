@@ -31,7 +31,7 @@ pub struct PolyArgIsNotPure {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct ExpectedPurityPolyArg {
+pub struct ExpectedPolyPurityArg {
     pub found: &'static str,
     pub param_span: Span,
 }
@@ -100,7 +100,9 @@ pub enum ErrorKind {
     AnonymousRecordField,
     PolyArgIsNotTy(Box<PolyArgIsNotTy>),
     PolyArgIsNotPure(Box<PolyArgIsNotPure>),
-    ExpectedPurityPolyArg(Box<ExpectedPurityPolyArg>),
+    ExpectedPolyPurityArg(Box<ExpectedPolyPurityArg>),
+    UnusedPolyPurityParam(purity::PVarId),
+    UnusedPolyTyParam(ty::TVarId),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -565,8 +567,8 @@ impl From<Error> for Diagnostic {
                     )
             }
 
-            ErrorKind::ExpectedPurityPolyArg(boxed_details) => {
-                let ExpectedPurityPolyArg { found, param_span } = *boxed_details;
+            ErrorKind::ExpectedPolyPurityArg(boxed_details) => {
+                let ExpectedPolyPurityArg { found, param_span } = *boxed_details;
 
                 Diagnostic::new_error(format!("{} cannot be used as a purity", found))
                     .with_label(Label::new_primary(origin).with_message("expected purity"))
@@ -575,6 +577,22 @@ impl From<Error> for Diagnostic {
                             .with_message("purity parameter declared here"),
                     )
             }
+
+            ErrorKind::UnusedPolyPurityParam(pvar) => Diagnostic::new_error(format!(
+                "unused polymorphic purity parameter `{}`",
+                pvar.source_name()
+            ))
+            .with_label(
+                Label::new_primary(pvar.span()).with_message("purity parameter declared here"),
+            ),
+
+            ErrorKind::UnusedPolyTyParam(tvar) => Diagnostic::new_error(format!(
+                "unused polymorphic type parameter `{}`",
+                tvar.source_name()
+            ))
+            .with_label(
+                Label::new_primary(tvar.span()).with_message("type parameter declared here"),
+            ),
         };
 
         loc_trace.label_macro_invocation(diagnostic)

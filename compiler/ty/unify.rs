@@ -16,6 +16,7 @@ use crate::ty::purity;
 use crate::ty::purity::Purity;
 use crate::ty::record;
 use crate::ty::ty_args::TyArgs;
+use crate::ty::var_usage::Variance;
 
 #[derive(Debug, PartialEq)]
 enum UnifiedTy<M: ty::PM> {
@@ -132,7 +133,7 @@ fn unify_fun<M: ty::PM>(fun1: &ty::Fun, fun2: &ty::Fun) -> UnifiedTy<M> {
 }
 
 fn unify_record_field_purities<M: ty::PM>(
-    variance: record::Variance,
+    variance: Variance,
     pvar: &purity::PVarId,
     ty_args1: &TyArgs<M>,
     ty_args2: &TyArgs<M>,
@@ -144,9 +145,9 @@ fn unify_record_field_purities<M: ty::PM>(
     let purity_ref2 = &ty_args2.pvar_purities()[pvar];
 
     match variance {
-        record::Variance::Covariant => unify_purity_refs(purity_ref1, purity_ref2),
-        record::Variance::Contravariant => intersect_purity_refs(purity_ref1, purity_ref2),
-        record::Variance::Invariant => {
+        Variance::Covariant => unify_purity_refs(purity_ref1, purity_ref2),
+        Variance::Contravariant => intersect_purity_refs(purity_ref1, purity_ref2),
+        Variance::Invariant => {
             if purity_refs_equivalent(purity_ref1, purity_ref2) {
                 purity_ref1.clone()
             } else {
@@ -157,7 +158,7 @@ fn unify_record_field_purities<M: ty::PM>(
 }
 
 fn unify_record_field_ty_refs<M: ty::PM>(
-    variance: record::Variance,
+    variance: Variance,
     tvar: &ty::TVarId,
     ty_args1: &TyArgs<M>,
     ty_args2: &TyArgs<M>,
@@ -169,12 +170,12 @@ fn unify_record_field_ty_refs<M: ty::PM>(
     let ty_ref2 = &ty_args2.tvar_types()[tvar];
 
     match variance {
-        record::Variance::Covariant => unify_ty_refs(ty_ref1, ty_ref2),
-        record::Variance::Contravariant => match intersect_ty_refs(ty_ref1, ty_ref2) {
+        Variance::Covariant => unify_ty_refs(ty_ref1, ty_ref2),
+        Variance::Contravariant => match intersect_ty_refs(ty_ref1, ty_ref2) {
             Ok(intersected) => UnifiedTy::Merged(intersected),
             Err(_) => UnifiedTy::Discerned,
         },
-        record::Variance::Invariant => {
+        Variance::Invariant => {
             if ty_refs_equivalent(ty_ref1, ty_ref2) {
                 UnifiedTy::Merged(ty_ref1.clone())
             } else {
@@ -713,7 +714,7 @@ mod test {
             EMPTY_SPAN,
             "cons1".into(),
             Some(Box::new([record::PolyParam::TVar(
-                record::Variance::Covariant,
+                Variance::Covariant,
                 tvar1.clone(),
             )])),
             Box::new([record::Field::new(
@@ -726,8 +727,8 @@ mod test {
             EMPTY_SPAN,
             "cons2".into(),
             Some(Box::new([
-                record::PolyParam::TVar(record::Variance::Covariant, tvar1.clone()),
-                record::PolyParam::TVar(record::Variance::Contravariant, tvar2.clone()),
+                record::PolyParam::TVar(Variance::Covariant, tvar1.clone()),
+                record::PolyParam::TVar(Variance::Contravariant, tvar2.clone()),
             ])),
             Box::new([
                 record::Field::new("cons2-covariant".into(), tvar1.clone().into()),

@@ -8,6 +8,7 @@ use crate::ty::purity;
 use crate::ty::purity::Purity;
 use crate::ty::record;
 use crate::ty::ty_args::TyArgs;
+use crate::ty::var_usage::Variance;
 
 #[derive(PartialEq, Debug)]
 pub enum Error {
@@ -98,7 +99,7 @@ where
 }
 
 fn intersect_record_field_purities<M: ty::PM>(
-    variance: record::Variance,
+    variance: Variance,
     pvar: &purity::PVarId,
     ty_args1: &TyArgs<M>,
     ty_args2: &TyArgs<M>,
@@ -110,9 +111,9 @@ fn intersect_record_field_purities<M: ty::PM>(
     let purity_ref2 = &ty_args2.pvar_purities()[pvar];
 
     match variance {
-        record::Variance::Covariant => Ok(intersect_purity_refs(purity_ref1, purity_ref2)),
-        record::Variance::Contravariant => Ok(unify_purity_refs(purity_ref1, purity_ref2)),
-        record::Variance::Invariant => {
+        Variance::Covariant => Ok(intersect_purity_refs(purity_ref1, purity_ref2)),
+        Variance::Contravariant => Ok(unify_purity_refs(purity_ref1, purity_ref2)),
+        Variance::Invariant => {
             if purity_refs_equivalent(purity_ref1, purity_ref2) {
                 Ok(purity_ref1.clone())
             } else {
@@ -123,7 +124,7 @@ fn intersect_record_field_purities<M: ty::PM>(
 }
 
 fn intersect_record_field_ty_refs<M: ty::PM>(
-    variance: record::Variance,
+    variance: Variance,
     tvar: &ty::TVarId,
     ty_args1: &TyArgs<M>,
     ty_args2: &TyArgs<M>,
@@ -135,9 +136,9 @@ fn intersect_record_field_ty_refs<M: ty::PM>(
     let ty_ref2 = &ty_args2.tvar_types()[tvar];
 
     match variance {
-        record::Variance::Covariant => intersect_ty_refs(ty_ref1, ty_ref2),
-        record::Variance::Contravariant => Ok(unify_to_ty_ref(ty_ref1, ty_ref2)),
-        record::Variance::Invariant => {
+        Variance::Covariant => intersect_ty_refs(ty_ref1, ty_ref2),
+        Variance::Contravariant => Ok(unify_to_ty_ref(ty_ref1, ty_ref2)),
+        Variance::Invariant => {
             if ty_refs_equivalent(ty_ref1, ty_ref2) {
                 Ok(ty_ref1.clone())
             } else {
@@ -655,7 +656,7 @@ mod test {
             EMPTY_SPAN,
             "cons1".into(),
             Some(Box::new([record::PolyParam::TVar(
-                record::Variance::Covariant,
+                Variance::Covariant,
                 tvar1.clone(),
             )])),
             Box::new([record::Field::new(
@@ -668,8 +669,8 @@ mod test {
             EMPTY_SPAN,
             "cons2".into(),
             Some(Box::new([
-                record::PolyParam::TVar(record::Variance::Covariant, tvar1.clone()),
-                record::PolyParam::TVar(record::Variance::Contravariant, tvar2.clone()),
+                record::PolyParam::TVar(Variance::Covariant, tvar1.clone()),
+                record::PolyParam::TVar(Variance::Contravariant, tvar2.clone()),
             ])),
             Box::new([
                 record::Field::new("cons2-covariant".into(), tvar1.clone().into()),

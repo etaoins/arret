@@ -1,6 +1,6 @@
 use crate::ty;
 use crate::ty::purity::Purity;
-use crate::ty::record;
+use crate::ty::var_usage::Variance;
 
 fn ty_has_subtypes<M: ty::PM>(ty: &ty::Ty<M>) -> bool {
     match ty {
@@ -40,7 +40,7 @@ fn ty_has_subtypes<M: ty::PM>(ty: &ty::Ty<M>) -> bool {
             .cons()
             .poly_params()
             .iter()
-            .any(|poly_param| poly_param.variance() != record::Variance::Invariant),
+            .any(|poly_param| poly_param.variance() != Variance::Invariant),
 
         ty::Ty::Vectorof(_) => {
             // Any arbitrary fixed length vector is a subtype of this vector
@@ -185,7 +185,7 @@ mod test {
             EMPTY_SPAN,
             "record_cons".into(),
             Some(Box::new([record::PolyParam::TVar(
-                record::Variance::Covariant,
+                Variance::Covariant,
                 tvar.clone(),
             )])),
             Box::new([record::Field::new("num".into(), tvar.into())]),

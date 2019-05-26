@@ -6,6 +6,7 @@ use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
 use crate::ty::ty_args::TyArgs;
+use crate::ty::var_usage::Variance;
 
 /// Record field of a record constructor
 #[derive(PartialEq, Debug, Clone)]
@@ -31,21 +32,6 @@ impl Field {
     pub fn ty_ref(&self) -> &ty::Ref<ty::Poly> {
         &self.ty_ref
     }
-}
-
-/// Indicates the variance of a record constructor's polymorphic parameter
-///
-/// By default variables are covariant. Whenever a variable appears inside a function's parameter
-/// list it becomes contravariant, flipping again for each nested function type. If a variable
-/// appears in both a covariant and contravariant position then it becomes invariant.
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub enum Variance {
-    /// Subtypes of the record have subtypes of this variable
-    Covariant,
-    /// Subtypes of the record have supertypes of this variable
-    Contravariant,
-    /// No subtype relationship exists between records with different types of this variable
-    Invariant,
 }
 
 /// Polymorphic parameter to a record constructor

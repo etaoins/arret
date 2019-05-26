@@ -26,7 +26,7 @@
 (defrecord (Foo 1) ())
                ;^ ERROR bad polymorphic variable declaration
 
-(defrecord (Point [N Num]) (point [x Num] [y Num]))
+(defrecord (Point [N Num]) (point [x N] [y N]))
 
 (def [_ (Point Int Float)] (point 1 2.0))
        ;^^^^^^^^^^^^^^^^^ ERROR wrong argument count; expected 1
@@ -51,3 +51,9 @@
 
 (defrecord (AnonymousPolyParam [_ Int]) (_))
                                ;^ ERROR polymorphic parameters must have a name
+
+(defrecord (UnusedPolyPurityParam [->_ ->!]) (_))
+                                 ;^^^^^^^^^ ERROR unused polymorphic purity parameter `->_`
+
+(defrecord (UnusedPolyTyParam [A Num]) (_))
+                             ;^^^^^^^ ERROR unused polymorphic type parameter `A`
