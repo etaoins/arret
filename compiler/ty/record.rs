@@ -86,7 +86,7 @@ impl PolyParam {
 pub struct Cons {
     span: Span,
     name: DataStr,
-    poly_params: Box<[PolyParam]>,
+    poly_params_list: Option<Box<[PolyParam]>>,
     fields: Box<[Field]>,
 }
 
@@ -94,13 +94,13 @@ impl Cons {
     pub fn new(
         span: Span,
         name: DataStr,
-        poly_params: Box<[PolyParam]>,
+        poly_params_list: Option<Box<[PolyParam]>>,
         fields: Box<[Field]>,
     ) -> ConsId {
         ConsId::new(Self {
             span,
             name,
-            poly_params,
+            poly_params_list,
             fields,
         })
     }
@@ -120,7 +120,17 @@ impl Cons {
 
     /// Returns the polymorphic parameters this constructor accepts
     pub fn poly_params(&self) -> &[PolyParam] {
-        &self.poly_params
+        match self.poly_params_list {
+            Some(ref poly_params) => poly_params.as_ref(),
+            None => &[],
+        }
+    }
+
+    /// Returns true if the constructor was declared as a singleton
+    ///
+    /// This has no effect on the type system; it's only used to accurately print the type.
+    pub fn is_singleton(&self) -> bool {
+        self.poly_params_list.is_none()
     }
 
     /// Returns an ordered list of fields of every record type instance

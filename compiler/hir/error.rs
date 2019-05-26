@@ -46,12 +46,13 @@ pub enum ErrorKind {
     ExpectedImportFilterKeyword(&'static str),
     ExpectedImportRenameMap(&'static str),
     ExpectedRecordTyConsDecl(&'static str),
-    ExpectedRecordFieldList(&'static str),
+    ExpectedRecordValueConsDecl(&'static str),
     ExpectedRecordFieldDecl(&'static str),
     UnboundIdent(DataStr),
     WrongArgCount(usize),
     WrongCondArgCount,
     WrongDefLikeArgCount(&'static str),
+    WrongDefRecordArgCount,
     NoMainFun,
     DefOutsideBody,
     ExportOutsideModule,
@@ -225,12 +226,11 @@ impl From<Error> for Diagnostic {
                     .with_message("expected symbol or polymorphic constructor list"),
             ),
 
-            ErrorKind::ExpectedRecordFieldList(found) => {
-                Diagnostic::new_error(format!("expected record field list, found {}", found))
-                    .with_label(
-                        Label::new_primary(origin).with_message("expected record field list"),
-                    )
-            }
+            ErrorKind::ExpectedRecordValueConsDecl(found) => Diagnostic::new_error(format!(
+                "expected record value constructor declaration, found {}",
+                found
+            ))
+            .with_label(Label::new_primary(origin).with_message("expected record field list")),
 
             ErrorKind::ExpectedRecordFieldDecl(found) => Diagnostic::new_error(format!(
                 "expected record field declaration, found {}",
@@ -275,6 +275,13 @@ impl From<Error> for Diagnostic {
                 Diagnostic::new_error("wrong argument count; expected 2").with_label(
                     Label::new_primary(origin)
                         .with_message(format!("expected `({} name definition)`", name)),
+                )
+            }
+
+            ErrorKind::WrongDefRecordArgCount => {
+                Diagnostic::new_error("wrong argument count; expected 2").with_label(
+                    Label::new_primary(origin)
+                        .with_message("expected `(defrecord ty-cons-decl value-cons-decl)`"),
                 )
             }
 

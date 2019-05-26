@@ -20,8 +20,8 @@ pub enum Binding {
     TyCons(types::TyCons),
     TyPred(ty::pred::TestTy),
     EqPred,
-    // This works as both a type constructor and value constructor depending on the context it's used
-    RecordCons(record::ConsId),
+    RecordValueCons(record::ConsId),
+    RecordTyCons(record::ConsId),
     Purity(purity::Ref),
 }
 
@@ -33,7 +33,8 @@ impl Binding {
             Binding::Macro(_) => "macro",
             Binding::Ty(_) => "type",
             Binding::TyCons(_) => "type constructor",
-            Binding::RecordCons(_) => "record constructor",
+            Binding::RecordValueCons(_) => "record value constructor",
+            Binding::RecordTyCons(_) => "record type constructor",
             Binding::Purity(_) => "purity",
         }
     }

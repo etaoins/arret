@@ -6,30 +6,36 @@
           ;^^^^^^^^ ERROR expected record type constuctor declaration, found keyword
 
 (defrecord _ [])
-            ;^^ ERROR expected record field list, found empty vector
+            ;^^ ERROR expected record value constructor declaration, found empty vector
 
-(defrecord foo (_))
-               ;^ ERROR anonymous record fields are not supported
+(defrecord _ ())
+            ;^^ ERROR expected record value constructor declaration, found empty list
 
-(defrecord foo (1))
-               ;^ ERROR expected record field declaration, found integer
+(defrecord _ (1))
+             ;^ ERROR expected symbol, found integer
 
-(defrecord foo ([]))
-               ;^^ ERROR expected record field declaration, found empty vector
+(defrecord Foo (foo _))
+                   ;^ ERROR anonymous record fields are not supported
+
+(defrecord Foo (foo 1))
+                   ;^ ERROR expected record field declaration, found integer
+
+(defrecord Foo (foo []))
+                   ;^^ ERROR expected record field declaration, found empty vector
 
 (defrecord (Foo 1) ())
                ;^ ERROR bad polymorphic variable declaration
 
-(defrecord (Point [N Num]) ([x Num] [y Num]))
+(defrecord (Point [N Num]) (point [x Num] [y Num]))
 
-(def [_ (Point Int Float)] (Point 1 2.0))
+(def [_ (Point Int Float)] (point 1 2.0))
        ;^^^^^^^^^^^^^^^^^ ERROR wrong argument count; expected 1
 
-(def [_ (Point Bool)] (Point true))
+(def [_ (Point Bool)] (point true))
               ;^^^^ ERROR mismatched types
 
 ; These polymorphic variables are actually fixed to a single type
-(defrecord (FixedPolyRecord [A Int] [->_ ->]) ([pred (A ->_ Bool)]))
+(defrecord (FixedPolyRecord [A Int] [->_ ->]) (fixed-poly-record [pred (A ->_ Bool)]))
 
 (def [_ (FixedPolyRecord Float ->)] 1)
                         ;^^^^^ ERROR mismatched types

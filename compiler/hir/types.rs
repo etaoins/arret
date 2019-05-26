@@ -308,10 +308,6 @@ fn lower_ident(scope: &Scope<'_>, span: Span, ident: &Ident) -> Result<ty::Ref<t
         Binding::Ty(ty) => Ok(ty.clone()),
         Binding::TyPred(test_ty) => Ok(ty::Ty::TyPred(test_ty.clone()).into()),
         Binding::EqPred => Ok(ty::Ty::EqPred.into()),
-        Binding::RecordCons(record_cons) if record_cons.poly_params().is_empty() => {
-            // Record constructors without parameters can be referred to by just their name
-            Ok(record::Instance::new(record_cons.clone(), TyArgs::empty()).into())
-        }
         other => Err(Error::new(span, ErrorKind::ExpectedTy(other.description()))),
     }
 }
@@ -387,8 +383,7 @@ fn lower_poly_data_iter(
             lower_literal(literal_datum)
         }
         Binding::TyCons(ty_cons) => lower_ty_cons_apply(scope, span, *ty_cons, data_iter),
-        // This acts as a type constructor in a type constructor context
-        Binding::RecordCons(record_cons) => {
+        Binding::RecordTyCons(record_cons) => {
             lower_record_ty_cons_apply(scope, span, record_cons, data_iter)
         }
         other => Err(Error::new(
@@ -694,6 +689,11 @@ fn str_for_ty<M: ty::PM>(ty: &ty::Ty<M>) -> String {
         ty::Ty::TopRecord(record_cons) => format!("({} ...)", record_cons.name()),
         ty::Ty::Record(instance) => {
             let record_cons = instance.cons();
+
+            if record_cons.is_singleton() {
+                // This is bound as its name
+                return record_cons.name().to_string();
+            }
 
             let record_parts: Vec<String> = std::iter::once(record_cons.name().to_string())
                 .chain(
@@ -1036,11 +1036,11 @@ mod test {
     }
 
     #[test]
-    fn mono_record_type() {
+    fn singleton_record_type() {
         let mono_record_cons = record::Cons::new(
             EMPTY_SPAN,
             "MonoCons".into(),
-            Box::new([]),
+            None,
             Box::new([record::Field::new("num".into(), ty::Ty::Num.into())]),
         );
 
@@ -1049,7 +1049,7 @@ mod test {
 
         let int_record_instance_ref: ty::Ref<ty::Poly> =
             record::Instance::new(mono_record_cons.clone(), TyArgs::empty()).into();
-        assert_eq!("(MonoCons)", str_for_ty_ref(&int_record_instance_ref));
+        assert_eq!("MonoCons", str_for_ty_ref(&int_record_instance_ref));
     }
 
     #[test]
@@ -1059,10 +1059,10 @@ mod test {
         let poly_record_cons = record::Cons::new(
             EMPTY_SPAN,
             "PolyCons".into(),
-            Box::new([
+            Some(Box::new([
                 record::PolyParam::Pure(EMPTY_SPAN),
                 record::PolyParam::TVar(record::Variance::Covariant, tvar.clone()),
-            ]),
+            ])),
             Box::new([record::Field::new("num".into(), tvar.clone().into())]),
         );
 

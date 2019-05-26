@@ -310,10 +310,8 @@ mod test {
     fn top_record_test_ty() {
         use crate::ty::ty_args::TyArgs;
 
-        let cons = record::Cons::new(EMPTY_SPAN, "cons".into(), Box::new([]), Box::new([]));
-
-        let other_cons =
-            record::Cons::new(EMPTY_SPAN, "other_cons".into(), Box::new([]), Box::new([]));
+        let cons = record::Cons::new(EMPTY_SPAN, "cons".into(), None, Box::new([]));
+        let other_cons = record::Cons::new(EMPTY_SPAN, "other_cons".into(), None, Box::new([]));
 
         let test_ty = TestTy::TopRecord(cons.clone());
 

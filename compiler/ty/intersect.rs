@@ -654,10 +654,10 @@ mod test {
         let cons1 = record::Cons::new(
             EMPTY_SPAN,
             "cons1".into(),
-            Box::new([record::PolyParam::TVar(
+            Some(Box::new([record::PolyParam::TVar(
                 record::Variance::Covariant,
                 tvar1.clone(),
-            )]),
+            )])),
             Box::new([record::Field::new(
                 "cons1-field1".into(),
                 tvar1.clone().into(),
@@ -667,10 +667,10 @@ mod test {
         let cons2 = record::Cons::new(
             EMPTY_SPAN,
             "cons2".into(),
-            Box::new([
+            Some(Box::new([
                 record::PolyParam::TVar(record::Variance::Covariant, tvar1.clone()),
                 record::PolyParam::TVar(record::Variance::Contravariant, tvar2.clone()),
-            ]),
+            ])),
             Box::new([
                 record::Field::new("cons2-covariant".into(), tvar1.clone().into()),
                 record::Field::new("cons2-contravariant".into(), tvar2.clone().into()),

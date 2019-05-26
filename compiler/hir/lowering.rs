@@ -50,6 +50,11 @@ pub struct LoweredProgram {
     pub main_var_id: VarId,
 }
 
+pub enum LoweredRecordCons {
+    Parameterised(Span, Ident, NsDataIter),
+    Singleton(Span, Ident),
+}
+
 struct DeferredDef {
     span: Span,
     macro_invocation_span: Option<Span>,
@@ -209,72 +214,102 @@ fn lower_record_field_decl(scope: &Scope<'_>, field_datum: NsDatum) -> Result<re
     Ok(record::Field::new(ident.into_name(), poly))
 }
 
+/// Lowers either the type or value constructor for a `(defrecord)`
+fn lower_record_cons_decl<F>(cons_datum: NsDatum, error_kind_cons: F) -> Result<LoweredRecordCons>
+where
+    F: Fn(&'static str) -> ErrorKind,
+{
+    let datum_description = cons_datum.description();
+
+    match cons_datum {
+        NsDatum::Ident(span, ident) => Ok(LoweredRecordCons::Singleton(span, ident)),
+        NsDatum::List(span, vs) => {
+            let mut param_data_iter = vs.into_vec().into_iter();
+
+            if let Some(name_datum) = param_data_iter.next() {
+                let (ident, ident_span) = expect_ident_and_span(name_datum)?;
+
+                Ok(LoweredRecordCons::Parameterised(
+                    ident_span,
+                    ident,
+                    param_data_iter,
+                ))
+            } else {
+                Err(Error::new(span, error_kind_cons(datum_description)))
+            }
+        }
+        other => Err(Error::new(other.span(), error_kind_cons(datum_description))),
+    }
+}
+
 fn lower_defrecord(
     outer_scope: &mut Scope<'_>,
     span: Span,
     mut arg_iter: NsDataIter,
 ) -> Result<()> {
-    if arg_iter.len() != 2 {
-        return Err(Error::new(
-            span,
-            ErrorKind::WrongDefLikeArgCount("defrecord"),
-        ));
-    }
+    use crate::ty::ty_args::TyArgs;
 
-    let self_datum = arg_iter.next().unwrap();
-    let self_description = self_datum.description();
+    if arg_iter.len() != 2 {
+        return Err(Error::new(span, ErrorKind::WrongDefRecordArgCount));
+    }
 
     let mut inner_scope = Scope::new_child(outer_scope);
 
-    let mut poly_params: Box<[record::PolyParam]> = Box::new([]);
-    let (ident_span, ident) = match self_datum {
-        NsDatum::Ident(span, ident) => (span, ident),
-        NsDatum::List(span, vs) => {
-            let mut param_data_iter = vs.into_vec().into_iter();
+    let ty_cons_datum = arg_iter.next().unwrap();
+    let ty_cons_decl = lower_record_cons_decl(ty_cons_datum, ErrorKind::ExpectedRecordTyConsDecl)?;
 
-            let name_datum = if let Some(name_datum) = param_data_iter.next() {
-                name_datum
-            } else {
-                return Err(Error::new(
-                    span,
-                    ErrorKind::ExpectedRecordTyConsDecl(self_description),
-                ));
-            };
-
-            let (ident, ident_span) = expect_ident_and_span(name_datum)?;
-            poly_params =
+    let (ty_ident_span, ty_ident, poly_params_list) = match ty_cons_decl {
+        LoweredRecordCons::Singleton(span, ident) => (span, ident, None),
+        LoweredRecordCons::Parameterised(span, ident, param_data_iter) => {
+            let poly_params =
                 lower_record_ty_cons_params(outer_scope, &mut inner_scope, param_data_iter)?;
 
-            (ident_span, ident)
-        }
-        other => {
-            return Err(Error::new(
-                other.span(),
-                ErrorKind::ExpectedRecordTyConsDecl(self_description),
-            ));
+            (span, ident, Some(poly_params))
         }
     };
 
-    let fields_datum = arg_iter.next().unwrap();
-    let fields_data = if let NsDatum::List(_, vs) = fields_datum {
-        vs
+    let value_cons_datum = arg_iter.next().unwrap();
+    let value_cons_decl =
+        lower_record_cons_decl(value_cons_datum, ErrorKind::ExpectedRecordValueConsDecl)?;
+
+    let fields: Box<[record::Field]>;
+    let (value_cons_ident_span, value_cons_ident) = match value_cons_decl {
+        LoweredRecordCons::Singleton(_, _) => {
+            unimplemented!("singleton record values");
+        }
+        LoweredRecordCons::Parameterised(span, ident, param_data_iter) => {
+            fields = param_data_iter
+                .map(|field_datum| lower_record_field_decl(&inner_scope, field_datum))
+                .collect::<Result<Box<_>>>()?;
+
+            (span, ident)
+        }
+    };
+
+    let record_ty_cons = record::Cons::new(span, ty_ident.name().clone(), poly_params_list, fields);
+
+    outer_scope.insert_binding(
+        value_cons_ident_span,
+        value_cons_ident,
+        Binding::RecordValueCons(record_ty_cons.clone()),
+    )?;
+
+    if record_ty_cons.is_singleton() {
+        // We were used as a singleton; bind a type
+        let record_instance = record::Instance::new(record_ty_cons.clone(), TyArgs::empty());
+
+        outer_scope.insert_binding(ty_ident_span, ty_ident, Binding::Ty(record_instance.into()))?;
     } else {
-        return Err(Error::new(
-            fields_datum.span(),
-            ErrorKind::ExpectedRecordFieldList(fields_datum.description()),
-        ));
+        // We were used as a type constructor; bind a type constructor
+        outer_scope.insert_binding(
+            ty_ident_span,
+            ty_ident,
+            Binding::RecordTyCons(record_ty_cons),
+        )?;
     };
 
-    let fields = fields_data
-        .into_vec()
-        .into_iter()
-        .map(|field_datum| lower_record_field_decl(&inner_scope, field_datum))
-        .collect::<Result<Box<_>>>()?;
-
-    let record_cons = record::Cons::new(span, ident.name().clone(), poly_params, fields);
-
-    // TODO: This does not add field accessors
-    outer_scope.insert_binding(ident_span, ident, Binding::RecordCons(record_cons))
+    // TODO: Add field accessors
+    Ok(())
 }
 
 fn lower_lettype(scope: &Scope<'_>, span: Span, arg_iter: NsDataIter) -> Result<Expr<Lowered>> {
@@ -584,8 +619,7 @@ fn lower_expr(scope: &Scope<'_>, datum: NsDatum) -> Result<Expr<Lowered>> {
             Binding::Var(id) => Ok(ExprKind::Ref(span, *id).into()),
             Binding::TyPred(test_ty) => Ok(ExprKind::TyPred(span, test_ty.clone()).into()),
             Binding::EqPred => Ok(ExprKind::EqPred(span).into()),
-            Binding::RecordCons(record_cons) => {
-                // This acts as a value in a value context
+            Binding::RecordValueCons(record_cons) => {
                 Ok(ExprKind::RecordCons(span, record_cons.clone()).into())
             }
             other => Err(Error::new(
