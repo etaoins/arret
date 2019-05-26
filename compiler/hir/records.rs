@@ -6,7 +6,7 @@ use crate::hir::ns::{NsDataIter, NsDatum};
 use crate::hir::scope::{Binding, Scope};
 use crate::hir::types::lower_poly;
 use crate::hir::types::lower_polymorphic_var_list;
-use crate::hir::util::expect_spanned_ident;
+use crate::hir::util::{expect_ident, expect_spanned_ident};
 use crate::ty;
 use crate::ty::record;
 
@@ -18,23 +18,22 @@ pub enum LoweredRecordCons {
 fn lower_record_field_decl(scope: &Scope<'_>, field_datum: NsDatum) -> Result<record::Field> {
     let datum_description = field_datum.description();
 
-    let (ident_span, ident, poly) = match field_datum {
-        NsDatum::Ident(span, ident) => (span, ident, ty::Ty::Any.into()),
-        NsDatum::Vector(vector_span, vs) => {
+    let (ident, poly) = match field_datum {
+        NsDatum::Ident(_, ident) => (ident, ty::Ty::Any.into()),
+        NsDatum::Vector(span, vs) => {
             let mut data = vs.into_vec();
 
             if data.len() != 2 {
                 return Err(Error::new(
-                    vector_span,
+                    span,
                     ErrorKind::ExpectedRecordFieldDecl(datum_description),
                 ));
             }
 
             let poly = lower_poly(scope, data.pop().unwrap())?;
-            let (ident_span, ident) =
-                expect_spanned_ident(data.pop().unwrap(), "new record field name")?;
+            let ident = expect_ident(data.pop().unwrap(), "new record field name")?;
 
-            (ident_span, ident, poly)
+            (ident, poly)
         }
         other => {
             return Err(Error::new(
@@ -43,10 +42,6 @@ fn lower_record_field_decl(scope: &Scope<'_>, field_datum: NsDatum) -> Result<re
             ));
         }
     };
-
-    if ident.is_underscore() {
-        return Err(Error::new(ident_span, ErrorKind::AnonymousRecordField));
-    }
 
     Ok(record::Field::new(ident.into_name(), poly))
 }

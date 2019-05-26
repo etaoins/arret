@@ -14,9 +14,6 @@
 (defrecord _ (1))
              ;^ ERROR expected symbol, found integer
 
-(defrecord Foo (foo _))
-                   ;^ ERROR anonymous record fields are not supported
-
 (defrecord Foo (foo 1))
                    ;^ ERROR expected record field declaration, found integer
 

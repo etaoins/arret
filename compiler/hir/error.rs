@@ -97,7 +97,6 @@ pub enum ErrorKind {
     NonFunPolyTy,
     ShortModuleName,
     AnonymousPolymorphicParam,
-    AnonymousRecordField,
     PolyArgIsNotTy(Box<PolyArgIsNotTy>),
     PolyArgIsNotPure(Box<PolyArgIsNotPure>),
     ExpectedPolyPurityArg(Box<ExpectedPolyPurityArg>),
@@ -524,11 +523,6 @@ impl From<Error> for Diagnostic {
                     Label::new_primary(origin).with_message("expected polymorphic parameter name"),
                 )
             }
-
-            ErrorKind::AnonymousRecordField => Diagnostic::new_error(
-                "anonymous record fields are not supported",
-            )
-            .with_label(Label::new_primary(origin).with_message("expected record field name")),
 
             ErrorKind::PolyArgIsNotTy(boxed_details) => {
                 let PolyArgIsNotTy {
