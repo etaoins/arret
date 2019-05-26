@@ -15,7 +15,7 @@ use crate::ty::record;
 use crate::CompileCtx;
 
 use crate::hir::destruc;
-use crate::hir::error::{Error, ErrorKind, Result};
+use crate::hir::error::{Error, ErrorKind, ExpectedSym, Result};
 use crate::hir::exports::Exports;
 use crate::hir::import::lower_import_set;
 use crate::hir::loader::{load_module_by_name, LoadedModule, ModuleName};
@@ -26,7 +26,7 @@ use crate::hir::scope::{Binding, Scope};
 use crate::hir::types::{
     lower_poly, lower_polymorphic_var_set, lower_record_ty_cons_params, try_lower_purity,
 };
-use crate::hir::util::{expect_ident_and_span, expect_one_arg, try_take_rest_arg};
+use crate::hir::util::{expect_one_arg, expect_spanned_ident, try_take_rest_arg};
 use crate::hir::Lowered;
 use crate::hir::{App, Cond, DeclPurity, DeclTy, Def, Expr, ExprKind, Fun, Let, VarId};
 
@@ -106,7 +106,7 @@ fn lower_macro(
     self_datum: NsDatum,
     transformer_spec: NsDatum,
 ) -> Result<()> {
-    let (self_ident, self_span) = expect_ident_and_span(self_datum)?;
+    let (self_span, self_ident) = expect_spanned_ident(self_datum, "new macro name")?;
 
     let macro_rules_data = if let NsDatum::List(span, vs) = transformer_spec {
         let mut transformer_data = vs.into_vec();
@@ -155,7 +155,7 @@ fn lower_letmacro(scope: &Scope<'_>, span: Span, arg_iter: NsDataIter) -> Result
 }
 
 fn lower_type(scope: &mut Scope<'_>, self_datum: NsDatum, ty_datum: NsDatum) -> Result<()> {
-    let (ident, span) = expect_ident_and_span(self_datum)?;
+    let (span, ident) = expect_spanned_ident(self_datum, "new type name")?;
     let ty = lower_poly(scope, ty_datum)?;
 
     scope.insert_binding(span, ident, Binding::Ty(ty))?;
@@ -189,7 +189,8 @@ fn lower_record_field_decl(scope: &Scope<'_>, field_datum: NsDatum) -> Result<re
             }
 
             let poly = lower_poly(scope, data.pop().unwrap())?;
-            let (ident, ident_span) = expect_ident_and_span(data.pop().unwrap())?;
+            let (ident_span, ident) =
+                expect_spanned_ident(data.pop().unwrap(), "new record field name")?;
 
             (ident_span, ident, poly)
         }
@@ -221,7 +222,8 @@ where
             let mut param_data_iter = vs.into_vec().into_iter();
 
             if let Some(name_datum) = param_data_iter.next() {
-                let (ident, ident_span) = expect_ident_and_span(name_datum)?;
+                let (ident_span, ident) =
+                    expect_spanned_ident(name_datum, "new record constructor name")?;
 
                 Ok(LoweredRecordCons::Parameterised(
                     ident_span,
@@ -343,7 +345,7 @@ fn lower_scalar_destruc(
 
             let ty = lower_poly(scope, data.pop().unwrap())?;
 
-            let (ident, span) = expect_ident_and_span(data.pop().unwrap())?;
+            let (span, ident) = expect_spanned_ident(data.pop().unwrap(), "new variable name")?;
             lower_ident_destruc(scope, span, ident, ty.into())
         }
         _ => Err(Error::new(destruc_datum.span(), ErrorKind::BadRestDestruc)),
@@ -381,7 +383,16 @@ fn lower_destruc(
         NsDatum::List(span, vs) => lower_list_destruc(scope, vs.into_vec().into_iter())
             .map(|list_destruc| destruc::Destruc::List(span, list_destruc)),
 
-        NsDatum::Keyword(span, _) => Err(Error::new(span, ErrorKind::ExpectedSym("keyword"))),
+        NsDatum::Keyword(span, _) => Err(Error::new(
+            span,
+            ErrorKind::ExpectedSym(
+                ExpectedSym {
+                    found: "keyword",
+                    usage: "new variable name",
+                }
+                .into(),
+            ),
+        )),
         _ => Err(Error::new(destruc_datum.span(), ErrorKind::BadListDestruc)),
     }
 }
@@ -774,7 +785,7 @@ impl<'ccx> LoweringCtx<'ccx> {
             Prim::Export => {
                 let deferred_exports = arg_iter
                     .map(|datum| {
-                        let (ident, span) = expect_ident_and_span(datum)?;
+                        let (span, ident) = expect_spanned_ident(datum, "identifier to export")?;
                         Ok(DeferredExport { span, ident })
                     })
                     .collect::<Result<Vec<DeferredExport>>>()?;

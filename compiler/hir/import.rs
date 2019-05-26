@@ -7,7 +7,7 @@ use crate::hir::error::{Error, ErrorKind};
 use crate::hir::exports::Exports;
 use crate::hir::loader::ModuleName;
 use crate::hir::ns::{Ident, NsDataIter, NsDatum};
-use crate::hir::util::{expect_ident, expect_ident_and_span};
+use crate::hir::util::{expect_ident, expect_spanned_ident};
 
 type Result<T> = result::Result<T, Vec<Error>>;
 
@@ -38,7 +38,7 @@ where
     fn lower_module_import(&mut self, span: Span, name_data: Vec<NsDatum>) -> Result<FilterInput> {
         let mut name_idents = name_data
             .into_iter()
-            .map(|datum| expect_ident(datum).map(Ident::into_name));
+            .map(|datum| expect_ident(datum, "module name component").map(Ident::into_name));
 
         let package_name = name_idents.next().unwrap()?;
         let terminal_name = name_idents.next_back().unwrap()?;
@@ -66,7 +66,8 @@ where
                 let inner_exports = filter_input.exports;
                 let only_exports = arg_iter
                     .map(|arg_datum| {
-                        let (ident, span) = expect_ident_and_span(arg_datum)?;
+                        let (span, ident) =
+                            expect_spanned_ident(arg_datum, "identifier to include")?;
 
                         if let Some(binding) = inner_exports.get(ident.name()) {
                             Ok((ident.into_name(), binding.clone()))
@@ -86,7 +87,7 @@ where
                 let mut errors = vec![];
 
                 for arg_datum in arg_iter {
-                    let (ident, span) = expect_ident_and_span(arg_datum)?;
+                    let (span, ident) = expect_spanned_ident(arg_datum, "identifier to exclude")?;
 
                     if exclude_exports.remove(ident.name()).is_none() {
                         errors.push(Error::new(span, ErrorKind::UnboundIdent(ident.into_name())));
@@ -113,8 +114,9 @@ where
                     let mut errors = vec![];
 
                     for (from_datum, to_datum) in vs.into_vec() {
-                        let (from_ident, from_span) = expect_ident_and_span(from_datum)?;
-                        let to_ident = expect_ident(to_datum)?;
+                        let (from_span, from_ident) =
+                            expect_spanned_ident(from_datum, "identifier to rename from")?;
+                        let to_ident = expect_ident(to_datum, "identifier to rename to")?;
 
                         match rename_exports.remove(from_ident.name()) {
                             Some(binding) => {
@@ -150,7 +152,7 @@ where
                 }
 
                 let prefix_datum = arg_iter.next().unwrap();
-                let prefix_ident = expect_ident(prefix_datum)?;
+                let prefix_ident = expect_ident(prefix_datum, "identifier prefix")?;
 
                 let prefix_exports = filter_input
                     .exports

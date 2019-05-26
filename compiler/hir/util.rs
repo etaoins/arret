@@ -1,4 +1,4 @@
-use crate::hir::error::{Error, ErrorKind, Result};
+use crate::hir::error::{Error, ErrorKind, ExpectedSym, Result};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum};
 use arret_syntax::span::Span;
 
@@ -44,17 +44,23 @@ pub fn expect_one_arg(span: Span, mut iter: NsDataIter) -> Result<NsDatum> {
     Ok(iter.next().unwrap())
 }
 
-pub fn expect_ident_and_span(datum: NsDatum) -> Result<(Ident, Span)> {
+pub fn expect_spanned_ident(datum: NsDatum, usage: &'static str) -> Result<(Span, Ident)> {
     if let NsDatum::Ident(span, ident) = datum {
-        Ok((ident, span))
+        Ok((span, ident))
     } else {
         Err(Error::new(
             datum.span(),
-            ErrorKind::ExpectedSym(datum.description()),
+            ErrorKind::ExpectedSym(
+                ExpectedSym {
+                    found: datum.description(),
+                    usage,
+                }
+                .into(),
+            ),
         ))
     }
 }
 
-pub fn expect_ident(datum: NsDatum) -> Result<Ident> {
-    expect_ident_and_span(datum).map(|(ident, _)| ident)
+pub fn expect_ident(datum: NsDatum, usage: &'static str) -> Result<Ident> {
+    expect_spanned_ident(datum, usage).map(|(_, ident)| ident)
 }

@@ -12,6 +12,12 @@ use crate::ty;
 use crate::ty::purity;
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct ExpectedSym {
+    pub found: &'static str,
+    pub usage: &'static str,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct PolyArgIsNotTy {
     pub arg_type: ty::Ref<ty::Poly>,
     pub param_bound: ty::Ref<ty::Poly>,
@@ -35,7 +41,6 @@ pub enum ErrorKind {
     ExpectedValue(&'static str),
     ExpectedTy(&'static str),
     ExpectedTyCons(&'static str),
-    ExpectedSym(&'static str),
     ExpectedParamList(&'static str),
     ExpectedPolyVarsDecl(&'static str),
     ExpectedMacroSpecList(&'static str),
@@ -48,6 +53,7 @@ pub enum ErrorKind {
     ExpectedRecordTyConsDecl(&'static str),
     ExpectedRecordValueConsDecl(&'static str),
     ExpectedRecordFieldDecl(&'static str),
+    ExpectedSym(Box<ExpectedSym>),
     UnboundIdent(DataStr),
     WrongArgCount(usize),
     WrongCondArgCount,
@@ -155,9 +161,12 @@ impl From<Error> for Diagnostic {
                     )
             }
 
-            ErrorKind::ExpectedSym(found) => {
-                Diagnostic::new_error(format!("expected symbol, found {}", found))
-                    .with_label(Label::new_primary(origin).with_message("expected symbol"))
+            ErrorKind::ExpectedSym(details) => {
+                let ExpectedSym { found, usage } = *details;
+
+                Diagnostic::new_error(format!("expected symbol, found {}", found)).with_label(
+                    Label::new_primary(origin).with_message(format!("expected {}", usage)),
+                )
             }
 
             ErrorKind::ExpectedParamList(found) => Diagnostic::new_error(format!(
