@@ -90,6 +90,7 @@ pub enum ErrorKind {
     BadImportSet,
     NonFunPolyTy,
     ShortModuleName,
+    AnonymousPolymorphicParam,
     AnonymousRecordField,
     PolyArgIsNotTy(Box<PolyArgIsNotTy>),
     PolyArgIsNotPure(Box<PolyArgIsNotPure>),
@@ -504,6 +505,12 @@ impl From<Error> for Diagnostic {
             ErrorKind::ShortModuleName => {
                 Diagnostic::new_error("module name requires a least two components").with_label(
                     Label::new_primary(origin).with_message("expected vector of 2 or more symbols"),
+                )
+            }
+
+            ErrorKind::AnonymousPolymorphicParam => {
+                Diagnostic::new_error("polymorphic parameters must have a name").with_label(
+                    Label::new_primary(origin).with_message("expected polymorphic parameter name"),
                 )
             }
 

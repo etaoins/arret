@@ -48,3 +48,6 @@
 
 (def [_ (FixedPolyRecord Int [])] 1)
                             ;^^ ERROR empty vector cannot be used as a purity
+
+(defrecord (AnonymousPolyParam [_ Int]) (_))
+                               ;^ ERROR polymorphic parameters must have a name

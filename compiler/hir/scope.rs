@@ -169,7 +169,7 @@ impl<'parent> Scope<'parent> {
 
         self.entries.reserve(new_bindings.size_hint().0);
 
-        for (ident, binding) in new_bindings {
+        for (ident, binding) in new_bindings.filter(|b| !b.0.is_underscore()) {
             let entry = SpannedBinding {
                 span: Some(span),
                 binding,

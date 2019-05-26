@@ -131,10 +131,7 @@ fn lower_macro(
     };
 
     let mac = lower_macro_rules(scope, &self_ident, macro_rules_data)?;
-
-    if !self_ident.is_underscore() {
-        scope.insert_binding(self_span, self_ident, Binding::Macro(mac))?;
-    }
+    scope.insert_binding(self_span, self_ident, Binding::Macro(mac))?;
 
     Ok(())
 }
@@ -161,10 +158,7 @@ fn lower_type(scope: &mut Scope<'_>, self_datum: NsDatum, ty_datum: NsDatum) -> 
     let (ident, span) = expect_ident_and_span(self_datum)?;
     let ty = lower_poly(scope, ty_datum)?;
 
-    if !ident.is_underscore() {
-        scope.insert_binding(span, ident, Binding::Ty(ty))?;
-    }
-
+    scope.insert_binding(span, ident, Binding::Ty(ty))?;
     Ok(())
 }
 

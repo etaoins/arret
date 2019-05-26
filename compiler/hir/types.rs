@@ -44,6 +44,10 @@ fn lower_polymorphic_var(scope: &Scope<'_>, tvar_datum: NsDatum) -> Result<Lower
 
     match tvar_datum {
         NsDatum::Ident(span, ident) => {
+            if ident.is_underscore() {
+                return Err(Error::new(span, ErrorKind::AnonymousPolymorphicParam));
+            }
+
             let source_name = ident.name().clone();
             return Ok(LoweredPolymorphicVar {
                 ident,
@@ -61,8 +65,11 @@ fn lower_polymorphic_var(scope: &Scope<'_>, tvar_datum: NsDatum) -> Result<Lower
                 let bound_datum = arg_data.pop().unwrap();
                 let (ident, span) = expect_ident_and_span(arg_data.pop().unwrap())?;
 
-                let source_name = ident.name().clone();
+                if ident.is_underscore() {
+                    return Err(Error::new(span, ErrorKind::AnonymousPolymorphicParam));
+                }
 
+                let source_name = ident.name().clone();
                 match try_lower_purity(scope, &bound_datum) {
                     Some(purity::Ref::Fixed(Purity::Impure)) => {
                         return Ok(LoweredPolymorphicVar {
