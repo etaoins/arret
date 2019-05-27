@@ -1,4 +1,5 @@
 use crate::ty;
+use crate::ty::Ty;
 
 /// Iterates through the member types of a list
 #[derive(Clone)]
@@ -17,7 +18,7 @@ impl<'list, M: ty::PM> ListIterator<'list, M> {
 
     pub fn try_new_from_ty_ref(ty_ref: &'list ty::Ref<M>) -> Option<ListIterator<'list, M>> {
         match ty_ref.try_to_fixed() {
-            Some(ty::Ty::List(list)) => Some(Self::new(list)),
+            Some(Ty::List(list)) => Some(Self::new(list)),
             _ => None,
         }
     }

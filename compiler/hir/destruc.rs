@@ -3,6 +3,7 @@ use arret_syntax::span::Span;
 
 use crate::hir;
 use crate::ty;
+use crate::ty::Ty;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Destruc<P: hir::Phase> {
@@ -116,7 +117,7 @@ pub fn poly_for_list_destruc(list: &List<hir::Inferred>) -> ty::List<ty::Poly> {
 
     let rest_poly = match list.rest() {
         Some(rest) => rest.ty().clone(),
-        None => ty::Ty::never().into(),
+        None => Ty::never().into(),
     };
 
     ty::List::new(fixed_polys, rest_poly)

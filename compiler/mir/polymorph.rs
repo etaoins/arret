@@ -6,6 +6,7 @@ use arret_runtime::callback;
 use crate::mir::ops;
 use crate::mir::value::Value;
 use crate::ty;
+use crate::ty::Ty;
 
 /// PolymorphABI annotates OpsABI with information about if a function expects a closure or rest
 ///
@@ -66,7 +67,7 @@ impl PolymorphABI {
             Some(other) => {
                 panic!("cannot determine member type for ABI rest list {:?}", other);
             }
-            None => ty::Ty::never().into(),
+            None => Ty::never().into(),
         };
 
         // If our rest type uses a Pair this can have fixed members

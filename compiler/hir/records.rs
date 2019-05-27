@@ -7,8 +7,8 @@ use crate::hir::scope::{Binding, Scope};
 use crate::hir::types::lower_poly;
 use crate::hir::types::lower_polymorphic_var_list;
 use crate::hir::util::{expect_ident, expect_spanned_ident};
-use crate::ty;
 use crate::ty::record;
+use crate::ty::Ty;
 
 pub enum LoweredRecordCons {
     Parameterised(Span, Ident, NsDataIter),
@@ -19,7 +19,7 @@ fn lower_record_field_decl(scope: &Scope<'_>, field_datum: NsDatum) -> Result<re
     let datum_description = field_datum.description();
 
     let (ident, poly) = match field_datum {
-        NsDatum::Ident(_, ident) => (ident, ty::Ty::Any.into()),
+        NsDatum::Ident(_, ident) => (ident, Ty::Any.into()),
         NsDatum::Vector(span, vs) => {
             let mut data = vs.into_vec();
 

@@ -2,6 +2,7 @@ use crate::hir;
 use crate::hir::destruc;
 use crate::ty;
 use crate::ty::list_iter::ListIterator;
+use crate::ty::Ty;
 
 pub fn type_for_decl_list_destruc(
     list: &destruc::List<hir::Lowered>,
@@ -26,9 +27,9 @@ pub fn type_for_decl_list_destruc(
             hir::DeclTy::Known(poly) => poly.clone(),
             hir::DeclTy::Free => guide_type_iter
                 .map(ListIterator::collect_rest)
-                .unwrap_or_else(|| ty::Ty::Any.into()),
+                .unwrap_or_else(|| Ty::Any.into()),
         },
-        None => ty::Ty::never().into(),
+        None => Ty::never().into(),
     };
 
     ty::List::new(fixed_polys, rest_poly)
@@ -42,7 +43,7 @@ pub fn type_for_decl_destruc(
     match destruc {
         destruc::Destruc::Scalar(_, scalar) => match scalar.ty() {
             hir::DeclTy::Known(poly) => poly.clone(),
-            hir::DeclTy::Free => guide_type.cloned().unwrap_or_else(|| ty::Ty::Any.into()),
+            hir::DeclTy::Free => guide_type.cloned().unwrap_or_else(|| Ty::Any.into()),
         },
 
         destruc::Destruc::List(_, list) => {

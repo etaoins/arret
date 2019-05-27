@@ -11,6 +11,7 @@ use crate::rfi;
 use crate::source::SourceFile;
 use crate::ty;
 use crate::ty::purity;
+use crate::ty::Ty;
 use crate::CompileCtx;
 
 use crate::hir::destruc;
@@ -591,7 +592,7 @@ impl<'ccx> LoweringCtx<'ccx> {
                     destruc::Scalar::new(
                         Some(var_id),
                         fun_name_data_str.clone(),
-                        ty::Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into(),
+                        Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into(),
                     ),
                 ),
                 value_expr: ExprKind::RustFun(Box::new(rust_fun.clone())).into(),
@@ -1067,7 +1068,7 @@ mod test {
             tvars: ty::TVars::new(),
             purity: Purity::Pure.into(),
             params: destruc::List::new(vec![], None),
-            ret_ty: ty::Ty::Int.into(),
+            ret_ty: Ty::Int.into(),
             body_expr: Datum::Int(t2s(u), 1).into(),
         }))
         .into();

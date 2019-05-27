@@ -8,6 +8,7 @@ use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
 use crate::ty::ty_args::TyArgs;
+use crate::ty::Ty;
 
 fn new_eq_pred_arret_fun() -> value::ArretFun {
     let left_var_id = hir::VarId::alloc();
@@ -18,7 +19,7 @@ fn new_eq_pred_arret_fun() -> value::ArretFun {
         .map(|(name, var_id)| {
             hir::destruc::Destruc::Scalar(
                 EMPTY_SPAN,
-                hir::destruc::Scalar::new(Some(*var_id), (*name).into(), ty::Ty::Any.into()),
+                hir::destruc::Scalar::new(Some(*var_id), (*name).into(), Ty::Any.into()),
             )
         })
         .collect();
@@ -35,24 +36,24 @@ fn new_eq_pred_arret_fun() -> value::ArretFun {
 
             purity: Purity::Pure.into(),
             params: hir::destruc::List::new(fixed_params, None),
-            ret_ty: ty::Ty::Bool.into(),
+            ret_ty: Ty::Bool.into(),
 
             body_expr: hir::Expr {
-                result_ty: ty::Ty::Bool.into(),
+                result_ty: Ty::Bool.into(),
                 kind: hir::ExprKind::App(Box::new(hir::App {
                     span: EMPTY_SPAN,
                     fun_expr: hir::Expr {
-                        result_ty: ty::Ty::EqPred.into(),
+                        result_ty: Ty::EqPred.into(),
                         kind: hir::ExprKind::EqPred(EMPTY_SPAN),
                     },
                     ty_args: TyArgs::empty(),
                     fixed_arg_exprs: vec![
                         hir::Expr {
-                            result_ty: ty::Ty::Any.into(),
+                            result_ty: Ty::Any.into(),
                             kind: hir::ExprKind::Ref(EMPTY_SPAN, left_var_id),
                         },
                         hir::Expr {
-                            result_ty: ty::Ty::Any.into(),
+                            result_ty: Ty::Any.into(),
                             kind: hir::ExprKind::Ref(EMPTY_SPAN, right_var_id),
                         },
                     ],
@@ -83,24 +84,24 @@ fn new_ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
                     hir::destruc::Scalar::new(
                         Some(subject_var_id),
                         "subject".into(),
-                        ty::Ty::Any.into(),
+                        Ty::Any.into(),
                     ),
                 )],
                 None,
             ),
-            ret_ty: ty::Ty::Bool.into(),
+            ret_ty: Ty::Bool.into(),
 
             body_expr: hir::Expr {
-                result_ty: ty::Ty::Bool.into(),
+                result_ty: Ty::Bool.into(),
                 kind: hir::ExprKind::App(Box::new(hir::App {
                     span: EMPTY_SPAN,
                     fun_expr: hir::Expr {
-                        result_ty: ty::Ty::TyPred(test_ty.clone()).into(),
+                        result_ty: Ty::TyPred(test_ty.clone()).into(),
                         kind: hir::ExprKind::TyPred(EMPTY_SPAN, test_ty),
                     },
                     ty_args: TyArgs::empty(),
                     fixed_arg_exprs: vec![hir::Expr {
-                        result_ty: ty::Ty::Any.into(),
+                        result_ty: Ty::Any.into(),
                         kind: hir::ExprKind::Ref(EMPTY_SPAN, subject_var_id),
                     }],
                     rest_arg_expr: None,

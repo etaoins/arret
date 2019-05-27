@@ -1,4 +1,5 @@
 use crate::ty;
+use crate::ty::Ty;
 
 fn subtract_ref_iters<'a, I, M>(minuend_iter: I, subtrahend_ref: &ty::Ref<M>) -> ty::Ref<M>
 where
@@ -11,29 +12,29 @@ where
 }
 
 fn subtract_tys<M: ty::PM>(
-    minuend_ty: &ty::Ty<M>,
+    minuend_ty: &Ty<M>,
     subtrahend_ref: &ty::Ref<M>,
-    subtrahend_ty: &ty::Ty<M>,
+    subtrahend_ty: &Ty<M>,
 ) -> ty::Ref<M> {
     match (minuend_ty, subtrahend_ty) {
-        (ty::Ty::Bool, _) => subtract_ref_iters(
+        (Ty::Bool, _) => subtract_ref_iters(
             [
-                ty::Ty::LitBool(false).into(),
-                ty::Ty::LitBool(true).into(),
+                Ty::LitBool(false).into(),
+                Ty::LitBool(true).into(),
             ]
                 .iter(),
             subtrahend_ref,
         ),
-        (ty::Ty::Num, _) => subtract_ref_iters(
+        (Ty::Num, _) => subtract_ref_iters(
             [
-                ty::Ty::Int.into(),
-                ty::Ty::Float.into(),
+                Ty::Int.into(),
+                Ty::Float.into(),
             ]
                 .iter(),
             subtrahend_ref,
         ),
-        (ty::Ty::Union(members), _) => subtract_ref_iters(members.iter(), subtrahend_ref),
-        (ty::Ty::List(minuend_list), ty::Ty::List(subtrahend_list))
+        (Ty::Union(members), _) => subtract_ref_iters(members.iter(), subtrahend_ref),
+        (Ty::List(minuend_list), Ty::List(subtrahend_list))
             // Make sure this is even useful or else we can recurse splitting list types
             // indefinitely
             if subtrahend_list.rest().is_never() && minuend_list.fixed().len() == subtrahend_list.fixed().len() =>
@@ -43,7 +44,7 @@ fn subtract_tys<M: ty::PM>(
             if !minued_rest.is_never() {
                 // This is the list type if we have no rest elements
                 let terminated_list =
-                    ty::List::new(minuend_list.fixed().to_vec().into_boxed_slice(), ty::Ty::never().into());
+                    ty::List::new(minuend_list.fixed().to_vec().into_boxed_slice(), Ty::never().into());
 
                 // This is the list type if we have at least one rest element
                 let mut continued_fixed = minuend_list.fixed().to_vec();
@@ -74,7 +75,7 @@ pub fn subtract_ty_refs<M: ty::PM>(
 
     if ty::is_a::ty_ref_is_a(minuend_ref, subtrahend_ref) {
         // No type remains
-        ty::Ty::Union(Box::new([])).into()
+        Ty::Union(Box::new([])).into()
     } else {
         match (minuend_ref, subtrahend_ref) {
             (ty::Ref::Fixed(minuend_ty), ty::Ref::Fixed(subtrahend_ty)) => {
@@ -152,9 +153,9 @@ mod test {
 
     #[test]
     fn poly_substraction() {
-        let ptype1_unbounded = tvar_bounded_by(ty::Ty::Any.into());
-        let ptype2_sym = tvar_bounded_by(ty::Ty::Sym.into());
-        let ptype3_num = tvar_bounded_by(ty::Ty::Num.into());
+        let ptype1_unbounded = tvar_bounded_by(Ty::Any.into());
+        let ptype2_sym = tvar_bounded_by(Ty::Sym.into());
+        let ptype3_num = tvar_bounded_by(Ty::Num.into());
 
         let any_float = poly_for_str("Float");
         let any_int = poly_for_str("Int");
@@ -171,7 +172,7 @@ mod test {
 
         // [PType3 Num] - Float = (∩ PType3 Int)
         let ptype3_int_intersect: ty::Ref<ty::Poly> =
-            ty::Ty::Intersect(Box::new([ptype3_num.clone(), any_int])).into();
+            Ty::Intersect(Box::new([ptype3_num.clone(), any_int])).into();
 
         assert_eq!(
             ptype3_int_intersect,
@@ -181,7 +182,7 @@ mod test {
 
     #[test]
     fn poly_record_type() {
-        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into());
+        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), Ty::Any.into());
 
         // Polymorphic record constructor and top type
         let poly_record_cons = record::Cons::new(
@@ -198,7 +199,7 @@ mod test {
 
         // Instance parameterised with an `Int`
         let mut int_tvars = HashMap::new();
-        int_tvars.insert(tvar.clone(), ty::Ty::Int.into());
+        int_tvars.insert(tvar.clone(), Ty::Int.into());
         let int_ty_args = TyArgs::new(HashMap::new(), int_tvars);
 
         let int_instance_ref: ty::Ref<ty::Poly> =
@@ -211,7 +212,7 @@ mod test {
         );
 
         // Instance minus the top record is nothing
-        let never_ref: ty::Ref<ty::Poly> = ty::Ty::never().into();
+        let never_ref: ty::Ref<ty::Poly> = Ty::never().into();
         assert_eq!(
             never_ref,
             subtract_ty_refs(&int_instance_ref, &top_record_ref)

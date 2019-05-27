@@ -17,6 +17,7 @@ use crate::ty::purity::Purity;
 use crate::ty::record;
 use crate::ty::ty_args::TyArgs;
 use crate::ty::var_usage::Variance;
+use crate::ty::Ty;
 
 #[derive(Debug, PartialEq)]
 enum UnifiedTy<M: ty::PM> {
@@ -111,7 +112,7 @@ fn unify_fun<M: ty::PM>(fun1: &ty::Fun, fun2: &ty::Fun) -> UnifiedTy<M> {
     if fun1.has_polymorphic_vars() || fun2.has_polymorphic_vars() {
         // TODO: We could do better here by finding our upper bound and unifying them
         // Preserving the polymorphicness would be very complex
-        UnifiedTy::Merged(ty::TopFun::new(unified_purity, ty::Ty::Any.into()).into())
+        UnifiedTy::Merged(ty::TopFun::new(unified_purity, Ty::Any.into()).into())
     } else {
         let unified_ret = unify_to_ty_ref(fun1.ret(), fun2.ret());
 
@@ -242,46 +243,39 @@ fn unify_record_instance<M: ty::PM>(
 
 fn unify_ty<M: ty::PM>(
     ref1: &ty::Ref<M>,
-    ty1: &ty::Ty<M>,
+    ty1: &Ty<M>,
     ref2: &ty::Ref<M>,
-    ty2: &ty::Ty<M>,
+    ty2: &Ty<M>,
 ) -> UnifiedTy<M> {
     if ty1 == ty2 {
         return UnifiedTy::Merged(ref1.clone());
     }
     match (ty1, ty2) {
         // Handle supertype relationships
-        (_, ty::Ty::Any) | (ty::Ty::Any, _) => UnifiedTy::Merged(ty::Ty::Any.into()),
-        (ty::Ty::LitSym(_), ty::Ty::Sym) | (ty::Ty::Sym, ty::Ty::LitSym(_)) => {
-            UnifiedTy::Merged(ty::Ty::Sym.into())
+        (_, Ty::Any) | (Ty::Any, _) => UnifiedTy::Merged(Ty::Any.into()),
+        (Ty::LitSym(_), Ty::Sym) | (Ty::Sym, Ty::LitSym(_)) => UnifiedTy::Merged(Ty::Sym.into()),
+        (Ty::LitBool(_), Ty::Bool) | (Ty::Bool, Ty::LitBool(_)) => {
+            UnifiedTy::Merged(Ty::Bool.into())
         }
-        (ty::Ty::LitBool(_), ty::Ty::Bool) | (ty::Ty::Bool, ty::Ty::LitBool(_)) => {
-            UnifiedTy::Merged(ty::Ty::Bool.into())
-        }
-        (ty::Ty::Float, ty::Ty::Num) | (ty::Ty::Num, ty::Ty::Float) => {
-            UnifiedTy::Merged(ty::Ty::Num.into())
-        }
-        (ty::Ty::Int, ty::Ty::Num) | (ty::Ty::Num, ty::Ty::Int) => {
-            UnifiedTy::Merged(ty::Ty::Num.into())
-        }
+        (Ty::Float, Ty::Num) | (Ty::Num, Ty::Float) => UnifiedTy::Merged(Ty::Num.into()),
+        (Ty::Int, Ty::Num) | (Ty::Num, Ty::Int) => UnifiedTy::Merged(Ty::Num.into()),
 
         // Simplify (U true false) => Bool
-        (ty::Ty::LitBool(true), ty::Ty::LitBool(false))
-        | (ty::Ty::LitBool(false), ty::Ty::LitBool(true)) => UnifiedTy::Merged(ty::Ty::Bool.into()),
-
-        // Simplify (U Float Int) => Num
-        (ty::Ty::Float, ty::Ty::Int) | (ty::Ty::Int, ty::Ty::Float) => {
-            UnifiedTy::Merged(ty::Ty::Num.into())
+        (Ty::LitBool(true), Ty::LitBool(false)) | (Ty::LitBool(false), Ty::LitBool(true)) => {
+            UnifiedTy::Merged(Ty::Bool.into())
         }
 
+        // Simplify (U Float Int) => Num
+        (Ty::Float, Ty::Int) | (Ty::Int, Ty::Float) => UnifiedTy::Merged(Ty::Num.into()),
+
         // Set type
-        (ty::Ty::Set(ty_ref1), ty::Ty::Set(ty_ref2)) => {
+        (Ty::Set(ty_ref1), Ty::Set(ty_ref2)) => {
             let unified_ty_ref = unify_to_ty_ref(ty_ref1.as_ref(), ty_ref2.as_ref());
-            UnifiedTy::Merged(ty::Ty::Set(Box::new(unified_ty_ref)).into())
+            UnifiedTy::Merged(Ty::Set(Box::new(unified_ty_ref)).into())
         }
 
         // Map type
-        (ty::Ty::Map(map1), ty::Ty::Map(map2)) => {
+        (Ty::Map(map1), Ty::Map(map2)) => {
             let unified_key_ref = unify_to_ty_ref(map1.key(), map2.key());
             let unified_val_ref = unify_to_ty_ref(map1.value(), map2.value());
 
@@ -289,7 +283,7 @@ fn unify_ty<M: ty::PM>(
         }
 
         // Vector types
-        (ty::Ty::Vector(members1), ty::Ty::Vector(members2)) => {
+        (Ty::Vector(members1), Ty::Vector(members2)) => {
             if members1.len() != members2.len() {
                 // We can quickly check vector lengths at runtime
                 UnifiedTy::Discerned
@@ -300,69 +294,68 @@ fn unify_ty<M: ty::PM>(
                     .map(|(member1, member2)| unify_to_ty_ref(member1, member2))
                     .collect();
 
-                UnifiedTy::Merged(ty::Ty::Vector(unified_members).into())
+                UnifiedTy::Merged(Ty::Vector(unified_members).into())
             }
         }
-        (ty::Ty::Vectorof(member1), ty::Ty::Vectorof(member2)) => UnifiedTy::Merged(
-            ty::Ty::Vectorof(Box::new(unify_to_ty_ref(
+        (Ty::Vectorof(member1), Ty::Vectorof(member2)) => UnifiedTy::Merged(
+            Ty::Vectorof(Box::new(unify_to_ty_ref(
                 member1.as_ref(),
                 member2.as_ref(),
             )))
             .into(),
         ),
-        (ty::Ty::Vector(members1), ty::Ty::Vectorof(member2))
-        | (ty::Ty::Vectorof(member2), ty::Ty::Vector(members1)) => {
+        (Ty::Vector(members1), Ty::Vectorof(member2))
+        | (Ty::Vectorof(member2), Ty::Vector(members1)) => {
             let unified_member =
                 union_extend(vec![member2.as_ref().clone()], members1.iter().cloned());
 
-            UnifiedTy::Merged(ty::Ty::Vectorof(Box::new(unified_member)).into())
+            UnifiedTy::Merged(Ty::Vectorof(Box::new(unified_member)).into())
         }
 
         // Function types
-        (ty::Ty::TopFun(top_fun1), ty::Ty::TopFun(top_fun2)) => unify_top_fun(top_fun1, top_fun2),
-        (ty::Ty::Fun(fun), ty::Ty::TopFun(top_fun))
-        | (ty::Ty::TopFun(top_fun), ty::Ty::Fun(fun)) => unify_top_fun(fun.top_fun(), top_fun),
-        (ty::Ty::TyPred(_), ty::Ty::TopFun(top_fun))
-        | (ty::Ty::TopFun(top_fun), ty::Ty::TyPred(_))
-        | (ty::Ty::EqPred, ty::Ty::TopFun(top_fun))
-        | (ty::Ty::TopFun(top_fun), ty::Ty::EqPred) => {
-            unify_top_fun(&ty::TopFun::new_for_pred(), top_fun)
+        (Ty::TopFun(top_fun1), Ty::TopFun(top_fun2)) => unify_top_fun(top_fun1, top_fun2),
+        (Ty::Fun(fun), Ty::TopFun(top_fun)) | (Ty::TopFun(top_fun), Ty::Fun(fun)) => {
+            unify_top_fun(fun.top_fun(), top_fun)
         }
+        (Ty::TyPred(_), Ty::TopFun(top_fun))
+        | (Ty::TopFun(top_fun), Ty::TyPred(_))
+        | (Ty::EqPred, Ty::TopFun(top_fun))
+        | (Ty::TopFun(top_fun), Ty::EqPred) => unify_top_fun(&ty::TopFun::new_for_pred(), top_fun),
 
-        (ty::Ty::Fun(fun1), ty::Ty::Fun(fun2)) => unify_fun(fun1, fun2),
-        (ty::Ty::TyPred(_), ty::Ty::Fun(fun)) | (ty::Ty::Fun(fun), ty::Ty::TyPred(_)) => {
+        (Ty::Fun(fun1), Ty::Fun(fun2)) => unify_fun(fun1, fun2),
+        (Ty::TyPred(_), Ty::Fun(fun)) | (Ty::Fun(fun), Ty::TyPred(_)) => {
             unify_fun(&ty::Fun::new_for_ty_pred(), fun)
         }
-        (ty::Ty::EqPred, ty::Ty::Fun(fun)) | (ty::Ty::Fun(fun), ty::Ty::EqPred) => {
+        (Ty::EqPred, Ty::Fun(fun)) | (Ty::Fun(fun), Ty::EqPred) => {
             unify_fun(&ty::Fun::new_for_eq_pred(), fun)
         }
 
-        (ty::Ty::TyPred(_), ty::Ty::TyPred(_)) => {
-            UnifiedTy::Merged(ty::Ty::Fun(Box::new(ty::Fun::new_for_ty_pred())).into())
+        (Ty::TyPred(_), Ty::TyPred(_)) => {
+            UnifiedTy::Merged(Ty::Fun(Box::new(ty::Fun::new_for_ty_pred())).into())
         }
 
         // Union types
-        (ty::Ty::Union(members1), ty::Ty::Union(members2)) => {
+        (Ty::Union(members1), Ty::Union(members2)) => {
             let new_union = union_extend(members1.to_vec(), members2.iter().cloned());
             UnifiedTy::Merged(new_union)
         }
-        (ty::Ty::Union(members1), _) => {
+        (Ty::Union(members1), _) => {
             let new_union = union_extend(members1.to_vec(), iter::once(ref2).cloned());
             UnifiedTy::Merged(new_union)
         }
-        (_, ty::Ty::Union(members2)) => {
+        (_, Ty::Union(members2)) => {
             let new_union = union_extend(members2.to_vec(), iter::once(ref1).cloned());
             UnifiedTy::Merged(new_union)
         }
 
         // List types
-        (ty::Ty::List(list1), ty::Ty::List(list2)) => match unify_list(list1, list2) {
+        (Ty::List(list1), Ty::List(list2)) => match unify_list(list1, list2) {
             UnifiedList::Discerned => UnifiedTy::Discerned,
             UnifiedList::Merged(merged_list) => UnifiedTy::Merged(merged_list.into()),
         },
 
         // Record types
-        (ty::Ty::Record(instance1), ty::Ty::Record(instance2)) => {
+        (Ty::Record(instance1), Ty::Record(instance2)) => {
             unify_record_instance(instance1, instance2)
         }
 
@@ -390,7 +383,7 @@ pub fn unify_purity_refs(purity1: &purity::Ref, purity2: &purity::Ref) -> purity
 pub fn unify_to_ty_ref<M: ty::PM>(ty_ref1: &ty::Ref<M>, ty_ref2: &ty::Ref<M>) -> ty::Ref<M> {
     match unify_ty_refs(ty_ref1, ty_ref2) {
         UnifiedTy::Merged(ty_ref) => ty_ref,
-        UnifiedTy::Discerned => ty::Ty::Union(Box::new([ty_ref1.clone(), ty_ref2.clone()])).into(),
+        UnifiedTy::Discerned => Ty::Union(Box::new([ty_ref1.clone(), ty_ref2.clone()])).into(),
     }
 }
 
@@ -678,7 +671,7 @@ mod test {
 
     #[test]
     fn related_poly_bounds() {
-        let ptype1_unbounded = tvar_bounded_by(ty::Ty::Any.into());
+        let ptype1_unbounded = tvar_bounded_by(Ty::Any.into());
         let ptype2_bounded_by_1 = tvar_bounded_by(ptype1_unbounded.clone());
 
         assert_eq!(
@@ -707,8 +700,8 @@ mod test {
         use crate::ty::ty_args::TyArgs;
         use std::collections::HashMap;
 
-        let tvar1 = ty::TVar::new(EMPTY_SPAN, "tvar1".into(), ty::Ty::Any.into());
-        let tvar2 = ty::TVar::new(EMPTY_SPAN, "tvar2".into(), ty::Ty::Any.into());
+        let tvar1 = ty::TVar::new(EMPTY_SPAN, "tvar1".into(), Ty::Any.into());
+        let tvar2 = ty::TVar::new(EMPTY_SPAN, "tvar2".into(), Ty::Any.into());
 
         let cons1 = record::Cons::new(
             EMPTY_SPAN,
@@ -740,7 +733,7 @@ mod test {
             cons1.clone(),
             TyArgs::new(
                 HashMap::new(),
-                std::iter::once((tvar1.clone(), ty::Ty::Float.into())).collect(),
+                std::iter::once((tvar1.clone(), Ty::Float.into())).collect(),
             ),
         )
         .into();
@@ -749,8 +742,8 @@ mod test {
             cons2.clone(),
             TyArgs::new(
                 HashMap::new(),
-                std::iter::once((tvar1.clone(), ty::Ty::Float.into()))
-                    .chain(std::iter::once((tvar2.clone(), ty::Ty::Bool.into())))
+                std::iter::once((tvar1.clone(), Ty::Float.into()))
+                    .chain(std::iter::once((tvar2.clone(), Ty::Bool.into())))
                     .collect(),
             ),
         )
@@ -760,11 +753,8 @@ mod test {
             cons2.clone(),
             TyArgs::new(
                 HashMap::new(),
-                std::iter::once((tvar1.clone(), ty::Ty::Int.into()))
-                    .chain(std::iter::once((
-                        tvar2.clone(),
-                        ty::Ty::LitBool(false).into(),
-                    )))
+                std::iter::once((tvar1.clone(), Ty::Int.into()))
+                    .chain(std::iter::once((tvar2.clone(), Ty::LitBool(false).into())))
                     .collect(),
             ),
         )
@@ -774,11 +764,8 @@ mod test {
             cons2.clone(),
             TyArgs::new(
                 HashMap::new(),
-                std::iter::once((tvar1.clone(), ty::Ty::Num.into()))
-                    .chain(std::iter::once((
-                        tvar2.clone(),
-                        ty::Ty::LitBool(false).into(),
-                    )))
+                std::iter::once((tvar1.clone(), Ty::Num.into()))
+                    .chain(std::iter::once((tvar2.clone(), Ty::LitBool(false).into())))
                     .collect(),
             ),
         )

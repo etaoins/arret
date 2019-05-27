@@ -12,6 +12,7 @@ use crate::ty::purity;
 use crate::ty::purity::Purity;
 use crate::ty::record;
 use crate::ty::ty_args::TyArgs;
+use crate::ty::Ty;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum TyCons {
@@ -53,7 +54,7 @@ fn lower_polymorphic_var(scope: &Scope<'_>, tvar_datum: NsDatum) -> Result<Lower
                 polymorphic_var: PolymorphicVar::TVar(ty::TVar::new(
                     span,
                     source_name,
-                    ty::Ty::Any.into(),
+                    Ty::Any.into(),
                 )),
             });
         }
@@ -125,7 +126,7 @@ fn lower_list_cons(scope: &Scope<'_>, mut arg_iter: NsDataIter) -> Result<ty::Li
 
     let rest_poly = match rest {
         Some(rest_datum) => lower_poly(scope, rest_datum)?,
-        None => ty::Ty::never().into(),
+        None => Ty::never().into(),
     };
 
     Ok(ty::List::new(fixed_polys, rest_poly))
@@ -169,17 +170,17 @@ fn lower_ty_cons_apply(
                 .map(|arg_datum| lower_poly(scope, arg_datum))
                 .collect::<Result<Box<[ty::Ref<ty::Poly>]>>>()?;
 
-            ty::Ty::Vector(member_tys).into()
+            Ty::Vector(member_tys).into()
         }
         TyCons::Vectorof => {
             let start_datum = expect_one_arg(span, arg_iter)?;
             let start_ty = lower_poly(scope, start_datum)?;
-            ty::Ty::Vectorof(Box::new(start_ty)).into()
+            Ty::Vectorof(Box::new(start_ty)).into()
         }
         TyCons::Set => {
             let member_datum = expect_one_arg(span, arg_iter)?;
             let member_ty = lower_poly(scope, member_datum)?;
-            ty::Ty::Set(Box::new(member_ty)).into()
+            Ty::Set(Box::new(member_ty)).into()
         }
         TyCons::Map => {
             expect_arg_count(span, 2, arg_iter.len())?;
@@ -202,7 +203,7 @@ fn lower_ty_cons_apply(
                 .map(|arg_datum| lower_poly(scope, arg_datum))
                 .collect::<Result<Box<[ty::Ref<ty::Poly>]>>>()?;
 
-            ty::Ty::Union(member_tys).into()
+            Ty::Union(member_tys).into()
         }
     })
 }
@@ -297,16 +298,16 @@ fn lower_literal_vec(literal_data: Vec<NsDatum>) -> Result<Vec<ty::Ref<ty::Poly>
 
 fn lower_literal(datum: NsDatum) -> Result<ty::Ref<ty::Poly>> {
     match datum {
-        NsDatum::Bool(_, v) => Ok(ty::Ty::LitBool(v).into()),
-        NsDatum::Keyword(_, name) => Ok(ty::Ty::LitSym(name).into()),
-        NsDatum::Ident(_, ident) => Ok(ty::Ty::LitSym(ident.into_name()).into()),
+        NsDatum::Bool(_, v) => Ok(Ty::LitBool(v).into()),
+        NsDatum::Keyword(_, name) => Ok(Ty::LitSym(name).into()),
+        NsDatum::Ident(_, ident) => Ok(Ty::LitSym(ident.into_name()).into()),
         NsDatum::List(_, vs) => {
             let fixed_literals = lower_literal_vec(vs.into_vec())?;
-            Ok(ty::List::new(fixed_literals.into_boxed_slice(), ty::Ty::never().into()).into())
+            Ok(ty::List::new(fixed_literals.into_boxed_slice(), Ty::never().into()).into())
         }
         NsDatum::Vector(_, vs) => {
             let fixed_literals = lower_literal_vec(vs.into_vec())?;
-            Ok(ty::Ty::Vector(fixed_literals.into_boxed_slice()).into())
+            Ok(Ty::Vector(fixed_literals.into_boxed_slice()).into())
         }
         _ => Err(Error::new(datum.span(), ErrorKind::UnsupportedLiteralType)),
     }
@@ -315,8 +316,8 @@ fn lower_literal(datum: NsDatum) -> Result<ty::Ref<ty::Poly>> {
 fn lower_ident(scope: &Scope<'_>, span: Span, ident: &Ident) -> Result<ty::Ref<ty::Poly>> {
     match scope.get_or_err(span, ident)? {
         Binding::Ty(ty) => Ok(ty.clone()),
-        Binding::TyPred(test_ty) => Ok(ty::Ty::TyPred(test_ty.clone()).into()),
-        Binding::EqPred => Ok(ty::Ty::EqPred.into()),
+        Binding::TyPred(test_ty) => Ok(Ty::TyPred(test_ty.clone()).into()),
+        Binding::EqPred => Ok(Ty::EqPred.into()),
         other => Err(Error::new(span, ErrorKind::ExpectedTy(other.description()))),
     }
 }
@@ -350,8 +351,8 @@ fn lower_polymorphic_poly(
 
     let inner_poly = lower_poly_data_iter(&inner_scope, span, data_iter)?;
 
-    if let ty::Ref::Fixed(ty::Ty::Fun(fun)) = inner_poly {
-        Ok(ty::Ty::Fun(Box::new(fun.with_polymorphic_vars(pvars, tvars))).into())
+    if let ty::Ref::Fixed(Ty::Fun(fun)) = inner_poly {
+        Ok(Ty::Fun(Box::new(fun.with_polymorphic_vars(pvars, tvars))).into())
     } else {
         return Err(Error::new(span, ErrorKind::NonFunPolyTy));
     }
@@ -516,14 +517,14 @@ macro_rules! export_ty_pred {
 }
 
 pub const TY_EXPORTS: &[(&str, Binding)] = &[
-    export_ty!("Any", ty::Ty::Any),
-    export_ty!("Bool", ty::Ty::Bool),
-    export_ty!("Sym", ty::Ty::Sym),
-    export_ty!("Str", ty::Ty::Str),
-    export_ty!("Int", ty::Ty::Int),
-    export_ty!("Float", ty::Ty::Float),
-    export_ty!("Num", ty::Ty::Num),
-    export_ty!("Char", ty::Ty::Char),
+    export_ty!("Any", Ty::Any),
+    export_ty!("Bool", Ty::Bool),
+    export_ty!("Sym", Ty::Sym),
+    export_ty!("Str", Ty::Str),
+    export_ty!("Int", Ty::Int),
+    export_ty!("Float", Ty::Float),
+    export_ty!("Num", Ty::Num),
+    export_ty!("Char", Ty::Char),
     export_ty_cons!("List", TyCons::List),
     export_ty_cons!("Vector", TyCons::Vector),
     export_ty_cons!("Vectorof", TyCons::Vectorof),
@@ -570,7 +571,7 @@ fn str_for_bounds(bound_pvars: &[purity::PVarId], bound_tvars: &[ty::TVarId]) ->
         .map(|pvar| format!("[{} ->!]", pvar.source_name()));
 
     let tvar_parts = bound_tvars.iter().map(|tvar| {
-        if tvar.bound() == &ty::Ty::Any.into() {
+        if tvar.bound() == &Ty::Any.into() {
             return tvar.source_name().into();
         }
 
@@ -595,26 +596,26 @@ fn str_for_record_poly_arg<M: ty::PM>(
     }
 }
 
-fn str_for_ty<M: ty::PM>(ty: &ty::Ty<M>) -> String {
+fn str_for_ty<M: ty::PM>(ty: &Ty<M>) -> String {
     match ty {
-        ty::Ty::Any => "Any".to_owned(),
-        ty::Ty::Bool => "Bool".to_owned(),
-        ty::Ty::Char => "Char".to_owned(),
-        ty::Ty::Int => "Int".to_owned(),
-        ty::Ty::Sym => "Sym".to_owned(),
-        ty::Ty::Str => "Str".to_owned(),
-        ty::Ty::Float => "Float".to_owned(),
-        ty::Ty::Num => "Num".to_owned(),
-        ty::Ty::LitBool(false) => "false".to_owned(),
-        ty::Ty::LitBool(true) => "true".to_owned(),
-        ty::Ty::LitSym(name) => format!("'{}", name),
-        ty::Ty::Map(map) => format!(
+        Ty::Any => "Any".to_owned(),
+        Ty::Bool => "Bool".to_owned(),
+        Ty::Char => "Char".to_owned(),
+        Ty::Int => "Int".to_owned(),
+        Ty::Sym => "Sym".to_owned(),
+        Ty::Str => "Str".to_owned(),
+        Ty::Float => "Float".to_owned(),
+        Ty::Num => "Num".to_owned(),
+        Ty::LitBool(false) => "false".to_owned(),
+        Ty::LitBool(true) => "true".to_owned(),
+        Ty::LitSym(name) => format!("'{}", name),
+        Ty::Map(map) => format!(
             "(Map {} {})",
             str_for_ty_ref(map.key()),
             str_for_ty_ref(map.value())
         ),
-        ty::Ty::Set(member) => format!("(Setof {})", str_for_ty_ref(member)),
-        ty::Ty::Vector(members) => {
+        Ty::Set(member) => format!("(Setof {})", str_for_ty_ref(member)),
+        Ty::Vector(members) => {
             let result_parts: Vec<String> = members
                 .iter()
                 .map(|member| format!(" {}", str_for_ty_ref(member)))
@@ -622,13 +623,13 @@ fn str_for_ty<M: ty::PM>(ty: &ty::Ty<M>) -> String {
 
             format!("(Vector{})", result_parts.join(""))
         }
-        ty::Ty::Vectorof(member) => format!("(Vectorof {})", str_for_ty_ref(member)),
-        ty::Ty::TopFun(top_fun) => format!(
+        Ty::Vectorof(member) => format!("(Vectorof {})", str_for_ty_ref(member)),
+        Ty::TopFun(top_fun) => format!(
             "(... {} {})",
             str_for_purity(top_fun.purity()),
             str_for_ty_ref(top_fun.ret())
         ),
-        ty::Ty::Fun(fun) => {
+        Ty::Fun(fun) => {
             let mut fun_parts = Vec::with_capacity(2);
 
             push_list_parts(&mut fun_parts, fun.params());
@@ -645,9 +646,9 @@ fn str_for_ty<M: ty::PM>(ty: &ty::Ty<M>) -> String {
                 format!("({})", fun_parts.join(" "))
             }
         }
-        ty::Ty::TyPred(test_ty) => test_ty.to_string(),
-        ty::Ty::EqPred => "=".to_owned(),
-        ty::Ty::Union(members) => {
+        Ty::TyPred(test_ty) => test_ty.to_string(),
+        Ty::EqPred => "=".to_owned(),
+        Ty::Union(members) => {
             let member_strs: Vec<String> = members
                 .iter()
                 .map(|m| format!(" {}", str_for_ty_ref(m)))
@@ -655,7 +656,7 @@ fn str_for_ty<M: ty::PM>(ty: &ty::Ty<M>) -> String {
 
             format!("(U{})", member_strs.join(""))
         }
-        ty::Ty::Intersect(members) => {
+        Ty::Intersect(members) => {
             let member_strs: Vec<String> = members
                 .iter()
                 .map(|m| format!(" {}", str_for_ty_ref(m)))
@@ -663,7 +664,7 @@ fn str_for_ty<M: ty::PM>(ty: &ty::Ty<M>) -> String {
 
             format!("(∩{})", member_strs.join(""))
         }
-        ty::Ty::List(list) => {
+        Ty::List(list) => {
             // While all list types can be expressed using `(List)` we try to find the shortest
             // representation
             if list.fixed().is_empty() && list.rest().is_never() {
@@ -677,8 +678,8 @@ fn str_for_ty<M: ty::PM>(ty: &ty::Ty<M>) -> String {
                 format!("({})", list_parts.join(" "))
             }
         }
-        ty::Ty::TopRecord(record_cons) => format!("({} ...)", record_cons.name()),
-        ty::Ty::Record(instance) => {
+        Ty::TopRecord(record_cons) => format!("({} ...)", record_cons.name()),
+        Ty::Record(instance) => {
             let record_cons = instance.cons();
 
             if record_cons.is_singleton() {
@@ -754,7 +755,7 @@ mod test {
     use arret_syntax::span::EMPTY_SPAN;
     use std::collections::HashMap;
 
-    fn assert_ty_for_str(expected: ty::Ty<ty::Poly>, datum_str: &str) {
+    fn assert_ty_for_str(expected: Ty<ty::Poly>, datum_str: &str) {
         let expected_poly = expected.into();
         assert_eq!(expected_poly, poly_for_str(datum_str));
 
@@ -772,7 +773,7 @@ mod test {
     fn true_literal() {
         let j = "true";
 
-        let expected = ty::Ty::LitBool(true);
+        let expected = Ty::LitBool(true);
         assert_ty_for_str(expected, j);
     }
 
@@ -780,7 +781,7 @@ mod test {
     fn false_literal() {
         let j = "false";
 
-        let expected = ty::Ty::LitBool(false);
+        let expected = Ty::LitBool(false);
         assert_ty_for_str(expected, j);
     }
 
@@ -788,7 +789,7 @@ mod test {
     fn sym_literal() {
         let j = "'foo";
 
-        let expected = ty::Ty::LitSym("foo".into());
+        let expected = Ty::LitSym("foo".into());
         assert_ty_for_str(expected, j);
     }
 
@@ -796,7 +797,7 @@ mod test {
     fn keyword_literal() {
         let j = ":foo";
 
-        let expected = ty::Ty::LitSym(":foo".into());
+        let expected = Ty::LitSym(":foo".into());
         assert_ty_for_str(expected, j);
     }
 
@@ -813,8 +814,8 @@ mod test {
         let j = "'(true false)";
 
         let expected = ty::List::new(
-            Box::new([ty::Ty::LitBool(true).into(), ty::Ty::LitBool(false).into()]),
-            ty::Ty::never().into(),
+            Box::new([Ty::LitBool(true).into(), Ty::LitBool(false).into()]),
+            Ty::never().into(),
         )
         .into();
 
@@ -825,7 +826,7 @@ mod test {
     fn empty_vector_literal() {
         let j = "[]";
 
-        let expected = ty::Ty::Vector(Box::new([]));
+        let expected = Ty::Vector(Box::new([]));
         assert_ty_for_str(expected, j);
     }
 
@@ -833,9 +834,9 @@ mod test {
     fn vector_literal() {
         let j = "[true false]";
 
-        let expected = ty::Ty::Vector(Box::new([
-            ty::Ty::LitBool(true).into(),
-            ty::Ty::LitBool(false).into(),
+        let expected = Ty::Vector(Box::new([
+            Ty::LitBool(true).into(),
+            Ty::LitBool(false).into(),
         ]));
 
         assert_ty_for_str(expected, j);
@@ -845,7 +846,7 @@ mod test {
     fn ty_ref() {
         let j = "Sym";
 
-        let expected = ty::Ty::Sym;
+        let expected = Ty::Sym;
         assert_ty_for_str(expected, j);
     }
 
@@ -854,8 +855,8 @@ mod test {
         let j = "(List true false)";
 
         let expected = ty::List::new(
-            Box::new([ty::Ty::LitBool(true).into(), ty::Ty::LitBool(false).into()]),
-            ty::Ty::never().into(),
+            Box::new([Ty::LitBool(true).into(), Ty::LitBool(false).into()]),
+            Ty::never().into(),
         )
         .into();
 
@@ -867,8 +868,8 @@ mod test {
         let j = "(List true & false)";
 
         let expected = ty::List::new(
-            Box::new([ty::Ty::LitBool(true).into()]),
-            ty::Ty::LitBool(false).into(),
+            Box::new([Ty::LitBool(true).into()]),
+            Ty::LitBool(false).into(),
         )
         .into();
 
@@ -879,8 +880,8 @@ mod test {
     fn vectorof_cons() {
         let j = "(Vectorof true)";
 
-        let inner_poly = ty::Ty::LitBool(true).into();
-        let expected = ty::Ty::Vectorof(Box::new(inner_poly));
+        let inner_poly = Ty::LitBool(true).into();
+        let expected = Ty::Vectorof(Box::new(inner_poly));
 
         assert_ty_for_str(expected, j);
     }
@@ -889,9 +890,9 @@ mod test {
     fn vector_cons() {
         let j = "(Vector true false)";
 
-        let expected = ty::Ty::Vector(Box::new([
-            ty::Ty::LitBool(true).into(),
-            ty::Ty::LitBool(false).into(),
+        let expected = Ty::Vector(Box::new([
+            Ty::LitBool(true).into(),
+            Ty::LitBool(false).into(),
         ]));
 
         assert_ty_for_str(expected, j);
@@ -904,7 +905,7 @@ mod test {
         let expected = ty::Fun::new(
             purity::PVars::new(),
             ty::TVars::new(),
-            ty::TopFun::new(Purity::Pure.into(), ty::Ty::LitBool(true).into()),
+            ty::TopFun::new(Purity::Pure.into(), Ty::LitBool(true).into()),
             ty::List::empty(),
         )
         .into();
@@ -919,7 +920,7 @@ mod test {
         let expected = ty::Fun::new(
             purity::PVars::new(),
             ty::TVars::new(),
-            ty::TopFun::new(Purity::Impure.into(), ty::Ty::LitBool(true).into()),
+            ty::TopFun::new(Purity::Impure.into(), Ty::LitBool(true).into()),
             ty::List::empty(),
         )
         .into();
@@ -934,11 +935,8 @@ mod test {
         let expected = ty::Fun::new(
             purity::PVars::new(),
             ty::TVars::new(),
-            ty::TopFun::new(Purity::Pure.into(), ty::Ty::LitBool(true).into()),
-            ty::List::new(
-                Box::new([ty::Ty::LitBool(false).into()]),
-                ty::Ty::never().into(),
-            ),
+            ty::TopFun::new(Purity::Pure.into(), Ty::LitBool(true).into()),
+            ty::List::new(Box::new([Ty::LitBool(false).into()]), Ty::never().into()),
         )
         .into();
 
@@ -952,8 +950,8 @@ mod test {
         let expected = ty::Fun::new(
             purity::PVars::new(),
             ty::TVars::new(),
-            ty::TopFun::new(Purity::Impure.into(), ty::Ty::LitBool(true).into()),
-            ty::List::new(Box::new([ty::Ty::Str.into()]), ty::Ty::Sym.into()),
+            ty::TopFun::new(Purity::Impure.into(), Ty::LitBool(true).into()),
+            ty::List::new(Box::new([Ty::Str.into()]), Ty::Sym.into()),
         )
         .into();
 
@@ -964,7 +962,7 @@ mod test {
     fn top_impure_fun() {
         let j = "(... ->! true)";
 
-        let expected = ty::TopFun::new(Purity::Impure.into(), ty::Ty::LitBool(true).into()).into();
+        let expected = ty::TopFun::new(Purity::Impure.into(), Ty::LitBool(true).into()).into();
 
         assert_ty_for_str(expected, j);
     }
@@ -973,7 +971,7 @@ mod test {
     fn type_predicate() {
         let j = "str?";
 
-        let expected = ty::Ty::TyPred(ty::pred::TestTy::Str);
+        let expected = Ty::TyPred(ty::pred::TestTy::Str);
         assert_ty_for_str(expected, j);
     }
 
@@ -981,7 +979,7 @@ mod test {
     fn equality_predicate() {
         let j = "=";
 
-        let expected = ty::Ty::EqPred;
+        let expected = Ty::EqPred;
         assert_ty_for_str(expected, j);
     }
 
@@ -989,8 +987,8 @@ mod test {
     fn set_cons() {
         let j = "(Setof true)";
 
-        let inner_poly = ty::Ty::LitBool(true).into();
-        let expected = ty::Ty::Set(Box::new(inner_poly));
+        let inner_poly = Ty::LitBool(true).into();
+        let expected = Ty::Set(Box::new(inner_poly));
 
         assert_ty_for_str(expected, j);
     }
@@ -999,8 +997,8 @@ mod test {
     fn map_cons() {
         let j = "(Map true false)";
 
-        let key_ty = ty::Ty::LitBool(true);
-        let value_ty = ty::Ty::LitBool(false);
+        let key_ty = Ty::LitBool(true);
+        let value_ty = Ty::LitBool(false);
         let expected = ty::Map::new(key_ty.into(), value_ty.into()).into();
 
         assert_ty_for_str(expected, j);
@@ -1009,7 +1007,7 @@ mod test {
     #[test]
     fn merged_union_cons() {
         let j = "(UnifyingU true false)";
-        let expected = ty::Ty::Bool;
+        let expected = Ty::Bool;
 
         assert_ty_for_str(expected, j);
     }
@@ -1033,7 +1031,7 @@ mod test {
             EMPTY_SPAN,
             "MonoCons".into(),
             None,
-            Box::new([record::Field::new("num".into(), ty::Ty::Num.into())]),
+            Box::new([record::Field::new("num".into(), Ty::Num.into())]),
         );
 
         let top_record_ref: ty::Ref<ty::Poly> = mono_record_cons.clone().into();
@@ -1046,7 +1044,7 @@ mod test {
 
     #[test]
     fn poly_record_type() {
-        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into());
+        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), Ty::Any.into());
 
         let poly_record_cons = record::Cons::new(
             EMPTY_SPAN,
@@ -1064,7 +1062,7 @@ mod test {
 
         // Instance parameterised with an `Int`
         let mut int_tvars = HashMap::new();
-        int_tvars.insert(tvar.clone(), ty::Ty::Int.into());
+        int_tvars.insert(tvar.clone(), Ty::Int.into());
         let int_ty_args = TyArgs::new(HashMap::new(), int_tvars);
 
         let poly_record_instance_ref: ty::Ref<ty::Poly> =

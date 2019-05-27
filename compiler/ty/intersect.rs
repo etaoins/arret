@@ -9,6 +9,7 @@ use crate::ty::purity::Purity;
 use crate::ty::record;
 use crate::ty::ty_args::TyArgs;
 use crate::ty::var_usage::Variance;
+use crate::ty::Ty;
 
 #[derive(PartialEq, Debug)]
 pub enum Error {
@@ -23,22 +24,22 @@ type Result<S> = result::Result<S, Error>;
 fn flatten_ref_intersect<M: ty::PM>(ref1: &ty::Ref<M>, ref2: &ty::Ref<M>) -> ty::Ref<M> {
     let mut members: Vec<ty::Ref<M>> = vec![];
 
-    if let Some(ty::Ty::Intersect(members1)) = ref1.try_to_fixed() {
+    if let Some(Ty::Intersect(members1)) = ref1.try_to_fixed() {
         members.extend(members1.iter().cloned());
     } else {
         members.push(ref1.clone());
     }
 
-    if let Some(ty::Ty::Intersect(members2)) = ref2.try_to_fixed() {
+    if let Some(Ty::Intersect(members2)) = ref2.try_to_fixed() {
         members.extend(members2.iter().cloned());
     } else {
         members.push(ref2.clone());
     }
 
     match members.len() {
-        0 => ty::Ty::Any.into(),
+        0 => Ty::Any.into(),
         1 => members.pop().unwrap(),
-        _ => ty::Ty::Intersect(members.into_boxed_slice()).into(),
+        _ => Ty::Intersect(members.into_boxed_slice()).into(),
     }
 }
 
@@ -77,7 +78,7 @@ where
     match intersected_types.len() {
         0 => Err(Error::Disjoint),
         1 => Ok(intersected_types.pop().unwrap()),
-        _ => Ok(ty::Ty::Union(intersected_types.into_boxed_slice()).into()),
+        _ => Ok(Ty::Union(intersected_types.into_boxed_slice()).into()),
     }
 }
 
@@ -89,7 +90,7 @@ where
     let mut acc = if let Some(acc) = ty_refs.next() {
         acc.clone()
     } else {
-        return Ok(ty::Ty::Any.into());
+        return Ok(Ty::Any.into());
     };
 
     for ty_ref in ty_refs {
@@ -199,28 +200,28 @@ fn intersect_record_instance<M: ty::PM>(
 /// Intersects two types under the assumption that they are not subtypes
 fn non_subty_intersect<M: ty::PM>(
     ref1: &ty::Ref<M>,
-    ty1: &ty::Ty<M>,
+    ty1: &Ty<M>,
     ref2: &ty::Ref<M>,
-    ty2: &ty::Ty<M>,
+    ty2: &Ty<M>,
 ) -> Result<ty::Ref<M>> {
     match (ty1, ty2) {
         // Union types
-        (ty::Ty::Union(refs1), ty::Ty::Union(refs2)) => intersect_union_iter(refs1, refs2.iter()),
-        (ty::Ty::Union(refs1), _) => intersect_union_iter(refs1, iter::once(ref2)),
-        (_, ty::Ty::Union(refs2)) => intersect_union_iter(refs2, iter::once(ref1)),
+        (Ty::Union(refs1), Ty::Union(refs2)) => intersect_union_iter(refs1, refs2.iter()),
+        (Ty::Union(refs1), _) => intersect_union_iter(refs1, iter::once(ref2)),
+        (_, Ty::Union(refs2)) => intersect_union_iter(refs2, iter::once(ref1)),
 
         // Intersection types
-        (ty::Ty::Intersect(refs1), ty::Ty::Intersect(refs2)) => {
+        (Ty::Intersect(refs1), Ty::Intersect(refs2)) => {
             intersect_ty_ref_iter(refs1.iter().chain(refs2.iter()))
         }
-        (ty::Ty::Intersect(refs1), _) => {
+        (Ty::Intersect(refs1), _) => {
             let mut acc = ref2.clone();
             for ty_ref in refs1.iter() {
                 acc = intersect_ty_refs(&acc, ty_ref)?;
             }
             Ok(acc)
         }
-        (_, ty::Ty::Intersect(refs2)) => {
+        (_, Ty::Intersect(refs2)) => {
             let mut acc = ref1.clone();
             for ty_ref in refs2.iter() {
                 acc = intersect_ty_refs(&acc, ty_ref)?;
@@ -229,24 +230,25 @@ fn non_subty_intersect<M: ty::PM>(
         }
 
         // Set type
-        (ty::Ty::Set(member1), ty::Ty::Set(member2)) => Ok(ty::Ty::Set(Box::new(
-            intersect_ty_refs(member1.as_ref(), member2.as_ref())?,
-        ))
+        (Ty::Set(member1), Ty::Set(member2)) => Ok(Ty::Set(Box::new(intersect_ty_refs(
+            member1.as_ref(),
+            member2.as_ref(),
+        )?))
         .into()),
 
         // Map type
-        (ty::Ty::Map(map1), ty::Ty::Map(map2)) => Ok(ty::Map::new(
+        (Ty::Map(map1), Ty::Map(map2)) => Ok(ty::Map::new(
             intersect_ty_refs(map1.key(), map2.key())?,
             intersect_ty_refs(map1.value(), map2.value())?,
         )
         .into()),
 
         // Vector types
-        (ty::Ty::Vectorof(member1), ty::Ty::Vectorof(member2)) => Ok(ty::Ty::Vectorof(Box::new(
+        (Ty::Vectorof(member1), Ty::Vectorof(member2)) => Ok(Ty::Vectorof(Box::new(
             intersect_ty_refs(member1.as_ref(), member2.as_ref())?,
         ))
         .into()),
-        (ty::Ty::Vector(members1), ty::Ty::Vector(members2)) => {
+        (Ty::Vector(members1), Ty::Vector(members2)) => {
             if members1.len() != members2.len() {
                 Err(Error::Disjoint)
             } else {
@@ -256,31 +258,30 @@ fn non_subty_intersect<M: ty::PM>(
                     .map(|(member1, member2)| intersect_ty_refs(member1, member2))
                     .collect::<Result<Box<[ty::Ref<M>]>>>()?;
 
-                Ok(ty::Ty::Vector(intersected_members).into())
+                Ok(Ty::Vector(intersected_members).into())
             }
         }
-        (ty::Ty::Vectorof(member1), ty::Ty::Vector(members2))
-        | (ty::Ty::Vector(members2), ty::Ty::Vectorof(member1)) => {
+        (Ty::Vectorof(member1), Ty::Vector(members2))
+        | (Ty::Vector(members2), Ty::Vectorof(member1)) => {
             let intersected_members = members2
                 .iter()
                 .map(|member2| intersect_ty_refs(member1.as_ref(), member2))
                 .collect::<Result<Box<[ty::Ref<M>]>>>()?;
 
-            Ok(ty::Ty::Vector(intersected_members).into())
+            Ok(Ty::Vector(intersected_members).into())
         }
 
         // List types
-        (ty::Ty::List(list1), ty::Ty::List(list2)) => Ok(intersect_list(list1, list2)?.into()),
+        (Ty::List(list1), Ty::List(list2)) => Ok(intersect_list(list1, list2)?.into()),
 
         // Function types
-        (ty::Ty::TopFun(top_fun1), ty::Ty::TopFun(top_fun2)) => {
+        (Ty::TopFun(top_fun1), Ty::TopFun(top_fun2)) => {
             let intersected_purity = intersect_purity_refs(top_fun1.purity(), top_fun2.purity());
             let intersected_ret = intersect_ty_refs(top_fun1.ret(), top_fun2.ret())?;
 
             Ok(ty::TopFun::new(intersected_purity, intersected_ret).into())
         }
-        (ty::Ty::TopFun(top_fun), ty::Ty::Fun(fun))
-        | (ty::Ty::Fun(fun), ty::Ty::TopFun(top_fun)) => {
+        (Ty::TopFun(top_fun), Ty::Fun(fun)) | (Ty::Fun(fun), Ty::TopFun(top_fun)) => {
             if fun.has_polymorphic_vars() {
                 // TODO: This might be possible but we would have to recalculate the tvars for
                 // the intersected function
@@ -299,7 +300,7 @@ fn non_subty_intersect<M: ty::PM>(
             )
             .into())
         }
-        (ty::Ty::Fun(fun1), ty::Ty::Fun(fun2)) => {
+        (Ty::Fun(fun1), Ty::Fun(fun2)) => {
             if fun1.has_polymorphic_vars() || fun2.has_polymorphic_vars() {
                 // TODO: Same issue as top functions
                 Err(Error::Disjoint)
@@ -317,8 +318,8 @@ fn non_subty_intersect<M: ty::PM>(
                 .into())
             }
         }
-        (ty::Ty::Record(instance1), ty::Ty::Record(instance2)) => {
-            Ok(ty::Ty::Record(Box::new(intersect_record_instance(instance1, instance2)?)).into())
+        (Ty::Record(instance1), Ty::Record(instance2)) => {
+            Ok(Ty::Record(Box::new(intersect_record_instance(instance1, instance2)?)).into())
         }
         (_, _) => Err(Error::Disjoint),
     }
@@ -473,7 +474,7 @@ mod test {
 
     #[test]
     fn intersect_types() {
-        let ptype = tvar_bounded_by(ty::Ty::Any.into());
+        let ptype = tvar_bounded_by(Ty::Any.into());
 
         let any_int = poly_for_str("Int");
         let any_float = poly_for_str("Float");
@@ -482,8 +483,8 @@ mod test {
         assert_eq!(
             Error::Disjoint,
             intersect_ty_refs::<ty::Poly>(
-                &ty::Ty::Intersect(Box::new([ptype.clone(), any_int.clone()])).into(),
-                &ty::Ty::Intersect(Box::new([ptype.clone(), any_float.clone()])).into(),
+                &Ty::Intersect(Box::new([ptype.clone(), any_int.clone()])).into(),
+                &Ty::Intersect(Box::new([ptype.clone(), any_float.clone()])).into(),
             )
             .unwrap_err()
         )
@@ -562,10 +563,10 @@ mod test {
 
     #[test]
     fn unbounded_poly_var() {
-        let ptype1 = tvar_bounded_by(ty::Ty::Any.into());
-        let ptype2 = tvar_bounded_by(ty::Ty::Any.into());
+        let ptype1 = tvar_bounded_by(Ty::Any.into());
+        let ptype2 = tvar_bounded_by(Ty::Any.into());
 
-        let ptype_intersect = ty::Ty::Intersect(Box::new([ptype1.clone(), ptype2.clone()])).into();
+        let ptype_intersect = Ty::Intersect(Box::new([ptype1.clone(), ptype2.clone()])).into();
         let any_sym = poly_for_str("Sym");
 
         // These are equal; it should just return the original type
@@ -573,20 +574,20 @@ mod test {
 
         // These create an intersect type
         assert_merged_poly(
-            &ty::Ty::Intersect(Box::new([ptype1.clone(), ptype2.clone()])).into(),
+            &Ty::Intersect(Box::new([ptype1.clone(), ptype2.clone()])).into(),
             &ptype1,
             &ptype2,
         );
 
         assert_merged_poly(
-            &ty::Ty::Intersect(Box::new([any_sym.clone(), ptype2.clone()])).into(),
+            &Ty::Intersect(Box::new([any_sym.clone(), ptype2.clone()])).into(),
             &any_sym,
             &ptype2,
         );
 
         // These extend an existing intersection
         assert_merged_poly(
-            &ty::Ty::Intersect(Box::new([any_sym.clone(), ptype1.clone(), ptype2.clone()])).into(),
+            &Ty::Intersect(Box::new([any_sym.clone(), ptype1.clone(), ptype2.clone()])).into(),
             &any_sym,
             &ptype_intersect,
         );
@@ -594,14 +595,14 @@ mod test {
 
     #[test]
     fn bounded_poly_vars() {
-        let ptype1_any = tvar_bounded_by(ty::Ty::Any.into());
-        let ptype2_sym = tvar_bounded_by(ty::Ty::Sym.into());
-        let ptype3_str = tvar_bounded_by(ty::Ty::Str.into());
+        let ptype1_any = tvar_bounded_by(Ty::Any.into());
+        let ptype2_sym = tvar_bounded_by(Ty::Sym.into());
+        let ptype3_str = tvar_bounded_by(Ty::Str.into());
 
         let any_sym = poly_for_str("Sym");
 
         assert_merged_poly(
-            &ty::Ty::Intersect(Box::new([ptype1_any.clone(), ptype2_sym.clone()])).into(),
+            &Ty::Intersect(Box::new([ptype1_any.clone(), ptype2_sym.clone()])).into(),
             &ptype1_any,
             &ptype2_sym,
         );
@@ -649,8 +650,8 @@ mod test {
         use crate::ty::ty_args::TyArgs;
         use std::collections::HashMap;
 
-        let tvar1 = ty::TVar::new(EMPTY_SPAN, "tvar1".into(), ty::Ty::Any.into());
-        let tvar2 = ty::TVar::new(EMPTY_SPAN, "tvar2".into(), ty::Ty::Any.into());
+        let tvar1 = ty::TVar::new(EMPTY_SPAN, "tvar1".into(), Ty::Any.into());
+        let tvar2 = ty::TVar::new(EMPTY_SPAN, "tvar2".into(), Ty::Any.into());
 
         let cons1 = record::Cons::new(
             EMPTY_SPAN,
@@ -682,7 +683,7 @@ mod test {
             cons1.clone(),
             TyArgs::new(
                 HashMap::new(),
-                std::iter::once((tvar1.clone(), ty::Ty::Float.into())).collect(),
+                std::iter::once((tvar1.clone(), Ty::Float.into())).collect(),
             ),
         )
         .into();
@@ -691,11 +692,8 @@ mod test {
             cons2.clone(),
             TyArgs::new(
                 HashMap::new(),
-                std::iter::once((tvar1.clone(), ty::Ty::Float.into()))
-                    .chain(std::iter::once((
-                        tvar2.clone(),
-                        ty::Ty::LitBool(true).into(),
-                    )))
+                std::iter::once((tvar1.clone(), Ty::Float.into()))
+                    .chain(std::iter::once((tvar2.clone(), Ty::LitBool(true).into())))
                     .collect(),
             ),
         )
@@ -705,11 +703,8 @@ mod test {
             cons2.clone(),
             TyArgs::new(
                 HashMap::new(),
-                std::iter::once((tvar1.clone(), ty::Ty::Int.into()))
-                    .chain(std::iter::once((
-                        tvar2.clone(),
-                        ty::Ty::LitBool(true).into(),
-                    )))
+                std::iter::once((tvar1.clone(), Ty::Int.into()))
+                    .chain(std::iter::once((tvar2.clone(), Ty::LitBool(true).into())))
                     .collect(),
             ),
         )
@@ -719,8 +714,8 @@ mod test {
             cons2.clone(),
             TyArgs::new(
                 HashMap::new(),
-                std::iter::once((tvar1.clone(), ty::Ty::Int.into()))
-                    .chain(std::iter::once((tvar2.clone(), ty::Ty::Bool.into())))
+                std::iter::once((tvar1.clone(), Ty::Int.into()))
+                    .chain(std::iter::once((tvar2.clone(), Ty::Bool.into())))
                     .collect(),
             ),
         )
@@ -730,8 +725,8 @@ mod test {
             cons2.clone(),
             TyArgs::new(
                 HashMap::new(),
-                std::iter::once((tvar1.clone(), ty::Ty::Num.into()))
-                    .chain(std::iter::once((tvar2.clone(), ty::Ty::Bool.into())))
+                std::iter::once((tvar1.clone(), Ty::Num.into()))
+                    .chain(std::iter::once((tvar2.clone(), Ty::Bool.into())))
                     .collect(),
             ),
         )

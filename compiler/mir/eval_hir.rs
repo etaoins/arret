@@ -27,6 +27,7 @@ use crate::rfi;
 use crate::ty;
 use crate::ty::purity::Purity;
 use crate::ty::ty_args::TyArgs;
+use crate::ty::Ty;
 
 #[derive(PartialEq, Eq, Hash)]
 struct RustFunKey {
@@ -1356,7 +1357,7 @@ impl EvalHirCtx {
             &mut fcx,
             &mut None,
             EMPTY_SPAN,
-            &ty::Ty::unit().into(),
+            &Ty::unit().into(),
             &main_value,
             ApplyArgs {
                 ty_args: &TyArgs::empty(),

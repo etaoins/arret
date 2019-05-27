@@ -10,6 +10,7 @@ use crate::mir::value::Value;
 use crate::rfi;
 use crate::ty;
 use crate::ty::purity::Purity;
+use crate::ty::Ty;
 
 /// Returns the upper bound on the purity for a Rust fun
 pub fn rust_fun_purity_upper_bound(rust_fun: &rfi::Fun) -> Purity {
@@ -108,7 +109,7 @@ pub fn ops_for_rust_fun(
     } = build_load_arg_list_value(&mut b, &wanted_abi);
 
     let purity_upper_bound = rust_fun_purity_upper_bound(rust_fun);
-    let ret_ty = ty::Ty::Any.into();
+    let ret_ty = Ty::Any.into();
     let app_result = build_rust_fun_app(
         ehx,
         &mut b,

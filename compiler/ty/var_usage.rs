@@ -6,6 +6,7 @@ use std::ops;
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::record;
+use crate::ty::Ty;
 
 /// Indicates the variance of a polymorphic parameter
 ///
@@ -76,53 +77,53 @@ fn visit_top_fun(var_usages: &mut VarUsages, polarity: Variance, top_fun: &ty::T
     visit_poly(var_usages, polarity, top_fun.ret());
 }
 
-fn visit_ty(var_usages: &mut VarUsages, polarity: Variance, poly_ty: &ty::Ty<ty::Poly>) {
+fn visit_ty(var_usages: &mut VarUsages, polarity: Variance, poly_ty: &Ty<ty::Poly>) {
     match poly_ty {
-        ty::Ty::Any
-        | ty::Ty::Bool
-        | ty::Ty::Char
-        | ty::Ty::LitBool(_)
-        | ty::Ty::Sym
-        | ty::Ty::LitSym(_)
-        | ty::Ty::Int
-        | ty::Ty::Float
-        | ty::Ty::Num
-        | ty::Ty::Str
-        | ty::Ty::TyPred(_)
-        | ty::Ty::EqPred
-        | ty::Ty::TopRecord(_) => {
+        Ty::Any
+        | Ty::Bool
+        | Ty::Char
+        | Ty::LitBool(_)
+        | Ty::Sym
+        | Ty::LitSym(_)
+        | Ty::Int
+        | Ty::Float
+        | Ty::Num
+        | Ty::Str
+        | Ty::TyPred(_)
+        | Ty::EqPred
+        | Ty::TopRecord(_) => {
             // Terminal type
         }
 
-        ty::Ty::List(list) => {
+        Ty::List(list) => {
             visit_list(var_usages, polarity, list);
         }
 
-        ty::Ty::Map(map) => {
+        Ty::Map(map) => {
             visit_poly(var_usages, polarity, map.key());
             visit_poly(var_usages, polarity, map.value());
         }
 
-        ty::Ty::Set(member) | ty::Ty::Vectorof(member) => {
+        Ty::Set(member) | Ty::Vectorof(member) => {
             visit_poly(var_usages, polarity, member);
         }
 
-        ty::Ty::Union(members) | ty::Ty::Intersect(members) | ty::Ty::Vector(members) => {
+        Ty::Union(members) | Ty::Intersect(members) | Ty::Vector(members) => {
             for member in members.iter() {
                 visit_poly(var_usages, polarity, member);
             }
         }
 
-        ty::Ty::Fun(fun) => {
+        Ty::Fun(fun) => {
             visit_top_fun(var_usages, polarity, fun.top_fun());
             visit_list(var_usages, polarity * Variance::Contravariant, fun.params());
         }
 
-        ty::Ty::TopFun(top_fun) => {
+        Ty::TopFun(top_fun) => {
             visit_top_fun(var_usages, polarity, &top_fun);
         }
 
-        ty::Ty::Record(record_instance) => {
+        Ty::Record(record_instance) => {
             let record_cons = record_instance.cons();
 
             for poly_param in record_cons.poly_params() {
@@ -215,7 +216,7 @@ mod test {
 
     #[test]
     fn convariant_usage() {
-        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into());
+        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), Ty::Any.into());
 
         let mut var_usages = VarUsages::new();
         var_usages.add_poly_usages(&tvar.clone().into());
@@ -225,7 +226,7 @@ mod test {
 
     #[test]
     fn contravariant_usage() {
-        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into());
+        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), Ty::Any.into());
 
         let mut var_usages = VarUsages::new();
 
@@ -233,7 +234,7 @@ mod test {
             &ty::Fun::new(
                 purity::PVars::new(),
                 ty::TVars::new(),
-                ty::TopFun::new(Purity::Pure.into(), ty::Ty::Any.into()),
+                ty::TopFun::new(Purity::Pure.into(), Ty::Any.into()),
                 ty::List::new(Box::new([]), tvar.clone().into()),
             )
             .into(),
@@ -247,7 +248,7 @@ mod test {
 
     #[test]
     fn invariant_usage() {
-        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into());
+        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), Ty::Any.into());
 
         let mut var_usages = VarUsages::new();
 

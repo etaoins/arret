@@ -13,6 +13,7 @@ use crate::hir::ns::NsDatum;
 use crate::hir::scope::Scope;
 use crate::source::SourceLoader;
 use crate::ty;
+use crate::ty::Ty;
 
 use arret_runtime::{abitype, binding};
 
@@ -181,7 +182,7 @@ impl Loader {
         let poly_type = hir::lower_poly(&self.type_scope, ns_datum)?;
 
         // Ensure the type is actually a function type
-        let poly_fun_type = if let ty::Ref::Fixed(ty::Ty::Fun(fun_type)) = poly_type {
+        let poly_fun_type = if let ty::Ref::Fixed(Ty::Fun(fun_type)) = poly_type {
             fun_type
         } else {
             return Err(Error::new(

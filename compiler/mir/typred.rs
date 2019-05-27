@@ -12,6 +12,7 @@ use crate::mir::value::build_reg::value_to_reg;
 use crate::mir::value::from_reg::reg_to_value;
 use crate::mir::value::Value;
 use crate::ty;
+use crate::ty::Ty;
 
 /// Returns a set of type tags that would satisfy the type predicate
 fn type_tags_for_test_ty(test_ty: &ty::pred::TestTy) -> TypeTagSet {
@@ -130,10 +131,5 @@ pub fn eval_ty_pred(
         })
         .unwrap();
 
-    reg_to_value(
-        ehx,
-        result_reg,
-        &abitype::ABIType::Bool,
-        &ty::Ty::Bool.into(),
-    )
+    reg_to_value(ehx, result_reg, &abitype::ABIType::Bool, &Ty::Bool.into())
 }

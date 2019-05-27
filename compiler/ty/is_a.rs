@@ -4,6 +4,7 @@ use crate::ty::purity;
 use crate::ty::purity::Purity;
 use crate::ty::record;
 use crate::ty::var_usage::Variance;
+use crate::ty::Ty;
 
 fn top_fun_is_a(sub_top_fun: &ty::TopFun, par_top_fun: &ty::TopFun) -> bool {
     purity_ref_is_a(sub_top_fun.purity(), par_top_fun.purity())
@@ -88,9 +89,9 @@ fn fun_is_a(sub_fun: &ty::Fun, par_fun: &ty::Fun) -> bool {
 
 fn ty_is_a<M: ty::PM>(
     sub_ref: &ty::Ref<M>,
-    sub_ty: &ty::Ty<M>,
+    sub_ty: &Ty<M>,
     parent_ref: &ty::Ref<M>,
-    parent_ty: &ty::Ty<M>,
+    parent_ty: &Ty<M>,
 ) -> bool {
     if sub_ty == parent_ty {
         return true;
@@ -98,65 +99,65 @@ fn ty_is_a<M: ty::PM>(
 
     match (sub_ty, parent_ty) {
         // Union types
-        (ty::Ty::Union(sub_members), _) => sub_members
+        (Ty::Union(sub_members), _) => sub_members
             .iter()
             .all(|sub_member| ty_ref_is_a(sub_member, parent_ref)),
-        (_, ty::Ty::Union(par_members)) => par_members
+        (_, Ty::Union(par_members)) => par_members
             .iter()
             .any(|par_member| ty_ref_is_a(sub_ref, par_member)),
 
         // Intersection types
-        (_, ty::Ty::Intersect(par_members)) => par_members
+        (_, Ty::Intersect(par_members)) => par_members
             .iter()
             .all(|par_member| ty_ref_is_a(sub_ref, par_member)),
-        (ty::Ty::Intersect(sub_members), _) => sub_members
+        (Ty::Intersect(sub_members), _) => sub_members
             .iter()
             .any(|sub_member| ty_ref_is_a(sub_member, parent_ref)),
 
         // Any type
-        (_, ty::Ty::Any) => true,
+        (_, Ty::Any) => true,
 
         // Sym types
-        (ty::Ty::LitSym(_), ty::Ty::Sym) => true,
+        (Ty::LitSym(_), Ty::Sym) => true,
 
         // Bool types
-        (ty::Ty::LitBool(_), ty::Ty::Bool) => true,
+        (Ty::LitBool(_), Ty::Bool) => true,
 
         // Floats
-        (ty::Ty::Float, ty::Ty::Num) => true,
+        (Ty::Float, Ty::Num) => true,
 
         // Ints
-        (ty::Ty::Int, ty::Ty::Num) => true,
+        (Ty::Int, Ty::Num) => true,
 
         // Sets
-        (ty::Ty::Set(sub), ty::Ty::Set(par)) => ty_ref_is_a(sub.as_ref(), par.as_ref()),
+        (Ty::Set(sub), Ty::Set(par)) => ty_ref_is_a(sub.as_ref(), par.as_ref()),
 
         // Maps
-        (ty::Ty::Map(sub_map), ty::Ty::Map(par_map)) => {
+        (Ty::Map(sub_map), Ty::Map(par_map)) => {
             ty_ref_is_a(sub_map.key(), par_map.key())
                 && ty_ref_is_a(sub_map.value(), par_map.value())
         }
 
         // Vector types
-        (ty::Ty::Vector(sub_members), ty::Ty::Vector(par_members)) => {
+        (Ty::Vector(sub_members), Ty::Vector(par_members)) => {
             (sub_members.len() == par_members.len())
                 && sub_members
                     .iter()
                     .zip(par_members.iter())
                     .all(|(sub_member, par_member)| ty_ref_is_a(sub_member, par_member))
         }
-        (ty::Ty::Vectorof(sub_member), ty::Ty::Vectorof(par_member)) => {
+        (Ty::Vectorof(sub_member), Ty::Vectorof(par_member)) => {
             ty_ref_is_a(sub_member.as_ref(), par_member.as_ref())
         }
-        (ty::Ty::Vector(sub_members), ty::Ty::Vectorof(par_member)) => sub_members
+        (Ty::Vector(sub_members), Ty::Vectorof(par_member)) => sub_members
             .iter()
             .all(|sub_member| ty_ref_is_a(sub_member, par_member)),
 
         // Functions
-        (ty::Ty::TopFun(sub_top_fun), ty::Ty::TopFun(par_top_fun)) => {
+        (Ty::TopFun(sub_top_fun), Ty::TopFun(par_top_fun)) => {
             top_fun_is_a(sub_top_fun, par_top_fun)
         }
-        (ty::Ty::Fun(sub_fun), ty::Ty::TopFun(par_top_fun)) => {
+        (Ty::Fun(sub_fun), Ty::TopFun(par_top_fun)) => {
             if sub_fun.has_polymorphic_vars() {
                 let sub_mono = inst_polymorphic_fun(sub_fun, &par_top_fun);
                 top_fun_is_a(sub_mono.top_fun(), par_top_fun)
@@ -164,32 +165,29 @@ fn ty_is_a<M: ty::PM>(
                 top_fun_is_a(sub_fun.top_fun(), par_top_fun)
             }
         }
-        (ty::Ty::Fun(sub_fun), ty::Ty::Fun(par_fun)) => fun_is_a(sub_fun, par_fun),
+        (Ty::Fun(sub_fun), Ty::Fun(par_fun)) => fun_is_a(sub_fun, par_fun),
 
         // All predicate types
-        (ty::Ty::TyPred(_), ty::Ty::TopFun(par_top_fun))
-        | (ty::Ty::EqPred, ty::Ty::TopFun(par_top_fun)) => {
+        (Ty::TyPred(_), Ty::TopFun(par_top_fun)) | (Ty::EqPred, Ty::TopFun(par_top_fun)) => {
             top_fun_is_a(&ty::TopFun::new_for_pred(), par_top_fun)
         }
 
         // Type predicate types
-        (ty::Ty::TyPred(_), ty::Ty::Fun(par_fun)) => fun_is_a(&ty::Fun::new_for_ty_pred(), par_fun),
+        (Ty::TyPred(_), Ty::Fun(par_fun)) => fun_is_a(&ty::Fun::new_for_ty_pred(), par_fun),
 
         // Equality predicate type
-        (ty::Ty::EqPred, ty::Ty::Fun(par_fun)) => fun_is_a(&ty::Fun::new_for_eq_pred(), par_fun),
+        (Ty::EqPred, Ty::Fun(par_fun)) => fun_is_a(&ty::Fun::new_for_eq_pred(), par_fun),
 
         // List types
-        (ty::Ty::List(sub_list), ty::Ty::List(par_list)) => list_is_a(sub_list, par_list),
+        (Ty::List(sub_list), Ty::List(par_list)) => list_is_a(sub_list, par_list),
 
         // Record types
-        (ty::Ty::Record(sub_instance), ty::Ty::Record(par_instance)) => {
+        (Ty::Record(sub_instance), Ty::Record(par_instance)) => {
             record_instance_is_a(sub_instance, par_instance)
         }
-        (ty::Ty::TopRecord(sub_cons), ty::Ty::TopRecord(par_cons)) => sub_cons == par_cons,
-        (ty::Ty::Record(sub_instance), ty::Ty::TopRecord(par_cons)) => {
-            sub_instance.cons() == par_cons
-        }
-        (ty::Ty::TopRecord(sub_cons), ty::Ty::Record(par_instance)) => {
+        (Ty::TopRecord(sub_cons), Ty::TopRecord(par_cons)) => sub_cons == par_cons,
+        (Ty::Record(sub_instance), Ty::TopRecord(par_cons)) => sub_instance.cons() == par_cons,
+        (Ty::TopRecord(sub_cons), Ty::Record(par_instance)) => {
             // If the top record has no polymorphic params then it only has one instance
             sub_cons == par_instance.cons() && sub_cons.poly_params().is_empty()
         }
@@ -236,7 +234,7 @@ pub fn ty_ref_is_a<M: ty::PM>(sub: &ty::Ref<M>, parent: &ty::Ref<M>) -> bool {
                     return true;
                 }
             }
-            ty::Ref::Fixed(ty::Ty::Intersect(sub_members)) => {
+            ty::Ref::Fixed(Ty::Intersect(sub_members)) => {
                 // Do we satisfy any of the members of the intersection?
                 if sub_members
                     .iter()
@@ -250,7 +248,7 @@ pub fn ty_ref_is_a<M: ty::PM>(sub: &ty::Ref<M>, parent: &ty::Ref<M>) -> bool {
     }
 
     let sub_ty = sub.resolve_to_ty();
-    if sub_ty == &ty::Ty::never() {
+    if sub_ty == &Ty::never() {
         // (U) is a definite subtype of every type, regardless if the parent is bound. This is
         // important as (U) is used as a placeholder for parameters with unknown type. More
         // generally, it's the contravariant equivalent of Any.
@@ -362,18 +360,18 @@ mod test {
 
     #[test]
     fn intersect_types() {
-        let ptype1 = tvar_bounded_by(ty::Ty::Any.into());
-        let ptype2 = tvar_bounded_by(ty::Ty::Any.into());
+        let ptype1 = tvar_bounded_by(Ty::Any.into());
+        let ptype2 = tvar_bounded_by(Ty::Any.into());
 
         let any_sym = poly_for_str("Sym");
         let foo_sym = poly_for_str("'foo");
 
         let sym_poly1_intersection =
-            ty::Ty::Intersect(Box::new([ptype1.clone(), any_sym.clone()])).into();
+            Ty::Intersect(Box::new([ptype1.clone(), any_sym.clone()])).into();
         let sym_poly2_intersection =
-            ty::Ty::Intersect(Box::new([ptype2.clone(), any_sym.clone()])).into();
+            Ty::Intersect(Box::new([ptype2.clone(), any_sym.clone()])).into();
         let sym_poly1_poly2_intersection =
-            ty::Ty::Intersect(Box::new([ptype1.clone(), ptype2.clone(), any_sym.clone()])).into();
+            Ty::Intersect(Box::new([ptype1.clone(), ptype2.clone(), any_sym.clone()])).into();
 
         // `Sym` might not be `Poly`
         assert_eq!(false, ty_ref_is_a(&any_sym, &sym_poly1_intersection));
@@ -407,7 +405,7 @@ mod test {
     #[test]
     fn any_and_never_types() {
         let any = poly_for_str("Any");
-        let never = ty::Ty::never().into();
+        let never = Ty::never().into();
         let foo_sym = poly_for_str("'foo");
 
         assert_eq!(true, ty_ref_is_a(&foo_sym, &any));
@@ -555,8 +553,8 @@ mod test {
 
     #[test]
     fn unbounded_poly_vars() {
-        let ptype1 = tvar_bounded_by(ty::Ty::Any.into());
-        let ptype2 = tvar_bounded_by(ty::Ty::Any.into());
+        let ptype1 = tvar_bounded_by(Ty::Any.into());
+        let ptype2 = tvar_bounded_by(Ty::Any.into());
 
         let poly_bool = poly_for_str("Bool");
 
@@ -567,8 +565,8 @@ mod test {
 
     #[test]
     fn bounded_poly_vars() {
-        let ptype1_sym = tvar_bounded_by(ty::Ty::Sym.into());
-        let ptype2_str = tvar_bounded_by(ty::Ty::Str.into());
+        let ptype1_sym = tvar_bounded_by(Ty::Sym.into());
+        let ptype2_str = tvar_bounded_by(Ty::Str.into());
 
         let poly_foo_sym = poly_for_str("'foo");
 
@@ -591,7 +589,7 @@ mod test {
 
     #[test]
     fn related_poly_bounds() {
-        let ptype1_unbounded = tvar_bounded_by(ty::Ty::Any.into());
+        let ptype1_unbounded = tvar_bounded_by(Ty::Any.into());
         let ptype2_bounded_by_1 = tvar_bounded_by(ptype1_unbounded.clone());
         let ptype3_bounded_by_2 = tvar_bounded_by(ptype2_bounded_by_1.clone());
 
@@ -719,9 +717,9 @@ mod test {
         use crate::ty::ty_args::TyArgs;
         use std::collections::HashMap;
 
-        let tvar1 = ty::TVar::new(EMPTY_SPAN, "tvar1".into(), ty::Ty::Any.into());
-        let tvar2 = ty::TVar::new(EMPTY_SPAN, "tvar2".into(), ty::Ty::Any.into());
-        let tvar3 = ty::TVar::new(EMPTY_SPAN, "tvar3".into(), ty::Ty::Any.into());
+        let tvar1 = ty::TVar::new(EMPTY_SPAN, "tvar1".into(), Ty::Any.into());
+        let tvar2 = ty::TVar::new(EMPTY_SPAN, "tvar2".into(), Ty::Any.into());
+        let tvar3 = ty::TVar::new(EMPTY_SPAN, "tvar3".into(), Ty::Any.into());
 
         let cons = record::Cons::new(
             EMPTY_SPAN,
@@ -742,9 +740,9 @@ mod test {
             cons.clone(),
             TyArgs::new(
                 HashMap::new(),
-                std::iter::once((tvar1.clone(), ty::Ty::Num.into()))
-                    .chain(std::iter::once((tvar2.clone(), ty::Ty::Num.into())))
-                    .chain(std::iter::once((tvar3.clone(), ty::Ty::Num.into())))
+                std::iter::once((tvar1.clone(), Ty::Num.into()))
+                    .chain(std::iter::once((tvar2.clone(), Ty::Num.into())))
+                    .chain(std::iter::once((tvar3.clone(), Ty::Num.into())))
                     .collect(),
             ),
         )
@@ -754,9 +752,9 @@ mod test {
             cons.clone(),
             TyArgs::new(
                 HashMap::new(),
-                std::iter::once((tvar1.clone(), ty::Ty::Int.into()))
-                    .chain(std::iter::once((tvar2.clone(), ty::Ty::Any.into())))
-                    .chain(std::iter::once((tvar3.clone(), ty::Ty::Num.into())))
+                std::iter::once((tvar1.clone(), Ty::Int.into()))
+                    .chain(std::iter::once((tvar2.clone(), Ty::Any.into())))
+                    .chain(std::iter::once((tvar3.clone(), Ty::Num.into())))
                     .collect(),
             ),
         )

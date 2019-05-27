@@ -1,23 +1,25 @@
-use crate::ty;
 use arret_syntax::datum::Datum;
+
+use crate::ty;
+use crate::ty::Ty;
 
 pub fn ty_ref_for_datum<M: ty::PM>(datum: &Datum) -> ty::Ref<M> {
     (match datum {
-        Datum::Bool(_, val) => ty::Ty::LitBool(*val),
-        Datum::Sym(_, val) => ty::Ty::LitSym(val.clone()),
-        Datum::Char(_, _) => ty::Ty::Char,
-        Datum::Int(_, _) => ty::Ty::Int,
-        Datum::Float(_, _) => ty::Ty::Float,
-        Datum::Str(_, _) => ty::Ty::Str,
+        Datum::Bool(_, val) => Ty::LitBool(*val),
+        Datum::Sym(_, val) => Ty::LitSym(val.clone()),
+        Datum::Char(_, _) => Ty::Char,
+        Datum::Int(_, _) => Ty::Int,
+        Datum::Float(_, _) => Ty::Float,
+        Datum::Str(_, _) => Ty::Str,
         Datum::List(_, vs) => ty::List::new(
             vs.iter().map(|datum| ty_ref_for_datum(datum)).collect(),
-            ty::Ty::never().into(),
+            Ty::never().into(),
         )
         .into(),
-        Datum::Vector(_, vs) => ty::Ty::Vector(vs.iter().map(|v| ty_ref_for_datum(v)).collect()),
+        Datum::Vector(_, vs) => Ty::Vector(vs.iter().map(|v| ty_ref_for_datum(v)).collect()),
         Datum::Set(_, vs) => {
             let unified_type = ty::unify::unify_ty_ref_iter(vs.iter().map(|v| ty_ref_for_datum(v)));
-            ty::Ty::Set(Box::new(unified_type))
+            Ty::Set(Box::new(unified_type))
         }
         Datum::Map(_, vs) => {
             let unified_key =

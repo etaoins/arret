@@ -7,6 +7,7 @@ use crate::ty::purity;
 use crate::ty::purity::Purity;
 use crate::ty::ty_args::TyArgs;
 use crate::ty::var_usage::Variance;
+use crate::ty::Ty;
 
 /// Record field of a record constructor
 #[derive(PartialEq, Debug, Clone)]
@@ -160,7 +161,7 @@ impl Cons {
                 .iter()
                 .map(|field| field.ty_ref.clone())
                 .collect(),
-            ty::Ty::never().into(),
+            Ty::never().into(),
         );
         ty::Fun::new(pvars, tvars, top_fun, params)
     }
@@ -168,15 +169,15 @@ impl Cons {
 
 pub type ConsId = ArcId<Cons>;
 
-impl<M: ty::PM> From<ConsId> for ty::Ty<M> {
+impl<M: ty::PM> From<ConsId> for Ty<M> {
     fn from(cons_id: ConsId) -> Self {
-        ty::Ty::TopRecord(cons_id)
+        Ty::TopRecord(cons_id)
     }
 }
 
 impl<M: ty::PM> From<ConsId> for ty::Ref<M> {
     fn from(cons_id: ConsId) -> Self {
-        ty::Ref::Fixed(ty::Ty::TopRecord(cons_id))
+        ty::Ref::Fixed(Ty::TopRecord(cons_id))
     }
 }
 
@@ -204,14 +205,14 @@ impl<M: ty::PM> Instance<M> {
     }
 }
 
-impl<M: ty::PM> From<Instance<M>> for ty::Ty<M> {
+impl<M: ty::PM> From<Instance<M>> for Ty<M> {
     fn from(instance: Instance<M>) -> Self {
-        ty::Ty::Record(Box::new(instance))
+        Ty::Record(Box::new(instance))
     }
 }
 
 impl<M: ty::PM> From<Instance<M>> for ty::Ref<M> {
     fn from(instance: Instance<M>) -> Self {
-        ty::Ref::Fixed(ty::Ty::Record(Box::new(instance)))
+        ty::Ref::Fixed(Ty::Record(Box::new(instance)))
     }
 }

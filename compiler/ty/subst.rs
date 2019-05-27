@@ -2,6 +2,7 @@ use crate::ty;
 use crate::ty::purity;
 use crate::ty::record;
 use crate::ty::ty_args::TyArgs;
+use crate::ty::Ty;
 
 fn subst_ty_ref_slice<S>(stx: &S, inputs: &[ty::Ref<S::InputPM>]) -> Box<[ty::Ref<S::OutputPM>]>
 where
@@ -74,36 +75,36 @@ where
     )
 }
 
-fn subst_ty<S>(stx: &S, ty: &ty::Ty<S::InputPM>) -> ty::Ty<S::OutputPM>
+fn subst_ty<S>(stx: &S, ty: &Ty<S::InputPM>) -> Ty<S::OutputPM>
 where
     S: Substitution,
 {
     match ty {
-        ty::Ty::Any => ty::Ty::Any,
-        ty::Ty::Bool => ty::Ty::Bool,
-        ty::Ty::Char => ty::Ty::Char,
-        ty::Ty::Float => ty::Ty::Float,
-        ty::Ty::Int => ty::Ty::Int,
-        ty::Ty::Num => ty::Ty::Num,
-        ty::Ty::Str => ty::Ty::Str,
-        ty::Ty::Sym => ty::Ty::Sym,
-        ty::Ty::EqPred => ty::Ty::EqPred,
-        ty::Ty::TyPred(test_ty) => ty::Ty::TyPred(test_ty.clone()),
-        ty::Ty::TopFun(top_fun) => subst_top_fun(stx, top_fun).into(),
-        ty::Ty::Fun(fun) => subst_fun(stx, fun).into(),
-        ty::Ty::Map(map) => {
+        Ty::Any => Ty::Any,
+        Ty::Bool => Ty::Bool,
+        Ty::Char => Ty::Char,
+        Ty::Float => Ty::Float,
+        Ty::Int => Ty::Int,
+        Ty::Num => Ty::Num,
+        Ty::Str => Ty::Str,
+        Ty::Sym => Ty::Sym,
+        Ty::EqPred => Ty::EqPred,
+        Ty::TyPred(test_ty) => Ty::TyPred(test_ty.clone()),
+        Ty::TopFun(top_fun) => subst_top_fun(stx, top_fun).into(),
+        Ty::Fun(fun) => subst_fun(stx, fun).into(),
+        Ty::Map(map) => {
             ty::Map::new(stx.subst_ty_ref(map.key()), stx.subst_ty_ref(map.value())).into()
         }
-        ty::Ty::LitBool(val) => ty::Ty::LitBool(*val),
-        ty::Ty::LitSym(val) => ty::Ty::LitSym(val.clone()),
-        ty::Ty::Set(member) => ty::Ty::Set(Box::new(stx.subst_ty_ref(&member))),
-        ty::Ty::Union(members) => ty::Ty::Union(subst_ty_ref_slice(stx, members)),
-        ty::Ty::Intersect(members) => ty::Ty::Intersect(subst_ty_ref_slice(stx, members)),
-        ty::Ty::Vector(members) => ty::Ty::Vector(subst_ty_ref_slice(stx, members)),
-        ty::Ty::Vectorof(member) => ty::Ty::Vectorof(Box::new(stx.subst_ty_ref(member))),
-        ty::Ty::List(list) => subst_list(stx, list).into(),
-        ty::Ty::TopRecord(cons) => ty::Ty::TopRecord(cons.clone()),
-        ty::Ty::Record(instance) => ty::Ty::Record(Box::new(subst_record_instance(stx, instance))),
+        Ty::LitBool(val) => Ty::LitBool(*val),
+        Ty::LitSym(val) => Ty::LitSym(val.clone()),
+        Ty::Set(member) => Ty::Set(Box::new(stx.subst_ty_ref(&member))),
+        Ty::Union(members) => Ty::Union(subst_ty_ref_slice(stx, members)),
+        Ty::Intersect(members) => Ty::Intersect(subst_ty_ref_slice(stx, members)),
+        Ty::Vector(members) => Ty::Vector(subst_ty_ref_slice(stx, members)),
+        Ty::Vectorof(member) => Ty::Vectorof(Box::new(stx.subst_ty_ref(member))),
+        Ty::List(list) => subst_list(stx, list).into(),
+        Ty::TopRecord(cons) => Ty::TopRecord(cons.clone()),
+        Ty::Record(instance) => Ty::Record(Box::new(subst_record_instance(stx, instance))),
     }
 }
 

@@ -20,6 +20,7 @@ use crate::rfi;
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::record;
+use crate::ty::Ty;
 
 /// DeclTy is a type declared by a user
 ///
@@ -30,8 +31,8 @@ pub enum DeclTy {
     Free,
 }
 
-impl From<ty::Ty<ty::Poly>> for DeclTy {
-    fn from(ty: ty::Ty<ty::Poly>) -> Self {
+impl From<Ty<ty::Poly>> for DeclTy {
+    fn from(ty: Ty<ty::Poly>) -> Self {
         DeclTy::Known(ty::Ref::Fixed(ty))
     }
 }

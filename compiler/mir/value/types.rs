@@ -7,15 +7,16 @@ use arret_runtime::boxed::refs::Gc;
 use crate::mir::tagset::TypeTagSet;
 use crate::mir::value::{RegValue, Value};
 use crate::ty;
+use crate::ty::Ty;
 
 pub fn mono_to_const(
     heap: &mut impl boxed::AsHeap,
     mono: &ty::Ref<ty::Mono>,
 ) -> Option<Gc<boxed::Any>> {
     match mono.as_ty() {
-        ty::Ty::LitBool(value) => Some(boxed::Bool::singleton_ref(*value).as_any_ref()),
-        ty::Ty::LitSym(value) => Some(boxed::Sym::new(heap, value.as_ref()).as_any_ref()),
-        ty::Ty::List(list) if list.rest().is_never() => {
+        Ty::LitBool(value) => Some(boxed::Bool::singleton_ref(*value).as_any_ref()),
+        Ty::LitSym(value) => Some(boxed::Sym::new(heap, value.as_ref()).as_any_ref()),
+        Ty::List(list) if list.rest().is_never() => {
             let fixed_consts = list
                 .fixed()
                 .iter()

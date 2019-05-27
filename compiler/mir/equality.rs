@@ -13,7 +13,7 @@ use crate::mir::value::build_reg::value_to_reg;
 use crate::mir::value::from_reg::reg_to_value;
 use crate::mir::value::to_const::value_to_const;
 use crate::mir::value::Value;
-use crate::ty;
+use crate::ty::Ty;
 
 fn runtime_compare(
     ehx: &mut EvalHirCtx,
@@ -150,12 +150,7 @@ fn build_bool_equality(
         }
     };
 
-    reg_to_value(
-        ehx,
-        result_reg,
-        &abitype::ABIType::Bool,
-        &ty::Ty::Bool.into(),
-    )
+    reg_to_value(ehx, result_reg, &abitype::ABIType::Bool, &Ty::Bool.into())
 }
 
 /// Determines if two values are statically equal
@@ -347,10 +342,5 @@ pub fn eval_equality(
         runtime_compare(ehx, b, span, left_value, right_value)
     };
 
-    reg_to_value(
-        ehx,
-        result_reg,
-        &abitype::ABIType::Bool,
-        &ty::Ty::Bool.into(),
-    )
+    reg_to_value(ehx, result_reg, &abitype::ABIType::Bool, &Ty::Bool.into())
 }

@@ -6,6 +6,7 @@ use crate::ty::purity;
 use crate::ty::purity::Purity;
 use crate::ty::record;
 use crate::ty::ty_args::TyArgs;
+use crate::ty::Ty;
 
 pub enum Error<'vars> {
     UnselectedPVar(&'vars purity::PVarId),
@@ -111,24 +112,24 @@ impl<'vars> SelectCtx<'vars> {
     /// Adds evidence that the target is a never
     ///
     /// The propagates the never in to nested types
-    fn add_evidence_never(&mut self, target_ty: &ty::Ty<ty::Poly>) {
+    fn add_evidence_never(&mut self, target_ty: &Ty<ty::Poly>) {
         match target_ty {
-            ty::Ty::Set(target_member) | ty::Ty::Vectorof(target_member) => {
-                self.add_evidence(target_member, &ty::Ty::never().into());
+            Ty::Set(target_member) | Ty::Vectorof(target_member) => {
+                self.add_evidence(target_member, &Ty::never().into());
             }
-            ty::Ty::Map(target_map) => {
-                self.add_evidence(target_map.key(), &ty::Ty::never().into());
-                self.add_evidence(target_map.value(), &ty::Ty::never().into());
+            Ty::Map(target_map) => {
+                self.add_evidence(target_map.key(), &Ty::never().into());
+                self.add_evidence(target_map.value(), &Ty::never().into());
             }
-            ty::Ty::List(target_list) => {
+            Ty::List(target_list) => {
                 for target_fixed in target_list.fixed() {
-                    self.add_evidence(target_fixed, &ty::Ty::never().into());
+                    self.add_evidence(target_fixed, &Ty::never().into());
                 }
-                self.add_evidence(target_list.rest(), &ty::Ty::never().into());
+                self.add_evidence(target_list.rest(), &Ty::never().into());
             }
-            ty::Ty::Vector(target_members) => {
+            Ty::Vector(target_members) => {
                 for target_member in target_members.iter() {
-                    self.add_evidence(target_member, &ty::Ty::never().into());
+                    self.add_evidence(target_member, &Ty::never().into());
                 }
             }
             _ => {}
@@ -137,62 +138,61 @@ impl<'vars> SelectCtx<'vars> {
 
     fn add_evidence_ty(
         &mut self,
-        target_ty: &ty::Ty<ty::Poly>,
+        target_ty: &Ty<ty::Poly>,
         evidence_poly: &ty::Ref<ty::Poly>,
-        evidence_ty: &ty::Ty<ty::Poly>,
+        evidence_ty: &Ty<ty::Poly>,
     ) {
         match (target_ty, evidence_ty) {
-            (ty::Ty::Set(target_member), ty::Ty::Set(evidence_member)) => {
+            (Ty::Set(target_member), Ty::Set(evidence_member)) => {
                 self.add_evidence(target_member, evidence_member);
             }
-            (ty::Ty::Map(target_map), ty::Ty::Map(evidence_map)) => {
+            (Ty::Map(target_map), Ty::Map(evidence_map)) => {
                 self.add_evidence(target_map.key(), evidence_map.key());
                 self.add_evidence(target_map.value(), evidence_map.value());
             }
-            (ty::Ty::List(target_list), ty::Ty::List(evidence_list)) => {
+            (Ty::List(target_list), Ty::List(evidence_list)) => {
                 self.add_evidence_list(target_list, evidence_list);
             }
-            (ty::Ty::Vector(target_members), ty::Ty::Vector(evidence_members)) => {
+            (Ty::Vector(target_members), Ty::Vector(evidence_members)) => {
                 for (target_member, evidence_member) in
                     target_members.iter().zip(evidence_members.iter())
                 {
                     self.add_evidence(target_member, evidence_member);
                 }
             }
-            (ty::Ty::Vectorof(target_member), ty::Ty::Vectorof(evidence_member)) => {
+            (Ty::Vectorof(target_member), Ty::Vectorof(evidence_member)) => {
                 self.add_evidence(target_member, evidence_member);
             }
-            (ty::Ty::Vectorof(target_member), ty::Ty::Vector(evidence_members)) => {
+            (Ty::Vectorof(target_member), Ty::Vector(evidence_members)) => {
                 for evidence_member in evidence_members.iter() {
                     self.add_evidence(target_member, evidence_member);
                 }
             }
-            (ty::Ty::TopFun(target_top_fun), ty::Ty::TopFun(evidence_top_fun)) => {
+            (Ty::TopFun(target_top_fun), Ty::TopFun(evidence_top_fun)) => {
                 self.add_evidence_top_fun(target_top_fun, evidence_top_fun);
             }
-            (ty::Ty::TopFun(target_top_fun), ty::Ty::Fun(evidence_fun)) => {
+            (Ty::TopFun(target_top_fun), Ty::Fun(evidence_fun)) => {
                 self.add_evidence_fun(target_top_fun, evidence_fun);
             }
-            (ty::Ty::TopFun(target_top_fun), ty::Ty::TyPred(_))
-            | (ty::Ty::TopFun(target_top_fun), ty::Ty::EqPred) => {
+            (Ty::TopFun(target_top_fun), Ty::TyPred(_))
+            | (Ty::TopFun(target_top_fun), Ty::EqPred) => {
                 self.add_evidence_top_fun(target_top_fun, &ty::TopFun::new_for_pred());
             }
-            (ty::Ty::Fun(target_fun), ty::Ty::Fun(evidence_fun)) => {
+            (Ty::Fun(target_fun), Ty::Fun(evidence_fun)) => {
                 self.add_evidence_fun(target_fun.top_fun(), evidence_fun);
             }
-            (ty::Ty::Fun(target_fun), ty::Ty::TyPred(_))
-            | (ty::Ty::Fun(target_fun), ty::Ty::EqPred) => {
+            (Ty::Fun(target_fun), Ty::TyPred(_)) | (Ty::Fun(target_fun), Ty::EqPred) => {
                 self.add_evidence_top_fun(target_fun.top_fun(), &ty::TopFun::new_for_pred());
             }
-            (ty::Ty::Record(target_instance), ty::Ty::Record(evidence_instance)) => {
+            (Ty::Record(target_instance), Ty::Record(evidence_instance)) => {
                 self.add_evidence_record(target_instance, evidence_instance)
             }
-            (ty::Ty::Union(target_members), _) => {
+            (Ty::Union(target_members), _) => {
                 for target_member in target_members.iter() {
                     self.add_evidence(target_member, evidence_poly);
                 }
             }
-            (_, ty::Ty::Union(evidence_members)) => {
+            (_, Ty::Union(evidence_members)) => {
                 if evidence_members.is_empty() {
                     self.add_evidence_never(target_ty);
                 }
@@ -291,7 +291,7 @@ impl<'vars> SelectCtx<'vars> {
         if self.selecting_tvars.len() != self.tvar_types.len() {
             for tvar in self.selecting_tvars {
                 if !self.tvar_types.contains_key(tvar) {
-                    if tvar.bound() == &ty::Ty::Any.into() {
+                    if tvar.bound() == &Ty::Any.into() {
                         return Err(Error::UnselectedTVar(tvar));
                     }
 

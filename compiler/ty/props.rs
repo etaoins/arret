@@ -1,52 +1,48 @@
 use crate::ty;
 use crate::ty::purity::Purity;
 use crate::ty::var_usage::Variance;
+use crate::ty::Ty;
 
-fn ty_has_subtypes<M: ty::PM>(ty: &ty::Ty<M>) -> bool {
+fn ty_has_subtypes<M: ty::PM>(ty: &Ty<M>) -> bool {
     match ty {
-        ty::Ty::Any
-        | ty::Ty::Bool
-        | ty::Ty::Num
-        | ty::Ty::Sym
-        | ty::Ty::TopFun(_)
-        | ty::Ty::TopRecord(_) => true,
+        Ty::Any | Ty::Bool | Ty::Num | Ty::Sym | Ty::TopFun(_) | Ty::TopRecord(_) => true,
 
-        ty::Ty::Char
-        | ty::Ty::Float
-        | ty::Ty::Int
-        | ty::Ty::LitBool(_)
-        | ty::Ty::LitSym(_)
-        | ty::Ty::Str
-        | ty::Ty::TyPred(_)
-        | ty::Ty::EqPred => false,
+        Ty::Char
+        | Ty::Float
+        | Ty::Int
+        | Ty::LitBool(_)
+        | Ty::LitSym(_)
+        | Ty::Str
+        | Ty::TyPred(_)
+        | Ty::EqPred => false,
 
-        ty::Ty::Fun(fun) => {
+        Ty::Fun(fun) => {
             fun.purity() != &Purity::Pure.into()
                 || !fun.params().fixed().is_empty()
-                || fun.params().rest() != &ty::Ty::Any.into()
+                || fun.params().rest() != &Ty::Any.into()
                 || has_subtypes(fun.ret())
         }
-        ty::Ty::Map(map) => has_subtypes(map.key()) || has_subtypes(map.value()),
-        ty::Ty::Set(member) => has_subtypes(member.as_ref()),
-        ty::Ty::Vector(members) => members.iter().any(has_subtypes),
-        ty::Ty::Union(members) => !members.is_empty(),
-        ty::Ty::List(list) => {
+        Ty::Map(map) => has_subtypes(map.key()) || has_subtypes(map.value()),
+        Ty::Set(member) => has_subtypes(member.as_ref()),
+        Ty::Vector(members) => members.iter().any(has_subtypes),
+        Ty::Union(members) => !members.is_empty(),
+        Ty::List(list) => {
             // Any arbitrary fixed length list is a subtype of a list with rest
             !list.rest().is_never() || list.fixed().iter().any(has_subtypes)
         }
 
         // Any record type supporting variance has subtypes
-        ty::Ty::Record(instance) => instance
+        Ty::Record(instance) => instance
             .cons()
             .poly_params()
             .iter()
             .any(|poly_param| poly_param.variance() != Variance::Invariant),
 
-        ty::Ty::Vectorof(_) => {
+        Ty::Vectorof(_) => {
             // Any arbitrary fixed length vector is a subtype of this vector
             true
         }
-        ty::Ty::Intersect(_) => {
+        Ty::Intersect(_) => {
             // If we're correctly normalised we should have subtypes
             true
         }
@@ -60,11 +56,11 @@ pub fn has_subtypes<M: ty::PM>(ty_ref: &ty::Ref<M>) -> bool {
         .unwrap_or(true)
 }
 
-fn ty_is_literal<M: ty::PM>(ty: &ty::Ty<M>) -> bool {
+fn ty_is_literal<M: ty::PM>(ty: &Ty<M>) -> bool {
     match ty {
-        ty::Ty::LitBool(_) | ty::Ty::LitSym(_) => true,
-        ty::Ty::Vector(members) => members.iter().all(is_literal),
-        ty::Ty::List(list) => list.rest().is_never() && list.fixed().iter().all(is_literal),
+        Ty::LitBool(_) | Ty::LitSym(_) => true,
+        Ty::Vector(members) => members.iter().all(is_literal),
+        Ty::List(list) => list.rest().is_never() && list.fixed().iter().all(is_literal),
         _ => false,
     }
 }
@@ -126,7 +122,7 @@ mod test {
 
         assert_eq!(false, str_has_subtypes("(RawU)"));
 
-        let tvar = ty::TVar::new(EMPTY_SPAN, "test".into(), ty::Ty::Any.into());
+        let tvar = ty::TVar::new(EMPTY_SPAN, "test".into(), Ty::Any.into());
         assert_eq!(true, has_subtypes(&tvar.into()));
     }
 
@@ -157,7 +153,7 @@ mod test {
         assert_eq!(false, str_is_literal("(Vectorof false)"));
         assert_eq!(true, str_is_literal("(Vector false true)"));
 
-        let tvar = ty::TVar::new(EMPTY_SPAN, "test".into(), ty::Ty::Any.into());
+        let tvar = ty::TVar::new(EMPTY_SPAN, "test".into(), Ty::Any.into());
         assert_eq!(false, is_literal(&tvar.into()));
     }
 
@@ -167,7 +163,7 @@ mod test {
             EMPTY_SPAN,
             "record_cons".into(),
             None,
-            Box::new([record::Field::new("num".into(), ty::Ty::Num.into())]),
+            Box::new([record::Field::new("num".into(), Ty::Num.into())]),
         );
 
         let int_record_instance_ref: ty::Ref<ty::Poly> =
@@ -179,7 +175,7 @@ mod test {
 
     #[test]
     fn poly_record_type() {
-        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), ty::Ty::Any.into());
+        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), Ty::Any.into());
 
         let poly_record_cons = record::Cons::new(
             EMPTY_SPAN,

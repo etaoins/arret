@@ -1,6 +1,7 @@
 use std::{iter, ops};
 
 use crate::ty;
+use crate::ty::Ty;
 use arret_runtime::abitype;
 use arret_runtime::boxed::{TypeTag, ALL_TYPE_TAGS};
 
@@ -82,21 +83,19 @@ where
         ty_ref
             .try_to_fixed()
             .map(|ty| match ty {
-                ty::Ty::Any => TypeTagSet::all(),
-                ty::Ty::Int => TypeTag::Int.into(),
-                ty::Ty::Float => TypeTag::Float.into(),
-                ty::Ty::Char => TypeTag::Char.into(),
-                ty::Ty::Bool => [TypeTag::True, TypeTag::False].iter().collect(),
-                ty::Ty::Num => [TypeTag::Int, TypeTag::Float].iter().collect(),
-                ty::Ty::LitBool(true) => TypeTag::True.into(),
-                ty::Ty::LitBool(false) => TypeTag::False.into(),
-                ty::Ty::Sym | ty::Ty::LitSym(_) => TypeTag::Sym.into(),
-                ty::Ty::Str => TypeTag::Str.into(),
-                ty::Ty::Fun(_) | ty::Ty::TopFun(_) | ty::Ty::TyPred(_) | ty::Ty::EqPred => {
-                    TypeTag::FunThunk.into()
-                }
-                ty::Ty::Vector(_) | ty::Ty::Vectorof(_) => TypeTag::Vector.into(),
-                ty::Ty::List(list) => {
+                Ty::Any => TypeTagSet::all(),
+                Ty::Int => TypeTag::Int.into(),
+                Ty::Float => TypeTag::Float.into(),
+                Ty::Char => TypeTag::Char.into(),
+                Ty::Bool => [TypeTag::True, TypeTag::False].iter().collect(),
+                Ty::Num => [TypeTag::Int, TypeTag::Float].iter().collect(),
+                Ty::LitBool(true) => TypeTag::True.into(),
+                Ty::LitBool(false) => TypeTag::False.into(),
+                Ty::Sym | Ty::LitSym(_) => TypeTag::Sym.into(),
+                Ty::Str => TypeTag::Str.into(),
+                Ty::Fun(_) | Ty::TopFun(_) | Ty::TyPred(_) | Ty::EqPred => TypeTag::FunThunk.into(),
+                Ty::Vector(_) | Ty::Vectorof(_) => TypeTag::Vector.into(),
+                Ty::List(list) => {
                     if list.is_empty() {
                         TypeTag::Nil.into()
                     } else if !list.fixed().is_empty() {
@@ -105,15 +104,15 @@ where
                         [TypeTag::Nil, TypeTag::Pair].iter().collect()
                     }
                 }
-                ty::Ty::Union(members) => members
+                Ty::Union(members) => members
                     .iter()
                     .map(TypeTagSet::from)
                     .fold(TypeTagSet::new(), |a, b| a | b),
-                ty::Ty::Intersect(members) => members
+                Ty::Intersect(members) => members
                     .iter()
                     .map(TypeTagSet::from)
                     .fold(TypeTagSet::new(), |a, b| a & b),
-                ty::Ty::Map(_) | ty::Ty::Set(_) | ty::Ty::TopRecord(_) | ty::Ty::Record(_) => {
+                Ty::Map(_) | Ty::Set(_) | Ty::TopRecord(_) | Ty::Record(_) => {
                     unimplemented!("no corresponding type tag")
                 }
             })
