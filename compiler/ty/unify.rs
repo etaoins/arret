@@ -399,11 +399,11 @@ where
 pub fn unify_list<M: ty::PM>(list1: &ty::List<M>, list2: &ty::List<M>) -> UnifiedList<M> {
     if list1.is_empty() {
         if let Some(member) = try_list_to_exact_pair(list2) {
-            return UnifiedList::Merged(ty::List::new(Box::new([]), member.clone()));
+            return UnifiedList::Merged(ty::List::new_uniform(member.clone()));
         }
     } else if list2.is_empty() {
         if let Some(member) = try_list_to_exact_pair(list1) {
-            return UnifiedList::Merged(ty::List::new(Box::new([]), member.clone()));
+            return UnifiedList::Merged(ty::List::new_uniform(member.clone()));
         }
     }
 

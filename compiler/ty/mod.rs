@@ -254,6 +254,7 @@ pub struct List<M: PM> {
 }
 
 impl<M: PM> List<M> {
+    /// Creates a list with the given fixed member types and a uniform tail member type
     pub fn new(fixed: Box<[Ref<M>]>, rest: Ref<M>) -> List<M> {
         List {
             fixed,
@@ -261,14 +262,34 @@ impl<M: PM> List<M> {
         }
     }
 
+    /// Creates a list of zero or more elements with a uniform type
+    pub fn new_uniform(rest: Ref<M>) -> List<M> {
+        List {
+            fixed: Box::new([]),
+            rest: Box::new(rest),
+        }
+    }
+
+    /// Creates a fixed sized list with the given member types
+    pub fn new_tuple(fixed: Box<[Ref<M>]>) -> List<M> {
+        List {
+            fixed,
+            rest: Box::new(Ty::never().into()),
+        }
+    }
+
+    /// Creates an empty list
     pub fn empty() -> List<M> {
-        List::new(Box::new([]), Ty::never().into())
+        List::new_tuple(Box::new([]))
     }
 
     pub fn fixed(&self) -> &[Ref<M>] {
         &self.fixed
     }
 
+    /// Returns the member type of our uniform tail
+    ///
+    /// This will be [`Ty::never()`] if the list has no tail.
     pub fn rest(&self) -> &Ref<M> {
         self.rest.as_ref()
     }
@@ -380,7 +401,7 @@ impl Fun {
             purity::PVars::new(),
             TVars::new(),
             TopFun::new_for_pred(),
-            List::new(Box::new([Ty::Any.into()]), Ty::never().into()),
+            List::new_tuple(Box::new([Ty::Any.into()])),
         )
     }
 
@@ -393,10 +414,7 @@ impl Fun {
             purity::PVars::new(),
             TVars::new(),
             TopFun::new_for_pred(),
-            List::new(
-                Box::new([Ty::Any.into(), Ty::Any.into()]),
-                Ty::never().into(),
-            ),
+            List::new_tuple(Box::new([Ty::Any.into(), Ty::Any.into()])),
         )
     }
 

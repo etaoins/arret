@@ -66,7 +66,7 @@ impl ConvertableABIType for abitype::BoxedABIType {
         match self {
             BoxedABIType::Any => Ty::Any.into(),
             BoxedABIType::Vector(member) => Ty::Vectorof(Box::new(member.to_ty_ref())).into(),
-            BoxedABIType::List(member) => ty::List::new(Box::new([]), member.to_ty_ref()).into(),
+            BoxedABIType::List(member) => ty::List::new_uniform(member.to_ty_ref()).into(),
             BoxedABIType::Pair(member) => {
                 let member_ty_ref: ty::Ref<M> = member.to_ty_ref();
                 ty::List::new(Box::new([member_ty_ref.clone()]), member_ty_ref).into()
@@ -127,7 +127,7 @@ impl ConvertableABIType for callback::EntryPointABIType {
             .map(ConvertableABIType::to_ty_ref)
             .collect();
 
-        let param_list_ty = ty::List::new(fixed_param_ty_refs, Ty::never().into());
+        let param_list_ty = ty::List::new_tuple(fixed_param_ty_refs);
 
         ty::Fun::new(
             purity::PVars::new(),
@@ -217,7 +217,7 @@ mod test {
             purity::PVars::new(),
             ty::TVars::new(),
             ty::TopFun::new(Purity::Impure.into(), Ty::Char.into()),
-            ty::List::new(Box::new([Ty::Int.into()]), Ty::never().into()),
+            ty::List::new_tuple(Box::new([Ty::Int.into()])),
         )
         .into();
 

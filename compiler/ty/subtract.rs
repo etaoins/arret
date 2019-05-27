@@ -44,7 +44,7 @@ fn subtract_tys<M: ty::PM>(
             if !minued_rest.is_never() {
                 // This is the list type if we have no rest elements
                 let terminated_list =
-                    ty::List::new(minuend_list.fixed().to_vec().into_boxed_slice(), Ty::never().into());
+                    ty::List::new_tuple(minuend_list.fixed().to_vec().into_boxed_slice());
 
                 // This is the list type if we have at least one rest element
                 let mut continued_fixed = minuend_list.fixed().to_vec();

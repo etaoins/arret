@@ -155,13 +155,12 @@ impl Cons {
         let ret_type = Instance::new(cons_id.clone(), ty_args).into();
         let top_fun = ty::TopFun::new(Purity::Pure.into(), ret_type);
 
-        let params = ty::List::new(
+        let params = ty::List::new_tuple(
             cons_id
                 .fields
                 .iter()
                 .map(|field| field.ty_ref.clone())
                 .collect(),
-            Ty::never().into(),
         );
         ty::Fun::new(pvars, tvars, top_fun, params)
     }

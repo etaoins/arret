@@ -235,7 +235,7 @@ mod test {
                 purity::PVars::new(),
                 ty::TVars::new(),
                 ty::TopFun::new(Purity::Pure.into(), Ty::Any.into()),
-                ty::List::new(Box::new([]), tvar.clone().into()),
+                ty::List::new_uniform(tvar.clone().into()),
             )
             .into(),
         );
@@ -257,7 +257,7 @@ mod test {
                 purity::PVars::new(),
                 ty::TVars::new(),
                 ty::TopFun::new(Purity::Pure.into(), tvar.clone().into()),
-                ty::List::new(Box::new([]), tvar.clone().into()),
+                ty::List::new_uniform(tvar.clone().into()),
             )
             .into(),
         );

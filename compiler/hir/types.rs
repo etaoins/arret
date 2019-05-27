@@ -303,7 +303,7 @@ fn lower_literal(datum: NsDatum) -> Result<ty::Ref<ty::Poly>> {
         NsDatum::Ident(_, ident) => Ok(Ty::LitSym(ident.into_name()).into()),
         NsDatum::List(_, vs) => {
             let fixed_literals = lower_literal_vec(vs.into_vec())?;
-            Ok(ty::List::new(fixed_literals.into_boxed_slice(), Ty::never().into()).into())
+            Ok(ty::List::new_tuple(fixed_literals.into_boxed_slice()).into())
         }
         NsDatum::Vector(_, vs) => {
             let fixed_literals = lower_literal_vec(vs.into_vec())?;
@@ -813,10 +813,10 @@ mod test {
     fn quoted_list_literal() {
         let j = "'(true false)";
 
-        let expected = ty::List::new(
-            Box::new([Ty::LitBool(true).into(), Ty::LitBool(false).into()]),
-            Ty::never().into(),
-        )
+        let expected = ty::List::new_tuple(Box::new([
+            Ty::LitBool(true).into(),
+            Ty::LitBool(false).into(),
+        ]))
         .into();
 
         assert_ty_for_str(expected, j);
@@ -854,10 +854,10 @@ mod test {
     fn fixed_list_cons() {
         let j = "(List true false)";
 
-        let expected = ty::List::new(
-            Box::new([Ty::LitBool(true).into(), Ty::LitBool(false).into()]),
-            Ty::never().into(),
-        )
+        let expected = ty::List::new_tuple(Box::new([
+            Ty::LitBool(true).into(),
+            Ty::LitBool(false).into(),
+        ]))
         .into();
 
         assert_ty_for_str(expected, j);
@@ -936,7 +936,7 @@ mod test {
             purity::PVars::new(),
             ty::TVars::new(),
             ty::TopFun::new(Purity::Pure.into(), Ty::LitBool(true).into()),
-            ty::List::new(Box::new([Ty::LitBool(false).into()]), Ty::never().into()),
+            ty::List::new_tuple(Box::new([Ty::LitBool(false).into()])),
         )
         .into();
 

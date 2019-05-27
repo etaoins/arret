@@ -11,11 +11,9 @@ pub fn ty_ref_for_datum<M: ty::PM>(datum: &Datum) -> ty::Ref<M> {
         Datum::Int(_, _) => Ty::Int,
         Datum::Float(_, _) => Ty::Float,
         Datum::Str(_, _) => Ty::Str,
-        Datum::List(_, vs) => ty::List::new(
-            vs.iter().map(|datum| ty_ref_for_datum(datum)).collect(),
-            Ty::never().into(),
-        )
-        .into(),
+        Datum::List(_, vs) => {
+            ty::List::new_tuple(vs.iter().map(|datum| ty_ref_for_datum(datum)).collect()).into()
+        }
         Datum::Vector(_, vs) => Ty::Vector(vs.iter().map(|v| ty_ref_for_datum(v)).collect()),
         Datum::Set(_, vs) => {
             let unified_type = ty::unify::unify_ty_ref_iter(vs.iter().map(|v| ty_ref_for_datum(v)));

@@ -112,7 +112,7 @@ impl TestTy {
             TestTy::Int => Ty::Int,
             TestTy::Float => Ty::Float,
             TestTy::Char => Ty::Char,
-            TestTy::List => ty::List::new(Box::new([]), Ty::Any.into()).into(),
+            TestTy::List => ty::List::new_uniform(Ty::Any.into()).into(),
             TestTy::Vector => Ty::Vectorof(Box::new(Ty::Any.into())),
             TestTy::Set => Ty::Set(Box::new(Ty::Any.into())),
             TestTy::Map => ty::Map::new(Ty::Any.into(), Ty::Any.into()).into(),
@@ -256,10 +256,7 @@ mod test {
 
     #[test]
     fn list_test_ty() {
-        assert_trivial_test_ty(
-            ty::List::new(Box::new([]), Ty::Any.into()).into(),
-            TestTy::List,
-        );
+        assert_trivial_test_ty(ty::List::new_uniform(Ty::Any.into()).into(), TestTy::List);
     }
 
     #[test]
@@ -298,11 +295,8 @@ mod test {
         let test_ty = TestTy::Nil;
 
         assert_test_ty_will_match(&test_ty, ty::List::empty());
-        assert_test_ty_may_match(&test_ty, ty::List::new(Box::new([]), Ty::Any.into()));
-        assert_test_ty_wont_match(
-            &test_ty,
-            ty::List::new(Box::new([Ty::Any.into()]), Ty::never().into()),
-        );
+        assert_test_ty_may_match(&test_ty, ty::List::new_uniform(Ty::Any.into()));
+        assert_test_ty_wont_match(&test_ty, ty::List::new_tuple(Box::new([Ty::Any.into()])));
     }
 
     #[test]
@@ -334,7 +328,7 @@ mod test {
         assert_test_ty_wont_match(&TestTy::Int, str_sym_union.clone());
 
         let list_false_union: ty::Ref<ty::Poly> = Ty::Union(Box::new([
-            ty::List::new(Box::new([]), Ty::Any.into()).into(),
+            ty::List::new_uniform(Ty::Any.into()).into(),
             Ty::LitBool(false).into(),
         ]))
         .into();

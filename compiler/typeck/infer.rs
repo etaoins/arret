@@ -225,7 +225,7 @@ fn member_type_for_poly_list(
                 span,
                 ErrorKind::IsNotTy(
                     poly_type.clone(),
-                    ty::List::new(Box::new([]), Ty::Any.into()).into(),
+                    ty::List::new_uniform(Ty::Any.into()).into(),
                 ),
             )
         })?;
@@ -576,7 +576,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                     self.type_for_free_ref(&required_member_type, span, current_member_type)?;
 
                 self.free_ty_polys[free_ty_id.to_usize()] = new_free_type.clone();
-                let rest_list_type = ty::List::new(Box::new([]), new_free_type).into();
+                let rest_list_type = ty::List::new_uniform(new_free_type).into();
 
                 // Make sure we didn't require a specific list type e.g. `(List Int Int Int)`
                 ensure_is_a(span, &rest_list_type, required_type)?;
@@ -1069,8 +1069,7 @@ impl<'types> RecursiveDefsCtx<'types> {
     ) -> Result<InferredNode> {
         use std::iter;
 
-        let wanted_subject_list_type =
-            ty::List::new(Box::new([Ty::Any.into()]), Ty::never().into()).into();
+        let wanted_subject_list_type = ty::List::new_tuple(Box::new([Ty::Any.into()])).into();
 
         let subject_list_node =
             self.visit_expr(pv, &wanted_subject_list_type, subject_list_expr)?;
