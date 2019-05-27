@@ -382,13 +382,22 @@ impl Fun {
         }
     }
 
-    // Returns the `Fun` type for the `(main!)` function
+    /// Creates a new function without polymorphic variables
+    pub fn new_mono(params: List<Poly>, purity: purity::Ref, ret: Ref<Poly>) -> Fun {
+        Fun {
+            pvars: purity::PVars::new(),
+            tvars: TVars::new(),
+            top_fun: TopFun::new(purity, ret),
+            params,
+        }
+    }
+
+    /// Returns the `Fun` type for the `(main!)` function
     pub fn new_for_main() -> Fun {
-        Self::new(
-            purity::PVars::new(),
-            TVars::new(),
-            TopFun::new(purity::Purity::Impure.into(), Ty::unit().into()),
+        Self::new_mono(
             List::empty(),
+            purity::Purity::Impure.into(),
+            Ty::unit().into(),
         )
     }
 

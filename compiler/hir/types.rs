@@ -902,11 +902,10 @@ mod test {
     fn pure_fun() {
         let j = "(-> true)";
 
-        let expected = ty::Fun::new(
-            purity::PVars::new(),
-            ty::TVars::new(),
-            ty::TopFun::new(Purity::Pure.into(), Ty::LitBool(true).into()),
+        let expected = ty::Fun::new_mono(
             ty::List::empty(),
+            Purity::Pure.into(),
+            Ty::LitBool(true).into(),
         )
         .into();
 
@@ -917,11 +916,10 @@ mod test {
     fn impure_fun() {
         let j = "(->! true)";
 
-        let expected = ty::Fun::new(
-            purity::PVars::new(),
-            ty::TVars::new(),
-            ty::TopFun::new(Purity::Impure.into(), Ty::LitBool(true).into()),
+        let expected = ty::Fun::new_mono(
             ty::List::empty(),
+            Purity::Impure.into(),
+            Ty::LitBool(true).into(),
         )
         .into();
 
@@ -932,11 +930,10 @@ mod test {
     fn fixed_fun() {
         let j = "(false -> true)";
 
-        let expected = ty::Fun::new(
-            purity::PVars::new(),
-            ty::TVars::new(),
-            ty::TopFun::new(Purity::Pure.into(), Ty::LitBool(true).into()),
+        let expected = ty::Fun::new_mono(
             ty::List::new_tuple(Box::new([Ty::LitBool(false).into()])),
+            Purity::Pure.into(),
+            Ty::LitBool(true).into(),
         )
         .into();
 
@@ -947,11 +944,10 @@ mod test {
     fn rest_impure_fun() {
         let j = "(Str & Sym ->! true)";
 
-        let expected = ty::Fun::new(
-            purity::PVars::new(),
-            ty::TVars::new(),
-            ty::TopFun::new(Purity::Impure.into(), Ty::LitBool(true).into()),
+        let expected = ty::Fun::new_mono(
             ty::List::new(Box::new([Ty::Str.into()]), Ty::Sym.into()),
+            Purity::Impure.into(),
+            Ty::LitBool(true).into(),
         )
         .into();
 

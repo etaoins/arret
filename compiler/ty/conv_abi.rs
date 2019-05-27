@@ -2,7 +2,6 @@ use arret_runtime::callback;
 use arret_runtime::{abitype, boxed};
 
 use crate::ty;
-use crate::ty::purity;
 use crate::ty::purity::Purity;
 use crate::ty::Ty;
 
@@ -118,8 +117,6 @@ impl ConvertableABIType for abitype::RetABIType {
 
 impl ConvertableABIType for callback::EntryPointABIType {
     fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M> {
-        let top_fun_ty = ty::TopFun::new(Purity::Impure.into(), self.ret.to_ty_ref());
-
         // TODO: How do we deal with rest params?
         let fixed_param_ty_refs = self
             .params
@@ -127,13 +124,10 @@ impl ConvertableABIType for callback::EntryPointABIType {
             .map(ConvertableABIType::to_ty_ref)
             .collect();
 
-        let param_list_ty = ty::List::new_tuple(fixed_param_ty_refs);
-
-        ty::Fun::new(
-            purity::PVars::new(),
-            ty::TVars::new(),
-            top_fun_ty,
-            param_list_ty,
+        ty::Fun::new_mono(
+            ty::List::new_tuple(fixed_param_ty_refs),
+            Purity::Impure.into(),
+            self.ret.to_ty_ref(),
         )
         .into()
     }
@@ -213,11 +207,10 @@ mod test {
             entry_point_abi_type.to_rust_str()
         );
 
-        let arret_poly: ty::Ref<ty::Poly> = ty::Fun::new(
-            purity::PVars::new(),
-            ty::TVars::new(),
-            ty::TopFun::new(Purity::Impure.into(), Ty::Char.into()),
+        let arret_poly: ty::Ref<ty::Poly> = ty::Fun::new_mono(
             ty::List::new_tuple(Box::new([Ty::Int.into()])),
+            Purity::Impure.into(),
+            Ty::Char.into(),
         )
         .into();
 

@@ -292,13 +292,7 @@ fn non_subty_intersect<M: ty::PM>(
             let intersected_params = fun.params().clone();
             let intersected_ret = intersect_ty_refs(top_fun.ret(), fun.ret())?;
 
-            Ok(ty::Fun::new(
-                purity::PVars::new(),
-                ty::TVars::new(),
-                ty::TopFun::new(intersected_purity, intersected_ret),
-                intersected_params,
-            )
-            .into())
+            Ok(ty::Fun::new_mono(intersected_params, intersected_purity, intersected_ret).into())
         }
         (Ty::Fun(fun1), Ty::Fun(fun2)) => {
             if fun1.has_polymorphic_vars() || fun2.has_polymorphic_vars() {
@@ -309,13 +303,10 @@ fn non_subty_intersect<M: ty::PM>(
                 let intersected_params = unify_list(fun1.params(), fun2.params())?;
                 let intersected_ret = intersect_ty_refs(fun1.ret(), fun2.ret())?;
 
-                Ok(ty::Fun::new(
-                    purity::PVars::new(),
-                    ty::TVars::new(),
-                    ty::TopFun::new(intersected_purity, intersected_ret),
-                    intersected_params,
+                Ok(
+                    ty::Fun::new_mono(intersected_params, intersected_purity, intersected_ret)
+                        .into(),
                 )
-                .into())
             }
         }
         (Ty::Record(instance1), Ty::Record(instance2)) => {

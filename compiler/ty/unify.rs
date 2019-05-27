@@ -118,13 +118,7 @@ fn unify_fun<M: ty::PM>(fun1: &ty::Fun, fun2: &ty::Fun) -> UnifiedTy<M> {
 
         match ty::intersect::intersect_list(fun1.params(), fun2.params()) {
             Ok(unified_params) => UnifiedTy::Merged(
-                ty::Fun::new(
-                    purity::PVars::new(),
-                    ty::TVars::new(),
-                    ty::TopFun::new(unified_purity, unified_ret),
-                    unified_params,
-                )
-                .into(),
+                ty::Fun::new_mono(unified_params, unified_purity, unified_ret).into(),
             ),
             Err(ty::intersect::Error::Disjoint) => {
                 UnifiedTy::Merged(ty::TopFun::new(unified_purity, unified_ret).into())

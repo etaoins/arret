@@ -231,11 +231,10 @@ mod test {
         let mut var_usages = VarUsages::new();
 
         var_usages.add_poly_usages(
-            &ty::Fun::new(
-                purity::PVars::new(),
-                ty::TVars::new(),
-                ty::TopFun::new(Purity::Pure.into(), Ty::Any.into()),
+            &ty::Fun::new_mono(
                 ty::List::new_uniform(tvar.clone().into()),
+                Purity::Pure.into(),
+                Ty::Any.into(),
             )
             .into(),
         );
@@ -253,11 +252,10 @@ mod test {
         let mut var_usages = VarUsages::new();
 
         var_usages.add_poly_usages(
-            &ty::Fun::new(
-                purity::PVars::new(),
-                ty::TVars::new(),
-                ty::TopFun::new(Purity::Pure.into(), tvar.clone().into()),
+            &ty::Fun::new_mono(
                 ty::List::new_uniform(tvar.clone().into()),
+                Purity::Pure.into(),
+                tvar.clone().into(),
             )
             .into(),
         );
