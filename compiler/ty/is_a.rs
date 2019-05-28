@@ -12,7 +12,7 @@ fn top_fun_is_a(sub_top_fun: &ty::TopFun, par_top_fun: &ty::TopFun) -> bool {
 }
 
 fn list_is_a<M: ty::PM>(sub_list: &ty::List<M>, par_list: &ty::List<M>) -> bool {
-    if (sub_list.fixed().len() > par_list.fixed().len()) && par_list.rest().is_never() {
+    if (sub_list.fixed().len() > par_list.fixed().len()) && !par_list.has_rest() {
         // sub is longer than par
         return false;
     }

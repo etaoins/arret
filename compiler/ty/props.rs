@@ -28,7 +28,7 @@ fn ty_has_subtypes<M: ty::PM>(ty: &Ty<M>) -> bool {
         Ty::Union(members) => !members.is_empty(),
         Ty::List(list) => {
             // Any arbitrary fixed length list is a subtype of a list with rest
-            !list.rest().is_never() || list.fixed().iter().any(has_subtypes)
+            list.has_rest() || list.fixed().iter().any(has_subtypes)
         }
 
         // Any record type supporting variance has subtypes
@@ -60,7 +60,7 @@ fn ty_is_literal<M: ty::PM>(ty: &Ty<M>) -> bool {
     match ty {
         Ty::LitBool(_) | Ty::LitSym(_) => true,
         Ty::Vector(members) => members.iter().all(is_literal),
-        Ty::List(list) => list.rest().is_never() && list.fixed().iter().all(is_literal),
+        Ty::List(list) => !list.has_rest() && list.fixed().iter().all(is_literal),
         _ => false,
     }
 }

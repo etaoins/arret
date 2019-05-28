@@ -667,7 +667,7 @@ fn str_for_ty<M: ty::PM>(ty: &Ty<M>) -> String {
         Ty::List(list) => {
             // While all list types can be expressed using `(List)` we try to find the shortest
             // representation
-            if list.fixed().is_empty() && list.rest().is_never() {
+            if list.is_empty() {
                 "()".to_owned()
             } else {
                 let mut list_parts = Vec::with_capacity(2);

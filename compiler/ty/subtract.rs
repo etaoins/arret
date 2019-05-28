@@ -37,7 +37,7 @@ fn subtract_tys<M: ty::PM>(
         (Ty::List(minuend_list), Ty::List(subtrahend_list))
             // Make sure this is even useful or else we can recurse splitting list types
             // indefinitely
-            if subtrahend_list.rest().is_never() && minuend_list.fixed().len() == subtrahend_list.fixed().len() =>
+            if !subtrahend_list.has_rest() && minuend_list.fixed().len() == subtrahend_list.fixed().len() =>
         {
             // This is required for `(nil?)` to work correctly
             let minued_rest = minuend_list.rest();

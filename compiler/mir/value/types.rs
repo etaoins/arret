@@ -16,7 +16,7 @@ pub fn mono_to_const(
     match mono.as_ty() {
         Ty::LitBool(value) => Some(boxed::Bool::singleton_ref(*value).as_any_ref()),
         Ty::LitSym(value) => Some(boxed::Sym::new(heap, value.as_ref()).as_any_ref()),
-        Ty::List(list) if list.rest().is_never() => {
+        Ty::List(list) if !list.has_rest() => {
             let fixed_consts = list
                 .fixed()
                 .iter()

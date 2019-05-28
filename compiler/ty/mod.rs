@@ -267,7 +267,7 @@ impl<M: PM> List<M> {
         }
     }
 
-    /// Creates a list of zero or more elements with a uniform type
+    /// Creates a list of zero or more members with a uniform type
     pub fn new_uniform(rest: Ref<M>) -> List<M> {
         List {
             fixed: Box::new([]),
@@ -314,8 +314,14 @@ impl<M: PM> List<M> {
         range2.start > range1.end || range2.end < range1.start
     }
 
+    /// Return true is the list is empty
     pub fn is_empty(&self) -> bool {
         self.fixed.is_empty() && self.rest.is_never()
+    }
+
+    /// Returns true if the list has a uniform tail of zero or more members
+    pub fn has_rest(&self) -> bool {
+        !self.rest.is_never()
     }
 }
 

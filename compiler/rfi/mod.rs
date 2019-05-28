@@ -86,7 +86,7 @@ impl Fun {
     }
 
     pub fn has_rest(&self) -> bool {
-        !self.arret_fun_type.params().rest().is_never()
+        self.arret_fun_type.params().has_rest()
     }
 
     pub fn ret(&self) -> &'static abitype::RetABIType {
@@ -199,8 +199,8 @@ impl Loader {
         let upper_fun_type = ty::subst::subst_poly_fun(&pta, &*poly_fun_type);
 
         // Calculate how many parameters the Rust function should accept
-        let expected_rust_params = upper_fun_type.params().fixed().len()
-            + !upper_fun_type.params().rest().is_never() as usize;
+        let expected_rust_params =
+            upper_fun_type.params().fixed().len() + upper_fun_type.params().has_rest() as usize;
 
         if expected_rust_params != rust_fun.params.len() {
             return Err(Error::new(
