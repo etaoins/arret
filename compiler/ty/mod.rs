@@ -132,7 +132,7 @@ impl<M: PM> Ref<M> {
     }
 
     pub fn is_never(&self) -> bool {
-        self.try_to_fixed() == Some(&Ty::never())
+        self.try_to_fixed().map_or(false, |fixed| fixed.is_never())
     }
 }
 
@@ -212,6 +212,11 @@ impl<M: PM> Ty<M> {
     /// Returns the canonical never type
     pub fn never() -> Ty<M> {
         Ty::Union(Box::new([]))
+    }
+
+    /// Returns if this is the never type
+    pub fn is_never(&self) -> bool {
+        self == &Ty::Union(Box::new([]))
     }
 }
 

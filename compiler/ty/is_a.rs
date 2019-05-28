@@ -248,7 +248,7 @@ pub fn ty_ref_is_a<M: ty::PM>(sub: &ty::Ref<M>, parent: &ty::Ref<M>) -> bool {
     }
 
     let sub_ty = sub.resolve_to_ty();
-    if sub_ty == &Ty::never() {
+    if sub_ty.is_never() {
         // (U) is a definite subtype of every type, regardless if the parent is bound. This is
         // important as (U) is used as a placeholder for parameters with unknown type. More
         // generally, it's the contravariant equivalent of Any.
