@@ -201,7 +201,7 @@ impl rustyline::highlight::Highlighter for ArretHelper {
     }
 
     fn highlight_prompt<'p>(&self, prompt: &'p str) -> Cow<'p, str> {
-        let prompt_style = Colour::Blue;
+        let prompt_style = Colour::Fixed(25); // DeepSkyBlue4 (#005faf)
         prompt_style.paint(prompt).to_string().into()
     }
 
@@ -268,7 +268,7 @@ fn parse_command(mut line: String) -> ParsedCommand {
 }
 
 pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
-    use arret_compiler::repl::{EvalKind, EvaledLine};
+    use arret_compiler::repl::{EvalKind, EvaledExprValue, EvaledLine};
     use rustyline::error::ReadlineError;
 
     // Setup our REPL backend
@@ -302,7 +302,10 @@ pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
 
     // Configure our styles
     let defs_style = Colour::Purple.bold();
+
     let expr_arrow_style = Colour::Green.bold();
+    let type_style = Colour::Fixed(166); // DarkOrange3 (#d75f00)
+    let type_brackets_style = Style::new().dimmed();
 
     loop {
         let readline = rl.readline(&PROMPT);
@@ -332,8 +335,27 @@ pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
 
                         println!("{}", defs_style.paint("defined"))
                     }
-                    Ok(EvaledLine::Expr(value)) => {
-                        println!("{} {}", expr_arrow_style.paint("=>"), value);
+                    Ok(EvaledLine::ExprType(type_str)) => {
+                        println!(
+                            "{} {}",
+                            expr_arrow_style.paint("=>"),
+                            type_style.paint(type_str)
+                        );
+                    }
+                    Ok(EvaledLine::ExprValue(evaled_expr)) => {
+                        let EvaledExprValue {
+                            value_str,
+                            type_str,
+                        } = evaled_expr;
+                        println!(
+                            // => [value Type]
+                            "{} {}{} {}{}",
+                            expr_arrow_style.paint("=>"),
+                            type_brackets_style.paint("["),
+                            value_str,
+                            type_style.paint(type_str),
+                            type_brackets_style.paint("]"),
+                        );
                     }
                     Err(diagnostics) => {
                         emit_diagnostics_to_stderr(ccx.source_loader(), diagnostics);

@@ -10,6 +10,7 @@ use crate::CompileCtx;
 use crate::SourceLoader;
 
 use crate::mir::eval_hir::EvalHirCtx;
+use crate::mir::Value;
 use crate::typeck::infer::InferCtx;
 
 pub struct ReplCtx<'ccx> {
@@ -35,10 +36,19 @@ pub enum EvalKind {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct EvaledExprValue {
+    /// Rendered type of the expression
+    pub type_str: String,
+    /// Rendered value of the expression
+    pub value_str: String,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum EvaledLine {
     EmptyInput,
     Defs,
-    Expr(String),
+    ExprType(String),
+    ExprValue(EvaledExprValue),
 }
 
 impl<'ccx> ReplCtx<'ccx> {
@@ -71,7 +81,7 @@ impl<'ccx> ReplCtx<'ccx> {
         kind: EvalKind,
     ) -> Result<EvaledLine, Vec<Diagnostic>> {
         use crate::hir::lowering::LoweredReplDatum;
-
+        use std::io::Write;
         let source_file = self
             .source_loader
             .load_string(FileName::Virtual("repl".into()), input.into());
@@ -122,12 +132,10 @@ impl<'ccx> ReplCtx<'ccx> {
             }
             LoweredReplDatum::Expr(decl_expr) => {
                 let node = self.icx.infer_expr(decl_expr)?;
+                let type_str = hir::str_for_ty_ref(node.result_ty());
 
                 match kind {
-                    EvalKind::Type => {
-                        let poly_str = hir::str_for_ty_ref(node.result_ty());
-                        Ok(EvaledLine::Expr(poly_str))
-                    }
+                    EvalKind::Type => Ok(EvaledLine::ExprType(type_str)),
                     EvalKind::Value => {
                         use crate::mir::eval_hir::FunCtx;
                         use arret_runtime_syntax::writer;
@@ -148,9 +156,26 @@ impl<'ccx> ReplCtx<'ccx> {
                         // Write the result to a string
                         let mut output_buf: Vec<u8> = vec![];
                         writer::write_boxed(&mut output_buf, &self.ehx, boxed).unwrap();
-                        let output_str = str::from_utf8(output_buf.as_slice()).unwrap().to_owned();
 
-                        Ok(EvaledLine::Expr(output_str))
+                        // Just `#fn` isn't very useful, even with a type. Add the source name.
+                        match value {
+                            Value::ArretFun(arret_fun) => {
+                                if let Some(source_name) = arret_fun.source_name() {
+                                    write!(&mut output_buf, "/{}", source_name).unwrap();
+                                }
+                            }
+                            Value::RustFun(rust_fun) => {
+                                write!(&mut output_buf, "/{}", rust_fun.symbol()).unwrap();
+                            }
+                            _ => {}
+                        }
+
+                        let value_str = str::from_utf8(output_buf.as_slice()).unwrap().to_owned();
+
+                        Ok(EvaledLine::ExprValue(EvaledExprValue {
+                            type_str,
+                            value_str,
+                        }))
                     }
                 }
             }
@@ -193,21 +218,20 @@ mod test {
             };
         }
 
-        macro_rules! assert_type {
-            ($expected:expr, $line:expr) => {
+        macro_rules! assert_expr {
+            ($expected_value:expr, $expected_type:expr, $line:expr) => {
                 assert_eq!(
-                    EvaledLine::Expr($expected.to_owned()),
+                    EvaledLine::ExprType($expected_type.to_owned()),
                     repl_ctx
                         .eval_line($line.to_owned(), EvalKind::Type)
                         .unwrap()
                 );
-            };
-        }
 
-        macro_rules! assert_value {
-            ($expected:expr, $line:expr) => {
                 assert_eq!(
-                    EvaledLine::Expr($expected.to_owned()),
+                    EvaledLine::ExprValue(EvaledExprValue {
+                        value_str: $expected_value.to_owned(),
+                        type_str: $expected_type.to_owned()
+                    }),
                     repl_ctx
                         .eval_line($line.to_owned(), EvalKind::Value)
                         .unwrap()
@@ -218,8 +242,7 @@ mod test {
         assert_empty!("       ");
         assert_empty!("; COMMENT!");
 
-        assert_type!("Int", "1");
-        assert_value!("1", "1");
+        assert_expr!("1", "Int", "1");
 
         repl_ctx
             .eval_line("(import [stdlib base])".to_owned(), EvalKind::Value)
@@ -228,28 +251,22 @@ mod test {
             );
 
         // Make sure we can references vars from the imported module
-        assert_type!("true", "(int? 5)");
-        assert_value!("true", "(int? 5)");
+        assert_expr!("true", "true", "(int? 5)");
 
         // Make sure we can redefine
         assert_defs!("(def x 'first)");
         assert_defs!("(def x 'second)");
-        assert_type!("'second", "x");
-        assert_value!("second", "x");
+        assert_expr!("second", "'second", "x");
 
         // `(do)` at the expression level
-        assert_type!("'baz", "(do 'foo 'bar 'baz)");
-        assert_value!("baz", "(do 'foo 'bar 'baz)");
+        assert_expr!("baz", "'baz", "(do 'foo 'bar 'baz)");
 
         // Polymorphic capturing closures
         assert_defs!("(def return-constant (fn #{T} ([x T]) (fn () -> T x)))");
         assert_defs!("(def return-one (return-constant 1))");
         assert_defs!("(def return-two (return-constant 'two))");
 
-        assert_type!("Int", "(return-one)");
-        assert_value!("1", "(return-one)");
-
-        assert_type!("'two", "(return-two)");
-        assert_value!("two", "(return-two)");
+        assert_expr!("1", "Int", "(return-one)");
+        assert_expr!("two", "'two", "(return-two)");
     }
 }
