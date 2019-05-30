@@ -346,16 +346,27 @@ pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
                         let EvaledExprValue {
                             value_str,
                             type_str,
+                            type_is_literal,
                         } = evaled_expr;
-                        println!(
-                            // => [value Type]
-                            "{} {}{} {}{}",
-                            expr_arrow_style.paint("=>"),
-                            type_brackets_style.paint("["),
-                            value_str,
-                            type_style.paint(type_str),
-                            type_brackets_style.paint("]"),
-                        );
+
+                        if type_is_literal {
+                            println!(
+                                // => value
+                                "{} {}",
+                                expr_arrow_style.paint("=>"),
+                                value_str,
+                            );
+                        } else {
+                            println!(
+                                // => [value Type]
+                                "{} {}{} {}{}",
+                                expr_arrow_style.paint("=>"),
+                                type_brackets_style.paint("["),
+                                value_str,
+                                type_style.paint(type_str),
+                                type_brackets_style.paint("]"),
+                            );
+                        }
                     }
                     Err(diagnostics) => {
                         emit_diagnostics_to_stderr(ccx.source_loader(), diagnostics);

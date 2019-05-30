@@ -6,6 +6,7 @@ use codespan_reporting::{Diagnostic, Label};
 use crate::hir;
 use crate::hir::scope::Scope;
 use crate::reporting::{diagnostic_for_syntax_error, errors_to_diagnostics};
+use crate::ty;
 use crate::CompileCtx;
 use crate::SourceLoader;
 
@@ -39,8 +40,15 @@ pub enum EvalKind {
 pub struct EvaledExprValue {
     /// Rendered type of the expression
     pub type_str: String,
+
     /// Rendered value of the expression
     pub value_str: String,
+
+    /// Indicates if the type is a literal
+    ///
+    /// REPL implementations may want to suppress printing the type of literal values as they
+    /// contain no additional information.
+    pub type_is_literal: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -141,6 +149,8 @@ impl<'ccx> ReplCtx<'ccx> {
                         use arret_runtime_syntax::writer;
                         use std::str;
 
+                        let type_is_literal = ty::props::is_literal(node.result_ty());
+
                         // Evaluate the expression
                         let mut fcx = FunCtx::new();
 
@@ -175,6 +185,7 @@ impl<'ccx> ReplCtx<'ccx> {
                         Ok(EvaledLine::ExprValue(EvaledExprValue {
                             type_str,
                             value_str,
+                            type_is_literal,
                         }))
                     }
                 }
@@ -227,15 +238,22 @@ mod test {
                         .unwrap()
                 );
 
-                assert_eq!(
+                match repl_ctx
+                    .eval_line($line.to_owned(), EvalKind::Value)
+                    .unwrap()
+                {
                     EvaledLine::ExprValue(EvaledExprValue {
-                        value_str: $expected_value.to_owned(),
-                        type_str: $expected_type.to_owned()
-                    }),
-                    repl_ctx
-                        .eval_line($line.to_owned(), EvalKind::Value)
-                        .unwrap()
-                );
+                        value_str,
+                        type_str,
+                        ..
+                    }) => {
+                        assert_eq!(value_str, $expected_value.to_owned());
+                        assert_eq!(type_str, $expected_type.to_owned());
+                    }
+                    other => {
+                        panic!("unexpected REPL result: {:?}", other);
+                    }
+                }
             };
         }
 
