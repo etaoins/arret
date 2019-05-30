@@ -198,6 +198,46 @@ impl<'ccx> ReplCtx<'ccx> {
 mod test {
     use super::*;
 
+    fn assert_defs(rcx: &mut ReplCtx<'_>, line: &'static str) {
+        assert_eq!(
+            EvaledLine::Defs,
+            rcx.eval_line(line.to_owned(), EvalKind::Value).unwrap()
+        );
+    }
+
+    fn assert_empty(rcx: &mut ReplCtx<'_>, line: &'static str) {
+        assert_eq!(
+            EvaledLine::EmptyInput,
+            rcx.eval_line(line.to_owned(), EvalKind::Value).unwrap()
+        );
+    }
+
+    fn assert_expr(
+        rcx: &mut ReplCtx<'_>,
+        expected_value: &'static str,
+        expected_type: &'static str,
+        line: &'static str,
+    ) {
+        assert_eq!(
+            EvaledLine::ExprType(expected_type.to_owned()),
+            rcx.eval_line(line.to_owned(), EvalKind::Type).unwrap()
+        );
+
+        match rcx.eval_line(line.into(), EvalKind::Value).unwrap() {
+            EvaledLine::ExprValue(EvaledExprValue {
+                value_str,
+                type_str,
+                ..
+            }) => {
+                assert_eq!(value_str, expected_value.to_owned());
+                assert_eq!(type_str, expected_type.to_owned());
+            }
+            other => {
+                panic!("unexpected REPL result: {:?}", other);
+            }
+        }
+    }
+
     #[test]
     fn basic_session() {
         use crate::{initialise_llvm, PackagePaths};
@@ -205,86 +245,39 @@ mod test {
         initialise_llvm(false);
 
         let ccx = CompileCtx::new(PackagePaths::test_paths(None), true);
-        let mut repl_ctx = ReplCtx::new(&ccx);
+        let mut rcx = ReplCtx::new(&ccx);
 
-        macro_rules! assert_empty {
-            ($line:expr) => {
-                assert_eq!(
-                    EvaledLine::EmptyInput,
-                    repl_ctx
-                        .eval_line($line.to_owned(), EvalKind::Value)
-                        .unwrap()
-                );
-            };
-        }
+        assert_empty(&mut rcx, "       ");
+        assert_empty(&mut rcx, "; COMMENT!");
 
-        macro_rules! assert_defs {
-            ($line:expr) => {
-                assert_eq!(
-                    EvaledLine::Defs,
-                    repl_ctx
-                        .eval_line($line.to_owned(), EvalKind::Value)
-                        .unwrap()
-                );
-            };
-        }
+        assert_expr(&mut rcx, "1", "Int", "1");
 
-        macro_rules! assert_expr {
-            ($expected_value:expr, $expected_type:expr, $line:expr) => {
-                assert_eq!(
-                    EvaledLine::ExprType($expected_type.to_owned()),
-                    repl_ctx
-                        .eval_line($line.to_owned(), EvalKind::Type)
-                        .unwrap()
-                );
-
-                match repl_ctx
-                    .eval_line($line.to_owned(), EvalKind::Value)
-                    .unwrap()
-                {
-                    EvaledLine::ExprValue(EvaledExprValue {
-                        value_str,
-                        type_str,
-                        ..
-                    }) => {
-                        assert_eq!(value_str, $expected_value.to_owned());
-                        assert_eq!(type_str, $expected_type.to_owned());
-                    }
-                    other => {
-                        panic!("unexpected REPL result: {:?}", other);
-                    }
-                }
-            };
-        }
-
-        assert_empty!("       ");
-        assert_empty!("; COMMENT!");
-
-        assert_expr!("1", "Int", "1");
-
-        repl_ctx
-            .eval_line("(import [stdlib base])".to_owned(), EvalKind::Value)
+        rcx.eval_line("(import [stdlib base])".to_owned(), EvalKind::Value)
             .expect(
                 "unable to load stdlib library; you may need to `cargo build` before running tests",
             );
 
         // Make sure we can references vars from the imported module
-        assert_expr!("true", "true", "(int? 5)");
+        assert_expr(&mut rcx, "true", "true", "(int? 5)");
 
         // Make sure we can redefine
-        assert_defs!("(def x 'first)");
-        assert_defs!("(def x 'second)");
-        assert_expr!("second", "'second", "x");
+        assert_defs(&mut rcx, "(def x 'first)");
+        assert_defs(&mut rcx, "(def x 'second)");
+        assert_expr(&mut rcx, "second", "'second", "x");
 
         // `(do)` at the expression level
-        assert_expr!("baz", "'baz", "(do 'foo 'bar 'baz)");
+        assert_expr(&mut rcx, "baz", "'baz", "(do 'foo 'bar 'baz)");
 
         // Polymorphic capturing closures
-        assert_defs!("(def return-constant (fn #{T} ([x T]) (fn () -> T x)))");
-        assert_defs!("(def return-one (return-constant 1))");
-        assert_defs!("(def return-two (return-constant 'two))");
+        assert_defs(
+            &mut rcx,
+            "(def return-constant (fn #{T} ([x T]) (fn () -> T x)))",
+        );
 
-        assert_expr!("1", "Int", "(return-one)");
-        assert_expr!("two", "'two", "(return-two)");
+        assert_defs(&mut rcx, "(def return-one (return-constant 1))");
+        assert_defs(&mut rcx, "(def return-two (return-constant 'two))");
+
+        assert_expr(&mut rcx, "1", "Int", "(return-one)");
+        assert_expr(&mut rcx, "two", "'two", "(return-two)");
     }
 }
