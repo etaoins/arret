@@ -43,6 +43,7 @@ pub enum Value {
     Const(Gc<boxed::Any>),
     // This uses `Box<[]>` because we can't convert from a `Vec<>` to `Rc<[]>` without reallocating
     List(Box<[Value]>, Option<Box<Value>>),
+    Record(record::ConsId, Box<[Value]>),
     ArretFun(ArretFun),
     RustFun(Rc<rfi::Fun>),
     Reg(Rc<RegValue>),

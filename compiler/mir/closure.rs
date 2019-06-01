@@ -39,6 +39,7 @@ fn can_reference_local_regs(value: &Value) -> bool {
             let mut inner_values = fixed.iter().chain(rest.iter().map(AsRef::as_ref));
             !inner_values.any(can_reference_local_regs)
         }
+        Value::Record(_, fields) => fields.iter().any(can_reference_local_regs),
     }
 }
 

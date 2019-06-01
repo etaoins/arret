@@ -40,6 +40,9 @@ pub fn value_to_const(ehx: &mut EvalHirCtx, value: &Value) -> Option<Gc<boxed::A
         Value::Const(boxed) => Some(*boxed),
         Value::List(fixed, Some(rest)) => list_to_const(ehx, fixed, Some(&*rest)),
         Value::List(fixed, None) => list_to_const(ehx, fixed, None),
+        Value::Record(_, _) => {
+            unimplemented!("boxing records");
+        }
         Value::TyPred(test_ty) => {
             let ty_pred_arret_fun = ehx
                 .synthetic_funs()

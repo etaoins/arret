@@ -126,8 +126,8 @@ fn inline_preference_factor_for_value(arg_value: &Value) -> OpCostFactor {
         Value::Reg(_) => 1.0,
         // Consts allow for const evaling, const propagation, dead code elimination, etc
         Value::Const(_) => 1.1,
-        // Lists can partially evaluate list operations
-        Value::List(_, _) => 1.2,
+        // Lists and records can partially evaluate their type-specific operations
+        Value::List(_, _) | Value::Record(_, _) => 1.2,
         // RustFuns can be const eval'ed
         Value::RustFun(_) => 1.5,
         // These can be const eval'ed or completely inlined
@@ -189,32 +189,39 @@ fn hash_value<H: Hasher>(value: &Value, state: &mut H) {
                 hash_value(rest_value, state);
             }
         }
-        Value::Const(any_ref) => {
+        Value::Record(record_cons, fields) => {
             state.write_u8(1);
+            record_cons.hash(state);
+            for field in fields.iter() {
+                hash_value(field, state);
+            }
+        }
+        Value::Const(any_ref) => {
+            state.write_u8(2);
             any_ref.hash(state);
         }
         Value::EqPred => {
-            state.write_u8(2);
+            state.write_u8(3);
         }
         Value::TyPred(test_ty) => {
-            state.write_u8(3);
+            state.write_u8(4);
             test_ty.hash(state);
         }
         Value::RecordCons(record_cons) => {
-            state.write_u8(4);
+            state.write_u8(5);
             record_cons.hash(state);
         }
         Value::FieldAccessor(record_cons, field_index) => {
-            state.write_u8(5);
+            state.write_u8(6);
             record_cons.hash(state);
             field_index.hash(state);
         }
         Value::RustFun(rust_fun) => {
-            state.write_u8(6);
+            state.write_u8(7);
             rust_fun.symbol().hash(state);
         }
         Value::ArretFun(arret_fun) => {
-            state.write_u8(7);
+            state.write_u8(8);
 
             state.write_usize(arret_fun.closure().const_values.len());
             for (_, const_value) in arret_fun.closure().const_values.iter() {
@@ -222,7 +229,7 @@ fn hash_value<H: Hasher>(value: &Value, state: &mut H) {
             }
         }
         Value::Reg(_) => {
-            state.write_u8(8);
+            state.write_u8(9);
         }
     };
 }

@@ -451,6 +451,9 @@ pub fn value_to_reg(
                 panic!("Attempt to construct non-boxed list");
             }
         }
+        Value::Record(_, _) => {
+            unimplemented!("boxing records");
+        }
         Value::ArretFun(ref arret_fun) => arret_fun_to_reg(ehx, b, span, arret_fun, abi_type),
         Value::TyPred(test_ty) => {
             let ty_pred_arret_fun = ehx

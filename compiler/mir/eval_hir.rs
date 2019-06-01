@@ -26,6 +26,7 @@ use crate::mir::{Expr, Value};
 use crate::rfi;
 use crate::ty;
 use crate::ty::purity::Purity;
+use crate::ty::record;
 use crate::ty::ty_args::TyArgs;
 use crate::ty::Ty;
 
@@ -419,6 +420,43 @@ impl EvalHirCtx {
         eval_equality(self, b, span, &left_value, &right_value)
     }
 
+    fn eval_record_cons_app(
+        &mut self,
+        b: &mut Option<Builder>,
+        span: Span,
+        record_cons: &record::ConsId,
+        arg_list_value: &Value,
+    ) -> Value {
+        let mut iter = arg_list_value.unsized_list_iter();
+
+        let field_values = record_cons
+            .fields()
+            .iter()
+            .map(|_| iter.next_unchecked(b, span))
+            .collect();
+
+        Value::Record(record_cons.clone(), field_values)
+    }
+
+    fn eval_field_accessor_app(
+        &mut self,
+        b: &mut Option<Builder>,
+        span: Span,
+        _record_cons: &record::ConsId,
+        field_index: usize,
+        arg_list_value: &Value,
+    ) -> Value {
+        let mut iter = arg_list_value.unsized_list_iter();
+        let record_value = iter.next_unchecked(b, span);
+
+        match record_value {
+            Value::Record(_, fields) => fields[field_index].clone(),
+            _ => {
+                unimplemented!("accessing fields of boxed records");
+            }
+        }
+    }
+
     pub fn rust_fun_to_jit_boxed(&mut self, rust_fun: Rc<rfi::Fun>) -> Gc<boxed::FunThunk> {
         let closure = boxed::NIL_INSTANCE.as_any_ref();
         let entry = self.jit_thunk_for_rust_fun(&rust_fun);
@@ -749,6 +787,16 @@ impl EvalHirCtx {
                 Ok(self.eval_ty_pred_app(b, span, &apply_args.list_value, test_ty))
             }
             Value::EqPred => Ok(self.eval_eq_pred_app(b, span, &apply_args.list_value)),
+            Value::RecordCons(record_cons) => {
+                Ok(self.eval_record_cons_app(b, span, record_cons, &apply_args.list_value))
+            }
+            Value::FieldAccessor(record_cons, field_index) => Ok(self.eval_field_accessor_app(
+                b,
+                span,
+                record_cons,
+                *field_index,
+                &apply_args.list_value,
+            )),
             Value::Const(boxed_fun) => match boxed_fun.as_subtype() {
                 boxed::AnySubtype::FunThunk(fun_thunk) => self.eval_const_fun_thunk_app(
                     fcx,
