@@ -542,7 +542,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         ty::intersect::intersect_ty_refs(required_type, current_type).map_err(|_| {
             Error::new(
                 span,
-                ErrorKind::VarHasEmptyType(required_type.clone(), current_type.clone()),
+                ErrorKind::VarHasEmptyType(current_type.clone(), required_type.clone()),
             )
         })
     }

@@ -114,14 +114,15 @@ impl From<Error> for Diagnostic {
                 )
             }
 
-            ErrorKind::VarHasEmptyType(ref left, ref right) => Diagnostic::new_error(
-                "type annotation needed",
-            )
-            .with_label(Label::new_primary(origin).with_message(format!(
-                "inferred conflicting types `{}` and `{}`",
-                hir::str_for_ty_ref(left),
-                hir::str_for_ty_ref(right)
-            ))),
+            ErrorKind::VarHasEmptyType(ref current_type, ref required_type) => {
+                Diagnostic::new_error("type annotation needed").with_label(
+                    Label::new_primary(origin).with_message(format!(
+                        "usage requires `{}` but variable has inferred type of `{}`",
+                        hir::str_for_ty_ref(required_type),
+                        hir::str_for_ty_ref(current_type)
+                    )),
+                )
+            }
 
             ErrorKind::TopFunApply(ref top_fun) => Diagnostic::new_error(format!(
                 "cannot determine parameter types for `{}`",
