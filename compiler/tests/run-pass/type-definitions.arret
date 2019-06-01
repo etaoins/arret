@@ -4,4 +4,8 @@
 (deftype _ Int)
 (deftype _ Float)
 
+(defn takes-int ([x Int])
+  (lettype [Integer Int]
+    (ann x Integer)))
+
 (defn main! ())

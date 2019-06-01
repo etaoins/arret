@@ -1,5 +1,5 @@
 (import [arret internal primitives])
-(export def let fn if quote export defmacro letmacro macro-rules deftype compile-error do =
+(export def let fn if quote export defmacro letmacro macro-rules deftype lettype compile-error do =
         defrecord)
 
 (import [arret internal types])
