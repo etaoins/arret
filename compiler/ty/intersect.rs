@@ -652,6 +652,7 @@ mod test {
                 tvar1.clone(),
             )])),
             Box::new([record::Field::new(
+                EMPTY_SPAN,
                 "cons1-field1".into(),
                 tvar1.clone().into(),
             )]),
@@ -665,8 +666,12 @@ mod test {
                 record::PolyParam::TVar(Variance::Contravariant, tvar2.clone()),
             ])),
             Box::new([
-                record::Field::new("cons2-covariant".into(), tvar1.clone().into()),
-                record::Field::new("cons2-contravariant".into(), tvar2.clone().into()),
+                record::Field::new(EMPTY_SPAN, "cons2-covariant".into(), tvar1.clone().into()),
+                record::Field::new(
+                    EMPTY_SPAN,
+                    "cons2-contravariant".into(),
+                    tvar2.clone().into(),
+                ),
             ]),
         );
 

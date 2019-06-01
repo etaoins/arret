@@ -12,13 +12,19 @@ use crate::ty::Ty;
 /// Record field of a record constructor
 #[derive(PartialEq, Debug, Clone)]
 pub struct Field {
+    span: Span,
     name: DataStr,
     ty_ref: ty::Ref<ty::Poly>,
 }
 
 impl Field {
-    pub fn new(name: DataStr, ty_ref: ty::Ref<ty::Poly>) -> Self {
-        Self { name, ty_ref }
+    pub fn new(span: Span, name: DataStr, ty_ref: ty::Ref<ty::Poly>) -> Self {
+        Self { span, name, ty_ref }
+    }
+
+    /// Returns the span where the constructor was defined
+    pub fn span(&self) -> Span {
+        self.span
     }
 
     /// Returns the name of the record field

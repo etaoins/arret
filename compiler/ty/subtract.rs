@@ -192,7 +192,11 @@ mod test {
                 Variance::Covariant,
                 tvar.clone(),
             )])),
-            Box::new([record::Field::new("num".into(), tvar.clone().into())]),
+            Box::new([record::Field::new(
+                EMPTY_SPAN,
+                "num".into(),
+                tvar.clone().into(),
+            )]),
         );
 
         let top_record_ref: ty::Ref<ty::Poly> = poly_record_cons.clone().into();

@@ -730,9 +730,9 @@ mod test {
                 record::PolyParam::TVar(Variance::Invariant, tvar3.clone()),
             ])),
             Box::new([
-                record::Field::new("covariant".into(), tvar1.clone().into()),
-                record::Field::new("contravariant".into(), tvar2.clone().into()),
-                record::Field::new("invariant".into(), tvar3.clone().into()),
+                record::Field::new(EMPTY_SPAN, "covariant".into(), tvar1.clone().into()),
+                record::Field::new(EMPTY_SPAN, "contravariant".into(), tvar2.clone().into()),
+                record::Field::new(EMPTY_SPAN, "invariant".into(), tvar3.clone().into()),
             ]),
         );
 

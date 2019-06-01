@@ -1027,7 +1027,7 @@ mod test {
             EMPTY_SPAN,
             "MonoCons".into(),
             None,
-            Box::new([record::Field::new("num".into(), Ty::Num.into())]),
+            Box::new([record::Field::new(EMPTY_SPAN, "num".into(), Ty::Num.into())]),
         );
 
         let top_record_ref: ty::Ref<ty::Poly> = mono_record_cons.clone().into();
@@ -1049,7 +1049,11 @@ mod test {
                 record::PolyParam::Pure(EMPTY_SPAN),
                 record::PolyParam::TVar(Variance::Covariant, tvar.clone()),
             ])),
-            Box::new([record::Field::new("num".into(), tvar.clone().into())]),
+            Box::new([record::Field::new(
+                EMPTY_SPAN,
+                "num".into(),
+                tvar.clone().into(),
+            )]),
         );
 
         // Top record type

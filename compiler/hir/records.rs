@@ -16,6 +16,7 @@ pub enum LoweredRecordCons {
 }
 
 fn lower_record_field_decl(scope: &Scope<'_>, field_datum: NsDatum) -> Result<record::Field> {
+    let datum_span = field_datum.span();
     let datum_description = field_datum.description();
 
     let (ident, poly) = match field_datum {
@@ -43,7 +44,7 @@ fn lower_record_field_decl(scope: &Scope<'_>, field_datum: NsDatum) -> Result<re
         }
     };
 
-    Ok(record::Field::new(ident.into_name(), poly))
+    Ok(record::Field::new(datum_span, ident.into_name(), poly))
 }
 
 /// Lowers either the type or value constructor for a `(defrecord)`

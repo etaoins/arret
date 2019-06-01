@@ -163,7 +163,7 @@ mod test {
             EMPTY_SPAN,
             "record_cons".into(),
             None,
-            Box::new([record::Field::new("num".into(), Ty::Num.into())]),
+            Box::new([record::Field::new(EMPTY_SPAN, "num".into(), Ty::Num.into())]),
         );
 
         let int_record_instance_ref: ty::Ref<ty::Poly> =
@@ -184,7 +184,7 @@ mod test {
                 Variance::Covariant,
                 tvar.clone(),
             )])),
-            Box::new([record::Field::new("num".into(), tvar.into())]),
+            Box::new([record::Field::new(EMPTY_SPAN, "num".into(), tvar.into())]),
         );
 
         let poly_record_instance_ref: ty::Ref<ty::Poly> =
