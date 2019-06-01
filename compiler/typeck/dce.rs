@@ -1,6 +1,6 @@
 use crate::hir;
 
-/// Returns if an expression can have a side effect or cause a type error
+/// Returns if an expression can have a side effect
 ///
 /// This is used for very basic dead code elimination during type checking.
 pub fn expr_can_side_effect(expr: &hir::Expr<hir::Inferred>) -> bool {

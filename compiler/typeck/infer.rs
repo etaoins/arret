@@ -235,7 +235,7 @@ fn member_type_for_poly_list(
 
 /// Preserves expressions for their side effects
 ///
-/// `side_effect_exprs` are evaluated but have their value discarded. `value_expr` will be used as
+/// `side_effect_exprs` are discarded if they can't cause side effects. `value_expr` will be used as
 /// the value of the returned expression.
 fn keep_exprs_for_side_effects(
     side_effect_exprs: impl IntoIterator<Item = hir::Expr<hir::Inferred>>,
