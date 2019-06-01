@@ -1,4 +1,7 @@
 use crate::hir;
+use crate::ty;
+use crate::ty::purity::Purity;
+use crate::ty::Ty;
 
 /// Returns if an expression can have a side effect
 ///
@@ -24,6 +27,15 @@ pub fn expr_can_side_effect(expr: &hir::Expr<hir::Inferred>) -> bool {
         ExprKind::Let(let_expr) => {
             expr_can_side_effect(&let_expr.value_expr) || expr_can_side_effect(&let_expr.body_expr)
         }
-        ExprKind::App(_) => true,
+        ExprKind::App(app) => {
+            if let ty::Ref::Fixed(Ty::Fun(ref fun_type)) = expr.result_ty {
+                fun_type.top_fun().purity() != &Purity::Pure.into()
+                    || fun_type.ret().is_never()
+                    || app.fixed_arg_exprs.iter().any(expr_can_side_effect)
+                    || app.rest_arg_expr.iter().any(expr_can_side_effect)
+            } else {
+                true
+            }
+        }
     }
 }
