@@ -22,6 +22,7 @@ pub enum Binding {
     EqPred,
     RecordValueCons(record::ConsId),
     RecordTyCons(record::ConsId),
+    FieldAccessor(record::ConsId, usize),
     Purity(purity::Ref),
 }
 
@@ -35,6 +36,7 @@ impl Binding {
             Binding::TyCons(_) => "type constructor",
             Binding::RecordValueCons(_) => "record value constructor",
             Binding::RecordTyCons(_) => "record type constructor",
+            Binding::FieldAccessor(_, _) => "record field accessor",
             Binding::Purity(_) => "purity",
         }
     }

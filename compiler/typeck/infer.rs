@@ -530,6 +530,26 @@ impl<'types> RecursiveDefsCtx<'types> {
         })
     }
 
+    fn visit_field_accessor(
+        &self,
+        required_type: &ty::Ref<ty::Poly>,
+        field_accessor: Box<hir::FieldAccessor>,
+    ) -> Result<InferredNode> {
+        let record_cons = &field_accessor.record_cons;
+        let record_field = &record_cons.fields()[field_accessor.field_index];
+
+        let field_accessor_fun_type = record_field.accessor_fun_type(&record_cons).into();
+        ensure_is_a(field_accessor.span, &field_accessor_fun_type, required_type)?;
+
+        Ok(InferredNode {
+            expr: hir::Expr {
+                result_ty: field_accessor_fun_type,
+                kind: hir::ExprKind::FieldAccessor(field_accessor),
+            },
+            type_conds: vec![],
+        })
+    }
+
     fn type_for_free_ref(
         &self,
         required_type: &ty::Ref<ty::Poly>,
@@ -1445,6 +1465,9 @@ impl<'types> RecursiveDefsCtx<'types> {
             ExprKind::EqPred(span) => self.visit_eq_pred(required_type, span),
             ExprKind::RecordCons(span, record_cons) => {
                 self.visit_record_cons(required_type, span, record_cons)
+            }
+            ExprKind::FieldAccessor(field_accessor) => {
+                self.visit_field_accessor(required_type, field_accessor)
             }
             ExprKind::Let(hir_let) => self.visit_let(pv, required_type, *hir_let),
             ExprKind::Ref(span, var_id) => self.visit_ref(required_type, span, var_id),

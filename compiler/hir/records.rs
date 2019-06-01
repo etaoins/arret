@@ -170,6 +170,20 @@ pub fn lower_defrecord(
     };
 
     let record_ty_cons = record::Cons::new(span, ty_ident.name().clone(), poly_params_list, fields);
+
+    for (idx, field) in record_ty_cons.fields().iter().enumerate() {
+        if field.name().as_ref() != "_" {
+            let accessor_name = format!("{}-{}", value_cons_ident.name(), field.name());
+            let accessor_ident = Ident::new(value_cons_ident.ns_id(), accessor_name.into());
+
+            outer_scope.insert_binding(
+                field.span(),
+                accessor_ident,
+                Binding::FieldAccessor(record_ty_cons.clone(), idx),
+            )?;
+        }
+    }
+
     outer_scope.insert_binding(
         value_cons_ident_span,
         value_cons_ident,
@@ -189,6 +203,5 @@ pub fn lower_defrecord(
         )?;
     };
 
-    // TODO: Add field accessors
     Ok(())
 }

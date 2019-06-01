@@ -39,6 +39,17 @@ impl Field {
     pub fn ty_ref(&self) -> &ty::Ref<ty::Poly> {
         &self.ty_ref
     }
+
+    /// Returns the type of the field accessor function
+    pub fn accessor_fun_type(&self, cons_id: &ConsId) -> ty::Fun {
+        let (ty_args, pvars, tvars) = cons_id.polymorphic_vars();
+
+        let top_fun = ty::TopFun::new(Purity::Pure.into(), self.ty_ref().clone());
+        let params =
+            ty::List::new_tuple(Box::new([Instance::new(cons_id.clone(), ty_args).into()]));
+
+        ty::Fun::new(pvars, tvars, top_fun, params)
+    }
 }
 
 /// Polymorphic parameter to a record constructor
@@ -131,8 +142,7 @@ impl Cons {
         self.fields.as_ref()
     }
 
-    /// Returns the type of the value constructor function
-    pub fn value_cons_fun_type(cons_id: &ConsId) -> ty::Fun {
+    fn polymorphic_vars(&self) -> (TyArgs<ty::Poly>, purity::PVars, ty::TVars) {
         use std::collections::HashMap;
 
         let mut pvars = purity::PVars::new();
@@ -143,7 +153,7 @@ impl Cons {
 
         // Create an identity map of our polymorphic variables. When we substitute in the selected
         // types the keys will stay the same while the values will be replaced.
-        for poly_param in cons_id.poly_params() {
+        for poly_param in self.poly_params() {
             match poly_param {
                 PolyParam::PVar(_, pvar) => {
                     pvars.push(pvar.clone());
@@ -158,6 +168,14 @@ impl Cons {
         }
 
         let ty_args = TyArgs::new(pvar_purities, tvar_types);
+
+        (ty_args, pvars, tvars)
+    }
+
+    /// Returns the type of the value constructor function
+    pub fn value_cons_fun_type(cons_id: &ConsId) -> ty::Fun {
+        let (ty_args, pvars, tvars) = cons_id.polymorphic_vars();
+
         let ret_type = Instance::new(cons_id.clone(), ty_args).into();
         let top_fun = ty::TopFun::new(Purity::Pure.into(), ret_type);
 

@@ -133,6 +133,13 @@ pub struct App<P: Phase> {
 }
 
 #[derive(PartialEq, Debug, Clone)]
+pub struct FieldAccessor {
+    pub span: Span,
+    pub record_cons: record::ConsId,
+    pub field_index: usize,
+}
+
+#[derive(PartialEq, Debug, Clone)]
 pub struct Expr<P: Phase> {
     pub result_ty: P::ResultType,
     pub kind: ExprKind<P>,
@@ -153,9 +160,12 @@ pub enum ExprKind<P: Phase> {
     Let(Box<Let<P>>),
     Cond(Box<Cond<P>>),
     Ref(Span, VarId),
+
     TyPred(Span, ty::pred::TestTy),
     EqPred(Span),
     RecordCons(Span, record::ConsId),
+    FieldAccessor(Box<FieldAccessor>),
+
     Do(Vec<Expr<P>>),
 
     /// Used for tracing macro expansion for error report and debug information

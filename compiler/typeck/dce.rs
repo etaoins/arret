@@ -14,6 +14,7 @@ pub fn expr_can_side_effect(expr: &hir::Expr<hir::Inferred>) -> bool {
         | ExprKind::EqPred(_)
         | ExprKind::TyPred(_, _)
         | ExprKind::RecordCons(_, _)
+        | ExprKind::FieldAccessor(_)
         | ExprKind::Fun(_)
         | ExprKind::RustFun(_) => false,
         ExprKind::Do(exprs) => exprs.iter().any(expr_can_side_effect),

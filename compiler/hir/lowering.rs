@@ -27,7 +27,9 @@ use crate::hir::scope::{Binding, Scope};
 use crate::hir::types::{lower_poly, lower_polymorphic_var_set, try_lower_purity};
 use crate::hir::util::{expect_one_arg, expect_spanned_ident, try_take_rest_arg};
 use crate::hir::Lowered;
-use crate::hir::{App, Cond, DeclPurity, DeclTy, Def, Expr, ExprKind, Fun, Let, VarId};
+use crate::hir::{
+    App, Cond, DeclPurity, DeclTy, Def, Expr, ExprKind, FieldAccessor, Fun, Let, VarId,
+};
 
 #[derive(Debug)]
 struct LoweredModule {
@@ -485,6 +487,14 @@ fn lower_expr(scope: &Scope<'_>, datum: NsDatum) -> Result<Expr<Lowered>> {
             Binding::EqPred => Ok(ExprKind::EqPred(span).into()),
             Binding::RecordValueCons(record_cons) => {
                 Ok(ExprKind::RecordCons(span, record_cons.clone()).into())
+            }
+            Binding::FieldAccessor(record_cons, field_index) => {
+                Ok(ExprKind::FieldAccessor(Box::new(FieldAccessor {
+                    span,
+                    record_cons: record_cons.clone(),
+                    field_index: *field_index,
+                }))
+                .into())
             }
             other => Err(Error::new(
                 span,

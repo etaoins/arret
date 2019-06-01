@@ -54,3 +54,6 @@
 
 (defrecord (UnusedPolyTyParam [A Num]) (_))
                              ;^^^^^^^ ERROR unused polymorphic type parameter `A`
+
+(defrecord DuplicateFieldName (duplicate-field-name field field))
+                                                         ;^^^^^ ERROR duplicate definition of `duplicate-field-name-field`

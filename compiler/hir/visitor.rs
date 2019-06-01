@@ -43,7 +43,8 @@ where
         | ExprKind::RustFun(_)
         | ExprKind::TyPred(_, _)
         | ExprKind::EqPred(_)
-        | ExprKind::RecordCons(_, _) => {
+        | ExprKind::RecordCons(_, _)
+        | ExprKind::FieldAccessor(_) => {
             // Terminal expression
         }
     };
