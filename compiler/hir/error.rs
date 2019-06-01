@@ -307,7 +307,7 @@ impl From<Error> for Diagnostic {
 
             ErrorKind::DuplicateDef(first_def_span, ref ident) => {
                 let diagnostic =
-                    Diagnostic::new_error(format!("duplicate definition of`{}`", ident))
+                    Diagnostic::new_error(format!("duplicate definition of `{}`", ident))
                         .with_label(
                             Label::new_primary(origin).with_message("second definition here"),
                         );
