@@ -33,9 +33,12 @@ pub fn mono_to_const(
 pub fn possible_type_tags_for_value(value: &Value) -> TypeTagSet {
     match value {
         Value::Const(any_ref) => any_ref.header().type_tag().into(),
-        Value::ArretFun(_) | Value::RustFun(_) | Value::TyPred(_) | Value::EqPred => {
-            boxed::TypeTag::FunThunk.into()
-        }
+        Value::ArretFun(_)
+        | Value::RustFun(_)
+        | Value::TyPred(_)
+        | Value::EqPred
+        | Value::RecordCons(_)
+        | Value::FieldAccessor(_, _) => boxed::TypeTag::FunThunk.into(),
         Value::List(fixed, rest) => {
             if !fixed.is_empty() {
                 // Non-empty list

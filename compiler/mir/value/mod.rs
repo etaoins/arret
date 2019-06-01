@@ -17,6 +17,7 @@ use crate::mir::builder::BuiltReg;
 use crate::mir::tagset::TypeTagSet;
 use crate::rfi;
 use crate::ty;
+use crate::ty::record;
 
 pub use arret_fun::{ArretFun, ArretFunId};
 
@@ -44,9 +45,12 @@ pub enum Value {
     List(Box<[Value]>, Option<Box<Value>>),
     ArretFun(ArretFun),
     RustFun(Rc<rfi::Fun>),
+    Reg(Rc<RegValue>),
+
     TyPred(ty::pred::TestTy),
     EqPred,
-    Reg(Rc<RegValue>),
+    RecordCons(record::ConsId),
+    FieldAccessor(record::ConsId, usize),
 }
 
 impl Value {

@@ -27,7 +27,12 @@ impl Closure {
 
 fn can_reference_local_regs(value: &Value) -> bool {
     match value {
-        Value::Const(_) | Value::EqPred | Value::TyPred(_) | Value::RustFun(_) => false,
+        Value::Const(_)
+        | Value::EqPred
+        | Value::TyPred(_)
+        | Value::RecordCons(_)
+        | Value::FieldAccessor(_, _)
+        | Value::RustFun(_) => false,
         Value::Reg(_) => true,
         Value::ArretFun(arret_fun) => !arret_fun.closure().free_values.is_empty(),
         Value::List(fixed, rest) => {

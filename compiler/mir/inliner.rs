@@ -131,7 +131,11 @@ fn inline_preference_factor_for_value(arg_value: &Value) -> OpCostFactor {
         // RustFuns can be const eval'ed
         Value::RustFun(_) => 1.5,
         // These can be const eval'ed or completely inlined
-        Value::ArretFun(_) | Value::TyPred(_) | Value::EqPred => 2.0,
+        Value::ArretFun(_)
+        | Value::TyPred(_)
+        | Value::EqPred
+        | Value::RecordCons(_)
+        | Value::FieldAccessor(_, _) => 2.0,
     }
 }
 
@@ -196,12 +200,21 @@ fn hash_value<H: Hasher>(value: &Value, state: &mut H) {
             state.write_u8(3);
             test_ty.hash(state);
         }
-        Value::RustFun(rust_fun) => {
+        Value::RecordCons(record_cons) => {
             state.write_u8(4);
+            record_cons.hash(state);
+        }
+        Value::FieldAccessor(record_cons, field_index) => {
+            state.write_u8(5);
+            record_cons.hash(state);
+            field_index.hash(state);
+        }
+        Value::RustFun(rust_fun) => {
+            state.write_u8(6);
             rust_fun.symbol().hash(state);
         }
         Value::ArretFun(arret_fun) => {
-            state.write_u8(5);
+            state.write_u8(7);
 
             state.write_usize(arret_fun.closure().const_values.len());
             for (_, const_value) in arret_fun.closure().const_values.iter() {
@@ -209,7 +222,7 @@ fn hash_value<H: Hasher>(value: &Value, state: &mut H) {
             }
         }
         Value::Reg(_) => {
-            state.write_u8(6);
+            state.write_u8(8);
         }
     };
 }
