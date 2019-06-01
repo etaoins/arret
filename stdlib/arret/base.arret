@@ -1,6 +1,6 @@
 (import [arret internal primitives])
 (export def let fn if quote export defmacro letmacro macro-rules deftype lettype compile-error do =
-        defrecord)
+        defrecord letrecord)
 
 (import [arret internal types])
 (export Any Bool Str Sym Int Float Num Char List Vector Vectorof Setof Map U -> ->! str? sym?

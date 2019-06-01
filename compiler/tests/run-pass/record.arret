@@ -1,10 +1,9 @@
 (import [stdlib base])
 (import [stdlib test])
 
-(defrecord (Record A) (record [poly A] [int Int] any))
-
 (defn main! () ->! ()
-  (let [test-record (record 'foo 2 'bar)]
-    (assert-eq! 'foo (ann (record-poly test-record) 'foo))
-    (assert-eq! 2 (ann (record-int test-record) Int))
-    (assert-eq! 'bar (ann (record-any test-record) Any))))
+  (letrecord [(Record A) (record [poly A] [int Int] any)]
+    (let [test-record (record 'foo 2 'bar)]
+      (assert-eq! 'foo (ann (record-poly test-record) 'foo))
+      (assert-eq! 2 (ann (record-int test-record) Int))
+      (assert-eq! 'bar (ann (record-any test-record) Any)))))

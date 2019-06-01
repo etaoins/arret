@@ -34,6 +34,7 @@ export_prims!(
     ("deftype", DefType),
     ("lettype", LetType),
     ("defrecord", DefRecord),
+    ("letrecord", LetRecord),
     ("compile-error", CompileError),
     ("All", All)
 );

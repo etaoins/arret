@@ -75,22 +75,19 @@ where
         other => Err(Error::new(other.span(), error_kind_cons(datum_description))),
     }
 }
-pub fn lower_defrecord(
+
+pub fn lower_record(
     outer_scope: &mut Scope<'_>,
-    span: Span,
-    mut arg_iter: NsDataIter,
+    ty_cons_datum: NsDatum,
+    value_cons_datum: NsDatum,
 ) -> Result<()> {
     use crate::hir::types::PolymorphicVar;
     use crate::ty::ty_args::TyArgs;
 
-    if arg_iter.len() != 2 {
-        return Err(Error::new(span, ErrorKind::WrongDefRecordArgCount));
-    }
-
     let mut inner_scope = Scope::new_child(outer_scope);
 
     // Lower our type constructor
-    let ty_cons_datum = arg_iter.next().unwrap();
+    let ty_cons_span = ty_cons_datum.span();
     let ty_cons_decl = lower_record_cons_decl(ty_cons_datum, ErrorKind::ExpectedRecordTyConsDecl)?;
 
     let (ty_ident_span, ty_ident, poly_vars) = match ty_cons_decl {
@@ -104,7 +101,6 @@ pub fn lower_defrecord(
     };
 
     // Lower our value destructor
-    let value_cons_datum = arg_iter.next().unwrap();
     let value_cons_decl =
         lower_record_cons_decl(value_cons_datum, ErrorKind::ExpectedRecordValueConsDecl)?;
 
@@ -169,7 +165,12 @@ pub fn lower_defrecord(
         None => None,
     };
 
-    let record_ty_cons = record::Cons::new(span, ty_ident.name().clone(), poly_params_list, fields);
+    let record_ty_cons = record::Cons::new(
+        ty_cons_span,
+        ty_ident.name().clone(),
+        poly_params_list,
+        fields,
+    );
 
     for (idx, field) in record_ty_cons.fields().iter().enumerate() {
         if field.name().as_ref() != "_" {

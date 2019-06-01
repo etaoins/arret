@@ -22,7 +22,7 @@ use crate::hir::loader::{load_module_by_name, LoadedModule, ModuleName};
 use crate::hir::macros::{expand_macro, lower_macro_rules};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum, NsId};
 use crate::hir::prim::Prim;
-use crate::hir::records::lower_defrecord;
+use crate::hir::records::lower_record;
 use crate::hir::scope::{Binding, Scope};
 use crate::hir::types::{lower_poly, lower_polymorphic_var_set, try_lower_purity};
 use crate::hir::util::{expect_one_arg, expect_spanned_ident, try_take_rest_arg};
@@ -171,6 +171,21 @@ fn lower_deftype(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) ->
 
 fn lower_lettype(scope: &Scope<'_>, span: Span, arg_iter: NsDataIter) -> Result<Expr<Lowered>> {
     lower_let_like(scope, span, arg_iter, lower_type, |expr, _| expr)
+}
+
+fn lower_defrecord(scope: &mut Scope<'_>, span: Span, mut arg_iter: NsDataIter) -> Result<()> {
+    if arg_iter.len() != 2 {
+        return Err(Error::new(span, ErrorKind::WrongDefRecordArgCount));
+    }
+
+    let ty_cons_datum = arg_iter.next().unwrap();
+    let value_cons_datum = arg_iter.next().unwrap();
+
+    lower_record(scope, ty_cons_datum, value_cons_datum)
+}
+
+fn lower_letrecord(scope: &Scope<'_>, span: Span, arg_iter: NsDataIter) -> Result<Expr<Lowered>> {
+    lower_let_like(scope, span, arg_iter, lower_record, |expr, _| expr)
 }
 
 /// Lowers an identifier in to a scalar destruc with the passed type
@@ -425,6 +440,7 @@ fn lower_expr_prim_apply(
         Prim::Let => lower_let(scope, span, arg_iter),
         Prim::LetMacro => lower_letmacro(scope, span, arg_iter),
         Prim::LetType => lower_lettype(scope, span, arg_iter),
+        Prim::LetRecord => lower_letrecord(scope, span, arg_iter),
         Prim::Export => Err(Error::new(span, ErrorKind::ExportOutsideModule)),
         Prim::Quote => {
             let literal_datum = expect_one_arg(span, arg_iter)?;
