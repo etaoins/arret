@@ -175,7 +175,7 @@ pub trait DistinctTagged: Boxed {
 /// Marks that every boxed value with `TYPE_TAG` corresponds to this boxed struct
 ///
 /// For example, [`Str`] is `UniqueTagged` because no other struct has the type tag of `Str`. As a
-/// counterexample, p`Vector<Str>`] is not because it shares a type tag with `Vector<Sym>`.
+/// counterexample, `Vector<Str>` is not because it shares a type tag with `Vector<Sym>`.
 ///
 /// In mathematical terms this can be thought of as the struct being bijective with the type tag.
 pub trait UniqueTagged: ConstTagged + DistinctTagged {}
