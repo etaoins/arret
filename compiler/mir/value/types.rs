@@ -50,9 +50,7 @@ pub fn possible_type_tags_for_value(value: &Value) -> TypeTagSet {
                 boxed::TypeTag::Nil.into()
             }
         }
-        Value::Record(_, _) => {
-            unimplemented!("record type tag");
-        }
+        Value::Record(_, _) => boxed::TypeTag::Record.into(),
         Value::Reg(reg_value) => reg_value.possible_type_tags,
     }
 }

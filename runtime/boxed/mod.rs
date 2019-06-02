@@ -28,6 +28,7 @@ pub use crate::boxed::types::float::Float;
 pub use crate::boxed::types::fun::{Closure, FunThunk, ThunkEntry};
 pub use crate::boxed::types::int::Int;
 pub use crate::boxed::types::list::{List, Nil, Pair, NIL_INSTANCE};
+pub use crate::boxed::types::record::Record;
 pub use crate::boxed::types::str::Str;
 pub use crate::boxed::types::sym::Sym;
 pub use crate::boxed::types::vector::Vector;
@@ -447,7 +448,8 @@ define_const_tagged_boxes! {
     True,
     False,
     Vector,
-    FunThunk
+    FunThunk,
+    Record
 }
 
 define_singleton_box!(

@@ -118,6 +118,7 @@ pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any
             write!(w, "\"")
         }
         AnySubtype::FunThunk(_) => write!(w, "#fn"),
+        AnySubtype::Record(_) => write!(w, "#record"),
     }
 }
 

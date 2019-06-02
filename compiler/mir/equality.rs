@@ -181,7 +181,7 @@ pub fn values_statically_equal(
                     // NaN != NaN
                     boxed::TypeTag::Float => true,
                     // Can contain partial equal values
-                    boxed::TypeTag::Pair | boxed::TypeTag::Vector => true,
+                    boxed::TypeTag::Pair | boxed::TypeTag::Vector | boxed::TypeTag::Record => true,
                     // The rest can be compared. Add them explicitly so we will be forced to
                     // classify new types
                     boxed::TypeTag::Int

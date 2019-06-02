@@ -95,6 +95,7 @@ where
                 Ty::Str => TypeTag::Str.into(),
                 Ty::Fun(_) | Ty::TopFun(_) | Ty::TyPred(_) | Ty::EqPred => TypeTag::FunThunk.into(),
                 Ty::Vector(_) | Ty::Vectorof(_) => TypeTag::Vector.into(),
+                Ty::Record(_) | Ty::TopRecord(_) => TypeTag::Record.into(),
                 Ty::List(list) => {
                     if list.is_empty() {
                         TypeTag::Nil.into()
@@ -112,9 +113,7 @@ where
                     .iter()
                     .map(TypeTagSet::from)
                     .fold(TypeTagSet::new(), |a, b| a & b),
-                Ty::Map(_) | Ty::Set(_) | Ty::TopRecord(_) | Ty::Record(_) => {
-                    unimplemented!("no corresponding type tag")
-                }
+                Ty::Map(_) | Ty::Set(_) => unimplemented!("no corresponding type tag"),
             })
             .unwrap_or_else(TypeTagSet::all)
     }

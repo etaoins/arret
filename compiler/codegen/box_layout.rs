@@ -45,6 +45,7 @@ impl BoxLayout {
             BoxLayout::ConstTagged(TypeTag::FunThunk) => b"boxed_fun_thunk\0",
             BoxLayout::ConstTagged(TypeTag::Pair) => b"boxed_pair\0",
             BoxLayout::ConstTagged(TypeTag::Vector) => b"boxed_vector\0",
+            BoxLayout::ConstTagged(TypeTag::Record) => b"boxed_record\0",
         }
     }
 
@@ -94,6 +95,9 @@ impl BoxLayout {
                         llvm_any_ptr,
                         llvm_any_list_ptr,
                     ]);
+                }
+                BoxLayout::ConstTagged(TypeTag::Record) => {
+                    members.push(LLVMInt32TypeInContext(tcx.llx));
                 }
                 BoxLayout::List => {
                     members.push(tcx.usize_llvm_type());
