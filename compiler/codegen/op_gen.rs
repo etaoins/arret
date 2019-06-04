@@ -764,6 +764,10 @@ fn gen_op(
 
                 fcx.regs.insert(*reg, llvm_callback);
             }
+            OpKind::ConstBoxedRecord(reg, BoxRecordOp { record_struct, .. }) => {
+                let llvm_value = const_gen::gen_boxed_record(tcx, mcx, record_struct);
+                fcx.regs.insert(*reg, llvm_value);
+            }
         }
     }
 }

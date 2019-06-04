@@ -10,6 +10,7 @@ use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::value;
 use crate::mir::value::Value;
 use crate::rfi;
+use crate::ty::record;
 
 enum RestLength {
     Known(usize),
@@ -222,6 +223,26 @@ fn list_to_reg(
     };
 
     b.cast_boxed(span, list_reg, boxed_abi_type.clone())
+}
+
+fn record_to_reg(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    record_cons: &record::ConsId,
+    boxed_abi_type: &abitype::BoxedABIType,
+) -> BuiltReg {
+    use crate::mir::ops::*;
+
+    let evaled_record_class = ehx.evaled_record_class_for_cons(record_cons);
+
+    let box_record_op = BoxRecordOp {
+        record_struct: evaled_record_class.record_struct.clone(),
+        field_regs: Box::new([]),
+    };
+
+    let record_reg = b.push_reg(span, OpKind::ConstBoxedRecord, box_record_op);
+    b.cast_boxed(span, record_reg, boxed_abi_type.clone())
 }
 
 pub fn reg_to_boxed_reg(
@@ -451,8 +472,16 @@ pub fn value_to_reg(
                 panic!("Attempt to construct non-boxed list");
             }
         }
-        Value::Record(_, _) => {
-            unimplemented!("boxing records");
+        Value::Record(record_cons, fields) => {
+            if !fields.is_empty() {
+                unimplemented!("genning records with fields");
+            }
+
+            if let abitype::ABIType::Boxed(boxed_abi_type) = abi_type {
+                record_to_reg(ehx, b, span, record_cons, boxed_abi_type)
+            } else {
+                panic!("Attempt to construct non-boxed list");
+            }
         }
         Value::ArretFun(ref arret_fun) => arret_fun_to_reg(ehx, b, span, arret_fun, abi_type),
         Value::TyPred(test_ty) => {

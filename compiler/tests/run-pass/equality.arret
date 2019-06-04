@@ -73,7 +73,10 @@
   (letrecord [EmptyOne (empty-one) EmptyTwo (empty-two)]
     (assert-eq! (empty-one) (empty-one))
     (assert-ne! (empty-one) (empty-two))
-    (assert-eq! (empty-two) (empty-two))))
+    (assert-eq! (empty-two) (empty-two))
+    
+    (assert-eq! (empty-one) (black-box! (empty-one)))
+    (assert-ne! (empty-two) (black-box! (empty-one)))))
 
 (defn main! () ->! ()
   (test-int-equality!)

@@ -42,6 +42,12 @@ struct ArretFunKey {
     polymorph_abi: PolymorphABI,
 }
 
+#[derive(PartialEq, Eq, Hash)]
+pub struct EvaledRecordClass {
+    pub jit_record_class_id: boxed::RecordClassId,
+    pub record_struct: ops::RecordStructId,
+}
+
 pub struct EvalHirCtx {
     runtime_task: arret_runtime::task::Task,
     global_values: HashMap<hir::VarId, Value>,
@@ -57,8 +63,8 @@ pub struct EvalHirCtx {
     thunk_fun_values: HashMap<*const boxed::FunThunk, Value>,
     thunk_jit: codegen::jit::JITCtx,
 
-    next_record_class_id: boxed::RecordClassId,
-    record_class_ids: HashMap<record::ConsId, boxed::RecordClassId>,
+    next_jit_record_class_id: boxed::RecordClassId,
+    record_classes: HashMap<record::ConsId, EvaledRecordClass>,
 }
 
 pub struct FunCtx {
@@ -171,8 +177,8 @@ impl EvalHirCtx {
             thunk_fun_values: HashMap::new(),
             thunk_jit,
 
-            next_record_class_id: 0,
-            record_class_ids: HashMap::new(),
+            next_jit_record_class_id: 0,
+            record_classes: HashMap::new(),
         }
     }
 
@@ -1066,20 +1072,27 @@ impl EvalHirCtx {
         private_fun_id
     }
 
-    pub fn record_class_id_for_cons(
+    pub fn evaled_record_class_for_cons(
         &mut self,
         record_cons: &record::ConsId,
-    ) -> boxed::RecordClassId {
-        if let Some(record_class_id) = self.record_class_ids.get(record_cons) {
-            return *record_class_id;
+    ) -> &EvaledRecordClass {
+        if self.record_classes.contains_key(record_cons) {
+            return &self.record_classes[record_cons];
         }
 
-        let record_class_id = self.next_record_class_id;
-        self.record_class_ids
-            .insert(record_cons.clone(), record_class_id);
-        self.next_record_class_id += 1;
+        // This is the class ID used by values in the JIT context
+        // codegen will reassign contiguous class IDs for the record classes it generates
+        let jit_record_class_id = self.next_jit_record_class_id;
+        self.next_jit_record_class_id += 1;
 
-        record_class_id
+        let evaled_record_class = EvaledRecordClass {
+            jit_record_class_id,
+            record_struct: ops::RecordStruct::new(record_cons.name().clone(), Box::new([])),
+        };
+
+        self.record_classes
+            .entry(record_cons.clone())
+            .or_insert(evaled_record_class)
     }
 
     pub fn arret_fun_to_thunk_reg(

@@ -6,8 +6,9 @@ use arret_syntax::datum::DataStr;
 use arret_syntax::span::Span;
 
 use crate::codegen::GenABI;
-use crate::mir::tagset::TypeTagSet;
 
+use crate::id_type::ArcId;
+use crate::mir::tagset::TypeTagSet;
 new_counting_id_type!(PrivateFunIdCounter, PrivateFunId);
 new_global_id_type!(RegId);
 
@@ -65,6 +66,26 @@ pub enum Callee {
     StaticSymbol(StaticSymbol),
 }
 
+/// Represents a structure tagged with a class ID
+///
+/// This is the MIR analog of [`record::Cons`](crate::ty::record::Cons)
+#[derive(Debug, PartialEq, Clone)]
+pub struct RecordStruct {
+    pub source_name: DataStr,
+    pub field_abi_types: Box<[abitype::ABIType]>,
+}
+
+pub type RecordStructId = ArcId<RecordStruct>;
+
+impl RecordStruct {
+    pub fn new(source_name: DataStr, field_abi_types: Box<[abitype::ABIType]>) -> RecordStructId {
+        ArcId::new(RecordStruct {
+            source_name,
+            field_abi_types,
+        })
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct CallOp {
     pub callee: Callee,
@@ -83,6 +104,12 @@ pub struct BoxPairOp {
 pub struct BoxFunThunkOp {
     pub closure_reg: RegId,
     pub callee: Callee,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct BoxRecordOp {
+    pub record_struct: RecordStructId,
+    pub field_regs: Box<[RegId]>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -206,6 +233,8 @@ pub enum OpKind {
     Int64CheckedDiv(RegId, BinaryOp),
     Int64CheckedRem(RegId, BinaryOp),
 
+    ConstBoxedRecord(RegId, BoxRecordOp),
+
     Ret(RegId),
     RetVoid,
     Unreachable,
@@ -286,7 +315,8 @@ impl OpKind {
             | BoxIdentical(reg_id, _)
             | UsizeToInt64(reg_id, _)
             | Int64ToFloat(reg_id, _)
-            | MakeCallback(reg_id, _) => Some(*reg_id),
+            | MakeCallback(reg_id, _)
+            | ConstBoxedRecord(reg_id, _) => Some(*reg_id),
             Cond(cond_op) => cond_op.reg_phi.clone().map(|reg_phi| reg_phi.output_reg),
             Ret(_) | RetVoid | Unreachable => None,
         }
@@ -408,6 +438,9 @@ impl OpKind {
             IntCompare(_, compare_op) | FloatCompare(_, compare_op) => {
                 coll.extend([compare_op.lhs_reg, compare_op.rhs_reg].iter().cloned());
             }
+            ConstBoxedRecord(_, BoxRecordOp { field_regs, .. }) => {
+                coll.extend(field_regs.iter().cloned());
+            }
         }
     }
 
@@ -462,7 +495,8 @@ impl OpKind {
             | ConstBoxedStr(_, _)
             | ConstBoxedSym(_, _)
             | ConstBoxedPair(_, _)
-            | ConstBoxedFunThunk(_, _) => OpCategory::ConstBox,
+            | ConstBoxedFunThunk(_, _)
+            | ConstBoxedRecord(_, _) => OpCategory::ConstBox,
 
             AllocBoxedInt(_, _)
             | AllocBoxedFloat(_, _)

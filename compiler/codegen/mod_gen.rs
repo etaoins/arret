@@ -7,6 +7,7 @@ use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 use llvm_sys::LLVMLinkage;
 
+use arret_runtime::boxed::RecordClassId;
 use arret_runtime::intern;
 
 use crate::codegen::analysis::AnalysedMod;
@@ -24,6 +25,9 @@ pub struct ModCtx<'am, 'sl, 'interner> {
 
     jit_interner: Option<&'interner mut intern::Interner>,
     global_interned_names: Vec<Box<str>>,
+
+    record_struct_class_ids: HashMap<ops::RecordStructId, RecordClassId>,
+    next_record_class_id: RecordClassId,
 
     function_pass_manager: LLVMPassManagerRef,
 }
@@ -100,6 +104,9 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
             jit_interner,
             global_interned_names: vec![],
 
+            record_struct_class_ids: HashMap::new(),
+            next_record_class_id: 0,
+
             function_pass_manager,
         }
     }
@@ -115,6 +122,22 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
 
             unsafe { intern::InternedSym::from_global_index(global_index as u32) }
         }
+    }
+
+    pub fn record_class_id_for_struct(
+        &mut self,
+        record_struct: &ops::RecordStructId,
+    ) -> RecordClassId {
+        if let Some(record_class_id) = self.record_struct_class_ids.get(record_struct) {
+            return *record_class_id;
+        }
+
+        let record_class_id = self.next_record_class_id;
+        self.next_record_class_id += 1;
+
+        self.record_struct_class_ids
+            .insert(record_struct.clone(), record_class_id);
+        record_class_id
     }
 
     pub fn llvm_private_fun(&self, private_fun_id: ops::PrivateFunId) -> LLVMValueRef {

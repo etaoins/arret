@@ -8,6 +8,7 @@ use arret_runtime::boxed;
 
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
+use crate::mir::ops;
 
 fn annotate_private_global(llvm_global: LLVMValueRef) {
     unsafe {
@@ -315,6 +316,35 @@ pub fn gen_boxed_fun_thunk(
         LLVMSetInitializer(global, llvm_value);
         LLVMSetAlignment(global, mem::align_of::<boxed::FunThunk>() as u32);
 
+        annotate_private_global(global);
+        global
+    }
+}
+
+pub fn gen_boxed_record(
+    tcx: &mut TargetCtx,
+    mcx: &mut ModCtx<'_, '_, '_>,
+    record_struct: &ops::RecordStructId,
+) -> LLVMValueRef {
+    let record_class_id = mcx.record_class_id_for_struct(record_struct);
+
+    unsafe {
+        let type_tag = boxed::TypeTag::Record;
+        let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
+        let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
+
+        let box_name = ffi::CString::new(format!("const_{}", record_struct.source_name)).unwrap();
+
+        let global = mcx.get_global_or_insert(llvm_type, box_name.as_bytes_with_nul(), || {
+            let members = &mut [
+                tcx.llvm_box_header(type_tag.to_const_header()),
+                LLVMConstInt(llvm_i32, u64::from(record_class_id), 1),
+            ];
+
+            LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32)
+        });
+
+        LLVMSetAlignment(global, mem::align_of::<boxed::Record>() as u32);
         annotate_private_global(global);
         global
     }
