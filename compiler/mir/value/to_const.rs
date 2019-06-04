@@ -40,8 +40,13 @@ pub fn value_to_const(ehx: &mut EvalHirCtx, value: &Value) -> Option<Gc<boxed::A
         Value::Const(boxed) => Some(*boxed),
         Value::List(fixed, Some(rest)) => list_to_const(ehx, fixed, Some(&*rest)),
         Value::List(fixed, None) => list_to_const(ehx, fixed, None),
-        Value::Record(_, _) => {
-            unimplemented!("boxing records");
+        Value::Record(record_cons, fields) => {
+            if !fields.is_empty() {
+                unimplemented!("boxing records with fields");
+            }
+
+            let record_class_id = ehx.record_class_id_for_cons(record_cons);
+            Some(boxed::Record::new(ehx, record_class_id).as_any_ref())
         }
         Value::TyPred(test_ty) => {
             let ty_pred_arret_fun = ehx

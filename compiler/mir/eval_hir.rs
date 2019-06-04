@@ -56,6 +56,9 @@ pub struct EvalHirCtx {
     // This uses pointers because `FunThunk` is always inequal to itself
     thunk_fun_values: HashMap<*const boxed::FunThunk, Value>,
     thunk_jit: codegen::jit::JITCtx,
+
+    next_record_class_id: boxed::RecordClassId,
+    record_class_ids: HashMap<record::ConsId, boxed::RecordClassId>,
 }
 
 pub struct FunCtx {
@@ -167,6 +170,9 @@ impl EvalHirCtx {
             rust_fun_thunks: HashMap::new(),
             thunk_fun_values: HashMap::new(),
             thunk_jit,
+
+            next_record_class_id: 0,
+            record_class_ids: HashMap::new(),
         }
     }
 
@@ -1058,6 +1064,22 @@ impl EvalHirCtx {
         self.private_funs.insert(private_fun_id, ops_fun);
 
         private_fun_id
+    }
+
+    pub fn record_class_id_for_cons(
+        &mut self,
+        record_cons: &record::ConsId,
+    ) -> boxed::RecordClassId {
+        if let Some(record_class_id) = self.record_class_ids.get(record_cons) {
+            return *record_class_id;
+        }
+
+        let record_class_id = self.next_record_class_id;
+        self.record_class_ids
+            .insert(record_cons.clone(), record_class_id);
+        self.next_record_class_id += 1;
+
+        record_class_id
     }
 
     pub fn arret_fun_to_thunk_reg(

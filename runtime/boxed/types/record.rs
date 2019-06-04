@@ -7,7 +7,7 @@ use crate::boxed::*;
 /// Numeric ID indicating which class the record belongs to
 ///
 /// This is used to distinguish record types before each other.
-pub type ClassId = u32;
+pub type RecordClassId = u32;
 
 /// User-defined record type
 ///
@@ -15,14 +15,14 @@ pub type ClassId = u32;
 #[repr(C, align(16))]
 pub struct Record {
     header: Header,
-    class_id: ClassId,
+    class_id: RecordClassId,
 }
 
 impl Boxed for Record {}
 
 impl Record {
     /// Constructs a new empty record of the given class
-    pub fn new(heap: &mut impl AsHeap, class_id: ClassId) -> Gc<Record> {
+    pub fn new(heap: &mut impl AsHeap, class_id: RecordClassId) -> Gc<Record> {
         heap.as_heap_mut().place_box(Record {
             header: Self::TYPE_TAG.to_heap_header(Self::size()),
             class_id,
@@ -35,7 +35,7 @@ impl Record {
     }
 
     /// Returns the class ID for the record
-    pub fn class_id(&self) -> ClassId {
+    pub fn class_id(&self) -> RecordClassId {
         self.class_id
     }
 }

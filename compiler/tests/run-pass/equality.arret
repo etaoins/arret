@@ -69,6 +69,12 @@
   (assert-eq! false ((black-box! =) test-fn-equality! test-fn-equality!))
   (assert-eq! false ((black-box! =) test-sym-equality! test-sym-equality!)))
 
+(defn test-record-equality! () ->! ()
+  (letrecord [EmptyOne (empty-one) EmptyTwo (empty-two)]
+    (assert-eq! (empty-one) (empty-one))
+    (assert-ne! (empty-one) (empty-two))
+    (assert-eq! (empty-two) (empty-two))))
+
 (defn main! () ->! ()
   (test-int-equality!)
   (test-bool-equality!)
@@ -77,4 +83,5 @@
   (test-nan-equality!)
   (test-float-zero-equality!)
   (test-char-equality!)
-  (test-fn-equality!))
+  (test-fn-equality!)
+  (test-record-equality!))
