@@ -111,8 +111,11 @@ fn gen_op(
             }
             OpKind::ConstRecordClassId(reg, record_struct) => {
                 let record_class_id = mcx.record_class_id_for_struct(record_struct);
-                let llvm_value =
-                    LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), record_class_id as u64, 1);
+                let llvm_value = LLVMConstInt(
+                    LLVMInt32TypeInContext(tcx.llx),
+                    u64::from(record_class_id),
+                    1,
+                );
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBoxedInt(reg, value) => {
