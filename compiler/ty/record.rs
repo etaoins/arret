@@ -90,6 +90,7 @@ impl PolyParam {
 pub struct Cons {
     span: Span,
     name: DataStr,
+    predicate_name: DataStr,
     poly_params_list: Option<Box<[PolyParam]>>,
     fields: Box<[Field]>,
 }
@@ -98,12 +99,14 @@ impl Cons {
     pub fn new(
         span: Span,
         name: DataStr,
+        predicate_name: DataStr,
         poly_params_list: Option<Box<[PolyParam]>>,
         fields: Box<[Field]>,
     ) -> ConsId {
         ConsId::new(Self {
             span,
             name,
+            predicate_name,
             poly_params_list,
             fields,
         })
@@ -120,6 +123,11 @@ impl Cons {
     /// It's used to define a constructor function.
     pub fn name(&self) -> &DataStr {
         &self.name
+    }
+
+    /// Returns the name of the type predicate
+    pub fn predicate_name(&self) -> &DataStr {
+        &self.predicate_name
     }
 
     /// Returns the polymorphic parameters this constructor accepts

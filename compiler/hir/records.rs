@@ -1,3 +1,4 @@
+use arret_syntax::datum::DataStr;
 use arret_syntax::span::Span;
 
 use crate::hir::error::{Error, ErrorKind, Result};
@@ -7,6 +8,7 @@ use crate::hir::scope::{Binding, Scope};
 use crate::hir::types::lower_poly;
 use crate::hir::types::lower_polymorphic_var_list;
 use crate::hir::util::{expect_ident, expect_spanned_ident};
+use crate::ty;
 use crate::ty::record;
 use crate::ty::Ty;
 
@@ -165,9 +167,13 @@ pub fn lower_record(
         None => None,
     };
 
+    let predicate_name: DataStr = format!("{}?", value_cons_ident.name()).into();
+    let predicate_ident = Ident::new(value_cons_ident.ns_id(), predicate_name.clone());
+
     let record_ty_cons = record::Cons::new(
         ty_cons_span,
         ty_ident.name().clone(),
+        predicate_name.clone(),
         poly_params_list,
         fields,
     );
@@ -184,6 +190,12 @@ pub fn lower_record(
             )?;
         }
     }
+
+    outer_scope.insert_binding(
+        value_cons_ident_span,
+        predicate_ident,
+        Binding::TyPred(ty::pred::TestTy::TopRecord(record_ty_cons.clone())),
+    )?;
 
     outer_scope.insert_binding(
         value_cons_ident_span,

@@ -647,6 +647,7 @@ mod test {
         let cons1 = record::Cons::new(
             EMPTY_SPAN,
             "cons1".into(),
+            "cons1?".into(),
             Some(Box::new([record::PolyParam::TVar(
                 Variance::Covariant,
                 tvar1.clone(),
@@ -661,6 +662,7 @@ mod test {
         let cons2 = record::Cons::new(
             EMPTY_SPAN,
             "cons2".into(),
+            "cons2?".into(),
             Some(Box::new([
                 record::PolyParam::TVar(Variance::Covariant, tvar1.clone()),
                 record::PolyParam::TVar(Variance::Contravariant, tvar2.clone()),

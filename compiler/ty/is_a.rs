@@ -699,8 +699,20 @@ mod test {
     fn distinct_record_cons_instances() {
         use crate::ty::ty_args::TyArgs;
 
-        let cons1 = record::Cons::new(EMPTY_SPAN, "cons1".into(), None, Box::new([]));
-        let cons2 = record::Cons::new(EMPTY_SPAN, "cons2".into(), None, Box::new([]));
+        let cons1 = record::Cons::new(
+            EMPTY_SPAN,
+            "cons1".into(),
+            "cons1?".into(),
+            None,
+            Box::new([]),
+        );
+        let cons2 = record::Cons::new(
+            EMPTY_SPAN,
+            "cons2".into(),
+            "cons2?".into(),
+            None,
+            Box::new([]),
+        );
 
         let instance1_poly: ty::Ref<ty::Poly> =
             record::Instance::new(cons1, TyArgs::empty()).into();
@@ -724,6 +736,7 @@ mod test {
         let cons = record::Cons::new(
             EMPTY_SPAN,
             "cons".into(),
+            "cons?".into(),
             Some(Box::new([
                 record::PolyParam::TVar(Variance::Covariant, tvar1.clone()),
                 record::PolyParam::TVar(Variance::Contravariant, tvar2.clone()),

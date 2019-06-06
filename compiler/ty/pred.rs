@@ -145,7 +145,7 @@ impl TestTy {
             TestTy::Map => "map?".to_owned(),
             TestTy::Fun => "fn?".to_owned(),
             TestTy::Nil => "nil?".to_owned(),
-            TestTy::TopRecord(cons) => format!("{}?", cons.name()),
+            TestTy::TopRecord(cons) => format!("{}", cons.predicate_name()),
         }
     }
 }
@@ -303,8 +303,20 @@ mod test {
     fn top_record_test_ty() {
         use crate::ty::ty_args::TyArgs;
 
-        let cons = record::Cons::new(EMPTY_SPAN, "cons".into(), None, Box::new([]));
-        let other_cons = record::Cons::new(EMPTY_SPAN, "other_cons".into(), None, Box::new([]));
+        let cons = record::Cons::new(
+            EMPTY_SPAN,
+            "cons".into(),
+            "cons?".into(),
+            None,
+            Box::new([]),
+        );
+        let other_cons = record::Cons::new(
+            EMPTY_SPAN,
+            "other_cons".into(),
+            "other_cons?".into(),
+            None,
+            Box::new([]),
+        );
 
         let test_ty = TestTy::TopRecord(cons.clone());
 

@@ -188,6 +188,7 @@ mod test {
         let poly_record_cons = record::Cons::new(
             EMPTY_SPAN,
             "record_cons".into(),
+            "record_cons?".into(),
             Some(Box::new([record::PolyParam::TVar(
                 Variance::Covariant,
                 tvar.clone(),

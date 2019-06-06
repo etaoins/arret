@@ -1026,6 +1026,7 @@ mod test {
         let mono_record_cons = record::Cons::new(
             EMPTY_SPAN,
             "MonoCons".into(),
+            "mono-cons?".into(),
             None,
             Box::new([record::Field::new(EMPTY_SPAN, "num".into(), Ty::Num.into())]),
         );
@@ -1045,6 +1046,7 @@ mod test {
         let poly_record_cons = record::Cons::new(
             EMPTY_SPAN,
             "PolyCons".into(),
+            "poly-cons?".into(),
             Some(Box::new([
                 record::PolyParam::Pure(EMPTY_SPAN),
                 record::PolyParam::TVar(Variance::Covariant, tvar.clone()),
