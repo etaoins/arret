@@ -176,6 +176,7 @@ pub enum OpKind {
     ConstBool(RegId, bool),
     ConstInternedSym(RegId, Box<str>),
     ConstTypeTag(RegId, boxed::TypeTag),
+    ConstRecordClassId(RegId, RecordStructId),
 
     ConstBoxedNil(RegId, ()),
     ConstBoxedTrue(RegId, ()),
@@ -207,6 +208,7 @@ pub enum OpKind {
     LoadBoxedCharValue(RegId, RegId),
     LoadBoxedSymInterned(RegId, RegId),
     LoadBoxedFunThunkClosure(RegId, RegId),
+    LoadBoxedRecordClassId(RegId, RegId),
     Cond(CondOp),
 
     MakeCallback(RegId, MakeCallbackOp),
@@ -215,6 +217,7 @@ pub enum OpKind {
     CharEqual(RegId, BinaryOp),
     InternedSymEqual(RegId, BinaryOp),
     TypeTagEqual(RegId, BinaryOp),
+    RecordClassIdEqual(RegId, BinaryOp),
     BoxIdentical(RegId, BinaryOp),
     UsizeToInt64(RegId, RegId),
     Int64ToFloat(RegId, RegId),
@@ -279,6 +282,7 @@ impl OpKind {
             | ConstBoxedSym(reg_id, _)
             | ConstBoxedPair(reg_id, _)
             | ConstBoxedFunThunk(reg_id, _)
+            | ConstRecordClassId(reg_id, _)
             | AllocBoxedInt(reg_id, _)
             | AllocBoxedFloat(reg_id, _)
             | AllocBoxedChar(reg_id, _)
@@ -296,6 +300,7 @@ impl OpKind {
             | LoadBoxedFloatValue(reg_id, _)
             | LoadBoxedCharValue(reg_id, _)
             | LoadBoxedFunThunkClosure(reg_id, _)
+            | LoadBoxedRecordClassId(reg_id, _)
             | FloatAdd(reg_id, _)
             | UsizeAdd(reg_id, _)
             | Int64CheckedAdd(reg_id, _)
@@ -305,12 +310,13 @@ impl OpKind {
             | Int64CheckedSub(reg_id, _)
             | FloatDiv(reg_id, _)
             | Int64CheckedDiv(reg_id, _)
-            | Int64CheckedRem(reg_id, _) => Some(*reg_id),
-            IntCompare(reg_id, _)
+            | Int64CheckedRem(reg_id, _)
+            | IntCompare(reg_id, _)
             | BoolEqual(reg_id, _)
             | CharEqual(reg_id, _)
             | InternedSymEqual(reg_id, _)
             | TypeTagEqual(reg_id, _)
+            | RecordClassIdEqual(reg_id, _)
             | FloatCompare(reg_id, _)
             | BoxIdentical(reg_id, _)
             | UsizeToInt64(reg_id, _)
@@ -337,6 +343,7 @@ impl OpKind {
             | ConstBool(_, _)
             | ConstInternedSym(_, _)
             | ConstTypeTag(_, _)
+            | ConstRecordClassId(_, _)
             | ConstBoxedInt(_, _)
             | ConstBoxedFloat(_, _)
             | ConstBoxedChar(_, _)
@@ -389,6 +396,7 @@ impl OpKind {
             | LoadBoxedCharValue(_, reg_id)
             | LoadBoxedSymInterned(_, reg_id)
             | LoadBoxedFunThunkClosure(_, reg_id)
+            | LoadBoxedRecordClassId(_, reg_id)
             | UsizeToInt64(_, reg_id)
             | Int64ToFloat(_, reg_id)
             | MakeCallback(
@@ -432,6 +440,7 @@ impl OpKind {
             | CharEqual(_, binary_op)
             | InternedSymEqual(_, binary_op)
             | TypeTagEqual(_, binary_op)
+            | RecordClassIdEqual(_, binary_op)
             | BoxIdentical(_, binary_op) => {
                 coll.extend([binary_op.lhs_reg, binary_op.rhs_reg].iter().cloned());
             }
@@ -484,7 +493,8 @@ impl OpKind {
             | ConstChar(_, _)
             | ConstBool(_, _)
             | ConstInternedSym(_, _)
-            | ConstTypeTag(_, _) => OpCategory::ConstReg,
+            | ConstTypeTag(_, _)
+            | ConstRecordClassId(_, _) => OpCategory::ConstReg,
 
             ConstBoxedNil(_, _)
             | ConstBoxedTrue(_, _)
@@ -514,7 +524,8 @@ impl OpKind {
             | LoadBoxedFloatValue(_, _)
             | LoadBoxedCharValue(_, _)
             | LoadBoxedSymInterned(_, _)
-            | LoadBoxedFunThunkClosure(_, _) => OpCategory::MemLoad,
+            | LoadBoxedFunThunkClosure(_, _)
+            | LoadBoxedRecordClassId(_, _) => OpCategory::MemLoad,
 
             FloatAdd(_, _)
             | UsizeAdd(_, _)
@@ -531,6 +542,7 @@ impl OpKind {
             | CharEqual(_, _)
             | InternedSymEqual(_, _)
             | TypeTagEqual(_, _)
+            | RecordClassIdEqual(_, _)
             | FloatCompare(_, _)
             | BoxIdentical(_, _)
             | Int64ToFloat(_, _) => OpCategory::RegOp,

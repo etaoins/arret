@@ -109,6 +109,12 @@ fn gen_op(
                 let llvm_value = LLVMConstInt(LLVMInt8TypeInContext(tcx.llx), *type_tag as u64, 1);
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::ConstRecordClassId(reg, record_struct) => {
+                let record_class_id = mcx.record_class_id_for_struct(record_struct);
+                let llvm_value =
+                    LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), record_class_id as u64, 1);
+                fcx.regs.insert(*reg, llvm_value);
+            }
             OpKind::ConstBoxedInt(reg, value) => {
                 let llvm_value = const_gen::gen_boxed_int(tcx, mcx, *value);
                 fcx.regs.insert(*reg, llvm_value);
@@ -368,6 +374,24 @@ fn gen_op(
 
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::LoadBoxedRecordClassId(reg, boxed_record_reg) => {
+                let llvm_boxed_record = fcx.regs[boxed_record_reg];
+                let value_ptr = LLVMBuildStructGEP(
+                    fcx.builder,
+                    llvm_boxed_record,
+                    1,
+                    b"record_class_id_ptr\0".as_ptr() as *const _,
+                );
+
+                let llvm_value = LLVMBuildLoad(
+                    fcx.builder,
+                    value_ptr,
+                    "record_class_id\0".as_ptr() as *const _,
+                );
+                tcx.add_invariant_load_metadata(llvm_value);
+
+                fcx.regs.insert(*reg, llvm_value);
+            }
             OpKind::LoadBoxedFunThunkClosure(reg, boxed_fun_thunk_reg) => {
                 let llvm_boxed_fun_thunk = fcx.regs[boxed_fun_thunk_reg];
 
@@ -526,6 +550,14 @@ fn gen_op(
                 *lhs_reg,
                 *rhs_reg,
                 "type_tag_equal\0",
+            ),
+            OpKind::RecordClassIdEqual(reg, BinaryOp { lhs_reg, rhs_reg }) => gen_int_compare(
+                fcx,
+                *reg,
+                Comparison::Eq,
+                *lhs_reg,
+                *rhs_reg,
+                "record_class_id_equal\0",
             ),
             OpKind::FloatCompare(
                 reg,
