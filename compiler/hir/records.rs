@@ -194,7 +194,7 @@ pub fn lower_record(
     outer_scope.insert_binding(
         value_cons_ident_span,
         predicate_ident,
-        Binding::TyPred(ty::pred::TestTy::TopRecord(record_ty_cons.clone())),
+        Binding::TyPred(ty::pred::TestTy::RecordClass(record_ty_cons.clone())),
     )?;
 
     outer_scope.insert_binding(

@@ -103,7 +103,7 @@ where
         Ty::Vector(members) => Ty::Vector(subst_ty_ref_slice(stx, members)),
         Ty::Vectorof(member) => Ty::Vectorof(Box::new(stx.subst_ty_ref(member))),
         Ty::List(list) => subst_list(stx, list).into(),
-        Ty::TopRecord(cons) => Ty::TopRecord(cons.clone()),
+        Ty::RecordClass(cons) => Ty::RecordClass(cons.clone()),
         Ty::Record(instance) => Ty::Record(Box::new(subst_record_instance(stx, instance))),
     }
 }

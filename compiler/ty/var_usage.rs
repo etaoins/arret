@@ -91,7 +91,7 @@ fn visit_ty(var_usages: &mut VarUsages, polarity: Variance, poly_ty: &Ty<ty::Pol
         | Ty::Str
         | Ty::TyPred(_)
         | Ty::EqPred
-        | Ty::TopRecord(_) => {
+        | Ty::RecordClass(_) => {
             // Terminal type
         }
 

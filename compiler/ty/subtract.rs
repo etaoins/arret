@@ -200,7 +200,7 @@ mod test {
             )]),
         );
 
-        let top_record_ref: ty::Ref<ty::Poly> = poly_record_cons.clone().into();
+        let record_class_ref: ty::Ref<ty::Poly> = poly_record_cons.clone().into();
 
         // Instance parameterised with an `Int`
         let mut int_tvars = HashMap::new();
@@ -210,17 +210,17 @@ mod test {
         let int_instance_ref: ty::Ref<ty::Poly> =
             record::Instance::new(poly_record_cons.clone(), int_ty_args).into();
 
-        // Top record minus an instance is the top record
+        // Record class minus an instance is the record class
         assert_eq!(
-            top_record_ref.clone(),
-            subtract_ty_refs(&top_record_ref, &int_instance_ref)
+            record_class_ref.clone(),
+            subtract_ty_refs(&record_class_ref, &int_instance_ref)
         );
 
-        // Instance minus the top record is nothing
+        // Instance minus the record class is nothing
         let never_ref: ty::Ref<ty::Poly> = Ty::never().into();
         assert_eq!(
             never_ref,
-            subtract_ty_refs(&int_instance_ref, &top_record_ref)
+            subtract_ty_refs(&int_instance_ref, &record_class_ref)
         );
     }
 }

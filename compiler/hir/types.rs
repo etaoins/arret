@@ -678,7 +678,7 @@ fn str_for_ty<M: ty::PM>(ty: &Ty<M>) -> String {
                 format!("({})", list_parts.join(" "))
             }
         }
-        Ty::TopRecord(record_cons) => format!("({} ...)", record_cons.name()),
+        Ty::RecordClass(record_cons) => format!("({} ...)", record_cons.name()),
         Ty::Record(instance) => {
             let record_cons = instance.cons();
 
@@ -1031,8 +1031,8 @@ mod test {
             Box::new([record::Field::new(EMPTY_SPAN, "num".into(), Ty::Num.into())]),
         );
 
-        let top_record_ref: ty::Ref<ty::Poly> = mono_record_cons.clone().into();
-        assert_eq!("(MonoCons ...)", str_for_ty_ref(&top_record_ref));
+        let record_class_ref: ty::Ref<ty::Poly> = mono_record_cons.clone().into();
+        assert_eq!("(MonoCons ...)", str_for_ty_ref(&record_class_ref));
 
         let int_record_instance_ref: ty::Ref<ty::Poly> =
             record::Instance::new(mono_record_cons.clone(), TyArgs::empty()).into();
@@ -1058,9 +1058,9 @@ mod test {
             )]),
         );
 
-        // Top record type
-        let top_record_ref: ty::Ref<ty::Poly> = poly_record_cons.clone().into();
-        assert_eq!("(PolyCons ...)", str_for_ty_ref(&top_record_ref));
+        // Record class type
+        let record_class_ref: ty::Ref<ty::Poly> = poly_record_cons.clone().into();
+        assert_eq!("(PolyCons ...)", str_for_ty_ref(&record_class_ref));
 
         // Instance parameterised with an `Int`
         let mut int_tvars = HashMap::new();

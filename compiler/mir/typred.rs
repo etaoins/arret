@@ -40,7 +40,7 @@ fn type_tags_for_test_ty(test_ty: &ty::pred::TestTy) -> TypeTagSet {
         TestTy::Set => {
             unimplemented!("sets");
         }
-        TestTy::TopRecord(_) => {
+        TestTy::RecordClass(_) => {
             unimplemented!("records");
         }
     }

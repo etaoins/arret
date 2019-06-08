@@ -202,13 +202,13 @@ pub type ConsId = ArcId<Cons>;
 
 impl<M: ty::PM> From<ConsId> for Ty<M> {
     fn from(cons_id: ConsId) -> Self {
-        Ty::TopRecord(cons_id)
+        Ty::RecordClass(cons_id)
     }
 }
 
 impl<M: ty::PM> From<ConsId> for ty::Ref<M> {
     fn from(cons_id: ConsId) -> Self {
-        ty::Ref::Fixed(Ty::TopRecord(cons_id))
+        ty::Ref::Fixed(Ty::RecordClass(cons_id))
     }
 }
 

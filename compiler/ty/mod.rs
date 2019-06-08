@@ -199,7 +199,7 @@ pub enum Ty<M: PM> {
     List(List<M>),
 
     // Record types
-    TopRecord(record::ConsId),
+    RecordClass(record::ConsId),
     Record(Box<record::Instance<M>>),
 }
 

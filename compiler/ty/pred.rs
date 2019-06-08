@@ -18,7 +18,7 @@ pub enum TestTy {
     Map,
     Fun,
     Nil,
-    TopRecord(record::ConsId),
+    RecordClass(record::ConsId),
 }
 
 impl TestTy {
@@ -54,15 +54,15 @@ impl TestTy {
                 _ => Some(false),
             },
             Ty::Vector(_) | Ty::Vectorof(_) => Some(self == &TestTy::Vector),
-            Ty::TopRecord(cons) => {
-                if let TestTy::TopRecord(test_cons) = self {
+            Ty::RecordClass(cons) => {
+                if let TestTy::RecordClass(test_cons) = self {
                     Some(cons == test_cons)
                 } else {
                     Some(false)
                 }
             }
             Ty::Record(instance) => {
-                if let TestTy::TopRecord(test_cons) = self {
+                if let TestTy::RecordClass(test_cons) = self {
                     Some(instance.cons() == test_cons)
                 } else {
                     Some(false)
@@ -118,13 +118,13 @@ impl TestTy {
             TestTy::Map => ty::Map::new(Ty::Any.into(), Ty::Any.into()).into(),
             TestTy::Fun => ty::TopFun::new(Purity::Impure.into(), Ty::Any.into()).into(),
             TestTy::Nil => ty::List::empty().into(),
-            TestTy::TopRecord(cons) => {
+            TestTy::RecordClass(cons) => {
                 if cons.poly_params().is_empty() {
                     // There's a single instance of this record; we can return the instance type.
                     // Instance types can be used in more situations than top types.
                     record::Instance::new(cons.clone(), TyArgs::empty()).into()
                 } else {
-                    Ty::TopRecord(cons.clone())
+                    Ty::RecordClass(cons.clone())
                 }
             }
         }
@@ -145,7 +145,7 @@ impl TestTy {
             TestTy::Map => "map?".to_owned(),
             TestTy::Fun => "fn?".to_owned(),
             TestTy::Nil => "nil?".to_owned(),
-            TestTy::TopRecord(cons) => format!("{}", cons.predicate_name()),
+            TestTy::RecordClass(cons) => format!("{}", cons.predicate_name()),
         }
     }
 }
@@ -300,7 +300,7 @@ mod test {
     }
 
     #[test]
-    fn top_record_test_ty() {
+    fn record_class_test_ty() {
         use crate::ty::ty_args::TyArgs;
 
         let cons = record::Cons::new(
@@ -318,7 +318,7 @@ mod test {
             Box::new([]),
         );
 
-        let test_ty = TestTy::TopRecord(cons.clone());
+        let test_ty = TestTy::RecordClass(cons.clone());
 
         let test_instance_poly: ty::Ref<ty::Poly> =
             record::Instance::new(cons, TyArgs::empty()).into();

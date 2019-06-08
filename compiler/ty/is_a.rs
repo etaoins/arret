@@ -185,10 +185,10 @@ fn ty_is_a<M: ty::PM>(
         (Ty::Record(sub_instance), Ty::Record(par_instance)) => {
             record_instance_is_a(sub_instance, par_instance)
         }
-        (Ty::TopRecord(sub_cons), Ty::TopRecord(par_cons)) => sub_cons == par_cons,
-        (Ty::Record(sub_instance), Ty::TopRecord(par_cons)) => sub_instance.cons() == par_cons,
-        (Ty::TopRecord(sub_cons), Ty::Record(par_instance)) => {
-            // If the top record has no polymorphic params then it only has one instance
+        (Ty::RecordClass(sub_cons), Ty::RecordClass(par_cons)) => sub_cons == par_cons,
+        (Ty::Record(sub_instance), Ty::RecordClass(par_cons)) => sub_instance.cons() == par_cons,
+        (Ty::RecordClass(sub_cons), Ty::Record(par_instance)) => {
+            // If the record class has no polymorphic params then it only has one instance
             sub_cons == par_instance.cons() && sub_cons.poly_params().is_empty()
         }
 
@@ -265,7 +265,7 @@ pub fn ty_ref_is_a<M: ty::PM>(sub: &ty::Ref<M>, parent: &ty::Ref<M>) -> bool {
 
 /// Determines if two type references are equivalent
 ///
-/// Our type system has no canonical union order, allows top record types with only a single
+/// Our type system has no canonical union order, allows record class types with only a single
 /// possible instance, etc. This makes normal `PartialEq` unreliable for determining if the type
 /// system would treat two types identically. This function is more expensive but can reliably
 /// detect equivalent types with different representations.

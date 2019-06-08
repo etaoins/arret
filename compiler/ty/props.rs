@@ -5,7 +5,7 @@ use crate::ty::Ty;
 
 fn ty_has_subtypes<M: ty::PM>(ty: &Ty<M>) -> bool {
     match ty {
-        Ty::Any | Ty::Bool | Ty::Num | Ty::Sym | Ty::TopFun(_) | Ty::TopRecord(_) => true,
+        Ty::Any | Ty::Bool | Ty::Num | Ty::Sym | Ty::TopFun(_) | Ty::RecordClass(_) => true,
 
         Ty::Char
         | Ty::Float
