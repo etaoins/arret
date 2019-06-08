@@ -200,6 +200,10 @@ impl TargetCtx {
         self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any)
     }
 
+    pub fn record_class_id_llvm_type(&self) -> LLVMTypeRef {
+        unsafe { LLVMInt32TypeInContext(self.llx) }
+    }
+
     fn box_header_llvm_type(&mut self) -> LLVMTypeRef {
         let llx = self.llx;
         *self.box_header_type.get_or_insert_with(|| unsafe {

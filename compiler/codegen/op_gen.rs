@@ -112,7 +112,7 @@ fn gen_op(
             OpKind::ConstRecordClassId(reg, record_struct) => {
                 let record_class_id = mcx.record_class_id_for_struct(record_struct);
                 let llvm_value = LLVMConstInt(
-                    LLVMInt32TypeInContext(tcx.llx),
+                    tcx.record_class_id_llvm_type(),
                     u64::from(record_class_id),
                     1,
                 );
@@ -391,6 +391,8 @@ fn gen_op(
                     value_ptr,
                     "record_class_id\0".as_ptr() as *const _,
                 );
+
+                mcx.add_record_class_id_range_metadata(llvm_value);
                 tcx.add_invariant_load_metadata(llvm_value);
 
                 fcx.regs.insert(*reg, llvm_value);

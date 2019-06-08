@@ -28,6 +28,7 @@ pub struct ModCtx<'am, 'sl, 'interner> {
 
     record_struct_class_ids: HashMap<ops::RecordStructId, RecordClassId>,
     next_record_class_id: RecordClassId,
+    record_class_id_llvm_values: Vec<LLVMValueRef>,
 
     function_pass_manager: LLVMPassManagerRef,
 }
@@ -106,6 +107,7 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
 
             record_struct_class_ids: HashMap::new(),
             next_record_class_id: 0,
+            record_class_id_llvm_values: vec![],
 
             function_pass_manager,
         }
@@ -138,6 +140,13 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
         self.record_struct_class_ids
             .insert(record_struct.clone(), record_class_id);
         record_class_id
+    }
+
+    pub fn add_record_class_id_range_metadata(&mut self, record_class_id_llvm_value: LLVMValueRef) {
+        // This is a bit of a hack - we don't know the range of the record class IDs until we
+        // finish generating the module.
+        self.record_class_id_llvm_values
+            .push(record_class_id_llvm_value);
     }
 
     pub fn llvm_private_fun(&self, private_fun_id: ops::PrivateFunId) -> LLVMValueRef {
@@ -196,6 +205,34 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
         }
     }
 
+    fn finalise_record_class_id_range_metadata(&mut self, tcx: &mut TargetCtx) {
+        unsafe {
+            let mut llvm_range_values: Vec<LLVMValueRef> = vec![
+                LLVMConstInt(tcx.record_class_id_llvm_type(), 0 as u64, 0),
+                LLVMConstInt(
+                    tcx.record_class_id_llvm_type(),
+                    self.next_record_class_id as u64,
+                    0,
+                ),
+            ];
+
+            let range_md_kind_id = tcx.llvm_md_kind_id_for_name(b"range");
+            let record_class_id_range_metadata = LLVMMDNodeInContext(
+                tcx.llx,
+                llvm_range_values.as_mut_ptr(),
+                llvm_range_values.len() as u32,
+            );
+
+            for llvm_value in self.record_class_id_llvm_values.iter() {
+                LLVMSetMetadata(
+                    *llvm_value,
+                    range_md_kind_id,
+                    record_class_id_range_metadata,
+                );
+            }
+        }
+    }
+
     /// Finalise the module and return the LLVMModuleRef
     ///
     /// This will verify the module's correctness and dump the LLVM IR to stdout if the
@@ -250,6 +287,8 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
 
         let llvm_global_interned_names =
             gen_global_interned_names(tcx, self.module, &self.global_interned_names);
+
+        self.finalise_record_class_id_range_metadata(tcx);
 
         if let Some(ref mut di_builder) = self.di_builder {
             di_builder.finalise();

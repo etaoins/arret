@@ -97,7 +97,7 @@ impl BoxLayout {
                     ]);
                 }
                 BoxLayout::ConstTagged(TypeTag::Record) => {
-                    members.push(LLVMInt32TypeInContext(tcx.llx));
+                    members.push(tcx.record_class_id_llvm_type());
                 }
                 BoxLayout::List => {
                     members.push(tcx.usize_llvm_type());
