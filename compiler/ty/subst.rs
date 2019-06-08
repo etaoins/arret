@@ -89,6 +89,8 @@ where
         Ty::Str => Ty::Str,
         Ty::Sym => Ty::Sym,
         Ty::EqPred => Ty::EqPred,
+        Ty::TopRecord => Ty::TopRecord,
+
         Ty::TyPred(test_ty) => Ty::TyPred(test_ty.clone()),
         Ty::TopFun(top_fun) => subst_top_fun(stx, top_fun).into(),
         Ty::Fun(fun) => subst_fun(stx, fun).into(),

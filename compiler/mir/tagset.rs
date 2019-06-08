@@ -95,7 +95,7 @@ where
                 Ty::Str => TypeTag::Str.into(),
                 Ty::Fun(_) | Ty::TopFun(_) | Ty::TyPred(_) | Ty::EqPred => TypeTag::FunThunk.into(),
                 Ty::Vector(_) | Ty::Vectorof(_) => TypeTag::Vector.into(),
-                Ty::Record(_) | Ty::RecordClass(_) => TypeTag::Record.into(),
+                Ty::TopRecord | Ty::RecordClass(_) | Ty::Record(_) => TypeTag::Record.into(),
                 Ty::List(list) => {
                     if list.is_empty() {
                         TypeTag::Nil.into()

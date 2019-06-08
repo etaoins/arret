@@ -525,6 +525,7 @@ pub const TY_EXPORTS: &[(&str, Binding)] = &[
     export_ty!("Float", Ty::Float),
     export_ty!("Num", Ty::Num),
     export_ty!("Char", Ty::Char),
+    export_ty!("Record", Ty::TopRecord),
     export_ty_cons!("List", TyCons::List),
     export_ty_cons!("Vector", TyCons::Vector),
     export_ty_cons!("Vectorof", TyCons::Vectorof),
@@ -546,6 +547,7 @@ pub const TY_EXPORTS: &[(&str, Binding)] = &[
     export_ty_pred!("map?", ty::pred::TestTy::Map),
     export_ty_pred!("fn?", ty::pred::TestTy::Fun),
     export_ty_pred!("nil?", ty::pred::TestTy::Nil),
+    export_ty_pred!("record?", ty::pred::TestTy::TopRecord),
     #[cfg(test)]
     export_ty_cons!("RawU", TyCons::RawU),
 ];
@@ -678,6 +680,8 @@ fn str_for_ty<M: ty::PM>(ty: &Ty<M>) -> String {
                 format!("({})", list_parts.join(" "))
             }
         }
+
+        Ty::TopRecord => "Record".to_owned(),
         Ty::RecordClass(record_cons) => format!("({} ...)", record_cons.name()),
         Ty::Record(instance) => {
             let record_cons = instance.cons();

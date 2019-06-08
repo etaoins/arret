@@ -4,7 +4,7 @@
 (defn black-box-untyped! ([input Any]) ->! Any
   (black-box! input))
 
-(defn main! () ->! ()
+(defn test-tagged-ty-preds! () ->! ()
   (assert-eq! true (str? (black-box-untyped! "foo")))
   (assert-eq! false (str? (black-box-untyped! 123)))
 
@@ -39,3 +39,17 @@
 
   (assert-eq! true ((black-box! str?) (black-box-untyped! "foo")))
   (assert-eq! false ((black-box! str?) (black-box-untyped! 123))))
+
+(defn test-record-ty-preds! () ->! ()
+  (letrecord [(RecordOne) (record-one) (RecordTwo) (record-two)]
+    (let [record-one-instance (record-one)]
+      (assert-eq! true (record? record-one-instance))
+      (assert-eq! true (record? (black-box! record-one-instance)))
+
+      (assert-eq! true (record-one? record-one-instance))
+      (assert-eq! false (record-two? record-one-instance))
+      (assert-eq! false (record-one? 123)))))
+
+(defn main! () ->! ()
+  (test-tagged-ty-preds!)
+  (test-record-ty-preds!))

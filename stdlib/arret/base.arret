@@ -3,8 +3,8 @@
         defrecord letrecord)
 
 (import [arret internal types])
-(export Any Bool Str Sym Int Float Num Char List Vector Vectorof Setof Map U -> ->! str? sym?
-        bool? num? int? float? char? list? vector? set? map? fn? nil?)
+(export Any Bool Str Sym Int Float Num Char List Vector Vectorof Setof Map U Record -> ->! str? sym?
+        bool? num? int? float? char? list? vector? set? map? fn? nil? record?)
 
 (import [stdlib rust])
 (export length panic panic! print! println! exit! cons map filter every? fold concat member? int

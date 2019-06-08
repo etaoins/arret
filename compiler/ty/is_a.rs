@@ -182,6 +182,9 @@ fn ty_is_a<M: ty::PM>(
         (Ty::List(sub_list), Ty::List(par_list)) => list_is_a(sub_list, par_list),
 
         // Record types
+        (Ty::RecordClass(_), Ty::TopRecord) => true,
+        (Ty::Record(_), Ty::TopRecord) => true,
+
         (Ty::Record(sub_instance), Ty::Record(par_instance)) => {
             record_instance_is_a(sub_instance, par_instance)
         }
@@ -722,6 +725,10 @@ mod test {
         // Different record constructors
         assert_eq!(false, ty_ref_is_a(&instance1_poly, &instance2_poly));
         assert_eq!(false, ty_ref_is_a(&instance2_poly, &instance1_poly));
+
+        // They're both top records
+        assert_eq!(true, ty_ref_is_a(&instance1_poly, &Ty::TopRecord.into()));
+        assert_eq!(true, ty_ref_is_a(&instance2_poly, &Ty::TopRecord.into()));
     }
 
     #[test]

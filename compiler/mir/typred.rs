@@ -40,8 +40,9 @@ fn type_tags_for_test_ty(test_ty: &ty::pred::TestTy) -> TypeTagSet {
         TestTy::Set => {
             unimplemented!("sets");
         }
+        TestTy::TopRecord => boxed::TypeTag::Record.into(),
         TestTy::RecordClass(_) => {
-            unimplemented!("records");
+            unimplemented!("record classes");
         }
     }
 }

@@ -18,6 +18,7 @@ pub enum TestTy {
     Map,
     Fun,
     Nil,
+    TopRecord,
     RecordClass(record::ConsId),
 }
 
@@ -54,20 +55,21 @@ impl TestTy {
                 _ => Some(false),
             },
             Ty::Vector(_) | Ty::Vectorof(_) => Some(self == &TestTy::Vector),
-            Ty::RecordClass(cons) => {
-                if let TestTy::RecordClass(test_cons) = self {
-                    Some(cons == test_cons)
-                } else {
-                    Some(false)
-                }
-            }
-            Ty::Record(instance) => {
-                if let TestTy::RecordClass(test_cons) = self {
-                    Some(instance.cons() == test_cons)
-                } else {
-                    Some(false)
-                }
-            }
+            Ty::TopRecord => match self {
+                TestTy::TopRecord => Some(true),
+                TestTy::RecordClass(_) => None,
+                _ => Some(false),
+            },
+            Ty::RecordClass(subject_cons) => match self {
+                TestTy::TopRecord => Some(true),
+                TestTy::RecordClass(test_cons) => Some(test_cons == subject_cons),
+                _ => Some(false),
+            },
+            Ty::Record(instance) => match self {
+                TestTy::TopRecord => Some(true),
+                TestTy::RecordClass(test_cons) => Some(instance.cons() == test_cons),
+                _ => Some(false),
+            },
             Ty::Union(members) => {
                 let results: Vec<Option<bool>> = members
                     .iter()
@@ -118,6 +120,7 @@ impl TestTy {
             TestTy::Map => ty::Map::new(Ty::Any.into(), Ty::Any.into()).into(),
             TestTy::Fun => ty::TopFun::new(Purity::Impure.into(), Ty::Any.into()).into(),
             TestTy::Nil => ty::List::empty().into(),
+            TestTy::TopRecord => Ty::TopRecord,
             TestTy::RecordClass(cons) => {
                 if cons.poly_params().is_empty() {
                     // There's a single instance of this record; we can return the instance type.
@@ -145,6 +148,7 @@ impl TestTy {
             TestTy::Map => "map?".to_owned(),
             TestTy::Fun => "fn?".to_owned(),
             TestTy::Nil => "nil?".to_owned(),
+            TestTy::TopRecord => "record?".to_owned(),
             TestTy::RecordClass(cons) => format!("{}", cons.predicate_name()),
         }
     }
@@ -300,6 +304,31 @@ mod test {
     }
 
     #[test]
+    fn top_record_test_ty() {
+        use crate::ty::ty_args::TyArgs;
+
+        let cons = record::Cons::new(
+            EMPTY_SPAN,
+            "cons".into(),
+            "cons?".into(),
+            None,
+            Box::new([]),
+        );
+
+        let test_ty = TestTy::TopRecord;
+
+        let test_class_poly: ty::Ref<ty::Poly> = cons.clone().into();
+
+        let test_instance_poly: ty::Ref<ty::Poly> =
+            record::Instance::new(cons, TyArgs::empty()).into();
+
+        assert_test_ty_may_match(&test_ty, Ty::Any);
+        assert_test_ty_will_match(&test_ty, Ty::TopRecord);
+        assert_test_ty_will_match(&test_ty, test_class_poly);
+        assert_test_ty_will_match(&test_ty, test_instance_poly);
+    }
+
+    #[test]
     fn record_class_test_ty() {
         use crate::ty::ty_args::TyArgs;
 
@@ -320,13 +349,22 @@ mod test {
 
         let test_ty = TestTy::RecordClass(cons.clone());
 
+        let test_class_poly: ty::Ref<ty::Poly> = cons.clone().into();
+        let other_class_poly: ty::Ref<ty::Poly> = other_cons.clone().into();
+
         let test_instance_poly: ty::Ref<ty::Poly> =
             record::Instance::new(cons, TyArgs::empty()).into();
+
         let other_instance_poly: ty::Ref<ty::Poly> =
             record::Instance::new(other_cons, TyArgs::empty()).into();
 
-        assert_test_ty_will_match(&test_ty, test_instance_poly);
         assert_test_ty_may_match(&test_ty, Ty::Any);
+        assert_test_ty_may_match(&test_ty, Ty::TopRecord);
+
+        assert_test_ty_will_match(&test_ty, test_class_poly);
+        assert_test_ty_wont_match(&test_ty, other_class_poly);
+
+        assert_test_ty_will_match(&test_ty, test_instance_poly);
         assert_test_ty_wont_match(&test_ty, other_instance_poly);
     }
 

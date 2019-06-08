@@ -20,9 +20,7 @@ fn type_tag_to_ty<M: ty::PM>(type_tag: boxed::TypeTag) -> Ty<M> {
         TypeTag::Nil => ty::List::empty().into(),
         TypeTag::Pair => ty::List::new(Box::new([Ty::Any.into()]), Ty::Any.into()).into(),
         TypeTag::FunThunk => ty::TopFun::new(Purity::Impure.into(), Ty::Any.into()).into(),
-        TypeTag::Record => {
-            unimplemented!("no topmost record type");
-        }
+        TypeTag::Record => Ty::TopRecord,
     }
 }
 
