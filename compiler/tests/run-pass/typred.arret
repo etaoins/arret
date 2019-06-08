@@ -48,7 +48,11 @@
 
       (assert-eq! true (record-one? record-one-instance))
       (assert-eq! false (record-two? record-one-instance))
-      (assert-eq! false (record-one? 123)))))
+      (assert-eq! false (record-one? 123))
+
+      (assert-eq! true (record-one? (black-box-untyped! record-one-instance)))
+      (assert-eq! false (record-two? (black-box-untyped! record-one-instance)))
+      (assert-eq! false (record-two? (black-box-untyped! 123))))))
 
 (defn main! () ->! ()
   (test-tagged-ty-preds!)

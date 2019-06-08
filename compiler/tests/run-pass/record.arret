@@ -2,11 +2,8 @@
 (import [stdlib test])
 
 (defn main! () ->! ()
-  (letrecord [(Record A) (record [poly A] [int Int] any) (OtherRecord) (other-record)]
+  (letrecord [(Record A) (record [poly A] [int Int] any)]
     (let [test-record (record 'foo 2 'bar)]
       (assert-eq! 'foo (ann (record-poly test-record) 'foo))
       (assert-eq! 2 (ann (record-int test-record) Int))
-      (assert-eq! 'bar (ann (record-any test-record) Any))
-
-      (assert-eq! true (record? test-record))
-      (assert-eq! false (other-record? test-record)))))
+      (assert-eq! 'bar (ann (record-any test-record) Any)))))
