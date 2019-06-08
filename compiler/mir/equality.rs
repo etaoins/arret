@@ -95,7 +95,7 @@ fn build_bool_equality(
         ConstTrue,
         Boxed,
         Other,
-    };
+    }
 
     fn classify_value(value: &Value) -> ValueClass {
         match value {
