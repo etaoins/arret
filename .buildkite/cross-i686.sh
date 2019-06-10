@@ -10,7 +10,12 @@ TARGET_TRIPLE=i686-unknown-linux-gnu
 echo '--- :older_woman: Checking i686 debug'
 cargo check --target $TARGET_TRIPLE
 
-# Cross-compile just stdlib. Otherwise we would need a 32bit LLVM etc.
+# Test our runtime. It contains a lot of low-level tests around structure sizes, roundtripping
+# data, garbage collection etc. that might not be covered by integration tests.
+echo '--- :older_adult: Testing i686 runtime'
+cargo test --target $TARGET_TRIPLE -p arret-runtime
+
+# Cross-compile just stdlib and its dependencies. Otherwise we would need a 32bit LLVM etc.
 echo '--- :older_man: Testing i686 cross-compile'
 cargo build --target $TARGET_TRIPLE -p arret-stdlib
 
