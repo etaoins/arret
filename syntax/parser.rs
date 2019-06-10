@@ -161,7 +161,7 @@ impl<'input> Parser<'input> {
             Sign,
             Whole,
             Fractional,
-        };
+        }
 
         let mut state: State = State::Sign;
 
