@@ -33,7 +33,7 @@ fn runtime_compare(
     );
 
     let abi = GenABI {
-        takes_task: false,
+        takes_task: true,
         params: Box::new([
             abitype::BoxedABIType::Any.into(),
             abitype::BoxedABIType::Any.into(),
@@ -99,7 +99,7 @@ fn build_bool_equality(
 
     fn classify_value(value: &Value) -> ValueClass {
         match value {
-            Value::Const(any_ref) if any_ref == &boxed::TRUE_INSTANCE.as_any_ref() => {
+            Value::Const(any_ref) if any_ref.header().type_tag() == boxed::TypeTag::True => {
                 ValueClass::ConstTrue
             }
             Value::Reg(reg_value) => {
@@ -215,7 +215,7 @@ pub fn values_statically_equal(
         _ => {
             if let Some(const_left) = value_to_const(ehx, left_value) {
                 if let Some(const_right) = value_to_const(ehx, right_value) {
-                    return Some(const_left == const_right);
+                    return Some(const_left.eq_in_heap(ehx.as_heap(), &const_right));
                 }
             }
 

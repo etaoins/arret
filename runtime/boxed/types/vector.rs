@@ -119,9 +119,15 @@ impl<T: Boxed> Vector<T> {
     }
 }
 
-impl<T: Boxed> PartialEq for Vector<T> {
-    fn eq(&self, other: &Vector<T>) -> bool {
-        self.iter().eq(other.iter())
+impl<T: Boxed> PartialEqInHeap for Vector<T> {
+    fn eq_in_heap(&self, heap: &Heap, other: &Vector<T>) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+
+        self.iter()
+            .zip(other.iter())
+            .all(|(self_value, other_value)| self_value.eq_in_heap(heap, other_value))
     }
 }
 
@@ -162,12 +168,12 @@ where
     Large(&'a LargeVector<T>),
 }
 
-impl<T: Boxed> Hash for Vector<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+impl<T: Boxed> HashInHeap for Vector<T> {
+    fn hash_in_heap<H: Hasher>(&self, heap: &Heap, state: &mut H) {
         TypeTag::Vector.hash(state);
         state.write_usize(self.len());
         for value in self.iter() {
-            value.hash(state);
+            value.hash_in_heap(heap, state);
         }
     }
 }
@@ -199,8 +205,8 @@ mod test {
         let forward_vec2 = Vector::new(&mut heap, &[boxed1, boxed2, boxed3]);
         let reverse_vec = Vector::new(&mut heap, &[boxed3, boxed2, boxed1]);
 
-        assert_ne!(forward_vec1, reverse_vec);
-        assert_eq!(forward_vec1, forward_vec2);
+        assert_eq!(false, forward_vec1.eq_in_heap(&heap, &reverse_vec));
+        assert_eq!(true, forward_vec1.eq_in_heap(&heap, &forward_vec2));
     }
 
     #[test]

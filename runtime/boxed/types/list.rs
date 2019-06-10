@@ -75,17 +75,17 @@ impl<T: Boxed> Pair<T> {
     }
 }
 
-impl<T: Boxed> PartialEq for Pair<T> {
-    fn eq(&self, rhs: &Pair<T>) -> bool {
-        (self.head == rhs.head) && (self.rest == rhs.rest)
+impl<T: Boxed> PartialEqInHeap for Pair<T> {
+    fn eq_in_heap(&self, heap: &Heap, rhs: &Pair<T>) -> bool {
+        self.head.eq_in_heap(heap, &rhs.head) && self.rest.eq_in_heap(heap, &rhs.rest)
     }
 }
 
-impl<T: Boxed> Hash for Pair<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+impl<T: Boxed> HashInHeap for Pair<T> {
+    fn hash_in_heap<H: Hasher>(&self, task: &Heap, state: &mut H) {
         TypeTag::Pair.hash(state);
-        self.head().hash(state);
-        self.rest().hash(state);
+        self.head().hash_in_heap(task, state);
+        self.rest().hash_in_heap(task, state);
     }
 }
 
@@ -201,17 +201,23 @@ impl<T: Boxed> List<T> {
     }
 }
 
-impl<T: Boxed> PartialEq for List<T> {
-    fn eq(&self, other: &List<T>) -> bool {
-        self.iter().eq(other.iter())
+impl<T: Boxed> PartialEqInHeap for List<T> {
+    fn eq_in_heap(&self, heap: &Heap, other: &List<T>) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+
+        self.iter()
+            .zip(other.iter())
+            .all(|(self_value, other_value)| self_value.eq_in_heap(heap, &other_value))
     }
 }
 
-impl<T: Boxed> Hash for List<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+impl<T: Boxed> HashInHeap for List<T> {
+    fn hash_in_heap<H: Hasher>(&self, heap: &Heap, state: &mut H) {
         match self.as_subtype() {
-            ListSubtype::Pair(pair) => pair.hash(state),
-            ListSubtype::Nil => NIL_INSTANCE.hash(state),
+            ListSubtype::Pair(pair) => pair.hash_in_heap(heap, state),
+            ListSubtype::Nil => NIL_INSTANCE.hash_in_heap(heap, state),
         }
     }
 }
@@ -316,8 +322,8 @@ mod test {
         let forward_list2 = List::from_values(&mut heap, [1, 2, 3].iter().cloned(), Int::new);
         let reverse_list = List::from_values(&mut heap, [3, 2, 1].iter().cloned(), Int::new);
 
-        assert_ne!(forward_list1, reverse_list);
-        assert_eq!(forward_list1, forward_list2);
+        assert_eq!(false, forward_list1.eq_in_heap(&heap, &reverse_list));
+        assert_eq!(true, forward_list1.eq_in_heap(&heap, &forward_list2));
     }
 
     #[test]

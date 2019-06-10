@@ -199,7 +199,7 @@ mod test {
 
             if let Value::Const(next_ref) = next_value {
                 let expected_ref = boxed::Int::new(&mut heap, *expected).as_any_ref();
-                assert_eq!(expected_ref, next_ref);
+                assert_eq!(true, expected_ref.eq_in_heap(&heap, &next_ref));
             } else {
                 panic!("expected const value, got {:?}", next_value);
             }
@@ -227,7 +227,7 @@ mod test {
 
             if let Value::Const(next_ref) = next_value {
                 let expected_ref = boxed::Int::new(&mut heap, *expected).as_any_ref();
-                assert_eq!(expected_ref, next_ref);
+                assert_eq!(true, expected_ref.eq_in_heap(&heap, &next_ref));
             } else {
                 panic!("expected const value, got {:?}", next_value);
             }

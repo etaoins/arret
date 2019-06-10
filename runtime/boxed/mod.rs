@@ -39,6 +39,8 @@ pub mod prelude {
     pub use super::AsHeap;
     pub use super::Boxed;
     pub use super::DistinctTagged;
+    pub use super::HashInHeap;
+    pub use super::PartialEqInHeap;
 }
 
 /// Size of a boxed value in bytes
@@ -131,11 +133,48 @@ impl Header {
     }
 }
 
+/// Equivalent of [`PartialEq`] that receives an additional [`Heap`] parameter
+///
+/// This is required for types that require additional metadata from the heap to perform equality
+/// checks.
+pub trait PartialEqInHeap {
+    /// Returns true if the values are equal
+    ///
+    /// Both values will be in the same heap.
+    fn eq_in_heap(&self, heap: &Heap, other: &Self) -> bool;
+}
+
+impl<T> PartialEqInHeap for T
+where
+    T: PartialEq,
+{
+    fn eq_in_heap(&self, _heap: &Heap, other: &Self) -> bool {
+        self.eq(other)
+    }
+}
+
+/// Equivalent of [`Hash`] that receives an additional [`Heap`] parameter
+///
+/// This is required for types that require additional metadata from the heap to calculate hashes.
+pub trait HashInHeap {
+    /// Feeds this value into the given [`Hasher`]
+    fn hash_in_heap<H: Hasher>(&self, heap: &Heap, state: &mut H);
+}
+
+impl<T> HashInHeap for T
+where
+    T: Hash,
+{
+    fn hash_in_heap<H: Hasher>(&self, _heap: &Heap, state: &mut H) {
+        self.hash(state)
+    }
+}
+
 /// Boxed value
 ///
 /// Boxes can be allocated on the stack, heap or a static constant. Every box is tagged with a
 /// top-level type.
-pub trait Boxed: Sized + Hash + PartialEq + fmt::Debug {
+pub trait Boxed: Sized + PartialEqInHeap + HashInHeap + fmt::Debug {
     /// Casts this value to an `Any` reference
     fn as_any_ref(&self) -> Gc<Any> {
         unsafe { Gc::new(&*(self as *const Self as *const Any)) }
@@ -346,21 +385,28 @@ macro_rules! define_supertype {
             }
         }
 
-        impl Hash for $name {
-            fn hash<H: Hasher>(&self, state: &mut H) {
+        impl HashInHeap for $name {
+            fn hash_in_heap<H: Hasher>(&self, heap: &Heap, state: &mut H) {
                 match self.as_subtype() {
                     $(
                         $subtype_enum::$member(subtype) => {
-                            subtype.hash(state)
+                            subtype.hash_in_heap(heap, state)
                         }
                     )*
                 }
             }
         }
 
-        impl PartialEq for $name {
-            fn eq(&self, rhs: &Self) -> bool {
-                self.as_subtype() == rhs.as_subtype()
+        impl PartialEqInHeap for $name {
+            fn eq_in_heap(&self, heap: &Heap, other: &$name) -> bool {
+                match (self.as_subtype(), other.as_subtype()) {
+                    $(
+                        ($subtype_enum::$member(self_value), $subtype_enum::$member(other_value)) => {
+                            self_value.eq_in_heap(heap, other_value)
+                        }
+                    ),*
+                    _ => false
+                }
             }
         }
 
@@ -392,7 +438,7 @@ macro_rules! define_supertype {
         }
 
         /// Possible subtypes of this supertype
-        #[derive(PartialEq, Debug)]
+        #[derive(Debug)]
         pub enum $subtype_enum<'a> {
             $(
                 #[allow(missing_docs)]
@@ -557,8 +603,8 @@ mod test {
         let box_three = Float::new(&mut heap, 3.0);
         let box_three_as_any = box_three.as_any_ref();
 
-        assert_eq!(box_two_as_any, box_two_as_any);
-        assert_ne!(box_two_as_any, box_three_as_any);
+        assert_eq!(true, box_two_as_any.eq_in_heap(&heap, &box_two_as_any));
+        assert_eq!(false, box_two_as_any.eq_in_heap(&heap, &box_three_as_any));
 
         assert_eq!(TRUE_INSTANCE, TRUE_INSTANCE);
     }

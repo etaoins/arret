@@ -2,6 +2,9 @@ use std::hash::{Hash, Hasher};
 
 use arret_syntax::span::Span;
 
+use arret_runtime::boxed::prelude::*;
+use arret_runtime::boxed::Heap;
+
 use crate::mir::builder::Builder;
 use crate::mir::closure::Closure;
 use crate::mir::error::{Error, Result};
@@ -26,10 +29,10 @@ pub struct ApplyCookie {
 }
 
 impl ApplyCookie {
-    pub fn new(arret_fun: &value::ArretFun, arg_list_value: &Value) -> Self {
+    pub fn new(heap: &Heap, arret_fun: &value::ArretFun, arg_list_value: &Value) -> Self {
         ApplyCookie {
             arret_fun_id: arret_fun.id(),
-            arg_hash: hash_for_arg_list_value(arg_list_value),
+            arg_hash: hash_for_arg_list_value(heap, arg_list_value),
         }
     }
 }
@@ -174,31 +177,31 @@ fn calc_inline_preference_factor(
 ///
 /// This can only distinguish constants; regs hash to the same value. It's possible for constants
 /// would compare as equal to receive different hashes depending on their representation.
-fn hash_value<H: Hasher>(value: &Value, state: &mut H) {
+fn hash_value<H: Hasher>(heap: &Heap, value: &Value, state: &mut H) {
     match value {
         Value::List(fixed, rest) => {
             state.write_u8(0);
 
             state.write_usize(fixed.len());
             for member in fixed.iter() {
-                hash_value(member, state);
+                hash_value(heap, member, state);
             }
 
             state.write_u8(rest.is_some() as u8);
             if let Some(rest_value) = rest {
-                hash_value(rest_value, state);
+                hash_value(heap, rest_value, state);
             }
         }
         Value::Record(record_cons, fields) => {
             state.write_u8(1);
             record_cons.hash(state);
             for field in fields.iter() {
-                hash_value(field, state);
+                hash_value(heap, field, state);
             }
         }
         Value::Const(any_ref) => {
             state.write_u8(2);
-            any_ref.hash(state);
+            any_ref.hash_in_heap(heap, state);
         }
         Value::EqPred => {
             state.write_u8(3);
@@ -225,7 +228,7 @@ fn hash_value<H: Hasher>(value: &Value, state: &mut H) {
 
             state.write_usize(arret_fun.closure().const_values.len());
             for (_, const_value) in arret_fun.closure().const_values.iter() {
-                hash_value(const_value, state);
+                hash_value(heap, const_value, state);
             }
         }
         Value::Reg(_) => {
@@ -238,11 +241,11 @@ fn hash_value<H: Hasher>(value: &Value, state: &mut H) {
 ///
 /// This is used to detect if a recursive loop is making forward progress. Collisions will cause us
 /// to abort recursive inlining.
-fn hash_for_arg_list_value(arg_list_value: &Value) -> u64 {
+fn hash_for_arg_list_value(heap: &Heap, arg_list_value: &Value) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     let mut state = DefaultHasher::new();
 
-    hash_value(arg_list_value, &mut state);
+    hash_value(heap, arg_list_value, &mut state);
     state.finish()
 }
 
@@ -279,7 +282,7 @@ pub(super) fn cond_inline<'a>(
     let call_result = ehx.build_arret_fun_app(&mut call_b, span, ret_ty, arret_fun, &apply_args);
     let call_ops = call_b.into_ops();
 
-    let apply_cookie = ApplyCookie::new(arret_fun, &apply_args.list_value);
+    let apply_cookie = ApplyCookie::new(ehx.as_heap(), arret_fun, &apply_args.list_value);
     if apply_stack.entries.len() >= MAX_INLINE_DEPTH || apply_stack.entries.contains(&apply_cookie)
     {
         // Abort recursion all the way back to the original call of this function
