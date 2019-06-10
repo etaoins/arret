@@ -322,7 +322,9 @@ mod test {
             let mut all_strong = StrongPass::new(old_heap);
             all_strong.visit_box(&mut boxed_vec);
 
-            let _ = all_strong.into_new_heap();
+            // Need to give this a name so it doesn't Drop
+            let _all_heap = all_strong.into_new_heap();
+
             let mut boxed_list_iter = boxed_vec.iter();
             assert_eq!(test_content.len(), boxed_list_iter.len());
 

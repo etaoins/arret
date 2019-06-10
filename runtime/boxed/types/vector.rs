@@ -178,6 +178,20 @@ impl<T: Boxed> HashInHeap for Vector<T> {
     }
 }
 
+impl<T: Boxed> Drop for Vector<T> {
+    fn drop(&mut self) {
+        // ptr::read will properly drop our specific representations
+        match self.as_repr() {
+            Repr::Inline(inline) => unsafe {
+                ptr::read(inline);
+            },
+            Repr::Large(large) => unsafe {
+                ptr::read(large);
+            },
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
