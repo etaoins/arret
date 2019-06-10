@@ -16,7 +16,7 @@ impl Boxed for Str {}
 impl UniqueTagged for Str {}
 
 impl Str {
-    /// Maximum number of bytes that can be stored directly in the ox
+    /// Maximum number of bytes that can be stored directly in the box
     pub const MAX_INLINE_BYTES: usize = 29;
 
     /// Constructs a new string
