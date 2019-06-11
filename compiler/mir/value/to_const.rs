@@ -48,7 +48,7 @@ pub fn value_to_const(ehx: &mut EvalHirCtx, value: &Value) -> Option<Gc<boxed::A
             let evaled_record_class = ehx.evaled_record_class_for_cons(record_cons);
             let jit_record_class_id = evaled_record_class.jit_record_class_id;
 
-            Some(boxed::Record::new(ehx, jit_record_class_id).as_any_ref())
+            Some(boxed::Record::new(ehx, jit_record_class_id, &[]).as_any_ref())
         }
         Value::TyPred(test_ty) => {
             let ty_pred_arret_fun = ehx

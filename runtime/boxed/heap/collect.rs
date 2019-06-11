@@ -5,16 +5,15 @@
 
 use std::ptr;
 
+use crate::boxed;
 use crate::boxed::heap::Heap;
 use crate::boxed::refs::Gc;
-use crate::boxed::{
-    AllocType, Any, BoxSize, Boxed, FunThunk, Header, List, Pair, Sym, TypeTag, Vector,
-};
+use crate::boxed::{AllocType, BoxSize, Boxed, TypeTag};
 
 #[repr(C, align(16))]
 struct ForwardingCell {
-    header: Header,
-    new_location: Gc<Any>,
+    header: boxed::Header,
+    new_location: Gc<boxed::Any>,
 }
 
 /// Strong pass from an old [`Heap`] in to a new [`Heap`]
@@ -54,7 +53,7 @@ impl StrongPass {
         new_heap
     }
 
-    fn move_box_to_new_heap(&mut self, box_ref: &mut Gc<Any>, size: BoxSize) {
+    fn move_box_to_new_heap(&mut self, box_ref: &mut Gc<boxed::Any>, size: BoxSize) {
         // Allocate and copy to the new heap
         let dest_location = self.new_heap.alloc_cells(size.cell_count());
         unsafe {
@@ -68,7 +67,7 @@ impl StrongPass {
 
         // Create a forwarding cell
         let forwarding_cell = ForwardingCell {
-            header: Header {
+            header: boxed::Header {
                 // This is arbitrary but could be useful for debugging
                 type_tag: box_ref.header.type_tag,
                 alloc_type: forward_alloc_type,
@@ -79,8 +78,8 @@ impl StrongPass {
         // Overwrite the previous box location
         unsafe {
             ptr::copy_nonoverlapping(
-                &forwarding_cell as *const ForwardingCell as *const Any,
-                box_ref.as_ptr() as *mut Any,
+                &forwarding_cell as *const ForwardingCell as *const boxed::Any,
+                box_ref.as_ptr() as *mut boxed::Any,
                 1,
             );
         }
@@ -91,11 +90,11 @@ impl StrongPass {
 
     /// Visits a garbage collected box as a strong root
     pub fn visit_box<T: Boxed>(&mut self, box_ref: &mut Gc<T>) {
-        let any_box_ref = unsafe { &mut *(box_ref as *mut _ as *mut Gc<Any>) };
+        let any_box_ref = unsafe { &mut *(box_ref as *mut _ as *mut Gc<boxed::Any>) };
         self.visit_any_box(any_box_ref);
     }
 
-    fn visit_any_box(&mut self, mut box_ref: &mut Gc<Any>) {
+    fn visit_any_box(&mut self, mut box_ref: &mut Gc<boxed::Any>) {
         // This loop is used for ad-hoc tail recursion when visiting Pairs and FunThunks
         // Everything else will return at the bottom of the loop
         loop {
@@ -123,7 +122,7 @@ impl StrongPass {
 
             match box_ref.header.type_tag {
                 TypeTag::Sym => {
-                    let sym_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Sym) };
+                    let sym_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut boxed::Sym) };
 
                     // If this symbol is heap indexed we need to reintern it on the new heap
                     let sym_name = sym_ref.name(&self.old_heap.interner);
@@ -131,28 +130,40 @@ impl StrongPass {
                     sym_ref.interned = new_interned_name;
                 }
                 TypeTag::Pair => {
-                    let pair_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Pair<Any>) };
+                    let pair_ref =
+                        unsafe { &mut *(box_ref.as_mut_ptr() as *mut boxed::Pair<boxed::Any>) };
 
                     self.visit_box(&mut pair_ref.head);
 
                     // Start again with the tail of the list
-                    box_ref =
-                        unsafe { &mut *(&mut pair_ref.rest as *mut Gc<List<Any>> as *mut Gc<Any>) };
+                    box_ref = unsafe {
+                        &mut *(&mut pair_ref.rest as *mut Gc<boxed::List<boxed::Any>>
+                            as *mut Gc<boxed::Any>)
+                    };
                     continue;
                 }
                 TypeTag::Vector => {
-                    let vec_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut Vector<Any>) };
+                    let vec_ref =
+                        unsafe { &mut *(box_ref.as_mut_ptr() as *mut boxed::Vector<boxed::Any>) };
 
                     for elem_ref in vec_ref.values_mut() {
                         self.visit_box(elem_ref);
                     }
                 }
                 TypeTag::FunThunk => {
-                    let fun_thunk_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut FunThunk) };
+                    let fun_thunk_ref =
+                        unsafe { &mut *(box_ref.as_mut_ptr() as *mut boxed::FunThunk) };
 
                     // Start again with the closure
-                    box_ref = unsafe { &mut *(&mut fun_thunk_ref.closure as *mut Gc<Any>) };
+                    box_ref = unsafe { &mut *(&mut fun_thunk_ref.closure as *mut Gc<boxed::Any>) };
                     continue;
+                }
+                TypeTag::Record => {
+                    let record_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut boxed::Record) };
+
+                    if record_ref.contains_gc_refs() {
+                        unimplemented!("garbage collecting records with GC references")
+                    }
                 }
                 _ => {}
             }
@@ -185,12 +196,12 @@ impl WeakPass {
     /// If the box was moved during the strong pass its new location will be returned. Otherwise,
     /// [`None`] will be returned.
     pub fn new_heap_ref_for<T: Boxed>(&self, boxed: Gc<T>) -> Option<Gc<T>> {
-        let any_boxed = unsafe { boxed.cast::<Any>() };
+        let any_boxed = unsafe { boxed.cast::<boxed::Any>() };
         self.new_heap_any_ref_for(any_boxed)
             .map(|new_box| unsafe { new_box.cast::<T>() })
     }
 
-    fn new_heap_any_ref_for(&self, box_ref: Gc<Any>) -> Option<Gc<Any>> {
+    fn new_heap_any_ref_for(&self, box_ref: Gc<boxed::Any>) -> Option<Gc<boxed::Any>> {
         match box_ref.header.alloc_type {
             AllocType::Const | AllocType::Stack => {
                 // These aren't managed by the GC; their pointer remains valid
@@ -282,7 +293,9 @@ mod test {
         use std::mem;
 
         // Three 1 cell integers + three pairs
-        const PAIR_CELLS: usize = mem::size_of::<Pair<Any>>() / mem::size_of::<Any>();
+        const PAIR_CELLS: usize =
+            mem::size_of::<boxed::Pair<boxed::Any>>() / mem::size_of::<boxed::Any>();
+
         const EXPECTED_HEAP_SIZE: usize = 3 + (3 * PAIR_CELLS);
 
         let mut old_heap = Heap::empty();
@@ -317,7 +330,7 @@ mod test {
         for &test_content in &test_contents {
             let mut old_heap = Heap::empty();
             let mut boxed_vec =
-                Vector::from_values(&mut old_heap, test_content.iter().cloned(), Int::new);
+                boxed::Vector::from_values(&mut old_heap, test_content.iter().cloned(), Int::new);
 
             let mut all_strong = StrongPass::new(old_heap);
             all_strong.visit_box(&mut boxed_vec);
