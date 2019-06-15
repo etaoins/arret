@@ -230,18 +230,39 @@ fn record_to_reg(
     b: &mut Builder,
     span: Span,
     record_cons: &record::ConsId,
+    fields: &Box<[Value]>,
     boxed_abi_type: &abitype::BoxedABIType,
 ) -> BuiltReg {
     use crate::mir::ops::*;
 
-    let evaled_record_class = ehx.evaled_record_class_for_cons(record_cons);
+    let record_struct = ehx
+        .evaled_record_class_for_cons(record_cons)
+        .record_struct
+        .clone();
+
+    let mut has_non_const_fields = false;
+    let field_regs = fields
+        .iter()
+        .zip(record_struct.field_abi_types.iter())
+        .map(|(field, abi_type)| {
+            let built_reg = value_to_reg(ehx, b, span, field, abi_type);
+            has_non_const_fields = has_non_const_fields || !built_reg.is_const();
+
+            built_reg.into()
+        })
+        .collect();
 
     let box_record_op = BoxRecordOp {
-        record_struct: evaled_record_class.record_struct.clone(),
-        field_regs: Box::new([]),
+        record_struct,
+        field_regs,
     };
 
-    let record_reg = b.push_reg(span, OpKind::ConstBoxedRecord, box_record_op);
+    let record_reg = if has_non_const_fields {
+        b.push_reg(span, OpKind::AllocBoxedRecord, box_record_op)
+    } else {
+        b.push_reg(span, OpKind::ConstBoxedRecord, box_record_op)
+    };
+
     b.cast_boxed(span, record_reg, boxed_abi_type.clone())
 }
 
@@ -473,12 +494,8 @@ pub fn value_to_reg(
             }
         }
         Value::Record(record_cons, fields) => {
-            if !fields.is_empty() {
-                unimplemented!("genning records with fields");
-            }
-
             if let abitype::ABIType::Boxed(boxed_abi_type) = abi_type {
-                record_to_reg(ehx, b, span, record_cons, boxed_abi_type)
+                record_to_reg(ehx, b, span, record_cons, fields, boxed_abi_type)
             } else {
                 panic!("Attempt to construct non-boxed list");
             }

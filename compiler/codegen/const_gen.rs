@@ -327,6 +327,7 @@ pub fn gen_boxed_record(
     record_struct: &ops::RecordStructId,
     mut llvm_fields: Box<[LLVMValueRef]>,
 ) -> LLVMValueRef {
+    let type_tag = boxed::TypeTag::Record;
     let record_class_id = mcx.record_class_id_for_struct(record_struct);
 
     let TargetRecordStruct {
@@ -353,7 +354,7 @@ pub fn gen_boxed_record(
 
         let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
         let box_members = &mut [
-            tcx.llvm_box_header(boxed::TypeTag::Record.to_const_header()),
+            tcx.llvm_box_header(type_tag.to_const_header()),
             LLVMConstInt(llvm_i8, data_len as u64, 1),
             // Constant records by definition cannot have GC refs
             LLVMConstInt(llvm_i8, 0, 1),
@@ -380,6 +381,6 @@ pub fn gen_boxed_record(
         LLVMSetAlignment(global, mem::align_of::<boxed::Record>() as u32);
         annotate_private_global(global);
 
-        global
+        LLVMConstBitCast(global, tcx.boxed_abi_to_llvm_ptr_type(&type_tag.into()))
     }
 }

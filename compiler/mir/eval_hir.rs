@@ -1077,6 +1077,8 @@ impl EvalHirCtx {
         &mut self,
         record_cons: &record::ConsId,
     ) -> &EvaledRecordClass {
+        use crate::mir::specific_abi_type::specific_abi_type_for_ty_ref;
+
         if self.record_classes.contains_key(record_cons) {
             return &self.record_classes[record_cons];
         }
@@ -1086,9 +1088,15 @@ impl EvalHirCtx {
         let jit_record_class_id = self.next_jit_record_class_id;
         self.next_jit_record_class_id += 1;
 
+        let field_abi_types = record_cons
+            .fields()
+            .iter()
+            .map(|field| specific_abi_type_for_ty_ref(field.ty_ref()))
+            .collect();
+
         let evaled_record_class = EvaledRecordClass {
             jit_record_class_id,
-            record_struct: ops::RecordStruct::new(record_cons.name().clone(), Box::new([])),
+            record_struct: ops::RecordStruct::new(record_cons.name().clone(), field_abi_types),
         };
 
         self.record_classes
