@@ -5,6 +5,7 @@ use arret_runtime::abitype::{BoxedABIType, EncodeBoxedABIType, TOP_LIST_BOXED_AB
 use arret_runtime::boxed;
 use arret_runtime::boxed::TypeTag;
 
+use crate::codegen::record_struct;
 use crate::codegen::target_gen::TargetCtx;
 use crate::codegen::GenABI;
 
@@ -97,7 +98,7 @@ impl BoxLayout {
                     ]);
                 }
                 BoxLayout::ConstTagged(TypeTag::Record) => {
-                    members.push(tcx.record_class_id_llvm_type());
+                    record_struct::append_common_members(tcx, members);
                 }
                 BoxLayout::List => {
                     members.push(tcx.usize_llvm_type());

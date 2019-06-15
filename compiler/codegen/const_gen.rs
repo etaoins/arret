@@ -7,7 +7,7 @@ use llvm_sys::{LLVMLinkage, LLVMUnnamedAddr};
 use arret_runtime::boxed;
 
 use crate::codegen::mod_gen::ModCtx;
-use crate::codegen::target_gen::TargetCtx;
+use crate::codegen::target_gen::{TargetCtx, TargetRecordStruct};
 use crate::mir::ops;
 
 fn annotate_private_global(llvm_global: LLVMValueRef) {
@@ -325,27 +325,61 @@ pub fn gen_boxed_record(
     tcx: &mut TargetCtx,
     mcx: &mut ModCtx<'_, '_, '_>,
     record_struct: &ops::RecordStructId,
+    mut llvm_fields: Box<[LLVMValueRef]>,
 ) -> LLVMValueRef {
     let record_class_id = mcx.record_class_id_for_struct(record_struct);
 
-    unsafe {
-        let type_tag = boxed::TypeTag::Record;
-        let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
-        let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
+    let TargetRecordStruct {
+        data_len,
+        llvm_data_type,
+        ..
+    } = tcx.target_record_struct(record_struct);
 
+    let llvm_box_type = tcx.inline_record_struct_box_type(record_struct);
+
+    unsafe {
         let box_name = ffi::CString::new(format!("const_{}", record_struct.source_name)).unwrap();
 
-        let global = mcx.get_global_or_insert(llvm_type, box_name.as_bytes_with_nul(), || {
-            let members = &mut [
-                tcx.llvm_box_header(type_tag.to_const_header()),
-                LLVMConstInt(llvm_i32, u64::from(record_class_id), 1),
-            ];
+        if data_len >= (std::u8::MAX as usize) {
+            // TODO: We can probably get rid of `inline_byte_length` once we save record class RTTI
+            unimplemented!("large constant boxed records");
+        }
 
-            LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32)
-        });
+        let llvm_data_value = LLVMConstNamedStruct(
+            llvm_data_type,
+            llvm_fields.as_mut_ptr(),
+            llvm_fields.len() as u32,
+        );
 
+        let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
+        let box_members = &mut [
+            tcx.llvm_box_header(boxed::TypeTag::Record.to_const_header()),
+            LLVMConstInt(llvm_i8, data_len as u64, 1),
+            // Constant records by definition cannot have GC refs
+            LLVMConstInt(llvm_i8, 0, 1),
+            LLVMConstInt(
+                tcx.record_class_id_llvm_type(),
+                u64::from(record_class_id),
+                1,
+            ),
+            llvm_data_value,
+        ];
+
+        let llvm_box_value = LLVMConstNamedStruct(
+            llvm_box_type,
+            box_members.as_mut_ptr(),
+            box_members.len() as u32,
+        );
+
+        let global = LLVMAddGlobal(
+            mcx.module,
+            llvm_box_type,
+            box_name.as_bytes_with_nul().as_ptr() as *const _,
+        );
+        LLVMSetInitializer(global, llvm_box_value);
         LLVMSetAlignment(global, mem::align_of::<boxed::Record>() as u32);
         annotate_private_global(global);
+
         global
     }
 }

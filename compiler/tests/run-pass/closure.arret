@@ -2,8 +2,12 @@
 (import [stdlib test])
 
 (defn return-const (x) (fn () x))
+
 (defn generic-return-const #{T} ([x T]) -> (-> T)
   (fn () -> T x))
+
+(defn return-two-int-values ([one Int] [two Int]) -> (-> (List & Int))
+  (fn () (list one two)))
 
 ; This recaptures a closure pointing to a value that's fallen out of scope
 (defn recapture-inner-temporary! () ->! ()
@@ -27,5 +31,7 @@
   (assert-eq! 2 (((black-box! generic-return-const) 2)))
   (assert-eq! 3 ((generic-return-const (black-box! 3))))
   (assert-eq! 4 (((black-box! generic-return-const) (black-box! 4))))
+
+  (assert-eq! '(123 456) ((black-box! (return-two-int-values (black-box! 123) (black-box! 456)))))
 
   (recapture-inner-temporary!))

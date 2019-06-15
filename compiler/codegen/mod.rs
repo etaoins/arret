@@ -10,6 +10,7 @@ mod mod_gen;
 mod op_gen;
 pub(crate) mod program;
 mod range_md;
+mod record_struct;
 pub(crate) mod target_gen;
 mod target_machine;
 

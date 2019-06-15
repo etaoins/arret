@@ -113,6 +113,13 @@ pub struct BoxRecordOp {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct LoadBoxedRecordFieldOp {
+    pub record_reg: RegId,
+    pub record_struct: RecordStructId,
+    pub field_idx: usize,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct CastBoxedOp {
     pub from_reg: RegId,
     pub to_type: abitype::BoxedABIType,
@@ -237,6 +244,8 @@ pub enum OpKind {
     Int64CheckedRem(RegId, BinaryOp),
 
     ConstBoxedRecord(RegId, BoxRecordOp),
+    AllocBoxedRecord(RegId, BoxRecordOp),
+    LoadBoxedRecordField(RegId, LoadBoxedRecordFieldOp),
 
     Ret(RegId),
     RetVoid,
@@ -301,6 +310,7 @@ impl OpKind {
             | LoadBoxedCharValue(reg_id, _)
             | LoadBoxedFunThunkClosure(reg_id, _)
             | LoadBoxedRecordClassId(reg_id, _)
+            | LoadBoxedRecordField(reg_id, _)
             | FloatAdd(reg_id, _)
             | UsizeAdd(reg_id, _)
             | Int64CheckedAdd(reg_id, _)
@@ -322,7 +332,8 @@ impl OpKind {
             | UsizeToInt64(reg_id, _)
             | Int64ToFloat(reg_id, _)
             | MakeCallback(reg_id, _)
-            | ConstBoxedRecord(reg_id, _) => Some(*reg_id),
+            | ConstBoxedRecord(reg_id, _)
+            | AllocBoxedRecord(reg_id, _) => Some(*reg_id),
             Cond(cond_op) => cond_op.reg_phi.clone().map(|reg_phi| reg_phi.output_reg),
             Ret(_) | RetVoid | Unreachable => None,
         }
@@ -397,6 +408,12 @@ impl OpKind {
             | LoadBoxedSymInterned(_, reg_id)
             | LoadBoxedFunThunkClosure(_, reg_id)
             | LoadBoxedRecordClassId(_, reg_id)
+            | LoadBoxedRecordField(
+                _,
+                LoadBoxedRecordFieldOp {
+                    record_reg: reg_id, ..
+                },
+            )
             | UsizeToInt64(_, reg_id)
             | Int64ToFloat(_, reg_id)
             | MakeCallback(
@@ -447,8 +464,8 @@ impl OpKind {
             IntCompare(_, compare_op) | FloatCompare(_, compare_op) => {
                 coll.extend([compare_op.lhs_reg, compare_op.rhs_reg].iter().cloned());
             }
-            ConstBoxedRecord(_, BoxRecordOp { field_regs, .. }) => {
-                coll.extend(field_regs.iter().cloned());
+            ConstBoxedRecord(_, box_record_op) | AllocBoxedRecord(_, box_record_op) => {
+                coll.extend(box_record_op.field_regs.iter().cloned());
             }
         }
     }
@@ -512,7 +529,8 @@ impl OpKind {
             | AllocBoxedFloat(_, _)
             | AllocBoxedChar(_, _)
             | AllocBoxedPair(_, _)
-            | AllocBoxedFunThunk(_, _) => OpCategory::AllocBoxed,
+            | AllocBoxedFunThunk(_, _)
+            | AllocBoxedRecord(_, _) => OpCategory::AllocBoxed,
 
             CastBoxed(_, _) | UsizeToInt64(_, _) => OpCategory::RegCast,
 
@@ -525,7 +543,8 @@ impl OpKind {
             | LoadBoxedCharValue(_, _)
             | LoadBoxedSymInterned(_, _)
             | LoadBoxedFunThunkClosure(_, _)
-            | LoadBoxedRecordClassId(_, _) => OpCategory::MemLoad,
+            | LoadBoxedRecordClassId(_, _)
+            | LoadBoxedRecordField(_, _) => OpCategory::MemLoad,
 
             FloatAdd(_, _)
             | UsizeAdd(_, _)

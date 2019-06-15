@@ -8,7 +8,8 @@ use crate::mir::ops::*;
 
 use crate::codegen::fun_gen::FunCtx;
 use crate::codegen::mod_gen::ModCtx;
-use crate::codegen::target_gen::TargetCtx;
+use crate::codegen::record_struct;
+use crate::codegen::target_gen::{TargetCtx, TargetRecordStruct};
 use crate::codegen::{alloc, const_gen};
 
 fn comparison_to_llvm_int_pred(comparison: Comparison) -> LLVMIntPredicate {
@@ -377,26 +378,6 @@ fn gen_op(
 
                 fcx.regs.insert(*reg, llvm_value);
             }
-            OpKind::LoadBoxedRecordClassId(reg, boxed_record_reg) => {
-                let llvm_boxed_record = fcx.regs[boxed_record_reg];
-                let value_ptr = LLVMBuildStructGEP(
-                    fcx.builder,
-                    llvm_boxed_record,
-                    1,
-                    b"record_class_id_ptr\0".as_ptr() as *const _,
-                );
-
-                let llvm_value = LLVMBuildLoad(
-                    fcx.builder,
-                    value_ptr,
-                    "record_class_id\0".as_ptr() as *const _,
-                );
-
-                mcx.add_record_class_id_range_metadata(llvm_value);
-                tcx.add_invariant_load_metadata(llvm_value);
-
-                fcx.regs.insert(*reg, llvm_value);
-            }
             OpKind::LoadBoxedFunThunkClosure(reg, boxed_fun_thunk_reg) => {
                 let llvm_boxed_fun_thunk = fcx.regs[boxed_fun_thunk_reg];
 
@@ -411,6 +392,79 @@ fn gen_op(
                     closure_ptr,
                     "boxed_fun_thunk_closure\0".as_ptr() as *const _,
                 );
+
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::LoadBoxedRecordClassId(reg, boxed_record_reg) => {
+                let llvm_boxed_record = fcx.regs[boxed_record_reg];
+                let value_ptr = LLVMBuildStructGEP(
+                    fcx.builder,
+                    llvm_boxed_record,
+                    record_struct::RECORD_CLASS_ID_INDEX,
+                    b"record_class_id_ptr\0".as_ptr() as *const _,
+                );
+
+                let llvm_value = LLVMBuildLoad(
+                    fcx.builder,
+                    value_ptr,
+                    "record_class_id\0".as_ptr() as *const _,
+                );
+
+                mcx.add_record_class_id_range_metadata(llvm_value);
+                tcx.add_invariant_load_metadata(llvm_value);
+
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::LoadBoxedRecordField(reg, load_boxed_record_field_op) => {
+                use std::ffi;
+                let LoadBoxedRecordFieldOp {
+                    record_reg,
+                    record_struct,
+                    field_idx,
+                } = load_boxed_record_field_op;
+
+                let TargetRecordStruct { record_layout, .. } =
+                    tcx.target_record_struct(record_struct);
+
+                if let boxed::RecordLayout::Large(_) = record_layout {
+                    unimplemented!("loading large boxed record fields");
+                }
+
+                let boxed_inline_record_name =
+                    ffi::CString::new(format!("boxed_inline_{}_record", record_struct.source_name))
+                        .unwrap();
+
+                let boxed_inline_record_ptr_type =
+                    LLVMPointerType(tcx.inline_record_struct_box_type(record_struct), 0);
+
+                let llvm_boxed_inline_record = LLVMBuildBitCast(
+                    fcx.builder,
+                    fcx.regs[record_reg],
+                    boxed_inline_record_ptr_type,
+                    boxed_inline_record_name.to_bytes_with_nul().as_ptr() as *const _,
+                );
+
+                let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
+                let field_gep_indices = &mut [
+                    LLVMConstInt(llvm_i32, 0 as u64, 0),
+                    LLVMConstInt(llvm_i32, record_struct::INLINE_DATA_INDEX as u64, 0),
+                    LLVMConstInt(llvm_i32, *field_idx as u64, 0),
+                ];
+
+                let field_ptr = LLVMBuildInBoundsGEP(
+                    fcx.builder,
+                    llvm_boxed_inline_record,
+                    field_gep_indices.as_mut_ptr(),
+                    field_gep_indices.len() as u32,
+                    b"record_field_ptr\0".as_ptr() as *const _,
+                );
+
+                let llvm_value = LLVMBuildLoad(
+                    fcx.builder,
+                    field_ptr,
+                    "record_field_value\0".as_ptr() as *const _,
+                );
+                tcx.add_invariant_load_metadata(llvm_value);
 
                 fcx.regs.insert(*reg, llvm_value);
             }
@@ -801,8 +855,48 @@ fn gen_op(
 
                 fcx.regs.insert(*reg, llvm_callback);
             }
-            OpKind::ConstBoxedRecord(reg, BoxRecordOp { record_struct, .. }) => {
-                let llvm_value = const_gen::gen_boxed_record(tcx, mcx, record_struct);
+            OpKind::ConstBoxedRecord(
+                reg,
+                BoxRecordOp {
+                    record_struct,
+                    field_regs,
+                },
+            ) => {
+                let llvm_fields = field_regs
+                    .iter()
+                    .map(|field_reg| fcx.regs[field_reg])
+                    .collect();
+
+                let llvm_value = const_gen::gen_boxed_record(tcx, mcx, record_struct, llvm_fields);
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::AllocBoxedRecord(
+                reg,
+                BoxRecordOp {
+                    record_struct,
+                    field_regs,
+                },
+            ) => {
+                let box_source = active_alloc.next_box_source();
+
+                let llvm_fields = field_regs
+                    .iter()
+                    .map(|field_reg| fcx.regs[field_reg])
+                    .collect();
+
+                let input = alloc::types::RecordInput {
+                    record_struct,
+                    llvm_fields,
+                };
+
+                let llvm_value = alloc::types::gen_alloc_boxed_record(
+                    tcx,
+                    mcx,
+                    fcx.builder,
+                    active_alloc,
+                    box_source,
+                    &input,
+                );
                 fcx.regs.insert(*reg, llvm_value);
             }
         }

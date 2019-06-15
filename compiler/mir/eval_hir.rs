@@ -1000,7 +1000,8 @@ impl EvalHirCtx {
     ) -> Value {
         use crate::mir::closure;
 
-        let closure = closure::calculate_closure(&fcx.local_values, &fun_expr.body_expr);
+        let closure =
+            closure::calculate_closure(&fcx.local_values, &fun_expr.body_expr, source_name);
 
         Value::ArretFun(value::ArretFun::new(
             source_name.cloned(),
@@ -1188,7 +1189,13 @@ impl EvalHirCtx {
         let mut fcx = FunCtx::with_mono_ty_args(arret_fun.env_ty_args().clone());
 
         // And loading its closure
-        closure::load_from_closure_param(&mut fcx.local_values, arret_fun.closure(), closure_reg);
+        closure::load_from_closure_param(
+            &mut b,
+            span,
+            &mut fcx.local_values,
+            arret_fun.closure(),
+            closure_reg,
+        );
 
         // Try to refine our polymorphic type variables based on our requested op ABI
         let mut stx = ty::select::SelectCtx::new(&fun_expr.pvars, &fun_expr.tvars);

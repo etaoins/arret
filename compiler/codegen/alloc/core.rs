@@ -30,11 +30,11 @@ fn init_alloced_box_header(
 fn gen_stack_alloced_box<T: boxed::ConstTagged>(
     tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,
+    llvm_type: LLVMTypeRef,
     value_name: &[u8],
 ) -> LLVMValueRef {
     unsafe {
         let type_tag = T::TYPE_TAG;
-        let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
 
         let alloced_box = LLVMBuildAlloca(builder, llvm_type, value_name.as_ptr() as *const _);
         LLVMSetAlignment(alloced_box, mem::align_of::<T>() as u32);
@@ -55,6 +55,7 @@ fn gen_heap_alloced_box<T: boxed::ConstTagged>(
     builder: LLVMBuilderRef,
     active_alloc: &mut ActiveAlloc<'_>,
     box_size: boxed::BoxSize,
+    llvm_type: LLVMTypeRef,
     value_name: &[u8],
 ) -> LLVMValueRef {
     unsafe {
@@ -91,7 +92,7 @@ fn gen_heap_alloced_box<T: boxed::ConstTagged>(
         let alloced_box = LLVMBuildBitCast(
             builder,
             llvm_slot,
-            tcx.boxed_abi_to_llvm_ptr_type(&type_tag.into()),
+            LLVMPointerType(llvm_type, 0),
             value_name.as_ptr() as *const _,
         );
 
@@ -106,6 +107,22 @@ fn gen_heap_alloced_box<T: boxed::ConstTagged>(
     }
 }
 
+pub fn gen_alloced_box_with_llvm_type<T: boxed::ConstTagged>(
+    tcx: &mut TargetCtx,
+    builder: LLVMBuilderRef,
+    active_alloc: &mut ActiveAlloc<'_>,
+    box_source: BoxSource,
+    llvm_type: LLVMTypeRef,
+    value_name: &[u8],
+) -> LLVMValueRef {
+    match box_source {
+        BoxSource::Stack => gen_stack_alloced_box::<T>(tcx, builder, llvm_type, value_name),
+        BoxSource::Heap(box_size) => {
+            gen_heap_alloced_box::<T>(tcx, builder, active_alloc, box_size, llvm_type, value_name)
+        }
+    }
+}
+
 pub fn gen_alloced_box<T: boxed::ConstTagged>(
     tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,
@@ -113,12 +130,16 @@ pub fn gen_alloced_box<T: boxed::ConstTagged>(
     box_source: BoxSource,
     value_name: &[u8],
 ) -> LLVMValueRef {
-    match box_source {
-        BoxSource::Stack => gen_stack_alloced_box::<T>(tcx, builder, value_name),
-        BoxSource::Heap(box_size) => {
-            gen_heap_alloced_box::<T>(tcx, builder, active_alloc, box_size, value_name)
-        }
-    }
+    let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&T::TYPE_TAG.into());
+
+    gen_alloced_box_with_llvm_type::<T>(
+        tcx,
+        builder,
+        active_alloc,
+        box_source,
+        llvm_type,
+        value_name,
+    )
 }
 
 /// Allocates cells by invoking a function at runtime

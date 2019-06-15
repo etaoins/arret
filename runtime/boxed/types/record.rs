@@ -21,68 +21,97 @@ struct RecordHeader {
 #[repr(C, align(16))]
 pub struct Record {
     record_header: RecordHeader,
-    padding: [u8; Record::MAX_INLINE_BYTES],
+    padding: [u8; Record::MAX_HEAP_INLINE_BYTES],
+}
+
+/// Describes the layout of a record's data
+#[derive(Clone, Copy, Debug)]
+pub enum RecordLayout {
+    /// Record data is stored inline in a box of the given size
+    Inline(BoxSize),
+    /// Record data is stored out-of-line in a box of the given size
+    Large(BoxSize),
+}
+
+impl RecordLayout {
+    /// Returns the box size for a record layout
+    pub fn box_size(&self) -> BoxSize {
+        match self {
+            RecordLayout::Inline(box_size) => *box_size,
+            RecordLayout::Large(box_size) => *box_size,
+        }
+    }
 }
 
 impl Boxed for Record {}
 
 impl Record {
-    /// Maximum number of bytes that can be stored directly in the box
-    pub const MAX_INLINE_BYTES: usize = 24;
+    /// Maximum number of bytes that can be stored directly in a heap box
+    pub const MAX_HEAP_INLINE_BYTES: usize = 24;
+
+    /// Maximum number of bytes that can be stored directly in a constant
+    pub const MAX_CONST_INLINE_BYTES: usize = 254;
 
     /// Constructs a new empty record of the given class
     pub fn new(heap: &mut impl AsHeap, class_id: RecordClassId, data: &[u8]) -> Gc<Record> {
-        let box_size = match data.len() {
-            0..=8 => BoxSize::Size16,
-            9..=Record::MAX_INLINE_BYTES => BoxSize::Size32,
-            _ => {
-                if cfg!(target_pointer_width = "32") {
-                    BoxSize::Size16
-                } else {
-                    BoxSize::Size32
+        let layout = Self::layout_for_data_len(data.len(), mem::size_of::<usize>() * 8);
+
+        let box_size = layout.box_size();
+        let header = Self::TYPE_TAG.to_heap_header(box_size);
+
+        let boxed = unsafe {
+            match layout {
+                RecordLayout::Large(_) => {
+                    let large_record = LargeRecord {
+                        record_header: RecordHeader {
+                            header,
+                            inline_byte_length: std::u8::MAX,
+                            contains_gc_refs: false,
+                            class_id,
+                        },
+                        external_data: data.into(),
+                        #[cfg(target_pointer_width = "32")]
+                        padding: 0,
+                    };
+
+                    mem::transmute(large_record)
+                }
+                RecordLayout::Inline(_) => {
+                    let mut inline_record = InlineRecord {
+                        record_header: RecordHeader {
+                            header,
+                            inline_byte_length: data.len() as u8,
+                            contains_gc_refs: false,
+                            class_id,
+                        },
+                        inline_data: mem::uninitialized(),
+                    };
+
+                    ptr::copy(
+                        data.as_ptr(),
+                        &mut inline_record.inline_data[0] as *mut u8,
+                        data.len(),
+                    );
+
+                    mem::transmute(inline_record)
                 }
             }
         };
 
-        let header = Self::TYPE_TAG.to_heap_header(box_size);
-
-        let boxed = unsafe {
-            if data.len() > Record::MAX_INLINE_BYTES {
-                let large_record = LargeRecord {
-                    record_header: RecordHeader {
-                        header,
-                        inline_byte_length: (Record::MAX_INLINE_BYTES as u8) + 1,
-                        contains_gc_refs: false,
-                        class_id,
-                    },
-                    external_data: data.into(),
-                    #[cfg(target_pointer_width = "32")]
-                    padding: 0,
-                };
-
-                mem::transmute(large_record)
-            } else {
-                let mut inline_record = InlineRecord {
-                    record_header: RecordHeader {
-                        header,
-                        inline_byte_length: data.len() as u8,
-                        contains_gc_refs: false,
-                        class_id,
-                    },
-                    inline_data: mem::uninitialized(),
-                };
-
-                ptr::copy(
-                    data.as_ptr(),
-                    &mut inline_record.inline_data[0] as *mut u8,
-                    data.len(),
-                );
-
-                mem::transmute(inline_record)
-            }
-        };
-
         heap.as_heap_mut().place_box(boxed)
+    }
+
+    /// Returns the layout for given data length and target pointer width in bits
+    pub fn layout_for_data_len(data_len: usize, pointer_width: usize) -> RecordLayout {
+        match data_len {
+            0..=8 => RecordLayout::Inline(BoxSize::Size16),
+            9..=Record::MAX_HEAP_INLINE_BYTES => RecordLayout::Inline(BoxSize::Size32),
+            _ => RecordLayout::Large(match pointer_width {
+                32 => BoxSize::Size16,
+                64 => BoxSize::Size32,
+                other => panic!("unsupported pointer width: {}", other),
+            }),
+        }
     }
 
     /// Returns the class ID for the record
@@ -109,7 +138,7 @@ impl Record {
     }
 
     fn is_inline(&self) -> bool {
-        self.record_header.inline_byte_length <= Record::MAX_INLINE_BYTES as u8
+        self.record_header.inline_byte_length <= Self::MAX_CONST_INLINE_BYTES as u8
     }
 
     fn as_repr<'a>(&'a self) -> Repr<'a> {
@@ -151,7 +180,7 @@ impl fmt::Debug for Record {
 #[repr(C, align(16))]
 struct InlineRecord {
     record_header: RecordHeader,
-    inline_data: [u8; Record::MAX_INLINE_BYTES],
+    inline_data: [u8; Record::MAX_HEAP_INLINE_BYTES],
 }
 
 impl InlineRecord {

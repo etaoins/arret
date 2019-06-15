@@ -12,6 +12,7 @@ use arret_runtime::callback::EntryPointABIType as CallbackEntryPointABIType;
 
 use crate::codegen::box_layout::BoxLayout;
 use crate::codegen::GenABI;
+use crate::mir::ops;
 
 fn llvm_enum_attr_for_name(
     llx: LLVMContextRef,
@@ -40,6 +41,13 @@ fn llvm_i64_md_node(llx: LLVMContextRef, values: &[u64]) -> LLVMValueRef {
 
         LLVMMDNodeInContext(llx, node_values.as_mut_ptr(), node_values.len() as u32)
     }
+}
+
+#[derive(Clone, Copy)]
+pub struct TargetRecordStruct {
+    pub data_len: usize,
+    pub record_layout: boxed::RecordLayout,
+    pub llvm_data_type: LLVMTypeRef,
 }
 
 /// Context for building against a given target machine
@@ -82,6 +90,9 @@ pub struct TargetCtx {
     empty_md_node: LLVMValueRef,
     boxed_dereferenceable_md_node: LLVMValueRef,
     boxed_align_md_node: LLVMValueRef,
+
+    target_record_structs: HashMap<ops::RecordStructId, TargetRecordStruct>,
+    inline_record_struct_box_types: HashMap<ops::RecordStructId, LLVMTypeRef>,
 }
 
 impl TargetCtx {
@@ -142,6 +153,9 @@ impl TargetCtx {
                     &[mem::size_of::<boxed::Any>() as u64],
                 ),
                 boxed_align_md_node: llvm_i64_md_node(llx, &[mem::align_of::<boxed::Any>() as u64]),
+
+                target_record_structs: HashMap::new(),
+                inline_record_struct_box_types: HashMap::new(),
             }
         }
     }
@@ -351,6 +365,105 @@ impl TargetCtx {
                 0,
             )
         }
+    }
+
+    pub fn target_record_struct<'a>(
+        &'a mut self,
+        record_struct: &ops::RecordStructId,
+    ) -> TargetRecordStruct {
+        use std::ffi;
+
+        if self.target_record_structs.contains_key(record_struct) {
+            return self.target_record_structs[record_struct];
+        }
+
+        let mut members: Box<[LLVMTypeRef]> = record_struct
+            .field_abi_types
+            .iter()
+            .map(|abi_type| self.abi_to_llvm_type(abi_type))
+            .collect();
+
+        let record_data_name =
+            ffi::CString::new(format!("{}_data", record_struct.source_name)).unwrap();
+
+        let llvm_data_type = unsafe {
+            let llvm_data_type = LLVMStructCreateNamed(
+                self.llx,
+                record_data_name.as_bytes_with_nul().as_ptr() as *const _,
+            );
+
+            LLVMStructSetBody(
+                llvm_data_type,
+                members.as_mut_ptr(),
+                members.len() as u32,
+                0,
+            );
+
+            // Our record data is only 8 byte aligned
+            assert!(LLVMABIAlignmentOfType(self.target_data, llvm_data_type) <= 8);
+
+            llvm_data_type
+        };
+
+        let data_len = unsafe {
+            ((LLVMSizeOfTypeInBits(self.target_data(), llvm_data_type) + 7) / 8) as usize
+        };
+
+        let record_layout =
+            boxed::Record::layout_for_data_len(data_len, self.pointer_bits() as usize);
+
+        let target_record_struct = TargetRecordStruct {
+            data_len,
+            record_layout,
+            llvm_data_type,
+        };
+
+        self.target_record_structs
+            .insert(record_struct.clone(), target_record_struct);
+        target_record_struct
+    }
+
+    pub fn inline_record_struct_box_type(
+        &mut self,
+        record_struct: &ops::RecordStructId,
+    ) -> LLVMTypeRef {
+        use crate::codegen::record_struct;
+        use std::ffi;
+
+        if let Some(inline_record_struct_box_type) =
+            self.inline_record_struct_box_types.get(record_struct)
+        {
+            return *inline_record_struct_box_type;
+        }
+
+        let llvm_data_type = self.target_record_struct(record_struct).llvm_data_type;
+        let llvm_header = self.box_header_llvm_type();
+
+        let mut members = vec![llvm_header];
+        record_struct::append_common_members(self, &mut members);
+        members.push(llvm_data_type);
+
+        let inline_box_name =
+            ffi::CString::new(format!("boxed_inline_{}", record_struct.source_name)).unwrap();
+
+        let inline_record_struct_box_type = unsafe {
+            let inline_record_struct_box_type = LLVMStructCreateNamed(
+                self.llx,
+                inline_box_name.as_bytes_with_nul().as_ptr() as *const _,
+            );
+
+            LLVMStructSetBody(
+                inline_record_struct_box_type,
+                members.as_mut_ptr(),
+                members.len() as u32,
+                0,
+            );
+            inline_record_struct_box_type
+        };
+
+        self.inline_record_struct_box_types
+            .insert(record_struct.clone(), inline_record_struct_box_type);
+        inline_record_struct_box_type
     }
 
     pub fn ptr_to_singleton_box(
