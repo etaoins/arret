@@ -21,7 +21,7 @@ struct RecordHeader {
 #[repr(C, align(16))]
 pub struct Record {
     record_header: RecordHeader,
-    padding: [u8; Record::MAX_HEAP_INLINE_BYTES],
+    padding: [u8; Record::MAX_INLINE_BYTES],
 }
 
 /// Describes the layout of a record's data
@@ -46,11 +46,8 @@ impl RecordLayout {
 impl Boxed for Record {}
 
 impl Record {
-    /// Maximum number of bytes that can be stored directly in a heap box
-    pub const MAX_HEAP_INLINE_BYTES: usize = 24;
-
-    /// Maximum number of bytes that can be stored directly in a constant
-    pub const MAX_CONST_INLINE_BYTES: usize = 254;
+    /// Maximum number of bytes that can be stored directly in a box
+    pub const MAX_INLINE_BYTES: usize = 24;
 
     /// Constructs a new empty record of the given class
     pub fn new(heap: &mut impl AsHeap, class_id: RecordClassId, data: &[u8]) -> Gc<Record> {
@@ -105,7 +102,7 @@ impl Record {
     pub fn layout_for_data_len(data_len: usize, pointer_width: usize) -> RecordLayout {
         match data_len {
             0..=8 => RecordLayout::Inline(BoxSize::Size16),
-            9..=Record::MAX_HEAP_INLINE_BYTES => RecordLayout::Inline(BoxSize::Size32),
+            9..=Record::MAX_INLINE_BYTES => RecordLayout::Inline(BoxSize::Size32),
             _ => RecordLayout::Large(match pointer_width {
                 32 => BoxSize::Size16,
                 64 => BoxSize::Size32,
@@ -138,7 +135,7 @@ impl Record {
     }
 
     fn is_inline(&self) -> bool {
-        self.record_header.inline_byte_length <= Self::MAX_CONST_INLINE_BYTES as u8
+        self.record_header.inline_byte_length <= Self::MAX_INLINE_BYTES as u8
     }
 
     fn as_repr<'a>(&'a self) -> Repr<'a> {
@@ -180,7 +177,7 @@ impl fmt::Debug for Record {
 #[repr(C, align(16))]
 struct InlineRecord {
     record_header: RecordHeader,
-    inline_data: [u8; Record::MAX_HEAP_INLINE_BYTES],
+    inline_data: [u8; Record::MAX_INLINE_BYTES],
 }
 
 impl InlineRecord {

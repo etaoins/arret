@@ -332,8 +332,8 @@ pub fn gen_boxed_record(
 
     let TargetRecordStruct {
         data_len,
+        record_layout,
         llvm_data_type,
-        ..
     } = tcx.target_record_struct(record_struct);
 
     let llvm_box_type = tcx.inline_record_struct_box_type(record_struct);
@@ -341,8 +341,7 @@ pub fn gen_boxed_record(
     unsafe {
         let box_name = ffi::CString::new(format!("const_{}", record_struct.source_name)).unwrap();
 
-        if data_len >= (std::u8::MAX as usize) {
-            // TODO: We can probably get rid of `inline_byte_length` once we save record class RTTI
+        if let boxed::RecordLayout::Large(_) = record_layout {
             unimplemented!("large constant boxed records");
         }
 
