@@ -116,7 +116,7 @@ pub struct BoxRecordOp {
 pub struct LoadBoxedRecordFieldOp {
     pub record_reg: RegId,
     pub record_struct: RecordStructId,
-    pub field_idx: usize,
+    pub field_index: usize,
 }
 
 #[derive(Debug, PartialEq, Clone)]

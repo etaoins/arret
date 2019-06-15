@@ -420,7 +420,7 @@ fn gen_op(
                 let LoadBoxedRecordFieldOp {
                     record_reg,
                     record_struct,
-                    field_idx,
+                    field_index,
                 } = load_boxed_record_field_op;
 
                 let TargetRecordStruct { record_layout, .. } =
@@ -448,7 +448,7 @@ fn gen_op(
                 let field_gep_indices = &mut [
                     LLVMConstInt(llvm_i32, 0 as u64, 0),
                     LLVMConstInt(llvm_i32, record_struct::INLINE_DATA_INDEX as u64, 0),
-                    LLVMConstInt(llvm_i32, *field_idx as u64, 0),
+                    LLVMConstInt(llvm_i32, *field_index as u64, 0),
                 ];
 
                 let field_ptr = LLVMBuildInBoundsGEP(

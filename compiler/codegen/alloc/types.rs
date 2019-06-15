@@ -277,11 +277,11 @@ pub fn gen_alloc_boxed_record(
         LLVMBuildStore(builder, llvm_record_class_id, record_class_id_ptr);
 
         let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
-        for (field_idx, llvm_field) in llvm_fields.iter().enumerate() {
+        for (field_index, llvm_field) in llvm_fields.iter().enumerate() {
             let field_gep_indices = &mut [
                 LLVMConstInt(llvm_i32, 0 as u64, 0),
                 LLVMConstInt(llvm_i32, record_struct::INLINE_DATA_INDEX as u64, 0),
-                LLVMConstInt(llvm_i32, field_idx as u64, 0),
+                LLVMConstInt(llvm_i32, field_index as u64, 0),
             ];
 
             let field_ptr = LLVMBuildInBoundsGEP(

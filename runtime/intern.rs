@@ -46,7 +46,7 @@ impl GlobalName {
 struct InternedIndexed {
     flag_byte: u8,
     _padding: [u8; 3],
-    name_idx: u32,
+    name_index: u32,
 }
 
 #[repr(align(8))]
@@ -114,7 +114,7 @@ impl InternedSym {
             indexed: InternedIndexed {
                 flag_byte: GLOBAL_INDEXED_FLAG,
                 _padding: [0; 3],
-                name_idx: index,
+                name_index: index,
             },
         }
     }
@@ -155,7 +155,7 @@ impl fmt::Debug for InternedSym {
         match self.repr() {
             InternedRepr::LocalIndexed(indexed) | InternedRepr::GlobalIndexed(indexed) => {
                 // We don't have access to the `Interner` so we can't print our interned value
-                write!(formatter, "`{:x}", indexed.name_idx)
+                write!(formatter, "`{:x}", indexed.name_index)
             }
             InternedRepr::Inline(inline) => write!(formatter, "'{}", inline.as_str()),
         }
@@ -166,9 +166,9 @@ impl fmt::Debug for InternedSym {
 // or `HashMap` as they might reallocate. We can fix this later.
 pub struct Interner {
     names: Vec<Box<str>>,
-    name_to_idx: HashMap<Box<str>, u32>,
+    name_to_index: HashMap<Box<str>, u32>,
     /// Contains the highest static index + 1
-    static_idx_watermark: u32,
+    static_index_watermark: u32,
     global_names: *const GlobalName,
 }
 
@@ -180,8 +180,8 @@ impl Interner {
     pub fn with_global_names(global_names: *const GlobalName) -> Interner {
         Interner {
             names: vec![],
-            name_to_idx: HashMap::new(),
-            static_idx_watermark: 0,
+            name_to_index: HashMap::new(),
+            static_index_watermark: 0,
             global_names,
         }
     }
@@ -198,10 +198,10 @@ impl Interner {
             unimplemented!("interning symbols with global interned names");
         }
 
-        let index = self.name_to_idx.get(name).cloned().unwrap_or_else(|| {
+        let index = self.name_to_index.get(name).cloned().unwrap_or_else(|| {
             let index = self.names.len() as u32;
             self.names.push(name.into());
-            self.name_to_idx.insert(name.into(), index);
+            self.name_to_index.insert(name.into(), index);
 
             index
         });
@@ -210,7 +210,7 @@ impl Interner {
             indexed: InternedIndexed {
                 flag_byte: LOCAL_INDEXED_FLAG,
                 _padding: [0; 3],
-                name_idx: index,
+                name_index: index,
             },
         }
     }
@@ -224,7 +224,7 @@ impl Interner {
         let interned_sym = self.intern(name);
 
         if let InternedRepr::LocalIndexed(indexed_sym) = interned_sym.repr() {
-            self.static_idx_watermark = indexed_sym.name_idx + 1;
+            self.static_index_watermark = indexed_sym.name_index + 1;
         }
 
         interned_sym
@@ -232,9 +232,9 @@ impl Interner {
 
     pub fn unintern<'a>(&'a self, interned: &'a InternedSym) -> &'a str {
         match interned.repr() {
-            InternedRepr::LocalIndexed(indexed) => &self.names[indexed.name_idx as usize],
+            InternedRepr::LocalIndexed(indexed) => &self.names[indexed.name_index as usize],
             InternedRepr::GlobalIndexed(indexed) => unsafe {
-                let global_name = &*self.global_names.offset(indexed.name_idx as isize);
+                let global_name = &*self.global_names.offset(indexed.name_index as isize);
                 global_name.as_str()
             },
             InternedRepr::Inline(inline) => inline.as_str(),
@@ -245,19 +245,19 @@ impl Interner {
     ///
     /// This preserves the index of all static [`InternedSym`]s.
     pub(crate) fn clone_for_collect_garbage(&self) -> Self {
-        if self.static_idx_watermark == 0 {
+        if self.static_index_watermark == 0 {
             // Avoid iterating over our HashMap
             return Self::new();
         };
 
-        let static_idx_watermark = self.static_idx_watermark;
+        let static_index_watermark = self.static_index_watermark;
 
-        let names = self.names[0..static_idx_watermark as usize].to_vec();
-        let name_to_idx = self
-            .name_to_idx
+        let names = self.names[0..static_index_watermark as usize].to_vec();
+        let name_to_index = self
+            .name_to_index
             .iter()
             .filter_map(|(name, idx)| {
-                if *idx < self.static_idx_watermark {
+                if *idx < self.static_index_watermark {
                     Some((name.clone(), *idx))
                 } else {
                     None
@@ -267,8 +267,8 @@ impl Interner {
 
         Interner {
             names,
-            name_to_idx,
-            static_idx_watermark,
+            name_to_index,
+            static_index_watermark,
             global_names: self.global_names,
         }
     }
@@ -354,12 +354,12 @@ mod test {
         interner.intern("three              ");
 
         assert_eq!(3, interner.names.len());
-        assert_eq!(3, interner.name_to_idx.len());
+        assert_eq!(3, interner.name_to_index.len());
 
         // No static symbols; we should collect everything
         interner = interner.clone_for_collect_garbage();
         assert_eq!(0, interner.names.len());
-        assert_eq!(0, interner.name_to_idx.len());
+        assert_eq!(0, interner.name_to_index.len());
 
         interner.intern("one                ");
         interner.intern_static("two         ");
@@ -368,17 +368,17 @@ mod test {
         // We need to preserve the second symbol
         interner = interner.clone_for_collect_garbage();
         assert_eq!(2, interner.names.len());
-        assert_eq!(2, interner.name_to_idx.len());
+        assert_eq!(2, interner.name_to_index.len());
 
         // We should be able to "promote" an existing symbol to static
         interner.intern("one-two-three-four");
         interner.intern_static("one-two-three-four");
 
         assert_eq!(3, interner.names.len());
-        assert_eq!(3, interner.name_to_idx.len());
+        assert_eq!(3, interner.name_to_index.len());
 
         interner = interner.clone_for_collect_garbage();
         assert_eq!(3, interner.names.len());
-        assert_eq!(3, interner.name_to_idx.len());
+        assert_eq!(3, interner.name_to_index.len());
     }
 }

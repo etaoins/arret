@@ -857,7 +857,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             index: usize,
             param_type: &'ty ty::Ref<ty::Poly>,
             expr: hir::Expr<hir::Lowered>,
-        };
+        }
 
         let mut fun_fixed_args: Vec<PendingFixedArg<'_>> = vec![];
         let mut non_fun_fixed_args: Vec<PendingFixedArg<'_>> = vec![];
@@ -1639,9 +1639,9 @@ impl<'types> RecursiveDefsCtx<'types> {
     }
 
     fn recurse_into_def_id(&mut self, def_id: InputDefId) -> Result<()> {
-        let def_idx = def_id.to_usize();
+        let def_index = def_id.to_usize();
 
-        let previous_state = std::mem::replace(&mut self.input_defs[def_idx], InputDef::Complete);
+        let previous_state = std::mem::replace(&mut self.input_defs[def_index], InputDef::Complete);
 
         if let InputDef::Pending(def) = previous_state {
             let inferred_def = self.visit_def(def)?;

@@ -206,18 +206,18 @@ pub fn load_from_closure_param(
 
             let record_reg: RegId = closure_reg.unwrap().into();
 
-            for (field_idx, (var_id, _)) in closure.free_values.iter().enumerate() {
+            for (field_index, (var_id, _)) in closure.free_values.iter().enumerate() {
                 let field_reg = b.push_reg(
                     span,
                     OpKind::LoadBoxedRecordField,
                     LoadBoxedRecordFieldOp {
                         record_reg,
                         record_struct: record_struct.clone(),
-                        field_idx,
+                        field_index,
                     },
                 );
 
-                let field_abi_type = record_struct.field_abi_types[field_idx].clone();
+                let field_abi_type = record_struct.field_abi_types[field_index].clone();
 
                 local_values.insert(
                     *var_id,
