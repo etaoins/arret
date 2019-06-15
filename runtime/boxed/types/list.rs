@@ -27,22 +27,22 @@ where
 impl<T: Boxed> Pair<T> {
     /// Constructs a pair with the given `head` and `rest`
     pub fn new(heap: &mut impl AsHeap, head: Gc<T>, rest: Gc<List<T>>) -> Gc<Pair<T>> {
+        let box_size = Self::size_for_pointer_width(mem::size_of::<usize>() * 8);
+
         heap.as_heap_mut().place_box(Pair {
-            header: Pair::TYPE_TAG.to_heap_header(Self::size()),
+            header: Pair::TYPE_TAG.to_heap_header(box_size),
             head,
             rest,
             list_length: rest.len() + 1,
         })
     }
 
-    /// Returns the box size for pairs
-    pub fn size() -> BoxSize {
-        if mem::size_of::<Self>() == 16 {
-            BoxSize::Size16
-        } else if mem::size_of::<Self>() == 32 {
-            BoxSize::Size32
-        } else {
-            unreachable!("Unsupported pair size!")
+    /// Returns the box size for pairs with the given target pointer width
+    pub fn size_for_pointer_width(pointer_width: usize) -> BoxSize {
+        match pointer_width {
+            32 => BoxSize::Size16,
+            64 => BoxSize::Size32,
+            other => panic!("unsupported pointer width: {}", other),
         }
     }
 
@@ -304,12 +304,12 @@ mod test {
         assert_eq!(16, mem::size_of::<Nil>());
         assert_eq!(16, mem::size_of::<List<Any>>());
 
-        #[cfg(target_pointer_width = "64")]
-        assert_eq!(32, mem::size_of::<Pair<Any>>());
-
-        // We should be able to back in to 16 bytes on 32bit
+        // We should be able to pack in to 16 bytes on 32bit
         #[cfg(target_pointer_width = "32")]
         assert_eq!(16, mem::size_of::<Pair<Any>>());
+
+        #[cfg(target_pointer_width = "64")]
+        assert_eq!(32, mem::size_of::<Pair<Any>>());
     }
 
     #[test]

@@ -2,6 +2,7 @@ use arret_runtime::boxed;
 
 use crate::codegen::alloc::{AllocAtom, BoxSource, CondPlan};
 use crate::codegen::analysis::escape::{CaptureKind, Captures};
+use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
 
 struct AllocInfo {
@@ -12,7 +13,7 @@ struct AllocInfo {
 /// Determines if an op requires the heap to be in a consistent state before it's executed
 ///
 /// Our `AllocAtom`s cannot span these operations
-fn op_needs_heap_checkpoint(op: &ops::Op) -> bool {
+fn op_needs_heap_checkpoint(tcx: &mut TargetCtx, op: &ops::Op) -> bool {
     use crate::mir::ops::OpKind;
 
     match op.kind() {
@@ -24,13 +25,13 @@ fn op_needs_heap_checkpoint(op: &ops::Op) -> bool {
             // We additionally need to make sure we don't allocate in our branches. Otherwise we
             // might need to plan an allocation of a dynamic size to cover each branch. Instead
             // just start a new atom for each branch.
-            .any(|op| op_needs_heap_checkpoint(op) || op_alloc_info(op).is_some()),
+            .any(|op| op_needs_heap_checkpoint(tcx, op) || op_alloc_info(tcx, op).is_some()),
         _ => false,
     }
 }
 
 /// Returns the output reg for an allocating op, or `None` otherwise
-fn op_alloc_info(op: &ops::Op) -> Option<AllocInfo> {
+fn op_alloc_info(tcx: &mut TargetCtx, op: &ops::Op) -> Option<AllocInfo> {
     use crate::mir::ops::OpKind;
 
     match op.kind() {
@@ -46,26 +47,38 @@ fn op_alloc_info(op: &ops::Op) -> Option<AllocInfo> {
             output_reg: *output_reg,
             box_size: boxed::Char::size(),
         }),
-        OpKind::AllocBoxedPair(output_reg, _) => Some(AllocInfo {
-            output_reg: *output_reg,
-            box_size: boxed::Pair::<boxed::Any>::size(),
-        }),
-        OpKind::AllocBoxedFunThunk(output_reg, _) => Some(AllocInfo {
-            output_reg: *output_reg,
-            box_size: boxed::FunThunk::size(),
-        }),
+        OpKind::AllocBoxedPair(output_reg, _) => {
+            let box_size = boxed::FunThunk::size_for_pointer_width(tcx.pointer_bits() as usize);
+
+            Some(AllocInfo {
+                output_reg: *output_reg,
+                box_size,
+            })
+        }
+        OpKind::AllocBoxedFunThunk(output_reg, _) => {
+            let box_size = boxed::FunThunk::size_for_pointer_width(tcx.pointer_bits() as usize);
+
+            Some(AllocInfo {
+                output_reg: *output_reg,
+                box_size,
+            })
+        }
         _ => None,
     }
 }
 
-pub fn plan_allocs<'op>(captures: &Captures, ops: &'op [ops::Op]) -> Vec<AllocAtom<'op>> {
+pub fn plan_allocs<'op>(
+    tcx: &mut TargetCtx,
+    captures: &Captures,
+    ops: &'op [ops::Op],
+) -> Vec<AllocAtom<'op>> {
     use std::mem;
 
     let mut atoms = vec![];
     let mut current_atom = AllocAtom::new(&ops[0..]);
 
     for (i, op) in ops.iter().enumerate() {
-        let checkpointing_op = op_needs_heap_checkpoint(op);
+        let checkpointing_op = op_needs_heap_checkpoint(tcx, op);
 
         if checkpointing_op && !current_atom.is_empty() {
             atoms.push(mem::replace(&mut current_atom, AllocAtom::new(&ops[i..])));
@@ -78,13 +91,13 @@ pub fn plan_allocs<'op>(captures: &Captures, ops: &'op [ops::Op]) -> Vec<AllocAt
         }) = op.kind()
         {
             current_atom.cond_plans.push(CondPlan {
-                true_subplan: plan_allocs(captures, true_ops),
-                false_subplan: plan_allocs(captures, false_ops),
+                true_subplan: plan_allocs(tcx, captures, true_ops),
+                false_subplan: plan_allocs(tcx, captures, false_ops),
             });
         } else if let Some(AllocInfo {
             output_reg,
             box_size,
-        }) = op_alloc_info(op)
+        }) = op_alloc_info(tcx, op)
         {
             if captures.get(output_reg) == CaptureKind::Never {
                 current_atom.box_sources.push(BoxSource::Stack);
@@ -114,9 +127,35 @@ pub fn plan_allocs<'op>(captures: &Captures, ops: &'op [ops::Op]) -> Vec<AllocAt
 mod test {
     use super::*;
 
+    /// Plans allocations assuming the native data layout
+    fn plan_native_allocs<'op>(ops: &'op [ops::Op]) -> Vec<AllocAtom<'op>> {
+        use crate::codegen::target_machine::create_target_machine;
+        use llvm_sys::target::*;
+        use llvm_sys::target_machine::*;
+
+        unsafe {
+            LLVM_InitializeNativeTarget();
+        }
+
+        let target_machine = create_target_machine(
+            None,
+            LLVMRelocMode::LLVMRelocDynamicNoPic,
+            LLVMCodeModel::LLVMCodeModelDefault,
+        );
+
+        let mut tcx = TargetCtx::new(target_machine, false);
+        let atoms = plan_allocs(&mut tcx, &Captures::new(), ops);
+
+        unsafe {
+            LLVMDisposeTargetMachine(target_machine);
+        }
+
+        atoms
+    }
+
     #[test]
     fn empty_ops() {
-        let actual_atoms = plan_allocs(&Captures::new(), &[]);
+        let actual_atoms = plan_native_allocs(&[]);
         assert_eq!(0, actual_atoms.len());
     }
 
@@ -156,7 +195,7 @@ mod test {
             },
         ];
 
-        let actual_atoms = plan_allocs(&Captures::new(), &input_ops);
+        let actual_atoms = plan_native_allocs(&input_ops);
 
         assert_eq!(expected_atoms, actual_atoms);
     }
@@ -187,7 +226,7 @@ mod test {
             .into(),
         ];
 
-        let actual_atoms = plan_allocs(&Captures::new(), &input_ops);
+        let actual_atoms = plan_native_allocs(&input_ops);
         // We should place the `AllocBoxedInt` and `Cond` in the same atom
         assert_eq!(1, actual_atoms.len());
     }
@@ -218,7 +257,7 @@ mod test {
             .into(),
         ];
 
-        let actual_atoms = plan_allocs(&Captures::new(), &input_ops);
+        let actual_atoms = plan_native_allocs(&input_ops);
         // We should place the `AllocBoxedInt` and `Cond` in different atoms
         assert_eq!(2, actual_atoms.len());
     }

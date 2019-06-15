@@ -163,7 +163,7 @@ impl TargetCtx {
     }
 
     pub fn pointer_bits(&self) -> u32 {
-        unsafe { LLVMPointerSize(self.target_data) }
+        unsafe { LLVMPointerSize(self.target_data) * 8 }
     }
 
     pub fn task_llvm_ptr_type(&mut self) -> LLVMTypeRef {
