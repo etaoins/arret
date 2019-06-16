@@ -7,7 +7,8 @@ use llvm_sys::{LLVMLinkage, LLVMUnnamedAddr};
 use arret_runtime::boxed;
 
 use crate::codegen::mod_gen::ModCtx;
-use crate::codegen::target_gen::{TargetCtx, TargetRecordStruct};
+use crate::codegen::record_struct;
+use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
 
 fn annotate_private_global(llvm_global: LLVMValueRef) {
@@ -330,9 +331,9 @@ pub fn gen_boxed_record(
     let type_tag = boxed::TypeTag::Record;
     let record_class_id = mcx.record_class_id_for_struct(record_struct);
 
-    let TargetRecordStruct {
+    let record_struct::TargetRecordStruct {
         data_len,
-        record_layout,
+        record_storage,
         llvm_data_type,
     } = tcx.target_record_struct(record_struct);
 
@@ -341,7 +342,7 @@ pub fn gen_boxed_record(
     unsafe {
         let box_name = ffi::CString::new(format!("const_{}", record_struct.source_name)).unwrap();
 
-        if let boxed::RecordLayout::Large(_) = record_layout {
+        if let boxed::RecordStorage::Large(_) = record_storage {
             unimplemented!("large constant boxed records");
         }
 

@@ -9,7 +9,7 @@ use crate::codegen::alloc::core::{gen_alloced_box, gen_alloced_box_with_llvm_typ
 use crate::codegen::alloc::{ActiveAlloc, BoxSource};
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::record_struct;
-use crate::codegen::target_gen::{TargetCtx, TargetRecordStruct};
+use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops::RecordStructId;
 
 pub struct PairInput {
@@ -205,13 +205,13 @@ pub fn gen_alloc_boxed_record(
 
     unsafe {
         let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
-        let TargetRecordStruct {
+        let record_struct::TargetRecordStruct {
             data_len,
-            record_layout,
+            record_storage,
             ..
         } = tcx.target_record_struct(record_struct);
 
-        if let boxed::RecordLayout::Large(_) = record_layout {
+        if let boxed::RecordStorage::Large(_) = record_storage {
             unimplemented!("allocating large boxed records");
         }
 

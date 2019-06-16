@@ -24,21 +24,21 @@ pub struct Record {
     padding: [u8; Record::MAX_INLINE_BYTES],
 }
 
-/// Describes the layout of a record's data
+/// Describes the storage of a record's data
 #[derive(Clone, Copy, Debug)]
-pub enum RecordLayout {
+pub enum RecordStorage {
     /// Record data is stored inline in a box of the given size
     Inline(BoxSize),
     /// Record data is stored out-of-line in a box of the given size
     Large(BoxSize),
 }
 
-impl RecordLayout {
+impl RecordStorage {
     /// Returns the box size for a record layout
     pub fn box_size(&self) -> BoxSize {
         match self {
-            RecordLayout::Inline(box_size) => *box_size,
-            RecordLayout::Large(box_size) => *box_size,
+            RecordStorage::Inline(box_size) => *box_size,
+            RecordStorage::Large(box_size) => *box_size,
         }
     }
 }
@@ -51,14 +51,14 @@ impl Record {
 
     /// Constructs a new empty record of the given class
     pub fn new(heap: &mut impl AsHeap, class_id: RecordClassId, data: &[u8]) -> Gc<Record> {
-        let layout = Self::layout_for_data_len(data.len(), mem::size_of::<usize>() * 8);
+        let storage = Self::storage_for_data_len(data.len(), mem::size_of::<usize>() * 8);
 
-        let box_size = layout.box_size();
+        let box_size = storage.box_size();
         let header = Self::TYPE_TAG.to_heap_header(box_size);
 
         let boxed = unsafe {
-            match layout {
-                RecordLayout::Large(_) => {
+            match storage {
+                RecordStorage::Large(_) => {
                     let large_record = LargeRecord {
                         record_header: RecordHeader {
                             header,
@@ -73,7 +73,7 @@ impl Record {
 
                     mem::transmute(large_record)
                 }
-                RecordLayout::Inline(_) => {
+                RecordStorage::Inline(_) => {
                     let mut inline_record = InlineRecord {
                         record_header: RecordHeader {
                             header,
@@ -98,12 +98,12 @@ impl Record {
         heap.as_heap_mut().place_box(boxed)
     }
 
-    /// Returns the layout for given data length and target pointer width in bits
-    pub fn layout_for_data_len(data_len: usize, pointer_width: usize) -> RecordLayout {
+    /// Returns the storage for given data length and target pointer width in bits
+    pub fn storage_for_data_len(data_len: usize, pointer_width: usize) -> RecordStorage {
         match data_len {
-            0..=8 => RecordLayout::Inline(BoxSize::Size16),
-            9..=Record::MAX_INLINE_BYTES => RecordLayout::Inline(BoxSize::Size32),
-            _ => RecordLayout::Large(match pointer_width {
+            0..=8 => RecordStorage::Inline(BoxSize::Size16),
+            9..=Record::MAX_INLINE_BYTES => RecordStorage::Inline(BoxSize::Size32),
+            _ => RecordStorage::Large(match pointer_width {
                 32 => BoxSize::Size16,
                 64 => BoxSize::Size32,
                 other => panic!("unsupported pointer width: {}", other),

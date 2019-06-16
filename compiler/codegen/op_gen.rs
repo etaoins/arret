@@ -9,7 +9,7 @@ use crate::mir::ops::*;
 use crate::codegen::fun_gen::FunCtx;
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::record_struct;
-use crate::codegen::target_gen::{TargetCtx, TargetRecordStruct};
+use crate::codegen::target_gen::TargetCtx;
 use crate::codegen::{alloc, const_gen};
 
 fn comparison_to_llvm_int_pred(comparison: Comparison) -> LLVMIntPredicate {
@@ -423,10 +423,10 @@ fn gen_op(
                     field_index,
                 } = load_boxed_record_field_op;
 
-                let TargetRecordStruct { record_layout, .. } =
+                let record_struct::TargetRecordStruct { record_storage, .. } =
                     tcx.target_record_struct(record_struct);
 
-                if let boxed::RecordLayout::Large(_) = record_layout {
+                if let boxed::RecordStorage::Large(_) = record_storage {
                     unimplemented!("loading large boxed record fields");
                 }
 

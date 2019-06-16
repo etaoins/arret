@@ -64,13 +64,13 @@ fn op_alloc_info(tcx: &mut TargetCtx, op: &ops::Op) -> Option<AllocInfo> {
             })
         }
         OpKind::AllocBoxedRecord(output_reg, box_record_op) => {
-            let record_layout = tcx
+            let record_storage = tcx
                 .target_record_struct(&box_record_op.record_struct)
-                .record_layout;
+                .record_storage;
 
             Some(AllocInfo {
                 output_reg: *output_reg,
-                box_size: record_layout.box_size(),
+                box_size: record_storage.box_size(),
             })
         }
         _ => None,

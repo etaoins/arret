@@ -98,7 +98,7 @@ impl BoxLayout {
                     ]);
                 }
                 BoxLayout::ConstTagged(TypeTag::Record) => {
-                    record_struct::append_common_members(tcx, members);
+                    record_struct::append_common_internal_members(tcx, members);
                 }
                 BoxLayout::List => {
                     members.push(tcx.usize_llvm_type());
