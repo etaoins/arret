@@ -211,6 +211,28 @@ impl<'of> ProgramCaptureCtx<'of> {
                     }
                 }
             }
+            OpKind::AllocBoxedRecord(reg, ops::BoxRecordOp { field_regs, .. }) => {
+                let output_capture = captures.get(*reg);
+
+                for field_reg in field_regs.iter() {
+                    captures.add(*field_reg, output_capture);
+                }
+            }
+            OpKind::LoadBoxedRecordField(
+                reg,
+                ops::LoadBoxedRecordFieldOp {
+                    record_reg,
+                    record_struct,
+                    field_index,
+                },
+            ) => {
+                let output_capture = captures.get(*reg);
+
+                // Don't capture the record if we're loading a non-GCed value
+                if record_struct.field_abi_types[*field_index].may_contain_gc_refs() {
+                    captures.add(*record_reg, output_capture);
+                }
+            }
             _ => {}
         }
     }

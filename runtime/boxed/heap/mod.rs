@@ -1,10 +1,12 @@
 pub mod collect;
+pub mod type_info;
 
 use std::{cmp, mem, ptr};
 
+use crate::boxed::heap::type_info::TypeInfo;
 use crate::boxed::refs::Gc;
 use crate::boxed::{AllocType, Any, Boxed};
-use crate::intern::Interner;
+use crate::intern::{AsInterner, Interner};
 
 /// Allocated segment of garbage collected memory
 ///
@@ -22,7 +24,7 @@ pub struct Segment {
 pub struct Heap {
     current_segment: Segment,
     full_segments: Vec<Segment>,
-    interner: Interner,
+    type_info: TypeInfo,
     len_at_last_gc: usize,
 }
 
@@ -99,15 +101,15 @@ impl Heap {
 
     /// Returns an empty heap with a default capacity
     pub fn empty() -> Heap {
-        Self::new(Interner::new(), Self::DEFAULT_CAPACITY)
+        Self::new(TypeInfo::empty(), Self::DEFAULT_CAPACITY)
     }
 
-    /// Returns a new heap with the given symbol interner and capacity
-    pub fn new(interner: Interner, count: usize) -> Heap {
+    /// Returns a new heap with the given type information and capacity
+    pub fn new(type_info: TypeInfo, count: usize) -> Heap {
         Heap {
             current_segment: Segment::with_capacity(count),
             full_segments: vec![],
-            interner,
+            type_info,
             len_at_last_gc: 0,
         }
     }
@@ -144,14 +146,14 @@ impl Heap {
         alloc
     }
 
-    /// Returns the symbol interner associated with this heap
-    pub fn interner(&self) -> &Interner {
-        &self.interner
+    /// Returns the runtime type information associated with the heap
+    pub fn type_info(&self) -> &TypeInfo {
+        &self.type_info
     }
 
-    /// Returns a mutable reference to the symbol interner associated with this heap
-    pub fn interner_mut(&mut self) -> &mut Interner {
-        &mut self.interner
+    /// Returns a mutable reference to the runtime type information associated with the heap
+    pub fn type_info_mut(&mut self) -> &mut TypeInfo {
+        &mut self.type_info
     }
 
     /// Returns the number of allocated cells
@@ -206,6 +208,12 @@ impl AsHeap for Heap {
     }
 }
 
+impl AsInterner for Heap {
+    fn as_interner(&self) -> &Interner {
+        self.type_info().interner()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -214,7 +222,7 @@ mod test {
     fn basic_alloc() {
         use crate::boxed::Str;
 
-        let mut heap = Heap::new(Interner::new(), 1);
+        let mut heap = Heap::new(TypeInfo::empty(), 1);
 
         let string1 = Str::new(&mut heap, "HELLO");
         let string2 = Str::new(&mut heap, "WORLD");

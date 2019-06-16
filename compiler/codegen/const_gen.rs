@@ -11,7 +11,7 @@ use crate::codegen::record_struct;
 use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
 
-fn annotate_private_global(llvm_global: LLVMValueRef) {
+pub fn annotate_private_global(llvm_global: LLVMValueRef) {
     unsafe {
         LLVMSetUnnamedAddress(llvm_global, LLVMUnnamedAddr::LLVMGlobalUnnamedAddr);
         LLVMSetGlobalConstant(llvm_global, 1 as i32);
@@ -335,7 +335,8 @@ pub fn gen_boxed_record(
         data_len,
         record_storage,
         llvm_data_type,
-    } = tcx.target_record_struct(record_struct);
+        ..
+    } = *tcx.target_record_struct(record_struct);
 
     let llvm_box_type = tcx.inline_record_struct_box_type(record_struct);
 

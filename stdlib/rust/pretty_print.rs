@@ -18,7 +18,7 @@ pub fn pretty_print(write: &mut dyn Write, heap: &impl AsHeap, value: Gc<boxed::
         }
         boxed::AnySubtype::Sym(sym) => {
             write
-                .write_all(sym.name(heap.as_heap().interner()).as_bytes())
+                .write_all(sym.name(heap.as_heap()).as_bytes())
                 .unwrap();
         }
         _ => {

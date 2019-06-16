@@ -21,7 +21,7 @@ use std::{fmt, ptr};
 use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
 use crate::boxed::refs::Gc;
 
-pub use crate::boxed::heap::collect;
+pub use crate::boxed::heap::{collect, type_info};
 pub use crate::boxed::heap::{AsHeap, Heap};
 pub use crate::boxed::types::char::Char;
 pub use crate::boxed::types::float::Float;

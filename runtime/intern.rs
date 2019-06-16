@@ -280,6 +280,18 @@ impl Default for Interner {
     }
 }
 
+/// Type that can be converted to an [`Interner`]
+pub trait AsInterner {
+    /// Returns this instance as an [`Interner`]
+    fn as_interner(&self) -> &Interner;
+}
+
+impl AsInterner for Interner {
+    fn as_interner(&self) -> &Interner {
+        self
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

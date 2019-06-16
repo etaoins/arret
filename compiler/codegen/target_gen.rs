@@ -71,6 +71,8 @@ pub struct TargetCtx {
     boxed_types: HashMap<BoxLayout, LLVMTypeRef>,
     global_interned_name_type: Option<LLVMTypeRef>,
 
+    classmap_field_type: Option<LLVMTypeRef>,
+
     boxed_dereferenceable_attr: LLVMAttributeRef,
     boxed_align_attr: LLVMAttributeRef,
     readonly_attr: LLVMAttributeRef,
@@ -122,6 +124,8 @@ impl TargetCtx {
                 boxed_inline_str_type: None,
                 boxed_types: HashMap::new(),
                 global_interned_name_type: None,
+
+                classmap_field_type: None,
 
                 boxed_dereferenceable_attr: llvm_enum_attr_for_name(
                     llx,
@@ -190,6 +194,7 @@ impl TargetCtx {
     pub fn global_interned_name_type(&mut self) -> LLVMTypeRef {
         let usize_llvm_type = self.usize_llvm_type();
         let llx = self.llx;
+
         *self
             .global_interned_name_type
             .get_or_insert_with(|| unsafe {
@@ -202,6 +207,25 @@ impl TargetCtx {
 
                 llvm_type
             })
+    }
+
+    pub fn classmap_field_type(&mut self) -> LLVMTypeRef {
+        let llx = self.llx;
+
+        *self.classmap_field_type.get_or_insert_with(|| unsafe {
+            let llvm_i32 = LLVMInt32TypeInContext(llx);
+            let llvm_i8 = LLVMInt8TypeInContext(llx);
+            let members = &mut [llvm_i32, llvm_i8, llvm_i8];
+
+            let llvm_type = LLVMStructCreateNamed(llx, b"classmap_field\0".as_ptr() as *const _);
+            LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
+
+            llvm_type
+        })
+    }
+
+    pub fn classmap_class_type(&mut self) -> LLVMTypeRef {
+        unsafe { LLVMPointerType(self.classmap_field_type(), 0) }
     }
 
     pub fn closure_llvm_type(&mut self) -> LLVMTypeRef {
@@ -364,18 +388,17 @@ impl TargetCtx {
     pub fn target_record_struct<'a>(
         &'a mut self,
         mir_record_struct: &ops::RecordStructId,
-    ) -> record_struct::TargetRecordStruct {
+    ) -> &'a record_struct::TargetRecordStruct {
         if self.target_record_structs.contains_key(mir_record_struct) {
-            return self.target_record_structs[mir_record_struct];
+            return &self.target_record_structs[mir_record_struct];
         }
 
         let target_record_struct =
             record_struct::TargetRecordStruct::from_mir_record_struct(self, mir_record_struct);
 
         self.target_record_structs
-            .insert(mir_record_struct.clone(), target_record_struct);
-
-        target_record_struct
+            .entry(mir_record_struct.clone())
+            .or_insert(target_record_struct)
     }
 
     pub fn inline_record_struct_box_type(

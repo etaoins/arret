@@ -71,8 +71,7 @@ pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any
         AnySubtype::Sym(sym) => {
             // TODO: We don't support quoted/raw symbols as EDN doesn't
             // This assumes the symbol is a valid identifier
-            let interner = heap.as_heap().interner();
-            write!(w, "{}", sym.name(interner))
+            write!(w, "{}", sym.name(heap.as_heap()))
         }
         AnySubtype::Float(float_ref) => {
             let f = float_ref.value();

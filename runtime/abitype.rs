@@ -197,6 +197,13 @@ impl ABIType {
             capture,
         }
     }
+
+    pub fn may_contain_gc_refs(&self) -> bool {
+        match self {
+            ABIType::Boxed(_) | ABIType::InternedSym | ABIType::Callback(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl From<boxed::TypeTag> for ParamABIType {

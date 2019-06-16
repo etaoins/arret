@@ -7,7 +7,7 @@ use arret_runtime::boxed;
 use arret_runtime::boxed::prelude::*;
 use arret_runtime::boxed::refs::Gc;
 use arret_runtime::callback::EntryPointABIType as CallbackEntryPointABIType;
-use arret_runtime::intern::Interner;
+use arret_runtime::intern::{AsInterner, Interner};
 
 use arret_runtime_syntax::reader;
 use arret_syntax::datum::{DataStr, Datum};
@@ -63,7 +63,6 @@ pub struct EvalHirCtx {
     thunk_fun_values: HashMap<*const boxed::FunThunk, Value>,
     thunk_jit: codegen::jit::JITCtx,
 
-    next_jit_record_class_id: boxed::RecordClassId,
     record_classes: HashMap<record::ConsId, EvaledRecordClass>,
 }
 
@@ -177,7 +176,6 @@ impl EvalHirCtx {
             thunk_fun_values: HashMap::new(),
             thunk_jit,
 
-            next_jit_record_class_id: 0,
             record_classes: HashMap::new(),
         }
     }
@@ -526,7 +524,7 @@ impl EvalHirCtx {
             let ops_fun = ops_for_rust_fun(self, rust_fun, wanted_abi);
             let address = self.thunk_jit.compile_fun(
                 &self.private_funs,
-                self.runtime_task.heap_mut().interner_mut(),
+                self.runtime_task.heap_mut().type_info_mut().interner_mut(),
                 &ops_fun,
             );
 
@@ -1060,7 +1058,7 @@ impl EvalHirCtx {
 
         let address = self.thunk_jit.compile_fun(
             &self.private_funs,
-            self.runtime_task.heap_mut().interner_mut(),
+            self.runtime_task.heap_mut().type_info_mut().interner_mut(),
             &ops_fun,
         );
         let entry = unsafe { mem::transmute(address as usize) };
@@ -1114,20 +1112,21 @@ impl EvalHirCtx {
             return &self.record_classes[record_cons];
         }
 
-        // This is the class ID used by values in the JIT context
-        // codegen will reassign contiguous class IDs for the record classes it generates
-        let jit_record_class_id = self.next_jit_record_class_id;
-        self.next_jit_record_class_id += 1;
-
         let field_abi_types = record_cons
             .fields()
             .iter()
             .map(|field| specific_abi_type_for_ty_ref(field.ty_ref()))
             .collect();
 
+        let record_struct = ops::RecordStruct::new(record_cons.name().clone(), field_abi_types);
+        let jit_record_class_id = self.thunk_jit.register_record_struct(
+            &record_struct,
+            self.runtime_task.heap_mut().type_info_mut().class_map_mut(),
+        );
+
         let evaled_record_class = EvaledRecordClass {
             jit_record_class_id,
-            record_struct: ops::RecordStruct::new(record_cons.name().clone(), field_abi_types),
+            record_struct,
         };
 
         self.record_classes
@@ -1375,11 +1374,7 @@ impl EvalHirCtx {
         use arret_runtime::boxed::collect;
         use std::mem;
 
-        let old_heap = mem::replace(
-            self.runtime_task.heap_mut(),
-            boxed::Heap::new(Interner::new(), 0),
-        );
-
+        let old_heap = mem::replace(self.runtime_task.heap_mut(), boxed::Heap::empty());
         let mut strong_pass = collect::StrongPass::new(old_heap);
 
         // Move all of our global values to the new heap
@@ -1545,5 +1540,11 @@ impl AsHeap for EvalHirCtx {
 
     fn as_heap_mut(&mut self) -> &mut boxed::Heap {
         self.runtime_task.heap_mut()
+    }
+}
+
+impl AsInterner for EvalHirCtx {
+    fn as_interner(&self) -> &Interner {
+        self.runtime_task.heap().type_info().interner()
     }
 }

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::{ffi, mem};
 
 use arret_runtime::boxed;
+use arret_runtime::class_map::ClassMap;
 use arret_runtime::intern::Interner;
 
 use llvm_sys::core::*;
@@ -156,6 +157,15 @@ impl JITCtx {
 
             LLVMOrcDisposeMangledSymbol(mangled_pointer);
         }
+    }
+
+    pub fn register_record_struct(
+        &mut self,
+        record_struct: &ops::RecordStructId,
+        class_map: &mut ClassMap,
+    ) -> boxed::RecordClassId {
+        let target_record_struct = self.tcx.target_record_struct(record_struct);
+        class_map.push_dynamic_class(target_record_struct.classmap_class.clone())
     }
 }
 

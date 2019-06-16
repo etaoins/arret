@@ -6,8 +6,8 @@ use std::panic;
 
 use crate::binding::Never;
 use crate::boxed::prelude::*;
+use crate::boxed::type_info::TypeInfo;
 use crate::boxed::Heap;
-use crate::intern::{GlobalName, Interner};
 
 /// Isolated task of execution
 ///
@@ -23,14 +23,12 @@ impl Task {
 
     /// Creates a new empty task
     pub fn new() -> Task {
-        Task {
-            heap: Heap::new(Interner::new(), Self::DEFAULT_CAPACITY),
-        }
+        Self::with_type_info(TypeInfo::empty())
     }
 
-    pub(crate) fn with_global_interned_names(names: *const GlobalName) -> Task {
-        Task {
-            heap: Heap::new(Interner::with_global_names(names), Self::DEFAULT_CAPACITY),
+    pub(crate) fn with_type_info(type_info: TypeInfo) -> Task {
+        Self {
+            heap: Heap::new(type_info, Self::DEFAULT_CAPACITY),
         }
     }
 

@@ -30,11 +30,11 @@ pub struct StrongPass {
 impl StrongPass {
     /// Consumes an existing heap to begin a garbage collection pass
     pub fn new(old_heap: Heap) -> StrongPass {
-        let interner = old_heap.interner().clone_for_collect_garbage();
+        let type_info = old_heap.type_info().clone_for_collect_garbage();
 
         StrongPass {
             old_heap,
-            new_heap: Heap::new(interner, Heap::DEFAULT_CAPACITY),
+            new_heap: Heap::new(type_info, Heap::DEFAULT_CAPACITY),
         }
     }
 
@@ -125,8 +125,10 @@ impl StrongPass {
                     let sym_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut boxed::Sym) };
 
                     // If this symbol is heap indexed we need to reintern it on the new heap
-                    let sym_name = sym_ref.name(&self.old_heap.interner);
-                    let new_interned_name = self.new_heap.interner.intern(sym_name);
+                    let new_interner = self.new_heap.type_info_mut().interner_mut();
+
+                    let sym_name = sym_ref.name(&self.old_heap);
+                    let new_interned_name = new_interner.intern(sym_name);
                     sym_ref.interned = new_interned_name;
                 }
                 TypeTag::Pair => {
@@ -283,8 +285,9 @@ mod test {
         all_strong.visit_box(&mut indexed);
 
         let all_heap = all_strong.into_new_heap();
-        assert_eq!(inline_name, inline.name(&all_heap.interner));
-        assert_eq!(indexed_name, indexed.name(&all_heap.interner));
+
+        assert_eq!(inline_name, inline.name(&all_heap));
+        assert_eq!(indexed_name, indexed.name(&all_heap));
         assert_eq!(2, all_heap.len());
     }
 

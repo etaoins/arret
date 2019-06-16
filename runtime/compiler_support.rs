@@ -8,14 +8,24 @@ use std::{panic, process};
 use crate::boxed;
 use crate::boxed::prelude::*;
 use crate::boxed::refs::Gc;
-use crate::intern::GlobalName;
+use crate::boxed::type_info::TypeInfo;
+use crate::class_map::{ClassMap, ClassRef};
+use crate::intern::{GlobalName, Interner};
 use crate::task::Task;
 
 type TaskEntry = extern "C" fn(&mut Task);
 
 #[export_name = "arret_runtime_launch_task"]
-pub extern "C" fn launch_task(global_interned_names: *const GlobalName, entry: TaskEntry) {
-    let mut task = Task::with_global_interned_names(global_interned_names);
+pub extern "C" fn launch_task(
+    global_names: *const GlobalName,
+    classmap_classes: *const ClassRef<'static>,
+    entry: TaskEntry,
+) {
+    let interner = Interner::with_global_names(global_names);
+    let class_map = ClassMap::with_const_classes(classmap_classes);
+
+    let type_info = TypeInfo::new(interner, class_map);
+    let mut task = Task::with_type_info(type_info);
 
     if let Err(err) = panic::catch_unwind(panic::AssertUnwindSafe(|| entry(&mut task))) {
         if let Some(message) = err.downcast_ref::<String>() {

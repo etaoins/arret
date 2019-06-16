@@ -106,6 +106,7 @@ fn program_to_module(
             llvm_module,
             llvm_entry_fun: llvm_arret_main,
             llvm_global_interned_names,
+            llvm_classmap_classes,
         } = gen_mod(
             tcx,
             CString::new("program").unwrap().as_ref(),
@@ -127,9 +128,12 @@ fn program_to_module(
         let bb = LLVMAppendBasicBlockInContext(tcx.llx, c_main, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
 
+        let classmap_class_ptr_type = LLVMPointerType(tcx.classmap_class_type(), 0);
+
         // Declare arret_runtime_launch_task
         let launch_task_llvm_arg_types = &mut [
             LLVMPointerType(tcx.global_interned_name_type(), 0),
+            classmap_class_ptr_type,
             LLVMPointerType(arret_main_llvm_type(tcx), 0),
         ];
 
@@ -147,7 +151,11 @@ fn program_to_module(
             launch_task_llvm_type,
         );
 
-        let launch_task_llvm_args = &mut [llvm_global_interned_names, llvm_arret_main];
+        let launch_task_llvm_args = &mut [
+            llvm_global_interned_names,
+            llvm_classmap_classes,
+            llvm_arret_main,
+        ];
 
         LLVMBuildCall(
             builder,

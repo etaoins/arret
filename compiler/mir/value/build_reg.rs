@@ -45,11 +45,9 @@ fn const_to_reg(
         (boxed::AnySubtype::False(_), abitype::ABIType::Bool) => {
             b.push_reg(span, OpKind::ConstBool, false)
         }
-        (boxed::AnySubtype::Sym(sym_ref), abitype::ABIType::InternedSym) => b.push_reg(
-            span,
-            OpKind::ConstInternedSym,
-            sym_ref.name(ehx.as_heap().interner()).into(),
-        ),
+        (boxed::AnySubtype::Sym(sym_ref), abitype::ABIType::InternedSym) => {
+            b.push_reg(span, OpKind::ConstInternedSym, sym_ref.name(ehx).into())
+        }
         (boxed::AnySubtype::Int(int_ref), abitype::ABIType::Boxed(to_abi_type)) => {
             let from_abi_type = boxed::TypeTag::Int.into();
             let from_reg = b.push_reg(span, OpKind::ConstBoxedInt, int_ref.value());
@@ -76,11 +74,7 @@ fn const_to_reg(
         }
         (boxed::AnySubtype::Sym(sym_ref), abitype::ABIType::Boxed(to_abi_type)) => {
             let from_abi_type = boxed::TypeTag::Sym.into();
-            let from_reg = b.push_reg(
-                span,
-                OpKind::ConstBoxedSym,
-                sym_ref.name(ehx.as_heap().interner()).into(),
-            );
+            let from_reg = b.push_reg(span, OpKind::ConstBoxedSym, sym_ref.name(ehx).into());
 
             b.cast_boxed_cond(span, &from_abi_type, from_reg, to_abi_type.clone())
         }

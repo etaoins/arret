@@ -2,7 +2,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 
 use crate::boxed::*;
-use crate::intern::{InternedSym, Interner};
+use crate::intern::{AsInterner, InternedSym};
 
 /// Interned symbol
 ///
@@ -22,7 +22,7 @@ impl Sym {
     /// Constructs a new symbol with a specified name
     pub fn new(heap: &mut impl AsHeap, value: &str) -> Gc<Sym> {
         let heap = heap.as_heap_mut();
-        let interned = heap.interner_mut().intern(value);
+        let interned = heap.type_info_mut().interner_mut().intern(value);
 
         heap.place_box(Sym {
             header: Self::TYPE_TAG.to_heap_header(Self::size()),
@@ -39,8 +39,8 @@ impl Sym {
     ///
     /// `interner` is required to unintern the name. It must be the same interner used to construct
     /// the symbol.
-    pub fn name<'a>(&'a self, interner: &'a Interner) -> &'a str {
-        interner.unintern(&self.interned)
+    pub fn name<'a>(&'a self, interner: &'a impl AsInterner) -> &'a str {
+        interner.as_interner().unintern(&self.interned)
     }
 }
 

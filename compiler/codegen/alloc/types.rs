@@ -194,8 +194,6 @@ pub fn gen_alloc_boxed_record(
     box_source: BoxSource,
     input: &RecordInput<'_>,
 ) -> LLVMValueRef {
-    use arret_runtime::abitype::ABIType;
-
     let RecordInput {
         record_struct,
         llvm_fields,
@@ -209,7 +207,7 @@ pub fn gen_alloc_boxed_record(
             data_len,
             record_storage,
             ..
-        } = tcx.target_record_struct(record_struct);
+        } = *tcx.target_record_struct(record_struct);
 
         if let boxed::RecordStorage::Large(_) = record_storage {
             unimplemented!("allocating large boxed records");
@@ -219,9 +217,8 @@ pub fn gen_alloc_boxed_record(
             .field_abi_types
             .iter()
             .zip(llvm_fields.iter())
-            .any(|(field_abi_type, llvm_field)| match field_abi_type {
-                ABIType::Boxed(_) | ABIType::InternedSym => LLVMIsConstant(*llvm_field) == 0,
-                _ => false,
+            .any(|(field_abi_type, llvm_field)| {
+                field_abi_type.may_contain_gc_refs() && LLVMIsConstant(*llvm_field) == 0
             });
 
         if contains_gc_refs {

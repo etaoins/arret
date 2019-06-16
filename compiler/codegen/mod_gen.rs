@@ -12,6 +12,7 @@ use arret_runtime::intern;
 
 use crate::codegen::analysis::AnalysedMod;
 use crate::codegen::debug_info::DebugInfoBuilder;
+use crate::codegen::record_struct;
 use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
 use crate::source::SourceLoader;
@@ -27,7 +28,8 @@ pub struct ModCtx<'am, 'sl, 'interner> {
     global_interned_names: Vec<Box<str>>,
 
     record_struct_class_ids: HashMap<ops::RecordStructId, RecordClassId>,
-    next_record_class_id: RecordClassId,
+    record_structs: Vec<ops::RecordStructId>,
+
     record_class_id_llvm_values: Vec<LLVMValueRef>,
 
     function_pass_manager: LLVMPassManagerRef,
@@ -37,6 +39,7 @@ pub struct GeneratedMod {
     pub llvm_module: LLVMModuleRef,
     pub llvm_entry_fun: LLVMValueRef,
     pub llvm_global_interned_names: LLVMValueRef,
+    pub llvm_classmap_classes: LLVMValueRef,
 }
 
 impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
@@ -106,7 +109,7 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
             global_interned_names: vec![],
 
             record_struct_class_ids: HashMap::new(),
-            next_record_class_id: 0,
+            record_structs: vec![],
             record_class_id_llvm_values: vec![],
 
             function_pass_manager,
@@ -134,8 +137,8 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
             return *record_class_id;
         }
 
-        let record_class_id = self.next_record_class_id;
-        self.next_record_class_id += 1;
+        let record_class_id = self.record_structs.len() as u32;
+        self.record_structs.push(record_struct.clone());
 
         self.record_struct_class_ids
             .insert(record_struct.clone(), record_class_id);
@@ -211,7 +214,7 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
                 LLVMConstInt(tcx.record_class_id_llvm_type(), 0 as u64, 0),
                 LLVMConstInt(
                     tcx.record_class_id_llvm_type(),
-                    u64::from(self.next_record_class_id),
+                    self.record_structs.len() as u64,
                     0,
                 ),
             ];
@@ -288,6 +291,9 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
         let llvm_global_interned_names =
             gen_global_interned_names(tcx, self.module, &self.global_interned_names);
 
+        let llvm_classmap_classes =
+            record_struct::gen_classmap_classes(tcx, self.module, &self.record_structs);
+
         self.finalise_record_class_id_range_metadata(tcx);
 
         if let Some(ref mut di_builder) = self.di_builder {
@@ -298,6 +304,7 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
             llvm_module: self.module,
             llvm_entry_fun,
             llvm_global_interned_names,
+            llvm_classmap_classes,
         }
     }
 }
