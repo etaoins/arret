@@ -454,7 +454,7 @@ impl EvalHirCtx {
         &mut self,
         b: &mut Option<Builder>,
         span: Span,
-        _record_cons: &record::ConsId,
+        record_cons: &record::ConsId,
         field_index: usize,
         arg_list_value: &Value,
     ) -> Value {
@@ -463,8 +463,39 @@ impl EvalHirCtx {
 
         match record_value {
             Value::Record(_, fields) => fields[field_index].clone(),
-            _ => {
-                unimplemented!("accessing fields of boxed records");
+            Value::Const(_) => {
+                unimplemented!("accessing fields of constant boxed records");
+            }
+            other_value => {
+                use crate::mir::ops::*;
+                use crate::mir::value::build_reg::value_to_reg;
+
+                let record_struct = self
+                    .evaled_record_class_for_cons(record_cons)
+                    .record_struct
+                    .clone();
+
+                let b = if let Some(b) = b {
+                    b
+                } else {
+                    panic!("need builder to access field of boxed record reg");
+                };
+
+                let record_reg =
+                    value_to_reg(self, b, span, &other_value, &boxed::TypeTag::Record.into());
+
+                let field_reg = b.push_reg(
+                    span,
+                    OpKind::LoadBoxedRecordField,
+                    LoadBoxedRecordFieldOp {
+                        field_index,
+                        record_reg: record_reg.into(),
+                        record_struct: record_struct.clone(),
+                    },
+                );
+
+                let field_abi_type = record_struct.field_abi_types[field_index].clone();
+                value::RegValue::new(field_reg, field_abi_type).into()
             }
         }
     }
