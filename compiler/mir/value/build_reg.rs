@@ -230,7 +230,7 @@ fn record_to_reg(
     b: &mut Builder,
     span: Span,
     record_cons: &record::ConsId,
-    fields: &Box<[Value]>,
+    fields: &[Value],
     boxed_abi_type: &abitype::BoxedABIType,
 ) -> BuiltReg {
     use crate::mir::ops::*;

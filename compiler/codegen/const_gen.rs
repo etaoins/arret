@@ -326,7 +326,7 @@ pub fn gen_boxed_record(
     tcx: &mut TargetCtx,
     mcx: &mut ModCtx<'_, '_, '_>,
     record_struct: &ops::RecordStructId,
-    mut llvm_fields: Box<[LLVMValueRef]>,
+    llvm_fields: &[LLVMValueRef],
 ) -> LLVMValueRef {
     let type_tag = boxed::TypeTag::Record;
     let record_class_id = mcx.record_class_id_for_struct(record_struct);
@@ -348,7 +348,7 @@ pub fn gen_boxed_record(
 
         let llvm_data_value = LLVMConstNamedStruct(
             llvm_data_type,
-            llvm_fields.as_mut_ptr(),
+            llvm_fields.as_ptr() as *mut _,
             llvm_fields.len() as u32,
         );
 

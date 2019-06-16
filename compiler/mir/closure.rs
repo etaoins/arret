@@ -94,7 +94,7 @@ pub fn calculate_closure(
         _ => {
             let closure_source_name = source_name
                 .map(|source_name| format!("{}_closure", source_name).into())
-                .unwrap_or("anon_closure".into());
+                .unwrap_or_else(|| "anon_closure".into());
 
             let field_abi_types = free_values
                 .iter()

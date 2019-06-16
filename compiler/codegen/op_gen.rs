@@ -447,7 +447,7 @@ fn gen_op(
                 let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
                 let field_gep_indices = &mut [
                     LLVMConstInt(llvm_i32, 0 as u64, 0),
-                    LLVMConstInt(llvm_i32, record_struct::INLINE_DATA_INDEX as u64, 0),
+                    LLVMConstInt(llvm_i32, u64::from(record_struct::INLINE_DATA_INDEX), 0),
                     LLVMConstInt(llvm_i32, *field_index as u64, 0),
                 ];
 
@@ -862,12 +862,12 @@ fn gen_op(
                     field_regs,
                 },
             ) => {
-                let llvm_fields = field_regs
+                let llvm_fields: Box<[LLVMValueRef]> = field_regs
                     .iter()
                     .map(|field_reg| fcx.regs[field_reg])
                     .collect();
 
-                let llvm_value = const_gen::gen_boxed_record(tcx, mcx, record_struct, llvm_fields);
+                let llvm_value = const_gen::gen_boxed_record(tcx, mcx, record_struct, &llvm_fields);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::AllocBoxedRecord(

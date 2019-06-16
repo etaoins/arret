@@ -35,10 +35,10 @@ pub enum RecordStorage {
 
 impl RecordStorage {
     /// Returns the box size for a record layout
-    pub fn box_size(&self) -> BoxSize {
+    pub fn box_size(self) -> BoxSize {
         match self {
-            RecordStorage::Inline(box_size) => *box_size,
-            RecordStorage::Large(box_size) => *box_size,
+            RecordStorage::Inline(box_size) => box_size,
+            RecordStorage::Large(box_size) => box_size,
         }
     }
 }
@@ -138,7 +138,7 @@ impl Record {
         self.record_header.inline_byte_length <= Self::MAX_INLINE_BYTES as u8
     }
 
-    fn as_repr<'a>(&'a self) -> Repr<'a> {
+    fn as_repr(&self) -> Repr<'_> {
         if self.is_inline() {
             Repr::Inline(unsafe { &*(self as *const Record as *const InlineRecord) })
         } else {

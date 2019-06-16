@@ -211,7 +211,7 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
                 LLVMConstInt(tcx.record_class_id_llvm_type(), 0 as u64, 0),
                 LLVMConstInt(
                     tcx.record_class_id_llvm_type(),
-                    self.next_record_class_id as u64,
+                    u64::from(self.next_record_class_id),
                     0,
                 ),
             ];

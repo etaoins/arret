@@ -172,7 +172,7 @@ fn eval_record_ty_pred(
         Value::Reg(reg_value) => {
             let possible_type_tags = reg_value.possible_type_tags;
 
-            if !possible_type_tags.contains(boxed::TypeTag::Record.into()) {
+            if !possible_type_tags.contains(boxed::TypeTag::Record) {
                 // Cannot be a record
                 return boxed::FALSE_INSTANCE.as_any_ref().into();
             }

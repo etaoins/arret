@@ -280,7 +280,7 @@ pub fn gen_alloc_boxed_record(
         for (field_index, llvm_field) in llvm_fields.iter().enumerate() {
             let field_gep_indices = &mut [
                 LLVMConstInt(llvm_i32, 0 as u64, 0),
-                LLVMConstInt(llvm_i32, record_struct::INLINE_DATA_INDEX as u64, 0),
+                LLVMConstInt(llvm_i32, u64::from(record_struct::INLINE_DATA_INDEX), 0),
                 LLVMConstInt(llvm_i32, field_index as u64, 0),
             ];
 
