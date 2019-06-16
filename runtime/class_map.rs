@@ -84,9 +84,10 @@ impl<'a> ClassRef<'a> {
     }
 
     /// Returns an iterator over the class' fields
-    pub fn field_iter(self) -> FieldIterator {
+    pub fn field_iter(self) -> FieldIterator<'a> {
         FieldIterator {
             fields: self.fields,
+            phantom_lifetime: PhantomData,
         }
     }
 }
@@ -123,11 +124,12 @@ impl BoxedClass {
 }
 
 /// Basic iterator of class fields
-pub struct FieldIterator {
+pub struct FieldIterator<'a> {
     fields: *const Field,
+    phantom_lifetime: PhantomData<&'a Field>,
 }
 
-impl Iterator for FieldIterator {
+impl<'a> Iterator for FieldIterator<'a> {
     type Item = Field;
 
     fn next(&mut self) -> Option<Field> {
