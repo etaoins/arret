@@ -1,3 +1,4 @@
+use std::alloc;
 use std::hash::{Hash, Hasher};
 use std::{fmt, mem};
 
@@ -12,7 +13,7 @@ pub type RecordClassId = u32;
 #[repr(C)]
 struct RecordHeader {
     header: Header,
-    inline_byte_length: u8,
+    inline_byte_len: u8,
     contains_gc_refs: bool,
     class_id: RecordClassId,
 }
@@ -54,43 +55,13 @@ impl Record {
         let storage = Self::storage_for_data_len(data.len(), mem::size_of::<usize>() * 8);
 
         let box_size = storage.box_size();
-        let header = Self::TYPE_TAG.to_heap_header(box_size);
-
         let boxed = unsafe {
             match storage {
                 RecordStorage::Large(_) => {
-                    let large_record = LargeRecord {
-                        record_header: RecordHeader {
-                            header,
-                            inline_byte_length: std::u8::MAX,
-                            contains_gc_refs: false,
-                            class_id,
-                        },
-                        external_data: data.into(),
-                        #[cfg(target_pointer_width = "32")]
-                        padding: 0,
-                    };
-
-                    mem::transmute(large_record)
+                    mem::transmute(LargeRecord::new(box_size, class_id, data))
                 }
                 RecordStorage::Inline(_) => {
-                    let mut inline_record = InlineRecord {
-                        record_header: RecordHeader {
-                            header,
-                            inline_byte_length: data.len() as u8,
-                            contains_gc_refs: false,
-                            class_id,
-                        },
-                        inline_data: mem::uninitialized(),
-                    };
-
-                    ptr::copy(
-                        data.as_ptr(),
-                        &mut inline_record.inline_data[0] as *mut u8,
-                        data.len(),
-                    );
-
-                    mem::transmute(inline_record)
+                    mem::transmute(InlineRecord::new(box_size, class_id, data))
                 }
             }
         };
@@ -132,12 +103,12 @@ impl Record {
     fn data_ptr(&self) -> *const u8 {
         match self.as_repr() {
             Repr::Inline(inline) => &inline.inline_data[0] as *const u8,
-            Repr::Large(large) => large.external_data.as_ptr(),
+            Repr::Large(large) => large.large_data,
         }
     }
 
     fn is_empty(&self) -> bool {
-        self.record_header.inline_byte_length == 0
+        self.record_header.inline_byte_len == 0
     }
 
     /// Returns true if this record contains pointers to garbage collected boxes
@@ -146,7 +117,7 @@ impl Record {
     }
 
     fn is_inline(&self) -> bool {
-        self.record_header.inline_byte_length <= Self::MAX_INLINE_BYTES as u8
+        self.record_header.inline_byte_len <= Self::MAX_INLINE_BYTES as u8
     }
 
     fn as_repr(&self) -> Repr<'_> {
@@ -199,13 +170,82 @@ struct InlineRecord {
     inline_data: [u8; Record::MAX_INLINE_BYTES],
 }
 
+impl InlineRecord {
+    pub fn new(box_size: BoxSize, class_id: RecordClassId, data: &[u8]) -> InlineRecord {
+        let header = Record::TYPE_TAG.to_heap_header(box_size);
+
+        unsafe {
+            let mut inline_record = InlineRecord {
+                record_header: RecordHeader {
+                    header,
+                    inline_byte_len: data.len() as u8,
+                    contains_gc_refs: false,
+                    class_id,
+                },
+                inline_data: mem::uninitialized(),
+            };
+
+            ptr::copy(
+                data.as_ptr(),
+                &mut inline_record.inline_data[0] as *mut u8,
+                data.len(),
+            );
+
+            inline_record
+        }
+    }
+}
+
 #[repr(C, align(16))]
 struct LargeRecord {
     record_header: RecordHeader,
-    external_data: Box<[u8]>,
+    large_data: *const u8,
+    large_byte_len: usize,
 
     #[cfg(target_pointer_width = "32")]
     padding: u64,
+}
+
+impl LargeRecord {
+    pub fn new(box_size: BoxSize, class_id: RecordClassId, data: &[u8]) -> LargeRecord {
+        unsafe {
+            let header = Record::TYPE_TAG.to_heap_header(box_size);
+            let alloc_layout = Self::alloc_layout_for_byte_len(data.len());
+            let large_data = alloc::alloc(alloc_layout);
+
+            ptr::copy(data.as_ptr(), large_data as *mut u8, data.len());
+
+            LargeRecord {
+                record_header: RecordHeader {
+                    header,
+                    inline_byte_len: std::u8::MAX,
+                    contains_gc_refs: false,
+                    class_id,
+                },
+
+                large_data,
+                large_byte_len: data.len(),
+
+                #[cfg(target_pointer_width = "32")]
+                padding: 0,
+            }
+        }
+    }
+
+    fn alloc_layout_for_byte_len(byte_len: usize) -> alloc::Layout {
+        unsafe { alloc::Layout::from_size_align_unchecked(byte_len, 8) }
+    }
+}
+
+impl Drop for LargeRecord {
+    fn drop(&mut self) {
+        unsafe {
+            alloc::dealloc(
+                self.large_data as *mut u8,
+                Self::alloc_layout_for_byte_len(self.large_byte_len),
+            );
+        }
+    }
 }
 
 enum Repr<'a> {
