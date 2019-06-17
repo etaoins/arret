@@ -1,4 +1,5 @@
 pub mod char;
+pub mod field_value;
 pub mod float;
 pub mod fun;
 pub mod int;

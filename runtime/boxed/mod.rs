@@ -24,6 +24,7 @@ use crate::boxed::refs::Gc;
 pub use crate::boxed::heap::{collect, type_info};
 pub use crate::boxed::heap::{AsHeap, Heap};
 pub use crate::boxed::types::char::Char;
+pub use crate::boxed::types::field_value::{FieldValue, FieldValueIter};
 pub use crate::boxed::types::float::Float;
 pub use crate::boxed::types::fun::{Closure, FunThunk, ThunkEntry};
 pub use crate::boxed::types::int::Int;

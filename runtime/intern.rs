@@ -234,7 +234,7 @@ impl Interner {
         match interned.repr() {
             InternedRepr::LocalIndexed(indexed) => &self.names[indexed.name_index as usize],
             InternedRepr::GlobalIndexed(indexed) => unsafe {
-                let global_name = &*self.global_names.offset(indexed.name_index as isize);
+                let global_name = &*self.global_names.add(indexed.name_index as usize);
                 global_name.as_str()
             },
             InternedRepr::Inline(inline) => inline.as_str(),

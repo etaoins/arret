@@ -3,6 +3,7 @@ use std::io::{Result, Write};
 use arret_runtime::boxed;
 use arret_runtime::boxed::prelude::*;
 use arret_runtime::boxed::refs::Gc;
+use arret_runtime::intern::InternedSym;
 
 macro_rules! process_escaped_chars {
     ($w:ident, $source:ident, $( $pattern:pat => $escape:expr ),*) => {
@@ -58,8 +59,84 @@ fn write_boxed_seq(
     Ok(())
 }
 
-/// Writes a representation of the passed box to the writer
+fn write_char(w: &mut dyn Write, c: char) -> Result<()> {
+    match c {
+        '\n' => write!(w, "\\newline"),
+        '\r' => write!(w, "\\return"),
+        ' ' => write!(w, "\\space"),
+        '\t' => write!(w, "\\tab"),
+        '\u{21}'..='\u{126}' => write!(w, "\\{}", c),
+        other => write!(w, "\\u{:04X}", other as u32),
+    }
+}
+
 #[allow(clippy::float_cmp)]
+fn write_float(w: &mut dyn Write, f: f64) -> Result<()> {
+    if f.is_nan() {
+        write!(w, "##NaN")
+    } else if f.is_infinite() {
+        if f.is_sign_positive() {
+            write!(w, "##Inf")
+        } else {
+            write!(w, "##-Inf")
+        }
+    } else if f == 0.0 && f.is_sign_negative() {
+        write!(w, "-0.0")
+    } else if (f as i64 as f64) == f {
+        // This is has no fractional part; force a .0 to mark it as a float
+        write!(w, "{:.1}", f)
+    } else {
+        write!(w, "{:.}", f)
+    }
+}
+
+fn write_interned_sym(
+    w: &mut dyn Write,
+    heap: &impl AsHeap,
+    interned_sym: InternedSym,
+) -> Result<()> {
+    // TODO: We don't support quoted/raw symbols as EDN doesn't
+    // This assumes the symbol is a valid identifier
+    write!(
+        w,
+        "{}",
+        heap.as_heap()
+            .type_info()
+            .interner()
+            .unintern(&interned_sym)
+    )
+}
+
+fn write_record(w: &mut dyn Write, heap: &impl AsHeap, record: &boxed::Record) -> Result<()> {
+    use boxed::FieldValue;
+
+    // TODO: Print our source name
+    write!(w, "#record(")?;
+
+    let mut has_prev = false;
+    for field in record.field_values(heap.as_heap()) {
+        if has_prev {
+            write!(w, " ")?;
+        } else {
+            has_prev = true;
+        }
+
+        match field {
+            FieldValue::Bool(true) => write!(w, "true")?,
+            FieldValue::Bool(false) => write!(w, "false")?,
+            FieldValue::Char(c) => write_char(w, c)?,
+            FieldValue::Float(f) => write_float(w, f)?,
+            FieldValue::Int(i) => write!(w, "{}", i)?,
+            FieldValue::InternedSym(interned_sym) => write_interned_sym(w, heap, interned_sym)?,
+            FieldValue::Boxed(boxed) => write_boxed(w, heap, boxed)?,
+            FieldValue::Callback => write!(w, "#fn")?,
+        }
+    }
+
+    write!(w, ")")
+}
+
+/// Writes a representation of the passed box to the writer
 pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any>) -> Result<()> {
     use arret_runtime::boxed::AnySubtype;
 
@@ -68,31 +145,8 @@ pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any
         AnySubtype::False(_) => write!(w, "false"),
         AnySubtype::Nil(_) => write!(w, "()"),
         AnySubtype::Int(int_ref) => write!(w, "{}", int_ref.value()),
-        AnySubtype::Sym(sym) => {
-            // TODO: We don't support quoted/raw symbols as EDN doesn't
-            // This assumes the symbol is a valid identifier
-            write!(w, "{}", sym.name(heap.as_heap()))
-        }
-        AnySubtype::Float(float_ref) => {
-            let f = float_ref.value();
-
-            if f.is_nan() {
-                write!(w, "##NaN")
-            } else if f.is_infinite() {
-                if f.is_sign_positive() {
-                    write!(w, "##Inf")
-                } else {
-                    write!(w, "##-Inf")
-                }
-            } else if f == 0.0 && f.is_sign_negative() {
-                write!(w, "-0.0")
-            } else if (f as i64 as f64) == f {
-                // This is has no fractional part; force a .0 to mark it as a float
-                write!(w, "{:.1}", f)
-            } else {
-                write!(w, "{:.}", f)
-            }
-        }
+        AnySubtype::Sym(sym) => write_interned_sym(w, heap, sym.interned()),
+        AnySubtype::Float(float_ref) => write_float(w, float_ref.value()),
         AnySubtype::Pair(list) => {
             write!(w, "(")?;
             write_boxed_seq(w, heap, list.as_list_ref().iter())?;
@@ -103,21 +157,14 @@ pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any
             write_boxed_seq(w, heap, vec.iter().cloned())?;
             write!(w, "]")
         }
-        AnySubtype::Char(c) => match c.value() {
-            '\n' => write!(w, "\\newline"),
-            '\r' => write!(w, "\\return"),
-            ' ' => write!(w, "\\space"),
-            '\t' => write!(w, "\\tab"),
-            '\u{21}'..='\u{126}' => write!(w, "\\{}", c.value()),
-            other => write!(w, "\\u{:04X}", other as u32),
-        },
+        AnySubtype::Char(char_ref) => write_char(w, char_ref.value()),
         AnySubtype::Str(s) => {
             write!(w, "\"")?;
             write_escaped_str(w, s.as_str())?;
             write!(w, "\"")
         }
         AnySubtype::FunThunk(_) => write!(w, "#fn"),
-        AnySubtype::Record(_) => write!(w, "#record"),
+        AnySubtype::Record(record) => write_record(w, heap, record),
     }
 }
 

@@ -42,6 +42,11 @@ impl Sym {
     pub fn name<'a>(&'a self, interner: &'a impl AsInterner) -> &'a str {
         interner.as_interner().unintern(&self.interned)
     }
+
+    /// Returns the interned symbol value
+    pub fn interned(&self) -> InternedSym {
+        self.interned
+    }
 }
 
 impl PartialEq for Sym {

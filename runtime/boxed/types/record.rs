@@ -116,16 +116,27 @@ impl Record {
         self.record_header.class_id
     }
 
-    /// Returns the record's data
-    pub fn data(&self) -> &[u8] {
-        match self.as_repr() {
-            Repr::Inline(inline) => inline.as_slice(),
-            Repr::Large(large) => large.external_data.as_ref(),
+    /// Returns an iterator over the record's field values
+    pub fn field_values<'cm>(&self, heap: &'cm Heap) -> FieldValueIter<'cm> {
+        let classmap_class = heap
+            .type_info()
+            .class_map()
+            .class_for_record_class_id(self.class_id());
+
+        FieldValueIter {
+            classmap_field_iter: classmap_class.field_iter(),
+            record_data: self.data_ptr(),
         }
     }
 
-    /// Returns true if this record contains zero-length data
-    pub fn is_empty(&self) -> bool {
+    fn data_ptr(&self) -> *const u8 {
+        match self.as_repr() {
+            Repr::Inline(inline) => &inline.inline_data[0] as *const u8,
+            Repr::Large(large) => large.external_data.as_ptr(),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
         self.record_header.inline_byte_length == 0
     }
 
@@ -148,23 +159,31 @@ impl Record {
 }
 
 impl PartialEqInHeap for Record {
-    fn eq_in_heap(&self, _heap: &Heap, other: &Record) -> bool {
-        if !self.is_empty() {
-            unimplemented!("equality between non-empty records");
+    fn eq_in_heap(&self, heap: &Heap, other: &Record) -> bool {
+        if self.class_id() != other.class_id() {
+            return false;
         }
 
-        self.class_id() == other.class_id()
+        if self.is_empty() {
+            return true;
+        }
+
+        self.field_values(heap)
+            .zip(other.field_values(heap))
+            .all(|(self_field, other_field)| self_field.eq_in_heap(heap, &other_field))
     }
 }
 
 impl HashInHeap for Record {
-    fn hash_in_heap<H: Hasher>(&self, _heap: &Heap, state: &mut H) {
-        if !self.is_empty() {
-            unimplemented!("hash for non-empty records");
-        }
-
+    fn hash_in_heap<H: Hasher>(&self, heap: &Heap, state: &mut H) {
         Self::TYPE_TAG.hash(state);
-        self.class_id().hash(state)
+        self.class_id().hash(state);
+
+        if !self.is_empty() {
+            for field in self.field_values(heap) {
+                field.hash_in_heap(heap, state);
+            }
+        }
     }
 }
 
@@ -178,18 +197,6 @@ impl fmt::Debug for Record {
 struct InlineRecord {
     record_header: RecordHeader,
     inline_data: [u8; Record::MAX_INLINE_BYTES],
-}
-
-impl InlineRecord {
-    fn as_slice(&self) -> &[u8] {
-        use std::slice;
-        unsafe {
-            slice::from_raw_parts(
-                &self.inline_data[0] as *const u8,
-                self.record_header.inline_byte_length as usize,
-            )
-        }
-    }
 }
 
 #[repr(C, align(16))]
@@ -250,33 +257,6 @@ mod test {
             false,
             record_class_one_instance1.eq_in_heap(&heap, &record_class_two_instance1)
         );
-    }
-
-    #[test]
-    fn data_round_trip() {
-        let mut heap = Heap::empty();
-
-        // Allocate these all upfront so if we misjudge a box size we'll stomp over ourselves
-        let empty_record = Record::new(&mut heap, 1, b"");
-        let one_cell_inline_record = Record::new(&mut heap, 2, b"hello");
-        let two_cell_inline_record = Record::new(&mut heap, 3, b"Hello, world!");
-        let large_record = Record::new(&mut heap, 4, b"This is a very large record data");
-
-        assert_eq!(true, empty_record.is_empty());
-        assert_eq!(true, empty_record.is_inline());
-        assert_eq!(b"", empty_record.data());
-
-        assert_eq!(false, one_cell_inline_record.is_empty());
-        assert_eq!(true, one_cell_inline_record.is_inline());
-        assert_eq!(b"hello", one_cell_inline_record.data());
-
-        assert_eq!(false, two_cell_inline_record.is_empty());
-        assert_eq!(true, two_cell_inline_record.is_inline());
-        assert_eq!(b"Hello, world!", two_cell_inline_record.data());
-
-        assert_eq!(false, large_record.is_empty());
-        assert_eq!(false, large_record.is_inline());
-        assert_eq!(b"This is a very large record data", large_record.data());
     }
 
     #[test]

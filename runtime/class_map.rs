@@ -142,7 +142,7 @@ impl<'a> Iterator for FieldIterator<'a> {
         if next_field.is_last {
             self.fields = ptr::null();
         } else {
-            self.fields = unsafe { self.fields.offset(1) };
+            self.fields = unsafe { self.fields.add(1) };
         }
 
         Some(next_field)
@@ -190,7 +190,7 @@ impl ClassMap {
 
             self.dynamic_classes[dynamic_class_index].as_ref()
         } else {
-            unsafe { *self.const_classes.offset(record_class_id as isize) }
+            unsafe { *self.const_classes.add(record_class_id as usize) }
         }
     }
 }
