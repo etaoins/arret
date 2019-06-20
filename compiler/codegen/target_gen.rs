@@ -170,14 +170,6 @@ impl TargetCtx {
         self.target_data
     }
 
-    pub fn usize_llvm_type(&self) -> LLVMTypeRef {
-        unsafe { LLVMIntPtrTypeInContext(self.llx, self.target_data) }
-    }
-
-    pub fn pointer_bits(&self) -> u32 {
-        unsafe { LLVMPointerSize(self.target_data) * 8 }
-    }
-
     pub fn task_llvm_ptr_type(&mut self) -> LLVMTypeRef {
         let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
         let llx = self.llx;
@@ -192,14 +184,14 @@ impl TargetCtx {
     }
 
     pub fn global_interned_name_type(&mut self) -> LLVMTypeRef {
-        let usize_llvm_type = self.usize_llvm_type();
         let llx = self.llx;
 
         *self
             .global_interned_name_type
             .get_or_insert_with(|| unsafe {
+                let llvm_i64 = LLVMInt64TypeInContext(llx);
                 let llvm_i8 = LLVMInt8TypeInContext(llx);
-                let members = &mut [usize_llvm_type, LLVMPointerType(llvm_i8, 0)];
+                let members = &mut [llvm_i64, LLVMPointerType(llvm_i8, 0)];
 
                 let llvm_type =
                     LLVMStructCreateNamed(llx, b"global_interned_name\0".as_ptr() as *const _);

@@ -85,10 +85,6 @@ fn gen_op(
                 let llvm_value = LLVMConstReal(LLVMDoubleTypeInContext(tcx.llx), *value);
                 fcx.regs.insert(*reg, llvm_value);
             }
-            OpKind::ConstUsize(reg, value) => {
-                let llvm_value = LLVMConstInt(tcx.usize_llvm_type(), *value as u64, 1);
-                fcx.regs.insert(*reg, llvm_value);
-            }
             OpKind::ConstChar(reg, value) => {
                 let llvm_value = LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), *value as u64, 1);
                 fcx.regs.insert(*reg, llvm_value);
@@ -426,7 +422,7 @@ fn gen_op(
                 let record_struct::TargetRecordStruct { record_storage, .. } =
                     tcx.target_record_struct(record_struct);
 
-                if let boxed::RecordStorage::Large(_) = record_storage {
+                if record_storage == &boxed::RecordStorage::Large {
                     unimplemented!("loading large boxed record fields");
                 }
 
@@ -671,22 +667,6 @@ fn gen_op(
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }
-            OpKind::UsizeToInt64(reg, usize_reg) => {
-                let llvm_usize = fcx.regs[usize_reg];
-
-                let llvm_i64 = if tcx.pointer_bits() == 64 {
-                    llvm_usize
-                } else {
-                    LLVMBuildZExt(
-                        fcx.builder,
-                        llvm_usize,
-                        LLVMInt64TypeInContext(tcx.llx),
-                        "usize_as_i64\0".as_ptr() as *const _,
-                    )
-                };
-
-                fcx.regs.insert(*reg, llvm_i64);
-            }
             OpKind::Int64ToFloat(reg, int64_reg) => {
                 let llvm_i64 = fcx.regs[int64_reg];
 
@@ -711,7 +691,7 @@ fn gen_op(
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }
-            OpKind::UsizeAdd(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+            OpKind::Int64Add(reg, BinaryOp { lhs_reg, rhs_reg }) => {
                 let llvm_lhs = fcx.regs[lhs_reg];
                 let llvm_rhs = fcx.regs[rhs_reg];
 

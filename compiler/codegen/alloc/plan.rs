@@ -47,22 +47,14 @@ fn op_alloc_info(tcx: &mut TargetCtx, op: &ops::Op) -> Option<AllocInfo> {
             output_reg: *output_reg,
             box_size: boxed::Char::size(),
         }),
-        OpKind::AllocBoxedPair(output_reg, _) => {
-            let box_size = boxed::FunThunk::size_for_pointer_width(tcx.pointer_bits() as usize);
-
-            Some(AllocInfo {
-                output_reg: *output_reg,
-                box_size,
-            })
-        }
-        OpKind::AllocBoxedFunThunk(output_reg, _) => {
-            let box_size = boxed::FunThunk::size_for_pointer_width(tcx.pointer_bits() as usize);
-
-            Some(AllocInfo {
-                output_reg: *output_reg,
-                box_size,
-            })
-        }
+        OpKind::AllocBoxedPair(output_reg, _) => Some(AllocInfo {
+            output_reg: *output_reg,
+            box_size: boxed::Pair::<boxed::Any>::size(),
+        }),
+        OpKind::AllocBoxedFunThunk(output_reg, _) => Some(AllocInfo {
+            output_reg: *output_reg,
+            box_size: boxed::FunThunk::size(),
+        }),
         OpKind::AllocBoxedRecord(output_reg, box_record_op) => {
             let record_storage = tcx
                 .target_record_struct(&box_record_op.record_struct)

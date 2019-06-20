@@ -111,7 +111,7 @@ fn const_to_reg(
                 pair_ref.rest().as_any_ref(),
                 &abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
             );
-            let length_reg = b.push_reg(span, OpKind::ConstUsize, pair_ref.len());
+            let length_reg = b.push_reg(span, OpKind::ConstInt64, pair_ref.len() as i64);
 
             let from_reg = b.push_reg(
                 span,
@@ -183,12 +183,14 @@ fn list_to_reg(
             .enumerate()
             .fold(tail_reg, |tail_reg, (i, fixed)| {
                 let length_reg = match rest_length {
-                    RestLength::Known(known) => b.push_reg(span, OpKind::ConstUsize, known + i + 1),
+                    RestLength::Known(known) => {
+                        b.push_reg(span, OpKind::ConstInt64, (known + i + 1) as i64)
+                    }
                     RestLength::Loaded(rest_length_reg) => {
-                        let index_reg = b.push_reg(span, OpKind::ConstUsize, i + 1);
+                        let index_reg = b.push_reg(span, OpKind::ConstInt64, (i + 1) as i64);
                         b.push_reg(
                             span,
-                            OpKind::UsizeAdd,
+                            OpKind::Int64Add,
                             BinaryOp {
                                 lhs_reg: rest_length_reg.into(),
                                 rhs_reg: index_reg.into(),

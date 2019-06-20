@@ -35,11 +35,10 @@ pub fn length(
             &abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
         );
 
-        let usize_length_reg = b.push_reg(span, OpKind::LoadBoxedListLength, list_reg.into());
-        let i64_length_reg = b.push_reg(span, OpKind::UsizeToInt64, usize_length_reg.into());
+        let length_reg = b.push_reg(span, OpKind::LoadBoxedListLength, list_reg.into());
 
         return Ok(Some(
-            value::RegValue::new(i64_length_reg, abitype::ABIType::Int).into(),
+            value::RegValue::new(length_reg, abitype::ABIType::Int).into(),
         ));
     }
 

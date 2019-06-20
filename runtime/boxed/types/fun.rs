@@ -1,5 +1,5 @@
+use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::{fmt, mem};
 
 use crate::boxed::refs::Gc;
 use crate::boxed::*;
@@ -35,22 +35,16 @@ impl UniqueTagged for FunThunk {}
 impl FunThunk {
     /// Constructs a new function value with the given closure and entry point
     pub fn new(heap: &mut impl AsHeap, closure: Closure, entry: ThunkEntry) -> Gc<FunThunk> {
-        let box_size = Self::size_for_pointer_width(mem::size_of::<usize>() * 8);
-
         heap.as_heap_mut().place_box(FunThunk {
-            header: Self::TYPE_TAG.to_heap_header(box_size),
+            header: Self::TYPE_TAG.to_heap_header(Self::size()),
             closure,
             entry,
         })
     }
 
-    /// Returns the box size for functions with the given target pointer width
-    pub fn size_for_pointer_width(pointer_width: usize) -> BoxSize {
-        match pointer_width {
-            32 => BoxSize::Size16,
-            64 => BoxSize::Size32,
-            other => panic!("unsupported pointer width: {}", other),
-        }
+    /// Returns the box size for functions
+    pub fn size() -> BoxSize {
+        BoxSize::Size32
     }
 
     /// Applies this function on the passed task with the given arguments
@@ -102,10 +96,6 @@ mod test {
 
     #[test]
     fn sizes() {
-        #[cfg(target_pointer_width = "32")]
-        assert_eq!(16, mem::size_of::<FunThunk>());
-
-        #[cfg(target_pointer_width = "64")]
         assert_eq!(32, mem::size_of::<FunThunk>());
     }
 

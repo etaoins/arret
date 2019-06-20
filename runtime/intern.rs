@@ -28,14 +28,15 @@ const INLINE_SIZE: usize = 8;
 
 #[repr(C)]
 pub struct GlobalName {
-    name_byte_length: usize,
+    name_byte_length: u64,
     name_bytes: *const u8,
 }
 
 impl GlobalName {
     fn as_str(&self) -> &str {
         unsafe {
-            let byte_slice = std::slice::from_raw_parts(self.name_bytes, self.name_byte_length);
+            let byte_slice =
+                std::slice::from_raw_parts(self.name_bytes, self.name_byte_length as usize);
             std::str::from_utf8_unchecked(byte_slice)
         }
     }

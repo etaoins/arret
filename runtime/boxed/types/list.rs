@@ -1,7 +1,7 @@
+use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::iter::FusedIterator;
 use std::marker::PhantomData;
-use std::{fmt, mem};
 
 use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
 use crate::boxed::refs::Gc;
@@ -11,7 +11,7 @@ use crate::boxed::*;
 #[repr(C, align(16))]
 pub struct Pair<T: Boxed = Any> {
     header: Header,
-    list_length: usize,
+    list_length: i64,
     pub(crate) head: Gc<T>,
     pub(crate) rest: Gc<List<T>>,
 }
@@ -27,30 +27,24 @@ where
 impl<T: Boxed> Pair<T> {
     /// Constructs a pair with the given `head` and `rest`
     pub fn new(heap: &mut impl AsHeap, head: Gc<T>, rest: Gc<List<T>>) -> Gc<Pair<T>> {
-        let box_size = Self::size_for_pointer_width(mem::size_of::<usize>() * 8);
-
         heap.as_heap_mut().place_box(Pair {
-            header: Pair::TYPE_TAG.to_heap_header(box_size),
+            header: Pair::TYPE_TAG.to_heap_header(Self::size()),
             head,
             rest,
-            list_length: rest.len() + 1,
+            list_length: (rest.len() + 1) as i64,
         })
     }
 
-    /// Returns the box size for pairs with the given target pointer width
-    pub fn size_for_pointer_width(pointer_width: usize) -> BoxSize {
-        match pointer_width {
-            32 => BoxSize::Size16,
-            64 => BoxSize::Size32,
-            other => panic!("unsupported pointer width: {}", other),
-        }
+    /// Returns the box size for pairs
+    pub fn size() -> BoxSize {
+        BoxSize::Size32
     }
 
     /// Returns the length of the list this pair is the head of
     ///
     /// Note that this must be at least 1.
     pub fn len(&self) -> usize {
-        self.list_length
+        self.list_length as usize
     }
 
     /// Returns false
@@ -102,7 +96,7 @@ impl<T: Boxed> fmt::Debug for Pair<T> {
 #[repr(C, align(16))]
 pub struct List<T: Boxed = Any> {
     header: Header,
-    list_length: usize,
+    list_length: i64,
     phantom: PhantomData<T>,
 }
 
@@ -185,7 +179,7 @@ impl<T: Boxed> List<T> {
 
     /// Returns the length of the list
     pub fn len(&self) -> usize {
-        self.list_length
+        self.list_length as usize
     }
 
     /// Returns true if the list is empty
@@ -303,12 +297,6 @@ mod test {
     fn sizes() {
         assert_eq!(16, mem::size_of::<Nil>());
         assert_eq!(16, mem::size_of::<List<Any>>());
-
-        // We should be able to pack in to 16 bytes on 32bit
-        #[cfg(target_pointer_width = "32")]
-        assert_eq!(16, mem::size_of::<Pair<Any>>());
-
-        #[cfg(target_pointer_width = "64")]
         assert_eq!(32, mem::size_of::<Pair<Any>>());
     }
 

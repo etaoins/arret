@@ -74,8 +74,7 @@ impl TargetRecordStruct {
         let data_len =
             unsafe { ((LLVMSizeOfTypeInBits(tcx.target_data(), llvm_data_type) + 7) / 8) as usize };
 
-        let record_storage =
-            boxed::Record::storage_for_data_len(data_len, tcx.pointer_bits() as usize);
+        let record_storage = boxed::Record::storage_for_data_len(data_len);
 
         let classmap_class = class_map::BoxedClass::from_fields(
             record_struct

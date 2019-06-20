@@ -134,8 +134,8 @@ pub fn gen_global_interned_names(
             return LLVMConstPointerNull(LLVMPointerType(tcx.global_interned_name_type(), 0));
         }
 
+        let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
         let global_interned_name_llvm_type = tcx.global_interned_name_type();
-        let usize_llvm_type = tcx.usize_llvm_type();
 
         let first_element_gep_indices = &mut [
             LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), 0, 0),
@@ -170,7 +170,7 @@ pub fn gen_global_interned_names(
                 );
 
                 let llvm_name_members = &mut [
-                    LLVMConstInt(usize_llvm_type, name.len() as u64, 0),
+                    LLVMConstInt(llvm_i64, name.len() as u64, 0),
                     llvm_name_string_ptr,
                 ];
 
@@ -343,7 +343,7 @@ pub fn gen_boxed_record(
     unsafe {
         let box_name = ffi::CString::new(format!("const_{}", record_struct.source_name)).unwrap();
 
-        if let boxed::RecordStorage::Large(_) = record_storage {
+        if record_storage == boxed::RecordStorage::Large {
             unimplemented!("large constant boxed records");
         }
 

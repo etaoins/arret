@@ -26,12 +26,12 @@ pub struct Record {
 }
 
 /// Describes the storage of a record's data
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RecordStorage {
     /// Record data is stored inline in a box of the given size
     Inline(BoxSize),
-    /// Record data is stored out-of-line in a box of the given size
-    Large(BoxSize),
+    /// Record data is stored out-of-line in a 32 byte box
+    Large,
 }
 
 impl RecordStorage {
@@ -39,7 +39,7 @@ impl RecordStorage {
     pub fn box_size(self) -> BoxSize {
         match self {
             RecordStorage::Inline(box_size) => box_size,
-            RecordStorage::Large(box_size) => box_size,
+            RecordStorage::Large => BoxSize::Size32,
         }
     }
 }
@@ -52,14 +52,12 @@ impl Record {
 
     /// Constructs a new empty record of the given class
     pub fn new(heap: &mut impl AsHeap, class_id: RecordClassId, data: &[u8]) -> Gc<Record> {
-        let storage = Self::storage_for_data_len(data.len(), mem::size_of::<usize>() * 8);
+        let storage = Self::storage_for_data_len(data.len());
 
         let box_size = storage.box_size();
         let boxed = unsafe {
             match storage {
-                RecordStorage::Large(_) => {
-                    mem::transmute(LargeRecord::new(box_size, class_id, data))
-                }
+                RecordStorage::Large => mem::transmute(LargeRecord::new(box_size, class_id, data)),
                 RecordStorage::Inline(_) => {
                     mem::transmute(InlineRecord::new(box_size, class_id, data))
                 }
@@ -69,16 +67,12 @@ impl Record {
         heap.as_heap_mut().place_box(boxed)
     }
 
-    /// Returns the storage for given data length and target pointer width in bits
-    pub fn storage_for_data_len(data_len: usize, pointer_width: usize) -> RecordStorage {
+    /// Returns the storage for given data length
+    pub fn storage_for_data_len(data_len: usize) -> RecordStorage {
         match data_len {
             0..=8 => RecordStorage::Inline(BoxSize::Size16),
             9..=Record::MAX_INLINE_BYTES => RecordStorage::Inline(BoxSize::Size32),
-            _ => RecordStorage::Large(match pointer_width {
-                32 => BoxSize::Size16,
-                64 => BoxSize::Size32,
-                other => panic!("unsupported pointer width: {}", other),
-            }),
+            _ => RecordStorage::Large,
         }
     }
 
@@ -201,9 +195,6 @@ struct LargeRecord {
     record_header: RecordHeader,
     large_data: *const u8,
     large_byte_len: usize,
-
-    #[cfg(target_pointer_width = "32")]
-    padding: u64,
 }
 
 impl LargeRecord {
@@ -225,9 +216,6 @@ impl LargeRecord {
 
                 large_data,
                 large_byte_len: data.len(),
-
-                #[cfg(target_pointer_width = "32")]
-                padding: 0,
             }
         }
     }

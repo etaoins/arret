@@ -24,15 +24,13 @@ steps:
     agents:
       queue: arm64
 
-  - label: ":fedora: Test LLVM Assert & i686"
+  - label: ":fedora: Test LLVM Assert & rustfmt"
     branches: '!master'
     command:
       - ./.buildkite/build-and-test.sh
 
       - "echo '--- :prettier: Checking rustfmt'"
       - cargo fmt -- --check
-
-      - ./.buildkite/cross-i686.sh
     plugins:
       - seek-oss/docker-ecr-cache#v1.3.0:
           dockerfile: ./.buildkite/llvm-assert.Dockerfile

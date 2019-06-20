@@ -178,7 +178,6 @@ pub enum Comparison {
 pub enum OpKind {
     ConstInt64(RegId, i64),
     ConstFloat(RegId, f64),
-    ConstUsize(RegId, usize),
     ConstChar(RegId, char),
     ConstBool(RegId, bool),
     ConstInternedSym(RegId, Box<str>),
@@ -226,14 +225,13 @@ pub enum OpKind {
     TypeTagEqual(RegId, BinaryOp),
     RecordClassIdEqual(RegId, BinaryOp),
     BoxIdentical(RegId, BinaryOp),
-    UsizeToInt64(RegId, RegId),
     Int64ToFloat(RegId, RegId),
 
     IntCompare(RegId, CompareOp),
     FloatCompare(RegId, CompareOp),
 
     FloatAdd(RegId, BinaryOp),
-    UsizeAdd(RegId, BinaryOp),
+    Int64Add(RegId, BinaryOp),
     Int64CheckedAdd(RegId, BinaryOp),
     FloatMul(RegId, BinaryOp),
     Int64CheckedMul(RegId, BinaryOp),
@@ -279,7 +277,6 @@ impl OpKind {
             | ConstBoxedFalse(reg_id, _)
             | ConstInt64(reg_id, _)
             | ConstFloat(reg_id, _)
-            | ConstUsize(reg_id, _)
             | ConstChar(reg_id, _)
             | ConstBool(reg_id, _)
             | ConstInternedSym(reg_id, _)
@@ -312,7 +309,7 @@ impl OpKind {
             | LoadBoxedRecordClassId(reg_id, _)
             | LoadBoxedRecordField(reg_id, _)
             | FloatAdd(reg_id, _)
-            | UsizeAdd(reg_id, _)
+            | Int64Add(reg_id, _)
             | Int64CheckedAdd(reg_id, _)
             | FloatMul(reg_id, _)
             | Int64CheckedMul(reg_id, _)
@@ -329,7 +326,6 @@ impl OpKind {
             | RecordClassIdEqual(reg_id, _)
             | FloatCompare(reg_id, _)
             | BoxIdentical(reg_id, _)
-            | UsizeToInt64(reg_id, _)
             | Int64ToFloat(reg_id, _)
             | MakeCallback(reg_id, _)
             | ConstBoxedRecord(reg_id, _)
@@ -349,7 +345,6 @@ impl OpKind {
             | ConstBoxedFalse(_, _)
             | ConstInt64(_, _)
             | ConstFloat(_, _)
-            | ConstUsize(_, _)
             | ConstChar(_, _)
             | ConstBool(_, _)
             | ConstInternedSym(_, _)
@@ -414,7 +409,6 @@ impl OpKind {
                     record_reg: reg_id, ..
                 },
             )
-            | UsizeToInt64(_, reg_id)
             | Int64ToFloat(_, reg_id)
             | MakeCallback(
                 _,
@@ -444,7 +438,7 @@ impl OpKind {
                 }
             }
             FloatAdd(_, binary_op)
-            | UsizeAdd(_, binary_op)
+            | Int64Add(_, binary_op)
             | Int64CheckedAdd(_, binary_op)
             | FloatMul(_, binary_op)
             | Int64CheckedMul(_, binary_op)
@@ -506,7 +500,6 @@ impl OpKind {
         match self {
             ConstInt64(_, _)
             | ConstFloat(_, _)
-            | ConstUsize(_, _)
             | ConstChar(_, _)
             | ConstBool(_, _)
             | ConstInternedSym(_, _)
@@ -532,7 +525,7 @@ impl OpKind {
             | AllocBoxedFunThunk(_, _)
             | AllocBoxedRecord(_, _) => OpCategory::AllocBoxed,
 
-            CastBoxed(_, _) | UsizeToInt64(_, _) => OpCategory::RegCast,
+            CastBoxed(_, _) => OpCategory::RegCast,
 
             LoadBoxedTypeTag(_, _)
             | LoadBoxedListLength(_, _)
@@ -547,7 +540,7 @@ impl OpKind {
             | LoadBoxedRecordField(_, _) => OpCategory::MemLoad,
 
             FloatAdd(_, _)
-            | UsizeAdd(_, _)
+            | Int64Add(_, _)
             | Int64CheckedAdd(_, _)
             | FloatSub(_, _)
             | Int64CheckedSub(_, _)

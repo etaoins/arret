@@ -209,7 +209,7 @@ pub fn gen_alloc_boxed_record(
             ..
         } = *tcx.target_record_struct(record_struct);
 
-        if let boxed::RecordStorage::Large(_) = record_storage {
+        if record_storage == boxed::RecordStorage::Large {
             unimplemented!("allocating large boxed records");
         }
 

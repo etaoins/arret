@@ -87,21 +87,18 @@ impl BoxLayout {
                     ]);
                 }
                 BoxLayout::ConstTagged(TypeTag::Pair) => {
+                    let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
                     let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
                     let llvm_any_list_ptr =
                         tcx.boxed_abi_to_llvm_ptr_type(&TOP_LIST_BOXED_ABI_TYPE);
 
-                    members.extend_from_slice(&[
-                        tcx.usize_llvm_type(),
-                        llvm_any_ptr,
-                        llvm_any_list_ptr,
-                    ]);
+                    members.extend_from_slice(&[llvm_i64, llvm_any_ptr, llvm_any_list_ptr]);
                 }
                 BoxLayout::ConstTagged(TypeTag::Record) => {
                     record_struct::append_common_internal_members(tcx, members);
                 }
                 BoxLayout::List => {
-                    members.push(tcx.usize_llvm_type());
+                    members.push(LLVMInt64TypeInContext(tcx.llx));
                 }
                 BoxLayout::ConstTagged(TypeTag::Nil)
                 | BoxLayout::ConstTagged(TypeTag::True)
