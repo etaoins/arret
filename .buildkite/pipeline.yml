@@ -12,7 +12,7 @@ steps:
       - ./.buildkite/build-and-test.sh
 
       - "echo '--- :sleuth_or_spy: Checking release'"
-      - cargo check --release
+      - RUSTFLAGS="-Copt-level=0" cargo check --release
     <<: *cached-ecr-build-env
 
   - label: ":muscle: Test ARM64"
