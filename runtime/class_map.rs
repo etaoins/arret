@@ -129,6 +129,15 @@ pub struct FieldIterator<'a> {
     phantom_lifetime: PhantomData<&'a Field>,
 }
 
+impl<'a> FieldIterator<'a> {
+    pub fn empty() -> FieldIterator<'static> {
+        FieldIterator {
+            fields: ptr::null(),
+            phantom_lifetime: PhantomData,
+        }
+    }
+}
+
 impl<'a> Iterator for FieldIterator<'a> {
     type Item = Field;
 

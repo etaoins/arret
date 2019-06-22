@@ -29,6 +29,11 @@ where
         self.closure
     }
 
+    /// Returns a mutable reference to the closure
+    pub(crate) fn closure_mut(&mut self) -> &mut boxed::Closure {
+        &mut self.closure
+    }
+
     /// Returns the entry point to the callback's implementation
     ///
     /// This would typically be used via `apply`.

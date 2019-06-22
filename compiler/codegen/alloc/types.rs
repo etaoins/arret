@@ -221,10 +221,6 @@ pub fn gen_alloc_boxed_record(
                 field_abi_type.may_contain_gc_refs() && LLVMIsConstant(*llvm_field) == 0
             });
 
-        if contains_gc_refs {
-            unimplemented!("allocating boxed records with GC references");
-        }
-
         let boxed_inline_record_name = ffi::CString::new(format!(
             "alloced_inline_{}_record",
             record_struct.source_name

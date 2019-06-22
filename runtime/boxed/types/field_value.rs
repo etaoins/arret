@@ -1,4 +1,5 @@
 use std::hash::{Hash, Hasher};
+use std::ptr;
 
 use crate::boxed;
 use crate::boxed::prelude::*;
@@ -22,6 +23,11 @@ pub enum FieldValue {
     Boxed(Gc<boxed::Any>),
     /// Callback function of an unknown type
     Callback,
+}
+
+pub(crate) enum FieldGcRef {
+    InternedSym(&'static mut InternedSym),
+    Boxed(&'static mut Gc<boxed::Any>),
 }
 
 impl PartialEqInHeap for FieldValue {
@@ -69,7 +75,6 @@ pub struct FieldValueIter<'cm> {
 impl<'cm> Iterator for FieldValueIter<'cm> {
     type Item = FieldValue;
 
-    // TODO: Actually align our pointers
     #[allow(clippy::cast_ptr_alignment)]
     fn next(&mut self) -> Option<FieldValue> {
         use class_map::FieldType;
@@ -93,5 +98,58 @@ impl<'cm> Iterator for FieldValueIter<'cm> {
                     FieldType::Callback => FieldValue::Callback,
                 }
             })
+    }
+}
+
+pub(crate) struct FieldGcRefIter<'cm> {
+    pub(super) classmap_field_iter: class_map::FieldIterator<'cm>,
+    pub(super) record_data: *const u8,
+}
+
+impl<'cm> FieldGcRefIter<'cm> {
+    pub(crate) fn empty() -> FieldGcRefIter<'static> {
+        FieldGcRefIter {
+            classmap_field_iter: class_map::FieldIterator::empty(),
+            record_data: ptr::null(),
+        }
+    }
+}
+
+impl<'cm> Iterator for FieldGcRefIter<'cm> {
+    type Item = FieldGcRef;
+
+    #[allow(clippy::cast_ptr_alignment)]
+    fn next(&mut self) -> Option<FieldGcRef> {
+        while let Some(classmap_field) = self.classmap_field_iter.next() {
+            unsafe {
+                use class_map::FieldType;
+                let field_base_ptr = self.record_data.add(classmap_field.offset());
+
+                match classmap_field.field_type() {
+                    FieldType::InternedSym => {
+                        return Some(FieldGcRef::InternedSym(
+                            &mut *(field_base_ptr as *mut InternedSym),
+                        ));
+                    }
+                    FieldType::Boxed => {
+                        return Some(FieldGcRef::Boxed(
+                            &mut *(field_base_ptr as *mut Gc<boxed::Any>),
+                        ));
+                    }
+                    FieldType::Callback => {
+                        use crate::callback::Callback;
+                        use crate::task::Task;
+
+                        let callback = &mut *(field_base_ptr
+                            as *mut Callback<extern "C" fn(&mut Task, boxed::Closure)>);
+
+                        return Some(FieldGcRef::Boxed(callback.closure_mut()));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        None
     }
 }

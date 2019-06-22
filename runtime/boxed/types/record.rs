@@ -3,6 +3,7 @@ use std::hash::{Hash, Hasher};
 use std::{fmt, mem};
 
 use crate::boxed::refs::Gc;
+use crate::boxed::types::field_value::FieldGcRefIter;
 use crate::boxed::*;
 
 /// Numeric ID indicating which class the record belongs to
@@ -94,6 +95,22 @@ impl Record {
         }
     }
 
+    pub(crate) fn field_gc_refs<'cm>(&mut self, heap: &'cm Heap) -> FieldGcRefIter<'cm> {
+        if !self.record_header.contains_gc_refs {
+            return FieldGcRefIter::empty();
+        }
+
+        let classmap_class = heap
+            .type_info()
+            .class_map()
+            .class_for_record_class_id(self.class_id());
+
+        FieldGcRefIter {
+            classmap_field_iter: classmap_class.field_iter(),
+            record_data: self.data_ptr(),
+        }
+    }
+
     fn data_ptr(&self) -> *const u8 {
         match self.as_repr() {
             Repr::Inline(inline) => &inline.inline_data[0] as *const u8,
@@ -103,11 +120,6 @@ impl Record {
 
     fn is_empty(&self) -> bool {
         self.record_header.inline_byte_len == 0
-    }
-
-    /// Returns true if this record contains pointers to garbage collected boxes
-    pub(crate) fn contains_gc_refs(&self) -> bool {
-        self.record_header.contains_gc_refs
     }
 
     fn is_inline(&self) -> bool {

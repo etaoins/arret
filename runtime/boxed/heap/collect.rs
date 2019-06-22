@@ -54,9 +54,15 @@ impl StrongPass {
         new_heap
     }
 
-    fn move_box_to_new_heap(&mut self, box_ref: &mut Gc<boxed::Any>, size: BoxSize) {
+    /// Visits a garbage collected box as a strong root
+    pub fn visit_box<T: Boxed>(&mut self, box_ref: &mut Gc<T>) {
+        let any_box_ref = unsafe { &mut *(box_ref as *mut _ as *mut Gc<boxed::Any>) };
+        Self::visit_any_box(&self.old_heap, &mut self.new_heap, any_box_ref);
+    }
+
+    fn move_box_to_new_heap(new_heap: &mut Heap, box_ref: &mut Gc<boxed::Any>, size: BoxSize) {
         // Allocate and copy to the new heap
-        let dest_location = self.new_heap.alloc_cells(size.cell_count());
+        let dest_location = new_heap.alloc_cells(size.cell_count());
         unsafe {
             ptr::copy_nonoverlapping(box_ref.as_ptr(), dest_location, size.cell_count());
         }
@@ -89,22 +95,16 @@ impl StrongPass {
         *box_ref = unsafe { Gc::new(dest_location) };
     }
 
-    /// Visits a garbage collected box as a strong root
-    pub fn visit_box<T: Boxed>(&mut self, box_ref: &mut Gc<T>) {
-        let any_box_ref = unsafe { &mut *(box_ref as *mut _ as *mut Gc<boxed::Any>) };
-        self.visit_any_box(any_box_ref);
-    }
-
     /// Re-interns the symbol on a new heap
-    fn visit_interned_sym(&mut self, interned_sym: &mut InternedSym) {
-        let old_interner = self.old_heap.type_info_mut().interner_mut();
-        let new_interner = self.new_heap.type_info_mut().interner_mut();
+    fn visit_interned_sym(old_heap: &Heap, new_heap: &mut Heap, interned_sym: &mut InternedSym) {
+        let old_interner = old_heap.type_info().interner();
+        let new_interner = new_heap.type_info_mut().interner_mut();
 
         let sym_name = old_interner.unintern(interned_sym);
         *interned_sym = new_interner.intern(sym_name);
     }
 
-    fn visit_any_box(&mut self, mut box_ref: &mut Gc<boxed::Any>) {
+    fn visit_any_box(old_heap: &Heap, new_heap: &mut Heap, mut box_ref: &mut Gc<boxed::Any>) {
         // This loop is used for ad-hoc tail recursion when visiting Pairs and FunThunks
         // Everything else will return at the bottom of the loop
         loop {
@@ -120,10 +120,10 @@ impl StrongPass {
                     return;
                 }
                 AllocType::Heap16 => {
-                    self.move_box_to_new_heap(box_ref, BoxSize::Size16);
+                    Self::move_box_to_new_heap(new_heap, box_ref, BoxSize::Size16);
                 }
                 AllocType::Heap32 => {
-                    self.move_box_to_new_heap(box_ref, BoxSize::Size32);
+                    Self::move_box_to_new_heap(new_heap, box_ref, BoxSize::Size32);
                 }
                 AllocType::Stack => {
                     // Stack boxes cannot move but they may point to heap boxes
@@ -133,13 +133,13 @@ impl StrongPass {
             match box_ref.header.type_tag {
                 TypeTag::Sym => {
                     let sym_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut boxed::Sym) };
-                    self.visit_interned_sym(sym_ref.interned_mut());
+                    Self::visit_interned_sym(old_heap, new_heap, sym_ref.interned_mut());
                 }
                 TypeTag::Pair => {
                     let pair_ref =
                         unsafe { &mut *(box_ref.as_mut_ptr() as *mut boxed::Pair<boxed::Any>) };
 
-                    self.visit_box(&mut pair_ref.head);
+                    Self::visit_any_box(old_heap, new_heap, &mut pair_ref.head);
 
                     // Start again with the tail of the list
                     box_ref = unsafe {
@@ -153,7 +153,7 @@ impl StrongPass {
                         unsafe { &mut *(box_ref.as_mut_ptr() as *mut boxed::Vector<boxed::Any>) };
 
                     for elem_ref in vec_ref.values_mut() {
-                        self.visit_box(elem_ref);
+                        Self::visit_any_box(old_heap, new_heap, elem_ref);
                     }
                 }
                 TypeTag::FunThunk => {
@@ -165,10 +165,18 @@ impl StrongPass {
                     continue;
                 }
                 TypeTag::Record => {
-                    let record_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut boxed::Record) };
+                    use crate::boxed::types::field_value::FieldGcRef;
 
-                    if record_ref.contains_gc_refs() {
-                        unimplemented!("garbage collecting records with GC references")
+                    let record_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut boxed::Record) };
+                    for field_gc_ref in record_ref.field_gc_refs(old_heap) {
+                        match field_gc_ref {
+                            FieldGcRef::Boxed(field_box_ref) => {
+                                Self::visit_any_box(old_heap, new_heap, field_box_ref);
+                            }
+                            FieldGcRef::InternedSym(interned_sym) => {
+                                Self::visit_interned_sym(old_heap, new_heap, interned_sym);
+                            }
+                        }
                     }
                 }
                 _ => {}
