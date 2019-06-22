@@ -75,6 +75,29 @@ pub fn gen_alloc_char(
     }
 }
 
+pub fn gen_alloc_sym(
+    tcx: &mut TargetCtx,
+    builder: LLVMBuilderRef,
+    active_alloc: &mut ActiveAlloc<'_>,
+    box_source: BoxSource,
+    llvm_interned_sym: LLVMValueRef,
+) -> LLVMValueRef {
+    unsafe {
+        let alloced_sym =
+            gen_alloced_box::<boxed::Sym>(tcx, builder, active_alloc, box_source, b"alloced_sym\0");
+
+        let interned_sym_ptr = LLVMBuildStructGEP(
+            builder,
+            alloced_sym,
+            1,
+            b"interned_sym_ptr\0".as_ptr() as *const _,
+        );
+        LLVMBuildStore(builder, llvm_interned_sym, interned_sym_ptr);
+
+        alloced_sym
+    }
+}
+
 pub fn gen_alloc_float(
     tcx: &mut TargetCtx,
     builder: LLVMBuilderRef,

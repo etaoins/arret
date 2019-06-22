@@ -198,6 +198,7 @@ pub enum OpKind {
     AllocBoxedInt(RegId, RegId),
     AllocBoxedFloat(RegId, RegId),
     AllocBoxedChar(RegId, RegId),
+    AllocBoxedSym(RegId, RegId),
     AllocBoxedPair(RegId, BoxPairOp),
     AllocBoxedFunThunk(RegId, BoxFunThunkOp),
 
@@ -292,6 +293,7 @@ impl OpKind {
             | AllocBoxedInt(reg_id, _)
             | AllocBoxedFloat(reg_id, _)
             | AllocBoxedChar(reg_id, _)
+            | AllocBoxedSym(reg_id, _)
             | AllocBoxedPair(reg_id, _)
             | AllocBoxedFunThunk(reg_id, _)
             | ConstCastBoxed(reg_id, _)
@@ -374,6 +376,7 @@ impl OpKind {
             AllocBoxedInt(_, reg_id)
             | AllocBoxedFloat(_, reg_id)
             | AllocBoxedChar(_, reg_id)
+            | AllocBoxedSym(_, reg_id)
             | ConstCastBoxed(
                 _,
                 CastBoxedOp {
@@ -521,6 +524,7 @@ impl OpKind {
             AllocBoxedInt(_, _)
             | AllocBoxedFloat(_, _)
             | AllocBoxedChar(_, _)
+            | AllocBoxedSym(_, _)
             | AllocBoxedPair(_, _)
             | AllocBoxedFunThunk(_, _)
             | AllocBoxedRecord(_, _) => OpCategory::AllocBoxed,

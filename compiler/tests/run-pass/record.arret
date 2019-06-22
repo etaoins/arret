@@ -36,6 +36,13 @@
       (assert-eq! 14.0 (record-field fourteen-record))
       (assert-eq! 14.0 (record-field (black-box! fourteen-record))))))
 
+(defn test-sym-record-fields! () ->! ()
+  (letrecord [Record (record [field Sym])]
+    (let [foo-record (record 'foo)]
+      (assert-eq! 'foo (record-field foo-record))
+      (assert-eq! 'foo (record-field (black-box! foo-record)))
+      (assert-eq! 'foo (black-box! (record-field (black-box! foo-record)))))))
+
 (defn test-boxed-record-fields! () ->! ()
   (letrecord [Record (record [field Any])]
     (let [list-record (record '(1 2 3))]
@@ -48,4 +55,5 @@
   (test-int-record-fields!)
   (test-char-record-fields!)
   (test-float-record-fields!)
+  (test-sym-record-fields!)
   (test-boxed-record-fields!))

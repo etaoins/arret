@@ -47,6 +47,10 @@ fn op_alloc_info(tcx: &mut TargetCtx, op: &ops::Op) -> Option<AllocInfo> {
             output_reg: *output_reg,
             box_size: boxed::Char::size(),
         }),
+        OpKind::AllocBoxedSym(output_reg, _) => Some(AllocInfo {
+            output_reg: *output_reg,
+            box_size: boxed::Sym::size(),
+        }),
         OpKind::AllocBoxedPair(output_reg, _) => Some(AllocInfo {
             output_reg: *output_reg,
             box_size: boxed::Pair::<boxed::Any>::size(),

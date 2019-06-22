@@ -510,6 +510,20 @@ fn gen_op(
 
                 fcx.regs.insert(*reg, llvm_alloced);
             }
+            OpKind::AllocBoxedSym(reg, interned_sym_reg) => {
+                let box_source = active_alloc.next_box_source();
+
+                let llvm_interned_sym = fcx.regs[interned_sym_reg];
+                let llvm_alloced = alloc::types::gen_alloc_sym(
+                    tcx,
+                    fcx.builder,
+                    active_alloc,
+                    box_source,
+                    llvm_interned_sym,
+                );
+
+                fcx.regs.insert(*reg, llvm_alloced);
+            }
             OpKind::AllocBoxedPair(
                 reg,
                 BoxPairOp {

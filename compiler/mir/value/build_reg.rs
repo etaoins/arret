@@ -288,6 +288,10 @@ pub fn reg_to_boxed_reg(
                 to_boxed.clone(),
             )
         }
+        abitype::ABIType::InternedSym => {
+            let boxed_sym_reg = b.push_reg(span, OpKind::AllocBoxedSym, reg_value.reg.into());
+            b.cast_boxed_cond(span, &TypeTag::Sym.into(), boxed_sym_reg, to_boxed.clone())
+        }
         abitype::ABIType::Float => {
             let boxed_float_reg = b.push_reg(span, OpKind::AllocBoxedFloat, reg_value.reg.into());
             b.cast_boxed_cond(
@@ -321,13 +325,10 @@ pub fn reg_to_boxed_reg(
                 .into()
             },
         ),
-        // The following are ephemeral unboxed types. They cannot be returned from functions and
-        // should never need to be boxed.
+        // Callbacks are ephemeral unboxed types. They cannot be returned from functions and should
+        // never need to be boxed.
         abitype::ABIType::Callback(_) => {
             unimplemented!("callback to boxed reg {:?} conversion", to_boxed)
-        }
-        abitype::ABIType::InternedSym => {
-            unimplemented!("interned sym to boxed reg {:?} conversion", to_boxed)
         }
     }
 }

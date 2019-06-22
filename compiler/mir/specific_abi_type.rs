@@ -18,6 +18,7 @@ fn specific_abi_type_for_type_tag(type_tag: TypeTag) -> abitype::ABIType {
         TypeTag::Int => abitype::ABIType::Int,
         TypeTag::Float => abitype::ABIType::Float,
         TypeTag::Char => abitype::ABIType::Char,
+        TypeTag::Sym => abitype::ABIType::InternedSym,
         other_tag => specific_boxed_abi_type_for_type_tag(other_tag).into(),
     }
 }
@@ -127,7 +128,7 @@ mod test {
         );
 
         assert_abi_type_for_str(abitype::ABIType::Char, "Char");
-
+        assert_abi_type_for_str(abitype::ABIType::InternedSym, "Sym");
         assert_abi_type_for_str(abitype::BoxedABIType::Any.into(), "(RawU Num Bool)");
     }
 }
