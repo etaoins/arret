@@ -95,7 +95,7 @@ fn record_to_const(
 
                     *boxed_ref = boxed_field;
                 }
-                FieldType::Callback => unimplemented!("constant"),
+                FieldType::Callback => unimplemented!("boxing constant callback record fields"),
             }
         }
     }
