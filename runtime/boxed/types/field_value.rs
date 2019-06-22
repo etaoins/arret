@@ -61,12 +61,12 @@ impl HashInHeap for FieldValue {
 }
 
 /// Iterates over fields in a record value
-pub struct FieldValueIter<'vm> {
-    pub(super) classmap_field_iter: class_map::FieldIterator<'vm>,
+pub struct FieldValueIter<'cm> {
+    pub(super) classmap_field_iter: class_map::FieldIterator<'cm>,
     pub(super) record_data: *const u8,
 }
 
-impl<'vm> Iterator for FieldValueIter<'vm> {
+impl<'cm> Iterator for FieldValueIter<'cm> {
     type Item = FieldValue;
 
     // TODO: Actually align our pointers
