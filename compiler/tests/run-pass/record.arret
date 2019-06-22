@@ -1,9 +1,51 @@
 (import [stdlib base])
 (import [stdlib test])
 
-(defn main! () ->! ()
+(defn test-poly-records! () ->! ()
   (letrecord [(Record A) (record [poly A] [int Int] any)]
     (let [test-record (record 'foo 2 'bar)]
       (assert-eq! 'foo (ann (record-poly test-record) 'foo))
       (assert-eq! 2 (ann (record-int test-record) Int))
       (assert-eq! 'bar (ann (record-any test-record) Any)))))
+
+
+(defn test-bool-record-fields! () ->! ()
+  (letrecord [Record (record [field Bool])]
+    (let [true-record (record true) false-record (record false)]
+      (assert-eq! false (record-field false-record))
+      (assert-eq! true (record-field true-record))
+
+      (assert-eq! false (record-field (black-box! false-record)))
+      (assert-eq! true (record-field (black-box! true-record))))))
+
+(defn test-int-record-fields! () ->! ()
+  (letrecord [Record (record [field Int])]
+    (let [twelve-record (record 12)]
+      (assert-eq! 12 (record-field twelve-record))
+      (assert-eq! 12 (record-field (black-box! twelve-record))))))
+
+(defn test-char-record-fields! () ->! ()
+  (letrecord [Record (record [field Char])]
+    (let [newline-record (record \newline)]
+      (assert-eq! \newline (record-field newline-record))
+      (assert-eq! \newline (record-field (black-box! newline-record))))))
+
+(defn test-float-record-fields! () ->! ()
+  (letrecord [Record (record [field Float])]
+    (let [fourteen-record (record 14.0)]
+      (assert-eq! 14.0 (record-field fourteen-record))
+      (assert-eq! 14.0 (record-field (black-box! fourteen-record))))))
+
+(defn test-boxed-record-fields! () ->! ()
+  (letrecord [Record (record [field Any])]
+    (let [list-record (record '(1 2 3))]
+      (assert-eq! '(1 2 3) (record-field list-record))
+      (assert-eq! '(1 2 3) (record-field (black-box! list-record))))))
+
+(defn main! () ->! ()
+  (test-poly-records!)
+  (test-bool-record-fields!)
+  (test-int-record-fields!)
+  (test-char-record-fields!)
+  (test-float-record-fields!)
+  (test-boxed-record-fields!))

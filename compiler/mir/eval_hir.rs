@@ -45,6 +45,7 @@ struct ArretFunKey {
 #[derive(PartialEq, Eq, Hash)]
 pub struct EvaledRecordClass {
     pub jit_record_class_id: boxed::RecordClassId,
+    pub jit_data_len: usize,
     pub record_struct: ops::RecordStructId,
 }
 
@@ -461,8 +462,33 @@ impl EvalHirCtx {
 
         match record_value {
             Value::Record(_, fields) => fields[field_index].clone(),
-            Value::Const(_) => {
-                unimplemented!("accessing fields of constant boxed records");
+            Value::Const(boxed_any) => {
+                use boxed::FieldValue;
+
+                let boxed_record =
+                    if let boxed::AnySubtype::Record(boxed_record) = boxed_any.as_subtype() {
+                        boxed_record
+                    } else {
+                        panic!("unexpected type when accessing record field");
+                    };
+
+                match boxed_record
+                    .field_values(self.as_heap())
+                    .nth(field_index)
+                    .unwrap()
+                {
+                    FieldValue::Bool(bool_value) => boxed::Bool::singleton_ref(bool_value).into(),
+                    FieldValue::Int(int_value) => boxed::Int::new(self, int_value).into(),
+                    FieldValue::Float(float_value) => boxed::Float::new(self, float_value).into(),
+                    FieldValue::Char(char_value) => boxed::Char::new(self, char_value).into(),
+                    FieldValue::Boxed(boxed_any) => boxed_any.into(),
+                    FieldValue::InternedSym(interned) => {
+                        boxed::Sym::from_interned_sym(self, interned).into()
+                    }
+                    FieldValue::Callback => {
+                        unimplemented!("loading callback field from constant record");
+                    }
+                }
             }
             other_value => {
                 use crate::mir::ops::*;
@@ -1119,13 +1145,14 @@ impl EvalHirCtx {
             .collect();
 
         let record_struct = ops::RecordStruct::new(record_cons.name().clone(), field_abi_types);
-        let jit_record_class_id = self.thunk_jit.register_record_struct(
+        let registered_record_struct = self.thunk_jit.register_record_struct(
             &record_struct,
             self.runtime_task.heap_mut().type_info_mut().class_map_mut(),
         );
 
         let evaled_record_class = EvaledRecordClass {
-            jit_record_class_id,
+            jit_record_class_id: registered_record_struct.record_class_id,
+            jit_data_len: registered_record_struct.data_len,
             record_struct,
         };
 

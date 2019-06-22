@@ -23,6 +23,12 @@ impl Sym {
     pub fn new(heap: &mut impl AsHeap, value: &str) -> Gc<Sym> {
         let heap = heap.as_heap_mut();
         let interned = heap.type_info_mut().interner_mut().intern(value);
+        Self::from_interned_sym(heap, interned)
+    }
+
+    /// Constructs a new symbol with an interned symbol
+    pub fn from_interned_sym(heap: &mut impl AsHeap, interned: InternedSym) -> Gc<Sym> {
+        let heap = heap.as_heap_mut();
 
         heap.place_box(Sym {
             header: Self::TYPE_TAG.to_heap_header(Self::size()),

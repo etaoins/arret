@@ -35,6 +35,13 @@ pub struct JITCtx {
     module_counter: usize,
 }
 
+pub struct RegisteredRecordStruct {
+    /// Total size of the record struct data in bytes
+    pub data_len: usize,
+    /// Record class ID that was dynamically registered in the class map
+    pub record_class_id: boxed::RecordClassId,
+}
+
 impl JITCtx {
     pub fn new(optimising: bool) -> JITCtx {
         #[allow(clippy::fn_to_numeric_cast)]
@@ -163,9 +170,15 @@ impl JITCtx {
         &mut self,
         record_struct: &ops::RecordStructId,
         class_map: &mut ClassMap,
-    ) -> boxed::RecordClassId {
+    ) -> RegisteredRecordStruct {
         let target_record_struct = self.tcx.target_record_struct(record_struct);
-        class_map.push_dynamic_class(target_record_struct.classmap_class.clone())
+        let record_class_id =
+            class_map.push_dynamic_class(target_record_struct.classmap_class.clone());
+
+        RegisteredRecordStruct {
+            data_len: target_record_struct.data_len,
+            record_class_id,
+        }
     }
 }
 
