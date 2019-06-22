@@ -47,6 +47,11 @@ impl Sym {
     pub fn interned(&self) -> InternedSym {
         self.interned
     }
+
+    /// Returns a mutable reference to the interned symbol value
+    pub(crate) fn interned_mut(&mut self) -> &mut InternedSym {
+        &mut self.interned
+    }
 }
 
 impl PartialEq for Sym {

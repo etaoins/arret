@@ -9,6 +9,7 @@ use crate::boxed;
 use crate::boxed::heap::Heap;
 use crate::boxed::refs::Gc;
 use crate::boxed::{AllocType, BoxSize, Boxed, TypeTag};
+use crate::intern::InternedSym;
 
 #[repr(C, align(16))]
 struct ForwardingCell {
@@ -94,6 +95,15 @@ impl StrongPass {
         self.visit_any_box(any_box_ref);
     }
 
+    /// Re-interns the symbol on a new heap
+    fn visit_interned_sym(&mut self, interned_sym: &mut InternedSym) {
+        let old_interner = self.old_heap.type_info_mut().interner_mut();
+        let new_interner = self.new_heap.type_info_mut().interner_mut();
+
+        let sym_name = old_interner.unintern(interned_sym);
+        *interned_sym = new_interner.intern(sym_name);
+    }
+
     fn visit_any_box(&mut self, mut box_ref: &mut Gc<boxed::Any>) {
         // This loop is used for ad-hoc tail recursion when visiting Pairs and FunThunks
         // Everything else will return at the bottom of the loop
@@ -123,13 +133,7 @@ impl StrongPass {
             match box_ref.header.type_tag {
                 TypeTag::Sym => {
                     let sym_ref = unsafe { &mut *(box_ref.as_mut_ptr() as *mut boxed::Sym) };
-
-                    // If this symbol is heap indexed we need to reintern it on the new heap
-                    let new_interner = self.new_heap.type_info_mut().interner_mut();
-
-                    let sym_name = sym_ref.name(&self.old_heap);
-                    let new_interned_name = new_interner.intern(sym_name);
-                    sym_ref.interned = new_interned_name;
+                    self.visit_interned_sym(sym_ref.interned_mut());
                 }
                 TypeTag::Pair => {
                     let pair_ref =
