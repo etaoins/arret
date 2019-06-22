@@ -485,7 +485,7 @@ impl EvalHirCtx {
                     FieldValue::InternedSym(interned) => {
                         boxed::Sym::from_interned_sym(self, interned).into()
                     }
-                    FieldValue::Callback => {
+                    FieldValue::Callback(_) => {
                         unimplemented!("loading callback field from constant record");
                     }
                 }

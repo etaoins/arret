@@ -12,9 +12,10 @@ use crate::task::Task;
 /// proper boxed value and can neither be stored in a collection or returned as a value. For those
 /// cases [`boxed::FunThunk`] should be used instead.
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Callback<F>
 where
-    F: EncodeEntryPointABIType,
+    F: Copy,
 {
     closure: boxed::Closure,
     entry_point: F,
@@ -22,7 +23,7 @@ where
 
 impl<F> Callback<F>
 where
-    F: EncodeEntryPointABIType,
+    F: Copy,
 {
     /// Returns the closure for this callback
     pub fn closure(&self) -> boxed::Closure {
@@ -41,6 +42,12 @@ where
         self.entry_point
     }
 }
+
+/// Untyped callback function
+///
+/// This is used internally in places (such as the garbage collector) where we don't know the
+/// precise type of the entry point.
+pub type AnyCallback = Callback<usize>;
 
 /// Encoding of an entry point's ABI type
 ///

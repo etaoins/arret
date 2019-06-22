@@ -4,6 +4,7 @@ use std::ptr;
 use crate::boxed;
 use crate::boxed::prelude::*;
 use crate::boxed::refs::Gc;
+use crate::callback::AnyCallback;
 use crate::class_map;
 use crate::intern::InternedSym;
 
@@ -22,7 +23,7 @@ pub enum FieldValue {
     /// Boxed garbage collected value
     Boxed(Gc<boxed::Any>),
     /// Callback function of an unknown type
-    Callback,
+    Callback(AnyCallback),
 }
 
 pub(crate) enum FieldGcRef {
@@ -39,7 +40,7 @@ impl PartialEqInHeap for FieldValue {
             (FieldValue::Int(sv), FieldValue::Int(ov)) => sv == ov,
             (FieldValue::InternedSym(sv), FieldValue::InternedSym(ov)) => sv == ov,
             (FieldValue::Boxed(sv), FieldValue::Boxed(ov)) => sv.eq_in_heap(heap, ov),
-            (FieldValue::Callback, FieldValue::Callback) => false,
+            (FieldValue::Callback(_), FieldValue::Callback(_)) => false,
             _ => false,
         }
     }
@@ -61,7 +62,7 @@ impl HashInHeap for FieldValue {
             FieldValue::Int(v) => (*v).hash(state),
             FieldValue::InternedSym(v) => (*v).hash(state),
             FieldValue::Boxed(v) => v.hash_in_heap(heap, state),
-            FieldValue::Callback => state.write_u8(42),
+            FieldValue::Callback(v) => state.write_usize(v.entry_point()),
         }
     }
 }
@@ -95,7 +96,9 @@ impl<'cm> Iterator for FieldValueIter<'cm> {
                     FieldType::Boxed => {
                         FieldValue::Boxed(*(field_base_ptr as *const Gc<boxed::Any>))
                     }
-                    FieldType::Callback => FieldValue::Callback,
+                    FieldType::Callback => {
+                        FieldValue::Callback(*(field_base_ptr as *const AnyCallback))
+                    }
                 }
             })
     }
@@ -137,11 +140,7 @@ impl<'cm> Iterator for FieldGcRefIter<'cm> {
                         ));
                     }
                     FieldType::Callback => {
-                        use crate::callback::Callback;
-                        use crate::task::Task;
-
-                        let callback = &mut *(field_base_ptr
-                            as *mut Callback<extern "C" fn(&mut Task, boxed::Closure)>);
+                        let callback = &mut *(field_base_ptr as *mut AnyCallback);
 
                         return Some(FieldGcRef::Boxed(callback.closure_mut()));
                     }
