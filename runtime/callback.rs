@@ -29,25 +29,7 @@ where
     pub fn closure(&self) -> boxed::Closure {
         self.closure
     }
-
-    /// Returns a mutable reference to the closure
-    pub(crate) fn closure_mut(&mut self) -> &mut boxed::Closure {
-        &mut self.closure
-    }
-
-    /// Returns the entry point to the callback's implementation
-    ///
-    /// This would typically be used via `apply`.
-    pub fn entry_point(&self) -> F {
-        self.entry_point
-    }
 }
-
-/// Untyped callback function
-///
-/// This is used internally in places (such as the garbage collector) where we don't know the
-/// precise type of the entry point.
-pub type AnyCallback = Callback<usize>;
 
 /// Encoding of an entry point's ABI type
 ///

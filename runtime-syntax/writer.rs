@@ -129,7 +129,6 @@ fn write_record(w: &mut dyn Write, heap: &impl AsHeap, record: &boxed::Record) -
             FieldValue::Int(i) => write!(w, "{}", i)?,
             FieldValue::InternedSym(interned_sym) => write_interned_sym(w, heap, interned_sym)?,
             FieldValue::Boxed(boxed) => write_boxed(w, heap, boxed)?,
-            FieldValue::Callback(_) => write!(w, "#fn")?,
         }
     }
 

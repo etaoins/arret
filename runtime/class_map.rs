@@ -17,7 +17,6 @@ pub enum FieldType {
     Int = 3,
     InternedSym = 4,
     Boxed = 5,
-    Callback = 6,
 }
 
 impl FieldType {
@@ -29,7 +28,9 @@ impl FieldType {
             abitype::ABIType::Int => FieldType::Int,
             abitype::ABIType::InternedSym => FieldType::InternedSym,
             abitype::ABIType::Boxed(_) => FieldType::Boxed,
-            abitype::ABIType::Callback(_) => FieldType::Callback,
+            abitype::ABIType::Callback(_) => {
+                unimplemented!("callback record fields");
+            }
         }
     }
 }
