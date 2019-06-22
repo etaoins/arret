@@ -111,6 +111,13 @@ impl Record {
         }
     }
 
+    /// Returns the allocation layout for data of the given length
+    ///
+    /// This ensures that the alignment of the data is sufficient for all possible field types.
+    pub fn data_alloc_layout_for_len(byte_len: usize) -> alloc::Layout {
+        unsafe { alloc::Layout::from_size_align_unchecked(byte_len, 8) }
+    }
+
     fn data_ptr(&self) -> *const u8 {
         match self.as_repr() {
             Repr::Inline(inline) => &inline.inline_data[0] as *const u8,
@@ -213,7 +220,7 @@ impl LargeRecord {
     pub fn new(box_size: BoxSize, class_id: RecordClassId, data: &[u8]) -> LargeRecord {
         unsafe {
             let header = Record::TYPE_TAG.to_heap_header(box_size);
-            let alloc_layout = Self::alloc_layout_for_byte_len(data.len());
+            let alloc_layout = Record::data_alloc_layout_for_len(data.len());
             let large_data = alloc::alloc(alloc_layout);
 
             ptr::copy(data.as_ptr(), large_data as *mut u8, data.len());
@@ -231,10 +238,6 @@ impl LargeRecord {
             }
         }
     }
-
-    fn alloc_layout_for_byte_len(byte_len: usize) -> alloc::Layout {
-        unsafe { alloc::Layout::from_size_align_unchecked(byte_len, 8) }
-    }
 }
 
 impl Drop for LargeRecord {
@@ -242,7 +245,7 @@ impl Drop for LargeRecord {
         unsafe {
             alloc::dealloc(
                 self.large_data as *mut u8,
-                Self::alloc_layout_for_byte_len(self.large_byte_len),
+                Record::data_alloc_layout_for_len(self.large_byte_len),
             );
         }
     }

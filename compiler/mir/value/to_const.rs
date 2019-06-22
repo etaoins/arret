@@ -8,11 +8,14 @@ use crate::mir::eval_hir::{EvalHirCtx, EvaledRecordClass};
 use crate::mir::value::Value;
 use crate::ty::record;
 
+#[allow(clippy::cast_ptr_alignment)]
 fn record_to_const(
     ehx: &mut EvalHirCtx,
     record_cons: &record::ConsId,
     field_values: &[Value],
 ) -> Option<Gc<boxed::Any>> {
+    use std::{alloc, slice};
+
     let EvaledRecordClass {
         jit_record_class_id,
         jit_data_len,
@@ -25,18 +28,18 @@ fn record_to_const(
         .class_map()
         .class_for_record_class_id(jit_record_class_id);
 
-    let mut data: Vec<u8> = Vec::with_capacity(jit_data_len);
-    data.resize_with(jit_data_len, Default::default);
+    let data_layout = boxed::Record::data_alloc_layout_for_len(jit_data_len);
+    let data_ptr = unsafe { alloc::alloc(data_layout) };
 
     let classmap_fields: Vec<class_map::Field> = classmap_class.field_iter().collect();
     for (classmap_field, field_value) in classmap_fields.iter().zip(field_values.iter()) {
         unsafe {
             use class_map::FieldType;
-            let data_ptr = data.as_mut_ptr().add(classmap_field.offset());
+            let field_ptr = data_ptr.add(classmap_field.offset());
 
             match classmap_field.field_type() {
                 FieldType::Bool => {
-                    let bool_ref = &mut *(data_ptr as *mut bool);
+                    let bool_ref = &mut *(field_ptr as *mut bool);
                     let boxed_field = value_to_const(ehx, field_value).unwrap();
 
                     match boxed_field.as_subtype() {
@@ -50,7 +53,7 @@ fn record_to_const(
                     }
                 }
                 FieldType::Int => {
-                    let int_ref = &mut *(data_ptr as *mut i64);
+                    let int_ref = &mut *(field_ptr as *mut i64);
                     let boxed_field = value_to_const(ehx, field_value).unwrap();
 
                     if let boxed::AnySubtype::Int(boxed_int) = boxed_field.as_subtype() {
@@ -60,7 +63,7 @@ fn record_to_const(
                     }
                 }
                 FieldType::Float => {
-                    let float_ref = &mut *(data_ptr as *mut f64);
+                    let float_ref = &mut *(field_ptr as *mut f64);
                     let boxed_field = value_to_const(ehx, field_value).unwrap();
 
                     if let boxed::AnySubtype::Float(boxed_float) = boxed_field.as_subtype() {
@@ -70,7 +73,7 @@ fn record_to_const(
                     }
                 }
                 FieldType::Char => {
-                    let char_ref = &mut *(data_ptr as *mut char);
+                    let char_ref = &mut *(field_ptr as *mut char);
                     let boxed_field = value_to_const(ehx, field_value).unwrap();
 
                     if let boxed::AnySubtype::Char(boxed_char) = boxed_field.as_subtype() {
@@ -80,7 +83,7 @@ fn record_to_const(
                     }
                 }
                 FieldType::InternedSym => {
-                    let interned_sym_ref = &mut *(data_ptr as *mut InternedSym);
+                    let interned_sym_ref = &mut *(field_ptr as *mut InternedSym);
                     let boxed_field = value_to_const(ehx, field_value).unwrap();
 
                     if let boxed::AnySubtype::Sym(boxed_sym) = boxed_field.as_subtype() {
@@ -90,7 +93,7 @@ fn record_to_const(
                     }
                 }
                 FieldType::Boxed => {
-                    let boxed_ref = &mut *(data_ptr as *mut Gc<boxed::Any>);
+                    let boxed_ref = &mut *(field_ptr as *mut Gc<boxed::Any>);
                     let boxed_field = value_to_const(ehx, field_value).unwrap();
 
                     *boxed_ref = boxed_field;
@@ -100,7 +103,13 @@ fn record_to_const(
         }
     }
 
-    Some(boxed::Record::new(ehx, jit_record_class_id, data.as_slice()).as_any_ref())
+    unsafe {
+        let data = slice::from_raw_parts(data_ptr, jit_data_len);
+        let boxed_record = boxed::Record::new(ehx, jit_record_class_id, data).as_any_ref();
+        alloc::dealloc(data_ptr, data_layout);
+
+        Some(boxed_record)
+    }
 }
 
 pub fn list_to_const(
