@@ -7,14 +7,6 @@ cached-ecr-build-env: &cached-ecr-build-env
     - docker#v3.0.1
 
 steps:
-  - label: ":ubuntu: Test x86-64"
-    command:
-      - ./.buildkite/build-and-test.sh
-
-      - "echo '--- :sleuth_or_spy: Checking release'"
-      - RUSTFLAGS="-Copt-level=0" cargo check --release
-    <<: *cached-ecr-build-env
-
   - label: ":muscle: Test ARM64"
     branches: '!master'
     command: ./.buildkite/build-and-test.sh
@@ -36,6 +28,14 @@ steps:
       - seek-oss/docker-ecr-cache#v1.3.0:
           dockerfile: ./.buildkite/llvm-assert.Dockerfile
       - docker#v3.0.1
+
+  - label: ":ubuntu: Test x86-64"
+    command:
+      - ./.buildkite/build-and-test.sh
+
+      - "echo '--- :sleuth_or_spy: Checking release'"
+      - RUSTFLAGS="-Copt-level=0" cargo check --release
+    <<: *cached-ecr-build-env
 
   - wait
 
