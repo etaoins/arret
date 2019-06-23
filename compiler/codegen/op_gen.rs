@@ -420,39 +420,29 @@ fn gen_op(
                 } = load_boxed_record_field_op;
 
                 let record_struct::TargetRecordStruct { record_storage, .. } =
-                    tcx.target_record_struct(record_struct);
+                    *tcx.target_record_struct(record_struct);
 
-                if record_storage == &boxed::RecordStorage::Large {
-                    unimplemented!("loading large boxed record fields");
-                }
-
-                let boxed_inline_record_name =
-                    ffi::CString::new(format!("boxed_inline_{}_record", record_struct.source_name))
+                let boxed_record_name =
+                    ffi::CString::new(format!("boxed_{}_record", record_struct.source_name))
                         .unwrap();
 
-                let boxed_inline_record_ptr_type =
+                let boxed_record_ptr_type =
                     LLVMPointerType(tcx.record_struct_box_type(record_struct), 0);
 
-                let llvm_boxed_inline_record = LLVMBuildBitCast(
+                let llvm_boxed_record = LLVMBuildBitCast(
                     fcx.builder,
                     fcx.regs[record_reg],
-                    boxed_inline_record_ptr_type,
-                    boxed_inline_record_name.to_bytes_with_nul().as_ptr() as *const _,
+                    boxed_record_ptr_type,
+                    boxed_record_name.to_bytes_with_nul().as_ptr() as *const _,
                 );
 
-                let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
-                let field_gep_indices = &mut [
-                    LLVMConstInt(llvm_i32, 0 as u64, 0),
-                    LLVMConstInt(llvm_i32, u64::from(record_struct::INLINE_DATA_INDEX), 0),
-                    LLVMConstInt(llvm_i32, *field_index as u64, 0),
-                ];
-
-                let field_ptr = LLVMBuildInBoundsGEP(
+                let field_ptr = record_struct::gen_record_field_ptr(
+                    tcx,
                     fcx.builder,
-                    llvm_boxed_inline_record,
-                    field_gep_indices.as_mut_ptr(),
-                    field_gep_indices.len() as u32,
-                    b"record_field_ptr\0".as_ptr() as *const _,
+                    record_storage,
+                    llvm_boxed_record,
+                    *field_index,
+                    b"record_field_ptr\0",
                 );
 
                 let llvm_value = LLVMBuildLoad(

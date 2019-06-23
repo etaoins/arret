@@ -506,7 +506,7 @@ impl TargetCtx {
         self.noalias_attr
     }
 
-    pub fn add_invariant_load_metadata(&mut self, loaded_value: LLVMValueRef) {
+    pub fn add_invariant_load_metadata(&self, loaded_value: LLVMValueRef) {
         unsafe {
             LLVMSetMetadata(
                 loaded_value,

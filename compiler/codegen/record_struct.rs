@@ -14,7 +14,7 @@ use crate::mir::ops;
 pub const IS_INLINE_INDEX: u32 = 1;
 pub const CONTAINS_GC_REFS_INDEX: u32 = 2;
 pub const RECORD_CLASS_ID_INDEX: u32 = 3;
-pub const INLINE_DATA_INDEX: u32 = 4;
+pub const DATA_INDEX: u32 = 4;
 
 /// Adds internal member fields common to all inline and large records
 pub fn append_common_internal_members(tcx: &mut TargetCtx, members: &mut Vec<LLVMTypeRef>) {
@@ -198,5 +198,70 @@ pub fn gen_classmap_classes<'a>(
             llvm_first_element_gep_indices.as_mut_ptr(),
             llvm_first_element_gep_indices.len() as u32,
         )
+    }
+}
+
+pub fn gen_record_field_ptr(
+    tcx: &TargetCtx,
+    builder: LLVMBuilderRef,
+    record_storage: boxed::RecordStorage,
+    llvm_boxed_record: LLVMValueRef,
+    field_index: usize,
+    pointer_name: &[u8],
+) -> LLVMValueRef {
+    unsafe {
+        let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
+
+        match record_storage {
+            boxed::RecordStorage::Inline(_) => {
+                let field_gep_indices = &mut [
+                    LLVMConstInt(llvm_i32, 0 as u64, 0),
+                    LLVMConstInt(llvm_i32, u64::from(DATA_INDEX), 0),
+                    LLVMConstInt(llvm_i32, field_index as u64, 0),
+                ];
+
+                LLVMBuildInBoundsGEP(
+                    builder,
+                    llvm_boxed_record,
+                    field_gep_indices.as_mut_ptr(),
+                    field_gep_indices.len() as u32,
+                    pointer_name.as_ptr() as *const _,
+                )
+            }
+            boxed::RecordStorage::Large => {
+                let data_ptr_gep_indices = &mut [
+                    LLVMConstInt(llvm_i32, 0 as u64, 0),
+                    LLVMConstInt(llvm_i32, u64::from(DATA_INDEX), 0),
+                ];
+
+                let llvm_record_data_ptr_ptr = LLVMBuildInBoundsGEP(
+                    builder,
+                    llvm_boxed_record,
+                    data_ptr_gep_indices.as_mut_ptr(),
+                    data_ptr_gep_indices.len() as u32,
+                    "record_data_ptr_ptr\0".as_ptr() as *const _,
+                );
+
+                let llvm_record_data_ptr = LLVMBuildLoad(
+                    builder,
+                    llvm_record_data_ptr_ptr,
+                    "record_data_ptr\0".as_ptr() as *const _,
+                );
+                tcx.add_invariant_load_metadata(llvm_record_data_ptr);
+
+                let field_gep_indices = &mut [
+                    LLVMConstInt(llvm_i32, 0 as u64, 0),
+                    LLVMConstInt(llvm_i32, field_index as u64, 0),
+                ];
+
+                LLVMBuildInBoundsGEP(
+                    builder,
+                    llvm_record_data_ptr,
+                    field_gep_indices.as_mut_ptr(),
+                    field_gep_indices.len() as u32,
+                    pointer_name.as_ptr() as *const _,
+                )
+            }
+        }
     }
 }

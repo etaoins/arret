@@ -49,6 +49,24 @@
       (assert-eq! '(1 2 3) (record-field list-record))
       (assert-eq! '(1 2 3) (record-field (black-box! list-record))))))
 
+(defn test-large-record! () ->! ()
+  (letrecord [Record (record [first Char] [second Float] [third Int] [fourth Sym] [fifth Bool])]
+    (let [large-record (record \tab 2.0 3 'four true)]
+      (assert-eq! \tab (record-first large-record))
+      (assert-eq! \tab (record-first (black-box! large-record)))
+
+      (assert-eq! 2.0 (record-second large-record))
+      (assert-eq! 2.0 (record-second (black-box! large-record)))
+
+      (assert-eq! 3 (record-third large-record))
+      (assert-eq! 3 (record-third (black-box! large-record)))
+
+      (assert-eq! 'four (record-fourth large-record))
+      (assert-eq! 'four (record-fourth (black-box! large-record)))
+
+      (assert-eq! true (record-fifth large-record))
+      (assert-eq! true (record-fifth (black-box! large-record))))))
+
 (defn main! () ->! ()
   (test-poly-records!)
   (test-bool-record-fields!)
@@ -56,4 +74,5 @@
   (test-char-record-fields!)
   (test-float-record-fields!)
   (test-sym-record-fields!)
-  (test-boxed-record-fields!))
+  (test-boxed-record-fields!)
+  (test-large-record!))

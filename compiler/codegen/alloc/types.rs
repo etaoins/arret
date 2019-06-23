@@ -244,11 +244,8 @@ pub fn gen_alloc_boxed_record(
                 field_abi_type.may_contain_gc_refs() && LLVMIsConstant(*llvm_field) == 0
             });
 
-        let boxed_inline_record_name = ffi::CString::new(format!(
-            "alloced_inline_{}_record",
-            record_struct.source_name
-        ))
-        .unwrap();
+        let boxed_record_name =
+            ffi::CString::new(format!("alloced_{}_record", record_struct.source_name)).unwrap();
 
         let llvm_box_type = tcx.record_struct_box_type(record_struct);
         let alloced_boxed_record = gen_alloced_box_with_llvm_type::<boxed::Record>(
@@ -257,7 +254,7 @@ pub fn gen_alloc_boxed_record(
             active_alloc,
             box_source,
             llvm_box_type,
-            boxed_inline_record_name.as_bytes_with_nul(),
+            boxed_record_name.as_bytes_with_nul(),
         );
 
         let inline_byte_length_ptr = LLVMBuildStructGEP(
@@ -292,20 +289,14 @@ pub fn gen_alloc_boxed_record(
         );
         LLVMBuildStore(builder, llvm_record_class_id, record_class_id_ptr);
 
-        let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
         for (field_index, llvm_field) in llvm_fields.iter().enumerate() {
-            let field_gep_indices = &mut [
-                LLVMConstInt(llvm_i32, 0 as u64, 0),
-                LLVMConstInt(llvm_i32, u64::from(record_struct::INLINE_DATA_INDEX), 0),
-                LLVMConstInt(llvm_i32, field_index as u64, 0),
-            ];
-
-            let field_ptr = LLVMBuildInBoundsGEP(
+            let field_ptr = record_struct::gen_record_field_ptr(
+                tcx,
                 builder,
+                record_storage,
                 alloced_boxed_record,
-                field_gep_indices.as_mut_ptr(),
-                field_gep_indices.len() as u32,
-                b"init_record_field_ptr\0".as_ptr() as *const _,
+                field_index,
+                b"init_record_field_ptr\0",
             );
 
             LLVMBuildStore(builder, *llvm_field, field_ptr);
