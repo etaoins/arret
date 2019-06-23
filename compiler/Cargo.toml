@@ -22,4 +22,3 @@ termcolor = "1"
 [dev-dependencies]
 rayon = "1"
 tempfile = "3"
-termcolor = "1"
