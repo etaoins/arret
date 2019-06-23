@@ -65,8 +65,9 @@ impl TargetRecordStruct {
                 0,
             );
 
-            // Our record data is only 8 byte aligned
-            assert!(LLVMABIAlignmentOfType(tcx.target_data(), llvm_data_type) <= 8);
+            // Make sure we meet our alignment requirement
+            let data_alignment = LLVMABIAlignmentOfType(tcx.target_data(), llvm_data_type);
+            assert!(data_alignment <= boxed::Record::DATA_ALIGNMENT as u32);
 
             llvm_data_type
         };

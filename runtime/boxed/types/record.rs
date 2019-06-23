@@ -54,7 +54,7 @@ impl Record {
     /// Alignment of our record data in bytes
     pub const DATA_ALIGNMENT: usize = 8;
 
-    /// Constructs a new empty record of the given class
+    /// Constructs a new record of the given class and initialises it with the passed data
     pub fn new(heap: &mut impl AsHeap, class_id: RecordClassId, data: &[u8]) -> Gc<Record> {
         let storage = Self::storage_for_data_len(data.len());
 
@@ -187,7 +187,7 @@ struct InlineRecord {
 }
 
 impl InlineRecord {
-    pub fn new(box_size: BoxSize, class_id: RecordClassId, data: &[u8]) -> InlineRecord {
+    fn new(box_size: BoxSize, class_id: RecordClassId, data: &[u8]) -> InlineRecord {
         let header = Record::TYPE_TAG.to_heap_header(box_size);
 
         unsafe {
@@ -220,7 +220,7 @@ struct LargeRecord {
 }
 
 impl LargeRecord {
-    pub fn new(box_size: BoxSize, class_id: RecordClassId, data: &[u8]) -> LargeRecord {
+    fn new(box_size: BoxSize, class_id: RecordClassId, data: &[u8]) -> LargeRecord {
         unsafe {
             let header = Record::TYPE_TAG.to_heap_header(box_size);
             let alloc_layout = Record::data_alloc_layout_for_len(data.len());
