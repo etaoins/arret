@@ -6,8 +6,13 @@
 (defn generic-return-const #{T} ([x T]) -> (-> T)
   (fn () -> T x))
 
+; This would have an inline record struct closure
 (defn return-two-int-values ([one Int] [two Int]) -> (-> (List & Int))
   (fn () (list one two)))
+
+; This would have a large record struct closure
+(defn return-four-int-values ([one Int] [two Int] [three Int] [four Int]) -> (-> (List & Int))
+  (fn () (list one two three four)))
 
 ; This recaptures a closure pointing to a value that's fallen out of scope
 (defn recapture-inner-temporary! () ->! ()
@@ -32,6 +37,10 @@
   (assert-eq! 3 ((generic-return-const (black-box! 3))))
   (assert-eq! 4 (((black-box! generic-return-const) (black-box! 4))))
 
-  (assert-eq! '(123 456) ((black-box! (return-two-int-values (black-box! 123) (black-box! 456)))))
+  (assert-eq! '(123 456) ((black-box!
+    (return-two-int-values (black-box! 123) (black-box! 456)))))
+
+  (assert-eq! '(1 2 3 4) ((black-box!
+    (return-four-int-values (black-box! 1) (black-box! 2) (black-box! 3) (black-box! 4)))))
 
   (recapture-inner-temporary!))

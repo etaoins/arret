@@ -226,15 +226,14 @@ pub fn gen_alloc_boxed_record(
 
     unsafe {
         let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
+        let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
+
         let record_struct::TargetRecordStruct {
             data_len,
             record_storage,
+            llvm_data_type,
             ..
         } = *tcx.target_record_struct(record_struct);
-
-        if record_storage == boxed::RecordStorage::Large {
-            unimplemented!("allocating large boxed records");
-        }
 
         let contains_gc_refs = record_struct
             .field_abi_types
@@ -256,15 +255,6 @@ pub fn gen_alloc_boxed_record(
             llvm_box_type,
             boxed_record_name.as_bytes_with_nul(),
         );
-
-        let inline_byte_length_ptr = LLVMBuildStructGEP(
-            builder,
-            alloced_boxed_record,
-            record_struct::IS_INLINE_INDEX,
-            b"inline_byte_length_ptr\0".as_ptr() as *const _,
-        );
-        let llvm_inline_byte_length = LLVMConstInt(llvm_i8, data_len as u64, 1);
-        LLVMBuildStore(builder, llvm_inline_byte_length, inline_byte_length_ptr);
 
         let contains_gc_refs_ptr = LLVMBuildStructGEP(
             builder,
@@ -289,17 +279,81 @@ pub fn gen_alloc_boxed_record(
         );
         LLVMBuildStore(builder, llvm_record_class_id, record_class_id_ptr);
 
+        // This is used by both inline and large recods
+        let record_data_gep_indices = &mut [
+            LLVMConstInt(llvm_i32, 0 as u64, 0),
+            LLVMConstInt(llvm_i32, u64::from(record_struct::DATA_INDEX), 0),
+        ];
+
+        let (llvm_record_data_ptr, inline_byte_len) = match (record_storage, box_source) {
+            (boxed::RecordStorage::Inline(_), _) => {
+                let llvm_inline_record_data_ptr = LLVMBuildInBoundsGEP(
+                    builder,
+                    alloced_boxed_record,
+                    record_data_gep_indices.as_mut_ptr(),
+                    record_data_gep_indices.len() as u32,
+                    "inline_record_data\0".as_ptr() as *const _,
+                );
+
+                (llvm_inline_record_data_ptr, data_len)
+            }
+            (boxed::RecordStorage::Large, BoxSource::Stack) => {
+                // Allocate the record data
+                let llvm_stack_record_data_ptr = LLVMBuildAlloca(
+                    builder,
+                    llvm_data_type,
+                    "stack_record_data\0".as_ptr() as *const _,
+                );
+
+                // Update our record data pointer
+                let llvm_record_data_ptr_ptr = LLVMBuildInBoundsGEP(
+                    builder,
+                    alloced_boxed_record,
+                    record_data_gep_indices.as_mut_ptr(),
+                    record_data_gep_indices.len() as u32,
+                    "record_data_ptr_ptr\0".as_ptr() as *const _,
+                );
+
+                LLVMBuildStore(
+                    builder,
+                    llvm_stack_record_data_ptr,
+                    llvm_record_data_ptr_ptr,
+                );
+
+                (
+                    llvm_stack_record_data_ptr,
+                    boxed::Record::MAX_INLINE_BYTES + 1,
+                )
+            }
+            (boxed::RecordStorage::Large, BoxSource::Heap(_)) => {
+                unimplemented!("allocating large boxed records on heap");
+            }
+        };
+
+        let inline_byte_length_ptr = LLVMBuildStructGEP(
+            builder,
+            alloced_boxed_record,
+            record_struct::IS_INLINE_INDEX,
+            b"inline_byte_length_ptr\0".as_ptr() as *const _,
+        );
+        let llvm_inline_byte_length = LLVMConstInt(llvm_i8, inline_byte_len as u64, 1);
+        LLVMBuildStore(builder, llvm_inline_byte_length, inline_byte_length_ptr);
+
         for (field_index, llvm_field) in llvm_fields.iter().enumerate() {
-            let field_ptr = record_struct::gen_record_field_ptr(
-                tcx,
+            let field_gep_indices = &mut [
+                LLVMConstInt(llvm_i32, 0 as u64, 0),
+                LLVMConstInt(llvm_i32, field_index as u64, 0),
+            ];
+
+            let llvm_field_ptr = LLVMBuildInBoundsGEP(
                 builder,
-                record_storage,
-                alloced_boxed_record,
-                field_index,
-                b"init_record_field_ptr\0",
+                llvm_record_data_ptr,
+                field_gep_indices.as_mut_ptr(),
+                field_gep_indices.len() as u32,
+                b"init_record_field_ptr\0".as_ptr() as *const _,
             );
 
-            LLVMBuildStore(builder, *llvm_field, field_ptr);
+            LLVMBuildStore(builder, *llvm_field, llvm_field_ptr);
         }
 
         let boxed_record_name =
