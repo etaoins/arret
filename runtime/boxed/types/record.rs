@@ -261,12 +261,13 @@ enum Repr<'a> {
 
 impl Drop for Record {
     fn drop(&mut self) {
-        // ptr::read will properly drop our specific representations
         match self.as_repr() {
-            Repr::Inline(inline) => unsafe {
-                ptr::read(inline);
-            },
+            Repr::Inline(_) => {
+                // Do nothing here; we might've been allocated as a 16 byte box so we can't read
+                // the whole thing.
+            }
             Repr::Large(large) => unsafe {
+                // Call `LargeRecord`'s drop implementation
                 ptr::read(large);
             },
         }
