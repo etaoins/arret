@@ -10,7 +10,7 @@ use tempfile::NamedTempFile;
 
 use arret_syntax::span::{ByteIndex, Span};
 
-use arret_compiler::{emit_diagnostics_to_stderr, errors_to_diagnostics, CompileCtx};
+use arret_compiler::{emit_diagnostics_to_stderr, errors_to_diagnostics, CompileCtx, OutputType};
 
 #[derive(Clone, Copy, PartialEq)]
 enum RunType {
@@ -169,6 +169,7 @@ fn result_for_single_test(
     source_file: &arret_compiler::SourceFile,
     test_type: TestType,
 ) -> Result<(), Vec<Diagnostic>> {
+    let skip_run_executable = env::var_os("ARRET_TEST_SKIP_RUN_EXECUTABLE").is_some();
     let hir = arret_compiler::lower_program(ccx, &source_file).map_err(errors_to_diagnostics)?;
 
     let inferred_defs =
@@ -203,6 +204,12 @@ fn result_for_single_test(
     let gen_program_opts = arret_compiler::GenProgramOptions::new()
         .with_target_triple(target_triple.as_ref().map(|x| &**x));
 
+    let gen_program_opts = if skip_run_executable {
+        gen_program_opts.with_output_type(OutputType::None)
+    } else {
+        gen_program_opts
+    };
+
     arret_compiler::gen_program(
         gen_program_opts,
         &hir.rust_libraries,
@@ -210,6 +217,10 @@ fn result_for_single_test(
         &output_path,
         None,
     );
+
+    if skip_run_executable {
+        return Ok(());
+    }
 
     let mut process = process::Command::new(output_path.as_os_str());
 

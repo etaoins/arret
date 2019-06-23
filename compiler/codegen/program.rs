@@ -16,6 +16,7 @@ use crate::SourceLoader;
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum OutputType {
+    None,
     LLVMIR,
     Assembly,
     Object,
@@ -225,6 +226,10 @@ pub fn gen_program(
         let mut error: *mut libc::c_char = ptr::null_mut();
 
         let llvm_code_gen_file_type = match output_type {
+            OutputType::None => {
+                LLVMDisposeTargetMachine(target_machine);
+                return;
+            }
             OutputType::LLVMIR => {
                 if LLVMPrintModuleToFile(
                     module,
