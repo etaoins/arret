@@ -24,13 +24,14 @@ steps:
     agents:
       queue: arm64
 
-  - label: ":fedora: Test LLVM Assert & rustfmt"
+  - label: ":fedora: LLVM Assert & Valgrind"
     branches: '!master'
     command:
-      - ./.buildkite/build-and-test.sh
-
       - "echo '--- :prettier: Checking rustfmt'"
       - cargo fmt -- --check
+
+      - ./.buildkite/build-and-test.sh
+      - ./.buildkite/valgrind-integration-tests.sh
     plugins:
       - seek-oss/docker-ecr-cache#v1.3.0:
           dockerfile: ./.buildkite/llvm-assert.Dockerfile

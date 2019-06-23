@@ -4,7 +4,7 @@ ARG LLVM_MAJOR=8
 ARG LLVM_VERSION=8.0.0
 ARG LLVM_ROOT=/opt/llvm-${LLVM_MAJOR}
 
-RUN dnf install -y file cmake ninja-build gcc-c++ glibc-devel.i686 xz && \
+RUN dnf install -y file cmake ninja-build gcc-c++ valgrind xz && \
   dnf clean all
 
 WORKDIR /usr/src
@@ -28,6 +28,5 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.35.0
 
 ENV PATH "/root/.cargo/bin:${PATH}"
 RUN rustup component add rustfmt
-RUN rustup target add i686-unknown-linux-gnu
 
 ENV LLVM_SYS_70_PREFIX "${LLVM_ROOT}"
