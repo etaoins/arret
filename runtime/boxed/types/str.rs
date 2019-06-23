@@ -26,11 +26,7 @@ impl Str {
             14..=Str::MAX_INLINE_BYTES => BoxSize::Size32,
             _ => {
                 // Too big to fit inline; this needs to be shared
-                if mem::size_of::<Arc<str>>() <= 8 {
-                    BoxSize::Size16
-                } else {
-                    BoxSize::Size32
-                }
+                BoxSize::Size32
             }
         };
 
@@ -107,12 +103,13 @@ impl fmt::Debug for Str {
 
 impl Drop for Str {
     fn drop(&mut self) {
-        // ptr::read will properly drop our specific representations
         match self.as_repr() {
-            Repr::Inline(inline) => unsafe {
-                ptr::read(inline);
-            },
+            Repr::Inline(_) => {
+                // Do nothing here; we might've been allocated as a 16 byte box so we can't read
+                // the whole thing.
+            }
             Repr::Shared(shared) => unsafe {
+                // ptr::read will properly drop our Rust fields
                 ptr::read(shared);
             },
         }
