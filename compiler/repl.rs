@@ -240,9 +240,10 @@ mod test {
 
     #[test]
     fn basic_session() {
-        use crate::{initialise_llvm, PackagePaths};
+        use crate::codegen::test::initialise_test_llvm;
+        use crate::PackagePaths;
 
-        initialise_llvm(false);
+        initialise_test_llvm();
 
         let ccx = CompileCtx::new(PackagePaths::test_paths(None), true);
         let mut rcx = ReplCtx::new(&ccx);

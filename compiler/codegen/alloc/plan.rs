@@ -135,13 +135,12 @@ mod test {
 
     /// Plans allocations assuming the native data layout
     fn plan_native_allocs<'op>(ops: &'op [ops::Op]) -> Vec<AllocAtom<'op>> {
-        use crate::codegen::target_machine::create_target_machine;
-        use llvm_sys::target::*;
         use llvm_sys::target_machine::*;
 
-        unsafe {
-            LLVM_InitializeNativeTarget();
-        }
+        use crate::codegen::target_machine::create_target_machine;
+        use crate::codegen::test::initialise_test_llvm;
+
+        initialise_test_llvm();
 
         let target_machine = create_target_machine(
             None,

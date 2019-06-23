@@ -55,3 +55,17 @@ pub fn initialise_llvm(support_cross_compilation: bool) {
         }
     }
 }
+
+#[cfg(test)]
+pub(crate) mod test {
+    use super::*;
+    use std::sync::Once;
+
+    static INITIALISE_TEST_LLVM: Once = Once::new();
+
+    pub fn initialise_test_llvm() {
+        INITIALISE_TEST_LLVM.call_once(|| {
+            initialise_llvm(false);
+        });
+    }
+}
