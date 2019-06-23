@@ -353,6 +353,15 @@ fn run_single_test(
     }
 }
 
+fn parse_env_var<F>(name: &str) -> Option<F>
+where
+    F: std::str::FromStr,
+{
+    env::var_os(name)
+        .and_then(|os_str| os_str.into_string().ok())
+        .and_then(|s| s.parse::<F>().ok())
+}
+
 fn entry_to_test_tuple(
     entry: io::Result<fs::DirEntry>,
     test_type: TestType,
@@ -373,8 +382,9 @@ fn entry_to_test_tuple(
 
 #[test]
 fn integration() {
-    let target_triple =
-        env::var_os("ARRET_TEST_TARGET_TRIPLE").map(|os_str| os_str.into_string().unwrap());
+    let target_triple = parse_env_var::<String>("ARRET_TEST_TARGET_TRIPLE");
+    let num_workers = parse_env_var::<usize>("ARRET_TEST_NUM_WORKERS");
+    let worker_id = parse_env_var::<usize>("ARRET_TEST_WORKER_ID");
 
     let package_paths =
         arret_compiler::PackagePaths::test_paths(target_triple.as_ref().map(|t| &**t));
@@ -403,8 +413,16 @@ fn integration() {
         .chain(optimise_entries)
         .chain(run_pass_entries)
         .chain(run_error_entries)
+        .enumerate()
         .par_bridge()
-        .filter_map(|(input_path, test_type)| {
+        .filter_map(|(idx, (input_path, test_type))| {
+            if let (Some(num_workers), Some(worker_id)) = (num_workers, worker_id) {
+                // Do simple work splitting across worker processes
+                if idx % num_workers != worker_id {
+                    return None;
+                }
+            }
+
             if !run_single_test(
                 target_triple.as_ref().map(|t| &**t),
                 &ccx,
