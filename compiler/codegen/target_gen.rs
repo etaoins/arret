@@ -88,7 +88,7 @@ pub struct TargetCtx {
     boxed_align_md_node: LLVMValueRef,
 
     target_record_structs: HashMap<ops::RecordStructId, record_struct::TargetRecordStruct>,
-    inline_record_struct_box_types: HashMap<ops::RecordStructId, LLVMTypeRef>,
+    record_struct_box_types: HashMap<ops::RecordStructId, LLVMTypeRef>,
 }
 
 impl TargetCtx {
@@ -153,7 +153,7 @@ impl TargetCtx {
                 boxed_align_md_node: llvm_i64_md_node(llx, &[mem::align_of::<boxed::Any>() as u64]),
 
                 target_record_structs: HashMap::new(),
-                inline_record_struct_box_types: HashMap::new(),
+                record_struct_box_types: HashMap::new(),
             }
         }
     }
@@ -393,46 +393,52 @@ impl TargetCtx {
             .or_insert(target_record_struct)
     }
 
-    pub fn inline_record_struct_box_type(
-        &mut self,
-        record_struct: &ops::RecordStructId,
-    ) -> LLVMTypeRef {
+    pub fn record_struct_box_type(&mut self, record_struct: &ops::RecordStructId) -> LLVMTypeRef {
         use std::ffi;
 
-        if let Some(inline_record_struct_box_type) =
-            self.inline_record_struct_box_types.get(record_struct)
-        {
-            return *inline_record_struct_box_type;
+        if let Some(record_struct_box_type) = self.record_struct_box_types.get(record_struct) {
+            return *record_struct_box_type;
         }
 
-        let llvm_data_type = self.target_record_struct(record_struct).llvm_data_type;
+        let record_struct::TargetRecordStruct {
+            llvm_data_type,
+            record_storage,
+            ..
+        } = *self.target_record_struct(record_struct);
+
         let llvm_header = self.box_header_llvm_type();
 
         let mut members = vec![llvm_header];
         record_struct::append_common_internal_members(self, &mut members);
-        members.push(llvm_data_type);
 
-        let inline_box_name =
-            ffi::CString::new(format!("boxed_inline_{}", record_struct.source_name)).unwrap();
+        match record_storage {
+            boxed::RecordStorage::Inline(_) => {
+                members.push(llvm_data_type);
+            }
+            boxed::RecordStorage::Large => unsafe {
+                members.push(LLVMPointerType(llvm_data_type, 0));
+            },
+        }
 
-        let inline_record_struct_box_type = unsafe {
-            let inline_record_struct_box_type = LLVMStructCreateNamed(
-                self.llx,
-                inline_box_name.as_bytes_with_nul().as_ptr() as *const _,
-            );
+        let box_name = ffi::CString::new(format!("boxed_{}", record_struct.source_name)).unwrap();
+
+        let record_struct_box_type = unsafe {
+            let record_struct_box_type =
+                LLVMStructCreateNamed(self.llx, box_name.as_bytes_with_nul().as_ptr() as *const _);
 
             LLVMStructSetBody(
-                inline_record_struct_box_type,
+                record_struct_box_type,
                 members.as_mut_ptr(),
                 members.len() as u32,
                 0,
             );
-            inline_record_struct_box_type
+
+            record_struct_box_type
         };
 
-        self.inline_record_struct_box_types
-            .insert(record_struct.clone(), inline_record_struct_box_type);
-        inline_record_struct_box_type
+        self.record_struct_box_types
+            .insert(record_struct.clone(), record_struct_box_type);
+        record_struct_box_type
     }
 
     pub fn ptr_to_singleton_box(

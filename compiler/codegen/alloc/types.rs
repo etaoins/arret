@@ -250,7 +250,7 @@ pub fn gen_alloc_boxed_record(
         ))
         .unwrap();
 
-        let llvm_box_type = tcx.inline_record_struct_box_type(record_struct);
+        let llvm_box_type = tcx.record_struct_box_type(record_struct);
         let alloced_boxed_record = gen_alloced_box_with_llvm_type::<boxed::Record>(
             tcx,
             builder,

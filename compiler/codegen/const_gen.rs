@@ -338,25 +338,42 @@ pub fn gen_boxed_record(
         ..
     } = *tcx.target_record_struct(record_struct);
 
-    let llvm_box_type = tcx.inline_record_struct_box_type(record_struct);
+    let llvm_box_type = tcx.record_struct_box_type(record_struct);
 
     unsafe {
         let box_name = ffi::CString::new(format!("const_{}", record_struct.source_name)).unwrap();
 
-        if record_storage == boxed::RecordStorage::Large {
-            unimplemented!("large constant boxed records");
-        }
-
-        let llvm_data_value = LLVMConstNamedStruct(
+        let llvm_data_struct = LLVMConstNamedStruct(
             llvm_data_type,
             llvm_fields.as_ptr() as *mut _,
             llvm_fields.len() as u32,
         );
 
+        let (llvm_data_value, inline_data_len) =
+            if let boxed::RecordStorage::Inline(_) = record_storage {
+                // Use the inline data directly
+                (llvm_data_struct, data_len)
+            } else {
+                // Create a global containing our data and return a pointer to it
+                let data_global_name =
+                    ffi::CString::new(format!("const_{}_data", record_struct.source_name)).unwrap();
+
+                let data_global = LLVMAddGlobal(
+                    mcx.module,
+                    llvm_data_type,
+                    data_global_name.as_bytes_with_nul().as_ptr() as *const _,
+                );
+                LLVMSetInitializer(data_global, llvm_data_struct);
+                LLVMSetAlignment(data_global, 8);
+                annotate_private_global(data_global);
+
+                (data_global, boxed::Record::MAX_INLINE_BYTES + 1)
+            };
+
         let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
         let box_members = &mut [
             tcx.llvm_box_header(type_tag.to_const_header()),
-            LLVMConstInt(llvm_i8, data_len as u64, 1),
+            LLVMConstInt(llvm_i8, inline_data_len as u64, 1),
             // Constant records by definition cannot have GC refs
             LLVMConstInt(llvm_i8, 0, 1),
             LLVMConstInt(
