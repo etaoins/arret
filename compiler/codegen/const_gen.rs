@@ -364,7 +364,7 @@ pub fn gen_boxed_record(
                     data_global_name.as_bytes_with_nul().as_ptr() as *const _,
                 );
                 LLVMSetInitializer(data_global, llvm_data_struct);
-                LLVMSetAlignment(data_global, 8);
+                LLVMSetAlignment(data_global, boxed::Record::DATA_ALIGNMENT as u32);
                 annotate_private_global(data_global);
 
                 (data_global, boxed::Record::MAX_INLINE_BYTES + 1)

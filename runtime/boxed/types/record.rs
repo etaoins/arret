@@ -51,6 +51,9 @@ impl Record {
     /// Maximum number of bytes that can be stored directly in a box
     pub const MAX_INLINE_BYTES: usize = 24;
 
+    /// Alignment of our record data in bytes
+    pub const DATA_ALIGNMENT: usize = 8;
+
     /// Constructs a new empty record of the given class
     pub fn new(heap: &mut impl AsHeap, class_id: RecordClassId, data: &[u8]) -> Gc<Record> {
         let storage = Self::storage_for_data_len(data.len());
@@ -115,7 +118,7 @@ impl Record {
     ///
     /// This ensures that the alignment of the data is sufficient for all possible field types.
     pub fn data_alloc_layout_for_len(byte_len: usize) -> alloc::Layout {
-        unsafe { alloc::Layout::from_size_align_unchecked(byte_len, 8) }
+        unsafe { alloc::Layout::from_size_align_unchecked(byte_len, Self::DATA_ALIGNMENT) }
     }
 
     fn data_ptr(&self) -> *const u8 {
