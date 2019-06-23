@@ -60,6 +60,8 @@ pub struct EvalHirCtx {
     synthetic_funs: SyntheticFuns,
 
     rust_fun_thunks: HashMap<usize, boxed::ThunkEntry>,
+    arret_fun_thunks: HashMap<value::ArretFunId, boxed::ThunkEntry>,
+
     // This uses pointers because `FunThunk` is always inequal to itself
     thunk_fun_values: HashMap<*const boxed::FunThunk, Value>,
     thunk_jit: codegen::jit::JITCtx,
@@ -174,6 +176,8 @@ impl EvalHirCtx {
             synthetic_funs: SyntheticFuns::new(),
 
             rust_fun_thunks: HashMap::new(),
+            arret_fun_thunks: HashMap::new(),
+
             thunk_fun_values: HashMap::new(),
             thunk_jit,
 
@@ -1067,24 +1071,12 @@ impl EvalHirCtx {
         &mut self,
         arret_fun: &value::ArretFun,
     ) -> Option<Gc<boxed::FunThunk>> {
-        use std::mem;
-
         // If we have non-const (i.e. "free") values in our closure we can't be const
         if !arret_fun.closure().free_values.is_empty() {
             return None;
         }
 
-        let wanted_abi = PolymorphABI::thunk_abi();
-        let ops_fun = self
-            .ops_for_arret_fun(&arret_fun, wanted_abi)
-            .expect("error during arret fun boxing");
-
-        let address = self.thunk_jit.compile_fun(
-            &self.private_funs,
-            self.runtime_task.heap_mut().type_info_mut().interner_mut(),
-            &ops_fun,
-        );
-        let entry = unsafe { mem::transmute(address as usize) };
+        let entry = self.jit_thunk_for_arret_fun(arret_fun);
 
         let closure = boxed::NIL_INSTANCE.as_any_ref();
         let new_boxed = boxed::FunThunk::new(self, closure, entry);
@@ -1093,6 +1085,33 @@ impl EvalHirCtx {
         self.thunk_fun_values
             .insert(new_boxed.as_ptr(), arret_fun_value);
         Some(new_boxed)
+    }
+
+    fn jit_thunk_for_arret_fun(&mut self, arret_fun: &value::ArretFun) -> boxed::ThunkEntry {
+        // Create a dynamic thunk to this Arret function if it doesn't exist
+        if let Some(thunk) = self.arret_fun_thunks.get(&arret_fun.id()) {
+            return *thunk;
+        }
+
+        let thunk = unsafe {
+            use std::mem;
+
+            let wanted_abi = PolymorphABI::thunk_abi();
+            let ops_fun = self
+                .ops_for_arret_fun(&arret_fun, wanted_abi)
+                .expect("error during arret fun boxing");
+
+            let address = self.thunk_jit.compile_fun(
+                &self.private_funs,
+                self.runtime_task.heap_mut().type_info_mut().interner_mut(),
+                &ops_fun,
+            );
+
+            mem::transmute(address as usize)
+        };
+
+        self.arret_fun_thunks.insert(arret_fun.id(), thunk);
+        thunk
     }
 
     /// Returns a private fun ID for the wanted Arret fun and ABI
