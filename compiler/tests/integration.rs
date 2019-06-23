@@ -205,7 +205,9 @@ fn result_for_single_test(
         .with_target_triple(target_triple.as_ref().map(|x| &**x));
 
     let gen_program_opts = if skip_run_executable {
-        gen_program_opts.with_output_type(OutputType::None)
+        gen_program_opts
+            .with_output_type(OutputType::None)
+            .with_llvm_opt(false)
     } else {
         gen_program_opts
     };
