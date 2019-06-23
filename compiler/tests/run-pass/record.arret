@@ -16,38 +16,59 @@
       (assert-eq! true (record-field true-record))
 
       (assert-eq! false (record-field (black-box! false-record)))
-      (assert-eq! true (record-field (black-box! true-record))))))
+      (assert-eq! true (record-field (black-box! true-record)))
+
+      (assert-eq! true-record true-record)
+      (assert-eq! true-record (black-box! true-record))
+
+      (assert-ne! true-record false-record)
+      (assert-ne! true-record (black-box! false-record)))))
 
 (defn test-int-record-fields! () ->! ()
   (letrecord [Record (record [field Int])]
     (let [twelve-record (record 12)]
       (assert-eq! 12 (record-field twelve-record))
-      (assert-eq! 12 (record-field (black-box! twelve-record))))))
+      (assert-eq! 12 (record-field (black-box! twelve-record)))
+
+      (assert-eq! twelve-record twelve-record)
+      (assert-eq! (black-box! twelve-record) (black-box! twelve-record)))))
 
 (defn test-char-record-fields! () ->! ()
   (letrecord [Record (record [field Char])]
     (let [newline-record (record \newline)]
       (assert-eq! \newline (record-field newline-record))
-      (assert-eq! \newline (record-field (black-box! newline-record))))))
+      (assert-eq! \newline (record-field (black-box! newline-record)))
+
+      (assert-eq! newline-record newline-record)
+      (assert-eq! (black-box! newline-record) (black-box! newline-record)))))
 
 (defn test-float-record-fields! () ->! ()
   (letrecord [Record (record [field Float])]
     (let [fourteen-record (record 14.0)]
       (assert-eq! 14.0 (record-field fourteen-record))
-      (assert-eq! 14.0 (record-field (black-box! fourteen-record))))))
+      (assert-eq! 14.0 (record-field (black-box! fourteen-record)))
+
+      (assert-eq! fourteen-record fourteen-record)
+      (assert-eq! (black-box! fourteen-record) (black-box! fourteen-record)))))
 
 (defn test-sym-record-fields! () ->! ()
   (letrecord [Record (record [field Sym])]
     (let [foo-record (record 'foo)]
       (assert-eq! 'foo (record-field foo-record))
       (assert-eq! 'foo (record-field (black-box! foo-record)))
-      (assert-eq! 'foo (black-box! (record-field (black-box! foo-record)))))))
+      (assert-eq! 'foo (black-box! (record-field (black-box! foo-record))))
+
+      (assert-eq! foo-record foo-record)
+      (assert-eq! (black-box! foo-record) (black-box! foo-record)))))
 
 (defn test-boxed-record-fields! () ->! ()
   (letrecord [Record (record [field Any])]
     (let [list-record (record '(1 2 3))]
       (assert-eq! '(1 2 3) (record-field list-record))
-      (assert-eq! '(1 2 3) (record-field (black-box! list-record))))))
+      (assert-eq! '(1 2 3) (record-field (black-box! list-record)))
+
+      (assert-eq! list-record list-record)
+      (assert-eq! (black-box! list-record) (black-box! list-record)))))
 
 (defn test-large-record! () ->! ()
   (letrecord [Record (record [first Char] [second Float] [third Int] [fourth Sym] [fifth Bool])]
@@ -65,7 +86,10 @@
       (assert-eq! 'four (record-fourth (black-box! large-record)))
 
       (assert-eq! true (record-fifth large-record))
-      (assert-eq! true (record-fifth (black-box! large-record))))))
+      (assert-eq! true (record-fifth (black-box! large-record)))
+
+      (assert-eq! large-record large-record)
+      (assert-eq! (black-box! large-record) (black-box! large-record)))))
 
 (defn main! () ->! ()
   (test-poly-records!)
