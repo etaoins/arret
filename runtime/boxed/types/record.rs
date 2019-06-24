@@ -216,7 +216,7 @@ impl InlineRecord {
 struct LargeRecord {
     record_header: RecordHeader,
     large_data: *const u8,
-    large_byte_len: usize,
+    data_layout: u64,
 }
 
 impl LargeRecord {
@@ -237,19 +237,30 @@ impl LargeRecord {
                 },
 
                 large_data,
-                large_byte_len: data.len(),
+                data_layout: Self::alloc_layout_to_u64(alloc_layout),
             }
         }
+    }
+
+    fn alloc_layout_to_u64(alloc_layout: alloc::Layout) -> u64 {
+        // This allows for alignments up to 2^16 and sizes up to 2^48
+        ((alloc_layout.align() as u64) & 0xFFFF) | ((alloc_layout.size() as u64) << 16)
+    }
+
+    fn u64_to_alloc_layout(input: u64) -> alloc::Layout {
+        let align = (input & 0xFFFF) as usize;
+        let size = (input >> 16) as usize;
+
+        unsafe { alloc::Layout::from_size_align_unchecked(size, align) }
     }
 }
 
 impl Drop for LargeRecord {
     fn drop(&mut self) {
+        let alloc_layout = Self::u64_to_alloc_layout(self.data_layout);
+
         unsafe {
-            alloc::dealloc(
-                self.large_data as *mut u8,
-                Record::data_alloc_layout_for_len(self.large_byte_len),
-            );
+            alloc::dealloc(self.large_data as *mut u8, alloc_layout);
         }
     }
 }
@@ -304,6 +315,28 @@ mod test {
             false,
             record_class_one_instance1.eq_in_heap(&heap, &record_class_two_instance1)
         );
+    }
+
+    #[test]
+    fn test_alloc_layout_to_u64() {
+        let u8_layout = alloc::Layout::new::<u8>();
+        let u32_layout = alloc::Layout::new::<u32>();
+        let u64_layout = alloc::Layout::new::<u64>();
+        let empty_array_layout = alloc::Layout::new::<[char; 0]>();
+        let large_array_layout = alloc::Layout::new::<[f64; 10000]>();
+
+        for layout in &[
+            u8_layout,
+            u32_layout,
+            u64_layout,
+            empty_array_layout,
+            large_array_layout,
+        ] {
+            assert_eq!(
+                *layout,
+                LargeRecord::u64_to_alloc_layout(LargeRecord::alloc_layout_to_u64(*layout)),
+            )
+        }
     }
 
     #[test]
