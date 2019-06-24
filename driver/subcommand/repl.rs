@@ -200,7 +200,11 @@ impl rustyline::highlight::Highlighter for ArretHelper {
         format!("{}{}{}", prefix, error_style.paint(error), suffix).into()
     }
 
-    fn highlight_prompt<'p>(&self, prompt: &'p str) -> Cow<'p, str> {
+    fn highlight_prompt<'b, 's: 'b, 'p: 'b>(
+        &'s self,
+        prompt: &'p str,
+        _default: bool,
+    ) -> Cow<'b, str> {
         let prompt_style = Colour::Fixed(25); // DeepSkyBlue4 (#005faf)
         prompt_style.paint(prompt).to_string().into()
     }
