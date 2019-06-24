@@ -1,7 +1,6 @@
 use std::collections::HashMap;
-use std::ffi;
-use std::panic;
 use std::rc::Rc;
+use std::{alloc, ffi, panic};
 
 use arret_runtime::boxed;
 use arret_runtime::boxed::prelude::*;
@@ -42,10 +41,10 @@ struct ArretFunKey {
     polymorph_abi: PolymorphABI,
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq)]
 pub struct EvaledRecordClass {
     pub jit_record_class_id: boxed::RecordClassId,
-    pub jit_data_len: usize,
+    pub jit_data_layout: alloc::Layout,
     pub record_struct: ops::RecordStructId,
 }
 
@@ -1168,7 +1167,7 @@ impl EvalHirCtx {
 
         let evaled_record_class = EvaledRecordClass {
             jit_record_class_id: registered_record_struct.record_class_id,
-            jit_data_len: registered_record_struct.data_len,
+            jit_data_layout: registered_record_struct.data_layout,
             record_struct,
         };
 

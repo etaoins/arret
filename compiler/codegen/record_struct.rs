@@ -1,3 +1,4 @@
+use std::alloc;
 use std::ffi;
 
 use llvm_sys::core::*;
@@ -32,7 +33,7 @@ pub fn append_common_internal_members(tcx: &mut TargetCtx, members: &mut Vec<LLV
 
 #[derive(Clone)]
 pub struct TargetRecordStruct {
-    pub data_len: usize,
+    pub data_layout: alloc::Layout,
     pub record_storage: boxed::RecordStorage,
     pub llvm_data_type: LLVMTypeRef,
     pub classmap_class: class_map::BoxedClass,
@@ -52,7 +53,7 @@ impl TargetRecordStruct {
         let record_data_name =
             ffi::CString::new(format!("{}_data", record_struct.source_name)).unwrap();
 
-        let llvm_data_type = unsafe {
+        unsafe {
             let llvm_data_type = LLVMStructCreateNamed(
                 tcx.llx,
                 record_data_name.as_bytes_with_nul().as_ptr() as *const _,
@@ -65,39 +66,34 @@ impl TargetRecordStruct {
                 0,
             );
 
-            // Make sure we meet our alignment requirement
-            let data_alignment = LLVMABIAlignmentOfType(tcx.target_data(), llvm_data_type);
-            assert!(data_alignment <= boxed::Record::DATA_ALIGNMENT as u32);
+            // Convert our LLVM layout information to Rust's `std::alloc::Layout`
+            let align = LLVMABIAlignmentOfType(tcx.target_data(), llvm_data_type) as usize;
+            let size = LLVMABISizeOfType(tcx.target_data(), llvm_data_type) as usize;
 
-            llvm_data_type
-        };
+            let data_layout = alloc::Layout::from_size_align_unchecked(size, align);
+            let record_storage = boxed::Record::storage_for_data_layout(data_layout);
 
-        let data_len =
-            unsafe { ((LLVMSizeOfTypeInBits(tcx.target_data(), llvm_data_type) + 7) / 8) as usize };
+            let classmap_class = class_map::BoxedClass::from_fields(
+                record_struct
+                    .field_abi_types
+                    .iter()
+                    .enumerate()
+                    .map(|(index, field_abi_type)| {
+                        let field_type = class_map::FieldType::from_abi_type(field_abi_type);
+                        let offset =
+                            LLVMOffsetOfElement(tcx.target_data(), llvm_data_type, index as u32)
+                                as usize;
 
-        let record_storage = boxed::Record::storage_for_data_len(data_len);
+                        class_map::Field::new(field_type, offset)
+                    }),
+            );
 
-        let classmap_class = class_map::BoxedClass::from_fields(
-            record_struct
-                .field_abi_types
-                .iter()
-                .enumerate()
-                .map(|(index, field_abi_type)| {
-                    let field_type = class_map::FieldType::from_abi_type(field_abi_type);
-                    let offset = unsafe {
-                        LLVMOffsetOfElement(tcx.target_data(), llvm_data_type, index as u32)
-                            as usize
-                    };
-
-                    class_map::Field::new(field_type, offset)
-                }),
-        );
-
-        Self {
-            data_len,
-            record_storage,
-            llvm_data_type,
-            classmap_class,
+            Self {
+                data_layout,
+                record_storage,
+                llvm_data_type,
+                classmap_class,
+            }
         }
     }
 }

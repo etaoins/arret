@@ -5,6 +5,7 @@ pub mod fun;
 pub mod int;
 pub mod list;
 pub mod record;
+pub mod record_data;
 pub mod str;
 pub mod sym;
 pub mod vector;

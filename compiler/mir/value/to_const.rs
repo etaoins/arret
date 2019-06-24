@@ -14,11 +14,9 @@ fn record_to_const(
     record_cons: &record::ConsId,
     field_values: &[Value],
 ) -> Option<Gc<boxed::Any>> {
-    use std::{alloc, slice};
-
     let EvaledRecordClass {
         jit_record_class_id,
-        jit_data_len,
+        jit_data_layout,
         ..
     } = *ehx.evaled_record_class_for_cons(record_cons);
 
@@ -28,14 +26,13 @@ fn record_to_const(
         .class_map()
         .class_for_record_class_id(jit_record_class_id);
 
-    let data_layout = boxed::Record::data_alloc_layout_for_len(jit_data_len);
-    let data_ptr = unsafe { alloc::alloc(data_layout) };
+    let data = boxed::RecordData::alloc(jit_data_layout);
 
     let classmap_fields: Vec<class_map::Field> = classmap_class.field_iter().collect();
     for (classmap_field, field_value) in classmap_fields.iter().zip(field_values.iter()) {
         unsafe {
             use class_map::FieldType;
-            let field_ptr = data_ptr.add(classmap_field.offset());
+            let field_ptr = data.as_ptr().add(classmap_field.offset());
 
             match classmap_field.field_type() {
                 FieldType::Bool => {
@@ -102,13 +99,7 @@ fn record_to_const(
         }
     }
 
-    unsafe {
-        let data = slice::from_raw_parts(data_ptr, jit_data_len);
-        let boxed_record = boxed::Record::new(ehx, jit_record_class_id, data).as_any_ref();
-        alloc::dealloc(data_ptr, data_layout);
-
-        Some(boxed_record)
-    }
+    Some(boxed::Record::new(ehx, jit_record_class_id, data).as_any_ref())
 }
 
 pub fn list_to_const(

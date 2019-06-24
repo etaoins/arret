@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::{ffi, mem};
+use std::{alloc, ffi, mem};
 
 use arret_runtime::boxed;
 use arret_runtime::class_map::ClassMap;
@@ -36,8 +36,8 @@ pub struct JITCtx {
 }
 
 pub struct RegisteredRecordStruct {
-    /// Total size of the record struct data in bytes
-    pub data_len: usize,
+    /// Allocation layout of the record's data
+    pub data_layout: alloc::Layout,
     /// Record class ID that was dynamically registered in the class map
     pub record_class_id: boxed::RecordClassId,
 }
@@ -176,7 +176,7 @@ impl JITCtx {
             class_map.push_dynamic_class(target_record_struct.classmap_class.clone());
 
         RegisteredRecordStruct {
-            data_len: target_record_struct.data_len,
+            data_layout: target_record_struct.data_layout,
             record_class_id,
         }
     }

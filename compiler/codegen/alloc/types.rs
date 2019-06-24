@@ -229,7 +229,7 @@ pub fn gen_alloc_boxed_record(
         let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
 
         let record_struct::TargetRecordStruct {
-            data_len,
+            data_layout,
             record_storage,
             llvm_data_type,
             ..
@@ -295,7 +295,7 @@ pub fn gen_alloc_boxed_record(
                     "inline_record_data\0".as_ptr() as *const _,
                 );
 
-                (llvm_inline_record_data_ptr, data_len)
+                (llvm_inline_record_data_ptr, data_layout.size())
             }
             (boxed::RecordStorage::External, BoxSource::Stack) => {
                 // Allocate the record data

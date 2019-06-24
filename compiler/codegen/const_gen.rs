@@ -332,7 +332,7 @@ pub fn gen_boxed_record(
     let record_class_id = mcx.record_class_id_for_struct(record_struct);
 
     let record_struct::TargetRecordStruct {
-        data_len,
+        data_layout,
         record_storage,
         llvm_data_type,
         ..
@@ -352,7 +352,7 @@ pub fn gen_boxed_record(
         let (llvm_data_value, inline_data_len) =
             if let boxed::RecordStorage::Inline(_) = record_storage {
                 // Use the inline data directly
-                (llvm_data_struct, data_len)
+                (llvm_data_struct, data_layout.size())
             } else {
                 // Create a global containing our data and return a pointer to it
                 let data_global_name =
@@ -364,7 +364,6 @@ pub fn gen_boxed_record(
                     data_global_name.as_bytes_with_nul().as_ptr() as *const _,
                 );
                 LLVMSetInitializer(data_global, llvm_data_struct);
-                LLVMSetAlignment(data_global, boxed::Record::DATA_ALIGNMENT as u32);
                 annotate_private_global(data_global);
 
                 (data_global, boxed::Record::MAX_INLINE_BYTES + 1)

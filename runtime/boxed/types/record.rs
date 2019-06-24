@@ -51,14 +51,14 @@ impl Record {
     /// Maximum number of bytes that can be stored directly in a box
     pub const MAX_INLINE_BYTES: usize = 24;
 
-    /// Alignment of our record data in bytes
-    pub const DATA_ALIGNMENT: usize = 8;
+    /// Alignment of our inline record data in bytes
+    const INLINE_DATA_ALIGNMENT: usize = 8;
 
     /// Constructs a new record of the given class and initialises it with the passed data
-    pub fn new(heap: &mut impl AsHeap, class_id: RecordClassId, data: &[u8]) -> Gc<Record> {
-        let storage = Self::storage_for_data_len(data.len());
-
+    pub fn new(heap: &mut impl AsHeap, class_id: RecordClassId, data: RecordData) -> Gc<Record> {
+        let storage = Self::storage_for_data_layout(data.layout());
         let box_size = storage.box_size();
+
         let boxed = unsafe {
             match storage {
                 RecordStorage::External => {
@@ -73,9 +73,14 @@ impl Record {
         heap.as_heap_mut().place_box(boxed)
     }
 
-    /// Returns the storage for given data length
-    pub fn storage_for_data_len(data_len: usize) -> RecordStorage {
-        match data_len {
+    /// Returns the storage for given data layout
+    pub fn storage_for_data_layout(data_layout: alloc::Layout) -> RecordStorage {
+        if data_layout.align() > Self::INLINE_DATA_ALIGNMENT {
+            // Requires more alignment than our inline data provides
+            return RecordStorage::External;
+        }
+
+        match data_layout.size() {
             0..=8 => RecordStorage::Inline(BoxSize::Size16),
             9..=Record::MAX_INLINE_BYTES => RecordStorage::Inline(BoxSize::Size32),
             _ => RecordStorage::External,
@@ -116,17 +121,10 @@ impl Record {
         }
     }
 
-    /// Returns the allocation layout for data of the given length
-    ///
-    /// This ensures that the alignment of the data is sufficient for all possible field types.
-    pub fn data_alloc_layout_for_len(byte_len: usize) -> alloc::Layout {
-        unsafe { alloc::Layout::from_size_align_unchecked(byte_len, Self::DATA_ALIGNMENT) }
-    }
-
     fn data_ptr(&self) -> *const u8 {
         match self.as_repr() {
             Repr::Inline(inline) => &inline.inline_data[0] as *const u8,
-            Repr::External(external) => external.external_data,
+            Repr::External(external) => external.external_data.as_ptr(),
         }
     }
 
@@ -189,14 +187,14 @@ struct InlineRecord {
 }
 
 impl InlineRecord {
-    fn new(box_size: BoxSize, class_id: RecordClassId, data: &[u8]) -> InlineRecord {
+    fn new(box_size: BoxSize, class_id: RecordClassId, data: RecordData) -> InlineRecord {
         let header = Record::TYPE_TAG.to_heap_header(box_size);
 
         unsafe {
             let mut inline_record = InlineRecord {
                 record_header: RecordHeader {
                     header,
-                    inline_byte_len: data.len() as u8,
+                    inline_byte_len: data.layout().size() as u8,
                     contains_gc_refs: false,
                     class_id,
                 },
@@ -206,7 +204,7 @@ impl InlineRecord {
             ptr::copy(
                 data.as_ptr(),
                 &mut inline_record.inline_data[0] as *mut u8,
-                data.len(),
+                data.layout().size(),
             );
 
             inline_record
@@ -217,52 +215,22 @@ impl InlineRecord {
 #[repr(C, align(16))]
 struct ExternalRecord {
     record_header: RecordHeader,
-    external_data: *const u8,
-    data_layout: u64,
+    external_data: RecordData,
 }
 
 impl ExternalRecord {
-    fn new(box_size: BoxSize, class_id: RecordClassId, data: &[u8]) -> ExternalRecord {
-        unsafe {
-            let header = Record::TYPE_TAG.to_heap_header(box_size);
-            let alloc_layout = Record::data_alloc_layout_for_len(data.len());
-            let external_data = alloc::alloc(alloc_layout);
+    fn new(box_size: BoxSize, class_id: RecordClassId, data: RecordData) -> ExternalRecord {
+        let header = Record::TYPE_TAG.to_heap_header(box_size);
 
-            ptr::copy(data.as_ptr(), external_data as *mut u8, data.len());
+        ExternalRecord {
+            record_header: RecordHeader {
+                header,
+                inline_byte_len: std::u8::MAX,
+                contains_gc_refs: false,
+                class_id,
+            },
 
-            ExternalRecord {
-                record_header: RecordHeader {
-                    header,
-                    inline_byte_len: std::u8::MAX,
-                    contains_gc_refs: false,
-                    class_id,
-                },
-
-                external_data,
-                data_layout: Self::alloc_layout_to_u64(alloc_layout),
-            }
-        }
-    }
-
-    fn alloc_layout_to_u64(alloc_layout: alloc::Layout) -> u64 {
-        // This allows for alignments up to 2^16 and sizes up to 2^48
-        ((alloc_layout.align() as u64) & 0xFFFF) | ((alloc_layout.size() as u64) << 16)
-    }
-
-    fn u64_to_alloc_layout(input: u64) -> alloc::Layout {
-        let align = (input & 0xFFFF) as usize;
-        let size = (input >> 16) as usize;
-
-        unsafe { alloc::Layout::from_size_align_unchecked(size, align) }
-    }
-}
-
-impl Drop for ExternalRecord {
-    fn drop(&mut self) {
-        let alloc_layout = Self::u64_to_alloc_layout(self.data_layout);
-
-        unsafe {
-            alloc::dealloc(self.external_data as *mut u8, alloc_layout);
+            external_data: data,
         }
     }
 }
@@ -303,10 +271,9 @@ mod test {
     fn equality() {
         let mut heap = Heap::empty();
 
-        let record_class_one_instance1 = Record::new(&mut heap, 1, &[]);
-        let record_class_one_instance2 = Record::new(&mut heap, 1, &[]);
-
-        let record_class_two_instance1 = Record::new(&mut heap, 2, &[]);
+        let record_class_one_instance1 = Record::new(&mut heap, 1, RecordData::empty());
+        let record_class_one_instance2 = Record::new(&mut heap, 1, RecordData::empty());
+        let record_class_two_instance1 = Record::new(&mut heap, 2, RecordData::empty());
 
         assert_eq!(
             true,
@@ -320,32 +287,10 @@ mod test {
     }
 
     #[test]
-    fn test_alloc_layout_to_u64() {
-        let u8_layout = alloc::Layout::new::<u8>();
-        let u32_layout = alloc::Layout::new::<u32>();
-        let u64_layout = alloc::Layout::new::<u64>();
-        let empty_array_layout = alloc::Layout::new::<[char; 0]>();
-        let large_array_layout = alloc::Layout::new::<[f64; 10000]>();
-
-        for layout in &[
-            u8_layout,
-            u32_layout,
-            u64_layout,
-            empty_array_layout,
-            large_array_layout,
-        ] {
-            assert_eq!(
-                *layout,
-                ExternalRecord::u64_to_alloc_layout(ExternalRecord::alloc_layout_to_u64(*layout)),
-            )
-        }
-    }
-
-    #[test]
     fn fmt_debug() {
         let mut heap = Heap::empty();
 
-        let boxed_one = Record::new(&mut heap, 1, &[]);
+        let boxed_one = Record::new(&mut heap, 1, RecordData::empty());
         assert_eq!("Record(1)", format!("{:?}", boxed_one));
     }
 }
