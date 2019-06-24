@@ -279,7 +279,7 @@ pub fn gen_alloc_boxed_record(
         );
         LLVMBuildStore(builder, llvm_record_class_id, record_class_id_ptr);
 
-        // This is used by both inline and large recods
+        // This is used by both inline and large records
         let record_data_gep_indices = &mut [
             LLVMConstInt(llvm_i32, 0 as u64, 0),
             LLVMConstInt(llvm_i32, u64::from(record_struct::DATA_INDEX), 0),
