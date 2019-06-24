@@ -70,26 +70,26 @@
       (assert-eq! list-record list-record)
       (assert-eq! (black-box! list-record) (black-box! list-record)))))
 
-(defn test-large-record! () ->! ()
+(defn test-external-record! () ->! ()
   (letrecord [Record (record [first Char] [second Float] [third Int] [fourth Sym] [fifth Bool])]
-    (let [large-record (record \tab 2.0 3 'four true)]
-      (assert-eq! \tab (record-first large-record))
-      (assert-eq! \tab (record-first (black-box! large-record)))
+    (let [external-record (record \tab 2.0 3 'four true)]
+      (assert-eq! \tab (record-first external-record))
+      (assert-eq! \tab (record-first (black-box! external-record)))
 
-      (assert-eq! 2.0 (record-second large-record))
-      (assert-eq! 2.0 (record-second (black-box! large-record)))
+      (assert-eq! 2.0 (record-second external-record))
+      (assert-eq! 2.0 (record-second (black-box! external-record)))
 
-      (assert-eq! 3 (record-third large-record))
-      (assert-eq! 3 (record-third (black-box! large-record)))
+      (assert-eq! 3 (record-third external-record))
+      (assert-eq! 3 (record-third (black-box! external-record)))
 
-      (assert-eq! 'four (record-fourth large-record))
-      (assert-eq! 'four (record-fourth (black-box! large-record)))
+      (assert-eq! 'four (record-fourth external-record))
+      (assert-eq! 'four (record-fourth (black-box! external-record)))
 
-      (assert-eq! true (record-fifth large-record))
-      (assert-eq! true (record-fifth (black-box! large-record)))
+      (assert-eq! true (record-fifth external-record))
+      (assert-eq! true (record-fifth (black-box! external-record)))
 
-      (assert-eq! large-record large-record)
-      (assert-eq! (black-box! large-record) (black-box! large-record)))))
+      (assert-eq! external-record external-record)
+      (assert-eq! (black-box! external-record) (black-box! external-record)))))
 
 (defn main! () ->! ()
   (test-poly-records!)
@@ -99,4 +99,4 @@
   (test-float-record-fields!)
   (test-sym-record-fields!)
   (test-boxed-record-fields!)
-  (test-large-record!))
+  (test-external-record!))

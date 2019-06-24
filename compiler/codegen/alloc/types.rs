@@ -279,7 +279,7 @@ pub fn gen_alloc_boxed_record(
         );
         LLVMBuildStore(builder, llvm_record_class_id, record_class_id_ptr);
 
-        // This is used by both inline and large records
+        // This is used by both inline and external records
         let record_data_gep_indices = &mut [
             LLVMConstInt(llvm_i32, 0 as u64, 0),
             LLVMConstInt(llvm_i32, u64::from(record_struct::DATA_INDEX), 0),
@@ -297,7 +297,7 @@ pub fn gen_alloc_boxed_record(
 
                 (llvm_inline_record_data_ptr, data_len)
             }
-            (boxed::RecordStorage::Large, BoxSource::Stack) => {
+            (boxed::RecordStorage::External, BoxSource::Stack) => {
                 // Allocate the record data
                 let llvm_stack_record_data_ptr = LLVMBuildAlloca(
                     builder,
@@ -325,8 +325,8 @@ pub fn gen_alloc_boxed_record(
                     boxed::Record::MAX_INLINE_BYTES + 1,
                 )
             }
-            (boxed::RecordStorage::Large, BoxSource::Heap(_)) => {
-                unimplemented!("allocating large boxed records on heap");
+            (boxed::RecordStorage::External, BoxSource::Heap(_)) => {
+                unimplemented!("allocating external boxed records on heap");
             }
         };
 

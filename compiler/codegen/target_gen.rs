@@ -415,7 +415,7 @@ impl TargetCtx {
             boxed::RecordStorage::Inline(_) => {
                 members.push(llvm_data_type);
             }
-            boxed::RecordStorage::Large => unsafe {
+            boxed::RecordStorage::External => unsafe {
                 members.push(LLVMPointerType(llvm_data_type, 0));
             },
         }

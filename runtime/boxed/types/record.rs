@@ -32,7 +32,7 @@ pub enum RecordStorage {
     /// Record data is stored inline in a box of the given size
     Inline(BoxSize),
     /// Record data is stored out-of-line in a 32 byte box
-    Large,
+    External,
 }
 
 impl RecordStorage {
@@ -40,7 +40,7 @@ impl RecordStorage {
     pub fn box_size(self) -> BoxSize {
         match self {
             RecordStorage::Inline(box_size) => box_size,
-            RecordStorage::Large => BoxSize::Size32,
+            RecordStorage::External => BoxSize::Size32,
         }
     }
 }
@@ -61,7 +61,9 @@ impl Record {
         let box_size = storage.box_size();
         let boxed = unsafe {
             match storage {
-                RecordStorage::Large => mem::transmute(LargeRecord::new(box_size, class_id, data)),
+                RecordStorage::External => {
+                    mem::transmute(ExternalRecord::new(box_size, class_id, data))
+                }
                 RecordStorage::Inline(_) => {
                     mem::transmute(InlineRecord::new(box_size, class_id, data))
                 }
@@ -76,7 +78,7 @@ impl Record {
         match data_len {
             0..=8 => RecordStorage::Inline(BoxSize::Size16),
             9..=Record::MAX_INLINE_BYTES => RecordStorage::Inline(BoxSize::Size32),
-            _ => RecordStorage::Large,
+            _ => RecordStorage::External,
         }
     }
 
@@ -124,7 +126,7 @@ impl Record {
     fn data_ptr(&self) -> *const u8 {
         match self.as_repr() {
             Repr::Inline(inline) => &inline.inline_data[0] as *const u8,
-            Repr::Large(large) => large.large_data,
+            Repr::External(external) => external.external_data,
         }
     }
 
@@ -140,7 +142,7 @@ impl Record {
         if self.is_inline() {
             Repr::Inline(unsafe { &*(self as *const Record as *const InlineRecord) })
         } else {
-            Repr::Large(unsafe { &*(self as *const Record as *const LargeRecord) })
+            Repr::External(unsafe { &*(self as *const Record as *const ExternalRecord) })
         }
     }
 }
@@ -213,22 +215,22 @@ impl InlineRecord {
 }
 
 #[repr(C, align(16))]
-struct LargeRecord {
+struct ExternalRecord {
     record_header: RecordHeader,
-    large_data: *const u8,
+    external_data: *const u8,
     data_layout: u64,
 }
 
-impl LargeRecord {
-    fn new(box_size: BoxSize, class_id: RecordClassId, data: &[u8]) -> LargeRecord {
+impl ExternalRecord {
+    fn new(box_size: BoxSize, class_id: RecordClassId, data: &[u8]) -> ExternalRecord {
         unsafe {
             let header = Record::TYPE_TAG.to_heap_header(box_size);
             let alloc_layout = Record::data_alloc_layout_for_len(data.len());
-            let large_data = alloc::alloc(alloc_layout);
+            let external_data = alloc::alloc(alloc_layout);
 
-            ptr::copy(data.as_ptr(), large_data as *mut u8, data.len());
+            ptr::copy(data.as_ptr(), external_data as *mut u8, data.len());
 
-            LargeRecord {
+            ExternalRecord {
                 record_header: RecordHeader {
                     header,
                     inline_byte_len: std::u8::MAX,
@@ -236,7 +238,7 @@ impl LargeRecord {
                     class_id,
                 },
 
-                large_data,
+                external_data,
                 data_layout: Self::alloc_layout_to_u64(alloc_layout),
             }
         }
@@ -255,19 +257,19 @@ impl LargeRecord {
     }
 }
 
-impl Drop for LargeRecord {
+impl Drop for ExternalRecord {
     fn drop(&mut self) {
         let alloc_layout = Self::u64_to_alloc_layout(self.data_layout);
 
         unsafe {
-            alloc::dealloc(self.large_data as *mut u8, alloc_layout);
+            alloc::dealloc(self.external_data as *mut u8, alloc_layout);
         }
     }
 }
 
 enum Repr<'a> {
     Inline(&'a InlineRecord),
-    Large(&'a LargeRecord),
+    External(&'a ExternalRecord),
 }
 
 impl Drop for Record {
@@ -277,9 +279,9 @@ impl Drop for Record {
                 // Do nothing here; we might've been allocated as a 16 byte box so we can't read
                 // the whole thing.
             }
-            Repr::Large(large) => unsafe {
-                // Call `LargeRecord`'s drop implementation
-                ptr::read(large);
+            Repr::External(external) => unsafe {
+                // Call `ExternalRecord`'s drop implementation
+                ptr::read(external);
             },
         }
     }
@@ -294,7 +296,7 @@ mod test {
     fn sizes() {
         assert_eq!(32, mem::size_of::<Record>());
         assert_eq!(32, mem::size_of::<InlineRecord>());
-        assert_eq!(32, mem::size_of::<LargeRecord>());
+        assert_eq!(32, mem::size_of::<ExternalRecord>());
     }
 
     #[test]
@@ -334,7 +336,7 @@ mod test {
         ] {
             assert_eq!(
                 *layout,
-                LargeRecord::u64_to_alloc_layout(LargeRecord::alloc_layout_to_u64(*layout)),
+                ExternalRecord::u64_to_alloc_layout(ExternalRecord::alloc_layout_to_u64(*layout)),
             )
         }
     }

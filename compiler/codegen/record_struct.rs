@@ -16,7 +16,7 @@ pub const CONTAINS_GC_REFS_INDEX: u32 = 2;
 pub const RECORD_CLASS_ID_INDEX: u32 = 3;
 pub const DATA_INDEX: u32 = 4;
 
-/// Adds internal member fields common to all inline and large records
+/// Adds internal member fields common to all inline and external records
 pub fn append_common_internal_members(tcx: &mut TargetCtx, members: &mut Vec<LLVMTypeRef>) {
     unsafe {
         members.extend_from_slice(&[
@@ -229,7 +229,7 @@ pub fn gen_record_field_ptr(
                     pointer_name.as_ptr() as *const _,
                 )
             }
-            boxed::RecordStorage::Large => {
+            boxed::RecordStorage::External => {
                 let data_ptr_gep_indices = &mut [
                     LLVMConstInt(llvm_i32, 0 as u64, 0),
                     LLVMConstInt(llvm_i32, u64::from(DATA_INDEX), 0),

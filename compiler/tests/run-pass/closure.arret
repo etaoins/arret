@@ -10,7 +10,7 @@
 (defn return-two-int-values ([one Int] [two Int]) -> (-> (List & Int))
   (fn () (list one two)))
 
-; This would have a large record struct closure
+; This would have a external record struct closure
 (defn return-four-int-values ([one Int] [two Int] [three Int] [four Int]) -> (-> (List & Int))
   (fn () (list one two three four)))
 
