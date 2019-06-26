@@ -3,7 +3,7 @@ ARG LLVM_ROOT=/opt/llvm-8
 
 ##
 
-FROM fedora:29 AS llvm-build
+FROM fedora:30 AS llvm-build
 ARG LLVM_VERSION
 ARG LLVM_ROOT
 
@@ -31,7 +31,7 @@ RUN ninja install
 
 ##
 
-FROM fedora:29
+FROM fedora:30
 ARG LLVM_ROOT
 
 COPY --from=llvm-build ${LLVM_ROOT} ${LLVM_ROOT}
