@@ -131,11 +131,11 @@ pub fn gen_global_interned_names(
 ) -> LLVMValueRef {
     unsafe {
         if names.is_empty() {
-            return LLVMConstPointerNull(LLVMPointerType(tcx.global_interned_name_type(), 0));
+            return LLVMConstPointerNull(LLVMPointerType(tcx.global_interned_name_llvm_type(), 0));
         }
 
         let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
-        let global_interned_name_llvm_type = tcx.global_interned_name_type();
+        let global_interned_name_llvm_type = tcx.global_interned_name_llvm_type();
 
         let first_element_gep_indices = &mut [
             LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), 0, 0),
@@ -338,7 +338,7 @@ pub fn gen_boxed_record(
         ..
     } = *tcx.target_record_struct(record_struct);
 
-    let llvm_box_type = tcx.record_struct_box_type(record_struct);
+    let llvm_box_type = tcx.record_struct_llvm_box_type(record_struct);
 
     unsafe {
         let box_name = ffi::CString::new(format!("const_{}", record_struct.source_name)).unwrap();

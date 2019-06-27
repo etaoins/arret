@@ -129,11 +129,11 @@ fn program_to_module(
         let bb = LLVMAppendBasicBlockInContext(tcx.llx, c_main, b"entry\0".as_ptr() as *const _);
         LLVMPositionBuilderAtEnd(builder, bb);
 
-        let classmap_class_ptr_type = LLVMPointerType(tcx.classmap_class_type(), 0);
+        let classmap_class_ptr_type = LLVMPointerType(tcx.classmap_class_llvm_type(), 0);
 
         // Declare arret_runtime_launch_task
         let launch_task_llvm_arg_types = &mut [
-            LLVMPointerType(tcx.global_interned_name_type(), 0),
+            LLVMPointerType(tcx.global_interned_name_llvm_type(), 0),
             classmap_class_ptr_type,
             LLVMPointerType(arret_main_llvm_type(tcx), 0),
         ];

@@ -427,7 +427,7 @@ fn gen_op(
                         .unwrap();
 
                 let boxed_record_ptr_type =
-                    LLVMPointerType(tcx.record_struct_box_type(record_struct), 0);
+                    LLVMPointerType(tcx.record_struct_llvm_box_type(record_struct), 0);
 
                 let llvm_boxed_record = LLVMBuildBitCast(
                     fcx.builder,

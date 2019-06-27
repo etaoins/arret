@@ -183,7 +183,7 @@ impl TargetCtx {
         })
     }
 
-    pub fn global_interned_name_type(&mut self) -> LLVMTypeRef {
+    pub fn global_interned_name_llvm_type(&mut self) -> LLVMTypeRef {
         let llx = self.llx;
 
         *self
@@ -201,7 +201,7 @@ impl TargetCtx {
             })
     }
 
-    pub fn classmap_field_type(&mut self) -> LLVMTypeRef {
+    pub fn classmap_field_llvm_type(&mut self) -> LLVMTypeRef {
         let llx = self.llx;
 
         *self.classmap_field_type.get_or_insert_with(|| unsafe {
@@ -216,8 +216,8 @@ impl TargetCtx {
         })
     }
 
-    pub fn classmap_class_type(&mut self) -> LLVMTypeRef {
-        unsafe { LLVMPointerType(self.classmap_field_type(), 0) }
+    pub fn classmap_class_llvm_type(&mut self) -> LLVMTypeRef {
+        unsafe { LLVMPointerType(self.classmap_field_llvm_type(), 0) }
     }
 
     pub fn closure_llvm_type(&mut self) -> LLVMTypeRef {
@@ -393,7 +393,10 @@ impl TargetCtx {
             .or_insert(target_record_struct)
     }
 
-    pub fn record_struct_box_type(&mut self, record_struct: &ops::RecordStructId) -> LLVMTypeRef {
+    pub fn record_struct_llvm_box_type(
+        &mut self,
+        record_struct: &ops::RecordStructId,
+    ) -> LLVMTypeRef {
         use std::ffi;
 
         if let Some(record_struct_box_type) = self.record_struct_box_types.get(record_struct) {

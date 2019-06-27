@@ -104,10 +104,10 @@ pub fn gen_classmap_classes<'a>(
     record_structs: &[ops::RecordStructId],
 ) -> LLVMValueRef {
     if record_structs.is_empty() {
-        return unsafe { LLVMConstPointerNull(LLVMPointerType(tcx.classmap_class_type(), 0)) };
+        return unsafe { LLVMConstPointerNull(LLVMPointerType(tcx.classmap_class_llvm_type(), 0)) };
     }
 
-    let llvm_classmap_field_type = tcx.classmap_field_type();
+    let llvm_classmap_field_type = tcx.classmap_field_llvm_type();
     let llvm_i8 = unsafe { LLVMInt8TypeInContext(tcx.llx) };
     let llvm_i32 = unsafe { LLVMInt32TypeInContext(tcx.llx) };
 
