@@ -1159,7 +1159,8 @@ impl EvalHirCtx {
             .map(|field| specific_abi_type_for_ty_ref(field.ty_ref()))
             .collect();
 
-        let record_struct = ops::RecordStruct::new(record_cons.name().clone(), field_abi_types);
+        let record_struct =
+            ops::RecordStruct::new(record_cons.ty_cons_name().clone(), field_abi_types);
         let registered_record_struct = self.thunk_jit.register_record_struct(
             &record_struct,
             self.runtime_task.heap_mut().type_info_mut().class_map_mut(),

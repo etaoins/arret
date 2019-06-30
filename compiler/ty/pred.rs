@@ -149,7 +149,7 @@ impl TestTy {
             TestTy::Fun => "fn?".to_owned(),
             TestTy::Nil => "nil?".to_owned(),
             TestTy::TopRecord => "record?".to_owned(),
-            TestTy::RecordClass(cons) => format!("{}", cons.predicate_name()),
+            TestTy::RecordClass(cons) => format!("{}?", cons.value_cons_name()),
         }
     }
 }

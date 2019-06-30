@@ -89,8 +89,8 @@ impl PolyParam {
 #[derive(PartialEq, Debug, Clone)]
 pub struct Cons {
     span: Span,
-    name: DataStr,
-    predicate_name: DataStr,
+    ty_cons_name: DataStr,
+    value_cons_name: DataStr,
     poly_params_list: Option<Box<[PolyParam]>>,
     fields: Box<[Field]>,
 }
@@ -98,15 +98,15 @@ pub struct Cons {
 impl Cons {
     pub fn new(
         span: Span,
-        name: DataStr,
-        predicate_name: DataStr,
+        ty_cons_name: DataStr,
+        value_cons_name: DataStr,
         poly_params_list: Option<Box<[PolyParam]>>,
         fields: Box<[Field]>,
     ) -> ConsId {
         ConsId::new(Self {
             span,
-            name,
-            predicate_name,
+            ty_cons_name,
+            value_cons_name,
             poly_params_list,
             fields,
         })
@@ -117,17 +117,17 @@ impl Cons {
         self.span
     }
 
-    /// Returns the name of the constructor
+    /// Returns the name of the type constructor
     ///
     /// Unlike other source names that are used for diagnostics, this is semantically meaningful.
-    /// It's used to define a constructor function.
-    pub fn name(&self) -> &DataStr {
-        &self.name
+    /// It's used to define a type constructor.
+    pub fn ty_cons_name(&self) -> &DataStr {
+        &self.ty_cons_name
     }
 
-    /// Returns the name of the type predicate
-    pub fn predicate_name(&self) -> &DataStr {
-        &self.predicate_name
+    /// Returns the name of the value constructor
+    pub fn value_cons_name(&self) -> &DataStr {
+        &self.value_cons_name
     }
 
     /// Returns the polymorphic parameters this constructor accepts

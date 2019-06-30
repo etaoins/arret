@@ -682,16 +682,16 @@ fn str_for_ty<M: ty::PM>(ty: &Ty<M>) -> String {
         }
 
         Ty::TopRecord => "Record".to_owned(),
-        Ty::RecordClass(record_cons) => format!("({} ...)", record_cons.name()),
+        Ty::RecordClass(record_cons) => format!("({} ...)", record_cons.ty_cons_name()),
         Ty::Record(instance) => {
             let record_cons = instance.cons();
 
             if record_cons.is_singleton() {
                 // This is bound as its name
-                return record_cons.name().to_string();
+                return record_cons.ty_cons_name().to_string();
             }
 
-            let record_parts: Vec<String> = std::iter::once(record_cons.name().to_string())
+            let record_parts: Vec<String> = std::iter::once(record_cons.ty_cons_name().to_string())
                 .chain(
                     record_cons
                         .poly_params()

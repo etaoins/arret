@@ -173,7 +173,7 @@ pub fn lower_record(
     let record_ty_cons = record::Cons::new(
         ty_cons_span,
         ty_ident.name().clone(),
-        predicate_name.clone(),
+        value_cons_ident.name().clone(),
         poly_params_list,
         fields,
     );
