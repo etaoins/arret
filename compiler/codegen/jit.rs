@@ -74,6 +74,10 @@ impl JITCtx {
                 b"arret_runtime_alloc_cells\0",
                 compiler_support::alloc_cells as u64,
             );
+            jcx.add_symbol(
+                b"arret_runtime_alloc_record_data\0",
+                compiler_support::alloc_record_data as u64,
+            );
             jcx.add_symbol(b"arret_runtime_equals\0", compiler_support::equals as u64);
 
             jcx

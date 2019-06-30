@@ -16,6 +16,7 @@ pub const IS_INLINE_INDEX: u32 = 1;
 pub const CONTAINS_GC_REFS_INDEX: u32 = 2;
 pub const RECORD_CLASS_ID_INDEX: u32 = 3;
 pub const DATA_INDEX: u32 = 4;
+pub const EXTERNAL_COMPACT_LAYOUT_INDEX: u32 = 5;
 
 /// Adds internal member fields common to all inline and external records
 pub fn append_common_internal_members(tcx: &mut TargetCtx, members: &mut Vec<LLVMTypeRef>) {

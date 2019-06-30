@@ -349,45 +349,61 @@ pub fn gen_boxed_record(
             llvm_fields.len() as u32,
         );
 
-        let (llvm_data_value, inline_data_len) =
-            if let boxed::RecordStorage::Inline(_) = record_storage {
-                // Use the inline data directly
-                (llvm_data_struct, data_layout.size())
-            } else {
-                // Create a global containing our data and return a pointer to it
-                let data_global_name =
-                    ffi::CString::new(format!("const_{}_data", record_struct.source_name)).unwrap();
+        let llvm_box_header = tcx.llvm_box_header(type_tag.to_const_header());
 
-                let data_global = LLVMAddGlobal(
-                    mcx.module,
-                    llvm_data_type,
-                    data_global_name.as_bytes_with_nul().as_ptr() as *const _,
-                );
-                LLVMSetInitializer(data_global, llvm_data_struct);
-                annotate_private_global(data_global);
-
-                (data_global, boxed::Record::MAX_INLINE_BYTES + 1)
-            };
-
+        // Constant records by definition cannot have GC refs
         let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
-        let box_members = &mut [
-            tcx.llvm_box_header(type_tag.to_const_header()),
-            LLVMConstInt(llvm_i8, inline_data_len as u64, 1),
-            // Constant records by definition cannot have GC refs
-            LLVMConstInt(llvm_i8, 0, 1),
-            LLVMConstInt(
-                tcx.record_class_id_llvm_type(),
-                u64::from(record_class_id),
-                1,
-            ),
-            llvm_data_value,
-        ];
+        let llvm_has_gc_refs = LLVMConstInt(llvm_i8, 0, 1);
 
-        let llvm_box_value = LLVMConstNamedStruct(
-            llvm_box_type,
-            box_members.as_mut_ptr(),
-            box_members.len() as u32,
+        let llvm_record_class_id = LLVMConstInt(
+            tcx.record_class_id_llvm_type(),
+            u64::from(record_class_id),
+            1,
         );
+
+        let llvm_box_value = if let boxed::RecordStorage::Inline(_) = record_storage {
+            let inline_box_members = &mut [
+                llvm_box_header,
+                LLVMConstInt(llvm_i8, data_layout.size() as u64, 1),
+                llvm_has_gc_refs,
+                llvm_record_class_id,
+                llvm_data_struct,
+            ];
+
+            LLVMConstNamedStruct(
+                llvm_box_type,
+                inline_box_members.as_mut_ptr(),
+                inline_box_members.len() as u32,
+            )
+        } else {
+            // Create a global containing our data and return a pointer to it
+            let data_global_name =
+                ffi::CString::new(format!("const_{}_data", record_struct.source_name)).unwrap();
+
+            let data_global = LLVMAddGlobal(
+                mcx.module,
+                llvm_data_type,
+                data_global_name.as_bytes_with_nul().as_ptr() as *const _,
+            );
+            LLVMSetInitializer(data_global, llvm_data_struct);
+            annotate_private_global(data_global);
+
+            let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
+            let external_box_members = &mut [
+                llvm_box_header,
+                LLVMConstInt(llvm_i8, (boxed::Record::MAX_INLINE_BYTES + 1) as u64, 1),
+                llvm_has_gc_refs,
+                llvm_record_class_id,
+                data_global,
+                LLVMConstInt(llvm_i64, 0, 0),
+            ];
+
+            LLVMConstNamedStruct(
+                llvm_box_type,
+                external_box_members.as_mut_ptr(),
+                external_box_members.len() as u32,
+            )
+        };
 
         let global = LLVMAddGlobal(
             mcx.module,

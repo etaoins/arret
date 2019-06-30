@@ -2,6 +2,7 @@ use std::ffi;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
+use llvm_sys::LLVMAttributeReturnIndex;
 
 use arret_runtime::boxed;
 
@@ -326,7 +327,97 @@ pub fn gen_alloc_boxed_record(
                 )
             }
             (boxed::RecordStorage::External, BoxSource::Heap(_)) => {
-                unimplemented!("allocating external boxed records on heap");
+                let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
+                let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
+                let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
+
+                let llvm_param_types = &mut [llvm_i64, llvm_i32];
+
+                let alloc_record_data_llvm_type = LLVMFunctionType(
+                    LLVMPointerType(llvm_i8, 0),
+                    llvm_param_types.as_mut_ptr(),
+                    llvm_param_types.len() as u32,
+                    0,
+                );
+
+                let alloc_record_data_fun = mcx.get_function_or_insert(
+                    alloc_record_data_llvm_type,
+                    b"arret_runtime_alloc_record_data\0",
+                    |alloc_record_data_fun| {
+                        LLVMAddAttributeAtIndex(
+                            alloc_record_data_fun,
+                            LLVMAttributeReturnIndex,
+                            tcx.llvm_noalias_attr(),
+                        );
+                    },
+                );
+
+                let alloc_record_data_args = &mut [
+                    LLVMConstInt(llvm_i64, data_layout.size() as u64, 0),
+                    LLVMConstInt(llvm_i32, data_layout.align() as u64, 0),
+                ];
+
+                let llvm_untyped_record_data_ptr = LLVMBuildCall(
+                    builder,
+                    alloc_record_data_fun,
+                    alloc_record_data_args.as_mut_ptr(),
+                    alloc_record_data_args.len() as u32,
+                    b"external_record_data\0".as_ptr() as *const _,
+                );
+
+                // Convert the record data pointer to the correct type
+                let llvm_typed_record_data_ptr = LLVMBuildBitCast(
+                    builder,
+                    llvm_untyped_record_data_ptr,
+                    LLVMPointerType(llvm_data_type, 0),
+                    b"typed_record_data_ptr\0".as_ptr() as *const _,
+                );
+
+                // Save the record data pointer
+                let llvm_record_data_ptr_ptr = LLVMBuildInBoundsGEP(
+                    builder,
+                    alloced_boxed_record,
+                    record_data_gep_indices.as_mut_ptr(),
+                    record_data_gep_indices.len() as u32,
+                    "record_data_ptr_ptr\0".as_ptr() as *const _,
+                );
+                LLVMBuildStore(
+                    builder,
+                    llvm_typed_record_data_ptr,
+                    llvm_record_data_ptr_ptr,
+                );
+
+                // Save the compact layout
+                let record_compact_layout_gep_indices = &mut [
+                    LLVMConstInt(llvm_i32, 0 as u64, 0),
+                    LLVMConstInt(
+                        llvm_i32,
+                        u64::from(record_struct::EXTERNAL_COMPACT_LAYOUT_INDEX),
+                        0,
+                    ),
+                ];
+
+                let llvm_record_compact_layout_ptr = LLVMBuildInBoundsGEP(
+                    builder,
+                    alloced_boxed_record,
+                    record_compact_layout_gep_indices.as_mut_ptr(),
+                    record_compact_layout_gep_indices.len() as u32,
+                    "record_compact_layout_ptr\0".as_ptr() as *const _,
+                );
+                LLVMBuildStore(
+                    builder,
+                    LLVMConstInt(
+                        llvm_i64,
+                        boxed::RecordData::alloc_layout_to_compact(data_layout),
+                        0,
+                    ),
+                    llvm_record_compact_layout_ptr,
+                );
+
+                (
+                    llvm_typed_record_data_ptr,
+                    boxed::Record::MAX_INLINE_BYTES + 1,
+                )
             }
         };
 

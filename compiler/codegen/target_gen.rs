@@ -419,7 +419,10 @@ impl TargetCtx {
                 members.push(llvm_data_type);
             }
             boxed::RecordStorage::External => unsafe {
-                members.push(LLVMPointerType(llvm_data_type, 0));
+                members.extend(&[
+                    LLVMPointerType(llvm_data_type, 0),
+                    LLVMInt64TypeInContext(self.llx),
+                ]);
             },
         }
 

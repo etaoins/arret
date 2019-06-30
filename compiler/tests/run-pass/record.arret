@@ -89,7 +89,12 @@
       (assert-eq! true (record-fifth (black-box! external-record)))
 
       (assert-eq! external-record external-record)
-      (assert-eq! (black-box! external-record) (black-box! external-record)))))
+      (assert-eq! (black-box! external-record) (black-box! external-record))
+
+      ; Force this to be allocated on the heap
+      ; TODO: Replace with `(black-box! external-record)` once that's supported
+      (let [heap-external-record ((black-box! (fn () (record \tab 2.0 (black-box! 3) 'four true))))]
+        (assert-eq! external-record heap-external-record)))))
 
 (defn main! () ->! ()
   (test-poly-records!)
