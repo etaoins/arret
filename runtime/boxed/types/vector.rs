@@ -38,12 +38,18 @@ impl<T: Boxed> Vector<T> {
 
         let boxed = unsafe {
             if values.len() <= MAX_INLINE_LENGTH {
-                let mut inline_vec: InlineVector<T> = InlineVector {
+                let mut inline_values = mem::MaybeUninit::<[Gc<T>; MAX_INLINE_LENGTH]>::uninit();
+                ptr::copy(
+                    values.as_ptr(),
+                    inline_values.as_mut_ptr() as *mut _,
+                    values.len(),
+                );
+
+                let inline_vec: InlineVector<T> = InlineVector {
                     header,
                     inline_length: values.len() as u32,
-                    values: mem::uninitialized(),
+                    values: inline_values.assume_init(),
                 };
-                inline_vec.values[0..values.len()].copy_from_slice(values);
 
                 mem::transmute(inline_vec)
             } else {

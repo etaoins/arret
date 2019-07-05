@@ -191,6 +191,13 @@ impl InlineRecord {
         let header = Record::TYPE_TAG.to_heap_header(box_size);
 
         unsafe {
+            let mut inline_data = mem::MaybeUninit::<[u8; Record::MAX_INLINE_BYTES]>::uninit();
+            ptr::copy(
+                data.as_ptr(),
+                inline_data.as_mut_ptr() as *mut _,
+                data.layout().size(),
+            );
+
             let mut inline_record = InlineRecord {
                 record_header: RecordHeader {
                     header,
@@ -198,7 +205,7 @@ impl InlineRecord {
                     contains_gc_refs: false,
                     class_id,
                 },
-                inline_data: mem::uninitialized(),
+                inline_data: inline_data.assume_init(),
             };
 
             ptr::copy(

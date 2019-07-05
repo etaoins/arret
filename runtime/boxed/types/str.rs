@@ -38,21 +38,23 @@ impl Str {
                     header,
                     inline_byte_length: (Str::MAX_INLINE_BYTES as u8) + 1,
                     shared_str: value.into(),
-                    padding: mem::uninitialized(),
+                    padding: 0,
                 };
 
                 mem::transmute(shared_str)
             } else {
-                let mut inline_str = InlineStr {
-                    header,
-                    inline_byte_length: value.len() as u8,
-                    inline_bytes: mem::uninitialized(),
-                };
+                let mut inline_bytes = mem::MaybeUninit::<[u8; Str::MAX_INLINE_BYTES]>::uninit();
                 ptr::copy(
                     value.as_ptr(),
-                    &mut inline_str.inline_bytes[0] as *mut u8,
+                    inline_bytes.as_mut_ptr() as *mut _,
                     value.len(),
                 );
+
+                let inline_str = InlineStr {
+                    header,
+                    inline_byte_length: value.len() as u8,
+                    inline_bytes: inline_bytes.assume_init(),
+                };
 
                 mem::transmute(inline_str)
             }
@@ -146,7 +148,7 @@ struct SharedStr {
     // Once we've determined we're not inline this has no useful value
     inline_byte_length: u8,
     shared_str: Arc<str>,
-    padding: [u64; 1],
+    padding: u64,
 }
 
 enum Repr<'a> {

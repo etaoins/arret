@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::{alloc, ffi, mem};
+use std::{alloc, ffi, ptr};
 
 use arret_runtime::boxed;
 use arret_runtime::class_map::ClassMap;
@@ -156,7 +156,7 @@ impl JITCtx {
 
     pub fn add_symbol(&mut self, unmangled_name: &[u8], address: u64) {
         unsafe {
-            let mut mangled_pointer: *mut libc::c_char = mem::uninitialized();
+            let mut mangled_pointer: *mut libc::c_char = ptr::null_mut();
             LLVMOrcGetMangledSymbol(
                 self.orc,
                 &mut mangled_pointer,

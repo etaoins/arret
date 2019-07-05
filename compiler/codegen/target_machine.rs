@@ -1,4 +1,4 @@
-use std::{ffi, mem, ptr};
+use std::{ffi, ptr};
 
 use llvm_sys::core::*;
 use llvm_sys::target_machine::*;
@@ -35,7 +35,7 @@ pub fn create_target_machine(
     let cross_triple = cross_triple.map(|cross_triple| ffi::CString::new(cross_triple).unwrap());
 
     unsafe {
-        let mut target: LLVMTargetRef = mem::uninitialized();
+        let mut target: LLVMTargetRef = ptr::null_mut();
 
         let triple_string = cross_triple
             .map(|cross_triple| TripleString::Cross(ffi::CString::new(cross_triple).unwrap()))
