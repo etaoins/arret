@@ -5,15 +5,36 @@ use arret_runtime::boxed;
 use arret_runtime::boxed::prelude::*;
 
 use crate::codegen::GenABI;
-use crate::mir::builder::{Builder, BuiltReg};
+use crate::mir::builder::{Builder, BuiltReg, TryToBuilder};
+use crate::mir::costing::cost_for_ops;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops::*;
 use crate::mir::tagset::TypeTagSet;
+use crate::mir::value;
 use crate::mir::value::build_reg::value_to_reg;
-use crate::mir::value::from_reg::reg_to_value;
 use crate::mir::value::to_const::value_to_const;
 use crate::mir::value::Value;
-use crate::ty::Ty;
+
+pub enum EqualityResult {
+    Static(bool),
+    Dynamic(Value),
+}
+
+impl EqualityResult {
+    fn from_bool_reg(reg: BuiltReg) -> EqualityResult {
+        EqualityResult::Dynamic(value::RegValue::new(reg, abitype::ABIType::Bool).into())
+    }
+}
+
+impl From<EqualityResult> for Value {
+    fn from(er: EqualityResult) -> Value {
+        match er {
+            EqualityResult::Static(true) => boxed::TRUE_INSTANCE.as_any_ref().into(),
+            EqualityResult::Static(false) => boxed::FALSE_INSTANCE.as_any_ref().into(),
+            EqualityResult::Dynamic(value) => value,
+        }
+    }
+}
 
 fn runtime_compare(
     ehx: &mut EvalHirCtx,
@@ -83,6 +104,86 @@ where
     )
 }
 
+fn build_record_equality(
+    ehx: &mut EvalHirCtx,
+    parent_b: &mut Builder,
+    span: Span,
+    left_value: &Value,
+    left_fields: &[Value],
+    right_value: &Value,
+    right_fields: &[Value],
+) -> EqualityResult {
+    // Try a fieldwise comparison
+    let mut fieldwise_b = Builder::new();
+    let mut fieldwise_regs = Vec::<BuiltReg>::with_capacity(left_fields.len());
+
+    for (left_field, right_field) in left_fields.iter().zip(right_fields.iter()) {
+        match eval_equality(ehx, &mut fieldwise_b, span, left_field, right_field) {
+            EqualityResult::Static(false) => {
+                // The whole comparison is false; we don't need to build anything
+                return EqualityResult::Static(false);
+            }
+            EqualityResult::Static(true) => {
+                // We can ignore this comparison
+            }
+            EqualityResult::Dynamic(value) => {
+                let fieldwise_reg =
+                    value_to_reg(ehx, &mut fieldwise_b, span, &value, &abitype::ABIType::Bool);
+                fieldwise_regs.push(fieldwise_reg);
+            }
+        }
+    }
+
+    let mut fieldwise_reg_iter = fieldwise_regs.into_iter();
+    let first_fieldwise_reg = if let Some(fieldwise_reg) = fieldwise_reg_iter.next() {
+        fieldwise_reg
+    } else {
+        // This is statically true
+        return EqualityResult::Static(true);
+    };
+
+    let combined_fieldwise_reg =
+        fieldwise_reg_iter.fold(first_fieldwise_reg, |acc_reg, fieldwise_reg| {
+            let phi_result_reg = fieldwise_b.alloc_local();
+            fieldwise_b.push(
+                span,
+                OpKind::Cond(CondOp {
+                    reg_phi: Some(RegPhi {
+                        output_reg: phi_result_reg.into(),
+                        true_result_reg: acc_reg.into(),
+                        false_result_reg: fieldwise_reg.into(),
+                    }),
+                    test_reg: fieldwise_reg.into(),
+                    true_ops: Box::new([]),
+                    false_ops: Box::new([]),
+                }),
+            );
+
+            phi_result_reg
+        });
+
+    // Try a runtime compare
+    let mut runtime_b = Builder::new();
+    let runtime_reg = runtime_compare(ehx, &mut runtime_b, span, left_value, right_value);
+
+    // Build ops for both options and cost them
+    let fieldwise_ops = fieldwise_b.into_ops();
+    let fieldwise_cost = cost_for_ops(fieldwise_ops.iter());
+
+    let runtime_ops = runtime_b.into_ops();
+    let runtime_cost = cost_for_ops(runtime_ops.iter());
+
+    // Slightly favour fieldwise comparisons. Runtime comparisons of records are more expensive
+    // than other types but this wouldn't be captured by `cost_for_ops`.
+    if runtime_cost < fieldwise_cost {
+        parent_b.append(runtime_ops.into_vec().into_iter());
+        EqualityResult::from_bool_reg(runtime_reg)
+    } else {
+        parent_b.append(fieldwise_ops.into_vec().into_iter());
+        EqualityResult::from_bool_reg(combined_fieldwise_reg)
+    }
+}
+
 /// Builds a comparison between two values known to be boolean
 fn build_bool_equality(
     ehx: &mut EvalHirCtx,
@@ -90,7 +191,7 @@ fn build_bool_equality(
     span: Span,
     left_value: &Value,
     right_value: &Value,
-) -> Value {
+) -> EqualityResult {
     enum ValueClass {
         ConstTrue,
         Boxed,
@@ -119,10 +220,10 @@ fn build_bool_equality(
     let result_reg = match (left_class, right_class) {
         // Comparing a boolean to constant true can be simplified to a no-op
         (ValueClass::ConstTrue, _) => {
-            return right_value.clone();
+            return EqualityResult::Dynamic(right_value.clone());
         }
         (_, ValueClass::ConstTrue) => {
-            return left_value.clone();
+            return EqualityResult::Dynamic(left_value.clone());
         }
         (ValueClass::Boxed, ValueClass::Boxed) => {
             // If both values are boxed we can just compare the pointers
@@ -150,7 +251,7 @@ fn build_bool_equality(
         }
     };
 
-    reg_to_value(ehx, result_reg, &abitype::ABIType::Bool, &Ty::Bool.into())
+    EqualityResult::from_bool_reg(result_reg)
 }
 
 /// Determines if two values are statically equal
@@ -229,22 +330,41 @@ pub fn values_statically_equal(
 /// This attempts `values_statically_equal` before building a runtime comparison.
 pub fn eval_equality(
     ehx: &mut EvalHirCtx,
-    b: &mut Option<Builder>,
+    b: &mut impl TryToBuilder,
     span: Span,
     left_value: &Value,
     right_value: &Value,
-) -> Value {
+) -> EqualityResult {
     use crate::mir::value::types::possible_type_tags_for_value;
 
     if let Some(static_result) = values_statically_equal(ehx, left_value, right_value) {
-        return boxed::Bool::singleton_ref(static_result).into();
+        return EqualityResult::Static(static_result);
     }
 
-    let b = if let Some(some_b) = b {
+    let b = if let Some(some_b) = b.try_to_builder() {
         some_b
     } else {
         panic!("runtime equality without builder")
     };
+
+    if let (Value::Record(left_cons, left_fields), Value::Record(right_cons, right_fields)) =
+        (left_value, right_value)
+    {
+        // TODO: Switch to something like `possible_record_classes_for_value`
+        if left_cons == right_cons {
+            return build_record_equality(
+                ehx,
+                b,
+                span,
+                left_value,
+                left_fields,
+                right_value,
+                right_fields,
+            );
+        } else {
+            return EqualityResult::Static(false);
+        }
+    }
 
     let left_type_tags = possible_type_tags_for_value(left_value);
     let right_type_tags = possible_type_tags_for_value(right_value);
@@ -253,7 +373,7 @@ pub fn eval_equality(
 
     if [left_type_tags, right_type_tags].contains(&boxed::TypeTag::FunThunk.into()) {
         // Functions always compare false
-        return boxed::FALSE_INSTANCE.as_any_ref().into();
+        return EqualityResult::Static(false);
     }
 
     if all_type_tags == abitype::ABIType::Bool.into() {
@@ -342,5 +462,5 @@ pub fn eval_equality(
         runtime_compare(ehx, b, span, left_value, right_value)
     };
 
-    reg_to_value(ehx, result_reg, &abitype::ABIType::Bool, &Ty::Bool.into())
+    EqualityResult::from_bool_reg(result_reg)
 }

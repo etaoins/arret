@@ -22,10 +22,18 @@
 (defmacro assert-fn-contains-op! (macro-rules
   [(op-category test-fn)
     (when-not (member? op-category (fn-op-categories test-fn))
-        (panic! "expected built function to contain an op of category `" op-category "`"))]))
+      (panic! "expected built function to contain an op of category `" op-category "`"))]))
 
 (export assert-fn-doesnt-contain-op!)
 (defmacro assert-fn-doesnt-contain-op! (macro-rules
   [(op-category test-fn)
     (when (member? op-category (fn-op-categories test-fn))
-        (panic! "built function unexpectedly contained an op of category `" op-category "`"))]))
+      (panic! "built function unexpectedly contained an op of category `" op-category "`"))]))
+
+(export assert-fn-returns-constant!)
+(defmacro assert-fn-returns-constant! (macro-rules
+  [(test-fn)
+    (when-not (every?
+        #(member? % '(:const-box :const-cast-box :const-reg :reg-cast :ret))
+        (fn-op-categories test-fn))
+      (panic! "built function unexpectedly returns non-constant"))]))

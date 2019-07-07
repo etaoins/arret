@@ -14,7 +14,7 @@ use arret_syntax::span::{Span, EMPTY_SPAN};
 
 use crate::codegen;
 use crate::hir;
-use crate::mir::builder::{Builder, BuiltReg};
+use crate::mir::builder::{Builder, BuiltReg, TryToBuilder};
 use crate::mir::error::{Error, Result};
 use crate::mir::inliner;
 use crate::mir::ops;
@@ -420,7 +420,7 @@ impl EvalHirCtx {
 
     fn eval_eq_pred_app(
         &mut self,
-        b: &mut Option<Builder>,
+        b: &mut impl TryToBuilder,
         span: Span,
         arg_list_value: &Value,
     ) -> Value {
@@ -431,7 +431,7 @@ impl EvalHirCtx {
         let left_value = iter.next_unchecked(b, span);
         let right_value = iter.next_unchecked(b, span);
 
-        eval_equality(self, b, span, &left_value, &right_value)
+        eval_equality(self, b, span, &left_value, &right_value).into()
     }
 
     fn eval_record_cons_app(

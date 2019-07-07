@@ -37,6 +37,17 @@
   (assert-native-compare-fn! (fn ([left Sym] [right Sym]) -> Bool
     (= left right)))
 
-  ; Fns can be directly compared because they're always inequal
-  (assert-native-compare-fn! (fn ([left (... -> Any)] [right (... -> Any)]) -> Bool
-    (= left right))))
+  ; Fns can be constantly compared because they're always inequal
+  (assert-fn-returns-constant! (fn ([left (... -> Any)] [right (... -> Any)]) -> Bool
+    (= left right)))
+
+  ; Records can be compared fieldwise
+  (letrecord [OneField (one-field [one Int])]
+    ; TODO: Track record types through function args so these can take records
+    (assert-native-compare-fn! (fn ([left Int] [right Int]) -> Bool
+      (= (one-field left) (one-field right)))))
+
+  ; If one field compares false the entire comparison is false
+  (letrecord [TwoField (two-field [one Int] [two Bool])]
+    (assert-fn-returns-constant! (fn ([left Int] [right Int]) -> Bool
+      (= (two-field left true) (two-field right false))))))
