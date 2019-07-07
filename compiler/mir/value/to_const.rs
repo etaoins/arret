@@ -37,7 +37,7 @@ fn record_to_const(
             match classmap_field.field_type() {
                 FieldType::Bool => {
                     let bool_ref = &mut *(field_ptr as *mut bool);
-                    let boxed_field = value_to_const(ehx, field_value).unwrap();
+                    let boxed_field = value_to_const(ehx, field_value)?;
 
                     match boxed_field.as_subtype() {
                         boxed::AnySubtype::True(_) => {
@@ -51,7 +51,7 @@ fn record_to_const(
                 }
                 FieldType::Int => {
                     let int_ref = &mut *(field_ptr as *mut i64);
-                    let boxed_field = value_to_const(ehx, field_value).unwrap();
+                    let boxed_field = value_to_const(ehx, field_value)?;
 
                     if let boxed::AnySubtype::Int(boxed_int) = boxed_field.as_subtype() {
                         *int_ref = boxed_int.value();
@@ -61,7 +61,7 @@ fn record_to_const(
                 }
                 FieldType::Float => {
                     let float_ref = &mut *(field_ptr as *mut f64);
-                    let boxed_field = value_to_const(ehx, field_value).unwrap();
+                    let boxed_field = value_to_const(ehx, field_value)?;
 
                     if let boxed::AnySubtype::Float(boxed_float) = boxed_field.as_subtype() {
                         *float_ref = boxed_float.value();
@@ -71,7 +71,7 @@ fn record_to_const(
                 }
                 FieldType::Char => {
                     let char_ref = &mut *(field_ptr as *mut char);
-                    let boxed_field = value_to_const(ehx, field_value).unwrap();
+                    let boxed_field = value_to_const(ehx, field_value)?;
 
                     if let boxed::AnySubtype::Char(boxed_char) = boxed_field.as_subtype() {
                         *char_ref = boxed_char.value();
@@ -81,7 +81,7 @@ fn record_to_const(
                 }
                 FieldType::InternedSym => {
                     let interned_sym_ref = &mut *(field_ptr as *mut InternedSym);
-                    let boxed_field = value_to_const(ehx, field_value).unwrap();
+                    let boxed_field = value_to_const(ehx, field_value)?;
 
                     if let boxed::AnySubtype::Sym(boxed_sym) = boxed_field.as_subtype() {
                         *interned_sym_ref = boxed_sym.interned();
@@ -91,7 +91,7 @@ fn record_to_const(
                 }
                 FieldType::Boxed => {
                     let boxed_ref = &mut *(field_ptr as *mut Gc<boxed::Any>);
-                    let boxed_field = value_to_const(ehx, field_value).unwrap();
+                    let boxed_field = value_to_const(ehx, field_value)?;
 
                     *boxed_ref = boxed_field;
                 }
