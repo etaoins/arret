@@ -142,7 +142,12 @@ fn eval_tagged_ty_pred(
         })
         .unwrap();
 
-    reg_to_value(ehx, result_reg, &abitype::ABIType::Bool, &Ty::Bool.into())
+    reg_to_value(
+        ehx,
+        result_reg,
+        &abitype::ABIType::Bool,
+        &Ty::<ty::Mono>::Bool.into(),
+    )
 }
 
 fn eval_record_ty_pred(
@@ -259,7 +264,12 @@ fn eval_record_ty_pred(
                 }
             };
 
-            reg_to_value(ehx, result_reg, &abitype::ABIType::Bool, &Ty::Bool.into())
+            reg_to_value(
+                ehx,
+                result_reg,
+                &abitype::ABIType::Bool,
+                &Ty::<ty::Mono>::Bool.into(),
+            )
         }
         _ => boxed::FALSE_INSTANCE.as_any_ref().into(),
     }

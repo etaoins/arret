@@ -106,7 +106,7 @@ pub fn ops_for_rust_fun(
         param_regs,
         arg_list_value,
         ..
-    } = build_load_arg_list_value(&mut b, &wanted_abi);
+    } = build_load_arg_list_value(ehx, &mut b, &wanted_abi, rust_fun.arret_fun_type().params());
 
     let purity_upper_bound = rust_fun_purity_upper_bound(rust_fun);
     let ret_ty = Ty::Any.into();

@@ -1251,6 +1251,7 @@ impl EvalHirCtx {
         arret_fun: &value::ArretFun,
         wanted_abi: PolymorphABI,
     ) -> Result<ops::Fun> {
+        use crate::hir::destruc::poly_for_list_destruc;
         use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
         use crate::mir::closure;
         use crate::mir::optimise::optimise_fun;
@@ -1260,11 +1261,12 @@ impl EvalHirCtx {
         let fun_expr = arret_fun.fun_expr();
         let span = fun_expr.span;
 
+        let param_list_poly = poly_for_list_destruc(&arret_fun.fun_expr().params);
         let LoadedArgList {
             closure_reg,
             param_regs,
             arg_list_value,
-        } = build_load_arg_list_value(&mut b, &wanted_abi);
+        } = build_load_arg_list_value(self, &mut b, &wanted_abi, &param_list_poly);
 
         // Start by taking the type args from the fun's enclosing environment
         let mut fcx = FunCtx::with_mono_ty_args(arret_fun.env_ty_args().clone());
@@ -1331,7 +1333,12 @@ impl EvalHirCtx {
             closure_reg,
             param_regs,
             arg_list_value,
-        } = build_load_arg_list_value(&mut b, &wanted_abi);
+        } = build_load_arg_list_value(
+            self,
+            &mut b,
+            &wanted_abi,
+            &ty::List::new_uniform(Ty::Any.into()),
+        );
 
         let fun_reg_value =
             value::RegValue::new(closure_reg.unwrap(), abitype::BoxedABIType::Any.into());

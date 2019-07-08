@@ -11,15 +11,18 @@ use crate::ty;
 ///
 /// Supported literal types will be converted to `Value::Const`. Everything else will become a
 /// `Value::Reg`.
-pub fn reg_to_value(
+pub fn reg_to_value<M>(
     heap: &mut impl boxed::AsHeap,
     reg: BuiltReg,
     abi_type: &abitype::ABIType,
-    arret_ty: &ty::Ref<ty::Mono>,
-) -> Value {
-    use crate::mir::value::types::mono_to_const;
+    arret_ty: &ty::Ref<M>,
+) -> Value
+where
+    M: ty::PM,
+{
+    use crate::mir::value::types::ty_ref_to_const;
 
-    mono_to_const(heap, arret_ty)
+    ty_ref_to_const(heap, arret_ty)
         .map(Value::Const)
         .unwrap_or_else(|| {
             value::RegValue {

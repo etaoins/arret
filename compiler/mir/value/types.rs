@@ -9,18 +9,21 @@ use crate::mir::value::{RegValue, Value};
 use crate::ty;
 use crate::ty::Ty;
 
-pub fn mono_to_const(
+pub fn ty_ref_to_const<M>(
     heap: &mut impl boxed::AsHeap,
-    mono: &ty::Ref<ty::Mono>,
-) -> Option<Gc<boxed::Any>> {
-    match mono.as_ty() {
+    ty_ref: &ty::Ref<M>,
+) -> Option<Gc<boxed::Any>>
+where
+    M: ty::PM,
+{
+    match ty_ref.resolve_to_ty() {
         Ty::LitBool(value) => Some(boxed::Bool::singleton_ref(*value).as_any_ref()),
         Ty::LitSym(value) => Some(boxed::Sym::new(heap, value.as_ref()).as_any_ref()),
         Ty::List(list) if !list.has_rest() => {
             let fixed_consts = list
                 .fixed()
                 .iter()
-                .map(|fixed| mono_to_const(heap, fixed))
+                .map(|fixed| ty_ref_to_const(heap, fixed))
                 .collect::<Option<Vec<Gc<boxed::Any>>>>()?;
 
             Some(boxed::List::new(heap, fixed_consts.into_iter()).as_any_ref())
@@ -70,7 +73,7 @@ where
     if let Value::Reg(reg_value) = value {
         // This could be useful; request the type
         let arret_ty = build_arret_ty();
-        if let Some(any_ref) = mono_to_const(heap, &arret_ty) {
+        if let Some(any_ref) = ty_ref_to_const(heap, &arret_ty) {
             return any_ref.into();
         }
 
