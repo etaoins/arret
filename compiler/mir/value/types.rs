@@ -4,9 +4,11 @@ use arret_runtime::boxed;
 use arret_runtime::boxed::prelude::*;
 use arret_runtime::boxed::refs::Gc;
 
+use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::tagset::TypeTagSet;
 use crate::mir::value::{RegValue, Value};
 use crate::ty;
+use crate::ty::record;
 use crate::ty::Ty;
 
 pub fn ty_ref_to_const<M>(
@@ -58,6 +60,28 @@ pub fn possible_type_tags_for_value(value: &Value) -> TypeTagSet {
     }
 }
 
+/// Returns the optional known record cons for a value
+///
+/// This does not imply that the value is definitely a record. For example, `(U SomeRecord false)`
+/// will have a known record class of `SomeRecord` although it may be `false`.
+pub fn known_record_cons_for_value<'a>(
+    ehx: &'a EvalHirCtx,
+    value: &'a Value,
+) -> Option<&'a record::ConsId> {
+    match value {
+        Value::Const(any_ref) => match any_ref.as_subtype() {
+            boxed::AnySubtype::Record(record_ref) => Some(
+                ehx.cons_for_jit_record_class_id(record_ref.class_id())
+                    .expect("unable to lookup record cons for JIT record class ID"),
+            ),
+            _ => None,
+        },
+        Value::Record(cons, _) => Some(&cons),
+        Value::Reg(reg_value) => reg_value.known_record_cons.as_ref(),
+        _ => None,
+    }
+}
+
 /// Annotates an existing value with Arret type information
 ///
 /// For the majority of values this is a no-op. For this reason this function takes a builder for
@@ -80,12 +104,21 @@ where
         let old_type_tags = reg_value.possible_type_tags;
         let new_type_tags = old_type_tags & TypeTagSet::from(&arret_ty);
 
+        let known_record_cons = arret_ty
+            .find_member(|poly_ty| match poly_ty {
+                Ty::Record(instance) => Some(instance.cons()),
+                Ty::RecordClass(cons) => Some(cons),
+                _ => None,
+            })
+            .cloned();
+
         // Avoid allocating a new Rc if this is a no-op
         let new_reg_value = if new_type_tags != old_type_tags {
             Rc::new(RegValue {
                 reg: reg_value.reg,
                 abi_type: reg_value.abi_type.clone(),
                 possible_type_tags: new_type_tags,
+                known_record_cons,
             })
         } else {
             reg_value

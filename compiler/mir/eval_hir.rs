@@ -65,7 +65,8 @@ pub struct EvalHirCtx {
     thunk_fun_values: HashMap<*const boxed::FunThunk, Value>,
     thunk_jit: codegen::jit::JITCtx,
 
-    record_classes: HashMap<record::ConsId, EvaledRecordClass>,
+    record_class_for_cons: HashMap<record::ConsId, EvaledRecordClass>,
+    cons_for_jit_record_class_id: HashMap<boxed::RecordClassId, record::ConsId>,
 }
 
 pub struct FunCtx {
@@ -180,7 +181,8 @@ impl EvalHirCtx {
             thunk_fun_values: HashMap::new(),
             thunk_jit,
 
-            record_classes: HashMap::new(),
+            record_class_for_cons: HashMap::new(),
+            cons_for_jit_record_class_id: HashMap::new(),
         }
     }
 
@@ -975,7 +977,7 @@ impl EvalHirCtx {
         use crate::mir::equality::values_statically_equal;
         use crate::mir::value::build_reg::value_to_reg;
         use crate::mir::value::plan_phi::*;
-        use crate::mir::value::types::possible_type_tags_for_value;
+        use crate::mir::value::types::{known_record_cons_for_value, possible_type_tags_for_value};
         use arret_runtime::abitype;
 
         let span = cond.span;
@@ -1002,11 +1004,23 @@ impl EvalHirCtx {
                         value_to_reg(self, &mut built_false.b, span, &false_value, &phi_abi_type);
 
                     let output_reg = b.alloc_local();
+
+                    let possible_type_tags = possible_type_tags_for_value(&true_value)
+                        | possible_type_tags_for_value(&false_value);
+
+                    let true_record_cons = known_record_cons_for_value(self, &true_value);
+                    let false_record_cons = known_record_cons_for_value(self, &false_value);
+                    let known_record_cons = if true_record_cons == false_record_cons {
+                        true_record_cons.cloned()
+                    } else {
+                        None
+                    };
+
                     let reg_value = value::RegValue {
                         reg: output_reg,
                         abi_type: phi_abi_type.clone(),
-                        possible_type_tags: possible_type_tags_for_value(&true_value)
-                            | possible_type_tags_for_value(&false_value),
+                        possible_type_tags,
+                        known_record_cons,
                     };
 
                     output_value = reg_value.into();
@@ -1149,8 +1163,8 @@ impl EvalHirCtx {
     ) -> &EvaledRecordClass {
         use crate::mir::specific_abi_type::specific_abi_type_for_ty_ref;
 
-        if self.record_classes.contains_key(record_cons) {
-            return &self.record_classes[record_cons];
+        if self.record_class_for_cons.contains_key(record_cons) {
+            return &self.record_class_for_cons[record_cons];
         }
 
         let field_abi_types = record_cons
@@ -1172,9 +1186,21 @@ impl EvalHirCtx {
             record_struct,
         };
 
-        self.record_classes
+        self.cons_for_jit_record_class_id.insert(
+            registered_record_struct.record_class_id,
+            record_cons.clone(),
+        );
+
+        self.record_class_for_cons
             .entry(record_cons.clone())
             .or_insert(evaled_record_class)
+    }
+
+    pub fn cons_for_jit_record_class_id(
+        &self,
+        record_class_id: boxed::RecordClassId,
+    ) -> Option<&record::ConsId> {
+        self.cons_for_jit_record_class_id.get(&record_class_id)
     }
 
     pub fn arret_fun_to_thunk_reg(

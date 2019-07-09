@@ -1,0 +1,12 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn test-record-ty-preds! () ->! ()
+  (letrecord [RecordOne (record-one)]
+    ; We should only need to test the type tag here
+    ; `:cond` would indicate we're also attempting to load the record class ID
+    (assert-fn-doesnt-contain-op! :cond (fn ([sub (U RecordOne false)]) -> Bool
+      (record-one? sub)))))
+
+(defn main! () ->! ()
+  (test-record-ty-preds!))
