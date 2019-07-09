@@ -34,6 +34,6 @@
 (defmacro assert-fn-returns-constant! (macro-rules
   [(test-fn)
     (when-not (every?
-        #(member? % '(:const-box :const-cast-box :const-reg :reg-cast :ret))
+        #(member? % '(:const-box :const-cast-box :const-reg :cast-boxed :ret))
         (fn-op-categories test-fn))
       (panic! "built function unexpectedly returns non-constant"))]))

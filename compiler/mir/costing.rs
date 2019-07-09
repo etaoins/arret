@@ -12,9 +12,8 @@ fn cost_for_op(op: &ops::Op) -> OpCost {
 
     let category_cost = match op.kind().category() {
         OpCategory::Unreachable => 0,
-        OpCategory::ConstCastBoxed => 0,
+        OpCategory::ConstCastBoxed | OpCategory::CastBoxed => 0,
         OpCategory::ConstReg => 1,
-        OpCategory::RegCast => 1,
         OpCategory::RegOp => 2,
         OpCategory::ConstBox => 4,
         OpCategory::Cond => 5, // Adjusted below to include branches
