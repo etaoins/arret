@@ -462,68 +462,12 @@ impl EvalHirCtx {
         field_index: usize,
         arg_list_value: &Value,
     ) -> Value {
+        use crate::mir::record_field::load_record_field;
+
         let mut iter = arg_list_value.unsized_list_iter();
         let record_value = iter.next_unchecked(b, span);
 
-        match record_value {
-            Value::Record(_, fields) => fields[field_index].clone(),
-            Value::Const(boxed_any) => {
-                use boxed::FieldValue;
-
-                let boxed_record =
-                    if let boxed::AnySubtype::Record(boxed_record) = boxed_any.as_subtype() {
-                        boxed_record
-                    } else {
-                        panic!("unexpected type when accessing record field");
-                    };
-
-                match boxed_record
-                    .field_values(self.as_heap())
-                    .nth(field_index)
-                    .unwrap()
-                {
-                    FieldValue::Bool(bool_value) => boxed::Bool::singleton_ref(bool_value).into(),
-                    FieldValue::Int(int_value) => boxed::Int::new(self, int_value).into(),
-                    FieldValue::Float(float_value) => boxed::Float::new(self, float_value).into(),
-                    FieldValue::Char(char_value) => boxed::Char::new(self, char_value).into(),
-                    FieldValue::Boxed(boxed_any) => boxed_any.into(),
-                    FieldValue::InternedSym(interned) => {
-                        boxed::Sym::from_interned_sym(self, interned).into()
-                    }
-                }
-            }
-            other_value => {
-                use crate::mir::ops::*;
-                use crate::mir::value::build_reg::value_to_reg;
-
-                let record_struct = self
-                    .evaled_record_class_for_cons(record_cons)
-                    .record_struct
-                    .clone();
-
-                let b = if let Some(b) = b {
-                    b
-                } else {
-                    panic!("need builder to access field of boxed record reg");
-                };
-
-                let record_reg =
-                    value_to_reg(self, b, span, &other_value, &boxed::TypeTag::Record.into());
-
-                let field_reg = b.push_reg(
-                    span,
-                    OpKind::LoadBoxedRecordField,
-                    LoadBoxedRecordFieldOp {
-                        field_index,
-                        record_reg: record_reg.into(),
-                        record_struct: record_struct.clone(),
-                    },
-                );
-
-                let field_abi_type = record_struct.field_abi_types[field_index].clone();
-                value::RegValue::new(field_reg, field_abi_type).into()
-            }
-        }
+        load_record_field(self, b, span, record_cons, &record_value, field_index)
     }
 
     pub fn rust_fun_to_jit_boxed(&mut self, rust_fun: Rc<rfi::Fun>) -> Gc<boxed::FunThunk> {

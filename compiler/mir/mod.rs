@@ -11,6 +11,7 @@ mod intrinsic;
 pub mod ops;
 mod optimise;
 mod polymorph;
+mod record_field;
 mod ret_value;
 mod rust_fun;
 mod specific_abi_type;

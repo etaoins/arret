@@ -6,7 +6,7 @@ use arret_runtime::boxed::prelude::*;
 
 use crate::codegen::GenABI;
 use crate::mir::builder::{Builder, BuiltReg, TryToBuilder};
-use crate::mir::costing::cost_for_ops;
+use crate::mir::costing::{cost_for_op_category, cost_for_ops};
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops::*;
 use crate::mir::tagset::TypeTagSet;
@@ -14,6 +14,7 @@ use crate::mir::value;
 use crate::mir::value::build_reg::value_to_reg;
 use crate::mir::value::to_const::value_to_const;
 use crate::mir::value::Value;
+use crate::ty::record;
 
 pub enum EqualityResult {
     Static(bool),
@@ -108,17 +109,37 @@ fn build_record_equality(
     ehx: &mut EvalHirCtx,
     parent_b: &mut Builder,
     span: Span,
+    record_cons: &record::ConsId,
     left_value: &Value,
-    left_fields: &[Value],
     right_value: &Value,
-    right_fields: &[Value],
 ) -> EqualityResult {
-    // Try a fieldwise comparison
-    let mut fieldwise_b = Builder::new();
-    let mut fieldwise_regs = Vec::<BuiltReg>::with_capacity(left_fields.len());
+    use crate::mir::record_field::load_record_field;
 
-    for (left_field, right_field) in left_fields.iter().zip(right_fields.iter()) {
-        match eval_equality(ehx, &mut fieldwise_b, span, left_field, right_field) {
+    // Try a fieldwise comparison
+    let field_count = record_cons.fields().len();
+    let mut fieldwise_b = Builder::new();
+    let mut fieldwise_regs = Vec::<BuiltReg>::with_capacity(field_count);
+
+    for field_index in 0..field_count {
+        let left_field = load_record_field(
+            ehx,
+            &mut fieldwise_b,
+            span,
+            record_cons,
+            left_value,
+            field_index,
+        );
+
+        let right_field = load_record_field(
+            ehx,
+            &mut fieldwise_b,
+            span,
+            record_cons,
+            right_value,
+            field_index,
+        );
+
+        match eval_equality(ehx, &mut fieldwise_b, span, &left_field, &right_field) {
             EqualityResult::Static(false) => {
                 // The whole comparison is false; we don't need to build anything
                 return EqualityResult::Static(false);
@@ -171,10 +192,11 @@ fn build_record_equality(
     let fieldwise_cost = cost_for_ops(fieldwise_ops.iter());
 
     let runtime_ops = runtime_b.into_ops();
-    let runtime_cost = cost_for_ops(runtime_ops.iter());
+    // Favour fieldwise comparisons. Runtime comparisons of records are more expensive than other
+    // types but this wouldn't be captured by `cost_for_ops`. Account for at least the cost of
+    // loading the class map.
+    let runtime_cost = cost_for_ops(runtime_ops.iter()) + cost_for_op_category(OpCategory::MemLoad);
 
-    // Slightly favour fieldwise comparisons. Runtime comparisons of records are more expensive
-    // than other types but this wouldn't be captured by `cost_for_ops`.
     if runtime_cost < fieldwise_cost {
         parent_b.append(runtime_ops.into_vec().into_iter());
         EqualityResult::from_bool_reg(runtime_reg)
@@ -335,7 +357,7 @@ pub fn eval_equality(
     left_value: &Value,
     right_value: &Value,
 ) -> EqualityResult {
-    use crate::mir::value::types::possible_type_tags_for_value;
+    use crate::mir::value::types::{known_record_cons_for_value, possible_type_tags_for_value};
 
     if let Some(static_result) = values_statically_equal(ehx, left_value, right_value) {
         return EqualityResult::Static(static_result);
@@ -346,25 +368,6 @@ pub fn eval_equality(
     } else {
         panic!("runtime equality without builder")
     };
-
-    if let (Value::Record(left_cons, left_fields), Value::Record(right_cons, right_fields)) =
-        (left_value, right_value)
-    {
-        // TODO: Switch to something like `possible_record_classes_for_value`
-        if left_cons == right_cons {
-            return build_record_equality(
-                ehx,
-                b,
-                span,
-                left_value,
-                left_fields,
-                right_value,
-                right_fields,
-            );
-        } else {
-            return EqualityResult::Static(false);
-        }
-    }
 
     let left_type_tags = possible_type_tags_for_value(left_value);
     let right_type_tags = possible_type_tags_for_value(right_value);
@@ -458,6 +461,29 @@ pub fn eval_equality(
                 )
             },
         )
+    } else if all_type_tags == boxed::TypeTag::Record.into() {
+        let known_left_cons = known_record_cons_for_value(ehx, left_value);
+        let known_right_cons = known_record_cons_for_value(ehx, right_value);
+
+        match (known_left_cons, known_right_cons) {
+            (Some(left_cons), Some(right_cons)) => {
+                if left_cons == right_cons {
+                    let common_cons = left_cons.clone();
+
+                    return build_record_equality(
+                        ehx,
+                        b,
+                        span,
+                        &common_cons,
+                        left_value,
+                        right_value,
+                    );
+                } else {
+                    return EqualityResult::Static(false);
+                }
+            }
+            _ => runtime_compare(ehx, b, span, left_value, right_value),
+        }
     } else {
         runtime_compare(ehx, b, span, left_value, right_value)
     };
