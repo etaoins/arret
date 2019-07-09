@@ -37,9 +37,17 @@ fn cost_for_op(op: &ops::Op) -> OpCost {
                 cost_for_ops(cond_op.false_ops.iter()),
             )
         }
-        ops::OpKind::Call(_, call_op) if call_op.impure => {
+        ops::OpKind::Call(_, call_op) => {
             // Impure calls are harder to optimise. Penalise them.
-            2
+            let impure_penalty = if call_op.impure { 2 } else { 0 };
+
+            let callee_penalty = match call_op.callee {
+                // These cannot be inlined and need to use the standard calling convention
+                ops::Callee::BoxedFunThunk(_) | ops::Callee::StaticSymbol(_) => 2,
+                _ => 0,
+            };
+
+            impure_penalty + callee_penalty
         }
         _ => 0,
     };
