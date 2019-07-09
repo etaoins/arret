@@ -9,7 +9,6 @@ use crate::mir::error::Result;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::intrinsic::num_utils::{num_value_to_float_reg, NumOperand};
 use crate::mir::ops::Comparison;
-use crate::mir::tagset::TypeTagSet;
 
 use crate::mir::value;
 use crate::mir::value::list::SizedListIterator;
@@ -139,16 +138,8 @@ fn compare_operand_list(
     }
 
     let left_value = list_iter.next(b, span).unwrap();
-    build_operand_iter_compare(ehx, b, span, &left_value, &mut list_iter, comparison).map(
-        |result_reg| {
-            (value::RegValue {
-                reg: result_reg,
-                abi_type: abitype::ABIType::Bool,
-                possible_type_tags: TypeTagSet::from(abitype::ABIType::Bool),
-            })
-            .into()
-        },
-    )
+    build_operand_iter_compare(ehx, b, span, &left_value, &mut list_iter, comparison)
+        .map(|result_reg| value::RegValue::new(result_reg, abitype::ABIType::Bool).into())
 }
 
 pub fn int(
