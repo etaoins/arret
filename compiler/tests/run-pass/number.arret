@@ -24,7 +24,7 @@
   (assert-eq! true (infinite? ##-Inf))
   (assert-eq! false (infinite? ##NaN)))
 
-(defn test-float () ->! ()
+(defn test-float! () ->! ()
   (assert-eq! 1.0 (float 1))
   (assert-eq! 0.0 (float (black-box! 0)))
   (assert-eq! -1.0 (float -1))
@@ -33,7 +33,7 @@
   (assert-eq! 0.0 (float 0.0))
   (assert-eq! -1.0 (float -1.0)))
 
-(defn test-int () ->! ()
+(defn test-int! () ->! ()
   (assert-eq! 1 (int (black-box! 1)))
   (assert-eq! 0 (int 0))
   (assert-eq! -1 (int -1))
@@ -43,7 +43,7 @@
   (assert-eq! 0 (int (black-box! 0.0)))
   (assert-eq! -1 (int -1.0)))
 
-(defn test-comparisons () ->! ()
+(defn test-comparisons! () ->! ()
   ; These are all always true
   (assert-eq! true (< -1))
   (assert-eq! true (<= (black-box! 0)))
@@ -88,10 +88,24 @@
   (assert-eq! false (> ##Inf ##-Inf (black-box! ##-Inf)))
   (assert-eq! true (>= ##Inf ##-Inf ##-Inf)))
 
+(defn test-even-odd! () ->! ()
+  (assert-eq! false (even? -1))
+  (assert-eq! true (odd? -1))
+
+  (assert-eq! true (even? 0))
+  (assert-eq! false (odd? 0))
+
+  (assert-eq! false (even? 1))
+  (assert-eq! true (odd? 1))
+
+  (assert-eq! true (even? 2))
+  (assert-eq! false (odd? 2)))
+
 (defn main! () ->! ()
   (test-zero?)
   (test-nan?)
   (test-infinite?)
-  (test-float)
-  (test-int)
-  (test-comparisons))
+  (test-float!)
+  (test-int!)
+  (test-comparisons!)
+  (test-even-odd!))

@@ -83,6 +83,14 @@
 (defn infinite? ([f Float]) -> Bool
   (or (= f ##Inf) (= f ##-Inf)))
 
+(export even?)
+(defn even? ([v Int]) -> Bool
+  (zero? (rem v 2)))
+
+(export odd?)
+(defn odd? ([v Int]) -> Bool
+  (not (zero? (rem v 2))))
+
 (export inc)
 (defn inc ([i Int]) -> Int
   (+ i 1))
