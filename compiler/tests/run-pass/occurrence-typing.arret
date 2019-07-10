@@ -46,7 +46,7 @@
     (ann input (U Sym Str Int))))
 
 (defn not-typing ([input (U Sym Str)])
-  (if (not (str? input))
+  (if-not (str? input)
     (ann input Sym)
     (ann input Str)))
 

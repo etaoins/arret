@@ -35,6 +35,11 @@
   [(test body-data ...) (if test () (do body-data ...))]
 ))
 
+(export if-not)
+(defmacro if-not (macro-rules
+  [(test-expr false-expr true-expr) (if test-expr true-expr false-expr)]
+))
+
 (export and)
 (defmacro and (macro-rules
   [() true]
