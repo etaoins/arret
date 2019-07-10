@@ -795,7 +795,7 @@ impl<'ccx> LoweringCtx<'ccx> {
                 Ok(Some(DeferredModulePrim::Def(deferred_def))) => {
                     deferred_defs.push(deferred_def);
                 }
-                Ok(_) => {}
+                Ok(None) => {}
                 Err(mut new_errors) => {
                     errors.append(&mut new_errors);
                 }
