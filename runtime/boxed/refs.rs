@@ -73,8 +73,8 @@ impl<T: Boxed> hash::Hash for Gc<T>
 where
     T: hash::Hash,
 {
-    fn hash<H: hash::Hasher>(&self, hasher: &mut H) {
-        unsafe { (*self.as_ptr()).hash(hasher) }
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        unsafe { (*self.as_ptr()).hash(state) }
     }
 }
 
