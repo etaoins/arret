@@ -142,7 +142,12 @@ fn eval_tagged_ty_pred(
         })
         .unwrap();
 
-    reg_to_value(ehx, result_reg, &abitype::ABIType::Bool, &Ty::Bool.into())
+    reg_to_value(
+        ehx,
+        result_reg,
+        &abitype::ABIType::Bool,
+        &Ty::<ty::Mono>::Bool.into(),
+    )
 }
 
 fn eval_record_ty_pred(
@@ -152,117 +157,132 @@ fn eval_record_ty_pred(
     subject_value: &Value,
     test_cons: &record::ConsId,
 ) -> Value {
-    match subject_value {
-        Value::Const(any_ref) => {
-            let test_evaled_record_class = ehx.evaled_record_class_for_cons(test_cons);
+    use crate::mir::value::types::{known_record_cons_for_value, possible_type_tags_for_value};
 
-            // Check if our JIT record class matches
-            let is_record_class = match any_ref.as_subtype() {
-                boxed::AnySubtype::Record(record_ref) => {
-                    record_ref.class_id() == test_evaled_record_class.jit_record_class_id
-                }
-                _ => false,
-            };
+    let possible_type_tags = possible_type_tags_for_value(subject_value);
 
-            boxed::Bool::singleton_ref(is_record_class).into()
-        }
-        Value::Record(subject_cons, _) => {
-            boxed::Bool::singleton_ref(test_cons == subject_cons).into()
-        }
-        Value::Reg(reg_value) => {
-            let possible_type_tags = reg_value.possible_type_tags;
+    if !possible_type_tags.contains(boxed::TypeTag::Record) {
+        // Cannot be a record
+        return boxed::FALSE_INSTANCE.as_any_ref().into();
+    }
 
-            if !possible_type_tags.contains(boxed::TypeTag::Record) {
-                // Cannot be a record
+    let is_definite_record = possible_type_tags == boxed::TypeTag::Record.into();
+    let definite_matching_cons =
+        if let Some(subject_cons) = known_record_cons_for_value(ehx, subject_value) {
+            let known_matching_cons = test_cons == subject_cons;
+            if !known_matching_cons {
+                // This cannot possibly match regardless of if it's record
                 return boxed::FALSE_INSTANCE.as_any_ref().into();
             }
 
-            let b = if let Some(some_b) = b {
-                some_b
-            } else {
-                panic!("runtime record type predicate without builder");
-            };
+            known_matching_cons
+        } else {
+            false
+        };
 
-            // If this isn't guaranteed to be a record we need to test its type tag first
-            let is_record_reg = if possible_type_tags == boxed::TypeTag::Record.into() {
-                None
-            } else {
-                let subject_type_tag_reg =
-                    build_load_type_tag(ehx, b, span, subject_value, possible_type_tags);
-
-                Some(build_is_type_tag(
-                    b,
-                    span,
-                    subject_type_tag_reg,
-                    boxed::TypeTag::Record,
-                ))
-            };
-
-            // Create a builder for testing the record class
-            let mut is_record_class_b = Builder::new();
-
-            let record_reg = value_to_reg(
-                ehx,
-                &mut is_record_class_b,
-                span,
-                subject_value,
-                &abitype::BoxedABIType::UniqueTagged(boxed::TypeTag::Record).into(),
-            )
-            .into();
-
-            // Load our subject record class ID
-            let subject_record_class_id_reg =
-                is_record_class_b.push_reg(span, OpKind::LoadBoxedRecordClassId, record_reg);
-
-            // Create our test record class ID
-            let test_record_class_id_reg = is_record_class_b.push_reg(
-                span,
-                OpKind::ConstRecordClassId,
-                ehx.evaled_record_class_for_cons(test_cons)
-                    .record_struct
-                    .clone(),
-            );
-
-            // Compare them for equality
-            let is_record_class_reg = is_record_class_b.push_reg(
-                span,
-                OpKind::RecordClassIdEqual,
-                BinaryOp {
-                    lhs_reg: subject_record_class_id_reg.into(),
-                    rhs_reg: test_record_class_id_reg.into(),
-                },
-            );
-
-            let result_reg = match is_record_reg {
-                Some(is_record_reg) => {
-                    // Need to merge the type tag test with the record class test
-                    let and_result_reg = b.alloc_local();
-
-                    let cond_op_kind = OpKind::Cond(CondOp {
-                        reg_phi: Some(RegPhi {
-                            output_reg: and_result_reg.into(),
-                            true_result_reg: is_record_class_reg.into(),
-                            false_result_reg: is_record_reg.into(),
-                        }),
-                        test_reg: is_record_reg.into(),
-                        true_ops: is_record_class_b.into_ops(),
-                        false_ops: Box::new([]),
-                    });
-
-                    b.push(span, cond_op_kind);
-                    and_result_reg
-                }
-                None => {
-                    // Nothing to merge
-                    b.append(is_record_class_b.into_ops().into_vec());
-                    is_record_class_reg
-                }
-            };
-
-            reg_to_value(ehx, result_reg, &abitype::ABIType::Bool, &Ty::Bool.into())
-        }
-        _ => boxed::FALSE_INSTANCE.as_any_ref().into(),
+    if is_definite_record && definite_matching_cons {
+        // This is a record with a matching cons
+        return boxed::TRUE_INSTANCE.as_any_ref().into();
     }
+
+    let b = if let Some(some_b) = b {
+        some_b
+    } else {
+        panic!("runtime record type predicate without builder");
+    };
+
+    let is_record_reg = if is_definite_record {
+        None
+    } else {
+        // If this isn't guaranteed to be a record we need to test its type tag first
+        let subject_type_tag_reg =
+            build_load_type_tag(ehx, b, span, subject_value, possible_type_tags);
+
+        Some(build_is_type_tag(
+            b,
+            span,
+            subject_type_tag_reg,
+            boxed::TypeTag::Record,
+        ))
+    };
+
+    let is_record_class_b_and_reg = if definite_matching_cons {
+        None
+    } else {
+        // Create a builder for testing the record class
+        let mut is_record_class_b = Builder::new();
+
+        let record_reg = value_to_reg(
+            ehx,
+            &mut is_record_class_b,
+            span,
+            subject_value,
+            &abitype::BoxedABIType::UniqueTagged(boxed::TypeTag::Record).into(),
+        )
+        .into();
+
+        // Load our subject record class ID
+        let subject_record_class_id_reg =
+            is_record_class_b.push_reg(span, OpKind::LoadBoxedRecordClassId, record_reg);
+
+        // Create our test record class ID
+        let test_record_class_id_reg = is_record_class_b.push_reg(
+            span,
+            OpKind::ConstRecordClassId,
+            ehx.evaled_record_class_for_cons(test_cons)
+                .record_struct
+                .clone(),
+        );
+
+        // Compare them for equality
+        let is_record_class_reg = is_record_class_b.push_reg(
+            span,
+            OpKind::RecordClassIdEqual,
+            BinaryOp {
+                lhs_reg: subject_record_class_id_reg.into(),
+                rhs_reg: test_record_class_id_reg.into(),
+            },
+        );
+
+        Some((is_record_class_b, is_record_class_reg))
+    };
+
+    let result_reg = match (is_record_reg, is_record_class_b_and_reg) {
+        (Some(is_record_reg), Some((is_record_class_b, is_record_class_reg))) => {
+            // Need to merge the type tag test with the record class test
+            let and_result_reg = b.alloc_local();
+
+            let cond_op_kind = OpKind::Cond(CondOp {
+                reg_phi: Some(RegPhi {
+                    output_reg: and_result_reg.into(),
+                    true_result_reg: is_record_class_reg.into(),
+                    false_result_reg: is_record_reg.into(),
+                }),
+                test_reg: is_record_reg.into(),
+                true_ops: is_record_class_b.into_ops(),
+                false_ops: Box::new([]),
+            });
+
+            b.push(span, cond_op_kind);
+            and_result_reg
+        }
+        (Some(is_record_reg), None) => is_record_reg,
+        (None, Some((is_record_class_b, is_record_class_reg))) => {
+            b.append(is_record_class_b.into_ops().into_vec());
+            is_record_class_reg
+        }
+        (None, None) => {
+            // This is unreachable but has a sane answer anyway
+            return boxed::TRUE_INSTANCE.as_any_ref().into();
+        }
+    };
+
+    reg_to_value(
+        ehx,
+        result_reg,
+        &abitype::ABIType::Bool,
+        &Ty::<ty::Mono>::Bool.into(),
+    )
 }
 
 pub fn eval_ty_pred(

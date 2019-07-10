@@ -65,7 +65,8 @@ pub struct EvalHirCtx {
     thunk_fun_values: HashMap<*const boxed::FunThunk, Value>,
     thunk_jit: codegen::jit::JITCtx,
 
-    record_classes: HashMap<record::ConsId, EvaledRecordClass>,
+    record_class_for_cons: HashMap<record::ConsId, EvaledRecordClass>,
+    cons_for_jit_record_class_id: HashMap<boxed::RecordClassId, record::ConsId>,
 }
 
 pub struct FunCtx {
@@ -180,7 +181,8 @@ impl EvalHirCtx {
             thunk_fun_values: HashMap::new(),
             thunk_jit,
 
-            record_classes: HashMap::new(),
+            record_class_for_cons: HashMap::new(),
+            cons_for_jit_record_class_id: HashMap::new(),
         }
     }
 
@@ -460,68 +462,12 @@ impl EvalHirCtx {
         field_index: usize,
         arg_list_value: &Value,
     ) -> Value {
+        use crate::mir::record_field::load_record_field;
+
         let mut iter = arg_list_value.unsized_list_iter();
         let record_value = iter.next_unchecked(b, span);
 
-        match record_value {
-            Value::Record(_, fields) => fields[field_index].clone(),
-            Value::Const(boxed_any) => {
-                use boxed::FieldValue;
-
-                let boxed_record =
-                    if let boxed::AnySubtype::Record(boxed_record) = boxed_any.as_subtype() {
-                        boxed_record
-                    } else {
-                        panic!("unexpected type when accessing record field");
-                    };
-
-                match boxed_record
-                    .field_values(self.as_heap())
-                    .nth(field_index)
-                    .unwrap()
-                {
-                    FieldValue::Bool(bool_value) => boxed::Bool::singleton_ref(bool_value).into(),
-                    FieldValue::Int(int_value) => boxed::Int::new(self, int_value).into(),
-                    FieldValue::Float(float_value) => boxed::Float::new(self, float_value).into(),
-                    FieldValue::Char(char_value) => boxed::Char::new(self, char_value).into(),
-                    FieldValue::Boxed(boxed_any) => boxed_any.into(),
-                    FieldValue::InternedSym(interned) => {
-                        boxed::Sym::from_interned_sym(self, interned).into()
-                    }
-                }
-            }
-            other_value => {
-                use crate::mir::ops::*;
-                use crate::mir::value::build_reg::value_to_reg;
-
-                let record_struct = self
-                    .evaled_record_class_for_cons(record_cons)
-                    .record_struct
-                    .clone();
-
-                let b = if let Some(b) = b {
-                    b
-                } else {
-                    panic!("need builder to access field of boxed record reg");
-                };
-
-                let record_reg =
-                    value_to_reg(self, b, span, &other_value, &boxed::TypeTag::Record.into());
-
-                let field_reg = b.push_reg(
-                    span,
-                    OpKind::LoadBoxedRecordField,
-                    LoadBoxedRecordFieldOp {
-                        field_index,
-                        record_reg: record_reg.into(),
-                        record_struct: record_struct.clone(),
-                    },
-                );
-
-                let field_abi_type = record_struct.field_abi_types[field_index].clone();
-                value::RegValue::new(field_reg, field_abi_type).into()
-            }
-        }
+        load_record_field(self, b, span, record_cons, &record_value, field_index)
     }
 
     pub fn rust_fun_to_jit_boxed(&mut self, rust_fun: Rc<rfi::Fun>) -> Gc<boxed::FunThunk> {
@@ -975,7 +921,7 @@ impl EvalHirCtx {
         use crate::mir::equality::values_statically_equal;
         use crate::mir::value::build_reg::value_to_reg;
         use crate::mir::value::plan_phi::*;
-        use crate::mir::value::types::possible_type_tags_for_value;
+        use crate::mir::value::types::{known_record_cons_for_value, possible_type_tags_for_value};
         use arret_runtime::abitype;
 
         let span = cond.span;
@@ -1002,11 +948,23 @@ impl EvalHirCtx {
                         value_to_reg(self, &mut built_false.b, span, &false_value, &phi_abi_type);
 
                     let output_reg = b.alloc_local();
+
+                    let possible_type_tags = possible_type_tags_for_value(&true_value)
+                        | possible_type_tags_for_value(&false_value);
+
+                    let true_record_cons = known_record_cons_for_value(self, &true_value);
+                    let false_record_cons = known_record_cons_for_value(self, &false_value);
+                    let known_record_cons = if true_record_cons == false_record_cons {
+                        true_record_cons.cloned()
+                    } else {
+                        None
+                    };
+
                     let reg_value = value::RegValue {
                         reg: output_reg,
                         abi_type: phi_abi_type.clone(),
-                        possible_type_tags: possible_type_tags_for_value(&true_value)
-                            | possible_type_tags_for_value(&false_value),
+                        possible_type_tags,
+                        known_record_cons,
                     };
 
                     output_value = reg_value.into();
@@ -1149,8 +1107,8 @@ impl EvalHirCtx {
     ) -> &EvaledRecordClass {
         use crate::mir::specific_abi_type::specific_abi_type_for_ty_ref;
 
-        if self.record_classes.contains_key(record_cons) {
-            return &self.record_classes[record_cons];
+        if self.record_class_for_cons.contains_key(record_cons) {
+            return &self.record_class_for_cons[record_cons];
         }
 
         let field_abi_types = record_cons
@@ -1172,9 +1130,21 @@ impl EvalHirCtx {
             record_struct,
         };
 
-        self.record_classes
+        self.cons_for_jit_record_class_id.insert(
+            registered_record_struct.record_class_id,
+            record_cons.clone(),
+        );
+
+        self.record_class_for_cons
             .entry(record_cons.clone())
             .or_insert(evaled_record_class)
+    }
+
+    pub fn cons_for_jit_record_class_id(
+        &self,
+        record_class_id: boxed::RecordClassId,
+    ) -> Option<&record::ConsId> {
+        self.cons_for_jit_record_class_id.get(&record_class_id)
     }
 
     pub fn arret_fun_to_thunk_reg(
@@ -1251,6 +1221,7 @@ impl EvalHirCtx {
         arret_fun: &value::ArretFun,
         wanted_abi: PolymorphABI,
     ) -> Result<ops::Fun> {
+        use crate::hir::destruc::poly_for_list_destruc;
         use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
         use crate::mir::closure;
         use crate::mir::optimise::optimise_fun;
@@ -1260,11 +1231,12 @@ impl EvalHirCtx {
         let fun_expr = arret_fun.fun_expr();
         let span = fun_expr.span;
 
+        let param_list_poly = poly_for_list_destruc(&arret_fun.fun_expr().params);
         let LoadedArgList {
             closure_reg,
             param_regs,
             arg_list_value,
-        } = build_load_arg_list_value(&mut b, &wanted_abi);
+        } = build_load_arg_list_value(self, &mut b, &wanted_abi, &param_list_poly);
 
         // Start by taking the type args from the fun's enclosing environment
         let mut fcx = FunCtx::with_mono_ty_args(arret_fun.env_ty_args().clone());
@@ -1331,7 +1303,12 @@ impl EvalHirCtx {
             closure_reg,
             param_regs,
             arg_list_value,
-        } = build_load_arg_list_value(&mut b, &wanted_abi);
+        } = build_load_arg_list_value(
+            self,
+            &mut b,
+            &wanted_abi,
+            &ty::List::new_uniform(Ty::Any.into()),
+        );
 
         let fun_reg_value =
             value::RegValue::new(closure_reg.unwrap(), abitype::BoxedABIType::Any.into());

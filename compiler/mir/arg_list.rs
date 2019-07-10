@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use arret_syntax::span::Span;
 
 use arret_runtime::abitype;
@@ -8,8 +6,8 @@ use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops;
 use crate::mir::polymorph::PolymorphABI;
-use crate::mir::value;
 use crate::mir::value::Value;
+use crate::ty;
 
 pub struct LoadedArgList {
     /// Reg holding the closure parameter
@@ -25,36 +23,57 @@ pub struct LoadedArgList {
 /// Builds the regs and ops for loading the argument list of a function
 ///
 /// This results in an argument list value which contains all arguments passed to the function.
-pub fn build_load_arg_list_value(b: &mut Builder, polymorph_abi: &PolymorphABI) -> LoadedArgList {
-    let closure_reg = if polymorph_abi.has_closure {
+pub fn build_load_arg_list_value(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    polymorph_abi: &PolymorphABI,
+    param_list_poly: &ty::List<ty::Poly>,
+) -> LoadedArgList {
+    use crate::mir::value::from_reg::reg_to_value;
+    use crate::ty::list_iter::ListIterator;
+
+    let closure_reg: Option<BuiltReg> = if polymorph_abi.has_closure {
         Some(b.alloc_local())
     } else {
         None
     };
 
-    let fixed_reg_values = polymorph_abi
-        .arret_fixed_params()
-        .map(|abi_type| Rc::new(value::RegValue::new(b.alloc_local(), abi_type.clone())))
-        .collect::<Vec<Rc<value::RegValue>>>();
+    let mut param_list_poly_iter = ListIterator::new(param_list_poly);
 
-    let rest_reg_value = polymorph_abi
-        .arret_rest_param()
-        .map(|abi_type| Rc::new(value::RegValue::new(b.alloc_local(), abi_type.clone())));
+    let fixed_reg_values: Vec<(ops::RegId, Value)> = polymorph_abi
+        .arret_fixed_params()
+        .map(|abi_type| {
+            let reg = b.alloc_local();
+            let param_type = param_list_poly_iter.next().unwrap();
+
+            (reg.into(), reg_to_value(ehx, reg, abi_type, param_type))
+        })
+        .collect();
+
+    let rest_reg_value: Option<(ops::RegId, Value)> =
+        polymorph_abi.arret_rest_param().map(|abi_type| {
+            let reg = b.alloc_local();
+            let tail_type = param_list_poly_iter.tail_type();
+
+            (
+                reg.into(),
+                reg_to_value(ehx, reg, abi_type, &tail_type.into()),
+            )
+        });
 
     let param_regs = closure_reg
         .into_iter()
         .map(Into::into)
-        .chain(
-            fixed_reg_values
-                .iter()
-                .map(|reg_value| reg_value.reg.into()),
-        )
-        .chain(rest_reg_value.iter().map(|reg_value| reg_value.reg.into()))
+        .chain(fixed_reg_values.iter().map(|(reg, _)| *reg))
+        .chain(rest_reg_value.iter().map(|(reg, _)| *reg))
         .collect();
 
     let arg_list_value = Value::List(
-        fixed_reg_values.into_iter().map(Value::Reg).collect(),
-        rest_reg_value.map(|reg_value| Box::new(Value::Reg(reg_value))),
+        fixed_reg_values
+            .into_iter()
+            .map(|(_, value)| value)
+            .collect(),
+        rest_reg_value.map(|(_, value)| Box::new(value)),
     );
 
     LoadedArgList {
@@ -69,7 +88,7 @@ pub fn build_save_arg_list_to_regs<'a>(
     b: &mut Builder,
     span: Span,
     arg_list_value: Value,
-    fixed_abi_types: impl DoubleEndedIterator<Item = &'a abitype::ABIType>,
+    fixed_abi_types: impl ExactSizeIterator<Item = &'a abitype::ABIType>,
     rest_abi_type: Option<&'a abitype::ABIType>,
 ) -> Vec<ops::RegId> {
     use crate::mir::value::build_reg::value_to_reg;

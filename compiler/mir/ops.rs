@@ -261,7 +261,7 @@ pub enum OpCategory {
     Call,
     Cond,
     MemLoad,
-    RegCast,
+    CastBoxed,
     RegOp,
     MakeCallback,
     Ret,
@@ -529,8 +529,6 @@ impl OpKind {
             | AllocBoxedFunThunk(_, _)
             | AllocBoxedRecord(_, _) => OpCategory::AllocBoxed,
 
-            CastBoxed(_, _) => OpCategory::RegCast,
-
             LoadBoxedTypeTag(_, _)
             | LoadBoxedListLength(_, _)
             | LoadBoxedPairHead(_, _)
@@ -568,6 +566,7 @@ impl OpKind {
             Cond(_) => OpCategory::Cond,
             MakeCallback(_, _) => OpCategory::MakeCallback,
             ConstCastBoxed(_, _) => OpCategory::ConstCastBoxed,
+            CastBoxed(_, _) => OpCategory::CastBoxed,
             Call(_, _) => OpCategory::Call,
             Unreachable => OpCategory::Unreachable,
         }

@@ -43,9 +43,8 @@
 
   ; Records can be compared fieldwise
   (letrecord [OneField (one-field [one Int])]
-    ; TODO: Track record types through function args so these can take records
-    (assert-native-compare-fn! (fn ([left Int] [right Int]) -> Bool
-      (= (one-field left) (one-field right)))))
+    (assert-native-compare-fn! (fn ([left OneField] [right OneField]) -> Bool
+      (= left right))))
 
   ; If one field compares false the entire comparison is false
   (letrecord [TwoField (two-field [one Int] [two Bool])]

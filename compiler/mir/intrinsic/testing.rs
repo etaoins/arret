@@ -80,7 +80,7 @@ fn op_category_to_string(category: ops::OpCategory) -> &'static str {
         OpCategory::Cond => ":cond",
         OpCategory::MakeCallback => ":make-callback",
         OpCategory::MemLoad => ":mem-load",
-        OpCategory::RegCast => ":reg-cast",
+        OpCategory::CastBoxed => ":cast-boxed",
         OpCategory::RegOp => ":reg-op",
         OpCategory::Ret => ":ret",
         OpCategory::Unreachable => ":unreachable",

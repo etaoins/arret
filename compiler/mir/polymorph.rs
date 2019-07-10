@@ -28,7 +28,7 @@ impl PolymorphABI {
     }
 
     /// Returns the ABI types of the params corresponding to Arret fixed params
-    pub fn arret_fixed_params(&self) -> impl DoubleEndedIterator<Item = &abitype::ABIType> {
+    pub fn arret_fixed_params(&self) -> impl ExactSizeIterator<Item = &abitype::ABIType> {
         let mut ops_param_iter = self.ops_abi.params.iter();
 
         if self.has_closure {

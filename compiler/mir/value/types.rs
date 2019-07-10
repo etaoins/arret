@@ -4,23 +4,28 @@ use arret_runtime::boxed;
 use arret_runtime::boxed::prelude::*;
 use arret_runtime::boxed::refs::Gc;
 
+use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::tagset::TypeTagSet;
 use crate::mir::value::{RegValue, Value};
 use crate::ty;
+use crate::ty::record;
 use crate::ty::Ty;
 
-pub fn mono_to_const(
+pub fn ty_ref_to_const<M>(
     heap: &mut impl boxed::AsHeap,
-    mono: &ty::Ref<ty::Mono>,
-) -> Option<Gc<boxed::Any>> {
-    match mono.as_ty() {
+    ty_ref: &ty::Ref<M>,
+) -> Option<Gc<boxed::Any>>
+where
+    M: ty::PM,
+{
+    match ty_ref.resolve_to_ty() {
         Ty::LitBool(value) => Some(boxed::Bool::singleton_ref(*value).as_any_ref()),
         Ty::LitSym(value) => Some(boxed::Sym::new(heap, value.as_ref()).as_any_ref()),
         Ty::List(list) if !list.has_rest() => {
             let fixed_consts = list
                 .fixed()
                 .iter()
-                .map(|fixed| mono_to_const(heap, fixed))
+                .map(|fixed| ty_ref_to_const(heap, fixed))
                 .collect::<Option<Vec<Gc<boxed::Any>>>>()?;
 
             Some(boxed::List::new(heap, fixed_consts.into_iter()).as_any_ref())
@@ -55,6 +60,28 @@ pub fn possible_type_tags_for_value(value: &Value) -> TypeTagSet {
     }
 }
 
+/// Returns the optional known record cons for a value
+///
+/// This does not imply that the value is definitely a record. For example, `(U SomeRecord false)`
+/// will have a known record class of `SomeRecord` although it may be `false`.
+pub fn known_record_cons_for_value<'a>(
+    ehx: &'a EvalHirCtx,
+    value: &'a Value,
+) -> Option<&'a record::ConsId> {
+    match value {
+        Value::Const(any_ref) => match any_ref.as_subtype() {
+            boxed::AnySubtype::Record(record_ref) => Some(
+                ehx.cons_for_jit_record_class_id(record_ref.class_id())
+                    .expect("unable to lookup record cons for JIT record class ID"),
+            ),
+            _ => None,
+        },
+        Value::Record(cons, _) => Some(&cons),
+        Value::Reg(reg_value) => reg_value.known_record_cons.as_ref(),
+        _ => None,
+    }
+}
+
 /// Annotates an existing value with Arret type information
 ///
 /// For the majority of values this is a no-op. For this reason this function takes a builder for
@@ -70,12 +97,20 @@ where
     if let Value::Reg(reg_value) = value {
         // This could be useful; request the type
         let arret_ty = build_arret_ty();
-        if let Some(any_ref) = mono_to_const(heap, &arret_ty) {
+        if let Some(any_ref) = ty_ref_to_const(heap, &arret_ty) {
             return any_ref.into();
         }
 
         let old_type_tags = reg_value.possible_type_tags;
         let new_type_tags = old_type_tags & TypeTagSet::from(&arret_ty);
+
+        let known_record_cons = arret_ty
+            .find_member(|poly_ty| match poly_ty {
+                Ty::Record(instance) => Some(instance.cons()),
+                Ty::RecordClass(cons) => Some(cons),
+                _ => None,
+            })
+            .cloned();
 
         // Avoid allocating a new Rc if this is a no-op
         let new_reg_value = if new_type_tags != old_type_tags {
@@ -83,6 +118,7 @@ where
                 reg: reg_value.reg,
                 abi_type: reg_value.abi_type.clone(),
                 possible_type_tags: new_type_tags,
+                known_record_cons,
             })
         } else {
             reg_value
