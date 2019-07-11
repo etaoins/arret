@@ -1,0 +1,9 @@
+(import [stdlib base])
+(import [stdlib test])
+
+; This is a line comment
+
+#_"This is an ignored form"
+
+(defn main! () ->! ()
+  (assert-eq! '() (comment this is a macro that discards its body)))
