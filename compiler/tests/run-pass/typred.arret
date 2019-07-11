@@ -5,8 +5,18 @@
   (black-box! input))
 
 (defn test-tagged-ty-preds! () ->! ()
+  (assert-eq! true (any? (black-box-untyped! "foo")))
+  (assert-eq! true (any? (black-box-untyped! 'foo)))
+  (assert-eq! true (any? (black-box-untyped! :foo)))
+  (assert-eq! true (any? (black-box-untyped! 1)))
+  (assert-eq! true (any? (black-box-untyped! 2.0)))
+
   (assert-eq! true (str? (black-box-untyped! "foo")))
   (assert-eq! false (str? (black-box-untyped! 123)))
+
+  (assert-eq! false (sym? (black-box-untyped! "foo")))
+  (assert-eq! true (sym? (black-box-untyped! 'foo)))
+  (assert-eq! true (sym? (black-box-untyped! :foo)))
 
   (assert-eq! true (true? (black-box-untyped! true)))
   (assert-eq! false (true? (black-box-untyped! false)))

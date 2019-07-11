@@ -112,6 +112,14 @@
 (defn false? ([v Any]) -> Bool
   (= false v))
 
+(export any?)
+(defn any? ([_ Any]) -> true
+  true)
+
+(export identity)
+(defn identity #{T} ([v T]) -> T
+  v)
+
 (export ->>)
 (defmacro ->> (macro-rules
   [(initial) initial]
