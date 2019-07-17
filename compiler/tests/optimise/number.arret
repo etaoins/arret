@@ -27,7 +27,12 @@
     (>= i)))
   (assert-fn-doesnt-contain-op! :call (fn ([f Float])
     (> f)))
-    
+
+  ; These can generate MIR ops after testing the parameter's type
+  (assert-fn-doesnt-contain-op! :call zero?)
+  (assert-fn-doesnt-contain-op! :call neg?)
+  (assert-fn-doesnt-contain-op! :call pos?)
+
   ; These can generate comparison MIR ops
   (assert-fn-doesnt-contain-op! :call (fn ([i1 Int] [i2 Int])
     (< i1 i2)))

@@ -91,6 +91,18 @@
     (= n 0)
     (= n 0.0)))
 
+(export pos?)
+(defn pos? ([n Num]) -> Bool
+  (if (int? n)
+    (> n 0)
+    (> n 0.0)))
+
+(export neg?)
+(defn neg? ([n Num]) -> Bool
+  (if (int? n)
+    (< n 0)
+    (< n 0.0)))
+
 (export nan?)
 (defn nan? ([f Float]) -> Bool
   (not= f f))
