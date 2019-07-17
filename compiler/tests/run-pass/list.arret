@@ -23,6 +23,7 @@
   (assert-eq! '(4 4 4) (map (fn (x) 4) '(1 2 3)))
   (assert-eq! '(() () ()) (map (fn (x) ()) '(1 2 3)))
   (assert-eq! '(true false true) (map #(= % "yes") '("yes" "no" "yes")))
+  (assert-eq! '(false true false) (map #(not= % "yes") '("yes" "no" "yes")))
 
   ; This should be safe because `panic` won't be called
   (map panic '()))

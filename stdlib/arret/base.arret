@@ -64,7 +64,13 @@
 (export not)
 (defmacro not (macro-rules
   [(test) (if test false true)]
- ))
+))
+
+; This is a macro to support occurrence typing
+(export not=)
+(defmacro not= (macro-rules
+  [(lhs rhs) (not (= lhs rhs))]
+))
 
 (export ann)
 (defmacro ann (macro-rules
@@ -87,7 +93,7 @@
 
 (export nan?)
 (defn nan? ([f Float]) -> Bool
-  (not (= f f)))
+  (not= f f))
 
 (export infinite?)
 (defn infinite? ([f Float]) -> Bool
