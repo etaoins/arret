@@ -39,6 +39,17 @@
 
   (assert-eq! '(3) (filter #(= % 3) '(1 2 3 4))))
 
+(defn test-some? () ->! ()
+  (assert-eq! false (some? (fn (x) true) '()))
+  (assert-eq! false (some? (fn (x) false) '()))
+
+  (assert-eq! true (some? (fn (x) true) '(1 2 3)))
+  (assert-eq! false (some? (fn (x) false) '(1 2 3)))
+
+  (assert-eq! true (some? (fn (x) x) '(true false true false)))
+
+  (assert-eq! true (some? #(= % 3) '(1 2 3 4))))
+
 (defn test-fold () ->! ()
   (assert-eq! 7 (fold + 1 '(1 2 3)))
   (assert-eq! 5.0 (fold + -1.0 '(1.0 2.0 3.0))))
@@ -76,6 +87,7 @@
   (test-cons)
   (test-map)
   (test-filter)
+  (test-some?)
   (test-fold)
   (test-concat)
   (test-member)
