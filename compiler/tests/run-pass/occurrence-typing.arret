@@ -40,6 +40,11 @@
     (ann left Int)
     (ann right Float)))
 
+(defn cond-typing ([input Num])
+  (cond
+    (int? input) (ann input Int)
+    (float? input) (ann input Float)))
+
 (defn or-typing ([input (U Sym Str Int)])
   (if (or (sym? input) (str? input))
     (ann input (U Sym Str))

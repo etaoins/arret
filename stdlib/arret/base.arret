@@ -35,6 +35,17 @@
   [(test body-data ...) (if test () (do body-data ...))]
 ))
 
+(export cond)
+(defmacro cond (macro-rules
+  [() ()]
+  ; Intentionally don't allow a tail here so we throw an error with unreachable clauses
+  [(:else body-expr) body-expr]
+  [(test-expr body-expr rest-clauses ...)
+   (if test-expr
+     body-expr
+     (cond rest-clauses ...))]
+))
+
 (export if-not)
 (defmacro if-not (macro-rules
   [(test-expr false-expr true-expr) (if test-expr true-expr false-expr)]
