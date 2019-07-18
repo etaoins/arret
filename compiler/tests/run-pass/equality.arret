@@ -5,6 +5,9 @@
   ; This is very tempting to simpify to `true` but that's not valid for NaN
   (= arg arg))
 
+(defn num-arg-is-nan? #{[N Num]} ([arg N]) -> Bool
+  (and (float? arg) (not= arg arg)))
+
 (defn test-int-equality! () ->! ()
   (assert-eq! (black-box! 1) (black-box! 1))
   (assert-ne! (black-box! 1) (black-box! 2)))
@@ -36,7 +39,8 @@
   (assert-eq! false (= (black-box! ##NaN) (black-box! ##NaN)))
   (assert-eq! false ((black-box! =) (black-box! ##NaN) (black-box! ##NaN)))
 
-  (assert-eq! false (arg-is-self-equal (black-box! ##NaN))))
+  (assert-eq! false (arg-is-self-equal (black-box! ##NaN)))
+  (assert-eq! true (num-arg-is-nan? (black-box! ##NaN))))
 
 (defn test-float-zero-equality! () ->! ()
   (assert-eq! true (= 0.0 -0.0))

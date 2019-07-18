@@ -112,7 +112,7 @@ where
                 Ty::Intersect(members) => members
                     .iter()
                     .map(TypeTagSet::from)
-                    .fold(TypeTagSet::new(), |a, b| a & b),
+                    .fold(TypeTagSet::all(), |a, b| a & b),
                 Ty::Map(_) | Ty::Set(_) => unimplemented!("no corresponding type tag"),
             })
             .unwrap_or_else(TypeTagSet::all)
@@ -245,5 +245,16 @@ mod test {
         assert!(list_hash_set.contains(&TypeTag::Nil));
 
         assert_eq!(ALL_TYPE_TAGS.len(), full_set.into_iter().count());
+    }
+
+    #[test]
+    fn from_intersect_ty_ref() {
+        let num_float_intersect: ty::Ref<ty::Poly> =
+            Ty::Intersect(Box::new([Ty::Num.into(), Ty::Float.into()])).into();
+
+        assert_eq!(
+            TypeTagSet::from(TypeTag::Float),
+            TypeTagSet::from(&num_float_intersect)
+        );
     }
 }
