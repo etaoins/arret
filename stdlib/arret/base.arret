@@ -138,6 +138,25 @@
 (defn dec ([i Int]) -> Int
   (- i 1))
 
+(defmacro defextrema (macro-rules
+  [(name operator)
+   (defn name #{[N Num]} ([first N] & [rest N]) -> N
+     (fold (fn ([acc N] [next N]) -> N
+             (cond
+               (and (float? next) (nan? next)) next
+               (and (float? acc) (nan? acc)) acc
+               (operator next acc) next
+               :else acc))
+           first rest))]
+))
+
+
+(export min)
+(defextrema min <)
+
+(export max)
+(defextrema max >)
+
 (export true?)
 (defn true? ([v Any]) -> Bool
   (= true v))

@@ -121,6 +121,27 @@
   (assert-eq! true (even? 2))
   (assert-eq! false (odd? 2)))
 
+(defn test-min-max! () ->! ()
+  (assert-eq! 0 (min 0))
+  (assert-eq! 0 (max 0))
+
+  (assert-eq! true (nan? (min ##NaN)))
+  (assert-eq! true (nan? (max ##NaN)))
+
+  (assert-eq! true (nan? (float (min ##NaN 0))))
+  (assert-eq! true (nan? (float (min 0 ##NaN))))
+  (assert-eq! true (nan? (float (max ##NaN 0))))
+  (assert-eq! true (nan? (float (max 0 ##NaN))))
+
+  (assert-eq! 1 (min 1 2 3))
+  (assert-eq! 3 (max 1 2 3))
+
+  (assert-eq! 1.0 (min 3.0 2 1.0))
+  (assert-eq! 3.0 (max 3.0 2 1.0))
+
+  (assert-eq! ##-Inf (min ##-Inf ##Inf))
+  (assert-eq! ##Inf (max ##-Inf ##Inf)))
+
 (defn main! () ->! ()
   (test-zero?)
   (test-pos?)
@@ -130,4 +151,5 @@
   (test-float!)
   (test-int!)
   (test-comparisons!)
-  (test-even-odd!))
+  (test-even-odd!)
+  (test-min-max!))
