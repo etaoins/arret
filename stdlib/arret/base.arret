@@ -7,8 +7,8 @@
         bool? num? int? float? char? list? vector? set? map? fn? nil? record?)
 
 (import [stdlib rust])
-(export length panic panic! print! println! exit! cons map filter every? fold concat member? int
-        float < <= == > >= + * - / rem quot)
+(export length panic panic! print! println! exit! cons map filter some? every? fold concat member?
+        int float < <= == > >= + * - / rem quot)
 
 (export defn)
 (defmacro defn (macro-rules
@@ -33,6 +33,17 @@
 (export when-not)
 (defmacro when-not (macro-rules
   [(test body-data ...) (if test () (do body-data ...))]
+))
+
+(export cond)
+(defmacro cond (macro-rules
+  [() ()]
+  ; Intentionally don't allow a tail here so we throw an error with unreachable clauses
+  [(:else body-expr) body-expr]
+  [(test-expr body-expr rest-clauses ...)
+   (if test-expr
+     body-expr
+     (cond rest-clauses ...))]
 ))
 
 (export if-not)
@@ -64,7 +75,13 @@
 (export not)
 (defmacro not (macro-rules
   [(test) (if test false true)]
- ))
+))
+
+; This is a macro to support occurrence typing
+(export not=)
+(defmacro not= (macro-rules
+  [(lhs rhs) (not (= lhs rhs))]
+))
 
 (export ann)
 (defmacro ann (macro-rules
@@ -85,9 +102,21 @@
     (= n 0)
     (= n 0.0)))
 
+(export pos?)
+(defn pos? ([n Num]) -> Bool
+  (if (int? n)
+    (> n 0)
+    (> n 0.0)))
+
+(export neg?)
+(defn neg? ([n Num]) -> Bool
+  (if (int? n)
+    (< n 0)
+    (< n 0.0)))
+
 (export nan?)
 (defn nan? ([f Float]) -> Bool
-  (not (= f f)))
+  (not= f f))
 
 (export infinite?)
 (defn infinite? ([f Float]) -> Bool

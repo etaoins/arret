@@ -4,12 +4,32 @@
 (defn test-zero? () ->! ()
   (assert-eq! true (zero? 0))
   (assert-eq! true (zero? (black-box! 0.0)))
+  (assert-eq! false (zero? ##NaN))
 
   (assert-eq! false (zero? 10))
   (assert-eq! false (zero? (black-box! 10.0)))
-  (assert-eq! false (zero? ##NaN))
   (assert-eq! false (zero? (black-box! ##Inf)))
   (assert-eq! false (zero? ##-Inf)))
+
+(defn test-pos? () ->! ()
+  (assert-eq! false (pos? 0))
+  (assert-eq! false (pos? (black-box! 0.0)))
+  (assert-eq! false (pos? ##NaN))
+
+  (assert-eq! true (pos? 10))
+  (assert-eq! false (pos? (black-box! -10.0)))
+  (assert-eq! true (pos? (black-box! ##Inf)))
+  (assert-eq! false (pos? ##-Inf)))
+
+(defn test-neg? () ->! ()
+  (assert-eq! false (neg? 0))
+  (assert-eq! false (neg? (black-box! 0.0)))
+  (assert-eq! false (neg? ##NaN))
+
+  (assert-eq! false (neg? 10))
+  (assert-eq! true (neg? (black-box! -10.0)))
+  (assert-eq! false (neg? (black-box! ##Inf)))
+  (assert-eq! true (neg? ##-Inf)))
 
 (defn test-nan? () ->! ()
   (assert-eq! false (nan? 10.0))
@@ -103,6 +123,8 @@
 
 (defn main! () ->! ()
   (test-zero?)
+  (test-pos?)
+  (test-neg?)
   (test-nan?)
   (test-infinite?)
   (test-float!)

@@ -63,6 +63,7 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "panic!" => stdlib_panic_impure,
     "map" => stdlib_map,
     "filter" => stdlib_filter,
+    "some?" => stdlib_some_p,
     "every?" => stdlib_every_p,
     "fold" => stdlib_fold,
     "print!" => stdlib_print,

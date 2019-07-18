@@ -50,6 +50,15 @@ pub fn stdlib_filter(
 }
 
 #[arret_rfi_derive::rust_fun("(All #{T [->_ ->!]} (T ->_ Bool) (List & T) ->_ Bool)")]
+pub fn stdlib_some_p(
+    task: &mut Task,
+    pred: callback::Callback<extern "C" fn(&mut Task, boxed::Closure, Gc<boxed::Any>) -> bool>,
+    input: Gc<boxed::List<boxed::Any>>,
+) -> bool {
+    input.iter().any(|elem| pred.apply(task, elem))
+}
+
+#[arret_rfi_derive::rust_fun("(All #{T [->_ ->!]} (T ->_ Bool) (List & T) ->_ Bool)")]
 pub fn stdlib_every_p(
     task: &mut Task,
     pred: callback::Callback<extern "C" fn(&mut Task, boxed::Closure, Gc<boxed::Any>) -> bool>,
