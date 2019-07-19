@@ -68,6 +68,8 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "fold" => stdlib_fold,
     "print!" => stdlib_print,
     "println!" => stdlib_println,
+    "write!" => stdlib_write,
+    "writeln!" => stdlib_writeln,
     "exit!" => stdlib_exit,
     "cons" => stdlib_cons,
     "concat" => stdlib_concat,
