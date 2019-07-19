@@ -1,10 +1,8 @@
 (import [stdlib base])
 (import [stdlib test])
 
+; This is a monomorphic, fixed arity form of `(constantly)`
 (defn return-const (x) (fn () x))
-
-(defn generic-return-const #{T} ([x T]) -> (-> T)
-  (fn () -> T x))
 
 ; This would have an inline record struct closure
 (defn return-two-int-values ([one Int] [two Int]) -> (-> (List & Int))
@@ -31,11 +29,11 @@
   (assert-eq! 3 ((return-const (black-box! 3))))
   (assert-eq! 4 (((black-box! return-const) (black-box! 4))))
 
-  (assert-eq! true (fn? (black-box! generic-return-const)))
-  (assert-eq! 1 ((generic-return-const 1)))
-  (assert-eq! 2 (((black-box! generic-return-const) 2)))
-  (assert-eq! 3 ((generic-return-const (black-box! 3))))
-  (assert-eq! 4 (((black-box! generic-return-const) (black-box! 4))))
+  (assert-eq! true (fn? (black-box! constantly)))
+  (assert-eq! 1 ((constantly 1)))
+  (assert-eq! 2 (((black-box! constantly) 2)))
+  (assert-eq! 3 ((constantly (black-box! 3))))
+  (assert-eq! 4 (((black-box! constantly) (black-box! 4))))
 
   (assert-eq! '(123 456) ((black-box!
     (return-two-int-values (black-box! 123) (black-box! 456)))))

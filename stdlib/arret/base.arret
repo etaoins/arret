@@ -173,6 +173,10 @@
 (defn identity #{T} ([v T]) -> T
   v)
 
+(export constantly)
+(defn constantly #{T} ([v T]) -> (& Any -> T)
+  (fn (& _) v))
+
 (export ->>)
 (defmacro ->> (macro-rules
   [(initial) initial]
