@@ -1,22 +1,23 @@
 (import [stdlib base])
 (import [stdlib test])
 
-(defn test-length () ->! ()
+(defn test-length! () ->! ()
   (assert-eq! 0 (length ()))
   (assert-eq! 4 (length '(1 2 3 4)))
   (assert-eq! 4 (length (black-box! '(1 2 3 4))))
   (assert-eq! 3 (length (list 1 2 3))))
 
-(defn test-first-rest () ->! ()
+(defn test-first-second-rest! () ->! ()
   (assert-eq! 'one (ann (first '(one two three)) 'one))
+  (assert-eq! 'two (ann (second '(one two three)) 'two))
   (assert-eq! '(two three) (ann (rest '(one two three)) (List & Sym)))
   (assert-eq! () (ann (rest '(one)) '())))
 
-(defn test-cons () ->! ()
+(defn test-cons! () ->! ()
   (assert-eq! '(1) (ann (cons 1 '()) (List Int)))
   (assert-eq! '((1 2) 3) (cons '(1 2) '(3))))
 
-(defn test-map () ->! ()
+(defn test-map! () ->! ()
   (assert-eq! '() (ann (map (fn (x) x) '()) '()))
   (assert-eq! '(1 2 3 4 5) (map (fn (x) x) '(1 2 3 4 5)))
   (assert-eq! '(0 1 2 3) (map #(length %) '(() (1) (1 2) (1 2 3))))
@@ -28,7 +29,7 @@
   ; This should be safe because `panic` won't be called
   (map panic '()))
 
-(defn test-filter () ->! ()
+(defn test-filter! () ->! ()
   (assert-eq! '() (filter (fn (x) true) '()))
   (assert-eq! '() (filter (fn (x) false) '()))
 
@@ -50,7 +51,7 @@
 
   (assert-eq! true (some? #(= % 3) '(1 2 3 4))))
 
-(defn test-fold () ->! ()
+(defn test-fold! () ->! ()
   (assert-eq! 7 (fold + 1 '(1 2 3)))
   (assert-eq! 5.0 (fold + -1.0 '(1.0 2.0 3.0))))
 
@@ -61,19 +62,19 @@
   (assert-eq! false (every? int? '(1.0 2)))
   (assert-eq! false (every? int? '(1 2.0))))
 
-(defn test-concat () ->! ()
+(defn test-concat! () ->! ()
   (assert-eq! '() (ann (concat) '()))
   (assert-eq! '(1 2 3) (concat '(1 2 3)))
   (assert-eq! '(1 2 3 4 5 6) (concat '(1 2 3) '() '(4 5 6))))
 
-(defn test-member () ->! ()
+(defn test-member! () ->! ()
   (assert-eq! false (member? 1 '()))
   (assert-eq! true (member? 1 '(1 2 3)))
   (assert-eq! true (member? 1 '(3 2 1)))
   (assert-eq! false (member? 1 '(4 5 6)))
   (assert-eq! false (member? ##NaN '(1 2 ##NaN))))
 
-(defn test-threading () ->! ()
+(defn test-threading! () ->! ()
   (assert-eq! '(3 5 7 9)
     (->> '(0 1 2 3 4)
       ; Make sure these are run in the correct order
@@ -82,13 +83,13 @@
       (map #(+ % 1)))))
 
 (defn main! () ->! ()
-  (test-length)
-  (test-first-rest)
-  (test-cons)
-  (test-map)
-  (test-filter)
+  (test-length!)
+  (test-first-second-rest!)
+  (test-cons!)
+  (test-map!)
+  (test-filter!)
   (test-some?)
-  (test-fold)
-  (test-concat)
-  (test-member)
-  (test-threading))
+  (test-fold!)
+  (test-concat!)
+  (test-member!)
+  (test-threading!))

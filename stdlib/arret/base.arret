@@ -89,8 +89,12 @@
 ))
 
 (export first)
-(defn first #{T} (([head T] & _)) -> T
-  head)
+(defn first #{T} (([v T] & _)) -> T
+  v)
+
+(export second)
+(defn second #{T} ((_ [v T] & _)) -> T
+  v)
 
 (export rest)
 (defn rest #{T} ((_ & [tail T])) -> (List & T)
