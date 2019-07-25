@@ -510,7 +510,10 @@ pub fn value_to_reg(
             let eq_pred_arret_fun = ehx.synthetic_funs().eq_pred_arret_fun().clone();
             arret_fun_to_reg(ehx, b, span, &eq_pred_arret_fun, abi_type)
         }
-        Value::RecordCons(_) => unimplemented!("synthesising record constructors"),
+        Value::RecordCons(cons) => {
+            let record_cons_arret_fun = ehx.synthetic_funs().record_cons_arret_fun(cons).clone();
+            arret_fun_to_reg(ehx, b, span, &record_cons_arret_fun, abi_type)
+        }
         Value::FieldAccessor(cons, field_index) => {
             let field_accessor_arret_fun = ehx
                 .synthetic_funs()

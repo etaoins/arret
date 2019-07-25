@@ -112,6 +112,81 @@ fn new_ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
     )
 }
 
+fn new_record_cons_arret_fun(cons: &record::ConsId) -> value::ArretFun {
+    let record::ConsPolymorphicVars {
+        ty_args,
+        pvars,
+        tvars,
+    } = cons.polymorphic_vars();
+
+    let cons_fun_ty = record::Cons::value_cons_fun_type(cons);
+    let record_instance_ty = Ty::Record(Box::new(record::Instance::new(
+        cons.clone(),
+        ty_args.clone(),
+    )));
+
+    let param_var_ids: Vec<hir::VarId> = hir::VarId::alloc_iter(cons.fields().len()).collect();
+
+    let params = hir::destruc::List::new(
+        cons.fields()
+            .iter()
+            .zip(param_var_ids.iter())
+            .map(|(field, param_var_id)| {
+                hir::destruc::Destruc::Scalar(
+                    EMPTY_SPAN,
+                    hir::destruc::Scalar::new(
+                        Some(*param_var_id),
+                        field.name().clone(),
+                        field.ty_ref().clone(),
+                    ),
+                )
+            })
+            .collect(),
+        None,
+    );
+
+    let cons_arg_exprs = cons
+        .fields()
+        .iter()
+        .zip(param_var_ids.iter())
+        .map(|(field, param_var_id)| hir::Expr {
+            result_ty: field.ty_ref().clone(),
+            kind: hir::ExprKind::Ref(EMPTY_SPAN, *param_var_id),
+        })
+        .collect();
+
+    value::ArretFun::new(
+        Some(cons.value_cons_name().clone()),
+        // These are the environment type args, not our own
+        TyArgs::empty(),
+        Closure::empty(),
+        hir::Fun {
+            span: EMPTY_SPAN,
+
+            pvars,
+            tvars,
+
+            purity: Purity::Pure.into(),
+            params,
+            ret_ty: record_instance_ty.clone().into(),
+
+            body_expr: hir::Expr {
+                result_ty: record_instance_ty.clone().into(),
+                kind: hir::ExprKind::App(Box::new(hir::App {
+                    span: EMPTY_SPAN,
+                    fun_expr: hir::Expr {
+                        result_ty: cons_fun_ty.into(),
+                        kind: hir::ExprKind::RecordCons(EMPTY_SPAN, cons.clone()),
+                    },
+                    ty_args: ty_args.clone(),
+                    fixed_arg_exprs: cons_arg_exprs,
+                    rest_arg_expr: None,
+                })),
+            },
+        },
+    )
+}
+
 fn new_field_accessor_arret_fun(cons: &record::ConsId, field_index: usize) -> value::ArretFun {
     let record::ConsPolymorphicVars {
         ty_args,
@@ -180,6 +255,7 @@ fn new_field_accessor_arret_fun(cons: &record::ConsId, field_index: usize) -> va
 pub struct SyntheticFuns {
     eq_pred_arret_fun: Option<value::ArretFun>,
     ty_pred_arret_fun: HashMap<ty::pred::TestTy, value::ArretFun>,
+    record_cons_arret_fun: HashMap<record::ConsId, value::ArretFun>,
     field_accessor_arret_fun: HashMap<(record::ConsId, usize), value::ArretFun>,
 }
 
@@ -197,6 +273,12 @@ impl SyntheticFuns {
         self.ty_pred_arret_fun
             .entry(test_ty.clone())
             .or_insert_with(|| new_ty_pred_arret_fun(test_ty))
+    }
+
+    pub fn record_cons_arret_fun(&mut self, cons: &record::ConsId) -> &value::ArretFun {
+        self.record_cons_arret_fun
+            .entry(cons.clone())
+            .or_insert_with(|| new_record_cons_arret_fun(cons))
     }
 
     pub fn field_accessor_arret_fun(

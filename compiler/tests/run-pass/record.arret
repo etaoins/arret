@@ -15,18 +15,22 @@
 
 (defn test-bool-record-fields! () ->! ()
   (letrecord [Record (record [field Bool])]
-    (let [true-record (record true) false-record (record false)]
+    (let [true-record (record true)
+          false-record (record false)
+          black-box-true-record ((black-box! record) true)
+          black-box-false-record ((black-box! record) false)]
+
       (assert-eq! false (record-field false-record))
       (assert-eq! true (record-field true-record))
 
-      (assert-eq! false (record-field (black-box! false-record)))
-      (assert-eq! true (record-field (black-box! true-record)))
+      (assert-eq! false (record-field black-box-false-record))
+      (assert-eq! true (record-field black-box-true-record))
 
       (assert-eq! true-record true-record)
-      (assert-eq! true-record (black-box! true-record))
+      (assert-eq! true-record black-box-true-record)
 
       (assert-ne! true-record false-record)
-      (assert-ne! true-record (black-box! false-record))
+      (assert-ne! true-record black-box-false-record)
       
       (assert-eq! false ((black-box! record-field) false-record))
       (assert-eq! true ((black-box! record-field) true-record)))))
@@ -104,8 +108,7 @@
       (assert-eq! (black-box! external-record) (black-box! external-record))
 
       ; Force this to be allocated on the heap
-      ; TODO: Replace with `(black-box! external-record)` once that's supported
-      (let [heap-external-record ((black-box! (fn () (record \tab 2.0 (black-box! 3) 'four true))))]
+      (let [heap-external-record ((black-box! record) \tab 2.0 (black-box! 3) 'four true)]
         (assert-eq! external-record heap-external-record)))))
 
 (defn main! () ->! ()
