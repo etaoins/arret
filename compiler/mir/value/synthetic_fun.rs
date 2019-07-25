@@ -1,5 +1,7 @@
-use arret_syntax::span::EMPTY_SPAN;
 use std::collections::HashMap;
+
+use arret_syntax::datum::DataStr;
+use arret_syntax::span::EMPTY_SPAN;
 
 use crate::hir;
 use crate::mir::closure::Closure;
@@ -11,53 +13,71 @@ use crate::ty::record;
 use crate::ty::ty_args::TyArgs;
 use crate::ty::Ty;
 
-fn new_eq_pred_arret_fun() -> value::ArretFun {
-    let left_var_id = hir::VarId::alloc();
-    let right_var_id = hir::VarId::alloc();
+struct ExprParam {
+    source_name: DataStr,
+    poly_type: ty::Ref<ty::Poly>,
+}
 
-    let fixed_params = [("left", left_var_id), ("right", right_var_id)]
+fn wrap_poly_expr_in_arret_fun(
+    source_name: DataStr,
+    ty_args: TyArgs<ty::Poly>,
+    pvars: purity::PVars,
+    tvars: ty::TVars,
+    expr_params: &[ExprParam],
+    ret_ty: ty::Ref<ty::Poly>,
+    wrapped_expr: hir::Expr<hir::Inferred>,
+) -> value::ArretFun {
+    let param_var_ids: Vec<hir::VarId> = hir::VarId::alloc_iter(expr_params.len()).collect();
+
+    let params = hir::destruc::List::new(
+        expr_params
+            .iter()
+            .zip(param_var_ids.iter())
+            .map(|(expr_param, param_var_id)| {
+                hir::destruc::Destruc::Scalar(
+                    EMPTY_SPAN,
+                    hir::destruc::Scalar::new(
+                        Some(*param_var_id),
+                        expr_param.source_name.clone(),
+                        expr_param.poly_type.clone(),
+                    ),
+                )
+            })
+            .collect(),
+        None,
+    );
+
+    let fixed_arg_exprs = expr_params
         .iter()
-        .map(|(name, var_id)| {
-            hir::destruc::Destruc::Scalar(
-                EMPTY_SPAN,
-                hir::destruc::Scalar::new(Some(*var_id), (*name).into(), Ty::Any.into()),
-            )
+        .zip(param_var_ids.iter())
+        .map(|(expr_param, param_var_id)| hir::Expr {
+            result_ty: expr_param.poly_type.clone(),
+            kind: hir::ExprKind::Ref(EMPTY_SPAN, *param_var_id),
         })
         .collect();
 
     value::ArretFun::new(
-        Some("=".into()),
+        Some(source_name),
+        // These are the environment type args, not our own
         TyArgs::empty(),
         Closure::empty(),
         hir::Fun {
             span: EMPTY_SPAN,
 
-            pvars: purity::PVars::new(),
-            tvars: ty::TVars::new(),
+            pvars,
+            tvars,
 
             purity: Purity::Pure.into(),
-            params: hir::destruc::List::new(fixed_params, None),
-            ret_ty: Ty::Bool.into(),
+            params,
+            ret_ty: ret_ty.clone(),
 
             body_expr: hir::Expr {
-                result_ty: Ty::Bool.into(),
+                result_ty: ret_ty.clone(),
                 kind: hir::ExprKind::App(Box::new(hir::App {
                     span: EMPTY_SPAN,
-                    fun_expr: hir::Expr {
-                        result_ty: Ty::EqPred.into(),
-                        kind: hir::ExprKind::EqPred(EMPTY_SPAN),
-                    },
-                    ty_args: TyArgs::empty(),
-                    fixed_arg_exprs: vec![
-                        hir::Expr {
-                            result_ty: Ty::Any.into(),
-                            kind: hir::ExprKind::Ref(EMPTY_SPAN, left_var_id),
-                        },
-                        hir::Expr {
-                            result_ty: Ty::Any.into(),
-                            kind: hir::ExprKind::Ref(EMPTY_SPAN, right_var_id),
-                        },
-                    ],
+                    fun_expr: wrapped_expr,
+                    ty_args,
+                    fixed_arg_exprs,
                     rest_arg_expr: None,
                 })),
             },
@@ -65,50 +85,59 @@ fn new_eq_pred_arret_fun() -> value::ArretFun {
     )
 }
 
-fn new_ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
-    let subject_var_id = hir::VarId::alloc();
-
-    value::ArretFun::new(
-        Some(test_ty.to_string().into()),
+fn wrap_mono_expr_in_arret_fun(
+    source_name: DataStr,
+    expr_params: &[ExprParam],
+    ret_ty: ty::Ref<ty::Poly>,
+    wrapped_expr: hir::Expr<hir::Inferred>,
+) -> value::ArretFun {
+    wrap_poly_expr_in_arret_fun(
+        source_name,
         TyArgs::empty(),
-        Closure::empty(),
-        hir::Fun {
-            span: EMPTY_SPAN,
+        purity::PVars::new(),
+        ty::TVars::new(),
+        expr_params,
+        ret_ty,
+        wrapped_expr,
+    )
+}
 
-            pvars: purity::PVars::new(),
-            tvars: ty::TVars::new(),
-
-            purity: Purity::Pure.into(),
-            params: hir::destruc::List::new(
-                vec![hir::destruc::Destruc::Scalar(
-                    EMPTY_SPAN,
-                    hir::destruc::Scalar::new(
-                        Some(subject_var_id),
-                        "subject".into(),
-                        Ty::Any.into(),
-                    ),
-                )],
-                None,
-            ),
-            ret_ty: Ty::Bool.into(),
-
-            body_expr: hir::Expr {
-                result_ty: Ty::Bool.into(),
-                kind: hir::ExprKind::App(Box::new(hir::App {
-                    span: EMPTY_SPAN,
-                    fun_expr: hir::Expr {
-                        result_ty: Ty::TyPred(test_ty.clone()).into(),
-                        kind: hir::ExprKind::TyPred(EMPTY_SPAN, test_ty),
-                    },
-                    ty_args: TyArgs::empty(),
-                    fixed_arg_exprs: vec![hir::Expr {
-                        result_ty: Ty::Any.into(),
-                        kind: hir::ExprKind::Ref(EMPTY_SPAN, subject_var_id),
-                    }],
-                    rest_arg_expr: None,
-                })),
-            },
+fn new_eq_pred_arret_fun() -> value::ArretFun {
+    let expr_params = [
+        ExprParam {
+            source_name: "left".into(),
+            poly_type: Ty::Any.into(),
         },
+        ExprParam {
+            source_name: "right".into(),
+            poly_type: Ty::Any.into(),
+        },
+    ];
+
+    let wrapped_expr = hir::Expr {
+        result_ty: Ty::EqPred.into(),
+        kind: hir::ExprKind::EqPred(EMPTY_SPAN),
+    };
+
+    wrap_mono_expr_in_arret_fun("=".into(), &expr_params, Ty::Bool.into(), wrapped_expr)
+}
+
+fn new_ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
+    let expr_params = [ExprParam {
+        source_name: "subject".into(),
+        poly_type: Ty::Any.into(),
+    }];
+
+    let wrapped_expr = hir::Expr {
+        result_ty: Ty::TyPred(test_ty.clone()).into(),
+        kind: hir::ExprKind::TyPred(EMPTY_SPAN, test_ty.clone()),
+    };
+
+    wrap_mono_expr_in_arret_fun(
+        test_ty.to_string().into(),
+        &expr_params,
+        Ty::Bool.into(),
+        wrapped_expr,
     )
 }
 
@@ -125,65 +154,28 @@ fn new_record_cons_arret_fun(cons: &record::ConsId) -> value::ArretFun {
         ty_args.clone(),
     )));
 
-    let param_var_ids: Vec<hir::VarId> = hir::VarId::alloc_iter(cons.fields().len()).collect();
-
-    let params = hir::destruc::List::new(
-        cons.fields()
-            .iter()
-            .zip(param_var_ids.iter())
-            .map(|(field, param_var_id)| {
-                hir::destruc::Destruc::Scalar(
-                    EMPTY_SPAN,
-                    hir::destruc::Scalar::new(
-                        Some(*param_var_id),
-                        field.name().clone(),
-                        field.ty_ref().clone(),
-                    ),
-                )
-            })
-            .collect(),
-        None,
-    );
-
-    let cons_arg_exprs = cons
+    let expr_params: Vec<ExprParam> = cons
         .fields()
         .iter()
-        .zip(param_var_ids.iter())
-        .map(|(field, param_var_id)| hir::Expr {
-            result_ty: field.ty_ref().clone(),
-            kind: hir::ExprKind::Ref(EMPTY_SPAN, *param_var_id),
+        .map(|field| ExprParam {
+            source_name: field.name().clone(),
+            poly_type: field.ty_ref().clone(),
         })
         .collect();
 
-    value::ArretFun::new(
-        Some(cons.value_cons_name().clone()),
-        // These are the environment type args, not our own
-        TyArgs::empty(),
-        Closure::empty(),
-        hir::Fun {
-            span: EMPTY_SPAN,
+    let wrapped_expr = hir::Expr {
+        result_ty: cons_fun_ty.into(),
+        kind: hir::ExprKind::RecordCons(EMPTY_SPAN, cons.clone()),
+    };
 
-            pvars,
-            tvars,
-
-            purity: Purity::Pure.into(),
-            params,
-            ret_ty: record_instance_ty.clone().into(),
-
-            body_expr: hir::Expr {
-                result_ty: record_instance_ty.clone().into(),
-                kind: hir::ExprKind::App(Box::new(hir::App {
-                    span: EMPTY_SPAN,
-                    fun_expr: hir::Expr {
-                        result_ty: cons_fun_ty.into(),
-                        kind: hir::ExprKind::RecordCons(EMPTY_SPAN, cons.clone()),
-                    },
-                    ty_args: ty_args.clone(),
-                    fixed_arg_exprs: cons_arg_exprs,
-                    rest_arg_expr: None,
-                })),
-            },
-        },
+    wrap_poly_expr_in_arret_fun(
+        cons.value_cons_name().clone(),
+        ty_args,
+        pvars,
+        tvars,
+        &expr_params,
+        record_instance_ty.into(),
+        wrapped_expr,
     )
 }
 
@@ -201,53 +193,28 @@ fn new_field_accessor_arret_fun(cons: &record::ConsId, field_index: usize) -> va
         ty_args.clone(),
     )));
 
-    let record_var_id = hir::VarId::alloc();
-    value::ArretFun::new(
-        Some(format!("{}-{}", cons.value_cons_name(), field.name()).into()),
-        // These are the environment type args, not our own
-        TyArgs::empty(),
-        Closure::empty(),
-        hir::Fun {
+    let expr_params = &[ExprParam {
+        source_name: cons.value_cons_name().clone(),
+        poly_type: record_instance_ty.clone().into(),
+    }];
+
+    let wrapped_expr = hir::Expr {
+        result_ty: accessor_fun_ty.into(),
+        kind: hir::ExprKind::FieldAccessor(Box::new(hir::FieldAccessor {
             span: EMPTY_SPAN,
+            record_cons: cons.clone(),
+            field_index,
+        })),
+    };
 
-            pvars,
-            tvars,
-
-            purity: Purity::Pure.into(),
-            params: hir::destruc::List::new(
-                vec![hir::destruc::Destruc::Scalar(
-                    EMPTY_SPAN,
-                    hir::destruc::Scalar::new(
-                        Some(record_var_id),
-                        cons.value_cons_name().clone(),
-                        record_instance_ty.clone().into(),
-                    ),
-                )],
-                None,
-            ),
-            ret_ty: field.ty_ref().clone(),
-
-            body_expr: hir::Expr {
-                result_ty: field.ty_ref().clone(),
-                kind: hir::ExprKind::App(Box::new(hir::App {
-                    span: EMPTY_SPAN,
-                    fun_expr: hir::Expr {
-                        result_ty: accessor_fun_ty.into(),
-                        kind: hir::ExprKind::FieldAccessor(Box::new(hir::FieldAccessor {
-                            span: EMPTY_SPAN,
-                            record_cons: cons.clone(),
-                            field_index,
-                        })),
-                    },
-                    ty_args: ty_args.clone(),
-                    fixed_arg_exprs: vec![hir::Expr {
-                        result_ty: record_instance_ty.into(),
-                        kind: hir::ExprKind::Ref(EMPTY_SPAN, record_var_id),
-                    }],
-                    rest_arg_expr: None,
-                })),
-            },
-        },
+    wrap_poly_expr_in_arret_fun(
+        format!("{}-{}", cons.value_cons_name(), field.name()).into(),
+        ty_args,
+        pvars,
+        tvars,
+        expr_params,
+        record_instance_ty.into(),
+        wrapped_expr,
     )
 }
 
