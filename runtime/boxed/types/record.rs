@@ -15,7 +15,7 @@ pub type RecordClassId = u32;
 struct RecordHeader {
     header: Header,
     inline_byte_len: u8,
-    contains_gc_refs: bool,
+    may_contain_gc_refs: bool,
     class_id: RecordClassId,
 }
 
@@ -106,7 +106,7 @@ impl Record {
     }
 
     pub(crate) fn field_gc_refs<'cm>(&mut self, heap: &'cm Heap) -> FieldGcRefIter<'cm> {
-        if !self.record_header.contains_gc_refs {
+        if !self.record_header.may_contain_gc_refs {
             return FieldGcRefIter::empty();
         }
 
@@ -198,23 +198,16 @@ impl InlineRecord {
                 data.layout().size(),
             );
 
-            let mut inline_record = InlineRecord {
+            InlineRecord {
                 record_header: RecordHeader {
                     header,
                     inline_byte_len: data.layout().size() as u8,
-                    contains_gc_refs: false,
+                    // This is conservative - we don't know if there are GC refs or not
+                    may_contain_gc_refs: (data.layout().size() > 0) as bool,
                     class_id,
                 },
                 inline_data: inline_data.assume_init(),
-            };
-
-            ptr::copy(
-                data.as_ptr(),
-                &mut inline_record.inline_data[0] as *mut u8,
-                data.layout().size(),
-            );
-
-            inline_record
+            }
         }
     }
 }
@@ -233,7 +226,8 @@ impl ExternalRecord {
             record_header: RecordHeader {
                 header,
                 inline_byte_len: std::u8::MAX,
-                contains_gc_refs: false,
+                // This is conservative - we don't know if there are GC refs or not
+                may_contain_gc_refs: true,
                 class_id,
             },
 
