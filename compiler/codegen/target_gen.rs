@@ -67,7 +67,11 @@ pub struct TargetCtx {
 
     task_type: Option<LLVMTypeRef>,
     box_header_type: Option<LLVMTypeRef>,
+
+    shared_str_type: Option<LLVMTypeRef>,
     boxed_inline_str_type: Option<LLVMTypeRef>,
+    boxed_external_str_type: Option<LLVMTypeRef>,
+
     boxed_types: HashMap<BoxLayout, LLVMTypeRef>,
     global_interned_name_type: Option<LLVMTypeRef>,
 
@@ -121,7 +125,11 @@ impl TargetCtx {
 
                 task_type: None,
                 box_header_type: None,
+
+                shared_str_type: None,
                 boxed_inline_str_type: None,
+                boxed_external_str_type: None,
+
                 boxed_types: HashMap::new(),
                 global_interned_name_type: None,
 
@@ -235,6 +243,48 @@ impl TargetCtx {
             let members = &mut [llvm_i8, llvm_i8];
 
             let llvm_type = LLVMStructCreateNamed(llx, b"box_header\0".as_ptr() as *const _);
+            LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
+
+            llvm_type
+        })
+    }
+
+    pub fn shared_str_llvm_type(&mut self) -> LLVMTypeRef {
+        let llx = self.llx;
+        let llvm_header = self.box_header_llvm_type();
+
+        *self.shared_str_type.get_or_insert_with(|| unsafe {
+            let llvm_i8 = LLVMInt8TypeInContext(llx);
+            let llvm_i64 = LLVMInt64TypeInContext(llx);
+
+            let members = &mut [
+                llvm_header,
+                // ref_count
+                llvm_i64,
+                // len
+                llvm_i64,
+                // data
+                LLVMArrayType(llvm_i8, 0),
+            ];
+
+            let llvm_type = LLVMStructCreateNamed(llx, b"shared_str\0".as_ptr() as *const _);
+            LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
+
+            llvm_type
+        })
+    }
+
+    pub fn boxed_external_str_llvm_type(&mut self) -> LLVMTypeRef {
+        let llx = self.llx;
+        let llvm_header = self.box_header_llvm_type();
+        let shared_str_llvm_type = self.shared_str_llvm_type();
+
+        *self.boxed_external_str_type.get_or_insert_with(|| unsafe {
+            let llvm_i8 = LLVMInt8TypeInContext(llx);
+            let members = &mut [llvm_header, llvm_i8, shared_str_llvm_type];
+
+            let llvm_type =
+                LLVMStructCreateNamed(llx, b"boxed_external_str\0".as_ptr() as *const _);
             LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
             llvm_type

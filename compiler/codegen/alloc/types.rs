@@ -236,7 +236,7 @@ pub fn gen_alloc_boxed_record(
             ..
         } = *tcx.target_record_struct(record_struct);
 
-        let contains_gc_refs = record_struct
+        let may_contain_gc_refs = record_struct
             .field_abi_types
             .iter()
             .zip(llvm_fields.iter())
@@ -257,14 +257,14 @@ pub fn gen_alloc_boxed_record(
             boxed_record_name.as_bytes_with_nul(),
         );
 
-        let contains_gc_refs_ptr = LLVMBuildStructGEP(
+        let may_contain_gc_refs_ptr = LLVMBuildStructGEP(
             builder,
             alloced_boxed_record,
             record_struct::CONTAINS_GC_REFS_INDEX,
-            b"contains_gc_refs_ptr\0".as_ptr() as *const _,
+            b"may_contain_gc_refs_ptr\0".as_ptr() as *const _,
         );
-        let llvm_contains_gc_refs = LLVMConstInt(llvm_i8, contains_gc_refs as u64, 1);
-        LLVMBuildStore(builder, llvm_contains_gc_refs, contains_gc_refs_ptr);
+        let llvm_may_contain_gc_refs = LLVMConstInt(llvm_i8, may_contain_gc_refs as u64, 1);
+        LLVMBuildStore(builder, llvm_may_contain_gc_refs, may_contain_gc_refs_ptr);
 
         let record_class_id_ptr = LLVMBuildStructGEP(
             builder,

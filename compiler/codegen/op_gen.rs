@@ -158,11 +158,7 @@ fn gen_op(
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBoxedStr(reg, value) => {
-                if value.len() > boxed::Str::MAX_INLINE_BYTES {
-                    unimplemented!("Non-inline strings");
-                }
-
-                let llvm_value = const_gen::gen_boxed_inline_str(tcx, mcx, value.as_ref());
+                let llvm_value = const_gen::gen_boxed_str(tcx, mcx, value.as_ref());
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBoxedSym(reg, value) => {

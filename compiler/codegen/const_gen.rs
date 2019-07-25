@@ -49,7 +49,71 @@ pub fn gen_boxed_pair(
     }
 }
 
-pub fn gen_boxed_inline_str(
+fn gen_boxed_external_str(
+    tcx: &mut TargetCtx,
+    mcx: &mut ModCtx<'_, '_, '_>,
+    value: &str,
+) -> LLVMValueRef {
+    unsafe {
+        let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
+
+        let shared_str_members = &mut [
+            // ref_count
+            LLVMConstInt(llvm_i64, std::u64::MAX, 0),
+            // len
+            LLVMConstInt(llvm_i64, value.len() as u64, 0),
+            // data
+            LLVMConstStringInContext(tcx.llx, value.as_ptr() as *mut _, value.len() as u32, 1),
+        ];
+
+        let shared_str_llvm_value = LLVMConstStruct(
+            shared_str_members.as_mut_ptr(),
+            shared_str_members.len() as u32,
+            0,
+        );
+
+        let shared_str_global = LLVMAddGlobal(
+            mcx.module,
+            LLVMTypeOf(shared_str_llvm_value),
+            "shared_str\0".as_ptr() as *const _,
+        );
+        LLVMSetInitializer(shared_str_global, shared_str_llvm_value);
+        annotate_private_global(shared_str_global);
+
+        let type_tag = boxed::TypeTag::Str;
+        let external_llvm_type = tcx.boxed_external_str_llvm_type();
+        let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
+
+        let external_members = &mut [
+            tcx.llvm_box_header(type_tag.to_const_header()),
+            LLVMConstInt(llvm_i8, (boxed::Str::MAX_INLINE_BYTES + 1) as u64, 0),
+            LLVMConstBitCast(
+                shared_str_global,
+                LLVMPointerType(tcx.shared_str_llvm_type(), 0),
+            ),
+        ];
+
+        let external_llvm_value = LLVMConstNamedStruct(
+            external_llvm_type,
+            external_members.as_mut_ptr(),
+            external_members.len() as u32,
+        );
+
+        let global = LLVMAddGlobal(
+            mcx.module,
+            external_llvm_type,
+            "const_str\0".as_ptr() as *const _,
+        );
+        LLVMSetInitializer(global, external_llvm_value);
+        LLVMSetAlignment(global, mem::align_of::<boxed::Str>() as u32);
+        annotate_private_global(global);
+
+        let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
+        LLVMConstBitCast(global, LLVMPointerType(llvm_type, 0))
+    }
+}
+
+fn gen_boxed_inline_str(
     tcx: &mut TargetCtx,
     mcx: &mut ModCtx<'_, '_, '_>,
     value: &str,
@@ -89,6 +153,17 @@ pub fn gen_boxed_inline_str(
 
         let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
         LLVMConstBitCast(global, LLVMPointerType(llvm_type, 0))
+    }
+}
+
+pub fn gen_boxed_str(
+    tcx: &mut TargetCtx,
+    mcx: &mut ModCtx<'_, '_, '_>,
+    value: &str,
+) -> LLVMValueRef {
+    match boxed::Str::storage_for_byte_len(value.len()) {
+        boxed::StrStorage::Inline(_) => gen_boxed_inline_str(tcx, mcx, value),
+        boxed::StrStorage::External => gen_boxed_external_str(tcx, mcx, value),
     }
 }
 

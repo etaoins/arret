@@ -31,7 +31,7 @@ pub use crate::boxed::types::int::Int;
 pub use crate::boxed::types::list::{List, Nil, Pair, NIL_INSTANCE};
 pub use crate::boxed::types::record::{Record, RecordClassId, RecordStorage};
 pub use crate::boxed::types::record_data::RecordData;
-pub use crate::boxed::types::str::Str;
+pub use crate::boxed::types::str::{Str, StrStorage};
 pub use crate::boxed::types::sym::Sym;
 pub use crate::boxed::types::vector::Vector;
 

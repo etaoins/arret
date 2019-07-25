@@ -42,7 +42,11 @@ impl Field {
 
     /// Returns the type of the field accessor function
     pub fn accessor_fun_type(&self, cons_id: &ConsId) -> ty::Fun {
-        let (ty_args, pvars, tvars) = cons_id.polymorphic_vars();
+        let ConsPolymorphicVars {
+            ty_args,
+            pvars,
+            tvars,
+        } = cons_id.polymorphic_vars();
 
         let top_fun = ty::TopFun::new(Purity::Pure.into(), self.ty_ref().clone());
         let params =
@@ -93,6 +97,13 @@ pub struct Cons {
     value_cons_name: DataStr,
     poly_params_list: Option<Box<[PolyParam]>>,
     fields: Box<[Field]>,
+}
+
+/// Polymorphic variables of a type constructor
+pub struct ConsPolymorphicVars {
+    pub ty_args: TyArgs<ty::Poly>,
+    pub pvars: purity::PVars,
+    pub tvars: ty::TVars,
 }
 
 impl Cons {
@@ -150,7 +161,8 @@ impl Cons {
         self.fields.as_ref()
     }
 
-    fn polymorphic_vars(&self) -> (TyArgs<ty::Poly>, purity::PVars, ty::TVars) {
+    /// Returns the polymorphic variables associated with the constructor
+    pub fn polymorphic_vars(&self) -> ConsPolymorphicVars {
         use std::collections::HashMap;
 
         let mut pvars = purity::PVars::new();
@@ -177,12 +189,20 @@ impl Cons {
 
         let ty_args = TyArgs::new(pvar_purities, tvar_types);
 
-        (ty_args, pvars, tvars)
+        ConsPolymorphicVars {
+            ty_args,
+            pvars,
+            tvars,
+        }
     }
 
     /// Returns the type of the value constructor function
     pub fn value_cons_fun_type(cons_id: &ConsId) -> ty::Fun {
-        let (ty_args, pvars, tvars) = cons_id.polymorphic_vars();
+        let ConsPolymorphicVars {
+            ty_args,
+            pvars,
+            tvars,
+        } = cons_id.polymorphic_vars();
 
         let ret_type = Instance::new(cons_id.clone(), ty_args).into();
         let top_fun = ty::TopFun::new(Purity::Pure.into(), ret_type);

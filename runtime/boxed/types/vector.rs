@@ -7,8 +7,26 @@ use crate::boxed::*;
 
 const MAX_16BYTE_INLINE_LENGTH: usize = ((16 - 8) / mem::size_of::<Gc<Any>>());
 const MAX_32BYTE_INLINE_LENGTH: usize = ((32 - 8) / mem::size_of::<Gc<Any>>());
-
 const MAX_INLINE_LENGTH: usize = MAX_32BYTE_INLINE_LENGTH;
+
+/// Describes the storage of a vector's data
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum VectorStorage {
+    /// Vector data is stored inline in a box of the given size
+    Inline(BoxSize),
+    /// Vector data is stored out-of-line in a 32 byte box
+    External,
+}
+
+impl VectorStorage {
+    /// Returns the box size for a vector storage
+    pub fn box_size(self) -> BoxSize {
+        match self {
+            VectorStorage::Inline(box_size) => box_size,
+            VectorStorage::External => BoxSize::Size32,
+        }
+    }
+}
 
 /// Immutable vector of boxed values
 ///
@@ -26,44 +44,33 @@ impl<T: Boxed> Boxed for Vector<T> {}
 impl<T: Boxed> Vector<T> {
     /// Constructs a new vector with the passed boxed values
     pub fn new(heap: &mut impl AsHeap, values: &[Gc<T>]) -> Gc<Vector<T>> {
-        let box_size = if values.len() <= MAX_16BYTE_INLINE_LENGTH {
-            // 1 cell inline
-            BoxSize::Size16
-        } else {
-            // 2 cell inline or large
-            BoxSize::Size32
-        };
-
-        let header = Vector::TYPE_TAG.to_heap_header(box_size);
+        let storage = Self::storage_for_element_len(values.len());
+        let header = Vector::TYPE_TAG.to_heap_header(storage.box_size());
 
         let boxed = unsafe {
-            if values.len() <= MAX_INLINE_LENGTH {
-                let mut inline_values = mem::MaybeUninit::<[Gc<T>; MAX_INLINE_LENGTH]>::uninit();
-                ptr::copy(
-                    values.as_ptr(),
-                    inline_values.as_mut_ptr() as *mut _,
-                    values.len(),
-                );
-
-                let inline_vec: InlineVector<T> = InlineVector {
-                    header,
-                    inline_length: values.len() as u32,
-                    values: inline_values.assume_init(),
-                };
-
-                mem::transmute(inline_vec)
-            } else {
-                let large_vec = LargeVector {
-                    header,
-                    inline_length: (MAX_INLINE_LENGTH + 1) as u32,
-                    values: values.into(),
-                };
-
-                mem::transmute(large_vec)
+            match storage {
+                VectorStorage::External => mem::transmute(ExternalVector::new(header, values)),
+                VectorStorage::Inline(_) => mem::transmute(InlineVector::new(header, values)),
             }
         };
 
         heap.as_heap_mut().place_box(boxed)
+    }
+
+    /// Returns the storage for given element length
+    fn storage_for_element_len(len: usize) -> VectorStorage {
+        const MIN_32BYTE_INLINE_LENGTH: usize = MAX_16BYTE_INLINE_LENGTH + 1;
+
+        match len {
+            0..=MAX_16BYTE_INLINE_LENGTH => VectorStorage::Inline(BoxSize::Size16),
+            MIN_32BYTE_INLINE_LENGTH..=MAX_32BYTE_INLINE_LENGTH => {
+                VectorStorage::Inline(BoxSize::Size32)
+            }
+            _ => {
+                // Too big to fit inline; this needs to be external
+                VectorStorage::External
+            }
+        }
     }
 
     /// Constructs a vector by constructing an iterator of values
@@ -89,7 +96,7 @@ impl<T: Boxed> Vector<T> {
         if self.is_inline() {
             Repr::Inline(unsafe { &*(self as *const Vector<T> as *const InlineVector<T>) })
         } else {
-            Repr::Large(unsafe { &*(self as *const Vector<T> as *const LargeVector<T>) })
+            Repr::External(unsafe { &*(self as *const Vector<T> as *const ExternalVector<T>) })
         }
     }
 
@@ -97,7 +104,7 @@ impl<T: Boxed> Vector<T> {
     pub fn len(&self) -> usize {
         match self.as_repr() {
             Repr::Inline(inline) => inline.inline_length as usize,
-            Repr::Large(large) => large.values.len(),
+            Repr::External(external) => external.values.len(),
         }
     }
 
@@ -110,7 +117,7 @@ impl<T: Boxed> Vector<T> {
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &Gc<T>> {
         match self.as_repr() {
             Repr::Inline(inline) => inline.values[0..self.len()].iter(),
-            Repr::Large(large) => large.values.iter(),
+            Repr::External(external) => external.values.iter(),
         }
     }
 
@@ -119,7 +126,7 @@ impl<T: Boxed> Vector<T> {
             if self.is_inline() {
                 &mut (*(self as *mut Vector<T> as *mut InlineVector<T>)).values[0..self.len()]
             } else {
-                &mut (*(self as *mut Vector<T> as *mut LargeVector<T>)).values
+                &mut (*(self as *mut Vector<T> as *mut ExternalVector<T>)).values
             }
         }
     }
@@ -134,6 +141,16 @@ impl<T: Boxed> PartialEqInHeap for Vector<T> {
         self.iter()
             .zip(other.iter())
             .all(|(self_value, other_value)| self_value.eq_in_heap(heap, other_value))
+    }
+}
+
+impl<T: Boxed> HashInHeap for Vector<T> {
+    fn hash_in_heap<H: Hasher>(&self, heap: &Heap, state: &mut H) {
+        TypeTag::Vector.hash(state);
+        state.write_usize(self.len());
+        for value in self.iter() {
+            value.hash_in_heap(heap, state);
+        }
     }
 }
 
@@ -159,11 +176,40 @@ pub struct InlineVector<T: Boxed> {
     values: [Gc<T>; MAX_INLINE_LENGTH],
 }
 
+impl<T: Boxed> InlineVector<T> {
+    fn new(header: Header, values: &[Gc<T>]) -> InlineVector<T> {
+        unsafe {
+            let mut inline_values = mem::MaybeUninit::<[Gc<T>; MAX_INLINE_LENGTH]>::uninit();
+            ptr::copy(
+                values.as_ptr(),
+                inline_values.as_mut_ptr() as *mut _,
+                values.len(),
+            );
+
+            InlineVector {
+                header,
+                inline_length: values.len() as u32,
+                values: inline_values.assume_init(),
+            }
+        }
+    }
+}
+
 #[repr(C, align(16))]
-pub struct LargeVector<T: Boxed> {
+pub struct ExternalVector<T: Boxed> {
     header: Header,
     inline_length: u32,
     values: Vec<Gc<T>>,
+}
+
+impl<T: Boxed> ExternalVector<T> {
+    fn new(header: Header, values: &[Gc<T>]) -> ExternalVector<T> {
+        ExternalVector {
+            header,
+            inline_length: (MAX_INLINE_LENGTH + 1) as u32,
+            values: values.into(),
+        }
+    }
 }
 
 enum Repr<'a, T: Boxed>
@@ -171,28 +217,19 @@ where
     T: 'a,
 {
     Inline(&'a InlineVector<T>),
-    Large(&'a LargeVector<T>),
-}
-
-impl<T: Boxed> HashInHeap for Vector<T> {
-    fn hash_in_heap<H: Hasher>(&self, heap: &Heap, state: &mut H) {
-        TypeTag::Vector.hash(state);
-        state.write_usize(self.len());
-        for value in self.iter() {
-            value.hash_in_heap(heap, state);
-        }
-    }
+    External(&'a ExternalVector<T>),
 }
 
 impl<T: Boxed> Drop for Vector<T> {
     fn drop(&mut self) {
-        // ptr::read will properly drop our specific representations
         match self.as_repr() {
-            Repr::Inline(inline) => unsafe {
-                ptr::read(inline);
-            },
-            Repr::Large(large) => unsafe {
-                ptr::read(large);
+            Repr::Inline(_) => {
+                // Do nothing here; we might've been allocated as a 16 byte box so we can't read
+                // the whole thing.
+            }
+            Repr::External(external) => unsafe {
+                // Call `ExternalVector`'s drop implementation
+                ptr::read(external);
             },
         }
     }
@@ -208,7 +245,7 @@ mod test {
     fn sizes() {
         assert_eq!(32, mem::size_of::<Vector<Any>>());
         assert_eq!(32, mem::size_of::<InlineVector<Any>>());
-        assert_eq!(32, mem::size_of::<LargeVector<Any>>());
+        assert_eq!(32, mem::size_of::<ExternalVector<Any>>());
     }
 
     #[test]

@@ -24,7 +24,7 @@ pub fn append_common_internal_members(tcx: &mut TargetCtx, members: &mut Vec<LLV
         members.extend_from_slice(&[
             // is_inline
             LLVMInt8TypeInContext(tcx.llx),
-            // contains_gc_refs
+            // may_contain_gc_refs
             LLVMInt8TypeInContext(tcx.llx),
             // record_class_id
             tcx.record_class_id_llvm_type(),

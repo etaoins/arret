@@ -6,29 +6,41 @@
     (let [test-record (record 'foo 2 'bar)]
       (assert-eq! 'foo (ann (record-poly test-record) 'foo))
       (assert-eq! 2 (ann (record-int test-record) Int))
-      (assert-eq! 'bar (ann (record-any test-record) Any)))))
+      (assert-eq! 'bar (ann (record-any test-record) Any))
+      
+      (assert-eq! 'foo (ann ((black-box! record-poly) test-record) 'foo))
+      (assert-eq! 2 (ann ((black-box! record-int) test-record) Int))
+      (assert-eq! 'bar (ann ((black-box! record-any) test-record) Any)))))
 
 
 (defn test-bool-record-fields! () ->! ()
   (letrecord [Record (record [field Bool])]
-    (let [true-record (record true) false-record (record false)]
+    (let [true-record (record true)
+          false-record (record false)
+          black-box-true-record ((black-box! record) true)
+          black-box-false-record ((black-box! record) false)]
+
       (assert-eq! false (record-field false-record))
       (assert-eq! true (record-field true-record))
 
-      (assert-eq! false (record-field (black-box! false-record)))
-      (assert-eq! true (record-field (black-box! true-record)))
+      (assert-eq! false (record-field black-box-false-record))
+      (assert-eq! true (record-field black-box-true-record))
 
       (assert-eq! true-record true-record)
-      (assert-eq! true-record (black-box! true-record))
+      (assert-eq! true-record black-box-true-record)
 
       (assert-ne! true-record false-record)
-      (assert-ne! true-record (black-box! false-record)))))
+      (assert-ne! true-record black-box-false-record)
+      
+      (assert-eq! false ((black-box! record-field) false-record))
+      (assert-eq! true ((black-box! record-field) true-record)))))
 
 (defn test-int-record-fields! () ->! ()
   (letrecord [Record (record [field Int])]
     (let [twelve-record (record 12)]
       (assert-eq! 12 (record-field twelve-record))
       (assert-eq! 12 (record-field (black-box! twelve-record)))
+      (assert-eq! 12 ((black-box! record-field) twelve-record))
 
       (assert-eq! twelve-record twelve-record)
       (assert-eq! (black-box! twelve-record) (black-box! twelve-record)))))
@@ -38,6 +50,7 @@
     (let [newline-record (record \newline)]
       (assert-eq! \newline (record-field newline-record))
       (assert-eq! \newline (record-field (black-box! newline-record)))
+      (assert-eq! \newline ((black-box! record-field) newline-record))
 
       (assert-eq! newline-record newline-record)
       (assert-eq! (black-box! newline-record) (black-box! newline-record)))))
@@ -47,6 +60,7 @@
     (let [fourteen-record (record 14.0)]
       (assert-eq! 14.0 (record-field fourteen-record))
       (assert-eq! 14.0 (record-field (black-box! fourteen-record)))
+      (assert-eq! 14.0 ((black-box! record-field) fourteen-record))
 
       (assert-eq! fourteen-record fourteen-record)
       (assert-eq! (black-box! fourteen-record) (black-box! fourteen-record)))))
@@ -57,6 +71,7 @@
       (assert-eq! 'foo (record-field foo-record))
       (assert-eq! 'foo (record-field (black-box! foo-record)))
       (assert-eq! 'foo (black-box! (record-field (black-box! foo-record))))
+      (assert-eq! 'foo ((black-box! record-field) foo-record))
 
       (assert-eq! foo-record foo-record)
       (assert-eq! (black-box! foo-record) (black-box! foo-record)))))
@@ -66,6 +81,7 @@
     (let [list-record (record '(1 2 3))]
       (assert-eq! '(1 2 3) (record-field list-record))
       (assert-eq! '(1 2 3) (record-field (black-box! list-record)))
+      (assert-eq! '(1 2 3) ((black-box! record-field) list-record))
 
       (assert-eq! list-record list-record)
       (assert-eq! (black-box! list-record) (black-box! list-record)))))
@@ -92,8 +108,7 @@
       (assert-eq! (black-box! external-record) (black-box! external-record))
 
       ; Force this to be allocated on the heap
-      ; TODO: Replace with `(black-box! external-record)` once that's supported
-      (let [heap-external-record ((black-box! (fn () (record \tab 2.0 (black-box! 3) 'four true))))]
+      (let [heap-external-record ((black-box! record) \tab 2.0 (black-box! 3) 'four true)]
         (assert-eq! external-record heap-external-record)))))
 
 (defn main! () ->! ()
