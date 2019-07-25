@@ -54,7 +54,7 @@ impl Str {
     }
 
     /// Returns the storage for given string byte length
-    fn storage_for_byte_len(len: usize) -> StrStorage {
+    pub fn storage_for_byte_len(len: usize) -> StrStorage {
         match len {
             0..=13 => StrStorage::Inline(BoxSize::Size16),
             14..=Str::MAX_INLINE_BYTES => StrStorage::Inline(BoxSize::Size32),
