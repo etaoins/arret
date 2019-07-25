@@ -158,8 +158,14 @@ pub fn value_to_const(ehx: &mut EvalHirCtx, value: &Value) -> Option<Gc<boxed::A
         Value::RecordCons(_) => {
             unimplemented!("converting record constructors to constants");
         }
-        Value::FieldAccessor(_, _) => {
-            unimplemented!("converting record field accessors to constants");
+        Value::FieldAccessor(cons, field_index) => {
+            let field_accessor_arret_fun = ehx
+                .synthetic_funs()
+                .field_accessor_arret_fun(cons, *field_index)
+                .clone();
+
+            ehx.arret_fun_to_jit_boxed(&field_accessor_arret_fun)
+                .map(|f| f.as_any_ref())
         }
         Value::RustFun(ref rust_fun) => {
             Some(ehx.rust_fun_to_jit_boxed(rust_fun.clone()).as_any_ref())
