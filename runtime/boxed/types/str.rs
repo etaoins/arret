@@ -1,7 +1,7 @@
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
 use std::{fmt, mem, ptr};
 
+use crate::boxed::types::shared_str::SharedStr;
 use crate::boxed::*;
 
 /// Describes the storage of a string's data
@@ -9,7 +9,7 @@ use crate::boxed::*;
 pub enum StrStorage {
     /// String data is stored inline in a box of the given size
     Inline(BoxSize),
-    /// String data is stored out-of-line in a 32 byte box
+    /// String data is stored out-of-line in a 16 byte box
     External,
 }
 
@@ -18,7 +18,7 @@ impl StrStorage {
     pub fn box_size(self) -> BoxSize {
         match self {
             StrStorage::Inline(box_size) => box_size,
-            StrStorage::External => BoxSize::Size32,
+            StrStorage::External => BoxSize::Size16,
         }
     }
 }
@@ -81,7 +81,7 @@ impl Str {
     pub fn as_str(&self) -> &str {
         match self.as_repr() {
             Repr::Inline(inline) => inline.as_str(),
-            Repr::External(external) => external.shared_str.as_ref(),
+            Repr::External(external) => external.shared_str.as_str(),
         }
     }
 }
@@ -167,8 +167,8 @@ struct ExternalStr {
     header: Header,
     // Once we've determined we're not inline this has no useful value
     inline_byte_length: u8,
-    shared_str: Arc<str>,
-    padding: u64,
+    shared_str: SharedStr,
+    padding: [u64; 2],
 }
 
 impl ExternalStr {
@@ -177,7 +177,7 @@ impl ExternalStr {
             header,
             inline_byte_length: (Str::MAX_INLINE_BYTES as u8) + 1,
             shared_str: value.into(),
-            padding: 0,
+            padding: [0, 0],
         }
     }
 }
