@@ -19,13 +19,6 @@ struct RecordHeader {
     class_id: RecordClassId,
 }
 
-/// User-defined record type
-#[repr(C, align(16))]
-pub struct Record {
-    record_header: RecordHeader,
-    padding: [u8; Record::MAX_INLINE_BYTES],
-}
-
 /// Describes the storage of a record's data
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RecordStorage {
@@ -36,13 +29,20 @@ pub enum RecordStorage {
 }
 
 impl RecordStorage {
-    /// Returns the box size for a record layout
+    /// Returns the box size for a record storage
     pub fn box_size(self) -> BoxSize {
         match self {
             RecordStorage::Inline(box_size) => box_size,
             RecordStorage::External => BoxSize::Size32,
         }
     }
+}
+
+/// User-defined record type
+#[repr(C, align(16))]
+pub struct Record {
+    record_header: RecordHeader,
+    padding: [u8; Record::MAX_INLINE_BYTES],
 }
 
 impl Boxed for Record {}

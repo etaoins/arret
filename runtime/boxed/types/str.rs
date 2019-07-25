@@ -4,6 +4,25 @@ use std::{fmt, mem, ptr};
 
 use crate::boxed::*;
 
+/// Describes the storage of a string's data
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum StrStorage {
+    /// String data is stored inline in a box of the given size
+    Inline(BoxSize),
+    /// String data is stored out-of-line in a 32 byte box
+    External,
+}
+
+impl StrStorage {
+    /// Returns the box size for a string storage
+    pub fn box_size(self) -> BoxSize {
+        match self {
+            StrStorage::Inline(box_size) => box_size,
+            StrStorage::External => BoxSize::Size32,
+        }
+    }
+}
+
 /// String value encoded as UTF-8
 #[repr(C, align(16))]
 pub struct Str {
@@ -21,46 +40,29 @@ impl Str {
 
     /// Constructs a new string
     pub fn new(heap: &mut impl AsHeap, value: &str) -> Gc<Str> {
-        let box_size = match value.len() {
-            0..=13 => BoxSize::Size16,
-            14..=Str::MAX_INLINE_BYTES => BoxSize::Size32,
-            _ => {
-                // Too big to fit inline; this needs to be shared
-                BoxSize::Size32
-            }
-        };
-
-        let header = Self::TYPE_TAG.to_heap_header(box_size);
+        let storage = Self::storage_for_byte_len(value.len());
+        let header = Self::TYPE_TAG.to_heap_header(storage.box_size());
 
         let boxed = unsafe {
-            if value.len() > Str::MAX_INLINE_BYTES {
-                let shared_str = SharedStr {
-                    header,
-                    inline_byte_length: (Str::MAX_INLINE_BYTES as u8) + 1,
-                    shared_str: value.into(),
-                    padding: 0,
-                };
-
-                mem::transmute(shared_str)
-            } else {
-                let mut inline_bytes = mem::MaybeUninit::<[u8; Str::MAX_INLINE_BYTES]>::uninit();
-                ptr::copy(
-                    value.as_ptr(),
-                    inline_bytes.as_mut_ptr() as *mut _,
-                    value.len(),
-                );
-
-                let inline_str = InlineStr {
-                    header,
-                    inline_byte_length: value.len() as u8,
-                    inline_bytes: inline_bytes.assume_init(),
-                };
-
-                mem::transmute(inline_str)
+            match storage {
+                StrStorage::External => mem::transmute(ExternalStr::new(header, value)),
+                StrStorage::Inline(_) => mem::transmute(InlineStr::new(header, value)),
             }
         };
 
         heap.as_heap_mut().place_box(boxed)
+    }
+
+    /// Returns the storage for given string byte length
+    fn storage_for_byte_len(len: usize) -> StrStorage {
+        match len {
+            0..=13 => StrStorage::Inline(BoxSize::Size16),
+            14..=Str::MAX_INLINE_BYTES => StrStorage::Inline(BoxSize::Size32),
+            _ => {
+                // Too big to fit inline; this needs to be external
+                StrStorage::External
+            }
+        }
     }
 
     fn is_inline(&self) -> bool {
@@ -71,7 +73,7 @@ impl Str {
         if self.is_inline() {
             Repr::Inline(unsafe { &*(self as *const Str as *const InlineStr) })
         } else {
-            Repr::Shared(unsafe { &*(self as *const Str as *const SharedStr) })
+            Repr::External(unsafe { &*(self as *const Str as *const ExternalStr) })
         }
     }
 
@@ -79,7 +81,7 @@ impl Str {
     pub fn as_str(&self) -> &str {
         match self.as_repr() {
             Repr::Inline(inline) => inline.as_str(),
-            Repr::Shared(shared) => shared.shared_str.as_ref(),
+            Repr::External(external) => external.shared_str.as_ref(),
         }
     }
 }
@@ -110,9 +112,9 @@ impl Drop for Str {
                 // Do nothing here; we might've been allocated as a 16 byte box so we can't read
                 // the whole thing.
             }
-            Repr::Shared(shared) => unsafe {
+            Repr::External(external) => unsafe {
                 // ptr::read will properly drop our Rust fields
-                ptr::read(shared);
+                ptr::read(external);
             },
         }
     }
@@ -126,6 +128,24 @@ struct InlineStr {
 }
 
 impl InlineStr {
+    fn new(header: Header, value: &str) -> InlineStr {
+        unsafe {
+            let mut inline_bytes = mem::MaybeUninit::<[u8; Str::MAX_INLINE_BYTES]>::uninit();
+
+            ptr::copy(
+                value.as_ptr(),
+                inline_bytes.as_mut_ptr() as *mut _,
+                value.len(),
+            );
+
+            InlineStr {
+                header,
+                inline_byte_length: value.len() as u8,
+                inline_bytes: inline_bytes.assume_init(),
+            }
+        }
+    }
+
     fn as_utf8(&self) -> &[u8] {
         use std::slice;
         unsafe {
@@ -143,7 +163,7 @@ impl InlineStr {
 }
 
 #[repr(C, align(16))]
-struct SharedStr {
+struct ExternalStr {
     header: Header,
     // Once we've determined we're not inline this has no useful value
     inline_byte_length: u8,
@@ -151,9 +171,20 @@ struct SharedStr {
     padding: u64,
 }
 
+impl ExternalStr {
+    fn new(header: Header, value: &str) -> ExternalStr {
+        ExternalStr {
+            header,
+            inline_byte_length: (Str::MAX_INLINE_BYTES as u8) + 1,
+            shared_str: value.into(),
+            padding: 0,
+        }
+    }
+}
+
 enum Repr<'a> {
     Inline(&'a InlineStr),
-    Shared(&'a SharedStr),
+    External(&'a ExternalStr),
 }
 
 #[cfg(test)]
@@ -164,7 +195,7 @@ mod test {
 
     #[test]
     fn sizes() {
-        assert_eq!(32, mem::size_of::<SharedStr>());
+        assert_eq!(32, mem::size_of::<ExternalStr>());
         assert_eq!(32, mem::size_of::<InlineStr>());
         assert_eq!(32, mem::size_of::<Str>());
     }
