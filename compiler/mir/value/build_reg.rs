@@ -494,7 +494,7 @@ pub fn value_to_reg(
             if let abitype::ABIType::Boxed(boxed_abi_type) = abi_type {
                 record_to_reg(ehx, b, span, record_cons, fields, boxed_abi_type)
             } else {
-                panic!("Attempt to construct non-boxed list");
+                panic!("Attempt to construct non-boxed record");
             }
         }
         Value::ArretFun(ref arret_fun) => arret_fun_to_reg(ehx, b, span, arret_fun, abi_type),
