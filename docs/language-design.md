@@ -53,14 +53,13 @@ The compiler aggressively attempts to optimise these temporary lists away - this
 
 ## User Defined Types
 
-Users can define their own types in two different ways:
+Users can define their own types in three different ways:
 
 1. `(deftype)` can be used to create an alias of an existing type.
 2. The `(U)` type constructor can be used to define a union type.
    Type predicates can be used to determine which member type a given value has.
-
-🔮 In the future developers will also be able to define record types.
-These are also known as structs or product types in other languages.
+3. `(defrecord)` will create a new record type distinct from all other types.
+   These are also known as structs or product types in other languages.
 
 ## Functions
 
