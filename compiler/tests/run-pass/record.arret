@@ -12,7 +12,6 @@
       (assert-eq! 2 (ann ((black-box! record-int) test-record) Int))
       (assert-eq! 'bar (ann ((black-box! record-any) test-record) Any)))))
 
-
 (defn test-bool-record-fields! () ->! ()
   (letrecord [Record (record [field Bool])]
     (let [true-record (record true)
@@ -43,7 +42,10 @@
       (assert-eq! 12 ((black-box! record-field) twelve-record))
 
       (assert-eq! twelve-record twelve-record)
-      (assert-eq! (black-box! twelve-record) (black-box! twelve-record)))))
+      (assert-eq! (black-box! twelve-record) (black-box! twelve-record))
+
+      ; Using a pure `(black-box)` tests that we can codegen record constants based on boxed values
+      (assert-eq! (black-box! twelve-record) (black-box twelve-record)))))
 
 (defn test-char-record-fields! () ->! ()
   (letrecord [Record (record [field Char])]
@@ -106,6 +108,7 @@
 
       (assert-eq! external-record external-record)
       (assert-eq! (black-box! external-record) (black-box! external-record))
+      (assert-eq! (black-box! external-record) (black-box external-record))
 
       ; Force this to be allocated on the heap
       (let [heap-external-record ((black-box! record) \tab 2.0 (black-box! 3) 'four true)]

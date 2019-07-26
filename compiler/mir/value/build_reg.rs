@@ -18,7 +18,7 @@ enum RestLength {
 }
 
 fn const_to_reg(
-    ehx: &mut EvalHirCtx,
+    ehx: &EvalHirCtx,
     b: &mut Builder,
     span: Span,
     any_ref: Gc<boxed::Any>,
@@ -129,6 +129,39 @@ fn const_to_reg(
                 from_reg,
                 to_abi_type.clone(),
             )
+        }
+        (boxed::AnySubtype::Record(record_ref), abitype::ABIType::Boxed(to_abi_type)) => {
+            let record_cons = ehx
+                .cons_for_jit_record_class_id(record_ref.class_id())
+                .expect("unable to lookup record cons for JIT record class ID");
+
+            let record_struct = ehx
+                .record_class_for_cons
+                .get(&record_cons)
+                .expect("unable to lookup record class for cons")
+                .record_struct
+                .clone();
+
+            let field_regs = record_ref
+                .field_values(ehx.as_heap())
+                .zip(record_struct.field_abi_types.iter())
+                .map(|(field_value, abi_type)| {
+                    let built_reg =
+                        record_field_value_to_const_reg(ehx, b, span, &field_value, abi_type);
+
+                    built_reg.into()
+                })
+                .collect();
+
+            let box_record_op = BoxRecordOp {
+                record_struct,
+                field_regs,
+            };
+
+            let from_abi_type = boxed::TypeTag::Record.into();
+            let from_reg = b.push_reg(span, OpKind::ConstBoxedRecord, box_record_op);
+
+            b.cast_boxed_cond(span, &from_abi_type, from_reg, to_abi_type.clone())
         }
         (subtype, abi_type) => unimplemented!(
             "Unimplemented const {:?} to reg {:?} conversion",
@@ -260,6 +293,32 @@ fn record_to_reg(
     };
 
     b.cast_boxed(span, record_reg, boxed_abi_type.clone())
+}
+
+fn record_field_value_to_const_reg(
+    ehx: &EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    field_value: &boxed::FieldValue,
+    abi_type: &abitype::ABIType,
+) -> BuiltReg {
+    use crate::mir::ops::*;
+    use arret_runtime::boxed::prelude::*;
+    use boxed::FieldValue;
+
+    // This depends on the fact we're encoding the exact record layout we're reading from. We only
+    // need `abi_type` to find the specific pointer type for boxed values.
+    match field_value {
+        FieldValue::Int(v) => b.push_reg(span, OpKind::ConstInt64, *v),
+        FieldValue::Float(v) => b.push_reg(span, OpKind::ConstFloat, *v),
+        FieldValue::Bool(v) => b.push_reg(span, OpKind::ConstBool, *v),
+        FieldValue::Char(v) => b.push_reg(span, OpKind::ConstChar, *v),
+        FieldValue::InternedSym(interned) => {
+            let name = ehx.as_heap().type_info().interner().unintern(interned);
+            b.push_reg(span, OpKind::ConstInternedSym, name.into())
+        }
+        FieldValue::Boxed(any_ref) => const_to_reg(ehx, b, span, *any_ref, abi_type),
+    }
 }
 
 pub fn reg_to_boxed_reg(

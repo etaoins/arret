@@ -65,7 +65,7 @@ pub struct EvalHirCtx {
     thunk_fun_values: HashMap<*const boxed::FunThunk, Value>,
     thunk_jit: codegen::jit::JITCtx,
 
-    record_class_for_cons: HashMap<record::ConsId, EvaledRecordClass>,
+    pub(super) record_class_for_cons: HashMap<record::ConsId, EvaledRecordClass>,
     cons_for_jit_record_class_id: HashMap<boxed::RecordClassId, record::ConsId>,
 }
 
