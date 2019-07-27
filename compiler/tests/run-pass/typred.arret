@@ -48,7 +48,12 @@
   (assert-eq! false (nil? (black-box-untyped! 123)))
 
   (assert-eq! true ((black-box! str?) (black-box-untyped! "foo")))
-  (assert-eq! false ((black-box! str?) (black-box-untyped! 123))))
+  (assert-eq! false ((black-box! str?) (black-box-untyped! 123)))
+
+  ; Make sure type predicates can be treatred as first-class functions
+  (assert-eq! '(true false true) (map int? '(1 2.0 3)))
+  (assert-eq! '(true false true) (map (black-box! int?) '(1 2.0 3)))
+  (assert-eq! '(true false true) ((black-box! map) int? '(1 2.0 3))))
 
 (defn test-record-ty-preds! () ->! ()
   (letrecord [(RecordOne) (record-one) (RecordTwo) (record-two)]
