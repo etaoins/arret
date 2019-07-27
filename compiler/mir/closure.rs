@@ -47,10 +47,10 @@ fn can_reference_local_regs(value: &Value) -> bool {
         | Value::RustFun(_) => false,
         Value::Reg(_) => true,
         Value::ArretFun(arret_fun) => !arret_fun.closure().free_values.is_empty(),
-        Value::List(fixed, rest) => {
-            let mut inner_values = fixed.iter().chain(rest.iter().map(AsRef::as_ref));
-            !inner_values.any(can_reference_local_regs)
-        }
+        Value::List(fixed, rest) => fixed
+            .iter()
+            .chain(rest.iter().map(AsRef::as_ref))
+            .any(can_reference_local_regs),
         Value::Record(_, fields) => fields.iter().any(can_reference_local_regs),
     }
 }
