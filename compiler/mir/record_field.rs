@@ -22,12 +22,9 @@ pub fn load_record_field(
         Value::Const(boxed_any) => {
             use boxed::FieldValue;
 
-            let boxed_record =
-                if let boxed::AnySubtype::Record(boxed_record) = boxed_any.as_subtype() {
-                    boxed_record
-                } else {
-                    panic!("unexpected type when accessing record field");
-                };
+            let boxed_record = boxed_any
+                .downcast_ref::<boxed::Record>()
+                .expect("unexpected type when accessing record field");
 
             match boxed_record
                 .field_values(ehx.as_heap())

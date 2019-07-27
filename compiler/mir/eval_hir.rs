@@ -810,17 +810,13 @@ impl EvalHirCtx {
                 *field_index,
                 &apply_args.list_value,
             )),
-            Value::Const(boxed_fun) => match boxed_fun.as_subtype() {
-                boxed::AnySubtype::FunThunk(fun_thunk) => self.eval_const_fun_thunk_app(
-                    fcx,
-                    b,
-                    span,
-                    ret_ty,
-                    unsafe { Gc::new(fun_thunk) },
-                    apply_args,
-                ),
-                other => unimplemented!("applying boxed function value type: {:?}", other),
-            },
+            Value::Const(boxed_fun) => {
+                let fun_thunk = boxed_fun
+                    .downcast_ref::<boxed::FunThunk>()
+                    .expect("applying non-function box");
+
+                self.eval_const_fun_thunk_app(fcx, b, span, ret_ty, fun_thunk, apply_args)
+            }
             Value::Reg(reg_value) => {
                 if let Some(b) = b {
                     Ok(self.build_reg_fun_thunk_app(b, span, reg_value, &apply_args.list_value))

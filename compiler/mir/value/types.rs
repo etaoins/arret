@@ -69,13 +69,10 @@ pub fn known_record_cons_for_value<'a>(
     value: &'a Value,
 ) -> Option<&'a record::ConsId> {
     match value {
-        Value::Const(any_ref) => match any_ref.as_subtype() {
-            boxed::AnySubtype::Record(record_ref) => Some(
-                ehx.cons_for_jit_record_class_id(record_ref.class_id())
-                    .expect("unable to lookup record cons for JIT record class ID"),
-            ),
-            _ => None,
-        },
+        Value::Const(any_ref) => any_ref.downcast_ref::<boxed::Record>().map(|record_ref| {
+            ehx.cons_for_jit_record_class_id(record_ref.class_id())
+                .expect("unable to lookup record cons for JIT record class ID")
+        }),
         Value::Record(cons, _) => Some(&cons),
         Value::Reg(reg_value) => reg_value.known_record_cons.as_ref(),
         _ => None,
