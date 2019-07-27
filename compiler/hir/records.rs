@@ -12,7 +12,7 @@ use crate::ty;
 use crate::ty::record;
 use crate::ty::Ty;
 
-pub enum LoweredRecordCons {
+enum LoweredRecordCons {
     Parameterised(Span, Ident, NsDataIter),
     Singleton(Span, Ident),
 }
