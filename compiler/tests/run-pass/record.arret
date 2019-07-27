@@ -114,6 +114,33 @@
       (let [heap-external-record ((black-box! record) \tab 2.0 (black-box! 3) 'four true)]
         (assert-eq! external-record heap-external-record)))))
 
+; This makes sure we implement records and first-class functions correctly
+(defn test-record-function-callbacks! () ->! ()
+  (letrecord [Record (record [field Int])]
+    (assert-eq! '(1 2 3)
+      (->>
+        '(1 2 3)
+        (map record)
+        (map record-field)))
+
+    (assert-eq! '(4 5 6)
+      (->>
+        '(4 5 6)
+        (map (black-box! record))
+        (map (black-box! record-field))))
+
+    (assert-eq! '(7 8 9)
+      (->>
+        (black-box! '(7 8 9))
+        (map record)
+        (map record-field)))
+
+    (assert-eq! '(10 11 12)
+      (->>
+        '(10 11 12)
+        ((black-box! map) record)
+        ((black-box! map) record-field)))))
+
 (defn main! () ->! ()
   (test-poly-records!)
   (test-bool-record-fields!)
@@ -122,4 +149,5 @@
   (test-float-record-fields!)
   (test-sym-record-fields!)
   (test-boxed-record-fields!)
-  (test-external-record!))
+  (test-external-record!)
+  (test-record-function-callbacks!))

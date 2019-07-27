@@ -27,6 +27,7 @@ pub struct ModCtx<'am, 'sl, 'interner> {
     jit_interner: Option<&'interner mut intern::Interner>,
     global_interned_names: Vec<Box<str>>,
 
+    has_jit_record_struct_class_ids: bool,
     record_struct_class_ids: HashMap<ops::RecordStructId, RecordClassId>,
     record_structs: Vec<ops::RecordStructId>,
 
@@ -53,6 +54,7 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
         name: &ffi::CStr,
         analysed_mod: &'am AnalysedMod<'am>,
         jit_interner: Option<&'interner mut intern::Interner>,
+        jit_record_struct_class_ids: HashMap<ops::RecordStructId, RecordClassId>,
         debug_source_loader: Option<&'sl SourceLoader>,
     ) -> Self {
         use crate::codegen::fun_gen::declare_fun;
@@ -108,7 +110,8 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
             jit_interner,
             global_interned_names: vec![],
 
-            record_struct_class_ids: HashMap::new(),
+            has_jit_record_struct_class_ids: !jit_record_struct_class_ids.is_empty(),
+            record_struct_class_ids: jit_record_struct_class_ids,
             record_structs: vec![],
             record_class_id_llvm_values: vec![],
 
@@ -210,6 +213,12 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
 
     fn finalise_record_class_id_range_metadata(&mut self, tcx: &mut TargetCtx) {
         unsafe {
+            if self.has_jit_record_struct_class_ids {
+                // These are from a distinct range; it's too much effort to include them in the JIT
+                // case so just skip generating metadata.
+                return;
+            }
+
             let mut llvm_range_values: Vec<LLVMValueRef> = vec![
                 LLVMConstInt(tcx.record_class_id_llvm_type(), 0 as u64, 0),
                 LLVMConstInt(
@@ -314,9 +323,18 @@ pub fn gen_mod<'am, 'sl, 'interner>(
     name: &ffi::CStr,
     analysed_mod: &'am AnalysedMod<'am>,
     jit_interner: Option<&'interner mut intern::Interner>,
+    jit_record_struct_class_ids: HashMap<ops::RecordStructId, RecordClassId>,
     debug_source_loader: Option<&'sl SourceLoader>,
 ) -> GeneratedMod {
-    ModCtx::new(tcx, name, analysed_mod, jit_interner, debug_source_loader).into_generated_mod(tcx)
+    ModCtx::new(
+        tcx,
+        name,
+        analysed_mod,
+        jit_interner,
+        jit_record_struct_class_ids,
+        debug_source_loader,
+    )
+    .into_generated_mod(tcx)
 }
 
 impl Drop for ModCtx<'_, '_, '_> {

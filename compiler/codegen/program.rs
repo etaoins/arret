@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 use std::{fs, path, process, ptr};
@@ -113,6 +114,7 @@ fn program_to_module(
             CString::new("program").unwrap().as_ref(),
             &analysed_mod,
             None,
+            HashMap::new(),
             debug_source_loader,
         );
 

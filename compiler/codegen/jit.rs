@@ -31,6 +31,7 @@ pub struct JITCtx {
     orc: LLVMOrcJITStackRef,
     target_machine: LLVMTargetMachineRef,
     symbols: HashMap<ffi::CString, u64>,
+    record_struct_class_ids: HashMap<ops::RecordStructId, boxed::RecordClassId>,
 
     module_counter: usize,
 }
@@ -63,6 +64,7 @@ impl JITCtx {
                 orc,
                 target_machine,
                 symbols: HashMap::new(),
+                record_struct_class_ids: HashMap::new(),
 
                 module_counter: 0,
             };
@@ -117,6 +119,7 @@ impl JITCtx {
                 module_name_cstring.as_ref(),
                 &analysed_mod,
                 Some(interner),
+                self.record_struct_class_ids.clone(),
                 None,
             );
 
@@ -178,6 +181,9 @@ impl JITCtx {
         let target_record_struct = self.tcx.target_record_struct(record_struct);
         let record_class_id =
             class_map.push_dynamic_class(target_record_struct.classmap_class.clone());
+
+        self.record_struct_class_ids
+            .insert(record_struct.clone(), record_class_id);
 
         RegisteredRecordStruct {
             data_layout: target_record_struct.data_layout,
