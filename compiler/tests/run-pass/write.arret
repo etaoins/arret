@@ -1,0 +1,35 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn test-write-to-stdout! () ->! ()
+  ; This is dumb but it makes us produce a binary
+  (print! "")
+
+  ; We should be able to call through a thunk as well
+  ((black-box! print!) "")
+
+  ; And through a callback
+  (map print! '(""))
+
+  ; And print an unknown value
+  (print! (black-box! ""))
+
+  ; And do both at once
+  ((black-box! print!) (black-box! "")))
+
+(defn test-write-to-str! () ->! ()
+  (assert-eq! "" (print-str))
+  (assert-eq! "" (write-str))
+  
+  (assert-eq! "hello" (print-str 'hello))
+  (assert-eq! "hello" (write-str 'hello))
+
+  (assert-eq! "Hello, world!" (print-str "Hello, world!"))
+  (assert-eq! "\"Hello, world!\"" (write-str "Hello, world!"))
+  
+  (assert-eq! " " (print-str \space))
+  (assert-eq! "\\space" (write-str \space)))
+
+(defn main! () ->! ()
+  (test-write-to-stdout!)
+  (test-write-to-str!))

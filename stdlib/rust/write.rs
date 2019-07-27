@@ -66,3 +66,25 @@ pub fn stdlib_writeln(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) {
     write_boxed_common(task, values, &mut output);
     output.write_all(&[b'\n']).unwrap();
 }
+
+#[arret_rfi_derive::rust_fun("(& Any -> Str)")]
+pub fn stdlib_print_str(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Gc<boxed::Str> {
+    let mut output: Vec<u8> = vec![];
+    pretty_print_common(task, values, &mut output);
+
+    boxed::Str::new(
+        task,
+        std::str::from_utf8(&output).expect("wrote invalid UTF-8"),
+    )
+}
+
+#[arret_rfi_derive::rust_fun("(& Any -> Str)")]
+pub fn stdlib_write_str(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Gc<boxed::Str> {
+    let mut output: Vec<u8> = vec![];
+    write_boxed_common(task, values, &mut output);
+
+    boxed::Str::new(
+        task,
+        std::str::from_utf8(&output).expect("wrote invalid UTF-8"),
+    )
+}
