@@ -14,6 +14,14 @@
         false
         (even-length? (rest tail))))))
 
+; This has a polymorphic purity
+(defn recursive-every? #{T [->_ ->!]} ([pred (T ->_ Bool)] [l (List & T)]) ->_ Bool
+  (if (nil? l)
+    true
+    (if (pred (first l))
+      (recursive-every? pred (rest l))
+      false)))
+
 (defn main! () ->! ()
   (assert-eq! '() ((black-box! recursive-reverse) '()))
   (assert-eq! '(()) ((black-box! recursive-reverse) (black-box! '(()))))
@@ -25,6 +33,15 @@
   (assert-eq! true ((black-box! even-length?) '(1 2)))
   (assert-eq! false ((black-box! even-length?) (black-box! '(1 2 3))))
   (assert-eq! true (even-length? '(1 2 3 4)))
+
+  (assert-eq! true (recursive-every? int? '(1 2 3)))
+  (assert-eq! false (recursive-every? int? '(1 2.0 3)))
+  (assert-eq! true ((black-box! recursive-every?) int? '(1 2 3)))
+  (assert-eq! false ((black-box! recursive-every?) int? '(1 2.0 3)))
+  (assert-eq! true (recursive-every? (black-box! int?) '(1 2 3)))
+  (assert-eq! false (recursive-every? (black-box! int?) '(1 2.0 3)))
+  (assert-eq! true (recursive-every? int? (black-box! '(1 2 3))))
+  (assert-eq! false (recursive-every? int? (black-box! '(1 2.0 3))))
 
   ; We should select an ABI for `even-length?` which doesn't require allocaton
   (let [black-box-list (black-box! '(1 2 3 4 5))

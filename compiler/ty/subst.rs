@@ -320,3 +320,8 @@ pub fn monomorphise(mta: &TyArgs<ty::Mono>, poly: &ty::Ref<ty::Poly>) -> ty::Ref
     let stx = Monomorphise::new(mta);
     stx.subst_ty_ref(poly)
 }
+
+pub fn monomorphise_purity(mta: &TyArgs<ty::Mono>, poly: &purity::Ref) -> purity::Ref {
+    let stx = Monomorphise::new(mta);
+    stx.subst_purity_ref(poly)
+}

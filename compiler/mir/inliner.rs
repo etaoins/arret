@@ -222,13 +222,13 @@ pub(super) fn cond_inline<'a>(
     arret_fun: &value::ArretFun,
     apply_args: ApplyArgs<'a>,
 ) -> Result<value::Value> {
-    let apply_stack = &fcx.inliner_stack;
-
     // We need to build an out-of-line call in every case
     let mut call_b = Builder::new();
-    let call_result = ehx.build_arret_fun_app(&mut call_b, span, ret_ty, arret_fun, &apply_args);
+    let call_result =
+        ehx.build_arret_fun_app(fcx, &mut call_b, span, ret_ty, arret_fun, &apply_args);
     let call_ops = call_b.into_ops();
 
+    let apply_stack = &fcx.inliner_stack;
     let apply_cookie = ApplyCookie::new(ehx.as_heap(), arret_fun, &apply_args.list_value);
     if apply_stack.entries.len() >= MAX_INLINE_DEPTH || apply_stack.entries.contains(&apply_cookie)
     {

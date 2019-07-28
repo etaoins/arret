@@ -24,6 +24,7 @@ use crate::mir::value::synthetic_fun::SyntheticFuns;
 use crate::mir::{Expr, Value};
 use crate::rfi;
 use crate::ty;
+use crate::ty::purity;
 use crate::ty::purity::Purity;
 use crate::ty::record;
 use crate::ty::ty_args::TyArgs;
@@ -124,6 +125,23 @@ pub(super) struct ApplyArgs<'tyargs> {
     pub(super) list_value: Value,
 }
 
+fn merge_apply_purity_into_scope(
+    scope: &HashMap<purity::PVarId, purity::Ref>,
+    apply_purities: &HashMap<purity::PVarId, purity::Ref>,
+    subst_with: &TyArgs<ty::Mono>,
+) -> HashMap<purity::PVarId, purity::Ref> {
+    use crate::ty::subst;
+
+    scope
+        .iter()
+        .map(|(pvar, v)| (pvar.clone(), v.clone()))
+        .chain(apply_purities.iter().map(|(pvar, poly_purity)| {
+            let subst_purity = subst::monomorphise_purity(subst_with, poly_purity);
+            (pvar.clone(), subst_purity)
+        }))
+        .collect()
+}
+
 /// Merge poly type args in to existing mono type args
 ///
 /// This is used when applying a polymorphic function. The `subst_with` are used to monomorphise
@@ -135,12 +153,11 @@ fn merge_apply_ty_args_into_scope(
 ) -> TyArgs<ty::Mono> {
     use crate::ty::subst;
 
-    let pvar_purities = scope
-        .pvar_purities()
-        .iter()
-        .chain(apply_ty_args.pvar_purities().iter())
-        .map(|(pvar, v)| (pvar.clone(), v.clone()))
-        .collect();
+    let pvar_purities = merge_apply_purity_into_scope(
+        scope.pvar_purities(),
+        apply_ty_args.pvar_purities(),
+        subst_with,
+    );
 
     let tvar_types = scope
         .tvar_types()
@@ -282,6 +299,7 @@ impl EvalHirCtx {
 
     pub(super) fn build_arret_fun_app(
         &mut self,
+        fcx: &mut FunCtx,
         b: &mut Builder,
         span: Span,
         ret_ty: &ty::Ref<ty::Mono>,
@@ -321,17 +339,15 @@ impl EvalHirCtx {
         ));
 
         let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
-
-        let outer_purities = arret_fun.env_ty_args().pvar_purities();
-        let apply_purities = apply_ty_args.pvar_purities();
         let fun_expr = arret_fun.fun_expr();
 
-        let app_purity = fun_app_purity(
-            outer_purities,
-            apply_purities,
-            &fun_expr.purity,
-            &fun_expr.ret_ty,
+        let mono_purities = merge_apply_purity_into_scope(
+            arret_fun.env_ty_args().pvar_purities(),
+            apply_ty_args.pvar_purities(),
+            &fcx.mono_ty_args,
         );
+
+        let app_purity = fun_app_purity(&mono_purities, &fun_expr.purity, &fun_expr.ret_ty);
 
         let ret_reg = b.push_reg(
             span,
@@ -639,13 +655,16 @@ impl EvalHirCtx {
             ty_args: apply_ty_args,
         } = apply_args;
 
-        let outer_purities = fcx.mono_ty_args.pvar_purities();
-        let apply_purities = apply_ty_args.pvar_purities();
         let arret_fun_type = rust_fun.arret_fun_type();
 
+        let mono_purities = merge_apply_purity_into_scope(
+            &HashMap::new(),
+            apply_ty_args.pvar_purities(),
+            &fcx.mono_ty_args,
+        );
+
         let call_purity = fun_app_purity(
-            outer_purities,
-            apply_purities,
+            &mono_purities,
             arret_fun_type.purity(),
             arret_fun_type.ret(),
         );
