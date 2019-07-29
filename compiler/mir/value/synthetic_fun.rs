@@ -70,6 +70,7 @@ fn wrap_poly_expr_in_arret_fun(
             purity: Purity::Pure.into(),
             params,
             ret_ty: ret_ty.clone(),
+            ret_ty_span: None,
 
             body_expr: hir::Expr {
                 result_ty: ret_ty.clone(),

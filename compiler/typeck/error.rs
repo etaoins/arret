@@ -37,10 +37,32 @@ impl fmt::Display for WantedArity {
 }
 
 #[derive(PartialEq, Debug, Clone)]
+pub struct IsNotRetTy {
+    value_poly: ty::Ref<ty::Poly>,
+    ret_poly: ty::Ref<ty::Poly>,
+    ret_ty_span: Option<Span>,
+}
+
+impl IsNotRetTy {
+    pub fn new(
+        value_poly: ty::Ref<ty::Poly>,
+        ret_poly: ty::Ref<ty::Poly>,
+        ret_ty_span: Option<Span>,
+    ) -> IsNotRetTy {
+        IsNotRetTy {
+            value_poly,
+            ret_poly,
+            ret_ty_span,
+        }
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
 pub enum ErrorKind {
     IsNotTy(ty::Ref<ty::Poly>, ty::Ref<ty::Poly>),
     IsNotFun(ty::Ref<ty::Poly>),
     IsNotPurity(ty::Ref<ty::Poly>, purity::Ref),
+    IsNotRetTy(IsNotRetTy),
     VarHasEmptyType(ty::Ref<ty::Poly>, ty::Ref<ty::Poly>),
     TopFunApply(ty::Ref<ty::Poly>),
     RecursiveType,
@@ -112,6 +134,32 @@ impl From<Error> for Diagnostic {
                         purity_str
                     )),
                 )
+            }
+
+            ErrorKind::IsNotRetTy(IsNotRetTy {
+                value_poly,
+                ret_poly,
+                ret_ty_span,
+            }) => {
+                let ret_poly_str = hir::str_for_ty_ref(ret_poly);
+                let diagnostic = Diagnostic::new_error("mismatched types").with_label(
+                    Label::new_primary(origin).with_message(format!(
+                        "`{}` is not a `{}`",
+                        hir::str_for_ty_ref(value_poly),
+                        ret_poly_str
+                    )),
+                );
+
+                if let Some(ret_ty_span) = ret_ty_span {
+                    diagnostic.with_label(
+                        Label::new_secondary(*ret_ty_span).with_message(format!(
+                            "expected `{}` due to return type",
+                            ret_poly_str
+                        )),
+                    )
+                } else {
+                    diagnostic
+                }
             }
 
             ErrorKind::VarHasEmptyType(ref current_type, ref required_type) => {
