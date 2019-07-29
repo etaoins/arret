@@ -102,7 +102,9 @@ pub struct Fun<P: Phase> {
 
     pub purity: P::Purity,
     pub params: destruc::List<P>,
+
     pub ret_ty: P::DeclType,
+    pub ret_ty_span: Option<Span>,
 
     pub body_expr: Expr<P>,
 }

@@ -397,6 +397,7 @@ fn lower_fun(
     // Determine if we have a purity and return type after the parameters, eg (param) -> RetTy
     let mut purity = DeclPurity::Free;
     let mut ret_ty = DeclTy::Free;
+    let mut ret_ty_span = None;
 
     if arg_iter.len() >= 2 {
         if let Some(poly_purity) = try_lower_purity(&fun_scope, &arg_iter.as_slice()[0]) {
@@ -406,6 +407,7 @@ fn lower_fun(
             match arg_iter.next().unwrap() {
                 NsDatum::Ident(_, ref ident) if ident.is_underscore() => {}
                 ret_datum => {
+                    ret_ty_span = Some(ret_datum.span());
                     ret_ty = lower_poly(&fun_scope, ret_datum)?.into();
                 }
             }
@@ -422,6 +424,7 @@ fn lower_fun(
         purity,
         params,
         ret_ty,
+        ret_ty_span,
         body_expr,
     }))
     .into())
@@ -1055,6 +1058,7 @@ mod test {
             purity: DeclPurity::Free,
             params: destruc::List::new(vec![], None),
             ret_ty: DeclTy::Free,
+            ret_ty_span: None,
             body_expr: ExprKind::Do(vec![]).into(),
         }))
         .into();
@@ -1075,6 +1079,7 @@ mod test {
             purity: Purity::Pure.into(),
             params: destruc::List::new(vec![], None),
             ret_ty: DeclTy::Free,
+            ret_ty_span: None,
             body_expr: Datum::Int(t2s(u), 1).into(),
         }))
         .into();
@@ -1086,7 +1091,8 @@ mod test {
     fn empty_fn_with_ret_ty() {
         let j = "(fn () -> Int 1)";
         let t = "^^^^^^^^^^^^^^^^";
-        let u = "              ^ ";
+        let u = "          ^^^   ";
+        let v = "              ^ ";
 
         let expected: Expr<_> = ExprKind::Fun(Box::new(Fun {
             span: t2s(t),
@@ -1095,7 +1101,8 @@ mod test {
             purity: Purity::Pure.into(),
             params: destruc::List::new(vec![], None),
             ret_ty: Ty::Int.into(),
-            body_expr: Datum::Int(t2s(u), 1).into(),
+            ret_ty_span: Some(t2s(u)),
+            body_expr: Datum::Int(t2s(v), 1).into(),
         }))
         .into();
 
