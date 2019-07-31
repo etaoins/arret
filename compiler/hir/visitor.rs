@@ -26,6 +26,14 @@ where
                 visit_exprs(rest_arg_expr, visitor);
             }
         }
+        ExprKind::Recur(recur) => {
+            for fixed_arg_expr in &recur.fixed_arg_exprs {
+                visit_exprs(fixed_arg_expr, visitor);
+            }
+            for rest_arg_expr in &recur.rest_arg_expr {
+                visit_exprs(rest_arg_expr, visitor);
+            }
+        }
         ExprKind::Let(hir_let) => {
             visit_exprs(&hir_let.value_expr, visitor);
             visit_exprs(&hir_let.body_expr, visitor);

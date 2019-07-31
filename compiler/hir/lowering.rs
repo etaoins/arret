@@ -28,7 +28,7 @@ use crate::hir::types::{lower_poly, lower_polymorphic_var_set, try_lower_purity}
 use crate::hir::util::{expect_one_arg, expect_spanned_ident, try_take_rest_arg};
 use crate::hir::Lowered;
 use crate::hir::{
-    App, Cond, DeclPurity, DeclTy, Def, Expr, ExprKind, FieldAccessor, Fun, Let, VarId,
+    App, Cond, DeclPurity, DeclTy, Def, Expr, ExprKind, FieldAccessor, Fun, Let, Recur, VarId,
 };
 
 #[derive(Debug)]
@@ -464,6 +464,7 @@ fn lower_expr_prim_apply(
             .into())
         }
         Prim::Do => lower_body(scope, arg_iter),
+        Prim::Recur => lower_recur(scope, span, arg_iter),
         Prim::CompileError => Err(lower_user_compile_error(span, arg_iter)),
         Prim::MacroRules | Prim::All => {
             Err(Error::new(span, ErrorKind::ExpectedValue("primitive")))
@@ -491,6 +492,27 @@ fn lower_expr_apply(
     Ok(ExprKind::App(Box::new(App {
         span,
         fun_expr,
+        ty_args: (),
+        fixed_arg_exprs,
+        rest_arg_expr,
+    }))
+    .into())
+}
+
+fn lower_recur(scope: &Scope<'_>, span: Span, mut arg_iter: NsDataIter) -> Result<Expr<Lowered>> {
+    let rest_arg_datum = try_take_rest_arg(&mut arg_iter);
+
+    let fixed_arg_exprs = arg_iter
+        .map(|arg_datum| lower_expr(scope, arg_datum))
+        .collect::<Result<Vec<Expr<Lowered>>>>()?;
+
+    let rest_arg_expr = match rest_arg_datum {
+        Some(rest_arg_datum) => Some(lower_expr(scope, rest_arg_datum)?),
+        None => None,
+    };
+
+    Ok(ExprKind::Recur(Box::new(Recur {
+        span,
         ty_args: (),
         fixed_arg_exprs,
         rest_arg_expr,
@@ -1143,6 +1165,29 @@ mod test {
             ty_args: (),
             fixed_arg_exprs: vec![Datum::Int(t2s(v), 2).into()],
             rest_arg_expr: Some(Datum::Int(t2s(w), 3).into()),
+        }))
+        .into();
+
+        assert_eq!(expected, expr_for_str(j));
+    }
+
+    #[test]
+    fn recur_expr() {
+        let j = "(recur 1 2 3)";
+        let t = "^^^^^^^^^^^^^";
+        let u = "       ^     ";
+        let v = "         ^   ";
+        let w = "           ^ ";
+
+        let expected: Expr<_> = ExprKind::Recur(Box::new(Recur {
+            span: t2s(t),
+            ty_args: (),
+            fixed_arg_exprs: vec![
+                Datum::Int(t2s(u), 1).into(),
+                Datum::Int(t2s(v), 2).into(),
+                Datum::Int(t2s(w), 3).into(),
+            ],
+            rest_arg_expr: None,
         }))
         .into();
 

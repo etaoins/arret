@@ -26,6 +26,7 @@ export_prims!(
     ("fn", Fun),
     ("if", If),
     ("do", Do),
+    ("recur", Recur),
     ("quote", Quote),
     ("export", Export),
     ("defmacro", DefMacro),

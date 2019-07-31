@@ -1525,6 +1525,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             ExprKind::Let(hir_let) => self.visit_let(pv, result_use, *hir_let),
             ExprKind::Ref(span, var_id) => self.visit_ref(result_use, span, var_id),
             ExprKind::App(app) => self.visit_app(pv, result_use, *app),
+            ExprKind::Recur(_) => unimplemented!("inferring (recur)"),
             ExprKind::MacroExpand(span, inner_expr) => self
                 .visit_expr_with_self_var_id(pv, result_use, *inner_expr, self_var_id)
                 .map(|inferred| InferredNode {

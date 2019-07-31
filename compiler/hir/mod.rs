@@ -135,6 +135,14 @@ pub struct App<P: Phase> {
 }
 
 #[derive(PartialEq, Debug, Clone)]
+pub struct Recur<P: Phase> {
+    pub span: Span,
+    pub ty_args: P::TyArgs,
+    pub fixed_arg_exprs: Vec<Expr<P>>,
+    pub rest_arg_expr: Option<Expr<P>>,
+}
+
+#[derive(PartialEq, Debug, Clone)]
 pub struct FieldAccessor {
     pub span: Span,
     pub record_cons: record::ConsId,
@@ -157,6 +165,7 @@ impl From<Datum> for Expr<Lowered> {
 pub enum ExprKind<P: Phase> {
     Lit(Datum),
     App(Box<App<P>>),
+    Recur(Box<Recur<P>>),
     Fun(Box<Fun<P>>),
     RustFun(Box<rfi::Fun>),
     Let(Box<Let<P>>),

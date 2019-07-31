@@ -1465,6 +1465,7 @@ impl EvalHirCtx {
             ExprKind::Ref(_, var_id) => Ok(self.eval_ref(fcx, *var_id)),
             ExprKind::Let(hir_let) => self.eval_let(fcx, b, hir_let),
             ExprKind::App(app) => self.eval_app(fcx, b, &expr.result_ty, app),
+            ExprKind::Recur(_) => unimplemented!("evaluating (recur)"),
             ExprKind::MacroExpand(span, expr) => self
                 .eval_expr(fcx, b, expr)
                 .map_err(|err| err.with_macro_invocation_span(*span)),

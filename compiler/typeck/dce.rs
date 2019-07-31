@@ -37,6 +37,13 @@ pub fn expr_can_side_effect(expr: &hir::Expr<hir::Inferred>) -> bool {
                 true
             }
         }
+        ExprKind::Recur(_) => {
+            // We don't know if a `(recur)` is pure without knowing the function it appears in.
+            // However, by definition `(recur)` always occurs in a position where its value becomes
+            // the return value of a function. This means that in practice it can never be
+            // eliminated anyway.
+            true
+        }
     }
 }
 
