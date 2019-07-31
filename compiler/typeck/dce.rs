@@ -19,7 +19,6 @@ pub fn expr_can_side_effect(expr: &hir::Expr<hir::Inferred>) -> bool {
         | ExprKind::RustFun(_) => false,
         ExprKind::Do(exprs) => exprs.iter().any(expr_can_side_effect),
         ExprKind::MacroExpand(_, inner) => expr_can_side_effect(inner),
-        // These can trigger type errors even if they only contain pure expressions
         ExprKind::Cond(cond) => {
             expr_can_side_effect(&cond.test_expr)
                 || expr_can_side_effect(&cond.true_expr)
@@ -29,7 +28,7 @@ pub fn expr_can_side_effect(expr: &hir::Expr<hir::Inferred>) -> bool {
             expr_can_side_effect(&let_expr.value_expr) || expr_can_side_effect(&let_expr.body_expr)
         }
         ExprKind::App(app) => {
-            if let ty::Ref::Fixed(Ty::Fun(ref fun_type)) = expr.result_ty {
+            if let ty::Ref::Fixed(Ty::Fun(ref fun_type)) = app.fun_expr.result_ty {
                 fun_type.top_fun().purity() != &Purity::Pure.into()
                     || fun_type.ret().is_never()
                     || app.fixed_arg_exprs.iter().any(expr_can_side_effect)
@@ -38,5 +37,60 @@ pub fn expr_can_side_effect(expr: &hir::Expr<hir::Inferred>) -> bool {
                 true
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::ty::ty_args::TyArgs;
+    use arret_syntax::span::EMPTY_SPAN;
+
+    #[test]
+    fn pure_app_expr() {
+        let app_expr = hir::Expr::<hir::Inferred> {
+            result_ty: ty::List::empty().into(),
+            kind: hir::ExprKind::App(Box::new(hir::App {
+                span: EMPTY_SPAN,
+                fun_expr: hir::Expr {
+                    result_ty: ty::Fun::new_mono(
+                        ty::List::empty(),
+                        Purity::Pure.into(),
+                        ty::List::empty().into(),
+                    )
+                    .into(),
+                    kind: hir::ExprKind::Do(vec![]),
+                },
+                ty_args: TyArgs::empty(),
+                fixed_arg_exprs: vec![],
+                rest_arg_expr: None,
+            })),
+        };
+
+        assert_eq!(false, expr_can_side_effect(&app_expr));
+    }
+
+    #[test]
+    fn impure_app_expr() {
+        let app_expr = hir::Expr::<hir::Inferred> {
+            result_ty: ty::List::empty().into(),
+            kind: hir::ExprKind::App(Box::new(hir::App {
+                span: EMPTY_SPAN,
+                fun_expr: hir::Expr {
+                    result_ty: ty::Fun::new_mono(
+                        ty::List::empty(),
+                        Purity::Impure.into(),
+                        ty::List::empty().into(),
+                    )
+                    .into(),
+                    kind: hir::ExprKind::Do(vec![]),
+                },
+                ty_args: TyArgs::empty(),
+                fixed_arg_exprs: vec![],
+                rest_arg_expr: None,
+            })),
+        };
+
+        assert_eq!(true, expr_can_side_effect(&app_expr));
     }
 }
