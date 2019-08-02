@@ -66,6 +66,8 @@ pub enum ErrorKind {
     VarHasEmptyType(ty::Ref<ty::Poly>, ty::Ref<ty::Poly>),
     TopFunApply(ty::Ref<ty::Poly>),
     RecursiveType,
+    RecurWithoutFunTypeDecl,
+    NonTailRecur,
     DependsOnError,
     WrongArity(usize, WantedArity),
     UnselectedPVar(purity::PVarId),
@@ -195,6 +197,16 @@ impl From<Error> for Diagnostic {
             ErrorKind::RecursiveType => Diagnostic::new_error("type annotation needed").with_label(
                 Label::new_primary(origin)
                     .with_message("recursive usage requires explicit type annotation".to_owned()),
+            ),
+
+            ErrorKind::RecurWithoutFunTypeDecl => Diagnostic::new_error("type annotation needed").with_label(
+                Label::new_primary(origin)
+                    .with_message("`(recur)` requires the function to have a complete type annotation".to_owned()),
+            ),
+
+            ErrorKind::NonTailRecur => Diagnostic::new_error("non-tail `(recur)`").with_label(
+                Label::new_primary(origin)
+                    .with_message("`(recur)` must occur in a position where it immediately becomes the return value of a function".to_owned()),
             ),
 
             ErrorKind::DependsOnError => {

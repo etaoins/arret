@@ -101,6 +101,13 @@ struct FunApp {
     rest_arg_expr: Option<hir::Expr<hir::Lowered>>,
 }
 
+struct VisitedFunAppLike {
+    ret_type: ty::Ref<ty::Poly>,
+    ty_args: TyArgs<ty::Poly>,
+    inferred_fixed_arg_exprs: Vec<hir::Expr<hir::Inferred>>,
+    inferred_rest_arg_expr: Option<hir::Expr<hir::Inferred>>,
+}
+
 enum VarType {
     // Introduced a definition that has yet to be processed
     Pending(InputDefId),
@@ -128,14 +135,22 @@ enum PurityVar {
     Known(purity::Ref),
 }
 
+#[derive(Clone)]
+struct RetExprResultUse<'a> {
+    /// Span of the declared return type if any
+    ret_type_span: Option<Span>,
+    ret_type: &'a ty::Ref<ty::Poly>,
+    known_self_type: Option<&'a ty::Fun>,
+}
+
 /// Describes the use of an expression's result value
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum ResultUse<'a> {
     /// Non-return expression with a used value
     InnerExpr(&'a ty::Ref<ty::Poly>),
 
     /// Expression used as the return value of a function
-    RetExpr(Option<Span>, &'a ty::Ref<ty::Poly>),
+    RetExpr(RetExprResultUse<'a>),
 
     /// Expression with an unused value
     ///
@@ -148,7 +163,7 @@ impl<'a> ResultUse<'a> {
     fn required_type(&self) -> &'a ty::Ref<ty::Poly> {
         match self {
             ResultUse::InnerExpr(required_type) => required_type,
-            ResultUse::RetExpr(_, required_type) => required_type,
+            ResultUse::RetExpr(RetExprResultUse { ret_type, .. }) => ret_type,
             ResultUse::Unused(required_type) => required_type,
         }
     }
@@ -206,7 +221,7 @@ fn unify_app_purity(pv: &mut PurityVar, app_purity: &purity::Ref) {
 /// Inspects the mismatched sub and parent types to attempt to produce an understandable type error
 fn error_kind_for_type_error(
     value_poly: &ty::Ref<ty::Poly>,
-    value_use: ResultUse<'_>,
+    value_use: &ResultUse<'_>,
 ) -> ErrorKind {
     if let ty::Ref::Fixed(Ty::TopFun(top_fun)) = value_use.required_type() {
         let topmost_fun = ty::TopFun::new(Purity::Impure.into(), Ty::Any.into()).into();
@@ -223,18 +238,26 @@ fn error_kind_for_type_error(
 
     match value_use {
         ResultUse::Unused(required_type) | ResultUse::InnerExpr(required_type) => {
-            ErrorKind::IsNotTy(value_poly.clone(), required_type.clone())
+            ErrorKind::IsNotTy(value_poly.clone(), (*required_type).clone())
         }
-        ResultUse::RetExpr(ret_ty_span, ret_ty) => ErrorKind::IsNotRetTy(IsNotRetTy::new(
+        ResultUse::RetExpr(RetExprResultUse {
+            ret_type_span,
+            ret_type,
+            ..
+        }) => ErrorKind::IsNotRetTy(IsNotRetTy::new(
             value_poly.clone(),
-            ret_ty.clone(),
-            ret_ty_span,
+            (*ret_type).clone(),
+            *ret_type_span,
         )),
     }
 }
 
 /// Ensures `value_poly` is appropriate for `value_use`
-fn ensure_is_a(span: Span, value_poly: &ty::Ref<ty::Poly>, value_use: ResultUse<'_>) -> Result<()> {
+fn ensure_is_a(
+    span: Span,
+    value_poly: &ty::Ref<ty::Poly>,
+    value_use: &ResultUse<'_>,
+) -> Result<()> {
     if !value_use.is_used() {
         // We don't throw type errors for unused values
         return Ok(());
@@ -344,7 +367,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         FreeTyId::new_entry_id(&mut self.free_ty_polys, initial_type)
     }
 
-    fn visit_lit(&mut self, result_use: ResultUse<'_>, datum: Datum) -> Result<InferredNode> {
+    fn visit_lit(&mut self, result_use: &ResultUse<'_>, datum: Datum) -> Result<InferredNode> {
         let lit_type = ty::datum::ty_ref_for_datum(&datum);
         ensure_is_a(datum.span(), &lit_type, result_use)?;
 
@@ -403,7 +426,7 @@ impl<'types> RecursiveDefsCtx<'types> {
     fn visit_cond(
         &mut self,
         pv: &mut PurityVar,
-        result_use: ResultUse<'_>,
+        result_use: &ResultUse<'_>,
         cond: hir::Cond<hir::Lowered>,
     ) -> Result<InferredNode> {
         use std::iter;
@@ -416,11 +439,11 @@ impl<'types> RecursiveDefsCtx<'types> {
             ..
         } = cond;
 
-        let test_node = self.visit_expr(pv, ResultUse::InnerExpr(&Ty::Bool.into()), test_expr)?;
+        let test_node = self.visit_expr(pv, &ResultUse::InnerExpr(&Ty::Bool.into()), test_expr)?;
         let test_known_bool = try_to_bool(test_node.result_ty());
 
         // If a branch isn't taken it doesn't need to match the type of the cond expression
-        let unused_use = ResultUse::Unused(result_use.required_type());
+        let unused_use = &ResultUse::Unused(result_use.required_type());
         let (true_result_use, false_result_use) = if test_node.is_divergent() {
             (unused_use, unused_use)
         } else {
@@ -522,7 +545,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
     fn visit_ty_pred(
         &self,
-        result_use: ResultUse<'_>,
+        result_use: &ResultUse<'_>,
         span: Span,
         test_ty: ty::pred::TestTy,
     ) -> Result<InferredNode> {
@@ -538,7 +561,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         })
     }
 
-    fn visit_eq_pred(&self, result_use: ResultUse<'_>, span: Span) -> Result<InferredNode> {
+    fn visit_eq_pred(&self, result_use: &ResultUse<'_>, span: Span) -> Result<InferredNode> {
         let pred_type = Ty::EqPred.into();
         ensure_is_a(span, &pred_type, result_use)?;
 
@@ -553,7 +576,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
     fn visit_record_cons(
         &self,
-        result_use: ResultUse<'_>,
+        result_use: &ResultUse<'_>,
         span: Span,
         record_cons: record::ConsId,
     ) -> Result<InferredNode> {
@@ -571,7 +594,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
     fn visit_field_accessor(
         &self,
-        result_use: ResultUse<'_>,
+        result_use: &ResultUse<'_>,
         field_accessor: Box<hir::FieldAccessor>,
     ) -> Result<InferredNode> {
         let record_cons = &field_accessor.record_cons;
@@ -608,7 +631,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
     fn visit_ref(
         &mut self,
-        result_use: ResultUse<'_>,
+        result_use: &ResultUse<'_>,
         span: Span,
         var_id: hir::VarId,
     ) -> Result<InferredNode> {
@@ -654,7 +677,7 @@ impl<'types> RecursiveDefsCtx<'types> {
     fn visit_do(
         &mut self,
         pv: &mut PurityVar,
-        result_use: ResultUse<'_>,
+        result_use: &ResultUse<'_>,
         mut exprs: Vec<hir::Expr<hir::Lowered>>,
     ) -> Result<InferredNode> {
         let terminal_expr = if let Some(terminal_expr) = exprs.pop() {
@@ -675,7 +698,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             let was_divergent = is_divergent;
             // The type of this expression doesn't matter; its value is discarded
             let node =
-                self.visit_expr(pv, ResultUse::Unused(&Ty::Any.into()), non_terminal_expr)?;
+                self.visit_expr(pv, &ResultUse::Unused(&Ty::Any.into()), non_terminal_expr)?;
 
             is_divergent = was_divergent || node.is_divergent();
             if !was_divergent && expr_can_side_effect(&node.expr) {
@@ -684,7 +707,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         }
 
         if is_divergent {
-            self.visit_expr(pv, ResultUse::Unused(&Ty::Any.into()), terminal_expr)?;
+            self.visit_expr(pv, &ResultUse::Unused(&Ty::Any.into()), terminal_expr)?;
 
             Ok(InferredNode {
                 expr: hir::Expr {
@@ -718,7 +741,7 @@ impl<'types> RecursiveDefsCtx<'types> {
     /// taken as-is.
     fn visit_fun(
         &mut self,
-        result_use: ResultUse<'_>,
+        result_use: &ResultUse<'_>,
         decl_fun: hir::Fun<hir::Lowered>,
         self_var_id: Option<hir::VarId>,
     ) -> Result<InferredNode> {
@@ -780,20 +803,24 @@ impl<'types> RecursiveDefsCtx<'types> {
             }
         };
 
+        let mut known_self_type: Option<ty::Fun> = None;
+
         let mut fun_pv = match decl_fun.purity {
             hir::DeclPurity::Known(poly_purity) => {
-                if let (Some(self_var_id), true) = (self_var_id, decl_tys_are_known) {
+                if decl_tys_are_known {
                     let self_type = ty::Fun::new(
                         decl_fun.pvars.clone(),
                         decl_fun.tvars.clone(),
                         ty::TopFun::new(poly_purity.clone(), wanted_ret_type.clone()),
                         initial_param_type,
-                    )
-                    .into();
+                    );
 
                     // We have a fully known type; allow recursive calls
-                    self.var_to_type
-                        .insert(self_var_id, VarType::Known(self_type));
+                    if let Some(self_var_id) = self_var_id {
+                        self.var_to_type
+                            .insert(self_var_id, VarType::Known(self_type.clone().into()));
+                    }
+                    known_self_type = Some(self_type);
                 }
 
                 PurityVar::Known(poly_purity)
@@ -804,8 +831,13 @@ impl<'types> RecursiveDefsCtx<'types> {
             }
         };
 
-        let body_result_use = ResultUse::RetExpr(decl_fun.ret_ty_span, &wanted_ret_type);
-        let body_node = self.visit_expr(&mut fun_pv, body_result_use, decl_fun.body_expr)?;
+        let body_result_use = ResultUse::RetExpr(RetExprResultUse {
+            ret_type_span: decl_fun.ret_ty_span,
+            ret_type: &wanted_ret_type,
+            known_self_type: known_self_type.as_ref(),
+        });
+
+        let body_node = self.visit_expr(&mut fun_pv, &body_result_use, decl_fun.body_expr)?;
         let revealed_ret_type = body_node.result_ty();
         let revealed_purity = fun_pv.into_poly();
 
@@ -866,7 +898,7 @@ impl<'types> RecursiveDefsCtx<'types> {
     fn visit_fun_app(
         &mut self,
         pv: &mut PurityVar,
-        result_use: ResultUse<'_>,
+        result_use: &ResultUse<'_>,
         span: Span,
         fun_type: &ty::Fun,
         fun_app: FunApp,
@@ -877,6 +909,97 @@ impl<'types> RecursiveDefsCtx<'types> {
             rest_arg_expr,
         } = fun_app;
 
+        let VisitedFunAppLike {
+            ret_type,
+            ty_args,
+            inferred_fixed_arg_exprs,
+            inferred_rest_arg_expr,
+        } = self.visit_fun_app_like(
+            pv,
+            result_use,
+            span,
+            fun_type,
+            fixed_arg_exprs,
+            rest_arg_expr,
+        )?;
+
+        Ok(InferredNode {
+            expr: hir::Expr {
+                result_ty: ret_type,
+                kind: hir::ExprKind::App(Box::new(hir::App {
+                    span,
+                    fun_expr,
+                    ty_args,
+                    fixed_arg_exprs: inferred_fixed_arg_exprs,
+                    rest_arg_expr: inferred_rest_arg_expr,
+                })),
+            },
+            type_conds: vec![],
+        })
+    }
+
+    fn visit_recur(
+        &mut self,
+        pv: &mut PurityVar,
+        result_use: &ResultUse<'_>,
+        recur: hir::Recur<hir::Lowered>,
+    ) -> Result<InferredNode> {
+        let hir::Recur {
+            span,
+            fixed_arg_exprs,
+            rest_arg_expr,
+            ..
+        } = recur;
+
+        let ret_expr_use = if let ResultUse::RetExpr(ret_expr_use) = result_use {
+            ret_expr_use
+        } else {
+            return Err(Error::new(span, ErrorKind::NonTailRecur));
+        };
+
+        let self_type = if let Some(self_type) = ret_expr_use.known_self_type {
+            self_type
+        } else {
+            return Err(Error::new(span, ErrorKind::RecurWithoutFunTypeDecl));
+        };
+
+        let VisitedFunAppLike {
+            ret_type,
+            ty_args,
+            inferred_fixed_arg_exprs,
+            inferred_rest_arg_expr,
+        } = self.visit_fun_app_like(
+            pv,
+            result_use,
+            span,
+            self_type,
+            fixed_arg_exprs,
+            rest_arg_expr,
+        )?;
+
+        Ok(InferredNode {
+            expr: hir::Expr {
+                result_ty: ret_type,
+                kind: hir::ExprKind::Recur(Box::new(hir::Recur {
+                    span,
+                    ty_args,
+                    fixed_arg_exprs: inferred_fixed_arg_exprs,
+                    rest_arg_expr: inferred_rest_arg_expr,
+                })),
+            },
+            type_conds: vec![],
+        })
+    }
+
+    fn visit_fun_app_like(
+        &mut self,
+        pv: &mut PurityVar,
+        result_use: &ResultUse<'_>,
+        span: Span,
+        fun_type: &ty::Fun,
+        fixed_arg_exprs: Vec<hir::Expr<hir::Lowered>>,
+        rest_arg_expr: Option<hir::Expr<hir::Lowered>>,
+    ) -> Result<VisitedFunAppLike> {
         // The context used to select the types for our non-function parameters
         let mut non_fun_param_stx = ty::select::SelectCtx::new(fun_type.pvars(), fun_type.tvars());
 
@@ -941,7 +1064,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         {
             let wanted_arg_type = ty::subst::subst_poly(&non_fun_param_pta, param_type);
             let fixed_arg_node =
-                self.visit_expr(pv, ResultUse::InnerExpr(&wanted_arg_type), expr)?;
+                self.visit_expr(pv, &ResultUse::InnerExpr(&wanted_arg_type), expr)?;
 
             is_divergent = is_divergent || fixed_arg_node.is_divergent();
 
@@ -954,7 +1077,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             let tail_type = param_iter.tail_type().into();
             let wanted_tail_type = ty::subst::subst_poly(&non_fun_param_pta, &tail_type);
             let rest_arg_node =
-                self.visit_expr(pv, ResultUse::InnerExpr(&wanted_tail_type), rest_arg_expr)?;
+                self.visit_expr(pv, &ResultUse::InnerExpr(&wanted_tail_type), rest_arg_expr)?;
 
             is_divergent = is_divergent || rest_arg_node.is_divergent();
 
@@ -985,7 +1108,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         {
             let wanted_arg_type = ty::subst::subst_poly(&fun_param_pta, param_type);
             let fixed_arg_node =
-                self.visit_expr(pv, ResultUse::InnerExpr(&wanted_arg_type), expr)?;
+                self.visit_expr(pv, &ResultUse::InnerExpr(&wanted_arg_type), expr)?;
 
             is_divergent = is_divergent || fixed_arg_node.is_divergent();
 
@@ -1019,18 +1142,11 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         ensure_is_a(span, &ret_type, result_use)?;
 
-        Ok(InferredNode {
-            expr: hir::Expr {
-                result_ty: ret_type,
-                kind: hir::ExprKind::App(Box::new(hir::App {
-                    span,
-                    fun_expr,
-                    ty_args: ret_pta,
-                    fixed_arg_exprs: inferred_fixed_arg_exprs,
-                    rest_arg_expr: inferred_rest_arg_expr,
-                })),
-            },
-            type_conds: vec![],
+        Ok(VisitedFunAppLike {
+            ret_type,
+            ty_args: ret_pta,
+            inferred_fixed_arg_exprs,
+            inferred_rest_arg_expr,
         })
     }
 
@@ -1054,7 +1170,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         };
 
         let subject_node =
-            self.visit_expr(pv, ResultUse::InnerExpr(&Ty::Any.into()), subject_expr)?;
+            self.visit_expr(pv, &ResultUse::InnerExpr(&Ty::Any.into()), subject_expr)?;
 
         let subject_poly = subject_node.result_ty();
         match test_ty.match_subject_ref(&subject_poly) {
@@ -1144,7 +1260,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         let subject_list_node = self.visit_expr(
             pv,
-            ResultUse::InnerExpr(&wanted_subject_list_type),
+            &ResultUse::InnerExpr(&wanted_subject_list_type),
             subject_list_expr,
         )?;
 
@@ -1222,11 +1338,11 @@ impl<'types> RecursiveDefsCtx<'types> {
             None
         };
 
-        let left_node = self.visit_expr(pv, ResultUse::InnerExpr(&Ty::Any.into()), left_expr)?;
+        let left_node = self.visit_expr(pv, &ResultUse::InnerExpr(&Ty::Any.into()), left_expr)?;
         let left_ty = left_node.result_ty();
         let left_is_literal = is_literal(left_ty);
 
-        let right_node = self.visit_expr(pv, ResultUse::InnerExpr(&Ty::Any.into()), right_expr)?;
+        let right_node = self.visit_expr(pv, &ResultUse::InnerExpr(&Ty::Any.into()), right_expr)?;
         let right_ty = right_node.result_ty();
         let right_is_literal = is_literal(right_ty);
 
@@ -1336,7 +1452,7 @@ impl<'types> RecursiveDefsCtx<'types> {
     fn visit_app(
         &mut self,
         pv: &mut PurityVar,
-        result_use: ResultUse<'_>,
+        result_use: &ResultUse<'_>,
         app: hir::App<hir::Lowered>,
     ) -> Result<InferredNode> {
         let hir::App {
@@ -1363,7 +1479,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         let wanted_fun_type =
             ty::TopFun::new(wanted_purity, result_use.required_type().clone()).into();
 
-        let fun_node = self.visit_expr(pv, ResultUse::InnerExpr(&wanted_fun_type), fun_expr)?;
+        let fun_node = self.visit_expr(pv, &ResultUse::InnerExpr(&wanted_fun_type), fun_expr)?;
         let revealed_fun_type = fun_node.result_ty().clone();
 
         match revealed_fun_type.resolve_to_ty() {
@@ -1424,7 +1540,7 @@ impl<'types> RecursiveDefsCtx<'types> {
     fn visit_let(
         &mut self,
         pv: &mut PurityVar,
-        result_use: ResultUse<'_>,
+        result_use: &ResultUse<'_>,
         hir_let: hir::Let<hir::Lowered>,
     ) -> Result<InferredNode> {
         let hir::Let {
@@ -1448,7 +1564,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         let value_node = self.visit_expr_with_self_var_id(
             pv,
-            ResultUse::InnerExpr(&required_destruc_type),
+            &ResultUse::InnerExpr(&required_destruc_type),
             value_expr,
             self_var_id,
         )?;
@@ -1481,7 +1597,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
     fn visit_rust_fun(
         &self,
-        result_use: ResultUse<'_>,
+        result_use: &ResultUse<'_>,
         rust_fun: Box<rfi::Fun>,
     ) -> Result<InferredNode> {
         let span = rust_fun.span();
@@ -1503,7 +1619,7 @@ impl<'types> RecursiveDefsCtx<'types> {
     fn visit_expr_with_self_var_id(
         &mut self,
         pv: &mut PurityVar,
-        result_use: ResultUse<'_>,
+        result_use: &ResultUse<'_>,
         expr: hir::Expr<hir::Lowered>,
         self_var_id: Option<hir::VarId>,
     ) -> Result<InferredNode> {
@@ -1525,7 +1641,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             ExprKind::Let(hir_let) => self.visit_let(pv, result_use, *hir_let),
             ExprKind::Ref(span, var_id) => self.visit_ref(result_use, span, var_id),
             ExprKind::App(app) => self.visit_app(pv, result_use, *app),
-            ExprKind::Recur(_) => unimplemented!("inferring (recur)"),
+            ExprKind::Recur(recur) => self.visit_recur(pv, result_use, *recur),
             ExprKind::MacroExpand(span, inner_expr) => self
                 .visit_expr_with_self_var_id(pv, result_use, *inner_expr, self_var_id)
                 .map(|inferred| InferredNode {
@@ -1542,7 +1658,7 @@ impl<'types> RecursiveDefsCtx<'types> {
     fn visit_expr(
         &mut self,
         pv: &mut PurityVar,
-        result_use: ResultUse<'_>,
+        result_use: &ResultUse<'_>,
         expr: hir::Expr<hir::Lowered>,
     ) -> Result<InferredNode> {
         self.visit_expr_with_self_var_id(pv, result_use, expr, None)
@@ -1667,7 +1783,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         let required_type = typeck::destruc::type_for_decl_destruc(&destruc, None);
         let value_node = match self.visit_expr_with_self_var_id(
             &mut pv,
-            ResultUse::InnerExpr(&required_type),
+            &ResultUse::InnerExpr(&required_type),
             value_expr,
             self_var_id,
         ) {
@@ -1758,7 +1874,7 @@ impl InferCtx {
         let mut rdcx = RecursiveDefsCtx::new(vec![], &mut self.var_to_type);
         let mut pv = PurityVar::Known(Purity::Impure.into());
 
-        rdcx.visit_expr(&mut pv, ResultUse::InnerExpr(&Ty::Any.into()), expr)
+        rdcx.visit_expr(&mut pv, &ResultUse::InnerExpr(&Ty::Any.into()), expr)
     }
 }
 
@@ -1835,7 +1951,7 @@ mod test {
 
         let mut pv = PurityVar::Known(Purity::Pure.into());
 
-        rdcx.visit_expr(&mut pv, ResultUse::InnerExpr(required_type), expr)
+        rdcx.visit_expr(&mut pv, &ResultUse::InnerExpr(required_type), expr)
             .map(|node| node.expr.result_ty)
     }
 
@@ -1969,30 +2085,58 @@ mod test {
     }
 
     #[test]
-    fn recursive_app() {
+    fn recursive_var_app() {
         assert_type_for_expr(
             "'foo",
-            "(let [[recurse (-> 'foo)] (fn () (recurse))] (recurse))",
+            "(let [[self-fn (-> 'foo)] (fn () (self-fn))] (self-fn))",
         );
 
         assert_type_for_expr(
             "'foo",
-            "(let [recurse (fn ([x Int]) -> 'foo (recurse x))] (recurse 1))",
+            "(let [self-fn (fn ([x Int]) -> 'foo (self-fn x))] (self-fn 1))",
         );
 
-        let j = "(let [recurse (fn () (recurse))] (recurse))";
+        let j = "(let [self-fn (fn () (self-fn))] (self-fn))";
         let t = "                      ^^^^^^^              ";
         let err = Error::new(t2s(t), ErrorKind::RecursiveType);
         assert_type_error(&err, j);
 
-        let j = "(let [recurse (fn (x) -> 'foo (recurse x))] (recurse 1))";
+        let j = "(let [self-fn (fn (x) -> 'foo (self-fn x))] (self-fn 1))";
         let t = "                               ^^^^^^^                  ";
         let err = Error::new(t2s(t), ErrorKind::RecursiveType);
         assert_type_error(&err, j);
 
-        let j = "(let [recurse (fn ([x Int]) (recurse x))] (recurse 1))";
+        let j = "(let [self-fn (fn ([x Int]) (self-fn x))] (self-fn 1))";
         let t = "                             ^^^^^^^                  ";
         let err = Error::new(t2s(t), ErrorKind::RecursiveType);
+        assert_type_error(&err, j);
+    }
+
+    #[test]
+    fn recur_expr() {
+        assert_type_for_expr(
+            "'foo",
+            "(let [self-fn (fn ([x Int]) -> 'foo (recur x))] (self-fn 1))",
+        );
+
+        let j = "(let [self-fn (fn () -> () (recur) ())] (self-fn))";
+        let t = "                           ^^^^^^^                ";
+        let err = Error::new(t2s(t), ErrorKind::NonTailRecur);
+        assert_type_error(&err, j);
+
+        let j = "(let [self-fn (fn () (recur))] (self-fn))";
+        let t = "                     ^^^^^^^             ";
+        let err = Error::new(t2s(t), ErrorKind::RecurWithoutFunTypeDecl);
+        assert_type_error(&err, j);
+
+        let j = "(let [self-fn (fn (x) -> 'foo (recur x))] (self-fn 1))";
+        let t = "                              ^^^^^^^^^               ";
+        let err = Error::new(t2s(t), ErrorKind::RecurWithoutFunTypeDecl);
+        assert_type_error(&err, j);
+
+        let j = "(let [self-fn (fn ([x Int]) (recur x))] (self-fn 1))";
+        let t = "                            ^^^^^^^^^               ";
+        let err = Error::new(t2s(t), ErrorKind::RecurWithoutFunTypeDecl);
         assert_type_error(&err, j);
     }
 
