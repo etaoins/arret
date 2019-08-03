@@ -70,10 +70,16 @@ pub struct EvalHirCtx {
     cons_for_jit_record_class_id: HashMap<boxed::RecordClassId, record::ConsId>,
 }
 
-pub struct FunCtx<'sv> {
+#[derive(Clone)]
+struct RecurSelf<'rs> {
+    arret_fun: &'rs value::ArretFun,
+    ty_args: &'rs TyArgs<ty::Poly>,
+}
+
+pub struct FunCtx<'rs> {
     mono_ty_args: TyArgs<ty::Mono>,
     local_values: HashMap<hir::VarId, Value>,
-    self_value: Option<&'sv value::ArretFun>,
+    recur_self: Option<RecurSelf<'rs>>,
 
     pub(super) inliner_stack: inliner::ApplyStack,
 }
@@ -83,7 +89,7 @@ impl<'sv> FunCtx<'sv> {
         FunCtx {
             mono_ty_args: TyArgs::empty(),
             local_values: HashMap::new(),
-            self_value: None,
+            recur_self: None,
 
             inliner_stack: inliner::ApplyStack::new(),
         }
@@ -378,7 +384,10 @@ impl EvalHirCtx {
                 &outer_fcx.mono_ty_args,
             ),
             local_values: outer_fcx.local_values.clone(),
-            self_value: Some(arret_fun),
+            recur_self: Some(RecurSelf {
+                arret_fun,
+                ty_args: &apply_args.ty_args,
+            }),
 
             inliner_stack,
         };
@@ -890,7 +899,8 @@ impl EvalHirCtx {
         result_ty: &ty::Ref<ty::Poly>,
         recur: &hir::Recur<hir::Inferred>,
     ) -> Result<Value> {
-        let self_value = fcx.self_value.expect("(recur) outside function");
+        let RecurSelf { arret_fun, ty_args } =
+            fcx.recur_self.clone().expect("`(recur)` outside function");
 
         let fixed_values = recur
             .fixed_arg_exprs
@@ -910,9 +920,9 @@ impl EvalHirCtx {
             b,
             recur.span,
             &ret_ty,
-            self_value,
+            arret_fun,
             ApplyArgs {
-                ty_args: &recur.ty_args,
+                ty_args,
                 list_value: arg_list_value,
             },
         )
@@ -1287,20 +1297,13 @@ impl EvalHirCtx {
             arg_list_value,
         } = build_load_arg_list_value(self, &mut b, &wanted_abi, &param_list_poly);
 
-        // Start by taking the type args from the fun's enclosing environment
-        let mut fcx = FunCtx {
-            mono_ty_args: arret_fun.env_ty_args().clone(),
-            local_values: HashMap::new(),
-            self_value: Some(arret_fun),
+        // Start by loading the closure
+        let mut local_values: HashMap<hir::VarId, Value> = HashMap::new();
 
-            inliner_stack: inliner::ApplyStack::new(),
-        };
-
-        // And loading its closure
         closure::load_from_closure_param(
             &mut b,
             span,
-            &mut fcx.local_values,
+            &mut local_values,
             arret_fun.closure(),
             closure_reg,
         );
@@ -1313,6 +1316,18 @@ impl EvalHirCtx {
         stx.add_evidence(&fun_param_poly.into(), &wanted_abi_poly.into());
 
         let ty_args = stx.into_poly_ty_args();
+
+        // Now build a function context
+        let fcx = FunCtx {
+            mono_ty_args: arret_fun.env_ty_args().clone(),
+            local_values,
+            recur_self: Some(RecurSelf {
+                arret_fun,
+                ty_args: &ty_args,
+            }),
+
+            inliner_stack: inliner::ApplyStack::new(),
+        };
 
         let mut some_b = Some(b);
         let app_result = self.inline_arret_fun_app(

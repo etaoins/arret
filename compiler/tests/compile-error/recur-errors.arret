@@ -9,4 +9,8 @@
 (defn recur-without-fun-ty-decl () (recur))
                                   ;^^^^^^^ ERROR type annotation needed
 
+(defn recur-with-non-generic-argument #{[T Num]}
+  ([v T]) -> () (recur 5))
+                      ;^ ERROR mismatched types
+
 (defn main! () ->! () ())

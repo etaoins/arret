@@ -137,7 +137,6 @@ pub struct App<P: Phase> {
 #[derive(PartialEq, Debug, Clone)]
 pub struct Recur<P: Phase> {
     pub span: Span,
-    pub ty_args: P::TyArgs,
     pub fixed_arg_exprs: Vec<Expr<P>>,
     pub rest_arg_expr: Option<Expr<P>>,
 }

@@ -513,7 +513,6 @@ fn lower_recur(scope: &Scope<'_>, span: Span, mut arg_iter: NsDataIter) -> Resul
 
     Ok(ExprKind::Recur(Box::new(Recur {
         span,
-        ty_args: (),
         fixed_arg_exprs,
         rest_arg_expr,
     }))
@@ -1181,7 +1180,6 @@ mod test {
 
         let expected: Expr<_> = ExprKind::Recur(Box::new(Recur {
             span: t2s(t),
-            ty_args: (),
             fixed_arg_exprs: vec![
                 Datum::Int(t2s(u), 1).into(),
                 Datum::Int(t2s(v), 2).into(),

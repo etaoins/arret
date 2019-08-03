@@ -101,13 +101,6 @@ struct FunApp {
     rest_arg_expr: Option<hir::Expr<hir::Lowered>>,
 }
 
-struct VisitedFunAppLike {
-    ret_type: ty::Ref<ty::Poly>,
-    ty_args: TyArgs<ty::Poly>,
-    inferred_fixed_arg_exprs: Vec<hir::Expr<hir::Inferred>>,
-    inferred_rest_arg_expr: Option<hir::Expr<hir::Inferred>>,
-}
-
 enum VarType {
     // Introduced a definition that has yet to be processed
     Pending(InputDefId),
@@ -909,97 +902,6 @@ impl<'types> RecursiveDefsCtx<'types> {
             rest_arg_expr,
         } = fun_app;
 
-        let VisitedFunAppLike {
-            ret_type,
-            ty_args,
-            inferred_fixed_arg_exprs,
-            inferred_rest_arg_expr,
-        } = self.visit_fun_app_like(
-            pv,
-            result_use,
-            span,
-            fun_type,
-            fixed_arg_exprs,
-            rest_arg_expr,
-        )?;
-
-        Ok(InferredNode {
-            expr: hir::Expr {
-                result_ty: ret_type,
-                kind: hir::ExprKind::App(Box::new(hir::App {
-                    span,
-                    fun_expr,
-                    ty_args,
-                    fixed_arg_exprs: inferred_fixed_arg_exprs,
-                    rest_arg_expr: inferred_rest_arg_expr,
-                })),
-            },
-            type_conds: vec![],
-        })
-    }
-
-    fn visit_recur(
-        &mut self,
-        pv: &mut PurityVar,
-        result_use: &ResultUse<'_>,
-        recur: hir::Recur<hir::Lowered>,
-    ) -> Result<InferredNode> {
-        let hir::Recur {
-            span,
-            fixed_arg_exprs,
-            rest_arg_expr,
-            ..
-        } = recur;
-
-        let ret_expr_use = if let ResultUse::RetExpr(ret_expr_use) = result_use {
-            ret_expr_use
-        } else {
-            return Err(Error::new(span, ErrorKind::NonTailRecur));
-        };
-
-        let self_type = if let Some(self_type) = ret_expr_use.known_self_type {
-            self_type
-        } else {
-            return Err(Error::new(span, ErrorKind::RecurWithoutFunTypeDecl));
-        };
-
-        let VisitedFunAppLike {
-            ret_type,
-            ty_args,
-            inferred_fixed_arg_exprs,
-            inferred_rest_arg_expr,
-        } = self.visit_fun_app_like(
-            pv,
-            result_use,
-            span,
-            self_type,
-            fixed_arg_exprs,
-            rest_arg_expr,
-        )?;
-
-        Ok(InferredNode {
-            expr: hir::Expr {
-                result_ty: ret_type,
-                kind: hir::ExprKind::Recur(Box::new(hir::Recur {
-                    span,
-                    ty_args,
-                    fixed_arg_exprs: inferred_fixed_arg_exprs,
-                    rest_arg_expr: inferred_rest_arg_expr,
-                })),
-            },
-            type_conds: vec![],
-        })
-    }
-
-    fn visit_fun_app_like(
-        &mut self,
-        pv: &mut PurityVar,
-        result_use: &ResultUse<'_>,
-        span: Span,
-        fun_type: &ty::Fun,
-        fixed_arg_exprs: Vec<hir::Expr<hir::Lowered>>,
-        rest_arg_expr: Option<hir::Expr<hir::Lowered>>,
-    ) -> Result<VisitedFunAppLike> {
         // The context used to select the types for our non-function parameters
         let mut non_fun_param_stx = ty::select::SelectCtx::new(fun_type.pvars(), fun_type.tvars());
 
@@ -1142,11 +1044,115 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         ensure_is_a(span, &ret_type, result_use)?;
 
-        Ok(VisitedFunAppLike {
-            ret_type,
-            ty_args: ret_pta,
-            inferred_fixed_arg_exprs,
-            inferred_rest_arg_expr,
+        Ok(InferredNode {
+            expr: hir::Expr {
+                result_ty: ret_type,
+                kind: hir::ExprKind::App(Box::new(hir::App {
+                    span,
+                    fun_expr,
+                    ty_args: ret_pta,
+                    fixed_arg_exprs: inferred_fixed_arg_exprs,
+                    rest_arg_expr: inferred_rest_arg_expr,
+                })),
+            },
+            type_conds: vec![],
+        })
+    }
+
+    /// Visit a `(recur)`
+    ///
+    /// This is similar to `visit_fun_app`. However, we require that the `(recur)`'s arguments match
+    /// the generic function type. This allows us to tail recurse when monomorphising polymorphic
+    /// functions because we know we can re-enter the same polymorph the `(recur)` occurs in.
+    ///
+    /// This sounds more complicated than normal function application but it's actual significantly
+    /// easier due to not having to perform type variable selection.
+    fn visit_recur(
+        &mut self,
+        pv: &mut PurityVar,
+        result_use: &ResultUse<'_>,
+        recur: hir::Recur<hir::Lowered>,
+    ) -> Result<InferredNode> {
+        let hir::Recur {
+            span,
+            fixed_arg_exprs,
+            rest_arg_expr,
+            ..
+        } = recur;
+
+        let ret_expr_use = if let ResultUse::RetExpr(ret_expr_use) = result_use {
+            ret_expr_use
+        } else {
+            return Err(Error::new(span, ErrorKind::NonTailRecur));
+        };
+
+        let self_type = if let Some(self_type) = ret_expr_use.known_self_type {
+            self_type
+        } else {
+            return Err(Error::new(span, ErrorKind::RecurWithoutFunTypeDecl));
+        };
+
+        // Iterate over our parameter type to feed type information in to the arguments
+        let mut param_iter = ListIterator::new(self_type.params());
+
+        let supplied_arg_count = fixed_arg_exprs.len();
+        let wanted_arity = WantedArity::new(param_iter.fixed_len(), param_iter.has_rest());
+
+        let mut is_divergent = false;
+
+        let inferred_fixed_arg_exprs = fixed_arg_exprs
+            .into_iter()
+            .map(|fixed_arg_expr| {
+                let param_type = param_iter.next().ok_or_else(|| {
+                    Error::new(
+                        span,
+                        ErrorKind::WrongArity(supplied_arg_count, wanted_arity),
+                    )
+                })?;
+
+                let fixed_arg_node =
+                    self.visit_expr(pv, &ResultUse::InnerExpr(&param_type), fixed_arg_expr)?;
+
+                is_divergent = is_divergent || fixed_arg_node.is_divergent();
+                Ok(fixed_arg_node.expr)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let inferred_rest_arg_expr = if let Some(rest_arg_expr) = rest_arg_expr {
+            let tail_type = param_iter.tail_type().into();
+            let rest_arg_node =
+                self.visit_expr(pv, &ResultUse::InnerExpr(&tail_type), rest_arg_expr)?;
+
+            is_divergent = is_divergent || rest_arg_node.is_divergent();
+            Some(rest_arg_node.expr)
+        } else if param_iter.fixed_len() > 0 {
+            // We wanted more args!
+            return Err(Error::new(
+                span,
+                ErrorKind::WrongArity(supplied_arg_count, wanted_arity),
+            ));
+        } else {
+            None
+        };
+
+        let ret_type: ty::Ref<ty::Poly> = if is_divergent {
+            Ty::never().into()
+        } else {
+            self_type.ret().clone()
+        };
+
+        ensure_is_a(span, &ret_type, result_use)?;
+
+        Ok(InferredNode {
+            expr: hir::Expr {
+                result_ty: ret_type,
+                kind: hir::ExprKind::Recur(Box::new(hir::Recur {
+                    span,
+                    fixed_arg_exprs: inferred_fixed_arg_exprs,
+                    rest_arg_expr: inferred_rest_arg_expr,
+                })),
+            },
+            type_conds: vec![],
         })
     }
 
