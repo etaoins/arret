@@ -1,0 +1,12 @@
+(import [stdlib base])
+
+(defn non-tail-reverse #{T} ([lst (List & T)]) -> (List & T)
+  (if (nil? lst)
+    lst
+    (concat (recur (rest lst)) (list (first lst)))))
+           ;^^^^^^^^^^^^^^^^^^ ERROR non-tail `(recur)`
+
+(defn recur-without-fun-ty-decl () (recur))
+                                  ;^^^^^^^ ERROR type annotation needed
+
+(defn main! () ->! () ())

@@ -12,14 +12,14 @@
     (let [tail (rest l)]
       (if (nil? tail)
         false
-        (even-length? (rest tail))))))
+        (recur (rest tail))))))
 
 ; This has a polymorphic purity
 (defn recursive-every? #{T [->_ ->!]} ([pred (T ->_ Bool)] [l (List & T)]) ->_ Bool
   (if (nil? l)
     true
     (if (pred (first l))
-      (recursive-every? pred (rest l))
+      (recur pred (rest l))
       false)))
 
 (defn main! () ->! ()

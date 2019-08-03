@@ -70,22 +70,20 @@ pub struct EvalHirCtx {
     cons_for_jit_record_class_id: HashMap<boxed::RecordClassId, record::ConsId>,
 }
 
-pub struct FunCtx {
+pub struct FunCtx<'sv> {
     mono_ty_args: TyArgs<ty::Mono>,
     local_values: HashMap<hir::VarId, Value>,
+    self_value: Option<&'sv value::ArretFun>,
 
     pub(super) inliner_stack: inliner::ApplyStack,
 }
 
-impl FunCtx {
-    pub fn new() -> FunCtx {
-        FunCtx::with_mono_ty_args(TyArgs::empty())
-    }
-
-    pub fn with_mono_ty_args(mono_ty_args: TyArgs<ty::Mono>) -> FunCtx {
+impl<'sv> FunCtx<'sv> {
+    pub fn new() -> FunCtx<'static> {
         FunCtx {
-            mono_ty_args,
+            mono_ty_args: TyArgs::empty(),
             local_values: HashMap::new(),
+            self_value: None,
 
             inliner_stack: inliner::ApplyStack::new(),
         }
@@ -172,8 +170,8 @@ fn merge_apply_ty_args_into_scope(
     TyArgs::new(pvar_purities, tvar_types)
 }
 
-impl Default for FunCtx {
-    fn default() -> FunCtx {
+impl<'sv> Default for FunCtx<'sv> {
+    fn default() -> FunCtx<'static> {
         FunCtx::new()
     }
 }
@@ -255,7 +253,7 @@ impl EvalHirCtx {
         }
     }
 
-    fn eval_ref(&self, fcx: &FunCtx, var_id: hir::VarId) -> Value {
+    fn eval_ref(&self, fcx: &FunCtx<'_>, var_id: hir::VarId) -> Value {
         fcx.local_values
             .get(&var_id)
             .unwrap_or_else(|| &self.global_values[&var_id])
@@ -264,7 +262,7 @@ impl EvalHirCtx {
 
     fn eval_do(
         &mut self,
-        fcx: &mut FunCtx,
+        fcx: &mut FunCtx<'_>,
         b: &mut Option<Builder>,
         exprs: &[Expr],
     ) -> Result<Value> {
@@ -277,7 +275,7 @@ impl EvalHirCtx {
 
     fn eval_let(
         &mut self,
-        fcx: &mut FunCtx,
+        fcx: &mut FunCtx<'_>,
         b: &mut Option<Builder>,
         hir_let: &hir::Let<hir::Inferred>,
     ) -> Result<Value> {
@@ -299,7 +297,7 @@ impl EvalHirCtx {
 
     pub(super) fn build_arret_fun_app(
         &mut self,
-        fcx: &mut FunCtx,
+        fcx: &mut FunCtx<'_>,
         b: &mut Builder,
         span: Span,
         ret_ty: &ty::Ref<ty::Mono>,
@@ -364,7 +362,7 @@ impl EvalHirCtx {
 
     pub(super) fn inline_arret_fun_app(
         &mut self,
-        outer_fcx: &FunCtx,
+        outer_fcx: &FunCtx<'_>,
         b: &mut Option<Builder>,
         span: Span,
         arret_fun: &value::ArretFun,
@@ -380,6 +378,7 @@ impl EvalHirCtx {
                 &outer_fcx.mono_ty_args,
             ),
             local_values: outer_fcx.local_values.clone(),
+            self_value: Some(arret_fun),
 
             inliner_stack,
         };
@@ -397,7 +396,7 @@ impl EvalHirCtx {
 
     fn eval_arret_fun_app(
         &mut self,
-        fcx: &mut FunCtx,
+        fcx: &mut FunCtx<'_>,
         b: &mut Option<Builder>,
         span: Span,
         ret_ty: &ty::Ref<ty::Mono>,
@@ -638,7 +637,7 @@ impl EvalHirCtx {
 
     fn eval_rust_fun_app(
         &mut self,
-        fcx: &mut FunCtx,
+        fcx: &mut FunCtx<'_>,
         b: &mut Option<Builder>,
         span: Span,
         ret_ty: &ty::Ref<ty::Mono>,
@@ -720,7 +719,7 @@ impl EvalHirCtx {
 
     fn eval_const_fun_thunk_app(
         &mut self,
-        fcx: &mut FunCtx,
+        fcx: &mut FunCtx<'_>,
         b: &mut Option<Builder>,
         span: Span,
         ret_ty: &ty::Ref<ty::Mono>,
@@ -798,7 +797,7 @@ impl EvalHirCtx {
 
     fn eval_value_app(
         &mut self,
-        fcx: &mut FunCtx,
+        fcx: &mut FunCtx<'_>,
         b: &mut Option<Builder>,
         span: Span,
         ret_ty: &ty::Ref<ty::Mono>,
@@ -851,7 +850,7 @@ impl EvalHirCtx {
 
     fn eval_app(
         &mut self,
-        fcx: &mut FunCtx,
+        fcx: &mut FunCtx<'_>,
         b: &mut Option<Builder>,
         result_ty: &ty::Ref<ty::Poly>,
         app: &hir::App<hir::Inferred>,
@@ -884,9 +883,44 @@ impl EvalHirCtx {
         )
     }
 
+    fn eval_recur(
+        &mut self,
+        fcx: &mut FunCtx<'_>,
+        b: &mut Option<Builder>,
+        result_ty: &ty::Ref<ty::Poly>,
+        recur: &hir::Recur<hir::Inferred>,
+    ) -> Result<Value> {
+        let self_value = fcx.self_value.expect("(recur) outside function");
+
+        let fixed_values = recur
+            .fixed_arg_exprs
+            .iter()
+            .map(|arg| self.eval_expr(fcx, b, arg))
+            .collect::<Result<Box<[Value]>>>()?;
+
+        let rest_value = match &recur.rest_arg_expr {
+            Some(rest_arg) => Some(Box::new(self.eval_expr(fcx, b, rest_arg)?)),
+            None => None,
+        };
+
+        let ret_ty = fcx.monomorphise(result_ty);
+        let arg_list_value = Value::List(fixed_values, rest_value);
+        self.eval_arret_fun_app(
+            fcx,
+            b,
+            recur.span,
+            &ret_ty,
+            self_value,
+            ApplyArgs {
+                ty_args: &recur.ty_args,
+                list_value: arg_list_value,
+            },
+        )
+    }
+
     fn eval_cond(
         &mut self,
-        fcx: &mut FunCtx,
+        fcx: &mut FunCtx<'_>,
         b: &mut Option<Builder>,
         cond: &hir::Cond<hir::Inferred>,
     ) -> Result<Value> {
@@ -914,7 +948,7 @@ impl EvalHirCtx {
 
     fn build_cond_branch(
         &mut self,
-        fcx: &mut FunCtx,
+        fcx: &mut FunCtx<'_>,
         branch_expr: &hir::Expr<hir::Inferred>,
     ) -> Result<BuiltCondBranch> {
         let b = Builder::new();
@@ -928,7 +962,7 @@ impl EvalHirCtx {
 
     fn build_cond(
         &mut self,
-        fcx: &mut FunCtx,
+        fcx: &mut FunCtx<'_>,
         b: &mut Builder,
         test_value: &Value,
         cond: &hir::Cond<hir::Inferred>,
@@ -1022,7 +1056,7 @@ impl EvalHirCtx {
 
     fn eval_arret_fun(
         &mut self,
-        fcx: &mut FunCtx,
+        fcx: &mut FunCtx<'_>,
         fun_expr: hir::Fun<hir::Inferred>,
         source_name: Option<&DataStr>,
     ) -> Value {
@@ -1254,7 +1288,13 @@ impl EvalHirCtx {
         } = build_load_arg_list_value(self, &mut b, &wanted_abi, &param_list_poly);
 
         // Start by taking the type args from the fun's enclosing environment
-        let mut fcx = FunCtx::with_mono_ty_args(arret_fun.env_ty_args().clone());
+        let mut fcx = FunCtx {
+            mono_ty_args: arret_fun.env_ty_args().clone(),
+            local_values: HashMap::new(),
+            self_value: Some(arret_fun),
+
+            inliner_stack: inliner::ApplyStack::new(),
+        };
 
         // And loading its closure
         closure::load_from_closure_param(
@@ -1440,7 +1480,7 @@ impl EvalHirCtx {
 
     fn eval_expr_with_source_name(
         &mut self,
-        fcx: &mut FunCtx,
+        fcx: &mut FunCtx<'_>,
         b: &mut Option<Builder>,
         expr: &Expr,
         source_name: Option<&DataStr>,
@@ -1465,7 +1505,7 @@ impl EvalHirCtx {
             ExprKind::Ref(_, var_id) => Ok(self.eval_ref(fcx, *var_id)),
             ExprKind::Let(hir_let) => self.eval_let(fcx, b, hir_let),
             ExprKind::App(app) => self.eval_app(fcx, b, &expr.result_ty, app),
-            ExprKind::Recur(_) => unimplemented!("evaluating (recur)"),
+            ExprKind::Recur(recur) => self.eval_recur(fcx, b, &expr.result_ty, recur),
             ExprKind::MacroExpand(span, expr) => self
                 .eval_expr(fcx, b, expr)
                 .map_err(|err| err.with_macro_invocation_span(*span)),
@@ -1480,7 +1520,7 @@ impl EvalHirCtx {
 
     pub fn eval_expr(
         &mut self,
-        fcx: &mut FunCtx,
+        fcx: &mut FunCtx<'_>,
         b: &mut Option<Builder>,
         expr: &Expr,
     ) -> Result<Value> {
@@ -1489,7 +1529,7 @@ impl EvalHirCtx {
 
     fn consume_expr_with_source_name(
         &mut self,
-        fcx: &mut FunCtx,
+        fcx: &mut FunCtx<'_>,
         b: &mut Option<Builder>,
         expr: Expr,
         source_name: Option<&DataStr>,
@@ -1504,7 +1544,7 @@ impl EvalHirCtx {
 
     pub fn consume_expr(
         &mut self,
-        fcx: &mut FunCtx,
+        fcx: &mut FunCtx<'_>,
         b: &mut Option<Builder>,
         expr: Expr,
     ) -> Result<Value> {

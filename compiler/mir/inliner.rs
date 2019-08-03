@@ -215,7 +215,7 @@ fn hash_for_arg_list_value(heap: &Heap, arg_list_value: &Value) -> u64 {
 /// calls should only be used in extreme cases.
 pub(super) fn cond_inline<'a>(
     ehx: &mut EvalHirCtx,
-    fcx: &mut FunCtx,
+    fcx: &mut FunCtx<'_>,
     outer_b: &mut Builder,
     span: Span,
     ret_ty: &ty::Ref<ty::Mono>,
