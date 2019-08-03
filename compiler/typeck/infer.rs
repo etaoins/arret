@@ -2114,28 +2114,25 @@ mod test {
 
     #[test]
     fn recur_expr() {
-        assert_type_for_expr(
-            "'foo",
-            "(let [self-fn (fn ([x Int]) -> 'foo (recur x))] (self-fn 1))",
-        );
+        assert_type_for_expr("'foo", "((fn ([x Int]) -> 'foo (recur x)) 1)");
 
-        let j = "(let [self-fn (fn () -> () (recur) ())] (self-fn))";
-        let t = "                           ^^^^^^^                ";
+        let j = "((fn () -> () (recur) ()))";
+        let t = "              ^^^^^^^     ";
         let err = Error::new(t2s(t), ErrorKind::NonTailRecur);
         assert_type_error(&err, j);
 
-        let j = "(let [self-fn (fn () (recur))] (self-fn))";
-        let t = "                     ^^^^^^^             ";
+        let j = "((fn () (recur)))";
+        let t = "        ^^^^^^^  ";
         let err = Error::new(t2s(t), ErrorKind::RecurWithoutFunTypeDecl);
         assert_type_error(&err, j);
 
-        let j = "(let [self-fn (fn (x) -> 'foo (recur x))] (self-fn 1))";
-        let t = "                              ^^^^^^^^^               ";
+        let j = "((fn (x) -> 'foo (recur x)) 1)";
+        let t = "                 ^^^^^^^^^    ";
         let err = Error::new(t2s(t), ErrorKind::RecurWithoutFunTypeDecl);
         assert_type_error(&err, j);
 
-        let j = "(let [self-fn (fn ([x Int]) (recur x))] (self-fn 1))";
-        let t = "                            ^^^^^^^^^               ";
+        let j = "((fn ([x Int]) (recur x)) 1)";
+        let t = "               ^^^^^^^^^    ";
         let err = Error::new(t2s(t), ErrorKind::RecurWithoutFunTypeDecl);
         assert_type_error(&err, j);
     }
