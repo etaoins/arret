@@ -42,6 +42,7 @@ impl UnsizedListIterator {
     ///
     /// It is undefined if the list has no more elements. This function may panic, generate
     /// nonsense code, generate code that crashes at runtime, etc.
+    #[must_use]
     pub fn next_unchecked(&mut self, b: &mut impl TryToBuilder, span: Span) -> Value {
         if let Some(next) = self.fixed.next() {
             return next;
@@ -88,6 +89,7 @@ impl UnsizedListIterator {
     }
 
     /// Returns a Value containing the rest of the iterator
+    #[must_use]
     pub fn into_rest(self) -> Value {
         Value::List(self.fixed.collect(), self.rest.map(Box::new))
     }
