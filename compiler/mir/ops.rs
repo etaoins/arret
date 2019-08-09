@@ -204,6 +204,7 @@ pub enum OpKind {
 
     ConstCastBoxed(RegId, CastBoxedOp),
     CastBoxed(RegId, CastBoxedOp),
+    Alias(RegId, RegId), // TODO: This is a hack for `duplicate_alloc_ops`
 
     Call(RegId, CallOp),
     LoadBoxedTypeTag(RegId, LoadBoxedTypeTagOp),
@@ -298,6 +299,7 @@ impl OpKind {
             | AllocBoxedFunThunk(reg_id, _)
             | ConstCastBoxed(reg_id, _)
             | CastBoxed(reg_id, _)
+            | Alias(reg_id, _)
             | Call(reg_id, _)
             | LoadBoxedTypeTag(reg_id, _)
             | LoadBoxedListLength(reg_id, _)
@@ -389,6 +391,7 @@ impl OpKind {
                     from_reg: reg_id, ..
                 },
             )
+            | Alias(_, reg_id)
             | Ret(reg_id)
             | LoadBoxedTypeTag(
                 _,
@@ -566,7 +569,7 @@ impl OpKind {
             Cond(_) => OpCategory::Cond,
             MakeCallback(_, _) => OpCategory::MakeCallback,
             ConstCastBoxed(_, _) => OpCategory::ConstCastBoxed,
-            CastBoxed(_, _) => OpCategory::CastBoxed,
+            CastBoxed(_, _) | Alias(_, _) => OpCategory::CastBoxed,
             Call(_, _) => OpCategory::Call,
             Unreachable => OpCategory::Unreachable,
         }

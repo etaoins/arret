@@ -184,6 +184,10 @@ fn gen_op(
                 );
                 fcx.regs.insert(*reg, to_llvm_value);
             }
+            OpKind::Alias(reg, from_reg) => {
+                let from_llvm_value = fcx.regs[from_reg];
+                fcx.regs.insert(*reg, from_llvm_value);
+            }
             OpKind::Call(reg, CallOp { callee, args, .. }) => {
                 use crate::codegen::callee;
 
