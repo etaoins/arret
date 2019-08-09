@@ -12,6 +12,7 @@ use crate::mir::error::{Error, Result};
 use crate::mir::eval_hir::ApplyArgs;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::eval_hir::FunCtx;
+use crate::mir::optimise::optimise_inlined_fun;
 use crate::mir::value;
 use crate::mir::value::Value;
 use crate::ty;
@@ -260,7 +261,14 @@ pub(super) fn cond_inline<'a>(
     // Build an inline version
     let inline_result =
         ehx.inline_arret_fun_app(fcx, &mut inline_b, span, arret_fun, apply_args, apply_stack);
+
     let inline_ops = inline_b.unwrap().into_ops();
+    let inline_ops = if let Ok(ref return_value) = inline_result {
+        // In order to cost the inline function accurately we need to optimise it first
+        optimise_inlined_fun(inline_ops, return_value)
+    } else {
+        inline_ops
+    };
 
     // Determine if calling is cheaper
     let call_cost = cost_for_ops(call_ops.iter());

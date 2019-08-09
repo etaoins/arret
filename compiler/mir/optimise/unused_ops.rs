@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use crate::mir::ops;
+use crate::mir::value::Value;
 
 fn remove_unused_cond_ops(
     cond_op: ops::CondOp,
@@ -93,6 +94,47 @@ fn remove_unused_branch_ops(
 pub fn remove_unused_fun_ops(ops: Box<[ops::Op]>) -> Box<[ops::Op]> {
     // Nothing is used at the beginning of a function
     let mut used_regs = HashSet::new();
+    remove_unused_branch_ops(ops, &mut used_regs)
+}
+
+/// Adds regs referenced by the passed value
+fn add_value_used_regs(value: &Value, used_regs: &mut HashSet<ops::RegId>) {
+    match value {
+        Value::Const(_)
+        | Value::RustFun(_)
+        | Value::TyPred(_)
+        | Value::EqPred
+        | Value::RecordCons(_)
+        | Value::FieldAccessor(_, _) => {}
+        Value::ArretFun(arret_fun) => {
+            for (_, free_value) in arret_fun.closure().free_values.iter() {
+                add_value_used_regs(free_value, used_regs);
+            }
+        }
+        Value::Reg(reg_value) => {
+            used_regs.insert(reg_value.reg.into());
+        }
+        Value::Record(_, field_values) => {
+            for field_value in field_values.iter() {
+                add_value_used_regs(field_value, used_regs);
+            }
+        }
+        Value::List(fixed_values, rest_value) => {
+            for fixed_value in fixed_values.iter() {
+                add_value_used_regs(fixed_value, used_regs);
+            }
+
+            if let Some(rest_value) = rest_value {
+                add_value_used_regs(rest_value, used_regs);
+            }
+        }
+    }
+}
+
+pub fn remove_unused_value_ops(ops: Box<[ops::Op]>, value: &Value) -> Box<[ops::Op]> {
+    let mut used_regs = HashSet::new();
+    add_value_used_regs(value, &mut used_regs);
+
     remove_unused_branch_ops(ops, &mut used_regs)
 }
 
