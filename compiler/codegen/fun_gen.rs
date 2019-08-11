@@ -3,6 +3,7 @@ use std::ffi;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
+use llvm_sys::LLVMCallConv;
 
 use crate::mir::ops;
 
@@ -67,7 +68,17 @@ pub(crate) fn declare_fun(
         .map(|source_name| ffi::CString::new(source_name.as_bytes()).unwrap())
         .unwrap_or_else(|| ffi::CString::new("anon_fun").unwrap());
 
-    unsafe { LLVMAddFunction(llvm_module, fun_symbol.as_ptr() as *const _, function_type) }
+    unsafe {
+        let llvm_fun = LLVMAddFunction(llvm_module, fun_symbol.as_ptr() as *const _, function_type);
+
+        let llvm_call_conv = match fun.abi.call_conv {
+            ops::CallConv::CCC => LLVMCallConv::LLVMCCallConv,
+            ops::CallConv::FastCC => LLVMCallConv::LLVMFastCallConv,
+        };
+        LLVMSetFunctionCallConv(llvm_fun, llvm_call_conv as u32);
+
+        llvm_fun
+    }
 }
 
 pub(crate) fn define_fun(

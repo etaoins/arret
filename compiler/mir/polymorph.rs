@@ -102,6 +102,7 @@ pub fn polymorph_abi_for_list_ty<M: ty::PM>(
         .collect();
 
     let ops_abi = ops::OpsABI {
+        call_conv: ops::CallConv::FastCC,
         params,
         ret: specific_ret_abi_type_for_ty_ref(ret_ty),
     };
@@ -129,6 +130,7 @@ mod test {
 
         let mul_param_poly = PolymorphABI {
             ops_abi: ops::OpsABI {
+                call_conv: ops::CallConv::FastCC,
                 params: Box::new([
                     boxed::Num::BOXED_ABI_TYPE.into(),
                     abitype::BoxedABIType::List(&boxed::Num::BOXED_ABI_TYPE).into(),

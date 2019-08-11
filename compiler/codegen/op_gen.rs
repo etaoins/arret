@@ -207,6 +207,9 @@ fn gen_op(
                     b"\0".as_ptr() as *const _,
                 );
 
+                let call_conv = callee::callee_call_conv(mcx, callee);
+                LLVMSetInstructionCallConv(llvm_ret, call_conv);
+
                 fcx.regs.insert(*reg, llvm_ret);
             }
             OpKind::Ret(reg) => {

@@ -1610,6 +1610,7 @@ impl EvalHirCtx {
 
         let main_abi = PolymorphABI {
             ops_abi: ops::OpsABI {
+                call_conv: ops::CallConv::CCC,
                 params: Box::new([]),
                 ret: abitype::RetABIType::Void,
             },

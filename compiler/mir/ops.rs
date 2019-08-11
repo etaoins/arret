@@ -13,7 +13,21 @@ new_counting_id_type!(PrivateFunIdCounter, PrivateFunId);
 new_global_id_type!(RegId);
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum CallConv {
+    /// C calling convention
+    ///
+    /// This is required for thunks and callbacks because they can be called from Rust.
+    CCC,
+
+    /// Fast calling convention
+    ///
+    /// This supports tail recursion.
+    FastCC,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct OpsABI {
+    pub call_conv: CallConv,
     pub params: Box<[abitype::ABIType]>,
     pub ret: abitype::RetABIType,
 }
@@ -21,6 +35,7 @@ pub struct OpsABI {
 impl OpsABI {
     pub fn thunk_abi() -> OpsABI {
         OpsABI {
+            call_conv: CallConv::CCC,
             params: Box::new([
                 // Closure
                 abitype::BoxedABIType::Any.into(),
@@ -42,6 +57,7 @@ impl From<callback::EntryPointABIType> for OpsABI {
             .collect();
 
         OpsABI {
+            call_conv: CallConv::CCC,
             params,
             ret: abi_type.ret,
         }

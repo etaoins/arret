@@ -324,6 +324,7 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
+                call_conv: ops::CallConv::FastCC,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: RetABIType::Void,
             },
@@ -344,6 +345,7 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
+                call_conv: ops::CallConv::FastCC,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::Int.into(),
             },
@@ -365,6 +367,7 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
+                call_conv: ops::CallConv::FastCC,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::Pair.into(),
             },
@@ -398,6 +401,7 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
+                call_conv: ops::CallConv::FastCC,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::Pair.into(),
             },
@@ -466,6 +470,7 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
+                call_conv: ops::CallConv::FastCC,
                 params: Box::new([
                     boxed::TypeTag::Int.into(),
                     boxed::TypeTag::Int.into(),
@@ -524,6 +529,7 @@ mod test {
             source_name: None,
 
             abi: ops::OpsABI {
+                call_conv: ops::CallConv::FastCC,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::Pair.into(),
             },

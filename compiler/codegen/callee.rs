@@ -2,7 +2,7 @@ use std::ffi;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
-use llvm_sys::LLVMAttributeFunctionIndex;
+use llvm_sys::{LLVMAttributeFunctionIndex, LLVMCallConv};
 
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
@@ -94,5 +94,16 @@ pub fn callee_takes_task(callee: &ops::Callee) -> bool {
         ops::Callee::BoxedFunThunk(_) => true,
         ops::Callee::PrivateFun(_) => true,
         ops::Callee::StaticSymbol(ops::StaticSymbol { abi, .. }) => abi.takes_task,
+    }
+}
+
+pub fn callee_call_conv(mcx: &mut ModCtx<'_, '_, '_>, callee: &ops::Callee) -> u32 {
+    match callee {
+        ops::Callee::BoxedFunThunk(_) | ops::Callee::StaticSymbol(_) => {
+            LLVMCallConv::LLVMCCallConv as u32
+        }
+        ops::Callee::PrivateFun(private_fun_id) => unsafe {
+            LLVMGetFunctionCallConv(mcx.llvm_private_fun(*private_fun_id))
+        },
     }
 }
