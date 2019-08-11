@@ -4,12 +4,30 @@ use arret_runtime::boxed::TypeTag;
 use crate::mir::tagset::TypeTagSet;
 use crate::mir::value::Value;
 use crate::ty;
+use crate::ty::Ty;
 
-fn specific_boxed_abi_type_for_type_tag(type_tag: TypeTag) -> abitype::BoxedABIType {
+const ANY_BOXED_ABI_TYPE: abitype::BoxedABIType = abitype::BoxedABIType::Any;
+
+const TOP_RECORD_BOXED_ABI_TYPE: abitype::BoxedABIType =
+    abitype::BoxedABIType::UniqueTagged(TypeTag::Record);
+
+fn specific_boxed_abi_type_for_type_tag(type_tag: TypeTag) -> &'static abitype::BoxedABIType {
+    use arret_runtime::abitype::EncodeBoxedABIType;
+    use arret_runtime::boxed;
+
     match type_tag {
-        TypeTag::Pair => abitype::BoxedABIType::Pair(&abitype::BoxedABIType::Any),
-        TypeTag::Vector => abitype::BoxedABIType::Vector(&abitype::BoxedABIType::Any),
-        other_tag => abitype::BoxedABIType::UniqueTagged(other_tag),
+        TypeTag::Pair => &boxed::Pair::<boxed::Any>::BOXED_ABI_TYPE,
+        TypeTag::Vector => &boxed::Vector::<boxed::Any>::BOXED_ABI_TYPE,
+        TypeTag::Char => &boxed::Char::BOXED_ABI_TYPE,
+        TypeTag::Int => &boxed::Int::BOXED_ABI_TYPE,
+        TypeTag::Float => &boxed::Float::BOXED_ABI_TYPE,
+        TypeTag::Str => &boxed::Str::BOXED_ABI_TYPE,
+        TypeTag::Sym => &boxed::Sym::BOXED_ABI_TYPE,
+        TypeTag::True => &boxed::True::BOXED_ABI_TYPE,
+        TypeTag::False => &boxed::False::BOXED_ABI_TYPE,
+        TypeTag::Nil => &boxed::Nil::BOXED_ABI_TYPE,
+        TypeTag::FunThunk => &boxed::FunThunk::BOXED_ABI_TYPE,
+        TypeTag::Record => &TOP_RECORD_BOXED_ABI_TYPE,
     }
 }
 
@@ -19,11 +37,15 @@ fn specific_abi_type_for_type_tag(type_tag: TypeTag) -> abitype::ABIType {
         TypeTag::Float => abitype::ABIType::Float,
         TypeTag::Char => abitype::ABIType::Char,
         TypeTag::Sym => abitype::ABIType::InternedSym,
-        other_tag => specific_boxed_abi_type_for_type_tag(other_tag).into(),
+        other_tag => specific_boxed_abi_type_for_type_tag(other_tag)
+            .clone()
+            .into(),
     }
 }
 
-fn specific_boxed_abi_type_for_type_tags(possible_type_tags: TypeTagSet) -> abitype::BoxedABIType {
+fn specific_boxed_abi_type_for_type_tags(
+    possible_type_tags: TypeTagSet,
+) -> &'static abitype::BoxedABIType {
     use arret_runtime::abitype::EncodeBoxedABIType;
     use arret_runtime::boxed;
 
@@ -31,13 +53,13 @@ fn specific_boxed_abi_type_for_type_tags(possible_type_tags: TypeTagSet) -> abit
         let single_type_tag = possible_type_tags.into_iter().next().unwrap();
         specific_boxed_abi_type_for_type_tag(single_type_tag)
     } else if possible_type_tags == [TypeTag::Pair, TypeTag::Nil].iter().collect() {
-        boxed::List::<boxed::Any>::BOXED_ABI_TYPE
+        &boxed::List::<boxed::Any>::BOXED_ABI_TYPE
     } else if possible_type_tags == [TypeTag::Float, TypeTag::Int].iter().collect() {
-        boxed::Num::BOXED_ABI_TYPE
+        &boxed::Num::BOXED_ABI_TYPE
     } else if possible_type_tags == [TypeTag::True, TypeTag::False].iter().collect() {
-        boxed::Bool::BOXED_ABI_TYPE
+        &boxed::Bool::BOXED_ABI_TYPE
     } else {
-        abitype::BoxedABIType::Any
+        &ANY_BOXED_ABI_TYPE
     }
 }
 
@@ -48,13 +70,44 @@ fn specific_abi_type_for_type_tags(possible_type_tags: TypeTagSet) -> abitype::A
         let single_type_tag = possible_type_tags.into_iter().next().unwrap();
         specific_abi_type_for_type_tag(single_type_tag)
     } else {
-        specific_boxed_abi_type_for_type_tags(possible_type_tags).into()
+        specific_boxed_abi_type_for_type_tags(possible_type_tags)
+            .clone()
+            .into()
     }
 }
 
 /// Returns a specific ABI type to encode the given ty_ref
 pub fn specific_abi_type_for_ty_ref<M: ty::PM>(ty_ref: &ty::Ref<M>) -> abitype::ABIType {
-    specific_abi_type_for_type_tags(ty_ref.into())
+    use crate::ty::list_iter::ListIterator;
+
+    match ty_ref.resolve_to_ty() {
+        Ty::List(list_ty) if !list_ty.is_empty() => {
+            let member_ty_ref = ListIterator::new(list_ty).collect_rest();
+            let member_boxed_abi_type =
+                specific_boxed_abi_type_for_type_tags((&member_ty_ref).into());
+
+            if list_ty.fixed().is_empty() {
+                abitype::BoxedABIType::List(member_boxed_abi_type).into()
+            } else {
+                abitype::BoxedABIType::Pair(member_boxed_abi_type).into()
+            }
+        }
+        Ty::Vectorof(member_ty) => {
+            let member_boxed_abi_type =
+                specific_boxed_abi_type_for_type_tags(member_ty.as_ref().into());
+
+            abitype::BoxedABIType::Vector(member_boxed_abi_type).into()
+        }
+        Ty::Vector(member_tys) => {
+            let member_ty_ref = ty::unify::unify_ty_ref_iter(member_tys.iter().cloned());
+
+            let member_boxed_abi_type =
+                specific_boxed_abi_type_for_type_tags((&member_ty_ref).into());
+
+            abitype::BoxedABIType::Vector(member_boxed_abi_type).into()
+        }
+        _ => specific_abi_type_for_type_tags(ty_ref.into()),
+    }
 }
 
 pub fn specific_ret_abi_type_for_ty_ref<M: ty::PM>(ty_ref: &ty::Ref<M>) -> abitype::RetABIType {
@@ -85,7 +138,7 @@ where
 pub fn specific_boxed_abi_type_for_values<'v>(
     possible_values: impl Iterator<Item = &'v Value>,
 ) -> abitype::BoxedABIType {
-    specific_type_for_values(possible_values, specific_boxed_abi_type_for_type_tags)
+    specific_type_for_values(possible_values, specific_boxed_abi_type_for_type_tags).clone()
 }
 
 /// Returns a specific ABI type to compactly encode the given set of possible values
@@ -121,14 +174,30 @@ mod test {
         assert_abi_type_for_str(abitype::ABIType::Float, "Float");
         assert_abi_type_for_str(abitype::ABIType::Int, "Int");
         assert_abi_type_for_str(boxed::Num::BOXED_ABI_TYPE.into(), "Num");
-
-        assert_abi_type_for_str(
-            boxed::List::<boxed::Any>::BOXED_ABI_TYPE.into(),
-            "(List & Any)",
-        );
-
         assert_abi_type_for_str(abitype::ABIType::Char, "Char");
         assert_abi_type_for_str(abitype::ABIType::InternedSym, "Sym");
         assert_abi_type_for_str(abitype::BoxedABIType::Any.into(), "(RawU Num Bool)");
+
+        assert_abi_type_for_str(boxed::Nil::BOXED_ABI_TYPE.into(), "(List)");
+
+        assert_abi_type_for_str(
+            abitype::BoxedABIType::List(&boxed::Bool::BOXED_ABI_TYPE).into(),
+            "(List & Bool)",
+        );
+
+        assert_abi_type_for_str(
+            abitype::BoxedABIType::Pair(&boxed::Num::BOXED_ABI_TYPE).into(),
+            "(List Float & Int)",
+        );
+
+        assert_abi_type_for_str(
+            abitype::BoxedABIType::Vector(&boxed::Str::BOXED_ABI_TYPE).into(),
+            "(Vectorof Str)",
+        );
+
+        assert_abi_type_for_str(
+            abitype::BoxedABIType::Vector(&boxed::Sym::BOXED_ABI_TYPE).into(),
+            "(Vector 'foo 'bar)",
+        );
     }
 }
