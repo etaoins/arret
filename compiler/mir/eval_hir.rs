@@ -310,22 +310,32 @@ impl EvalHirCtx {
         arret_fun: &value::ArretFun,
         apply_args: &ApplyArgs<'_>,
     ) -> Result<Value> {
+        use crate::hir::destruc::poly_for_list_destruc;
         use crate::mir::app_purity::fun_app_purity;
         use crate::mir::arg_list::build_save_arg_list_to_regs;
         use crate::mir::closure;
         use crate::mir::ops::*;
-        use crate::mir::polymorph::polymorph_abi_for_arg_list_value;
+        use crate::mir::polymorph::polymorph_abi_for_list_ty;
         use crate::mir::ret_value::ret_reg_to_value;
+        use crate::ty::subst;
 
         let ApplyArgs {
             list_value: arg_list_value,
             ty_args: apply_ty_args,
         } = apply_args;
 
+        let mono_ty_args = merge_apply_ty_args_into_scope(
+            arret_fun.env_ty_args(),
+            apply_ty_args,
+            &fcx.mono_ty_args,
+        );
+
         let closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure());
 
-        let wanted_abi =
-            polymorph_abi_for_arg_list_value(closure_reg.is_some(), arg_list_value, ret_ty);
+        let param_list_poly = poly_for_list_destruc(&arret_fun.fun_expr().params);
+        let param_list_mono = subst::monomorphise_list(&mono_ty_args, &param_list_poly);
+
+        let wanted_abi = polymorph_abi_for_list_ty(closure_reg.is_some(), &param_list_mono, ret_ty);
         let ret_abi = wanted_abi.ops_abi.ret.clone();
 
         let mut arg_regs: Vec<RegId> = vec![];
@@ -345,13 +355,11 @@ impl EvalHirCtx {
         let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
         let fun_expr = arret_fun.fun_expr();
 
-        let mono_purities = merge_apply_purity_into_scope(
-            arret_fun.env_ty_args().pvar_purities(),
-            apply_ty_args.pvar_purities(),
-            &fcx.mono_ty_args,
+        let app_purity = fun_app_purity(
+            mono_ty_args.pvar_purities(),
+            &fun_expr.purity,
+            &fun_expr.ret_ty,
         );
-
-        let app_purity = fun_app_purity(&mono_purities, &fun_expr.purity, &fun_expr.ret_ty);
 
         let ret_reg = b.push_reg(
             span,

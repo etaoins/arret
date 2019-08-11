@@ -4,7 +4,6 @@ use arret_runtime::abitype;
 use arret_runtime::callback;
 
 use crate::mir::ops;
-use crate::mir::value::Value;
 use crate::ty;
 use crate::ty::Ty;
 
@@ -85,45 +84,21 @@ impl From<callback::EntryPointABIType> for PolymorphABI {
     }
 }
 
-// This is essentially the thunk ABI type with an optional closure
-fn fallback_polymorph_abi(has_closure: bool, ret_ty: &ty::Ref<ty::Mono>) -> PolymorphABI {
-    use crate::mir::specific_abi_type::specific_ret_abi_type_for_ty_ref;
-
-    let params = Some(abitype::BoxedABIType::Any.into())
-        .filter(|_| has_closure)
-        .into_iter()
-        .chain(iter::once(abitype::TOP_LIST_BOXED_ABI_TYPE.into()))
-        .collect();
-
-    let ops_abi = ops::OpsABI {
-        params,
-        ret: specific_ret_abi_type_for_ty_ref(ret_ty),
-    };
-
-    PolymorphABI {
-        ops_abi,
-        has_closure,
-        has_rest: true,
-    }
-}
-
-// TODO: This should use the list iterator so we can deal with chained lists, consts, etc
-fn list_polymorph_abi(
+/// Recommends a polymorph ABI for a given list and ret type
+pub fn polymorph_abi_for_list_ty<M: ty::PM>(
     has_closure: bool,
-    fixed: &[Value],
-    rest: Option<&Value>,
-    ret_ty: &ty::Ref<ty::Mono>,
+    list_ty: &ty::List<M>,
+    ret_ty: &ty::Ref<M>,
 ) -> PolymorphABI {
     use crate::mir::specific_abi_type::*;
 
+    let has_rest = list_ty.has_rest();
+
     let params = Some(abitype::BoxedABIType::Any.into())
         .filter(|_| has_closure)
         .into_iter()
-        .chain(fixed.iter().map(specific_abi_type_for_value))
-        .chain(
-            rest.into_iter()
-                .map(|_| abitype::TOP_LIST_BOXED_ABI_TYPE.into()),
-        )
+        .chain(list_ty.fixed().iter().map(specific_abi_type_for_ty_ref))
+        .chain(iter::once(abitype::TOP_LIST_BOXED_ABI_TYPE.into()).filter(|_| has_rest))
         .collect();
 
     let ops_abi = ops::OpsABI {
@@ -134,29 +109,7 @@ fn list_polymorph_abi(
     PolymorphABI {
         ops_abi,
         has_closure,
-        has_rest: rest.is_some(),
-    }
-}
-
-/// Recommends a polymorph ABI for a given list value and ret type
-pub fn polymorph_abi_for_arg_list_value(
-    has_closure: bool,
-    arg_list_value: &Value,
-    ret_ty: &ty::Ref<ty::Mono>,
-) -> PolymorphABI {
-    match arg_list_value {
-        Value::List(fixed, rest) => {
-            let rest = match rest {
-                Some(value) => Some(value.as_ref()),
-                None => None,
-            };
-
-            list_polymorph_abi(has_closure, fixed.as_ref(), rest, ret_ty)
-        }
-        _ => {
-            // This isn't a list; we can't do anything useful with it
-            fallback_polymorph_abi(has_closure, ret_ty)
-        }
+        has_rest: list_ty.has_rest(),
     }
 }
 

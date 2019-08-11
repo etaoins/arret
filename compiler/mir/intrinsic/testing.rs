@@ -2,7 +2,6 @@ use std::collections::BTreeSet;
 
 use arret_syntax::span::Span;
 
-use arret_runtime::abitype;
 use arret_runtime::boxed;
 
 use crate::mir::builder::Builder;
@@ -16,42 +15,13 @@ use crate::mir::value::Value;
 
 fn ideal_polymorph_abi_for_arret_fun(arret_fun: &value::ArretFun) -> PolymorphABI {
     use crate::hir::destruc::poly_for_list_destruc;
-    use crate::mir::specific_abi_type::specific_abi_type_for_ty_ref;
-    use crate::ty::subst;
-    use crate::ty::ty_args::TyArgs;
+    use crate::mir::polymorph::polymorph_abi_for_list_ty;
 
     let has_closure = !arret_fun.closure().free_values.is_empty();
-
     let fun_expr = arret_fun.fun_expr();
-    let upper_bound = TyArgs::from_upper_bound(&fun_expr.pvars, &fun_expr.tvars);
     let param_list_type = poly_for_list_destruc(&fun_expr.params);
 
-    let params = Some(abitype::BoxedABIType::Any.into())
-        .filter(|_| has_closure)
-        .into_iter()
-        .chain(param_list_type.fixed().iter().map(|fixed_poly| {
-            let fixed_poly = subst::subst_poly(&upper_bound, fixed_poly);
-            specific_abi_type_for_ty_ref(&fixed_poly)
-        }))
-        .chain(
-            Some(abitype::TOP_LIST_BOXED_ABI_TYPE.into())
-                .filter(|_| param_list_type.has_rest())
-                .into_iter(),
-        )
-        .collect();
-
-    let ret_poly = subst::subst_poly(&upper_bound, &fun_expr.ret_ty);
-
-    let ops_abi = ops::OpsABI {
-        params,
-        ret: specific_abi_type_for_ty_ref(&ret_poly).into(),
-    };
-
-    PolymorphABI {
-        ops_abi,
-        has_closure,
-        has_rest: param_list_type.has_rest(),
-    }
+    polymorph_abi_for_list_ty(has_closure, &param_list_type, &fun_expr.ret_ty)
 }
 
 fn add_ops_categories<'a>(
