@@ -374,6 +374,11 @@ pub fn eval_equality(
     let all_type_tags = left_type_tags | right_type_tags;
     let common_type_tags = left_type_tags & right_type_tags;
 
+    if common_type_tags.is_empty() {
+        // No types in common
+        return EqualityResult::Static(false);
+    }
+
     if [left_type_tags, right_type_tags].contains(&boxed::TypeTag::FunThunk.into()) {
         // Functions always compare false
         return EqualityResult::Static(false);
