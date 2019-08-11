@@ -8,6 +8,7 @@ use arret_runtime::boxed::refs::Gc;
 use arret_runtime::callback::EntryPointABIType as CallbackEntryPointABIType;
 use arret_runtime::intern::{AsInterner, Interner};
 
+use arret_runtime::abitype;
 use arret_runtime_syntax::reader;
 use arret_syntax::datum::{DataStr, Datum};
 use arret_syntax::span::{Span, EMPTY_SPAN};
@@ -74,12 +75,15 @@ pub struct EvalHirCtx {
 struct RecurSelf<'rs> {
     arret_fun: &'rs value::ArretFun,
     ty_args: &'rs TyArgs<ty::Poly>,
+
+    /// Return ABI type of expected by tail calls, if they're allowed
+    tail_call_ret_abi_type: Option<abitype::RetABIType>,
 }
 
 pub struct FunCtx<'rs> {
     mono_ty_args: TyArgs<ty::Mono>,
     local_values: HashMap<hir::VarId, Value>,
-    recur_self: Option<RecurSelf<'rs>>,
+    recur_self: Option<Box<RecurSelf<'rs>>>,
 
     pub(super) inliner_stack: inliner::ApplyStack,
 }
@@ -385,6 +389,18 @@ impl EvalHirCtx {
     ) -> Result<Value> {
         let fun_expr = arret_fun.fun_expr();
 
+        // We can only tail call if we're inlining ourselves and we were able to tail call
+        // in the outer function.
+        let tail_call_ret_abi_type = if let Some(ref outer_recur_self) = outer_fcx.recur_self {
+            if outer_recur_self.arret_fun.id() == arret_fun.id() {
+                outer_recur_self.tail_call_ret_abi_type.clone()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let mut inner_fcx = FunCtx {
             mono_ty_args: merge_apply_ty_args_into_scope(
                 arret_fun.env_ty_args(),
@@ -392,10 +408,11 @@ impl EvalHirCtx {
                 &outer_fcx.mono_ty_args,
             ),
             local_values: outer_fcx.local_values.clone(),
-            recur_self: Some(RecurSelf {
+            recur_self: Some(Box::new(RecurSelf {
                 arret_fun,
                 ty_args: &apply_args.ty_args,
-            }),
+                tail_call_ret_abi_type,
+            })),
 
             inliner_stack,
         };
@@ -588,7 +605,6 @@ impl EvalHirCtx {
         rust_fun: &rfi::Fun,
     ) -> BuiltReg {
         use crate::mir::ops::*;
-        use arret_runtime::abitype;
 
         let wanted_abi = PolymorphABI::thunk_abi();
         let private_fun_id = self.id_for_rust_fun(rust_fun, wanted_abi);
@@ -614,7 +630,6 @@ impl EvalHirCtx {
         entry_point_abi: &CallbackEntryPointABIType,
     ) -> BuiltReg {
         use crate::mir::ops::*;
-        use arret_runtime::abitype;
 
         let wanted_abi = entry_point_abi.clone().into();
         let private_fun_id = self.id_for_rust_fun(rust_fun, wanted_abi);
@@ -771,7 +786,6 @@ impl EvalHirCtx {
     ) -> Value {
         use crate::mir::ops::*;
         use crate::mir::value::build_reg::value_to_reg;
-        use arret_runtime::abitype;
 
         let fun_boxed_abi_type =
             if let abitype::ABIType::Boxed(ref fun_boxed_abi_type) = fun_reg_value.abi_type {
@@ -907,8 +921,13 @@ impl EvalHirCtx {
         result_ty: &ty::Ref<ty::Poly>,
         recur: &hir::Recur<hir::Inferred>,
     ) -> Result<Value> {
-        let RecurSelf { arret_fun, ty_args } =
-            fcx.recur_self.clone().expect("`(recur)` outside function");
+        use crate::mir::ret_value::build_value_ret;
+
+        let RecurSelf {
+            arret_fun,
+            ty_args,
+            tail_call_ret_abi_type,
+        } = *fcx.recur_self.clone().expect("`(recur)` outside function");
 
         let fixed_values = recur
             .fixed_arg_exprs
@@ -923,7 +942,7 @@ impl EvalHirCtx {
 
         let ret_ty = fcx.monomorphise(result_ty);
         let arg_list_value = Value::List(fixed_values, rest_value);
-        self.eval_arret_fun_app(
+        let result = self.eval_arret_fun_app(
             fcx,
             b,
             recur.span,
@@ -933,7 +952,22 @@ impl EvalHirCtx {
                 ty_args,
                 list_value: arg_list_value,
             },
-        )
+        );
+
+        if let Err(Error::AbortRecursion(_)) = result {
+            return result;
+        }
+
+        if let Some(ret_abi) = tail_call_ret_abi_type {
+            if let Some(b) = b {
+                // LLVM tail call optimisation requires we return immediately after our call.
+                // This helps us avoid any `phi`ing through conditionals etc. that may break that.
+                build_value_ret(self, b, recur.span, result, &ret_abi);
+                return Err(Error::Diverged);
+            }
+        }
+
+        result
     }
 
     fn eval_cond(
@@ -989,7 +1023,6 @@ impl EvalHirCtx {
         use crate::mir::value::build_reg::value_to_reg;
         use crate::mir::value::plan_phi::*;
         use crate::mir::value::types::{known_record_cons_for_value, possible_type_tags_for_value};
-        use arret_runtime::abitype;
 
         let span = cond.span;
         let test_reg = value_to_reg(self, b, span, test_value, &abitype::ABIType::Bool);
@@ -1222,7 +1255,6 @@ impl EvalHirCtx {
     ) -> BuiltReg {
         use crate::mir::closure;
         use crate::mir::ops::*;
-        use arret_runtime::abitype;
 
         let wanted_abi = PolymorphABI::thunk_abi();
         let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
@@ -1262,7 +1294,6 @@ impl EvalHirCtx {
     ) -> BuiltReg {
         use crate::mir::closure;
         use crate::mir::ops::*;
-        use arret_runtime::abitype;
 
         let wanted_abi = entry_point_abi.clone().into();
         let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
@@ -1329,10 +1360,11 @@ impl EvalHirCtx {
         let fcx = FunCtx {
             mono_ty_args: arret_fun.env_ty_args().clone(),
             local_values,
-            recur_self: Some(RecurSelf {
+            recur_self: Some(Box::new(RecurSelf {
                 arret_fun,
                 ty_args: &ty_args,
-            }),
+                tail_call_ret_abi_type: Some(wanted_abi.ops_abi.ret.clone()),
+            })),
 
             inliner_stack: inliner::ApplyStack::new(),
         };
@@ -1371,7 +1403,6 @@ impl EvalHirCtx {
         use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
         use crate::mir::optimise::optimise_fun;
         use crate::mir::ret_value::build_value_ret;
-        use arret_runtime::abitype;
 
         let wanted_abi = entry_point_abi.into();
 
@@ -1421,7 +1452,6 @@ impl EvalHirCtx {
         entry_point_abi: &CallbackEntryPointABIType,
     ) -> BuiltReg {
         use crate::mir::ops::*;
-        use arret_runtime::abitype;
 
         // Closures are of type `Any`
         let closure_reg = b.cast_boxed_cond(
@@ -1597,8 +1627,6 @@ impl EvalHirCtx {
 
     /// Builds the main function of the program
     pub fn into_built_program(mut self, main_var_id: hir::VarId) -> Result<BuiltProgram> {
-        use arret_runtime::abitype;
-
         let fcx = FunCtx::new();
         let main_value = self.eval_ref(&fcx, main_var_id);
 
