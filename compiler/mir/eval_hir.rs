@@ -72,9 +72,8 @@ pub struct EvalHirCtx {
 }
 
 #[derive(Clone)]
-struct RecurSelf<'rs> {
-    arret_fun: &'rs value::ArretFun,
-    ty_args: &'rs TyArgs<ty::Poly>,
+struct RecurSelf<'af> {
+    arret_fun: &'af value::ArretFun,
 
     /// Return ABI type of expected by tail calls, if they're allowed
     tail_call_ret_abi_type: Option<abitype::RetABIType>,
@@ -410,7 +409,6 @@ impl EvalHirCtx {
             local_values: outer_fcx.local_values.clone(),
             recur_self: Some(Box::new(RecurSelf {
                 arret_fun,
-                ty_args: &apply_args.ty_args,
                 tail_call_ret_abi_type,
             })),
 
@@ -925,7 +923,6 @@ impl EvalHirCtx {
 
         let RecurSelf {
             arret_fun,
-            ty_args,
             tail_call_ret_abi_type,
         } = *fcx.recur_self.clone().expect("`(recur)` outside function");
 
@@ -940,6 +937,23 @@ impl EvalHirCtx {
             None => None,
         };
 
+        // By definition our ty args are the outer functions type args pointed to themselves
+        let pvar_purities = arret_fun
+            .fun_expr()
+            .pvars
+            .iter()
+            .map(|pvar| (pvar.clone(), pvar.clone().into()))
+            .collect();
+
+        let tvar_types = arret_fun
+            .fun_expr()
+            .tvars
+            .iter()
+            .map(|tvar| (tvar.clone(), tvar.clone().into()))
+            .collect();
+
+        let ty_args = TyArgs::new(pvar_purities, tvar_types);
+
         let ret_ty = fcx.monomorphise(result_ty);
         let arg_list_value = Value::List(fixed_values, rest_value);
         let result = self.eval_arret_fun_app(
@@ -949,7 +963,7 @@ impl EvalHirCtx {
             &ret_ty,
             arret_fun,
             ApplyArgs {
-                ty_args,
+                ty_args: &ty_args,
                 list_value: arg_list_value,
             },
         );
@@ -1362,7 +1376,6 @@ impl EvalHirCtx {
             local_values,
             recur_self: Some(Box::new(RecurSelf {
                 arret_fun,
-                ty_args: &ty_args,
                 tail_call_ret_abi_type: Some(wanted_abi.ops_abi.ret.clone()),
             })),
 

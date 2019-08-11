@@ -22,6 +22,10 @@
       (recur pred (rest l))
       false)))
 
+(defn wrapped-recursive-every? #{[->_ ->!] T} ([pred (T ->_ Bool)] [lst (List & T)]) ->_ Bool
+  ; This is forcing `(recursive-every?)` to have the same polymorphic purity as the outer function
+  (recursive-every? pred lst))
+
 (defn main! () ->! ()
   (assert-eq! '() ((black-box! recursive-reverse) '()))
   (assert-eq! '(()) ((black-box! recursive-reverse) (black-box! '(()))))
@@ -42,6 +46,8 @@
   (assert-eq! false (recursive-every? (black-box! int?) '(1 2.0 3)))
   (assert-eq! true (recursive-every? int? (black-box! '(1 2 3))))
   (assert-eq! false (recursive-every? int? (black-box! '(1 2.0 3))))
+
+  (assert-eq! true (wrapped-recursive-every? (fn (_) true) '(1 2 3)))
 
   ; We should select an ABI for `even-length?` which doesn't require allocaton
   (let [black-box-list (black-box! '(1 2 3 4 5))
