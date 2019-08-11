@@ -80,42 +80,39 @@ where
     M: ty::PM,
 {
     fn from(ty_ref: &'a ty::Ref<M>) -> TypeTagSet {
-        ty_ref
-            .try_to_fixed()
-            .map(|ty| match ty {
-                Ty::Any => TypeTagSet::all(),
-                Ty::Int => TypeTag::Int.into(),
-                Ty::Float => TypeTag::Float.into(),
-                Ty::Char => TypeTag::Char.into(),
-                Ty::Bool => [TypeTag::True, TypeTag::False].iter().collect(),
-                Ty::Num => [TypeTag::Int, TypeTag::Float].iter().collect(),
-                Ty::LitBool(true) => TypeTag::True.into(),
-                Ty::LitBool(false) => TypeTag::False.into(),
-                Ty::Sym | Ty::LitSym(_) => TypeTag::Sym.into(),
-                Ty::Str => TypeTag::Str.into(),
-                Ty::Fun(_) | Ty::TopFun(_) | Ty::TyPred(_) | Ty::EqPred => TypeTag::FunThunk.into(),
-                Ty::Vector(_) | Ty::Vectorof(_) => TypeTag::Vector.into(),
-                Ty::TopRecord | Ty::RecordClass(_) | Ty::Record(_) => TypeTag::Record.into(),
-                Ty::List(list) => {
-                    if list.is_empty() {
-                        TypeTag::Nil.into()
-                    } else if !list.fixed().is_empty() {
-                        TypeTag::Pair.into()
-                    } else {
-                        [TypeTag::Nil, TypeTag::Pair].iter().collect()
-                    }
+        match ty_ref.resolve_to_ty() {
+            Ty::Any => TypeTagSet::all(),
+            Ty::Int => TypeTag::Int.into(),
+            Ty::Float => TypeTag::Float.into(),
+            Ty::Char => TypeTag::Char.into(),
+            Ty::Bool => [TypeTag::True, TypeTag::False].iter().collect(),
+            Ty::Num => [TypeTag::Int, TypeTag::Float].iter().collect(),
+            Ty::LitBool(true) => TypeTag::True.into(),
+            Ty::LitBool(false) => TypeTag::False.into(),
+            Ty::Sym | Ty::LitSym(_) => TypeTag::Sym.into(),
+            Ty::Str => TypeTag::Str.into(),
+            Ty::Fun(_) | Ty::TopFun(_) | Ty::TyPred(_) | Ty::EqPred => TypeTag::FunThunk.into(),
+            Ty::Vector(_) | Ty::Vectorof(_) => TypeTag::Vector.into(),
+            Ty::TopRecord | Ty::RecordClass(_) | Ty::Record(_) => TypeTag::Record.into(),
+            Ty::List(list) => {
+                if list.is_empty() {
+                    TypeTag::Nil.into()
+                } else if !list.fixed().is_empty() {
+                    TypeTag::Pair.into()
+                } else {
+                    [TypeTag::Nil, TypeTag::Pair].iter().collect()
                 }
-                Ty::Union(members) => members
-                    .iter()
-                    .map(TypeTagSet::from)
-                    .fold(TypeTagSet::new(), |a, b| a | b),
-                Ty::Intersect(members) => members
-                    .iter()
-                    .map(TypeTagSet::from)
-                    .fold(TypeTagSet::all(), |a, b| a & b),
-                Ty::Map(_) | Ty::Set(_) => unimplemented!("no corresponding type tag"),
-            })
-            .unwrap_or_else(TypeTagSet::all)
+            }
+            Ty::Union(members) => members
+                .iter()
+                .map(TypeTagSet::from)
+                .fold(TypeTagSet::new(), |a, b| a | b),
+            Ty::Intersect(members) => members
+                .iter()
+                .map(TypeTagSet::from)
+                .fold(TypeTagSet::all(), |a, b| a & b),
+            Ty::Map(_) | Ty::Set(_) => unimplemented!("no corresponding type tag"),
+        }
     }
 }
 
@@ -191,6 +188,7 @@ impl ops::BitAnd for TypeTagSet {
 #[cfg(test)]
 mod test {
     use super::*;
+    use arret_syntax::span::EMPTY_SPAN;
 
     #[test]
     fn basic_operations() {
@@ -248,10 +246,22 @@ mod test {
     }
 
     #[test]
-    fn from_intersect_ty_ref() {
+    fn from_ty_ref() {
+        let int_ty_ref: ty::Ref<ty::Poly> = Ty::Int.into();
+        assert_eq!(
+            TypeTagSet::from(TypeTag::Int),
+            TypeTagSet::from(&int_ty_ref)
+        );
+
+        let poly_sym_ref: ty::Ref<ty::Poly> =
+            ty::TVar::new(EMPTY_SPAN, "tvar1".into(), Ty::Sym.into()).into();
+        assert_eq!(
+            TypeTagSet::from(TypeTag::Sym),
+            TypeTagSet::from(&poly_sym_ref)
+        );
+
         let num_float_intersect: ty::Ref<ty::Poly> =
             Ty::Intersect(Box::new([Ty::Num.into(), Ty::Float.into()])).into();
-
         assert_eq!(
             TypeTagSet::from(TypeTag::Float),
             TypeTagSet::from(&num_float_intersect)
