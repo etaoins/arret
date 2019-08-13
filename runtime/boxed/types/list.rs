@@ -120,7 +120,9 @@ pub enum ListSubtype<'a, T: Boxed>
 where
     T: 'a,
 {
+    /// Non-empty list
     Pair(&'a Pair<T>),
+    /// Empty list
     Nil,
 }
 

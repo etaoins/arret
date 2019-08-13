@@ -112,13 +112,20 @@ pub fn stdlib_take(
 }
 
 #[arret_rfi_derive::rust_fun("(All #{T} Int (List & T) -> (List & T))")]
-pub fn stdlib_drop(
-    task: &mut Task,
-    count: i64,
-    input: Gc<boxed::List<boxed::Any>>,
-) -> Gc<boxed::List<boxed::Any>> {
+pub fn stdlib_drop(count: i64, input: Gc<boxed::List<boxed::Any>>) -> Gc<boxed::List<boxed::Any>> {
     let usize_count = if count < 0 { 0 } else { count as usize };
-    let output_vec: Vec<Gc<boxed::Any>> = input.iter().skip(usize_count).collect();
+    let mut head = input;
 
-    boxed::List::new(task, output_vec.into_iter())
+    for _ in 0..usize_count {
+        match head.as_subtype() {
+            boxed::ListSubtype::Pair(pair) => {
+                head = pair.rest();
+            }
+            boxed::ListSubtype::Nil => {
+                break;
+            }
+        }
+    }
+
+    head
 }
