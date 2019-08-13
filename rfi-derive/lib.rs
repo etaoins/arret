@@ -8,13 +8,13 @@ extern crate quote;
 
 use syn::{parse_macro_input, ItemFn, Token};
 
-fn arg_is_task(arg: &syn::ArgCaptured) -> bool {
-    if let syn::Type::Reference(_) = arg.ty {
+fn arg_is_task(arg: &syn::PatType) -> bool {
+    if let syn::Type::Reference(_) = *arg.ty {
     } else {
         return false;
     };
 
-    if let syn::Pat::Ident(ref pat_ident) = arg.pat {
+    if let syn::Pat::Ident(ref pat_ident) = *arg.pat {
         return pat_ident.ident == "task";
     } else {
         return false;
@@ -46,40 +46,40 @@ pub fn rust_fun(
 
     // Parse the input tokens into a syntax tree
     let mut input_fn = parse_macro_input!(input as ItemFn);
+    let mut input_sig = &mut input_fn.sig;
     let vis = input_fn.vis.clone();
 
     // Rename the function so the descriptor can take its original name
-    let descriptor_ident = input_fn.ident.clone();
-    let entry_point_name = format!("arret_{}_entry_point", input_fn.ident);
-    input_fn.ident = proc_macro2::Ident::new(&entry_point_name, input_fn.ident.span());
+    let descriptor_ident = input_sig.ident.clone();
+    let entry_point_name = format!("arret_{}_entry_point", input_sig.ident);
+    input_sig.ident = proc_macro2::Ident::new(&entry_point_name, input_sig.ident.span());
 
     // RFI assumes a C ABI
-    input_fn.abi = Some(syn::Abi {
-        extern_token: Token![extern](input_fn.ident.span()),
-        name: Some(syn::LitStr::new("C", input_fn.ident.span())),
+    input_sig.abi = Some(syn::Abi {
+        extern_token: Token![extern](input_sig.ident.span()),
+        name: Some(syn::LitStr::new("C", input_sig.ident.span())),
     });
 
-    let takes_task = input_fn
-        .decl
+    let takes_task = input_sig
         .inputs
         .first()
-        .map(|arg| match arg.value() {
-            syn::FnArg::Captured(captured) => arg_is_task(captured),
+        .map(|arg| match arg {
+            syn::FnArg::Typed(typed) => arg_is_task(typed),
             _ => false,
         })
         .unwrap_or(false);
 
-    let mut param_iter = input_fn.decl.inputs.iter();
+    let mut param_iter = input_sig.inputs.iter();
     if takes_task {
         param_iter.next();
     }
 
     let param_types = param_iter.map(|arg| match arg {
-        syn::FnArg::Captured(captured) => captured.ty.clone(),
+        syn::FnArg::Typed(typed) => typed.ty.clone(),
         _ => panic!("unexpected arg type"),
     });
 
-    let ret_type = match input_fn.decl.output {
+    let ret_type = match input_sig.output {
         syn::ReturnType::Default => quote!(()),
         syn::ReturnType::Type(_, ref ret_type) => quote!(#ret_type),
     };
