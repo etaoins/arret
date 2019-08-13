@@ -1,7 +1,6 @@
 use arret_runtime::binding::*;
 
 use arret_runtime::boxed;
-use arret_runtime::boxed::prelude::*;
 use arret_runtime::boxed::refs::Gc;
 use arret_runtime::callback;
 use arret_runtime::task::Task;
@@ -98,17 +97,6 @@ pub fn stdlib_concat(
 
     // We don't need to rebuild our tail
     boxed::List::new_with_tail(task, head_values.into_iter(), list_iter.next().unwrap())
-}
-
-#[arret_rfi_derive::rust_fun("(Any (List & Any) -> Bool)")]
-pub fn stdlib_member_p(
-    task: &Task,
-    needle: Gc<boxed::Any>,
-    haystack: Gc<boxed::List<boxed::Any>>,
-) -> bool {
-    haystack
-        .iter()
-        .any(|member| member.eq_in_heap(task.as_heap(), &needle))
 }
 
 #[arret_rfi_derive::rust_fun("(All #{T} Int (List & T) -> (List & T))")]

@@ -75,7 +75,6 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "exit!" => stdlib_exit,
     "cons" => stdlib_cons,
     "concat" => stdlib_concat,
-    "member?" => stdlib_member_p,
     "take" => stdlib_take,
     "drop" => stdlib_drop,
 

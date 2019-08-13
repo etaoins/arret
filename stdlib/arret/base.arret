@@ -8,7 +8,7 @@
 
 (import [stdlib rust])
 (export length panic panic! print! println! print-str write! writeln! write-str exit! cons map
-        filter some? every? fold concat take drop member? int float < <= == > >= + * - / rem quot)
+        filter some? every? fold concat take drop int float < <= == > >= + * - / rem quot)
 
 (export defn)
 (defmacro defn (macro-rules
@@ -180,6 +180,15 @@
 (export constantly)
 (defn constantly #{T} ([v T]) -> (& Any -> T)
   (fn (& _) v))
+
+; We're polymorphic over both the needle and haystack to build type-specific equality checks
+(export member?)
+(defn member? #{N H} ([needle N] [haystack (List & H)]) -> Bool
+  (if (nil? haystack)
+    false
+    (or
+      (= needle (first haystack))
+      (recur needle (rest haystack)))))
 
 (export ->>)
 (defmacro ->> (macro-rules
