@@ -956,6 +956,21 @@ impl EvalHirCtx {
 
         let ret_ty = fcx.monomorphise(result_ty);
         let arg_list_value = Value::List(fixed_values, rest_value);
+
+        if b.is_none() {
+            // There is no way to make our MIR evaluation tail recursive; we'll eventually exhaust
+            // our Rust stack. Instead, build a native function and call in to it.
+            use crate::mir::value::to_const::value_to_const;
+            let boxed_arg_list = value_to_const(self, &arg_list_value)
+                .expect("could not produce constant arg list during eval");
+
+            let thunk = self.jit_thunk_for_arret_fun(arret_fun);
+            return Self::call_native_fun(recur.span, || {
+                let closure = boxed::NIL_INSTANCE.as_any_ref();
+                thunk(&mut self.runtime_task, closure, boxed_arg_list)
+            });
+        }
+
         let result = self.eval_arret_fun_app(
             fcx,
             b,
