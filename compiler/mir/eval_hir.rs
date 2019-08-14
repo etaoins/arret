@@ -71,12 +71,17 @@ pub struct EvalHirCtx {
     cons_for_jit_record_class_id: HashMap<boxed::RecordClassId, record::ConsId>,
 }
 
-#[derive(Clone)]
+/// Context for performing a tail call in `(recur)`
+struct TailCallCtx {
+    self_abi: PolymorphABI,
+    closure_reg: Option<BuiltReg>,
+}
+
 struct RecurSelf<'af> {
     arret_fun: &'af value::ArretFun,
 
     /// Return ABI type of expected by tail calls, if they're allowed
-    tail_call_ret_abi_type: Option<abitype::RetABIType>,
+    tail_call_ctx: Option<TailCallCtx>,
 }
 
 pub struct FunCtx<'rs> {
@@ -306,7 +311,7 @@ impl EvalHirCtx {
 
     pub(super) fn build_arret_fun_app(
         &mut self,
-        fcx: &mut FunCtx<'_>,
+        fcx: &FunCtx<'_>,
         b: &mut Builder,
         span: Span,
         ret_ty: &ty::Ref<ty::Mono>,
@@ -388,18 +393,6 @@ impl EvalHirCtx {
     ) -> Result<Value> {
         let fun_expr = arret_fun.fun_expr();
 
-        // We can only tail call if we're inlining ourselves and we were able to tail call
-        // in the outer function.
-        let tail_call_ret_abi_type = if let Some(ref outer_recur_self) = outer_fcx.recur_self {
-            if outer_recur_self.arret_fun.id() == arret_fun.id() {
-                outer_recur_self.tail_call_ret_abi_type.clone()
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
         let mut inner_fcx = FunCtx {
             mono_ty_args: merge_apply_ty_args_into_scope(
                 arret_fun.env_ty_args(),
@@ -409,7 +402,7 @@ impl EvalHirCtx {
             local_values: outer_fcx.local_values.clone(),
             recur_self: Some(Box::new(RecurSelf {
                 arret_fun,
-                tail_call_ret_abi_type,
+                tail_call_ctx: None,
             })),
 
             inliner_stack,
@@ -912,6 +905,37 @@ impl EvalHirCtx {
         )
     }
 
+    /// Evaluates a `(recur)` within a fun body
+    ///
+    /// While `(recur)` is semantically equivalent to calling the fun by name it has a different
+    /// implication about programmer intent. `(recur)` is used in positions where unbounded tail
+    /// recursion can occur, typically to iteratively process a data structure. This is used where
+    /// a loop would be used in other languages.
+    ///
+    /// For this reason they are evaluated quite differently from normal applies. Four things are
+    /// tried in order of preference:
+    ///
+    /// 1. If we don't have a builder we will JIT a thunk and call into it. This is important
+    ///    because our MIR evaluation is not tail recursive; we could exhaust our Rust stack if
+    ///    we attempted to MIR evaluate until the end of recursion.
+    ///
+    /// 2. If the arg list is constant and the apply is pure then we will also evaluate through a
+    ///    thunk. This is the same way Rust funs are treated.
+    ///
+    /// 3. If we have a `tail_call_ctx` we will built a special `TailCall` op and immediately
+    ///    return its value. This maximises the chance that codegen and LLVM will be able to
+    ///    optimise the tail call in to a loop. We're also able to reuse our existing closure arg
+    ///    directly.
+    ///
+    /// 4. If we don't have a `tail_call_ctx` we will treat this as if it was an Arret fun apply.
+    ///
+    ///    This can happen if we're being inlined or we're inside a thunk or callback. This will
+    ///    only happen for one recursion; the next one will have a `tail_call_ctx` and use one of
+    ///    the above cases.
+    ///
+    ///    We directly build a fun app instead of attempting inlining. Inlining a recursion with a
+    ///    non-constant arg list will nearly always hit the maximum inline depth and abort. This is
+    ///    wasteful of compiler time.
     fn eval_recur(
         &mut self,
         fcx: &mut FunCtx<'_>,
@@ -919,12 +943,9 @@ impl EvalHirCtx {
         result_ty: &ty::Ref<ty::Poly>,
         recur: &hir::Recur<hir::Inferred>,
     ) -> Result<Value> {
-        use crate::mir::ret_value::build_value_ret;
+        use crate::mir::app_purity::fun_app_purity;
 
-        let RecurSelf {
-            arret_fun,
-            tail_call_ret_abi_type,
-        } = *fcx.recur_self.clone().expect("`(recur)` outside function");
+        let span = recur.span;
 
         let fixed_values = recur
             .fixed_arg_exprs
@@ -937,66 +958,116 @@ impl EvalHirCtx {
             None => None,
         };
 
-        // By definition our ty args are the outer functions type args pointed to themselves
-        let pvar_purities = arret_fun
-            .fun_expr()
-            .pvars
-            .iter()
-            .map(|pvar| (pvar.clone(), pvar.clone().into()))
-            .collect();
-
-        let tvar_types = arret_fun
-            .fun_expr()
-            .tvars
-            .iter()
-            .map(|tvar| (tvar.clone(), tvar.clone().into()))
-            .collect();
-
-        let ty_args = TyArgs::new(pvar_purities, tvar_types);
+        let (arret_fun, tail_call_ctx) = if let Some(recur_self) = &fcx.recur_self {
+            (&recur_self.arret_fun, &recur_self.tail_call_ctx)
+        } else {
+            panic!("`(recur)` outside function");
+        };
 
         let ret_ty = fcx.monomorphise(result_ty);
         let arg_list_value = Value::List(fixed_values, rest_value);
 
-        if b.is_none() {
-            // There is no way to make our MIR evaluation tail recursive; we'll eventually exhaust
-            // our Rust stack. Instead, build a native function and call in to it.
-            use crate::mir::value::to_const::value_to_const;
-            let boxed_arg_list = value_to_const(self, &arg_list_value)
-                .expect("could not produce constant arg list during eval");
-
-            let thunk = self.jit_thunk_for_arret_fun(arret_fun);
-            return Self::call_native_fun(recur.span, || {
-                let closure = boxed::NIL_INSTANCE.as_any_ref();
-                thunk(&mut self.runtime_task, closure, boxed_arg_list)
-            });
-        }
-
-        let result = self.eval_arret_fun_app(
-            fcx,
-            b,
-            recur.span,
-            &ret_ty,
-            arret_fun,
-            ApplyArgs {
-                ty_args: &ty_args,
-                list_value: arg_list_value,
-            },
+        // Determine our purity to see if we can const eval
+        let recur_purity = fun_app_purity(
+            fcx.mono_ty_args.pvar_purities(),
+            &arret_fun.fun_expr().purity,
+            &arret_fun.fun_expr().ret_ty,
         );
 
-        if let Err(Error::AbortRecursion(_)) = result {
-            return result;
-        }
+        let can_const_eval = b.is_none() || (recur_purity == Purity::Pure);
+        if can_const_eval {
+            use crate::mir::value::to_const::value_to_const;
 
-        if let Some(ret_abi) = tail_call_ret_abi_type {
-            if let Some(b) = b {
-                // LLVM tail call optimisation requires we return immediately after our call.
-                // This helps us avoid any `phi`ing through conditionals etc. that may break that.
-                build_value_ret(self, b, recur.span, result, &ret_abi);
-                return Err(Error::Diverged);
+            if let Some(boxed_arg_list) = value_to_const(self, &arg_list_value) {
+                let thunk = self.jit_thunk_for_arret_fun(arret_fun);
+                return Self::call_native_fun(span, || {
+                    let closure = boxed::NIL_INSTANCE.as_any_ref();
+                    thunk(&mut self.runtime_task, closure, boxed_arg_list)
+                });
             }
         }
 
-        result
+        let some_b = if let Some(some_b) = b {
+            some_b
+        } else {
+            panic!("failed to const eval (recur) during eval");
+        };
+
+        if let Some(tail_call_ctx) = tail_call_ctx {
+            use crate::mir::arg_list::build_save_arg_list_to_regs;
+            use crate::mir::ops::*;
+
+            let self_abi = &tail_call_ctx.self_abi;
+
+            let mut arg_regs: Vec<RegId> = vec![];
+            if let Some(closure_reg) = tail_call_ctx.closure_reg {
+                arg_regs.push(closure_reg.into());
+            }
+
+            arg_regs.extend(build_save_arg_list_to_regs(
+                self,
+                some_b,
+                span,
+                arg_list_value.clone(),
+                self_abi.arret_fixed_params(),
+                self_abi.arret_rest_param(),
+            ));
+
+            // All of the context for `TailCall` is implicit except the arg regs
+            let ret_reg = some_b.push_reg(
+                span,
+                OpKind::TailCall,
+                TailCallOp {
+                    impure: recur_purity == Purity::Impure,
+                    args: arg_regs.into_boxed_slice(),
+                },
+            );
+
+            match &self_abi.ops_abi.ret {
+                abitype::RetABIType::Inhabited(_) => {
+                    some_b.push(span, OpKind::Ret(ret_reg.into()));
+                }
+                abitype::RetABIType::Never => {
+                    some_b.push(span, OpKind::Unreachable);
+                }
+                abitype::RetABIType::Void => {
+                    some_b.push(span, OpKind::RetVoid);
+                }
+            }
+
+            Err(Error::Diverged)
+        } else {
+            // By definition our ty args are the fun's type args pointed to themselves
+            let pvar_purities = arret_fun
+                .fun_expr()
+                .pvars
+                .iter()
+                .map(|pvar| (pvar.clone(), pvar.clone().into()))
+                .collect();
+
+            let tvar_types = arret_fun
+                .fun_expr()
+                .tvars
+                .iter()
+                .map(|tvar| (tvar.clone(), tvar.clone().into()))
+                .collect();
+
+            let ty_args = TyArgs::new(pvar_purities, tvar_types);
+
+            // We can't do a native tail call. This can happen if we're inside a thunk or callback
+            // since they don't have the `FastCC` calling convention.
+            self.build_arret_fun_app(
+                fcx,
+                some_b,
+                recur.span,
+                &ret_ty,
+                arret_fun,
+                &ApplyArgs {
+                    ty_args: &ty_args,
+                    list_value: arg_list_value,
+                },
+            )
+        }
     }
 
     fn eval_cond(
@@ -1385,6 +1456,15 @@ impl EvalHirCtx {
 
         let ty_args = stx.into_poly_ty_args();
 
+        let tail_call_ctx = if wanted_abi.ops_abi.call_conv == ops::CallConv::FastCC {
+            Some(TailCallCtx {
+                self_abi: wanted_abi.clone(),
+                closure_reg,
+            })
+        } else {
+            None
+        };
+
         // Now build a function context
         let mut fcx = FunCtx {
             mono_ty_args: merge_apply_ty_args_into_scope(
@@ -1395,7 +1475,7 @@ impl EvalHirCtx {
             local_values,
             recur_self: Some(Box::new(RecurSelf {
                 arret_fun,
-                tail_call_ret_abi_type: Some(wanted_abi.ops_abi.ret.clone()),
+                tail_call_ctx,
             })),
 
             inliner_stack: inliner::ApplyStack::new(),

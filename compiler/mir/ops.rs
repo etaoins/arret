@@ -110,6 +110,12 @@ pub struct CallOp {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct TailCallOp {
+    pub impure: bool,
+    pub args: Box<[RegId]>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct BoxPairOp {
     pub head_reg: RegId,
     pub rest_reg: RegId,
@@ -223,6 +229,8 @@ pub enum OpKind {
     Alias(RegId, RegId), // TODO: This is a hack for `duplicate_alloc_ops`
 
     Call(RegId, CallOp),
+    TailCall(RegId, TailCallOp),
+
     LoadBoxedTypeTag(RegId, LoadBoxedTypeTagOp),
     LoadBoxedListLength(RegId, RegId),
     LoadBoxedPairHead(RegId, RegId),
@@ -317,6 +325,7 @@ impl OpKind {
             | CastBoxed(reg_id, _)
             | Alias(reg_id, _)
             | Call(reg_id, _)
+            | TailCall(reg_id, _)
             | LoadBoxedTypeTag(reg_id, _)
             | LoadBoxedListLength(reg_id, _)
             | LoadBoxedPairHead(reg_id, _)
@@ -441,8 +450,8 @@ impl OpKind {
             ) => {
                 coll.extend(iter::once(*reg_id));
             }
-            Call(_, call_op) => {
-                coll.extend(call_op.args.iter().cloned());
+            Call(_, CallOp { args, .. }) | TailCall(_, TailCallOp { args, .. }) => {
+                coll.extend(args.iter().cloned());
             }
             Cond(cond_op) => {
                 coll.extend(iter::once(cond_op.test_reg));
@@ -501,7 +510,7 @@ impl OpKind {
 
         match self {
             Ret(_) | RetVoid | Unreachable => true,
-            Call(_, call_op) => call_op.impure,
+            Call(_, CallOp { impure, .. }) | TailCall(_, TailCallOp { impure, .. }) => *impure,
             Cond(cond_op) => cond_op
                 .true_ops
                 .iter()
@@ -586,7 +595,9 @@ impl OpKind {
             MakeCallback(_, _) => OpCategory::MakeCallback,
             ConstCastBoxed(_, _) => OpCategory::ConstCastBoxed,
             CastBoxed(_, _) | Alias(_, _) => OpCategory::CastBoxed,
-            Call(_, _) => OpCategory::Call,
+
+            Call(_, _) | TailCall(_, _) => OpCategory::Call,
+
             Unreachable => OpCategory::Unreachable,
         }
     }

@@ -201,6 +201,12 @@ impl<'of> ProgramCaptureCtx<'of> {
                     }
                 };
             }
+            OpKind::TailCall(_, ops::TailCallOp { args, .. }) => {
+                // This is the same justification as the recursive case in `OpKind::Call`
+                for arg_reg in args.iter() {
+                    captures.add(*arg_reg, CaptureKind::Always);
+                }
+            }
             OpKind::MakeCallback(_, ops::MakeCallbackOp { callee, .. })
             | OpKind::AllocBoxedFunThunk(_, ops::BoxFunThunkOp { callee, .. })
             | OpKind::ConstBoxedFunThunk(_, ops::BoxFunThunkOp { callee, .. }) => {

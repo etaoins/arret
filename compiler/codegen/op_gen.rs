@@ -1,6 +1,6 @@
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
-use llvm_sys::{LLVMIntPredicate, LLVMRealPredicate};
+use llvm_sys::{LLVMCallConv, LLVMIntPredicate, LLVMRealPredicate};
 
 use arret_runtime::boxed;
 
@@ -209,6 +209,24 @@ fn gen_op(
 
                 let call_conv = callee::callee_call_conv(mcx, callee);
                 LLVMSetInstructionCallConv(llvm_ret, call_conv);
+
+                fcx.regs.insert(*reg, llvm_ret);
+            }
+            OpKind::TailCall(reg, TailCallOp { args, .. }) => {
+                let mut llvm_args = std::iter::once(fcx.current_task)
+                    .chain(args.iter().map(|param_reg| fcx.regs[&param_reg]))
+                    .collect::<Vec<LLVMValueRef>>();
+
+                let llvm_ret = LLVMBuildCall(
+                    fcx.builder,
+                    fcx.function,
+                    llvm_args.as_mut_ptr(),
+                    llvm_args.len() as u32,
+                    b"\0".as_ptr() as *const _,
+                );
+
+                LLVMSetTailCall(llvm_ret, 1);
+                LLVMSetInstructionCallConv(llvm_ret, LLVMCallConv::LLVMFastCallConv as u32);
 
                 fcx.regs.insert(*reg, llvm_ret);
             }
