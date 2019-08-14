@@ -1386,8 +1386,12 @@ impl EvalHirCtx {
         let ty_args = stx.into_poly_ty_args();
 
         // Now build a function context
-        let fcx = FunCtx {
-            mono_ty_args: arret_fun.env_ty_args().clone(),
+        let mut fcx = FunCtx {
+            mono_ty_args: merge_apply_ty_args_into_scope(
+                arret_fun.env_ty_args(),
+                &ty_args,
+                &TyArgs::empty(),
+            ),
             local_values,
             recur_self: Some(Box::new(RecurSelf {
                 arret_fun,
@@ -1398,19 +1402,17 @@ impl EvalHirCtx {
         };
 
         let mut some_b = Some(b);
-        let app_result = self.inline_arret_fun_app(
-            &fcx,
+        Self::destruc_list(
             &mut some_b,
             span,
-            arret_fun,
-            ApplyArgs {
-                ty_args: &ty_args,
-                list_value: arg_list_value,
-            },
-            inliner::ApplyStack::new(),
+            &mut fcx.local_values,
+            &fun_expr.params,
+            arg_list_value,
         );
-        let mut b = some_b.unwrap();
 
+        let app_result = self.eval_expr(&mut fcx, &mut some_b, &fun_expr.body_expr);
+
+        let mut b = some_b.unwrap();
         build_value_ret(self, &mut b, span, app_result, &wanted_abi.ops_abi.ret);
 
         Ok(optimise_fun(ops::Fun {
