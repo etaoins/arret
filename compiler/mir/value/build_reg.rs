@@ -251,7 +251,12 @@ fn list_to_reg(
             })
     };
 
-    b.cast_boxed(span, list_reg, boxed_abi_type.clone())
+    b.cast_boxed_cond(
+        span,
+        &TOP_LIST_BOXED_ABI_TYPE,
+        list_reg,
+        boxed_abi_type.clone(),
+    )
 }
 
 fn record_to_reg(
