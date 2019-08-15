@@ -212,10 +212,7 @@ impl<T: Boxed> ExternalVector<T> {
     }
 }
 
-enum Repr<'a, T: Boxed>
-where
-    T: 'a,
-{
+enum Repr<'a, T: Boxed> {
     Inline(&'a InlineVector<T>),
     External(&'a ExternalVector<T>),
 }

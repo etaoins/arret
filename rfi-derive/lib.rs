@@ -15,10 +15,10 @@ fn arg_is_task(arg: &syn::PatType) -> bool {
     };
 
     if let syn::Pat::Ident(ref pat_ident) = *arg.pat {
-        return pat_ident.ident == "task";
+        pat_ident.ident == "task"
     } else {
-        return false;
-    };
+        false
+    }
 }
 
 /// Annotates a Rust function to be exported via `arret_runtime::define_rust_module!`

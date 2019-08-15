@@ -116,10 +116,7 @@ where
 }
 
 /// Possible subtypes of [`List`]
-pub enum ListSubtype<'a, T: Boxed>
-where
-    T: 'a,
-{
+pub enum ListSubtype<'a, T: Boxed> {
     /// Non-empty list
     Pair(&'a Pair<T>),
     /// Empty list

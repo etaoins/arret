@@ -354,7 +354,7 @@ fn lower_polymorphic_poly(
     if let ty::Ref::Fixed(Ty::Fun(fun)) = inner_poly {
         Ok(Ty::Fun(Box::new(fun.with_polymorphic_vars(pvars, tvars))).into())
     } else {
-        return Err(Error::new(span, ErrorKind::NonFunPolyTy));
+        Err(Error::new(span, ErrorKind::NonFunPolyTy))
     }
 }
 
