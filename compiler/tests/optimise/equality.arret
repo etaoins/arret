@@ -5,6 +5,7 @@
   [(f)
     (do
       (assert-fn-doesnt-contain-op! :call f)
+      (assert-fn-doesnt-contain-op! :cond f)
       (assert-fn-doesnt-contain-op! :const-box f)
       (assert-fn-doesnt-contain-op! :alloc-boxed f))]))
 
@@ -16,6 +17,10 @@
   ; Ints can be directly compared
   (assert-native-compare-fn! (fn ([left Int] [right Int]) -> Bool
     (= left right)))
+
+  ; This should optimise similarly
+  (assert-native-compare-fn! (fn ([left Int] [right Int]) -> Bool
+    (not= left right)))
 
   ; Floats can be directly compared
   (assert-native-compare-fn! (fn ([left Float] [right Float]) -> Bool

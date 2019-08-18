@@ -1122,6 +1122,8 @@ impl EvalHirCtx {
         test_value: &Value,
         cond: &hir::Cond<hir::Inferred>,
     ) -> Result<Value> {
+        use arret_runtime::boxed::TypeTag;
+
         use crate::mir::equality::values_statically_equal;
         use crate::mir::value::build_reg::value_to_reg;
         use crate::mir::value::plan_phi::*;
@@ -1138,8 +1140,34 @@ impl EvalHirCtx {
 
         match (built_true.result, built_false.result) {
             (Ok(true_value), Ok(false_value)) => {
+                let possible_true_type_tags = possible_type_tags_for_value(&true_value);
+                let possible_false_type_tags = possible_type_tags_for_value(&false_value);
+
                 if values_statically_equal(self, &true_value, &false_value) == Some(true) {
                     output_value = true_value;
+                    reg_phi = None;
+                } else if possible_true_type_tags == TypeTag::True.into()
+                    && possible_false_type_tags == TypeTag::False.into()
+                {
+                    // Our output value is our test
+                    output_value = test_value.clone();
+                    reg_phi = None;
+                } else if possible_true_type_tags == TypeTag::False.into()
+                    && possible_false_type_tags == TypeTag::True.into()
+                {
+                    // Our output value is the reverse of our test
+                    let const_false_reg = b.push_reg(span, ops::OpKind::ConstBool, false);
+                    let neg_reg = b.push_reg(
+                        span,
+                        ops::OpKind::BoolEqual,
+                        ops::BinaryOp {
+                            lhs_reg: test_reg.into(),
+                            rhs_reg: const_false_reg.into(),
+                        },
+                    );
+
+                    let reg_value = value::RegValue::new(neg_reg, abitype::ABIType::Bool);
+                    output_value = reg_value.into();
                     reg_phi = None;
                 } else {
                     let phi_abi_type = plan_phi_abi_type(&true_value, &false_value);
@@ -1152,8 +1180,7 @@ impl EvalHirCtx {
 
                     let output_reg = b.alloc_local();
 
-                    let possible_type_tags = possible_type_tags_for_value(&true_value)
-                        | possible_type_tags_for_value(&false_value);
+                    let possible_type_tags = possible_true_type_tags | possible_false_type_tags;
 
                     let true_record_cons = known_record_cons_for_value(self, &true_value);
                     let false_record_cons = known_record_cons_for_value(self, &false_value);
