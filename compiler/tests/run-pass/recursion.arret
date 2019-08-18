@@ -26,6 +26,12 @@
   ; This is forcing `(recursive-every?)` to have the same polymorphic purity as the outer function
   (recursive-every? pred lst))
 
+; This makes sure `(recur)` works properly capturing an outer variable
+(defn return-infinite-print ([output Str]) -> (->! ())
+  (fn () ->! ()
+    (println! output)
+    (recur)))
+
 (defn main! () ->! ()
   (assert-eq! '() ((black-box! recursive-reverse) '()))
   (assert-eq! '(()) ((black-box! recursive-reverse) (black-box! '(()))))
@@ -48,6 +54,9 @@
   (assert-eq! false (recursive-every? int? (black-box! '(1 2.0 3))))
 
   (assert-eq! true (wrapped-recursive-every? (fn (_) true) '(1 2 3)))
+
+  ; Just building this function would previously crash
+  (assert-eq! true (fn? (black-box! return-infinite-print)))
 
   ; We should select an ABI for `even-length?` which doesn't require allocaton
   (let [black-box-list (black-box! '(1 2 3 4 5))

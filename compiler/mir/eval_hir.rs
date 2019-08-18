@@ -1438,14 +1438,18 @@ impl EvalHirCtx {
 
         // Start by loading the closure
         let mut local_values: HashMap<hir::VarId, Value> = HashMap::new();
+        let mut recur_closure = arret_fun.closure().clone();
 
         closure::load_from_closure_param(
             &mut b,
             span,
             &mut local_values,
-            arret_fun.closure(),
+            &mut recur_closure,
             closure_reg,
         );
+
+        // Our closure has been updated with its new reg IDs
+        let recur_arret_fun = arret_fun.with_closure(recur_closure);
 
         // Try to refine our polymorphic type variables based on our requested op ABI
         let mut stx = ty::select::SelectCtx::new(&fun_expr.pvars, &fun_expr.tvars);
@@ -1474,7 +1478,7 @@ impl EvalHirCtx {
             ),
             local_values,
             recur_self: Some(Box::new(RecurSelf {
-                arret_fun,
+                arret_fun: &recur_arret_fun,
                 tail_call_ctx,
             })),
 

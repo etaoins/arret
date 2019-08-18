@@ -176,7 +176,7 @@ pub fn load_from_closure_param(
     b: &mut Builder,
     span: Span,
     local_values: &mut HashMap<hir::VarId, Value>,
-    closure: &Closure,
+    closure: &mut Closure,
     closure_reg: Option<BuiltReg>,
 ) {
     use crate::mir::value;
@@ -195,18 +195,19 @@ pub fn load_from_closure_param(
         Repr::SingleBox => {
             let var_id = &closure.free_values[0].0;
             let closure_reg = closure_reg.unwrap();
+            let new_value: Value =
+                value::RegValue::new(closure_reg, abitype::BoxedABIType::Any.into()).into();
 
-            local_values.insert(
-                *var_id,
-                value::RegValue::new(closure_reg, abitype::BoxedABIType::Any.into()).into(),
-            );
+            local_values.insert(*var_id, new_value.clone());
+            closure.free_values[0].1 = new_value;
         }
         Repr::RecordStruct(record_struct) => {
             use crate::mir::ops::*;
 
             let record_reg: RegId = closure_reg.unwrap().into();
 
-            for (field_index, (var_id, _)) in closure.free_values.iter().enumerate() {
+            for (field_index, (var_id, closure_value)) in closure.free_values.iter_mut().enumerate()
+            {
                 let field_reg = b.push_reg(
                     span,
                     OpKind::LoadBoxedRecordField,
@@ -219,10 +220,10 @@ pub fn load_from_closure_param(
 
                 let field_abi_type = record_struct.field_abi_types[field_index].clone();
 
-                local_values.insert(
-                    *var_id,
-                    value::RegValue::new(field_reg, field_abi_type).into(),
-                );
+                let new_value: Value = value::RegValue::new(field_reg, field_abi_type).into();
+
+                local_values.insert(*var_id, new_value.clone());
+                *closure_value = new_value;
             }
         }
     }

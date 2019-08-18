@@ -65,6 +65,13 @@ impl ArretFun {
         &self.consts.fun_expr
     }
 
+    pub fn with_closure(&self, closure: Closure) -> ArretFun {
+        ArretFun {
+            consts: self.consts.clone(),
+            closure,
+        }
+    }
+
     /// Indicates if this `ArretFun` is used in multiple places
     ///
     /// This is a heuristic; if a `Fun` is bound to a variable this will return true regardless
