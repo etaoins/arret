@@ -974,7 +974,10 @@ impl EvalHirCtx {
             &arret_fun.fun_expr().ret_ty,
         );
 
-        let can_const_eval = b.is_none() || (recur_purity == Purity::Pure);
+        // If we're impure or we have dynamic closure values we need to be evaluated at runtime
+        let can_const_eval = b.is_none()
+            || (recur_purity == Purity::Pure && arret_fun.closure().free_values.is_empty());
+
         if can_const_eval {
             use crate::mir::value::to_const::value_to_const;
 
