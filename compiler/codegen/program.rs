@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
-use std::{fs, path, process, ptr};
+use std::{env, fs, io, path, process, ptr};
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
@@ -56,6 +56,10 @@ impl<'target> Options<'target> {
             output_type,
             ..self
         }
+    }
+
+    pub fn output_type(&self) -> OutputType {
+        self.output_type
     }
 }
 
@@ -197,6 +201,10 @@ pub fn gen_program(
     debug_source_loader: Option<&SourceLoader>,
 ) {
     use crate::codegen::target_machine::create_target_machine;
+
+    if env::var_os("ARRET_DUMP_MIR").is_some() {
+        mir::print_program(&mut io::stdout().lock(), program, debug_source_loader).unwrap();
+    }
 
     let Options {
         target_triple,

@@ -112,6 +112,11 @@ macro_rules! new_counting_id_type {
             pub fn new(value: u32) -> $id_name {
                 $id_name(value)
             }
+
+            #[allow(unused)]
+            pub fn to_u32(&self) -> u32 {
+                self.0
+            }
         }
     };
 }

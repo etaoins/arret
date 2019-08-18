@@ -68,7 +68,16 @@ fn main() {
                     Arg::with_name("OUTPUT")
                         .short("o")
                         .value_name("FILE")
-                        .help("Output filename"),
+                        .help("Output filename")
+                        .long_help(
+                            "Output filename.\n\
+                             Four special extensions are recognised to output intermediate formats:\n\
+                             \n\
+                             `.mir` will output a text representation of Arret's internal middle IR\n\
+                             `.ll` will output LLVM IR\n\
+                             `.s` will output assembler for the target architecture\n\
+                             `.o` will output an unlinked object file"
+                        ),
                 )
                 .arg(
                     Arg::with_name("DEBUG")

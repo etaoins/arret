@@ -116,6 +116,26 @@ impl ConvertableABIType for abitype::RetABIType {
     }
 }
 
+impl ConvertableABIType for abitype::ParamABIType {
+    fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M> {
+        self.abi_type.to_ty_ref()
+    }
+
+    fn to_rust_str(&self) -> String {
+        use arret_runtime::abitype::ABIType;
+        use arret_runtime::abitype::ParamCapture;
+
+        match &self.abi_type {
+            ABIType::Boxed(boxed) => match self.capture {
+                ParamCapture::Auto => format!("Gc<{}>", boxed.to_rust_str()),
+                ParamCapture::Never => format!("NoCapture<{}>", boxed.to_rust_str()),
+                ParamCapture::Always => format!("Capture<{}>", boxed.to_rust_str()),
+            },
+            other => other.to_rust_str(),
+        }
+    }
+}
+
 impl ConvertableABIType for callback::EntryPointABIType {
     fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M> {
         // TODO: How do we deal with rest params?
@@ -216,5 +236,21 @@ mod test {
         .into();
 
         assert_eq!(arret_poly, entry_point_abi_type.to_ty_ref());
+    }
+
+    #[test]
+    fn captured_int_abi_type() {
+        use arret_runtime::abitype::{EncodeBoxedABIType, ParamABIType};
+        use arret_runtime::boxed;
+
+        let param_abi_type = ParamABIType {
+            abi_type: <boxed::Int as EncodeBoxedABIType>::BOXED_ABI_TYPE.into(),
+            capture: abitype::ParamCapture::Always,
+        };
+
+        assert_eq!("Capture<boxed::Int>", param_abi_type.to_rust_str());
+
+        let int_poly: ty::Ref<ty::Poly> = Ty::Int.into();
+        assert_eq!(int_poly, param_abi_type.to_ty_ref());
     }
 }

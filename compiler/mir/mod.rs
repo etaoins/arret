@@ -11,6 +11,7 @@ mod intrinsic;
 pub mod ops;
 mod optimise;
 mod polymorph;
+pub mod printer;
 mod record_field;
 mod ret_value;
 mod rust_fun;
@@ -19,8 +20,9 @@ mod tagset;
 mod typred;
 mod value;
 
-pub use crate::mir::eval_hir::BuiltProgram;
-pub use crate::mir::value::Value;
+pub use eval_hir::BuiltProgram;
+pub use printer::print_program;
+pub use value::Value;
 
 use crate::hir;
 type Expr = hir::Expr<hir::Inferred>;

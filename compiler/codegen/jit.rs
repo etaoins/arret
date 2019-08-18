@@ -1,19 +1,20 @@
 use std::collections::HashMap;
-use std::{alloc, ffi, ptr};
-
-use arret_runtime::boxed;
-use arret_runtime::class_map::ClassMap;
-use arret_runtime::intern::Interner;
+use std::{alloc, env, ffi, io, ptr};
 
 use llvm_sys::core::*;
 use llvm_sys::execution_engine::*;
 use llvm_sys::orc::*;
 use llvm_sys::target_machine::*;
 
+use arret_runtime::boxed;
+use arret_runtime::class_map::ClassMap;
+use arret_runtime::intern::Interner;
+
 use crate::codegen::analysis::AnalysedMod;
 use crate::codegen::mod_gen::{gen_mod, GeneratedMod};
 use crate::codegen::target_gen::TargetCtx;
 use crate::mir::ops;
+use crate::mir::printer::print_fun;
 
 extern "C" fn orc_sym_resolve(name_ptr: *const libc::c_char, jcx_void: *mut libc::c_void) -> u64 {
     unsafe {
@@ -92,6 +93,10 @@ impl JITCtx {
         interner: &mut Interner,
         fun: &ops::Fun,
     ) -> u64 {
+        if env::var_os("ARRET_DUMP_MIR").is_some() {
+            print_fun(&mut io::stdout().lock(), private_funs, fun, None).unwrap();
+        }
+
         let tcx = &mut self.tcx;
 
         self.module_counter += 1;

@@ -14,6 +14,7 @@ mod record_struct;
 pub(crate) mod target_gen;
 mod target_machine;
 
+use crate::mir::ops::OpsABI;
 use arret_runtime::abitype;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -32,6 +33,20 @@ impl GenABI {
                 abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
             ]),
             ret: abitype::BoxedABIType::Any.into(),
+        }
+    }
+}
+
+impl<'a> From<&'a OpsABI> for GenABI {
+    fn from(ops_abi: &'a OpsABI) -> GenABI {
+        GenABI {
+            takes_task: true,
+            params: ops_abi
+                .params
+                .iter()
+                .map(|abi_type| abi_type.clone().into())
+                .collect(),
+            ret: ops_abi.ret.clone(),
         }
     }
 }

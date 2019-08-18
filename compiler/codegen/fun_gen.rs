@@ -49,17 +49,7 @@ pub(crate) fn declare_fun(
     llvm_module: LLVMModuleRef,
     fun: &ops::Fun,
 ) -> LLVMValueRef {
-    let gen_abi = GenABI {
-        takes_task: true,
-        params: fun
-            .abi
-            .params
-            .iter()
-            .map(|abi_type| abi_type.clone().into())
-            .collect(),
-        ret: fun.abi.ret.clone(),
-    };
-
+    let gen_abi: GenABI = (&fun.abi).into();
     let function_type = tcx.fun_abi_to_llvm_type(&gen_abi);
 
     let fun_symbol = fun
