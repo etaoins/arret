@@ -115,6 +115,36 @@ fn box_record_op_to_string(
     )
 }
 
+fn comparison_to_str(comparison: ops::Comparison) -> &'static str {
+    match comparison {
+        ops::Comparison::Lt => "<",
+        ops::Comparison::Le => "<=",
+        ops::Comparison::Eq => "==",
+        ops::Comparison::Gt => ">",
+        ops::Comparison::Ge => ">=",
+    }
+}
+
+fn print_cond_branch(
+    w: &mut dyn Write,
+    private_funs: &HashMap<ops::PrivateFunId, ops::Fun>,
+    ident_level: usize,
+    ops: &[ops::Op],
+    result_reg: Option<ops::RegId>,
+) -> Result<()> {
+    let ident_level = ident_level + 1;
+    print_branch(w, private_funs, ident_level, ops)?;
+
+    if let Some(result_reg) = result_reg {
+        for _ in 0..ident_level {
+            write!(w, "  ")?;
+        }
+        writeln!(w, "%{}", result_reg.to_usize())?;
+    }
+
+    Ok(())
+}
+
 fn print_branch(
     w: &mut dyn Write,
     private_funs: &HashMap<ops::PrivateFunId, ops::Fun>,
@@ -132,6 +162,9 @@ fn print_branch(
             }
             ops::OpKind::ConstInt64(reg, value) => {
                 writeln!(w, "%{} = const {}: i64;", reg.to_usize(), value)?
+            }
+            ops::OpKind::ConstTypeTag(reg, type_tag) => {
+                writeln!(w, "%{} = const TypeTag::{:?};", reg.to_usize(), type_tag)?
             }
             ops::OpKind::CastBoxed(reg, ops::CastBoxedOp { from_reg, to_type }) => writeln!(
                 w,
@@ -195,6 +228,22 @@ fn print_branch(
                     box_record_op_to_string(box_record_op)
                 )?;
             }
+            ops::OpKind::ConstBoxedSym(reg, name) => {
+                writeln!(
+                    w,
+                    "%{} = const boxed::Sym {{ name: {:?} }};",
+                    reg.to_usize(),
+                    name
+                )?;
+            }
+            ops::OpKind::ConstBoxedStr(reg, name) => {
+                writeln!(
+                    w,
+                    "%{} = const boxed::Str {{ value: {:?} }};",
+                    reg.to_usize(),
+                    name
+                )?;
+            }
             ops::OpKind::LoadBoxedRecordField(
                 reg,
                 ops::LoadBoxedRecordFieldOp {
@@ -213,10 +262,31 @@ fn print_branch(
                     record_struct.field_abi_types[*field_index].to_rust_str()
                 )?;
             }
+            ops::OpKind::LoadBoxedTypeTag(
+                reg,
+                ops::LoadBoxedTypeTagOp {
+                    subject_reg,
+                    possible_type_tags,
+                },
+            ) => {
+                let type_tags_string = possible_type_tags
+                    .into_iter()
+                    .map(|type_tag| format!("{:?}", type_tag))
+                    .collect::<Vec<String>>()
+                    .join(", ");
+
+                writeln!(
+                    w,
+                    "%{} = <%{} as boxed::Any>.type_tag in [{}];",
+                    reg.to_usize(),
+                    subject_reg.to_usize(),
+                    type_tags_string
+                )?;
+            }
             ops::OpKind::LoadBoxedPairHead(reg, pair_reg) => {
                 writeln!(
                     w,
-                    "%{} = <%{} as boxed::Pair>.head();",
+                    "%{} = <%{} as boxed::Pair>.head;",
                     reg.to_usize(),
                     pair_reg.to_usize()
                 )?;
@@ -224,9 +294,60 @@ fn print_branch(
             ops::OpKind::LoadBoxedPairRest(reg, pair_reg) => {
                 writeln!(
                     w,
-                    "%{} = <%{} as boxed::Pair>.rest();",
+                    "%{} = <%{} as boxed::Pair>.rest;",
                     reg.to_usize(),
                     pair_reg.to_usize()
+                )?;
+            }
+            ops::OpKind::LoadBoxedSymInterned(reg, sym_reg) => {
+                writeln!(
+                    w,
+                    "%{} = <%{} as boxed::Sym>.interned;",
+                    reg.to_usize(),
+                    sym_reg.to_usize()
+                )?;
+            }
+            ops::OpKind::IntCompare(
+                reg,
+                ops::CompareOp {
+                    lhs_reg,
+                    rhs_reg,
+                    comparison,
+                },
+            ) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: i64) {} (%{}: i64)",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    comparison_to_str(*comparison),
+                    rhs_reg.to_usize(),
+                )?;
+            }
+            ops::OpKind::FloatCompare(
+                reg,
+                ops::CompareOp {
+                    lhs_reg,
+                    rhs_reg,
+                    comparison,
+                },
+            ) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: f64) {} (%{}: f64)",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    comparison_to_str(*comparison),
+                    rhs_reg.to_usize(),
+                )?;
+            }
+            ops::OpKind::TypeTagEqual(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: TypeTag) == (%{}: TypeTag);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
                 )?;
             }
             ops::OpKind::Call(
@@ -273,6 +394,44 @@ fn print_branch(
                     .collect::<String>();
 
                 writeln!(w, "%{} = {} recur({});", reg.to_usize(), purity, args,)?;
+            }
+            ops::OpKind::Cond(cond_op) => {
+                if let Some(reg_phi) = &cond_op.reg_phi {
+                    write!(w, "%{} = ", reg_phi.output_reg.to_usize())?;
+                }
+                writeln!(w, "if %{} {{", cond_op.test_reg.to_usize())?;
+
+                print_cond_branch(
+                    w,
+                    private_funs,
+                    ident_level,
+                    &cond_op.true_ops,
+                    cond_op.reg_phi.as_ref().map(|rp| rp.true_result_reg),
+                )?;
+
+                if !cond_op.false_ops.is_empty() {
+                    for _ in 0..ident_level {
+                        write!(w, "  ")?;
+                    }
+                    writeln!(w, "}} else {{")?;
+
+                    print_cond_branch(
+                        w,
+                        private_funs,
+                        ident_level,
+                        &cond_op.false_ops,
+                        cond_op.reg_phi.as_ref().map(|rp| rp.false_result_reg),
+                    )?;
+                }
+
+                for _ in 0..ident_level {
+                    write!(w, "  ")?;
+                }
+                if cond_op.reg_phi.is_some() {
+                    writeln!(w, "}};")?;
+                } else {
+                    writeln!(w, "}}")?;
+                }
             }
             ops::OpKind::Ret(reg) => {
                 writeln!(w, "return %{};", reg.to_usize())?;
