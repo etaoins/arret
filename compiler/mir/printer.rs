@@ -90,6 +90,31 @@ fn box_fun_thunk_op_to_string(
     )
 }
 
+fn box_record_op_to_string(
+    ops::BoxRecordOp {
+        record_struct,
+        field_regs,
+    }: &ops::BoxRecordOp,
+) -> String {
+    let field_strings = field_regs
+        .iter()
+        .zip(record_struct.field_abi_types.iter())
+        .map(|(field_reg, field_abi_type)| {
+            format!(
+                "%{}: {}",
+                field_reg.to_usize(),
+                field_abi_type.to_rust_str()
+            )
+        })
+        .collect::<Vec<String>>()
+        .join(", ");
+
+    format!(
+        "record::{} {{ {} }}",
+        record_struct.source_name, field_strings
+    )
+}
+
 fn print_branch(
     w: &mut dyn Write,
     private_funs: &HashMap<ops::PrivateFunId, ops::Fun>,
@@ -152,6 +177,40 @@ fn print_branch(
                     "%{} = alloc {};",
                     reg.to_usize(),
                     box_fun_thunk_op_to_string(private_funs, box_fun_thunk_op)
+                )?;
+            }
+            ops::OpKind::ConstBoxedRecord(reg, box_record_op) => {
+                writeln!(
+                    w,
+                    "%{} = const {};",
+                    reg.to_usize(),
+                    box_record_op_to_string(box_record_op)
+                )?;
+            }
+            ops::OpKind::AllocBoxedRecord(reg, box_record_op) => {
+                writeln!(
+                    w,
+                    "%{} = alloc {};",
+                    reg.to_usize(),
+                    box_record_op_to_string(box_record_op)
+                )?;
+            }
+            ops::OpKind::LoadBoxedRecordField(
+                reg,
+                ops::LoadBoxedRecordFieldOp {
+                    record_reg,
+                    record_struct,
+                    field_index,
+                },
+            ) => {
+                writeln!(
+                    w,
+                    "%{} = <%{} as record::{}>.{}: {};",
+                    reg.to_usize(),
+                    record_reg.to_usize(),
+                    record_struct.source_name,
+                    field_index,
+                    record_struct.field_abi_types[*field_index].to_rust_str()
                 )?;
             }
             ops::OpKind::LoadBoxedPairHead(reg, pair_reg) => {
