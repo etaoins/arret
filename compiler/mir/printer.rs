@@ -161,10 +161,19 @@ fn print_branch(
                 writeln!(w, "%{} = const boxed::NIL_INSTANCE;", reg.to_usize())?;
             }
             ops::OpKind::ConstInt64(reg, value) => {
-                writeln!(w, "%{} = const {}: i64;", reg.to_usize(), value)?
+                writeln!(w, "%{} = const {}i64;", reg.to_usize(), value)?
+            }
+            ops::OpKind::ConstFloat(reg, value) => {
+                writeln!(w, "%{} = const {}f64;", reg.to_usize(), value)?
             }
             ops::OpKind::ConstTypeTag(reg, type_tag) => {
                 writeln!(w, "%{} = const TypeTag::{:?};", reg.to_usize(), type_tag)?
+            }
+            ops::OpKind::ConstBoxedTrue(reg, ()) => {
+                writeln!(w, "%{} = const boxed::TRUE_INSTANCE;", reg.to_usize(),)?
+            }
+            ops::OpKind::ConstBoxedFalse(reg, ()) => {
+                writeln!(w, "%{} = const boxed::FALSE_INSTANCE;", reg.to_usize())?
             }
             ops::OpKind::CastBoxed(reg, ops::CastBoxedOp { from_reg, to_type }) => writeln!(
                 w,
@@ -180,6 +189,12 @@ fn print_branch(
                 from_reg.to_usize(),
                 to_type.to_rust_str()
             )?,
+            ops::OpKind::Int64ToFloat(reg, from_reg) => writeln!(
+                w,
+                "%{} = (%{}: i64) as f64;",
+                reg.to_usize(),
+                from_reg.to_usize(),
+            )?,
             ops::OpKind::ConstBoxedPair(reg, box_pair_op) => {
                 writeln!(
                     w,
@@ -194,6 +209,38 @@ fn print_branch(
                     "%{} = alloc {};",
                     reg.to_usize(),
                     box_pair_op_to_string(box_pair_op)
+                )?;
+            }
+            ops::OpKind::ConstBoxedInt(reg, value) => {
+                writeln!(
+                    w,
+                    "%{} = const boxed::Int {{ value: {}i64 }};",
+                    reg.to_usize(),
+                    value
+                )?;
+            }
+            ops::OpKind::AllocBoxedInt(reg, value_reg) => {
+                writeln!(
+                    w,
+                    "%{} = alloc boxed::Int {{ value: %{}i64 }};",
+                    reg.to_usize(),
+                    value_reg.to_usize()
+                )?;
+            }
+            ops::OpKind::ConstBoxedFloat(reg, value) => {
+                writeln!(
+                    w,
+                    "%{} = const boxed::Float {{ value: {}f64 }};",
+                    reg.to_usize(),
+                    value
+                )?;
+            }
+            ops::OpKind::AllocBoxedFloat(reg, value_reg) => {
+                writeln!(
+                    w,
+                    "%{} = alloc boxed::Float {{ value: %{}f64 }};",
+                    reg.to_usize(),
+                    value_reg.to_usize()
                 )?;
             }
             ops::OpKind::ConstBoxedFunThunk(reg, box_fun_thunk_op) => {
@@ -307,6 +354,30 @@ fn print_branch(
                     sym_reg.to_usize()
                 )?;
             }
+            ops::OpKind::LoadBoxedIntValue(reg, int_reg) => {
+                writeln!(
+                    w,
+                    "%{} = <%{} as boxed::Int>.value;",
+                    reg.to_usize(),
+                    int_reg.to_usize()
+                )?;
+            }
+            ops::OpKind::LoadBoxedFloatValue(reg, float_reg) => {
+                writeln!(
+                    w,
+                    "%{} = <%{} as boxed::Float>.value;",
+                    reg.to_usize(),
+                    float_reg.to_usize()
+                )?;
+            }
+            ops::OpKind::LoadBoxedFunThunkClosure(reg, fun_thunk_reg) => {
+                writeln!(
+                    w,
+                    "%{} = <%{} as boxed::FunThunk>.closure;",
+                    reg.to_usize(),
+                    fun_thunk_reg.to_usize()
+                )?;
+            }
             ops::OpKind::IntCompare(
                 reg,
                 ops::CompareOp {
@@ -317,7 +388,7 @@ fn print_branch(
             ) => {
                 writeln!(
                     w,
-                    "%{} = (%{}: i64) {} (%{}: i64)",
+                    "%{} = (%{}: i64) {} (%{}: i64);",
                     reg.to_usize(),
                     lhs_reg.to_usize(),
                     comparison_to_str(*comparison),
@@ -334,10 +405,82 @@ fn print_branch(
             ) => {
                 writeln!(
                     w,
-                    "%{} = (%{}: f64) {} (%{}: f64)",
+                    "%{} = (%{}: f64) {} (%{}: f64);",
                     reg.to_usize(),
                     lhs_reg.to_usize(),
                     comparison_to_str(*comparison),
+                    rhs_reg.to_usize(),
+                )?;
+            }
+            ops::OpKind::FloatAdd(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: f64) + (%{}: f64);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
+                )?;
+            }
+            ops::OpKind::FloatSub(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: f64) - (%{}: f64);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
+                )?;
+            }
+            ops::OpKind::FloatMul(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: f64) * (%{}: f64);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
+                )?;
+            }
+            ops::OpKind::FloatDiv(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: f64) / (%{}: f64);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
+                )?;
+            }
+            ops::OpKind::Int64CheckedAdd(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = checked (%{}: i64) + (%{}: i64);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
+                )?;
+            }
+            ops::OpKind::Int64CheckedSub(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = checked (%{}: i64) - (%{}: i64);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
+                )?;
+            }
+            ops::OpKind::Int64CheckedMul(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = checked (%{}: i64) * (%{}: i64);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
+                )?;
+            }
+            ops::OpKind::Int64CheckedDiv(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = checked (%{}: i64) / (%{}: i64);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
                     rhs_reg.to_usize(),
                 )?;
             }
@@ -438,6 +581,9 @@ fn print_branch(
             }
             ops::OpKind::RetVoid => {
                 writeln!(w, "return;")?;
+            }
+            ops::OpKind::Unreachable => {
+                writeln!(w, "unreachable;")?;
             }
             _ => writeln!(w, "{:?}", op.kind)?,
         }
