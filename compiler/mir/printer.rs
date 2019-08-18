@@ -169,8 +169,11 @@ fn print_branch(
             ops::OpKind::ConstTypeTag(reg, type_tag) => {
                 writeln!(w, "%{} = const TypeTag::{:?};", reg.to_usize(), type_tag)?
             }
+            ops::OpKind::ConstBool(reg, value) => {
+                writeln!(w, "%{} = const {};", reg.to_usize(), value)?
+            }
             ops::OpKind::ConstBoxedTrue(reg, ()) => {
-                writeln!(w, "%{} = const boxed::TRUE_INSTANCE;", reg.to_usize(),)?
+                writeln!(w, "%{} = const boxed::TRUE_INSTANCE;", reg.to_usize())?
             }
             ops::OpKind::ConstBoxedFalse(reg, ()) => {
                 writeln!(w, "%{} = const boxed::FALSE_INSTANCE;", reg.to_usize())?
@@ -189,6 +192,9 @@ fn print_branch(
                 from_reg.to_usize(),
                 to_type.to_rust_str()
             )?,
+            ops::OpKind::Alias(reg, from_reg) => {
+                writeln!(w, "%{} = %{};", reg.to_usize(), from_reg.to_usize(),)?
+            }
             ops::OpKind::Int64ToFloat(reg, from_reg) => writeln!(
                 w,
                 "%{} = (%{}: i64) as f64;",
@@ -257,6 +263,21 @@ fn print_branch(
                     "%{} = alloc {};",
                     reg.to_usize(),
                     box_fun_thunk_op_to_string(private_funs, box_fun_thunk_op)
+                )?;
+            }
+            ops::OpKind::MakeCallback(
+                reg,
+                ops::MakeCallbackOp {
+                    closure_reg,
+                    callee,
+                },
+            ) => {
+                writeln!(
+                    w,
+                    "%{} = callback::Callback {{ closure: %{}, entry_point: {} }};",
+                    reg.to_usize(),
+                    closure_reg.to_usize(),
+                    callee_to_string(private_funs, callee)
                 )?;
             }
             ops::OpKind::ConstBoxedRecord(reg, box_record_op) => {
@@ -484,10 +505,28 @@ fn print_branch(
                     rhs_reg.to_usize(),
                 )?;
             }
+            ops::OpKind::Int64CheckedRem(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = checked (%{}: i64) % (%{}: i64);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
+                )?;
+            }
             ops::OpKind::TypeTagEqual(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
                 writeln!(
                     w,
                     "%{} = (%{}: TypeTag) == (%{}: TypeTag);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
+                )?;
+            }
+            ops::OpKind::BoolEqual(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: bool) == (%{}: bool);",
                     reg.to_usize(),
                     lhs_reg.to_usize(),
                     rhs_reg.to_usize(),
