@@ -178,6 +178,12 @@ fn print_branch(
             ops::OpKind::ConstBoxedFalse(reg, ()) => {
                 writeln!(w, "%{} = const boxed::FALSE_INSTANCE;", reg.to_usize())?
             }
+            ops::OpKind::ConstRecordClassId(reg, record_class_id) => writeln!(
+                w,
+                "%{} = const record::{}::CLASS_ID;",
+                reg.to_usize(),
+                record_class_id.source_name
+            )?,
             ops::OpKind::CastBoxed(reg, ops::CastBoxedOp { from_reg, to_type }) => writeln!(
                 w,
                 "%{} = %{} as {};",
@@ -399,6 +405,14 @@ fn print_branch(
                     fun_thunk_reg.to_usize()
                 )?;
             }
+            ops::OpKind::LoadBoxedRecordClassId(reg, record_reg) => {
+                writeln!(
+                    w,
+                    "%{} = <%{} as boxed::Record>.class_id;",
+                    reg.to_usize(),
+                    record_reg.to_usize()
+                )?;
+            }
             ops::OpKind::IntCompare(
                 reg,
                 ops::CompareOp {
@@ -523,10 +537,28 @@ fn print_branch(
                     rhs_reg.to_usize(),
                 )?;
             }
+            ops::OpKind::BoxIdentical(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = &(%{}: boxed::Any) == &(%{}: boxed::Any);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
+                )?;
+            }
             ops::OpKind::BoolEqual(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
                 writeln!(
                     w,
                     "%{} = (%{}: bool) == (%{}: bool);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
+                )?;
+            }
+            ops::OpKind::RecordClassIdEqual(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: boxed::RecordClassId) == (%{}: boxed::RecordClassId);",
                     reg.to_usize(),
                     lhs_reg.to_usize(),
                     rhs_reg.to_usize(),
