@@ -2091,34 +2091,6 @@ mod test {
     }
 
     #[test]
-    fn recursive_var_app() {
-        assert_type_for_expr(
-            "'foo",
-            "(let [[self-fn (-> 'foo)] (fn () (self-fn))] (self-fn))",
-        );
-
-        assert_type_for_expr(
-            "'foo",
-            "(let [self-fn (fn ([x Int]) -> 'foo (self-fn x))] (self-fn 1))",
-        );
-
-        let j = "(let [self-fn (fn () (self-fn))] (self-fn))";
-        let t = "                      ^^^^^^^              ";
-        let err = Error::new(t2s(t), ErrorKind::RecursiveType);
-        assert_type_error(&err, j);
-
-        let j = "(let [self-fn (fn (x) -> 'foo (self-fn x))] (self-fn 1))";
-        let t = "                               ^^^^^^^                  ";
-        let err = Error::new(t2s(t), ErrorKind::RecursiveType);
-        assert_type_error(&err, j);
-
-        let j = "(let [self-fn (fn ([x Int]) (self-fn x))] (self-fn 1))";
-        let t = "                             ^^^^^^^                  ";
-        let err = Error::new(t2s(t), ErrorKind::RecursiveType);
-        assert_type_error(&err, j);
-    }
-
-    #[test]
     fn recur_expr() {
         assert_type_for_expr("'foo", "((fn ([x Int]) -> 'foo (recur x)) 1)");
 

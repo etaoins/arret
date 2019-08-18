@@ -345,8 +345,8 @@ fn lower_let(scope: &Scope<'_>, span: Span, arg_iter: NsDataIter) -> Result<Expr
         span,
         arg_iter,
         |scope, target_datum, value_datum| {
-            let destruc = lower_destruc(scope, target_datum)?;
             let value_expr = lower_expr(scope, value_datum)?;
+            let destruc = lower_destruc(scope, target_datum)?;
             Ok((destruc, value_expr))
         },
         |body_expr, (destruc, value_expr)| {

@@ -14,3 +14,6 @@
 
 (def _ fn)
       ;^^ ERROR cannot take the value of a primitive
+
+(def _ (let [x x]))
+              ;^ ERROR unable to resolve `x`
