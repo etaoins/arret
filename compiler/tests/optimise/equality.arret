@@ -5,7 +5,6 @@
   [(f)
     (do
       (assert-fn-doesnt-contain-op! :call f)
-      (assert-fn-doesnt-contain-op! :cond f)
       (assert-fn-doesnt-contain-op! :const-box f)
       (assert-fn-doesnt-contain-op! :alloc-boxed f))]))
 

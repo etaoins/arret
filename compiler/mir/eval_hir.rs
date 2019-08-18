@@ -1150,23 +1150,8 @@ impl EvalHirCtx {
                     && possible_false_type_tags == TypeTag::False.into()
                 {
                     // Our output value is our test
-                    output_value = test_value.clone();
-                    reg_phi = None;
-                } else if possible_true_type_tags == TypeTag::False.into()
-                    && possible_false_type_tags == TypeTag::True.into()
-                {
-                    // Our output value is the reverse of our test
-                    let const_false_reg = b.push_reg(span, ops::OpKind::ConstBool, false);
-                    let neg_reg = b.push_reg(
-                        span,
-                        ops::OpKind::BoolEqual,
-                        ops::BinaryOp {
-                            lhs_reg: test_reg.into(),
-                            rhs_reg: const_false_reg.into(),
-                        },
-                    );
-
-                    let reg_value = value::RegValue::new(neg_reg, abitype::ABIType::Bool);
+                    // Use the unboxed value because LLVM has trouble reasoning about our boxed bools
+                    let reg_value = value::RegValue::new(test_reg, abitype::ABIType::Bool);
                     output_value = reg_value.into();
                     reg_phi = None;
                 } else {

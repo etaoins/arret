@@ -1,4 +1,5 @@
 use arret_runtime::abitype;
+use arret_runtime::boxed;
 
 use crate::mir::value::Value;
 
@@ -21,12 +22,22 @@ pub fn plan_phi_abi_type(lhs: &Value, rhs: &Value) -> abitype::ABIType {
             //
             // If both values are boxed then create an boxed phi. This prevents us from "wasting"
             // a box from prematurely unboxing it and then having to allocate to re-box it later.
-            let both_boxed = [lhs, rhs].iter().all(|value| {
+            let both_boxed_non_bools = [lhs, rhs].iter().all(|value| {
                 match value {
-                    Value::Const(_) => {
-                        // `Const`s can be either boxed or unboxed
-                        // This effectively means "whatever the other value wants"
-                        true
+                    Value::Const(any_ref) => {
+                        match any_ref.as_subtype() {
+                            boxed::AnySubtype::True(_) | boxed::AnySubtype::False(_) => {
+                                // LLVM has trouble following bool values through boxing and
+                                // unboxing. Also, boxing bools is relatively cheap because we just
+                                // need to return a pointer to the correct singleton value.
+                                false
+                            }
+                            _ => {
+                                // `Const`s can be either boxed or unboxed
+                                // This effectively means "whatever the other value wants"
+                                true
+                            }
+                        }
                     }
                     Value::Reg(reg_value) => {
                         if let abitype::ABIType::Boxed(_) = reg_value.abi_type {
@@ -41,7 +52,7 @@ pub fn plan_phi_abi_type(lhs: &Value, rhs: &Value) -> abitype::ABIType {
 
             let values_iter = iter::once(lhs).chain(iter::once(rhs));
 
-            if both_boxed {
+            if both_boxed_non_bools {
                 specific_boxed_abi_type_for_values(values_iter).into()
             } else {
                 specific_abi_type_for_values(values_iter)
