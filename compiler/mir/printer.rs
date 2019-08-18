@@ -47,7 +47,9 @@ fn callee_to_string(
         ops::Callee::PrivateFun(private_fun_id) => {
             private_fun_to_string(private_funs, *private_fun_id)
         }
-        ops::Callee::BoxedFunThunk(thunk_reg) => format!("%{}", thunk_reg.to_usize()),
+        ops::Callee::BoxedFunThunk(thunk_reg) => {
+            format!("<%{} as boxed::FunThunk>.entry", thunk_reg.to_usize())
+        }
     }
 }
 fn callee_to_gen_abi(
@@ -163,8 +165,19 @@ fn print_branch(
             ops::OpKind::ConstInt64(reg, value) => {
                 writeln!(w, "%{} = const {}i64;", reg.to_usize(), value)?
             }
+            ops::OpKind::ConstChar(reg, value) => {
+                writeln!(w, "%{} = const {:?}", reg.to_usize(), value)?
+            }
             ops::OpKind::ConstFloat(reg, value) => {
                 writeln!(w, "%{} = const {}f64;", reg.to_usize(), value)?
+            }
+            ops::OpKind::ConstInternedSym(reg, name) => {
+                writeln!(
+                    w,
+                    "%{} = const interned::InternedSym {{ name: {:?} }};",
+                    reg.to_usize(),
+                    name
+                )?;
             }
             ops::OpKind::ConstTypeTag(reg, type_tag) => {
                 writeln!(w, "%{} = const TypeTag::{:?};", reg.to_usize(), type_tag)?
@@ -234,7 +247,23 @@ fn print_branch(
             ops::OpKind::AllocBoxedInt(reg, value_reg) => {
                 writeln!(
                     w,
-                    "%{} = alloc boxed::Int {{ value: %{}i64 }};",
+                    "%{} = alloc boxed::Int {{ value: %{} }};",
+                    reg.to_usize(),
+                    value_reg.to_usize()
+                )?;
+            }
+            ops::OpKind::ConstBoxedChar(reg, value) => {
+                writeln!(
+                    w,
+                    "%{} = const boxed::Char {{ value: {:?} }};",
+                    reg.to_usize(),
+                    value
+                )?;
+            }
+            ops::OpKind::AllocBoxedChar(reg, value_reg) => {
+                writeln!(
+                    w,
+                    "%{} = alloc boxed::Char {{ value: %{} }};",
                     reg.to_usize(),
                     value_reg.to_usize()
                 )?;
@@ -250,7 +279,7 @@ fn print_branch(
             ops::OpKind::AllocBoxedFloat(reg, value_reg) => {
                 writeln!(
                     w,
-                    "%{} = alloc boxed::Float {{ value: %{}f64 }};",
+                    "%{} = alloc boxed::Float {{ value: %{} }};",
                     reg.to_usize(),
                     value_reg.to_usize()
                 )?;
@@ -308,6 +337,14 @@ fn print_branch(
                     "%{} = const boxed::Sym {{ name: {:?} }};",
                     reg.to_usize(),
                     name
+                )?;
+            }
+            ops::OpKind::AllocBoxedSym(reg, interned_sym_reg) => {
+                writeln!(
+                    w,
+                    "%{} = alloc boxed::Sym {{ interned: %{} }};",
+                    reg.to_usize(),
+                    interned_sym_reg.to_usize()
                 )?;
             }
             ops::OpKind::ConstBoxedStr(reg, name) => {
@@ -373,6 +410,14 @@ fn print_branch(
                     pair_reg.to_usize()
                 )?;
             }
+            ops::OpKind::LoadBoxedListLength(reg, list_reg) => {
+                writeln!(
+                    w,
+                    "%{} = <%{} as boxed::List>.list_length;",
+                    reg.to_usize(),
+                    list_reg.to_usize()
+                )?;
+            }
             ops::OpKind::LoadBoxedSymInterned(reg, sym_reg) => {
                 writeln!(
                     w,
@@ -393,6 +438,14 @@ fn print_branch(
                 writeln!(
                     w,
                     "%{} = <%{} as boxed::Float>.value;",
+                    reg.to_usize(),
+                    float_reg.to_usize()
+                )?;
+            }
+            ops::OpKind::LoadBoxedCharValue(reg, float_reg) => {
+                writeln!(
+                    w,
+                    "%{} = <%{} as boxed::Char>.value;",
                     reg.to_usize(),
                     float_reg.to_usize()
                 )?;
@@ -483,6 +536,15 @@ fn print_branch(
                     rhs_reg.to_usize(),
                 )?;
             }
+            ops::OpKind::Int64Add(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = unchecked (%{}: i64) + (%{}: i64);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
+                )?;
+            }
             ops::OpKind::Int64CheckedAdd(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
                 writeln!(
                     w,
@@ -550,6 +612,24 @@ fn print_branch(
                 writeln!(
                     w,
                     "%{} = (%{}: bool) == (%{}: bool);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
+                )?;
+            }
+            ops::OpKind::CharEqual(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: char) == (%{}: char);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
+                )?;
+            }
+            ops::OpKind::InternedSymEqual(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: interned::InternedSym) == (%{}: interned::InternedSym);",
                     reg.to_usize(),
                     lhs_reg.to_usize(),
                     rhs_reg.to_usize(),
@@ -656,7 +736,6 @@ fn print_branch(
             ops::OpKind::Unreachable => {
                 writeln!(w, "unreachable;")?;
             }
-            _ => writeln!(w, "{:?}", op.kind)?,
         }
     }
 
