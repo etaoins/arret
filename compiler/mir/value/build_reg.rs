@@ -401,32 +401,42 @@ fn boxed_to_bool(
     b: &mut Builder,
     span: Span,
     from_boxed: &abitype::BoxedABIType,
-    boxed_reg: BuiltReg,
+    reg_value: &value::RegValue,
 ) -> BuiltReg {
     use crate::mir::ops::*;
     use arret_runtime::boxed::TypeTag;
 
-    let boxed_any_reg = b.cast_boxed_cond(span, from_boxed, boxed_reg, abitype::BoxedABIType::Any);
+    let possible_type_tags =
+        reg_value.possible_type_tags & [TypeTag::True, TypeTag::False].iter().collect();
 
-    let boxed_type_tag_reg = b.push_reg(
-        span,
-        OpKind::LoadBoxedTypeTag,
-        LoadBoxedTypeTagOp {
-            subject_reg: boxed_any_reg.into(),
-            possible_type_tags: [TypeTag::True, TypeTag::False].iter().collect(),
-        },
-    );
+    if possible_type_tags == TypeTag::True.into() {
+        b.push_reg(span, OpKind::ConstBool, true)
+    } else if possible_type_tags == TypeTag::False.into() {
+        b.push_reg(span, OpKind::ConstBool, false)
+    } else {
+        let boxed_any_reg =
+            b.cast_boxed_cond(span, from_boxed, reg_value.reg, abitype::BoxedABIType::Any);
 
-    let true_type_tag_reg = b.push_reg(span, OpKind::ConstTypeTag, TypeTag::True);
+        let boxed_type_tag_reg = b.push_reg(
+            span,
+            OpKind::LoadBoxedTypeTag,
+            LoadBoxedTypeTagOp {
+                subject_reg: boxed_any_reg.into(),
+                possible_type_tags,
+            },
+        );
 
-    b.push_reg(
-        span,
-        OpKind::TypeTagEqual,
-        BinaryOp {
-            lhs_reg: boxed_type_tag_reg.into(),
-            rhs_reg: true_type_tag_reg.into(),
-        },
-    )
+        let true_type_tag_reg = b.push_reg(span, OpKind::ConstTypeTag, TypeTag::True);
+
+        b.push_reg(
+            span,
+            OpKind::TypeTagEqual,
+            BinaryOp {
+                lhs_reg: boxed_type_tag_reg.into(),
+                rhs_reg: true_type_tag_reg.into(),
+            },
+        )
+    }
 }
 
 fn reg_to_reg(
@@ -458,7 +468,7 @@ fn reg_to_reg(
             b.push_reg(span, OpKind::LoadBoxedCharValue, boxed_char_reg.into())
         }
         (abitype::ABIType::Boxed(from_boxed), abitype::ABIType::Bool) => {
-            boxed_to_bool(b, span, from_boxed, reg_value.reg)
+            boxed_to_bool(b, span, from_boxed, reg_value)
         }
         (abitype::ABIType::Boxed(from_boxed), abitype::ABIType::InternedSym) => {
             let boxed_sym_reg =

@@ -1,6 +1,7 @@
 use arret_runtime::boxed;
 use arret_runtime::boxed::prelude::*;
 use arret_runtime::boxed::refs::Gc;
+use arret_runtime::boxed::TypeTag;
 use arret_runtime::class_map;
 use arret_runtime::intern::InternedSym;
 
@@ -164,6 +165,16 @@ pub fn value_to_const(ehx: &mut EvalHirCtx, value: &Value) -> Option<Gc<boxed::A
         Value::RustFun(ref rust_fun) => {
             Some(ehx.rust_fun_to_jit_boxed(rust_fun.clone()).as_any_ref())
         }
-        Value::Reg(_) => None,
+        Value::Reg(ref reg_value) => {
+            if reg_value.possible_type_tags == TypeTag::Nil.into() {
+                Some(boxed::NIL_INSTANCE.as_any_ref())
+            } else if reg_value.possible_type_tags == TypeTag::True.into() {
+                Some(boxed::TRUE_INSTANCE.as_any_ref())
+            } else if reg_value.possible_type_tags == TypeTag::False.into() {
+                Some(boxed::FALSE_INSTANCE.as_any_ref())
+            } else {
+                None
+            }
+        }
     }
 }
