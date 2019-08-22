@@ -8,7 +8,7 @@
 
 (import [stdlib rust])
 (export length panic panic! print! println! print-str write! writeln! write-str exit! cons map
-        filter some? every? fold concat take drop int float < <= == > >= + * - / rem quot)
+        filter some? every? fold concat take int float < <= == > >= + * - / rem quot)
 
 (export defn)
 (defmacro defn (macro-rules
@@ -189,6 +189,13 @@
     (or
       (= needle (first haystack))
       (recur needle (rest haystack)))))
+
+(export drop)
+(defn drop #{T} ([i Int] [l (List & T)]) -> (List & T)
+  (cond
+    (<= i 0) l
+    (nil? l) l
+    :else (recur (dec i) (rest l))))
 
 (export ->>)
 (defmacro ->> (macro-rules

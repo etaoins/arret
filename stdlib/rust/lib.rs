@@ -58,25 +58,26 @@ pub fn stdlib_exit(exit_code: i64) {
 }
 
 define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
-    "length" => stdlib_length,
     "panic" => stdlib_panic,
     "panic!" => stdlib_panic_impure,
-    "map" => stdlib_map,
-    "filter" => stdlib_filter,
-    "some?" => stdlib_some_p,
-    "every?" => stdlib_every_p,
-    "fold" => stdlib_fold,
+    "exit!" => stdlib_exit,
+
     "print!" => stdlib_print,
     "println!" => stdlib_println,
     "print-str" => stdlib_print_str,
     "write!" => stdlib_write,
     "writeln!" => stdlib_writeln,
     "write-str" => stdlib_write_str,
-    "exit!" => stdlib_exit,
+
+    "length" => stdlib_length,
+    "map" => stdlib_map,
+    "filter" => stdlib_filter,
+    "some?" => stdlib_some_p,
+    "every?" => stdlib_every_p,
+    "fold" => stdlib_fold,
     "cons" => stdlib_cons,
     "concat" => stdlib_concat,
     "take" => stdlib_take,
-    "drop" => stdlib_drop,
 
     "float" => stdlib_float,
     "int" => stdlib_int,
