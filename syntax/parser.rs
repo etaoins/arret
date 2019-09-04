@@ -214,7 +214,7 @@ impl<'input> Parser<'input> {
         };
 
         // Cover the initial #
-        let adj_span = span.with_start(ByteIndex(span.start().0 - 1));
+        let adj_span = Span::new(ByteIndex(span.start().0 - 1), span.end());
         Ok(Datum::Float(adj_span, float_value))
     }
 
@@ -280,7 +280,7 @@ impl<'input> Parser<'input> {
             '#' => self.parse_symbolic_float(),
             _ => {
                 let (span, _) = self.capture_span(|s| s.consume_char(ExpectedContent::Dispatch));
-                let adj_span = span.with_start(ByteIndex(span.start().0 - 1));
+                let adj_span = Span::new(ByteIndex(span.start().0 - 1), span.end());
 
                 Err(Error::new(adj_span, ErrorKind::UnsupportedDispatch))
             }
@@ -349,7 +349,7 @@ impl<'input> Parser<'input> {
         let (outer_span, contents) = self.capture_span(|s| s.parse_seq('}', ExpectedContent::Set));
 
         // Cover the # in our span
-        let adj_span = outer_span.with_start(ByteIndex(outer_span.start().0 - 1));
+        let adj_span = Span::new(ByteIndex(outer_span.start().0 - 1), outer_span.end());
         contents.map(|contents| Datum::Set(adj_span, contents.into()))
     }
 
@@ -360,7 +360,7 @@ impl<'input> Parser<'input> {
             self.capture_span(|s| s.parse_seq(')', ExpectedContent::List));
 
         // Cover the # in our span
-        let adj_span = outer_span.with_start(ByteIndex(outer_span.start().0 - 1));
+        let adj_span = Span::new(ByteIndex(outer_span.start().0 - 1), outer_span.end());
         let body_contents = body_contents?;
 
         convert_anon_fun(adj_span, body_contents.into_iter())
