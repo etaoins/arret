@@ -126,21 +126,50 @@ pub enum ListSubtype<'a, T: Boxed> {
 impl<T: Boxed> List<T> {
     /// Constructs a new fixed sized list containing the passed `elems`
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(
-        heap: &mut impl AsHeap,
-        elems: impl DoubleEndedIterator<Item = Gc<T>>,
-    ) -> Gc<List<T>> {
+    pub fn new(heap: &mut impl AsHeap, elems: impl ExactSizeIterator<Item = Gc<T>>) -> Gc<List<T>> {
         Self::new_with_tail(heap, elems, Self::empty())
     }
 
     /// Constructs a list with a head of `elems` and the specified tail list
     pub fn new_with_tail(
         heap: &mut impl AsHeap,
-        elems: impl DoubleEndedIterator<Item = Gc<T>>,
+        elems: impl ExactSizeIterator<Item = Gc<T>>,
         tail: Gc<List<T>>,
     ) -> Gc<List<T>> {
-        // TODO: This is naive; we could use a single multi-cell allocation instead
-        elems.rfold(tail, |tail, elem| Pair::new(heap, elem, tail).as_list_ref())
+        let elems_len = elems.len();
+        let tail_len = tail.len();
+
+        if elems_len == 0 {
+            return tail;
+        }
+
+        // Allocate the entire list at once
+        let heap_alloc = heap
+            .as_heap_mut()
+            .alloc_cells(Pair::<T>::size().cell_count() * elems_len);
+
+        unsafe {
+            let pair_alloc = heap_alloc as *mut Pair<T>;
+
+            for (i, head) in elems.enumerate() {
+                let elems_remaining = elems_len - i;
+
+                let rest = if elems_remaining == 1 {
+                    tail
+                } else {
+                    (&*pair_alloc.add(i + 1)).as_list_ref()
+                };
+
+                *pair_alloc.add(i) = Pair {
+                    header: Pair::TYPE_TAG.to_heap_header(Pair::<T>::size()),
+                    head,
+                    rest,
+                    list_length: (elems_remaining + tail_len) as i64,
+                };
+            }
+
+            Gc::new(pair_alloc as *const List<T>)
+        }
     }
 
     /// Returns an empty list

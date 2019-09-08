@@ -27,7 +27,6 @@ pub fn stdlib_map(
     >,
     input: Gc<boxed::List<boxed::Any>>,
 ) -> Gc<boxed::List<boxed::Any>> {
-    // TODO: List::new needs a DoubleEndedIterator which List::iter doesn't implement
     let output_vec: Vec<Gc<boxed::Any>> =
         input.iter().map(|elem| mapper.apply(task, elem)).collect();
 
@@ -106,7 +105,5 @@ pub fn stdlib_take(
     input: Gc<boxed::List<boxed::Any>>,
 ) -> Gc<boxed::List<boxed::Any>> {
     let usize_count = if count < 0 { 0 } else { count as usize };
-    let output_vec: Vec<Gc<boxed::Any>> = input.iter().take(usize_count).collect();
-
-    boxed::List::new(task, output_vec.into_iter())
+    boxed::List::new(task, input.iter().take(usize_count))
 }
