@@ -15,12 +15,6 @@
   [(destruc fn-data ...) (def destruc (fn fn-data ...))]
 ))
 
-; emulates `apply` from R7RS and Clojure
-(export apply)
-(defmacro apply (macro-rules
-  [(fun fixed ... rest) (fun fixed ... & rest)]
-))
-
 (export list)
 (defn list #{A} (& [l A]) -> (List & A)
   l)

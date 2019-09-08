@@ -20,11 +20,6 @@
   (assert-eq! false (take-exactly-three  & '(1 2 3)))
   (assert-eq! false (take-exactly-three 1 2 & '(3)))
 
-  ; And the `(apply)` macro
-  (assert-eq! false (apply take-exactly-three 1 2 3 '()))
-  (assert-eq! false (apply take-exactly-three '(1 2 3)))
-  (assert-eq! false (apply take-exactly-three 1 2 '(3)))
-
   ; Make sure we select the return type correctly
   (let [[ret-str Str] (identity "Hello polymorphism!")]
     (assert-eq! "Hello polymorphism!" ret-str))
