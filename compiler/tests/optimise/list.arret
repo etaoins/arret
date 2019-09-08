@@ -4,4 +4,8 @@
 (defn main! () ->! ()
   ; This should just need to load the length from the cell
   (assert-fn-doesnt-contain-op! :call (fn ([l (List & Any)]) -> Int
-    (length l))))
+    (length l)))
+
+  ; We should know this is a constant value
+  (assert-fn-doesnt-contain-op! :mem-load (fn ([l (List & Any)]) -> Int
+    (if (nil? l) (length l) 0))))

@@ -21,6 +21,9 @@ pub fn list_value_length(value: &Value) -> Option<usize> {
         Value::Const(any_ref) => any_ref
             .downcast_ref::<boxed::List<boxed::Any>>()
             .map(|list_ref| list_ref.len()),
+        Value::Reg(reg_value) if reg_value.possible_type_tags == boxed::TypeTag::Nil.into() => {
+            Some(0)
+        }
         _ => None,
     }
 }
