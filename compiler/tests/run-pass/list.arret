@@ -98,6 +98,14 @@
   (assert-eq! '() (drop 3 '(1 2 3)))
   (assert-eq! '() (drop 4 '(1 2 3))))
 
+(defn test-drop-last! () ->! ()
+  (assert-eq! '(1 2 3) (drop-last -1 '(1 2 3)))
+  (assert-eq! '(1 2 3) (drop-last 0 '(1 2 3)))
+  (assert-eq! '(1 2) (drop-last 1 '(1 2 3)))
+  (assert-eq! '(1) (drop-last 2 '(1 2 3)))
+  (assert-eq! '() (drop-last 3 '(1 2 3)))
+  (assert-eq! '() (drop-last 4 '(1 2 3))))
+
 (defn main! () ->! ()
   (test-length!)
   (test-first-second-rest!)
@@ -110,4 +118,5 @@
   (test-member!)
   (test-threading!)
   (test-take!)
-  (test-drop!))
+  (test-drop!)
+  (test-drop-last!))

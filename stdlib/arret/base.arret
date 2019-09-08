@@ -197,6 +197,10 @@
     (nil? l) l
     :else (recur (dec i) (rest l))))
 
+(export drop-last)
+(defn drop-last #{T} ([i Int] [l (List & T)]) -> (List & T)
+  (take (- (length l) i) l))
+
 (export ->>)
 (defmacro ->> (macro-rules
   [(initial) initial]
