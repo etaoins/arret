@@ -123,7 +123,7 @@ pub fn list_to_const(
 
 /// Attempts to convert a MIR value to a constant boxed values
 ///
-/// Regs do not have a constant value at compile type; they will return None
+/// Non-singleton regs do not have a constant value at compile time; they will return None
 pub fn value_to_const(ehx: &mut EvalHirCtx, value: &Value) -> Option<Gc<boxed::Any>> {
     match value {
         Value::Const(boxed) => Some(*boxed),
