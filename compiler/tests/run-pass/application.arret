@@ -17,8 +17,13 @@
 (defn main! () ->! ()
   ; Stress test various ways of passing arguments
   (assert-eq! false (take-exactly-three 1 2 3))
-  (assert-eq! false (take-exactly-three  & '(1 2 3)))
+  (assert-eq! false (take-exactly-three & '(1 2 3)))
   (assert-eq! false (take-exactly-three 1 2 & '(3)))
+
+  ; Make sure we can figure out this is a `(Listof Int)`
+  (let [l (concat & '((1 2 3) (4 5)))]
+    (assert-eq! '(1 2 3 4 5) l)
+    (ann l (List & Int)))
 
   ; Make sure we select the return type correctly
   (let [[ret-str Str] (identity "Hello polymorphism!")]

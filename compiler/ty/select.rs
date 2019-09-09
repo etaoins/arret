@@ -138,6 +138,7 @@ impl<'vars> SelectCtx<'vars> {
 
     fn add_evidence_ty(
         &mut self,
+        target_poly: &ty::Ref<ty::Poly>,
         target_ty: &Ty<ty::Poly>,
         evidence_poly: &ty::Ref<ty::Poly>,
         evidence_ty: &Ty<ty::Poly>,
@@ -195,6 +196,10 @@ impl<'vars> SelectCtx<'vars> {
             (_, Ty::Union(evidence_members)) => {
                 if evidence_members.is_empty() {
                     self.add_evidence_never(target_ty);
+                } else {
+                    for evidence_member in evidence_members.iter() {
+                        self.add_evidence(target_poly, evidence_member);
+                    }
                 }
             }
             _ => {}
@@ -225,7 +230,7 @@ impl<'vars> SelectCtx<'vars> {
             ty::Ref::Var(tvar, _) => self.add_var_evidence(tvar, evidence_poly),
             ty::Ref::Fixed(target_ty) => {
                 let evidence_ty = evidence_poly.resolve_to_ty();
-                self.add_evidence_ty(target_ty, evidence_poly, evidence_ty)
+                self.add_evidence_ty(target_poly, target_ty, evidence_poly, evidence_ty)
             }
         }
     }
@@ -521,6 +526,20 @@ mod test {
             &scope.poly_for_str("(List true false)"),
         );
         assert_selected_type(&stx, &poly_a, &scope.poly_for_str("Bool"));
+    }
+
+    #[test]
+    fn listof_from_list_union() {
+        let scope = TestScope::new("A");
+        let poly_a = scope.poly_for_str("A");
+
+        let mut stx = scope.select_ctx();
+
+        stx.add_evidence(
+            &scope.poly_for_str("(List & A)"),
+            &scope.poly_for_str("(U (List Int Int) (List Int Int Int))"),
+        );
+        assert_selected_type(&stx, &poly_a, &scope.poly_for_str("Int"));
     }
 
     #[test]
