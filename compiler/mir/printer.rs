@@ -736,6 +736,9 @@ fn print_branch(
             ops::OpKind::Unreachable => {
                 writeln!(w, "unreachable;")?;
             }
+            ops::OpKind::Panic(message) => {
+                writeln!(w, "panic({:?});", message)?;
+            }
         }
     }
 

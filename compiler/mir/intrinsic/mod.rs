@@ -2,6 +2,7 @@ mod list;
 mod math;
 mod num_utils;
 mod number;
+mod panics;
 mod testing;
 
 use arret_syntax::span::Span;
@@ -73,5 +74,10 @@ define_build_intrinsics! {
     "<=" => number::num_le,
     "==" => number::num_eq,
     ">" => number::num_gt,
-    ">=" => number::num_ge
+    ">=" => number::num_ge,
+
+    // Purity doesn't matter at the MIR level; these are both treated as impure so they're not
+    // optimised away.
+    "panic" => panics::panics,
+    "panic!" => panics::panics
 }

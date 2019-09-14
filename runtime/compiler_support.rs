@@ -55,3 +55,11 @@ pub extern "C" fn alloc_record_data(size: u64, align: u32) -> *mut u8 {
 pub extern "C" fn equals(task: &Task, lhs: Gc<boxed::Any>, rhs: Gc<boxed::Any>) -> bool {
     lhs.eq_in_heap(task.as_heap(), &rhs)
 }
+
+#[export_name = "arret_runtime_panic_with_string"]
+pub unsafe extern "C" fn panic_with_string(message_bytes: *const u8, message_len: u32) {
+    let message_vec: Vec<u8> =
+        std::slice::from_raw_parts(message_bytes, message_len as usize).into();
+
+    panic!(String::from_utf8_unchecked(message_vec));
+}

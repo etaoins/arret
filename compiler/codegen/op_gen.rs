@@ -8,6 +8,7 @@ use crate::mir::ops::*;
 
 use crate::codegen::fun_gen::FunCtx;
 use crate::codegen::mod_gen::ModCtx;
+use crate::codegen::panic_gen::gen_panic;
 use crate::codegen::record_struct;
 use crate::codegen::target_gen::TargetCtx;
 use crate::codegen::{alloc, const_gen};
@@ -239,6 +240,9 @@ fn gen_op(
             }
             OpKind::Unreachable => {
                 LLVMBuildUnreachable(fcx.builder);
+            }
+            OpKind::Panic(message) => {
+                gen_panic(tcx, mcx, fcx, message);
             }
             OpKind::LoadBoxedTypeTag(
                 reg,

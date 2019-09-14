@@ -274,6 +274,7 @@ pub enum OpKind {
     Ret(RegId),
     RetVoid,
     Unreachable,
+    Panic(String),
 }
 
 /// Indicates the high-level category of an op
@@ -360,7 +361,7 @@ impl OpKind {
             | ConstBoxedRecord(reg_id, _)
             | AllocBoxedRecord(reg_id, _) => Some(*reg_id),
             Cond(cond_op) => cond_op.reg_phi.clone().map(|reg_phi| reg_phi.output_reg),
-            Ret(_) | RetVoid | Unreachable => None,
+            Ret(_) | RetVoid | Unreachable | Panic(_) => None,
         }
     }
 
@@ -385,7 +386,8 @@ impl OpKind {
             | ConstBoxedStr(_, _)
             | ConstBoxedSym(_, _)
             | RetVoid
-            | Unreachable => {}
+            | Unreachable
+            | Panic(_) => {}
             ConstBoxedPair(_, box_pair_op) | AllocBoxedPair(_, box_pair_op) => {
                 coll.extend(
                     [
@@ -509,7 +511,7 @@ impl OpKind {
         use crate::mir::ops::OpKind::*;
 
         match self {
-            Ret(_) | RetVoid | Unreachable => true,
+            Ret(_) | RetVoid | Unreachable | Panic(_) => true,
             Call(_, CallOp { impure, .. }) | TailCall(_, TailCallOp { impure, .. }) => *impure,
             Cond(cond_op) => cond_op
                 .true_ops
@@ -598,7 +600,7 @@ impl OpKind {
 
             Call(_, _) | TailCall(_, _) => OpCategory::Call,
 
-            Unreachable => OpCategory::Unreachable,
+            Unreachable | Panic(_) => OpCategory::Unreachable,
         }
     }
 }

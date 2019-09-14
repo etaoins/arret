@@ -8,6 +8,7 @@ mod fun_gen;
 pub(crate) mod jit;
 mod mod_gen;
 mod op_gen;
+mod panic_gen;
 pub(crate) mod program;
 mod range_md;
 mod record_struct;

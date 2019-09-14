@@ -82,6 +82,10 @@ impl JITCtx {
                 compiler_support::alloc_record_data as u64,
             );
             jcx.add_symbol(b"arret_runtime_equals\0", compiler_support::equals as u64);
+            jcx.add_symbol(
+                b"arret_runtime_panic_with_string\0",
+                compiler_support::panic_with_string as u64,
+            );
 
             jcx
         }
