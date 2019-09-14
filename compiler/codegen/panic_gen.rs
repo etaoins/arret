@@ -16,7 +16,7 @@ pub(crate) fn gen_panic(
 ) {
     unsafe {
         let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
-        let llvm_i32 = LLVMInt64TypeInContext(tcx.llx);
+        let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
 
         let llvm_param_types = &mut [
             tcx.task_llvm_ptr_type(),
