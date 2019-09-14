@@ -13,7 +13,7 @@ fn pretty_print_common(
     output: &mut dyn Write,
 ) {
     for value in values.iter() {
-        crate::pretty_print::pretty_print(output, task, value);
+        arret_runtime_syntax::writer::pretty_print_boxed(output, task, value);
     }
 }
 

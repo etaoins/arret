@@ -5,9 +5,6 @@
 extern crate arret_runtime;
 use arret_rfi_derive;
 
-mod pretty_print;
-use crate::pretty_print::pretty_print;
-
 pub mod list;
 use crate::list::*;
 
@@ -23,8 +20,9 @@ use crate::testing::*;
 pub mod write;
 use crate::write::*;
 
-use arret_runtime::binding::*;
+use arret_runtime_syntax::writer::pretty_print_boxed;
 
+use arret_runtime::binding::*;
 use arret_runtime::boxed;
 use arret_runtime::boxed::refs::Gc;
 use arret_runtime::task::Task;
@@ -34,7 +32,7 @@ pub fn panic_common(task: &mut Task, values: Gc<boxed::List<boxed::Any>>) -> Nev
 
     let mut output = Vec::<u8>::new();
     for value in values.iter() {
-        pretty_print(&mut output, task, value)
+        pretty_print_boxed(&mut output, task, value)
     }
 
     let message = str::from_utf8(output.as_slice()).unwrap().to_owned();

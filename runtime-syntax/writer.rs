@@ -167,6 +167,29 @@ pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any
     }
 }
 
+/// Writes a pretty-printed representation of the passed box to the writer
+pub fn pretty_print_boxed(write: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any>) {
+    match any_ref.as_subtype() {
+        boxed::AnySubtype::Str(string) => {
+            write.write_all(string.as_str().as_bytes()).unwrap();
+        }
+        boxed::AnySubtype::Char(c) => {
+            let mut buffer = [0; 4];
+            write
+                .write_all(c.value().encode_utf8(&mut buffer).as_bytes())
+                .unwrap();
+        }
+        boxed::AnySubtype::Sym(sym) => {
+            write
+                .write_all(sym.name(heap.as_heap()).as_bytes())
+                .unwrap();
+        }
+        _ => {
+            write_boxed(write, heap.as_heap(), any_ref).unwrap();
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
