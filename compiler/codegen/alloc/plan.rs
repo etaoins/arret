@@ -17,7 +17,16 @@ fn op_needs_heap_checkpoint(tcx: &mut TargetCtx, op: &ops::Op) -> bool {
     use crate::mir::ops::OpKind;
 
     match op.kind() {
-        OpKind::Ret(_) | OpKind::RetVoid | OpKind::Unreachable | OpKind::Call(_, _) => true,
+        OpKind::Ret(_)
+        | OpKind::RetVoid
+        | OpKind::Unreachable
+        | OpKind::Call(_, _)
+        | OpKind::Panic(_)
+        | OpKind::Int64CheckedAdd(_, _)
+        | OpKind::Int64CheckedSub(_, _)
+        | OpKind::Int64CheckedMul(_, _)
+        | OpKind::Int64CheckedDiv(_, _)
+        | OpKind::Int64CheckedRem(_, _) => true,
         OpKind::Cond(cond_op) => cond_op
             .true_ops
             .iter()
