@@ -572,10 +572,28 @@ fn print_branch(
                     rhs_reg.to_usize(),
                 )?;
             }
+            ops::OpKind::Int64Div(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = unchecked (%{}: i64) / (%{}: i64);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
+                )?;
+            }
             ops::OpKind::Int64CheckedDiv(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
                 writeln!(
                     w,
                     "%{} = checked (%{}: i64) / (%{}: i64);",
+                    reg.to_usize(),
+                    lhs_reg.to_usize(),
+                    rhs_reg.to_usize(),
+                )?;
+            }
+            ops::OpKind::Int64Rem(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = unchecked (%{}: i64) % (%{}: i64);",
                     reg.to_usize(),
                     lhs_reg.to_usize(),
                     rhs_reg.to_usize(),

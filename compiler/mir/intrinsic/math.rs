@@ -20,7 +20,7 @@
 
 use arret_syntax::span::Span;
 
-use arret_runtime::abitype;
+use arret_runtime::{abitype, boxed};
 
 use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::error::Result;
@@ -32,6 +32,16 @@ use crate::mir::value;
 use crate::mir::value::build_reg::value_to_reg;
 use crate::mir::value::list::SizedListIterator;
 use crate::mir::value::Value;
+
+/// Tries to convert a `Value` to a constant `i64`
+fn try_value_to_i64(value: Value) -> Option<i64> {
+    match value {
+        Value::Const(any_ref) => any_ref
+            .downcast_ref::<boxed::Int>()
+            .map(|int_ref| int_ref.value()),
+        _ => None,
+    }
+}
 
 /// Folds a series of numerical operands as `Float`s
 ///
@@ -294,15 +304,17 @@ pub fn div(
     ))
 }
 
-fn int_division_op<I>(
+fn int_division_op<CI, UI>(
     ehx: &mut EvalHirCtx,
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-    op_kind: I,
+    checked_op_kind: CI,
+    unchecked_op_kind: UI,
 ) -> Result<Option<Value>>
 where
-    I: FnOnce(RegId, BinaryOp) -> OpKind,
+    CI: FnOnce(RegId, BinaryOp) -> OpKind,
+    UI: FnOnce(RegId, BinaryOp) -> OpKind,
 {
     let mut iter = arg_list_value.unsized_list_iter();
 
@@ -312,14 +324,40 @@ where
     let denom_value = iter.next_unchecked(b, span);
     let denom_reg = value_to_reg(ehx, b, span, &denom_value, &abitype::ABIType::Int);
 
-    let result_reg = b.push_reg(
-        span,
-        op_kind,
-        BinaryOp {
-            lhs_reg: numer_reg.into(),
-            rhs_reg: denom_reg.into(),
-        },
-    );
+    let needs_checked = match try_value_to_i64(denom_value) {
+        None => {
+            // Completely unknown, we need a check
+            true
+        }
+        Some(0) | Some(-1) => {
+            // Definite divide-by-zero or possible overflow
+            true
+        }
+        Some(_) => {
+            // Don't need a check
+            false
+        }
+    };
+
+    let result_reg = if needs_checked {
+        b.push_reg(
+            span,
+            checked_op_kind,
+            BinaryOp {
+                lhs_reg: numer_reg.into(),
+                rhs_reg: denom_reg.into(),
+            },
+        )
+    } else {
+        b.push_reg(
+            span,
+            unchecked_op_kind,
+            BinaryOp {
+                lhs_reg: numer_reg.into(),
+                rhs_reg: denom_reg.into(),
+            },
+        )
+    };
 
     Ok(Some(
         value::RegValue::new(result_reg, abitype::ABIType::Int).into(),
@@ -332,7 +370,14 @@ pub fn quot(
     span: Span,
     arg_list_value: &Value,
 ) -> Result<Option<Value>> {
-    int_division_op(ehx, b, span, arg_list_value, OpKind::Int64CheckedDiv)
+    int_division_op(
+        ehx,
+        b,
+        span,
+        arg_list_value,
+        OpKind::Int64CheckedDiv,
+        OpKind::Int64Div,
+    )
 }
 
 pub fn rem(
@@ -341,5 +386,12 @@ pub fn rem(
     span: Span,
     arg_list_value: &Value,
 ) -> Result<Option<Value>> {
-    int_division_op(ehx, b, span, arg_list_value, OpKind::Int64CheckedRem)
+    int_division_op(
+        ehx,
+        b,
+        span,
+        arg_list_value,
+        OpKind::Int64CheckedRem,
+        OpKind::Int64Rem,
+    )
 }

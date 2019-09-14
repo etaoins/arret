@@ -264,7 +264,9 @@ pub enum OpKind {
     FloatSub(RegId, BinaryOp),
     Int64CheckedSub(RegId, BinaryOp),
     FloatDiv(RegId, BinaryOp),
+    Int64Div(RegId, BinaryOp),
     Int64CheckedDiv(RegId, BinaryOp),
+    Int64Rem(RegId, BinaryOp),
     Int64CheckedRem(RegId, BinaryOp),
 
     ConstBoxedRecord(RegId, BoxRecordOp),
@@ -346,7 +348,9 @@ impl OpKind {
             | FloatSub(reg_id, _)
             | Int64CheckedSub(reg_id, _)
             | FloatDiv(reg_id, _)
+            | Int64Div(reg_id, _)
             | Int64CheckedDiv(reg_id, _)
+            | Int64Rem(reg_id, _)
             | Int64CheckedRem(reg_id, _)
             | IntCompare(reg_id, _)
             | BoolEqual(reg_id, _)
@@ -478,7 +482,9 @@ impl OpKind {
             | FloatSub(_, binary_op)
             | Int64CheckedSub(_, binary_op)
             | FloatDiv(_, binary_op)
+            | Int64Div(_, binary_op)
             | Int64CheckedDiv(_, binary_op)
+            | Int64Rem(_, binary_op)
             | Int64CheckedRem(_, binary_op)
             | BoolEqual(_, binary_op)
             | CharEqual(_, binary_op)
@@ -579,7 +585,9 @@ impl OpKind {
             | FloatMul(_, _)
             | Int64CheckedMul(_, _)
             | FloatDiv(_, _)
+            | Int64Div(_, _)
             | Int64CheckedDiv(_, _)
+            | Int64Rem(_, _)
             | Int64CheckedRem(_, _)
             | IntCompare(_, _)
             | BoolEqual(_, _)
