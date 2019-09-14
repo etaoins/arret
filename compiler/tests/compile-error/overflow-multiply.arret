@@ -1,0 +1,8 @@
+(import [stdlib base])
+
+(def maximum-int 9223372036854775807)
+(def _ (* maximum-int 2))
+      ;^^^^^^^^^^^^^^^^^ ERROR attempt to multiply with overflow
+
+
+(defn main! () ->! ())

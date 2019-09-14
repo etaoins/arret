@@ -1,0 +1,8 @@
+(import [stdlib base])
+
+(def minimum-int -9223372036854775808)
+(def _ (- minimum-int 1))
+      ;^^^^^^^^^^^^^^^^^ ERROR attempt to subtract with overflow
+
+
+(defn main! () ->! ())

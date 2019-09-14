@@ -34,13 +34,14 @@ where
 
 fn fold_num_op<IR, FR>(
     task: &mut Task,
+    op_name: &'static str,
     mut operands_iter: impl Iterator<Item = Gc<boxed::Num>>,
     initial_value: i64,
     int_reduce: IR,
     float_reduce: FR,
 ) -> Gc<boxed::Num>
 where
-    IR: Fn(i64, i64) -> i64,
+    IR: Fn(i64, i64) -> Option<i64>,
     FR: Fn(f64, f64) -> f64,
 {
     // Accumulate as an integer for as long as possible
@@ -49,7 +50,11 @@ where
     while let Some(operand) = operands_iter.next() {
         match operand.as_subtype() {
             boxed::NumSubtype::Int(int_ref) => {
-                int_acc = int_reduce(int_acc, int_ref.value());
+                if let Some(reduced_int) = int_reduce(int_acc, int_ref.value()) {
+                    int_acc = reduced_int;
+                } else {
+                    task.panic(format!("attempt to {} with overflow", op_name));
+                }
             }
             boxed::NumSubtype::Float(float_ref) => {
                 // Switch to float
@@ -73,9 +78,10 @@ pub fn stdlib_add(
 
     fold_num_op(
         task,
+        "add",
         iter::once(initial_num).chain(rest.iter()),
         0,
-        i64::add,
+        i64::checked_add,
         f64::add,
     )
 }
@@ -91,9 +97,10 @@ pub fn stdlib_mul(
 
     fold_num_op(
         task,
+        "multiply",
         iter::once(initial_num).chain(rest.iter()),
         1,
-        i64::mul,
+        i64::checked_mul,
         f64::mul,
     )
 }
@@ -111,7 +118,14 @@ pub fn stdlib_sub(
             if rest.is_empty() {
                 boxed::Int::new(task, -int_ref.value()).as_num_ref()
             } else {
-                fold_num_op(task, rest.iter(), int_ref.value(), i64::sub, f64::sub)
+                fold_num_op(
+                    task,
+                    "subtract",
+                    rest.iter(),
+                    int_ref.value(),
+                    i64::checked_sub,
+                    f64::sub,
+                )
             }
         }
         boxed::NumSubtype::Float(float_ref) => {

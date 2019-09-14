@@ -1,0 +1,7 @@
+(import [stdlib base])
+
+(def maximum-int 9223372036854775807)
+(def _ (+ maximum-int 1))
+      ;^^^^^^^^^^^^^^^^^ ERROR attempt to add with overflow
+
+(defn main! () ->! ())
