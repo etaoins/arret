@@ -5,7 +5,7 @@ use arret_runtime::boxed;
 use crate::mir::builder::Builder;
 use crate::mir::error::Result;
 use crate::mir::eval_hir::EvalHirCtx;
-use crate::mir::value::list::list_value_length;
+use crate::mir::value::list::{list_value_length, ListValueLength};
 use crate::mir::Value;
 
 pub fn length(
@@ -17,7 +17,9 @@ pub fn length(
     let mut iter = arg_list_value.unsized_list_iter();
     let single_arg = iter.next_unchecked(b, span);
 
-    if let Some(known_length) = list_value_length(&single_arg) {
+    let list_length = list_value_length(&single_arg);
+
+    if let ListValueLength::Exact(known_length) = list_length {
         return Ok(Some(boxed::Int::new(ehx, known_length as i64).into()));
     }
 
@@ -35,7 +37,14 @@ pub fn length(
             &abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
         );
 
-        let length_reg = b.push_reg(span, OpKind::LoadBoxedListLength, list_reg.into());
+        let length_reg = b.push_reg(
+            span,
+            OpKind::LoadBoxedListLength,
+            LoadBoxedListLengthOp {
+                list_reg: list_reg.into(),
+                min_length: list_length.lower_bound(),
+            },
+        );
 
         return Ok(Some(
             value::RegValue::new(length_reg, abitype::ABIType::Int).into(),

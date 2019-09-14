@@ -6,25 +6,66 @@ use crate::mir::builder::{Builder, TryToBuilder};
 use crate::mir::value;
 use crate::mir::value::Value;
 
-pub fn list_value_length(value: &Value) -> Option<usize> {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ListValueLength {
+    Exact(usize),
+    Min(usize),
+}
+
+impl ListValueLength {
+    pub fn lower_bound(&self) -> usize {
+        match self {
+            ListValueLength::Exact(len) => *len,
+            ListValueLength::Min(len) => *len,
+        }
+    }
+}
+
+impl std::ops::Add for ListValueLength {
+    type Output = ListValueLength;
+
+    fn add(self, other: ListValueLength) -> ListValueLength {
+        match (self, other) {
+            (ListValueLength::Exact(self_len), ListValueLength::Exact(other_len)) => {
+                ListValueLength::Exact(self_len + other_len)
+            }
+
+            _ => ListValueLength::Min(self.lower_bound() + other.lower_bound()),
+        }
+    }
+}
+
+pub fn list_value_length(value: &Value) -> ListValueLength {
     use arret_runtime::boxed;
 
     match value {
         Value::List(fixed, rest) => {
-            let fixed_len = fixed.len();
+            let fixed_len = ListValueLength::Exact(fixed.len());
 
             match rest {
-                Some(rest) => list_value_length(rest).map(|rest_len| fixed_len + rest_len),
-                None => Some(fixed_len),
+                Some(rest) => fixed_len + list_value_length(rest),
+                None => fixed_len,
             }
         }
-        Value::Const(any_ref) => any_ref
-            .downcast_ref::<boxed::List<boxed::Any>>()
-            .map(|list_ref| list_ref.len()),
-        Value::Reg(reg_value) if reg_value.possible_type_tags == boxed::TypeTag::Nil.into() => {
-            Some(0)
+
+        Value::Const(any_ref) => match any_ref.downcast_ref::<boxed::List<boxed::Any>>() {
+            Some(list_ref) => ListValueLength::Exact(list_ref.len()),
+            None => ListValueLength::Min(0),
+        },
+
+        Value::Reg(reg_value) => {
+            if !reg_value.possible_type_tags.contains(boxed::TypeTag::Pair) {
+                // Must be empty
+                ListValueLength::Exact(0)
+            } else if !reg_value.possible_type_tags.contains(boxed::TypeTag::Nil) {
+                // Cannot be empty
+                ListValueLength::Min(1)
+            } else {
+                ListValueLength::Min(0)
+            }
         }
-        _ => None,
+
+        _ => ListValueLength::Min(0),
     }
 }
 
@@ -127,10 +168,13 @@ pub struct SizedListIterator {
 
 impl SizedListIterator {
     pub fn try_new(value: &Value) -> Option<Self> {
-        list_value_length(value).map(move |size| Self {
-            size,
-            unsized_list_iterator: UnsizedListIterator::new(value.clone()),
-        })
+        match list_value_length(value) {
+            ListValueLength::Exact(size) => Some(Self {
+                size,
+                unsized_list_iterator: UnsizedListIterator::new(value.clone()),
+            }),
+            _ => None,
+        }
     }
 }
 
@@ -163,11 +207,15 @@ mod test {
 
     #[test]
     fn list_length() {
+        use crate::mir::builder::BuiltReg;
+        use crate::mir::ops::RegId;
+        use arret_runtime::abitype;
+
         let mut heap = boxed::Heap::empty();
         let elements = &[1, 2, 3];
 
         // Start with three fixed values
-        let fixed_values = elements
+        let fixed_values: Box<[Value]> = elements
             .iter()
             .map(|element| boxed::Int::new(&mut heap, *element).into())
             .collect();
@@ -179,10 +227,58 @@ mod test {
         let const_list_tail = Value::List(Box::new([]), Some(Box::new(boxed_list_tail.into())));
 
         // Add the fixed values (3 elements) to the constant tail (3 elements)
-        let list_value = Value::List(fixed_values, Some(Box::new(const_list_tail)));
+        let list_value = Value::List(fixed_values.clone(), Some(Box::new(const_list_tail)));
 
         // The length should be 6
-        assert_eq!(Some(6), list_value_length(&list_value));
+        assert_eq!(ListValueLength::Exact(6), list_value_length(&list_value));
+
+        // Try 3 fixed values with a completely unknown tail
+        let list_with_unknown_tail = Value::List(
+            fixed_values.clone(),
+            Some(Box::new(
+                value::RegValue::new(
+                    BuiltReg::Local(RegId::alloc()),
+                    abitype::BoxedABIType::Any.into(),
+                )
+                .into(),
+            )),
+        );
+
+        // Length should be at least 3
+        assert_eq!(
+            ListValueLength::Min(3),
+            list_value_length(&list_with_unknown_tail)
+        );
+
+        // Try 3 fixed values with a pair tail
+        let list_with_pair_tail = Value::List(
+            fixed_values.clone(),
+            Some(Box::new(
+                value::RegValue::new(BuiltReg::Local(RegId::alloc()), boxed::TypeTag::Pair.into())
+                    .into(),
+            )),
+        );
+
+        // Length should be at least 4
+        assert_eq!(
+            ListValueLength::Min(4),
+            list_value_length(&list_with_pair_tail)
+        );
+
+        // Try 3 fixed values with a nil tail
+        let list_with_nil_tail = Value::List(
+            fixed_values.clone(),
+            Some(Box::new(
+                value::RegValue::new(BuiltReg::Local(RegId::alloc()), boxed::TypeTag::Nil.into())
+                    .into(),
+            )),
+        );
+
+        // Length should be at exactly 3
+        assert_eq!(
+            ListValueLength::Exact(3),
+            list_value_length(&list_with_nil_tail)
+        );
     }
 
     #[test]

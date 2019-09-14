@@ -290,7 +290,15 @@ fn gen_op(
                 tcx.add_invariant_load_metadata(llvm_type_tag);
                 fcx.regs.insert(*reg, llvm_type_tag);
             }
-            OpKind::LoadBoxedListLength(reg, list_reg) => {
+            OpKind::LoadBoxedListLength(
+                reg,
+                LoadBoxedListLengthOp {
+                    list_reg,
+                    min_length,
+                },
+            ) => {
+                let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
+
                 let llvm_list = fcx.regs[list_reg];
                 let length_ptr = LLVMBuildStructGEP(
                     fcx.builder,
@@ -302,6 +310,23 @@ fn gen_op(
                 let llvm_length =
                     LLVMBuildLoad(fcx.builder, length_ptr, "length\0".as_ptr() as *const _);
                 tcx.add_invariant_load_metadata(llvm_length);
+
+                // Every list element needs at least one pair. This means there's a maximum list
+                // length that can fit in our address space.
+                let max_length = std::u64::MAX / std::mem::size_of::<boxed::Pair>() as u64;
+
+                let mut llvm_range_values = [
+                    LLVMConstInt(llvm_i64, *min_length as u64, 0),
+                    LLVMConstInt(llvm_i64, max_length + 1, 0),
+                ];
+
+                let range_md_kind_id = tcx.llvm_md_kind_id_for_name(b"length_range");
+                let list_length_range_md = LLVMMDNodeInContext(
+                    tcx.llx,
+                    llvm_range_values.as_mut_ptr(),
+                    llvm_range_values.len() as u32,
+                );
+                LLVMSetMetadata(llvm_length, range_md_kind_id, list_length_range_md);
 
                 fcx.regs.insert(*reg, llvm_length);
             }

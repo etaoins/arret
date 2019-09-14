@@ -410,12 +410,19 @@ fn print_branch(
                     pair_reg.to_usize()
                 )?;
             }
-            ops::OpKind::LoadBoxedListLength(reg, list_reg) => {
+            ops::OpKind::LoadBoxedListLength(
+                reg,
+                ops::LoadBoxedListLengthOp {
+                    list_reg,
+                    min_length,
+                },
+            ) => {
                 writeln!(
                     w,
-                    "%{} = <%{} as boxed::List>.list_length;",
+                    "%{} = <%{} as boxed::List>.list_length where > {};",
                     reg.to_usize(),
-                    list_reg.to_usize()
+                    list_reg.to_usize(),
+                    min_length
                 )?;
             }
             ops::OpKind::LoadBoxedSymInterned(reg, sym_reg) => {

@@ -182,6 +182,12 @@ pub struct LoadBoxedTypeTagOp {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct LoadBoxedListLengthOp {
+    pub list_reg: RegId,
+    pub min_length: usize,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct MakeCallbackOp {
     pub closure_reg: RegId,
     pub callee: Callee,
@@ -232,7 +238,7 @@ pub enum OpKind {
     TailCall(RegId, TailCallOp),
 
     LoadBoxedTypeTag(RegId, LoadBoxedTypeTagOp),
-    LoadBoxedListLength(RegId, RegId),
+    LoadBoxedListLength(RegId, LoadBoxedListLengthOp),
     LoadBoxedPairHead(RegId, RegId),
     LoadBoxedPairRest(RegId, RegId),
     LoadBoxedIntValue(RegId, RegId),
@@ -431,7 +437,12 @@ impl OpKind {
                     ..
                 },
             )
-            | LoadBoxedListLength(_, reg_id)
+            | LoadBoxedListLength(
+                _,
+                LoadBoxedListLengthOp {
+                    list_reg: reg_id, ..
+                },
+            )
             | LoadBoxedPairHead(_, reg_id)
             | LoadBoxedPairRest(_, reg_id)
             | LoadBoxedIntValue(_, reg_id)
@@ -733,7 +744,14 @@ mod test {
         );
         assert_eq!(
             false,
-            OpKind::LoadBoxedListLength(RegId::alloc(), RegId::alloc()).const_output()
+            OpKind::LoadBoxedListLength(
+                RegId::alloc(),
+                LoadBoxedListLengthOp {
+                    list_reg: RegId::alloc(),
+                    min_length: 0
+                }
+            )
+            .const_output()
         );
     }
 

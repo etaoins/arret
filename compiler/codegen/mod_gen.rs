@@ -219,7 +219,7 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
                 return;
             }
 
-            let mut llvm_range_values: Vec<LLVMValueRef> = vec![
+            let mut llvm_range_values = [
                 LLVMConstInt(tcx.record_class_id_llvm_type(), 0 as u64, 0),
                 LLVMConstInt(
                     tcx.record_class_id_llvm_type(),

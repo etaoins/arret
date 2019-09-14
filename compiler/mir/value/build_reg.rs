@@ -180,7 +180,7 @@ fn list_to_reg(
     boxed_abi_type: &abitype::BoxedABIType,
 ) -> BuiltReg {
     use crate::mir::ops::*;
-    use crate::mir::value::list::list_value_length;
+    use crate::mir::value::list::{list_value_length, ListValueLength};
     use arret_runtime::abitype::TOP_LIST_BOXED_ABI_TYPE;
 
     let tail_reg = if let Some(rest) = rest {
@@ -201,9 +201,16 @@ fn list_to_reg(
     } else {
         let rest_length = match rest {
             Some(rest) => match list_value_length(rest) {
-                Some(known) => RestLength::Known(known),
-                None => {
-                    let length_reg = b.push_reg(span, OpKind::LoadBoxedListLength, tail_reg.into());
+                ListValueLength::Exact(known) => RestLength::Known(known),
+                ListValueLength::Min(min_length) => {
+                    let length_reg = b.push_reg(
+                        span,
+                        OpKind::LoadBoxedListLength,
+                        LoadBoxedListLengthOp {
+                            list_reg: tail_reg.into(),
+                            min_length,
+                        },
+                    );
                     RestLength::Loaded(length_reg)
                 }
             },
