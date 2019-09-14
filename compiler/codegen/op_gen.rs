@@ -7,6 +7,7 @@ use arret_runtime::boxed;
 use crate::mir::ops::*;
 
 use crate::codegen::fun_gen::FunCtx;
+use crate::codegen::math_gen;
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::panic_gen::gen_panic;
 use crate::codegen::record_struct;
@@ -736,12 +737,13 @@ fn gen_op(
                 let llvm_lhs = fcx.regs[lhs_reg];
                 let llvm_rhs = fcx.regs[rhs_reg];
 
-                // TODO: Check for overflow
-                let llvm_value = LLVMBuildAdd(
-                    fcx.builder,
+                let llvm_value = math_gen::gen_checked_int_math(
+                    tcx,
+                    mcx,
+                    fcx,
+                    &math_gen::CHECKED_ADD,
                     llvm_lhs,
                     llvm_rhs,
-                    "sum\0".as_ptr() as *const _,
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }
@@ -761,12 +763,13 @@ fn gen_op(
                 let llvm_lhs = fcx.regs[lhs_reg];
                 let llvm_rhs = fcx.regs[rhs_reg];
 
-                // TODO: Check for overflow
-                let llvm_value = LLVMBuildMul(
-                    fcx.builder,
+                let llvm_value = math_gen::gen_checked_int_math(
+                    tcx,
+                    mcx,
+                    fcx,
+                    &math_gen::CHECKED_MUL,
                     llvm_lhs,
                     llvm_rhs,
-                    "product\0".as_ptr() as *const _,
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }
@@ -786,12 +789,13 @@ fn gen_op(
                 let llvm_lhs = fcx.regs[lhs_reg];
                 let llvm_rhs = fcx.regs[rhs_reg];
 
-                // TODO: Check for overflow
-                let llvm_value = LLVMBuildSub(
-                    fcx.builder,
+                let llvm_value = math_gen::gen_checked_int_math(
+                    tcx,
+                    mcx,
+                    fcx,
+                    &math_gen::CHECKED_SUB,
                     llvm_lhs,
                     llvm_rhs,
-                    "difference\0".as_ptr() as *const _,
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }
