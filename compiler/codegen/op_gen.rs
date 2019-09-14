@@ -837,53 +837,45 @@ fn gen_op(
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Int64Div(reg, BinaryOp { lhs_reg, rhs_reg }) => {
-                let llvm_lhs = fcx.regs[lhs_reg];
-                let llvm_rhs = fcx.regs[rhs_reg];
+                let llvm_numer = fcx.regs[lhs_reg];
+                let llvm_denom = fcx.regs[rhs_reg];
 
                 let llvm_value = LLVMBuildSDiv(
                     fcx.builder,
-                    llvm_lhs,
-                    llvm_rhs,
+                    llvm_numer,
+                    llvm_denom,
                     "quot\0".as_ptr() as *const _,
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Int64CheckedDiv(reg, BinaryOp { lhs_reg, rhs_reg }) => {
-                let llvm_lhs = fcx.regs[lhs_reg];
-                let llvm_rhs = fcx.regs[rhs_reg];
+                let llvm_numer = fcx.regs[lhs_reg];
+                let llvm_denom = fcx.regs[rhs_reg];
 
-                // TODO: Check for overflow
-                let llvm_value = LLVMBuildSDiv(
-                    fcx.builder,
-                    llvm_lhs,
-                    llvm_rhs,
-                    "quot\0".as_ptr() as *const _,
-                );
+                let llvm_value =
+                    math_gen::gen_checked_int_div(tcx, mcx, fcx, llvm_numer, llvm_denom);
+
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Int64Rem(reg, BinaryOp { lhs_reg, rhs_reg }) => {
-                let llvm_lhs = fcx.regs[lhs_reg];
-                let llvm_rhs = fcx.regs[rhs_reg];
+                let llvm_numer = fcx.regs[lhs_reg];
+                let llvm_denom = fcx.regs[rhs_reg];
 
                 let llvm_value = LLVMBuildSRem(
                     fcx.builder,
-                    llvm_lhs,
-                    llvm_rhs,
+                    llvm_numer,
+                    llvm_denom,
                     "rem\0".as_ptr() as *const _,
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Int64CheckedRem(reg, BinaryOp { lhs_reg, rhs_reg }) => {
-                let llvm_lhs = fcx.regs[lhs_reg];
-                let llvm_rhs = fcx.regs[rhs_reg];
+                let llvm_numer = fcx.regs[lhs_reg];
+                let llvm_denom = fcx.regs[rhs_reg];
 
-                // TODO: Check for overflow
-                let llvm_value = LLVMBuildSRem(
-                    fcx.builder,
-                    llvm_lhs,
-                    llvm_rhs,
-                    "rem\0".as_ptr() as *const _,
-                );
+                let llvm_value =
+                    math_gen::gen_checked_int_rem(tcx, mcx, fcx, llvm_numer, llvm_denom);
+
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::MakeCallback(

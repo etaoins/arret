@@ -1,5 +1,6 @@
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
+use llvm_sys::LLVMIntPredicate;
 
 use crate::codegen::fun_gen::FunCtx;
 use crate::codegen::mod_gen::ModCtx;
@@ -112,5 +113,107 @@ pub(crate) fn gen_checked_int_math(
 
         LLVMPositionBuilderAtEnd(fcx.builder, cont_block);
         llvm_math_result
+    }
+}
+
+pub(crate) fn gen_checked_int_rem(
+    tcx: &mut TargetCtx,
+    mcx: &mut ModCtx<'_, '_, '_>,
+    fcx: &mut FunCtx,
+    llvm_numer: LLVMValueRef,
+    llvm_denom: LLVMValueRef,
+) -> LLVMValueRef {
+    unsafe {
+        let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
+
+        let denom_is_zero = LLVMBuildICmp(
+            fcx.builder,
+            LLVMIntPredicate::LLVMIntEQ,
+            llvm_denom,
+            LLVMConstInt(llvm_i64, 0, 0),
+            b"denom_is_zero\0".as_ptr() as *const _,
+        );
+
+        let rem_by_zero_block = LLVMAppendBasicBlockInContext(
+            tcx.llx,
+            fcx.function,
+            b"rem_by_zero\0".as_ptr() as *const _,
+        );
+
+        let valid_rem_block = LLVMAppendBasicBlockInContext(
+            tcx.llx,
+            fcx.function,
+            b"valid_rem\0".as_ptr() as *const _,
+        );
+
+        LLVMBuildCondBr(
+            fcx.builder,
+            denom_is_zero,
+            rem_by_zero_block,
+            valid_rem_block,
+        );
+
+        LLVMPositionBuilderAtEnd(fcx.builder, rem_by_zero_block);
+        gen_panic(tcx, mcx, fcx, "division by zero");
+
+        LLVMPositionBuilderAtEnd(fcx.builder, valid_rem_block);
+        LLVMBuildSRem(
+            fcx.builder,
+            llvm_numer,
+            llvm_denom,
+            "rem\0".as_ptr() as *const _,
+        )
+    }
+}
+
+pub(crate) fn gen_checked_int_div(
+    tcx: &mut TargetCtx,
+    mcx: &mut ModCtx<'_, '_, '_>,
+    fcx: &mut FunCtx,
+    llvm_numer: LLVMValueRef,
+    llvm_denom: LLVMValueRef,
+) -> LLVMValueRef {
+    unsafe {
+        let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
+
+        let denom_is_zero = LLVMBuildICmp(
+            fcx.builder,
+            LLVMIntPredicate::LLVMIntEQ,
+            llvm_denom,
+            LLVMConstInt(llvm_i64, 0, 0),
+            b"denom_is_zero\0".as_ptr() as *const _,
+        );
+
+        // TODO: Check for overflow (i.e. i64::MAX / -1)
+
+        let div_by_zero_block = LLVMAppendBasicBlockInContext(
+            tcx.llx,
+            fcx.function,
+            b"div_by_zero\0".as_ptr() as *const _,
+        );
+
+        let valid_div_block = LLVMAppendBasicBlockInContext(
+            tcx.llx,
+            fcx.function,
+            b"valid_div\0".as_ptr() as *const _,
+        );
+
+        LLVMBuildCondBr(
+            fcx.builder,
+            denom_is_zero,
+            div_by_zero_block,
+            valid_div_block,
+        );
+
+        LLVMPositionBuilderAtEnd(fcx.builder, div_by_zero_block);
+        gen_panic(tcx, mcx, fcx, "division by zero");
+
+        LLVMPositionBuilderAtEnd(fcx.builder, valid_div_block);
+        LLVMBuildSDiv(
+            fcx.builder,
+            llvm_numer,
+            llvm_denom,
+            "quot\0".as_ptr() as *const _,
+        )
     }
 }
