@@ -18,7 +18,11 @@ pub(crate) fn gen_panic(
         let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
         let llvm_i32 = LLVMInt64TypeInContext(tcx.llx);
 
-        let llvm_param_types = &mut [LLVMPointerType(llvm_i8, 0), llvm_i32];
+        let llvm_param_types = &mut [
+            tcx.task_llvm_ptr_type(),
+            LLVMPointerType(llvm_i8, 0),
+            llvm_i32,
+        ];
 
         let panic_with_string_llvm_type = LLVMFunctionType(
             LLVMVoidTypeInContext(tcx.llx),
@@ -68,6 +72,7 @@ pub(crate) fn gen_panic(
         );
 
         let panic_with_string_args = &mut [
+            fcx.current_task,
             message_pointer,
             LLVMConstInt(llvm_i32, message.len() as u64, 0),
         ];
