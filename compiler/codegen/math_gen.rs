@@ -176,6 +176,32 @@ pub(crate) fn gen_checked_int_div(
     unsafe {
         let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
 
+        // Build our blocks
+        let div_by_zero_block = LLVMAppendBasicBlockInContext(
+            tcx.llx,
+            fcx.function,
+            b"div_by_zero\0".as_ptr() as *const _,
+        );
+
+        let non_zero_denom_block = LLVMAppendBasicBlockInContext(
+            tcx.llx,
+            fcx.function,
+            b"non_zero_denom\0".as_ptr() as *const _,
+        );
+
+        let neg_one_denom_block = LLVMAppendBasicBlockInContext(
+            tcx.llx,
+            fcx.function,
+            b"neg_one_denom\0".as_ptr() as *const _,
+        );
+
+        let valid_div_block = LLVMAppendBasicBlockInContext(
+            tcx.llx,
+            fcx.function,
+            b"valid_div_block\0".as_ptr() as *const _,
+        );
+
+        // Test if the denominator is zero
         let denom_is_zero = LLVMBuildICmp(
             fcx.builder,
             LLVMIntPredicate::LLVMIntEQ,
@@ -184,27 +210,53 @@ pub(crate) fn gen_checked_int_div(
             b"denom_is_zero\0".as_ptr() as *const _,
         );
 
-        // TODO: Check for overflow (i.e. i64::MAX / -1)
-
-        let div_by_zero_block = LLVMAppendBasicBlockInContext(
-            tcx.llx,
-            fcx.function,
-            b"div_by_zero\0".as_ptr() as *const _,
-        );
-
-        let valid_div_block = LLVMAppendBasicBlockInContext(
-            tcx.llx,
-            fcx.function,
-            b"valid_div\0".as_ptr() as *const _,
-        );
-
+        // If it's zero then raise a divide by zero error
         LLVMBuildCondBr(
             fcx.builder,
             denom_is_zero,
             div_by_zero_block,
+            non_zero_denom_block,
+        );
+
+        // Test if the denominator is negative one
+        LLVMPositionBuilderAtEnd(fcx.builder, non_zero_denom_block);
+
+        let denom_is_neg_one = LLVMBuildICmp(
+            fcx.builder,
+            LLVMIntPredicate::LLVMIntEQ,
+            llvm_denom,
+            LLVMConstInt(llvm_i64, std::mem::transmute(-1i64), 0),
+            b"denom_is_neg_one\0".as_ptr() as *const _,
+        );
+
+        // If it's negative one then we need to test the denominator
+        LLVMBuildCondBr(
+            fcx.builder,
+            denom_is_neg_one,
+            neg_one_denom_block,
             valid_div_block,
         );
 
+        // Test if the numerator is i64::MIN
+        LLVMPositionBuilderAtEnd(fcx.builder, neg_one_denom_block);
+
+        let numer_is_int_min = LLVMBuildICmp(
+            fcx.builder,
+            LLVMIntPredicate::LLVMIntEQ,
+            llvm_numer,
+            LLVMConstInt(llvm_i64, std::mem::transmute(std::i64::MIN), 0),
+            b"numer_is_int_min\0".as_ptr() as *const _,
+        );
+
+        // If it's i64::MIN then raise a divide by zero error
+        LLVMBuildCondBr(
+            fcx.builder,
+            numer_is_int_min,
+            div_by_zero_block,
+            valid_div_block,
+        );
+
+        // Build the common panic block
         LLVMPositionBuilderAtEnd(fcx.builder, div_by_zero_block);
         gen_panic(tcx, mcx, fcx, "division by zero");
 
