@@ -12,13 +12,28 @@ use arret_syntax::span::{ByteIndex, Span};
 
 use arret_compiler::{emit_diagnostics_to_stderr, errors_to_diagnostics, CompileCtx, OutputType};
 
-#[derive(Clone, Copy, PartialEq)]
-enum RunType {
-    Pass,
-    Error,
+#[derive(Clone, PartialEq)]
+struct RunOutput {
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, PartialEq)]
+enum RunType {
+    Pass(RunOutput),
+    Error(RunOutput),
+}
+
+impl RunType {
+    fn expected_output(&self) -> &RunOutput {
+        match self {
+            RunType::Pass(run_output) => run_output,
+            RunType::Error(run_output) => run_output,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq)]
 enum TestType {
     CompileError,
     Optimise,
@@ -163,6 +178,49 @@ fn extract_expected_diagnostics(
         .collect()
 }
 
+fn exit_with_run_output_difference(
+    source_filename: &path::Path,
+    stream_name: &str,
+    expected: &[u8],
+    actual: &[u8],
+) {
+    use std::io::Write;
+    use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+
+    let mut expected_color = ColorSpec::new();
+    expected_color.set_fg(Some(Color::Red));
+
+    let mut actual_color = ColorSpec::new();
+    actual_color.set_fg(Some(Color::Green));
+
+    let stderr = StandardStream::stderr(ColorChoice::Auto);
+    let mut stderr_lock = stderr.lock();
+
+    writeln!(
+        stderr_lock,
+        "unexpected {} output from integration test {}\n",
+        stream_name,
+        source_filename.to_string_lossy()
+    )
+    .unwrap();
+
+    write!(stderr_lock, "Expected: \"").unwrap();
+
+    let _ = stderr_lock.set_color(&expected_color);
+    stderr_lock.write_all(expected).unwrap();
+    let _ = stderr_lock.reset();
+    writeln!(stderr_lock, "\"").unwrap();
+
+    write!(stderr_lock, "Actual:   \"").unwrap();
+
+    let _ = stderr_lock.set_color(&actual_color);
+    stderr_lock.write_all(actual).unwrap();
+    let _ = stderr_lock.reset();
+    writeln!(stderr_lock, "\"").unwrap();
+
+    process::exit(1);
+}
+
 fn result_for_single_test(
     target_triple: Option<&str>,
     ccx: &CompileCtx,
@@ -181,7 +239,8 @@ fn result_for_single_test(
     }
 
     // Try evaluating if we're not supposed to panic
-    if test_type != TestType::Run(RunType::Error) {
+    if let TestType::Run(RunType::Error(_)) = test_type {
+    } else {
         ehx.eval_main_fun(hir.main_var_id)?;
     }
 
@@ -226,30 +285,51 @@ fn result_for_single_test(
 
     let mut process = process::Command::new(output_path.as_os_str());
 
-    match run_type {
-        RunType::Pass => {
-            let status = process.status().unwrap();
-            if !status.success() {
-                panic!(
-                    "unexpected status {} returned from integration test {}",
-                    status,
-                    source_file.file_map().name()
-                );
-            }
-        }
-        RunType::Error => {
-            // Discard our panic output
-            let status = process.stderr(process::Stdio::null()).status().unwrap();
+    let expected_output = run_type.expected_output();
+    let output = process
+        .stdout(process::Stdio::piped())
+        .stderr(process::Stdio::piped())
+        .output()
+        .unwrap();
 
-            // Code 1 is used by panic. This makes sure we didn't e.g. SIGSEGV.
-            if status.code() != Some(1) {
+    match run_type {
+        RunType::Pass(_) => {
+            if !output.status.success() {
                 panic!(
                     "unexpected status {} returned from integration test {}",
-                    status,
+                    output.status,
                     source_file.file_map().name()
                 );
             }
         }
+        RunType::Error(_) => {
+            // Code 1 is used by panic. This makes sure we didn't e.g. SIGSEGV.
+            if output.status.code() != Some(1) {
+                panic!(
+                    "unexpected status {} returned from integration test {}",
+                    output.status,
+                    source_file.file_map().name()
+                );
+            }
+        }
+    }
+
+    if expected_output.stderr != output.stderr {
+        exit_with_run_output_difference(
+            source_file.file_map().name().as_ref(),
+            "stderr",
+            &expected_output.stderr,
+            &output.stderr,
+        );
+    }
+
+    if expected_output.stdout != output.stdout {
+        exit_with_run_output_difference(
+            source_file.file_map().name().as_ref(),
+            "stdout",
+            &expected_output.stdout,
+            &output.stdout,
+        );
     }
 
     Ok(())
@@ -362,22 +442,58 @@ where
         .and_then(|s| s.parse::<F>().ok())
 }
 
-fn entry_to_test_tuple(
+fn entry_is_arret_source(entry: &fs::DirEntry) -> bool {
+    entry
+        .file_name()
+        .to_str()
+        .map(|file_name| !file_name.starts_with('.') && file_name.ends_with(".arret"))
+        .unwrap_or(false)
+}
+
+fn entry_to_compile_test_tuple(
     entry: io::Result<fs::DirEntry>,
     test_type: TestType,
 ) -> Option<(path::PathBuf, TestType)> {
     let entry = entry.unwrap();
 
-    if !entry
-        .file_name()
-        .to_str()
-        .map(|file_name| !file_name.starts_with('.') && file_name.ends_with(".arret"))
-        .unwrap_or(false)
-    {
+    if !entry_is_arret_source(&entry) {
+        None
+    } else {
+        Some((entry.path(), test_type))
+    }
+}
+
+fn entry_to_run_test_tuple<RT>(
+    entry: io::Result<fs::DirEntry>,
+    run_type: RT,
+) -> Option<(path::PathBuf, TestType)>
+where
+    RT: FnOnce(RunOutput) -> RunType,
+{
+    use std::io::Read;
+    let entry = entry.unwrap();
+
+    if !entry_is_arret_source(&entry) {
         return None;
     }
 
-    Some((entry.path(), test_type))
+    let stderr_filename = entry.path().with_extension("stderr");
+    let stdout_filename = entry.path().with_extension("stdout");
+
+    let mut stderr = Vec::new();
+    // This file may no exist - we'll treat it as any empty file
+    if let Ok(mut file) = fs::File::open(stderr_filename) {
+        file.read_to_end(&mut stderr).unwrap();
+    }
+
+    let mut stdout = Vec::new();
+    if let Ok(mut file) = fs::File::open(stdout_filename) {
+        file.read_to_end(&mut stdout).unwrap();
+    }
+
+    let expected_output = RunOutput { stderr, stdout };
+
+    Some((entry.path(), TestType::Run(run_type(expected_output))))
 }
 
 #[test]
@@ -395,19 +511,19 @@ fn integration() {
 
     let compile_error_entries = fs::read_dir("./tests/compile-error")
         .unwrap()
-        .filter_map(|entry| entry_to_test_tuple(entry, TestType::CompileError));
+        .filter_map(|entry| entry_to_compile_test_tuple(entry, TestType::CompileError));
 
     let optimise_entries = fs::read_dir("./tests/optimise")
         .unwrap()
-        .filter_map(|entry| entry_to_test_tuple(entry, TestType::Optimise));
+        .filter_map(|entry| entry_to_compile_test_tuple(entry, TestType::Optimise));
 
     let run_pass_entries = fs::read_dir("./tests/run-pass")
         .unwrap()
-        .filter_map(|entry| entry_to_test_tuple(entry, TestType::Run(RunType::Pass)));
+        .filter_map(|entry| entry_to_run_test_tuple(entry, RunType::Pass));
 
     let run_error_entries = fs::read_dir("./tests/run-error")
         .unwrap()
-        .filter_map(|entry| entry_to_test_tuple(entry, TestType::Run(RunType::Error)));
+        .filter_map(|entry| entry_to_run_test_tuple(entry, RunType::Error));
 
     let failed_tests = compile_error_entries
         .chain(optimise_entries)
