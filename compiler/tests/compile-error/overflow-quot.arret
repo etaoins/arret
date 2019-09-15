@@ -1,0 +1,9 @@
+(import [stdlib base])
+
+(def minimum-int -9223372036854775808)
+
+; This message isn't quite right but it's not worth distinguishing these cases
+(def _ (quot minimum-int -1))
+      ;^^^^^^^^^^^^^^^^^^^^^ ERROR division by zero
+
+(defn main! () ->! ())

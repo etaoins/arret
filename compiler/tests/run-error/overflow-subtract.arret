@@ -1,0 +1,8 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(def minimum-int -9223372036854775808)
+
+(defn main! () ->! ()
+  (black-box! (- (black-box! minimum-int) 1))
+  ())

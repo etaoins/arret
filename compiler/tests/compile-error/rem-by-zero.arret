@@ -1,0 +1,6 @@
+(import [stdlib base])
+
+(def _ (rem 1 0))
+      ;^^^^^^^^^ ERROR division by zero
+
+(defn main! () ->! ())

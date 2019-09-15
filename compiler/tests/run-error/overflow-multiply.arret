@@ -1,0 +1,8 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(def maximum-int 9223372036854775807)
+
+(defn main! () ->! ()
+  (black-box! (* (black-box! maximum-int) 2))
+  ())
