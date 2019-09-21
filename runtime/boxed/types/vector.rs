@@ -43,7 +43,10 @@ impl<T: Boxed> Boxed for Vector<T> {}
 
 impl<T: Boxed> Vector<T> {
     /// Constructs a new vector with the passed boxed values
-    pub fn new(heap: &mut impl AsHeap, values: &[Gc<T>]) -> Gc<Vector<T>> {
+    pub fn new(
+        heap: &mut impl AsHeap,
+        values: impl ExactSizeIterator<Item = Gc<T>>,
+    ) -> Gc<Vector<T>> {
         let storage = Self::storage_for_element_len(values.len());
         let header = Vector::TYPE_TAG.to_heap_header(storage.box_size());
 
@@ -85,7 +88,7 @@ impl<T: Boxed> Vector<T> {
         let heap = heap.as_heap_mut();
 
         let elems: Vec<Gc<T>> = values.map(|v| cons(heap, v)).collect();
-        Self::new(heap, elems.as_slice())
+        Self::new(heap, elems.into_iter())
     }
 
     fn is_inline(&self) -> bool {
@@ -177,19 +180,21 @@ pub struct InlineVector<T: Boxed> {
 }
 
 impl<T: Boxed> InlineVector<T> {
-    fn new(header: Header, values: &[Gc<T>]) -> InlineVector<T> {
+    fn new(header: Header, values: impl ExactSizeIterator<Item = Gc<T>>) -> InlineVector<T> {
         unsafe {
-            let mut inline_values = mem::MaybeUninit::<[Gc<T>; MAX_INLINE_LENGTH]>::uninit();
-            ptr::copy(
-                values.as_ptr(),
-                inline_values.as_mut_ptr() as *mut _,
-                values.len(),
-            );
+            let inline_length = values.len();
+
+            let mut inline_values =
+                mem::MaybeUninit::<[Gc<T>; MAX_INLINE_LENGTH]>::uninit().assume_init();
+
+            for (inline_value, value) in inline_values.iter_mut().zip(values) {
+                ptr::write(inline_value, value);
+            }
 
             InlineVector {
                 header,
-                inline_length: values.len() as u32,
-                values: inline_values.assume_init(),
+                inline_length: inline_length as u32,
+                values: inline_values,
             }
         }
     }
@@ -203,11 +208,11 @@ pub struct ExternalVector<T: Boxed> {
 }
 
 impl<T: Boxed> ExternalVector<T> {
-    fn new(header: Header, values: &[Gc<T>]) -> ExternalVector<T> {
+    fn new(header: Header, values: impl ExactSizeIterator<Item = Gc<T>>) -> ExternalVector<T> {
         ExternalVector {
             header,
             inline_length: (MAX_INLINE_LENGTH + 1) as u32,
-            values: values.into(),
+            values: values.collect(),
         }
     }
 }
@@ -255,9 +260,9 @@ mod test {
         let boxed2 = Int::new(&mut heap, 2);
         let boxed3 = Int::new(&mut heap, 3);
 
-        let forward_vec1 = Vector::new(&mut heap, &[boxed1, boxed2, boxed3]);
-        let forward_vec2 = Vector::new(&mut heap, &[boxed1, boxed2, boxed3]);
-        let reverse_vec = Vector::new(&mut heap, &[boxed3, boxed2, boxed1]);
+        let forward_vec1 = Vector::new(&mut heap, vec![boxed1, boxed2, boxed3].into_iter());
+        let forward_vec2 = Vector::new(&mut heap, vec![boxed1, boxed2, boxed3].into_iter());
+        let reverse_vec = Vector::new(&mut heap, vec![boxed3, boxed2, boxed1].into_iter());
 
         assert_eq!(false, forward_vec1.eq_in_heap(&heap, &reverse_vec));
         assert_eq!(true, forward_vec1.eq_in_heap(&heap, &forward_vec2));

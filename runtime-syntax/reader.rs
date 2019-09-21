@@ -27,7 +27,7 @@ pub fn box_syntax_datum(heap: &mut impl boxed::AsHeap, datum: &Datum) -> Gc<boxe
                 .map(|elem| box_syntax_datum(heap, elem))
                 .collect::<Vec<Gc<boxed::Any>>>();
 
-            boxed::Vector::new(heap, boxed_elems.as_slice()).as_any_ref()
+            boxed::Vector::new(heap, boxed_elems.into_iter()).as_any_ref()
         }
         Datum::Map(_, _) => unimplemented!("Maps"),
         Datum::Set(_, _) => unimplemented!("Sets"),
