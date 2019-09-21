@@ -28,10 +28,10 @@ impl NumOperand {
     ) -> Option<NumOperand> {
         let possible_type_tags = possible_type_tags_for_value(value);
 
-        if possible_type_tags == boxed::TypeTag::Int.into() {
+        if !possible_type_tags.contains(boxed::TypeTag::Float) {
             let int64_reg = value_to_reg(ehx, b, span, value, &abitype::ABIType::Int);
             Some(NumOperand::Int(int64_reg))
-        } else if possible_type_tags == boxed::TypeTag::Float.into() {
+        } else if !possible_type_tags.contains(boxed::TypeTag::Int) {
             let float_reg = value_to_reg(ehx, b, span, value, &abitype::ABIType::Float);
             Some(NumOperand::Float(float_reg))
         } else {
