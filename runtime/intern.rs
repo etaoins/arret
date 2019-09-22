@@ -15,6 +15,7 @@
 
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 use std::{fmt, ptr, str};
 
 // UTF-8 sequences cannot start with 10xxxxxxx. This is pattern for the last continuation byte,
@@ -163,11 +164,9 @@ impl fmt::Debug for InternedSym {
     }
 }
 
-// TODO: This keeps two copies of the name. We can't simply keep a pointer to inside the `Vec`
-// or `HashMap` as they might reallocate. We can fix this later.
 pub struct Interner {
-    names: Vec<Box<str>>,
-    name_to_index: HashMap<Box<str>, u32>,
+    names: Vec<Rc<str>>,
+    name_to_index: HashMap<Rc<str>, u32>,
     /// Contains the highest static index + 1
     static_index_watermark: u32,
     global_names: *const GlobalName,
@@ -199,10 +198,12 @@ impl Interner {
             unimplemented!("interning symbols with global interned names");
         }
 
+        let shared_name: Rc<str> = name.into();
+
         let index = self.name_to_index.get(name).cloned().unwrap_or_else(|| {
             let index = self.names.len() as u32;
-            self.names.push(name.into());
-            self.name_to_index.insert(name.into(), index);
+            self.names.push(shared_name.clone());
+            self.name_to_index.insert(shared_name.clone(), index);
 
             index
         });
