@@ -3,6 +3,14 @@ use arret_runtime::boxed;
 use arret_runtime::boxed::refs::Gc;
 use arret_runtime::task::Task;
 
+#[arret_rfi_derive::rust_fun("(All #{T} & T -> (Vectorof T))")]
+pub fn stdlib_vector(
+    task: &mut Task,
+    values: Gc<boxed::List<boxed::Any>>,
+) -> Gc<boxed::Vector<boxed::Any>> {
+    boxed::Vector::new(task, values.iter())
+}
+
 #[arret_rfi_derive::rust_fun("(All #{T} (Vectorof T) Int -> T)")]
 pub fn stdlib_vector_ref(
     task: &mut Task,

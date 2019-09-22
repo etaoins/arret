@@ -100,5 +100,6 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "heap-alloc-count" => stdlib_heap_alloc_count,
     "fn-op-categories" => stdlib_fn_op_categories,
 
+    "vector" => stdlib_vector,
     "vector-ref" => stdlib_vector_ref
 });
