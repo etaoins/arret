@@ -42,3 +42,11 @@ pub fn stdlib_vector_ref(
 pub fn stdlib_vector_length(vector: Gc<boxed::Vector<boxed::Any>>) -> i64 {
     vector.len() as i64
 }
+
+#[arret_rfi_derive::rust_fun("(All #{T} (Vectorof T) -> (List & T))")]
+pub fn stdlib_vector_to_list(
+    task: &mut Task,
+    vector: Gc<boxed::Vector<boxed::Any>>,
+) -> Gc<boxed::List<boxed::Any>> {
+    boxed::List::new(task, vector.values().iter().cloned())
+}

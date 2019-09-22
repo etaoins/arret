@@ -14,7 +14,11 @@
 (defn test-vector-length! () ->! ()
   (assert-eq! 3 (vector-length [1 2 3])))
 
+(defn test-vector->list! () ->! ()
+  (assert-eq! '(1 2 3) (vector->list [1 2 3])))
+
 (defn main! () ->! ()
   (test-vector!)
   (test-vector-ref!)
-  (test-vector-length!))
+  (test-vector-length!)
+  (test-vector->list!))
