@@ -11,6 +11,10 @@
 (defn test-vector-ref! () ->! ()
   (assert-eq! 1 (vector-ref [1 2 3] 0)))
 
+(defn test-vector-length! () ->! ()
+  (assert-eq! 3 (vector-length [1 2 3])))
+
 (defn main! () ->! ()
   (test-vector!)
-  (test-vector-ref!))
+  (test-vector-ref!)
+  (test-vector-length!))

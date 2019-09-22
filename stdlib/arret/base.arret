@@ -9,7 +9,7 @@
 (import [stdlib rust])
 (export length panic panic! print! println! print-str write! writeln! write-str exit! cons map
         filter some? every? fold concat take int float < <= == > >= + * - / rem quot vector
-        vector-ref)
+        vector-length vector-ref)
 
 (export defn)
 (defmacro defn (macro-rules

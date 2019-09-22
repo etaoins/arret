@@ -101,5 +101,6 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "fn-op-categories" => stdlib_fn_op_categories,
 
     "vector" => stdlib_vector,
+    "vector-length" => stdlib_vector_length,
     "vector-ref" => stdlib_vector_ref
 });

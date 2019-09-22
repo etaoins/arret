@@ -37,3 +37,8 @@ pub fn stdlib_vector_ref(
 
     values[usize_index]
 }
+
+#[arret_rfi_derive::rust_fun("((Vectorof Any) -> Int)")]
+pub fn stdlib_vector_length(vector: Gc<boxed::Vector<boxed::Any>>) -> i64 {
+    vector.len() as i64
+}
