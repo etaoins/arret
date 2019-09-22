@@ -124,6 +124,17 @@ impl<T: Boxed> Vector<T> {
         }
     }
 
+    /// Returns a slice of values contained in the vector
+    pub fn values(&self) -> &[Gc<T>] {
+        unsafe {
+            if self.is_inline() {
+                &(*(self as *const Vector<T> as *const InlineVector<T>)).values[0..self.len()]
+            } else {
+                &(*(self as *const Vector<T> as *const ExternalVector<T>)).values
+            }
+        }
+    }
+
     pub(crate) fn values_mut(&mut self) -> &mut [Gc<T>] {
         unsafe {
             if self.is_inline() {

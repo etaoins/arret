@@ -1,0 +1,6 @@
+(import [stdlib base])
+
+(def _ (vector-ref [1 2 3] 5))
+      ;^^^^^^^^^^^^^^^^^^^^^^ ERROR index 5 out of bounds for vector of length 3
+
+(defn main! () ->! ())

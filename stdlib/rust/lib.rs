@@ -17,6 +17,9 @@ use crate::number::*;
 pub mod testing;
 use crate::testing::*;
 
+pub mod vector;
+use crate::vector::*;
+
 pub mod write;
 use crate::write::*;
 
@@ -95,5 +98,7 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "black-box" => stdlib_black_box,
     "black-box!" => stdlib_black_box_impure,
     "heap-alloc-count" => stdlib_heap_alloc_count,
-    "fn-op-categories" => stdlib_fn_op_categories
+    "fn-op-categories" => stdlib_fn_op_categories,
+
+    "vector-ref" => stdlib_vector_ref
 });

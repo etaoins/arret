@@ -1,0 +1,10 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn test-vector-ref! () ->! ()
+  ; TODO: This needs to be evaluated at compile time because the compiler can't codegen vectors
+  ; yet.
+  (assert-eq! 1 (vector-ref [1 2 3] 0)))
+
+(defn main! () ->! ()
+  (test-vector-ref!))
