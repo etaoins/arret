@@ -191,6 +191,16 @@ fn print_branch(
             ops::OpKind::ConstBoxedFalse(reg, ()) => {
                 writeln!(w, "%{} = const boxed::FALSE_INSTANCE;", reg.to_usize())?
             }
+            ops::OpKind::ConstBoxedVector(reg, element_regs) => writeln!(
+                w,
+                "%{} = const boxed::Vector {{ elements: [{}] }};",
+                reg.to_usize(),
+                element_regs
+                    .iter()
+                    .map(|element_reg| format!("%{}", element_reg.to_usize()))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )?,
             ops::OpKind::ConstRecordClassId(reg, record_class_id) => writeln!(
                 w,
                 "%{} = const record::{}::CLASS_ID;",

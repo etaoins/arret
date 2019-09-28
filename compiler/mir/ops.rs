@@ -222,6 +222,7 @@ pub enum OpKind {
     ConstBoxedSym(RegId, Box<str>),
     ConstBoxedPair(RegId, BoxPairOp),
     ConstBoxedFunThunk(RegId, BoxFunThunkOp),
+    ConstBoxedVector(RegId, Box<[RegId]>),
 
     AllocBoxedInt(RegId, RegId),
     AllocBoxedFloat(RegId, RegId),
@@ -323,6 +324,7 @@ impl OpKind {
             | ConstBoxedSym(reg_id, _)
             | ConstBoxedPair(reg_id, _)
             | ConstBoxedFunThunk(reg_id, _)
+            | ConstBoxedVector(reg_id, _)
             | ConstRecordClassId(reg_id, _)
             | AllocBoxedInt(reg_id, _)
             | AllocBoxedFloat(reg_id, _)
@@ -412,6 +414,7 @@ impl OpKind {
             ConstBoxedFunThunk(_, box_fun_thunk_op) | AllocBoxedFunThunk(_, box_fun_thunk_op) => {
                 coll.extend(iter::once(box_fun_thunk_op.closure_reg));
             }
+            ConstBoxedVector(_, element_regs) => coll.extend(element_regs.iter().copied()),
             AllocBoxedInt(_, reg_id)
             | AllocBoxedFloat(_, reg_id)
             | AllocBoxedChar(_, reg_id)
@@ -566,7 +569,8 @@ impl OpKind {
             | ConstBoxedSym(_, _)
             | ConstBoxedPair(_, _)
             | ConstBoxedFunThunk(_, _)
-            | ConstBoxedRecord(_, _) => OpCategory::ConstBox,
+            | ConstBoxedRecord(_, _)
+            | ConstBoxedVector(_, _) => OpCategory::ConstBox,
 
             AllocBoxedInt(_, _)
             | AllocBoxedFloat(_, _)
