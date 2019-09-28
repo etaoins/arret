@@ -1,4 +1,4 @@
-ARG LLVM_VERSION=8.0.0
+ARG LLVM_VERSION=8.0.1
 ARG LLVM_ROOT=/opt/llvm-8
 
 ##
@@ -11,7 +11,10 @@ RUN dnf install -y file cmake ninja-build gcc-c++ xz && \
   dnf clean all
 
 WORKDIR /usr/src
-RUN curl http://releases.llvm.org/${LLVM_VERSION}/llvm-${LLVM_VERSION}.src.tar.xz -sS | \
+
+# TODO: For some reason LLVM 8.0.1 isn't in the usual location 
+#RUN curl http://releases.llvm.org/${LLVM_VERSION}/llvm-${LLVM_VERSION}.src.tar.xz -sS | \
+RUN curl https://github.com/llvm/llvm-project/releases/download/llvmorg-8.0.1/llvm-8.0.1.src.tar.xz -sSL | \
   tar -Jx --no-same-owner
 
 WORKDIR /usr/src/llvm-build
@@ -44,4 +47,4 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.38.0
 ENV PATH "/root/.cargo/bin:${PATH}"
 RUN rustup component add rustfmt
 
-ENV LLVM_SYS_70_PREFIX "${LLVM_ROOT}"
+ENV LLVM_SYS_80_PREFIX "${LLVM_ROOT}"

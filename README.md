@@ -17,7 +17,8 @@ Documentation for the [`arret_runtime` crate](https://rustdoc.arret-lang.org/arr
 
 ### Docker REPL Image
 
-There is a public Docker image at [etaoins/arret:repl](https://cloud.docker.com/u/etaoins/repository/docker/etaoins/arret) that runs the Arret REPL. Whenever `cargo run repl` appears in the documentation this command can be used instead:
+There is a public Docker image at [etaoins/arret:repl](https://cloud.docker.com/u/etaoins/repository/docker/etaoins/arret) that runs the Arret REPL.
+Whenever `cargo run repl` appears in the documentation this command can be used instead:
 
 ```shell
 > docker run -ti etaoins/arret:repl
@@ -39,7 +40,7 @@ Hello, world!
 
 1. A Unix-like host running on ARM64, x86-64 or x86-32.
    These are the platforms supporting lazy compilation with LLVM's ORC JIT.
-1. [LLVM](http://releases.llvm.org) 7 or 8
+1. [LLVM](http://releases.llvm.org) 8 or 9
 1. [Rust](https://www.rust-lang.org/en-US/)
 
 ### Building with rustup and Cargo

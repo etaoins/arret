@@ -140,24 +140,26 @@ impl JITCtx {
             tcx.finish_module(llvm_module);
 
             let mut orc_module: LLVMOrcModuleHandle = 0;
-            if LLVMOrcAddEagerlyCompiledIR(
+            if !LLVMOrcAddEagerlyCompiledIR(
                 self.orc,
                 &mut orc_module,
                 llvm_module,
                 Some(orc_sym_resolve),
                 self as *mut JITCtx as *mut _,
-            ) != LLVMOrcErrorCode::LLVMOrcErrSuccess
+            )
+            .is_null()
             {
                 panic!("Unable to add module");
             }
 
             let mut target_address: LLVMOrcTargetAddress = 0;
-            if LLVMOrcGetSymbolAddressIn(
+            if !LLVMOrcGetSymbolAddressIn(
                 self.orc,
                 &mut target_address,
                 orc_module,
                 function_name.as_ptr() as *const _,
-            ) != LLVMOrcErrorCode::LLVMOrcErrSuccess
+            )
+            .is_null()
             {
                 panic!("Unable to get symbol address")
             }
