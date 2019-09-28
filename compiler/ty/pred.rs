@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::ty;
 use crate::ty::purity::Purity;
 use crate::ty::record;
@@ -132,24 +134,26 @@ impl TestTy {
             }
         }
     }
+}
 
-    pub fn to_string(&self) -> String {
+impl fmt::Display for TestTy {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            TestTy::Str => "str?".to_owned(),
-            TestTy::Sym => "sym?".to_owned(),
-            TestTy::Num => "num?".to_owned(),
-            TestTy::Int => "int?".to_owned(),
-            TestTy::Float => "float?".to_owned(),
-            TestTy::Bool => "bool?".to_owned(),
-            TestTy::Char => "char?".to_owned(),
-            TestTy::List => "list?".to_owned(),
-            TestTy::Vector => "vector?".to_owned(),
-            TestTy::Set => "set?".to_owned(),
-            TestTy::Map => "map?".to_owned(),
-            TestTy::Fun => "fn?".to_owned(),
-            TestTy::Nil => "nil?".to_owned(),
-            TestTy::TopRecord => "record?".to_owned(),
-            TestTy::RecordClass(cons) => format!("{}?", cons.value_cons_name()),
+            TestTy::Str => write!(formatter, "str?"),
+            TestTy::Sym => write!(formatter, "sym?"),
+            TestTy::Num => write!(formatter, "num?"),
+            TestTy::Int => write!(formatter, "int?"),
+            TestTy::Float => write!(formatter, "float?"),
+            TestTy::Bool => write!(formatter, "bool?"),
+            TestTy::Char => write!(formatter, "char?"),
+            TestTy::List => write!(formatter, "list?"),
+            TestTy::Vector => write!(formatter, "vector?"),
+            TestTy::Set => write!(formatter, "set?"),
+            TestTy::Map => write!(formatter, "map?"),
+            TestTy::Fun => write!(formatter, "fn?"),
+            TestTy::Nil => write!(formatter, "nil?"),
+            TestTy::TopRecord => write!(formatter, "record?"),
+            TestTy::RecordClass(cons) => write!(formatter, "{}?", cons.value_cons_name()),
         }
     }
 }
