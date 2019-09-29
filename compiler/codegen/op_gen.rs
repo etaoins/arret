@@ -167,8 +167,14 @@ fn gen_op(
                 let llvm_value = const_gen::gen_boxed_sym(tcx, mcx, value.as_ref());
                 fcx.regs.insert(*reg, llvm_value);
             }
-            OpKind::ConstBoxedVector(_reg, _value) => {
-                unimplemented!("generating constant boxed vectors");
+            OpKind::ConstBoxedVector(reg, elements) => {
+                let llvm_value = const_gen::gen_boxed_vector(
+                    tcx,
+                    mcx,
+                    elements.iter().map(|element| fcx.regs[element]),
+                );
+
+                fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstCastBoxed(reg, CastBoxedOp { from_reg, to_type }) => {
                 let from_llvm_value = fcx.regs[from_reg];

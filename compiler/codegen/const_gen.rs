@@ -1,4 +1,4 @@
-use std::{ffi, mem};
+use std::{ffi, iter, mem};
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
@@ -490,5 +490,48 @@ pub fn gen_boxed_record(
         annotate_private_global(global);
 
         LLVMConstBitCast(global, tcx.boxed_abi_to_llvm_ptr_type(&type_tag.into()))
+    }
+}
+
+pub fn gen_boxed_vector(
+    tcx: &mut TargetCtx,
+    mcx: &mut ModCtx<'_, '_, '_>,
+    llvm_elements: impl ExactSizeIterator<Item = LLVMValueRef>,
+) -> LLVMValueRef {
+    use arret_runtime::abitype::BoxedABIType;
+
+    let elements_len = llvm_elements.len();
+
+    if elements_len > boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH {
+        unimplemented!("generating constant vector of length {}", elements_len);
+    }
+
+    unsafe {
+        let type_tag = boxed::TypeTag::Vector;
+        let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
+        let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
+        let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
+
+        let mut members: Vec<LLVMValueRef> = vec![
+            tcx.llvm_box_header(type_tag.to_const_header()),
+            LLVMConstInt(llvm_i32, elements_len as u64, 0),
+        ];
+
+        members.extend(
+            llvm_elements.chain(
+                iter::repeat(LLVMGetUndef(llvm_any_ptr))
+                    .take(boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH - elements_len),
+            ),
+        );
+
+        let llvm_value =
+            LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
+
+        let global = LLVMAddGlobal(mcx.module, llvm_type, "const_vector\0".as_ptr() as *const _);
+        LLVMSetInitializer(global, llvm_value);
+        LLVMSetAlignment(global, mem::align_of::<boxed::Vector>() as u32);
+
+        annotate_private_global(global);
+        global
     }
 }

@@ -7,7 +7,6 @@ use crate::boxed::*;
 
 const MAX_16BYTE_INLINE_LENGTH: usize = ((16 - 8) / mem::size_of::<Gc<Any>>());
 const MAX_32BYTE_INLINE_LENGTH: usize = ((32 - 8) / mem::size_of::<Gc<Any>>());
-const MAX_INLINE_LENGTH: usize = MAX_32BYTE_INLINE_LENGTH;
 
 /// Describes the storage of a vector's data
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -42,6 +41,9 @@ pub struct Vector<T: Boxed = Any> {
 impl<T: Boxed> Boxed for Vector<T> {}
 
 impl<T: Boxed> Vector<T> {
+    /// Maximum element length of an inline vector
+    pub const MAX_INLINE_LENGTH: usize = MAX_32BYTE_INLINE_LENGTH;
+
     /// Constructs a new vector with the passed boxed values
     pub fn new(
         heap: &mut impl AsHeap,
@@ -92,7 +94,7 @@ impl<T: Boxed> Vector<T> {
     }
 
     fn is_inline(&self) -> bool {
-        self.inline_length <= (MAX_INLINE_LENGTH as u32)
+        self.inline_length <= (Self::MAX_INLINE_LENGTH as u32)
     }
 
     fn as_repr(&self) -> Repr<'_, T> {
@@ -187,7 +189,7 @@ where
 pub struct InlineVector<T: Boxed> {
     header: Header,
     inline_length: u32,
-    values: [Gc<T>; MAX_INLINE_LENGTH],
+    values: [Gc<T>; MAX_32BYTE_INLINE_LENGTH],
 }
 
 impl<T: Boxed> InlineVector<T> {
@@ -196,7 +198,7 @@ impl<T: Boxed> InlineVector<T> {
             let inline_length = values.len();
 
             let mut inline_values =
-                mem::MaybeUninit::<[Gc<T>; MAX_INLINE_LENGTH]>::uninit().assume_init();
+                mem::MaybeUninit::<[Gc<T>; MAX_32BYTE_INLINE_LENGTH]>::uninit().assume_init();
 
             for (inline_value, value) in inline_values.iter_mut().zip(values) {
                 ptr::write(inline_value, value);
@@ -222,7 +224,7 @@ impl<T: Boxed> ExternalVector<T> {
     fn new(header: Header, values: impl ExactSizeIterator<Item = Gc<T>>) -> ExternalVector<T> {
         ExternalVector {
             header,
-            inline_length: (MAX_INLINE_LENGTH + 1) as u32,
+            inline_length: (Vector::<T>::MAX_INLINE_LENGTH + 1) as u32,
             values: values.collect(),
         }
     }

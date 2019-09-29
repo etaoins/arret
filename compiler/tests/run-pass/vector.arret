@@ -1,21 +1,27 @@
 (import [stdlib base])
 (import [stdlib test])
 
-; TODO: These need to be evaluated at compile time because the compiler can't codegen vectors
-; yet.
-
 (defn test-vector! () ->! ()
   (assert-eq! [] (vector))
-  (assert-eq! [1 2 3] (vector 1 2 3)))
+  (assert-eq! [1] (vector 1))
+  (assert-eq! [1 2] ((black-box! vector) 1 2))
+  (assert-eq! [1 2 3] (vector 1 2 (black-box! 3))))
 
 (defn test-vector-ref! () ->! ()
-  (assert-eq! 1 (vector-ref [1 2 3] 0)))
+  (assert-eq! 1 (vector-ref [1 2 3] 0))
+  (assert-eq! 2 ((black-box! vector-ref) [1 2 3] 1))
+  (assert-eq! 3 (vector-ref (black-box! [1 2 3]) 2)))
 
 (defn test-vector-length! () ->! ()
-  (assert-eq! 3 (vector-length [1 2 3])))
+  (assert-eq! 0 (vector-length []))
+  (assert-eq! 1 ((black-box! vector-length) [1]))
+  (assert-eq! 2 (vector-length (black-box! [1 2])))
+  (assert-eq! 3 ((black-box! vector-length) (black-box! [1 2 3]))))
 
 (defn test-vector->list! () ->! ()
-  (assert-eq! '(1 2 3) (vector->list [1 2 3])))
+  (assert-eq! '(1) (vector->list [1]))
+  (assert-eq! '(1 2) ((black-box! vector->list) [1 2]))
+  (assert-eq! '(1 2 3) (vector->list (black-box! [1 2 3]))))
 
 (defn main! () ->! ()
   (test-vector!)
