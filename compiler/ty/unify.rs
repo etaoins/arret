@@ -188,7 +188,7 @@ fn unify_record_instance<M: ty::PM>(
     use std::collections::HashMap;
 
     if instance1.cons() != instance2.cons() {
-        return UnifiedTy::Merged(Ty::TopRecord.into());
+        return UnifiedTy::Discerned;
     }
 
     let mut merged_pvar_purities = HashMap::new();
@@ -774,7 +774,7 @@ mod test {
 
         // Different record constructors
         assert_eq!(
-            UnifiedTy::Merged(Ty::TopRecord.into()),
+            UnifiedTy::Discerned,
             unify_ty_refs(&float_instance1_poly, &float_bool_instance2_poly)
         );
 

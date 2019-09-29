@@ -105,4 +105,12 @@
     (if 'foo 1 2)))
         ;^^^ ERROR mismatched types
 
+(defrecord RecordOne (record1))
+(defrecord RecordTwo (record2))
+(defrecord RecordThree (record3))
+
+; Make sure we don't unify this to `Record`
+(def [_ (U RecordOne RecordTwo)] (record3))
+                                 ;^^^^^^^ ERROR mismatched types
+
 (defn main! ())

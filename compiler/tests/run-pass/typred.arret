@@ -56,8 +56,12 @@
   (assert-eq! '(true false true) ((black-box! map) int? '(1 2.0 3))))
 
 (defn test-record-ty-preds! () ->! ()
-  (letrecord [(RecordOne) (record-one) (RecordTwo) (record-two)]
-    (let [record-one-instance (record-one)]
+  (letrecord [RecordOne (record-one) RecordTwo (record-two)]
+    (let [record-one-instance (record-one)
+          record-two-instance (record-two)
+          record-number (fn ([r (U RecordOne RecordTwo)]) -> Int
+            (if (record-one? r) 1 2))]
+
       (assert-eq! true (record? record-one-instance))
       (assert-eq! true (record? (black-box! record-one-instance)))
 
@@ -67,7 +71,10 @@
 
       (assert-eq! true (record-one? (black-box-untyped! record-one-instance)))
       (assert-eq! false (record-two? (black-box-untyped! record-one-instance)))
-      (assert-eq! false (record-two? (black-box-untyped! 123))))))
+      (assert-eq! false (record-two? (black-box-untyped! 123)))
+
+      (assert-eq! 1 (record-number (black-box! record-one-instance)))
+      (assert-eq! 2 (record-number (black-box! record-two-instance))))))
 
 (defn main! () ->! ()
   (test-tagged-ty-preds!)
