@@ -16,7 +16,7 @@ arret-syntax = { path = "../syntax" }
 arret-runtime = { path = "../runtime" }
 arret-runtime-syntax = { path = "../runtime-syntax" }
 codespan = "0.3"
-codespan-reporting = "0.3"
+codespan-reporting = "0.5"
 termcolor = "1"
 
 [dev-dependencies]
