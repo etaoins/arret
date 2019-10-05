@@ -26,7 +26,7 @@ pub struct RegValue {
     pub reg: BuiltReg,
     pub abi_type: abitype::ABIType,
     pub possible_type_tags: TypeTagSet,
-    pub known_record_cons: Option<record::ConsId>,
+    pub type_hint: types::TypeHint,
 }
 
 impl RegValue {
@@ -35,7 +35,7 @@ impl RegValue {
             reg,
             possible_type_tags: (&abi_type).into(),
             abi_type,
-            known_record_cons: None,
+            type_hint: types::TypeHint::None,
         }
     }
 }

@@ -300,7 +300,7 @@ impl<M: PM> List<M> {
         self.rest.as_ref()
     }
 
-    fn size_range(&self) -> Range<usize> {
+    pub fn size_range(&self) -> Range<usize> {
         if self.rest.is_never() {
             (self.fixed.len()..self.fixed.len())
         } else {

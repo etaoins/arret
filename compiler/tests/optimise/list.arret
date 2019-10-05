@@ -8,4 +8,8 @@
 
   ; We should know this is a constant value
   (assert-fn-doesnt-contain-op! :mem-load (fn ([l (List & Any)]) -> Int
-    (if (nil? l) (length l) 0))))
+    (if (nil? l) (length l) 0)))
+
+  ; This should come from the type
+  (assert-fn-doesnt-contain-op! :mem-load (fn ([l (List Any Any Any)]) -> Int
+    (length l))))

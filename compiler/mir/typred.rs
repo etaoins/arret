@@ -10,6 +10,7 @@ use crate::mir::ops::*;
 use crate::mir::tagset::TypeTagSet;
 use crate::mir::value::build_reg::value_to_reg;
 use crate::mir::value::from_reg::reg_to_value;
+use crate::mir::value::types::TypeHint;
 use crate::mir::value::Value;
 use crate::ty;
 use crate::ty::record;
@@ -157,7 +158,7 @@ fn eval_record_ty_pred(
     subject_value: &Value,
     test_cons: &record::ConsId,
 ) -> Value {
-    use crate::mir::value::types::{known_record_cons_for_value, possible_type_tags_for_value};
+    use crate::mir::value::types::{possible_type_tags_for_value, type_hint_for_value};
 
     let possible_type_tags = possible_type_tags_for_value(subject_value);
 
@@ -168,8 +169,8 @@ fn eval_record_ty_pred(
 
     let is_definite_record = possible_type_tags == boxed::TypeTag::Record.into();
     let definite_matching_cons =
-        if let Some(subject_cons) = known_record_cons_for_value(ehx, subject_value) {
-            let known_matching_cons = test_cons == subject_cons;
+        if let TypeHint::KnownRecordCons(subject_cons) = type_hint_for_value(ehx, subject_value) {
+            let known_matching_cons = test_cons == &subject_cons;
             if !known_matching_cons {
                 // This cannot possibly match regardless of if it's record
                 return boxed::FALSE_INSTANCE.as_any_ref().into();

@@ -4,6 +4,7 @@ use arret_syntax::span::Span;
 
 use crate::mir::builder::{Builder, TryToBuilder};
 use crate::mir::value;
+use crate::mir::value::types::TypeHint;
 use crate::mir::value::Value;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,8 +59,12 @@ pub fn list_value_length(value: &Value) -> ListValueLength {
                 // Must be empty
                 ListValueLength::Exact(0)
             } else if !reg_value.possible_type_tags.contains(boxed::TypeTag::Nil) {
-                // Cannot be empty
-                ListValueLength::Min(1)
+                if let TypeHint::KnownListLength(len) = reg_value.type_hint {
+                    ListValueLength::Exact(len)
+                } else {
+                    // Cannot be empty
+                    ListValueLength::Min(1)
+                }
             } else {
                 ListValueLength::Min(0)
             }

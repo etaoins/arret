@@ -22,6 +22,7 @@ use crate::mir::ops;
 use crate::mir::polymorph::PolymorphABI;
 use crate::mir::value;
 use crate::mir::value::synthetic_fun::SyntheticFuns;
+use crate::mir::value::types::TypeHint;
 use crate::mir::{Expr, Value};
 use crate::rfi;
 use crate::ty;
@@ -1127,7 +1128,7 @@ impl EvalHirCtx {
         use crate::mir::equality::values_statically_equal;
         use crate::mir::value::build_reg::value_to_reg;
         use crate::mir::value::plan_phi::*;
-        use crate::mir::value::types::{known_record_cons_for_value, possible_type_tags_for_value};
+        use crate::mir::value::types::{possible_type_tags_for_value, type_hint_for_value};
 
         let span = cond.span;
         let test_reg = value_to_reg(self, b, span, test_value, &abitype::ABIType::Bool);
@@ -1167,19 +1168,19 @@ impl EvalHirCtx {
 
                     let possible_type_tags = possible_true_type_tags | possible_false_type_tags;
 
-                    let true_record_cons = known_record_cons_for_value(self, &true_value);
-                    let false_record_cons = known_record_cons_for_value(self, &false_value);
-                    let known_record_cons = if true_record_cons == false_record_cons {
-                        true_record_cons.cloned()
+                    let true_type_hint = type_hint_for_value(self, &true_value);
+                    let false_type_hint = type_hint_for_value(self, &false_value);
+                    let common_type_hint = if true_type_hint == false_type_hint {
+                        true_type_hint.clone()
                     } else {
-                        None
+                        TypeHint::None
                     };
 
                     let reg_value = value::RegValue {
                         reg: output_reg,
                         abi_type: phi_abi_type.clone(),
                         possible_type_tags,
-                        known_record_cons,
+                        type_hint: common_type_hint,
                     };
 
                     output_value = reg_value.into();
