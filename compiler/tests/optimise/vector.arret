@@ -1,0 +1,7 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn main! () ->! ()
+  ; This should come from the type
+  (assert-fn-doesnt-contain-op! :call (fn ([v (Vector Any Any Any)]) -> Int
+    (vector-length v))))

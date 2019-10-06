@@ -4,6 +4,7 @@ mod num_utils;
 mod number;
 mod panics;
 mod testing;
+mod vector;
 
 use arret_syntax::span::Span;
 
@@ -79,5 +80,7 @@ define_build_intrinsics! {
     // Purity doesn't matter at the MIR level; these are both treated as impure so they're not
     // optimised away.
     "panic" => panics::panics,
-    "panic!" => panics::panics
+    "panic!" => panics::panics,
+
+    "vector-length" => vector::vector_length
 }

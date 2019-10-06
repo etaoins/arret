@@ -25,6 +25,9 @@ pub enum TypeHint {
     /// List of a known length
     KnownListLength(usize),
 
+    /// Vector of a known length
+    KnownVectorLength(usize),
+
     /// No type hint
     None,
 }
@@ -89,6 +92,10 @@ where
         }
     }
 
+    if let Some(Ty::Vector(members)) = ty_ref.try_to_fixed() {
+        return TypeHint::KnownVectorLength(members.len());
+    }
+
     TypeHint::None
 }
 
@@ -115,11 +122,16 @@ pub fn known_record_cons_for_value<'a>(
 
 pub fn type_hint_for_value(ehx: &EvalHirCtx, value: &Value) -> TypeHint {
     if let Some(cons) = known_record_cons_for_value(ehx, value) {
-        TypeHint::KnownRecordCons(cons.clone())
-    } else if let Value::Reg(reg_value) = value {
-        reg_value.type_hint.clone()
-    } else {
-        TypeHint::None
+        return TypeHint::KnownRecordCons(cons.clone());
+    }
+
+    match value {
+        Value::Const(any_ref) => any_ref
+            .downcast_ref::<boxed::Vector>()
+            .map(|vector_ref| TypeHint::KnownVectorLength(vector_ref.len()))
+            .unwrap_or(TypeHint::None),
+        Value::Reg(reg_value) => reg_value.type_hint.clone(),
+        _ => TypeHint::None,
     }
 }
 
