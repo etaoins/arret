@@ -133,7 +133,14 @@ impl<'of> ProgramCaptureCtx<'of> {
             OpKind::CastBoxed(reg, ops::CastBoxedOp { from_reg, .. })
             | OpKind::Alias(reg, from_reg)
             | OpKind::LoadBoxedPairHead(reg, from_reg)
-            | OpKind::LoadBoxedPairRest(reg, from_reg) => {
+            | OpKind::LoadBoxedPairRest(reg, from_reg)
+            | OpKind::LoadBoxedVectorMember(
+                reg,
+                ops::LoadBoxedVectorMemberOp {
+                    vector_reg: from_reg,
+                    ..
+                },
+            ) => {
                 captures.add(*from_reg, captures.get(*reg));
             }
             OpKind::AllocBoxedPair(

@@ -82,5 +82,6 @@ define_build_intrinsics! {
     "panic" => panics::panics,
     "panic!" => panics::panics,
 
-    "vector-length" => vector::vector_length
+    "vector-length" => vector::vector_length,
+    "vector-ref" => vector::vector_ref
 }

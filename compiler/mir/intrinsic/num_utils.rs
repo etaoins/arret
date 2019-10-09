@@ -116,3 +116,13 @@ pub fn num_value_to_float_reg(
         BuiltReg::Local(output_reg)
     }
 }
+
+/// Tries to convert a `Value` to a constant `i64`
+pub fn try_value_to_i64(value: Value) -> Option<i64> {
+    match value {
+        Value::Const(any_ref) => any_ref
+            .downcast_ref::<boxed::Int>()
+            .map(|int_ref| int_ref.value()),
+        _ => None,
+    }
+}

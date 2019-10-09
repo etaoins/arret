@@ -142,6 +142,14 @@ pub struct LoadBoxedRecordFieldOp {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct LoadBoxedVectorMemberOp {
+    pub vector_reg: RegId,
+    /// Exact known length of the vector we're loading from
+    pub known_vector_length: usize,
+    pub member_index: usize,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct CastBoxedOp {
     pub from_reg: RegId,
     pub to_type: abitype::BoxedABIType,
@@ -248,6 +256,8 @@ pub enum OpKind {
     LoadBoxedSymInterned(RegId, RegId),
     LoadBoxedFunThunkClosure(RegId, RegId),
     LoadBoxedRecordClassId(RegId, RegId),
+    LoadBoxedVectorMember(RegId, LoadBoxedVectorMemberOp),
+
     Cond(CondOp),
 
     MakeCallback(RegId, MakeCallbackOp),
@@ -348,6 +358,7 @@ impl OpKind {
             | LoadBoxedFunThunkClosure(reg_id, _)
             | LoadBoxedRecordClassId(reg_id, _)
             | LoadBoxedRecordField(reg_id, _)
+            | LoadBoxedVectorMember(reg_id, _)
             | FloatAdd(reg_id, _)
             | Int64Add(reg_id, _)
             | Int64CheckedAdd(reg_id, _)
@@ -458,6 +469,12 @@ impl OpKind {
                 _,
                 LoadBoxedRecordFieldOp {
                     record_reg: reg_id, ..
+                },
+            )
+            | LoadBoxedVectorMember(
+                _,
+                LoadBoxedVectorMemberOp {
+                    vector_reg: reg_id, ..
                 },
             )
             | Int64ToFloat(_, reg_id)
@@ -590,7 +607,8 @@ impl OpKind {
             | LoadBoxedSymInterned(_, _)
             | LoadBoxedFunThunkClosure(_, _)
             | LoadBoxedRecordClassId(_, _)
-            | LoadBoxedRecordField(_, _) => OpCategory::MemLoad,
+            | LoadBoxedRecordField(_, _)
+            | LoadBoxedVectorMember(_, _) => OpCategory::MemLoad,
 
             FloatAdd(_, _)
             | Int64Add(_, _)

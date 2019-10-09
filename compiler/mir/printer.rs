@@ -420,6 +420,23 @@ fn print_branch(
                     pair_reg.to_usize()
                 )?;
             }
+            ops::OpKind::LoadBoxedVectorMember(
+                reg,
+                ops::LoadBoxedVectorMemberOp {
+                    vector_reg,
+                    known_vector_length,
+                    member_index,
+                },
+            ) => {
+                writeln!(
+                    w,
+                    "%{reg} = <%{vector_reg} as boxed::Vector>[{member_index}] where <${vector_reg} as boxed::Vector>.len == {known_vector_length};",
+                    reg = reg.to_usize(),
+                    vector_reg = vector_reg.to_usize(),
+                    known_vector_length = known_vector_length,
+                    member_index = member_index
+                )?;
+            }
             ops::OpKind::LoadBoxedListLength(
                 reg,
                 ops::LoadBoxedListLengthOp {

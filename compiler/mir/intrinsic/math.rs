@@ -20,28 +20,18 @@
 
 use arret_syntax::span::Span;
 
-use arret_runtime::{abitype, boxed};
+use arret_runtime::abitype;
 
 use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::error::Result;
 use crate::mir::eval_hir::EvalHirCtx;
-use crate::mir::intrinsic::num_utils::{num_value_to_float_reg, NumOperand};
+use crate::mir::intrinsic::num_utils::{num_value_to_float_reg, try_value_to_i64, NumOperand};
 use crate::mir::ops::{BinaryOp, OpKind, RegId};
 
 use crate::mir::value;
 use crate::mir::value::build_reg::value_to_reg;
 use crate::mir::value::list::SizedListIterator;
 use crate::mir::value::Value;
-
-/// Tries to convert a `Value` to a constant `i64`
-fn try_value_to_i64(value: Value) -> Option<i64> {
-    match value {
-        Value::Const(any_ref) => any_ref
-            .downcast_ref::<boxed::Int>()
-            .map(|int_ref| int_ref.value()),
-        _ => None,
-    }
-}
 
 /// Folds a series of numerical operands as `Float`s
 ///

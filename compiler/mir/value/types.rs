@@ -120,6 +120,22 @@ pub fn known_record_cons_for_value<'a>(
     }
 }
 
+pub fn known_vector_length_for_value(value: &Value) -> Option<usize> {
+    match value {
+        Value::Const(any_ref) => any_ref
+            .downcast_ref::<boxed::Vector>()
+            .map(|vector_ref| vector_ref.len()),
+        Value::Reg(reg_value) => {
+            if let TypeHint::KnownVectorLength(known_length) = reg_value.type_hint {
+                Some(known_length)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 pub fn type_hint_for_value(ehx: &EvalHirCtx, value: &Value) -> TypeHint {
     if let Some(cons) = known_record_cons_for_value(ehx, value) {
         return TypeHint::KnownRecordCons(cons.clone());

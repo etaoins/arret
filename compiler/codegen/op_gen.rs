@@ -514,6 +514,38 @@ fn gen_op(
 
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::LoadBoxedVectorMember(
+                reg,
+                LoadBoxedVectorMemberOp {
+                    vector_reg,
+                    known_vector_length,
+                    member_index,
+                },
+            ) => {
+                if *known_vector_length > boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH {
+                    // TODO: This will need to be done after we implement persistent vectors
+                    unimplemented!("loading members from external vectors")
+                }
+
+                let llvm_boxed_vector = fcx.regs[vector_reg];
+                let value_ptr = LLVMBuildStructGEP(
+                    fcx.builder,
+                    llvm_boxed_vector,
+                    // Skip the header and inline len
+                    (2 + member_index) as u32,
+                    b"vector_member_ptr\0".as_ptr() as *const _,
+                );
+
+                let llvm_value = LLVMBuildLoad(
+                    fcx.builder,
+                    value_ptr,
+                    "vector_member_ptr\0".as_ptr() as *const _,
+                );
+
+                tcx.add_invariant_load_metadata(llvm_value);
+
+                fcx.regs.insert(*reg, llvm_value);
+            }
             OpKind::Cond(cond_op) => {
                 let cond_alloc_plan = active_alloc.next_cond_plan();
                 gen_cond(tcx, mcx, fcx, cond_op, cond_alloc_plan);
