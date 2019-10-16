@@ -5,7 +5,7 @@ RUN \
   apt-get -y install curl gcc zlib1g-dev libstdc++-8-dev llvm-8 llvm-8-dev && \
   apt-get clean
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.38.0
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.38.0 --profile=minimal
 ENV PATH "/root/.cargo/bin:${PATH}"
 
 # These are the minimum required files for `cargo fetch`
