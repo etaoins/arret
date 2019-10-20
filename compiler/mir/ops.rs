@@ -1,6 +1,5 @@
 use arret_runtime::abitype;
 use arret_runtime::boxed;
-use arret_runtime::callback;
 
 use arret_syntax::datum::DataStr;
 use arret_syntax::span::Span;
@@ -43,23 +42,6 @@ impl OpsABI {
                 abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
             ]),
             ret: abitype::BoxedABIType::Any.into(),
-        }
-    }
-}
-
-impl From<callback::EntryPointABIType> for OpsABI {
-    fn from(abi_type: callback::EntryPointABIType) -> Self {
-        use std::iter;
-
-        // Include our captures
-        let params = iter::once(abitype::BoxedABIType::Any.into())
-            .chain(abi_type.params.iter().cloned())
-            .collect();
-
-        OpsABI {
-            call_conv: CallConv::CCC,
-            params,
-            ret: abi_type.ret,
         }
     }
 }

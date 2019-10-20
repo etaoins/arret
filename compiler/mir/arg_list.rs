@@ -41,7 +41,8 @@ pub fn build_load_arg_list_value(
     let mut param_list_poly_iter = ListIterator::new(param_list_poly);
 
     let fixed_reg_values: Vec<(ops::RegId, Value)> = polymorph_abi
-        .arret_fixed_params()
+        .fixed_params
+        .iter()
         .map(|abi_type| {
             let reg = b.alloc_local();
             let param_type = param_list_poly_iter.next().unwrap();
@@ -51,7 +52,7 @@ pub fn build_load_arg_list_value(
         .collect();
 
     let rest_reg_value: Option<(ops::RegId, Value)> =
-        polymorph_abi.arret_rest_param().map(|abi_type| {
+        polymorph_abi.rest_param.as_ref().map(|abi_type| {
             let reg = b.alloc_local();
             let tail_type = param_list_poly_iter.tail_type();
 

@@ -120,13 +120,13 @@ pub fn ops_for_rust_fun(
         arg_list_value,
     );
 
-    build_value_ret(ehx, &mut b, span, app_result, &wanted_abi.ops_abi.ret);
+    build_value_ret(ehx, &mut b, span, app_result, &wanted_abi.ret);
 
     optimise_fun(ops::Fun {
         span,
         source_name: Some(fun_symbol.into()),
 
-        abi: wanted_abi.ops_abi,
+        abi: wanted_abi.into(),
         param_regs,
         ops: b.into_ops(),
     })

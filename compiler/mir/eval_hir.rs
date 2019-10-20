@@ -346,7 +346,7 @@ impl EvalHirCtx {
 
         let wanted_abi =
             polymorph_abi_for_list_ty(captures_reg.is_some(), &param_list_mono, ret_ty);
-        let ret_abi = wanted_abi.ops_abi.ret.clone();
+        let ret_abi = wanted_abi.ret.clone();
 
         let mut arg_regs: Vec<RegId> = vec![];
         if let Some(captures_reg) = captures_reg {
@@ -358,8 +358,8 @@ impl EvalHirCtx {
             b,
             span,
             arg_list_value.clone(),
-            wanted_abi.arret_fixed_params(),
-            wanted_abi.arret_rest_param(),
+            wanted_abi.fixed_params.iter(),
+            wanted_abi.rest_param.as_ref(),
         ));
 
         let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
@@ -1018,8 +1018,8 @@ impl EvalHirCtx {
                 some_b,
                 span,
                 arg_list_value.clone(),
-                self_abi.arret_fixed_params(),
-                self_abi.arret_rest_param(),
+                self_abi.fixed_params.iter(),
+                self_abi.rest_param.as_ref(),
             ));
 
             // All of the context for `TailCall` is implicit except the arg regs
@@ -1032,7 +1032,7 @@ impl EvalHirCtx {
                 },
             );
 
-            match &self_abi.ops_abi.ret {
+            match &self_abi.ret {
                 abitype::RetABIType::Inhabited(_) => {
                     some_b.push(span, OpKind::Ret(ret_reg.into()));
                 }
@@ -1481,7 +1481,7 @@ impl EvalHirCtx {
 
         let ty_args = stx.into_poly_ty_args();
 
-        let tail_call_ctx = if wanted_abi.ops_abi.call_conv == ops::CallConv::FastCC {
+        let tail_call_ctx = if wanted_abi.call_conv == ops::CallConv::FastCC {
             Some(TailCallCtx {
                 self_abi: wanted_abi.clone(),
                 captures_reg,
@@ -1518,13 +1518,13 @@ impl EvalHirCtx {
         let app_result = self.eval_expr(&mut fcx, &mut some_b, &fun_expr.body_expr);
 
         let mut b = some_b.unwrap();
-        build_value_ret(self, &mut b, span, app_result, &wanted_abi.ops_abi.ret);
+        build_value_ret(self, &mut b, span, app_result, &wanted_abi.ret);
 
         Ok(optimise_fun(ops::Fun {
             span: arret_fun.fun_expr().span,
             source_name: arret_fun.source_name().clone(),
 
-            abi: wanted_abi.ops_abi,
+            abi: wanted_abi.into(),
             param_regs,
             ops: b.into_ops(),
         }))
@@ -1560,19 +1560,13 @@ impl EvalHirCtx {
         let result_value =
             self.build_reg_fun_thunk_app(&mut b, EMPTY_SPAN, &fun_reg_value, &arg_list_value);
 
-        build_value_ret(
-            self,
-            &mut b,
-            EMPTY_SPAN,
-            Ok(result_value),
-            &wanted_abi.ops_abi.ret,
-        );
+        build_value_ret(self, &mut b, EMPTY_SPAN, Ok(result_value), &wanted_abi.ret);
 
         optimise_fun(ops::Fun {
             span: EMPTY_SPAN,
             source_name: Some("callback_to_thunk_adapter".into()),
 
-            abi: wanted_abi.ops_abi,
+            abi: wanted_abi.into(),
             param_regs,
             ops: b.into_ops(),
         })
@@ -1772,14 +1766,14 @@ impl EvalHirCtx {
         };
 
         let main_abi = PolymorphABI {
-            ops_abi: ops::OpsABI {
-                call_conv: ops::CallConv::CCC,
-                params: Box::new([]),
-                ret: abitype::RetABIType::Void,
-            },
+            call_conv: ops::CallConv::CCC,
+
             // Main is a top-level function; it can't capture
             has_captures: false,
-            has_rest: false,
+            fixed_params: Box::new([]),
+            rest_param: None,
+
+            ret: abitype::RetABIType::Void,
         };
 
         let main = self.ops_for_arret_fun(&main_arret_fun, main_abi)?;
