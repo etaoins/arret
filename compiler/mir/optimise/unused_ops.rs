@@ -107,7 +107,7 @@ fn add_value_used_regs(value: &Value, used_regs: &mut HashSet<ops::RegId>) {
         | Value::RecordCons(_)
         | Value::FieldAccessor(_, _) => {}
         Value::ArretFun(arret_fun) => {
-            for (_, free_value) in arret_fun.closure().free_values.iter() {
+            for (_, free_value) in arret_fun.env_values().free_values.iter() {
                 add_value_used_regs(free_value, used_regs);
             }
         }

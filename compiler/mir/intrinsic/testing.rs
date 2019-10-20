@@ -17,11 +17,11 @@ fn ideal_polymorph_abi_for_arret_fun(arret_fun: &value::ArretFun) -> PolymorphAB
     use crate::hir::destruc::poly_for_list_destruc;
     use crate::mir::polymorph::polymorph_abi_for_list_ty;
 
-    let has_closure = !arret_fun.closure().free_values.is_empty();
+    let has_env = !arret_fun.env_values().free_values.is_empty();
     let fun_expr = arret_fun.fun_expr();
     let param_list_type = poly_for_list_destruc(&fun_expr.params);
 
-    polymorph_abi_for_list_ty(has_closure, &param_list_type, &fun_expr.ret_ty)
+    polymorph_abi_for_list_ty(has_env, &param_list_type, &fun_expr.ret_ty)
 }
 
 fn add_ops_categories<'a>(

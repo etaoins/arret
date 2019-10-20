@@ -1,8 +1,8 @@
 mod app_purity;
 mod arg_list;
 mod builder;
-mod closure;
 mod costing;
+mod env_values;
 mod equality;
 pub mod error;
 pub mod eval_hir;

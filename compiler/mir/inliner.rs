@@ -6,8 +6,8 @@ use arret_runtime::boxed::prelude::*;
 use arret_runtime::boxed::Heap;
 
 use crate::mir::builder::Builder;
-use crate::mir::closure::Closure;
 use crate::mir::costing::{cost_for_ops, OpCost, OpCostFactor};
+use crate::mir::env_values::EnvValues;
 use crate::mir::error::{Error, Result};
 use crate::mir::eval_hir::ApplyArgs;
 use crate::mir::eval_hir::EvalHirCtx;
@@ -104,8 +104,8 @@ fn inline_preference_factor_for_arg_list_value(arg_list_value: &Value) -> OpCost
 }
 
 /// Returns the product of the inline scaling factor for each captured value
-fn inline_preference_factor_for_closure(closure: &Closure) -> OpCostFactor {
-    closure
+fn inline_preference_factor_for_env_values(env_values: &EnvValues) -> OpCostFactor {
+    env_values
         .free_values
         .iter()
         .map(|(_, value)| inline_preference_factor_for_value(value))
@@ -118,7 +118,7 @@ fn calc_inline_preference_factor(
     arg_list_value: &Value,
 ) -> OpCostFactor {
     inline_preference_factor_for_arg_list_value(arg_list_value)
-        * inline_preference_factor_for_closure(arret_fun.closure())
+        * inline_preference_factor_for_env_values(arret_fun.env_values())
 }
 
 /// Hashes the passed value, poorly
@@ -174,8 +174,8 @@ fn hash_value<H: Hasher>(heap: &Heap, value: &Value, state: &mut H) {
         Value::ArretFun(arret_fun) => {
             state.write_u8(8);
 
-            state.write_usize(arret_fun.closure().const_values.len());
-            for (_, const_value) in arret_fun.closure().const_values.iter() {
+            state.write_usize(arret_fun.env_values().const_values.len());
+            for (_, const_value) in arret_fun.env_values().const_values.iter() {
                 hash_value(heap, const_value, state);
             }
         }
@@ -204,8 +204,8 @@ fn hash_for_arg_list_value(heap: &Heap, arg_list_value: &Value) -> u64 {
 /// 1. The approximate cost of performing a call versus inlining. This is calculated by attempting
 ///    both options and measuring the cost of the ops they build.
 ///
-/// 2. The amount of knowledge lost by calling through a closure and arg regs. This is referred to
-///    as the inlining preference factor. This is multiplied against the call cost.
+/// 2. The amount of knowledge lost by calling through a fun and arg regs. This is referred to as
+///    the inlining preference factor. This is multiplied against the call cost.
 ///
 /// 3. If the inlining limit has been reached. This is a basic fixed threshold.
 ///

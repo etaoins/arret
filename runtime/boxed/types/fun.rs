@@ -5,18 +5,18 @@ use crate::boxed::refs::Gc;
 use crate::boxed::*;
 use crate::task;
 
-/// Opaque type for a function's closure
+/// Opaque type for a function's captures
 ///
 /// This has a meaning specific to the implementation of the function. This may be a dummy value
-/// (typically [`Nil`]) for functions without a closure, a single boxed value or a collection of
+/// (typically [`Nil`]) for functions that don't capture, a single boxed value or a collection of
 /// multiple boxed values. The only external contract is that it must be a boxed value to allow for
 /// garbage collection.
-pub type Closure = Gc<Any>;
+pub type Captures = Gc<Any>;
 
 /// Entry point for executing a function
-pub type ThunkEntry = extern "C" fn(&mut task::Task, Closure, Gc<Any>) -> Gc<Any>;
+pub type ThunkEntry = extern "C" fn(&mut task::Task, Captures, Gc<Any>) -> Gc<Any>;
 
-/// Boxed function value with an optional closure
+/// Boxed function value with optional captures
 ///
 /// This is typically used in places where functions are used as values or stored in collections.
 /// For example, placing a function in a list will create a `FunThunk`. When taking an function as a
@@ -25,7 +25,7 @@ pub type ThunkEntry = extern "C" fn(&mut task::Task, Closure, Gc<Any>) -> Gc<Any
 #[repr(C, align(16))]
 pub struct FunThunk {
     header: Header,
-    pub(crate) closure: Closure,
+    pub(crate) captures: Captures,
     entry: ThunkEntry,
 }
 
@@ -33,11 +33,11 @@ impl Boxed for FunThunk {}
 impl UniqueTagged for FunThunk {}
 
 impl FunThunk {
-    /// Constructs a new function value with the given closure and entry point
-    pub fn new(heap: &mut impl AsHeap, closure: Closure, entry: ThunkEntry) -> Gc<FunThunk> {
+    /// Constructs a new function value with the given captures and entry point
+    pub fn new(heap: &mut impl AsHeap, captures: Captures, entry: ThunkEntry) -> Gc<FunThunk> {
         heap.as_heap_mut().place_box(FunThunk {
             header: Self::TYPE_TAG.to_heap_header(Self::size()),
-            closure,
+            captures,
             entry,
         })
     }
@@ -49,7 +49,7 @@ impl FunThunk {
 
     /// Applies this function on the passed task with the given arguments
     pub fn apply(&self, task: &mut task::Task, arg_list: Gc<Any>) -> Gc<Any> {
-        (self.entry)(task, self.closure, arg_list)
+        (self.entry)(task, self.captures, arg_list)
     }
 }
 
@@ -82,13 +82,17 @@ mod test {
     use crate::boxed::heap::Heap;
     use std::mem;
 
-    extern "C" fn identity_entry(_: &mut task::Task, _closure: Closure, rest: Gc<Any>) -> Gc<Any> {
+    extern "C" fn identity_entry(
+        _: &mut task::Task,
+        _captures: Captures,
+        rest: Gc<Any>,
+    ) -> Gc<Any> {
         rest
     }
 
     extern "C" fn return_42_entry(
         task: &mut task::Task,
-        _closure: Closure,
+        _captures: Captures,
         _rest: Gc<Any>,
     ) -> Gc<Any> {
         Int::new(task, 32).as_any_ref()
@@ -103,10 +107,10 @@ mod test {
     fn equality() {
         let mut heap = Heap::empty();
 
-        let nil_closure = boxed::NIL_INSTANCE.as_any_ref();
-        let boxed_identity1 = FunThunk::new(&mut heap, nil_closure, identity_entry);
-        let boxed_identity2 = FunThunk::new(&mut heap, nil_closure, identity_entry);
-        let boxed_return = FunThunk::new(&mut heap, nil_closure, return_42_entry);
+        let nil_captures = boxed::NIL_INSTANCE.as_any_ref();
+        let boxed_identity1 = FunThunk::new(&mut heap, nil_captures, identity_entry);
+        let boxed_identity2 = FunThunk::new(&mut heap, nil_captures, identity_entry);
+        let boxed_return = FunThunk::new(&mut heap, nil_captures, return_42_entry);
 
         assert_ne!(boxed_identity1, boxed_return);
         // We use pointer identity for now

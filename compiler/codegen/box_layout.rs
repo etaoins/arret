@@ -82,7 +82,7 @@ impl BoxLayout {
                 }
                 BoxLayout::ConstTagged(TypeTag::FunThunk) => {
                     members.extend_from_slice(&[
-                        tcx.closure_llvm_type(),
+                        tcx.captures_llvm_type(),
                         LLVMPointerType(tcx.fun_abi_to_llvm_type(&GenABI::thunk_abi()), 0),
                     ]);
                 }

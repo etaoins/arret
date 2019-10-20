@@ -75,7 +75,7 @@ pub struct EvalHirCtx {
 /// Context for performing a tail call in `(recur)`
 struct TailCallCtx {
     self_abi: PolymorphABI,
-    closure_reg: Option<BuiltReg>,
+    captures_reg: Option<BuiltReg>,
 }
 
 struct RecurSelf<'af> {
@@ -322,7 +322,7 @@ impl EvalHirCtx {
         use crate::hir::destruc::poly_for_list_destruc;
         use crate::mir::app_purity::fun_app_purity;
         use crate::mir::arg_list::build_save_arg_list_to_regs;
-        use crate::mir::closure;
+        use crate::mir::env_values;
         use crate::mir::ops::*;
         use crate::mir::polymorph::polymorph_abi_for_list_ty;
         use crate::mir::ret_value::ret_reg_to_value;
@@ -339,17 +339,18 @@ impl EvalHirCtx {
             &fcx.mono_ty_args,
         );
 
-        let closure_reg = closure::save_to_closure_reg(self, b, span, &arret_fun.closure());
+        let captures_reg = env_values::save_to_captures_reg(self, b, span, &arret_fun.env_values());
 
         let param_list_poly = poly_for_list_destruc(&arret_fun.fun_expr().params);
         let param_list_mono = subst::monomorphise_list(&mono_ty_args, &param_list_poly);
 
-        let wanted_abi = polymorph_abi_for_list_ty(closure_reg.is_some(), &param_list_mono, ret_ty);
+        let wanted_abi =
+            polymorph_abi_for_list_ty(captures_reg.is_some(), &param_list_mono, ret_ty);
         let ret_abi = wanted_abi.ops_abi.ret.clone();
 
         let mut arg_regs: Vec<RegId> = vec![];
-        if let Some(closure_reg) = closure_reg {
-            arg_regs.push(closure_reg.into());
+        if let Some(captures_reg) = captures_reg {
+            arg_regs.push(captures_reg.into());
         }
 
         arg_regs.extend(build_save_arg_list_to_regs(
@@ -512,9 +513,9 @@ impl EvalHirCtx {
     }
 
     pub fn rust_fun_to_jit_boxed(&mut self, rust_fun: Rc<rfi::Fun>) -> Gc<boxed::FunThunk> {
-        let closure = boxed::NIL_INSTANCE.as_any_ref();
+        let captures = boxed::NIL_INSTANCE.as_any_ref();
         let entry = self.jit_thunk_for_rust_fun(&rust_fun);
-        let new_boxed = boxed::FunThunk::new(self, closure, entry);
+        let new_boxed = boxed::FunThunk::new(self, captures, entry);
 
         let rust_fun_value = Value::RustFun(rust_fun);
         self.thunk_fun_values
@@ -602,13 +603,13 @@ impl EvalHirCtx {
         let private_fun_id = self.id_for_rust_fun(rust_fun, wanted_abi);
 
         let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
-        let closure_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
+        let captures_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
 
         b.push_reg(
             span,
             OpKind::ConstBoxedFunThunk,
             BoxFunThunkOp {
-                closure_reg: closure_reg.into(),
+                captures_reg: captures_reg.into(),
                 callee: ops::Callee::PrivateFun(private_fun_id),
             },
         )
@@ -627,13 +628,13 @@ impl EvalHirCtx {
         let private_fun_id = self.id_for_rust_fun(rust_fun, wanted_abi);
 
         let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
-        let closure_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
+        let captures_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
 
         b.push_reg(
             span,
             OpKind::MakeCallback,
             MakeCallbackOp {
-                closure_reg: closure_reg.into(),
+                captures_reg: captures_reg.into(),
                 callee: ops::Callee::PrivateFun(private_fun_id),
             },
         )
@@ -713,8 +714,8 @@ impl EvalHirCtx {
                 let runtime_task = &mut self.runtime_task;
 
                 let native_result = Self::call_native_fun(span, || {
-                    let closure = boxed::NIL_INSTANCE.as_any_ref();
-                    thunk(runtime_task, closure, boxed_arg_list)
+                    let captures = boxed::NIL_INSTANCE.as_any_ref();
+                    thunk(runtime_task, captures, boxed_arg_list)
                 });
 
                 // If we receive a panic while building we want to still build the function call.
@@ -796,7 +797,11 @@ impl EvalHirCtx {
             boxed::TypeTag::FunThunk.into(),
         );
 
-        let closure_reg = b.push_reg(span, OpKind::LoadBoxedFunThunkClosure, fun_thunk_reg.into());
+        let captures_reg = b.push_reg(
+            span,
+            OpKind::LoadBoxedFunThunkCaptures,
+            fun_thunk_reg.into(),
+        );
         let arg_list_reg = value_to_reg(
             self,
             b,
@@ -811,7 +816,7 @@ impl EvalHirCtx {
             CallOp {
                 callee: Callee::BoxedFunThunk(fun_thunk_reg.into()),
                 impure: true,
-                args: Box::new([closure_reg.into(), arg_list_reg.into()]),
+                args: Box::new([captures_reg.into(), arg_list_reg.into()]),
             },
         );
 
@@ -829,9 +834,9 @@ impl EvalHirCtx {
     ) -> Result<Value> {
         match fun_value {
             Value::ArretFun(arret_fun) => {
-                use crate::mir::closure;
+                use crate::mir::env_values;
 
-                closure::load_from_current_fun(&mut fcx.local_values, arret_fun.closure());
+                env_values::load_from_current_fun(&mut fcx.local_values, arret_fun.env_values());
                 self.eval_arret_fun_app(fcx, b, span, ret_ty, &arret_fun, apply_args)
             }
             Value::RustFun(rust_fun) => {
@@ -925,7 +930,7 @@ impl EvalHirCtx {
     ///
     /// 3. If we have a `tail_call_ctx` we will built a special `TailCall` op and immediately
     ///    return its value. This maximises the chance that codegen and LLVM will be able to
-    ///    optimise the tail call in to a loop. We're also able to reuse our existing closure arg
+    ///    optimise the tail call in to a loop. We're also able to reuse our existing captures arg
     ///    directly.
     ///
     /// 4. If we don't have a `tail_call_ctx` we will treat this as if it was an Arret fun apply.
@@ -975,9 +980,9 @@ impl EvalHirCtx {
             &arret_fun.fun_expr().ret_ty,
         );
 
-        // If we're impure or we have dynamic closure values we need to be evaluated at runtime
+        // If we're impure or we have dynamic environment values we need to be evaluated at runtime
         let can_const_eval = b.is_none()
-            || (recur_purity == Purity::Pure && arret_fun.closure().free_values.is_empty());
+            || (recur_purity == Purity::Pure && arret_fun.env_values().free_values.is_empty());
 
         if can_const_eval {
             use crate::mir::value::to_const::value_to_const;
@@ -985,8 +990,8 @@ impl EvalHirCtx {
             if let Some(boxed_arg_list) = value_to_const(self, &arg_list_value) {
                 let thunk = self.jit_thunk_for_arret_fun(arret_fun);
                 return Self::call_native_fun(span, || {
-                    let closure = boxed::NIL_INSTANCE.as_any_ref();
-                    thunk(&mut self.runtime_task, closure, boxed_arg_list)
+                    let captures = boxed::NIL_INSTANCE.as_any_ref();
+                    thunk(&mut self.runtime_task, captures, boxed_arg_list)
                 });
             }
         }
@@ -1004,8 +1009,8 @@ impl EvalHirCtx {
             let self_abi = &tail_call_ctx.self_abi;
 
             let mut arg_regs: Vec<RegId> = vec![];
-            if let Some(closure_reg) = tail_call_ctx.closure_reg {
-                arg_regs.push(closure_reg.into());
+            if let Some(captures_reg) = tail_call_ctx.captures_reg {
+                arg_regs.push(captures_reg.into());
             }
 
             arg_regs.extend(build_save_arg_list_to_regs(
@@ -1227,15 +1232,15 @@ impl EvalHirCtx {
         fun_expr: hir::Fun<hir::Inferred>,
         source_name: Option<&DataStr>,
     ) -> Value {
-        use crate::mir::closure;
+        use crate::mir::env_values;
 
-        let closure =
-            closure::calculate_closure(&fcx.local_values, &fun_expr.body_expr, source_name);
+        let env_values =
+            env_values::calculate_env_values(&fcx.local_values, &fun_expr.body_expr, source_name);
 
         Value::ArretFun(value::ArretFun::new(
             source_name.cloned(),
             fcx.mono_ty_args.clone(),
-            closure,
+            env_values,
             fun_expr,
         ))
     }
@@ -1244,15 +1249,15 @@ impl EvalHirCtx {
         &mut self,
         arret_fun: &value::ArretFun,
     ) -> Option<Gc<boxed::FunThunk>> {
-        // If we have non-const (i.e. "free") values in our closure we can't be const
-        if !arret_fun.closure().free_values.is_empty() {
+        // If we have non-const (i.e. "free") values in our environment we can't be const
+        if !arret_fun.env_values().free_values.is_empty() {
             return None;
         }
 
         let entry = self.jit_thunk_for_arret_fun(arret_fun);
 
-        let closure = boxed::NIL_INSTANCE.as_any_ref();
-        let new_boxed = boxed::FunThunk::new(self, closure, entry);
+        let captures = boxed::NIL_INSTANCE.as_any_ref();
+        let new_boxed = boxed::FunThunk::new(self, captures, entry);
 
         let arret_fun_value = Value::ArretFun(arret_fun.clone());
         self.thunk_fun_values
@@ -1369,32 +1374,32 @@ impl EvalHirCtx {
         span: Span,
         arret_fun: &value::ArretFun,
     ) -> BuiltReg {
-        use crate::mir::closure;
+        use crate::mir::env_values;
         use crate::mir::ops::*;
 
         let wanted_abi = PolymorphABI::thunk_abi();
         let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
 
-        let closure_reg = closure::save_to_closure_reg(self, b, span, arret_fun.closure());
+        let captures_reg = env_values::save_to_captures_reg(self, b, span, arret_fun.env_values());
 
-        if let Some(closure_reg) = closure_reg {
+        if let Some(captures_reg) = captures_reg {
             b.push_reg(
                 span,
                 OpKind::AllocBoxedFunThunk,
                 BoxFunThunkOp {
-                    closure_reg: closure_reg.into(),
+                    captures_reg: captures_reg.into(),
                     callee: ops::Callee::PrivateFun(private_fun_id),
                 },
             )
         } else {
             let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
-            let outer_closure_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
+            let outer_captures_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
 
             b.push_reg(
                 span,
                 OpKind::ConstBoxedFunThunk,
                 BoxFunThunkOp {
-                    closure_reg: outer_closure_reg.into(),
+                    captures_reg: outer_captures_reg.into(),
                     callee: ops::Callee::PrivateFun(private_fun_id),
                 },
             )
@@ -1408,13 +1413,13 @@ impl EvalHirCtx {
         arret_fun: &value::ArretFun,
         entry_point_abi: &CallbackEntryPointABIType,
     ) -> BuiltReg {
-        use crate::mir::closure;
+        use crate::mir::env_values;
         use crate::mir::ops::*;
 
         let wanted_abi = entry_point_abi.clone().into();
         let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
 
-        let closure_reg = closure::save_to_closure_reg(self, b, span, arret_fun.closure())
+        let captures_reg = env_values::save_to_captures_reg(self, b, span, arret_fun.env_values())
             .unwrap_or_else(|| {
                 let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
                 b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any)
@@ -1424,7 +1429,7 @@ impl EvalHirCtx {
             span,
             OpKind::MakeCallback,
             MakeCallbackOp {
-                closure_reg: closure_reg.into(),
+                captures_reg: captures_reg.into(),
                 callee: ops::Callee::PrivateFun(private_fun_id),
             },
         )
@@ -1437,7 +1442,7 @@ impl EvalHirCtx {
     ) -> Result<ops::Fun> {
         use crate::hir::destruc::poly_for_list_destruc;
         use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
-        use crate::mir::closure;
+        use crate::mir::env_values;
         use crate::mir::optimise::optimise_fun;
         use crate::mir::ret_value::build_value_ret;
 
@@ -1447,25 +1452,25 @@ impl EvalHirCtx {
 
         let param_list_poly = poly_for_list_destruc(&arret_fun.fun_expr().params);
         let LoadedArgList {
-            closure_reg,
+            captures_reg,
             param_regs,
             arg_list_value,
         } = build_load_arg_list_value(self, &mut b, &wanted_abi, &param_list_poly);
 
-        // Start by loading the closure
+        // Start by loading the captures
         let mut local_values: HashMap<hir::VarId, Value> = HashMap::new();
-        let mut recur_closure = arret_fun.closure().clone();
+        let mut recur_env_values = arret_fun.env_values().clone();
 
-        closure::load_from_closure_param(
+        env_values::load_from_env_param(
             &mut b,
             span,
             &mut local_values,
-            &mut recur_closure,
-            closure_reg,
+            &mut recur_env_values,
+            captures_reg,
         );
 
-        // Our closure has been updated with its new reg IDs
-        let recur_arret_fun = arret_fun.with_closure(recur_closure);
+        // Our env values have been updated with its new reg IDs
+        let recur_arret_fun = arret_fun.with_env_values(recur_env_values);
 
         // Try to refine our polymorphic type variables based on our requested op ABI
         let mut stx = ty::select::SelectCtx::new(&fun_expr.pvars, &fun_expr.tvars);
@@ -1479,7 +1484,7 @@ impl EvalHirCtx {
         let tail_call_ctx = if wanted_abi.ops_abi.call_conv == ops::CallConv::FastCC {
             Some(TailCallCtx {
                 self_abi: wanted_abi.clone(),
-                closure_reg,
+                captures_reg,
             })
         } else {
             None
@@ -1525,7 +1530,7 @@ impl EvalHirCtx {
         }))
     }
 
-    /// Builds a function with a callback ABI that calls a thunk passed as its closure
+    /// Builds a function with a callback ABI that calls a thunk passed as its captures
     fn ops_for_callback_to_thunk_adapter(
         &mut self,
         entry_point_abi: CallbackEntryPointABIType,
@@ -1539,7 +1544,7 @@ impl EvalHirCtx {
         let mut b = Builder::new();
 
         let LoadedArgList {
-            closure_reg,
+            captures_reg,
             param_regs,
             arg_list_value,
         } = build_load_arg_list_value(
@@ -1550,7 +1555,7 @@ impl EvalHirCtx {
         );
 
         let fun_reg_value =
-            value::RegValue::new(closure_reg.unwrap(), abitype::BoxedABIType::Any.into());
+            value::RegValue::new(captures_reg.unwrap(), abitype::BoxedABIType::Any.into());
 
         let result_value =
             self.build_reg_fun_thunk_app(&mut b, EMPTY_SPAN, &fun_reg_value, &arg_list_value);
@@ -1583,8 +1588,8 @@ impl EvalHirCtx {
     ) -> BuiltReg {
         use crate::mir::ops::*;
 
-        // Closures are of type `Any`
-        let closure_reg = b.cast_boxed_cond(
+        // Captures are of type `Any`
+        let captures_reg = b.cast_boxed_cond(
             EMPTY_SPAN,
             thunk_reg_abi_type,
             thunk_reg,
@@ -1599,7 +1604,7 @@ impl EvalHirCtx {
             span,
             OpKind::MakeCallback,
             MakeCallbackOp {
-                closure_reg: closure_reg.into(),
+                captures_reg: captures_reg.into(),
                 callee: ops::Callee::PrivateFun(private_fun_id),
             },
         )
@@ -1773,7 +1778,7 @@ impl EvalHirCtx {
                 ret: abitype::RetABIType::Void,
             },
             // Main is a top-level function; it can't capture
-            has_closure: false,
+            has_captures: false,
             has_rest: false,
         };
 

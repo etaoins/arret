@@ -81,14 +81,14 @@ fn box_pair_op_to_string(
 fn box_fun_thunk_op_to_string(
     private_funs: &HashMap<ops::PrivateFunId, ops::Fun>,
     ops::BoxFunThunkOp {
-        closure_reg,
+        captures_reg,
         callee,
     }: &ops::BoxFunThunkOp,
 ) -> String {
     format!(
-        "boxed::FunThunk {{ closure: %{}, entry: {} }}",
-        closure_reg.to_usize(),
-        callee_to_string(private_funs, callee)
+        "boxed::FunThunk {{ captures: %{captures_reg}, entry: {entry} }}",
+        captures_reg = captures_reg.to_usize(),
+        entry = callee_to_string(private_funs, callee)
     )
 }
 
@@ -313,16 +313,16 @@ fn print_branch(
             ops::OpKind::MakeCallback(
                 reg,
                 ops::MakeCallbackOp {
-                    closure_reg,
+                    captures_reg,
                     callee,
                 },
             ) => {
                 writeln!(
                     w,
-                    "%{} = callback::Callback {{ closure: %{}, entry_point: {} }};",
+                    "%{} = callback::Callback {{ captures: %{captures_reg}, entry_point: {entry_point} }};",
                     reg.to_usize(),
-                    closure_reg.to_usize(),
-                    callee_to_string(private_funs, callee)
+                    captures_reg = captures_reg.to_usize(),
+                    entry_point = callee_to_string(private_funs, callee)
                 )?;
             }
             ops::OpKind::ConstBoxedRecord(reg, box_record_op) => {
@@ -484,10 +484,10 @@ fn print_branch(
                     float_reg.to_usize()
                 )?;
             }
-            ops::OpKind::LoadBoxedFunThunkClosure(reg, fun_thunk_reg) => {
+            ops::OpKind::LoadBoxedFunThunkCaptures(reg, fun_thunk_reg) => {
                 writeln!(
                     w,
-                    "%{} = <%{} as boxed::FunThunk>.closure;",
+                    "%{} = <%{} as boxed::FunThunk>.env;",
                     reg.to_usize(),
                     fun_thunk_reg.to_usize()
                 )?;

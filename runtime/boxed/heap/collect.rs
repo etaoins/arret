@@ -160,8 +160,8 @@ impl StrongPass {
                     let fun_thunk_ref =
                         unsafe { &mut *(box_ref.as_mut_ptr() as *mut boxed::FunThunk) };
 
-                    // Start again with the closure
-                    box_ref = unsafe { &mut *(&mut fun_thunk_ref.closure as *mut Gc<boxed::Any>) };
+                    // Start again with the captures
+                    box_ref = unsafe { &mut *(&mut fun_thunk_ref.captures as *mut Gc<boxed::Any>) };
                     continue;
                 }
                 TypeTag::Record => {

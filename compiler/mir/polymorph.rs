@@ -7,13 +7,13 @@ use crate::mir::ops;
 use crate::ty;
 use crate::ty::Ty;
 
-/// PolymorphABI annotates OpsABI with information about if a function expects a closure or rest
+/// PolymorphABI annotates OpsABI with information about if a function expects a captures or rest
 ///
 /// This is information that's useful while generating MIR but can be discarded when building Ops.
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub struct PolymorphABI {
     pub ops_abi: ops::OpsABI,
-    pub has_closure: bool,
+    pub has_captures: bool,
     pub has_rest: bool,
 }
 
@@ -21,7 +21,7 @@ impl PolymorphABI {
     pub fn thunk_abi() -> PolymorphABI {
         PolymorphABI {
             ops_abi: ops::OpsABI::thunk_abi(),
-            has_closure: true,
+            has_captures: true,
             has_rest: true,
         }
     }
@@ -30,7 +30,7 @@ impl PolymorphABI {
     pub fn arret_fixed_params(&self) -> impl ExactSizeIterator<Item = &abitype::ABIType> {
         let mut ops_param_iter = self.ops_abi.params.iter();
 
-        if self.has_closure {
+        if self.has_captures {
             ops_param_iter.next().unwrap();
         }
 
@@ -78,7 +78,7 @@ impl From<callback::EntryPointABIType> for PolymorphABI {
     fn from(abi_type: callback::EntryPointABIType) -> Self {
         PolymorphABI {
             ops_abi: abi_type.into(),
-            has_closure: true,
+            has_captures: true,
             has_rest: false,
         }
     }
@@ -86,7 +86,7 @@ impl From<callback::EntryPointABIType> for PolymorphABI {
 
 /// Recommends a polymorph ABI for a given list and ret type
 pub fn polymorph_abi_for_list_ty<M: ty::PM>(
-    has_closure: bool,
+    has_captures: bool,
     list_ty: &ty::List<M>,
     ret_ty: &ty::Ref<M>,
 ) -> PolymorphABI {
@@ -95,7 +95,7 @@ pub fn polymorph_abi_for_list_ty<M: ty::PM>(
     let has_rest = list_ty.has_rest();
 
     let params = Some(abitype::BoxedABIType::Any.into())
-        .filter(|_| has_closure)
+        .filter(|_| has_captures)
         .into_iter()
         .chain(list_ty.fixed().iter().map(specific_abi_type_for_ty_ref))
         .chain(iter::once(abitype::TOP_LIST_BOXED_ABI_TYPE.into()).filter(|_| has_rest))
@@ -109,7 +109,7 @@ pub fn polymorph_abi_for_list_ty<M: ty::PM>(
 
     PolymorphABI {
         ops_abi,
-        has_closure,
+        has_captures,
         has_rest: list_ty.has_rest(),
     }
 }
@@ -137,7 +137,7 @@ mod test {
                 ]),
                 ret: boxed::Num::BOXED_ABI_TYPE.into(),
             },
-            has_closure: false,
+            has_captures: false,
             has_rest: true,
         }
         .param_ty_ref();

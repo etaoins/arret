@@ -20,7 +20,7 @@ pub struct PairInput {
 }
 
 pub struct FunThunkInput {
-    pub llvm_closure: LLVMValueRef,
+    pub llvm_captures: LLVMValueRef,
     pub llvm_entry_point: LLVMValueRef,
 }
 
@@ -177,7 +177,7 @@ pub fn gen_alloc_boxed_fun_thunk(
     input: &FunThunkInput,
 ) -> LLVMValueRef {
     let FunThunkInput {
-        llvm_closure,
+        llvm_captures,
         llvm_entry_point,
     } = input;
 
@@ -190,13 +190,13 @@ pub fn gen_alloc_boxed_fun_thunk(
             b"alloced_fun_thunk\0",
         );
 
-        let closure_ptr = LLVMBuildStructGEP(
+        let captures_ptr = LLVMBuildStructGEP(
             builder,
             alloced_fun_thunk,
             1,
-            b"closure_ptr\0".as_ptr() as *const _,
+            b"captures_ptr\0".as_ptr() as *const _,
         );
-        LLVMBuildStore(builder, *llvm_closure, closure_ptr);
+        LLVMBuildStore(builder, *llvm_captures, captures_ptr);
 
         let entry_point_ptr = LLVMBuildStructGEP(
             builder,

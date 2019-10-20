@@ -4,11 +4,11 @@
 ; This is a monomorphic, fixed arity form of `(constantly)`
 (defn return-const (x) (fn () x))
 
-; This would have an inline record struct closure
+; This would have an inline record struct captures
 (defn return-two-int-values ([one Int] [two Int]) -> (-> (List & Int))
   (fn () (list one two)))
 
-; This would have a external record struct closure
+; This would have a external record struct captures
 (defn return-four-int-values ([one Int] [two Int] [three Int] [four Int]) -> (-> (List & Int))
   (fn () (list one two three four)))
 

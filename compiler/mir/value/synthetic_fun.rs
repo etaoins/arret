@@ -4,7 +4,7 @@ use arret_syntax::datum::DataStr;
 use arret_syntax::span::EMPTY_SPAN;
 
 use crate::hir;
-use crate::mir::closure::Closure;
+use crate::mir::env_values::EnvValues;
 use crate::mir::value;
 use crate::ty;
 use crate::ty::purity;
@@ -60,7 +60,7 @@ fn wrap_poly_expr_in_arret_fun(
         Some(source_name),
         // These are the environment type args, not our own
         TyArgs::empty(),
-        Closure::empty(),
+        EnvValues::empty(),
         hir::Fun {
             span: EMPTY_SPAN,
 

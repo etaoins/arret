@@ -228,7 +228,7 @@ impl TargetCtx {
         unsafe { LLVMPointerType(self.classmap_field_llvm_type(), 0) }
     }
 
-    pub fn closure_llvm_type(&mut self) -> LLVMTypeRef {
+    pub fn captures_llvm_type(&mut self) -> LLVMTypeRef {
         self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any)
     }
 

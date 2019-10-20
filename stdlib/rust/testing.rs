@@ -19,7 +19,7 @@ pub fn stdlib_black_box_impure(value: Gc<boxed::Any>) -> Gc<boxed::Any> {
 #[arret_rfi_derive::rust_fun("(All #{[->_ ->!] T} (->_ T) ->_ (List Int T))")]
 pub fn stdlib_heap_alloc_count(
     task: &mut Task,
-    block: callback::Callback<extern "C" fn(&mut Task, boxed::Closure) -> Gc<boxed::Any>>,
+    block: callback::Callback<extern "C" fn(&mut Task, boxed::Captures) -> Gc<boxed::Any>>,
 ) -> Gc<boxed::List<boxed::Any>> {
     let before_len = task.heap().len();
     let ret = block.apply(task);

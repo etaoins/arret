@@ -26,7 +26,7 @@ pub use crate::boxed::heap::{AsHeap, Heap};
 pub use crate::boxed::types::char::Char;
 pub use crate::boxed::types::field_value::{FieldValue, FieldValueIter};
 pub use crate::boxed::types::float::Float;
-pub use crate::boxed::types::fun::{Closure, FunThunk, ThunkEntry};
+pub use crate::boxed::types::fun::{Captures, FunThunk, ThunkEntry};
 pub use crate::boxed::types::int::Int;
 pub use crate::boxed::types::list::{List, ListSubtype, Nil, Pair, NIL_INSTANCE};
 pub use crate::boxed::types::record::{Record, RecordClassId, RecordStorage};

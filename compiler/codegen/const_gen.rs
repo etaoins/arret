@@ -368,7 +368,7 @@ pub fn gen_boxed_nil(tcx: &mut TargetCtx, mcx: &mut ModCtx<'_, '_, '_>) -> LLVMV
 pub fn gen_boxed_fun_thunk(
     tcx: &mut TargetCtx,
     mcx: &mut ModCtx<'_, '_, '_>,
-    llvm_closure: LLVMValueRef,
+    llvm_captures: LLVMValueRef,
     llvm_entry_point: LLVMValueRef,
 ) -> LLVMValueRef {
     unsafe {
@@ -377,7 +377,7 @@ pub fn gen_boxed_fun_thunk(
 
         let members = &mut [
             tcx.llvm_box_header(type_tag.to_const_header()),
-            llvm_closure,
+            llvm_captures,
             llvm_entry_point,
         ];
 

@@ -10,10 +10,10 @@ use crate::mir::value::Value;
 use crate::ty;
 
 pub struct LoadedArgList {
-    /// Reg holding the closure parameter
-    pub closure_reg: Option<BuiltReg>,
+    /// Reg holding the captures parameter
+    pub captures_reg: Option<BuiltReg>,
 
-    /// All regs the function takes including the closure
+    /// All regs the function takes including the captures
     pub param_regs: Box<[ops::RegId]>,
 
     /// Built list value of the arguments
@@ -32,7 +32,7 @@ pub fn build_load_arg_list_value(
     use crate::mir::value::from_reg::reg_to_value;
     use crate::ty::list_iter::ListIterator;
 
-    let closure_reg: Option<BuiltReg> = if polymorph_abi.has_closure {
+    let captures_reg: Option<BuiltReg> = if polymorph_abi.has_captures {
         Some(b.alloc_local())
     } else {
         None
@@ -61,7 +61,7 @@ pub fn build_load_arg_list_value(
             )
         });
 
-    let param_regs = closure_reg
+    let param_regs = captures_reg
         .into_iter()
         .map(Into::into)
         .chain(fixed_reg_values.iter().map(|(reg, _)| *reg))
@@ -77,7 +77,7 @@ pub fn build_load_arg_list_value(
     );
 
     LoadedArgList {
-        closure_reg,
+        captures_reg,
         param_regs,
         arg_list_value,
     }

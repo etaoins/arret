@@ -132,15 +132,15 @@ fn gen_op(
             OpKind::ConstBoxedFunThunk(
                 reg,
                 BoxFunThunkOp {
-                    closure_reg,
+                    captures_reg,
                     callee,
                 },
             ) => {
                 let llvm_entry_point = gen_callee_entry_point(tcx, mcx, fcx, callee);
-                let llvm_closure = fcx.regs[closure_reg];
+                let llvm_env = fcx.regs[captures_reg];
 
                 let llvm_value =
-                    const_gen::gen_boxed_fun_thunk(tcx, mcx, llvm_closure, llvm_entry_point);
+                    const_gen::gen_boxed_fun_thunk(tcx, mcx, llvm_env, llvm_entry_point);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBoxedPair(
@@ -434,19 +434,19 @@ fn gen_op(
 
                 fcx.regs.insert(*reg, llvm_value);
             }
-            OpKind::LoadBoxedFunThunkClosure(reg, boxed_fun_thunk_reg) => {
+            OpKind::LoadBoxedFunThunkCaptures(reg, boxed_fun_thunk_reg) => {
                 let llvm_boxed_fun_thunk = fcx.regs[boxed_fun_thunk_reg];
 
-                let closure_ptr = LLVMBuildStructGEP(
+                let captures_ptr = LLVMBuildStructGEP(
                     fcx.builder,
                     llvm_boxed_fun_thunk,
                     1,
-                    b"boxed_fun_thunk_closure_ptr\0".as_ptr() as *const _,
+                    b"boxed_fun_thunk_captures_ptr\0".as_ptr() as *const _,
                 );
                 let llvm_value = LLVMBuildLoad(
                     fcx.builder,
-                    closure_ptr,
-                    "boxed_fun_thunk_closure\0".as_ptr() as *const _,
+                    captures_ptr,
+                    "boxed_fun_thunk_captures\0".as_ptr() as *const _,
                 );
 
                 fcx.regs.insert(*reg, llvm_value);
@@ -634,14 +634,14 @@ fn gen_op(
             OpKind::AllocBoxedFunThunk(
                 reg,
                 BoxFunThunkOp {
-                    closure_reg,
+                    captures_reg,
                     callee,
                 },
             ) => {
                 let box_source = active_alloc.next_box_source();
 
                 let input = alloc::types::FunThunkInput {
-                    llvm_closure: fcx.regs[closure_reg],
+                    llvm_captures: fcx.regs[captures_reg],
                     llvm_entry_point: gen_callee_entry_point(tcx, mcx, fcx, callee),
                 };
 
@@ -923,26 +923,26 @@ fn gen_op(
                 reg,
                 MakeCallbackOp {
                     callee,
-                    closure_reg,
+                    captures_reg,
                 },
             ) => {
-                let llvm_closure = fcx.regs[closure_reg];
+                let llvm_captures = fcx.regs[captures_reg];
                 let llvm_entry_point = gen_callee_entry_point(tcx, mcx, fcx, callee);
                 let entry_point_llvm_type = LLVMTypeOf(llvm_entry_point);
 
                 let callback_type = tcx.callback_llvm_type(entry_point_llvm_type);
 
                 let llvm_undef = LLVMGetUndef(callback_type);
-                let llvm_with_closure = LLVMBuildInsertValue(
+                let llvm_with_captures = LLVMBuildInsertValue(
                     fcx.builder,
                     llvm_undef,
-                    llvm_closure,
+                    llvm_captures,
                     0,
-                    b"\0".as_ptr() as *const _,
+                    b"captures\0".as_ptr() as *const _,
                 );
                 let llvm_callback = LLVMBuildInsertValue(
                     fcx.builder,
-                    llvm_with_closure,
+                    llvm_with_captures,
                     llvm_entry_point,
                     1,
                     b"callback\0".as_ptr() as *const _,

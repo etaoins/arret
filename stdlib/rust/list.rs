@@ -23,7 +23,7 @@ pub fn stdlib_cons(
 pub fn stdlib_map(
     task: &mut Task,
     mapper: callback::Callback<
-        extern "C" fn(&mut Task, boxed::Closure, Gc<boxed::Any>) -> Gc<boxed::Any>,
+        extern "C" fn(&mut Task, boxed::Captures, Gc<boxed::Any>) -> Gc<boxed::Any>,
     >,
     input: Gc<boxed::List<boxed::Any>>,
 ) -> Gc<boxed::List<boxed::Any>> {
@@ -36,7 +36,7 @@ pub fn stdlib_map(
 #[arret_rfi_derive::rust_fun("(All #{T [->_ ->!]} (T ->_ Bool) (List & T) ->_ (List & T))")]
 pub fn stdlib_filter(
     task: &mut Task,
-    filter: callback::Callback<extern "C" fn(&mut Task, boxed::Closure, Gc<boxed::Any>) -> bool>,
+    filter: callback::Callback<extern "C" fn(&mut Task, boxed::Captures, Gc<boxed::Any>) -> bool>,
     input: Gc<boxed::List<boxed::Any>>,
 ) -> Gc<boxed::List<boxed::Any>> {
     let output_vec: Vec<Gc<boxed::Any>> = input
@@ -50,7 +50,7 @@ pub fn stdlib_filter(
 #[arret_rfi_derive::rust_fun("(All #{T [->_ ->!]} (T ->_ Bool) (List & T) ->_ Bool)")]
 pub fn stdlib_some_p(
     task: &mut Task,
-    pred: callback::Callback<extern "C" fn(&mut Task, boxed::Closure, Gc<boxed::Any>) -> bool>,
+    pred: callback::Callback<extern "C" fn(&mut Task, boxed::Captures, Gc<boxed::Any>) -> bool>,
     input: Gc<boxed::List<boxed::Any>>,
 ) -> bool {
     input.iter().any(|elem| pred.apply(task, elem))
@@ -59,7 +59,7 @@ pub fn stdlib_some_p(
 #[arret_rfi_derive::rust_fun("(All #{T [->_ ->!]} (T ->_ Bool) (List & T) ->_ Bool)")]
 pub fn stdlib_every_p(
     task: &mut Task,
-    pred: callback::Callback<extern "C" fn(&mut Task, boxed::Closure, Gc<boxed::Any>) -> bool>,
+    pred: callback::Callback<extern "C" fn(&mut Task, boxed::Captures, Gc<boxed::Any>) -> bool>,
     input: Gc<boxed::List<boxed::Any>>,
 ) -> bool {
     input.iter().all(|elem| pred.apply(task, elem))
@@ -69,7 +69,7 @@ pub fn stdlib_every_p(
 pub fn stdlib_fold(
     task: &mut Task,
     folder: callback::Callback<
-        extern "C" fn(&mut Task, boxed::Closure, Gc<boxed::Any>, Gc<boxed::Any>) -> Gc<boxed::Any>,
+        extern "C" fn(&mut Task, boxed::Captures, Gc<boxed::Any>, Gc<boxed::Any>) -> Gc<boxed::Any>,
     >,
     initial: Gc<boxed::Any>,
     input: Gc<boxed::List<boxed::Any>>,

@@ -165,7 +165,7 @@ impl ConvertableABIType for callback::EntryPointABIType {
         };
 
         format!(
-            "extern \"C\" fn(&mut Task, boxed::Closure{}) -> {}",
+            "extern \"C\" fn(&mut Task, boxed::Captures{}) -> {}",
             params_str,
             self.ret.to_rust_str()
         )
@@ -221,10 +221,10 @@ mod test {
     fn callback_abi_type() {
         use arret_runtime::task;
 
-        let entry_point_abi_type = <extern "C" fn(&mut task::Task, boxed::Closure, i64) -> char as callback::EncodeEntryPointABIType>::ENTRY_POINT_ABI_TYPE;
+        let entry_point_abi_type = <extern "C" fn(&mut task::Task, boxed::Captures, i64) -> char as callback::EncodeEntryPointABIType>::ENTRY_POINT_ABI_TYPE;
 
         assert_eq!(
-            "extern \"C\" fn(&mut Task, boxed::Closure, i64) -> char",
+            "extern \"C\" fn(&mut Task, boxed::Captures, i64) -> char",
             entry_point_abi_type.to_rust_str()
         );
 

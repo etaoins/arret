@@ -3,7 +3,7 @@ use std::rc::Rc;
 use arret_syntax::datum::DataStr;
 
 use crate::hir;
-use crate::mir::closure::Closure;
+use crate::mir::env_values::EnvValues;
 use crate::ty;
 use crate::ty::ty_args::TyArgs;
 
@@ -20,14 +20,14 @@ struct ArretFunConsts {
 #[derive(Clone, Debug)]
 pub struct ArretFun {
     consts: Rc<ArretFunConsts>,
-    closure: Closure,
+    env_values: EnvValues,
 }
 
 impl ArretFun {
     pub fn new(
         source_name: Option<DataStr>,
         env_ty_args: TyArgs<ty::Mono>,
-        closure: Closure,
+        env_values: EnvValues,
         fun_expr: hir::Fun<hir::Inferred>,
     ) -> Self {
         Self {
@@ -37,7 +37,7 @@ impl ArretFun {
                 env_ty_args,
                 fun_expr,
             }),
-            closure,
+            env_values,
         }
     }
 
@@ -53,22 +53,22 @@ impl ArretFun {
         &self.consts.env_ty_args
     }
 
-    pub fn closure(&self) -> &Closure {
-        &self.closure
+    pub fn env_values(&self) -> &EnvValues {
+        &self.env_values
     }
 
-    pub fn closure_mut(&mut self) -> &mut Closure {
-        &mut self.closure
+    pub fn env_values_mut(&mut self) -> &mut EnvValues {
+        &mut self.env_values
     }
 
     pub fn fun_expr(&self) -> &hir::Fun<hir::Inferred> {
         &self.consts.fun_expr
     }
 
-    pub fn with_closure(&self, closure: Closure) -> ArretFun {
+    pub fn with_env_values(&self, env_values: EnvValues) -> ArretFun {
         ArretFun {
             consts: self.consts.clone(),
-            closure,
+            env_values,
         }
     }
 

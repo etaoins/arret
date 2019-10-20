@@ -17,7 +17,7 @@ pub struct Callback<F>
 where
     F: Copy,
 {
-    closure: boxed::Closure,
+    captures: boxed::Captures,
     entry_point: F,
 }
 
@@ -25,9 +25,9 @@ impl<F> Callback<F>
 where
     F: Copy,
 {
-    /// Returns the closure for this callback
-    pub fn closure(&self) -> boxed::Closure {
-        self.closure
+    /// Returns the captures for this callback
+    pub fn captures(&self) -> boxed::Captures {
+        self.captures
     }
 }
 
@@ -54,7 +54,7 @@ pub trait EncodeEntryPointABIType: Copy {
 
 macro_rules! define_generic_entry_point {
     ( $( $generic_param:ident ),* ) => {
-        impl<R, $( $generic_param ),*> EncodeEntryPointABIType for for<'s> extern "C" fn(&'s mut Task, closure: boxed::Closure, $( $generic_param ),* ) -> R
+        impl<R, $( $generic_param ),*> EncodeEntryPointABIType for for<'s> extern "C" fn(&'s mut Task, captures: boxed::Captures, $( $generic_param ),* ) -> R
         where
             R: abitype::EncodeRetABIType,
             $( $generic_param: abitype::EncodeABIType ),*
@@ -65,7 +65,7 @@ macro_rules! define_generic_entry_point {
             };
         }
 
-        impl<R, $( $generic_param ),*> Callback<for<'s> extern "C" fn(&'s mut Task, closure: boxed::Closure, $( $generic_param ),* ) -> R>
+        impl<R, $( $generic_param ),*> Callback<for<'s> extern "C" fn(&'s mut Task, captures: boxed::Captures, $( $generic_param ),* ) -> R>
         where
             R: abitype::EncodeRetABIType,
             $( $generic_param: abitype::EncodeABIType ),*
@@ -78,7 +78,7 @@ macro_rules! define_generic_entry_point {
             #[allow(non_snake_case)]
             #[allow(clippy::too_many_arguments)]
             pub fn apply(&self, task: &mut Task, $( $generic_param: $generic_param ),*) -> R {
-                (self.entry_point)(task, self.closure, $( $generic_param ),*)
+                (self.entry_point)(task, self.captures, $( $generic_param ),*)
             }
         }
     }
@@ -101,13 +101,13 @@ mod test {
 
     #[test]
     fn encode_entry_point_abi_type() {
-        let empty_abi_type = <extern "C" fn(&mut Task, boxed::Closure) as EncodeEntryPointABIType>::ENTRY_POINT_ABI_TYPE;
+        let empty_abi_type = <extern "C" fn(&mut Task, boxed::Captures) as EncodeEntryPointABIType>::ENTRY_POINT_ABI_TYPE;
         assert_eq!(abitype::RetABIType::Void, empty_abi_type.ret);
         assert!(empty_abi_type.params.is_empty());
 
         let two_param_abi_type = <extern "C" fn(
             &mut Task,
-            boxed::Closure,
+            boxed::Captures,
             i64,
             Gc<boxed::Int>,
         ) -> bool as EncodeEntryPointABIType>::ENTRY_POINT_ABI_TYPE;

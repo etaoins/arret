@@ -37,7 +37,7 @@ impl OpsABI {
         OpsABI {
             call_conv: CallConv::CCC,
             params: Box::new([
-                // Closure
+                // Captures
                 abitype::BoxedABIType::Any.into(),
                 // Rest argument
                 abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
@@ -51,7 +51,7 @@ impl From<callback::EntryPointABIType> for OpsABI {
     fn from(abi_type: callback::EntryPointABIType) -> Self {
         use std::iter;
 
-        // Include our closure
+        // Include our captures
         let params = iter::once(abitype::BoxedABIType::Any.into())
             .chain(abi_type.params.iter().cloned())
             .collect();
@@ -124,7 +124,7 @@ pub struct BoxPairOp {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct BoxFunThunkOp {
-    pub closure_reg: RegId,
+    pub captures_reg: RegId,
     pub callee: Callee,
 }
 
@@ -197,7 +197,7 @@ pub struct LoadBoxedListLengthOp {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct MakeCallbackOp {
-    pub closure_reg: RegId,
+    pub captures_reg: RegId,
     pub callee: Callee,
 }
 
@@ -254,7 +254,7 @@ pub enum OpKind {
     LoadBoxedFloatValue(RegId, RegId),
     LoadBoxedCharValue(RegId, RegId),
     LoadBoxedSymInterned(RegId, RegId),
-    LoadBoxedFunThunkClosure(RegId, RegId),
+    LoadBoxedFunThunkCaptures(RegId, RegId),
     LoadBoxedRecordClassId(RegId, RegId),
     LoadBoxedVectorMember(RegId, LoadBoxedVectorMemberOp),
 
@@ -355,7 +355,7 @@ impl OpKind {
             | LoadBoxedSymInterned(reg_id, _)
             | LoadBoxedFloatValue(reg_id, _)
             | LoadBoxedCharValue(reg_id, _)
-            | LoadBoxedFunThunkClosure(reg_id, _)
+            | LoadBoxedFunThunkCaptures(reg_id, _)
             | LoadBoxedRecordClassId(reg_id, _)
             | LoadBoxedRecordField(reg_id, _)
             | LoadBoxedVectorMember(reg_id, _)
@@ -423,7 +423,7 @@ impl OpKind {
                 );
             }
             ConstBoxedFunThunk(_, box_fun_thunk_op) | AllocBoxedFunThunk(_, box_fun_thunk_op) => {
-                coll.extend(iter::once(box_fun_thunk_op.closure_reg));
+                coll.extend(iter::once(box_fun_thunk_op.captures_reg));
             }
             ConstBoxedVector(_, element_regs) => coll.extend(element_regs.iter().copied()),
             AllocBoxedInt(_, reg_id)
@@ -463,7 +463,7 @@ impl OpKind {
             | LoadBoxedFloatValue(_, reg_id)
             | LoadBoxedCharValue(_, reg_id)
             | LoadBoxedSymInterned(_, reg_id)
-            | LoadBoxedFunThunkClosure(_, reg_id)
+            | LoadBoxedFunThunkCaptures(_, reg_id)
             | LoadBoxedRecordClassId(_, reg_id)
             | LoadBoxedRecordField(
                 _,
@@ -481,7 +481,7 @@ impl OpKind {
             | MakeCallback(
                 _,
                 MakeCallbackOp {
-                    closure_reg: reg_id,
+                    captures_reg: reg_id,
                     ..
                 },
             ) => {
@@ -605,7 +605,7 @@ impl OpKind {
             | LoadBoxedFloatValue(_, _)
             | LoadBoxedCharValue(_, _)
             | LoadBoxedSymInterned(_, _)
-            | LoadBoxedFunThunkClosure(_, _)
+            | LoadBoxedFunThunkCaptures(_, _)
             | LoadBoxedRecordClassId(_, _)
             | LoadBoxedRecordField(_, _)
             | LoadBoxedVectorMember(_, _) => OpCategory::MemLoad,

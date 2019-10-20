@@ -94,10 +94,10 @@ pub fn visit_value_root(strong_pass: &mut boxed::collect::StrongPass, value: &mu
             }
         }
         Value::ArretFun(ref mut arret_fun) => {
-            for (_, value) in arret_fun.closure_mut().const_values.iter_mut() {
+            for (_, value) in arret_fun.env_values_mut().const_values.iter_mut() {
                 visit_value_root(strong_pass, value);
             }
-            for (_, value) in arret_fun.closure_mut().free_values.iter_mut() {
+            for (_, value) in arret_fun.env_values_mut().free_values.iter_mut() {
                 visit_value_root(strong_pass, value);
             }
         }
