@@ -43,7 +43,7 @@ pub fn build_value_ret(
 pub fn ret_reg_to_value(ret_reg: BuiltReg, ret_abi: abitype::RetABIType) -> Result<Value> {
     match ret_abi {
         abitype::RetABIType::Inhabited(abi_type) => {
-            Ok(value::RegValue::new(ret_reg, abi_type.clone()).into())
+            Ok(value::RegValue::new(ret_reg, abi_type).into())
         }
         abitype::RetABIType::Never => Err(Error::Diverged),
         abitype::RetABIType::Void => Ok(Value::List(Box::new([]), None)),
