@@ -99,12 +99,17 @@ pub fn polymorph_abi_for_list_ty<M: ty::PM>(
         call_conv: ops::CallConv::FastCC,
 
         has_captures,
+
         fixed_params: list_ty
             .fixed()
             .iter()
             .map(specific_abi_type_for_ty_ref)
             .collect(),
-        rest_param: Some(abitype::TOP_LIST_BOXED_ABI_TYPE.into()).filter(|_| list_ty.has_rest()),
+
+        rest_param: Some(
+            abitype::BoxedABIType::List(specific_boxed_abi_type_for_ty_ref(list_ty.rest())).into(),
+        )
+        .filter(|_| list_ty.has_rest()),
 
         ret: specific_ret_abi_type_for_ty_ref(ret_ty),
     }

@@ -63,6 +63,12 @@ fn specific_boxed_abi_type_for_type_tags(
     }
 }
 
+pub fn specific_boxed_abi_type_for_ty_ref<M: ty::PM>(
+    ty_ref: &ty::Ref<M>,
+) -> &'static abitype::BoxedABIType {
+    specific_boxed_abi_type_for_type_tags(ty_ref.into())
+}
+
 fn specific_abi_type_for_type_tags(possible_type_tags: TypeTagSet) -> abitype::ABIType {
     if possible_type_tags.is_subset([TypeTag::True, TypeTag::False].iter().collect()) {
         abitype::ABIType::Bool
@@ -83,8 +89,7 @@ pub fn specific_abi_type_for_ty_ref<M: ty::PM>(ty_ref: &ty::Ref<M>) -> abitype::
     match ty_ref.resolve_to_ty() {
         Ty::List(list_ty) if !list_ty.is_empty() => {
             let member_ty_ref = ListIterator::new(list_ty).collect_rest();
-            let member_boxed_abi_type =
-                specific_boxed_abi_type_for_type_tags((&member_ty_ref).into());
+            let member_boxed_abi_type = specific_boxed_abi_type_for_ty_ref(&member_ty_ref);
 
             if list_ty.fixed().is_empty() {
                 abitype::BoxedABIType::List(member_boxed_abi_type).into()
@@ -93,16 +98,12 @@ pub fn specific_abi_type_for_ty_ref<M: ty::PM>(ty_ref: &ty::Ref<M>) -> abitype::
             }
         }
         Ty::Vectorof(member_ty) => {
-            let member_boxed_abi_type =
-                specific_boxed_abi_type_for_type_tags(member_ty.as_ref().into());
-
+            let member_boxed_abi_type = specific_boxed_abi_type_for_ty_ref(member_ty.as_ref());
             abitype::BoxedABIType::Vector(member_boxed_abi_type).into()
         }
         Ty::Vector(member_tys) => {
             let member_ty_ref = ty::unify::unify_ty_ref_iter(member_tys.iter().cloned());
-
-            let member_boxed_abi_type =
-                specific_boxed_abi_type_for_type_tags((&member_ty_ref).into());
+            let member_boxed_abi_type = specific_boxed_abi_type_for_ty_ref(&member_ty_ref);
 
             abitype::BoxedABIType::Vector(member_boxed_abi_type).into()
         }
