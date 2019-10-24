@@ -11,7 +11,7 @@ steps:
     branches: '!master'
     command: ./.buildkite/build-and-test.sh
     plugins:
-      - docker-compose#v3.0.3:
+      - docker-compose#v3.1.0:
           run: build-env
     agents:
       queue: arm64
@@ -58,7 +58,7 @@ steps:
       - docker-login#v2.0.1:
           username: etaoins
           password-env: DOCKER_HUB_PASSWORD
-      - docker-compose#v3.0.3:
+      - docker-compose#v3.1.0:
           push:
             repl:etaoins/arret:repl
           env:
