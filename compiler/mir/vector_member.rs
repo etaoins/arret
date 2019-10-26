@@ -5,11 +5,22 @@ use arret_runtime::boxed;
 
 use crate::mir::builder::Builder;
 use crate::mir::eval_hir::EvalHirCtx;
-use crate::mir::value;
 use crate::mir::value::Value;
 
 // TODO: MIR shouldn't know about this codegen restriction; this is a temporary hack.
 pub const MAX_DIRECT_ACCESS_LENGTH: usize = boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH;
+
+fn vector_member_type(vector_value: &Value) -> &abitype::BoxedABIType {
+    if let Value::Reg(reg_value) = vector_value {
+        if let abitype::ABIType::Boxed(abitype::BoxedABIType::Vector(member_boxed_abi_type)) =
+            &reg_value.abi_type
+        {
+            return *member_boxed_abi_type;
+        }
+    }
+
+    &abitype::BoxedABIType::Any
+}
 
 /// Loads a vector member from a vector of known length
 ///
@@ -23,7 +34,12 @@ pub fn load_vector_member(
     member_index: usize,
 ) -> Value {
     use crate::mir::ops::*;
+    use crate::mir::tagset::TypeTagSet;
     use crate::mir::value::build_reg::value_to_reg;
+    use crate::mir::value::types::TypeHint;
+    use crate::mir::value::RegValue;
+
+    let member_possible_type_tags: TypeTagSet = vector_member_type(vector_value).into();
 
     let vector_reg = value_to_reg(
         ehx,
@@ -43,5 +59,11 @@ pub fn load_vector_member(
         },
     );
 
-    value::RegValue::new(member_reg, abitype::BoxedABIType::Any.into()).into()
+    (RegValue {
+        reg: member_reg,
+        possible_type_tags: member_possible_type_tags,
+        abi_type: abitype::BoxedABIType::Any.into(),
+        type_hint: TypeHint::None,
+    })
+    .into()
 }
