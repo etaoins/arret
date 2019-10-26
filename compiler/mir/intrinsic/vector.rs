@@ -31,10 +31,7 @@ pub fn vector_ref(
     span: Span,
     arg_list_value: &Value,
 ) -> Result<Option<Value>> {
-    use crate::mir::ops::*;
-    use crate::mir::value;
-    use crate::mir::value::build_reg::value_to_reg;
-    use arret_runtime::abitype;
+    use crate::mir::vector_member;
 
     let mut iter = arg_list_value.unsized_list_iter();
     let vector_value = iter.next_unchecked(b, span);
@@ -47,35 +44,21 @@ pub fn vector_ref(
     };
 
     let index = if let Some(index) = try_value_to_i64(index_value) {
-        index
+        index as usize
     } else {
         return Ok(None);
     };
 
-    // TODO: MIR shouldn't know about this codegen restriction; this is a temporary hack.
-    if index > boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH as i64 {
+    if index > vector_member::MAX_DIRECT_ACCESS_LENGTH {
         return Ok(None);
     }
 
-    let vector_reg = value_to_reg(
+    Ok(Some(vector_member::load_vector_member(
         ehx,
         b,
         span,
+        known_length,
         &vector_value,
-        &abitype::BoxedABIType::Vector(&abitype::BoxedABIType::Any).into(),
-    );
-
-    let member_reg = b.push_reg(
-        span,
-        OpKind::LoadBoxedVectorMember,
-        LoadBoxedVectorMemberOp {
-            vector_reg: vector_reg.into(),
-            known_vector_length: known_length as usize,
-            member_index: index as usize,
-        },
-    );
-
-    Ok(Some(
-        value::RegValue::new(member_reg, abitype::BoxedABIType::Any.into()).into(),
-    ))
+        index,
+    )))
 }

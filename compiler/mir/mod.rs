@@ -19,6 +19,7 @@ mod specific_abi_type;
 mod tagset;
 mod typred;
 mod value;
+mod vector_member;
 
 pub use eval_hir::BuiltProgram;
 pub use printer::print_program;
