@@ -1,8 +1,8 @@
-FROM ubuntu:19.04 AS build-env
+FROM ubuntu:19.10 AS build-env
 
 RUN \
   apt-get update && \
-  apt-get -y install curl gcc zlib1g-dev libstdc++-8-dev llvm-8 llvm-8-dev && \
+  apt-get -y install curl gcc zlib1g-dev libstdc++-9-dev llvm-8 llvm-8-dev && \
   apt-get clean
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.38.0 --profile=minimal
@@ -31,7 +31,7 @@ RUN cargo build --release
 
 ###
 
-FROM ubuntu:19.04 AS repl
+FROM ubuntu:19.10 AS repl
 
 ARG vcs_ref
 
