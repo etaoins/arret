@@ -49,6 +49,7 @@ steps:
       - cargo check
 
       - "echo '--- :female-detective: Checking release'"
+      - RUSTFLAGS="-Copt-level=0" cargo check --release
       - cargo check --release
     <<: *cached-ecr-build-env
 
