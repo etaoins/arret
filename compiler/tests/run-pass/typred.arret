@@ -1,9 +1,6 @@
 (import [stdlib base])
 (import [stdlib test])
 
-(defn black-box-untyped! ([input Any]) ->! Any
-  (black-box! input))
-
 (defn test-tagged-ty-preds! () ->! ()
   (assert-eq! true (any? (black-box-untyped! "foo")))
   (assert-eq! true (any? (black-box-untyped! 'foo)))

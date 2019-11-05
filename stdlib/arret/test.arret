@@ -4,6 +4,10 @@
 (import (:only [stdlib rust] black-box black-box! heap-alloc-count fn-op-categories))
 (export black-box black-box! heap-alloc-count)
 
+(export black-box-untyped!)
+(defn black-box-untyped! ([input Any]) ->! Any
+  (black-box! input))
+
 (export assert-eq!)
 (defmacro assert-eq! (macro-rules
   [(expected-expr actual-expr)
