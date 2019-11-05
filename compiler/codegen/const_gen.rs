@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::{ffi, iter, mem};
 
 use llvm_sys::core::*;
@@ -202,7 +203,7 @@ pub fn gen_boxed_sym(
 pub fn gen_global_interned_names(
     tcx: &mut TargetCtx,
     llvm_module: LLVMModuleRef,
-    names: &[Box<str>],
+    names: &[Rc<str>],
 ) -> LLVMValueRef {
     unsafe {
         if names.is_empty() {

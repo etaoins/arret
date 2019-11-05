@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::ffi;
+use std::rc::Rc;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
@@ -25,7 +26,10 @@ pub struct ModCtx<'am, 'sl, 'interner> {
     llvm_private_funs: HashMap<ops::PrivateFunId, LLVMValueRef>,
 
     jit_interner: Option<&'interner mut intern::Interner>,
-    global_interned_names: Vec<Box<str>>,
+    /// Names that have been interned in the order of their global index
+    global_interned_names: Vec<Rc<str>>,
+    /// Index of already interned names to their interned sym
+    global_name_to_interned: HashMap<Rc<str>, intern::InternedSym>,
 
     has_jit_record_struct_class_ids: bool,
     record_struct_class_ids: HashMap<ops::RecordStructId, RecordClassId>,
@@ -109,6 +113,7 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
 
             jit_interner,
             global_interned_names: vec![],
+            global_name_to_interned: HashMap::new(),
 
             has_jit_record_struct_class_ids: !jit_record_struct_class_ids.is_empty(),
             record_struct_class_ids: jit_record_struct_class_ids,
@@ -119,16 +124,26 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
         }
     }
 
-    pub fn intern_name(&mut self, value: &str) -> intern::InternedSym {
+    pub fn intern_name(&mut self, name: &str) -> intern::InternedSym {
         if let Some(ref mut jit_interner) = self.jit_interner {
-            jit_interner.intern_static(value)
-        } else if let Some(interned_sym) = intern::InternedSym::try_from_inline_name(value) {
+            jit_interner.intern_static(name)
+        } else if let Some(interned_sym) = intern::InternedSym::try_from_inline_name(name) {
             interned_sym
+        } else if let Some(interned_sym) = self.global_name_to_interned.get(name) {
+            *interned_sym
         } else {
-            let global_index = self.global_interned_names.len();
-            self.global_interned_names.push(value.into());
+            let owned_name: Rc<str> = name.into();
 
-            unsafe { intern::InternedSym::from_global_index(global_index as u32) }
+            let global_index = self.global_interned_names.len();
+            self.global_interned_names.push(owned_name.clone());
+
+            let interned_sym =
+                unsafe { intern::InternedSym::from_global_index(global_index as u32) };
+
+            self.global_name_to_interned
+                .insert(owned_name.clone(), interned_sym);
+
+            interned_sym
         }
     }
 
