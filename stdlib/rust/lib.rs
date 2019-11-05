@@ -23,6 +23,9 @@ use crate::vector::*;
 pub mod write;
 use crate::write::*;
 
+pub mod read;
+use crate::read::*;
+
 use arret_runtime_syntax::writer::pretty_print_boxed;
 
 use arret_runtime::binding::*;
@@ -69,6 +72,8 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "write!" => stdlib_write,
     "writeln!" => stdlib_writeln,
     "write-str" => stdlib_write_str,
+
+    "read-str" => stdlib_read_str,
 
     "length" => stdlib_length,
     "map" => stdlib_map,

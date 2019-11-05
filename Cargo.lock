@@ -96,6 +96,7 @@ dependencies = [
  "arret-rfi-derive 0.1.0",
  "arret-runtime 0.1.0",
  "arret-runtime-syntax 0.1.0",
+ "arret-syntax 0.1.0",
 ]
 
 [[package]]

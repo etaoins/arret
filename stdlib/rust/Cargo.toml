@@ -10,6 +10,7 @@ path = "lib.rs"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
+arret-syntax = { path = "../../syntax" }
 arret-runtime = { path = "../../runtime" }
 arret-runtime-syntax = { path = "../../runtime-syntax" }
 arret-rfi-derive = { path = "../../rfi-derive" }

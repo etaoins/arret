@@ -1,0 +1,30 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn test-read-str! () ->! ()
+  (assert-eq! 1 (read-str "1"))
+
+  (assert-eq! -1.5 (read-str "-1.5"))
+  (assert-eq! ##Inf (read-str "##Inf"))
+  (assert-eq! ##-Inf (read-str "##-Inf"))
+
+  (let [read-nan (read-str "##NaN")]
+    (assert-eq! true (and (float? read-nan) (nan? read-nan))))
+
+  (assert-eq! 'tiny (read-str "tiny"))
+  (assert-eq! 'large-so-it-wont-intern-inline (read-str "large-so-it-wont-intern-inline"))
+
+  (assert-eq! "tiny" (read-str "\"tiny\""))
+  (assert-eq! "Really quite large so it wont fit inside a cell" (read-str "\"Really quite large so it wont fit inside a cell\""))
+
+  (assert-eq! '() (read-str "()"))
+  (assert-eq! '(1 2 3) (read-str "(1 2 3)"))
+
+  (assert-eq! [] (read-str "[]"))
+  (assert-eq! [one two three] (read-str "[one two three]"))
+
+  (assert-eq! \newline (read-str "\\newline"))
+  (assert-eq! \λ (read-str "\\λ")))
+
+(defn main! () ->! ()
+  (test-read-str!))

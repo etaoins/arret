@@ -7,8 +7,8 @@
         bool? num? int? float? char? list? vector? set? map? fn? nil? record?)
 
 (import [stdlib rust])
-(export length panic panic! print! println! print-str write! writeln! write-str exit! cons map
-        filter some? every? fold concat take int float < <= == > >= + * - / rem quot vector
+(export length panic panic! print! println! print-str write! writeln! write-str read-str exit! cons
+        map filter some? every? fold concat take int float < <= == > >= + * - / rem quot vector
         vector-length vector->list vector-ref)
 
 (export defn)
