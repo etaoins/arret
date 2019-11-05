@@ -1,6 +1,7 @@
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
 
+use std::io::Write;
 use std::ops::Range;
 use std::{env, fs, io, path, process};
 
@@ -184,7 +185,6 @@ fn exit_with_run_output_difference(
     expected: &[u8],
     actual: &[u8],
 ) {
-    use std::io::Write;
     use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
     let mut expected_color = ColorSpec::new();
@@ -295,21 +295,24 @@ fn result_for_single_test(
     match run_type {
         RunType::Pass(_) => {
             if !output.status.success() {
-                panic!(
+                // Dump any panic message from the test
+                let _ = io::stderr().write_all(&output.stderr);
+
+                return Err(vec![Diagnostic::new_error(format!(
                     "unexpected status {} returned from integration test {}",
                     output.status,
                     source_file.file_map().name()
-                );
+                ))]);
             }
         }
         RunType::Error(_) => {
             // Code 1 is used by panic. This makes sure we didn't e.g. SIGSEGV.
             if output.status.code() != Some(1) {
-                panic!(
+                return Err(vec![Diagnostic::new_error(format!(
                     "unexpected status {} returned from integration test {}",
                     output.status,
                     source_file.file_map().name()
-                );
+                ))]);
             }
         }
     }
@@ -481,7 +484,7 @@ where
     let stdout_filename = entry.path().with_extension("stdout");
 
     let mut stderr = Vec::new();
-    // This file may no exist - we'll treat it as any empty file
+    // This file may not exist - we'll treat it as any empty file
     if let Ok(mut file) = fs::File::open(stderr_filename) {
         file.read_to_end(&mut stderr).unwrap();
     }
@@ -553,6 +556,12 @@ fn integration() {
         .collect::<Vec<String>>();
 
     if !failed_tests.is_empty() {
-        panic!("integration tests failed: {}", failed_tests.join(", "))
+        let _ = writeln!(
+            io::stderr(),
+            "integration tests failed: {}",
+            failed_tests.join(", ")
+        );
+
+        process::exit(1);
     }
 }
