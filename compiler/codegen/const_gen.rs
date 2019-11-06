@@ -109,8 +109,7 @@ fn gen_boxed_external_str(
         LLVMSetAlignment(global, mem::align_of::<boxed::Str>() as u32);
         annotate_private_global(global);
 
-        let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
-        LLVMConstBitCast(global, LLVMPointerType(llvm_type, 0))
+        LLVMConstBitCast(global, tcx.boxed_abi_to_llvm_ptr_type(&type_tag.into()))
     }
 }
 
@@ -152,8 +151,7 @@ fn gen_boxed_inline_str(
         LLVMSetAlignment(global, mem::align_of::<boxed::Str>() as u32);
         annotate_private_global(global);
 
-        let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
-        LLVMConstBitCast(global, LLVMPointerType(llvm_type, 0))
+        LLVMConstBitCast(global, tcx.boxed_abi_to_llvm_ptr_type(&type_tag.into()))
     }
 }
 

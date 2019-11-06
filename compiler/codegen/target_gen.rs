@@ -251,14 +251,12 @@ impl TargetCtx {
 
     pub fn shared_str_llvm_type(&mut self) -> LLVMTypeRef {
         let llx = self.llx;
-        let llvm_header = self.box_header_llvm_type();
 
         *self.shared_str_type.get_or_insert_with(|| unsafe {
             let llvm_i8 = LLVMInt8TypeInContext(llx);
             let llvm_i64 = LLVMInt64TypeInContext(llx);
 
             let members = &mut [
-                llvm_header,
                 // ref_count
                 llvm_i64,
                 // len
@@ -281,7 +279,11 @@ impl TargetCtx {
 
         *self.boxed_external_str_type.get_or_insert_with(|| unsafe {
             let llvm_i8 = LLVMInt8TypeInContext(llx);
-            let members = &mut [llvm_header, llvm_i8, shared_str_llvm_type];
+            let members = &mut [
+                llvm_header,
+                llvm_i8,
+                LLVMPointerType(shared_str_llvm_type, 0),
+            ];
 
             let llvm_type =
                 LLVMStructCreateNamed(llx, b"boxed_external_str\0".as_ptr() as *const _);
