@@ -15,7 +15,12 @@
   (assert-eq! 'large-so-it-wont-intern-inline (read-str "large-so-it-wont-intern-inline"))
 
   (assert-eq! "tiny" (read-str "\"tiny\""))
-  (assert-eq! "Really quite large so it wont fit inside a cell" (read-str "\"Really quite large so it wont fit inside a cell\""))
+
+  (assert-eq! "Really quite large so it wont fit inside a cell"
+    (read-str "\"Really quite large so it wont fit inside a cell\""))
+
+  (assert-eq! "Really quite large so it wont fit inside a cell"
+    (read-str (black-box! "\"Really quite large so it wont fit inside a cell\"")))
 
   (assert-eq! '() (read-str "()"))
   (assert-eq! '(1 2 3) (read-str "(1 2 3)"))

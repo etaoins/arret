@@ -67,7 +67,8 @@ fn gen_boxed_external_str(
             LLVMConstStringInContext(tcx.llx, value.as_ptr() as *mut _, value.len() as u32, 1),
         ];
 
-        let shared_str_llvm_value = LLVMConstStruct(
+        let shared_str_llvm_value = LLVMConstStructInContext(
+            tcx.llx,
             shared_str_members.as_mut_ptr(),
             shared_str_members.len() as u32,
             0,
