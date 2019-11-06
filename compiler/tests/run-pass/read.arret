@@ -14,6 +14,10 @@
   (assert-eq! 'tiny (read-str "tiny"))
   (assert-eq! 'large-so-it-wont-intern-inline (read-str "large-so-it-wont-intern-inline"))
 
+  ; The `black-box!` forces us to re-intern these at runtime
+  (assert-eq! 'large-so-it-wont-intern-inline (read-str (black-box! "large-so-it-wont-intern-inline")))
+  (assert-ne! 'large-so-it-wont-intern-inline (read-str (black-box! "new-large-symbol-that-didnt-appear-at-compile-time")))
+
   (assert-eq! "tiny" (read-str "\"tiny\""))
 
   (assert-eq! "Really quite large so it wont fit inside a cell"

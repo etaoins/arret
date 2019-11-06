@@ -209,13 +209,14 @@ pub fn gen_global_interned_names(
             return LLVMConstPointerNull(LLVMPointerType(tcx.global_interned_name_llvm_type(), 0));
         }
 
+        let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
+        let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
         let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
+
         let global_interned_name_llvm_type = tcx.global_interned_name_llvm_type();
 
-        let first_element_gep_indices = &mut [
-            LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), 0, 0),
-            LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), 0, 0),
-        ];
+        let first_element_gep_indices =
+            &mut [LLVMConstInt(llvm_i32, 0, 0), LLVMConstInt(llvm_i32, 0, 0)];
 
         let mut llvm_names: Vec<LLVMValueRef> = names
             .iter()
@@ -255,6 +256,18 @@ pub fn gen_global_interned_names(
                     llvm_name_members.len() as u32,
                 )
             })
+            .chain(iter::once({
+                let llvm_name_members = &mut [
+                    LLVMConstInt(llvm_i64, 0, 0),
+                    LLVMConstPointerNull(LLVMPointerType(llvm_i8, 0)),
+                ];
+
+                LLVMConstNamedStruct(
+                    global_interned_name_llvm_type,
+                    llvm_name_members.as_mut_ptr(),
+                    llvm_name_members.len() as u32,
+                )
+            }))
             .collect();
 
         let llvm_names_value = LLVMConstArray(

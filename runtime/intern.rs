@@ -41,6 +41,10 @@ impl GlobalName {
             std::str::from_utf8_unchecked(byte_slice)
         }
     }
+
+    fn is_null(&self) -> bool {
+        self.name_bytes.is_null()
+    }
 }
 
 #[repr(align(8))]
@@ -121,6 +125,16 @@ impl InternedSym {
         }
     }
 
+    pub fn from_local_index(index: u32) -> InternedSym {
+        InternedSym {
+            indexed: InternedIndexed {
+                flag_byte: LOCAL_INDEXED_FLAG,
+                _padding: [0; 3],
+                name_index: index,
+            },
+        }
+    }
+
     pub fn to_raw_u64(self) -> u64 {
         unsafe { self.raw }
     }
@@ -166,7 +180,7 @@ impl fmt::Debug for InternedSym {
 
 pub struct Interner {
     names: Vec<Rc<str>>,
-    name_to_index: HashMap<Rc<str>, u32>,
+    name_to_interned: HashMap<Rc<str>, InternedSym>,
     /// Contains the highest static index + 1
     static_index_watermark: u32,
     global_names: *const GlobalName,
@@ -180,9 +194,33 @@ impl Interner {
     pub fn with_global_names(global_names: *const GlobalName) -> Interner {
         Interner {
             names: vec![],
-            name_to_index: HashMap::new(),
+            name_to_interned: HashMap::new(),
             static_index_watermark: 0,
             global_names,
+        }
+    }
+
+    fn lookup_global_name(&mut self, name: &str) -> Option<InternedSym> {
+        if self.global_names.is_null() {
+            return None;
+        }
+
+        // TODO: This is O(n) with the number of global names
+        let mut index = 0;
+        loop {
+            unsafe {
+                let global_name = &*self.global_names.add(index);
+
+                if global_name.is_null() {
+                    break None;
+                }
+
+                if global_name.as_str() == name {
+                    break Some(InternedSym::from_global_index(index as u32));
+                }
+            }
+
+            index += 1;
         }
     }
 
@@ -194,27 +232,27 @@ impl Interner {
             return inline_interned;
         };
 
-        if !self.global_names.is_null() {
-            unimplemented!("interning symbols with global interned names");
-        }
-
         let shared_name: Rc<str> = name.into();
 
-        let index = self.name_to_index.get(name).cloned().unwrap_or_else(|| {
-            let index = self.names.len() as u32;
-            self.names.push(shared_name.clone());
-            self.name_to_index.insert(shared_name.clone(), index);
-
-            index
-        });
-
-        InternedSym {
-            indexed: InternedIndexed {
-                flag_byte: LOCAL_INDEXED_FLAG,
-                _padding: [0; 3],
-                name_index: index,
-            },
+        // See if this has already been interned locally or is a cached global name
+        if let Some(interned) = self.name_to_interned.get(name) {
+            return *interned;
         }
+
+        // See if this is in our global names
+        if let Some(interned) = self.lookup_global_name(name) {
+            // Cache this so we don't have to iterate to find the name again
+            self.name_to_interned.insert(name.into(), interned);
+            return interned;
+        }
+
+        let index = self.names.len() as u32;
+        self.names.push(shared_name.clone());
+
+        let interned = InternedSym::from_local_index(index);
+        self.name_to_interned.insert(name.into(), interned);
+
+        interned
     }
 
     /// Interns a static symbol with the given name
@@ -255,21 +293,23 @@ impl Interner {
         let static_index_watermark = self.static_index_watermark;
 
         let names = self.names[0..static_index_watermark as usize].to_vec();
-        let name_to_index = self
-            .name_to_index
+        let name_to_interned = self
+            .name_to_interned
             .iter()
-            .filter_map(|(name, idx)| {
-                if *idx < self.static_index_watermark {
-                    Some((name.clone(), *idx))
-                } else {
-                    None
+            .filter_map(|(name, interned)| {
+                if let InternedRepr::LocalIndexed(indexed) = interned.repr() {
+                    if indexed.name_index < self.static_index_watermark {
+                        return Some((name.clone(), *interned));
+                    }
                 }
+
+                None
             })
             .collect();
 
         Interner {
             names,
-            name_to_index,
+            name_to_interned,
             static_index_watermark,
             global_names: self.global_names,
         }
@@ -368,12 +408,12 @@ mod test {
         interner.intern("three              ");
 
         assert_eq!(3, interner.names.len());
-        assert_eq!(3, interner.name_to_index.len());
+        assert_eq!(3, interner.name_to_interned.len());
 
         // No static symbols; we should collect everything
         interner = interner.clone_for_collect_garbage();
         assert_eq!(0, interner.names.len());
-        assert_eq!(0, interner.name_to_index.len());
+        assert_eq!(0, interner.name_to_interned.len());
 
         interner.intern("one                ");
         interner.intern_static("two         ");
@@ -382,17 +422,17 @@ mod test {
         // We need to preserve the second symbol
         interner = interner.clone_for_collect_garbage();
         assert_eq!(2, interner.names.len());
-        assert_eq!(2, interner.name_to_index.len());
+        assert_eq!(2, interner.name_to_interned.len());
 
         // We should be able to "promote" an existing symbol to static
         interner.intern("one-two-three-four");
         interner.intern_static("one-two-three-four");
 
         assert_eq!(3, interner.names.len());
-        assert_eq!(3, interner.name_to_index.len());
+        assert_eq!(3, interner.name_to_interned.len());
 
         interner = interner.clone_for_collect_garbage();
         assert_eq!(3, interner.names.len());
-        assert_eq!(3, interner.name_to_index.len());
+        assert_eq!(3, interner.name_to_interned.len());
     }
 }
