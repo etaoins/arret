@@ -232,8 +232,6 @@ impl Interner {
             return inline_interned;
         };
 
-        let shared_name: Rc<str> = name.into();
-
         // See if this has already been interned locally or is a cached global name
         if let Some(interned) = self.name_to_interned.get(name) {
             return *interned;
@@ -246,11 +244,13 @@ impl Interner {
             return interned;
         }
 
+        let shared_name: Rc<str> = name.into();
+
         let index = self.names.len() as u32;
         self.names.push(shared_name.clone());
 
         let interned = InternedSym::from_local_index(index);
-        self.name_to_interned.insert(name.into(), interned);
+        self.name_to_interned.insert(shared_name, interned);
 
         interned
     }

@@ -141,7 +141,7 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
                 unsafe { intern::InternedSym::from_global_index(global_index as u32) };
 
             self.global_name_to_interned
-                .insert(owned_name.clone(), interned_sym);
+                .insert(owned_name, interned_sym);
 
             interned_sym
         }
