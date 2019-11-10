@@ -51,7 +51,7 @@ COPY --from=llvm-build ${LLVM_ROOT} ${LLVM_ROOT}
 RUN dnf install -y valgrind && \
   dnf clean all
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.38.0 --profile=minimal
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.39.0 --profile=minimal
 
 ENV PATH "/root/.cargo/bin:${PATH}"
 RUN rustup component add rustfmt
