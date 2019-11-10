@@ -489,13 +489,10 @@ impl<'input> Parser<'input> {
                 Ok(datum) => {
                     datum_vec.push(datum);
                 }
-                Err(err) => {
-                    if err.kind() == &ErrorKind::Eof(ExpectedContent::Datum) {
-                        break Ok(datum_vec);
-                    } else {
-                        break Err(err);
-                    }
+                Err(err) if err.kind() == &ErrorKind::Eof(ExpectedContent::Datum) => {
+                    break Ok(datum_vec)
                 }
+                Err(err) => break Err(err),
             }
         }
     }
