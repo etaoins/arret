@@ -329,24 +329,15 @@ where
         }
     };
 
+    let div_binary_op = BinaryOp {
+        lhs_reg: numer_reg.into(),
+        rhs_reg: denom_reg.into(),
+    };
+
     let result_reg = if needs_checked {
-        b.push_reg(
-            span,
-            checked_op_kind,
-            BinaryOp {
-                lhs_reg: numer_reg.into(),
-                rhs_reg: denom_reg.into(),
-            },
-        )
+        b.push_reg(span, checked_op_kind, div_binary_op)
     } else {
-        b.push_reg(
-            span,
-            unchecked_op_kind,
-            BinaryOp {
-                lhs_reg: numer_reg.into(),
-                rhs_reg: denom_reg.into(),
-            },
-        )
+        b.push_reg(span, unchecked_op_kind, div_binary_op)
     };
 
     Ok(Some(
