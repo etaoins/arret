@@ -201,7 +201,7 @@ pub(crate) fn gen_checked_int_div(
             b"valid_div_block\0".as_ptr() as *const _,
         );
 
-        // Test if the denominator is zero
+        // Test if the denominator is 0
         let denom_is_zero = LLVMBuildICmp(
             fcx.builder,
             LLVMIntPredicate::LLVMIntEQ,
@@ -210,7 +210,7 @@ pub(crate) fn gen_checked_int_div(
             b"denom_is_zero\0".as_ptr() as *const _,
         );
 
-        // If it's zero then raise a divide by zero error
+        // If the denominator 0 then raise a divide by zero error
         LLVMBuildCondBr(
             fcx.builder,
             denom_is_zero,
@@ -218,7 +218,7 @@ pub(crate) fn gen_checked_int_div(
             non_zero_denom_block,
         );
 
-        // Test if the denominator is negative one
+        // Test if the denominator is -1
         LLVMPositionBuilderAtEnd(fcx.builder, non_zero_denom_block);
 
         let denom_is_neg_one = LLVMBuildICmp(
@@ -229,7 +229,7 @@ pub(crate) fn gen_checked_int_div(
             b"denom_is_neg_one\0".as_ptr() as *const _,
         );
 
-        // If it's negative one then we need to test the denominator
+        // If the denominator in -1 then we need to test the numerator
         LLVMBuildCondBr(
             fcx.builder,
             denom_is_neg_one,
@@ -248,7 +248,7 @@ pub(crate) fn gen_checked_int_div(
             b"numer_is_int_min\0".as_ptr() as *const _,
         );
 
-        // If it's i64::MIN then raise a divide by zero error
+        // If denominator is -1 and numerator is i64::MIN then raise a divide by zero error
         LLVMBuildCondBr(
             fcx.builder,
             numer_is_int_min,
