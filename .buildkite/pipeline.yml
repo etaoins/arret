@@ -58,9 +58,14 @@ steps:
       - docker-login#v2.0.1:
           username: etaoins
           password-env: DOCKER_HUB_PASSWORD
+      - docker-login#v2.0.1:
+          server: docker.pkg.github.com
+          username: etaoins
+          password-env: GITHUB_TOKEN
       - docker-compose#v3.1.0:
           push:
-            repl:etaoins/arret:repl
+            - repl:etaoins/arret:repl
+            - repl:docker.pkg.github.com/etaoins/arret/repl
           env:
             - BUILDKITE_COMMIT
     concurrency_group: 'push-repl-image'
