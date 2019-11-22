@@ -28,7 +28,13 @@ const GLOBAL_INDEXED_FLAG: u8 = 0x82;
 const INLINE_SIZE: usize = 8;
 
 #[repr(C)]
-pub struct GlobalName {
+pub struct RawGlobalNames {
+    len: u32,
+    names: [GlobalName; 1],
+}
+
+#[repr(C)]
+struct GlobalName {
     name_byte_length: u64,
     name_bytes: *const u8,
 }
@@ -40,10 +46,6 @@ impl GlobalName {
                 std::slice::from_raw_parts(self.name_bytes, self.name_byte_length as usize);
             std::str::from_utf8_unchecked(byte_slice)
         }
-    }
-
-    fn is_null(&self) -> bool {
-        self.name_bytes.is_null()
     }
 }
 
@@ -183,15 +185,25 @@ pub struct Interner {
     name_to_interned: HashMap<Rc<str>, InternedSym>,
     /// Contains the highest static index + 1
     static_index_watermark: u32,
-    global_names: *const GlobalName,
+    global_names: Option<&'static [GlobalName]>,
 }
 
 impl Interner {
     pub fn new() -> Interner {
-        Self::with_global_names(std::ptr::null())
+        Interner {
+            names: vec![],
+            name_to_interned: HashMap::new(),
+            static_index_watermark: 0,
+            global_names: None,
+        }
     }
 
-    pub fn with_global_names(global_names: *const GlobalName) -> Interner {
+    pub unsafe fn with_global_names(raw_global_names: *const RawGlobalNames) -> Interner {
+        // Convert from our codegened layout to Rust
+        let global_names = raw_global_names.as_ref().map(|raw_global_names| {
+            std::slice::from_raw_parts(&raw_global_names.names[0], raw_global_names.len as usize)
+        });
+
         Interner {
             names: vec![],
             name_to_interned: HashMap::new(),
@@ -201,37 +213,12 @@ impl Interner {
     }
 
     fn lookup_global_name(&mut self, name: &str) -> Option<InternedSym> {
-        use std::cmp::Ordering;
-
-        if self.global_names.is_null() {
-            return None;
-        }
-
-        // TODO: This is O(n) with the number of global names
-        let mut index = 0;
-        loop {
-            unsafe {
-                let global_name = &*self.global_names.add(index);
-
-                if global_name.is_null() {
-                    // Reached the end
-                    break None;
-                }
-
-                match global_name.as_str().cmp(name) {
-                    Ordering::Less => {}
-                    Ordering::Equal => {
-                        break Some(InternedSym::from_global_index(index as u32));
-                    }
-                    Ordering::Greater => {
-                        // Global names are sorted; we're past the location we should be found in.
-                        break None;
-                    }
-                }
-            }
-
-            index += 1;
-        }
+        self.global_names.and_then(|global_names| {
+            global_names
+                .binary_search_by(|global_name| global_name.as_str().cmp(name))
+                .ok()
+                .map(|index| unsafe { InternedSym::from_global_index(index as u32) })
+        })
     }
 
     /// Interns a symbol with the given name
@@ -283,10 +270,9 @@ impl Interner {
     pub fn unintern<'a>(&'a self, interned: &'a InternedSym) -> &'a str {
         match interned.repr() {
             InternedRepr::LocalIndexed(indexed) => &self.names[indexed.name_index as usize],
-            InternedRepr::GlobalIndexed(indexed) => unsafe {
-                let global_name = &*self.global_names.add(indexed.name_index as usize);
-                global_name.as_str()
-            },
+            InternedRepr::GlobalIndexed(indexed) => {
+                self.global_names.unwrap()[indexed.name_index as usize].as_str()
+            }
             InternedRepr::Inline(inline) => inline.as_str(),
         }
     }

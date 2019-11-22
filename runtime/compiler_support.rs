@@ -12,14 +12,14 @@ use crate::boxed::prelude::*;
 use crate::boxed::refs::Gc;
 use crate::boxed::type_info::TypeInfo;
 use crate::class_map::{ClassMap, ClassRef};
-use crate::intern::{GlobalName, Interner};
+use crate::intern::{Interner, RawGlobalNames};
 use crate::task::Task;
 
 type TaskEntry = extern "C" fn(&mut Task);
 
 #[export_name = "arret_runtime_launch_task"]
-pub extern "C" fn launch_task(
-    global_names: *const GlobalName,
+pub unsafe extern "C" fn launch_task(
+    global_names: *const RawGlobalNames,
     classmap_classes: *const ClassRef<'static>,
     entry: TaskEntry,
 ) {

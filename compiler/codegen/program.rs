@@ -139,7 +139,7 @@ fn program_to_module(
 
         // Declare arret_runtime_launch_task
         let launch_task_llvm_arg_types = &mut [
-            LLVMPointerType(tcx.global_interned_name_llvm_type(), 0),
+            LLVMTypeOf(llvm_global_interned_names),
             classmap_class_ptr_type,
             LLVMPointerType(arret_main_llvm_type(tcx), 0),
         ];

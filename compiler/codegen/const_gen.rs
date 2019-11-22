@@ -208,11 +208,11 @@ pub fn gen_global_interned_names<'a>(
     names: impl ExactSizeIterator<Item = &'a Rc<str>>,
 ) -> LLVMValueRef {
     unsafe {
-        if names.len() == 0 {
+        let names_len = names.len();
+        if names_len == 0 {
             return LLVMConstPointerNull(LLVMPointerType(tcx.global_interned_name_llvm_type(), 0));
         }
 
-        let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
         let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
         let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
 
@@ -258,40 +258,38 @@ pub fn gen_global_interned_names<'a>(
                     llvm_name_members.len() as u32,
                 )
             })
-            .chain(iter::once({
-                let llvm_name_members = &mut [
-                    LLVMConstInt(llvm_i64, 0, 0),
-                    LLVMConstPointerNull(LLVMPointerType(llvm_i8, 0)),
-                ];
-
-                LLVMConstNamedStruct(
-                    global_interned_name_llvm_type,
-                    llvm_name_members.as_mut_ptr(),
-                    llvm_name_members.len() as u32,
-                )
-            }))
             .collect();
 
-        let llvm_names_value = LLVMConstArray(
+        let llvm_names_array = LLVMConstArray(
             global_interned_name_llvm_type,
             llvm_names.as_mut_ptr(),
             llvm_names.len() as u32,
         );
 
+        let global_names_members = &mut [
+            // len
+            LLVMConstInt(llvm_i32, names_len as u64, 0),
+            // names
+            llvm_names_array,
+        ];
+
+        let llvm_global_names = LLVMConstStructInContext(
+            tcx.llx,
+            global_names_members.as_mut_ptr(),
+            global_names_members.len() as u32,
+            0,
+        );
+
         let global = LLVMAddGlobal(
             llvm_module,
-            LLVMTypeOf(llvm_names_value),
+            LLVMTypeOf(llvm_global_names),
             "global_interned_names\0".as_ptr() as *const _,
         );
 
-        LLVMSetInitializer(global, llvm_names_value);
+        LLVMSetInitializer(global, llvm_global_names);
         annotate_private_global(global);
 
-        LLVMConstGEP(
-            global,
-            first_element_gep_indices.as_mut_ptr(),
-            first_element_gep_indices.len() as u32,
-        )
+        global
     }
 }
 
