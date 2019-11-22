@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use arret_runtime::abitype;
 use arret_runtime::boxed;
 
@@ -8,6 +10,7 @@ use crate::codegen::GenABI;
 
 use crate::id_type::ArcId;
 use crate::mir::tagset::TypeTagSet;
+
 new_counting_id_type!(PrivateFunIdCounter, PrivateFunId);
 new_global_id_type!(RegId);
 
@@ -198,7 +201,7 @@ pub enum OpKind {
     ConstFloat(RegId, f64),
     ConstChar(RegId, char),
     ConstBool(RegId, bool),
-    ConstInternedSym(RegId, Box<str>),
+    ConstInternedSym(RegId, Rc<str>),
     ConstTypeTag(RegId, boxed::TypeTag),
     ConstRecordClassId(RegId, RecordStructId),
 
@@ -209,7 +212,7 @@ pub enum OpKind {
     ConstBoxedFloat(RegId, f64),
     ConstBoxedChar(RegId, char),
     ConstBoxedStr(RegId, Box<str>),
-    ConstBoxedSym(RegId, Box<str>),
+    ConstBoxedSym(RegId, Rc<str>),
     ConstBoxedPair(RegId, BoxPairOp),
     ConstBoxedFunThunk(RegId, BoxFunThunkOp),
     ConstBoxedVector(RegId, Box<[RegId]>),

@@ -199,13 +199,16 @@ pub fn gen_boxed_sym(
     }
 }
 
-pub fn gen_global_interned_names(
+/// Generates a table of global interned names
+///
+/// `names` must be pre-sorted
+pub fn gen_global_interned_names<'a>(
     tcx: &mut TargetCtx,
     llvm_module: LLVMModuleRef,
-    names: &[Rc<str>],
+    names: impl ExactSizeIterator<Item = &'a Rc<str>>,
 ) -> LLVMValueRef {
     unsafe {
-        if names.is_empty() {
+        if names.len() == 0 {
             return LLVMConstPointerNull(LLVMPointerType(tcx.global_interned_name_llvm_type(), 0));
         }
 
@@ -219,7 +222,6 @@ pub fn gen_global_interned_names(
             &mut [LLVMConstInt(llvm_i32, 0, 0), LLVMConstInt(llvm_i32, 0, 0)];
 
         let mut llvm_names: Vec<LLVMValueRef> = names
-            .iter()
             .map(|name| {
                 let llvm_name_string = LLVMConstStringInContext(
                     tcx.llx,

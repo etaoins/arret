@@ -1,6 +1,10 @@
 pub mod escape;
+pub mod names;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::rc::Rc;
+
+use arret_runtime::intern;
 
 use crate::codegen::analysis::escape::Captures;
 use crate::mir::ops;
@@ -8,6 +12,7 @@ use crate::mir::ops;
 pub struct AnalysedMod<'of> {
     private_funs: HashMap<ops::PrivateFunId, AnalysedFun<'of>>,
     entry_fun: AnalysedFun<'of>,
+    global_interned_names: BTreeMap<Rc<str>, intern::InternedSym>,
 }
 
 pub struct AnalysedFun<'of> {
@@ -40,12 +45,16 @@ impl<'of> AnalysedMod<'of> {
             })
             .collect();
 
+        let global_interned_names =
+            names::calc_program_global_interned_names(&private_funs, entry_fun);
+
         AnalysedMod {
             private_funs,
             entry_fun: AnalysedFun {
                 ops_fun: entry_fun,
                 captures: entry_fun_captures,
             },
+            global_interned_names,
         }
     }
 
@@ -55,5 +64,9 @@ impl<'of> AnalysedMod<'of> {
 
     pub fn entry_fun(&self) -> &AnalysedFun<'of> {
         &self.entry_fun
+    }
+
+    pub fn global_interned_names(&self) -> &BTreeMap<Rc<str>, intern::InternedSym> {
+        &self.global_interned_names
     }
 }

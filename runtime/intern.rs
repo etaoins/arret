@@ -201,6 +201,8 @@ impl Interner {
     }
 
     fn lookup_global_name(&mut self, name: &str) -> Option<InternedSym> {
+        use std::cmp::Ordering;
+
         if self.global_names.is_null() {
             return None;
         }
@@ -212,11 +214,19 @@ impl Interner {
                 let global_name = &*self.global_names.add(index);
 
                 if global_name.is_null() {
+                    // Reached the end
                     break None;
                 }
 
-                if global_name.as_str() == name {
-                    break Some(InternedSym::from_global_index(index as u32));
+                match global_name.as_str().cmp(name) {
+                    Ordering::Less => {}
+                    Ordering::Equal => {
+                        break Some(InternedSym::from_global_index(index as u32));
+                    }
+                    Ordering::Greater => {
+                        // Global names are sorted; we're past the location we should be found in.
+                        break None;
+                    }
                 }
             }
 

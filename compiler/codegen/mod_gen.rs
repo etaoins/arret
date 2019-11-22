@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::ffi;
-use std::rc::Rc;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
@@ -26,10 +25,6 @@ pub struct ModCtx<'am, 'sl, 'interner> {
     llvm_private_funs: HashMap<ops::PrivateFunId, LLVMValueRef>,
 
     jit_interner: Option<&'interner mut intern::Interner>,
-    /// Names that have been interned in the order of their global index
-    global_interned_names: Vec<Rc<str>>,
-    /// Index of already interned names to their interned sym
-    global_name_to_interned: HashMap<Rc<str>, intern::InternedSym>,
 
     has_jit_record_struct_class_ids: bool,
     record_struct_class_ids: HashMap<ops::RecordStructId, RecordClassId>,
@@ -112,8 +107,6 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
             llvm_private_funs,
 
             jit_interner,
-            global_interned_names: vec![],
-            global_name_to_interned: HashMap::new(),
 
             has_jit_record_struct_class_ids: !jit_record_struct_class_ids.is_empty(),
             record_struct_class_ids: jit_record_struct_class_ids,
@@ -129,21 +122,12 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
             jit_interner.intern_static(name)
         } else if let Some(interned_sym) = intern::InternedSym::try_from_inline_name(name) {
             interned_sym
-        } else if let Some(interned_sym) = self.global_name_to_interned.get(name) {
-            *interned_sym
         } else {
-            let owned_name: Rc<str> = name.into();
-
-            let global_index = self.global_interned_names.len();
-            self.global_interned_names.push(owned_name.clone());
-
-            let interned_sym =
-                unsafe { intern::InternedSym::from_global_index(global_index as u32) };
-
-            self.global_name_to_interned
-                .insert(owned_name, interned_sym);
-
-            interned_sym
+            *self
+                .analysed_mod
+                .global_interned_names()
+                .get(name)
+                .expect("encountered name not found during analysis")
         }
     }
 
@@ -312,8 +296,11 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
             }
         }
 
-        let llvm_global_interned_names =
-            gen_global_interned_names(tcx, self.module, &self.global_interned_names);
+        let llvm_global_interned_names = gen_global_interned_names(
+            tcx,
+            self.module,
+            self.analysed_mod.global_interned_names().keys(),
+        );
 
         let llvm_classmap_classes =
             record_struct::gen_classmap_classes(tcx, self.module, &self.record_structs);
