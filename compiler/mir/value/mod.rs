@@ -8,6 +8,7 @@ pub mod to_const;
 pub mod types;
 
 use std::rc::Rc;
+use std::sync::Arc;
 
 use arret_runtime::abitype;
 use arret_runtime::boxed;
@@ -47,7 +48,7 @@ pub enum Value {
     List(Box<[Value]>, Option<Box<Value>>),
     Record(record::ConsId, Box<[Value]>),
     ArretFun(ArretFun),
-    RustFun(Rc<rfi::Fun>),
+    RustFun(Arc<rfi::Fun>),
     Reg(Rc<RegValue>),
 
     TyPred(ty::pred::TestTy),

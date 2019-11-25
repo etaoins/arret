@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::result;
+use std::sync::Arc;
 
 use crate::hir;
 use crate::hir::destruc;
@@ -1604,7 +1605,7 @@ impl<'types> RecursiveDefsCtx<'types> {
     fn visit_rust_fun(
         &self,
         result_use: &ResultUse<'_>,
-        rust_fun: Box<rfi::Fun>,
+        rust_fun: Arc<rfi::Fun>,
     ) -> Result<InferredNode> {
         let span = rust_fun.span();
 

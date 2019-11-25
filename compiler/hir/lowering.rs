@@ -763,7 +763,7 @@ impl<'ccx> LoweringCtx<'ccx> {
                         Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into(),
                     ),
                 ),
-                value_expr: ExprKind::RustFun(Box::new(rust_fun.clone())).into(),
+                value_expr: ExprKind::RustFun(rust_fun.clone()).into(),
             };
 
             defs.push(def);

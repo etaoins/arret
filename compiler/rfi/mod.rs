@@ -20,7 +20,7 @@ use arret_runtime::{abitype, binding};
 pub struct Library {
     _loaded: libloading::Library,
     target_path: Box<path::Path>,
-    exported_funs: HashMap<&'static str, Fun>,
+    exported_funs: HashMap<&'static str, Arc<Fun>>,
 }
 
 impl Library {
@@ -28,7 +28,7 @@ impl Library {
         &self.target_path
     }
 
-    pub fn exported_funs(&self) -> &HashMap<&'static str, Fun> {
+    pub fn exported_funs(&self) -> &HashMap<&'static str, Arc<Fun>> {
         &self.exported_funs
     }
 }
@@ -327,9 +327,9 @@ impl Loader {
                     intrinsic_name,
                 )?;
 
-                Ok((*fun_name, fun))
+                Ok((*fun_name, Arc::new(fun)))
             })
-            .collect::<Result<HashMap<&'static str, Fun>, Error>>()?;
+            .collect::<Result<HashMap<&'static str, Arc<Fun>>, Error>>()?;
 
         let library = Arc::new(Library {
             _loaded: loaded,

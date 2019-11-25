@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::{alloc, ffi, panic};
 
 use arret_runtime::boxed;
@@ -512,14 +512,13 @@ impl EvalHirCtx {
         load_record_field(self, b, span, record_cons, &record_value, field_index)
     }
 
-    pub fn rust_fun_to_jit_boxed(&mut self, rust_fun: Rc<rfi::Fun>) -> Gc<boxed::FunThunk> {
+    pub fn rust_fun_to_jit_boxed(&mut self, rust_fun: Arc<rfi::Fun>) -> Gc<boxed::FunThunk> {
         let captures = boxed::NIL_INSTANCE.as_any_ref();
         let entry = self.jit_thunk_for_rust_fun(&rust_fun);
         let new_boxed = boxed::FunThunk::new(self, captures, entry);
 
-        let rust_fun_value = Value::RustFun(rust_fun);
         self.thunk_fun_values
-            .insert(new_boxed.as_ptr(), rust_fun_value);
+            .insert(new_boxed.as_ptr(), Value::RustFun(rust_fun));
 
         new_boxed
     }
@@ -1676,7 +1675,7 @@ impl EvalHirCtx {
             ExprKind::Fun(fun_expr) => {
                 Ok(self.eval_arret_fun(fcx, fun_expr.as_ref().clone(), source_name))
             }
-            ExprKind::RustFun(rust_fun) => Ok(Value::RustFun(Rc::new(rust_fun.as_ref().clone()))),
+            ExprKind::RustFun(rust_fun) => Ok(Value::RustFun(rust_fun.clone())),
             ExprKind::TyPred(_, test_ty) => Ok(Value::TyPred(test_ty.clone())),
             ExprKind::EqPred(_) => Ok(Value::EqPred),
             ExprKind::RecordCons(_, record_cons) => Ok(Value::RecordCons(record_cons.clone())),
@@ -1719,7 +1718,7 @@ impl EvalHirCtx {
         use crate::hir::ExprKind;
         match expr.kind {
             ExprKind::Fun(fun_expr) => Ok(self.eval_arret_fun(fcx, *fun_expr, source_name)),
-            ExprKind::RustFun(rust_fun) => Ok(Value::RustFun(rust_fun.into())),
+            ExprKind::RustFun(rust_fun) => Ok(Value::RustFun(rust_fun)),
             _ => self.eval_expr_with_source_name(fcx, b, &expr, source_name),
         }
     }

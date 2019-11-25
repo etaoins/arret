@@ -13,6 +13,8 @@ mod types;
 mod util;
 pub(crate) mod visitor;
 
+use std::sync::Arc;
+
 use arret_syntax::datum::Datum;
 use arret_syntax::span::Span;
 
@@ -166,7 +168,7 @@ pub enum ExprKind<P: Phase> {
     App(Box<App<P>>),
     Recur(Box<Recur<P>>),
     Fun(Box<Fun<P>>),
-    RustFun(Box<rfi::Fun>),
+    RustFun(Arc<rfi::Fun>),
     Let(Box<Let<P>>),
     Cond(Box<Cond<P>>),
     Ref(Span, VarId),
