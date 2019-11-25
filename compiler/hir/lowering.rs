@@ -17,7 +17,6 @@ use crate::CompileCtx;
 use crate::hir::destruc;
 use crate::hir::error::{Error, ErrorKind, ExpectedSym, Result};
 use crate::hir::exports::Exports;
-use crate::hir::import::lower_import_set;
 use crate::hir::loader::{load_module_by_name, LoadedModule, ModuleName};
 use crate::hir::macros::{expand_macro, lower_macro_rules};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum, NsId};
@@ -601,15 +600,19 @@ impl<'ccx> LoweringCtx<'ccx> {
         }
     }
 
-    fn load_module(&mut self, span: Span, module_name: ModuleName) -> Result<&Exports, Vec<Error>> {
+    fn load_module(
+        &mut self,
+        span: Span,
+        module_name: &ModuleName,
+    ) -> Result<&Exports, Vec<Error>> {
         // TODO: An if-let or match here will cause the borrow to live past the return. This
         // prevents us from doing the insert below. We need to do a two-phase check instead.
-        if self.module_exports.contains_key(&module_name) {
-            return Ok(&self.module_exports[&module_name]);
+        if self.module_exports.contains_key(module_name) {
+            return Ok(&self.module_exports[module_name]);
         }
 
         let LoweredModule { exports, defs, .. } = {
-            match load_module_by_name(self.ccx, span, &module_name)? {
+            match load_module_by_name(self.ccx, span, module_name)? {
                 LoadedModule::Source(source_file) => {
                     let module_data = source_file.parsed().map_err(|err| vec![err.into()])?;
                     self.lower_module(module_data)?
@@ -619,7 +622,10 @@ impl<'ccx> LoweringCtx<'ccx> {
         };
 
         self.module_defs.push(defs);
-        Ok(self.module_exports.entry(module_name).or_insert(exports))
+        Ok(self
+            .module_exports
+            .entry(module_name.clone())
+            .or_insert(exports))
     }
 
     fn include_rfi_library(&mut self, span: Span, rfi_library: Arc<rfi::Library>) -> LoweredModule {
@@ -667,16 +673,38 @@ impl<'ccx> LoweringCtx<'ccx> {
         ns_id: NsId,
         arg_iter: NsDataIter,
     ) -> Result<(), Vec<Error>> {
+        use crate::hir::import;
+        use std::borrow::Cow;
+
         for arg_datum in arg_iter {
             let span = arg_datum.span();
 
-            let bindings = lower_import_set(arg_datum, |span, module_name| {
-                Ok(self.load_module(span, module_name)?.clone())
-            })?
-            .into_iter()
-            .map(|(name, binding)| (Ident::new(ns_id, name), binding));
+            let parsed_import = import::parse_import_set(arg_datum)?;
 
-            scope.insert_bindings(span, bindings)?;
+            let (module_span, module_name) = parsed_import.spanned_module_name();
+            let module_exports = self.load_module(module_span, module_name)?;
+
+            let exports =
+                import::filter_imported_exports(&parsed_import, Cow::Borrowed(module_exports))?;
+
+            match exports {
+                Cow::Owned(exports) => {
+                    scope.insert_bindings(
+                        span,
+                        exports
+                            .into_iter()
+                            .map(|(name, binding)| (Ident::new(ns_id, name), binding)),
+                    )?;
+                }
+                Cow::Borrowed(exports) => {
+                    scope.insert_bindings(
+                        span,
+                        exports.iter().map(|(name, binding)| {
+                            (Ident::new(ns_id, name.clone()), binding.clone())
+                        }),
+                    )?;
+                }
+            }
         }
 
         Ok(())

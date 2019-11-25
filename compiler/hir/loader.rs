@@ -85,6 +85,10 @@ impl ModuleName {
     pub fn is_rfi(&self) -> bool {
         self.path.is_empty() && self.terminal_name.as_ref() == "rust"
     }
+
+    pub fn terminal_name(&self) -> &DataStr {
+        &self.terminal_name
+    }
 }
 
 pub fn load_module_by_name(
