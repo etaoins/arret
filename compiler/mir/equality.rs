@@ -237,7 +237,7 @@ fn build_bool_equality(
     }
 
     let left_class = classify_value(left_value);
-    let right_class = classify_value(left_value);
+    let right_class = classify_value(right_value);
 
     let result_reg = match (left_class, right_class) {
         // Comparing a boolean to constant true can be simplified to a no-op

@@ -33,9 +33,12 @@
   (assert-native-compare-fn! (fn ([left Char] [right Char]) -> Bool
     (= left right)))
 
-  ; This should be optimised away entirely
+  ; These should be optimised away entirely
   (assert-fn-doesnt-contain-op! :reg-op (fn ([v Bool]) -> Bool
     (= true v)))
+
+  (assert-fn-doesnt-contain-op! :reg-op (fn ([v Bool]) -> Bool
+    (= v true)))
 
   ; Syms can be directly compared
   (assert-native-compare-fn! (fn ([left Sym] [right Sym]) -> Bool
