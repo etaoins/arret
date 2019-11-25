@@ -6,7 +6,9 @@ macro_rules! export_prims {
         pub enum Prim {
             // `(import)` is magically added to every scope. If we add it again in `PRIM_EXPORTS`
             // we will trigger duplicate definition errors if someone imports the prim modules.
-            Import,
+            // Note that `(import)` is actually parsed specially; this is here to catch duplicate
+            // definitions.
+            ImportPlaceholder,
             $($i,)*
         }
 

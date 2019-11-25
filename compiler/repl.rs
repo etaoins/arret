@@ -117,11 +117,9 @@ impl<'ccx> ReplCtx<'ccx> {
             self.ehx.collect_garbage();
         }
 
-        let ns_datum = hir::ns::NsDatum::from_syntax_datum(input_datum);
-
         match self
             .lcx
-            .lower_repl_datum(&mut self.scope, ns_datum)
+            .lower_repl_datum(&mut self.scope, input_datum)
             .map_err(errors_to_diagnostics)?
         {
             LoweredReplDatum::Defs(defs) => {

@@ -6,7 +6,9 @@ use crate::hir::error::{
 use crate::hir::ns::{Ident, NsDataIter, NsDatum};
 use crate::hir::prim::Prim;
 use crate::hir::scope::{Binding, Scope};
-use crate::hir::util::{expect_arg_count, expect_one_arg, expect_spanned_ident, try_take_rest_arg};
+use crate::hir::util::{
+    expect_arg_count, expect_one_arg, expect_spanned_ns_ident, try_take_rest_arg,
+};
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
@@ -63,7 +65,7 @@ fn lower_polymorphic_var(scope: &Scope<'_>, tvar_datum: NsDatum) -> Result<Lower
 
             if arg_data.len() == 2 {
                 let bound_datum = arg_data.pop().unwrap();
-                let (ident_span, ident) = expect_spanned_ident(
+                let (ident_span, ident) = expect_spanned_ns_ident(
                     arg_data.pop().unwrap(),
                     "new polymorphic parameter name",
                 )?;
@@ -385,7 +387,7 @@ fn lower_poly_data_iter(
     }
 
     let fn_datum = data_iter.next().unwrap();
-    let (ident_span, ident) = expect_spanned_ident(fn_datum, "type constructor name")?;
+    let (ident_span, ident) = expect_spanned_ns_ident(fn_datum, "type constructor name")?;
 
     match scope.get_or_err(ident_span, &ident)? {
         Binding::Prim(Prim::Quote) => {

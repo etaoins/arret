@@ -17,7 +17,6 @@ mod test {
     use crate::hir::error::{Error, ErrorKind};
     use crate::hir::exports::Exports;
     use crate::hir::loader::ModuleName;
-    use crate::hir::ns::NsDatum;
     use crate::hir::prim::Prim;
     use crate::hir::scope::Binding;
 
@@ -26,8 +25,7 @@ mod test {
     fn exports_for_import_set(datum: &str) -> Result<Exports> {
         use arret_syntax::parser::datum_from_str;
 
-        let import_set_datum = NsDatum::from_syntax_datum(&datum_from_str(datum).unwrap());
-        let parsed_import = parse::parse_import_set(import_set_datum)?;
+        let parsed_import = parse::parse_import_set(&datum_from_str(datum).unwrap())?;
 
         let (_, module_name) = parsed_import.spanned_module_name();
 

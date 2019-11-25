@@ -19,12 +19,12 @@ use crate::hir::error::{Error, ErrorKind, ExpectedSym, Result};
 use crate::hir::exports::Exports;
 use crate::hir::loader::{load_module_by_name, LoadedModule, ModuleName};
 use crate::hir::macros::{expand_macro, lower_macro_rules};
-use crate::hir::ns::{Ident, NsDataIter, NsDatum, NsId};
+use crate::hir::ns::{Ident, NsDataIter, NsDatum};
 use crate::hir::prim::Prim;
 use crate::hir::records::lower_record;
 use crate::hir::scope::{Binding, Scope};
 use crate::hir::types::{lower_poly, lower_polymorphic_var_set, try_lower_purity};
-use crate::hir::util::{expect_one_arg, expect_spanned_ident, try_take_rest_arg};
+use crate::hir::util::{expect_one_arg, expect_spanned_ns_ident, try_take_rest_arg};
 use crate::hir::Lowered;
 use crate::hir::{
     App, Cond, DeclPurity, DeclTy, Def, Expr, ExprKind, FieldAccessor, Fun, Let, Recur, VarId,
@@ -96,12 +96,24 @@ fn lower_user_compile_error(span: Span, arg_iter: NsDataIter) -> Error {
     }
 }
 
+fn try_extract_import_set(datum: &Datum) -> Option<&[Datum]> {
+    if let Datum::List(_, vs) = datum {
+        if let Some(Datum::Sym(_, name)) = vs.get(0) {
+            if name.as_ref() == "import" {
+                return Some(&vs[1..]);
+            }
+        }
+    }
+
+    None
+}
+
 fn lower_macro(
     scope: &mut Scope<'_>,
     self_datum: NsDatum,
     transformer_spec: NsDatum,
 ) -> Result<()> {
-    let (self_span, self_ident) = expect_spanned_ident(self_datum, "new macro name")?;
+    let (self_span, self_ident) = expect_spanned_ns_ident(self_datum, "new macro name")?;
 
     let macro_rules_data = if let NsDatum::List(span, vs) = transformer_spec {
         let mut transformer_data = vs.into_vec();
@@ -150,7 +162,7 @@ fn lower_letmacro(scope: &Scope<'_>, span: Span, arg_iter: NsDataIter) -> Result
 }
 
 fn lower_type(scope: &mut Scope<'_>, self_datum: NsDatum, ty_datum: NsDatum) -> Result<()> {
-    let (span, ident) = expect_spanned_ident(self_datum, "new type name")?;
+    let (span, ident) = expect_spanned_ns_ident(self_datum, "new type name")?;
     let ty = lower_poly(scope, ty_datum)?;
 
     scope.insert_binding(span, ident, Binding::Ty(ty))?;
@@ -220,7 +232,7 @@ fn lower_scalar_destruc(
 
             let ty = lower_poly(scope, data.pop().unwrap())?;
 
-            let (span, ident) = expect_spanned_ident(data.pop().unwrap(), "new variable name")?;
+            let (span, ident) = expect_spanned_ns_ident(data.pop().unwrap(), "new variable name")?;
             lower_ident_destruc(scope, span, ident, ty.into())
         }
         _ => Err(Error::new(destruc_datum.span(), ErrorKind::BadRestDestruc)),
@@ -436,7 +448,7 @@ fn lower_expr_prim_apply(
     mut arg_iter: NsDataIter,
 ) -> Result<Expr<Lowered>> {
     match prim {
-        Prim::Def | Prim::DefMacro | Prim::DefType | Prim::Import | Prim::DefRecord => {
+        Prim::Def | Prim::DefMacro | Prim::DefType | Prim::ImportPlaceholder | Prim::DefRecord => {
             Err(Error::new(span, ErrorKind::DefOutsideBody))
         }
         Prim::Let => lower_let(scope, span, arg_iter),
@@ -575,6 +587,106 @@ fn lower_expr(scope: &Scope<'_>, datum: NsDatum) -> Result<Expr<Lowered>> {
     }
 }
 
+fn lower_module_prim_apply(
+    scope: &mut Scope<'_>,
+    span: Span,
+    prim: Prim,
+    mut arg_iter: NsDataIter,
+) -> Result<Option<DeferredModulePrim>, Vec<Error>> {
+    match prim {
+        Prim::Export => {
+            let deferred_exports = arg_iter
+                .map(|datum| {
+                    let (span, ident) = expect_spanned_ns_ident(datum, "identifier to export")?;
+                    Ok(DeferredExport { span, ident })
+                })
+                .collect::<Result<Vec<DeferredExport>>>()?;
+
+            Ok(Some(DeferredModulePrim::Exports(deferred_exports)))
+        }
+        Prim::Def => {
+            if arg_iter.len() != 2 {
+                return Err(vec![Error::new(
+                    span,
+                    ErrorKind::WrongDefLikeArgCount("def"),
+                )]);
+            }
+
+            let destruc_datum = arg_iter.next().unwrap();
+            let destruc = lower_destruc(scope, destruc_datum)?;
+
+            let value_datum = arg_iter.next().unwrap();
+
+            let deferred_def = DeferredDef {
+                span,
+                macro_invocation_span: None,
+                destruc,
+                value_datum,
+            };
+
+            Ok(Some(DeferredModulePrim::Def(deferred_def)))
+        }
+        Prim::DefMacro => Ok(lower_defmacro(scope, span, arg_iter).map(|_| None)?),
+        Prim::DefType => Ok(lower_deftype(scope, span, arg_iter).map(|_| None)?),
+        Prim::DefRecord => Ok(lower_defrecord(scope, span, arg_iter).map(|_| None)?),
+        Prim::CompileError => Err(vec![lower_user_compile_error(span, arg_iter)]),
+        _ => Err(vec![Error::new(span, ErrorKind::NonDefInsideModule)]),
+    }
+}
+
+fn lower_module_def(
+    scope: &mut Scope<'_>,
+    datum: NsDatum,
+) -> Result<Option<DeferredModulePrim>, Vec<Error>> {
+    let span = datum.span();
+
+    if let NsDatum::List(span, vs) = datum {
+        let mut data_iter = vs.into_vec().into_iter();
+
+        if let Some(NsDatum::Ident(fn_span, ref ident)) = data_iter.next() {
+            match scope.get_or_err(fn_span, ident)? {
+                Binding::Prim(prim) => {
+                    let prim = *prim;
+                    return lower_module_prim_apply(scope, span, prim, data_iter);
+                }
+                Binding::Macro(mac) => {
+                    let mac = &mac.clone();
+                    let expanded_datum = expand_macro(scope, span, &mac, data_iter.as_slice())?;
+
+                    return lower_module_def(scope, expanded_datum)
+                        .map(|def| def.map(|def| def.with_macro_invocation_span(span)))
+                        .map_err(|errs| {
+                            errs.into_iter()
+                                .map(|e| e.with_macro_invocation_span(span))
+                                .collect()
+                        });
+                }
+                _ => {
+                    // Non-def
+                }
+            }
+        }
+    }
+
+    Err(vec![Error::new(span, ErrorKind::NonDefInsideModule)])
+}
+
+fn resolve_deferred_def(scope: &Scope<'_>, deferred_def: DeferredDef) -> Result<Def<Lowered>> {
+    let DeferredDef {
+        span,
+        macro_invocation_span,
+        destruc,
+        value_datum,
+    } = deferred_def;
+
+    lower_expr(&scope, value_datum).map(|value_expr| Def {
+        span,
+        macro_invocation_span,
+        destruc,
+        value_expr,
+    })
+}
+
 impl<'ccx> LoweringCtx<'ccx> {
     pub fn new(ccx: &'ccx CompileCtx) -> Self {
         use crate::hir::exports;
@@ -670,13 +782,12 @@ impl<'ccx> LoweringCtx<'ccx> {
     fn lower_import(
         &mut self,
         scope: &mut Scope<'_>,
-        ns_id: NsId,
-        arg_iter: NsDataIter,
+        arg_data: &[Datum],
     ) -> Result<(), Vec<Error>> {
         use crate::hir::import;
         use std::borrow::Cow;
 
-        for arg_datum in arg_iter {
+        for arg_datum in arg_data {
             let span = arg_datum.span();
 
             let parsed_import = import::parse_import_set(arg_datum)?;
@@ -691,16 +802,19 @@ impl<'ccx> LoweringCtx<'ccx> {
                 Cow::Owned(exports) => {
                     scope.insert_bindings(
                         span,
-                        exports
-                            .into_iter()
-                            .map(|(name, binding)| (Ident::new(ns_id, name), binding)),
+                        exports.into_iter().map(|(name, binding)| {
+                            (Ident::new(Scope::root_ns_id(), name), binding)
+                        }),
                     )?;
                 }
                 Cow::Borrowed(exports) => {
                     scope.insert_bindings(
                         span,
                         exports.iter().map(|(name, binding)| {
-                            (Ident::new(ns_id, name.clone()), binding.clone())
+                            (
+                                Ident::new(Scope::root_ns_id(), name.clone()),
+                                binding.clone(),
+                            )
                         }),
                     )?;
                 }
@@ -710,121 +824,12 @@ impl<'ccx> LoweringCtx<'ccx> {
         Ok(())
     }
 
-    fn lower_module_prim_apply(
-        &mut self,
-        scope: &mut Scope<'_>,
-        span: Span,
-        ns_id: NsId,
-        prim: Prim,
-        mut arg_iter: NsDataIter,
-    ) -> Result<Option<DeferredModulePrim>, Vec<Error>> {
-        match prim {
-            Prim::Export => {
-                let deferred_exports = arg_iter
-                    .map(|datum| {
-                        let (span, ident) = expect_spanned_ident(datum, "identifier to export")?;
-                        Ok(DeferredExport { span, ident })
-                    })
-                    .collect::<Result<Vec<DeferredExport>>>()?;
-
-                Ok(Some(DeferredModulePrim::Exports(deferred_exports)))
-            }
-            Prim::Def => {
-                if arg_iter.len() != 2 {
-                    return Err(vec![Error::new(
-                        span,
-                        ErrorKind::WrongDefLikeArgCount("def"),
-                    )]);
-                }
-
-                let destruc_datum = arg_iter.next().unwrap();
-                let destruc = lower_destruc(scope, destruc_datum)?;
-
-                let value_datum = arg_iter.next().unwrap();
-
-                let deferred_def = DeferredDef {
-                    span,
-                    macro_invocation_span: None,
-                    destruc,
-                    value_datum,
-                };
-
-                Ok(Some(DeferredModulePrim::Def(deferred_def)))
-            }
-            Prim::DefMacro => Ok(lower_defmacro(scope, span, arg_iter).map(|_| None)?),
-            Prim::DefType => Ok(lower_deftype(scope, span, arg_iter).map(|_| None)?),
-            Prim::DefRecord => Ok(lower_defrecord(scope, span, arg_iter).map(|_| None)?),
-            Prim::Import => self.lower_import(scope, ns_id, arg_iter).map(|_| None),
-            Prim::CompileError => Err(vec![lower_user_compile_error(span, arg_iter)]),
-            _ => Err(vec![Error::new(span, ErrorKind::NonDefInsideModule)]),
-        }
-    }
-
-    fn lower_module_def(
-        &mut self,
-        scope: &mut Scope<'_>,
-        datum: NsDatum,
-    ) -> Result<Option<DeferredModulePrim>, Vec<Error>> {
-        let span = datum.span();
-
-        if let NsDatum::List(span, vs) = datum {
-            let mut data_iter = vs.into_vec().into_iter();
-
-            if let Some(NsDatum::Ident(fn_span, ref ident)) = data_iter.next() {
-                match scope.get_or_err(fn_span, ident)? {
-                    Binding::Prim(prim) => {
-                        let prim = *prim;
-                        return self.lower_module_prim_apply(
-                            scope,
-                            span,
-                            ident.ns_id(),
-                            prim,
-                            data_iter,
-                        );
-                    }
-                    Binding::Macro(mac) => {
-                        let mac = &mac.clone();
-                        let expanded_datum = expand_macro(scope, span, &mac, data_iter.as_slice())?;
-
-                        return self
-                            .lower_module_def(scope, expanded_datum)
-                            .map(|def| def.map(|def| def.with_macro_invocation_span(span)))
-                            .map_err(|errs| {
-                                errs.into_iter()
-                                    .map(|e| e.with_macro_invocation_span(span))
-                                    .collect()
-                            });
-                    }
-                    _ => {
-                        // Non-def
-                    }
-                }
-            }
-        }
-
-        Err(vec![Error::new(span, ErrorKind::NonDefInsideModule)])
-    }
-
-    fn resolve_deferred_def(scope: &Scope<'_>, deferred_def: DeferredDef) -> Result<Def<Lowered>> {
-        let DeferredDef {
-            span,
-            macro_invocation_span,
-            destruc,
-            value_datum,
-        } = deferred_def;
-
-        lower_expr(&scope, value_datum).map(|value_expr| Def {
-            span,
-            macro_invocation_span,
-            destruc,
-            value_expr,
-        })
-    }
-
     fn lower_module(&mut self, data: &[Datum]) -> Result<LoweredModule, Vec<Error>> {
-        // The default scope only consists of (import)
-        let mut scope =
-            Scope::new_with_entries(std::iter::once(("import", Binding::Prim(Prim::Import))));
+        // The default scope only consists of a placeholder for (import)
+        let mut scope = Scope::new_with_entries(std::iter::once((
+            "import",
+            Binding::Prim(Prim::ImportPlaceholder),
+        )));
 
         // Build up a list of errors to return at once
         let mut errors: Vec<Error> = vec![];
@@ -839,8 +844,16 @@ impl<'ccx> LoweringCtx<'ccx> {
         let mut deferred_defs = Vec::<DeferredDef>::new();
 
         for input_datum in data {
+            if let Some(arg_data) = try_extract_import_set(input_datum) {
+                if let Err(mut new_errors) = self.lower_import(&mut scope, arg_data) {
+                    errors.append(&mut new_errors);
+                }
+
+                continue;
+            }
+
             let ns_datum = NsDatum::from_syntax_datum(input_datum);
-            match self.lower_module_def(&mut scope, ns_datum) {
+            match lower_module_def(&mut scope, ns_datum) {
                 Ok(Some(DeferredModulePrim::Exports(mut exports))) => {
                     deferred_exports.append(&mut exports);
                 }
@@ -871,7 +884,7 @@ impl<'ccx> LoweringCtx<'ccx> {
         // And now process any deferred defs
         let mut defs = Vec::with_capacity(deferred_defs.len());
         for deferred_def in deferred_defs {
-            match Self::resolve_deferred_def(&scope, deferred_def) {
+            match resolve_deferred_def(&scope, deferred_def) {
                 Ok(def) => {
                     defs.push(def);
                 }
@@ -906,18 +919,26 @@ impl<'ccx> LoweringCtx<'ccx> {
     pub fn lower_repl_datum(
         &mut self,
         scope: &mut Scope<'_>,
-        datum: NsDatum,
+        datum: &Datum,
     ) -> Result<LoweredReplDatum, Vec<Error>> {
         use std::mem;
 
+        if let Some(arg_data) = try_extract_import_set(datum) {
+            self.lower_import(scope, arg_data)?;
+
+            let defs = mem::replace(&mut self.module_defs, vec![]);
+            return Ok(LoweredReplDatum::Defs(defs));
+        }
+
         // Try interpreting this as a module def
-        match self.lower_module_def(scope, datum.clone()) {
+        let ns_datum = NsDatum::from_syntax_datum(datum);
+        match lower_module_def(scope, ns_datum.clone()) {
             Ok(deferred_prims) => {
                 let defs = deferred_prims
                     .into_iter()
                     .map(|deferred_prim| match deferred_prim {
                         DeferredModulePrim::Def(deferred_def) => {
-                            Self::resolve_deferred_def(scope, deferred_def).map_err(|err| vec![err])
+                            resolve_deferred_def(scope, deferred_def).map_err(|err| vec![err])
                         }
                         DeferredModulePrim::Exports(_) => {
                             Err(vec![Error::new(datum.span(), ErrorKind::ExportInsideRepl)])
@@ -925,10 +946,7 @@ impl<'ccx> LoweringCtx<'ccx> {
                     })
                     .collect::<Result<Vec<Def<Lowered>>, Vec<Error>>>()?;
 
-                let mut all_new_defs = mem::replace(&mut self.module_defs, vec![]);
-                all_new_defs.push(defs);
-
-                Ok(LoweredReplDatum::Defs(all_new_defs))
+                Ok(LoweredReplDatum::Defs(vec![defs]))
             }
             Err(errs) => {
                 let non_def_errs = errs
@@ -938,7 +956,7 @@ impl<'ccx> LoweringCtx<'ccx> {
 
                 if non_def_errs.is_empty() {
                     // Re-interpret as an expression
-                    let expr = lower_expr(scope, datum)?;
+                    let expr = lower_expr(scope, ns_datum)?;
                     Ok(LoweredReplDatum::Expr(expr))
                 } else {
                     Err(non_def_errs)

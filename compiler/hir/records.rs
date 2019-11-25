@@ -7,7 +7,7 @@ use crate::hir::ns::{NsDataIter, NsDatum};
 use crate::hir::scope::{Binding, Scope};
 use crate::hir::types::lower_poly;
 use crate::hir::types::lower_polymorphic_var_list;
-use crate::hir::util::{expect_ident, expect_spanned_ident};
+use crate::hir::util::{expect_ns_ident, expect_spanned_ns_ident};
 use crate::ty;
 use crate::ty::record;
 use crate::ty::Ty;
@@ -34,7 +34,7 @@ fn lower_record_field_decl(scope: &Scope<'_>, field_datum: NsDatum) -> Result<re
             }
 
             let poly = lower_poly(scope, data.pop().unwrap())?;
-            let ident = expect_ident(data.pop().unwrap(), "new record field name")?;
+            let ident = expect_ns_ident(data.pop().unwrap(), "new record field name")?;
 
             (ident, poly)
         }
@@ -63,7 +63,7 @@ where
 
             if let Some(name_datum) = param_data_iter.next() {
                 let (ident_span, ident) =
-                    expect_spanned_ident(name_datum, "new record constructor name")?;
+                    expect_spanned_ns_ident(name_datum, "new record constructor name")?;
 
                 Ok(LoweredRecordCons::Parameterised(
                     ident_span,

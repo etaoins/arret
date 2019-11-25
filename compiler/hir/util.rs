@@ -1,6 +1,8 @@
+use arret_syntax::datum::{DataStr, Datum};
+use arret_syntax::span::Span;
+
 use crate::hir::error::{Error, ErrorKind, ExpectedSym, Result};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum};
-use arret_syntax::span::Span;
 
 /// Removes the rest argument from the passed iterator and returns it
 ///
@@ -44,7 +46,7 @@ pub fn expect_one_arg(span: Span, mut iter: NsDataIter) -> Result<NsDatum> {
     Ok(iter.next().unwrap())
 }
 
-pub fn expect_spanned_ident(datum: NsDatum, usage: &'static str) -> Result<(Span, Ident)> {
+pub fn expect_spanned_ns_ident(datum: NsDatum, usage: &'static str) -> Result<(Span, Ident)> {
     if let NsDatum::Ident(span, ident) = datum {
         Ok((span, ident))
     } else {
@@ -61,6 +63,32 @@ pub fn expect_spanned_ident(datum: NsDatum, usage: &'static str) -> Result<(Span
     }
 }
 
-pub fn expect_ident(datum: NsDatum, usage: &'static str) -> Result<Ident> {
+pub fn expect_ns_ident(datum: NsDatum, usage: &'static str) -> Result<Ident> {
+    expect_spanned_ns_ident(datum, usage).map(|(_, ident)| ident)
+}
+
+pub fn expect_spanned_ident<'a>(
+    datum: &'a Datum,
+    usage: &'static str,
+) -> Result<(Span, &'a DataStr)> {
+    if let Datum::Sym(span, name) = datum {
+        if !name.starts_with(':') {
+            return Ok((*span, name));
+        }
+    }
+
+    Err(Error::new(
+        datum.span(),
+        ErrorKind::ExpectedSym(
+            ExpectedSym {
+                found: datum.description(),
+                usage,
+            }
+            .into(),
+        ),
+    ))
+}
+
+pub fn expect_ident<'a>(datum: &'a Datum, usage: &'static str) -> Result<&'a DataStr> {
     expect_spanned_ident(datum, usage).map(|(_, ident)| ident)
 }

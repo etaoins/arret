@@ -95,7 +95,7 @@ impl<'parent> Scope<'parent> {
     pub fn new_repl() -> Scope<'static> {
         use std::iter;
 
-        let entries = iter::once(("import", Binding::Prim(Prim::Import)));
+        let entries = iter::once(("import", Binding::Prim(Prim::ImportPlaceholder)));
         let mut scope = Self::new_with_entries(entries);
         scope.allow_redef = true;
 

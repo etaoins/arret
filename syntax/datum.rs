@@ -33,4 +33,33 @@ impl Datum {
             | Datum::Set(span, _) => *span,
         }
     }
+
+    pub fn description(&self) -> &'static str {
+        match self {
+            Datum::Bool(_, true) => "boolean true",
+            Datum::Bool(_, false) => "boolean false",
+            Datum::Char(_, _) => "character",
+            Datum::Int(_, _) => "integer",
+            Datum::Float(_, _) => "floating point number",
+            Datum::Str(_, _) => "string",
+            Datum::Sym(_, name) => {
+                if name.starts_with(':') {
+                    "keyword"
+                } else {
+                    "symbol"
+                }
+            }
+            Datum::List(_, vs) if vs.is_empty() => "empty list",
+            Datum::List(_, _) => "list",
+
+            Datum::Vector(_, vs) if vs.is_empty() => "empty vector",
+            Datum::Vector(_, _) => "vector",
+
+            Datum::Set(_, vs) if vs.is_empty() => "empty set",
+            Datum::Set(_, _) => "set",
+
+            Datum::Map(_, vs) if vs.is_empty() => "empty map",
+            Datum::Map(_, _) => "map",
+        }
+    }
 }
