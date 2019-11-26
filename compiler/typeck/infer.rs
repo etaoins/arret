@@ -348,10 +348,9 @@ impl<'types> RecursiveDefsCtx<'types> {
             })
             .collect::<Vec<InputDef>>();
 
-        let complete_defs = Vec::with_capacity(input_defs.len());
         RecursiveDefsCtx {
+            complete_defs: Vec::with_capacity(input_defs.len()),
             input_defs,
-            complete_defs,
             free_ty_polys: vec![],
             var_to_type,
         }
@@ -1824,13 +1823,13 @@ impl<'types> RecursiveDefsCtx<'types> {
             let inferred_def = self.visit_def(def)?;
             self.complete_defs.push(inferred_def);
         } else {
-            panic!("Tried to infer already complete def. An error previously occurred?[")
+            panic!("Tried to infer already complete def. An error previously occurred?")
         }
 
         Ok(())
     }
 
-    fn infer_input_defs(&mut self) -> result::Result<(), Vec<Error>> {
+    fn into_inferred_defs(mut self) -> result::Result<Vec<hir::Def<hir::Inferred>>, Vec<Error>> {
         let mut errs = vec![];
         while let Some(def_state) = self.input_defs.pop() {
             match def_state {
@@ -1850,7 +1849,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         }
 
         if errs.is_empty() {
-            Ok(())
+            Ok(self.complete_defs)
         } else {
             Err(errs)
         }
@@ -1872,9 +1871,7 @@ impl InferCtx {
         &mut self,
         defs: Vec<hir::Def<hir::Lowered>>,
     ) -> result::Result<Vec<hir::Def<hir::Inferred>>, Vec<Error>> {
-        let mut rdcx = RecursiveDefsCtx::new(defs, &mut self.var_to_type);
-        rdcx.infer_input_defs()?;
-        Ok(rdcx.complete_defs)
+        RecursiveDefsCtx::new(defs, &mut self.var_to_type).into_inferred_defs()
     }
 
     pub fn infer_expr(&mut self, expr: hir::Expr<hir::Lowered>) -> Result<InferredNode> {
@@ -1926,10 +1923,8 @@ pub fn infer_program(
     let mut complete_defs = vec![];
 
     for recursive_defs in defs {
-        let mut rdcx = RecursiveDefsCtx::new(recursive_defs, &mut var_to_type);
-
-        rdcx.infer_input_defs()?;
-        complete_defs.append(&mut rdcx.complete_defs);
+        let rdcx = RecursiveDefsCtx::new(recursive_defs, &mut var_to_type);
+        complete_defs.append(&mut rdcx.into_inferred_defs()?);
     }
 
     let inferred_main_type = if let VarType::Known(ref poly_type) = var_to_type[&main_var_id] {
