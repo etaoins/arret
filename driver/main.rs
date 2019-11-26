@@ -24,7 +24,7 @@ fn find_path_to_arret_root() -> path::PathBuf {
 fn input_arg_to_source_file(
     source_loader: &arret_compiler::SourceLoader,
     input_param: &str,
-) -> arret_compiler::ArcId<arret_compiler::SourceFile> {
+) -> arret_compiler::SourceFile {
     if input_param == "-" {
         use std::io::prelude::*;
 

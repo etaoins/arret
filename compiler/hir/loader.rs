@@ -6,7 +6,6 @@ use arret_syntax::datum::DataStr;
 use arret_syntax::span::Span;
 
 use crate::hir::error::{Error, ErrorKind, Result};
-use crate::id_type::ArcId;
 use crate::rfi;
 use crate::source::SourceFile;
 use crate::CompileCtx;
@@ -69,7 +68,7 @@ pub struct ModuleName {
 
 #[derive(Debug)]
 pub enum LoadedModule {
-    Source(ArcId<SourceFile>),
+    Source(Arc<SourceFile>),
     Rust(Arc<rfi::Library>),
 }
 

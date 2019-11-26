@@ -7,8 +7,6 @@ use codespan::FileName;
 
 use arret_syntax::datum::Datum;
 
-use crate::id_type::ArcId;
-
 pub type CodeMap = codespan::CodeMap<Cow<'static, str>>;
 pub type FileMap = codespan::FileMap<Cow<'static, str>>;
 
@@ -39,7 +37,7 @@ impl fmt::Debug for SourceFile {
 #[derive(Default)]
 pub struct SourceLoader {
     code_map: RwLock<CodeMap>,
-    loaded_paths: Mutex<HashMap<Box<path::Path>, ArcId<SourceFile>>>,
+    loaded_paths: Mutex<HashMap<Box<path::Path>, Arc<SourceFile>>>,
 }
 
 impl SourceLoader {
@@ -51,27 +49,27 @@ impl SourceLoader {
         self.code_map.read().unwrap()
     }
 
-    pub fn load_path(&self, path: &path::Path) -> Result<ArcId<SourceFile>, io::Error> {
+    pub fn load_path(&self, path: &path::Path) -> Result<Arc<SourceFile>, io::Error> {
         let mut loaded_paths = self.loaded_paths.lock().unwrap();
 
         if let Some(source_file) = loaded_paths.get(path) {
             return Ok(source_file.clone());
         }
 
-        let source_file = self.load_path_uncached(path)?;
+        let source_file = Arc::new(self.load_path_uncached(path)?);
         loaded_paths.insert(path.into(), source_file.clone());
 
         Ok(source_file)
     }
 
-    pub fn load_path_uncached(&self, path: &path::Path) -> Result<ArcId<SourceFile>, io::Error> {
+    pub fn load_path_uncached(&self, path: &path::Path) -> Result<SourceFile, io::Error> {
         let file_name = FileName::Real(path.to_owned());
         let source = fs::read_to_string(path)?;
 
         Ok(self.load_string(file_name, source.into()))
     }
 
-    pub fn load_string(&self, file_name: FileName, source: Cow<'static, str>) -> ArcId<SourceFile> {
+    pub fn load_string(&self, file_name: FileName, source: Cow<'static, str>) -> SourceFile {
         use arret_syntax::parser::data_from_str_with_span_offset;
 
         let file_map = self
@@ -83,6 +81,6 @@ impl SourceLoader {
         let span_offset = file_map.span().start();
         let parsed = data_from_str_with_span_offset(file_map.src(), span_offset);
 
-        ArcId::new(SourceFile { file_map, parsed })
+        SourceFile { file_map, parsed }
     }
 }
