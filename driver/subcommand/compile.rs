@@ -2,9 +2,7 @@ use std::{fs, path};
 
 use codespan_reporting::Diagnostic;
 
-use arret_compiler::{
-    emit_diagnostics_to_stderr, errors_to_diagnostics, print_program_mir, CompileCtx,
-};
+use arret_compiler::{emit_diagnostics_to_stderr, print_program_mir, CompileCtx};
 
 // We don't use this ourselves so overload it for the purposes of dumping MIR
 const MIR_OUTPUT_TYPE: arret_compiler::OutputType = arret_compiler::OutputType::None;
@@ -16,21 +14,22 @@ fn try_compile_input_file(
     output_path: &path::Path,
     debug_info: bool,
 ) -> Result<(), Vec<Diagnostic>> {
-    let hir = arret_compiler::lower_program(ccx, input_file).map_err(errors_to_diagnostics)?;
-
-    let inferred_defs =
-        arret_compiler::infer_program(hir.defs, hir.main_var_id).map_err(errors_to_diagnostics)?;
+    let arret_compiler::InferredProgram {
+        defs,
+        main_var_id,
+        rust_libraries,
+    } = arret_compiler::program_to_inferred_hir(ccx, input_file)?;
 
     let mut ehx = arret_compiler::EvalHirCtx::new(true);
-    for inferred_def in inferred_defs {
-        ehx.consume_def(inferred_def)?;
+    for def in defs {
+        ehx.consume_def(def)?;
     }
 
     if ehx.should_collect() {
         ehx.collect_garbage();
     }
 
-    let mir_program = ehx.into_built_program(hir.main_var_id)?;
+    let mir_program = ehx.into_built_program(main_var_id)?;
 
     if options.output_type() == MIR_OUTPUT_TYPE {
         let mut output_file = fs::File::create(output_path).unwrap();
@@ -46,7 +45,7 @@ fn try_compile_input_file(
 
     arret_compiler::gen_program(
         options,
-        &hir.rust_libraries,
+        &rust_libraries,
         &mir_program,
         output_path,
         debug_source_loader,

@@ -1,22 +1,21 @@
 use codespan_reporting::Diagnostic;
 
-use arret_compiler::{emit_diagnostics_to_stderr, errors_to_diagnostics, CompileCtx};
+use arret_compiler::{emit_diagnostics_to_stderr, CompileCtx};
 
 fn try_eval_input_file(
     ccx: &CompileCtx,
     input_file: &arret_compiler::SourceFile,
 ) -> Result<(), Vec<Diagnostic>> {
-    let hir = arret_compiler::lower_program(ccx, input_file).map_err(errors_to_diagnostics)?;
-
-    let inferred_defs =
-        arret_compiler::infer_program(hir.defs, hir.main_var_id).map_err(errors_to_diagnostics)?;
+    let arret_compiler::InferredProgram {
+        defs, main_var_id, ..
+    } = arret_compiler::program_to_inferred_hir(ccx, input_file)?;
 
     let mut ehx = arret_compiler::EvalHirCtx::new(true);
-    for inferred_def in inferred_defs {
-        ehx.consume_def(inferred_def)?;
+    for def in defs {
+        ehx.consume_def(def)?;
     }
 
-    ehx.eval_main_fun(hir.main_var_id)?;
+    ehx.eval_main_fun(main_var_id)?;
 
     Ok(())
 }

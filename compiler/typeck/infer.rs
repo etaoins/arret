@@ -1915,7 +1915,7 @@ fn ensure_main_type(
     Ok(())
 }
 
-pub fn infer_program(
+pub fn infer_program_defs(
     defs: Vec<Vec<hir::Def<hir::Lowered>>>,
     main_var_id: hir::VarId,
 ) -> result::Result<Vec<hir::Def<hir::Inferred>>, Vec<Error>> {

@@ -11,7 +11,7 @@ use tempfile::NamedTempFile;
 
 use arret_syntax::span::{ByteIndex, Span};
 
-use arret_compiler::{emit_diagnostics_to_stderr, errors_to_diagnostics, CompileCtx, OutputType};
+use arret_compiler::{emit_diagnostics_to_stderr, CompileCtx, OutputType};
 
 #[derive(Clone, PartialEq)]
 struct RunOutput {
@@ -228,20 +228,22 @@ fn result_for_single_test(
     test_type: TestType,
 ) -> Result<(), Vec<Diagnostic>> {
     let skip_run_executable = env::var_os("ARRET_TEST_SKIP_RUN_EXECUTABLE").is_some();
-    let hir = arret_compiler::lower_program(ccx, &source_file).map_err(errors_to_diagnostics)?;
 
-    let inferred_defs =
-        arret_compiler::infer_program(hir.defs, hir.main_var_id).map_err(errors_to_diagnostics)?;
+    let arret_compiler::InferredProgram {
+        defs,
+        main_var_id,
+        rust_libraries,
+    } = arret_compiler::program_to_inferred_hir(ccx, &source_file)?;
 
     let mut ehx = arret_compiler::EvalHirCtx::new(true);
-    for inferred_def in inferred_defs {
-        ehx.consume_def(inferred_def)?;
+    for def in defs {
+        ehx.consume_def(def)?;
     }
 
     // Try evaluating if we're not supposed to panic
     if let TestType::Run(RunType::Error(_)) = test_type {
     } else {
-        ehx.eval_main_fun(hir.main_var_id)?;
+        ehx.eval_main_fun(main_var_id)?;
     }
 
     let run_type = if let TestType::Run(run_type) = test_type {
@@ -251,7 +253,7 @@ fn result_for_single_test(
     };
 
     // And now compiling and running
-    let mir_program = ehx.into_built_program(hir.main_var_id)?;
+    let mir_program = ehx.into_built_program(main_var_id)?;
 
     if mir_program.is_empty() {
         // Don't bother building
@@ -273,7 +275,7 @@ fn result_for_single_test(
 
     arret_compiler::gen_program(
         gen_program_opts,
-        &hir.rust_libraries,
+        &rust_libraries,
         &mir_program,
         &output_path,
         None,
