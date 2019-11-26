@@ -1922,7 +1922,7 @@ pub fn infer_program(
     defs: Vec<Vec<hir::Def<hir::Lowered>>>,
     main_var_id: hir::VarId,
 ) -> result::Result<Vec<hir::Def<hir::Inferred>>, Vec<Error>> {
-    let mut var_to_type = HashMap::with_capacity(defs.len());
+    let mut var_to_type = HashMap::new();
     let mut complete_defs = vec![];
 
     for recursive_defs in defs {
