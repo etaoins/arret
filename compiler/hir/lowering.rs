@@ -30,7 +30,6 @@ use crate::hir::{
     App, Cond, DeclPurity, DeclTy, Def, Expr, ExprKind, FieldAccessor, Fun, Let, Recur, VarId,
 };
 
-#[derive(Debug)]
 struct LoweredModule {
     defs: Vec<Def<Lowered>>,
     exports: Exports,
