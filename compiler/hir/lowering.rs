@@ -17,6 +17,7 @@ use crate::CompileCtx;
 use crate::hir::destruc;
 use crate::hir::error::{Error, ErrorKind, ExpectedSym, Result};
 use crate::hir::exports::Exports;
+use crate::hir::import;
 use crate::hir::loader::{load_module_by_name, LoadedModule, ModuleName};
 use crate::hir::macros::{expand_macro, lower_macro_rules};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum};
@@ -93,18 +94,6 @@ fn lower_user_compile_error(span: Span, arg_iter: NsDataIter) -> Error {
         ),
         Err(error) => error,
     }
-}
-
-fn try_extract_import_set(datum: &Datum) -> Option<&[Datum]> {
-    if let Datum::List(_, vs) = datum {
-        if let Some(Datum::Sym(_, name)) = vs.get(0) {
-            if name.as_ref() == "import" {
-                return Some(&vs[1..]);
-            }
-        }
-    }
-
-    None
 }
 
 fn lower_macro(
@@ -785,7 +774,6 @@ impl<'ccx> LoweringCtx<'ccx> {
         scope: &mut Scope<'_>,
         arg_data: &[Datum],
     ) -> Result<(), Vec<Error>> {
-        use crate::hir::import;
         use std::borrow::Cow;
 
         for arg_datum in arg_data {
@@ -845,7 +833,7 @@ impl<'ccx> LoweringCtx<'ccx> {
         let mut deferred_defs = Vec::<DeferredDef>::new();
 
         for input_datum in data {
-            if let Some(arg_data) = try_extract_import_set(input_datum) {
+            if let Some(arg_data) = import::try_extract_import_set(input_datum) {
                 if let Err(mut new_errors) = self.lower_import(&mut scope, arg_data) {
                     errors.append(&mut new_errors);
                 }
@@ -924,7 +912,7 @@ impl<'ccx> LoweringCtx<'ccx> {
     ) -> Result<LoweredReplDatum, Vec<Error>> {
         use std::mem;
 
-        if let Some(arg_data) = try_extract_import_set(datum) {
+        if let Some(arg_data) = import::try_extract_import_set(datum) {
             self.lower_import(scope, arg_data)?;
 
             let defs = mem::replace(&mut self.module_defs, vec![]);

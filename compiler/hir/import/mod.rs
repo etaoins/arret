@@ -1,8 +1,22 @@
 mod filter;
 mod parse;
 
+use arret_syntax::datum::Datum;
+
 pub use filter::filter_imported_exports;
 pub use parse::{parse_import_set, ParsedFilter, ParsedImportSet};
+
+pub fn try_extract_import_set(datum: &Datum) -> Option<&[Datum]> {
+    if let Datum::List(_, vs) = datum {
+        if let Some(Datum::Sym(_, name)) = vs.get(0) {
+            if name.as_ref() == "import" {
+                return Some(&vs[1..]);
+            }
+        }
+    }
+
+    None
+}
 
 #[cfg(test)]
 mod test {
