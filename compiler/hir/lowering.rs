@@ -670,6 +670,43 @@ fn lower_module_def(
     Err(vec![Error::new(span, ErrorKind::NonDefInsideModule)])
 }
 
+fn lower_rfi_library(span: Span, rfi_library: &rfi::Library) -> LoweredModule {
+    use arret_syntax::datum::DataStr;
+
+    let exported_funs = rfi_library.exported_funs();
+
+    let mut exports = HashMap::with_capacity(exported_funs.len());
+    let mut defs = Vec::with_capacity(exported_funs.len());
+
+    let var_ids = VarId::alloc_iter(exported_funs.len());
+    for ((fun_name, rust_fun), var_id) in exported_funs.iter().zip(var_ids) {
+        let fun_name_data_str: DataStr = (*fun_name).into();
+
+        let def = Def {
+            span,
+            macro_invocation_span: None,
+            destruc: destruc::Destruc::Scalar(
+                span,
+                destruc::Scalar::new(
+                    Some(var_id),
+                    fun_name_data_str.clone(),
+                    Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into(),
+                ),
+            ),
+            value_expr: ExprKind::RustFun(rust_fun.clone()).into(),
+        };
+
+        defs.push(def);
+        exports.insert(fun_name_data_str, Binding::Var(var_id));
+    }
+
+    LoweredModule {
+        defs,
+        exports,
+        main_var_id: None,
+    }
+}
+
 fn resolve_deferred_def(scope: &Scope<'_>, deferred_def: DeferredDef) -> Result<Def<Lowered>> {
     let DeferredDef {
         span,
@@ -728,7 +765,11 @@ impl<'ccx> LoweringCtx<'ccx> {
                     let module_data = source_file.parsed().map_err(|err| vec![err.into()])?;
                     self.lower_module(module_data)?
                 }
-                LoadedModule::Rust(rfi_library) => self.include_rfi_library(span, rfi_library),
+                LoadedModule::Rust(rfi_library) => {
+                    let rfi_module = lower_rfi_library(span, &rfi_library);
+                    self.rust_libraries.push(rfi_library);
+                    rfi_module
+                }
             }
         };
 
@@ -737,45 +778,6 @@ impl<'ccx> LoweringCtx<'ccx> {
             .module_exports
             .entry(module_name.clone())
             .or_insert(exports))
-    }
-
-    fn include_rfi_library(&mut self, span: Span, rfi_library: Arc<rfi::Library>) -> LoweredModule {
-        use arret_syntax::datum::DataStr;
-
-        let exported_funs = rfi_library.exported_funs();
-
-        let mut exports = HashMap::with_capacity(exported_funs.len());
-        let mut defs = Vec::with_capacity(exported_funs.len());
-
-        let var_ids = VarId::alloc_iter(exported_funs.len());
-        for ((fun_name, rust_fun), var_id) in exported_funs.iter().zip(var_ids) {
-            let fun_name_data_str: DataStr = (*fun_name).into();
-
-            let def = Def {
-                span,
-                macro_invocation_span: None,
-                destruc: destruc::Destruc::Scalar(
-                    span,
-                    destruc::Scalar::new(
-                        Some(var_id),
-                        fun_name_data_str.clone(),
-                        Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into(),
-                    ),
-                ),
-                value_expr: ExprKind::RustFun(rust_fun.clone()).into(),
-            };
-
-            defs.push(def);
-            exports.insert(fun_name_data_str, Binding::Var(var_id));
-        }
-
-        self.rust_libraries.push(rfi_library);
-
-        LoweredModule {
-            defs,
-            exports,
-            main_var_id: None,
-        }
     }
 
     fn lower_import(
