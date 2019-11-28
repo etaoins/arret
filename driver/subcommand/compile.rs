@@ -14,20 +14,11 @@ fn try_compile_input_file(
     output_path: &path::Path,
     debug_info: bool,
 ) -> Result<(), Vec<Diagnostic>> {
-    let arret_compiler::InferredProgram {
-        defs,
+    let arret_compiler::EvaluableProgram {
+        ehx,
         main_var_id,
         rust_libraries,
-    } = arret_compiler::program_to_inferred_hir(ccx, input_file)?;
-
-    let mut ehx = arret_compiler::EvalHirCtx::new(true);
-    for def in defs {
-        ehx.consume_def(def)?;
-    }
-
-    if ehx.should_collect() {
-        ehx.collect_garbage();
-    }
+    } = arret_compiler::program_to_evaluable(ccx, input_file)?;
 
     let mir_program = ehx.into_built_program(main_var_id)?;
 

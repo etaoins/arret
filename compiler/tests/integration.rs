@@ -229,16 +229,11 @@ fn result_for_single_test(
 ) -> Result<(), Vec<Diagnostic>> {
     let skip_run_executable = env::var_os("ARRET_TEST_SKIP_RUN_EXECUTABLE").is_some();
 
-    let arret_compiler::InferredProgram {
-        defs,
+    let arret_compiler::EvaluableProgram {
+        mut ehx,
         main_var_id,
         rust_libraries,
-    } = arret_compiler::program_to_inferred_hir(ccx, &source_file)?;
-
-    let mut ehx = arret_compiler::EvalHirCtx::new(true);
-    for def in defs {
-        ehx.consume_def(def)?;
-    }
+    } = arret_compiler::program_to_evaluable(ccx, &source_file)?;
 
     // Try evaluating if we're not supposed to panic
     if let TestType::Run(RunType::Error(_)) = test_type {

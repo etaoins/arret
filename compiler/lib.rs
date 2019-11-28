@@ -28,16 +28,16 @@ pub use crate::mir::print_program as print_program_mir;
 pub use crate::reporting::emit_diagnostics_to_stderr;
 pub use crate::source::{SourceFile, SourceLoader};
 
-pub struct InferredProgram {
-    pub defs: Vec<hir::Def<hir::Inferred>>,
+pub struct EvaluableProgram {
+    pub ehx: EvalHirCtx,
     pub main_var_id: hir::VarId,
     pub rust_libraries: Vec<Arc<rfi::Library>>,
 }
 
-pub fn program_to_inferred_hir(
+pub fn program_to_evaluable(
     ccx: &CompileCtx,
     source_file: &SourceFile,
-) -> Result<InferredProgram, Vec<Diagnostic>> {
+) -> Result<EvaluableProgram, Vec<Diagnostic>> {
     use crate::reporting::errors_to_diagnostics;
 
     let hir = hir::lowering::lower_program(ccx, source_file).map_err(errors_to_diagnostics)?;
@@ -45,8 +45,18 @@ pub fn program_to_inferred_hir(
     let inferred_defs = typeck::infer::infer_program_defs(hir.defs, hir.main_var_id)
         .map_err(errors_to_diagnostics)?;
 
-    Ok(InferredProgram {
-        defs: inferred_defs,
+    let mut ehx = EvalHirCtx::new(ccx.enable_optimisations());
+
+    for def in inferred_defs {
+        ehx.consume_def(def)?;
+    }
+
+    if ehx.should_collect() {
+        ehx.collect_garbage();
+    }
+
+    Ok(EvaluableProgram {
+        ehx,
         main_var_id: hir.main_var_id,
         rust_libraries: hir.rust_libraries,
     })

@@ -6,14 +6,11 @@ fn try_eval_input_file(
     ccx: &CompileCtx,
     input_file: &arret_compiler::SourceFile,
 ) -> Result<(), Vec<Diagnostic>> {
-    let arret_compiler::InferredProgram {
-        defs, main_var_id, ..
-    } = arret_compiler::program_to_inferred_hir(ccx, input_file)?;
-
-    let mut ehx = arret_compiler::EvalHirCtx::new(true);
-    for def in defs {
-        ehx.consume_def(def)?;
-    }
+    let arret_compiler::EvaluableProgram {
+        mut ehx,
+        main_var_id,
+        ..
+    } = arret_compiler::program_to_evaluable(ccx, input_file)?;
 
     ehx.eval_main_fun(main_var_id)?;
 
