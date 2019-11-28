@@ -116,7 +116,7 @@ pub fn load_module_by_name(
             )
             .map(LoadedModule::Rust)
     } else {
-        // Look file files starting in the package path
+        // Look for files starting in the package path
         let mut path_buf = path::PathBuf::new();
         path_buf.push(&package_path.arret_base);
 
