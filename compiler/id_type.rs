@@ -38,24 +38,31 @@ macro_rules! new_indexing_id_type {
 #[macro_export]
 macro_rules! new_global_id_type {
     ($id_name:ident) => {
-        use std::num::NonZeroUsize;
-        use std::sync::atomic::{AtomicUsize, Ordering};
-
+        new_global_id_type!(
+            $id_name,
+            usize,
+            std::sync::atomic::AtomicUsize,
+            std::num::NonZeroUsize
+        );
+    };
+    ($id_name:ident, $native_type:ty, $atomic_type:ty, $non_zero_type:ty) => {
         // These counters are very hot and shared between threads
         // They're not strongly correlated with each other so put them on different cachelines to
         // avoid bouncing them between CPUs. The value of 64 is just a guess; it's a typical value
         // and isn't needed for correctness.
         #[repr(align(64))]
-        struct AlignedAtomicUsize(AtomicUsize);
+        struct AlignedAtomic($atomic_type);
 
-        static NEXT_VALUE: AlignedAtomicUsize = AlignedAtomicUsize(AtomicUsize::new(1));
+        static NEXT_VALUE: AlignedAtomic = AlignedAtomic(<$atomic_type>::new(1));
 
         #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
-        pub struct $id_name(NonZeroUsize);
+        pub struct $id_name($non_zero_type);
 
         impl $id_name {
             /// Allocates a ID unique for the duration of compiler's execution
             pub fn alloc() -> Self {
+                use std::sync::atomic::Ordering;
+
                 // We used relaxed ordering because the order doesn't actually matter; these are
                 // used only for uniqueness
                 let raw_id = NEXT_VALUE.0.fetch_add(1, Ordering::Relaxed);
@@ -66,7 +73,9 @@ macro_rules! new_global_id_type {
             ///
             /// This can be significantly more efficient than the equivalent number of calls to `alloc`
             #[allow(unused)]
-            pub fn alloc_iter(length: usize) -> impl ExactSizeIterator<Item = Self> {
+            pub fn alloc_iter(length: $native_type) -> impl ExactSizeIterator<Item = Self> {
+                use std::sync::atomic::Ordering;
+
                 let start_raw = NEXT_VALUE.0.fetch_add(length, Ordering::Relaxed);
                 let end_raw = start_raw + length;
 
@@ -74,12 +83,12 @@ macro_rules! new_global_id_type {
             }
 
             #[allow(unused)]
-            pub fn to_usize(&self) -> usize {
+            pub fn get(&self) -> $native_type {
                 self.0.into()
             }
 
-            fn new(raw_id: usize) -> Self {
-                $id_name(NonZeroUsize::new(raw_id).unwrap())
+            fn new(raw_id: $native_type) -> Self {
+                $id_name(<$non_zero_type>::new(raw_id).unwrap())
             }
         }
     };

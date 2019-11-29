@@ -39,9 +39,9 @@ impl fmt::Debug for BuiltReg {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // This is by analogy with LLVM
         if self.is_const() {
-            write!(f, "@{}", self.into_reg_id().to_usize())
+            write!(f, "@{}", self.into_reg_id().get())
         } else {
-            write!(f, "%{}", self.into_reg_id().to_usize())
+            write!(f, "%{}", self.into_reg_id().get())
         }
     }
 }
