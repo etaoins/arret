@@ -86,7 +86,7 @@ pub fn lower_record(
     use crate::hir::types::PolymorphicVar;
     use crate::ty::ty_args::TyArgs;
 
-    let mut inner_scope = Scope::new_child(outer_scope);
+    let mut inner_scope = outer_scope.child();
 
     // Lower our type constructor
     let ty_cons_span = ty_cons_datum.span();

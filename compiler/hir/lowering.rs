@@ -296,7 +296,7 @@ where
         ));
     };
 
-    let mut scope = Scope::new_child(outer_scope);
+    let mut scope = outer_scope.child();
     let mut outputs = Vec::<O>::with_capacity(bindings_data.len() / 2);
 
     let mut bindings_iter = bindings_data.into_iter();
@@ -365,7 +365,7 @@ fn lower_fun(
     span: Span,
     mut arg_iter: NsDataIter,
 ) -> Result<Expr<Lowered>> {
-    let mut fun_scope = Scope::new_child(outer_scope);
+    let mut fun_scope = outer_scope.child();
 
     let mut next_datum = arg_iter
         .next()
@@ -555,7 +555,7 @@ fn lower_expr(scope: &Scope<'_>, datum: NsDatum) -> Result<Expr<Lowered>> {
                         return lower_expr_prim_apply(scope, span, *prim, data_iter);
                     }
                     Binding::Macro(mac) => {
-                        let mut macro_scope = Scope::new_child(scope);
+                        let mut macro_scope = scope.child();
 
                         let expanded_datum =
                             expand_macro(&mut macro_scope, span, mac, data_iter.as_slice())?;

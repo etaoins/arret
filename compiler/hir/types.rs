@@ -344,7 +344,7 @@ fn lower_polymorphic_poly(
         ));
     };
 
-    let mut inner_scope = Scope::new_child(scope);
+    let mut inner_scope = scope.child();
     let (pvars, tvars) = lower_polymorphic_var_set(
         scope,
         &mut inner_scope,

@@ -115,11 +115,11 @@ impl<'parent> Scope<'parent> {
         Self::new_with_entries(entries)
     }
 
-    pub fn new_child(parent: &'parent Scope<'parent>) -> Scope<'parent> {
+    pub fn child(&'parent self) -> Scope<'parent> {
         Scope {
-            ns_id_counter: parent.ns_id_counter.clone(),
+            ns_id_counter: self.ns_id_counter.clone(),
             entries: HashMap::new(),
-            parent: Some(parent),
+            parent: Some(self),
             allow_redef: false,
         }
     }
