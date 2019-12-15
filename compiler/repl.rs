@@ -122,22 +122,22 @@ impl<'ccx> ReplCtx<'ccx> {
             .lower_repl_datum(&mut self.scope, input_datum)
             .map_err(errors_to_diagnostics)?
         {
-            LoweredReplDatum::Defs(defs) => {
-                for recursive_defs in defs {
-                    let inferred_defs = self
+            LoweredReplDatum::Defs(new_module_defs) => {
+                for module_defs in new_module_defs {
+                    let inferred_module_defs = self
                         .icx
-                        .infer_defs(recursive_defs)
+                        .infer_module_defs(module_defs)
                         .map_err(errors_to_diagnostics)?;
 
-                    for inferred_def in inferred_defs {
+                    for inferred_def in inferred_module_defs {
                         self.ehx.consume_def(inferred_def)?;
                     }
                 }
 
                 Ok(EvaledLine::Defs)
             }
-            LoweredReplDatum::Expr(decl_expr) => {
-                let node = self.icx.infer_expr(decl_expr)?;
+            LoweredReplDatum::Expr(module_id, decl_expr) => {
+                let node = self.icx.infer_expr(module_id, decl_expr)?;
                 let type_str = hir::str_for_ty_ref(node.result_ty());
 
                 match kind {

@@ -11,6 +11,7 @@ mod records;
 pub(crate) mod scope;
 mod types;
 mod util;
+pub(crate) mod var_id;
 pub(crate) mod visitor;
 
 use std::sync::Arc;
@@ -23,6 +24,8 @@ use crate::ty;
 use crate::ty::purity;
 use crate::ty::record;
 use crate::ty::Ty;
+
+pub use crate::hir::var_id::{LocalId, ModuleId, VarId};
 
 /// DeclTy is a type declared by a user
 ///
@@ -92,8 +95,6 @@ impl Phase for Lowered {
     type ResultType = ();
     type TyArgs = ();
 }
-
-new_global_id_type!(VarId);
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Fun<P: Phase> {

@@ -185,6 +185,15 @@ enum InputDef {
     Complete,
 }
 
+type InferredLocals = HashMap<hir::LocalId, ty::Ref<ty::Poly>>;
+type InferredModuleVars = HashMap<hir::ModuleId, InferredLocals>;
+
+struct InferredModule {
+    module_id: hir::ModuleId,
+    inferred_locals: InferredLocals,
+    defs: Vec<hir::Def<hir::Inferred>>,
+}
+
 struct RecursiveDefsCtx<'types> {
     input_defs: Vec<InputDef>,
     complete_defs: Vec<hir::Def<hir::Inferred>>,
@@ -195,7 +204,9 @@ struct RecursiveDefsCtx<'types> {
     // and then pop them off afterwards.
     free_ty_polys: Vec<ty::Ref<ty::Poly>>,
 
-    var_to_type: &'types mut HashMap<hir::VarId, VarType>,
+    self_module_id: hir::ModuleId,
+    self_locals: HashMap<hir::LocalId, VarType>,
+    imported_vars: &'types InferredModuleVars,
 }
 
 /// Tries to convert a polymorphic type to a literal boolean value
@@ -318,9 +329,12 @@ fn keep_exprs_for_side_effects(
 
 impl<'types> RecursiveDefsCtx<'types> {
     fn new(
+        imported_vars: &'types InferredModuleVars,
+        self_module_id: hir::ModuleId,
         defs: Vec<hir::Def<hir::Lowered>>,
-        var_to_type: &'types mut HashMap<hir::VarId, VarType>,
     ) -> RecursiveDefsCtx<'types> {
+        let mut self_locals = HashMap::new();
+
         // We do this in reverse order because we infer our defs in reverse order. This doesn't
         // matter for correctness. However, presumably most definitions have more dependencies
         // before them than after them. Visiting them in forward order should cause less
@@ -341,7 +355,8 @@ impl<'types> RecursiveDefsCtx<'types> {
                         }
                     };
 
-                    var_to_type.insert(var_id, var_type);
+                    debug_assert!(var_id.module_id() == self_module_id);
+                    self_locals.insert(var_id.local_id(), var_type);
                 });
 
                 InputDef::Pending(hir_def)
@@ -352,12 +367,20 @@ impl<'types> RecursiveDefsCtx<'types> {
             complete_defs: Vec::with_capacity(input_defs.len()),
             input_defs,
             free_ty_polys: vec![],
-            var_to_type,
+
+            self_module_id,
+            self_locals,
+            imported_vars,
         }
     }
 
     fn insert_free_ty(&mut self, initial_type: ty::Ref<ty::Poly>) -> FreeTyId {
         FreeTyId::new_entry_id(&mut self.free_ty_polys, initial_type)
+    }
+
+    fn insert_local(&mut self, var_id: hir::VarId, var_type: VarType) -> Option<VarType> {
+        debug_assert!(var_id.module_id() == self.self_module_id);
+        self.self_locals.insert(var_id.local_id(), var_type)
     }
 
     fn visit_lit(&mut self, result_use: &ResultUse<'_>, datum: Datum) -> Result<InferredNode> {
@@ -397,8 +420,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
                 (
                     override_var_id,
-                    self.var_to_type
-                        .insert(override_var_id, VarType::Known(override_type.clone()))
+                    self.insert_local(override_var_id, VarType::Known(override_type.clone()))
                         .unwrap(),
                 )
             })
@@ -410,7 +432,8 @@ impl<'types> RecursiveDefsCtx<'types> {
         // We need to use `rev()` to make sure we restore the original type if multiple conds
         // applied to a single var.
         for (var_id, original_var_type) in restore_var_types.into_iter().rev() {
-            self.var_to_type.insert(var_id, original_var_type);
+            self.self_locals
+                .insert(var_id.local_id(), original_var_type);
         }
 
         result
@@ -628,7 +651,18 @@ impl<'types> RecursiveDefsCtx<'types> {
         span: Span,
         var_id: hir::VarId,
     ) -> Result<InferredNode> {
-        let pending_def_id = match self.var_to_type[&var_id] {
+        let module_id = var_id.module_id();
+        let local_id = var_id.local_id();
+
+        if module_id != self.self_module_id {
+            // This comes from an imported module
+            let known_type = &self.imported_vars[&module_id][&local_id];
+            ensure_is_a(span, known_type, result_use)?;
+
+            return Ok(InferredNode::new_ref_node(span, var_id, known_type.clone()));
+        }
+
+        let pending_def_id = match self.self_locals[&local_id] {
             VarType::Pending(def_id) => def_id,
             VarType::Recursive => return Err(Error::new(span, ErrorKind::RecursiveType)),
             VarType::Error => return Err(Error::new(span, ErrorKind::DependsOnError)),
@@ -810,8 +844,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
                     // We have a fully known type; allow recursive calls
                     if let Some(self_var_id) = self_var_id {
-                        self.var_to_type
-                            .insert(self_var_id, VarType::Known(self_type.clone().into()));
+                        self.insert_local(self_var_id, VarType::Known(self_type.clone().into()));
                     }
                     known_self_type = Some(self_type);
                 }
@@ -1565,7 +1598,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                 hir::DeclTy::Free => VarType::Recursive,
             };
 
-            self.var_to_type.insert(var_id, var_type);
+            self.insert_local(var_id, var_type);
         });
 
         let value_node = self.visit_expr_with_self_var_id(
@@ -1691,7 +1724,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                 VarType::Known(value_type.clone())
             };
 
-            self.var_to_type.insert(var_id, var_type);
+            self.insert_local(var_id, var_type);
         }
 
         start_offset
@@ -1723,7 +1756,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                 VarType::Known(value_type_iter.tail_type().into())
             };
 
-            self.var_to_type.insert(var_id, var_type);
+            self.insert_local(var_id, var_type);
         }
     }
 
@@ -1782,7 +1815,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         // Mark all of our free typed variable as recursive
         let self_var_id = typeck::destruc::visit_vars(&destruc, &mut |var_id, decl_type| {
             if *decl_type == hir::DeclTy::Free {
-                self.var_to_type.insert(var_id, VarType::Recursive);
+                self.insert_local(var_id, VarType::Recursive);
             }
         });
 
@@ -1797,7 +1830,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             Err(error) => {
                 // Mark this def as an error so we can suppress cascade errors
                 typeck::destruc::visit_vars(&destruc, &mut |var_id, _| {
-                    self.var_to_type.insert(var_id, VarType::Error);
+                    self.insert_local(var_id, VarType::Error);
                 });
                 return Err(error);
             }
@@ -1829,7 +1862,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         Ok(())
     }
 
-    fn into_inferred_defs(mut self) -> result::Result<Vec<hir::Def<hir::Inferred>>, Vec<Error>> {
+    fn into_inferred_module(mut self) -> result::Result<InferredModule, Vec<Error>> {
         let mut errs = vec![];
         while let Some(def_state) = self.input_defs.pop() {
             match def_state {
@@ -1848,34 +1881,62 @@ impl<'types> RecursiveDefsCtx<'types> {
             }
         }
 
-        if errs.is_empty() {
-            Ok(self.complete_defs)
-        } else {
-            Err(errs)
+        if !errs.is_empty() {
+            return Err(errs);
         }
+
+        let inferred_locals: InferredLocals = self
+            .self_locals
+            .into_iter()
+            .flat_map(|(local_id, var_type)| match var_type {
+                VarType::Known(poly) => Some((local_id, poly)),
+                _ => None,
+            })
+            .collect();
+
+        Ok(InferredModule {
+            module_id: self.self_module_id,
+            inferred_locals,
+            defs: self.complete_defs,
+        })
     }
 }
 
 pub(crate) struct InferCtx {
-    var_to_type: HashMap<hir::VarId, VarType>,
+    all_inferred_vars: InferredModuleVars,
 }
 
 impl InferCtx {
     pub fn new() -> InferCtx {
         InferCtx {
-            var_to_type: HashMap::new(),
+            all_inferred_vars: HashMap::new(),
         }
     }
 
-    pub fn infer_defs(
+    pub fn infer_module_defs(
         &mut self,
-        defs: Vec<hir::Def<hir::Lowered>>,
+        module_defs: hir::lowering::ModuleDefs,
     ) -> result::Result<Vec<hir::Def<hir::Inferred>>, Vec<Error>> {
-        RecursiveDefsCtx::new(defs, &mut self.var_to_type).into_inferred_defs()
+        let inferred_module = RecursiveDefsCtx::new(
+            &self.all_inferred_vars,
+            module_defs.module_id,
+            module_defs.defs,
+        )
+        .into_inferred_module()?;
+
+        self.all_inferred_vars
+            .insert(inferred_module.module_id, inferred_module.inferred_locals);
+
+        Ok(inferred_module.defs)
     }
 
-    pub fn infer_expr(&mut self, expr: hir::Expr<hir::Lowered>) -> Result<InferredNode> {
-        let mut rdcx = RecursiveDefsCtx::new(vec![], &mut self.var_to_type);
+    pub fn infer_expr(
+        &mut self,
+        module_id: hir::ModuleId,
+        expr: hir::Expr<hir::Lowered>,
+    ) -> Result<InferredNode> {
+        let mut rdcx = RecursiveDefsCtx::new(&self.all_inferred_vars, module_id, vec![]);
+
         let mut pv = PurityVar::Known(Purity::Impure.into());
 
         rdcx.visit_expr(&mut pv, &ResultUse::InnerExpr(&Ty::Any.into()), expr)
@@ -1916,24 +1977,23 @@ fn ensure_main_type(
 }
 
 pub fn infer_program_defs(
-    defs: Vec<Vec<hir::Def<hir::Lowered>>>,
+    all_module_defs: Vec<hir::lowering::ModuleDefs>,
     main_var_id: hir::VarId,
 ) -> result::Result<Vec<hir::Def<hir::Inferred>>, Vec<Error>> {
-    let mut var_to_type = HashMap::new();
+    let mut all_inferred_vars: InferredModuleVars = HashMap::new();
     let mut complete_defs = vec![];
 
-    for recursive_defs in defs {
-        let rdcx = RecursiveDefsCtx::new(recursive_defs, &mut var_to_type);
-        complete_defs.append(&mut rdcx.into_inferred_defs()?);
+    for module_defs in all_module_defs {
+        let mut inferred_module =
+            RecursiveDefsCtx::new(&all_inferred_vars, module_defs.module_id, module_defs.defs)
+                .into_inferred_module()?;
+
+        all_inferred_vars.insert(inferred_module.module_id, inferred_module.inferred_locals);
+        complete_defs.append(&mut inferred_module.defs);
     }
 
-    let inferred_main_type = if let VarType::Known(ref poly_type) = var_to_type[&main_var_id] {
-        poly_type
-    } else {
-        panic!("Unable to find (main!) var type");
-    };
-
-    ensure_main_type(&complete_defs, main_var_id, &inferred_main_type).map_err(|err| vec![err])?;
+    let inferred_main_type = &all_inferred_vars[&main_var_id.module_id()][&main_var_id.local_id()];
+    ensure_main_type(&complete_defs, main_var_id, inferred_main_type).map_err(|err| vec![err])?;
 
     Ok(complete_defs)
 }
@@ -1941,15 +2001,16 @@ pub fn infer_program_defs(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::hir::lowering::expr_for_str;
+    use crate::hir::lowering::module_expr_for_str;
     use arret_syntax::span::t2s;
 
     fn type_for_expr(
         required_type: &ty::Ref<ty::Poly>,
+        module_id: hir::ModuleId,
         expr: hir::Expr<hir::Lowered>,
     ) -> Result<ty::Ref<ty::Poly>> {
-        let mut var_to_type = HashMap::new();
-        let mut rdcx = RecursiveDefsCtx::new(vec![], &mut var_to_type);
+        let imported_vars = HashMap::new();
+        let mut rdcx = RecursiveDefsCtx::new(&imported_vars, module_id, vec![]);
 
         let mut pv = PurityVar::Known(Purity::Pure.into());
 
@@ -1958,24 +2019,33 @@ mod test {
     }
 
     fn assert_type_for_expr(ty_str: &str, expr_str: &str) {
-        let expr = expr_for_str(expr_str);
+        let (module_id, expr) = module_expr_for_str(expr_str);
         let poly = hir::poly_for_str(ty_str);
 
-        assert_eq!(poly, type_for_expr(&Ty::Any.into(), expr).unwrap());
+        assert_eq!(
+            poly,
+            type_for_expr(&Ty::Any.into(), module_id, expr).unwrap()
+        );
     }
 
     fn assert_constrained_type_for_expr(expected_ty_str: &str, expr_str: &str, guide_ty_str: &str) {
-        let expr = expr_for_str(expr_str);
+        let (module_id, expr) = module_expr_for_str(expr_str);
         let expected_poly = hir::poly_for_str(expected_ty_str);
         let guide_poly = hir::poly_for_str(guide_ty_str);
 
-        assert_eq!(expected_poly, type_for_expr(&guide_poly, expr).unwrap());
+        assert_eq!(
+            expected_poly,
+            type_for_expr(&guide_poly, module_id, expr).unwrap()
+        );
     }
 
     fn assert_type_error(err: &Error, expr_str: &str) {
-        let expr = expr_for_str(expr_str);
+        let (module_id, expr) = module_expr_for_str(expr_str);
 
-        assert_eq!(err, &type_for_expr(&Ty::Any.into(), expr).unwrap_err())
+        assert_eq!(
+            err,
+            &type_for_expr(&Ty::Any.into(), module_id, expr).unwrap_err()
+        )
     }
 
     #[test]

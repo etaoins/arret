@@ -69,19 +69,6 @@ macro_rules! new_global_id_type {
                 Self::new(raw_id)
             }
 
-            /// Produces an iterator of IDs unique for the duration of compiler's execution
-            ///
-            /// This can be significantly more efficient than the equivalent number of calls to `alloc`
-            #[allow(unused)]
-            pub fn alloc_iter(length: $native_type) -> impl ExactSizeIterator<Item = Self> {
-                use std::sync::atomic::Ordering;
-
-                let start_raw = NEXT_VALUE.0.fetch_add(length, Ordering::Relaxed);
-                let end_raw = start_raw + length;
-
-                (start_raw..end_raw).map(Self::new)
-            }
-
             #[allow(unused)]
             pub fn get(&self) -> $native_type {
                 self.0.into()

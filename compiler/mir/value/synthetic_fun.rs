@@ -4,6 +4,7 @@ use arret_syntax::datum::DataStr;
 use arret_syntax::span::EMPTY_SPAN;
 
 use crate::hir;
+use crate::hir::var_id::ModuleVarIdAlloc;
 use crate::mir::env_values::EnvValues;
 use crate::mir::value;
 use crate::ty;
@@ -27,12 +28,16 @@ fn wrap_poly_expr_in_arret_fun(
     ret_ty: ty::Ref<ty::Poly>,
     wrapped_expr: hir::Expr<hir::Inferred>,
 ) -> value::ArretFun {
-    let param_var_ids: Vec<hir::VarId> = hir::VarId::alloc_iter(expr_params.len()).collect();
+    let mvia = ModuleVarIdAlloc::new();
+
+    let expr_params_with_var_id: Vec<(&ExprParam, hir::VarId)> = expr_params
+        .iter()
+        .map(|expr_param| (expr_param, mvia.alloc()))
+        .collect();
 
     let params = hir::destruc::List::new(
-        expr_params
+        expr_params_with_var_id
             .iter()
-            .zip(param_var_ids.iter())
             .map(|(expr_param, param_var_id)| {
                 hir::destruc::Destruc::Scalar(
                     EMPTY_SPAN,
@@ -47,9 +52,8 @@ fn wrap_poly_expr_in_arret_fun(
         None,
     );
 
-    let fixed_arg_exprs = expr_params
+    let fixed_arg_exprs = expr_params_with_var_id
         .iter()
-        .zip(param_var_ids.iter())
         .map(|(expr_param, param_var_id)| hir::Expr {
             result_ty: expr_param.poly_type.clone(),
             kind: hir::ExprKind::Ref(EMPTY_SPAN, *param_var_id),
