@@ -22,6 +22,14 @@ impl VarId {
     pub fn local_id(self) -> LocalId {
         self.1
     }
+
+    pub fn to_module_local_id(self, module_id: ModuleId) -> Option<LocalId> {
+        if self.module_id() == module_id {
+            Some(self.local_id())
+        } else {
+            None
+        }
+    }
 }
 
 pub struct ModuleVarIdAlloc {

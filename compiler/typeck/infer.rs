@@ -30,35 +30,6 @@ pub struct InferredNode {
 }
 
 impl InferredNode {
-    fn new_ref_node(span: Span, var_id: hir::VarId, poly_type: ty::Ref<ty::Poly>) -> InferredNode {
-        let type_conds = if poly_type == Ty::Bool.into() {
-            // This seems useless but it allows occurrence typing to work if this type
-            // flows through another node such as `(do)` or `(let)`
-            vec![
-                VarTypeCond {
-                    when: NodeBool::True,
-                    override_var_id: var_id,
-                    override_type: Ty::LitBool(true).into(),
-                },
-                VarTypeCond {
-                    when: NodeBool::False,
-                    override_var_id: var_id,
-                    override_type: Ty::LitBool(false).into(),
-                },
-            ]
-        } else {
-            vec![]
-        };
-
-        InferredNode {
-            expr: hir::Expr {
-                result_ty: poly_type,
-                kind: hir::ExprKind::Ref(span, var_id),
-            },
-            type_conds,
-        }
-    }
-
     fn is_divergent(&self) -> bool {
         self.expr.result_ty.is_never()
     }
@@ -80,7 +51,7 @@ enum NodeBool {
 
 struct VarTypeCond {
     when: NodeBool,
-    override_var_id: hir::VarId,
+    override_local_id: hir::LocalId,
     override_type: ty::Ref<ty::Poly>,
 }
 
@@ -374,6 +345,45 @@ impl<'types> RecursiveDefsCtx<'types> {
         }
     }
 
+    fn new_ref_node(
+        &self,
+        span: Span,
+        var_id: hir::VarId,
+        poly_type: ty::Ref<ty::Poly>,
+    ) -> InferredNode {
+        // We can't override type conditions across modules
+        let type_conds = if poly_type == Ty::Bool.into() {
+            if let Some(override_local_id) = var_id.to_module_local_id(self.self_module_id) {
+                // This seems useless but it allows occurrence typing to work if this type
+                // flows through another node such as `(do)` or `(let)`
+                vec![
+                    VarTypeCond {
+                        when: NodeBool::True,
+                        override_local_id,
+                        override_type: Ty::LitBool(true).into(),
+                    },
+                    VarTypeCond {
+                        when: NodeBool::False,
+                        override_local_id,
+                        override_type: Ty::LitBool(false).into(),
+                    },
+                ]
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        };
+
+        InferredNode {
+            expr: hir::Expr {
+                result_ty: poly_type,
+                kind: hir::ExprKind::Ref(span, var_id),
+            },
+            type_conds,
+        }
+    }
+
     fn insert_free_ty(&mut self, initial_type: ty::Ref<ty::Poly>) -> FreeTyId {
         FreeTyId::new_entry_id(&mut self.free_ty_polys, initial_type)
     }
@@ -413,27 +423,27 @@ impl<'types> RecursiveDefsCtx<'types> {
             .filter(|tc| tc.when == node_bool)
             .map(|type_cond| {
                 let VarTypeCond {
-                    override_var_id,
+                    override_local_id,
                     ref override_type,
                     ..
                 } = *type_cond;
 
                 (
-                    override_var_id,
-                    self.insert_local(override_var_id, VarType::Known(override_type.clone()))
+                    override_local_id,
+                    self.self_locals
+                        .insert(override_local_id, VarType::Known(override_type.clone()))
                         .unwrap(),
                 )
             })
-            .collect::<Vec<(hir::VarId, VarType)>>();
+            .collect::<Vec<(hir::LocalId, VarType)>>();
 
         let result = inner(self);
 
         // Restore the original types
         // We need to use `rev()` to make sure we restore the original type if multiple conds
         // applied to a single var.
-        for (var_id, original_var_type) in restore_var_types.into_iter().rev() {
-            self.self_locals
-                .insert(var_id.local_id(), original_var_type);
+        for (local_id, original_var_type) in restore_var_types.into_iter().rev() {
+            self.self_locals.insert(local_id, original_var_type);
         }
 
         result
@@ -659,7 +669,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             let known_type = &self.imported_vars[&module_id][&local_id];
             ensure_is_a(span, known_type, result_use)?;
 
-            return Ok(InferredNode::new_ref_node(span, var_id, known_type.clone()));
+            return Ok(self.new_ref_node(span, var_id, known_type.clone()));
         }
 
         let pending_def_id = match self.self_locals[&local_id] {
@@ -668,7 +678,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             VarType::Error => return Err(Error::new(span, ErrorKind::DependsOnError)),
             VarType::Known(ref known_type) => {
                 ensure_is_a(span, known_type, result_use)?;
-                return Ok(InferredNode::new_ref_node(span, var_id, known_type.clone()));
+                return Ok(self.new_ref_node(span, var_id, known_type.clone()));
             }
             VarType::ParamScalar(free_ty_id) => {
                 let current_type = &self.free_ty_polys[free_ty_id.to_usize()];
@@ -676,7 +686,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                     self.type_for_free_ref(result_use.required_type(), span, current_type)?;
 
                 self.free_ty_polys[free_ty_id.to_usize()] = new_free_type.clone();
-                return Ok(InferredNode::new_ref_node(span, var_id, new_free_type));
+                return Ok(self.new_ref_node(span, var_id, new_free_type));
             }
             VarType::ParamRest(free_ty_id) => {
                 let current_member_type = &self.free_ty_polys[free_ty_id.to_usize()];
@@ -692,7 +702,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                 // Make sure we didn't require a specific list type e.g. `(List Int Int Int)`
                 ensure_is_a(span, &rest_list_type, result_use)?;
 
-                return Ok(InferredNode::new_ref_node(span, var_id, rest_list_type));
+                return Ok(self.new_ref_node(span, var_id, rest_list_type));
             }
         };
 
@@ -1240,7 +1250,9 @@ impl<'types> RecursiveDefsCtx<'types> {
                     Ty::Bool.into()
                 };
 
-                let type_conds = if let Some(var_id) = subject_var_id {
+                let type_conds = if let Some(override_local_id) =
+                    subject_var_id.and_then(|vi| vi.to_module_local_id(self.self_module_id))
+                {
                     let test_poly = test_ty.to_ty().into();
                     let type_if_true = ty::intersect::intersect_ty_refs(subject_poly, &test_poly)
                         .unwrap_or_else(|_| subject_poly.clone());
@@ -1250,12 +1262,12 @@ impl<'types> RecursiveDefsCtx<'types> {
                     vec![
                         VarTypeCond {
                             when: NodeBool::True,
-                            override_var_id: var_id,
+                            override_local_id,
                             override_type: type_if_true,
                         },
                         VarTypeCond {
                             when: NodeBool::False,
-                            override_var_id: var_id,
+                            override_local_id,
                             override_type: type_if_false,
                         },
                     ]
@@ -1431,10 +1443,12 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         let mut type_conds = vec![];
 
-        if let Some(left_var_id) = left_var_id {
+        if let Some(override_local_id) =
+            left_var_id.and_then(|vi| vi.to_module_local_id(self.self_module_id))
+        {
             type_conds.push(VarTypeCond {
                 when: NodeBool::True,
-                override_var_id: left_var_id,
+                override_local_id,
                 override_type: intersected_type.clone(),
             });
 
@@ -1443,16 +1457,18 @@ impl<'types> RecursiveDefsCtx<'types> {
 
                 type_conds.push(VarTypeCond {
                     when: NodeBool::False,
-                    override_var_id: left_var_id,
+                    override_local_id,
                     override_type: subtracted_type,
                 });
             }
         }
 
-        if let Some(right_var_id) = right_var_id {
+        if let Some(override_local_id) =
+            right_var_id.and_then(|vi| vi.to_module_local_id(self.self_module_id))
+        {
             type_conds.push(VarTypeCond {
                 when: NodeBool::True,
-                override_var_id: right_var_id,
+                override_local_id,
                 override_type: intersected_type.clone(),
             });
 
@@ -1461,7 +1477,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
                 type_conds.push(VarTypeCond {
                     when: NodeBool::False,
-                    override_var_id: right_var_id,
+                    override_local_id,
                     override_type: subtracted_type,
                 });
             }
