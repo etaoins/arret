@@ -117,7 +117,7 @@ impl InternedSym {
         }
     }
 
-    pub unsafe fn from_global_index(index: u32) -> InternedSym {
+    pub fn from_global_index(index: u32) -> InternedSym {
         InternedSym {
             indexed: InternedIndexed {
                 flag_byte: GLOBAL_INDEXED_FLAG,
@@ -198,6 +198,10 @@ impl Interner {
         }
     }
 
+    /// Creates a new `Interner` with a global names struct produced by codegen
+    ///
+    /// # Safety
+    /// `raw_global_names` must be a pointer to a valid [`RawGlobalNames`]
     pub unsafe fn with_global_names(raw_global_names: *const RawGlobalNames) -> Interner {
         // Convert from our codegened layout to Rust
         let global_names = raw_global_names.as_ref().map(|raw_global_names| {
@@ -217,7 +221,7 @@ impl Interner {
             global_names
                 .binary_search_by(|global_name| global_name.as_str().cmp(name))
                 .ok()
-                .map(|index| unsafe { InternedSym::from_global_index(index as u32) })
+                .map(|index| InternedSym::from_global_index(index as u32))
         })
     }
 

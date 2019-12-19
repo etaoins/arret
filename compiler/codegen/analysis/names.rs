@@ -52,11 +52,7 @@ pub fn calc_program_global_interned_names(
     names
         .into_iter()
         .enumerate()
-        .map(|(idx, name)| {
-            (name, unsafe {
-                intern::InternedSym::from_global_index(idx as u32)
-            })
-        })
+        .map(|(idx, name)| (name, intern::InternedSym::from_global_index(idx as u32)))
         .collect()
 }
 
@@ -116,9 +112,7 @@ mod test {
                 ("gamma NOT INLINE", 2u32)
             ]
             .iter()
-            .map(|(name, idx)| ((*name).into(), unsafe {
-                intern::InternedSym::from_global_index(*idx)
-            }))
+            .map(|(name, idx)| ((*name).into(), intern::InternedSym::from_global_index(*idx)))
             .collect::<BTreeMap<Rc<str>, _>>(),
             global_interned_names
         );

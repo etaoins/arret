@@ -34,6 +34,9 @@ impl<T: Boxed> Deref for Gc<T> {
 
 impl<T: Boxed> Gc<T> {
     /// Returns a new instance wrapping a pointer to a garbage collected box
+    ///
+    /// # Safety
+    /// The requires a valid pointer to a box
     pub unsafe fn new(ptr: *const T) -> Gc<T> {
         Gc {
             inner: ptr::NonNull::new_unchecked(ptr as *mut T),
@@ -41,6 +44,9 @@ impl<T: Boxed> Gc<T> {
     }
 
     /// Unchecked cast to the passed type
+    ///
+    /// # Safety
+    /// The requires the box to be of the asserted type
     pub unsafe fn cast<U: Boxed>(self) -> Gc<U> {
         Gc {
             inner: self.inner.cast::<U>(),
