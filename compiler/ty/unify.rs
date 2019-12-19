@@ -731,7 +731,7 @@ mod test {
         );
 
         let float_instance1_poly: ty::Ref<ty::Poly> = record::Instance::new(
-            cons1.clone(),
+            cons1,
             TyArgs::new(
                 HashMap::new(),
                 std::iter::once((tvar1.clone(), Ty::Float.into())).collect(),
@@ -762,11 +762,11 @@ mod test {
         .into();
 
         let num_false_instance2_poly: ty::Ref<ty::Poly> = record::Instance::new(
-            cons2.clone(),
+            cons2,
             TyArgs::new(
                 HashMap::new(),
-                std::iter::once((tvar1.clone(), Ty::Num.into()))
-                    .chain(std::iter::once((tvar2.clone(), Ty::LitBool(false).into())))
+                std::iter::once((tvar1, Ty::Num.into()))
+                    .chain(std::iter::once((tvar2, Ty::LitBool(false).into())))
                     .collect(),
             ),
         )

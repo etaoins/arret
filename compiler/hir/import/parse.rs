@@ -50,7 +50,7 @@ fn parse_module_name(span: Span, name: &[Datum]) -> Result<ModuleName> {
     Ok(ModuleName::new(
         package_name,
         name_components,
-        terminal_name.clone(),
+        terminal_name,
     ))
 }
 

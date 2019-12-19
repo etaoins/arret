@@ -379,7 +379,7 @@ mod test {
 
         assert_test_ty_may_match(&TestTy::Str, str_sym_union.clone());
         assert_test_ty_may_match(&TestTy::Sym, str_sym_union.clone());
-        assert_test_ty_wont_match(&TestTy::Int, str_sym_union.clone());
+        assert_test_ty_wont_match(&TestTy::Int, str_sym_union);
 
         let list_false_union: ty::Ref<ty::Poly> = Ty::Union(Box::new([
             ty::List::new_uniform(Ty::Any.into()).into(),
@@ -391,7 +391,7 @@ mod test {
 
         let never: ty::Ref<ty::Poly> = Ty::never().into();
         assert_test_ty_will_match(&TestTy::Str, never.clone());
-        assert_test_ty_will_match(&TestTy::Sym, never.clone());
+        assert_test_ty_will_match(&TestTy::Sym, never);
     }
 
     #[test]
@@ -401,6 +401,6 @@ mod test {
 
         assert_test_ty_will_match(&TestTy::Str, str_num_intersect.clone());
         assert_test_ty_may_match(&TestTy::Int, str_num_intersect.clone());
-        assert_test_ty_wont_match(&TestTy::Sym, str_num_intersect.clone());
+        assert_test_ty_wont_match(&TestTy::Sym, str_num_intersect);
     }
 }

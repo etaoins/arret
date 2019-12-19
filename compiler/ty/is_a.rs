@@ -327,9 +327,9 @@ mod test {
 
         let int_to_any_sym = ty::Map::new(any_int.clone(), any_sym.clone()).into();
 
-        let int_to_foo_sym = ty::Map::new(any_int.clone(), foo_sym.clone()).into();
+        let int_to_foo_sym = ty::Map::new(any_int, foo_sym).into();
 
-        let any_sym_to_any_sym = ty::Map::new(any_sym.clone(), any_sym.clone()).into();
+        let any_sym_to_any_sym = ty::Map::new(any_sym.clone(), any_sym).into();
 
         assert_eq!(true, ty_ref_is_a(&int_to_foo_sym, &int_to_any_sym));
         assert_eq!(false, ty_ref_is_a(&int_to_any_sym, &int_to_foo_sym));
@@ -374,7 +374,7 @@ mod test {
         let sym_poly2_intersection =
             Ty::Intersect(Box::new([ptype2.clone(), any_sym.clone()])).into();
         let sym_poly1_poly2_intersection =
-            Ty::Intersect(Box::new([ptype1.clone(), ptype2.clone(), any_sym.clone()])).into();
+            Ty::Intersect(Box::new([ptype1.clone(), ptype2, any_sym.clone()])).into();
 
         // `Sym` might not be `Poly`
         assert_eq!(false, ty_ref_is_a(&any_sym, &sym_poly1_intersection));
@@ -769,12 +769,12 @@ mod test {
         .into();
 
         let int_any_num_instance_poly: ty::Ref<ty::Poly> = record::Instance::new(
-            cons.clone(),
+            cons,
             TyArgs::new(
                 HashMap::new(),
-                std::iter::once((tvar1.clone(), Ty::Int.into()))
-                    .chain(std::iter::once((tvar2.clone(), Ty::Any.into())))
-                    .chain(std::iter::once((tvar3.clone(), Ty::Num.into())))
+                std::iter::once((tvar1, Ty::Int.into()))
+                    .chain(std::iter::once((tvar2, Ty::Any.into())))
+                    .chain(std::iter::once((tvar3, Ty::Num.into())))
                     .collect(),
             ),
         )

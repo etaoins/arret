@@ -1041,7 +1041,7 @@ mod test {
         assert_eq!("(MonoCons ...)", str_for_ty_ref(&record_class_ref));
 
         let int_record_instance_ref: ty::Ref<ty::Poly> =
-            record::Instance::new(mono_record_cons.clone(), TyArgs::empty()).into();
+            record::Instance::new(mono_record_cons, TyArgs::empty()).into();
         assert_eq!("MonoCons", str_for_ty_ref(&int_record_instance_ref));
     }
 
@@ -1070,11 +1070,11 @@ mod test {
 
         // Instance parameterised with an `Int`
         let mut int_tvars = HashMap::new();
-        int_tvars.insert(tvar.clone(), Ty::Int.into());
+        int_tvars.insert(tvar, Ty::Int.into());
         let int_ty_args = TyArgs::new(HashMap::new(), int_tvars);
 
         let poly_record_instance_ref: ty::Ref<ty::Poly> =
-            record::Instance::new(poly_record_cons.clone(), int_ty_args).into();
+            record::Instance::new(poly_record_cons, int_ty_args).into();
 
         assert_eq!(
             "(PolyCons -> Int)",

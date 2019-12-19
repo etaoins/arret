@@ -1016,7 +1016,7 @@ impl EvalHirCtx {
                 self,
                 some_b,
                 span,
-                arg_list_value.clone(),
+                arg_list_value,
                 self_abi.fixed_params.iter(),
                 self_abi.rest_param.as_ref(),
             ));
@@ -1175,14 +1175,14 @@ impl EvalHirCtx {
                     let true_type_hint = type_hint_for_value(self, &true_value);
                     let false_type_hint = type_hint_for_value(self, &false_value);
                     let common_type_hint = if true_type_hint == false_type_hint {
-                        true_type_hint.clone()
+                        true_type_hint
                     } else {
                         TypeHint::None
                     };
 
                     let reg_value = value::RegValue {
                         reg: output_reg,
-                        abi_type: phi_abi_type.clone(),
+                        abi_type: phi_abi_type,
                         possible_type_tags,
                         type_hint: common_type_hint,
                     };

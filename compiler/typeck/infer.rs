@@ -826,7 +826,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         // Use the declared return type if possible
         let wanted_ret_type = match decl_fun.ret_ty {
-            hir::DeclTy::Known(poly) => poly.clone(),
+            hir::DeclTy::Known(poly) => poly,
             hir::DeclTy::Free => {
                 decl_tys_are_known = false;
 
@@ -1469,7 +1469,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             type_conds.push(VarTypeCond {
                 when: NodeBool::True,
                 override_local_id,
-                override_type: intersected_type.clone(),
+                override_type: intersected_type,
             });
 
             if left_is_literal {

@@ -204,11 +204,11 @@ mod test {
 
         // Instance parameterised with an `Int`
         let mut int_tvars = HashMap::new();
-        int_tvars.insert(tvar.clone(), Ty::Int.into());
+        int_tvars.insert(tvar, Ty::Int.into());
         let int_ty_args = TyArgs::new(HashMap::new(), int_tvars);
 
         let int_instance_ref: ty::Ref<ty::Poly> =
-            record::Instance::new(poly_record_cons.clone(), int_ty_args).into();
+            record::Instance::new(poly_record_cons, int_ty_args).into();
 
         // Record class minus an instance is the record class
         assert_eq!(

@@ -508,7 +508,7 @@ mod test {
                 ops::OpKind::Call(
                     ret_reg,
                     ops::CallOp {
-                        callee: ops::Callee::StaticSymbol(static_symbol.clone()),
+                        callee: ops::Callee::StaticSymbol(static_symbol),
                         impure: true,
                         args: Box::new([param_reg4, param_reg5, param_reg6]),
                     },

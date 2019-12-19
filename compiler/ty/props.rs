@@ -174,7 +174,7 @@ mod test {
         );
 
         let int_record_instance_ref: ty::Ref<ty::Poly> =
-            record::Instance::new(mono_record_cons.clone(), TyArgs::empty()).into();
+            record::Instance::new(mono_record_cons, TyArgs::empty()).into();
 
         assert_eq!(false, has_subtypes(&int_record_instance_ref));
         assert_eq!(false, is_literal(&int_record_instance_ref));
@@ -196,7 +196,7 @@ mod test {
         );
 
         let poly_record_instance_ref: ty::Ref<ty::Poly> =
-            record::Instance::new(poly_record_cons.clone(), TyArgs::empty()).into();
+            record::Instance::new(poly_record_cons, TyArgs::empty()).into();
 
         assert_eq!(true, has_subtypes(&poly_record_instance_ref));
         assert_eq!(false, is_literal(&poly_record_instance_ref));

@@ -474,8 +474,8 @@ mod test {
         assert_eq!(
             Error::Disjoint,
             intersect_ty_refs::<ty::Poly>(
-                &Ty::Intersect(Box::new([ptype.clone(), any_int.clone()])).into(),
-                &Ty::Intersect(Box::new([ptype.clone(), any_float.clone()])).into(),
+                &Ty::Intersect(Box::new([ptype.clone(), any_int])).into(),
+                &Ty::Intersect(Box::new([ptype, any_float])).into(),
             )
             .unwrap_err()
         )
@@ -578,7 +578,7 @@ mod test {
 
         // These extend an existing intersection
         assert_merged_poly(
-            &Ty::Intersect(Box::new([any_sym.clone(), ptype1.clone(), ptype2.clone()])).into(),
+            &Ty::Intersect(Box::new([any_sym.clone(), ptype1, ptype2])).into(),
             &any_sym,
             &ptype_intersect,
         );
@@ -678,7 +678,7 @@ mod test {
         );
 
         let float_instance1_poly: ty::Ref<ty::Poly> = record::Instance::new(
-            cons1.clone(),
+            cons1,
             TyArgs::new(
                 HashMap::new(),
                 std::iter::once((tvar1.clone(), Ty::Float.into())).collect(),
@@ -720,11 +720,11 @@ mod test {
         .into();
 
         let num_bool_instance2_poly: ty::Ref<ty::Poly> = record::Instance::new(
-            cons2.clone(),
+            cons2,
             TyArgs::new(
                 HashMap::new(),
-                std::iter::once((tvar1.clone(), Ty::Num.into()))
-                    .chain(std::iter::once((tvar2.clone(), Ty::Bool.into())))
+                std::iter::once((tvar1, Ty::Num.into()))
+                    .chain(std::iter::once((tvar2, Ty::Bool.into())))
                     .collect(),
             ),
         )

@@ -168,7 +168,7 @@ pub fn lower_record(
     };
 
     let predicate_name: DataStr = format!("{}?", value_cons_ident.name()).into();
-    let predicate_ident = Ident::new(value_cons_ident.ns_id(), predicate_name.clone());
+    let predicate_ident = Ident::new(value_cons_ident.ns_id(), predicate_name);
 
     let record_ty_cons = record::Cons::new(
         ty_cons_span,
@@ -205,7 +205,7 @@ pub fn lower_record(
 
     if record_ty_cons.is_singleton() {
         // We were used as a singleton; bind a type
-        let record_instance = record::Instance::new(record_ty_cons.clone(), TyArgs::empty());
+        let record_instance = record::Instance::new(record_ty_cons, TyArgs::empty());
         outer_scope.insert_binding(ty_ident_span, ty_ident, Binding::Ty(record_instance.into()))?;
     } else {
         // We were used as a type constructor; bind a type constructor

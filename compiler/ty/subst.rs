@@ -244,7 +244,7 @@ impl<'tyargs> Substitution for Monomorphise<'tyargs> {
 
     fn subst_ty_ref(&self, poly: &ty::Ref<ty::Poly>) -> ty::Ref<ty::Mono> {
         match poly {
-            ty::Ref::Fixed(fixed) => subst_ty(self, fixed).clone().into(),
+            ty::Ref::Fixed(fixed) => subst_ty(self, fixed).into(),
             ty::Ref::Var(tvar, _) => self
                 .mono_ty_args
                 .tvar_types()

@@ -329,7 +329,7 @@ impl TargetCtx {
                 LLVMStructCreateNamed(self.llx, box_layout.type_name().as_ptr() as *const _);
             LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
-            self.boxed_types.insert(box_layout.clone(), llvm_type);
+            self.boxed_types.insert(box_layout, llvm_type);
             llvm_type
         }
     }

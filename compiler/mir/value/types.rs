@@ -274,7 +274,7 @@ mod test {
         assert_eq!(
             FoundRecordConses::Single(&cons1),
             find_record_conses_for_ty_ref(
-                &Ty::Union(Box::new([class1_poly.clone(), instance1_poly.clone()])).into()
+                &Ty::Union(Box::new([class1_poly, instance1_poly.clone()])).into()
             )
         );
 
@@ -290,7 +290,7 @@ mod test {
         assert_eq!(
             FoundRecordConses::Multi,
             find_record_conses_for_ty_ref(
-                &Ty::Union(Box::new([class2_poly.clone(), instance1_poly.clone()])).into()
+                &Ty::Union(Box::new([class2_poly, instance1_poly])).into()
             )
         );
 
@@ -298,11 +298,7 @@ mod test {
         assert_eq!(
             FoundRecordConses::Multi,
             find_record_conses_for_ty_ref(
-                &Ty::Union(Box::new([
-                    tvar_bounded_by(Ty::Any.into()),
-                    instance2_poly.clone()
-                ]))
-                .into()
+                &Ty::Union(Box::new([tvar_bounded_by(Ty::Any.into()), instance2_poly])).into()
             )
         );
     }

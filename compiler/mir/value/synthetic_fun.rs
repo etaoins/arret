@@ -77,7 +77,7 @@ fn wrap_poly_expr_in_arret_fun(
             ret_ty_span: None,
 
             body_expr: hir::Expr {
-                result_ty: ret_ty.clone(),
+                result_ty: ret_ty,
                 kind: hir::ExprKind::App(Box::new(hir::App {
                     span: EMPTY_SPAN,
                     fun_expr: wrapped_expr,

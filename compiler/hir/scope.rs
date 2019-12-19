@@ -75,7 +75,7 @@ impl<'parent> Scope<'parent> {
                     Ident::new(Self::root_ns_id(), (*name).into()),
                     SpannedBinding {
                         span: None,
-                        binding: binding.clone(),
+                        binding,
                     },
                 )
             })

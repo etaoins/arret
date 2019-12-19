@@ -272,7 +272,7 @@ mod test {
 
         // Try 3 fixed values with a nil tail
         let list_with_nil_tail = Value::List(
-            fixed_values.clone(),
+            fixed_values,
             Some(Box::new(
                 value::RegValue::new(BuiltReg::Local(RegId::alloc()), boxed::TypeTag::Nil.into())
                     .into(),
