@@ -161,6 +161,7 @@ mod test {
 
     #[test]
     fn cloning() {
+        #[allow(clippy::redundant_clone)]
         let hello_clone = SharedStr::new("Hello, clone!").clone();
         assert_eq!("Hello, clone!", hello_clone.as_str());
     }
