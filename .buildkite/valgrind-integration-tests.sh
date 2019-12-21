@@ -28,7 +28,7 @@ export ARRET_TEST_NUM_WORKERS
 
 valgrind_pids=()
 for ((i=0; i<ARRET_TEST_NUM_WORKERS; i++)); do
-  ARRET_TEST_WORKER_ID=$i valgrind --leak-check=no --error-exitcode=42 "${integration_test_binary}" &
+  ARRET_TEST_WORKER_ID=$i valgrind --leak-check=no --suppressions=../.buildkite/valgrind.supp --error-exitcode=42 "${integration_test_binary}" &
   valgrind_pids[${i}]=$!
 done
 
