@@ -524,7 +524,7 @@ fn gen_op(
             ) => {
                 if *known_vector_length > boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH {
                     // TODO: This will need to be done after we implement persistent vectors
-                    unimplemented!("loading members from external vectors")
+                    todo!("loading members from external vectors")
                 }
 
                 let llvm_boxed_vector = fcx.regs[vector_reg];

@@ -37,14 +37,14 @@ fn type_tags_for_test_ty(test_ty: &ty::pred::TestTy) -> TypeTagSet {
         TestTy::List => [boxed::TypeTag::Pair, boxed::TypeTag::Nil].iter().collect(),
         TestTy::Vector => boxed::TypeTag::Vector.into(),
         TestTy::Map => {
-            unimplemented!("maps");
+            todo!("maps");
         }
         TestTy::Set => {
-            unimplemented!("sets");
+            todo!("sets");
         }
         TestTy::TopRecord => boxed::TypeTag::Record.into(),
         TestTy::RecordClass(_) => {
-            unimplemented!("record classes");
+            todo!("record classes");
         }
     }
 }

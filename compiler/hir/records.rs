@@ -109,7 +109,7 @@ pub fn lower_record(
     let fields: Box<[record::Field]>;
     let (value_cons_ident_span, value_cons_ident) = match value_cons_decl {
         LoweredRecordCons::Singleton(_, _) => {
-            unimplemented!("singleton record values");
+            todo!("singleton record values");
         }
         LoweredRecordCons::Parameterised(span, ident, param_data_iter) => {
             fields = param_data_iter

@@ -111,7 +111,7 @@ where
                 .iter()
                 .map(TypeTagSet::from)
                 .fold(TypeTagSet::all(), |a, b| a & b),
-            Ty::Map(_) | Ty::Set(_) => unimplemented!("no corresponding type tag"),
+            Ty::Map(_) | Ty::Set(_) => todo!("no corresponding type tag"),
         }
     }
 }

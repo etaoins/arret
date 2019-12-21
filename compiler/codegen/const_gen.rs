@@ -516,7 +516,7 @@ pub fn gen_boxed_vector(
     let elements_len = llvm_elements.len();
 
     if elements_len > boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH {
-        unimplemented!("generating constant vector of length {}", elements_len);
+        todo!("generating constant vector of length {}", elements_len);
     }
 
     unsafe {
