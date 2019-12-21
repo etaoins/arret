@@ -18,7 +18,7 @@ arret-runtime-syntax = { path = "../runtime-syntax" }
 codespan = "0.3"
 codespan-reporting = "0.3"
 termcolor = "1"
+rayon = "1"
 
 [dev-dependencies]
-rayon = "1"
 tempfile = "3"

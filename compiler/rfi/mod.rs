@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::{fmt, path};
 
+use rayon::prelude::*;
+
 use codespan::FileName;
 
 use arret_syntax::datum::Datum;
@@ -291,7 +293,7 @@ impl Loader {
 
         let filename: Arc<path::Path> = native_path.clone().into();
         let exported_funs = exports
-            .iter()
+            .par_iter()
             .map(|(fun_name, rust_fun)| {
                 let entry_point_address = unsafe {
                     *loaded
