@@ -450,6 +450,14 @@ fn entry_is_arret_source(entry: &fs::DirEntry) -> bool {
         .unwrap_or(false)
 }
 
+fn read_or_empty_vec(filename: &path::Path) -> Result<Vec<u8>, io::Error> {
+    match fs::read(filename) {
+        Ok(data) => Ok(data),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(vec![]),
+        Err(err) => Err(err),
+    }
+}
+
 fn entry_to_compile_test_tuple(
     entry: io::Result<fs::DirEntry>,
     test_type: TestType,
@@ -470,7 +478,6 @@ fn entry_to_run_test_tuple<RT>(
 where
     RT: FnOnce(RunOutput) -> RunType,
 {
-    use std::io::Read;
     let entry = entry.unwrap();
 
     if !entry_is_arret_source(&entry) {
@@ -480,16 +487,9 @@ where
     let stderr_filename = entry.path().with_extension("stderr");
     let stdout_filename = entry.path().with_extension("stdout");
 
-    let mut stderr = Vec::new();
-    // This file may not exist - we'll treat it as any empty file
-    if let Ok(mut file) = fs::File::open(stderr_filename) {
-        file.read_to_end(&mut stderr).unwrap();
-    }
-
-    let mut stdout = Vec::new();
-    if let Ok(mut file) = fs::File::open(stdout_filename) {
-        file.read_to_end(&mut stdout).unwrap();
-    }
+    // These files may not exist - we'll treat them as empty
+    let stderr = read_or_empty_vec(&stderr_filename).unwrap();
+    let stdout = read_or_empty_vec(&stdout_filename).unwrap();
 
     let expected_output = RunOutput { stderr, stdout };
 
