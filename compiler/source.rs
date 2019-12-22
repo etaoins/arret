@@ -1,14 +1,16 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
+use std::sync::{Arc, RwLock, RwLockReadGuard};
 use std::{fmt, fs, io, path};
 
 use codespan::FileName;
 
 use arret_syntax::datum::Datum;
 
+use crate::promise;
+
 pub type CodeMap = codespan::CodeMap<Cow<'static, str>>;
 pub type FileMap = codespan::FileMap<Cow<'static, str>>;
+pub type CachedPath = Result<Arc<SourceFile>, Arc<io::Error>>;
 
 pub struct SourceFile {
     file_map: Arc<FileMap>,
@@ -37,7 +39,7 @@ impl fmt::Debug for SourceFile {
 #[derive(Default)]
 pub struct SourceLoader {
     code_map: RwLock<CodeMap>,
-    loaded_paths: Mutex<HashMap<Box<path::Path>, Arc<SourceFile>>>,
+    loaded_paths: promise::PromiseMap<Box<path::Path>, CachedPath>,
 }
 
 impl SourceLoader {
@@ -49,17 +51,12 @@ impl SourceLoader {
         self.code_map.read().unwrap()
     }
 
-    pub fn load_path(&self, path: &path::Path) -> Result<Arc<SourceFile>, io::Error> {
-        let mut loaded_paths = self.loaded_paths.lock().unwrap();
-
-        if let Some(source_file) = loaded_paths.get(path) {
-            return Ok(source_file.clone());
-        }
-
-        let source_file = Arc::new(self.load_path_uncached(path)?);
-        loaded_paths.insert(path.into(), source_file.clone());
-
-        Ok(source_file)
+    pub fn load_path(&self, path: &path::Path) -> CachedPath {
+        self.loaded_paths.get_or_insert_with(path.into(), || {
+            self.load_path_uncached(path)
+                .map(Arc::new)
+                .map_err(Arc::new)
+        })
     }
 
     pub fn load_path_uncached(&self, path: &path::Path) -> Result<SourceFile, io::Error> {

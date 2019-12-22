@@ -8,6 +8,7 @@ mod codegen;
 mod context;
 mod hir;
 mod mir;
+mod promise;
 pub mod repl;
 mod reporting;
 mod rfi;

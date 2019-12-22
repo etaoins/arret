@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::{fmt, path};
 
 use rayon::prelude::*;
@@ -13,6 +13,7 @@ use crate::hir;
 use crate::hir::error::{Error, ErrorKind};
 use crate::hir::ns::NsDatum;
 use crate::hir::scope::Scope;
+use crate::promise::PromiseMap;
 use crate::source::SourceLoader;
 use crate::ty;
 use crate::ty::Ty;
@@ -24,6 +25,8 @@ pub struct Library {
     target_path: Box<path::Path>,
     exported_funs: HashMap<&'static str, Arc<Fun>>,
 }
+
+pub type CachedLibrary = Result<Arc<Library>, Error>;
 
 impl Library {
     pub fn target_path(&self) -> &path::Path {
@@ -98,7 +101,7 @@ impl Fun {
 
 pub struct Loader {
     type_scope: Scope<'static>,
-    native_rust_libraries: Mutex<HashMap<Box<path::Path>, Arc<Library>>>,
+    native_rust_libraries: PromiseMap<Box<path::Path>, CachedLibrary>,
 }
 
 /// Ensure that the specified Arret type is compatible with the corresponding Rust type
@@ -166,7 +169,7 @@ impl Loader {
     pub fn new() -> Loader {
         Loader {
             type_scope: Scope::new_with_primitives(),
-            native_rust_libraries: Mutex::new(HashMap::new()),
+            native_rust_libraries: PromiseMap::new(),
         }
     }
 
@@ -270,78 +273,76 @@ impl Loader {
         target_base_path: &path::Path,
         package_name: &str,
     ) -> Result<Arc<Library>, Error> {
-        let mut native_rust_libraries = self.native_rust_libraries.lock().unwrap();
         let native_path = build_rfi_lib_path(native_base_path, package_name, LibType::Dynamic);
 
-        if let Some(library) = native_rust_libraries.get(native_path.as_path()) {
-            return Ok(library.clone());
-        }
+        self.native_rust_libraries
+            .get_or_insert_with(native_path.clone().into(), || {
+                let target_path =
+                    build_rfi_lib_path(target_base_path, package_name, LibType::Static);
 
-        let target_path = build_rfi_lib_path(target_base_path, package_name, LibType::Static);
+                let map_io_err = |err| Error::from_module_io(span, &native_path, &err);
+                let loaded = libloading::Library::new(&native_path).map_err(map_io_err)?;
 
-        let map_io_err = |err| Error::from_module_io(span, &native_path, &err);
-        let loaded = libloading::Library::new(&native_path).map_err(map_io_err)?;
+                let exports_symbol_name =
+                    format!("ARRET_{}_RUST_EXPORTS", package_name.to_uppercase());
+                let exports: binding::RustExports = unsafe {
+                    let exports_symbol = loaded
+                        .get::<*const binding::RustExports>(exports_symbol_name.as_bytes())
+                        .map_err(map_io_err)?;
 
-        let exports_symbol_name = format!("ARRET_{}_RUST_EXPORTS", package_name.to_uppercase());
-        let exports: binding::RustExports = unsafe {
-            let exports_symbol = loaded
-                .get::<*const binding::RustExports>(exports_symbol_name.as_bytes())
-                .map_err(map_io_err)?;
-
-            &(**exports_symbol)
-        };
-
-        let filename: Arc<path::Path> = native_path.clone().into();
-        let exported_funs = exports
-            .par_iter()
-            .map(|(fun_name, rust_fun)| {
-                let entry_point_address = unsafe {
-                    *loaded
-                        .get::<usize>(rust_fun.symbol.as_bytes())
-                        .map_err(map_io_err)?
+                    &(**exports_symbol)
                 };
 
-                // Parse the declared Arret type string as a datum
-                let file_map_name = FileName::Virtual(
-                    format!("{}:{}", filename.to_string_lossy(), fun_name).into(),
-                );
+                let filename: Arc<path::Path> = native_path.clone().into();
+                let exported_funs = exports
+                    .par_iter()
+                    .map(|(fun_name, rust_fun)| {
+                        let entry_point_address = unsafe {
+                            *loaded
+                                .get::<usize>(rust_fun.symbol.as_bytes())
+                                .map_err(map_io_err)?
+                        };
 
-                let arret_type_source_file =
-                    source_loader.load_string(file_map_name, rust_fun.arret_type.into());
+                        // Parse the declared Arret type string as a datum
+                        let file_map_name = FileName::Virtual(
+                            format!("{}:{}", filename.to_string_lossy(), fun_name).into(),
+                        );
 
-                let arret_type_datum = match arret_type_source_file.parsed()? {
-                    [arret_type_datum] => arret_type_datum,
-                    _ => {
-                        return Err(Error::new(
-                            arret_type_source_file.file_map().span(),
-                            ErrorKind::RustFunError("expected exactly one Arret type datum".into()),
-                        ));
-                    }
-                };
+                        let arret_type_source_file =
+                            source_loader.load_string(file_map_name, rust_fun.arret_type.into());
 
-                // Treat every native function in the stdlib as an intrinsic
-                let intrinsic_name = Some(*fun_name).filter(|_| package_name == "stdlib");
+                        let arret_type_datum = match arret_type_source_file.parsed()? {
+                            [arret_type_datum] => arret_type_datum,
+                            _ => {
+                                return Err(Error::new(
+                                    arret_type_source_file.file_map().span(),
+                                    ErrorKind::RustFunError(
+                                        "expected exactly one Arret type datum".into(),
+                                    ),
+                                ));
+                            }
+                        };
 
-                let fun = self.process_rust_fun(
-                    arret_type_datum,
-                    entry_point_address,
-                    rust_fun,
-                    intrinsic_name,
-                )?;
+                        // Treat every native function in the stdlib as an intrinsic
+                        let intrinsic_name = Some(*fun_name).filter(|_| package_name == "stdlib");
 
-                Ok((*fun_name, Arc::new(fun)))
+                        let fun = self.process_rust_fun(
+                            arret_type_datum,
+                            entry_point_address,
+                            rust_fun,
+                            intrinsic_name,
+                        )?;
+
+                        Ok((*fun_name, Arc::new(fun)))
+                    })
+                    .collect::<Result<HashMap<&'static str, Arc<Fun>>, Error>>()?;
+
+                Ok(Arc::new(Library {
+                    _loaded: loaded,
+                    target_path: target_path.into_boxed_path(),
+                    exported_funs,
+                }))
             })
-            .collect::<Result<HashMap<&'static str, Arc<Fun>>, Error>>()?;
-
-        let library = Arc::new(Library {
-            _loaded: loaded,
-            target_path: target_path.into_boxed_path(),
-            exported_funs,
-        });
-
-        native_rust_libraries.insert(native_path.into(), library.clone());
-
-        Ok(library)
     }
 }
 
