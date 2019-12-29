@@ -1001,7 +1001,7 @@ impl<'ccx> LoweringCtx<'ccx> {
         if let Some(arg_data) = import::try_extract_import_set(datum) {
             self.lower_import(scope, arg_data)?;
 
-            let module_defs = mem::replace(&mut self.module_defs, vec![]);
+            let module_defs = mem::take(&mut self.module_defs);
             return Ok(LoweredReplDatum::Defs(module_defs));
         }
 

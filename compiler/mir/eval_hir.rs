@@ -1630,7 +1630,7 @@ impl EvalHirCtx {
         use arret_runtime::boxed::collect;
         use std::mem;
 
-        let old_heap = mem::replace(self.runtime_task.heap_mut(), boxed::Heap::empty());
+        let old_heap = mem::take(self.runtime_task.heap_mut());
         let mut strong_pass = collect::StrongPass::new(old_heap);
 
         // Move all of our global values to the new heap
@@ -1646,7 +1646,7 @@ impl EvalHirCtx {
         // Any function values that are still live need to be updated
         let weak_pass = strong_pass.into_weak_pass();
 
-        let old_thunk_fun_values = mem::replace(&mut self.thunk_fun_values, HashMap::new());
+        let old_thunk_fun_values = mem::take(&mut self.thunk_fun_values);
         self.thunk_fun_values = old_thunk_fun_values
             .into_iter()
             .filter_map(|(fun_thunk, value)| unsafe {

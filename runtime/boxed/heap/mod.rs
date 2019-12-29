@@ -189,6 +189,12 @@ impl Heap {
     }
 }
 
+impl Default for Heap {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
 /// Object that can be used as a heap
 pub trait AsHeap {
     /// Returns this object as a heap
