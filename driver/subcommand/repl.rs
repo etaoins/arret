@@ -279,7 +279,11 @@ pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
     let mut repl_ctx = arret_compiler::repl::ReplCtx::new(ccx);
 
     // Setup Rustyline
-    let mut rl = rustyline::Editor::<ArretHelper>::new();
+    let rl_config = rustyline::Config::builder()
+        .history_ignore_space(true)
+        .build();
+
+    let mut rl = rustyline::Editor::<ArretHelper>::with_config(rl_config);
 
     // Import [stdlib base] so we have most useful things defined
     let initial_import = "(import [stdlib base])".to_owned();
@@ -314,12 +318,13 @@ pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
     let type_brackets_style = Style::new().dimmed();
 
     loop {
+        let mut history_dirty = false;
         let readline = rl.readline(&PROMPT);
 
         match readline {
             Ok(line) => {
                 if !line.chars().all(char::is_whitespace) {
-                    rl.add_history_entry(line.clone());
+                    history_dirty = rl.add_history_entry(line.clone());
                 }
 
                 let (eval_kind, input) = match parse_command(line) {
@@ -385,8 +390,10 @@ pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
             }
         }
 
-        if let Some(ref history_path) = history_path {
-            let _ = rl.save_history(&history_path);
+        if history_dirty {
+            if let Some(ref history_path) = history_path {
+                let _ = rl.save_history(&history_path);
+            }
         }
     }
 }
