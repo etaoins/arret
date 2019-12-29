@@ -286,7 +286,6 @@ pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
     if let Err(diagnostics) = repl_ctx.eval_line(initial_import, EvalKind::Value) {
         emit_diagnostics_to_stderr(ccx.source_loader(), diagnostics);
     }
-    rl.set_helper(Some(ArretHelper::new(repl_ctx.bound_names())));
 
     // Process the include file if specified
     if let Some(include_path) = include_path {
@@ -297,6 +296,9 @@ pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
             }
         }
     }
+
+    // Set our initiial completions
+    rl.set_helper(Some(ArretHelper::new(repl_ctx.bound_names())));
 
     // Load our history
     let history_path = repl_history_path();
