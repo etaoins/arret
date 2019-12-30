@@ -118,8 +118,8 @@ where
             return cloned_promise.value();
         }
 
-        let (completer, source_file) = promise();
-        promises_lock.insert(key, source_file);
+        let (completer, promise) = promise();
+        promises_lock.insert(key, promise);
         drop(promises_lock);
 
         // Build a new value. This is presumably expensive
