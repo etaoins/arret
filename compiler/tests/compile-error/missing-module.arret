@@ -1,4 +1,2 @@
-(import []) ;~ ERROR module name requires a least two components
-(import [just-one]) ;~ ERROR module name requires a least two components
 (import [package does not exist]) ;~ ERROR package not found
 (import [stdlib module does not exist]) ;~ ERROR module not found

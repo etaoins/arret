@@ -6,11 +6,8 @@ use codespan::FileName;
 
 use arret_syntax::datum::Datum;
 
-use crate::promise;
-
 pub type CodeMap = codespan::CodeMap<Cow<'static, str>>;
 pub type FileMap = codespan::FileMap<Cow<'static, str>>;
-pub type CachedPath = Result<Arc<SourceFile>, Arc<io::Error>>;
 
 pub struct SourceFile {
     file_map: Arc<FileMap>,
@@ -39,7 +36,6 @@ impl fmt::Debug for SourceFile {
 #[derive(Default)]
 pub struct SourceLoader {
     code_map: RwLock<CodeMap>,
-    loaded_paths: promise::PromiseMap<Box<path::Path>, CachedPath>,
 }
 
 impl SourceLoader {
@@ -51,15 +47,7 @@ impl SourceLoader {
         self.code_map.read().unwrap()
     }
 
-    pub fn load_path(&self, path: &path::Path) -> CachedPath {
-        self.loaded_paths.get_or_insert_with(path.into(), || {
-            self.load_path_uncached(path)
-                .map(Arc::new)
-                .map_err(Arc::new)
-        })
-    }
-
-    pub fn load_path_uncached(&self, path: &path::Path) -> Result<SourceFile, io::Error> {
+    pub fn load_path(&self, path: &path::Path) -> Result<SourceFile, io::Error> {
         let file_name = FileName::Real(path.to_owned());
         let source = fs::read_to_string(path)?;
 

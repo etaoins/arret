@@ -36,7 +36,7 @@ fn input_arg_to_source_file(
         let input_path = path::Path::new(input_param);
 
         source_loader
-            .load_path_uncached(input_path)
+            .load_path(input_path)
             .expect("Unable to read input file")
     }
 }

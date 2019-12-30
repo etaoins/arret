@@ -195,7 +195,7 @@ fn target_triple_to_cc_args(target_triple: &str) -> Vec<&str> {
 /// `codegen::initialise_llvm()` must be called before this.
 pub fn gen_program(
     options: Options<'_>,
-    rust_libraries: &[Arc<rfi::Library>],
+    rfi_libraries: &[Arc<rfi::Library>],
     program: &mir::BuiltProgram,
     output_file: &path::Path,
     debug_source_loader: Option<&SourceLoader>,
@@ -285,7 +285,7 @@ pub fn gen_program(
             .args(target_args)
             .arg("-o")
             .arg(output_file)
-            .args(rust_libraries.iter().map(|l| l.target_path()))
+            .args(rfi_libraries.iter().map(|l| l.target_path()))
             .arg("-pthread")
             .arg("-ldl")
             .arg("-lm")

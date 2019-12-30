@@ -1,5 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+
+use codespan_reporting::Diagnostic;
 
 use rayon::prelude::*;
 
@@ -9,8 +11,8 @@ use arret_syntax::span::Span;
 #[cfg(test)]
 use arret_syntax::span::EMPTY_SPAN;
 
+use crate::context;
 use crate::rfi;
-use crate::source::SourceFile;
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::Ty;
@@ -20,7 +22,7 @@ use crate::hir::destruc;
 use crate::hir::error::{Error, ErrorKind, ExpectedSym, Result};
 use crate::hir::exports::Exports;
 use crate::hir::import;
-use crate::hir::loader::{load_module_by_name, LoadedModule, ModuleName};
+use crate::hir::loader::ModuleName;
 use crate::hir::macros::{expand_macro, lower_macro_rules};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum};
 use crate::hir::prim::Prim;
@@ -34,6 +36,7 @@ use crate::hir::{
     App, Cond, DeclPurity, DeclTy, Def, Expr, ExprKind, FieldAccessor, Fun, Let, ModuleId, Recur,
     VarId,
 };
+use crate::id_type::ArcId;
 
 /// Module lowered to HIR
 pub struct LoweredModule {
@@ -43,12 +46,12 @@ pub struct LoweredModule {
     /// Defs in the order the were lowered
     pub defs: Vec<Def<Lowered>>,
 
-    exports: Exports,
-    main_var_id: Option<VarId>,
+    pub exports: Exports,
+    pub main_var_id: Option<VarId>,
 }
 
 impl LoweredModule {
-    fn from_primitives(exports: Exports) -> Self {
+    pub fn from_primitives(exports: Exports) -> Self {
         Self {
             module_id: ModuleId::alloc(),
             defs: vec![],
@@ -56,26 +59,6 @@ impl LoweredModule {
             main_var_id: None,
         }
     }
-}
-
-pub struct LoweringCtx<'ccx> {
-    ccx: &'ccx CompileCtx,
-    rust_libraries: Vec<Arc<rfi::Library>>,
-
-    module_name_to_lowered_idx: HashMap<ModuleName, usize>,
-    lowered_modules: Vec<LoweredModule>,
-}
-
-/// Lowered program
-pub struct LoweredProgram {
-    /// Lowered modules in dependency order
-    pub lowered_modules: Vec<LoweredModule>,
-
-    /// Rust libraries the program depends on
-    pub rust_libraries: Vec<Arc<rfi::Library>>,
-
-    /// Variable of the main function
-    pub main_var_id: VarId,
 }
 
 struct DeferredDef {
@@ -107,9 +90,15 @@ impl DeferredModulePrim {
     }
 }
 
-pub enum LoweredReplDatum {
+pub(crate) enum LoweredReplDatum {
+    /// One or more modules were imported
+    Import(HashSet<ArcId<context::Module>>),
+    /// An evaluable definition
+    EvaluableDef(ModuleId, Def<Lowered>),
+    /// A non-evalable definition handled by HIR lowering
+    NonEvaluableDef,
+    /// An expression
     Expr(ModuleId, Expr<Lowered>),
-    Defs(Vec<LoweredModule>),
 }
 
 // This would be less ugly as Result<!> once it's stabilised
@@ -729,7 +718,7 @@ fn lower_module_def(
     Err(vec![Error::new(span, ErrorKind::NonDefInsideModule)])
 }
 
-fn lower_rfi_library(span: Span, rfi_library: &rfi::Library) -> LoweredModule {
+pub fn lower_rfi_library(span: Span, rfi_library: &rfi::Library) -> LoweredModule {
     use arret_syntax::datum::DataStr;
 
     let exported_funs = rfi_library.exported_funs();
@@ -768,6 +757,150 @@ fn lower_rfi_library(span: Span, rfi_library: &rfi::Library) -> LoweredModule {
     }
 }
 
+pub fn insert_import_bindings(
+    imported_exports: &HashMap<ModuleName, Arc<Exports>>,
+    scope: &mut Scope<'_>,
+    arg_data: &[Datum],
+) -> Result<(), Vec<Error>> {
+    use std::borrow::Cow;
+
+    for arg_datum in arg_data {
+        let span = arg_datum.span();
+
+        let parsed_import = import::parse_import_set(arg_datum)?;
+        let unfiltered_exports = &imported_exports[parsed_import.module_name()];
+
+        let exports =
+            import::filter_imported_exports(&parsed_import, Cow::Borrowed(unfiltered_exports))?;
+
+        match exports {
+            Cow::Owned(exports) => {
+                scope.insert_bindings(
+                    span,
+                    exports
+                        .into_iter()
+                        .map(|(name, binding)| (Ident::new(Scope::root_ns_id(), name), binding)),
+                )?;
+            }
+            Cow::Borrowed(exports) => {
+                scope.insert_bindings(
+                    span,
+                    exports.iter().map(|(name, binding)| {
+                        (
+                            Ident::new(Scope::root_ns_id(), name.clone()),
+                            binding.clone(),
+                        )
+                    }),
+                )?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub fn lower_data(
+    imported_exports: &HashMap<ModuleName, Arc<Exports>>,
+    data: &[Datum],
+) -> Result<LoweredModule, Vec<Error>> {
+    let mvia = ModuleVarIdAlloc::new();
+
+    // The default scope only consists of a placeholder for (import)
+    let mut scope = Scope::new_with_entries(std::iter::once((
+        "import",
+        Binding::Prim(Prim::ImportPlaceholder),
+    )));
+
+    // Build up a list of errors to return at once
+    let mut errors: Vec<Error> = vec![];
+
+    // Extract all of our definitions.
+    //
+    // This occurs in two passes:
+    // - Imports, types and macros are resolved immediately and cannot refer to bindings later
+    //   in the body
+    // - Definitions are resolved after the module has been loaded
+    let mut deferred_exports = Vec::<DeferredExport>::new();
+    let mut deferred_defs = Vec::<DeferredDef>::new();
+
+    for input_datum in data {
+        if let Some(arg_data) = import::try_extract_import_set(input_datum) {
+            if let Err(mut new_errors) =
+                insert_import_bindings(imported_exports, &mut scope, arg_data)
+            {
+                errors.append(&mut new_errors);
+            }
+
+            continue;
+        }
+
+        let ns_datum = NsDatum::from_syntax_datum(input_datum);
+        match lower_module_def(&mvia, &mut scope, ns_datum) {
+            Ok(Some(DeferredModulePrim::Exports(mut exports))) => {
+                deferred_exports.append(&mut exports);
+            }
+            Ok(Some(DeferredModulePrim::Def(deferred_def))) => {
+                deferred_defs.push(deferred_def);
+            }
+            Ok(None) => {}
+            Err(mut new_errors) => {
+                errors.append(&mut new_errors);
+            }
+        };
+    }
+
+    // Process any exports
+    let mut exports = HashMap::with_capacity(deferred_exports.len());
+    for deferred_export in deferred_exports {
+        let DeferredExport { span, ident } = deferred_export;
+        match scope.get_or_err(span, &ident) {
+            Ok(binding) => {
+                exports.insert(ident.into_name(), binding.clone());
+            }
+            Err(err) => {
+                errors.push(err);
+            }
+        };
+    }
+
+    // And now process any deferred defs
+    let mut defs = Vec::with_capacity(deferred_defs.len());
+    let deferred_results: Vec<Result<_, _>> = deferred_defs
+        .into_par_iter()
+        .map(|deferred_def| resolve_deferred_def(&mvia, &scope, deferred_def))
+        .collect();
+
+    for deferred_result in deferred_results {
+        match deferred_result {
+            Ok(def) => {
+                defs.push(def);
+            }
+            Err(error) => {
+                errors.push(error);
+            }
+        }
+    }
+
+    // Try to find `main!`. If we're not the entry module this will be ignored.
+    let main_ident = Ident::new(Scope::root_ns_id(), "main!".into());
+    let main_var_id = if let Some(Binding::Var(var_id)) = scope.get(&main_ident) {
+        Some(*var_id)
+    } else {
+        None
+    };
+
+    if errors.is_empty() {
+        Ok(LoweredModule {
+            module_id: mvia.module_id(),
+            defs,
+            exports,
+            main_var_id,
+        })
+    } else {
+        Err(errors)
+    }
+}
+
 fn resolve_deferred_def(
     mvia: &ModuleVarIdAlloc,
     scope: &Scope<'_>,
@@ -788,298 +921,60 @@ fn resolve_deferred_def(
     })
 }
 
-impl<'ccx> LoweringCtx<'ccx> {
-    pub fn new(ccx: &'ccx CompileCtx) -> Self {
-        use crate::hir::exports;
-        let mut lcx = Self {
-            ccx,
-            rust_libraries: vec![],
-
-            module_name_to_lowered_idx: HashMap::new(),
-            lowered_modules: vec![],
-        };
-
-        // These modules are always loaded
-        lcx.push_lowered_module(
-            ModuleName::new("arret".into(), vec!["internal".into()], "primitives".into()),
-            LoweredModule::from_primitives(exports::prims_exports()),
-        );
-
-        lcx.push_lowered_module(
-            ModuleName::new("arret".into(), vec!["internal".into()], "types".into()),
-            LoweredModule::from_primitives(exports::tys_exports()),
-        );
-
-        lcx
-    }
-
-    fn load_module(
-        &mut self,
-        span: Span,
-        module_name: &ModuleName,
-    ) -> Result<&LoweredModule, Vec<Error>> {
-        if let Some(idx) = self.module_name_to_lowered_idx.get(module_name) {
-            return Ok(&self.lowered_modules[*idx]);
-        }
-
-        let lowered_module = {
-            match load_module_by_name(self.ccx, span, module_name)? {
-                LoadedModule::Source(source_file) => {
-                    let module_data = source_file.parsed().map_err(|err| vec![err.into()])?;
-                    self.lower_module(module_data)?
-                }
-                LoadedModule::Rust(rfi_library) => {
-                    let rfi_module = lower_rfi_library(span, &rfi_library);
-                    self.rust_libraries.push(rfi_library);
-                    rfi_module
-                }
-            }
-        };
-
-        Ok(self.push_lowered_module(module_name.clone(), lowered_module))
-    }
-
-    fn push_lowered_module(
-        &mut self,
-        module_name: ModuleName,
-        lowered_module: LoweredModule,
-    ) -> &LoweredModule {
-        let idx = self.lowered_modules.len();
-        self.lowered_modules.push(lowered_module);
-        self.module_name_to_lowered_idx.insert(module_name, idx);
-
-        &self.lowered_modules[idx]
-    }
-
-    fn lower_import(
-        &mut self,
-        scope: &mut Scope<'_>,
-        arg_data: &[Datum],
-    ) -> Result<(), Vec<Error>> {
-        use std::borrow::Cow;
-
-        for arg_datum in arg_data {
-            let span = arg_datum.span();
-
-            let parsed_import = import::parse_import_set(arg_datum)?;
-
-            let (module_span, module_name) = parsed_import.spanned_module_name();
-            let lowered_module = self.load_module(module_span, module_name)?;
-
-            let exports = import::filter_imported_exports(
-                &parsed_import,
-                Cow::Borrowed(&lowered_module.exports),
-            )?;
-
-            match exports {
-                Cow::Owned(exports) => {
-                    scope.insert_bindings(
-                        span,
-                        exports.into_iter().map(|(name, binding)| {
-                            (Ident::new(Scope::root_ns_id(), name), binding)
-                        }),
-                    )?;
-                }
-                Cow::Borrowed(exports) => {
-                    scope.insert_bindings(
-                        span,
-                        exports.iter().map(|(name, binding)| {
-                            (
-                                Ident::new(Scope::root_ns_id(), name.clone()),
-                                binding.clone(),
-                            )
-                        }),
-                    )?;
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn lower_module(&mut self, data: &[Datum]) -> Result<LoweredModule, Vec<Error>> {
-        let mvia = ModuleVarIdAlloc::new();
-
-        // The default scope only consists of a placeholder for (import)
-        let mut scope = Scope::new_with_entries(std::iter::once((
-            "import",
-            Binding::Prim(Prim::ImportPlaceholder),
-        )));
-
-        // Build up a list of errors to return at once
-        let mut errors: Vec<Error> = vec![];
-
-        // Extract all of our definitions.
-        //
-        // This occurs in two passes:
-        // - Imports, types and macros are resolved immediately and cannot refer to bindings later
-        //   in the body
-        // - Definitions are resolved after the module has been loaded
-        let mut deferred_exports = Vec::<DeferredExport>::new();
-        let mut deferred_defs = Vec::<DeferredDef>::new();
-
-        for input_datum in data {
-            if let Some(arg_data) = import::try_extract_import_set(input_datum) {
-                if let Err(mut new_errors) = self.lower_import(&mut scope, arg_data) {
-                    errors.append(&mut new_errors);
-                }
-
-                continue;
-            }
-
-            let ns_datum = NsDatum::from_syntax_datum(input_datum);
-            match lower_module_def(&mvia, &mut scope, ns_datum) {
-                Ok(Some(DeferredModulePrim::Exports(mut exports))) => {
-                    deferred_exports.append(&mut exports);
-                }
-                Ok(Some(DeferredModulePrim::Def(deferred_def))) => {
-                    deferred_defs.push(deferred_def);
-                }
-                Ok(None) => {}
-                Err(mut new_errors) => {
-                    errors.append(&mut new_errors);
-                }
-            };
-        }
-
-        // Process any exports
-        let mut exports = HashMap::with_capacity(deferred_exports.len());
-        for deferred_export in deferred_exports {
-            let DeferredExport { span, ident } = deferred_export;
-            match scope.get_or_err(span, &ident) {
-                Ok(binding) => {
-                    exports.insert(ident.into_name(), binding.clone());
-                }
-                Err(err) => {
-                    errors.push(err);
-                }
-            };
-        }
-
-        // And now process any deferred defs
-        let mut defs = Vec::with_capacity(deferred_defs.len());
-        let deferred_results: Vec<Result<_, _>> = deferred_defs
-            .into_par_iter()
-            .map(|deferred_def| resolve_deferred_def(&mvia, &scope, deferred_def))
-            .collect();
-
-        for deferred_result in deferred_results {
-            match deferred_result {
-                Ok(def) => {
-                    defs.push(def);
-                }
-                Err(error) => {
-                    errors.push(error);
-                }
-            }
-        }
-
-        // Try to find `main!`. If we're not the root module this will be ignored.
-        let main_ident = Ident::new(Scope::root_ns_id(), "main!".into());
-        let main_var_id = if let Some(Binding::Var(var_id)) = scope.get(&main_ident) {
-            Some(*var_id)
-        } else {
-            None
-        };
-
-        if errors.is_empty() {
-            Ok(LoweredModule {
-                module_id: mvia.module_id(),
-                defs,
-                exports,
-                main_var_id,
-            })
-        } else {
-            Err(errors)
-        }
-    }
-}
-
 // REPL interface
-impl<'ccx> LoweringCtx<'ccx> {
-    pub fn lower_repl_datum(
-        &mut self,
-        scope: &mut Scope<'_>,
-        datum: &Datum,
-    ) -> Result<LoweredReplDatum, Vec<Error>> {
-        use std::mem;
+pub(crate) fn lower_repl_datum(
+    ccx: &CompileCtx,
+    scope: &mut Scope<'_>,
+    datum: &Datum,
+) -> Result<LoweredReplDatum, Vec<Diagnostic>> {
+    use crate::reporting::errors_to_diagnostics;
 
-        // For the purposes of type inference every datum is a new module
-        let mvia = ModuleVarIdAlloc::new();
+    // For the purposes of type inference every datum is a new module
+    let mvia = ModuleVarIdAlloc::new();
 
-        if let Some(arg_data) = import::try_extract_import_set(datum) {
-            self.lower_import(scope, arg_data)?;
+    if let Some(arg_data) = import::try_extract_import_set(datum) {
+        let context::ModuleImports {
+            imports,
+            imported_exports,
+        } = ccx.imports_for_data(std::iter::once(datum))?;
 
-            let lowered_modules = mem::take(&mut self.lowered_modules);
-            return Ok(LoweredReplDatum::Defs(lowered_modules));
+        insert_import_bindings(&imported_exports, scope, arg_data)
+            .map_err(errors_to_diagnostics)?;
+
+        return Ok(LoweredReplDatum::Import(imports));
+    }
+
+    // Try interpreting this as a module def
+    let ns_datum = NsDatum::from_syntax_datum(datum);
+    match lower_module_def(&mvia, scope, ns_datum.clone()) {
+        Ok(Some(DeferredModulePrim::Def(deferred_def))) => {
+            let def =
+                resolve_deferred_def(&mvia, scope, deferred_def).map_err(|err| vec![err.into()])?;
+
+            Ok(LoweredReplDatum::EvaluableDef(mvia.module_id(), def))
         }
+        Ok(Some(DeferredModulePrim::Exports(_))) => {
+            Err(vec![
+                Error::new(datum.span(), ErrorKind::ExportInsideRepl).into()
+            ])
+        }
+        Ok(None) => Ok(LoweredReplDatum::NonEvaluableDef),
+        Err(errs) => {
+            let non_def_errs = errs
+                .into_iter()
+                .filter(|err| err.kind() != &ErrorKind::NonDefInsideModule)
+                .collect::<Vec<Error>>();
 
-        // Try interpreting this as a module def
-        let ns_datum = NsDatum::from_syntax_datum(datum);
-        match lower_module_def(&mvia, scope, ns_datum.clone()) {
-            Ok(deferred_prims) => {
-                let defs = deferred_prims
-                    .into_iter()
-                    .map(|deferred_prim| match deferred_prim {
-                        DeferredModulePrim::Def(deferred_def) => {
-                            resolve_deferred_def(&mvia, scope, deferred_def)
-                                .map_err(|err| vec![err])
-                        }
-                        DeferredModulePrim::Exports(_) => {
-                            Err(vec![Error::new(datum.span(), ErrorKind::ExportInsideRepl)])
-                        }
-                    })
-                    .collect::<Result<Vec<Def<Lowered>>, Vec<Error>>>()?;
+            if non_def_errs.is_empty() {
+                // Re-interpret as an expression
+                let expr = lower_expr(&mvia, scope, ns_datum).map_err(|err| vec![err.into()])?;
 
-                Ok(LoweredReplDatum::Defs(vec![LoweredModule {
-                    module_id: mvia.module_id(),
-                    defs,
-                    main_var_id: None,
-                    exports: HashMap::new(),
-                }]))
-            }
-            Err(errs) => {
-                let non_def_errs = errs
-                    .into_iter()
-                    .filter(|err| err.kind() != &ErrorKind::NonDefInsideModule)
-                    .collect::<Vec<Error>>();
-
-                if non_def_errs.is_empty() {
-                    // Re-interpret as an expression
-                    let expr = lower_expr(&mvia, scope, ns_datum)?;
-                    Ok(LoweredReplDatum::Expr(mvia.module_id(), expr))
-                } else {
-                    Err(non_def_errs)
-                }
+                Ok(LoweredReplDatum::Expr(mvia.module_id(), expr))
+            } else {
+                Err(errors_to_diagnostics(non_def_errs))
             }
         }
     }
-}
-
-pub fn lower_program(
-    ccx: &CompileCtx,
-    source_file: &SourceFile,
-) -> Result<LoweredProgram, Vec<Error>> {
-    let file_span = source_file.file_map().span();
-
-    let data = source_file.parsed().map_err(|err| vec![err.into()])?;
-
-    let mut lcx = LoweringCtx::new(ccx);
-    let root_module = lcx.lower_module(data)?;
-
-    let main_var_id = if let Some(var_id) = root_module.main_var_id {
-        var_id
-    } else {
-        return Err(vec![Error::new(file_span, ErrorKind::NoMainFun)]);
-    };
-
-    lcx.lowered_modules.push(root_module);
-
-    Ok(LoweredProgram {
-        lowered_modules: lcx.lowered_modules,
-        rust_libraries: lcx.rust_libraries,
-        main_var_id,
-    })
 }
 
 ////
@@ -1102,21 +997,42 @@ fn import_statement_for_module(names: &[&'static str]) -> Datum {
 
 #[cfg(test)]
 fn module_for_str(data_str: &str) -> Result<LoweredModule> {
-    use crate::PackagePaths;
+    use std::iter;
+
+    use crate::hir::exports;
     use arret_syntax::parser::data_from_str;
 
+    let mut program_data = vec![];
+    let mut imported_exports = HashMap::<ModuleName, Arc<Exports>>::new();
+
+    for (terminal_name, exports) in iter::once(("primitives", exports::prims_exports()))
+        .chain(iter::once(("types", exports::tys_exports())))
+    {
+        program_data.push(import_statement_for_module(&[
+            "arret",
+            "internal",
+            terminal_name,
+        ]));
+
+        imported_exports.insert(
+            ModuleName::new(
+                "arret".into(),
+                vec!["internal".into()],
+                terminal_name.into(),
+            ),
+            Arc::new(exports),
+        );
+    }
+
     let mut test_data = data_from_str(data_str).unwrap();
-    let mut program_data = vec![
-        import_statement_for_module(&["arret", "internal", "primitives"]),
-        import_statement_for_module(&["arret", "internal", "types"]),
-    ];
     program_data.append(&mut test_data);
 
-    let ccx = CompileCtx::new(PackagePaths::test_paths(None), true);
-    let mut lcx = LoweringCtx::new(&ccx);
+    imported_exports.insert(
+        ModuleName::new("arret".into(), vec!["internal".into()], "types".into()),
+        Arc::new(exports::tys_exports()),
+    );
 
-    lcx.lower_module(&program_data)
-        .map_err(|mut errors| errors.remove(0))
+    lower_data(&imported_exports, &program_data).map_err(|mut errors| errors.remove(0))
 }
 
 #[cfg(test)]

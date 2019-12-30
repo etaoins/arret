@@ -17,7 +17,7 @@ fn try_compile_input_file(
     let arret_compiler::EvaluableProgram {
         ehx,
         main_var_id,
-        rust_libraries,
+        rfi_libraries,
     } = arret_compiler::program_to_evaluable(ccx, input_file)?;
 
     let mir_program = ehx.into_built_program(main_var_id)?;
@@ -36,7 +36,7 @@ fn try_compile_input_file(
 
     arret_compiler::gen_program(
         options,
-        &rust_libraries,
+        &rfi_libraries,
         &mir_program,
         output_path,
         debug_source_loader,

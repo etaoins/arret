@@ -11,14 +11,14 @@ where
 }
 
 /// Handle to a complete an associated promise
-pub struct Complete<T>
+pub struct Completer<T>
 where
     T: Send + Clone,
 {
     inner: Arc<Inner<T>>,
 }
 
-impl<T> Complete<T>
+impl<T> Completer<T>
 where
     T: Send + Clone,
 {
@@ -64,7 +64,7 @@ where
 }
 
 /// Creates new completer and promise
-pub fn promise<T>() -> (Complete<T>, Promise<T>)
+pub fn promise<T>() -> (Completer<T>, Promise<T>)
 where
     T: Send + Clone,
 {
@@ -74,11 +74,26 @@ where
     });
 
     (
-        Complete {
+        Completer {
             inner: inner.clone(),
         },
         Promise { inner },
     )
+}
+
+/// Create an immediately completed promise
+pub fn completed<T>(value: T) -> Promise<T>
+where
+    T: Send + Clone,
+{
+    Promise {
+        inner: {
+            Arc::new(Inner {
+                value: Mutex::new(Some(value)),
+                waker: Condvar::new(),
+            })
+        },
+    }
 }
 
 /// Concurrent map of keys to values where each key is only calculated once
@@ -100,6 +115,14 @@ where
         PromiseMap {
             promises: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Inserts a completed value directly in to a promise map
+    ///
+    /// This bypasses locking by using a mutable self.
+    pub fn insert(&mut self, key: K, value: V) {
+        let promises = self.promises.get_mut().unwrap();
+        promises.insert(key, completed(value));
     }
 
     /// Fetches the value from the promise map or inserts it if it does not exist

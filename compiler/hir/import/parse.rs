@@ -15,6 +15,13 @@ pub enum ParsedImportSet {
 }
 
 impl ParsedImportSet {
+    pub fn into_spanned_module_name(self) -> (Span, ModuleName) {
+        match self {
+            ParsedImportSet::Module(span, module_name) => (span, module_name),
+            ParsedImportSet::Filter(_, inner_import) => inner_import.into_spanned_module_name(),
+        }
+    }
+
     pub fn spanned_module_name(&self) -> (Span, &ModuleName) {
         match self {
             ParsedImportSet::Module(span, module_name) => (*span, module_name),

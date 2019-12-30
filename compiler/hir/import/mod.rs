@@ -1,7 +1,13 @@
 mod filter;
 mod parse;
 
+use std::collections::HashMap;
+
 use arret_syntax::datum::Datum;
+use arret_syntax::span::Span;
+
+use crate::hir::error::Error;
+use crate::hir::loader::ModuleName;
 
 pub use filter::filter_imported_exports;
 pub use parse::{parse_import_set, ParsedFilter, ParsedImportSet};
@@ -16,6 +22,39 @@ pub fn try_extract_import_set(datum: &Datum) -> Option<&[Datum]> {
     }
 
     None
+}
+
+/// Returns all unique imported module names for the passed module data
+///
+/// The value of the `HashMap` will be the first span where that module name occurs. This is
+/// intended to provide a stable location for error reporting.
+pub fn collect_imported_module_names<'a>(
+    data: impl Iterator<Item = &'a Datum>,
+) -> Result<HashMap<ModuleName, Span>, Vec<Error>> {
+    let mut imported_module_names = HashMap::new();
+    let mut errors = vec![];
+
+    for datum in data {
+        if let Some(arg_data) = try_extract_import_set(datum) {
+            for arg_datum in arg_data {
+                match parse_import_set(arg_datum) {
+                    Ok(parsed_import) => {
+                        let (span, module_name) = parsed_import.into_spanned_module_name();
+                        imported_module_names.entry(module_name).or_insert(span);
+                    }
+                    Err(error) => {
+                        errors.push(error);
+                    }
+                }
+            }
+        }
+    }
+
+    if !errors.is_empty() {
+        return Err(errors);
+    }
+
+    Ok(imported_module_names)
 }
 
 #[cfg(test)]

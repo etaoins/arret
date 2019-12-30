@@ -59,7 +59,6 @@ pub enum ErrorKind {
     WrongCondArgCount,
     WrongDefLikeArgCount(&'static str),
     WrongDefRecordArgCount,
-    NoMainFun,
     DefOutsideBody,
     ExportOutsideModule,
     NonDefInsideModule,
@@ -388,12 +387,6 @@ impl From<Error> for Diagnostic {
                 "error loading RFI module",
             )
             .with_label(Label::new_primary(origin).with_message(message.clone().into_string())),
-
-            ErrorKind::NoMainFun => {
-                Diagnostic::new_error("no main! function defined in root module").with_label(
-                    Label::new_primary(origin).with_message("main! function expected in this file"),
-                )
-            }
 
             ErrorKind::BadListDestruc => Diagnostic::new_error("unsupported destructuring binding")
                 .with_label(

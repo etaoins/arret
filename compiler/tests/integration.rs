@@ -232,7 +232,7 @@ fn result_for_single_test(
     let arret_compiler::EvaluableProgram {
         mut ehx,
         main_var_id,
-        rust_libraries,
+        rfi_libraries,
     } = arret_compiler::program_to_evaluable(ccx, &source_file)?;
 
     // Try evaluating if we're not supposed to panic
@@ -270,7 +270,7 @@ fn result_for_single_test(
 
     arret_compiler::gen_program(
         gen_program_opts,
-        &rust_libraries,
+        &rfi_libraries,
         &mir_program,
         &output_path,
         None,
@@ -424,7 +424,7 @@ fn run_single_test(
     input_path: &path::Path,
     test_type: TestType,
 ) -> bool {
-    let source_file = ccx.source_loader().load_path_uncached(input_path).unwrap();
+    let source_file = ccx.source_loader().load_path(input_path).unwrap();
 
     if test_type == TestType::CompileError {
         run_single_compile_fail_test(target_triple, ccx, &source_file)

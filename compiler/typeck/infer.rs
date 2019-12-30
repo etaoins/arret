@@ -157,12 +157,11 @@ enum InputDef {
 }
 
 type InferredLocals = HashMap<hir::LocalId, ty::Ref<ty::Poly>>;
-type InferredModuleVars = HashMap<hir::ModuleId, InferredLocals>;
+type InferredModuleVars = HashMap<hir::ModuleId, Arc<InferredLocals>>;
 
-struct InferredModule {
-    module_id: hir::ModuleId,
-    inferred_locals: InferredLocals,
-    defs: Vec<hir::Def<hir::Inferred>>,
+pub struct InferredModule {
+    pub inferred_locals: InferredLocals,
+    pub defs: Vec<hir::Def<hir::Inferred>>,
 }
 
 struct RecursiveDefsCtx<'types> {
@@ -1911,55 +1910,13 @@ impl<'types> RecursiveDefsCtx<'types> {
             .collect();
 
         Ok(InferredModule {
-            module_id: self.self_module_id,
             inferred_locals,
             defs: self.complete_defs,
         })
     }
 }
 
-pub(crate) struct InferCtx {
-    all_inferred_vars: InferredModuleVars,
-}
-
-impl InferCtx {
-    pub fn new() -> InferCtx {
-        InferCtx {
-            all_inferred_vars: HashMap::new(),
-        }
-    }
-
-    pub fn infer_module_defs(
-        &mut self,
-        lowered_module: hir::lowering::LoweredModule,
-    ) -> result::Result<Vec<hir::Def<hir::Inferred>>, Vec<Error>> {
-        let inferred_module = RecursiveDefsCtx::new(
-            &self.all_inferred_vars,
-            lowered_module.module_id,
-            lowered_module.defs,
-        )
-        .into_inferred_module()?;
-
-        self.all_inferred_vars
-            .insert(inferred_module.module_id, inferred_module.inferred_locals);
-
-        Ok(inferred_module.defs)
-    }
-
-    pub fn infer_expr(
-        &mut self,
-        module_id: hir::ModuleId,
-        expr: hir::Expr<hir::Lowered>,
-    ) -> Result<InferredNode> {
-        let mut rdcx = RecursiveDefsCtx::new(&self.all_inferred_vars, module_id, vec![]);
-
-        let mut pv = PurityVar::Known(Purity::Impure.into());
-
-        rdcx.visit_expr(&mut pv, &ResultUse::InnerExpr(&Ty::Any.into()), expr)
-    }
-}
-
-fn ensure_main_type(
+pub fn ensure_main_type(
     complete_defs: &[hir::Def<hir::Inferred>],
     main_var_id: hir::VarId,
     inferred_main_type: &ty::Ref<ty::Poly>,
@@ -1992,29 +1949,23 @@ fn ensure_main_type(
     Ok(())
 }
 
-pub fn infer_program_defs(
-    lowered_modules: Vec<hir::lowering::LoweredModule>,
-    main_var_id: hir::VarId,
-) -> result::Result<Vec<hir::Def<hir::Inferred>>, Vec<Error>> {
-    let mut all_inferred_vars: InferredModuleVars = HashMap::new();
-    let mut complete_defs = vec![];
+pub fn infer_module(
+    imported_inferred_vars: &InferredModuleVars,
+    module_id: hir::ModuleId,
+    defs: Vec<hir::Def<hir::Lowered>>,
+) -> result::Result<InferredModule, Vec<Error>> {
+    RecursiveDefsCtx::new(imported_inferred_vars, module_id, defs).into_inferred_module()
+}
+pub fn infer_expr(
+    all_inferred_vars: &InferredModuleVars,
+    module_id: hir::ModuleId,
+    expr: hir::Expr<hir::Lowered>,
+) -> Result<InferredNode> {
+    let mut rdcx = RecursiveDefsCtx::new(&all_inferred_vars, module_id, vec![]);
 
-    for lowered_module in lowered_modules {
-        let mut inferred_module = RecursiveDefsCtx::new(
-            &all_inferred_vars,
-            lowered_module.module_id,
-            lowered_module.defs,
-        )
-        .into_inferred_module()?;
+    let mut pv = PurityVar::Known(Purity::Impure.into());
 
-        all_inferred_vars.insert(inferred_module.module_id, inferred_module.inferred_locals);
-        complete_defs.append(&mut inferred_module.defs);
-    }
-
-    let inferred_main_type = &all_inferred_vars[&main_var_id.module_id()][&main_var_id.local_id()];
-    ensure_main_type(&complete_defs, main_var_id, inferred_main_type).map_err(|err| vec![err])?;
-
-    Ok(complete_defs)
+    rdcx.visit_expr(&mut pv, &ResultUse::InnerExpr(&Ty::Any.into()), expr)
 }
 
 #[cfg(test)]

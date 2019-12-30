@@ -1,24 +1,30 @@
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+
 use arret_syntax::datum::DataStr;
 
 use codespan::FileName;
 use codespan_reporting::{Diagnostic, Label};
 
+use crate::context;
 use crate::hir;
 use crate::hir::scope::Scope;
+use crate::id_type::ArcId;
 use crate::reporting::{diagnostic_for_syntax_error, errors_to_diagnostics};
 use crate::ty;
 use crate::CompileCtx;
-use crate::SourceLoader;
 
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::Value;
-use crate::typeck::infer::InferCtx;
+use crate::typeck::infer::{infer_expr, infer_module};
 
 pub struct ReplCtx<'ccx> {
     scope: Scope<'static>,
-    source_loader: &'ccx SourceLoader,
-    lcx: hir::lowering::LoweringCtx<'ccx>,
-    icx: InferCtx,
+    ccx: &'ccx CompileCtx,
+
+    inferred_module_vars: HashMap<hir::ModuleId, Arc<HashMap<hir::LocalId, ty::Ref<ty::Poly>>>>,
+    seen_modules: HashSet<hir::ModuleId>,
+
     ehx: EvalHirCtx,
 }
 
@@ -65,9 +71,11 @@ impl<'ccx> ReplCtx<'ccx> {
 
         ReplCtx {
             scope,
-            source_loader: ccx.source_loader(),
-            lcx: hir::lowering::LoweringCtx::new(ccx),
-            icx: InferCtx::new(),
+            ccx,
+
+            seen_modules: HashSet::new(),
+            inferred_module_vars: HashMap::new(),
+
             ehx: EvalHirCtx::new(ccx.enable_optimisations()),
         }
     }
@@ -83,6 +91,32 @@ impl<'ccx> ReplCtx<'ccx> {
         })
     }
 
+    /// Visits a subtree of modules and adds any missing defs and inferred module vars
+    fn visit_module_tree(
+        &mut self,
+        root_module: &ArcId<context::Module>,
+    ) -> Result<(), Vec<Diagnostic>> {
+        if self.seen_modules.contains(&root_module.module_id) {
+            return Ok(());
+        }
+
+        self.seen_modules.insert(root_module.module_id);
+
+        // Make sure our imports are first
+        for import in &root_module.imports {
+            self.visit_module_tree(import)?;
+        }
+
+        self.inferred_module_vars
+            .insert(root_module.module_id, root_module.inferred_locals.clone());
+
+        for def in &root_module.defs {
+            self.ehx.visit_def(def)?;
+        }
+
+        Ok(())
+    }
+
     pub fn eval_line(
         &mut self,
         input: String,
@@ -91,7 +125,8 @@ impl<'ccx> ReplCtx<'ccx> {
         use crate::hir::lowering::LoweredReplDatum;
         use std::io::Write;
         let source_file = self
-            .source_loader
+            .ccx
+            .source_loader()
             .load_string(FileName::Virtual("repl".into()), input.into());
 
         let input_data = source_file
@@ -117,27 +152,36 @@ impl<'ccx> ReplCtx<'ccx> {
             self.ehx.collect_garbage();
         }
 
-        match self
-            .lcx
-            .lower_repl_datum(&mut self.scope, input_datum)
+        match hir::lowering::lower_repl_datum(&self.ccx, &mut self.scope, input_datum)
             .map_err(errors_to_diagnostics)?
         {
-            LoweredReplDatum::Defs(new_module_defs) => {
-                for module_defs in new_module_defs {
-                    let inferred_module_defs = self
-                        .icx
-                        .infer_module_defs(module_defs)
-                        .map_err(errors_to_diagnostics)?;
-
-                    for inferred_def in inferred_module_defs {
-                        self.ehx.consume_def(inferred_def)?;
-                    }
+            LoweredReplDatum::Import(modules) => {
+                for module in modules {
+                    self.visit_module_tree(&module)?;
                 }
 
                 Ok(EvaledLine::Defs)
             }
+            LoweredReplDatum::EvaluableDef(module_id, def) => {
+                let inferred_module =
+                    infer_module(&self.inferred_module_vars, module_id, vec![def])
+                        .map_err(errors_to_diagnostics)?;
+
+                self.inferred_module_vars
+                    .insert(module_id, Arc::new(inferred_module.inferred_locals));
+
+                for inferred_def in inferred_module.defs {
+                    self.ehx.consume_def(inferred_def)?;
+                }
+
+                Ok(EvaledLine::Defs)
+            }
+            LoweredReplDatum::NonEvaluableDef => {
+                // This was handled entirely by HIR lowering
+                Ok(EvaledLine::Defs)
+            }
             LoweredReplDatum::Expr(module_id, decl_expr) => {
-                let node = self.icx.infer_expr(module_id, decl_expr)?;
+                let node = infer_expr(&self.inferred_module_vars, module_id, decl_expr)?;
                 let type_str = hir::str_for_ty_ref(node.result_ty());
 
                 match kind {

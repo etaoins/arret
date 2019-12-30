@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::path;
-use std::sync::Arc;
 
 use arret_syntax::datum::DataStr;
 use arret_syntax::span::Span;
@@ -68,8 +67,8 @@ pub struct ModuleName {
 
 #[derive(Debug)]
 pub enum LoadedModule {
-    Source(Arc<SourceFile>),
-    Rust(Arc<rfi::Library>),
+    Source(SourceFile),
+    Rust(rfi::Library),
 }
 
 impl ModuleName {

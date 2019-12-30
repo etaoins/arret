@@ -1603,6 +1603,24 @@ impl EvalHirCtx {
         )
     }
 
+    pub fn visit_def(&mut self, def: &hir::Def<hir::Inferred>) -> Result<()> {
+        let hir::Def {
+            destruc,
+            value_expr,
+            ..
+        } = def;
+
+        let mut fcx = FunCtx::new();
+
+        // Don't pass a builder; we should never generate ops based on a def
+        let source_name = Self::destruc_source_name(&destruc);
+        let value =
+            self.eval_expr_with_source_name(&mut fcx, &mut None, value_expr, source_name)?;
+
+        Self::destruc_value(&mut None, &mut self.global_values, &destruc, value);
+        Ok(())
+    }
+
     pub fn consume_def(&mut self, def: hir::Def<hir::Inferred>) -> Result<()> {
         let hir::Def {
             destruc,
