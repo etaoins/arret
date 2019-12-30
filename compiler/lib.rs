@@ -43,7 +43,7 @@ pub fn program_to_evaluable(
 
     let hir = hir::lowering::lower_program(ccx, source_file).map_err(errors_to_diagnostics)?;
 
-    let inferred_defs = typeck::infer::infer_program_defs(hir.module_defs, hir.main_var_id)
+    let inferred_defs = typeck::infer::infer_program_defs(hir.lowered_modules, hir.main_var_id)
         .map_err(errors_to_diagnostics)?;
 
     let mut ehx = EvalHirCtx::new(ccx.enable_optimisations());

@@ -1931,12 +1931,12 @@ impl InferCtx {
 
     pub fn infer_module_defs(
         &mut self,
-        module_defs: hir::lowering::ModuleDefs,
+        lowered_module: hir::lowering::LoweredModule,
     ) -> result::Result<Vec<hir::Def<hir::Inferred>>, Vec<Error>> {
         let inferred_module = RecursiveDefsCtx::new(
             &self.all_inferred_vars,
-            module_defs.module_id,
-            module_defs.defs,
+            lowered_module.module_id,
+            lowered_module.defs,
         )
         .into_inferred_module()?;
 
@@ -1993,16 +1993,19 @@ fn ensure_main_type(
 }
 
 pub fn infer_program_defs(
-    all_module_defs: Vec<hir::lowering::ModuleDefs>,
+    lowered_modules: Vec<hir::lowering::LoweredModule>,
     main_var_id: hir::VarId,
 ) -> result::Result<Vec<hir::Def<hir::Inferred>>, Vec<Error>> {
     let mut all_inferred_vars: InferredModuleVars = HashMap::new();
     let mut complete_defs = vec![];
 
-    for module_defs in all_module_defs {
-        let mut inferred_module =
-            RecursiveDefsCtx::new(&all_inferred_vars, module_defs.module_id, module_defs.defs)
-                .into_inferred_module()?;
+    for lowered_module in lowered_modules {
+        let mut inferred_module = RecursiveDefsCtx::new(
+            &all_inferred_vars,
+            lowered_module.module_id,
+            lowered_module.defs,
+        )
+        .into_inferred_module()?;
 
         all_inferred_vars.insert(inferred_module.module_id, inferred_module.inferred_locals);
         complete_defs.append(&mut inferred_module.defs);

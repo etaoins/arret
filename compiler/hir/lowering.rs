@@ -35,34 +35,41 @@ use crate::hir::{
     VarId,
 };
 
-struct LoweredModule {
-    module_id: ModuleId,
-    defs: Vec<Def<Lowered>>,
-    exports: Exports,
-
-    main_var_id: Option<VarId>,
-}
-
-pub struct LoweringCtx<'ccx> {
-    ccx: &'ccx CompileCtx,
-    rust_libraries: Vec<Arc<rfi::Library>>,
-    module_exports: HashMap<ModuleName, Exports>,
-    module_defs: Vec<ModuleDefs>,
-}
-
-/// Lowered definitions for a module
-pub struct ModuleDefs {
+/// Module lowered to HIR
+pub struct LoweredModule {
     /// Globally unique ID for the module
     pub module_id: ModuleId,
 
     /// Defs in the order the were lowered
     pub defs: Vec<Def<Lowered>>,
+
+    exports: Exports,
+    main_var_id: Option<VarId>,
+}
+
+impl LoweredModule {
+    fn from_primitives(exports: Exports) -> Self {
+        Self {
+            module_id: ModuleId::alloc(),
+            defs: vec![],
+            exports,
+            main_var_id: None,
+        }
+    }
+}
+
+pub struct LoweringCtx<'ccx> {
+    ccx: &'ccx CompileCtx,
+    rust_libraries: Vec<Arc<rfi::Library>>,
+
+    module_name_to_lowered_idx: HashMap<ModuleName, usize>,
+    lowered_modules: Vec<LoweredModule>,
 }
 
 /// Lowered program
 pub struct LoweredProgram {
     /// Lowered modules in dependency order
-    pub module_defs: Vec<ModuleDefs>,
+    pub lowered_modules: Vec<LoweredModule>,
 
     /// Rust libraries the program depends on
     pub rust_libraries: Vec<Arc<rfi::Library>>,
@@ -102,7 +109,7 @@ impl DeferredModulePrim {
 
 pub enum LoweredReplDatum {
     Expr(ModuleId, Expr<Lowered>),
-    Defs(Vec<ModuleDefs>),
+    Defs(Vec<LoweredModule>),
 }
 
 // This would be less ugly as Result<!> once it's stabilised
@@ -784,45 +791,38 @@ fn resolve_deferred_def(
 impl<'ccx> LoweringCtx<'ccx> {
     pub fn new(ccx: &'ccx CompileCtx) -> Self {
         use crate::hir::exports;
-
-        let mut module_exports = HashMap::with_capacity(2);
-
-        // These modules are always loaded
-        module_exports.insert(
-            ModuleName::new("arret".into(), vec!["internal".into()], "primitives".into()),
-            exports::prims_exports(),
-        );
-
-        module_exports.insert(
-            ModuleName::new("arret".into(), vec!["internal".into()], "types".into()),
-            exports::tys_exports(),
-        );
-
-        Self {
+        let mut lcx = Self {
             ccx,
             rust_libraries: vec![],
-            module_exports,
-            module_defs: vec![],
-        }
+
+            module_name_to_lowered_idx: HashMap::new(),
+            lowered_modules: vec![],
+        };
+
+        // These modules are always loaded
+        lcx.push_lowered_module(
+            ModuleName::new("arret".into(), vec!["internal".into()], "primitives".into()),
+            LoweredModule::from_primitives(exports::prims_exports()),
+        );
+
+        lcx.push_lowered_module(
+            ModuleName::new("arret".into(), vec!["internal".into()], "types".into()),
+            LoweredModule::from_primitives(exports::tys_exports()),
+        );
+
+        lcx
     }
 
     fn load_module(
         &mut self,
         span: Span,
         module_name: &ModuleName,
-    ) -> Result<&Exports, Vec<Error>> {
-        // TODO: An if-let or match here will cause the borrow to live past the return. This
-        // prevents us from doing the insert below. We need to do a two-phase check instead.
-        if self.module_exports.contains_key(module_name) {
-            return Ok(&self.module_exports[module_name]);
+    ) -> Result<&LoweredModule, Vec<Error>> {
+        if let Some(idx) = self.module_name_to_lowered_idx.get(module_name) {
+            return Ok(&self.lowered_modules[*idx]);
         }
 
-        let LoweredModule {
-            module_id,
-            exports,
-            defs,
-            ..
-        } = {
+        let lowered_module = {
             match load_module_by_name(self.ccx, span, module_name)? {
                 LoadedModule::Source(source_file) => {
                     let module_data = source_file.parsed().map_err(|err| vec![err.into()])?;
@@ -836,12 +836,19 @@ impl<'ccx> LoweringCtx<'ccx> {
             }
         };
 
-        self.module_defs.push(ModuleDefs { module_id, defs });
+        Ok(self.push_lowered_module(module_name.clone(), lowered_module))
+    }
 
-        Ok(self
-            .module_exports
-            .entry(module_name.clone())
-            .or_insert(exports))
+    fn push_lowered_module(
+        &mut self,
+        module_name: ModuleName,
+        lowered_module: LoweredModule,
+    ) -> &LoweredModule {
+        let idx = self.lowered_modules.len();
+        self.lowered_modules.push(lowered_module);
+        self.module_name_to_lowered_idx.insert(module_name, idx);
+
+        &self.lowered_modules[idx]
     }
 
     fn lower_import(
@@ -857,10 +864,12 @@ impl<'ccx> LoweringCtx<'ccx> {
             let parsed_import = import::parse_import_set(arg_datum)?;
 
             let (module_span, module_name) = parsed_import.spanned_module_name();
-            let module_exports = self.load_module(module_span, module_name)?;
+            let lowered_module = self.load_module(module_span, module_name)?;
 
-            let exports =
-                import::filter_imported_exports(&parsed_import, Cow::Borrowed(module_exports))?;
+            let exports = import::filter_imported_exports(
+                &parsed_import,
+                Cow::Borrowed(&lowered_module.exports),
+            )?;
 
             match exports {
                 Cow::Owned(exports) => {
@@ -1001,8 +1010,8 @@ impl<'ccx> LoweringCtx<'ccx> {
         if let Some(arg_data) = import::try_extract_import_set(datum) {
             self.lower_import(scope, arg_data)?;
 
-            let module_defs = mem::take(&mut self.module_defs);
-            return Ok(LoweredReplDatum::Defs(module_defs));
+            let lowered_modules = mem::take(&mut self.lowered_modules);
+            return Ok(LoweredReplDatum::Defs(lowered_modules));
         }
 
         // Try interpreting this as a module def
@@ -1022,9 +1031,11 @@ impl<'ccx> LoweringCtx<'ccx> {
                     })
                     .collect::<Result<Vec<Def<Lowered>>, Vec<Error>>>()?;
 
-                Ok(LoweredReplDatum::Defs(vec![ModuleDefs {
+                Ok(LoweredReplDatum::Defs(vec![LoweredModule {
                     module_id: mvia.module_id(),
                     defs,
+                    main_var_id: None,
+                    exports: HashMap::new(),
                 }]))
             }
             Err(errs) => {
@@ -1056,19 +1067,16 @@ pub fn lower_program(
     let mut lcx = LoweringCtx::new(ccx);
     let root_module = lcx.lower_module(data)?;
 
-    lcx.module_defs.push(ModuleDefs {
-        module_id: root_module.module_id,
-        defs: root_module.defs,
-    });
-
     let main_var_id = if let Some(var_id) = root_module.main_var_id {
         var_id
     } else {
         return Err(vec![Error::new(file_span, ErrorKind::NoMainFun)]);
     };
 
+    lcx.lowered_modules.push(root_module);
+
     Ok(LoweredProgram {
-        module_defs: lcx.module_defs,
+        lowered_modules: lcx.lowered_modules,
         rust_libraries: lcx.rust_libraries,
         main_var_id,
     })
