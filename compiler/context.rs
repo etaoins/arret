@@ -201,7 +201,7 @@ impl CompileCtx {
     /// This returns a cached module; the module will only be compiled once per `CompileCtx`
     /// instance. If the module is being compiled on another thread this will block until the
     /// compilation is finished.
-    pub(crate) fn get_module_by_name(&self, span: Span, module_name: ModuleName) -> CachedModule {
+    fn get_module_by_name(&self, span: Span, module_name: ModuleName) -> CachedModule {
         self.modules_by_name
             .get_or_insert_with(
                 module_name.clone(),
