@@ -269,7 +269,6 @@ impl Loader {
         package_name: &str,
     ) -> Result<Library, Error> {
         let native_path = build_rfi_lib_path(native_base_path, package_name, LibType::Dynamic);
-
         let target_path = build_rfi_lib_path(target_base_path, package_name, LibType::Static);
 
         let map_io_err = |err| Error::from_module_io(span, &native_path, &err);
@@ -284,7 +283,7 @@ impl Loader {
             &(**exports_symbol)
         };
 
-        let filename: Arc<path::Path> = native_path.clone().into();
+        let lossy_native_path = native_path.to_string_lossy();
         let exported_funs = exports
             .par_iter()
             .map(|(fun_name, rust_fun)| {
@@ -295,9 +294,8 @@ impl Loader {
                 };
 
                 // Parse the declared Arret type string as a datum
-                let file_map_name = FileName::Virtual(
-                    format!("{}:{}", filename.to_string_lossy(), fun_name).into(),
-                );
+                let file_map_name =
+                    FileName::Virtual(format!("{}:{}", lossy_native_path, fun_name).into());
 
                 let arret_type_source_file =
                     source_loader.load_string(file_map_name, rust_fun.arret_type.into());
