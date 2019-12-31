@@ -25,7 +25,6 @@ use crate::ty::purity;
 use crate::ty::record;
 use crate::ty::Ty;
 
-pub use crate::context::ModuleId;
 pub use crate::hir::var_id::{LocalId, VarId};
 
 /// DeclTy is a type declared by a user

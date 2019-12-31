@@ -39,7 +39,7 @@ pub struct EvaluableProgram {
 /// Visits a subtree of modules, evaluates their definitions and collects their RFI libraries
 fn include_imports(
     ehx: &mut EvalHirCtx,
-    visited_modules: &mut HashSet<hir::ModuleId>,
+    visited_modules: &mut HashSet<context::ModuleId>,
     rfi_libraries: &mut Vec<Arc<rfi::Library>>,
     root_module: &context::Module,
 ) -> Result<(), Vec<Diagnostic>> {

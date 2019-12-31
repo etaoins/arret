@@ -21,8 +21,8 @@ pub struct ReplCtx<'ccx> {
     scope: Scope<'static>,
     ccx: &'ccx CompileCtx,
 
-    inferred_module_vars: HashMap<hir::ModuleId, Arc<HashMap<hir::LocalId, ty::Ref<ty::Poly>>>>,
-    seen_modules: HashSet<hir::ModuleId>,
+    inferred_module_vars: HashMap<context::ModuleId, Arc<HashMap<hir::LocalId, ty::Ref<ty::Poly>>>>,
+    seen_modules: HashSet<context::ModuleId>,
 
     ehx: EvalHirCtx,
 }
