@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use arret_syntax::datum::DataStr;
 use arret_syntax::span::EMPTY_SPAN;
 
+use crate::context::ModuleId;
 use crate::hir;
-use crate::hir::var_id::ModuleVarIdAlloc;
+use crate::hir::var_id::VarIdAlloc;
 use crate::mir::env_values::EnvValues;
 use crate::mir::value;
 use crate::ty;
@@ -28,11 +29,11 @@ fn wrap_poly_expr_in_arret_fun(
     ret_ty: ty::Ref<ty::Poly>,
     wrapped_expr: hir::Expr<hir::Inferred>,
 ) -> value::ArretFun {
-    let mvia = ModuleVarIdAlloc::new();
+    let via = VarIdAlloc::new(ModuleId::alloc());
 
     let expr_params_with_var_id: Vec<(&ExprParam, hir::VarId)> = expr_params
         .iter()
-        .map(|expr_param| (expr_param, mvia.alloc()))
+        .map(|expr_param| (expr_param, via.alloc()))
         .collect();
 
     let params = hir::destruc::List::new(

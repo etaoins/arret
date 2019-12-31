@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::result;
 use std::sync::Arc;
 
+use crate::context::ModuleId;
 use crate::hir;
 use crate::hir::destruc;
 use crate::rfi;
@@ -157,7 +158,7 @@ enum InputDef {
 }
 
 type InferredLocals = HashMap<hir::LocalId, ty::Ref<ty::Poly>>;
-type InferredModuleVars = HashMap<hir::ModuleId, Arc<InferredLocals>>;
+type InferredModuleVars = HashMap<ModuleId, Arc<InferredLocals>>;
 
 pub struct InferredModule {
     pub inferred_locals: InferredLocals,
@@ -174,7 +175,7 @@ struct RecursiveDefsCtx<'types> {
     // and then pop them off afterwards.
     free_ty_polys: Vec<ty::Ref<ty::Poly>>,
 
-    self_module_id: hir::ModuleId,
+    self_module_id: ModuleId,
     self_locals: HashMap<hir::LocalId, VarType>,
     imported_vars: &'types InferredModuleVars,
 }
@@ -300,7 +301,7 @@ fn keep_exprs_for_side_effects(
 impl<'types> RecursiveDefsCtx<'types> {
     fn new(
         imported_vars: &'types InferredModuleVars,
-        self_module_id: hir::ModuleId,
+        self_module_id: ModuleId,
         defs: Vec<hir::Def<hir::Lowered>>,
     ) -> RecursiveDefsCtx<'types> {
         let mut self_locals = HashMap::new();
@@ -1951,14 +1952,14 @@ pub fn ensure_main_type(
 
 pub fn infer_module(
     imported_inferred_vars: &InferredModuleVars,
-    module_id: hir::ModuleId,
+    module_id: ModuleId,
     defs: Vec<hir::Def<hir::Lowered>>,
 ) -> result::Result<InferredModule, Vec<Error>> {
     RecursiveDefsCtx::new(imported_inferred_vars, module_id, defs).into_inferred_module()
 }
 pub fn infer_expr(
     all_inferred_vars: &InferredModuleVars,
-    module_id: hir::ModuleId,
+    module_id: ModuleId,
     expr: hir::Expr<hir::Lowered>,
 ) -> Result<InferredNode> {
     let mut rdcx = RecursiveDefsCtx::new(&all_inferred_vars, module_id, vec![]);
@@ -1976,7 +1977,7 @@ mod test {
 
     fn type_for_expr(
         required_type: &ty::Ref<ty::Poly>,
-        module_id: hir::ModuleId,
+        module_id: ModuleId,
         expr: hir::Expr<hir::Lowered>,
     ) -> Result<ty::Ref<ty::Poly>> {
         let imported_vars = HashMap::new();

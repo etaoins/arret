@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 
-new_global_id_type!(ModuleId, u32, AtomicU32, NonZeroU32);
+use crate::context::ModuleId;
 
 /// Identifier for a local variable within a module
 ///
@@ -32,15 +32,15 @@ impl VarId {
     }
 }
 
-pub struct ModuleVarIdAlloc {
+pub struct VarIdAlloc {
     module_id: ModuleId,
     local_id_counter: AtomicU32,
 }
 
-impl ModuleVarIdAlloc {
-    pub fn new() -> Self {
+impl VarIdAlloc {
+    pub fn new(module_id: ModuleId) -> Self {
         Self {
-            module_id: ModuleId::alloc(),
+            module_id,
             local_id_counter: AtomicU32::new(1),
         }
     }

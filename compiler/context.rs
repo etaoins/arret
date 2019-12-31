@@ -25,6 +25,13 @@ use crate::source::SourceFile;
 use crate::ty;
 use crate::typeck::infer;
 
+new_global_id_type!(
+    ModuleId,
+    u32,
+    std::sync::atomic::AtomicU32,
+    std::num::NonZeroU32
+);
+
 pub(crate) struct ModuleImports {
     pub imports: HashSet<Arc<Module>>,
     pub imported_exports: HashMap<ModuleName, Arc<Exports>>,
@@ -34,7 +41,7 @@ pub(crate) struct ModuleImports {
 ///
 /// This represents both Arret and RFI libraries
 pub(crate) struct Module {
-    pub module_id: hir::ModuleId,
+    pub module_id: ModuleId,
 
     pub imports: HashSet<Arc<Module>>,
     pub defs: Vec<hir::Def<hir::Inferred>>,
@@ -77,12 +84,12 @@ fn transitive_deps(imports: &HashSet<Arc<Module>>) -> HashSet<Arc<Module>> {
 
 /// Runs type inference on a HIR lowered module
 fn infer_lowered_module(
+    module_id: ModuleId,
     lowered_module: LoweredModule,
     imports: HashSet<Arc<Module>>,
     rfi_library: Option<rfi::Library>,
 ) -> UncachedModule {
     let LoweredModule {
-        module_id,
         defs: lowered_defs,
         exports,
         main_var_id,
@@ -115,8 +122,10 @@ fn infer_lowered_module(
 fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> UncachedModule {
     use crate::hir::lowering::lower_rfi_library;
 
-    let lowered_module = lower_rfi_library(span, &rfi_library);
-    infer_lowered_module(lowered_module, HashSet::new(), Some(rfi_library))
+    let module_id = ModuleId::alloc();
+    let lowered_module = lower_rfi_library(module_id, span, &rfi_library);
+
+    infer_lowered_module(module_id, lowered_module, HashSet::new(), Some(rfi_library))
 }
 
 /// Shared context for compilation
@@ -145,6 +154,7 @@ impl CompileCtx {
         {
             // These modules are always loaded
             let prims_module = infer_lowered_module(
+                ModuleId::alloc(),
                 LoweredModule::from_primitives(exports),
                 HashSet::new(),
                 None,
@@ -267,8 +277,12 @@ impl CompileCtx {
             imported_exports,
         } = self.imports_for_data(data.iter())?;
 
-        hir::lowering::lower_data(&imported_exports, data)
+        let module_id = ModuleId::alloc();
+
+        hir::lowering::lower_data(module_id, &imported_exports, data)
             .map_err(errors_to_diagnostics)
-            .and_then(|lowered_module| infer_lowered_module(lowered_module, imports, None))
+            .and_then(|lowered_module| {
+                infer_lowered_module(module_id, lowered_module, imports, None)
+            })
     }
 }
