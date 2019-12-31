@@ -18,7 +18,7 @@ use crate::hir::import;
 use crate::hir::loader::{LoadedModule, ModuleName};
 use crate::hir::lowering::LoweredModule;
 use crate::id_type::ArcId;
-use crate::promise;
+use crate::promise::PromiseMap;
 use crate::reporting::diagnostic_for_syntax_error;
 use crate::reporting::errors_to_diagnostics;
 use crate::source::SourceFile;
@@ -116,7 +116,7 @@ pub struct CompileCtx {
     source_loader: SourceLoader,
     rfi_loader: rfi::Loader,
 
-    modules_by_name: promise::PromiseMap<ModuleName, CachedModule>,
+    modules_by_name: PromiseMap<ModuleName, CachedModule>,
 }
 
 impl CompileCtx {
@@ -124,8 +124,7 @@ impl CompileCtx {
         use crate::hir::exports;
         use std::iter;
 
-        let mut modules_by_name: promise::PromiseMap<ModuleName, CachedModule> =
-            promise::PromiseMap::new();
+        let mut modules_by_name = PromiseMap::<ModuleName, CachedModule>::new();
 
         for (terminal_name, exports) in iter::once(("primitives", exports::prims_exports()))
             .chain(iter::once(("types", exports::tys_exports())))
@@ -212,18 +211,20 @@ impl CompileCtx {
     ) -> Result<ModuleImports, Vec<Diagnostic>> {
         let imported_module_names =
             import::collect_imported_module_names(data).map_err(errors_to_diagnostics)?;
+        let import_count = imported_module_names.len();
 
         let loaded_module_results: Vec<(ModuleName, CachedModule)> = imported_module_names
             .into_par_iter()
             .map(|(module_name, span)| {
-                let cached_module = self.get_module_by_name(span, module_name.clone());
-                (module_name, cached_module)
+                let module = self.get_module_by_name(span, module_name.clone());
+                (module_name, module)
             })
             .collect();
 
         let mut diagnostics: Vec<Diagnostic> = vec![];
-        let mut imports: HashSet<ArcId<Module>> = HashSet::new();
-        let mut imported_exports: HashMap<ModuleName, Arc<Exports>> = HashMap::new();
+
+        let mut imports = HashSet::<ArcId<Module>>::with_capacity(import_count);
+        let mut imported_exports = HashMap::<ModuleName, Arc<Exports>>::with_capacity(import_count);
 
         for (module_name, loaded_module_result) in loaded_module_results {
             match loaded_module_result {
