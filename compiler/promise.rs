@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::ops::Deref;
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 
 struct Inner<T>
 where
@@ -102,7 +102,7 @@ where
     K: std::hash::Hash,
     V: Send + Clone,
 {
-    promises: Mutex<HashMap<K, Promise<V>>>,
+    promises: RwLock<HashMap<K, Promise<V>>>,
 }
 
 impl<K, V> PromiseMap<K, V>
@@ -113,7 +113,7 @@ where
     /// Creates a new empty `PromiseMap`
     pub fn new() -> Self {
         PromiseMap {
-            promises: Mutex::new(HashMap::new()),
+            promises: RwLock::new(HashMap::new()),
         }
     }
 
@@ -133,17 +133,29 @@ where
     where
         F: FnOnce() -> V,
     {
-        let mut promises_lock = self.promises.lock().unwrap();
-        if let Some(promise) = promises_lock.get(&key) {
+        // Opportunisticly try to fetch the promise with a read lock
+        let promises_read = self.promises.read().unwrap();
+        if let Some(promise) = promises_read.get(&key) {
             let cloned_promise = promise.clone();
-            drop(promises_lock);
+            drop(promises_read);
+
+            return cloned_promise.value();
+        }
+
+        drop(promises_read);
+
+        // Try again with a write lock to ensure another thread didn't already insert
+        let mut promises_write = self.promises.write().unwrap();
+        if let Some(promise) = promises_write.get(&key) {
+            let cloned_promise = promise.clone();
+            drop(promises_write);
 
             return cloned_promise.value();
         }
 
         let (completer, promise) = promise();
-        promises_lock.insert(key, promise);
-        drop(promises_lock);
+        promises_write.insert(key, promise);
+        drop(promises_write);
 
         // Build a new value. This is presumably expensive
         let value = func();
