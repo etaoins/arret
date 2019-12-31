@@ -36,7 +36,6 @@ use crate::hir::{
     App, Cond, DeclPurity, DeclTy, Def, Expr, ExprKind, FieldAccessor, Fun, Let, ModuleId, Recur,
     VarId,
 };
-use crate::id_type::ArcId;
 
 /// Module lowered to HIR
 pub struct LoweredModule {
@@ -92,7 +91,7 @@ impl DeferredModulePrim {
 
 pub(crate) enum LoweredReplDatum {
     /// One or more modules were imported
-    Import(HashSet<ArcId<context::Module>>),
+    Import(HashSet<Arc<context::Module>>),
     /// An evaluable definition
     EvaluableDef(ModuleId, Def<Lowered>),
     /// A non-evalable definition handled by HIR lowering

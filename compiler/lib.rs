@@ -41,7 +41,7 @@ fn include_imports(
     ehx: &mut EvalHirCtx,
     visited_modules: &mut HashSet<hir::ModuleId>,
     rfi_libraries: &mut Vec<Arc<rfi::Library>>,
-    root_module: &ArcId<context::Module>,
+    root_module: &context::Module,
 ) -> Result<(), Vec<Diagnostic>> {
     if visited_modules.contains(&root_module.module_id) {
         return Ok(());

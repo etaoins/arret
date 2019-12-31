@@ -9,7 +9,6 @@ use codespan_reporting::{Diagnostic, Label};
 use crate::context;
 use crate::hir;
 use crate::hir::scope::Scope;
-use crate::id_type::ArcId;
 use crate::reporting::{diagnostic_for_syntax_error, errors_to_diagnostics};
 use crate::ty;
 use crate::CompileCtx;
@@ -94,7 +93,7 @@ impl<'ccx> ReplCtx<'ccx> {
     /// Visits a subtree of modules and adds any missing defs and inferred module vars
     fn visit_module_tree(
         &mut self,
-        root_module: &ArcId<context::Module>,
+        root_module: &Arc<context::Module>,
     ) -> Result<(), Vec<Diagnostic>> {
         if self.seen_modules.contains(&root_module.module_id) {
             return Ok(());

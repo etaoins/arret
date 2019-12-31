@@ -3,6 +3,7 @@ use crate::rfi;
 use crate::source::SourceLoader;
 
 use std::collections::{HashMap, HashSet};
+use std::hash;
 use std::sync::Arc;
 
 use codespan_reporting::Diagnostic;
@@ -17,7 +18,6 @@ use crate::hir::exports::Exports;
 use crate::hir::import;
 use crate::hir::loader::{LoadedModule, ModuleName};
 use crate::hir::lowering::LoweredModule;
-use crate::id_type::ArcId;
 use crate::promise::PromiseMap;
 use crate::reporting::diagnostic_for_syntax_error;
 use crate::reporting::errors_to_diagnostics;
@@ -26,7 +26,7 @@ use crate::ty;
 use crate::typeck::infer;
 
 pub(crate) struct ModuleImports {
-    pub imports: HashSet<ArcId<Module>>,
+    pub imports: HashSet<Arc<Module>>,
     pub imported_exports: HashMap<ModuleName, Arc<Exports>>,
 }
 
@@ -36,7 +36,7 @@ pub(crate) struct ModuleImports {
 pub(crate) struct Module {
     pub module_id: hir::ModuleId,
 
-    pub imports: HashSet<ArcId<Module>>,
+    pub imports: HashSet<Arc<Module>>,
     pub defs: Vec<hir::Def<hir::Inferred>>,
     pub inferred_locals: Arc<HashMap<hir::LocalId, ty::Ref<ty::Poly>>>,
     pub exports: Arc<Exports>,
@@ -45,13 +45,27 @@ pub(crate) struct Module {
     pub rfi_library: Option<Arc<rfi::Library>>,
 }
 
-pub(crate) type CachedModule = Result<ArcId<Module>, Vec<Diagnostic>>;
+impl PartialEq for Module {
+    fn eq(&self, other: &Self) -> bool {
+        self.module_id == other.module_id
+    }
+}
+
+impl Eq for Module {}
+
+impl hash::Hash for Module {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        state.write_u32(self.module_id.get());
+    }
+}
+
+pub(crate) type CachedModule = Result<Arc<Module>, Vec<Diagnostic>>;
 pub(crate) type UncachedModule = Result<Module, Vec<Diagnostic>>;
 
 /// Finds all transitive dependencies for a set of imports
 ///
 /// This is inclusive of the imports themselves.
-fn transitive_deps(imports: &HashSet<ArcId<Module>>) -> HashSet<ArcId<Module>> {
+fn transitive_deps(imports: &HashSet<Arc<Module>>) -> HashSet<Arc<Module>> {
     let mut all_deps = imports.clone();
 
     for import in imports.iter() {
@@ -64,7 +78,7 @@ fn transitive_deps(imports: &HashSet<ArcId<Module>>) -> HashSet<ArcId<Module>> {
 /// Runs type inference on a HIR lowered module
 fn infer_lowered_module(
     lowered_module: LoweredModule,
-    imports: HashSet<ArcId<Module>>,
+    imports: HashSet<Arc<Module>>,
     rfi_library: Option<rfi::Library>,
 ) -> UncachedModule {
     let LoweredModule {
@@ -142,7 +156,7 @@ impl CompileCtx {
                     vec!["internal".into()],
                     (*terminal_name).into(),
                 ),
-                prims_module.map(ArcId::new),
+                prims_module.map(Arc::new),
             );
         }
 
@@ -183,10 +197,10 @@ impl CompileCtx {
                 module_name.clone(),
                 move || match hir::loader::load_module_by_name(self, span, &module_name) {
                     Ok(LoadedModule::Source(source_file)) => {
-                        self.source_file_to_module(&source_file).map(ArcId::new)
+                        self.source_file_to_module(&source_file).map(Arc::new)
                     }
                     Ok(LoadedModule::Rust(rfi_library)) => {
-                        rfi_library_to_module(span, rfi_library).map(ArcId::new)
+                        rfi_library_to_module(span, rfi_library).map(Arc::new)
                     }
                     Err(err) => Err(vec![err.into()]),
                 },
@@ -223,7 +237,7 @@ impl CompileCtx {
 
         let mut diagnostics: Vec<Diagnostic> = vec![];
 
-        let mut imports = HashSet::<ArcId<Module>>::with_capacity(import_count);
+        let mut imports = HashSet::<Arc<Module>>::with_capacity(import_count);
         let mut imported_exports = HashMap::<ModuleName, Arc<Exports>>::with_capacity(import_count);
 
         for (module_name, loaded_module_result) in loaded_module_results {
