@@ -1957,6 +1957,7 @@ pub fn infer_module(
 ) -> result::Result<InferredModule, Vec<Error>> {
     RecursiveDefsCtx::new(imported_inferred_vars, module_id, defs).into_inferred_module()
 }
+
 pub fn infer_expr(
     all_inferred_vars: &InferredModuleVars,
     module_id: ModuleId,
