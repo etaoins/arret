@@ -15,7 +15,7 @@ use crate::CompileCtx;
 
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::Value;
-use crate::typeck::infer::{infer_expr, infer_module};
+use crate::typeck::infer::{infer_module, infer_repl_expr};
 
 pub struct ReplCtx<'ccx> {
     scope: Scope<'static>,
@@ -180,7 +180,7 @@ impl<'ccx> ReplCtx<'ccx> {
                 Ok(EvaledLine::Defs)
             }
             LoweredReplDatum::Expr(module_id, decl_expr) => {
-                let node = infer_expr(&self.inferred_module_vars, module_id, decl_expr)?;
+                let node = infer_repl_expr(&self.inferred_module_vars, module_id, decl_expr)?;
                 let type_str = hir::str_for_ty_ref(node.result_ty());
 
                 match kind {

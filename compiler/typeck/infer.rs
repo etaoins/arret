@@ -1958,13 +1958,12 @@ pub fn infer_module(
     RecursiveDefsCtx::new(imported_inferred_vars, module_id, defs).into_inferred_module()
 }
 
-pub fn infer_expr(
+pub fn infer_repl_expr(
     all_inferred_vars: &InferredModuleVars,
     module_id: ModuleId,
     expr: hir::Expr<hir::Lowered>,
 ) -> Result<InferredNode> {
     let mut rdcx = RecursiveDefsCtx::new(&all_inferred_vars, module_id, vec![]);
-
     let mut pv = PurityVar::Known(Purity::Impure.into());
 
     rdcx.visit_expr(&mut pv, &ResultUse::InnerExpr(&Ty::Any.into()), expr)
