@@ -2,6 +2,8 @@ mod expander;
 mod linker;
 mod matcher;
 
+use std::sync::Arc;
+
 use arret_syntax::span::Span;
 
 use crate::hir::error::{Error, ErrorKind, Result};
@@ -11,9 +13,7 @@ use crate::hir::macros::matcher::match_rule;
 use crate::hir::ns::{Ident, NsDatum};
 use crate::hir::scope::Scope;
 
-use crate::id_type::ArcId;
-
-#[derive(PartialEq, Debug)]
+#[derive(Debug)]
 pub struct Rule {
     pattern_span: Span,
     pattern: Box<[NsDatum]>,
@@ -26,11 +26,9 @@ pub struct Macro {
     rules: Box<[Rule]>,
 }
 
-pub type MacroId = ArcId<Macro>;
-
 impl Macro {
-    pub fn new(rules: Box<[Rule]>) -> MacroId {
-        MacroId::new(Macro { rules })
+    pub fn new(rules: Box<[Rule]>) -> Arc<Self> {
+        Arc::new(Self { rules })
     }
 }
 
@@ -100,7 +98,7 @@ pub fn lower_macro_rules(
     scope: &Scope<'_>,
     self_ident: &Ident,
     macro_rules_data: Vec<NsDatum>,
-) -> Result<MacroId> {
+) -> Result<Arc<Macro>> {
     let rules = macro_rules_data
         .into_iter()
         .map(|rule_datum| lower_macro_rule_datum(scope, self_ident, rule_datum))
@@ -112,7 +110,7 @@ pub fn lower_macro_rules(
 pub fn expand_macro<'s, 'p>(
     scope: &'s mut Scope<'p>,
     invocation_span: Span,
-    mac: &MacroId,
+    mac: &Arc<Macro>,
     arg_data: &[NsDatum],
 ) -> Result<NsDatum> {
     for rule in mac.rules.iter() {

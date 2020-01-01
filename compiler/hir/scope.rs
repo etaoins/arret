@@ -1,9 +1,10 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use arret_syntax::span::Span;
 
 use crate::hir::error::{Error, ErrorKind};
-use crate::hir::macros::MacroId;
+use crate::hir::macros::Macro;
 use crate::hir::ns::{Ident, NsDatum, NsId, NsIdCounter};
 use crate::hir::prim::Prim;
 use crate::hir::{types, VarId};
@@ -11,11 +12,11 @@ use crate::ty;
 use crate::ty::purity;
 use crate::ty::record;
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub enum Binding {
     Var(VarId),
     Prim(Prim),
-    Macro(MacroId),
+    Macro(Arc<Macro>),
     Ty(ty::Ref<ty::Poly>),
     TyCons(types::TyCons),
     TyPred(ty::pred::TestTy),

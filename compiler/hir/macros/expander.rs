@@ -1,10 +1,11 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use arret_syntax::span::Span;
 
 use crate::hir::macros::linker::{TemplateIdent, VarLinks};
 use crate::hir::macros::matcher::MatchData;
-use crate::hir::macros::{get_escaped_ident, starts_with_zero_or_more, MacroId};
+use crate::hir::macros::{get_escaped_ident, starts_with_zero_or_more, Macro};
 use crate::hir::ns::{Ident, NsDatum, NsId};
 use crate::hir::scope::{Binding, Scope};
 
@@ -31,7 +32,7 @@ impl<'scope, 'parent> ExpandCtx<'scope, 'parent> {
 
     fn expand_ident(
         &mut self,
-        self_mac: &MacroId,
+        self_mac: &Arc<Macro>,
         cursor: &mut ExpandCursor<'_, '_>,
         span: Span,
         ident: &Ident,
@@ -71,7 +72,7 @@ impl<'scope, 'parent> ExpandCtx<'scope, 'parent> {
 
     fn expand_zero_or_more(
         &mut self,
-        self_mac: &MacroId,
+        self_mac: &Arc<Macro>,
         cursor: &mut ExpandCursor<'_, '_>,
         template: &NsDatum,
     ) -> Vec<NsDatum> {
@@ -102,7 +103,7 @@ impl<'scope, 'parent> ExpandCtx<'scope, 'parent> {
 
     fn expand_slice(
         &mut self,
-        self_mac: &MacroId,
+        self_mac: &Arc<Macro>,
         cursor: &mut ExpandCursor<'_, '_>,
         mut templates: &[NsDatum],
     ) -> Box<[NsDatum]> {
@@ -128,7 +129,7 @@ impl<'scope, 'parent> ExpandCtx<'scope, 'parent> {
 
     fn expand_list(
         &mut self,
-        self_mac: &MacroId,
+        self_mac: &Arc<Macro>,
         cursor: &mut ExpandCursor<'_, '_>,
         span: Span,
         templates: &[NsDatum],
@@ -142,7 +143,7 @@ impl<'scope, 'parent> ExpandCtx<'scope, 'parent> {
 
     fn expand_datum(
         &mut self,
-        self_mac: &MacroId,
+        self_mac: &Arc<Macro>,
         cursor: &mut ExpandCursor<'_, '_>,
         template: &NsDatum,
     ) -> NsDatum {
@@ -160,7 +161,7 @@ impl<'scope, 'parent> ExpandCtx<'scope, 'parent> {
 
 pub fn expand_rule<'scope, 'parent, 'data>(
     scope: &'scope mut Scope<'parent>,
-    self_mac: &MacroId,
+    self_mac: &Arc<Macro>,
     match_data: &'data MatchData<'data>,
     var_links: &VarLinks,
     template: &NsDatum,

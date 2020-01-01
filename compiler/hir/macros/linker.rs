@@ -9,7 +9,7 @@ use crate::hir::ns::{Ident, NsDatum};
 use crate::hir::scope::{Binding, Scope};
 
 /// Indicates the meaning of a given ident in the template
-#[derive(PartialEq, Debug)]
+#[derive(Debug)]
 pub enum TemplateIdent {
     /// Refers to a template variable with a given index
     SubpatternVar(usize),
@@ -22,7 +22,7 @@ pub enum TemplateIdent {
 }
 
 /// Precomputed links from variables in the template to the pattern
-#[derive(PartialEq, Debug)]
+#[derive(Debug)]
 pub struct VarLinks {
     subpattern_index: usize,
     template_idents: Box<[TemplateIdent]>,

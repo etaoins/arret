@@ -124,7 +124,8 @@ fn lower_macro(
             return Err(Error::new(span, ErrorKind::NoMacroType));
         };
 
-        if scope.get_datum(macro_type_datum) != Some(&Binding::Prim(Prim::MacroRules)) {
+        if let Some(Binding::Prim(Prim::MacroRules)) = scope.get_datum(macro_type_datum) {
+        } else {
             return Err(Error::new(macro_type_datum.span(), ErrorKind::BadMacroType));
         }
 

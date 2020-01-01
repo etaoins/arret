@@ -93,13 +93,27 @@ mod test {
         }
     }
 
+    fn assert_exports_prim(exports: &Exports, name: &'static str, expected_prim: Prim) {
+        match exports.get(name) {
+            Some(Binding::Prim(actual_prim)) => {
+                assert_eq!(actual_prim, &expected_prim);
+            }
+            Some(other) => {
+                panic!("Non-prim binding {:?} for {}", other, name);
+            }
+            None => {
+                panic!("Missing binding for {}", name);
+            }
+        }
+    }
+
     #[test]
     fn basic_import() {
         let j = "[lib test]";
         let exports = exports_for_import_set(j).unwrap();
 
-        assert_eq!(exports["quote"], Binding::Prim(Prim::Quote));
-        assert_eq!(exports["if"], Binding::Prim(Prim::If));
+        assert_exports_prim(&exports, "quote", Prim::Quote);
+        assert_exports_prim(&exports, "if", Prim::If);
     }
 
     #[test]
@@ -115,7 +129,7 @@ mod test {
         let j = "(:only [lib test] quote)";
         let exports = exports_for_import_set(j).unwrap();
 
-        assert_eq!(exports["quote"], Binding::Prim(Prim::Quote));
+        assert_exports_prim(&exports, "quote", Prim::Quote);
         assert_eq!(false, exports.contains_key("if"));
 
         let j = "(:only [lib test] quote ifz)";
@@ -130,7 +144,7 @@ mod test {
         let j = "(:exclude [lib test] if)";
         let exports = exports_for_import_set(j).unwrap();
 
-        assert_eq!(exports["quote"], Binding::Prim(Prim::Quote));
+        assert_exports_prim(&exports, "quote", Prim::Quote);
         assert_eq!(false, exports.contains_key("if"));
 
         let j = "(:exclude [lib test] ifz)";
@@ -145,8 +159,8 @@ mod test {
         let j = "(:rename [lib test] {quote new-quote, if new-if})";
         let exports = exports_for_import_set(j).unwrap();
 
-        assert_eq!(exports["new-quote"], Binding::Prim(Prim::Quote));
-        assert_eq!(exports["new-if"], Binding::Prim(Prim::If));
+        assert_exports_prim(&exports, "new-quote", Prim::Quote);
+        assert_exports_prim(&exports, "new-if", Prim::If);
 
         let j = "(:rename [lib test] {ifz new-ifz})";
         let t = "                     ^^^          ";
@@ -160,8 +174,8 @@ mod test {
         let j = "(:prefix [lib test] new-)";
         let exports = exports_for_import_set(j).unwrap();
 
-        assert_eq!(exports["new-quote"], Binding::Prim(Prim::Quote));
-        assert_eq!(exports["new-if"], Binding::Prim(Prim::If));
+        assert_exports_prim(&exports, "new-quote", Prim::Quote);
+        assert_exports_prim(&exports, "new-if", Prim::If);
     }
 
     #[test]
@@ -169,7 +183,7 @@ mod test {
         let j = "(:prefixed [lib test])";
         let exports = exports_for_import_set(j).unwrap();
 
-        assert_eq!(exports["test/quote"], Binding::Prim(Prim::Quote));
-        assert_eq!(exports["test/if"], Binding::Prim(Prim::If));
+        assert_exports_prim(&exports, "test/quote", Prim::Quote);
+        assert_exports_prim(&exports, "test/if", Prim::If);
     }
 }

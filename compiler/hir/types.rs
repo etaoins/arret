@@ -372,7 +372,7 @@ fn lower_poly_data_iter(
         return Ok(ty::List::empty().into());
     }
 
-    if scope.get_datum(&data_iter.as_slice()[0]) == Some(&Binding::Prim(Prim::All)) {
+    if let Some(Binding::Prim(Prim::All)) = scope.get_datum(&data_iter.as_slice()[0]) {
         // Discard the `All`
         data_iter.next();
 
