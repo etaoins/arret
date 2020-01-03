@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::mpsc;
 use std::sync::Arc;
+use std::thread;
 
 use arret_syntax::datum::DataStr;
 
@@ -16,16 +18,6 @@ use crate::CompileCtx;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::Value;
 use crate::typeck::infer::{infer_module, infer_repl_expr};
-
-pub struct ReplCtx<'ccx> {
-    scope: Scope<'static>,
-    ccx: &'ccx CompileCtx,
-
-    inferred_module_vars: HashMap<context::ModuleId, Arc<HashMap<hir::LocalId, ty::Ref<ty::Poly>>>>,
-    seen_modules: HashSet<context::ModuleId>,
-
-    ehx: EvalHirCtx,
-}
 
 /// Indicates the kind of evaluation to perform on the input
 ///
@@ -58,17 +50,37 @@ pub struct EvaledExprValue {
 
 #[derive(Debug, PartialEq)]
 pub enum EvaledLine {
+    /// Line was all whitepsace
     EmptyInput,
-    Defs,
+
+    /// Line added new definitions
+    ///
+    /// All bound identifiers in the root scope are returned. This is useful for tab &
+    /// autocompletion.
+    Defs(Vec<DataStr>),
+
+    /// Line was evaluated to a type with the given name
     ExprType(String),
+
+    /// Line was evaluate to a value
     ExprValue(EvaledExprValue),
 }
 
-impl<'ccx> ReplCtx<'ccx> {
-    pub fn new(ccx: &'ccx CompileCtx) -> Self {
+struct ReplEngine<'ccx> {
+    scope: Scope<'static>,
+    ccx: &'ccx CompileCtx,
+
+    inferred_module_vars: HashMap<context::ModuleId, Arc<HashMap<hir::LocalId, ty::Ref<ty::Poly>>>>,
+    seen_modules: HashSet<context::ModuleId>,
+
+    ehx: EvalHirCtx,
+}
+
+impl<'ccx> ReplEngine<'ccx> {
+    fn new(ccx: &'ccx CompileCtx) -> Self {
         let scope = Scope::new_repl();
 
-        ReplCtx {
+        Self {
             scope,
             ccx,
 
@@ -80,14 +92,17 @@ impl<'ccx> ReplCtx<'ccx> {
     }
 
     /// Returns all names bound in the root scope and namespace
-    pub fn bound_names(&self) -> impl Iterator<Item = &DataStr> {
-        self.scope.bound_idents().filter_map(move |ident| {
-            if ident.ns_id() == Scope::root_ns_id() {
-                Some(ident.name())
-            } else {
-                None
-            }
-        })
+    fn bound_names(&self) -> Vec<DataStr> {
+        self.scope
+            .bound_idents()
+            .filter_map(move |ident| {
+                if ident.ns_id() == Scope::root_ns_id() {
+                    Some(ident.name().clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     /// Visits a subtree of modules and adds any missing defs and inferred module vars
@@ -116,13 +131,10 @@ impl<'ccx> ReplCtx<'ccx> {
         Ok(())
     }
 
-    pub fn eval_line(
-        &mut self,
-        input: String,
-        kind: EvalKind,
-    ) -> Result<EvaledLine, Vec<Diagnostic>> {
+    fn eval_line(&mut self, input: String, kind: EvalKind) -> Result<EvaledLine, Vec<Diagnostic>> {
         use crate::hir::lowering::LoweredReplDatum;
         use std::io::Write;
+
         let source_file = self
             .ccx
             .source_loader()
@@ -147,10 +159,6 @@ impl<'ccx> ReplCtx<'ccx> {
             }
         };
 
-        if self.ehx.should_collect() {
-            self.ehx.collect_garbage();
-        }
-
         match hir::lowering::lower_repl_datum(&self.ccx, &mut self.scope, input_datum)
             .map_err(errors_to_diagnostics)?
         {
@@ -159,7 +167,7 @@ impl<'ccx> ReplCtx<'ccx> {
                     self.visit_module_tree(&module)?;
                 }
 
-                Ok(EvaledLine::Defs)
+                Ok(EvaledLine::Defs(self.bound_names()))
             }
             LoweredReplDatum::EvaluableDef(module_id, def) => {
                 let inferred_module =
@@ -173,11 +181,11 @@ impl<'ccx> ReplCtx<'ccx> {
                     self.ehx.consume_def(inferred_def)?;
                 }
 
-                Ok(EvaledLine::Defs)
+                Ok(EvaledLine::Defs(self.bound_names()))
             }
             LoweredReplDatum::NonEvaluableDef => {
                 // This was handled entirely by HIR lowering
-                Ok(EvaledLine::Defs)
+                Ok(EvaledLine::Defs(self.bound_names()))
             }
             LoweredReplDatum::Expr(module_id, decl_expr) => {
                 let node = infer_repl_expr(&self.inferred_module_vars, module_id, decl_expr)?;
@@ -235,36 +243,103 @@ impl<'ccx> ReplCtx<'ccx> {
     }
 }
 
+pub struct ReplCtx {
+    send_line: mpsc::Sender<(String, EvalKind)>,
+    receive_result: mpsc::Receiver<Result<EvaledLine, Vec<Diagnostic>>>,
+}
+
+impl ReplCtx {
+    /// Creates a new `ReplCtx`
+    ///
+    /// This will launch a REPL engine thread which can asynchronously evaluate lines.
+    pub fn new(ccx: Arc<CompileCtx>) -> Self {
+        let (send_line, receive_line) = mpsc::channel();
+        let (send_result, receive_result) = mpsc::channel();
+
+        thread::spawn(move || {
+            let mut engine = ReplEngine::new(&ccx);
+
+            loop {
+                match receive_line.recv() {
+                    Ok((input, kind)) => {
+                        let result = engine.eval_line(input, kind);
+                        send_result.send(result).unwrap();
+
+                        if engine.ehx.should_collect() {
+                            engine.ehx.collect_garbage();
+                        }
+                    }
+                    Err(_) => {
+                        return;
+                    }
+                }
+            }
+        });
+
+        Self {
+            send_line,
+            receive_result,
+        }
+    }
+
+    /// Sends a line to be evaluated by the REPL engine
+    ///
+    /// This is asynchronous and an unlimited number of lines can be sent before reading their
+    /// results. This allows the calling thread to remain responsive to user input while evaluation,
+    /// garbage collection, etc occurs.
+    pub fn send_line(&self, input: String, kind: EvalKind) -> Result<(), ()> {
+        self.send_line.send((input, kind)).map_err(|_| ())
+    }
+
+    /// Receives the next result from the REPL engine
+    ///
+    /// These will be returned in the order they were submitted with `send_line`.
+    pub fn receive_result(&self) -> Result<EvaledLine, Vec<Diagnostic>> {
+        self.receive_result.recv().unwrap()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
-    fn assert_defs(rcx: &mut ReplCtx<'_>, line: &'static str) {
-        assert_eq!(
-            EvaledLine::Defs,
-            rcx.eval_line(line.to_owned(), EvalKind::Value).unwrap()
-        );
+    fn eval_line_sync(
+        rcx: &mut ReplCtx,
+        input: String,
+        kind: EvalKind,
+    ) -> Result<EvaledLine, Vec<Diagnostic>> {
+        rcx.send_line(input, kind).unwrap();
+        rcx.receive_result()
     }
 
-    fn assert_empty(rcx: &mut ReplCtx<'_>, line: &'static str) {
+    fn assert_defs(rcx: &mut ReplCtx, line: &'static str) {
+        match eval_line_sync(rcx, line.to_owned(), EvalKind::Value).unwrap() {
+            EvaledLine::Defs(_) => {}
+            other => {
+                panic!("Expected defs, got {:?}", other);
+            }
+        }
+    }
+
+    fn assert_empty(rcx: &mut ReplCtx, line: &'static str) {
         assert_eq!(
             EvaledLine::EmptyInput,
-            rcx.eval_line(line.to_owned(), EvalKind::Value).unwrap()
+            eval_line_sync(rcx, line.to_owned(), EvalKind::Value).unwrap()
         );
     }
 
     fn assert_expr(
-        rcx: &mut ReplCtx<'_>,
+        rcx: &mut ReplCtx,
         expected_value: &'static str,
         expected_type: &'static str,
         line: &'static str,
     ) {
         assert_eq!(
             EvaledLine::ExprType(expected_type.to_owned()),
-            rcx.eval_line(line.to_owned(), EvalKind::Type).unwrap()
+            eval_line_sync(rcx, line.to_owned(), EvalKind::Type).unwrap()
         );
 
-        match rcx.eval_line(line.into(), EvalKind::Value).unwrap() {
+        match eval_line_sync(rcx, line.into(), EvalKind::Value).unwrap() {
             EvaledLine::ExprValue(EvaledExprValue {
                 value_str,
                 type_str,
@@ -286,18 +361,22 @@ mod test {
 
         initialise_test_llvm();
 
-        let ccx = CompileCtx::new(PackagePaths::test_paths(None), true);
-        let mut rcx = ReplCtx::new(&ccx);
+        let ccx = Arc::new(CompileCtx::new(PackagePaths::test_paths(None), true));
+        let mut rcx = ReplCtx::new(ccx);
 
         assert_empty(&mut rcx, "       ");
         assert_empty(&mut rcx, "; COMMENT!");
 
         assert_expr(&mut rcx, "1", "Int", "1");
 
-        rcx.eval_line("(import [stdlib base])".to_owned(), EvalKind::Value)
-            .expect(
-                "unable to load stdlib library; you may need to `cargo build` before running tests",
-            );
+        eval_line_sync(
+            &mut rcx,
+            "(import [stdlib base])".to_owned(),
+            EvalKind::Value,
+        )
+        .expect(
+            "unable to load stdlib library; you may need to `cargo build` before running tests",
+        );
 
         // Make sure we can references vars from the imported module
         assert_expr(&mut rcx, "true", "true", "(int? 5)");

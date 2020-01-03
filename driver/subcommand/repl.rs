@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::io::prelude::*;
 use std::io::BufReader;
+use std::sync::Arc;
 use std::{fs, path};
 
 use ansi_term::{Colour, Style};
@@ -74,15 +75,13 @@ struct ArretHelper {
 }
 
 impl ArretHelper {
-    fn new<'a>(names_iter: impl Iterator<Item = &'a DataStr>) -> ArretHelper {
-        let mut all_names = names_iter
-            .cloned()
-            .chain(UNBOUND_COMPLETIONS.iter().map(|unbound| (*unbound).into()))
-            .collect::<Vec<DataStr>>();
+    fn new(mut bound_names: Vec<DataStr>) -> ArretHelper {
+        bound_names.extend(UNBOUND_COMPLETIONS.iter().map(|unbound| (*unbound).into()));
+        bound_names.sort();
 
-        all_names.sort();
-
-        ArretHelper { all_names }
+        ArretHelper {
+            all_names: bound_names,
+        }
     }
 }
 
@@ -271,12 +270,12 @@ fn parse_command(mut line: String) -> ParsedCommand {
     }
 }
 
-pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
+pub fn interactive_loop(ccx: Arc<CompileCtx>, include_path: Option<path::PathBuf>) {
     use arret_compiler::repl::{EvalKind, EvaledExprValue, EvaledLine};
     use rustyline::error::ReadlineError;
 
     // Setup our REPL backend
-    let mut repl_ctx = arret_compiler::repl::ReplCtx::new(ccx);
+    let repl_ctx = arret_compiler::repl::ReplCtx::new(ccx.clone());
 
     // Setup Rustyline
     let rl_config = rustyline::Config::builder()
@@ -287,27 +286,34 @@ pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
 
     // Import [stdlib base] so we have most useful things defined
     let initial_import = "(import [stdlib base])".to_owned();
-    if let Err(diagnostics) = repl_ctx.eval_line(initial_import, EvalKind::Value) {
-        emit_diagnostics_to_stderr(ccx.source_loader(), diagnostics);
-    }
+    repl_ctx.send_line(initial_import, EvalKind::Value).unwrap();
+    let mut sent_prelude_lines = 1;
 
-    // Process the include file if specified
     if let Some(include_path) = include_path {
         let include_file = fs::File::open(include_path).unwrap();
-        for include_line in BufReader::new(include_file).lines() {
-            if let Err(diagnostics) = repl_ctx.eval_line(include_line.unwrap(), EvalKind::Value) {
-                emit_diagnostics_to_stderr(ccx.source_loader(), diagnostics);
-            }
+
+        // Import the include file line-by-line
+        for line in BufReader::new(include_file).lines() {
+            repl_ctx.send_line(line.unwrap(), EvalKind::Value).unwrap();
+            sent_prelude_lines += 1
         }
     }
 
-    // Set our initiial completions
-    rl.set_helper(Some(ArretHelper::new(repl_ctx.bound_names())));
-
-    // Load our history
+    // Load our history while the REPL engine is thinking
     let history_path = repl_history_path();
     if let Some(ref history_path) = history_path {
         let _ = rl.load_history(history_path);
+    }
+
+    // Collect all the responses
+    for _ in 0..sent_prelude_lines {
+        match repl_ctx.receive_result() {
+            Ok(EvaledLine::Defs(bound_names)) => {
+                rl.set_helper(Some(ArretHelper::new(bound_names)));
+            }
+            Ok(_) => {}
+            Err(diagnostics) => emit_diagnostics_to_stderr(ccx.source_loader(), diagnostics),
+        }
     }
 
     // Configure our styles
@@ -338,11 +344,20 @@ pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
                     }
                 };
 
-                match repl_ctx.eval_line(input, eval_kind) {
+                repl_ctx.send_line(input, eval_kind).unwrap();
+
+                if history_dirty {
+                    // Write our history while the REPL engine is thinking
+                    if let Some(ref history_path) = history_path {
+                        let _ = rl.save_history(&history_path);
+                    }
+                }
+
+                match repl_ctx.receive_result() {
                     Ok(EvaledLine::EmptyInput) => {}
-                    Ok(EvaledLine::Defs) => {
+                    Ok(EvaledLine::Defs(bound_names)) => {
                         // Refresh our completions
-                        rl.set_helper(Some(ArretHelper::new(repl_ctx.bound_names())));
+                        rl.set_helper(Some(ArretHelper::new(bound_names)));
 
                         println!("{}", defs_style.paint("defined"))
                     }
@@ -387,12 +402,6 @@ pub fn interactive_loop(ccx: &CompileCtx, include_path: Option<path::PathBuf>) {
             Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => break,
             Err(other) => {
                 panic!("Readline error: {:?}", other);
-            }
-        }
-
-        if history_dirty {
-            if let Some(ref history_path) = history_path {
-                let _ = rl.save_history(&history_path);
             }
         }
     }

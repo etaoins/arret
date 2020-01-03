@@ -3,9 +3,11 @@
 
 mod subcommand;
 
+use std::sync::Arc;
+use std::{env, path, process};
+
 use arret_compiler::CompileCtx;
 use codespan::FileName;
-use std::{env, path, process};
 
 const ARRET_FILE_EXTENSION: &str = ".arret";
 
@@ -158,7 +160,7 @@ fn main() {
         }
     } else if let Some(repl_matches) = matches.subcommand_matches("repl") {
         let package_paths = arret_compiler::PackagePaths::with_stdlib(&arret_target_dir, None);
-        let ccx = CompileCtx::new(package_paths, enable_optimisations);
+        let ccx = Arc::new(CompileCtx::new(package_paths, enable_optimisations));
 
         initialise_llvm(false);
 
@@ -166,7 +168,7 @@ fn main() {
             .value_of("INCLUDE")
             .map(|include_param| path::Path::new(include_param).to_owned());
 
-        subcommand::repl::interactive_loop(&ccx, include_path);
+        subcommand::repl::interactive_loop(ccx, include_path);
     } else if let Some(eval_matches) = matches.subcommand_matches("eval") {
         let package_paths = arret_compiler::PackagePaths::with_stdlib(&arret_target_dir, None);
         let ccx = CompileCtx::new(package_paths, enable_optimisations);
