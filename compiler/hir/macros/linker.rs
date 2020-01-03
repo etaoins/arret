@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::result;
 
-use arret_syntax::span::{Span, EMPTY_SPAN};
+use arret_syntax::span::Span;
 
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::macros::starts_with_zero_or_more;
@@ -323,13 +323,13 @@ fn link_found_vars(
 pub fn link_rule_vars(
     scope: &Scope<'_>,
     self_ident: &Ident,
+    pattern_span: Span,
     patterns: &[NsDatum],
     template: &NsDatum,
 ) -> Result<VarLinks> {
     let mut fpvcx = FindVarsCtx::new(FindVarsInputType::Pattern);
 
-    // We don't need to report the root span for the pattern
-    let mut pattern_vars = FoundVars::new(EMPTY_SPAN);
+    let mut pattern_vars = FoundVars::new(pattern_span);
     fpvcx.visit_seq(&mut pattern_vars, patterns)?;
 
     let mut ftvcx = FindVarsCtx::new(FindVarsInputType::Template);

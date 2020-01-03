@@ -84,7 +84,7 @@ fn lower_macro_rule_datum(
         ));
     };
 
-    let var_links = link_rule_vars(scope, self_ident, &pattern, &template)?;
+    let var_links = link_rule_vars(scope, self_ident, pattern_span, &pattern, &template)?;
 
     Ok(Rule {
         pattern_span,
