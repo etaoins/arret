@@ -259,19 +259,12 @@ impl ReplCtx {
         thread::spawn(move || {
             let mut engine = ReplEngine::new(&ccx);
 
-            loop {
-                match receive_line.recv() {
-                    Ok((input, kind)) => {
-                        let result = engine.eval_line(input, kind);
-                        send_result.send(result).unwrap();
+            for (input, kind) in receive_line.iter() {
+                let result = engine.eval_line(input, kind);
+                send_result.send(result).unwrap();
 
-                        if engine.ehx.should_collect() {
-                            engine.ehx.collect_garbage();
-                        }
-                    }
-                    Err(_) => {
-                        return;
-                    }
+                if engine.ehx.should_collect() {
+                    engine.ehx.collect_garbage();
                 }
             }
         });
