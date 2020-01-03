@@ -278,11 +278,7 @@ pub fn interactive_loop(ccx: Arc<CompileCtx>, include_path: Option<path::PathBuf
     let repl_ctx = arret_compiler::repl::ReplCtx::new(ccx.clone());
 
     // Setup Rustyline
-    let rl_config = rustyline::Config::builder()
-        .history_ignore_space(true)
-        .build();
-
-    let mut rl = rustyline::Editor::<ArretHelper>::with_config(rl_config);
+    let mut rl = rustyline::Editor::<ArretHelper>::new();
 
     // Import [stdlib base] so we have most useful things defined
     let initial_import = "(import [stdlib base])".to_owned();
