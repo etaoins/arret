@@ -88,8 +88,14 @@ pub fn program_to_evaluable(
     };
 
     let inferred_main_type = &entry_module.inferred_locals[&main_var_id.local_id()];
-    infer::ensure_main_type(&entry_module.defs, main_var_id, inferred_main_type)
-        .map_err(|err| vec![err.into()])?;
+
+    infer::ensure_main_type(
+        source_file.file_map().span(),
+        &entry_module.defs,
+        main_var_id,
+        inferred_main_type,
+    )
+    .map_err(|err| vec![err.into()])?;
 
     let mut ehx = EvalHirCtx::new(ccx.source_loader(), ccx.enable_optimisations());
     let mut rfi_libraries = vec![];

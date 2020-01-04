@@ -18,7 +18,7 @@ use crate::typeck::dce::expr_can_side_effect;
 use crate::typeck::error::{Error, ErrorKind, IsNotRetTy, WantedArity};
 
 use arret_syntax::datum::Datum;
-use arret_syntax::span::{Span, EMPTY_SPAN};
+use arret_syntax::span::Span;
 
 type Result<T> = result::Result<T, Error>;
 
@@ -1918,6 +1918,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 }
 
 pub fn ensure_main_type(
+    fallback_span: Span,
     complete_defs: &[hir::Def<hir::Inferred>],
     main_var_id: hir::VarId,
     inferred_main_type: &ty::Ref<ty::Poly>,
@@ -1939,7 +1940,8 @@ pub fn ensure_main_type(
 
                 None
             })
-            .unwrap_or_else(|| EMPTY_SPAN.into());
+            // Fall back to the `Span` we were given
+            .unwrap_or_else(|| fallback_span.into());
 
         return Err(Error::new_with_loc_trace(
             main_loc_trace,
