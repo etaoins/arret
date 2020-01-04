@@ -1583,7 +1583,7 @@ impl EvalHirCtx {
 
         // Captures are of type `Any`
         let captures_reg = b.cast_boxed_cond(
-            EMPTY_SPAN,
+            span,
             thunk_reg_abi_type,
             thunk_reg,
             abitype::BoxedABIType::Any,
