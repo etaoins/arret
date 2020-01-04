@@ -11,7 +11,7 @@ use arret_runtime::intern::{AsInterner, Interner};
 use arret_runtime::abitype;
 use arret_runtime_syntax::reader;
 use arret_syntax::datum::{DataStr, Datum};
-use arret_syntax::span::{Span, EMPTY_SPAN};
+use arret_syntax::span::Span;
 
 use crate::codegen;
 use crate::hir;
@@ -25,6 +25,7 @@ use crate::mir::value::synthetic_fun::SyntheticFuns;
 use crate::mir::value::types::TypeHint;
 use crate::mir::{Expr, Value};
 use crate::rfi;
+use crate::source::SourceLoader;
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
@@ -52,6 +53,8 @@ pub struct EvaledRecordClass {
 }
 
 pub struct EvalHirCtx {
+    synthetic_span: Span,
+
     runtime_task: arret_runtime::task::Task,
     global_values: HashMap<hir::VarId, Value>,
 
@@ -192,10 +195,12 @@ impl<'sv> Default for FunCtx<'sv> {
 }
 
 impl EvalHirCtx {
-    pub fn new(optimising: bool) -> EvalHirCtx {
+    pub fn new(sl: &SourceLoader, optimising: bool) -> EvalHirCtx {
         let thunk_jit = codegen::jit::JITCtx::new(optimising);
 
         EvalHirCtx {
+            synthetic_span: sl.span_for_rust_source_file(file!()),
+
             runtime_task: arret_runtime::task::Task::new(),
             global_values: HashMap::new(),
 
@@ -203,7 +208,7 @@ impl EvalHirCtx {
             private_funs: HashMap::new(),
             rust_funs: HashMap::new(),
             arret_funs: HashMap::new(),
-            synthetic_funs: SyntheticFuns::new(),
+            synthetic_funs: SyntheticFuns::new(sl),
 
             rust_fun_thunks: HashMap::new(),
             arret_fun_thunks: HashMap::new(),
@@ -1538,6 +1543,7 @@ impl EvalHirCtx {
         use crate::mir::optimise::optimise_fun;
         use crate::mir::ret_value::build_value_ret;
 
+        let span = self.synthetic_span;
         let wanted_abi = entry_point_abi.into();
 
         let mut b = Builder::new();
@@ -1557,12 +1563,12 @@ impl EvalHirCtx {
             value::RegValue::new(captures_reg.unwrap(), abitype::BoxedABIType::Any.into());
 
         let result_value =
-            self.build_reg_fun_thunk_app(&mut b, EMPTY_SPAN, &fun_reg_value, &arg_list_value);
+            self.build_reg_fun_thunk_app(&mut b, span, &fun_reg_value, &arg_list_value);
 
-        build_value_ret(self, &mut b, EMPTY_SPAN, Ok(result_value), &wanted_abi.ret);
+        build_value_ret(self, &mut b, span, Ok(result_value), &wanted_abi.ret);
 
         optimise_fun(ops::Fun {
-            span: EMPTY_SPAN,
+            span,
             source_name: Some("callback_to_thunk_adapter".into()),
 
             abi: wanted_abi.into(),
@@ -1759,7 +1765,7 @@ impl EvalHirCtx {
         self.eval_value_app(
             &mut fcx,
             &mut None,
-            EMPTY_SPAN,
+            self.synthetic_span,
             &Ty::unit().into(),
             &main_value,
             ApplyArgs {

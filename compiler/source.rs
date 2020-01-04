@@ -5,6 +5,7 @@ use std::{fmt, fs, io, path};
 use codespan::FileName;
 
 use arret_syntax::datum::Datum;
+use arret_syntax::span::Span;
 
 pub type CodeMap = codespan::CodeMap<Cow<'static, str>>;
 pub type FileMap = codespan::FileMap<Cow<'static, str>>;
@@ -67,5 +68,17 @@ impl SourceLoader {
         let parsed = data_from_str_with_span_offset(file_map.src(), span_offset);
 
         SourceFile { file_map, parsed }
+    }
+
+    /// Creates an artifical span for a Rust source file
+    ///
+    /// This points to a zero length span with the specified filename. It's intended for IR and code
+    /// generated from the compiler that can't be directly attributed to input Arret code. For
+    /// example, the compiler will generate synthetic functions on demand that can be shared between
+    /// multiple callsites.
+    pub fn span_for_rust_source_file(&self, filename: &'static str) -> Span {
+        self.load_string(FileName::Real(filename.into()), Cow::Borrowed(""))
+            .file_map()
+            .span()
     }
 }

@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 
 use arret_syntax::datum::DataStr;
-use arret_syntax::span::EMPTY_SPAN;
+use arret_syntax::span::Span;
 
 use crate::context::ModuleId;
 use crate::hir;
 use crate::hir::var_id::VarIdAlloc;
 use crate::mir::env_values::EnvValues;
 use crate::mir::value;
+use crate::source::SourceLoader;
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
@@ -21,6 +22,7 @@ struct ExprParam {
 }
 
 fn wrap_poly_expr_in_arret_fun(
+    span: Span,
     source_name: DataStr,
     ty_args: TyArgs<ty::Poly>,
     expr_params: &[ExprParam],
@@ -42,7 +44,7 @@ fn wrap_poly_expr_in_arret_fun(
             .iter()
             .map(|(expr_param, param_var_id)| {
                 hir::destruc::Destruc::Scalar(
-                    EMPTY_SPAN,
+                    span,
                     hir::destruc::Scalar::new(
                         Some(*param_var_id),
                         expr_param.source_name.clone(),
@@ -58,7 +60,7 @@ fn wrap_poly_expr_in_arret_fun(
         .iter()
         .map(|(expr_param, param_var_id)| hir::Expr {
             result_ty: expr_param.poly_type.clone(),
-            kind: hir::ExprKind::Ref(EMPTY_SPAN, *param_var_id),
+            kind: hir::ExprKind::Ref(span, *param_var_id),
         })
         .collect();
 
@@ -68,7 +70,7 @@ fn wrap_poly_expr_in_arret_fun(
         TyArgs::empty(),
         EnvValues::empty(),
         hir::Fun {
-            span: EMPTY_SPAN,
+            span,
 
             pvars,
             tvars,
@@ -81,7 +83,7 @@ fn wrap_poly_expr_in_arret_fun(
             body_expr: hir::Expr {
                 result_ty: ret_ty,
                 kind: hir::ExprKind::App(Box::new(hir::App {
-                    span: EMPTY_SPAN,
+                    span,
                     fun_expr: wrapped_expr,
                     ty_args,
                     fixed_arg_exprs,
@@ -93,12 +95,14 @@ fn wrap_poly_expr_in_arret_fun(
 }
 
 fn wrap_mono_expr_in_arret_fun(
+    span: Span,
     source_name: DataStr,
     expr_params: &[ExprParam],
     ret_ty: ty::Ref<ty::Poly>,
     wrapped_expr: hir::Expr<hir::Inferred>,
 ) -> value::ArretFun {
     wrap_poly_expr_in_arret_fun(
+        span,
         source_name,
         TyArgs::empty(),
         expr_params,
@@ -107,7 +111,7 @@ fn wrap_mono_expr_in_arret_fun(
     )
 }
 
-fn new_eq_pred_arret_fun() -> value::ArretFun {
+fn new_eq_pred_arret_fun(span: Span) -> value::ArretFun {
     let expr_params = [
         ExprParam {
             source_name: "left".into(),
@@ -121,13 +125,19 @@ fn new_eq_pred_arret_fun() -> value::ArretFun {
 
     let wrapped_expr = hir::Expr {
         result_ty: Ty::EqPred.into(),
-        kind: hir::ExprKind::EqPred(EMPTY_SPAN),
+        kind: hir::ExprKind::EqPred(span),
     };
 
-    wrap_mono_expr_in_arret_fun("=".into(), &expr_params, Ty::Bool.into(), wrapped_expr)
+    wrap_mono_expr_in_arret_fun(
+        span,
+        "=".into(),
+        &expr_params,
+        Ty::Bool.into(),
+        wrapped_expr,
+    )
 }
 
-fn new_ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
+fn new_ty_pred_arret_fun(span: Span, test_ty: ty::pred::TestTy) -> value::ArretFun {
     let expr_params = [ExprParam {
         source_name: "subject".into(),
         poly_type: Ty::Any.into(),
@@ -135,10 +145,11 @@ fn new_ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
 
     let wrapped_expr = hir::Expr {
         result_ty: Ty::TyPred(test_ty.clone()).into(),
-        kind: hir::ExprKind::TyPred(EMPTY_SPAN, test_ty.clone()),
+        kind: hir::ExprKind::TyPred(span, test_ty.clone()),
     };
 
     wrap_mono_expr_in_arret_fun(
+        span,
         test_ty.to_string().into(),
         &expr_params,
         Ty::Bool.into(),
@@ -146,7 +157,7 @@ fn new_ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
     )
 }
 
-fn new_record_cons_arret_fun(cons: &record::ConsId) -> value::ArretFun {
+fn new_record_cons_arret_fun(span: Span, cons: &record::ConsId) -> value::ArretFun {
     let ty_args = cons.identity_ty_args();
 
     let cons_fun_ty = record::Cons::value_cons_fun_type(cons);
@@ -166,10 +177,11 @@ fn new_record_cons_arret_fun(cons: &record::ConsId) -> value::ArretFun {
 
     let wrapped_expr = hir::Expr {
         result_ty: cons_fun_ty.into(),
-        kind: hir::ExprKind::RecordCons(EMPTY_SPAN, cons.clone()),
+        kind: hir::ExprKind::RecordCons(span, cons.clone()),
     };
 
     wrap_poly_expr_in_arret_fun(
+        span,
         cons.value_cons_name().clone(),
         ty_args,
         &expr_params,
@@ -178,7 +190,11 @@ fn new_record_cons_arret_fun(cons: &record::ConsId) -> value::ArretFun {
     )
 }
 
-fn new_field_accessor_arret_fun(cons: &record::ConsId, field_index: usize) -> value::ArretFun {
+fn new_field_accessor_arret_fun(
+    span: Span,
+    cons: &record::ConsId,
+    field_index: usize,
+) -> value::ArretFun {
     let ty_args = cons.identity_ty_args();
 
     let field = &cons.fields()[field_index];
@@ -196,13 +212,14 @@ fn new_field_accessor_arret_fun(cons: &record::ConsId, field_index: usize) -> va
     let wrapped_expr = hir::Expr {
         result_ty: accessor_fun_ty.into(),
         kind: hir::ExprKind::FieldAccessor(Box::new(hir::FieldAccessor {
-            span: EMPTY_SPAN,
+            span,
             record_cons: cons.clone(),
             field_index,
         })),
     };
 
     wrap_poly_expr_in_arret_fun(
+        span,
         format!("{}-{}", cons.value_cons_name(), field.name()).into(),
         ty_args,
         expr_params,
@@ -213,6 +230,7 @@ fn new_field_accessor_arret_fun(cons: &record::ConsId, field_index: usize) -> va
 
 #[derive(Default)]
 pub struct SyntheticFuns {
+    synthetic_span: Span,
     eq_pred_arret_fun: Option<value::ArretFun>,
     ty_pred_arret_fun: HashMap<ty::pred::TestTy, value::ArretFun>,
     record_cons_arret_fun: HashMap<record::ConsId, value::ArretFun>,
@@ -220,25 +238,38 @@ pub struct SyntheticFuns {
 }
 
 impl SyntheticFuns {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(sl: &SourceLoader) -> Self {
+        Self {
+            synthetic_span: sl.span_for_rust_source_file(file!()),
+
+            eq_pred_arret_fun: None,
+            ty_pred_arret_fun: HashMap::new(),
+            record_cons_arret_fun: HashMap::new(),
+            field_accessor_arret_fun: HashMap::new(),
+        }
     }
 
     pub fn eq_pred_arret_fun(&mut self) -> &value::ArretFun {
+        let span = self.synthetic_span;
+
         self.eq_pred_arret_fun
-            .get_or_insert_with(new_eq_pred_arret_fun)
+            .get_or_insert_with(|| new_eq_pred_arret_fun(span))
     }
 
     pub fn ty_pred_arret_fun(&mut self, test_ty: ty::pred::TestTy) -> &value::ArretFun {
+        let span = self.synthetic_span;
+
         self.ty_pred_arret_fun
             .entry(test_ty.clone())
-            .or_insert_with(|| new_ty_pred_arret_fun(test_ty))
+            .or_insert_with(|| new_ty_pred_arret_fun(span, test_ty))
     }
 
     pub fn record_cons_arret_fun(&mut self, cons: &record::ConsId) -> &value::ArretFun {
+        let span = self.synthetic_span;
+
         self.record_cons_arret_fun
             .entry(cons.clone())
-            .or_insert_with(|| new_record_cons_arret_fun(cons))
+            .or_insert_with(|| new_record_cons_arret_fun(span, cons))
     }
 
     pub fn field_accessor_arret_fun(
@@ -246,10 +277,11 @@ impl SyntheticFuns {
         cons: &record::ConsId,
         field_index: usize,
     ) -> &value::ArretFun {
+        let span = self.synthetic_span;
         let lookup_key = (cons.clone(), field_index);
 
         self.field_accessor_arret_fun
             .entry(lookup_key)
-            .or_insert_with(|| new_field_accessor_arret_fun(cons, field_index))
+            .or_insert_with(|| new_field_accessor_arret_fun(span, cons, field_index))
     }
 }

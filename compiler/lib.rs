@@ -91,7 +91,7 @@ pub fn program_to_evaluable(
     infer::ensure_main_type(&entry_module.defs, main_var_id, inferred_main_type)
         .map_err(|err| vec![err.into()])?;
 
-    let mut ehx = EvalHirCtx::new(ccx.enable_optimisations());
+    let mut ehx = EvalHirCtx::new(ccx.source_loader(), ccx.enable_optimisations());
     let mut rfi_libraries = vec![];
 
     for import in &entry_module.imports {
