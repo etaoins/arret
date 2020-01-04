@@ -9,7 +9,7 @@ path = "lib.rs"
 crate-type = ["lib"]
 
 [dependencies]
-llvm-sys = "80"
+llvm-sys = "90"
 libc = "0.2"
 libloading = "0.5"
 arret-syntax = { path = "../syntax" }
