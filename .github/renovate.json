@@ -3,6 +3,9 @@
     "config:base",
     "docker:disable"
   ],
+  "cargo": {
+    "enabled": true
+  },
   "timezone": "Australia/Melbourne",
   "schedule": [
     "after 6pm every weekday",
