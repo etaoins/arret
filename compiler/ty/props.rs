@@ -81,10 +81,11 @@ pub fn is_literal<M: ty::PM>(ty_ref: &ty::Ref<M>) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
+
     use crate::hir::poly_for_str;
+    use crate::source::EMPTY_SPAN;
     use crate::ty::record;
     use crate::ty::ty_args::TyArgs;
-    use arret_syntax::span::EMPTY_SPAN;
 
     fn str_has_subtypes(datum_str: &str) -> bool {
         let poly = poly_for_str(datum_str);

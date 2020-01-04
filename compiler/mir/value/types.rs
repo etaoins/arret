@@ -205,8 +205,8 @@ mod test {
     use super::*;
 
     use crate::hir::tvar_bounded_by;
+    use crate::source::EMPTY_SPAN;
     use crate::ty::ty_args::TyArgs;
-    use arret_syntax::span::EMPTY_SPAN;
 
     #[test]
     fn test_find_record_conses_for_ty_ref() {

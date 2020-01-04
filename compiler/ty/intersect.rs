@@ -378,8 +378,9 @@ pub fn intersect_purity_refs(purity1: &purity::Ref, purity2: &purity::Ref) -> pu
 #[cfg(test)]
 mod test {
     use super::*;
+
     use crate::hir::{poly_for_str, tvar_bounded_by};
-    use arret_syntax::span::EMPTY_SPAN;
+    use crate::source::EMPTY_SPAN;
 
     fn assert_disjoint_poly(poly1: &ty::Ref<ty::Poly>, poly2: &ty::Ref<ty::Poly>) {
         assert_eq!(

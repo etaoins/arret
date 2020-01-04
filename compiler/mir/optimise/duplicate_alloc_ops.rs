@@ -63,7 +63,8 @@ pub fn remove_redundant_alloc_ops(ops: &mut [ops::Op]) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use arret_syntax::span::EMPTY_SPAN;
+
+    use crate::source::EMPTY_SPAN;
 
     #[test]
     fn test_box_different_native_regs() {

@@ -50,8 +50,9 @@ pub fn expr_can_side_effect(expr: &hir::Expr<hir::Inferred>) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    use crate::source::EMPTY_SPAN;
     use crate::ty::ty_args::TyArgs;
-    use arret_syntax::span::EMPTY_SPAN;
 
     #[test]
     fn pure_app_expr() {

@@ -10,6 +10,9 @@ use arret_syntax::span::Span;
 pub type CodeMap = codespan::CodeMap<Cow<'static, str>>;
 pub type FileMap = codespan::FileMap<Cow<'static, str>>;
 
+#[cfg(test)]
+pub const EMPTY_SPAN: Span = Span::new_unchecked(codespan::ByteIndex(0), codespan::ByteIndex(0));
+
 pub struct SourceFile {
     file_map: Arc<FileMap>,
     parsed: Result<Vec<Datum>, arret_syntax::error::Error>,

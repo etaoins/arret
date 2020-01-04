@@ -194,8 +194,8 @@ impl VarUsages {
 mod test {
     use super::*;
 
+    use crate::source::EMPTY_SPAN;
     use crate::ty::purity::Purity;
-    use arret_syntax::span::EMPTY_SPAN;
 
     #[test]
     fn test_variance_mul() {

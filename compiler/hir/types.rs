@@ -749,17 +749,18 @@ pub fn poly_for_str(datum_str: &str) -> ty::Ref<ty::Poly> {
 
 #[cfg(test)]
 pub fn tvar_bounded_by(bound: ty::Ref<ty::Poly>) -> ty::Ref<ty::Poly> {
-    use arret_syntax::span::EMPTY_SPAN;
-
+    use crate::source::EMPTY_SPAN;
     ty::TVar::new(EMPTY_SPAN, "TVar".into(), bound).into()
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ty::var_usage::Variance;
-    use arret_syntax::span::EMPTY_SPAN;
+
     use std::collections::HashMap;
+
+    use crate::source::EMPTY_SPAN;
+    use crate::ty::var_usage::Variance;
 
     fn assert_ty_for_str(expected: Ty<ty::Poly>, datum_str: &str) {
         let expected_poly = expected.into();

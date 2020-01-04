@@ -286,8 +286,9 @@ pub fn purity_refs_equivalent(purity_ref1: &purity::Ref, purity_ref2: &purity::R
 #[cfg(test)]
 mod test {
     use super::*;
+
     use crate::hir::{poly_for_str, tvar_bounded_by};
-    use arret_syntax::span::EMPTY_SPAN;
+    use crate::source::EMPTY_SPAN;
 
     #[test]
     fn sym_types() {

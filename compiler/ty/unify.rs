@@ -430,8 +430,9 @@ pub fn unify_list<M: ty::PM>(list1: &ty::List<M>, list2: &ty::List<M>) -> Unifie
 #[cfg(test)]
 mod test {
     use super::*;
+
     use crate::hir::{poly_for_str, tvar_bounded_by};
-    use arret_syntax::span::EMPTY_SPAN;
+    use crate::source::EMPTY_SPAN;
 
     fn assert_discerned(ty_str1: &str, ty_str2: &str) {
         let poly1 = poly_for_str(ty_str1);

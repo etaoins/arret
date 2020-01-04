@@ -306,8 +306,10 @@ pub fn calc_program_captures(
 #[cfg(test)]
 mod test {
     use super::*;
+
     use arret_runtime::boxed;
-    use arret_syntax::span::EMPTY_SPAN;
+
+    use crate::source::EMPTY_SPAN;
 
     fn calc_single_fun_captures(fun: &ops::Fun) -> Captures {
         calc_program_captures(&HashMap::new(), fun).entry_fun_captures

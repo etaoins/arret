@@ -8,9 +8,6 @@ use rayon::prelude::*;
 use arret_syntax::datum::Datum;
 use arret_syntax::span::Span;
 
-#[cfg(test)]
-use arret_syntax::span::EMPTY_SPAN;
-
 use crate::context;
 use crate::rfi;
 use crate::ty;
@@ -36,6 +33,9 @@ use crate::hir::Lowered;
 use crate::hir::{
     App, Cond, DeclPurity, DeclTy, Def, Expr, ExprKind, FieldAccessor, Fun, Let, Recur, VarId,
 };
+
+#[cfg(test)]
+use crate::source::EMPTY_SPAN;
 
 /// Module lowered to HIR
 pub struct LoweredModule {

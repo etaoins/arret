@@ -138,7 +138,8 @@ pub fn load_module_by_name(
 #[cfg(test)]
 mod test {
     use super::*;
-    use arret_syntax::span::EMPTY_SPAN;
+
+    use crate::source::EMPTY_SPAN;
 
     fn load_stdlib_module(name: &'static str) -> Result<LoadedModule> {
         let ccx = CompileCtx::new(PackagePaths::test_paths(None), true);

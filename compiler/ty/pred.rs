@@ -161,7 +161,8 @@ impl fmt::Display for TestTy {
 #[cfg(test)]
 mod test {
     use super::*;
-    use arret_syntax::span::EMPTY_SPAN;
+
+    use crate::source::EMPTY_SPAN;
 
     fn assert_test_ty_will_match(test_ty: &TestTy, subject_ref: impl Into<ty::Ref<ty::Poly>>) {
         let subject_ref = subject_ref.into();

@@ -102,9 +102,8 @@ mod test {
 
     use std::collections::HashMap;
 
-    use arret_syntax::span::EMPTY_SPAN;
-
     use crate::hir::{poly_for_str, tvar_bounded_by};
+    use crate::source::EMPTY_SPAN;
     use crate::ty::record;
     use crate::ty::ty_args::TyArgs;
     use crate::ty::var_usage::Variance;

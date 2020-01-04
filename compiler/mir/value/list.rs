@@ -208,7 +208,8 @@ mod test {
 
     use arret_runtime::boxed;
     use arret_runtime::boxed::prelude::*;
-    use arret_syntax::span::EMPTY_SPAN;
+
+    use crate::source::EMPTY_SPAN;
 
     #[test]
     fn list_length() {

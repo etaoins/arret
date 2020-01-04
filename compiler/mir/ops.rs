@@ -668,7 +668,7 @@ mod test {
 
     impl From<OpKind> for Op {
         fn from(op_kind: OpKind) -> Self {
-            use arret_syntax::span::EMPTY_SPAN;
+            use crate::source::EMPTY_SPAN;
             Op::new(EMPTY_SPAN, op_kind)
         }
     }

@@ -188,7 +188,8 @@ impl ops::BitAnd for TypeTagSet {
 #[cfg(test)]
 mod test {
     use super::*;
-    use arret_syntax::span::EMPTY_SPAN;
+
+    use crate::source::EMPTY_SPAN;
 
     #[test]
     fn basic_operations() {

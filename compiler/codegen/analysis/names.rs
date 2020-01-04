@@ -59,9 +59,11 @@ pub fn calc_program_global_interned_names(
 #[cfg(test)]
 mod test {
     use super::*;
+
     use arret_runtime::abitype::RetABIType;
     use arret_runtime::boxed;
-    use arret_syntax::span::EMPTY_SPAN;
+
+    use crate::source::EMPTY_SPAN;
 
     #[test]
     fn simple_global_interned_names() {
