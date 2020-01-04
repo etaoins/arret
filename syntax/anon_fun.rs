@@ -90,24 +90,28 @@ pub fn convert_anon_fun(outer_span: Span, body_data: impl Iterator<Item = Datum>
 mod test {
     use super::*;
     use crate::parser::data_from_str;
-    use crate::span::{t2s, EMPTY_SPAN};
+    use crate::span::t2s;
 
     #[test]
     fn empty_fun() {
-        let body_data = data_from_str("").unwrap();
+        let j = "";
+        let t = "";
+
+        let body_data = data_from_str(j).unwrap();
+        let outer_span = t2s(t);
 
         let expected = Datum::List(
-            EMPTY_SPAN,
+            outer_span,
             Box::new([
-                Datum::Sym(EMPTY_SPAN, "fn".into()),
-                Datum::List(EMPTY_SPAN, Box::new([])),
-                Datum::List(EMPTY_SPAN, Box::new([])),
+                Datum::Sym(outer_span, "fn".into()),
+                Datum::List(outer_span, Box::new([])),
+                Datum::List(outer_span, Box::new([])),
             ]),
         );
 
         assert_eq!(
             expected,
-            convert_anon_fun(EMPTY_SPAN, body_data.into_iter()).unwrap()
+            convert_anon_fun(outer_span, body_data.into_iter()).unwrap()
         );
     }
 
@@ -117,14 +121,15 @@ mod test {
         let t = "^";
 
         let body_data = data_from_str(j).unwrap();
+        let outer_span = t2s(t);
 
         let expected = Datum::List(
-            EMPTY_SPAN,
+            outer_span,
             Box::new([
-                Datum::Sym(EMPTY_SPAN, "fn".into()),
-                Datum::List(EMPTY_SPAN, Box::new([Datum::Sym(EMPTY_SPAN, "%1".into())])),
+                Datum::Sym(outer_span, "fn".into()),
+                Datum::List(outer_span, Box::new([Datum::Sym(outer_span, "%1".into())])),
                 Datum::List(
-                    EMPTY_SPAN,
+                    outer_span,
                     Box::new([
                         // This is converted to %1
                         Datum::Sym(t2s(t), "%1".into()),
@@ -135,34 +140,36 @@ mod test {
 
         assert_eq!(
             expected,
-            convert_anon_fun(EMPTY_SPAN, body_data.into_iter()).unwrap()
+            convert_anon_fun(outer_span, body_data.into_iter()).unwrap()
         );
     }
 
     #[test]
     fn two_arg_fun() {
         let j = "%1 %2";
-        let t = "^^   ";
-        let u = "   ^^";
+        let t = "^^^^^";
+        let u = "^^   ";
+        let v = "   ^^";
 
         let body_data = data_from_str(j).unwrap();
+        let outer_span = t2s(t);
 
         let expected = Datum::List(
-            EMPTY_SPAN,
+            outer_span,
             Box::new([
-                Datum::Sym(EMPTY_SPAN, "fn".into()),
+                Datum::Sym(outer_span, "fn".into()),
                 Datum::List(
-                    EMPTY_SPAN,
+                    outer_span,
                     Box::new([
-                        Datum::Sym(EMPTY_SPAN, "%1".into()),
-                        Datum::Sym(EMPTY_SPAN, "%2".into()),
+                        Datum::Sym(outer_span, "%1".into()),
+                        Datum::Sym(outer_span, "%2".into()),
                     ]),
                 ),
                 Datum::List(
-                    EMPTY_SPAN,
+                    outer_span,
                     Box::new([
-                        Datum::Sym(t2s(t), "%1".into()),
-                        Datum::Sym(t2s(u), "%2".into()),
+                        Datum::Sym(t2s(u), "%1".into()),
+                        Datum::Sym(t2s(v), "%2".into()),
                     ]),
                 ),
             ]),
@@ -170,35 +177,37 @@ mod test {
 
         assert_eq!(
             expected,
-            convert_anon_fun(EMPTY_SPAN, body_data.into_iter()).unwrap()
+            convert_anon_fun(outer_span, body_data.into_iter()).unwrap()
         );
     }
 
     #[test]
     fn rest_fun() {
         let j = "%1 %&";
-        let t = "^^   ";
-        let u = "   ^^";
+        let t = "^^^^^";
+        let u = "^^   ";
+        let v = "   ^^";
 
         let body_data = data_from_str(j).unwrap();
+        let outer_span = t2s(t);
 
         let expected = Datum::List(
-            EMPTY_SPAN,
+            outer_span,
             Box::new([
-                Datum::Sym(EMPTY_SPAN, "fn".into()),
+                Datum::Sym(outer_span, "fn".into()),
                 Datum::List(
-                    EMPTY_SPAN,
+                    outer_span,
                     Box::new([
-                        Datum::Sym(EMPTY_SPAN, "%1".into()),
-                        Datum::Sym(EMPTY_SPAN, "&".into()),
-                        Datum::Sym(EMPTY_SPAN, "%&".into()),
+                        Datum::Sym(outer_span, "%1".into()),
+                        Datum::Sym(outer_span, "&".into()),
+                        Datum::Sym(outer_span, "%&".into()),
                     ]),
                 ),
                 Datum::List(
-                    EMPTY_SPAN,
+                    outer_span,
                     Box::new([
-                        Datum::Sym(t2s(t), "%1".into()),
-                        Datum::Sym(t2s(u), "%&".into()),
+                        Datum::Sym(t2s(u), "%1".into()),
+                        Datum::Sym(t2s(v), "%&".into()),
                     ]),
                 ),
             ]),
@@ -206,7 +215,7 @@ mod test {
 
         assert_eq!(
             expected,
-            convert_anon_fun(EMPTY_SPAN, body_data.into_iter()).unwrap()
+            convert_anon_fun(outer_span, body_data.into_iter()).unwrap()
         );
     }
 }
