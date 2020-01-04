@@ -628,8 +628,6 @@ mod test {
 
     #[test]
     fn purity_refs() {
-        use arret_syntax::span::EMPTY_SPAN;
-
         let purity_pure = Purity::Pure.into();
         let purity_impure = Purity::Impure.into();
 
