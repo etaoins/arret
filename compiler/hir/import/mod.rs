@@ -65,7 +65,7 @@ mod test {
     use std::collections::HashMap;
     use std::result;
 
-    use arret_syntax::span::{t2s, EMPTY_SPAN};
+    use arret_syntax::span::t2s;
 
     use crate::hir::error::{Error, ErrorKind};
     use crate::hir::exports::Exports;
@@ -79,8 +79,7 @@ mod test {
         use arret_syntax::parser::datum_from_str;
 
         let parsed_import = parse::parse_import_set(&datum_from_str(datum).unwrap())?;
-
-        let (_, module_name) = parsed_import.spanned_module_name();
+        let (span, module_name) = parsed_import.spanned_module_name();
 
         if module_name == &ModuleName::new("lib".into(), vec![], "test".into()) {
             let mut exports = HashMap::new();
@@ -89,7 +88,7 @@ mod test {
 
             Ok(filter::filter_imported_exports(&parsed_import, Cow::Owned(exports))?.into_owned())
         } else {
-            Err(vec![Error::new(EMPTY_SPAN, ErrorKind::PackageNotFound)])
+            Err(vec![Error::new(span, ErrorKind::PackageNotFound)])
         }
     }
 
@@ -119,7 +118,9 @@ mod test {
     #[test]
     fn package_not_found() {
         let j = "[not found]";
-        let err = vec![Error::new(EMPTY_SPAN, ErrorKind::PackageNotFound)];
+        let t = "^^^^^^^^^^^";
+
+        let err = vec![Error::new(t2s(t), ErrorKind::PackageNotFound)];
 
         assert_eq!(err, exports_for_import_set(j).unwrap_err());
     }
