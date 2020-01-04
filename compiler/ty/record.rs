@@ -42,11 +42,9 @@ impl Field {
 
     /// Returns the type of the field accessor function
     pub fn accessor_fun_type(&self, cons_id: &ConsId) -> ty::Fun {
-        let ConsPolymorphicVars {
-            ty_args,
-            pvars,
-            tvars,
-        } = cons_id.polymorphic_vars();
+        let ty_args = cons_id.identity_ty_args();
+        let pvars: purity::PVars = ty_args.pvar_purities().keys().cloned().collect();
+        let tvars: ty::TVars = ty_args.tvar_types().keys().cloned().collect();
 
         let top_fun = ty::TopFun::new(Purity::Pure.into(), self.ty_ref().clone());
         let params =
@@ -97,13 +95,6 @@ pub struct Cons {
     value_cons_name: DataStr,
     poly_params_list: Option<Box<[PolyParam]>>,
     fields: Box<[Field]>,
-}
-
-/// Polymorphic variables of a type constructor
-pub struct ConsPolymorphicVars {
-    pub ty_args: TyArgs<ty::Poly>,
-    pub pvars: purity::PVars,
-    pub tvars: ty::TVars,
 }
 
 impl Cons {
@@ -161,14 +152,11 @@ impl Cons {
         self.fields.as_ref()
     }
 
-    /// Returns the polymorphic variables associated with the constructor
-    pub fn polymorphic_vars(&self) -> ConsPolymorphicVars {
+    /// Returns an identity map of polymorphic variables associated with the constructor
+    pub fn identity_ty_args(&self) -> TyArgs<ty::Poly> {
         use std::collections::HashMap;
 
-        let mut pvars = purity::PVars::new();
         let mut pvar_purities = HashMap::new();
-
-        let mut tvars = ty::TVars::new();
         let mut tvar_types = HashMap::new();
 
         // Create an identity map of our polymorphic variables. When we substitute in the selected
@@ -176,33 +164,23 @@ impl Cons {
         for poly_param in self.poly_params() {
             match poly_param {
                 PolyParam::PVar(_, pvar) => {
-                    pvars.push(pvar.clone());
                     pvar_purities.insert(pvar.clone(), pvar.clone().into());
                 }
                 PolyParam::TVar(_, tvar) => {
-                    tvars.push(tvar.clone());
                     tvar_types.insert(tvar.clone(), tvar.clone().into());
                 }
                 PolyParam::Pure(_) | PolyParam::TFixed(_, _) => {}
             }
         }
 
-        let ty_args = TyArgs::new(pvar_purities, tvar_types);
-
-        ConsPolymorphicVars {
-            ty_args,
-            pvars,
-            tvars,
-        }
+        TyArgs::new(pvar_purities, tvar_types)
     }
 
     /// Returns the type of the value constructor function
     pub fn value_cons_fun_type(cons_id: &ConsId) -> ty::Fun {
-        let ConsPolymorphicVars {
-            ty_args,
-            pvars,
-            tvars,
-        } = cons_id.polymorphic_vars();
+        let ty_args = cons_id.identity_ty_args();
+        let pvars: purity::PVars = ty_args.pvar_purities().keys().cloned().collect();
+        let tvars: ty::TVars = ty_args.tvar_types().keys().cloned().collect();
 
         let ret_type = Instance::new(cons_id.clone(), ty_args).into();
         let top_fun = ty::TopFun::new(Purity::Pure.into(), ret_type);

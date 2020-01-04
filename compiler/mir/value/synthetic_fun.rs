@@ -23,13 +23,14 @@ struct ExprParam {
 fn wrap_poly_expr_in_arret_fun(
     source_name: DataStr,
     ty_args: TyArgs<ty::Poly>,
-    pvars: purity::PVars,
-    tvars: ty::TVars,
     expr_params: &[ExprParam],
     ret_ty: ty::Ref<ty::Poly>,
     wrapped_expr: hir::Expr<hir::Inferred>,
 ) -> value::ArretFun {
     let via = VarIdAlloc::new(ModuleId::alloc());
+
+    let pvars: purity::PVars = ty_args.pvar_purities().keys().cloned().collect();
+    let tvars: ty::TVars = ty_args.tvar_types().keys().cloned().collect();
 
     let expr_params_with_var_id: Vec<(&ExprParam, hir::VarId)> = expr_params
         .iter()
@@ -100,8 +101,6 @@ fn wrap_mono_expr_in_arret_fun(
     wrap_poly_expr_in_arret_fun(
         source_name,
         TyArgs::empty(),
-        purity::PVars::new(),
-        ty::TVars::new(),
         expr_params,
         ret_ty,
         wrapped_expr,
@@ -148,11 +147,7 @@ fn new_ty_pred_arret_fun(test_ty: ty::pred::TestTy) -> value::ArretFun {
 }
 
 fn new_record_cons_arret_fun(cons: &record::ConsId) -> value::ArretFun {
-    let record::ConsPolymorphicVars {
-        ty_args,
-        pvars,
-        tvars,
-    } = cons.polymorphic_vars();
+    let ty_args = cons.identity_ty_args();
 
     let cons_fun_ty = record::Cons::value_cons_fun_type(cons);
     let record_instance_ty = Ty::Record(Box::new(record::Instance::new(
@@ -177,8 +172,6 @@ fn new_record_cons_arret_fun(cons: &record::ConsId) -> value::ArretFun {
     wrap_poly_expr_in_arret_fun(
         cons.value_cons_name().clone(),
         ty_args,
-        pvars,
-        tvars,
         &expr_params,
         record_instance_ty.into(),
         wrapped_expr,
@@ -186,11 +179,7 @@ fn new_record_cons_arret_fun(cons: &record::ConsId) -> value::ArretFun {
 }
 
 fn new_field_accessor_arret_fun(cons: &record::ConsId, field_index: usize) -> value::ArretFun {
-    let record::ConsPolymorphicVars {
-        ty_args,
-        pvars,
-        tvars,
-    } = cons.polymorphic_vars();
+    let ty_args = cons.identity_ty_args();
 
     let field = &cons.fields()[field_index];
     let accessor_fun_ty = field.accessor_fun_type(cons);
@@ -216,8 +205,6 @@ fn new_field_accessor_arret_fun(cons: &record::ConsId, field_index: usize) -> va
     wrap_poly_expr_in_arret_fun(
         format!("{}-{}", cons.value_cons_name(), field.name()).into(),
         ty_args,
-        pvars,
-        tvars,
         expr_params,
         record_instance_ty.into(),
         wrapped_expr,
