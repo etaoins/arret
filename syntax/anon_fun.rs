@@ -97,7 +97,7 @@ mod test {
         let j = "";
         let t = "";
 
-        let body_data = data_from_str(j).unwrap();
+        let body_data = data_from_str(None, j).unwrap();
         let outer_span = t2s(t);
 
         let expected = Datum::List(
@@ -120,7 +120,7 @@ mod test {
         let j = "%";
         let t = "^";
 
-        let body_data = data_from_str(j).unwrap();
+        let body_data = data_from_str(None, j).unwrap();
         let outer_span = t2s(t);
 
         let expected = Datum::List(
@@ -151,7 +151,7 @@ mod test {
         let u = "^^   ";
         let v = "   ^^";
 
-        let body_data = data_from_str(j).unwrap();
+        let body_data = data_from_str(None, j).unwrap();
         let outer_span = t2s(t);
 
         let expected = Datum::List(
@@ -188,7 +188,7 @@ mod test {
         let u = "^^   ";
         let v = "   ^^";
 
-        let body_data = data_from_str(j).unwrap();
+        let body_data = data_from_str(None, j).unwrap();
         let outer_span = t2s(t);
 
         let expected = Datum::List(

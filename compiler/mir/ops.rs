@@ -668,8 +668,7 @@ mod test {
 
     impl From<OpKind> for Op {
         fn from(op_kind: OpKind) -> Self {
-            use crate::source::EMPTY_SPAN;
-            Op::new(EMPTY_SPAN, op_kind)
+            Op::new(crate::source::empty_span(), op_kind)
         }
     }
 

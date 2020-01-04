@@ -330,7 +330,7 @@ mod test {
             let outer_scope = Scope::new_with_primitives();
             let mut inner_scope = Scope::new_with_primitives();
 
-            let polymorphic_data = data_from_str(polymorphic_str)
+            let polymorphic_data = data_from_str(None, polymorphic_str)
                 .unwrap()
                 .iter()
                 .map(NsDatum::from_syntax_datum)
@@ -352,14 +352,14 @@ mod test {
 
         fn poly_for_str(&self, poly_str: &str) -> ty::Ref<ty::Poly> {
             use crate::hir::lower_poly;
-            let test_datum = datum_from_str(poly_str).unwrap();
+            let test_datum = datum_from_str(None, poly_str).unwrap();
 
             lower_poly(&self.scope, NsDatum::from_syntax_datum(&test_datum)).unwrap()
         }
 
         fn purity_for_str(&self, poly_str: &str) -> purity::Ref {
             use crate::hir::try_lower_purity;
-            let test_datum = datum_from_str(poly_str).unwrap();
+            let test_datum = datum_from_str(None, poly_str).unwrap();
 
             try_lower_purity(&self.scope, &NsDatum::from_syntax_datum(&test_datum)).unwrap()
         }

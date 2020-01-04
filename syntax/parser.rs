@@ -1,28 +1,29 @@
 use crate::datum::Datum;
 use crate::error::{Error, ErrorKind, ExpectedContent, Result};
-use crate::span::{ByteIndex, Span};
+use crate::span::Span;
 
-pub fn data_from_str_with_span_offset(s: &str, span_offset: ByteIndex) -> Result<Vec<Datum>> {
-    let mut parser = Parser::from_str(s, span_offset);
-    parser.parse_data()
+pub fn data_from_str_with_span_offset(
+    file_id: Option<codespan::FileId>,
+    s: &str,
+    span_offset: codespan::ByteIndex,
+) -> Result<Vec<Datum>> {
+    Parser::from_str(file_id, s, span_offset).parse_data()
 }
 
-pub fn data_from_str(s: &str) -> Result<Vec<Datum>> {
-    data_from_str_with_span_offset(s, ByteIndex(0))
+pub fn data_from_str(file_id: Option<codespan::FileId>, s: &str) -> Result<Vec<Datum>> {
+    data_from_str_with_span_offset(file_id, s, codespan::ByteIndex(0))
 }
 
-pub fn datum_from_str_with_span_offset(s: &str, span_offset: ByteIndex) -> Result<Datum> {
-    let mut parser = Parser::from_str(s, span_offset);
-    parser.parse_datum()
+pub fn datum_from_str_with_span_offset(
+    file_id: Option<codespan::FileId>,
+    s: &str,
+    span_offset: codespan::ByteIndex,
+) -> Result<Datum> {
+    Parser::from_str(file_id, s, span_offset).parse_datum()
 }
 
-pub fn datum_from_str(s: &str) -> Result<Datum> {
-    datum_from_str_with_span_offset(s, ByteIndex(0))
-}
-
-pub struct Parser<'input> {
-    input: &'input str,
-    consumed_bytes: u32,
+pub fn datum_from_str(file_id: Option<codespan::FileId>, s: &str) -> Result<Datum> {
+    datum_from_str_with_span_offset(file_id, s, codespan::ByteIndex(0))
 }
 
 fn is_whitespace(c: char) -> bool {
@@ -45,21 +46,30 @@ pub fn is_identifier_char(c: char) -> bool {
     }
 }
 
+pub struct Parser<'input> {
+    file_id: Option<codespan::FileId>,
+    input: &'input str,
+    consumed_bytes: u32,
+}
+
 impl<'input> Parser<'input> {
-    fn from_str(input: &'input str, span_offset: ByteIndex) -> Self {
+    fn from_str(
+        file_id: Option<codespan::FileId>,
+        input: &'input str,
+        span_offset: codespan::ByteIndex,
+    ) -> Self {
         Parser {
+            file_id,
             input,
-            consumed_bytes: span_offset.0,
+            consumed_bytes: span_offset.to_usize() as u32,
         }
     }
 
     fn eof_err(&self, ec: ExpectedContent) -> Error {
         let eof_pos = self.consumed_bytes + (self.input.len() as u32);
+        let codespan_span = codespan::Span::new(eof_pos, eof_pos);
 
-        Error::new(
-            Span::new(ByteIndex(eof_pos), ByteIndex(eof_pos)),
-            ErrorKind::Eof(ec),
-        )
+        Error::new(Span::new(self.file_id, codespan_span), ErrorKind::Eof(ec))
     }
 
     fn peek_char(&mut self, ec: ExpectedContent) -> Result<char> {
@@ -134,8 +144,8 @@ impl<'input> Parser<'input> {
         self.input = remaining_input;
         self.consumed_bytes += last_index as u32;
 
-        let span = Span::new(ByteIndex(start), ByteIndex(self.consumed_bytes as u32));
-        (span, consumed)
+        let codespan_span = codespan::Span::new(start, self.consumed_bytes as u32);
+        (Span::new(self.file_id, codespan_span), consumed)
     }
 
     fn consume_while<T>(&mut self, mut predicate: T) -> (Span, &str)
@@ -153,7 +163,8 @@ impl<'input> Parser<'input> {
         let result = block(self);
         let end = self.consumed_bytes;
 
-        (Span::new(ByteIndex(start), ByteIndex(end)), result)
+        let codespan_span = codespan::Span::new(start, end);
+        (Span::new(self.file_id, codespan_span), result)
     }
 
     fn parse_num(&mut self) -> Result<Datum> {
@@ -214,8 +225,12 @@ impl<'input> Parser<'input> {
         };
 
         // Cover the initial #
-        let adj_span = Span::new(ByteIndex(span.start().0 - 1), span.end());
-        Ok(Datum::Float(adj_span, float_value))
+        let adj_codespan_span = codespan::Span::new(span.start().to_usize() as u32 - 1, span.end());
+
+        Ok(Datum::Float(
+            Span::new(self.file_id, adj_codespan_span),
+            float_value,
+        ))
     }
 
     fn parse_signed_num_or_symbol(&mut self) -> Result<Datum> {
@@ -280,9 +295,14 @@ impl<'input> Parser<'input> {
             '#' => self.parse_symbolic_float(),
             _ => {
                 let (span, _) = self.capture_span(|s| s.consume_char(ExpectedContent::Dispatch));
-                let adj_span = Span::new(ByteIndex(span.start().0 - 1), span.end());
 
-                Err(Error::new(adj_span, ErrorKind::UnsupportedDispatch))
+                let adj_codespan_span =
+                    codespan::Span::new(span.start().to_usize() as u32 - 1, span.end());
+
+                Err(Error::new(
+                    Span::new(self.file_id, adj_codespan_span),
+                    ErrorKind::UnsupportedDispatch,
+                ))
             }
         }
     }
@@ -349,8 +369,11 @@ impl<'input> Parser<'input> {
         let (outer_span, contents) = self.capture_span(|s| s.parse_seq('}', ExpectedContent::Set));
 
         // Cover the # in our span
-        let adj_span = Span::new(ByteIndex(outer_span.start().0 - 1), outer_span.end());
-        contents.map(|contents| Datum::Set(adj_span, contents.into()))
+        let adj_codespan_span =
+            codespan::Span::new(outer_span.start().to_usize() as u32 - 1, outer_span.end());
+
+        contents
+            .map(|contents| Datum::Set(Span::new(self.file_id, adj_codespan_span), contents.into()))
     }
 
     fn parse_anon_fun(&mut self) -> Result<Datum> {
@@ -360,10 +383,15 @@ impl<'input> Parser<'input> {
             self.capture_span(|s| s.parse_seq(')', ExpectedContent::List));
 
         // Cover the # in our span
-        let adj_span = Span::new(ByteIndex(outer_span.start().0 - 1), outer_span.end());
+        let adj_codespan_span =
+            codespan::Span::new(outer_span.start().to_usize() as u32 - 1, outer_span.end());
+
         let body_contents = body_contents?;
 
-        convert_anon_fun(adj_span, body_contents.into_iter())
+        convert_anon_fun(
+            Span::new(self.file_id, adj_codespan_span),
+            body_contents.into_iter(),
+        )
     }
 
     fn parse_quote_escape(&mut self) -> Result<char> {
@@ -390,11 +418,12 @@ impl<'input> Parser<'input> {
                     .ok_or_else(|| Error::new(span, ErrorKind::InvalidCodePoint))
             }
             _ => {
-                let span = Span::new(
-                    ByteIndex(escape_start),
-                    ByteIndex(self.consumed_bytes as u32),
-                );
-                Err(Error::new(span, ErrorKind::UnsupportedStringEscape))
+                let codespan_span = codespan::Span::new(escape_start, self.consumed_bytes as u32);
+
+                Err(Error::new(
+                    Span::new(self.file_id, codespan_span),
+                    ErrorKind::UnsupportedStringEscape,
+                ))
             }
         }
     }
@@ -506,7 +535,7 @@ mod test {
     use crate::span::t2s;
 
     fn whole_str_span(v: &str) -> Span {
-        Span::new(ByteIndex(0), ByteIndex(v.len() as u32))
+        Span::new(None, codespan::Span::new(0, v.len() as u32))
     }
 
     #[test]
@@ -515,27 +544,27 @@ mod test {
         let t = "^^^^^";
         let expected = Datum::Bool(t2s(t), false);
 
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = "true";
         let t = "^^^^";
         let expected = Datum::Bool(t2s(t), true);
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = "     false";
         let t = "     ^^^^^";
         let expected = Datum::Bool(t2s(t), false);
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = "\ttrue\t";
         let t = "\t^^^^\t";
         let expected = Datum::Bool(t2s(t), true);
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = " trueorfalse  ";
         let t = " ^^^^^^^^^^^  ";
         let expected = Datum::Sym(t2s(t), "trueorfalse".into());
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
     }
 
     #[test]
@@ -543,7 +572,7 @@ mod test {
         let j = "() ; with a comment";
         let t = "^^                 ";
         let expected = Datum::List(t2s(t), Box::new([]));
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = "( true   false )";
         let t = "^^^^^^^^^^^^^^^^";
@@ -554,7 +583,7 @@ mod test {
             t2s(t),
             Box::new([Datum::Bool(t2s(u), true), Datum::Bool(t2s(v), false)]),
         );
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = "(1, 2, (3))";
         let t = "^^^^^^^^^^^";
@@ -571,13 +600,13 @@ mod test {
                 Datum::List(t2s(w), Box::new([Datum::Int(t2s(x), 3)])),
             ]),
         );
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = "(true";
         let t = "    >";
         let u = "^    ";
         let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::List(t2s(u))));
-        assert_eq!(err, datum_from_str(j).unwrap_err());
+        assert_eq!(err, datum_from_str(None, j).unwrap_err());
 
         let j = ")";
         let t = "^";
@@ -585,7 +614,7 @@ mod test {
             t2s(t),
             ErrorKind::UnexpectedChar(')', ExpectedContent::Datum),
         );
-        assert_eq!(err, datum_from_str(j).unwrap_err());
+        assert_eq!(err, datum_from_str(None, j).unwrap_err());
 
         let j = "(]";
         let t = "^ ";
@@ -594,7 +623,7 @@ mod test {
             t2s(u),
             ErrorKind::UnexpectedChar(']', ExpectedContent::List(t2s(t))),
         );
-        assert_eq!(err, datum_from_str(j).unwrap_err());
+        assert_eq!(err, datum_from_str(None, j).unwrap_err());
     }
 
     #[test]
@@ -602,7 +631,7 @@ mod test {
         let j = "  []";
         let t = "  ^^";
         let expected = Datum::Vector(t2s(t), Box::new([]));
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = "[ true   (true false) ]";
         let t = "^^^^^^^^^^^^^^^^^^^^^^^";
@@ -621,13 +650,13 @@ mod test {
                 ),
             ]),
         );
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = "[true []";
         let t = "       >";
         let u = "^       ";
         let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::Vector(t2s(u))));
-        assert_eq!(err, datum_from_str(j).unwrap_err());
+        assert_eq!(err, datum_from_str(None, j).unwrap_err());
 
         let j = "]";
         let t = "^";
@@ -635,7 +664,7 @@ mod test {
             t2s(t),
             ErrorKind::UnexpectedChar(']', ExpectedContent::Datum),
         );
-        assert_eq!(err, datum_from_str(j).unwrap_err());
+        assert_eq!(err, datum_from_str(None, j).unwrap_err());
     }
 
     #[test]
@@ -659,7 +688,7 @@ mod test {
             let s = whole_str_span(test_symbol);
             let expected = Datum::Sym(s, test_symbol.into());
 
-            assert_eq!(expected, datum_from_str(test_symbol).unwrap());
+            assert_eq!(expected, datum_from_str(None, test_symbol).unwrap());
         }
     }
 
@@ -669,7 +698,7 @@ mod test {
             let s = whole_str_span(test_symbol);
             let expected = Datum::Sym(s, test_symbol.into());
 
-            assert_eq!(expected, datum_from_str(test_symbol).unwrap());
+            assert_eq!(expected, datum_from_str(None, test_symbol).unwrap());
         }
     }
 
@@ -696,19 +725,19 @@ mod test {
             let s = whole_str_span(test_string);
             let expected = Datum::Str(s, (*expected_contents).into());
 
-            assert_eq!(expected, datum_from_str(test_string).unwrap());
+            assert_eq!(expected, datum_from_str(None, test_string).unwrap());
         }
 
         let j = r#" "foo "#;
         let t = r#"     >"#;
         let u = r#" ^    "#;
         let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::String(t2s(u))));
-        assert_eq!(err, datum_from_str(j).unwrap_err());
+        assert_eq!(err, datum_from_str(None, j).unwrap_err());
 
         let j = r#""\p""#;
         let t = r#"  ^ "#;
         let err = Error::new(t2s(t), ErrorKind::UnsupportedStringEscape);
-        assert_eq!(err, datum_from_str(j).unwrap_err());
+        assert_eq!(err, datum_from_str(None, j).unwrap_err());
     }
 
     #[test]
@@ -729,23 +758,23 @@ mod test {
             let s = whole_str_span(j);
             let expected = Datum::Char(s, *expected_char);
 
-            assert_eq!(expected, datum_from_str(j).unwrap());
+            assert_eq!(expected, datum_from_str(None, j).unwrap());
         }
 
         let j = r#"\SPACE"#;
         let t = r#" ^^^^^"#;
         let err = Error::new(t2s(t), ErrorKind::UnsupportedChar);
-        assert_eq!(err, datum_from_str(j).unwrap_err());
+        assert_eq!(err, datum_from_str(None, j).unwrap_err());
 
         let j = r#"\u110000"#;
         let t = r#" ^^^^^^^"#;
         let err = Error::new(t2s(t), ErrorKind::InvalidCodePoint);
-        assert_eq!(err, datum_from_str(j).unwrap_err());
+        assert_eq!(err, datum_from_str(None, j).unwrap_err());
 
         let j = r#"[\newline]"#;
         let t = r#" ^^^^^^^^ "#;
         let expected = Datum::Vector(whole_str_span(j), Box::new([Datum::Char(t2s(t), '\n')]));
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
     }
 
     #[allow(clippy::unreadable_literal)]
@@ -766,23 +795,23 @@ mod test {
             let s = whole_str_span(j);
             let expected = Datum::Int(s, expected_int);
 
-            assert_eq!(expected, datum_from_str(j).unwrap());
+            assert_eq!(expected, datum_from_str(None, j).unwrap());
         }
 
         let j = "10223372036854775807";
         let t = "^^^^^^^^^^^^^^^^^^^^";
         let err = Error::new(t2s(t), ErrorKind::IntegerOverflow);
-        assert_eq!(err, datum_from_str(j).unwrap_err());
+        assert_eq!(err, datum_from_str(None, j).unwrap_err());
 
         let j = "-10223372036854775807";
         let t = "^^^^^^^^^^^^^^^^^^^^^";
         let err = Error::new(t2s(t), ErrorKind::IntegerOverflow);
-        assert_eq!(err, datum_from_str(j).unwrap_err());
+        assert_eq!(err, datum_from_str(None, j).unwrap_err());
 
         let j = "4545894549584910223372036854775807";
         let t = "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^";
         let err = Error::new(t2s(t), ErrorKind::IntegerOverflow);
-        assert_eq!(err, datum_from_str(j).unwrap_err());
+        assert_eq!(err, datum_from_str(None, j).unwrap_err());
     }
 
     #[test]
@@ -805,11 +834,11 @@ mod test {
             let s = whole_str_span(j);
             let expected = Datum::Float(s, expected_float);
 
-            assert_eq!(expected, datum_from_str(j).unwrap());
+            assert_eq!(expected, datum_from_str(None, j).unwrap());
         }
 
         // This can't be compared using normal equality
-        if let Datum::Float(_, f) = datum_from_str("##NaN").unwrap() {
+        if let Datum::Float(_, f) = datum_from_str(None, "##NaN").unwrap() {
             assert!(f.is_nan());
         } else {
             panic!("Expected ##NaN to parse as float");
@@ -821,7 +850,7 @@ mod test {
         let j = "{}";
         let t = "^^";
         let expected = Datum::Map(t2s(t), Box::new([]));
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = "{ 1,2 ,, 3  4}";
         let t = "^^^^^^^^^^^^^^";
@@ -836,7 +865,7 @@ mod test {
         ]);
         let expected = Datum::Map(t2s(t), expected_contents);
 
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = "{1 {2 3}}";
         let t = "^^^^^^^^^";
@@ -851,12 +880,12 @@ mod test {
         let outer_contents = Box::new([(Datum::Int(t2s(u), 1), inner)]);
         let expected = Datum::Map(t2s(t), outer_contents);
 
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = "{1}";
         let t = "^^^";
         let err = Error::new(t2s(t), ErrorKind::UnevenMap);
-        assert_eq!(err, datum_from_str(j).unwrap_err());
+        assert_eq!(err, datum_from_str(None, j).unwrap_err());
     }
 
     #[test]
@@ -864,7 +893,7 @@ mod test {
         let j = "#{}";
         let t = "^^^";
         let expected = Datum::Set(t2s(t), Box::new([]));
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = "#{ 1 2  3 4}";
         let t = "^^^^^^^^^^^^";
@@ -881,7 +910,7 @@ mod test {
         ]);
         let expected = Datum::Set(t2s(t), expected_contents);
 
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = "#{1 #{2 3}}";
         let t = "^^^^^^^^^^^";
@@ -896,7 +925,7 @@ mod test {
         let outer_contents = Box::new([Datum::Int(t2s(u), 1), inner]);
         let expected = Datum::Set(t2s(t), outer_contents);
 
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
     }
 
     #[test]
@@ -913,7 +942,7 @@ mod test {
                 Datum::Sym(t2s(v), "foo".into()),
             ]),
         );
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = "' (1 2 3)";
         let t = "^^^^^^^^^";
@@ -937,12 +966,12 @@ mod test {
                 ),
             ]),
         );
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = "'";
         let t = ">";
         let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::Datum));
-        assert_eq!(err, datum_from_str(j).unwrap_err());
+        assert_eq!(err, datum_from_str(None, j).unwrap_err());
     }
 
     #[test]
@@ -951,13 +980,13 @@ mod test {
         let t = r#"^^   "#;
         let err = Error::new(t2s(t), ErrorKind::UnsupportedDispatch);
 
-        assert_eq!(err, datum_from_str(j).unwrap_err());
+        assert_eq!(err, datum_from_str(None, j).unwrap_err());
 
         let j = "#";
         let t = ">";
         let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::Dispatch));
 
-        assert_eq!(err, datum_from_str(j).unwrap_err());
+        assert_eq!(err, datum_from_str(None, j).unwrap_err());
     }
 
     #[test]
@@ -967,7 +996,7 @@ mod test {
         let u = " ^^^^^              ";
 
         let expected = Datum::List(t2s(t), Box::new([Datum::Sym(t2s(u), "Hello".into())]));
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
 
         let j = "(Hello #_  you jerk)";
         let t = "^^^^^^^^^^^^^^^^^^^^";
@@ -981,7 +1010,7 @@ mod test {
                 Datum::Sym(t2s(v), "jerk".into()),
             ]),
         );
-        assert_eq!(expected, datum_from_str(j).unwrap());
+        assert_eq!(expected, datum_from_str(None, j).unwrap());
     }
 
     #[test]
@@ -991,7 +1020,7 @@ mod test {
         let u = "          ^  ";
 
         let expected = vec![Datum::Int(t2s(t), 1), Datum::Int(t2s(u), 3)];
-        assert_eq!(expected, data_from_str(j).unwrap());
+        assert_eq!(expected, data_from_str(None, j).unwrap());
 
         let j = "(true)))";
         let t = "      ^ ";
@@ -999,13 +1028,13 @@ mod test {
             t2s(t),
             ErrorKind::UnexpectedChar(')', ExpectedContent::Datum),
         );
-        assert_eq!(err, data_from_str(j).unwrap_err());
+        assert_eq!(err, data_from_str(None, j).unwrap_err());
 
         let j = "(true";
         let t = "    >";
         let u = "^    ";
 
         let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::List(t2s(u))));
-        assert_eq!(err, data_from_str(j).unwrap_err());
+        assert_eq!(err, data_from_str(None, j).unwrap_err());
     }
 }

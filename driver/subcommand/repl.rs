@@ -7,7 +7,6 @@ use std::{fs, path};
 use ansi_term::{Colour, Style};
 
 use arret_syntax::datum::DataStr;
-use arret_syntax::span::ByteIndex;
 
 use arret_compiler::{emit_diagnostics_to_stderr, CompileCtx};
 
@@ -57,7 +56,7 @@ fn error_for_line(mut line: &str) -> Option<arret_syntax::error::Error> {
         return None;
     }
 
-    datum_from_str_with_span_offset(line, ByteIndex(span_offset as u32)).err()
+    datum_from_str_with_span_offset(None, line, codespan::ByteIndex(span_offset as u32)).err()
 }
 
 fn expected_content_for_line(line: &str) -> Option<arret_syntax::error::ExpectedContent> {

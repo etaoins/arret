@@ -5,13 +5,12 @@ use std::thread;
 
 use arret_syntax::datum::DataStr;
 
-use codespan::FileName;
-use codespan_reporting::{Diagnostic, Label};
+use codespan_reporting::diagnostic::Diagnostic;
 
 use crate::context;
 use crate::hir;
 use crate::hir::scope::Scope;
-use crate::reporting::{diagnostic_for_syntax_error, errors_to_diagnostics};
+use crate::reporting::{diagnostic_for_syntax_error, errors_to_diagnostics, new_label};
 use crate::ty;
 use crate::CompileCtx;
 
@@ -138,7 +137,7 @@ impl<'ccx> ReplEngine<'ccx> {
         let source_file = self
             .ccx
             .source_loader()
-            .load_string(FileName::Virtual("repl".into()), input.into());
+            .load_string("repl".to_owned(), input);
 
         let input_data = source_file
             .parsed()
@@ -152,10 +151,10 @@ impl<'ccx> ReplEngine<'ccx> {
             _ => {
                 let extra_span = input_data[1].span();
 
-                return Err(vec![Diagnostic::new_error("unexpected trailing datum")
-                    .with_label(
-                        Label::new_primary(extra_span).with_message("trailing datum"),
-                    )]);
+                return Err(vec![Diagnostic::new_error(
+                    "unexpected trailing datum",
+                    new_label(extra_span, "trailing datum"),
+                )]);
             }
         };
 

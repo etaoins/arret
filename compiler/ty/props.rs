@@ -83,7 +83,7 @@ mod test {
     use super::*;
 
     use crate::hir::poly_for_str;
-    use crate::source::EMPTY_SPAN;
+    use crate::source::empty_span;
     use crate::ty::record;
     use crate::ty::ty_args::TyArgs;
 
@@ -129,7 +129,7 @@ mod test {
 
         assert_eq!(false, str_has_subtypes("(RawU)"));
 
-        let tvar = ty::TVar::new(EMPTY_SPAN, "test".into(), Ty::Any.into());
+        let tvar = ty::TVar::new(empty_span(), "test".into(), Ty::Any.into());
         assert_eq!(true, has_subtypes(&tvar.into()));
     }
 
@@ -160,18 +160,22 @@ mod test {
         assert_eq!(false, str_is_literal("(Vectorof false)"));
         assert_eq!(true, str_is_literal("(Vector false true)"));
 
-        let tvar = ty::TVar::new(EMPTY_SPAN, "test".into(), Ty::Any.into());
+        let tvar = ty::TVar::new(empty_span(), "test".into(), Ty::Any.into());
         assert_eq!(false, is_literal(&tvar.into()));
     }
 
     #[test]
     fn mono_record_type() {
         let mono_record_cons = record::Cons::new(
-            EMPTY_SPAN,
+            empty_span(),
             "record_cons".into(),
             "record_cons?".into(),
             None,
-            Box::new([record::Field::new(EMPTY_SPAN, "num".into(), Ty::Num.into())]),
+            Box::new([record::Field::new(
+                empty_span(),
+                "num".into(),
+                Ty::Num.into(),
+            )]),
         );
 
         let int_record_instance_ref: ty::Ref<ty::Poly> =
@@ -183,17 +187,17 @@ mod test {
 
     #[test]
     fn poly_record_type() {
-        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), Ty::Any.into());
+        let tvar = ty::TVar::new(empty_span(), "tvar".into(), Ty::Any.into());
 
         let poly_record_cons = record::Cons::new(
-            EMPTY_SPAN,
+            empty_span(),
             "record_cons".into(),
             "record_cons?".into(),
             Some(Box::new([record::PolyParam::TVar(
                 Variance::Covariant,
                 tvar.clone(),
             )])),
-            Box::new([record::Field::new(EMPTY_SPAN, "num".into(), tvar.into())]),
+            Box::new([record::Field::new(empty_span(), "num".into(), tvar.into())]),
         );
 
         let poly_record_instance_ref: ty::Ref<ty::Poly> =

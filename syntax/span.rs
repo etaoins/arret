@@ -1,6 +1,37 @@
-pub use codespan::ByteIndex;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Span {
+    file_id: Option<codespan::FileId>,
+    codespan_span: codespan::Span,
+}
 
-pub type Span = codespan::ByteSpan;
+impl Span {
+    pub const fn new(file_id: Option<codespan::FileId>, codespan_span: codespan::Span) -> Self {
+        Self {
+            file_id,
+            codespan_span,
+        }
+    }
+
+    pub fn file_id(&self) -> Option<codespan::FileId> {
+        self.file_id
+    }
+
+    pub fn start(&self) -> codespan::ByteIndex {
+        self.codespan_span.start()
+    }
+
+    pub fn end(&self) -> codespan::ByteIndex {
+        self.codespan_span.end()
+    }
+
+    pub fn codespan_span(&self) -> codespan::Span {
+        self.codespan_span
+    }
+
+    pub fn contains(&self, other: Span) -> bool {
+        self.file_id == other.file_id && self.start() <= other.start() && self.end() >= other.end()
+    }
+}
 
 // This isn't #[cfg(test)] because it's used in other crates
 pub fn t2s(v: &str) -> Span {
@@ -17,5 +48,6 @@ pub fn t2s(v: &str) -> Span {
         (start, end)
     };
 
-    Span::new(ByteIndex(start), ByteIndex(end))
+    let codespan_span = codespan::Span::new(start, end);
+    Span::new(None, codespan_span)
 }

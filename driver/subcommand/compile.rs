@@ -1,6 +1,6 @@
 use std::{fs, path};
 
-use codespan_reporting::Diagnostic;
+use codespan_reporting::diagnostic::Diagnostic;
 
 use arret_compiler::{emit_diagnostics_to_stderr, print_program_mir, CompileCtx};
 

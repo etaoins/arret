@@ -5,13 +5,13 @@ use std::io::Write;
 use std::ops::Range;
 use std::{env, fs, io, path, process};
 
-use codespan_reporting::{Diagnostic, Label, LabelStyle, Severity};
+use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
 use rayon::prelude::*;
 use tempfile::NamedTempFile;
 
-use arret_syntax::span::{ByteIndex, Span};
+use arret_syntax::span::Span;
 
-use arret_compiler::{emit_diagnostics_to_stderr, CompileCtx, OutputType};
+use arret_compiler::{emit_diagnostics_to_stderr, CompileCtx, OutputType, SourceLoader};
 
 #[derive(Clone, PartialEq)]
 struct RunOutput {
@@ -44,16 +44,19 @@ enum TestType {
 #[derive(Debug)]
 enum ExpectedSpan {
     Exact(Span),
-    StartRange(Range<ByteIndex>),
+    StartRange(codespan::FileId, Range<codespan::ByteIndex>),
 }
 
 impl ExpectedSpan {
     fn matches(&self, actual_span: Span) -> bool {
         match self {
             ExpectedSpan::Exact(span) => *span == actual_span,
-            ExpectedSpan::StartRange(span_range) => {
+            ExpectedSpan::StartRange(expected_file_id, span_range) => {
                 let actual_span_start = actual_span.start();
-                actual_span_start >= span_range.start && actual_span_start < span_range.end
+
+                actual_span.file_id() == Some(*expected_file_id)
+                    && actual_span_start >= span_range.start
+                    && actual_span_start < span_range.end
             }
         }
     }
@@ -76,31 +79,42 @@ impl ExpectedDiagnostic {
             return false;
         }
 
-        actual
-            .labels
-            .iter()
-            .any(|candidate_label| self.span.matches(candidate_label.span))
+        std::iter::once(&actual.primary_label)
+            .chain(actual.secondary_labels.iter())
+            .any(|candidate_label| {
+                let candidate_span = Span::new(Some(candidate_label.file_id), candidate_label.span);
+                self.span.matches(candidate_span)
+            })
     }
 
     /// Returns a diagnostic for reporting missing expectation
     fn to_error_diagnostic(&self) -> Diagnostic {
         let span = match self.span {
             ExpectedSpan::Exact(span) => span,
-            ExpectedSpan::StartRange(ref span_range) => Span::new(span_range.start, span_range.end),
+            ExpectedSpan::StartRange(file_id, ref span_range) => Span::new(
+                Some(file_id),
+                codespan::Span::new(span_range.start, span_range.end),
+            ),
         };
 
-        Diagnostic::new_error(format!("expected {}", self.expected_severity.to_str(),)).with_label(
-            Label::new_primary(span).with_message(format!("{} ...", self.message_prefix)),
+        Diagnostic::new_error(
+            format!("expected {}", severity_name(self.expected_severity)),
+            Label::new(
+                span.file_id().unwrap(),
+                span.codespan_span(),
+                format!("{} ...", self.message_prefix),
+            ),
         )
     }
 }
 
 fn take_severity(marker_string: &str) -> (Severity, &str) {
     for (prefix, severity) in &[
+        (" BUG ", Severity::Bug),
         (" ERROR ", Severity::Error),
         (" WARNING ", Severity::Warning),
-        (" NOTE ", Severity::Note),
         (" HELP ", Severity::Help),
+        (" NOTE ", Severity::Note),
     ] {
         if marker_string.starts_with(prefix) {
             return (*severity, &marker_string[prefix.len()..]);
@@ -110,13 +124,22 @@ fn take_severity(marker_string: &str) -> (Severity, &str) {
     panic!("Unknown severity prefix for `{}`", marker_string)
 }
 
+fn severity_name(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Bug => "bug",
+        Severity::Error => "error",
+        Severity::Warning => "warning",
+        Severity::Help => "help",
+        Severity::Note => "note",
+    }
+}
+
 fn extract_expected_diagnostics(
+    source_loader: &SourceLoader,
     source_file: &arret_compiler::SourceFile,
 ) -> Vec<ExpectedDiagnostic> {
-    let file_map = source_file.file_map();
-
-    let source = file_map.src();
-    let span_offset = file_map.span().start().0;
+    let files = source_loader.files();
+    let source = files.source(source_file.file_id());
 
     source
         .match_indices(";~")
@@ -136,8 +159,9 @@ fn extract_expected_diagnostics(
                 expected_severity: severity,
                 message_prefix: marker_string.into(),
                 span: ExpectedSpan::StartRange(
-                    ByteIndex(span_offset + (*start_of_line_index as u32))
-                        ..ByteIndex(span_offset + (index as u32)),
+                    source_file.file_id(),
+                    codespan::ByteIndex(*start_of_line_index as u32)
+                        ..codespan::ByteIndex(index as u32),
                 ),
             }
         })
@@ -171,8 +195,11 @@ fn extract_expected_diagnostics(
                 expected_severity: severity,
                 message_prefix: marker_string.into(),
                 span: ExpectedSpan::Exact(Span::new(
-                    ByteIndex(span_offset + (span_start as u32)),
-                    ByteIndex(span_offset + (span_end as u32)),
+                    Some(source_file.file_id()),
+                    codespan::Span::new(
+                        codespan::ByteIndex(span_start as u32),
+                        codespan::ByteIndex(span_end as u32),
+                    ),
                 )),
             }
         }))
@@ -180,7 +207,7 @@ fn extract_expected_diagnostics(
 }
 
 fn exit_with_run_output_difference(
-    source_filename: &path::Path,
+    source_filename: &str,
     stream_name: &str,
     expected: &[u8],
     actual: &[u8],
@@ -199,8 +226,7 @@ fn exit_with_run_output_difference(
     writeln!(
         stderr_lock,
         "unexpected {} output from integration test {}\n",
-        stream_name,
-        source_filename.to_string_lossy()
+        stream_name, source_filename
     )
     .unwrap();
 
@@ -295,28 +321,40 @@ fn result_for_single_test(
                 // Dump any panic message from the test
                 let _ = io::stderr().write_all(&output.stderr);
 
-                return Err(vec![Diagnostic::new_error(format!(
-                    "unexpected status {} returned from integration test {}",
-                    output.status,
-                    source_file.file_map().name()
-                ))]);
+                return Err(vec![Diagnostic::new_error(
+                    format!(
+                        "unexpected status {} returned from integration test",
+                        output.status,
+                    ),
+                    Label::new(
+                        source_file.file_id(),
+                        codespan::Span::initial(),
+                        "integration test file",
+                    ),
+                )]);
             }
         }
         RunType::Error(_) => {
             // Code 1 is used by panic. This makes sure we didn't e.g. SIGSEGV.
             if output.status.code() != Some(1) {
-                return Err(vec![Diagnostic::new_error(format!(
-                    "unexpected status {} returned from integration test {}",
-                    output.status,
-                    source_file.file_map().name()
-                ))]);
+                return Err(vec![Diagnostic::new_error(
+                    format!(
+                        "unexpected status {} returned from integration test",
+                        output.status,
+                    ),
+                    Label::new(
+                        source_file.file_id(),
+                        codespan::Span::initial(),
+                        "integration test file",
+                    ),
+                )]);
             }
         }
     }
 
     if expected_output.stderr != output.stderr {
         exit_with_run_output_difference(
-            source_file.file_map().name().as_ref(),
+            ccx.source_loader().files().name(source_file.file_id()),
             "stderr",
             &expected_output.stderr,
             &output.stderr,
@@ -325,7 +363,7 @@ fn result_for_single_test(
 
     if expected_output.stdout != output.stdout {
         exit_with_run_output_difference(
-            source_file.file_map().name().as_ref(),
+            ccx.source_loader().files().name(source_file.file_id()),
             "stdout",
             &expected_output.stdout,
             &output.stdout,
@@ -358,13 +396,13 @@ fn run_single_compile_fail_test(
 ) -> bool {
     let result = result_for_single_test(target_triple, ccx, source_file, TestType::CompileError);
 
-    let mut expected_diags = extract_expected_diagnostics(source_file);
+    let mut expected_diags = extract_expected_diagnostics(ccx.source_loader(), source_file);
     let actual_diags = if let Err(diags) = result {
         diags
     } else {
         eprintln!(
             "Compilation unexpectedly succeeded for {}",
-            source_file.file_map().name()
+            ccx.source_loader().files().name(source_file.file_id())
         );
         return false;
     };
@@ -393,20 +431,14 @@ fn run_single_compile_fail_test(
     let all_diags = unexpected_diags
         .into_iter()
         .map(|unexpected_diag| {
-            let error_diag =
-                Diagnostic::new_error(format!("unexpected {}", unexpected_diag.severity.to_str()));
-
-            if let Some(span) = unexpected_diag
-                .labels
-                .iter()
-                .find(|label| label.style == LabelStyle::Primary)
-                .map(|label| label.span)
-            {
-                error_diag
-                    .with_label(Label::new_primary(span).with_message(unexpected_diag.message))
-            } else {
-                error_diag
-            }
+            Diagnostic::new_error(
+                format!("unexpected {}", severity_name(unexpected_diag.severity)),
+                Label::new(
+                    unexpected_diag.primary_label.file_id,
+                    unexpected_diag.primary_label.span,
+                    unexpected_diag.message,
+                ),
+            )
         })
         .chain(
             expected_diags

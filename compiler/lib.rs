@@ -16,7 +16,7 @@ mod source;
 mod ty;
 mod typeck;
 
-use codespan_reporting::Diagnostic;
+use codespan_reporting::diagnostic::Diagnostic;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -69,6 +69,8 @@ pub fn program_to_evaluable(
     ccx: &CompileCtx,
     source_file: &SourceFile,
 ) -> Result<EvaluableProgram, Vec<Diagnostic>> {
+    use arret_syntax::span::Span;
+
     use crate::typeck::infer;
 
     let entry_module = ccx.source_file_to_module(source_file)?;
@@ -76,21 +78,22 @@ pub fn program_to_evaluable(
     let main_var_id = if let Some(var_id) = entry_module.main_var_id {
         var_id
     } else {
-        use codespan_reporting::Label;
-        let file_span = source_file.file_map().span();
+        use codespan_reporting::diagnostic::Label;
 
         return Err(vec![Diagnostic::new_error(
             "no main! function defined in entry module",
-        )
-        .with_label(
-            Label::new_primary(file_span).with_message("main! function expected in this file"),
+            Label::new(
+                source_file.file_id(),
+                codespan::Span::initial(),
+                "main! function expected in this file",
+            ),
         )]);
     };
 
     let inferred_main_type = &entry_module.inferred_locals[&main_var_id.local_id()];
 
     infer::ensure_main_type(
-        source_file.file_map().span(),
+        Span::new(Some(source_file.file_id()), codespan::Span::initial()),
         &entry_module.defs,
         main_var_id,
         inferred_main_type,

@@ -11,19 +11,17 @@ use crate::source::SourceLoader;
 use crate::ty::conv_abi::ConvertableABIType;
 
 fn span_to_human_location(source_loader: Option<&SourceLoader>, span: Span) -> Option<String> {
-    let span_start = span.start();
-
     let source_loader = source_loader?;
-    let code_map = source_loader.code_map();
-    let file_map = code_map.find_file(span_start)?;
+    let file_id = span.file_id()?;
 
-    let (line, column) = file_map.location(span_start).ok()?;
+    let files = source_loader.files();
+    let location = files.location(file_id, span.codespan_span().start()).ok()?;
 
     Some(format!(
         "{}:{}:{}",
-        file_map.name(),
-        line.number(),
-        column.number()
+        files.name(file_id),
+        location.line.number(),
+        location.column.number()
     ))
 }
 

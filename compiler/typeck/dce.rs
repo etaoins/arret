@@ -51,7 +51,7 @@ pub fn expr_can_side_effect(expr: &hir::Expr<hir::Inferred>) -> bool {
 mod test {
     use super::*;
 
-    use crate::source::EMPTY_SPAN;
+    use crate::source::empty_span;
     use crate::ty::ty_args::TyArgs;
 
     #[test]
@@ -59,7 +59,7 @@ mod test {
         let app_expr = hir::Expr::<hir::Inferred> {
             result_ty: ty::List::empty().into(),
             kind: hir::ExprKind::App(Box::new(hir::App {
-                span: EMPTY_SPAN,
+                span: empty_span(),
                 fun_expr: hir::Expr {
                     result_ty: ty::Fun::new_mono(
                         ty::List::empty(),
@@ -83,7 +83,7 @@ mod test {
         let app_expr = hir::Expr::<hir::Inferred> {
             result_ty: ty::List::empty().into(),
             kind: hir::ExprKind::App(Box::new(hir::App {
-                span: EMPTY_SPAN,
+                span: empty_span(),
                 fun_expr: hir::Expr {
                     result_ty: ty::Fun::new_mono(
                         ty::List::empty(),

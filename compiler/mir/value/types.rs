@@ -205,13 +205,13 @@ mod test {
     use super::*;
 
     use crate::hir::tvar_bounded_by;
-    use crate::source::EMPTY_SPAN;
+    use crate::source::empty_span;
     use crate::ty::ty_args::TyArgs;
 
     #[test]
     fn test_find_record_conses_for_ty_ref() {
         let cons1 = record::Cons::new(
-            EMPTY_SPAN,
+            empty_span(),
             "cons1".into(),
             "cons1?".into(),
             None,
@@ -219,7 +219,7 @@ mod test {
         );
 
         let cons2 = record::Cons::new(
-            EMPTY_SPAN,
+            empty_span(),
             "cons2".into(),
             "cons2?".into(),
             None,

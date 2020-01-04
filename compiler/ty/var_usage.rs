@@ -194,7 +194,7 @@ impl VarUsages {
 mod test {
     use super::*;
 
-    use crate::source::EMPTY_SPAN;
+    use crate::source::empty_span;
     use crate::ty::purity::Purity;
 
     #[test]
@@ -217,7 +217,7 @@ mod test {
 
     #[test]
     fn convariant_usage() {
-        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), Ty::Any.into());
+        let tvar = ty::TVar::new(empty_span(), "tvar".into(), Ty::Any.into());
 
         let mut var_usages = VarUsages::new();
         var_usages.add_poly_usages(&tvar.clone().into());
@@ -227,7 +227,7 @@ mod test {
 
     #[test]
     fn contravariant_usage() {
-        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), Ty::Any.into());
+        let tvar = ty::TVar::new(empty_span(), "tvar".into(), Ty::Any.into());
 
         let mut var_usages = VarUsages::new();
 
@@ -248,7 +248,7 @@ mod test {
 
     #[test]
     fn invariant_usage() {
-        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), Ty::Any.into());
+        let tvar = ty::TVar::new(empty_span(), "tvar".into(), Ty::Any.into());
 
         let mut var_usages = VarUsages::new();
 

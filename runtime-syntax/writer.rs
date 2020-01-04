@@ -210,7 +210,7 @@ mod test {
         assert_eq!(expected, first_output);
 
         // Try to round trip this to make sure our output and tests are sane
-        let reparsed_syntax = datum_from_str(&first_output).unwrap();
+        let reparsed_syntax = datum_from_str(None, &first_output).unwrap();
         let reboxed_ref = reader::box_syntax_datum(heap, &reparsed_syntax);
 
         let second_output = string_for_boxed(heap, reboxed_ref);

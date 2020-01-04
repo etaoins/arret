@@ -39,7 +39,7 @@ mod test {
 
     fn assert_poly_for_str(ty_str: &str, datum_str: &str) {
         use arret_syntax::parser::datum_from_str;
-        let datum = datum_from_str(datum_str).unwrap();
+        let datum = datum_from_str(None, datum_str).unwrap();
 
         assert_eq!(poly_for_str(ty_str), ty_ref_for_datum(&datum));
     }

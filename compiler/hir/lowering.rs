@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use codespan_reporting::Diagnostic;
+use codespan_reporting::diagnostic::Diagnostic;
 
 use rayon::prelude::*;
 
@@ -35,7 +35,7 @@ use crate::hir::{
 };
 
 #[cfg(test)]
-use crate::source::EMPTY_SPAN;
+use crate::source::empty_span;
 
 /// Module lowered to HIR
 pub struct LoweredModule {
@@ -974,14 +974,14 @@ pub(crate) fn lower_repl_datum(
 #[cfg(test)]
 fn import_statement_for_module(names: &[&'static str]) -> Datum {
     Datum::List(
-        EMPTY_SPAN,
+        empty_span(),
         Box::new([
-            Datum::Sym(EMPTY_SPAN, "import".into()),
+            Datum::Sym(empty_span(), "import".into()),
             Datum::Vector(
-                EMPTY_SPAN,
+                empty_span(),
                 names
                     .iter()
-                    .map(|&n| Datum::Sym(EMPTY_SPAN, n.into()))
+                    .map(|&n| Datum::Sym(empty_span(), n.into()))
                     .collect(),
             ),
         ]),
@@ -1017,7 +1017,7 @@ fn module_for_str(data_str: &str) -> Result<LoweredModule> {
         );
     }
 
-    let mut test_data = data_from_str(data_str).unwrap();
+    let mut test_data = data_from_str(None, data_str).unwrap();
     program_data.append(&mut test_data);
 
     imported_exports.insert(
@@ -1036,7 +1036,7 @@ pub fn module_expr_for_str(data_str: &str) -> (ModuleId, Expr<Lowered>) {
     let via = VarIdAlloc::new(ModuleId::alloc());
     let scope = Scope::new_with_primitives();
 
-    let test_datum = datum_from_str(data_str).unwrap();
+    let test_datum = datum_from_str(None, data_str).unwrap();
     let test_nsdatum = NsDatum::from_syntax_datum(&test_datum);
 
     (

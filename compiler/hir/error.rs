@@ -1,13 +1,13 @@
-use std::{error, fmt, io, path, result};
+use std::{error, fmt, io, iter, path, result};
 
-use codespan_reporting::{Diagnostic, Label};
+use codespan_reporting::diagnostic::Diagnostic;
 
 use arret_syntax::datum::DataStr;
 use arret_syntax::error::Error as SyntaxError;
 use arret_syntax::span::Span;
 
 use crate::hir::types::{str_for_purity, str_for_ty_ref};
-use crate::reporting::{diagnostic_for_syntax_error, LocTrace};
+use crate::reporting::{diagnostic_for_syntax_error, new_label, LocTrace};
 use crate::ty;
 use crate::ty::purity;
 
@@ -144,120 +144,110 @@ impl From<Error> for Diagnostic {
         let origin = loc_trace.origin();
 
         let diagnostic = match kind {
-            ErrorKind::ExpectedValue(found) => {
-                Diagnostic::new_error(format!("cannot take the value of a {}", found))
-                    .with_label(Label::new_primary(origin).with_message("expected value"))
-            }
+            ErrorKind::ExpectedValue(found) => Diagnostic::new_error(
+                format!("cannot take the value of a {}", found),
+                new_label(origin, "expected value"),
+            ),
 
-            ErrorKind::ExpectedTy(found) => {
-                Diagnostic::new_error(format!("{} cannot be used as a type", found))
-                    .with_label(Label::new_primary(origin).with_message("expected type"))
-            }
+            ErrorKind::ExpectedTy(found) => Diagnostic::new_error(
+                format!("{} cannot be used as a type", found),
+                new_label(origin, "expected type"),
+            ),
 
-            ErrorKind::ExpectedTyCons(found) => {
-                Diagnostic::new_error(format!("{} cannot be used as a type constructor", found))
-                    .with_label(
-                        Label::new_primary(origin).with_message("expected type constructor"),
-                    )
-            }
+            ErrorKind::ExpectedTyCons(found) => Diagnostic::new_error(
+                format!("{} cannot be used as a type constructor", found),
+                new_label(origin, "expected type constructor"),
+            ),
 
             ErrorKind::ExpectedSym(details) => {
                 let ExpectedSym { found, usage } = *details;
 
-                Diagnostic::new_error(format!("expected symbol, found {}", found)).with_label(
-                    Label::new_primary(origin).with_message(format!("expected {}", usage)),
+                Diagnostic::new_error(
+                    format!("expected symbol, found {}", found),
+                    new_label(origin, format!("expected {}", usage)),
                 )
             }
 
-            ErrorKind::ExpectedParamList(found) => Diagnostic::new_error(format!(
-                "expected parameter declaration list, found {}",
-                found
-            ))
-            .with_label(Label::new_primary(origin).with_message("expected parameter list")),
-
-            ErrorKind::ExpectedPolyVarsDecl(found) => Diagnostic::new_error(format!(
-                "expected polymorphic variable set, found {}",
-                found
-            ))
-            .with_label(
-                Label::new_primary(origin).with_message("expected polymorphic variable set"),
+            ErrorKind::ExpectedParamList(found) => Diagnostic::new_error(
+                format!("expected parameter declaration list, found {}", found),
+                new_label(origin, "expected parameter list"),
             ),
 
-            ErrorKind::ExpectedMacroSpecList(found) => Diagnostic::new_error(format!(
-                "expected macro specification list, found {}",
-                found
-            ))
-            .with_label(Label::new_primary(origin).with_message("expected `(macro-rules ...)`")),
-
-            ErrorKind::ExpectedMacroRuleVec(found) => {
-                Diagnostic::new_error(format!("expected macro rule vector, found {}", found))
-                    .with_label(
-                        Label::new_primary(origin).with_message("expected `[pattern template]`"),
-                    )
-            }
-
-            ErrorKind::ExpectedMacroRulePatternList(found) => {
-                Diagnostic::new_error(format!("expected macro rule pattern list, found {}", found))
-                    .with_label(
-                        Label::new_primary(origin).with_message("expected macro rule pattern list"),
-                    )
-            }
-
-            ErrorKind::ExpectedMacroEllipsisEscape(found) => {
-                Diagnostic::new_error(format!("expected macro symbol to escape, found {}", found))
-                    .with_label(Label::new_primary(origin).with_message("expected symbol"))
-            }
-
-            ErrorKind::ExpectedCompileErrorString(found) => {
-                Diagnostic::new_error(format!("expected error message string, found {}", found))
-                    .with_label(Label::new_primary(origin).with_message("expected string"))
-            }
-
-            ErrorKind::ExpectedImportFilterKeyword(found) => {
-                Diagnostic::new_error(format!("expected import filter keyword, found {}", found))
-                    .with_label(Label::new_primary(origin).with_message(
-                        "expected `:only`, `:exclude`, `:rename`, `:prefix` or `:prefixed`",
-                    ))
-            }
-
-            ErrorKind::ExpectedImportRenameMap(found) => {
-                Diagnostic::new_error(format!("expected identifier rename map, found {}", found))
-                    .with_label(
-                        Label::new_primary(origin).with_message("expected identifier rename map"),
-                    )
-            }
-
-            ErrorKind::ExpectedRecordTyConsDecl(found) => Diagnostic::new_error(format!(
-                "expected record type constuctor declaration, found {}",
-                found
-            ))
-            .with_label(
-                Label::new_primary(origin)
-                    .with_message("expected symbol or polymorphic constructor list"),
+            ErrorKind::ExpectedPolyVarsDecl(found) => Diagnostic::new_error(
+                format!("expected polymorphic variable set, found {}", found),
+                new_label(origin, "expected polymorphic variable set"),
             ),
 
-            ErrorKind::ExpectedRecordValueConsDecl(found) => Diagnostic::new_error(format!(
-                "expected record value constructor declaration, found {}",
-                found
-            ))
-            .with_label(Label::new_primary(origin).with_message("expected record field list")),
+            ErrorKind::ExpectedMacroSpecList(found) => Diagnostic::new_error(
+                format!("expected macro specification list, found {}", found),
+                new_label(origin, "expected `(macro-rules ...)`"),
+            ),
 
-            ErrorKind::ExpectedRecordFieldDecl(found) => Diagnostic::new_error(format!(
-                "expected record field declaration, found {}",
-                found
-            ))
-            .with_label(
-                Label::new_primary(origin).with_message("expected record field declaration"),
+            ErrorKind::ExpectedMacroRuleVec(found) => Diagnostic::new_error(
+                format!("expected macro rule vector, found {}", found),
+                new_label(origin, "expected `[pattern template]`"),
+            ),
+
+            ErrorKind::ExpectedMacroRulePatternList(found) => Diagnostic::new_error(
+                format!("expected macro rule pattern list, found {}", found),
+                new_label(origin, "expected macro rule pattern list"),
+            ),
+
+            ErrorKind::ExpectedMacroEllipsisEscape(found) => Diagnostic::new_error(
+                format!("expected macro symbol to escape, found {}", found),
+                new_label(origin, "expected symbol"),
+            ),
+
+            ErrorKind::ExpectedCompileErrorString(found) => Diagnostic::new_error(
+                format!("expected error message string, found {}", found),
+                new_label(origin, "expected string"),
+            ),
+
+            ErrorKind::ExpectedImportFilterKeyword(found) => Diagnostic::new_error(
+                format!("expected import filter keyword, found {}", found),
+                new_label(
+                    origin,
+                    "expected `:only`, `:exclude`, `:rename`, `:prefix` or `:prefixed`",
+                ),
+            ),
+
+            ErrorKind::ExpectedImportRenameMap(found) => Diagnostic::new_error(
+                format!("expected identifier rename map, found {}", found),
+                new_label(origin, "expected identifier rename map"),
+            ),
+
+            ErrorKind::ExpectedRecordTyConsDecl(found) => Diagnostic::new_error(
+                format!(
+                    "expected record type constuctor declaration, found {}",
+                    found
+                ),
+                new_label(origin, "expected symbol or polymorphic constructor list"),
+            ),
+
+            ErrorKind::ExpectedRecordValueConsDecl(found) => Diagnostic::new_error(
+                format!(
+                    "expected record value constructor declaration, found {}",
+                    found
+                ),
+                new_label(origin, "expected record field list"),
+            ),
+
+            ErrorKind::ExpectedRecordFieldDecl(found) => Diagnostic::new_error(
+                format!("expected record field declaration, found {}", found),
+                new_label(origin, "expected record field declaration"),
             ),
 
             ErrorKind::UnboundIdent(ref ident) => {
-                let diagnostic = Diagnostic::new_error(format!("unable to resolve `{}`", ident))
-                    .with_label(Label::new_primary(origin).with_message("not found in this scope"));
+                let diagnostic = Diagnostic::new_error(
+                    format!("unable to resolve `{}`", ident),
+                    new_label(origin, "not found in this scope"),
+                );
 
                 if ident.as_ref() == "nil" {
-                    diagnostic.with_label(Label::new_secondary(origin).with_message(
-                        "Arret does not have a distinct `nil` value; consider using `()` instead",
-                    ))
+                    diagnostic.with_notes(vec![
+                        "Arret does not have a distinct `nil` value; consider using `()` instead"
+                            .to_owned(),
+                    ])
                 } else {
                     diagnostic
                 }
@@ -270,51 +260,54 @@ impl From<Error> for Diagnostic {
                     format!("expected {} arguments", expected)
                 };
 
-                Diagnostic::new_error(format!("wrong argument count; expected {}", expected))
-                    .with_label(Label::new_primary(origin).with_message(label_message))
-            }
-
-            ErrorKind::WrongCondArgCount => {
-                Diagnostic::new_error("wrong argument count; expected 3").with_label(
-                    Label::new_primary(origin)
-                        .with_message("expected `(if test-expr true-expr false-expr)`"),
+                Diagnostic::new_error(
+                    format!("wrong argument count; expected {}", expected),
+                    new_label(origin, label_message),
                 )
             }
 
-            ErrorKind::WrongDefLikeArgCount(name) => {
-                Diagnostic::new_error("wrong argument count; expected 2").with_label(
-                    Label::new_primary(origin)
-                        .with_message(format!("expected `({} name definition)`", name)),
-                )
-            }
+            ErrorKind::WrongCondArgCount => Diagnostic::new_error(
+                "wrong argument count; expected 3",
+                new_label(origin, "expected `(if test-expr true-expr false-expr)`"),
+            ),
 
-            ErrorKind::WrongDefRecordArgCount => {
-                Diagnostic::new_error("wrong argument count; expected 2").with_label(
-                    Label::new_primary(origin)
-                        .with_message("expected `(defrecord ty-cons-decl value-cons-decl)`"),
-                )
-            }
+            ErrorKind::WrongDefLikeArgCount(name) => Diagnostic::new_error(
+                "wrong argument count; expected 2",
+                new_label(origin, format!("expected `({} name definition)`", name)),
+            ),
 
-            ErrorKind::WrongMacroRuleVecCount(found) => Diagnostic::new_error(format!(
-                "expected macro rule vector with 2 elements, found {}",
-                found
-            ))
-            .with_label(Label::new_primary(origin).with_message("expected `[pattern template]`")),
+            ErrorKind::WrongDefRecordArgCount => Diagnostic::new_error(
+                "wrong argument count; expected 2",
+                new_label(
+                    origin,
+                    "expected `(defrecord ty-cons-decl value-cons-decl)`",
+                ),
+            ),
 
-            ErrorKind::DefOutsideBody => Diagnostic::new_error("definition outside module body")
-                .with_label(Label::new_primary(origin).with_message("not at top-level of module")),
+            ErrorKind::WrongMacroRuleVecCount(found) => Diagnostic::new_error(
+                format!(
+                    "expected macro rule vector with 2 elements, found {}",
+                    found
+                ),
+                new_label(origin, "expected `[pattern template]`"),
+            ),
+
+            ErrorKind::DefOutsideBody => Diagnostic::new_error(
+                "definition outside module body",
+                new_label(origin, "not at top-level of module"),
+            ),
 
             ErrorKind::DuplicateDef(first_def_span, ref ident) => {
-                let diagnostic =
-                    Diagnostic::new_error(format!("duplicate definition of `{}`", ident))
-                        .with_label(
-                            Label::new_primary(origin).with_message("second definition here"),
-                        );
+                let diagnostic = Diagnostic::new_error(
+                    format!("duplicate definition of `{}`", ident),
+                    new_label(origin, "second definition here"),
+                );
 
                 if let Some(first_def_span) = first_def_span {
-                    diagnostic.with_label(
-                        Label::new_secondary(first_def_span).with_message("first definition here"),
-                    )
+                    diagnostic.with_secondary_labels(iter::once(new_label(
+                        first_def_span,
+                        "first definition here",
+                    )))
                 } else {
                     diagnostic
                 }
@@ -322,61 +315,61 @@ impl From<Error> for Diagnostic {
 
             ErrorKind::ExportOutsideModule => Diagnostic::new_error(
                 "(export) outside of module body",
+                new_label(origin, "not at top-level of module"),
+            ),
+
+            ErrorKind::NonDefInsideModule => Diagnostic::new_error(
+                "value at top-level of module body",
+                new_label(origin, "(import), (export) or definition expected"),
+            ),
+
+            ErrorKind::ExportInsideRepl => Diagnostic::new_error(
+                "export not supported within REPL",
+                new_label(origin, "export not supported"),
+            ),
+
+            ErrorKind::PackageNotFound => {
+                Diagnostic::new_error("package not found", new_label(origin, "at this import"))
+            }
+
+            ErrorKind::ModuleNotFound(ref filename) => Diagnostic::new_error(
+                format!("module not found at `{}`", filename.to_string_lossy()),
+                new_label(origin, "at this import"),
+            ),
+
+            ErrorKind::NoMacroRule(pattern_spans) => Diagnostic::new_error(
+                "no matching macro rule",
+                new_label(origin, "at this macro invocation"),
             )
-            .with_label(Label::new_primary(origin).with_message("not at top-level of module")),
+            .with_secondary_labels(
+                pattern_spans
+                    .iter()
+                    .map(|pattern_span| new_label(*pattern_span, "unmatched macro rule")),
+            ),
 
-            ErrorKind::NonDefInsideModule => {
-                Diagnostic::new_error("value at top-level of module body").with_label(
-                    Label::new_primary(origin)
-                        .with_message("(import), (export) or definition expected"),
-                )
-            }
-
-            ErrorKind::ExportInsideRepl => {
-                Diagnostic::new_error("export not supported within REPL")
-                    .with_label(Label::new_primary(origin).with_message("export not supported"))
-            }
-
-            ErrorKind::PackageNotFound => Diagnostic::new_error("package not found")
-                .with_label(Label::new_primary(origin).with_message("at this import")),
-
-            ErrorKind::ModuleNotFound(ref filename) => Diagnostic::new_error(format!(
-                "module not found at `{}`",
-                filename.to_string_lossy()
-            ))
-            .with_label(Label::new_primary(origin).with_message("at this import")),
-
-            ErrorKind::NoMacroRule(pattern_spans) => {
-                Diagnostic::new_error("no matching macro rule")
-                    .with_label(Label::new_primary(origin).with_message("at this macro invocation"))
-                    .with_labels(pattern_spans.iter().map(|pattern_span| {
-                        Label::new_secondary(*pattern_span).with_message("unmatched macro rule")
-                    }))
-            }
-
-            ErrorKind::MultipleZeroOrMoreMatch(first_zero_or_more_span) => {
-                Diagnostic::new_error("multiple zero or more matches in the same sequence")
-                    .with_label(
-                        Label::new_primary(origin).with_message("second zero or more match"),
-                    )
-                    .with_label(
-                        Label::new_secondary(first_zero_or_more_span)
-                            .with_message("first zero or more match"),
-                    )
-            }
+            ErrorKind::MultipleZeroOrMoreMatch(first_zero_or_more_span) => Diagnostic::new_error(
+                "multiple zero or more matches in the same sequence",
+                new_label(origin, "second zero or more match"),
+            )
+            .with_secondary_labels(iter::once(new_label(
+                first_zero_or_more_span,
+                "first zero or more match",
+            ))),
 
             ErrorKind::NoVecDestruc => Diagnostic::new_error(
                 "vectors can only be used in a destructure in the form `[name Type]`",
-            )
-            .with_label(Label::new_primary(origin).with_message("unexpected vector")),
+                new_label(origin, "unexpected vector"),
+            ),
 
-            ErrorKind::UserError(ref message) => Diagnostic::new_error(message.as_ref())
-                .with_label(Label::new_primary(origin).with_message("user error raised here")),
+            ErrorKind::UserError(ref message) => Diagnostic::new_error(
+                message.as_ref(),
+                new_label(origin, "user error raised here"),
+            ),
 
-            ErrorKind::ReadError(ref filename) => {
-                Diagnostic::new_error(format!("error reading `{}`", filename.to_string_lossy()))
-                    .with_label(Label::new_primary(origin).with_message("at this import"))
-            }
+            ErrorKind::ReadError(ref filename) => Diagnostic::new_error(
+                format!("error reading `{}`", filename.to_string_lossy()),
+                new_label(origin, "at this import"),
+            ),
 
             ErrorKind::SyntaxError(ref err) => {
                 // Just proxy this
@@ -385,137 +378,129 @@ impl From<Error> for Diagnostic {
 
             ErrorKind::RustFunError(ref message) => Diagnostic::new_error(
                 "error loading RFI module",
-            )
-            .with_label(Label::new_primary(origin).with_message(message.clone().into_string())),
+                new_label(origin, message.clone().into_string()),
+            ),
 
-            ErrorKind::BadListDestruc => Diagnostic::new_error("unsupported destructuring binding")
-                .with_label(
-                    Label::new_primary(origin)
-                        .with_message("expected variable name, list or `[name Type]`"),
+            ErrorKind::BadListDestruc => Diagnostic::new_error(
+                "unsupported destructuring binding",
+                new_label(origin, "expected variable name, list or `[name Type]`"),
+            ),
+
+            ErrorKind::BadRestDestruc => Diagnostic::new_error(
+                "unsupported rest destructuring",
+                new_label(origin, "expected variable name or `[name Type]`"),
+            ),
+
+            ErrorKind::NoBindingVec => Diagnostic::new_error(
+                "binding vector expected",
+                new_label(origin, "expected vector argument"),
+            ),
+
+            ErrorKind::BindingsNotVec(found) => Diagnostic::new_error(
+                format!("binding vector expected, found {}", found),
+                new_label(origin, "vector expected"),
+            ),
+
+            ErrorKind::UnevenBindingVec => Diagnostic::new_error(
+                "binding vector must have an even number of forms",
+                new_label(origin, "extra binding form"),
+            ),
+
+            ErrorKind::BadPolyVarDecl => Diagnostic::new_error(
+                "bad polymorphic variable declaration",
+                new_label(
+                    origin,
+                    "expected polymorphic variable name or `[name Bound]`",
                 ),
+            ),
 
-            ErrorKind::BadRestDestruc => Diagnostic::new_error("unsupported rest destructuring")
-                .with_label(
-                    Label::new_primary(origin)
-                        .with_message("expected variable name or `[name Type]`"),
+            ErrorKind::UnsupportedLiteralType => Diagnostic::new_error(
+                "unsupported literal type",
+                new_label(origin, "expected boolean, symbol, keyword, list or vector"),
+            ),
+
+            ErrorKind::VarPurityBound => Diagnostic::new_error(
+                "purity variables cannot be bound by other variables",
+                new_label(origin, "expected `->` or `->!`"),
+            ),
+
+            ErrorKind::NoParamDecl => Diagnostic::new_error(
+                "parameter declaration missing",
+                new_label(origin, "expected parameter list argument"),
+            ),
+
+            ErrorKind::NoPolyVarsDecl => Diagnostic::new_error(
+                "polymorphic variable declaration missing",
+                new_label(origin, "expected polymorphic variable set argument"),
+            ),
+
+            ErrorKind::UnsupportedImportFilter => Diagnostic::new_error(
+                "unsupported import filter",
+                new_label(
+                    origin,
+                    "expected `:only`, `:exclude`, `:rename`, `:prefix` or `:prefixed`",
                 ),
-
-            ErrorKind::NoBindingVec => Diagnostic::new_error("binding vector expected")
-                .with_label(Label::new_primary(origin).with_message("expected vector argument")),
-
-            ErrorKind::BindingsNotVec(found) => {
-                Diagnostic::new_error(format!("binding vector expected, found {}", found))
-                    .with_label(Label::new_primary(origin).with_message("vector expected"))
-            }
-
-            ErrorKind::UnevenBindingVec => {
-                Diagnostic::new_error("binding vector must have an even number of forms")
-                    .with_label(Label::new_primary(origin).with_message("extra binding form"))
-            }
-
-            ErrorKind::BadPolyVarDecl => {
-                Diagnostic::new_error("bad polymorphic variable declaration").with_label(
-                    Label::new_primary(origin)
-                        .with_message("expected polymorphic variable name or `[name Bound]`"),
-                )
-            }
-
-            ErrorKind::UnsupportedLiteralType => Diagnostic::new_error("unsupported literal type")
-                .with_label(
-                    Label::new_primary(origin)
-                        .with_message("expected boolean, symbol, keyword, list or vector"),
-                ),
-
-            ErrorKind::VarPurityBound => {
-                Diagnostic::new_error("purity variables cannot be bound by other variables")
-                    .with_label(Label::new_primary(origin).with_message("expected `->` or `->!`"))
-            }
-
-            ErrorKind::NoParamDecl => Diagnostic::new_error("parameter declaration missing")
-                .with_label(
-                    Label::new_primary(origin).with_message("expected parameter list argument"),
-                ),
-
-            ErrorKind::NoPolyVarsDecl => {
-                Diagnostic::new_error("polymorphic variable declaration missing").with_label(
-                    Label::new_primary(origin)
-                        .with_message("expected polymorphic variable set argument"),
-                )
-            }
-
-            ErrorKind::UnsupportedImportFilter => {
-                Diagnostic::new_error("unsupported import filter").with_label(
-                    Label::new_primary(origin).with_message(
-                        "expected `:only`, `:exclude`, `:rename`, `:prefix` or `:prefixed`",
-                    ),
-                )
-            }
+            ),
 
             ErrorKind::MacroMultiPatternRef(sub_var_spans) => Diagnostic::new_error(
                 "subtemplate references macro variables from multiple subpatterns",
+                new_label(origin, "subtemplate references multiple subpatterns"),
             )
-            .with_label(
-                Label::new_primary(origin)
-                    .with_message("subtemplate references multiple subpatterns"),
-            )
-            .with_labels(sub_var_spans.iter().map(|sub_var_span| {
-                Label::new_secondary(*sub_var_span).with_message("referenced macro variable")
-            })),
+            .with_secondary_labels(
+                sub_var_spans
+                    .iter()
+                    .map(|sub_var_span| new_label(*sub_var_span, "referenced macro variable")),
+            ),
 
-            ErrorKind::MacroNoTemplateVars => {
-                Diagnostic::new_error("subtemplate does not include any macro variables")
-                    .with_label(
-                        Label::new_primary(origin)
-                            .with_message("subtemplate includes no variables"),
-                    )
-            }
+            ErrorKind::MacroNoTemplateVars => Diagnostic::new_error(
+                "subtemplate does not include any macro variables",
+                new_label(origin, "subtemplate includes no variables"),
+            ),
 
             ErrorKind::MacroNoPatternRef => Diagnostic::new_error(
                 "subtemplate does not reference macro variables from any subpattern",
-            )
-            .with_label(
-                Label::new_primary(origin)
-                    .with_message("subtemplate does not reference subpatterns"),
+                new_label(origin, "subtemplate does not reference subpatterns"),
             ),
 
-            ErrorKind::MacroBadEllipsis => {
-                Diagnostic::new_error("unexpected ellipsis in macro rule")
-                    .with_label(Label::new_primary(origin).with_message("expected `var ...`"))
-            }
-
-            ErrorKind::MacroBadSetPattern => {
-                Diagnostic::new_error("set patterns must either be empty or a zero or more match")
-                    .with_label(
-                        Label::new_primary(origin).with_message("expected `#{}` or `#{var ...}`"),
-                    )
-            }
-
-            ErrorKind::NoMacroType => Diagnostic::new_error("missing macro type").with_label(
-                Label::new_primary(origin).with_message("expected `(macro-rules ...)`"),
+            ErrorKind::MacroBadEllipsis => Diagnostic::new_error(
+                "unexpected ellipsis in macro rule",
+                new_label(origin, "expected `var ...`"),
             ),
 
-            ErrorKind::BadMacroType => Diagnostic::new_error("unsupported macro type")
-                .with_label(Label::new_primary(origin).with_message("expected `macro-rules`")),
-
-            ErrorKind::BadImportSet => Diagnostic::new_error("bad import set").with_label(
-                Label::new_primary(origin)
-                    .with_message("expected module name vector or applied filter"),
+            ErrorKind::MacroBadSetPattern => Diagnostic::new_error(
+                "set patterns must either be empty or a zero or more match",
+                new_label(origin, "expected `#{}` or `#{var ...}`"),
             ),
 
-            ErrorKind::NonFunPolyTy => Diagnostic::new_error("polymorphism on non-function type")
-                .with_label(Label::new_primary(origin).with_message("expected function type")),
+            ErrorKind::NoMacroType => Diagnostic::new_error(
+                "missing macro type",
+                new_label(origin, "expected `(macro-rules ...)`"),
+            ),
 
-            ErrorKind::ShortModuleName => {
-                Diagnostic::new_error("module name requires a least two components").with_label(
-                    Label::new_primary(origin).with_message("expected vector of 2 or more symbols"),
-                )
-            }
+            ErrorKind::BadMacroType => Diagnostic::new_error(
+                "unsupported macro type",
+                new_label(origin, "expected `macro-rules`"),
+            ),
 
-            ErrorKind::AnonymousPolymorphicParam => {
-                Diagnostic::new_error("polymorphic parameters must have a name").with_label(
-                    Label::new_primary(origin).with_message("expected polymorphic parameter name"),
-                )
-            }
+            ErrorKind::BadImportSet => Diagnostic::new_error(
+                "bad import set",
+                new_label(origin, "expected module name vector or applied filter"),
+            ),
+
+            ErrorKind::NonFunPolyTy => Diagnostic::new_error(
+                "polymorphism on non-function type",
+                new_label(origin, "expected function type"),
+            ),
+
+            ErrorKind::ShortModuleName => Diagnostic::new_error(
+                "module name requires a least two components",
+                new_label(origin, "expected vector of 2 or more symbols"),
+            ),
+
+            ErrorKind::AnonymousPolymorphicParam => Diagnostic::new_error(
+                "polymorphic parameters must have a name",
+                new_label(origin, "expected polymorphic parameter name"),
+            ),
 
             ErrorKind::PolyArgIsNotTy(boxed_details) => {
                 let PolyArgIsNotTy {
@@ -524,16 +509,21 @@ impl From<Error> for Diagnostic {
                     param_span,
                 } = *boxed_details;
 
-                Diagnostic::new_error("mismatched types")
-                    .with_label(Label::new_primary(origin).with_message(format!(
-                        "`{}` does not satisfy the lower bound of `{}`",
-                        str_for_ty_ref(&arg_type),
-                        str_for_ty_ref(&param_bound)
-                    )))
-                    .with_label(
-                        Label::new_secondary(param_span)
-                            .with_message("type parameter declared here"),
-                    )
+                Diagnostic::new_error(
+                    "mismatched types",
+                    new_label(
+                        origin,
+                        format!(
+                            "`{}` does not satisfy the lower bound of `{}`",
+                            str_for_ty_ref(&arg_type),
+                            str_for_ty_ref(&param_bound)
+                        ),
+                    ),
+                )
+                .with_secondary_labels(iter::once(new_label(
+                    param_span,
+                    "type parameter declared here",
+                )))
             }
 
             ErrorKind::PolyArgIsNotPure(boxed_details) => {
@@ -541,44 +531,43 @@ impl From<Error> for Diagnostic {
                     arg_purity,
                     param_span,
                 } = *boxed_details;
-                Diagnostic::new_error("mismatched purities")
-                    .with_label(
-                        Label::new_primary(origin)
-                            .with_message(
-                                format!("`{}` is not pure", str_for_purity(&arg_purity),),
-                            ),
-                    )
-                    .with_label(
-                        Label::new_secondary(param_span)
-                            .with_message("purity parameter declared here"),
-                    )
+                Diagnostic::new_error(
+                    "mismatched purities",
+                    new_label(
+                        origin,
+                        format!("`{}` is not pure", str_for_purity(&arg_purity)),
+                    ),
+                )
+                .with_secondary_labels(iter::once(new_label(
+                    param_span,
+                    "purity parameter declared here",
+                )))
             }
 
             ErrorKind::ExpectedPolyPurityArg(boxed_details) => {
                 let ExpectedPolyPurityArg { found, param_span } = *boxed_details;
 
-                Diagnostic::new_error(format!("{} cannot be used as a purity", found))
-                    .with_label(Label::new_primary(origin).with_message("expected purity"))
-                    .with_label(
-                        Label::new_secondary(param_span)
-                            .with_message("purity parameter declared here"),
-                    )
+                Diagnostic::new_error(
+                    format!("{} cannot be used as a purity", found),
+                    new_label(origin, "expected purity"),
+                )
+                .with_secondary_labels(iter::once(new_label(
+                    param_span,
+                    "purity parameter declared here",
+                )))
             }
 
-            ErrorKind::UnusedPolyPurityParam(pvar) => Diagnostic::new_error(format!(
-                "unused polymorphic purity parameter `{}`",
-                pvar.source_name()
-            ))
-            .with_label(
-                Label::new_primary(pvar.span()).with_message("purity parameter declared here"),
+            ErrorKind::UnusedPolyPurityParam(pvar) => Diagnostic::new_error(
+                format!(
+                    "unused polymorphic purity parameter `{}`",
+                    pvar.source_name()
+                ),
+                new_label(pvar.span(), "purity parameter declared here"),
             ),
 
-            ErrorKind::UnusedPolyTyParam(tvar) => Diagnostic::new_error(format!(
-                "unused polymorphic type parameter `{}`",
-                tvar.source_name()
-            ))
-            .with_label(
-                Label::new_primary(tvar.span()).with_message("type parameter declared here"),
+            ErrorKind::UnusedPolyTyParam(tvar) => Diagnostic::new_error(
+                format!("unused polymorphic type parameter `{}`", tvar.source_name()),
+                new_label(tvar.span(), "type parameter declared here"),
             ),
         };
 

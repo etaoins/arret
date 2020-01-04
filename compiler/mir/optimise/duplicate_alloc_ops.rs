@@ -64,7 +64,7 @@ pub fn remove_redundant_alloc_ops(ops: &mut [ops::Op]) {
 mod test {
     use super::*;
 
-    use crate::source::EMPTY_SPAN;
+    use crate::source::empty_span;
 
     #[test]
     fn test_box_different_native_regs() {
@@ -76,11 +76,11 @@ mod test {
 
         let ops = &mut [
             ops::Op::new(
-                EMPTY_SPAN,
+                empty_span(),
                 ops::OpKind::AllocBoxedInt(boxed_reg1, native_reg1),
             ),
             ops::Op::new(
-                EMPTY_SPAN,
+                empty_span(),
                 ops::OpKind::AllocBoxedInt(boxed_reg2, native_reg2),
             ),
         ];
@@ -101,22 +101,22 @@ mod test {
 
         let ops = &mut [
             ops::Op::new(
-                EMPTY_SPAN,
+                empty_span(),
                 ops::OpKind::AllocBoxedFloat(boxed_reg1, native_reg1),
             ),
             ops::Op::new(
-                EMPTY_SPAN,
+                empty_span(),
                 ops::OpKind::AllocBoxedFloat(boxed_reg2, native_reg1),
             ),
         ];
 
         let expected_ops = &[
             ops::Op::new(
-                EMPTY_SPAN,
+                empty_span(),
                 ops::OpKind::AllocBoxedFloat(boxed_reg1, native_reg1),
             ),
             // Should remove the redundant alloc of the same native value
-            ops::Op::new(EMPTY_SPAN, ops::OpKind::Alias(boxed_reg2, boxed_reg1)),
+            ops::Op::new(empty_span(), ops::OpKind::Alias(boxed_reg2, boxed_reg1)),
         ];
 
         remove_redundant_alloc_ops(ops);
@@ -131,22 +131,22 @@ mod test {
 
         let ops = &mut [
             ops::Op::new(
-                EMPTY_SPAN,
+                empty_span(),
                 ops::OpKind::LoadBoxedSymInterned(native_reg1, boxed_reg1),
             ),
             ops::Op::new(
-                EMPTY_SPAN,
+                empty_span(),
                 ops::OpKind::AllocBoxedSym(boxed_reg2, native_reg1),
             ),
         ];
 
         let expected_ops = &[
             ops::Op::new(
-                EMPTY_SPAN,
+                empty_span(),
                 ops::OpKind::LoadBoxedSymInterned(native_reg1, boxed_reg1),
             ),
             // Should re-use the original box we got the native value from
-            ops::Op::new(EMPTY_SPAN, ops::OpKind::Alias(boxed_reg2, boxed_reg1)),
+            ops::Op::new(empty_span(), ops::OpKind::Alias(boxed_reg2, boxed_reg1)),
         ];
 
         remove_redundant_alloc_ops(ops);
@@ -168,21 +168,21 @@ mod test {
 
         let ops = &mut [
             ops::Op::new(
-                EMPTY_SPAN,
+                empty_span(),
                 ops::OpKind::AllocBoxedChar(outer_boxed_reg1, outer_native_reg1),
             ),
             ops::Op::new(
-                EMPTY_SPAN,
+                empty_span(),
                 ops::OpKind::Cond(ops::CondOp {
                     reg_phi: None,
                     test_reg,
                     true_ops: Box::new([
                         ops::Op::new(
-                            EMPTY_SPAN,
+                            empty_span(),
                             ops::OpKind::AllocBoxedChar(branch_boxed_reg1, outer_native_reg1),
                         ),
                         ops::Op::new(
-                            EMPTY_SPAN,
+                            empty_span(),
                             ops::OpKind::AllocBoxedChar(branch_boxed_reg2, branch_native_reg2),
                         ),
                     ]),
@@ -190,29 +190,29 @@ mod test {
                 }),
             ),
             ops::Op::new(
-                EMPTY_SPAN,
+                empty_span(),
                 ops::OpKind::AllocBoxedChar(outer_boxed_reg2, branch_native_reg2),
             ),
         ];
 
         let expected_ops = &[
             ops::Op::new(
-                EMPTY_SPAN,
+                empty_span(),
                 ops::OpKind::AllocBoxedChar(outer_boxed_reg1, outer_native_reg1),
             ),
             ops::Op::new(
-                EMPTY_SPAN,
+                empty_span(),
                 ops::OpKind::Cond(ops::CondOp {
                     reg_phi: None,
                     test_reg,
                     true_ops: Box::new([
                         ops::Op::new(
-                            EMPTY_SPAN,
+                            empty_span(),
                             // We can use the alloc from outside this branch
                             ops::OpKind::Alias(branch_boxed_reg1, outer_boxed_reg1),
                         ),
                         ops::Op::new(
-                            EMPTY_SPAN,
+                            empty_span(),
                             ops::OpKind::AllocBoxedChar(branch_boxed_reg2, branch_native_reg2),
                         ),
                     ]),
@@ -220,7 +220,7 @@ mod test {
                 }),
             ),
             ops::Op::new(
-                EMPTY_SPAN,
+                empty_span(),
                 // We can't use an alloc from within the branch
                 ops::OpKind::AllocBoxedChar(outer_boxed_reg2, branch_native_reg2),
             ),

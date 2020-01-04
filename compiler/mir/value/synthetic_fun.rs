@@ -228,7 +228,6 @@ fn new_field_accessor_arret_fun(
     )
 }
 
-#[derive(Default)]
 pub struct SyntheticFuns {
     synthetic_span: Span,
     eq_pred_arret_fun: Option<value::ArretFun>,

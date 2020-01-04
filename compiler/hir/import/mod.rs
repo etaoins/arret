@@ -78,7 +78,7 @@ mod test {
     fn exports_for_import_set(datum: &str) -> Result<Exports> {
         use arret_syntax::parser::datum_from_str;
 
-        let parsed_import = parse::parse_import_set(&datum_from_str(datum).unwrap())?;
+        let parsed_import = parse::parse_import_set(&datum_from_str(None, datum).unwrap())?;
         let (span, module_name) = parsed_import.spanned_module_name();
 
         if module_name == &ModuleName::new("lib".into(), vec![], "test".into()) {

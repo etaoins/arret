@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash;
 use std::sync::Arc;
 
-use codespan_reporting::Diagnostic;
+use codespan_reporting::diagnostic::Diagnostic;
 
 use arret_syntax::datum::Datum;
 use arret_syntax::span::Span;

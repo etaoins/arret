@@ -1,11 +1,11 @@
 use std::{error, fmt, result};
 
-use codespan_reporting::{Diagnostic, Label};
+use codespan_reporting::diagnostic::Diagnostic;
 
 use arret_syntax::span::Span;
 
 use crate::mir::inliner::ApplyCookie;
-use crate::reporting::LocTrace;
+use crate::reporting::{new_label, LocTrace};
 
 #[derive(Debug, PartialEq)]
 pub struct Panic {
@@ -48,8 +48,9 @@ impl Error {
 impl From<Error> for Diagnostic {
     fn from(error: Error) -> Diagnostic {
         if let Error::Panic(panic) = error {
-            let diagnostic = Diagnostic::new_error(panic.message).with_label(
-                Label::new_primary(panic.loc_trace.origin()).with_message("panicked here"),
+            let diagnostic = Diagnostic::new_error(
+                panic.message,
+                new_label(panic.loc_trace.origin(), "panicked here"),
             );
 
             return panic.loc_trace.label_macro_invocation(diagnostic);

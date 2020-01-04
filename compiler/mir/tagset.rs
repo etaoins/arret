@@ -189,7 +189,7 @@ impl ops::BitAnd for TypeTagSet {
 mod test {
     use super::*;
 
-    use crate::source::EMPTY_SPAN;
+    use crate::source::empty_span;
 
     #[test]
     fn basic_operations() {
@@ -255,7 +255,7 @@ mod test {
         );
 
         let poly_sym_ref: ty::Ref<ty::Poly> =
-            ty::TVar::new(EMPTY_SPAN, "tvar1".into(), Ty::Sym.into()).into();
+            ty::TVar::new(empty_span(), "tvar1".into(), Ty::Sym.into()).into();
         assert_eq!(
             TypeTagSet::from(TypeTag::Sym),
             TypeTagSet::from(&poly_sym_ref)

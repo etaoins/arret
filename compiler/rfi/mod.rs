@@ -4,8 +4,6 @@ use std::{fmt, path};
 
 use rayon::prelude::*;
 
-use codespan::FileName;
-
 use arret_syntax::datum::Datum;
 use arret_syntax::span::Span;
 
@@ -294,8 +292,7 @@ impl Loader {
                 };
 
                 // Parse the declared Arret type string as a datum
-                let file_map_name =
-                    FileName::Virtual(format!("{}:{}", lossy_native_path, fun_name).into());
+                let file_map_name = format!("{}:{}", lossy_native_path, fun_name);
 
                 let arret_type_source_file =
                     source_loader.load_string(file_map_name, rust_fun.arret_type.into());
@@ -304,7 +301,10 @@ impl Loader {
                     [arret_type_datum] => arret_type_datum,
                     _ => {
                         return Err(Error::new(
-                            arret_type_source_file.file_map().span(),
+                            Span::new(
+                                Some(arret_type_source_file.file_id()),
+                                codespan::Span::from_str(rust_fun.arret_type),
+                            ),
                             ErrorKind::RustFunError("expected exactly one Arret type datum".into()),
                         ));
                     }
@@ -342,7 +342,7 @@ mod test {
 
     fn binding_fun_to_poly_type(rust_fun: &'static binding::RustFun) -> Result<ty::Fun, Error> {
         let loader = Loader::new();
-        let arret_type_datum = datum_from_str(rust_fun.arret_type).unwrap();
+        let arret_type_datum = datum_from_str(None, rust_fun.arret_type).unwrap();
 
         loader
             .process_rust_fun(&arret_type_datum, 0, rust_fun, None)

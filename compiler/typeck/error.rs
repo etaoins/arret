@@ -1,13 +1,12 @@
-use std::error;
-use std::fmt;
 use std::fmt::Display;
+use std::{error, fmt, iter};
 
-use codespan_reporting::{Diagnostic, Label};
+use codespan_reporting::diagnostic::Diagnostic;
 
 use arret_syntax::span::Span;
 
 use crate::hir;
-use crate::reporting::LocTrace;
+use crate::reporting::{new_label, LocTrace};
 use crate::ty;
 use crate::ty::purity;
 
@@ -109,11 +108,9 @@ impl From<Error> for Diagnostic {
             ErrorKind::IsNotFun(ref sub) => Diagnostic::new_error(format!(
                 "expected function, found `{}`",
                 hir::str_for_ty_ref(sub)
-            ))
-            .with_label(Label::new_primary(origin).with_message("application requires function")),
+            ), new_label(origin,"application requires function")),
 
-            ErrorKind::IsNotTy(ref sub, ref parent) => Diagnostic::new_error("mismatched types")
-                .with_label(Label::new_primary(origin).with_message(format!(
+            ErrorKind::IsNotTy(ref sub, ref parent) => Diagnostic::new_error("mismatched types",new_label(origin,format!(
                     "`{}` is not a `{}`",
                     hir::str_for_ty_ref(sub),
                     hir::str_for_ty_ref(parent)
@@ -129,8 +126,8 @@ impl From<Error> for Diagnostic {
                     format!("`{}`", hir::str_for_purity(purity))
                 };
 
-                Diagnostic::new_error("mismatched purities").with_label(
-                    Label::new_primary(origin).with_message(format!(
+                Diagnostic::new_error("mismatched purities",
+                    new_label(origin,format!(
                         "function of type `{}` is not {}",
                         hir::str_for_ty_ref(fun),
                         purity_str
@@ -144,8 +141,8 @@ impl From<Error> for Diagnostic {
                 ret_ty_span,
             }) => {
                 let ret_poly_str = hir::str_for_ty_ref(ret_poly);
-                let diagnostic = Diagnostic::new_error("mismatched types").with_label(
-                    Label::new_primary(origin).with_message(format!(
+                let diagnostic = Diagnostic::new_error("mismatched types",
+                    new_label(origin,format!(
                         "`{}` is not a `{}`",
                         hir::str_for_ty_ref(value_poly),
                         ret_poly_str
@@ -153,11 +150,12 @@ impl From<Error> for Diagnostic {
                 );
 
                 if let Some(ret_ty_span) = ret_ty_span {
-                    diagnostic.with_label(
-                        Label::new_secondary(*ret_ty_span).with_message(format!(
+                    diagnostic.with_secondary_labels(
+                        iter::once(
+                        new_label(*ret_ty_span,format!(
                             "expected `{}` due to return type",
                             ret_poly_str
-                        )),
+                        ))),
                     )
                 } else {
                     diagnostic
@@ -165,8 +163,8 @@ impl From<Error> for Diagnostic {
             }
 
             ErrorKind::VarHasEmptyType(ref current_type, ref required_type) => {
-                Diagnostic::new_error("type annotation needed").with_label(
-                    Label::new_primary(origin).with_message(format!(
+                Diagnostic::new_error("type annotation needed",
+                    new_label(origin,format!(
                         "usage requires `{}` but variable has inferred type of `{}`",
                         hir::str_for_ty_ref(required_type),
                         hir::str_for_ty_ref(current_type)
@@ -177,8 +175,7 @@ impl From<Error> for Diagnostic {
             ErrorKind::TopFunApply(ref top_fun) => Diagnostic::new_error(format!(
                 "cannot determine parameter types for `{}`",
                 hir::str_for_ty_ref(top_fun)
-            ))
-            .with_label(Label::new_primary(origin).with_message("at this application")),
+            ),new_label(origin,"at this application")),
 
             ErrorKind::WrongArity(have, ref wanted) => {
                 let label_message = if wanted.fixed_len == 1 {
@@ -190,47 +187,44 @@ impl From<Error> for Diagnostic {
                 Diagnostic::new_error(format!(
                     "incorrect number of arguments: wanted {}, have {}",
                     wanted, have
-                ))
-                .with_label(Label::new_primary(origin).with_message(label_message))
+                ),new_label(origin,label_message))
             }
 
-            ErrorKind::RecursiveType => Diagnostic::new_error("type annotation needed").with_label(
-                Label::new_primary(origin)
-                    .with_message("recursive usage requires explicit type annotation".to_owned()),
+            ErrorKind::RecursiveType => Diagnostic::new_error("type annotation needed",
+                new_label(origin,
+                    "recursive usage requires explicit type annotation")
             ),
 
-            ErrorKind::RecurWithoutFunTypeDecl => Diagnostic::new_error("type annotation needed").with_label(
-                Label::new_primary(origin)
-                    .with_message("`(recur)` requires the function to have a complete type annotation".to_owned()),
+            ErrorKind::RecurWithoutFunTypeDecl => Diagnostic::new_error("type annotation needed",
+               new_label(origin,
+                    "`(recur)` requires the function to have a complete type annotation"),
             ),
 
-            ErrorKind::NonTailRecur => Diagnostic::new_error("non-tail `(recur)`").with_label(
-                Label::new_primary(origin)
-                    .with_message("`(recur)` must occur in a position where it immediately becomes the return value of a function".to_owned()),
+            ErrorKind::NonTailRecur => Diagnostic::new_error("non-tail `(recur)`",
+                new_label(origin,
+                    "`(recur)` must occur in a position where it immediately becomes the return value of a function"),
             ),
 
             ErrorKind::DependsOnError => {
-                Diagnostic::new_error("type cannot be determined due to previous error")
-                    .with_label(Label::new_primary(origin))
+                Diagnostic::new_error("type cannot be determined due to previous error",
+                new_label(origin, "cannot infer type"))
             }
 
             ErrorKind::UnselectedPVar(pvar) => Diagnostic::new_error(format!(
                 "cannot determine purity of purity variable `{}`",
                 pvar.source_name()
-            ))
-            .with_label(Label::new_primary(origin).with_message("at this application"))
-            .with_label(
-                Label::new_secondary(pvar.span()).with_message("purity variable defined here"),
-            ),
+            ),new_label(origin,"at this application"))
+            .with_secondary_labels(iter::once(
+                new_label(pvar.span(),"purity variable defined here"),
+            )),
 
             ErrorKind::UnselectedTVar(tvar) => Diagnostic::new_error(format!(
                 "cannot determine type of type variable `{}`",
                 tvar.source_name()
-            ))
-            .with_label(Label::new_primary(origin).with_message("at this application"))
-            .with_label(
-                Label::new_secondary(tvar.span()).with_message("type variable defined here"),
-            ),
+            ),new_label(origin,"at this application"))
+            .with_secondary_labels(iter::once(
+               new_label(tvar.span(),"type variable defined here"),
+            )),
         };
 
         error.loc_trace.label_macro_invocation(diagnostic)

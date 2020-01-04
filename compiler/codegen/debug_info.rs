@@ -2,8 +2,6 @@ use std::collections::HashMap;
 use std::os::unix::ffi::OsStrExt;
 use std::{env, ffi, ptr};
 
-use codespan::FileName;
-
 use llvm_sys::core::*;
 use llvm_sys::debuginfo::*;
 use llvm_sys::prelude::*;
@@ -11,14 +9,14 @@ use llvm_sys::prelude::*;
 use arret_syntax::datum::DataStr;
 use arret_syntax::span::Span;
 
-use crate::source::{FileMap, SourceLoader};
+use crate::source::SourceLoader;
 
 pub struct DebugInfoBuilder<'sl> {
     pub llvm_dib: LLVMDIBuilderRef,
 
     source_loader: &'sl SourceLoader,
     current_dir: ffi::CString,
-    file_metadata: HashMap<FileName, Option<LLVMMetadataRef>>,
+    file_metadata: HashMap<codespan::FileId, Option<LLVMMetadataRef>>,
 }
 
 impl<'sl> DebugInfoBuilder<'sl> {
@@ -49,17 +47,13 @@ impl<'sl> DebugInfoBuilder<'sl> {
     }
 
     fn add_compile_unit_metadata(&mut self, optimised: bool, main_span: Span) {
-        let main_span_start = main_span.start();
-
-        let code_map = self.source_loader.code_map();
-        let main_file_map = if let Some(file_map) = code_map.find_file(main_span_start) {
-            file_map
+        let main_file_id = if let Some(file_id) = main_span.file_id() {
+            file_id
         } else {
             return;
         };
 
-        let main_file_metadata = if let Some(metadata) = self.file_metadata(main_file_map.as_ref())
-        {
+        let main_file_metadata = if let Some(metadata) = self.file_metadata(main_file_id) {
             metadata
         } else {
             return;
@@ -89,28 +83,25 @@ impl<'sl> DebugInfoBuilder<'sl> {
         }
     }
 
-    pub fn file_metadata(&mut self, file_map: &FileMap) -> Option<LLVMMetadataRef> {
-        if let Some(metadata) = self.file_metadata.get(file_map.name()) {
+    pub fn file_metadata(&mut self, file_id: codespan::FileId) -> Option<LLVMMetadataRef> {
+        if let Some(metadata) = self.file_metadata.get(&file_id) {
             return *metadata;
         }
 
-        let metadata = if let FileName::Real(ref filename) = file_map.name() {
-            ffi::CString::new(filename.to_string_lossy().as_bytes())
-                .ok()
-                .map(|c_filename| unsafe {
-                    LLVMDIBuilderCreateFile(
-                        self.llvm_dib,
-                        c_filename.as_ptr() as *const _,
-                        c_filename.as_bytes().len(),
-                        self.current_dir.as_ptr() as *const _,
-                        self.current_dir.as_bytes().len(),
-                    )
-                })
-        } else {
-            None
-        };
+        let files = self.source_loader.files();
+        let filename = files.name(file_id);
 
-        self.file_metadata.insert(file_map.name().clone(), metadata);
+        let metadata = ffi::CString::new(filename).ok().map(|c_filename| unsafe {
+            LLVMDIBuilderCreateFile(
+                self.llvm_dib,
+                c_filename.as_ptr() as *const _,
+                c_filename.as_bytes().len(),
+                self.current_dir.as_ptr() as *const _,
+                self.current_dir.as_bytes().len(),
+            )
+        });
+
+        self.file_metadata.insert(file_id, metadata);
         metadata
     }
 
@@ -137,23 +128,25 @@ impl<'sl> DebugInfoBuilder<'sl> {
         source_name: Option<&DataStr>,
         llvm_function: LLVMValueRef,
     ) {
-        let span_start = span.start();
-
-        let code_map = self.source_loader.code_map();
-
-        let file_map = if let Some(file_map) = code_map.find_file(span_start) {
-            file_map
+        let file_id = if let Some(file_id) = span.file_id() {
+            file_id
         } else {
             return;
         };
 
-        let line_index = if let Ok((line_index, _)) = file_map.location(span_start) {
-            line_index
+        let location = if let Ok(location) = self
+            .source_loader
+            .files()
+            .location(file_id, span.codespan_span().start())
+        {
+            location
         } else {
             return;
         };
 
-        let file_metadata = if let Some(file_metadata) = self.file_metadata(file_map.as_ref()) {
+        let line_index = location.line.to_usize();
+
+        let file_metadata = if let Some(file_metadata) = self.file_metadata(file_id) {
             file_metadata
         } else {
             return;
@@ -180,11 +173,11 @@ impl<'sl> DebugInfoBuilder<'sl> {
                 linkage_name_ptr,
                 linkage_name_len,
                 file_metadata,
-                line_index.number().0 as u32,
+                line_index as u32,
                 self.placeholder_subroutine_type(file_metadata),
                 source_name.is_none() as i32, // `IsLocalToUnit`
                 1,                            // `IsDefinition`
-                line_index.number().0 as u32, // `ScopeLine`
+                line_index as u32,            // `ScopeLine`
                 LLVMDIFlags::LLVMDIFlagZero,
                 1, // `IsOptimized`
             );
