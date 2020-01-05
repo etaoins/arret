@@ -162,7 +162,7 @@ impl fmt::Display for TestTy {
 mod test {
     use super::*;
 
-    use crate::source::empty_span;
+    use crate::source::EMPTY_SPAN;
 
     fn assert_test_ty_will_match(test_ty: &TestTy, subject_ref: impl Into<ty::Ref<ty::Poly>>) {
         let subject_ref = subject_ref.into();
@@ -313,7 +313,7 @@ mod test {
         use crate::ty::ty_args::TyArgs;
 
         let cons = record::Cons::new(
-            empty_span(),
+            EMPTY_SPAN,
             "cons".into(),
             "cons?".into(),
             None,
@@ -338,14 +338,14 @@ mod test {
         use crate::ty::ty_args::TyArgs;
 
         let cons = record::Cons::new(
-            empty_span(),
+            EMPTY_SPAN,
             "cons".into(),
             "cons?".into(),
             None,
             Box::new([]),
         );
         let other_cons = record::Cons::new(
-            empty_span(),
+            EMPTY_SPAN,
             "other_cons".into(),
             "other_cons?".into(),
             None,

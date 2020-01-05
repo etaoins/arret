@@ -35,7 +35,7 @@ use crate::hir::{
 };
 
 #[cfg(test)]
-use crate::source::empty_span;
+use crate::source::EMPTY_SPAN;
 
 /// Module lowered to HIR
 pub struct LoweredModule {
@@ -974,14 +974,14 @@ pub(crate) fn lower_repl_datum(
 #[cfg(test)]
 fn import_statement_for_module(names: &[&'static str]) -> Datum {
     Datum::List(
-        empty_span(),
+        EMPTY_SPAN,
         Box::new([
-            Datum::Sym(empty_span(), "import".into()),
+            Datum::Sym(EMPTY_SPAN, "import".into()),
             Datum::Vector(
-                empty_span(),
+                EMPTY_SPAN,
                 names
                     .iter()
-                    .map(|&n| Datum::Sym(empty_span(), n.into()))
+                    .map(|&n| Datum::Sym(EMPTY_SPAN, n.into()))
                     .collect(),
             ),
         ]),

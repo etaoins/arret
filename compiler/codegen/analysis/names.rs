@@ -63,7 +63,7 @@ mod test {
     use arret_runtime::abitype::RetABIType;
     use arret_runtime::boxed;
 
-    use crate::source::empty_span;
+    use crate::source::EMPTY_SPAN;
 
     #[test]
     fn simple_global_interned_names() {
@@ -75,7 +75,7 @@ mod test {
         let gamma_reg = ops::RegId::alloc();
 
         let test_fun = ops::Fun {
-            span: empty_span(),
+            span: EMPTY_SPAN,
             source_name: None,
 
             abi: ops::OpsABI {

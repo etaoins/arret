@@ -9,4 +9,4 @@ path = "lib.rs"
 crate-type = ["lib"]
 
 [dependencies]
-codespan = "0.6"
+codespan = { git = "https://github.com/brendanzab/codespan", rev = "c760bff07d59ba6abb3d4fc83200558600b62b4" }

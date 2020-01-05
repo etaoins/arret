@@ -380,7 +380,7 @@ mod test {
     use super::*;
 
     use crate::hir::{poly_for_str, tvar_bounded_by};
-    use crate::source::empty_span;
+    use crate::source::EMPTY_SPAN;
 
     fn assert_disjoint_poly(poly1: &ty::Ref<ty::Poly>, poly2: &ty::Ref<ty::Poly>) {
         assert_eq!(
@@ -642,11 +642,11 @@ mod test {
         use crate::ty::ty_args::TyArgs;
         use std::collections::HashMap;
 
-        let tvar1 = ty::TVar::new(empty_span(), "tvar1".into(), Ty::Any.into());
-        let tvar2 = ty::TVar::new(empty_span(), "tvar2".into(), Ty::Any.into());
+        let tvar1 = ty::TVar::new(EMPTY_SPAN, "tvar1".into(), Ty::Any.into());
+        let tvar2 = ty::TVar::new(EMPTY_SPAN, "tvar2".into(), Ty::Any.into());
 
         let cons1 = record::Cons::new(
-            empty_span(),
+            EMPTY_SPAN,
             "cons1".into(),
             "cons1?".into(),
             Some(Box::new([record::PolyParam::TVar(
@@ -654,14 +654,14 @@ mod test {
                 tvar1.clone(),
             )])),
             Box::new([record::Field::new(
-                empty_span(),
+                EMPTY_SPAN,
                 "cons1-field1".into(),
                 tvar1.clone().into(),
             )]),
         );
 
         let cons2 = record::Cons::new(
-            empty_span(),
+            EMPTY_SPAN,
             "cons2".into(),
             "cons2?".into(),
             Some(Box::new([
@@ -669,9 +669,9 @@ mod test {
                 record::PolyParam::TVar(Variance::Contravariant, tvar2.clone()),
             ])),
             Box::new([
-                record::Field::new(empty_span(), "cons2-covariant".into(), tvar1.clone().into()),
+                record::Field::new(EMPTY_SPAN, "cons2-covariant".into(), tvar1.clone().into()),
                 record::Field::new(
-                    empty_span(),
+                    EMPTY_SPAN,
                     "cons2-contravariant".into(),
                     tvar2.clone().into(),
                 ),

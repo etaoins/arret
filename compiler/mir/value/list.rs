@@ -209,7 +209,7 @@ mod test {
     use arret_runtime::boxed;
     use arret_runtime::boxed::prelude::*;
 
-    use crate::source::empty_span;
+    use crate::source::EMPTY_SPAN;
 
     #[test]
     fn list_length() {
@@ -302,7 +302,7 @@ mod test {
         };
 
         for expected in elements {
-            let next_value = iter.next_unchecked(&mut None, empty_span());
+            let next_value = iter.next_unchecked(&mut None, EMPTY_SPAN);
 
             if let Value::Const(next_ref) = next_value {
                 let expected_ref = boxed::Int::new(&mut heap, *expected).as_any_ref();
@@ -330,7 +330,7 @@ mod test {
         };
 
         for expected in elements {
-            let next_value = iter.next_unchecked(&mut None, empty_span());
+            let next_value = iter.next_unchecked(&mut None, EMPTY_SPAN);
 
             if let Value::Const(next_ref) = next_value {
                 let expected_ref = boxed::Int::new(&mut heap, *expected).as_any_ref();

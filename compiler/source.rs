@@ -5,9 +5,7 @@ use arret_syntax::datum::Datum;
 use arret_syntax::span::Span;
 
 #[cfg(test)]
-pub fn empty_span() -> Span {
-    Span::new(None, codespan::Span::initial())
-}
+pub const EMPTY_SPAN: Span = Span::new(None, codespan::Span::initial());
 
 pub struct SourceFile {
     file_id: codespan::FileId,

@@ -103,7 +103,7 @@ mod test {
     use std::collections::HashMap;
 
     use crate::hir::{poly_for_str, tvar_bounded_by};
-    use crate::source::empty_span;
+    use crate::source::EMPTY_SPAN;
     use crate::ty::record;
     use crate::ty::ty_args::TyArgs;
     use crate::ty::var_usage::Variance;
@@ -181,11 +181,11 @@ mod test {
 
     #[test]
     fn poly_record_type() {
-        let tvar = ty::TVar::new(empty_span(), "tvar".into(), Ty::Any.into());
+        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), Ty::Any.into());
 
         // Polymorphic record constructor and top type
         let poly_record_cons = record::Cons::new(
-            empty_span(),
+            EMPTY_SPAN,
             "record_cons".into(),
             "record_cons?".into(),
             Some(Box::new([record::PolyParam::TVar(
@@ -193,7 +193,7 @@ mod test {
                 tvar.clone(),
             )])),
             Box::new([record::Field::new(
-                empty_span(),
+                EMPTY_SPAN,
                 "num".into(),
                 tvar.clone().into(),
             )]),

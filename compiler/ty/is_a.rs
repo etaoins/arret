@@ -288,7 +288,7 @@ mod test {
     use super::*;
 
     use crate::hir::{poly_for_str, tvar_bounded_by};
-    use crate::source::empty_span;
+    use crate::source::EMPTY_SPAN;
 
     #[test]
     fn sym_types() {
@@ -704,14 +704,14 @@ mod test {
         use crate::ty::ty_args::TyArgs;
 
         let cons1 = record::Cons::new(
-            empty_span(),
+            EMPTY_SPAN,
             "cons1".into(),
             "cons1?".into(),
             None,
             Box::new([]),
         );
         let cons2 = record::Cons::new(
-            empty_span(),
+            EMPTY_SPAN,
             "cons2".into(),
             "cons2?".into(),
             None,
@@ -737,12 +737,12 @@ mod test {
         use crate::ty::ty_args::TyArgs;
         use std::collections::HashMap;
 
-        let tvar1 = ty::TVar::new(empty_span(), "tvar1".into(), Ty::Any.into());
-        let tvar2 = ty::TVar::new(empty_span(), "tvar2".into(), Ty::Any.into());
-        let tvar3 = ty::TVar::new(empty_span(), "tvar3".into(), Ty::Any.into());
+        let tvar1 = ty::TVar::new(EMPTY_SPAN, "tvar1".into(), Ty::Any.into());
+        let tvar2 = ty::TVar::new(EMPTY_SPAN, "tvar2".into(), Ty::Any.into());
+        let tvar3 = ty::TVar::new(EMPTY_SPAN, "tvar3".into(), Ty::Any.into());
 
         let cons = record::Cons::new(
-            empty_span(),
+            EMPTY_SPAN,
             "cons".into(),
             "cons?".into(),
             Some(Box::new([
@@ -751,9 +751,9 @@ mod test {
                 record::PolyParam::TVar(Variance::Invariant, tvar3.clone()),
             ])),
             Box::new([
-                record::Field::new(empty_span(), "covariant".into(), tvar1.clone().into()),
-                record::Field::new(empty_span(), "contravariant".into(), tvar2.clone().into()),
-                record::Field::new(empty_span(), "invariant".into(), tvar3.clone().into()),
+                record::Field::new(EMPTY_SPAN, "covariant".into(), tvar1.clone().into()),
+                record::Field::new(EMPTY_SPAN, "contravariant".into(), tvar2.clone().into()),
+                record::Field::new(EMPTY_SPAN, "invariant".into(), tvar3.clone().into()),
             ]),
         );
 

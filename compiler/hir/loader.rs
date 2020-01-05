@@ -139,13 +139,13 @@ pub fn load_module_by_name(
 mod test {
     use super::*;
 
-    use crate::source::empty_span;
+    use crate::source::EMPTY_SPAN;
 
     fn load_stdlib_module(name: &'static str) -> Result<LoadedModule> {
         let ccx = CompileCtx::new(PackagePaths::test_paths(None), true);
         let module_name = ModuleName::new("stdlib".into(), vec![], name.into());
 
-        load_module_by_name(&ccx, empty_span(), &module_name)
+        load_module_by_name(&ccx, EMPTY_SPAN, &module_name)
     }
 
     #[test]

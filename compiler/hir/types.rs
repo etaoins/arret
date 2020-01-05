@@ -749,7 +749,7 @@ pub fn poly_for_str(datum_str: &str) -> ty::Ref<ty::Poly> {
 
 #[cfg(test)]
 pub fn tvar_bounded_by(bound: ty::Ref<ty::Poly>) -> ty::Ref<ty::Poly> {
-    ty::TVar::new(crate::source::empty_span(), "TVar".into(), bound).into()
+    ty::TVar::new(crate::source::EMPTY_SPAN, "TVar".into(), bound).into()
 }
 
 #[cfg(test)]
@@ -758,7 +758,7 @@ mod test {
 
     use std::collections::HashMap;
 
-    use crate::source::empty_span;
+    use crate::source::EMPTY_SPAN;
     use crate::ty::var_usage::Variance;
 
     fn assert_ty_for_str(expected: Ty<ty::Poly>, datum_str: &str) {
@@ -1030,12 +1030,12 @@ mod test {
     #[test]
     fn singleton_record_type() {
         let mono_record_cons = record::Cons::new(
-            empty_span(),
+            EMPTY_SPAN,
             "MonoCons".into(),
             "mono-cons?".into(),
             None,
             Box::new([record::Field::new(
-                empty_span(),
+                EMPTY_SPAN,
                 "num".into(),
                 Ty::Num.into(),
             )]),
@@ -1051,18 +1051,18 @@ mod test {
 
     #[test]
     fn poly_record_type() {
-        let tvar = ty::TVar::new(empty_span(), "tvar".into(), Ty::Any.into());
+        let tvar = ty::TVar::new(EMPTY_SPAN, "tvar".into(), Ty::Any.into());
 
         let poly_record_cons = record::Cons::new(
-            empty_span(),
+            EMPTY_SPAN,
             "PolyCons".into(),
             "poly-cons?".into(),
             Some(Box::new([
-                record::PolyParam::Pure(empty_span()),
+                record::PolyParam::Pure(EMPTY_SPAN),
                 record::PolyParam::TVar(Variance::Covariant, tvar.clone()),
             ])),
             Box::new([record::Field::new(
-                empty_span(),
+                EMPTY_SPAN,
                 "num".into(),
                 tvar.clone().into(),
             )]),

@@ -309,7 +309,7 @@ mod test {
 
     use arret_runtime::boxed;
 
-    use crate::source::empty_span;
+    use crate::source::EMPTY_SPAN;
 
     fn calc_single_fun_captures(fun: &ops::Fun) -> Captures {
         calc_program_captures(&HashMap::new(), fun).entry_fun_captures
@@ -335,7 +335,7 @@ mod test {
         let param_reg = ops::RegId::alloc();
 
         let test_fun = ops::Fun {
-            span: empty_span(),
+            span: EMPTY_SPAN,
             source_name: None,
 
             abi: ops::OpsABI {
@@ -356,7 +356,7 @@ mod test {
         let capture_reg = ops::RegId::alloc();
 
         let test_fun = ops::Fun {
-            span: empty_span(),
+            span: EMPTY_SPAN,
             source_name: None,
 
             abi: ops::OpsABI {
@@ -378,7 +378,7 @@ mod test {
         let ret_reg = ops::RegId::alloc();
 
         let test_fun = ops::Fun {
-            span: empty_span(),
+            span: EMPTY_SPAN,
             source_name: None,
 
             abi: ops::OpsABI {
@@ -412,7 +412,7 @@ mod test {
         let ret_reg = ops::RegId::alloc();
 
         let test_fun = ops::Fun {
-            span: empty_span(),
+            span: EMPTY_SPAN,
             source_name: None,
 
             abi: ops::OpsABI {
@@ -481,7 +481,7 @@ mod test {
         };
 
         let test_fun = ops::Fun {
-            span: empty_span(),
+            span: EMPTY_SPAN,
             source_name: None,
 
             abi: ops::OpsABI {
@@ -540,7 +540,7 @@ mod test {
         let ret_reg = ops::RegId::alloc();
 
         let test_fun = ops::Fun {
-            span: empty_span(),
+            span: EMPTY_SPAN,
             source_name: None,
 
             abi: ops::OpsABI {
