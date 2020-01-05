@@ -2,6 +2,8 @@ use std::borrow::Cow;
 
 use ansi_term::{Colour, Style};
 
+use rustyline::validate::{ValidationContext, ValidationResult};
+
 use arret_syntax::datum::DataStr;
 
 use super::command::{HELP_COMMAND, QUIT_COMMAND, TYPE_ONLY_PREFIX};
@@ -181,5 +183,16 @@ impl rustyline::highlight::Highlighter for ArretHelper {
     }
 }
 
-impl rustyline::validate::Validator for ArretHelper {}
+impl rustyline::validate::Validator for ArretHelper {
+    fn validate(
+        &self,
+        ctx: &mut ValidationContext<'_>,
+    ) -> Result<ValidationResult, rustyline::error::ReadlineError> {
+        match expected_content_for_line(ctx.input()) {
+            Some(_) => Ok(ValidationResult::Incomplete),
+            None => Ok(ValidationResult::Valid(None)),
+        }
+    }
+}
+
 impl rustyline::Helper for ArretHelper {}
