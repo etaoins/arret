@@ -231,6 +231,7 @@ impl rustyline::highlight::Highlighter for ArretHelper {
     }
 }
 
+impl rustyline::validate::Validator for ArretHelper {}
 impl rustyline::Helper for ArretHelper {}
 
 /// Gets the full path to where our REPL history should be stored
