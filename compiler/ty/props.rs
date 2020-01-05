@@ -171,11 +171,7 @@ mod test {
             "record_cons".into(),
             "record_cons?".into(),
             None,
-            Box::new([record::Field::new(
-                EMPTY_SPAN,
-                "num".into(),
-                Ty::Num.into(),
-            )]),
+            Box::new([record::Field::new(EMPTY_SPAN, "num".into(), Ty::Num.into())]),
         );
 
         let int_record_instance_ref: ty::Ref<ty::Poly> =

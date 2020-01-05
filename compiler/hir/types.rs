@@ -1034,11 +1034,7 @@ mod test {
             "MonoCons".into(),
             "mono-cons?".into(),
             None,
-            Box::new([record::Field::new(
-                EMPTY_SPAN,
-                "num".into(),
-                Ty::Num.into(),
-            )]),
+            Box::new([record::Field::new(EMPTY_SPAN, "num".into(), Ty::Num.into())]),
         );
 
         let record_class_ref: ty::Ref<ty::Poly> = mono_record_cons.clone().into();
