@@ -81,12 +81,17 @@ impl rustyline::completion::Completer for ArretHelper {
             ""
         };
 
+        let is_command = prefix.starts_with('/');
+        let is_first_identifier = pos == prefix.len();
+
+        if is_command && !is_first_identifier {
+            // Don't complete commands in illegal positions
+            return Ok((0, vec![]));
+        }
+
         let options = sorted_strings_prefixed_by(&self.all_names, prefix)
             .filter_map(|name| {
-                if name.starts_with('/') && pos != prefix.len() {
-                    // Commands can only appear at the beginning of the line
-                    None
-                } else if name.ends_with(suffix) {
+                if name.ends_with(suffix) {
                     Some((&name[0..name.len() - suffix.len()]).to_owned())
                 } else {
                     None
@@ -117,13 +122,12 @@ impl rustyline::hint::Hinter for ArretHelper {
 
         let last_ident = &line[last_ident_start..];
 
-        if !last_ident.is_empty() {
-            for name in sorted_strings_prefixed_by(&self.all_names, last_ident) {
-                if name.starts_with('/') && pos != last_ident.len() {
-                    // Command not at the start of the line
-                    continue;
-                }
+        let is_command = last_ident.starts_with('/');
+        let is_first_identifier = pos == last_ident.len();
 
+        // Make sure we have at least one character and we don't complete commands mid-line
+        if !(last_ident.is_empty() || (is_command && !is_first_identifier)) {
+            for name in sorted_strings_prefixed_by(&self.all_names, last_ident) {
                 // Don't suggest ourselves
                 if name.len() != last_ident.len() {
                     return Some(name[last_ident.len()..].to_owned());
