@@ -139,7 +139,7 @@ fn extract_expected_diagnostics(
     source_file: &arret_compiler::SourceFile,
 ) -> Vec<ExpectedDiagnostic> {
     let files = source_loader.files();
-    let source = files.source(source_file.file_id());
+    let source = files.source(source_file.file_id()).as_ref();
 
     source
         .match_indices(";~")

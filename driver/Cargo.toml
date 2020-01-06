@@ -13,7 +13,7 @@ clap = "2"
 rustyline = "5"
 directories = "2"
 ansi_term = "0.12"
-codespan = { git = "https://github.com/brendanzab/codespan", rev = "c760bff07d59ba6abb3d4fc83200558600b62b4" }
-codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c760bff07d59ba6abb3d4fc83200558600b62b4" }
+codespan = "0.7"
+codespan-reporting = "0.7"
 arret-syntax = { path = "../syntax" }
 arret-compiler = { path = "../compiler" }

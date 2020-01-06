@@ -131,8 +131,9 @@ impl<'ccx> ReplEngine<'ccx> {
     }
 
     fn eval_line(&mut self, input: String, kind: EvalKind) -> Result<EvaledLine, Vec<Diagnostic>> {
-        use crate::hir::lowering::LoweredReplDatum;
         use std::io::Write;
+
+        use crate::hir::lowering::LoweredReplDatum;
 
         let source_file = self
             .ccx

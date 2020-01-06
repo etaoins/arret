@@ -295,7 +295,7 @@ impl Loader {
                 let file_map_name = format!("{}:{}", lossy_native_path, fun_name);
 
                 let arret_type_source_file =
-                    source_loader.load_string(file_map_name, rust_fun.arret_type.into());
+                    source_loader.load_string(file_map_name, rust_fun.arret_type);
 
                 let arret_type_datum = match arret_type_source_file.parsed()? {
                     [arret_type_datum] => arret_type_datum,

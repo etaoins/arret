@@ -28,7 +28,7 @@ pub use crate::id_type::ArcId;
 pub use crate::mir::eval_hir::{BuiltProgram, EvalHirCtx};
 pub use crate::mir::print_program as print_program_mir;
 pub use crate::reporting::emit_diagnostics_to_stderr;
-pub use crate::source::{SourceFile, SourceLoader};
+pub use crate::source::{SourceFile, SourceLoader, SourceText};
 
 pub struct EvaluableProgram {
     pub ehx: EvalHirCtx,
