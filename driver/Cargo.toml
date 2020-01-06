@@ -10,7 +10,7 @@ path = "main.rs"
 
 [dependencies]
 clap = "2"
-rustyline = "5"
+rustyline = "6"
 directories = "2"
 ansi_term = "0.12"
 codespan = "0.7"
