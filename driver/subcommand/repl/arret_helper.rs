@@ -26,6 +26,22 @@ pub struct ArretHelper {
     all_names: Vec<DataStr>,
 }
 
+fn sorted_strings_prefixed_by<'a, T: AsRef<str>>(
+    haystack: &'a [T],
+    prefix: &'a str,
+) -> impl Iterator<Item = &'a T> + 'a {
+    // Use a binary search to find the start of the strings
+    let start_pos = match haystack.binary_search_by(|needle| needle.as_ref().cmp(prefix)) {
+        Ok(found) => found,
+        Err(insert_idx) => insert_idx,
+    };
+
+    haystack[start_pos..]
+        .iter()
+        // Once we stop matching prefixes we're done
+        .take_while(move |needle| needle.as_ref().starts_with(prefix))
+}
+
 impl ArretHelper {
     pub fn new(mut bound_names: Vec<DataStr>) -> ArretHelper {
         bound_names.extend(UNBOUND_COMPLETIONS.iter().map(|unbound| (*unbound).into()));
@@ -65,14 +81,12 @@ impl rustyline::completion::Completer for ArretHelper {
             ""
         };
 
-        let options = self
-            .all_names
-            .iter()
+        let options = sorted_strings_prefixed_by(&self.all_names, prefix)
             .filter_map(|name| {
                 if name.starts_with('/') && pos != prefix.len() {
                     // Commands can only appear at the beginning of the line
                     None
-                } else if name.starts_with(prefix) && name.ends_with(suffix) {
+                } else if name.ends_with(suffix) {
                     Some((&name[0..name.len() - suffix.len()]).to_owned())
                 } else {
                     None
@@ -104,13 +118,14 @@ impl rustyline::hint::Hinter for ArretHelper {
         let last_ident = &line[last_ident_start..];
 
         if !last_ident.is_empty() {
-            for name in self.all_names.iter() {
+            for name in sorted_strings_prefixed_by(&self.all_names, last_ident) {
                 if name.starts_with('/') && pos != last_ident.len() {
                     // Command not at the start of the line
                     continue;
                 }
 
-                if name.starts_with(last_ident) && name.len() > last_ident.len() {
+                // Don't suggest ourselves
+                if name.len() != last_ident.len() {
                     return Some(name[last_ident.len()..].to_owned());
                 }
             }
@@ -196,3 +211,68 @@ impl rustyline::validate::Validator for ArretHelper {
 }
 
 impl rustyline::Helper for ArretHelper {}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn assert_sorted_strings_prefixed_by(
+        expected: &[&'static str],
+        haystack: &[&'static str],
+        needle: &'static str,
+    ) {
+        let expected_vec = expected.to_owned();
+        let actual_vec: Vec<&str> = sorted_strings_prefixed_by(&haystack, needle)
+            .cloned()
+            .collect();
+
+        assert_eq!(expected_vec, actual_vec)
+    }
+
+    #[test]
+    fn sorted_strings_prefixed_by_empty() {
+        let haystack: &[&str] = &[];
+        assert_sorted_strings_prefixed_by(&[], haystack, "foo");
+    }
+
+    #[test]
+    fn sorted_strings_prefixed_by_missing_at_beginning() {
+        // "foo" would be before this one
+        let haystack = &["zoop"];
+        assert_sorted_strings_prefixed_by(&[], haystack, "foo");
+    }
+
+    #[test]
+    fn sorted_strings_prefixed_by_missing_in_middle() {
+        // "foo" would be in the middle of these two
+        let haystack = &["bar", "zoop"];
+        assert_sorted_strings_prefixed_by(&[], haystack, "foo");
+    }
+
+    #[test]
+    fn sorted_strings_prefixed_by_missing_at_end() {
+        // "foo" would be after of these two
+        let haystack = &["bar", "baz"];
+        assert_sorted_strings_prefixed_by(&[], haystack, "foo");
+    }
+
+    #[test]
+    fn sorted_strings_prefixed_by_only_self() {
+        let haystack = &["bar", "baz", "foo"];
+        assert_sorted_strings_prefixed_by(&["foo"], haystack, "foo");
+    }
+
+    #[test]
+    fn strings_prefixed_by_only_other() {
+        let haystack = &["bar", "baz", "foobar", "foobaz"];
+
+        assert_sorted_strings_prefixed_by(&["foobar", "foobaz"], haystack, "foo");
+    }
+
+    #[test]
+    fn strings_prefixed_by_self_and_other() {
+        let haystack = &["bar", "baz", "foo", "foobar", "foobaz", "zoop"];
+
+        assert_sorted_strings_prefixed_by(&["foo", "foobar", "foobaz"], haystack, "foo");
+    }
+}
