@@ -1,0 +1,22 @@
+(import [arret internal primitives])
+
+; Primitives
+(export def let fn if quote export defmacro letmacro macro-rules deftype lettype compile-error do =
+        defrecord letrecord recur)
+
+; Booleans
+true false
+
+; Numbers
+-10
+10
+-100
+100
+
+; Macros
+(defmacro cond (macro-rules
+  [() ()]
+  [(test-expr body-expr rest-clauses ...)
+   (if test-expr
+     body-expr
+     (cond rest-clauses ...))]))

@@ -92,6 +92,16 @@ These can be compiled to a static binary by running Arret with the path name:
 "Hello, world!"
 ```
 
+### Editors
+
+A basic [Visual Studio Code](https://code.visualstudio.com) extension is bundled in [editors/code](./editors/code).
+
+```sh
+cd editors/code
+yarn
+yarn vscode:install
+```
+
 ## Examples
 
 The Arret language is still rapidly evolving.

@@ -1,0 +1,69 @@
+{
+  "name": "arret",
+  "displayName": "Arret",
+  "description": "Arret language support",
+  "version": "0.0.1",
+  "publisher": "etaoins",
+  "repository": "https://github.com/etaoins/arret",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.41.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:arret"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "arret",
+        "aliases": [
+          "Arret"
+        ],
+        "extensions": [
+          ".arret"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "arret",
+        "scopeName": "source.arret",
+        "path": "./syntaxes/arret.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:download": "node ./out/test/downloadVsCode.js",
+    "vscode:install": "vsce package && code --install-extension arret-0.0.1.vsix",
+    "vscode:package": "vsce package",
+    "vscode:prepublish": "yarn run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "yarn run compile",
+    "test": "node ./out/test/runTest.js",
+    "format": "eslint --fix 'src/**/*.ts'",
+    "lint": "eslint 'src/**/*.ts'"
+  },
+  "devDependencies": {
+    "@types/glob": "^7.1.1",
+    "@types/mocha": "^5.2.7",
+    "@types/node": "^12.11.7",
+    "@types/vscode": "^1.41.0",
+    "@typescript-eslint/eslint-plugin": "^2.17.0",
+    "@typescript-eslint/parser": "^2.17.0",
+    "eslint": "^6.8.0",
+    "eslint-config-prettier": "^6.9.0",
+    "eslint-plugin-prettier": "^3.1.2",
+    "glob": "^7.1.5",
+    "mocha": "^6.2.2",
+    "prettier": "^1.19.1",
+    "typescript": "^3.6.4",
+    "vsce": "^1.71.0",
+    "vscode-test": "^1.2.2"
+  }
+}

@@ -1,0 +1,1190 @@
+[
+	{
+		"c": "(",
+		"t": "source.arret meta.expression.arret punctuation.section.expression.begin.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "import",
+		"t": "source.arret meta.expression.arret keyword.control.arret",
+		"r": {
+			"dark_plus": "keyword.control: #C586C0",
+			"light_plus": "keyword.control: #AF00DB",
+			"dark_vs": "keyword.control: #569CD6",
+			"light_vs": "keyword.control: #0000FF",
+			"hc_black": "keyword.control: #C586C0"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "[",
+		"t": "source.arret meta.expression.arret meta.vector.arret punctuation.section.vector.begin.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "arret",
+		"t": "source.arret meta.expression.arret meta.vector.arret meta.symbol.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret meta.vector.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "internal",
+		"t": "source.arret meta.expression.arret meta.vector.arret meta.symbol.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret meta.vector.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "primitives",
+		"t": "source.arret meta.expression.arret meta.vector.arret meta.symbol.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "]",
+		"t": "source.arret meta.expression.arret meta.vector.arret punctuation.section.vector.end.trailing.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": ")",
+		"t": "source.arret meta.expression.arret punctuation.section.expression.end.trailing.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": ";",
+		"t": "source.arret comment.line.semicolon.arret punctuation.definition.comment.arret",
+		"r": {
+			"dark_plus": "comment: #6A9955",
+			"light_plus": "comment: #008000",
+			"dark_vs": "comment: #6A9955",
+			"light_vs": "comment: #008000",
+			"hc_black": "comment: #7CA668"
+		}
+	},
+	{
+		"c": " Primitives",
+		"t": "source.arret comment.line.semicolon.arret",
+		"r": {
+			"dark_plus": "comment: #6A9955",
+			"light_plus": "comment: #008000",
+			"dark_vs": "comment: #6A9955",
+			"light_vs": "comment: #008000",
+			"hc_black": "comment: #7CA668"
+		}
+	},
+	{
+		"c": "(",
+		"t": "source.arret meta.expression.arret punctuation.section.expression.begin.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "export",
+		"t": "source.arret meta.expression.arret keyword.control.arret",
+		"r": {
+			"dark_plus": "keyword.control: #C586C0",
+			"light_plus": "keyword.control: #AF00DB",
+			"dark_vs": "keyword.control: #569CD6",
+			"light_vs": "keyword.control: #0000FF",
+			"hc_black": "keyword.control: #C586C0"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "def",
+		"t": "source.arret meta.expression.arret keyword.control.arret",
+		"r": {
+			"dark_plus": "keyword.control: #C586C0",
+			"light_plus": "keyword.control: #AF00DB",
+			"dark_vs": "keyword.control: #569CD6",
+			"light_vs": "keyword.control: #0000FF",
+			"hc_black": "keyword.control: #C586C0"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "let",
+		"t": "source.arret meta.expression.arret storage.control.arret",
+		"r": {
+			"dark_plus": "storage: #569CD6",
+			"light_plus": "storage: #0000FF",
+			"dark_vs": "storage: #569CD6",
+			"light_vs": "storage: #0000FF",
+			"hc_black": "storage: #569CD6"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "fn",
+		"t": "source.arret meta.expression.arret storage.control.arret",
+		"r": {
+			"dark_plus": "storage: #569CD6",
+			"light_plus": "storage: #0000FF",
+			"dark_vs": "storage: #569CD6",
+			"light_vs": "storage: #0000FF",
+			"hc_black": "storage: #569CD6"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "if",
+		"t": "source.arret meta.expression.arret storage.control.arret",
+		"r": {
+			"dark_plus": "storage: #569CD6",
+			"light_plus": "storage: #0000FF",
+			"dark_vs": "storage: #569CD6",
+			"light_vs": "storage: #0000FF",
+			"hc_black": "storage: #569CD6"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "quote",
+		"t": "source.arret meta.expression.arret storage.control.arret",
+		"r": {
+			"dark_plus": "storage: #569CD6",
+			"light_plus": "storage: #0000FF",
+			"dark_vs": "storage: #569CD6",
+			"light_vs": "storage: #0000FF",
+			"hc_black": "storage: #569CD6"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "export",
+		"t": "source.arret meta.expression.arret keyword.control.arret",
+		"r": {
+			"dark_plus": "keyword.control: #C586C0",
+			"light_plus": "keyword.control: #AF00DB",
+			"dark_vs": "keyword.control: #569CD6",
+			"light_vs": "keyword.control: #0000FF",
+			"hc_black": "keyword.control: #C586C0"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "defmacro",
+		"t": "source.arret meta.expression.arret keyword.control.arret",
+		"r": {
+			"dark_plus": "keyword.control: #C586C0",
+			"light_plus": "keyword.control: #AF00DB",
+			"dark_vs": "keyword.control: #569CD6",
+			"light_vs": "keyword.control: #0000FF",
+			"hc_black": "keyword.control: #C586C0"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "letmacro",
+		"t": "source.arret meta.expression.arret storage.control.arret",
+		"r": {
+			"dark_plus": "storage: #569CD6",
+			"light_plus": "storage: #0000FF",
+			"dark_vs": "storage: #569CD6",
+			"light_vs": "storage: #0000FF",
+			"hc_black": "storage: #569CD6"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "macro-rules",
+		"t": "source.arret meta.expression.arret storage.control.arret",
+		"r": {
+			"dark_plus": "storage: #569CD6",
+			"light_plus": "storage: #0000FF",
+			"dark_vs": "storage: #569CD6",
+			"light_vs": "storage: #0000FF",
+			"hc_black": "storage: #569CD6"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "deftype",
+		"t": "source.arret meta.expression.arret keyword.control.arret",
+		"r": {
+			"dark_plus": "keyword.control: #C586C0",
+			"light_plus": "keyword.control: #AF00DB",
+			"dark_vs": "keyword.control: #569CD6",
+			"light_vs": "keyword.control: #0000FF",
+			"hc_black": "keyword.control: #C586C0"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "lettype",
+		"t": "source.arret meta.expression.arret storage.control.arret",
+		"r": {
+			"dark_plus": "storage: #569CD6",
+			"light_plus": "storage: #0000FF",
+			"dark_vs": "storage: #569CD6",
+			"light_vs": "storage: #0000FF",
+			"hc_black": "storage: #569CD6"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "compile-error",
+		"t": "source.arret meta.expression.arret storage.control.arret",
+		"r": {
+			"dark_plus": "storage: #569CD6",
+			"light_plus": "storage: #0000FF",
+			"dark_vs": "storage: #569CD6",
+			"light_vs": "storage: #0000FF",
+			"hc_black": "storage: #569CD6"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "do",
+		"t": "source.arret meta.expression.arret storage.control.arret",
+		"r": {
+			"dark_plus": "storage: #569CD6",
+			"light_plus": "storage: #0000FF",
+			"dark_vs": "storage: #569CD6",
+			"light_vs": "storage: #0000FF",
+			"hc_black": "storage: #569CD6"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "=",
+		"t": "source.arret meta.expression.arret meta.symbol.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "        ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "defrecord",
+		"t": "source.arret meta.expression.arret keyword.control.arret",
+		"r": {
+			"dark_plus": "keyword.control: #C586C0",
+			"light_plus": "keyword.control: #AF00DB",
+			"dark_vs": "keyword.control: #569CD6",
+			"light_vs": "keyword.control: #0000FF",
+			"hc_black": "keyword.control: #C586C0"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "letrecord",
+		"t": "source.arret meta.expression.arret storage.control.arret",
+		"r": {
+			"dark_plus": "storage: #569CD6",
+			"light_plus": "storage: #0000FF",
+			"dark_vs": "storage: #569CD6",
+			"light_vs": "storage: #0000FF",
+			"hc_black": "storage: #569CD6"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "recur",
+		"t": "source.arret meta.expression.arret storage.control.arret",
+		"r": {
+			"dark_plus": "storage: #569CD6",
+			"light_plus": "storage: #0000FF",
+			"dark_vs": "storage: #569CD6",
+			"light_vs": "storage: #0000FF",
+			"hc_black": "storage: #569CD6"
+		}
+	},
+	{
+		"c": ")",
+		"t": "source.arret meta.expression.arret punctuation.section.expression.end.trailing.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": ";",
+		"t": "source.arret comment.line.semicolon.arret punctuation.definition.comment.arret",
+		"r": {
+			"dark_plus": "comment: #6A9955",
+			"light_plus": "comment: #008000",
+			"dark_vs": "comment: #6A9955",
+			"light_vs": "comment: #008000",
+			"hc_black": "comment: #7CA668"
+		}
+	},
+	{
+		"c": " Booleans",
+		"t": "source.arret comment.line.semicolon.arret",
+		"r": {
+			"dark_plus": "comment: #6A9955",
+			"light_plus": "comment: #008000",
+			"dark_vs": "comment: #6A9955",
+			"light_vs": "comment: #008000",
+			"hc_black": "comment: #7CA668"
+		}
+	},
+	{
+		"c": "true",
+		"t": "source.arret constant.language.boolean.arret",
+		"r": {
+			"dark_plus": "constant.language: #569CD6",
+			"light_plus": "constant.language: #0000FF",
+			"dark_vs": "constant.language: #569CD6",
+			"light_vs": "constant.language: #0000FF",
+			"hc_black": "constant.language: #569CD6"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "false",
+		"t": "source.arret constant.language.boolean.arret",
+		"r": {
+			"dark_plus": "constant.language: #569CD6",
+			"light_plus": "constant.language: #0000FF",
+			"dark_vs": "constant.language: #569CD6",
+			"light_vs": "constant.language: #0000FF",
+			"hc_black": "constant.language: #569CD6"
+		}
+	},
+	{
+		"c": ";",
+		"t": "source.arret comment.line.semicolon.arret punctuation.definition.comment.arret",
+		"r": {
+			"dark_plus": "comment: #6A9955",
+			"light_plus": "comment: #008000",
+			"dark_vs": "comment: #6A9955",
+			"light_vs": "comment: #008000",
+			"hc_black": "comment: #7CA668"
+		}
+	},
+	{
+		"c": " Numbers",
+		"t": "source.arret comment.line.semicolon.arret",
+		"r": {
+			"dark_plus": "comment: #6A9955",
+			"light_plus": "comment: #008000",
+			"dark_vs": "comment: #6A9955",
+			"light_vs": "comment: #008000",
+			"hc_black": "comment: #7CA668"
+		}
+	},
+	{
+		"c": "-10",
+		"t": "source.arret constant.numeric.long.arret",
+		"r": {
+			"dark_plus": "constant.numeric: #B5CEA8",
+			"light_plus": "constant.numeric: #09885A",
+			"dark_vs": "constant.numeric: #B5CEA8",
+			"light_vs": "constant.numeric: #09885A",
+			"hc_black": "constant.numeric: #B5CEA8"
+		}
+	},
+	{
+		"c": "10",
+		"t": "source.arret constant.numeric.long.arret",
+		"r": {
+			"dark_plus": "constant.numeric: #B5CEA8",
+			"light_plus": "constant.numeric: #09885A",
+			"dark_vs": "constant.numeric: #B5CEA8",
+			"light_vs": "constant.numeric: #09885A",
+			"hc_black": "constant.numeric: #B5CEA8"
+		}
+	},
+	{
+		"c": "-100",
+		"t": "source.arret constant.numeric.long.arret",
+		"r": {
+			"dark_plus": "constant.numeric: #B5CEA8",
+			"light_plus": "constant.numeric: #09885A",
+			"dark_vs": "constant.numeric: #B5CEA8",
+			"light_vs": "constant.numeric: #09885A",
+			"hc_black": "constant.numeric: #B5CEA8"
+		}
+	},
+	{
+		"c": "100",
+		"t": "source.arret constant.numeric.long.arret",
+		"r": {
+			"dark_plus": "constant.numeric: #B5CEA8",
+			"light_plus": "constant.numeric: #09885A",
+			"dark_vs": "constant.numeric: #B5CEA8",
+			"light_vs": "constant.numeric: #09885A",
+			"hc_black": "constant.numeric: #B5CEA8"
+		}
+	},
+	{
+		"c": ";",
+		"t": "source.arret comment.line.semicolon.arret punctuation.definition.comment.arret",
+		"r": {
+			"dark_plus": "comment: #6A9955",
+			"light_plus": "comment: #008000",
+			"dark_vs": "comment: #6A9955",
+			"light_vs": "comment: #008000",
+			"hc_black": "comment: #7CA668"
+		}
+	},
+	{
+		"c": " Macros",
+		"t": "source.arret comment.line.semicolon.arret",
+		"r": {
+			"dark_plus": "comment: #6A9955",
+			"light_plus": "comment: #008000",
+			"dark_vs": "comment: #6A9955",
+			"light_vs": "comment: #008000",
+			"hc_black": "comment: #7CA668"
+		}
+	},
+	{
+		"c": "(",
+		"t": "source.arret meta.expression.arret punctuation.section.expression.begin.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "defmacro",
+		"t": "source.arret meta.expression.arret keyword.control.arret",
+		"r": {
+			"dark_plus": "keyword.control: #C586C0",
+			"light_plus": "keyword.control: #AF00DB",
+			"dark_vs": "keyword.control: #569CD6",
+			"light_vs": "keyword.control: #0000FF",
+			"hc_black": "keyword.control: #C586C0"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "cond",
+		"t": "source.arret meta.expression.arret storage.control.arret",
+		"r": {
+			"dark_plus": "storage: #569CD6",
+			"light_plus": "storage: #0000FF",
+			"dark_vs": "storage: #569CD6",
+			"light_vs": "storage: #0000FF",
+			"hc_black": "storage: #569CD6"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "(",
+		"t": "source.arret meta.expression.arret meta.expression.arret punctuation.section.expression.begin.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "macro-rules",
+		"t": "source.arret meta.expression.arret meta.expression.arret storage.control.arret",
+		"r": {
+			"dark_plus": "storage: #569CD6",
+			"light_plus": "storage: #0000FF",
+			"dark_vs": "storage: #569CD6",
+			"light_vs": "storage: #0000FF",
+			"hc_black": "storage: #569CD6"
+		}
+	},
+	{
+		"c": "  ",
+		"t": "source.arret meta.expression.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "[",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret punctuation.section.vector.begin.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "(",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret punctuation.section.expression.begin.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": ")",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret punctuation.section.expression.end.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "(",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret punctuation.section.expression.begin.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": ")",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret punctuation.section.expression.end.trailing.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "]",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret punctuation.section.vector.end.trailing.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "  ",
+		"t": "source.arret meta.expression.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "[",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret punctuation.section.vector.begin.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "(",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret punctuation.section.expression.begin.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "test-expr",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret entity.name.function.arret",
+		"r": {
+			"dark_plus": "entity.name.function: #DCDCAA",
+			"light_plus": "entity.name.function: #795E26",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "entity.name.function: #DCDCAA"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "body-expr",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret meta.symbol.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "rest-clauses",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret meta.symbol.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "...",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret meta.symbol.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": ")",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret punctuation.section.expression.end.trailing.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "   ",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "(",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret punctuation.section.expression.begin.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "if",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret storage.control.arret",
+		"r": {
+			"dark_plus": "storage: #569CD6",
+			"light_plus": "storage: #0000FF",
+			"dark_vs": "storage: #569CD6",
+			"light_vs": "storage: #0000FF",
+			"hc_black": "storage: #569CD6"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "test-expr",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret meta.symbol.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "     ",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "body-expr",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret meta.symbol.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "     ",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "(",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret meta.expression.arret punctuation.section.expression.begin.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "cond",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret meta.expression.arret storage.control.arret",
+		"r": {
+			"dark_plus": "storage: #569CD6",
+			"light_plus": "storage: #0000FF",
+			"dark_vs": "storage: #569CD6",
+			"light_vs": "storage: #0000FF",
+			"hc_black": "storage: #569CD6"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "rest-clauses",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret meta.expression.arret meta.symbol.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": " ",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret meta.expression.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "...",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret meta.expression.arret meta.symbol.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": ")",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret meta.expression.arret punctuation.section.expression.end.trailing.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": ")",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret meta.expression.arret punctuation.section.expression.end.trailing.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": "]",
+		"t": "source.arret meta.expression.arret meta.expression.arret meta.vector.arret punctuation.section.vector.end.trailing.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": ")",
+		"t": "source.arret meta.expression.arret meta.expression.arret punctuation.section.expression.end.trailing.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	},
+	{
+		"c": ")",
+		"t": "source.arret meta.expression.arret punctuation.section.expression.end.trailing.arret",
+		"r": {
+			"dark_plus": "default: #D4D4D4",
+			"light_plus": "default: #000000",
+			"dark_vs": "default: #D4D4D4",
+			"light_vs": "default: #000000",
+			"hc_black": "default: #FFFFFF"
+		}
+	}
+]

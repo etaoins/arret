@@ -1,0 +1,293 @@
+{
+  "information_for_contributors": [
+    "This file is based on https://github.com/microsoft/vscode/blob/master/extensions/clojure/syntaxes/clojure.tmLanguage.json"
+  ],
+  "name": "Arret",
+  "scopeName": "source.arret",
+  "patterns": [
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#quoted-sexp"
+    },
+    {
+      "include": "#sexp"
+    },
+    {
+      "include": "#keyfn"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#vector"
+    },
+    {
+      "include": "#set"
+    },
+    {
+      "include": "#map"
+    },
+    {
+      "include": "#var"
+    },
+    {
+      "include": "#constants"
+    },
+    {
+      "include": "#namespace-symbol"
+    },
+    {
+      "include": "#symbol"
+    }
+  ],
+  "repository": {
+    "comment": {
+      "begin": "(?<!\\\\);",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.arret"
+        }
+      },
+      "end": "$",
+      "name": "comment.line.semicolon.arret"
+    },
+    "constants": {
+      "patterns": [
+        {
+          "match": "(true|false)",
+          "name": "constant.language.boolean.arret"
+        },
+        {
+          "match": "(-?\\d+\\.\\d+([eE][+-]?\\d+)?)",
+          "name": "constant.numeric.double.arret"
+        },
+        {
+          "match": "(-?\\d+)",
+          "name": "constant.numeric.long.arret"
+        },
+        {
+          "include": "#keyword"
+        }
+      ]
+    },
+    "keyword": {
+      "match": "(?<=(\\s|\\(|\\[|\\{)):[\\w\\#\\.\\-\\_\\:\\+\\=\\>\\<\\/\\!\\?\\*]+(?=(\\s|\\)|\\]|\\}|\\,))",
+      "name": "constant.keyword.arret"
+    },
+    "keyfn": {
+      "patterns": [
+        {
+          "match": "(?<=(\\s|\\(|\\[|\\{))(if(-[-\\p{Ll}\\?]*)?|when(-[-\\p{Ll}]*)?|for(-[-\\p{Ll}]*)?|compile-error|cond|do|macro-rules|quote|letmacro|lettype|letrecord|let(-[-\\p{Ll}\\?]*)?|loop|recur|fn|([\\p{Ll}]*case))(?=(\\s|\\)|\\]|\\}))",
+          "name": "storage.control.arret"
+        },
+        {
+          "match": "(?<=(\\s|\\(|\\[|\\{))(import|export|defmacro|deftype|defmacro|(def[\\p{Ll}\\-]*))(?=(\\s|\\)|\\]|\\}))",
+          "name": "keyword.control.arret"
+        }
+      ]
+    },
+    "dynamic-variables": {
+      "match": "\\*[\\w\\.\\-\\_\\:\\+\\=\\>\\<\\!\\?\\d]+\\*",
+      "name": "meta.symbol.dynamic.arret"
+    },
+    "map": {
+      "begin": "(\\{)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.section.map.begin.arret"
+        }
+      },
+      "end": "(\\}(?=[\\}\\]\\)\\s]*(?:;|$)))|(\\})",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.section.map.end.trailing.arret"
+        },
+        "2": {
+          "name": "punctuation.section.map.end.arret"
+        }
+      },
+      "name": "meta.map.arret",
+      "patterns": [
+        {
+          "include": "$self"
+        }
+      ]
+    },
+    "quoted-sexp": {
+      "begin": "(['``]\\()",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.section.expression.begin.arret"
+        }
+      },
+      "end": "(\\))$|(\\)(?=[\\}\\]\\)\\s]*(?:;|$)))|(\\))",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.section.expression.end.trailing.arret"
+        },
+        "2": {
+          "name": "punctuation.section.expression.end.trailing.arret"
+        },
+        "3": {
+          "name": "punctuation.section.expression.end.arret"
+        }
+      },
+      "name": "meta.quoted-expression.arret",
+      "patterns": [
+        {
+          "include": "$self"
+        }
+      ]
+    },
+    "set": {
+      "begin": "(\\#\\{)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.section.set.begin.arret"
+        }
+      },
+      "end": "(\\}(?=[\\}\\]\\)\\s]*(?:;|$)))|(\\})",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.section.set.end.trailing.arret"
+        },
+        "2": {
+          "name": "punctuation.section.set.end.arret"
+        }
+      },
+      "name": "meta.set.arret",
+      "patterns": [
+        {
+          "include": "$self"
+        }
+      ]
+    },
+    "sexp": {
+      "begin": "(\\()",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.section.expression.begin.arret"
+        }
+      },
+      "end": "(\\))$|(\\)(?=[\\}\\]\\)\\s]*(?:;|$)))|(\\))",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.section.expression.end.trailing.arret"
+        },
+        "2": {
+          "name": "punctuation.section.expression.end.trailing.arret"
+        },
+        "3": {
+          "name": "punctuation.section.expression.end.arret"
+        }
+      },
+      "name": "meta.expression.arret",
+      "patterns": [
+        {
+          "include": "#keyfn"
+        },
+        {
+          "include": "#constants"
+        },
+        {
+          "include": "#vector"
+        },
+        {
+          "include": "#map"
+        },
+        {
+          "include": "#set"
+        },
+        {
+          "include": "#sexp"
+        },
+        {
+          "match": "(?<=\\()(.+?)(?=\\s|\\))",
+          "captures": {
+            "1": {
+              "name": "entity.name.function.arret"
+            }
+          },
+          "patterns": [
+            {
+              "include": "$self"
+            }
+          ]
+        },
+        {
+          "include": "$self"
+        }
+      ]
+    },
+    "string": {
+      "begin": "(?<!\\\\)(\")",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.begin.arret"
+        }
+      },
+      "end": "(\")",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.end.arret"
+        }
+      },
+      "name": "string.quoted.double.arret",
+      "patterns": [
+        {
+          "match": "\\\\.",
+          "name": "constant.character.escape.arret"
+        }
+      ]
+    },
+    "namespace-symbol": {
+      "patterns": [
+        {
+          "match": "([\\p{L}\\.\\-\\_\\+\\=\\>\\<\\!\\?\\*][\\w\\.\\-\\_\\:\\+\\=\\>\\<\\!\\?\\*\\d]*)/",
+          "captures": {
+            "1": {
+              "name": "meta.symbol.namespace.arret"
+            }
+          }
+        }
+      ]
+    },
+    "symbol": {
+      "patterns": [
+        {
+          "match": "([\\p{L}\\.\\-\\_\\+\\=\\>\\<\\!\\?\\*][\\w\\.\\-\\_\\:\\+\\=\\>\\<\\!\\?\\*\\d]*)",
+          "name": "meta.symbol.arret"
+        }
+      ]
+    },
+    "var": {
+      "match": "(?<=(\\s|\\(|\\[|\\{)\\#)'[\\w\\.\\-\\_\\:\\+\\=\\>\\<\\/\\!\\?\\*]+(?=(\\s|\\)|\\]|\\}))",
+      "name": "meta.var.arret"
+    },
+    "vector": {
+      "begin": "(\\[)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.section.vector.begin.arret"
+        }
+      },
+      "end": "(\\](?=[\\}\\]\\)\\s]*(?:;|$)))|(\\])",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.section.vector.end.trailing.arret"
+        },
+        "2": {
+          "name": "punctuation.section.vector.end.arret"
+        }
+      },
+      "name": "meta.vector.arret",
+      "patterns": [
+        {
+          "include": "$self"
+        }
+      ]
+    }
+  }
+}
