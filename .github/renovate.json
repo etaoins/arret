@@ -1,16 +1,9 @@
 {
-  "extends": [
-    "config:base",
-    "docker:disable"
-  ],
+  "extends": ["config:base", "docker:disable"],
   "cargo": {
     "enabled": true
   },
   "timezone": "Australia/Melbourne",
-  "schedule": [
-    "after 6pm every weekday",
-    "before 8am every weekday",
-    "every weekend"
-  ],
+  "schedule": ["before 5am every weekend"],
   "prCreation": "not-pending"
 }
