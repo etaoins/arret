@@ -14,7 +14,7 @@ FROM fedora-common AS llvm-build
 ARG LLVM_VERSION
 ARG LLVM_ROOT
 
-RUN dnf install -y file cmake ninja-build python3 xz && \
+RUN dnf install -y file cmake ninja-build xz && \
   dnf clean all
 
 WORKDIR /usr/src
@@ -49,7 +49,7 @@ COPY --from=llvm-build ${LLVM_ROOT} ${LLVM_ROOT}
 RUN dnf install -y valgrind && \
   dnf clean all
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.40.0 --profile=minimal
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.41.0 --profile=minimal
 
 ENV PATH "/root/.cargo/bin:${PATH}"
 RUN rustup component add rustfmt
