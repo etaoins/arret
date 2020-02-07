@@ -3,20 +3,18 @@ ARG LLVM_ROOT=/opt/llvm-8
 
 ##
 
-FROM centos:8 AS centos-common
+FROM fedora:31 AS fedora-common
 
 RUN dnf install -y gcc-c++
 # `dnf clean all` happens in later stages
 
 ##
 
-FROM centos-common AS llvm-build
+FROM fedora-common AS llvm-build
 ARG LLVM_VERSION
 ARG LLVM_ROOT
 
-RUN dnf install -y dnf-plugins-core && \
-  dnf config-manager --set-enabled PowerTools && \
-  dnf install -y file cmake ninja-build python3 && \
+RUN dnf install -y file cmake ninja-build python3 xz && \
   dnf clean all
 
 WORKDIR /usr/src
@@ -43,7 +41,7 @@ RUN ninja install
 
 ##
 
-FROM centos-common
+FROM fedora-common
 ARG LLVM_ROOT
 
 COPY --from=llvm-build ${LLVM_ROOT} ${LLVM_ROOT}

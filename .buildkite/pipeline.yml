@@ -16,7 +16,7 @@ steps:
     agents:
       queue: arm64
 
-  - label: ":centos: LLVM Assert & Valgrind"
+  - label: ":fedora: LLVM Assert & Valgrind"
     branches: '!master'
     command:
       - "echo '--- :prettier: Checking rustfmt'"
