@@ -52,7 +52,7 @@
   "devDependencies": {
     "@types/glob": "7.1.1",
     "@types/mocha": "7.0.1",
-    "@types/node": "12.12.27",
+    "@types/node": "12.12.28",
     "@types/vscode": "1.42.0",
     "@typescript-eslint/eslint-plugin": "2.20.0",
     "@typescript-eslint/parser": "2.20.0",
