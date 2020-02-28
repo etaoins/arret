@@ -3,12 +3,12 @@
    Memcheck:Param
    statx(buf)
    ...
-   fun:_ZN3std3sys4unix2fs9try_statx17h5cd8eb8360d0d6f4E
+   fun:*try_statx*
 }
 {
    <rust_try_statx_file_name>
    Memcheck:Param
    statx(file_name)
    ...
-   fun:_ZN3std3sys4unix2fs9try_statx17h5cd8eb8360d0d6f4E
+   fun:*try_statx*
 }
