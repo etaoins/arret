@@ -1,6 +1,7 @@
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
 
+use std::ffi::OsStr;
 use std::io::Write;
 use std::ops::Range;
 use std::{env, fs, io, path, process};
@@ -207,7 +208,7 @@ fn extract_expected_diagnostics(
 }
 
 fn exit_with_run_output_difference(
-    source_filename: &str,
+    source_filename: &OsStr,
     stream_name: &str,
     expected: &[u8],
     actual: &[u8],
@@ -226,7 +227,8 @@ fn exit_with_run_output_difference(
     writeln!(
         stderr_lock,
         "unexpected {} output from integration test {}\n",
-        stream_name, source_filename
+        stream_name,
+        source_filename.to_string_lossy()
     )
     .unwrap();
 
@@ -402,7 +404,10 @@ fn run_single_compile_fail_test(
     } else {
         eprintln!(
             "Compilation unexpectedly succeeded for {}",
-            ccx.source_loader().files().name(source_file.file_id())
+            ccx.source_loader()
+                .files()
+                .name(source_file.file_id())
+                .to_string_lossy()
         );
         return false;
     };

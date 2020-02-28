@@ -135,10 +135,7 @@ impl<'ccx> ReplEngine<'ccx> {
 
         use crate::hir::lowering::LoweredReplDatum;
 
-        let source_file = self
-            .ccx
-            .source_loader()
-            .load_string("repl".to_owned(), input);
+        let source_file = self.ccx.source_loader().load_string("repl".into(), input);
 
         let input_data = source_file
             .parsed()

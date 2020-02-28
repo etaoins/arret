@@ -32,7 +32,7 @@ fn input_arg_to_source_file(
         let mut input_string = String::new();
         std::io::stdin().read_to_string(&mut input_string).unwrap();
 
-        source_loader.load_string("<stdin>".to_owned(), input_string)
+        source_loader.load_string("<stdin>".into(), input_string)
     } else {
         let input_path = path::Path::new(input_param);
 

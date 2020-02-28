@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::sync::{Arc, RwLock, RwLockReadGuard};
 use std::{fmt, fs, io, path};
 
@@ -80,13 +81,14 @@ impl SourceLoader {
 
     pub fn load_path(&self, path: &path::Path) -> Result<SourceFile, io::Error> {
         let source = fs::read_to_string(path)?;
+
         Ok(self.load_string(
-            path.to_string_lossy().into_owned(),
+            path.as_os_str().to_owned(),
             SourceText::Shared(source.into()),
         ))
     }
 
-    pub fn load_string(&self, filename: String, source: impl Into<SourceText>) -> SourceFile {
+    pub fn load_string(&self, filename: OsString, source: impl Into<SourceText>) -> SourceFile {
         use arret_syntax::parser::data_from_str;
 
         let (file_id, source) = {

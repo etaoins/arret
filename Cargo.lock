@@ -186,18 +186,18 @@ dependencies = [
 
 [[package]]
 name = "codespan"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21094c000d5db8035900662bbfddec754e79f795324254ac0817f36e5ccfc3f5"
+checksum = "52899426b69706219a1aaee2e95868fd01a0bd8006bb163f069578a0af5b5bb2"
 dependencies = [
  "unicode-segmentation",
 ]
 
 [[package]]
 name = "codespan-reporting"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "657b2c99e1f17bc3e5153808d9f704c8ba6171c3fe45e69fde26e2876156938b"
+checksum = "600c3317d4705222ff820139aaa76a3a208024ffc41f894da565a4c3b949d4c9"
 dependencies = [
  "codespan",
  "termcolor",

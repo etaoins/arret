@@ -91,15 +91,17 @@ impl<'sl> DebugInfoBuilder<'sl> {
         let files = self.source_loader.files();
         let filename = files.name(file_id);
 
-        let metadata = ffi::CString::new(filename).ok().map(|c_filename| unsafe {
-            LLVMDIBuilderCreateFile(
-                self.llvm_dib,
-                c_filename.as_ptr() as *const _,
-                c_filename.as_bytes().len(),
-                self.current_dir.as_ptr() as *const _,
-                self.current_dir.as_bytes().len(),
-            )
-        });
+        let metadata = ffi::CString::new(filename.as_bytes())
+            .ok()
+            .map(|c_filename| unsafe {
+                LLVMDIBuilderCreateFile(
+                    self.llvm_dib,
+                    c_filename.as_ptr() as *const _,
+                    c_filename.as_bytes().len(),
+                    self.current_dir.as_ptr() as *const _,
+                    self.current_dir.as_bytes().len(),
+                )
+            });
 
         self.file_metadata.insert(file_id, metadata);
         metadata

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::sync::Arc;
 use std::{fmt, path};
 
@@ -281,7 +282,6 @@ impl Loader {
             &(**exports_symbol)
         };
 
-        let lossy_native_path = native_path.to_string_lossy();
         let exported_funs = exports
             .par_iter()
             .map(|(fun_name, rust_fun)| {
@@ -292,7 +292,12 @@ impl Loader {
                 };
 
                 // Parse the declared Arret type string as a datum
-                let file_map_name = format!("{}:{}", lossy_native_path, fun_name);
+                let mut file_map_name =
+                    OsString::with_capacity(native_path.as_os_str().len() + 1 + fun_name.len());
+
+                file_map_name.push(native_path.as_os_str());
+                file_map_name.push(":");
+                file_map_name.push(fun_name);
 
                 let arret_type_source_file =
                     source_loader.load_string(file_map_name, rust_fun.arret_type);

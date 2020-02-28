@@ -19,7 +19,7 @@ fn span_to_human_location(source_loader: Option<&SourceLoader>, span: Span) -> O
 
     Some(format!(
         "{}:{}:{}",
-        files.name(file_id),
+        files.name(file_id).to_string_lossy(),
         location.line.number(),
         location.column.number()
     ))
