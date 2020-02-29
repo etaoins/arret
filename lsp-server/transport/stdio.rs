@@ -3,7 +3,7 @@ use tokio::io;
 use tokio::prelude::*;
 use tokio::sync::mpsc;
 
-use crate::json_rpc::{IncomingMessage, OutgoingMessage};
+use crate::json_rpc::{ClientMessage, ServerMessage};
 use crate::transport::Transport;
 
 fn parse_header_line(header_line: &str) -> (String, String) {
@@ -42,8 +42,8 @@ macro_rules! break_on_broken_pipe {
 pub fn create() -> Transport {
     // Allow some concurrency with the dispatcher but 4 message is a bit excessive
     // This allows for backpressure on `stdin`/`stdout`
-    let (send_outgoing, mut recv_outgoing) = mpsc::channel::<OutgoingMessage>(4);
-    let (mut send_incoming, recv_incoming) = mpsc::channel::<IncomingMessage>(4);
+    let (send_outgoing, mut recv_outgoing) = mpsc::channel::<ServerMessage>(4);
+    let (mut send_incoming, recv_incoming) = mpsc::channel::<ClientMessage>(4);
 
     // Write all our responses out sequentially
     tokio::spawn(async move {
@@ -107,10 +107,10 @@ pub fn create() -> Transport {
                 "Could not read body from stdin"
             );
 
-            let incoming_message: IncomingMessage =
+            let client_message: ClientMessage =
                 serde_json::from_slice(&read_buffer).expect("Invalid JSON");
 
-            if send_incoming.send(incoming_message).await.is_err() {
+            if send_incoming.send(client_message).await.is_err() {
                 // Channel closed
                 break;
             }

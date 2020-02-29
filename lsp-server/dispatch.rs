@@ -1,15 +1,11 @@
-use crate::json_rpc::{ErrorCode, IncomingMessage, Request, Response};
+use crate::json_rpc::{ClientMessage, ErrorCode, Request, Response};
 use crate::messages;
 use crate::transport::Transport;
 use lsp_types;
 use serde_json;
 
-fn handle_non_lifetime_request(request: Request) -> Response {
-    Response::new_err(
-        request.id,
-        ErrorCode::MethodNotFound,
-        "Method not found".to_owned(),
-    )
+fn handle_non_lifecycle_request(request: Request) -> Response {
+    Response::new_err(request.id, ErrorCode::MethodNotFound, "Method not found")
 }
 
 /// Runs a dispatch loop against the provided transport
@@ -37,13 +33,13 @@ pub async fn dispatch_messages(transport: Transport) -> Result<(), ()> {
     // Wait for initialize
     while let Some(incoming_message) = incoming.recv().await {
         match incoming_message {
-            IncomingMessage::Notification(notification) => {
+            ClientMessage::Notification(notification) => {
                 if notification.method == "exit" {
                     // Unclean exit
                     return Err(());
                 }
             }
-            IncomingMessage::Request(request) if request.method.as_str() == "initialize" => {
+            ClientMessage::Request(request) if request.method.as_str() == "initialize" => {
                 let initialize_params: lsp_types::InitializeParams =
                     serde_json::from_value(request.params)
                         .expect("Could not parse initialize params");
@@ -53,11 +49,11 @@ pub async fn dispatch_messages(transport: Transport) -> Result<(), ()> {
 
                 break;
             }
-            IncomingMessage::Request(request) => {
+            ClientMessage::Request(request) => {
                 send_or_return_err!(Response::new_err(
                     request.id,
                     ErrorCode::ServerNotInitialized,
-                    "Server not initialized".to_owned(),
+                    "Server not initialized"
                 ));
             }
         }
@@ -66,18 +62,18 @@ pub async fn dispatch_messages(transport: Transport) -> Result<(), ()> {
     // Process normal messages until we receive a shutdown request
     while let Some(incoming_message) = incoming.recv().await {
         match incoming_message {
-            IncomingMessage::Notification(notification) => {
+            ClientMessage::Notification(notification) => {
                 if notification.method == "exit" {
                     // Unclean exit
                     return Err(());
                 }
             }
-            IncomingMessage::Request(request) if request.method == "shutdown" => {
+            ClientMessage::Request(request) if request.method == "shutdown" => {
                 send_or_return_err!(Response::new_ok(request.id, serde_json::Value::Null));
-            }
-            IncomingMessage::Request(request) => {
-                send_or_return_err!(handle_non_lifetime_request(request));
                 break;
+            }
+            ClientMessage::Request(request) => {
+                send_or_return_err!(handle_non_lifecycle_request(request));
             }
         }
     }
@@ -85,16 +81,16 @@ pub async fn dispatch_messages(transport: Transport) -> Result<(), ()> {
     // Wait for exit
     while let Some(incoming_message) = incoming.recv().await {
         match incoming_message {
-            IncomingMessage::Notification(notification) => {
+            ClientMessage::Notification(notification) => {
                 if notification.method == "exit" {
                     return Ok(());
                 }
             }
-            IncomingMessage::Request(request) => {
+            ClientMessage::Request(request) => {
                 send_or_return_err!(Response::new_err(
                     request.id,
                     ErrorCode::InvalidRequest,
-                    "Shutting down".to_owned(),
+                    "Shutting down"
                 ));
             }
         }
@@ -102,4 +98,145 @@ pub async fn dispatch_messages(transport: Transport) -> Result<(), ()> {
 
     // Receiver channel unexpectedly closed
     Err(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use futures::future::BoxFuture;
+    use futures::prelude::*;
+    use tokio::sync::mpsc;
+
+    use crate::json_rpc::{Notification, RequestId, ServerMessage};
+
+    struct TestDispatcher {
+        outgoing: mpsc::Receiver<ServerMessage>,
+        incoming: mpsc::Sender<ClientMessage>,
+        exit_future: BoxFuture<'static, Result<(), ()>>,
+    }
+
+    fn create_test_dispatcher() -> TestDispatcher {
+        let (send_outgoing, recv_outgoing) = mpsc::channel::<ServerMessage>(4);
+        let (send_incoming, recv_incoming) = mpsc::channel::<ClientMessage>(4);
+
+        let dispatcher = dispatch_messages(Transport {
+            outgoing: send_outgoing,
+            incoming: recv_incoming,
+        });
+
+        TestDispatcher {
+            outgoing: recv_outgoing,
+            incoming: send_incoming,
+            exit_future: dispatcher.boxed(),
+        }
+    }
+
+    fn expect_response(server_message: ServerMessage) -> Response {
+        if let ServerMessage::Response(response) = server_message {
+            response
+        } else {
+            panic!("Expected response, got {:?}", server_message);
+        }
+    }
+
+    #[allow(deprecated)]
+    #[tokio::test]
+    async fn test_clean_lifecycle() {
+        let TestDispatcher {
+            mut outgoing,
+            mut incoming,
+            exit_future,
+        } = create_test_dispatcher();
+
+        tokio::spawn(async move {
+            // We should return an error for messages before initialization
+            incoming
+                .send(Request::new(123.into(), "shutdown", serde_json::Value::Null).into())
+                .await
+                .unwrap();
+
+            let response = expect_response(outgoing.recv().await.unwrap());
+
+            assert_eq!(
+                Response::new_err(
+                    123.into(),
+                    ErrorCode::ServerNotInitialized,
+                    "Server not initialized"
+                ),
+                response,
+            );
+
+            // Now initialize
+            let initialize_params = lsp_types::InitializeParams {
+                process_id: None,
+                root_path: None,
+                root_uri: None,
+                initialization_options: None,
+                capabilities: Default::default(),
+                trace: None,
+                workspace_folders: None,
+                client_info: None,
+            };
+
+            incoming
+                .send(Request::new("123".to_owned().into(), "initialize", initialize_params).into())
+                .await
+                .unwrap();
+
+            let response = expect_response(outgoing.recv().await.unwrap());
+
+            // Don't assert the exact body
+            assert_eq!(response.id, RequestId::from("123".to_owned()));
+            assert!(response.error.is_none());
+
+            // Send initialized notification
+            incoming
+                .send(Notification::new("initialized", serde_json::Value::Null).into())
+                .await
+                .unwrap();
+
+            // Now shutdown for real
+            incoming
+                .send(Request::new(456.into(), "shutdown", serde_json::Value::Null).into())
+                .await
+                .unwrap();
+
+            let response = expect_response(outgoing.recv().await.unwrap());
+
+            assert_eq!(
+                Response::new_ok(456.into(), serde_json::Value::Null),
+                response,
+            );
+
+            // We should return an error on duplicate shutdown
+            incoming
+                .send(
+                    Request::new("456".to_owned().into(), "shutdown", serde_json::Value::Null)
+                        .into(),
+                )
+                .await
+                .unwrap();
+
+            let response = expect_response(outgoing.recv().await.unwrap());
+
+            assert_eq!(
+                Response::new_err(
+                    "456".to_owned().into(),
+                    ErrorCode::InvalidRequest,
+                    "Shutting down"
+                ),
+                response,
+            );
+
+            // And send exit notification
+            incoming
+                .send(Notification::new("exit", serde_json::Value::Null).into())
+                .await
+                .unwrap();
+        });
+
+        // This should be considered a clean exit
+        assert!(exit_future.await.is_ok());
+    }
 }

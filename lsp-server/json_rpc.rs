@@ -10,57 +10,102 @@ pub enum ErrorCode {
     MethodNotFound = -32601,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 #[serde(untagged)]
-pub enum IncomingMessage {
+pub enum ClientMessage {
     Request(Request),
     Notification(Notification),
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+impl From<Request> for ClientMessage {
+    fn from(request: Request) -> ClientMessage {
+        ClientMessage::Request(request)
+    }
+}
+
+impl From<Notification> for ClientMessage {
+    fn from(notification: Notification) -> ClientMessage {
+        ClientMessage::Notification(notification)
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 #[serde(untagged)]
-pub enum OutgoingMessage {
+pub enum ServerMessage {
     Response(Response),
     Notification(Notification),
 }
 
-impl From<Response> for OutgoingMessage {
-    fn from(response: Response) -> OutgoingMessage {
-        OutgoingMessage::Response(response)
+impl From<Response> for ServerMessage {
+    fn from(response: Response) -> ServerMessage {
+        ServerMessage::Response(response)
     }
 }
 
-impl From<Notification> for OutgoingMessage {
-    fn from(notification: Notification) -> OutgoingMessage {
-        OutgoingMessage::Notification(notification)
+impl From<Notification> for ServerMessage {
+    fn from(notification: Notification) -> ServerMessage {
+        ServerMessage::Notification(notification)
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Notification {
     pub method: String,
     pub params: serde_json::Value,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+impl Notification {
+    #[cfg(test)]
+    pub fn new(method: impl Into<String>, params: impl Serialize) -> Notification {
+        Notification {
+            method: method.into(),
+            params: serde_json::to_value(params).expect("Could not serialise notification"),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 #[serde(untagged)]
 enum IdRepr {
     U64(u64),
     String(String),
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 #[serde(transparent)]
 pub struct RequestId(IdRepr);
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+impl From<u64> for RequestId {
+    fn from(id: u64) -> RequestId {
+        RequestId(IdRepr::U64(id))
+    }
+}
+
+impl From<String> for RequestId {
+    fn from(id: String) -> RequestId {
+        RequestId(IdRepr::String(id))
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Request {
     pub id: RequestId,
     pub method: String,
     pub params: serde_json::Value,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+impl Request {
+    #[cfg(test)]
+    pub fn new(id: RequestId, method: impl Into<String>, params: impl Serialize) -> Request {
+        Request {
+            id,
+            method: method.into(),
+            params: serde_json::to_value(params).expect("Could not serialise request"),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Response {
     pub id: RequestId,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -69,7 +114,7 @@ pub struct Response {
     pub error: Option<ResponseError>,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct ResponseError {
     pub code: i32,
     pub message: String,
@@ -78,7 +123,7 @@ pub struct ResponseError {
 }
 
 impl Response {
-    pub fn new_ok<R: Serialize>(id: RequestId, result: R) -> Response {
+    pub fn new_ok(id: RequestId, result: impl Serialize) -> Response {
         Response {
             id,
             result: Some(serde_json::to_value(result).expect("Could not serialise result")),
@@ -86,10 +131,10 @@ impl Response {
         }
     }
 
-    pub fn new_err(id: RequestId, code: ErrorCode, message: String) -> Response {
+    pub fn new_err(id: RequestId, code: ErrorCode, message: impl Into<String>) -> Response {
         let error = ResponseError {
             code: code as i32,
-            message,
+            message: message.into(),
             data: None,
         };
 
