@@ -3,88 +3,122 @@ use tokio::io;
 use tokio::prelude::*;
 use tokio::sync::mpsc;
 
-use crate::dispatch;
-use crate::json_rpc;
+use crate::json_rpc::{IncomingMessage, OutgoingMessage};
+use crate::transport::Transport;
 
-fn parse_header_component(component: Vec<u8>) -> String {
-    String::from_utf8(component)
-        .expect("Non-UTF8 header encoding")
+fn parse_header_line(header_line: &str) -> (String, String) {
+    let mut parts = header_line.splitn(2, ':');
+
+    let name = parts
+        .next()
+        .expect("Did not find header name")
         .trim()
-        .to_string()
-}
-
-fn parse_header_line(header_line: &[u8]) -> (String, String) {
-    let mut parts = header_line.splitn(2, |c| *c == b':');
-
-    let name = parse_header_component(parts.next().expect("Did not find header name").to_owned())
         .to_ascii_lowercase();
 
-    let value = parse_header_component(parts.next().expect("Did not find header value").to_owned());
+    let value = parts
+        .next()
+        .expect("Did not find header value")
+        .trim()
+        .to_owned();
 
     (name, value)
 }
 
-pub async fn main_loop() {
-    let mut reader = io::BufReader::new(io::stdin());
+/// Waits for the passed I/O future and `break`s from the current loop if the pipe is broken
+///
+/// This is useful to propagate closing `stdout`/`stdin` by closing the respective MPSC channel.
+macro_rules! break_on_broken_pipe {
+    ($io_future:expr, $message:expr) => {
+        if let Err(err) = $io_future.await {
+            if err.kind() == io::ErrorKind::BrokenPipe {
+                break;
+            } else {
+                panic!("{}: {:?}", $message, err);
+            }
+        }
+    };
+}
 
-    let (send_response, mut recv_response) = mpsc::channel::<json_rpc::Response>(4);
+pub fn create() -> Transport {
+    // Allow some concurrency with the dispatcher but 4 message is a bit excessive
+    // This allows for backpressure on `stdin`/`stdout`
+    let (send_outgoing, mut recv_outgoing) = mpsc::channel::<OutgoingMessage>(4);
+    let (mut send_incoming, recv_incoming) = mpsc::channel::<IncomingMessage>(4);
 
     // Write all our responses out sequentially
     tokio::spawn(async move {
         let mut writer = io::stdout();
 
-        loop {
-            let response = recv_response.recv().await;
-
+        while let Some(response) = recv_outgoing.recv().await {
             let response_bytes =
                 serde_json::to_vec(&response).expect("Could not serialise response");
 
-            writer
-                .write_all(format!("Content-Length: {}\r\n\r\n", response_bytes.len()).as_bytes())
-                .await
-                .expect("Could not write response header");
+            break_on_broken_pipe!(
+                writer.write_all(
+                    format!("Content-Length: {}\r\n\r\n", response_bytes.len()).as_bytes()
+                ),
+                "Could not write response header"
+            );
 
-            writer
-                .write_all(&response_bytes)
-                .await
-                .expect("Could not write response body");
+            break_on_broken_pipe!(
+                writer.write_all(&response_bytes),
+                "Could not write response body"
+            );
 
-            writer.flush().await.expect("Could not flush writer");
+            break_on_broken_pipe!(writer.flush(), "Could not flush writer");
         }
     });
 
-    loop {
-        let mut content_length: Option<usize> = None;
-        let mut read_buffer = Vec::<u8>::new();
+    tokio::spawn(async move {
+        let mut reader = io::BufReader::new(io::stdin());
 
-        // Read the header
-        while let Ok(_) = reader.read_until(b'\n', &mut read_buffer).await {
-            if read_buffer == b"\r\n" {
-                // Read full header
+        loop {
+            let mut content_length: Option<usize> = None;
+            let mut line_buffer = String::new();
+
+            // Read the header
+            loop {
+                break_on_broken_pipe!(
+                    reader.read_line(&mut line_buffer),
+                    "Could not read header line from stdin"
+                );
+
+                if line_buffer == "\r\n" {
+                    // Read full header
+                    break;
+                }
+
+                let (name, value) = parse_header_line(&line_buffer);
+                if name == "content-length" {
+                    content_length = Some(value.parse().expect("Cannot parse Content-Length"));
+                }
+
+                line_buffer.clear();
+            }
+
+            let content_length = content_length.expect("Header had no Content-Length");
+
+            // Read the entire content
+            let mut read_buffer = Vec::<u8>::new();
+            read_buffer.resize(content_length, 0);
+
+            break_on_broken_pipe!(
+                reader.read_exact(&mut read_buffer),
+                "Could not read body from stdin"
+            );
+
+            let incoming_message: IncomingMessage =
+                serde_json::from_slice(&read_buffer).expect("Invalid JSON");
+
+            if send_incoming.send(incoming_message).await.is_err() {
+                // Channel closed
                 break;
             }
-
-            let (name, value) = parse_header_line(&read_buffer);
-            if name == "content-length" {
-                content_length = Some(value.parse().expect("Cannot parse Content-Length"));
-            }
-
-            read_buffer.clear();
         }
+    });
 
-        let content_length = content_length.expect("Header had no Content-Length");
-
-        // Read the entire content
-        read_buffer.resize(content_length, 0);
-        reader
-            .read_exact(&mut read_buffer)
-            .await
-            .expect("Could not read body");
-
-        let incoming_message: json_rpc::IncomingMessage =
-            serde_json::from_slice(&read_buffer).expect("Invalid JSON");
-
-        // Asynchronously dispatch while we consume the next incoming message
-        dispatch::dispatch_incoming_message(incoming_message, send_response.clone());
+    Transport {
+        incoming: recv_incoming,
+        outgoing: send_outgoing,
     }
 }

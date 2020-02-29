@@ -4,6 +4,7 @@ mod messages;
 mod transport;
 
 #[tokio::main]
-async fn main() {
-    transport::stdio::main_loop().await
+async fn main() -> Result<(), ()> {
+    let transport = transport::stdio::create();
+    dispatch::dispatch_messages(transport).await
 }
