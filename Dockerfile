@@ -19,6 +19,7 @@ ADD rfi-derive/Cargo.toml /opt/arret/rfi-derive/
 ADD stdlib/rust/Cargo.toml /opt/arret/stdlib/rust/
 ADD compiler/Cargo.toml /opt/arret/compiler/
 ADD driver/Cargo.toml /opt/arret/driver/
+ADD lsp-server/Cargo.toml /opt/arret/lsp-server/
 
 WORKDIR /opt/arret
 

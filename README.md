@@ -95,8 +95,13 @@ These can be compiled to a static binary by running Arret with the path name:
 ### Editors
 
 A basic [Visual Studio Code](https://code.visualstudio.com) extension is bundled in [editors/code](./editors/code).
+This uses the [Language Server](https://microsoft.github.io/language-server-protocol/) from the [lsp-server crate](./lsp-server).
 
 ```sh
+# Install `arret-lsp-server`
+cargo install --path lsp-server
+
+# Install the Visual Studio code extension
 cd editors/code
 yarn
 yarn vscode:install

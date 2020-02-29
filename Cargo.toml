@@ -3,6 +3,7 @@ members = [
 	"syntax",
 	"compiler",
 	"driver",
+	"lsp-server",
 	"runtime",
 	"runtime-syntax",
 	"rfi-derive",
