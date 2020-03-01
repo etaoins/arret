@@ -55,7 +55,6 @@ pub struct Notification {
 }
 
 impl Notification {
-    #[cfg(test)]
     pub fn new(method: impl Into<String>, params: impl Serialize) -> Notification {
         Notification {
             method: method.into(),

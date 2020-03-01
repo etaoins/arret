@@ -1,5 +1,6 @@
 use lsp_types;
 
+#[derive(Debug)]
 pub struct Document {
     #[allow(dead_code)]
     version: Option<i64>,
@@ -29,13 +30,13 @@ impl Document {
         range: lsp_types::Range,
         new_range_text: &str,
     ) -> Result<Document, ()> {
-        let start_offset = if let Some(start_offset) = self.position_for_offset(range.start) {
+        let start_offset = if let Some(start_offset) = self.position_to_offset(range.start) {
             start_offset
         } else {
             return Err(());
         };
 
-        let end_offset = self.position_for_offset(range.end);
+        let end_offset = self.position_to_offset(range.end);
 
         // Rebuild the new text
         let mut new_text = self.text[..start_offset].to_string() + new_range_text;
@@ -70,8 +71,40 @@ impl Document {
         })
     }
 
+    /// Returns the document version
+    pub fn version(&self) -> Option<i64> {
+        self.version
+    }
+
+    /// Returns the document text
+    pub fn text(&self) -> &str {
+        self.text.as_ref()
+    }
+
+    /// Returns the position for the given byte offset
+    pub fn offset_to_position(&self, offset: usize) -> lsp_types::Position {
+        let line = match self
+            .line_offsets
+            .binary_search_by(|line_start| line_start.cmp(&offset))
+        {
+            Ok(line) => line,
+            Err(line) => line - 1,
+        };
+
+        let line_start = self.line_offsets[line];
+        let character: usize = self.text[line_start..offset]
+            .chars()
+            .map(|c| c.len_utf16())
+            .sum();
+
+        lsp_types::Position {
+            line: line as u64,
+            character: character as u64,
+        }
+    }
+
     /// Returns the byte offset for the given position
-    fn position_for_offset(&self, position: lsp_types::Position) -> Option<usize> {
+    fn position_to_offset(&self, position: lsp_types::Position) -> Option<usize> {
         // Lines are already computed
         let line_offset = *self.line_offsets.get(position.line as usize)?;
 
@@ -100,6 +133,51 @@ mod test {
 
     fn assert_consistency(doc: &Document) {
         assert_eq!(line_offsets_for_str(&doc.text), doc.line_offsets);
+    }
+
+    #[test]
+    fn test_positions() {
+        let doc = Document::new(None, "Hello 💣\nNext line\n".into());
+
+        assert_eq!(
+            lsp_types::Position {
+                line: 0,
+                character: 0
+            },
+            doc.offset_to_position(0)
+        );
+
+        assert_eq!(
+            lsp_types::Position {
+                line: 0,
+                character: 6
+            },
+            doc.offset_to_position(6)
+        );
+
+        assert_eq!(
+            lsp_types::Position {
+                line: 0,
+                character: 8
+            },
+            doc.offset_to_position(10)
+        );
+
+        assert_eq!(
+            lsp_types::Position {
+                line: 1,
+                character: 0
+            },
+            doc.offset_to_position(11)
+        );
+
+        assert_eq!(
+            lsp_types::Position {
+                line: 2,
+                character: 0
+            },
+            doc.offset_to_position(21)
+        );
     }
 
     #[test]

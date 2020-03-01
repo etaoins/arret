@@ -3,6 +3,7 @@ mod json_rpc;
 mod model;
 mod session;
 mod transport;
+mod watcher;
 
 use tokio::io;
 

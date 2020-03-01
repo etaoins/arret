@@ -1,21 +1,30 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use lsp_types;
+use tokio::sync::mpsc;
 
 use crate::handler;
-use crate::json_rpc::{ClientMessage, ErrorCode, Response};
+use crate::json_rpc::{ClientMessage, ErrorCode, Response, ServerMessage};
 use crate::model::Document;
 use crate::transport::Connection;
+use crate::watcher::SyntaxWatcher;
 
 pub struct State {
-    pub documents: HashMap<String, Document>,
+    pub documents: HashMap<String, Arc<Document>>,
+    pub syntax_watcher: SyntaxWatcher,
 }
 
 impl State {
-    fn new() -> State {
+    fn new(outgoing: mpsc::Sender<ServerMessage>) -> State {
         State {
             documents: HashMap::new(),
+            syntax_watcher: SyntaxWatcher::new(outgoing),
         }
+    }
+
+    async fn shutdown(self) {
+        self.syntax_watcher.shutdown().await;
     }
 }
 
@@ -86,7 +95,7 @@ pub async fn run(connection: Connection) -> Result<(), ()> {
         }
     }
 
-    let mut state = State::new();
+    let mut state = State::new(outgoing.clone());
 
     // Process normal messages until we receive a shutdown request
     while let Some(incoming_message) = incoming.recv().await {
@@ -95,6 +104,9 @@ pub async fn run(connection: Connection) -> Result<(), ()> {
                 // Nothing do to
             }
             ClientMessage::Notification(notification) if notification.method == "exit" => {
+                // Tear down our state or we'll likely to panic if there are concurrent operationss
+                state.shutdown().await;
+
                 // Unclean exit
                 return Err(());
             }
@@ -110,6 +122,9 @@ pub async fn run(connection: Connection) -> Result<(), ()> {
             }
         }
     }
+
+    // Cleanly shutdown our state
+    state.shutdown().await;
 
     // Wait for exit
     while let Some(incoming_message) = incoming.recv().await {
