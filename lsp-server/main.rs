@@ -1,5 +1,6 @@
+mod handler;
 mod json_rpc;
-mod messages;
+mod model;
 mod session;
 mod transport;
 

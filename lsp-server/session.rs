@@ -1,11 +1,42 @@
-use crate::json_rpc::{ClientMessage, ErrorCode, Request, Response};
-use crate::messages;
-use crate::transport::Connection;
-use lsp_types;
-use serde_json;
+use std::collections::HashMap;
 
-fn handle_non_lifecycle_request(request: Request) -> Response {
-    Response::new_err(request.id, ErrorCode::MethodNotFound, "Method not found")
+use lsp_types;
+
+use crate::handler;
+use crate::json_rpc::{ClientMessage, ErrorCode, Response};
+use crate::model::Document;
+use crate::transport::Connection;
+
+pub struct State {
+    pub documents: HashMap<String, Document>,
+}
+
+impl State {
+    fn new() -> State {
+        State {
+            documents: HashMap::new(),
+        }
+    }
+}
+
+// This is special because we don't have `State` yet
+pub fn handle_initialize_request() -> lsp_types::InitializeResult {
+    lsp_types::InitializeResult {
+        server_info: Some(lsp_types::ServerInfo {
+            name: "arret-lsp-server".to_owned(),
+            version: None,
+        }),
+        capabilities: lsp_types::ServerCapabilities {
+            text_document_sync: Some(lsp_types::TextDocumentSyncCapability::Options(
+                lsp_types::TextDocumentSyncOptions {
+                    open_close: Some(true),
+                    change: Some(lsp_types::TextDocumentSyncKind::Full),
+                    ..Default::default()
+                },
+            )),
+            ..Default::default()
+        },
+    }
 }
 
 /// Runs a session loop against the provided connection
@@ -40,11 +71,7 @@ pub async fn run(connection: Connection) -> Result<(), ()> {
                 }
             }
             ClientMessage::Request(request) if request.method.as_str() == "initialize" => {
-                let initialize_params: lsp_types::InitializeParams =
-                    serde_json::from_value(request.params)
-                        .expect("Could not parse initialize params");
-
-                let response = messages::initialize::handle(initialize_params);
+                let response = handle_initialize_request();
                 send_or_return_err!(Response::new_ok(request.id, response));
 
                 break;
@@ -59,21 +86,27 @@ pub async fn run(connection: Connection) -> Result<(), ()> {
         }
     }
 
+    let mut state = State::new();
+
     // Process normal messages until we receive a shutdown request
     while let Some(incoming_message) = incoming.recv().await {
         match incoming_message {
+            ClientMessage::Notification(notification) if notification.method == "initialized" => {
+                // Nothing do to
+            }
+            ClientMessage::Notification(notification) if notification.method == "exit" => {
+                // Unclean exit
+                return Err(());
+            }
             ClientMessage::Notification(notification) => {
-                if notification.method == "exit" {
-                    // Unclean exit
-                    return Err(());
-                }
+                handler::handle_non_lifecycle_notification(&mut state, notification);
             }
             ClientMessage::Request(request) if request.method == "shutdown" => {
                 send_or_return_err!(Response::new_ok(request.id, ()));
                 break;
             }
             ClientMessage::Request(request) => {
-                send_or_return_err!(handle_non_lifecycle_request(request));
+                send_or_return_err!(handler::handle_non_lifecycle_request(&mut state, request));
             }
         }
     }
@@ -108,7 +141,7 @@ mod test {
     use futures::prelude::*;
     use tokio::sync::mpsc;
 
-    use crate::json_rpc::{Notification, RequestId, ServerMessage};
+    use crate::json_rpc::{Notification, Request, RequestId, ServerMessage};
 
     struct TestSession {
         outgoing: mpsc::Receiver<ServerMessage>,
