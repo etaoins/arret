@@ -30,7 +30,7 @@ pub fn handle_initialize_request() -> lsp_types::InitializeResult {
             text_document_sync: Some(lsp_types::TextDocumentSyncCapability::Options(
                 lsp_types::TextDocumentSyncOptions {
                     open_close: Some(true),
-                    change: Some(lsp_types::TextDocumentSyncKind::Full),
+                    change: Some(lsp_types::TextDocumentSyncKind::Incremental),
                     ..Default::default()
                 },
             )),

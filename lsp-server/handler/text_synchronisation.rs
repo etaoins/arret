@@ -32,19 +32,30 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
             content_changes,
         } = params;
 
-        for content_change in content_changes {
-            if content_change.range.is_some() || content_change.range_length.is_some() {
-                eprintln!(
-                    "Received unexpected incremental update to document {}",
-                    text_document.uri
-                );
-                continue;
-            }
-
-            state.documents.insert(
-                text_document.uri.to_string(),
-                Document::new(text_document.version, Arc::from(content_change.text)),
+        let document = if let Some(document) = state.documents.get_mut(text_document.uri.as_str()) {
+            document
+        } else {
+            eprintln!(
+                "Received change notification for unknown document {}",
+                text_document.uri
             );
+            return;
+        };
+
+        for content_change in content_changes {
+            match content_change.range {
+                Some(range) => {
+                    if document
+                        .replace_range(text_document.version, range, &content_change.text)
+                        .is_err()
+                    {
+                        eprintln!("Could not find range to replace in {}", text_document.uri);
+                    }
+                }
+                None => {
+                    document.replace_all(text_document.version, Arc::from(content_change.text));
+                }
+            }
         }
     }
 }
