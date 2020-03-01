@@ -69,7 +69,7 @@ pub async fn run(connection: Connection) -> Result<(), ()> {
                 }
             }
             ClientMessage::Request(request) if request.method == "shutdown" => {
-                send_or_return_err!(Response::new_ok(request.id, serde_json::Value::Null));
+                send_or_return_err!(Response::new_ok(request.id, ()));
                 break;
             }
             ClientMessage::Request(request) => {
@@ -152,7 +152,7 @@ mod test {
         tokio::spawn(async move {
             // We should return an error for messages before initialization
             incoming
-                .send(Request::new(123.into(), "shutdown", serde_json::Value::Null).into())
+                .send(Request::new(123.into(), "shutdown", ()).into())
                 .await
                 .unwrap();
 
@@ -192,29 +192,23 @@ mod test {
 
             // Send initialized notification
             incoming
-                .send(Notification::new("initialized", serde_json::Value::Null).into())
+                .send(Notification::new("initialized", ()).into())
                 .await
                 .unwrap();
 
             // Now shutdown for real
             incoming
-                .send(Request::new(456.into(), "shutdown", serde_json::Value::Null).into())
+                .send(Request::new(456.into(), "shutdown", ()).into())
                 .await
                 .unwrap();
 
             let response = expect_response(outgoing.recv().await.unwrap());
 
-            assert_eq!(
-                Response::new_ok(456.into(), serde_json::Value::Null),
-                response,
-            );
+            assert_eq!(Response::new_ok(456.into(), ()), response,);
 
             // We should return an error on duplicate shutdown
             incoming
-                .send(
-                    Request::new("456".to_owned().into(), "shutdown", serde_json::Value::Null)
-                        .into(),
-                )
+                .send(Request::new("456".to_owned().into(), "shutdown", ()).into())
                 .await
                 .unwrap();
 
@@ -231,7 +225,7 @@ mod test {
 
             // And send exit notification
             incoming
-                .send(Notification::new("exit", serde_json::Value::Null).into())
+                .send(Notification::new("exit", ()).into())
                 .await
                 .unwrap();
         });
