@@ -1,3 +1,5 @@
+use arret_syntax::span::Span;
+
 use lsp_types;
 
 #[derive(Debug)]
@@ -79,6 +81,14 @@ impl Document {
     /// Returns the document text
     pub fn text(&self) -> &str {
         self.text.as_ref()
+    }
+
+    /// Returns an LSP `Range` for the given `arret-syntax` S`pan`
+    pub fn span_to_range(&self, span: Span) -> lsp_types::Range {
+        lsp_types::Range {
+            start: self.offset_to_position(span.start().to_usize()),
+            end: self.offset_to_position(span.end().to_usize()),
+        }
     }
 
     /// Returns the position for the given byte offset

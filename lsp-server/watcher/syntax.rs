@@ -17,10 +17,7 @@ fn syntax_diagnostics_for_document(document: &Document) -> Vec<lsp_types::Diagno
     match data_from_str(None, document.text()) {
         Ok(_) => vec![],
         Err(error) => vec![lsp_types::Diagnostic {
-            range: lsp_types::Range {
-                start: document.offset_to_position(error.span().start().to_usize()),
-                end: document.offset_to_position(error.span().end().to_usize()),
-            },
+            range: document.span_to_range(error.span()),
             severity: Some(lsp_types::DiagnosticSeverity::Error),
             message: error.kind().message(),
             source: Some("arret-syntax".to_owned()),
