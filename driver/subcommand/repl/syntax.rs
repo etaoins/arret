@@ -33,7 +33,7 @@ pub fn error_for_line(mut line: &str) -> Option<arret_syntax::error::Error> {
     datum_from_str_with_span_offset(None, line, ByteIndex(span_offset as u32)).err()
 }
 
-pub fn error_context_for_line(line: &str) -> Option<arret_syntax::error::WithinContext> {
+pub fn error_context_for_eol(line: &str) -> Option<arret_syntax::error::WithinContext> {
     error_for_line(line).and_then(|error| {
         if let arret_syntax::error::ErrorKind::Eof(within_context) = error.kind() {
             Some(*within_context)

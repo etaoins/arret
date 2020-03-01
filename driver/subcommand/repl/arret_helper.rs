@@ -7,7 +7,7 @@ use rustyline::validate::{ValidationContext, ValidationResult};
 use arret_syntax::datum::DataStr;
 
 use super::command::{HELP_COMMAND, QUIT_COMMAND, TYPE_ONLY_PREFIX};
-use super::syntax::{error_context_for_line, error_for_line, MAXIMUM_PARSED_LINE_LEN};
+use super::syntax::{error_context_for_eol, error_for_line, MAXIMUM_PARSED_LINE_LEN};
 
 /// Completions that don't map to a bound value in scope
 const UNBOUND_COMPLETIONS: &[&str] = &[
@@ -108,7 +108,7 @@ impl rustyline::hint::Hinter for ArretHelper {
         use arret_syntax::error::WithinContext;
         use arret_syntax::parser::is_identifier_char;
 
-        let within_context = error_context_for_line(line);
+        let within_context = error_context_for_eol(line);
 
         // If we're inside a string we shouldn't try to hint identifiers
         if let Some(WithinContext::String(_)) = within_context {
@@ -207,7 +207,7 @@ impl rustyline::validate::Validator for ArretHelper {
         &self,
         ctx: &mut ValidationContext<'_>,
     ) -> Result<ValidationResult, rustyline::error::ReadlineError> {
-        match error_context_for_line(ctx.input()) {
+        match error_context_for_eol(ctx.input()) {
             Some(_) => Ok(ValidationResult::Incomplete),
             None => Ok(ValidationResult::Valid(None)),
         }

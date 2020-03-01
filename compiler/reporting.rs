@@ -67,33 +67,29 @@ pub fn errors_to_diagnostics<E: Into<Diagnostic>>(errors: Vec<E>) -> Vec<Diagnos
 /// This is required because `arret-syntax` doesn't depend on `codespan-reporting`. It requires
 /// its consumers to handle reporting themselves.
 pub fn diagnostic_for_syntax_error(error: &arret_syntax::error::Error) -> Diagnostic {
-    use arret_syntax::error::ErrorKind;
-
     let origin = error.span();
+    let within = error.kind().within_context();
 
-    match error.kind() {
-        ErrorKind::Eof(within) | ErrorKind::UnexpectedChar(_, within) => {
-            let primary_label_message = within
-                .expected_next()
-                .map(|en| en.description())
-                .unwrap_or_else(|| "expected datum".to_owned());
+    let primary_label_message = within
+        .and_then(|within| within.expected_next())
+        .map(|en| en.description())
+        .unwrap_or_else(|| "syntax error".to_owned());
 
-            let diagnostic = Diagnostic::new_error(
-                error.kind().message(),
-                new_label(origin, primary_label_message),
-            );
+    let mut diagnostic = Diagnostic::new_error(
+        error.kind().message(),
+        new_label(origin, primary_label_message),
+    );
 
-            if let Some(open_char_span) = within.open_char_span() {
-                diagnostic.with_secondary_labels(iter::once(new_label(
-                    open_char_span,
-                    format!("{} starts here", within.description()),
-                )))
-            } else {
-                diagnostic
-            }
+    if let Some(within) = within {
+        if let Some(open_char_span) = within.open_char_span() {
+            diagnostic = diagnostic.with_secondary_labels(iter::once(new_label(
+                open_char_span,
+                format!("{} starts here", within.description()),
+            )));
         }
-        _ => Diagnostic::new_error(error.kind().message(), new_label(origin, "syntax error")),
     }
+
+    diagnostic
 }
 
 pub fn new_label(span: Span, message: impl Into<String>) -> Label {

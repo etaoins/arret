@@ -53,22 +53,34 @@ impl ErrorKind {
     /// Returns a string describing the error
     pub fn message(&self) -> String {
         match self {
-            ErrorKind::Eof(ref ec) => {
-                format!("unexpected end of file while parsing {}", ec.description())
-            }
+            ErrorKind::Eof(ref within) => format!(
+                "unexpected end of file while parsing {}",
+                within.description()
+            ),
             ErrorKind::UnsupportedDispatch => "unsupported dispatch".to_owned(),
             ErrorKind::UnsupportedChar => "unsupported character".to_owned(),
             ErrorKind::InvalidCodePoint => "invalid code point".to_owned(),
             ErrorKind::UnsupportedStringEscape => "unsupported string escape".to_owned(),
             ErrorKind::IntegerOverflow => "integer literal does not fit in i64".to_owned(),
             ErrorKind::InvalidFloat => "unable to parse float".to_owned(),
-            ErrorKind::UnexpectedChar(c, ec) => {
-                format!("unexpected `{}` while parsing {}", c, ec.description())
+            ErrorKind::UnexpectedChar(c, within) => {
+                format!("unexpected `{}` while parsing {}", c, within.description())
             }
             ErrorKind::UnevenMap => "map literal must have an even number of values".to_owned(),
             ErrorKind::InvalidArgLiteral => {
                 "arg literal must be `%`, `%{integer}` or `%&`".to_owned()
             }
+        }
+    }
+
+    /// Returns the context this error was encountered in
+    ///
+    /// This is used to disambiguate errors that can occur in multiple contexts. Other error types
+    /// (e.g. `InvalidFloat`) require no additional context.
+    pub fn within_context(&self) -> Option<WithinContext> {
+        match self {
+            ErrorKind::Eof(within) | ErrorKind::UnexpectedChar(_, within) => Some(*within),
+            _ => None,
         }
     }
 }
