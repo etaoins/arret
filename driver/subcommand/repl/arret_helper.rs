@@ -7,7 +7,7 @@ use rustyline::validate::{ValidationContext, ValidationResult};
 use arret_syntax::datum::DataStr;
 
 use super::command::{HELP_COMMAND, QUIT_COMMAND, TYPE_ONLY_PREFIX};
-use super::syntax::{error_for_line, expected_content_for_line, MAXIMUM_PARSED_LINE_LEN};
+use super::syntax::{error_context_for_line, error_for_line, MAXIMUM_PARSED_LINE_LEN};
 
 /// Completions that don't map to a bound value in scope
 const UNBOUND_COMPLETIONS: &[&str] = &[
@@ -105,13 +105,13 @@ impl rustyline::completion::Completer for ArretHelper {
 
 impl rustyline::hint::Hinter for ArretHelper {
     fn hint(&self, line: &str, pos: usize, _: &rustyline::Context<'_>) -> Option<String> {
-        use arret_syntax::error::ExpectedContent;
+        use arret_syntax::error::WithinContext;
         use arret_syntax::parser::is_identifier_char;
 
-        let expected_content = expected_content_for_line(line);
+        let within_context = error_context_for_line(line);
 
         // If we're inside a string we shouldn't try to hint identifiers
-        if let Some(ExpectedContent::String(_)) = expected_content {
+        if let Some(WithinContext::String(_)) = within_context {
             return Some("\"".to_owned());
         }
 
@@ -135,9 +135,9 @@ impl rustyline::hint::Hinter for ArretHelper {
             }
         }
 
-        expected_content
-            .and_then(|ec| ec.expected_close_char())
-            .map(|c| c.to_string())
+        within_context
+            .and_then(|within| within.expected_next())
+            .map(|en| en.close_char().to_string())
     }
 }
 
@@ -207,7 +207,7 @@ impl rustyline::validate::Validator for ArretHelper {
         &self,
         ctx: &mut ValidationContext<'_>,
     ) -> Result<ValidationResult, rustyline::error::ReadlineError> {
-        match expected_content_for_line(ctx.input()) {
+        match error_context_for_line(ctx.input()) {
             Some(_) => Ok(ValidationResult::Incomplete),
             None => Ok(ValidationResult::Valid(None)),
         }

@@ -37,14 +37,14 @@ impl Display for Error {
 /// Syntax error without (span)[`Span`] information
 #[derive(Debug, Clone, PartialEq)]
 pub enum ErrorKind {
-    Eof(ExpectedContent),
+    Eof(WithinContext),
     UnsupportedDispatch,
     UnsupportedChar,
     InvalidCodePoint,
     UnsupportedStringEscape,
     IntegerOverflow,
     InvalidFloat,
-    UnexpectedChar(char, ExpectedContent),
+    UnexpectedChar(char, WithinContext),
     UnevenMap,
     InvalidArgLiteral,
 }
@@ -75,8 +75,9 @@ impl ErrorKind {
 
 pub type Result<T> = result::Result<T, Error>;
 
+/// Describes the content an error occurred within, with optional starting span
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum ExpectedContent {
+pub enum WithinContext {
     List(Span),
     Vector(Span),
     Set(Span),
@@ -89,31 +90,31 @@ pub enum ExpectedContent {
     CodePoint,
 }
 
-impl ExpectedContent {
-    /// Returns a description of the content that was expected
+impl WithinContext {
+    /// Returns a description of the content that was being parsed
     pub fn description(&self) -> &'static str {
         match self {
-            ExpectedContent::List(_) => "list",
-            ExpectedContent::Vector(_) => "vector",
-            ExpectedContent::Set(_) => "set",
-            ExpectedContent::Map(_) => "map",
-            ExpectedContent::String(_) => "string literal",
-            ExpectedContent::Identifier => "identifier",
-            ExpectedContent::Datum => "datum",
-            ExpectedContent::Dispatch => "dispatch",
-            ExpectedContent::QuoteEscape => "quote escape",
-            ExpectedContent::CodePoint => "code point",
+            WithinContext::List(_) => "list",
+            WithinContext::Vector(_) => "vector",
+            WithinContext::Set(_) => "set",
+            WithinContext::Map(_) => "map",
+            WithinContext::String(_) => "string literal",
+            WithinContext::Identifier => "identifier",
+            WithinContext::Datum => "datum",
+            WithinContext::Dispatch => "dispatch",
+            WithinContext::QuoteEscape => "quote escape",
+            WithinContext::CodePoint => "code point",
         }
     }
 
-    /// Returns the character expected to close an open sequence or string
-    pub fn expected_close_char(&self) -> Option<char> {
+    /// Returns the normally expected in this context
+    pub fn expected_next(&self) -> Option<ExpectedNext> {
         match self {
-            ExpectedContent::List(_) => Some(')'),
-            ExpectedContent::Vector(_) => Some(']'),
-            ExpectedContent::Set(_) => Some('}'),
-            ExpectedContent::Map(_) => Some('}'),
-            ExpectedContent::String(_) => Some('"'),
+            WithinContext::List(_) => Some(ExpectedNext::List),
+            WithinContext::Vector(_) => Some(ExpectedNext::Vector),
+            WithinContext::Set(_) => Some(ExpectedNext::Set),
+            WithinContext::Map(_) => Some(ExpectedNext::Map),
+            WithinContext::String(_) => Some(ExpectedNext::String),
             _ => None,
         }
     }
@@ -121,12 +122,42 @@ impl ExpectedContent {
     /// Returns the character opening the sequence or string
     pub fn open_char_span(&self) -> Option<Span> {
         match self {
-            ExpectedContent::List(span)
-            | ExpectedContent::Vector(span)
-            | ExpectedContent::Set(span)
-            | ExpectedContent::Map(span)
-            | ExpectedContent::String(span) => Some(*span),
+            WithinContext::List(span)
+            | WithinContext::Vector(span)
+            | WithinContext::Set(span)
+            | WithinContext::Map(span)
+            | WithinContext::String(span) => Some(*span),
             _ => None,
+        }
+    }
+}
+
+/// Describes the content normally expected within the content
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum ExpectedNext {
+    List,
+    Vector,
+    Set,
+    Map,
+    String,
+}
+
+impl ExpectedNext {
+    /// Returns the character that would terminate this sequence or string
+    pub fn close_char(self) -> char {
+        match self {
+            ExpectedNext::List => ')',
+            ExpectedNext::Vector => ']',
+            ExpectedNext::Set => '}',
+            ExpectedNext::Map => '}',
+            ExpectedNext::String => '"',
+        }
+    }
+
+    pub fn description(self) -> String {
+        match self {
+            ExpectedNext::String => "expected `\"`".to_owned(),
+            other => format!("expected datum or `{}`", other.close_char()),
         }
     }
 }

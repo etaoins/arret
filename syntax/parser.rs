@@ -1,5 +1,5 @@
 use crate::datum::Datum;
-use crate::error::{Error, ErrorKind, ExpectedContent, Result};
+use crate::error::{Error, ErrorKind, Result, WithinContext};
 use crate::span::Span;
 
 pub fn data_from_str_with_span_offset(
@@ -65,19 +65,28 @@ impl<'input> Parser<'input> {
         }
     }
 
-    fn eof_err(&self, ec: ExpectedContent) -> Error {
+    fn eof_err(&self, within: WithinContext) -> Error {
         let eof_pos = self.consumed_bytes + (self.input.len() as u32);
         let codespan_span = codespan::Span::new(eof_pos, eof_pos);
 
-        Error::new(Span::new(self.file_id, codespan_span), ErrorKind::Eof(ec))
+        Error::new(
+            Span::new(self.file_id, codespan_span),
+            ErrorKind::Eof(within),
+        )
     }
 
-    fn peek_char(&mut self, ec: ExpectedContent) -> Result<char> {
-        self.input.chars().next().ok_or_else(|| self.eof_err(ec))
+    fn peek_char(&mut self, within: WithinContext) -> Result<char> {
+        self.input
+            .chars()
+            .next()
+            .ok_or_else(|| self.eof_err(within))
     }
 
-    fn peek_nth_char(&mut self, i: usize, ec: ExpectedContent) -> Result<char> {
-        self.input.chars().nth(i).ok_or_else(|| self.eof_err(ec))
+    fn peek_nth_char(&mut self, i: usize, within: WithinContext) -> Result<char> {
+        self.input
+            .chars()
+            .nth(i)
+            .ok_or_else(|| self.eof_err(within))
     }
 
     fn eat_bytes(&mut self, count: usize) {
@@ -85,7 +94,7 @@ impl<'input> Parser<'input> {
         self.consumed_bytes += count as u32;
     }
 
-    fn consume_char(&mut self, ec: ExpectedContent) -> Result<char> {
+    fn consume_char(&mut self, within: WithinContext) -> Result<char> {
         let mut char_indices = self.input.char_indices();
 
         match char_indices.next() {
@@ -99,20 +108,20 @@ impl<'input> Parser<'input> {
                 Ok(c)
             }
 
-            None => Err(self.eof_err(ec)),
+            None => Err(self.eof_err(within)),
         }
     }
 
-    fn skip_until_non_whitespace(&mut self, ec: ExpectedContent) -> Result<char> {
+    fn skip_until_non_whitespace(&mut self, within: WithinContext) -> Result<char> {
         loop {
             self.consume_while(is_whitespace);
 
-            match self.peek_char(ec)? {
+            match self.peek_char(within)? {
                 ';' => {
                     self.consume_until(|c| c == '\n');
                 }
                 '#' => {
-                    match self.peek_nth_char(1, ec) {
+                    match self.peek_nth_char(1, within) {
                         Ok('_') => {
                             // Discard the #_ and the following datum
                             self.eat_bytes(2);
@@ -234,13 +243,13 @@ impl<'input> Parser<'input> {
     }
 
     fn parse_signed_num_or_symbol(&mut self) -> Result<Datum> {
-        match self.peek_nth_char(1, ExpectedContent::Identifier) {
+        match self.peek_nth_char(1, WithinContext::Identifier) {
             Ok(digit) if digit.is_ascii_digit() => self.parse_num(),
             Ok(_)
             | Err(Error {
                 kind: ErrorKind::Eof(_),
                 ..
-            }) => self.parse_identifier(ExpectedContent::Identifier),
+            }) => self.parse_identifier(WithinContext::Identifier),
             Err(other) => Err(other),
         }
     }
@@ -289,12 +298,12 @@ impl<'input> Parser<'input> {
         // This means we need to adjust our spans below to cover it for reporting
         self.eat_bytes(1);
 
-        match self.peek_char(ExpectedContent::Dispatch)? {
+        match self.peek_char(WithinContext::Dispatch)? {
             '{' => self.parse_set(),
             '(' => self.parse_anon_fun(),
             '#' => self.parse_symbolic_float(),
             _ => {
-                let (span, _) = self.capture_span(|s| s.consume_char(ExpectedContent::Dispatch));
+                let (span, _) = self.capture_span(|s| s.consume_char(WithinContext::Dispatch));
 
                 let adj_codespan_span =
                     codespan::Span::new(span.start().to_usize() as u32 - 1, span.end());
@@ -309,7 +318,7 @@ impl<'input> Parser<'input> {
 
     fn parse_seq<F>(&mut self, terminator: char, make_ec: F) -> Result<Vec<Datum>>
     where
-        F: FnOnce(Span) -> ExpectedContent,
+        F: FnOnce(Span) -> WithinContext,
     {
         // Consume the opening bracket
         let (open_bracket_span, _) = self.capture_span(|s| {
@@ -333,22 +342,20 @@ impl<'input> Parser<'input> {
     }
 
     fn parse_list(&mut self) -> Result<Datum> {
-        let (outer_span, contents) = self.capture_span(|s| s.parse_seq(')', ExpectedContent::List));
+        let (outer_span, contents) = self.capture_span(|s| s.parse_seq(')', WithinContext::List));
 
         contents.map(|contents| Datum::List(outer_span, contents.into()))
     }
 
     fn parse_vector(&mut self) -> Result<Datum> {
-        let (outer_span, contents) =
-            self.capture_span(|s| s.parse_seq(']', ExpectedContent::Vector));
+        let (outer_span, contents) = self.capture_span(|s| s.parse_seq(']', WithinContext::Vector));
 
         contents.map(|contents| Datum::Vector(outer_span, contents.into()))
     }
 
     fn parse_map(&mut self) -> Result<Datum> {
         // First get the contents without splitting pairwise
-        let (span, unpaired_contents) =
-            self.capture_span(|s| s.parse_seq('}', ExpectedContent::Map));
+        let (span, unpaired_contents) = self.capture_span(|s| s.parse_seq('}', WithinContext::Map));
 
         let unpaired_contents = unpaired_contents?;
         if unpaired_contents.len() % 2 == 1 {
@@ -366,7 +373,7 @@ impl<'input> Parser<'input> {
     }
 
     fn parse_set(&mut self) -> Result<Datum> {
-        let (outer_span, contents) = self.capture_span(|s| s.parse_seq('}', ExpectedContent::Set));
+        let (outer_span, contents) = self.capture_span(|s| s.parse_seq('}', WithinContext::Set));
 
         // Cover the # in our span
         let adj_codespan_span =
@@ -380,7 +387,7 @@ impl<'input> Parser<'input> {
         use crate::anon_fun::convert_anon_fun;
 
         let (outer_span, body_contents) =
-            self.capture_span(|s| s.parse_seq(')', ExpectedContent::List));
+            self.capture_span(|s| s.parse_seq(')', WithinContext::List));
 
         // Cover the # in our span
         let adj_codespan_span =
@@ -397,7 +404,7 @@ impl<'input> Parser<'input> {
     fn parse_quote_escape(&mut self) -> Result<char> {
         let escape_start = self.consumed_bytes as u32;
 
-        match self.consume_char(ExpectedContent::QuoteEscape)? {
+        match self.consume_char(WithinContext::QuoteEscape)? {
             't' => Ok('\t'),
             'r' => Ok('\r'),
             'n' => Ok('\n'),
@@ -410,7 +417,7 @@ impl<'input> Parser<'input> {
                 let code_point =
                     code_point.map_err(|_| Error::new(span, ErrorKind::UnsupportedChar))?;
 
-                if self.consume_char(ExpectedContent::CodePoint)? != ';' {
+                if self.consume_char(WithinContext::CodePoint)? != ';' {
                     return Err(Error::new(span, ErrorKind::UnsupportedChar));
                 }
 
@@ -440,7 +447,7 @@ impl<'input> Parser<'input> {
                 let (_, unescaped_contents) = s.consume_until(|c| c == '"' || c == '\\');
                 contents.push_str(unescaped_contents);
 
-                match s.consume_char(ExpectedContent::String(open_quote_span))? {
+                match s.consume_char(WithinContext::String(open_quote_span))? {
                     '"' => {
                         return Ok(contents);
                     }
@@ -454,12 +461,15 @@ impl<'input> Parser<'input> {
         contents.map(|contents| Datum::Str(span, contents.into()))
     }
 
-    fn parse_identifier(&mut self, ec: ExpectedContent) -> Result<Datum> {
+    fn parse_identifier(&mut self, within: WithinContext) -> Result<Datum> {
         let (span, content) = self.consume_while(is_identifier_char);
 
         if content.is_empty() {
-            let (span, next_char) = self.capture_span(|s| s.consume_char(ec));
-            return Err(Error::new(span, ErrorKind::UnexpectedChar(next_char?, ec)));
+            let (span, next_char) = self.capture_span(|s| s.consume_char(within));
+            return Err(Error::new(
+                span,
+                ErrorKind::UnexpectedChar(next_char?, within),
+            ));
         }
 
         match content {
@@ -487,7 +497,7 @@ impl<'input> Parser<'input> {
         })
     }
 
-    fn parse_datum_starting_with(&mut self, c: char, ec: ExpectedContent) -> Result<Datum> {
+    fn parse_datum_starting_with(&mut self, c: char, within: WithinContext) -> Result<Datum> {
         match c {
             '(' => self.parse_list(),
             '[' => self.parse_vector(),
@@ -498,12 +508,12 @@ impl<'input> Parser<'input> {
             '"' => self.parse_string(),
             '\\' => self.parse_char(),
             '#' => self.parse_dispatch(),
-            _ => self.parse_identifier(ec),
+            _ => self.parse_identifier(within),
         }
     }
 
     fn parse_datum(&mut self) -> Result<Datum> {
-        let ec = ExpectedContent::Datum;
+        let ec = WithinContext::Datum;
 
         let start_char = self.skip_until_non_whitespace(ec)?;
         self.parse_datum_starting_with(start_char, ec)
@@ -518,7 +528,7 @@ impl<'input> Parser<'input> {
                 Ok(datum) => {
                     datum_vec.push(datum);
                 }
-                Err(err) if err.kind() == &ErrorKind::Eof(ExpectedContent::Datum) => {
+                Err(err) if err.kind() == &ErrorKind::Eof(WithinContext::Datum) => {
                     break Ok(datum_vec)
                 }
                 Err(err) => break Err(err),
@@ -605,15 +615,12 @@ mod test {
         let j = "(true";
         let t = "    >";
         let u = "^    ";
-        let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::List(t2s(u))));
+        let err = Error::new(t2s(t), ErrorKind::Eof(WithinContext::List(t2s(u))));
         assert_eq!(err, datum_from_str(None, j).unwrap_err());
 
         let j = ")";
         let t = "^";
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::UnexpectedChar(')', ExpectedContent::Datum),
-        );
+        let err = Error::new(t2s(t), ErrorKind::UnexpectedChar(')', WithinContext::Datum));
         assert_eq!(err, datum_from_str(None, j).unwrap_err());
 
         let j = "(]";
@@ -621,7 +628,7 @@ mod test {
         let u = " ^";
         let err = Error::new(
             t2s(u),
-            ErrorKind::UnexpectedChar(']', ExpectedContent::List(t2s(t))),
+            ErrorKind::UnexpectedChar(']', WithinContext::List(t2s(t))),
         );
         assert_eq!(err, datum_from_str(None, j).unwrap_err());
     }
@@ -655,15 +662,12 @@ mod test {
         let j = "[true []";
         let t = "       >";
         let u = "^       ";
-        let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::Vector(t2s(u))));
+        let err = Error::new(t2s(t), ErrorKind::Eof(WithinContext::Vector(t2s(u))));
         assert_eq!(err, datum_from_str(None, j).unwrap_err());
 
         let j = "]";
         let t = "^";
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::UnexpectedChar(']', ExpectedContent::Datum),
-        );
+        let err = Error::new(t2s(t), ErrorKind::UnexpectedChar(']', WithinContext::Datum));
         assert_eq!(err, datum_from_str(None, j).unwrap_err());
     }
 
@@ -731,7 +735,7 @@ mod test {
         let j = r#" "foo "#;
         let t = r#"     >"#;
         let u = r#" ^    "#;
-        let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::String(t2s(u))));
+        let err = Error::new(t2s(t), ErrorKind::Eof(WithinContext::String(t2s(u))));
         assert_eq!(err, datum_from_str(None, j).unwrap_err());
 
         let j = r#""\p""#;
@@ -970,7 +974,7 @@ mod test {
 
         let j = "'";
         let t = ">";
-        let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::Datum));
+        let err = Error::new(t2s(t), ErrorKind::Eof(WithinContext::Datum));
         assert_eq!(err, datum_from_str(None, j).unwrap_err());
     }
 
@@ -984,7 +988,7 @@ mod test {
 
         let j = "#";
         let t = ">";
-        let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::Dispatch));
+        let err = Error::new(t2s(t), ErrorKind::Eof(WithinContext::Dispatch));
 
         assert_eq!(err, datum_from_str(None, j).unwrap_err());
     }
@@ -1024,17 +1028,14 @@ mod test {
 
         let j = "(true)))";
         let t = "      ^ ";
-        let err = Error::new(
-            t2s(t),
-            ErrorKind::UnexpectedChar(')', ExpectedContent::Datum),
-        );
+        let err = Error::new(t2s(t), ErrorKind::UnexpectedChar(')', WithinContext::Datum));
         assert_eq!(err, data_from_str(None, j).unwrap_err());
 
         let j = "(true";
         let t = "    >";
         let u = "^    ";
 
-        let err = Error::new(t2s(t), ErrorKind::Eof(ExpectedContent::List(t2s(u))));
+        let err = Error::new(t2s(t), ErrorKind::Eof(WithinContext::List(t2s(u))));
         assert_eq!(err, data_from_str(None, j).unwrap_err());
     }
 }

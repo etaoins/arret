@@ -72,22 +72,21 @@ pub fn diagnostic_for_syntax_error(error: &arret_syntax::error::Error) -> Diagno
     let origin = error.span();
 
     match error.kind() {
-        ErrorKind::Eof(ec) | ErrorKind::UnexpectedChar(_, ec) => {
-            let primary_label_message = match ec.expected_close_char() {
-                Some('"') => "expected `\"`".to_owned(),
-                Some(sequence_close_char) => format!("expected datum or `{}`", sequence_close_char),
-                None => "expected datum".to_owned(),
-            };
+        ErrorKind::Eof(within) | ErrorKind::UnexpectedChar(_, within) => {
+            let primary_label_message = within
+                .expected_next()
+                .map(|en| en.description())
+                .unwrap_or_else(|| "expected datum".to_owned());
 
             let diagnostic = Diagnostic::new_error(
                 error.kind().message(),
                 new_label(origin, primary_label_message),
             );
 
-            if let Some(open_char_span) = ec.open_char_span() {
+            if let Some(open_char_span) = within.open_char_span() {
                 diagnostic.with_secondary_labels(iter::once(new_label(
                     open_char_span,
-                    format!("{} starts here", ec.description()),
+                    format!("{} starts here", within.description()),
                 )))
             } else {
                 diagnostic
