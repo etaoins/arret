@@ -121,3 +121,33 @@ pub fn create_connection(
         outgoing: send_outgoing,
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use crate::json_rpc::Notification;
+
+    #[tokio::test]
+    async fn test_happy_recv_notification() {
+        let body = br#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#;
+
+        let mut message = format!("Content-Length: {}\r\n", body.len()).into_bytes();
+        message.extend_from_slice(b"\r\n");
+        message.extend_from_slice(body);
+
+        let Connection { mut incoming, .. } = create_connection(
+            io::BufReader::new(std::io::Cursor::new(message)),
+            Vec::new(),
+        );
+
+        let client_message = incoming.recv().await.unwrap();
+        assert_eq!(
+            ClientMessage::Notification(Notification::new(
+                "initialized",
+                serde_json::Value::Object(serde_json::map::Map::new())
+            )),
+            client_message,
+        );
+    }
+}
