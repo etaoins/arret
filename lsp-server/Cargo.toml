@@ -12,7 +12,19 @@ path = "main.rs"
 # This matches the version in `codespan-reporting`
 lsp-types = "0.71"
 futures = "0.3"
-tokio = { version = "0.2", features = ["full"] }
 arret-syntax = { path = "../syntax" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+
+[dependencies.tokio]
+version = "0.2"
+features = [
+  "rt-core",
+  "rt-threaded",
+  "rt-util",
+  "io-driver",
+  "io-util",
+  "io-std",
+  "macros",
+  "sync"
+]
