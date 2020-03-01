@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use lsp_types;
 
 use crate::handler::SyncNotificationHandler;
@@ -16,7 +14,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
 
         state.documents.insert(
             text_document.uri.to_string(),
-            Document::new(Some(text_document.version), Arc::from(text_document.text)),
+            Document::new(Some(text_document.version), text_document.text),
         );
     }
 }
@@ -32,31 +30,47 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
             content_changes,
         } = params;
 
-        let document = if let Some(document) = state.documents.get_mut(text_document.uri.as_str()) {
-            document
-        } else {
-            eprintln!(
-                "Received change notification for unknown document {}",
-                text_document.uri
-            );
-            return;
-        };
+        let orig_document =
+            if let Some(document) = state.documents.remove(text_document.uri.as_str()) {
+                document
+            } else {
+                eprintln!(
+                    "Received change notification for unknown document {}",
+                    text_document.uri
+                );
+                return;
+            };
 
-        for content_change in content_changes {
-            match content_change.range {
-                Some(range) => {
-                    if document
-                        .replace_range(text_document.version, range, &content_change.text)
-                        .is_err()
-                    {
-                        eprintln!("Could not find range to replace in {}", text_document.uri);
-                    }
-                }
-                None => {
-                    document.replace_all(text_document.version, Arc::from(content_change.text));
-                }
-            }
-        }
+        let new_document =
+            content_changes
+                .into_iter()
+                .fold(
+                    orig_document,
+                    |prev_document, content_change| match content_change.range {
+                        Some(range) => {
+                            match prev_document.with_range_edit(
+                                text_document.version,
+                                range,
+                                &content_change.text,
+                            ) {
+                                Ok(new_document) => new_document,
+                                Err(()) => {
+                                    eprintln!(
+                                        "Could not find range to replace in {}",
+                                        text_document.uri
+                                    );
+
+                                    prev_document
+                                }
+                            }
+                        }
+                        None => Document::new(text_document.version, content_change.text),
+                    },
+                );
+
+        state
+            .documents
+            .insert(text_document.uri.to_string(), new_document);
     }
 }
 

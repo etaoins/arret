@@ -1,10 +1,9 @@
 use lsp_types;
 
-use std::sync::Arc;
-
 pub struct Document {
+    #[allow(dead_code)]
     version: Option<i64>,
-    text: Arc<str>,
+    text: String,
     line_offsets: Vec<usize>,
 }
 
@@ -15,7 +14,7 @@ fn line_offsets_for_str(source: &str) -> Vec<usize> {
 }
 
 impl Document {
-    pub fn new(version: Option<i64>, text: Arc<str>) -> Document {
+    pub fn new(version: Option<i64>, text: String) -> Document {
         Document {
             version,
             line_offsets: line_offsets_for_str(&text),
@@ -23,18 +22,13 @@ impl Document {
         }
     }
 
-    pub fn replace_all(&mut self, new_version: Option<i64>, new_text: Arc<str>) {
-        self.version = new_version;
-        self.line_offsets = line_offsets_for_str(&new_text);
-        self.text = new_text;
-    }
-
-    pub fn replace_range(
-        &mut self,
+    /// Returns a new instance of the document with specified range replaced
+    pub fn with_range_edit(
+        &self,
         new_version: Option<i64>,
         range: lsp_types::Range,
         new_range_text: &str,
-    ) -> Result<(), ()> {
+    ) -> Result<Document, ()> {
         let start_offset = if let Some(start_offset) = self.position_for_offset(range.start) {
             start_offset
         } else {
@@ -69,11 +63,11 @@ impl Document {
             )
         }
 
-        self.version = new_version;
-        self.line_offsets = new_line_offsets;
-        self.text = Arc::from(new_text);
-
-        Ok(())
+        Ok(Document {
+            version: new_version,
+            line_offsets: new_line_offsets,
+            text: new_text,
+        })
     }
 
     /// Returns the byte offset for the given position
@@ -110,176 +104,162 @@ mod test {
 
     #[test]
     fn test_append_to_empty() {
-        let mut doc = Document::new(None, "".into());
-
-        assert!(doc
-            .replace_range(
+        let doc = Document::new(None, "".into())
+            .with_range_edit(
                 None,
                 lsp_types::Range {
                     start: lsp_types::Position {
                         line: 0,
-                        character: 0
+                        character: 0,
                     },
                     end: lsp_types::Position {
                         line: 0,
-                        character: 7
+                        character: 7,
                     },
                 },
-                "abc-123"
+                "abc-123",
             )
-            .is_ok());
+            .unwrap();
 
-        assert_eq!(doc.text.as_ref(), "abc-123");
+        assert_eq!(&doc.text, "abc-123");
         assert_consistency(&doc);
     }
 
     #[test]
     fn test_append_to_line() {
-        let mut doc = Document::new(None, "Hello".into());
-
-        assert!(doc
-            .replace_range(
+        let doc = Document::new(None, "Hello".into())
+            .with_range_edit(
                 None,
                 lsp_types::Range {
                     start: lsp_types::Position {
                         line: 0,
-                        character: 5
+                        character: 5,
                     },
                     end: lsp_types::Position {
                         line: 0,
-                        character: 5
+                        character: 5,
                     },
                 },
-                ", world!"
+                ", world!",
             )
-            .is_ok());
+            .unwrap();
 
-        assert_eq!(doc.text.as_ref(), "Hello, world!");
+        assert_eq!(&doc.text, "Hello, world!");
         assert_consistency(&doc);
     }
 
     #[test]
     fn test_erase_all() {
-        let mut doc = Document::new(None, "abc-123".into());
-
-        assert!(doc
-            .replace_range(
+        let doc = Document::new(None, "abc-123".into())
+            .with_range_edit(
                 None,
                 lsp_types::Range {
                     start: lsp_types::Position {
                         line: 0,
-                        character: 0
+                        character: 0,
                     },
                     end: lsp_types::Position {
                         line: 0,
-                        character: 7
+                        character: 7,
                     },
                 },
-                ""
+                "",
             )
-            .is_ok());
+            .unwrap();
 
-        assert_eq!(doc.text.as_ref(), "");
+        assert_eq!(&doc.text, "");
         assert_consistency(&doc);
     }
 
     #[test]
     fn test_replace_line() {
-        let mut doc = Document::new(None, "hello\nnebraska\n".into());
-
-        assert!(doc
-            .replace_range(
+        let doc = Document::new(None, "hello\nnebraska\n".into())
+            .with_range_edit(
                 None,
                 lsp_types::Range {
                     start: lsp_types::Position {
                         line: 1,
-                        character: 0
+                        character: 0,
                     },
                     end: lsp_types::Position {
                         line: 1,
-                        character: 8
+                        character: 8,
                     },
                 },
-                "world"
+                "world",
             )
-            .is_ok());
+            .unwrap();
 
-        assert_eq!(doc.text.as_ref(), "hello\nworld\n");
+        assert_eq!(&doc.text, "hello\nworld\n");
         assert_consistency(&doc);
     }
 
     #[test]
     fn test_insert_line() {
-        let mut doc = Document::new(None, "hello\nworld\n".into());
-
-        assert!(doc
-            .replace_range(
+        let doc = Document::new(None, "hello\nworld\n".into())
+            .with_range_edit(
                 None,
                 lsp_types::Range {
                     start: lsp_types::Position {
                         line: 1,
-                        character: 0
+                        character: 0,
                     },
                     end: lsp_types::Position {
                         line: 1,
-                        character: 0
+                        character: 0,
                     },
                 },
-                "entire\n"
+                "entire\n",
             )
-            .is_ok());
+            .unwrap();
 
-        assert_eq!(doc.text.as_ref(), "hello\nentire\nworld\n");
+        assert_eq!(&doc.text, "hello\nentire\nworld\n");
         assert_consistency(&doc);
     }
 
     #[test]
     fn test_delete_line() {
-        let mut doc = Document::new(None, "hello\nentire\nworld\n".into());
-
-        assert!(doc
-            .replace_range(
+        let doc = Document::new(None, "hello\nentire\nworld\n".into())
+            .with_range_edit(
                 None,
                 lsp_types::Range {
                     start: lsp_types::Position {
                         line: 1,
-                        character: 0
+                        character: 0,
                     },
                     end: lsp_types::Position {
                         line: 2,
-                        character: 0
+                        character: 0,
                     },
                 },
-                ""
+                "",
             )
-            .is_ok());
+            .unwrap();
 
-        assert_eq!(doc.text.as_ref(), "hello\nworld\n");
+        assert_eq!(&doc.text, "hello\nworld\n");
         assert_consistency(&doc);
     }
 
     #[test]
     fn test_delete_utf16() {
-        let mut doc = Document::new(None, "Defuse 💣 me".into());
-
-        assert!(doc
-            .replace_range(
+        let doc = Document::new(None, "Defuse 💣 me".into())
+            .with_range_edit(
                 None,
                 lsp_types::Range {
                     start: lsp_types::Position {
                         line: 0,
-                        character: 7
+                        character: 7,
                     },
                     end: lsp_types::Position {
                         line: 0,
-                        character: 10
+                        character: 10,
                     },
                 },
-                ""
+                "",
             )
-            .is_ok());
+            .unwrap();
 
-        assert_eq!(doc.text.as_ref(), "Defuse me");
+        assert_eq!(&doc.text, "Defuse me");
         assert_consistency(&doc);
     }
 }
