@@ -1,10 +1,15 @@
-mod dispatch;
 mod json_rpc;
 mod messages;
+mod session;
 mod transport;
+
+use tokio::io;
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
-    let transport = transport::stdio::create();
-    dispatch::dispatch_messages(transport).await
+    let reader = io::BufReader::new(io::stdin());
+    let writer = io::stdout();
+
+    let connection = transport::bytestream::create_connection(reader, writer);
+    session::run(connection).await
 }

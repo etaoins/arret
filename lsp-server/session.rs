@@ -1,6 +1,6 @@
 use crate::json_rpc::{ClientMessage, ErrorCode, Request, Response};
 use crate::messages;
-use crate::transport::Transport;
+use crate::transport::Connection;
 use lsp_types;
 use serde_json;
 
@@ -8,23 +8,23 @@ fn handle_non_lifecycle_request(request: Request) -> Response {
     Response::new_err(request.id, ErrorCode::MethodNotFound, "Method not found")
 }
 
-/// Runs a dispatch loop against the provided transport
+/// Runs a session loop against the provided connection
 ///
 /// On a clean exit (`shutdown` followed by `exit`) this will return `Ok`, otherwise it will return
 /// `Err`.
-pub async fn dispatch_messages(transport: Transport) -> Result<(), ()> {
-    let Transport {
+pub async fn run(connection: Connection) -> Result<(), ()> {
+    let Connection {
         mut incoming,
         mut outgoing,
-    } = transport;
+    } = connection;
 
     /// Sends the outgoing message or returns `Err` if the send channel is closed
     ///
-    /// This will cause us to exit uncleanly if our transport closes unexpectedly.
+    /// This will cause us to exit uncleanly if our connection closes unexpectedly.
     macro_rules! send_or_return_err {
         ($outgoing_message:expr) => {
             if outgoing.send($outgoing_message.into()).await.is_err() {
-                eprintln!("Transport unexpectedly closed");
+                eprintln!("Connection unexpectedly closed");
                 return Err(());
             }
         };
@@ -110,25 +110,25 @@ mod test {
 
     use crate::json_rpc::{Notification, RequestId, ServerMessage};
 
-    struct TestDispatcher {
+    struct TestSession {
         outgoing: mpsc::Receiver<ServerMessage>,
         incoming: mpsc::Sender<ClientMessage>,
         exit_future: BoxFuture<'static, Result<(), ()>>,
     }
 
-    fn create_test_dispatcher() -> TestDispatcher {
+    fn run_test_session() -> TestSession {
         let (send_outgoing, recv_outgoing) = mpsc::channel::<ServerMessage>(4);
         let (send_incoming, recv_incoming) = mpsc::channel::<ClientMessage>(4);
 
-        let dispatcher = dispatch_messages(Transport {
+        let session = run(Connection {
             outgoing: send_outgoing,
             incoming: recv_incoming,
         });
 
-        TestDispatcher {
+        TestSession {
             outgoing: recv_outgoing,
             incoming: send_incoming,
-            exit_future: dispatcher.boxed(),
+            exit_future: session.boxed(),
         }
     }
 
@@ -143,11 +143,11 @@ mod test {
     #[allow(deprecated)]
     #[tokio::test]
     async fn test_clean_lifecycle() {
-        let TestDispatcher {
+        let TestSession {
             mut outgoing,
             mut incoming,
             exit_future,
-        } = create_test_dispatcher();
+        } = run_test_session();
 
         tokio::spawn(async move {
             // We should return an error for messages before initialization

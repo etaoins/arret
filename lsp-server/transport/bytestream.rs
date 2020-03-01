@@ -4,7 +4,7 @@ use tokio::prelude::*;
 use tokio::sync::mpsc;
 
 use crate::json_rpc::{ClientMessage, ServerMessage};
-use crate::transport::Transport;
+use crate::transport::Connection;
 
 fn parse_header_line(header_line: &str) -> (String, String) {
     let mut parts = header_line.splitn(2, ':');
@@ -39,16 +39,17 @@ macro_rules! break_on_broken_pipe {
     };
 }
 
-pub fn create() -> Transport {
-    // Allow some concurrency with the dispatcher but 4 message is a bit excessive
+pub fn create_connection(
+    mut reader: impl io::AsyncBufRead + Unpin + Send + 'static,
+    mut writer: impl io::AsyncWrite + Unpin + Send + 'static,
+) -> Connection {
+    // Allow some concurrency with the session but 4 message is a bit excessive
     // This allows for backpressure on `stdin`/`stdout`
     let (send_outgoing, mut recv_outgoing) = mpsc::channel::<ServerMessage>(4);
     let (mut send_incoming, recv_incoming) = mpsc::channel::<ClientMessage>(4);
 
     // Write all our responses out sequentially
     tokio::spawn(async move {
-        let mut writer = io::stdout();
-
         while let Some(response) = recv_outgoing.recv().await {
             let response_bytes =
                 serde_json::to_vec(&response).expect("Could not serialise response");
@@ -70,8 +71,6 @@ pub fn create() -> Transport {
     });
 
     tokio::spawn(async move {
-        let mut reader = io::BufReader::new(io::stdin());
-
         loop {
             let mut content_length: Option<usize> = None;
             let mut line_buffer = String::new();
@@ -117,7 +116,7 @@ pub fn create() -> Transport {
         }
     });
 
-    Transport {
+    Connection {
         incoming: recv_incoming,
         outgoing: send_outgoing,
     }
