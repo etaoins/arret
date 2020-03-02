@@ -13,16 +13,48 @@ use crate::json_rpc::{Notification, ServerMessage};
 use crate::model::Document;
 use crate::watcher::DocumentWatcher;
 
-fn syntax_diagnostics_for_document(document: &Document) -> Vec<lsp_types::Diagnostic> {
+fn syntax_diagnostics_for_document(
+    url: &lsp_types::Url,
+    document: &Document,
+) -> Vec<lsp_types::Diagnostic> {
     match data_from_str(None, document.text()) {
         Ok(_) => vec![],
-        Err(error) => vec![lsp_types::Diagnostic {
-            range: document.span_to_range(error.span()),
-            severity: Some(lsp_types::DiagnosticSeverity::Error),
-            message: error.kind().message(),
-            source: Some("arret-syntax".to_owned()),
-            ..Default::default()
-        }],
+        Err(error) => {
+            let within = error.kind().within_context();
+
+            let mut related_information = vec![];
+
+            if let Some(within) = within {
+                if let Some(open_char_span) = within.open_char_span() {
+                    related_information.push(lsp_types::DiagnosticRelatedInformation {
+                        location: lsp_types::Location {
+                            uri: url.clone(),
+                            range: document.span_to_range(open_char_span),
+                        },
+                        message: format!("{} starts here", within.description()),
+                    });
+                }
+
+                if let Some(expected_next) = within.expected_next() {
+                    related_information.push(lsp_types::DiagnosticRelatedInformation {
+                        location: lsp_types::Location {
+                            uri: url.clone(),
+                            range: document.span_to_range(error.span()),
+                        },
+                        message: expected_next.description(),
+                    });
+                }
+            }
+
+            vec![lsp_types::Diagnostic {
+                range: document.span_to_range(error.span()),
+                severity: Some(lsp_types::DiagnosticSeverity::Error),
+                message: error.kind().message(),
+                related_information: Some(related_information),
+                source: Some("arret-syntax".to_owned()),
+                ..Default::default()
+            }]
+        }
     }
 }
 
@@ -41,7 +73,7 @@ impl DocumentTask {
 
         let join_handle = tokio::spawn(async move {
             while let Some(document) = receive_change.recv().await {
-                let diagnostics = syntax_diagnostics_for_document(&document);
+                let diagnostics = syntax_diagnostics_for_document(&url, &document);
 
                 if outgoing
                     .send(
@@ -131,16 +163,20 @@ mod test {
 
     #[test]
     fn correct_document_diagnostics() {
+        let url = lsp_types::Url::parse("file:///foo/bar").unwrap();
         let doc = Document::new(None, "('hello-world)".to_owned());
-        let diags = syntax_diagnostics_for_document(&doc);
+
+        let diags = syntax_diagnostics_for_document(&url, &doc);
 
         assert_eq!(Vec::<lsp_types::Diagnostic>::new(), diags);
     }
 
     #[test]
     fn missing_delimiter_diagnostics() {
+        let url = lsp_types::Url::parse("file:///foo/bar").unwrap();
         let doc = Document::new(None, "('hello-world".to_owned());
-        let diags = syntax_diagnostics_for_document(&doc);
+
+        let diags = syntax_diagnostics_for_document(&url, &doc);
 
         assert_eq!(
             vec![lsp_types::Diagnostic {
@@ -156,6 +192,40 @@ mod test {
                 },
                 severity: Some(lsp_types::DiagnosticSeverity::Error),
                 message: "unexpected end of file while parsing list".into(),
+                related_information: Some(vec![
+                    lsp_types::DiagnosticRelatedInformation {
+                        location: lsp_types::Location {
+                            uri: url.clone(),
+                            range: lsp_types::Range {
+                                start: lsp_types::Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: lsp_types::Position {
+                                    line: 0,
+                                    character: 1,
+                                }
+                            },
+                        },
+                        message: "list starts here".to_owned(),
+                    },
+                    lsp_types::DiagnosticRelatedInformation {
+                        location: lsp_types::Location {
+                            uri: url,
+                            range: lsp_types::Range {
+                                start: lsp_types::Position {
+                                    line: 0,
+                                    character: 13,
+                                },
+                                end: lsp_types::Position {
+                                    line: 0,
+                                    character: 13,
+                                }
+                            },
+                        },
+                        message: "expected datum or `)`".to_owned(),
+                    }
+                ]),
                 source: Some("arret-syntax".to_owned()),
                 ..Default::default()
             }],
@@ -165,8 +235,10 @@ mod test {
 
     #[test]
     fn unsupported_character_diagnostics() {
+        let url = lsp_types::Url::parse("file:///foo/bar").unwrap();
         let doc = Document::new(None, "\\newline \\madeup".to_owned());
-        let diags = syntax_diagnostics_for_document(&doc);
+
+        let diags = syntax_diagnostics_for_document(&url, &doc);
 
         assert_eq!(
             vec![lsp_types::Diagnostic {
@@ -182,6 +254,7 @@ mod test {
                 },
                 severity: Some(lsp_types::DiagnosticSeverity::Error),
                 message: "unsupported character".into(),
+                related_information: Some(vec![]),
                 source: Some("arret-syntax".to_owned()),
                 ..Default::default()
             }],
