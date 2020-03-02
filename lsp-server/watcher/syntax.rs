@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use futures::future::join_all;
 use lsp_types;
 use lsp_types::notification::Notification as _;
 use tokio::sync::{mpsc, watch};
@@ -129,12 +128,15 @@ impl SyntaxWatcher {
     }
 
     pub async fn shutdown(self) {
-        let document_task_futures = self
+        let document_task_futures: Vec<_> = self
             .document_tasks
             .into_iter()
-            .map(|(_, task)| task.shutdown());
+            .map(|(_, task)| task.shutdown())
+            .collect();
 
-        join_all(document_task_futures).await;
+        for document_task_future in document_task_futures {
+            document_task_future.await;
+        }
     }
 }
 

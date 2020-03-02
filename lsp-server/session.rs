@@ -152,19 +152,22 @@ pub async fn run(connection: Connection) -> Result<(), ()> {
 mod test {
     use super::*;
 
-    use futures::future::BoxFuture;
-    use futures::prelude::*;
+    use std::future::Future;
+
     use tokio::sync::mpsc;
 
     use crate::json_rpc::{Notification, Request, RequestId, ServerMessage};
 
-    struct TestSession {
+    struct TestSession<F>
+    where
+        F: Future<Output = Result<(), ()>>,
+    {
         outgoing: mpsc::Receiver<ServerMessage>,
         incoming: mpsc::Sender<ClientMessage>,
-        exit_future: BoxFuture<'static, Result<(), ()>>,
+        exit_future: F,
     }
 
-    fn run_test_session() -> TestSession {
+    fn run_test_session() -> TestSession<impl Future<Output = Result<(), ()>>> {
         let (send_outgoing, recv_outgoing) = mpsc::channel::<ServerMessage>(4);
         let (send_incoming, recv_incoming) = mpsc::channel::<ClientMessage>(4);
 
@@ -176,7 +179,7 @@ mod test {
         TestSession {
             outgoing: recv_outgoing,
             incoming: send_incoming,
-            exit_future: session.boxed(),
+            exit_future: session,
         }
     }
 

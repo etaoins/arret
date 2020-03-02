@@ -15,14 +15,6 @@ arret-syntax = { path = "../syntax" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-[dependencies.futures]
-version = "0.3"
-default-features = false
-features = [
-  "std",
-  "async-await"
-]
-
 [dependencies.tokio]
 version = "0.2"
 features = [
