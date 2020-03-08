@@ -58,9 +58,22 @@ pub async fn run(connection: Connection) -> Result<(), ()> {
         mut outgoing,
     } = connection;
 
-    /// Sends the outgoing message or returns `Err` if the send channel is closed
+    /// Receives an incoming message or returns `Err` if the receive channel is closed
     ///
     /// This will cause us to exit uncleanly if our connection closes unexpectedly.
+    macro_rules! recv_or_return_err {
+        () => {
+            match incoming.recv().await {
+                Some(incoming_message) => incoming_message,
+                None => {
+                    eprintln!("Connection unexpectedly closed");
+                    return Err(());
+                }
+            }
+        };
+    }
+
+    /// Sends the outgoing message or returns `Err` if the send channel is closed
     macro_rules! send_or_return_err {
         ($outgoing_message:expr) => {
             if outgoing.send($outgoing_message.into()).await.is_err() {
@@ -71,8 +84,8 @@ pub async fn run(connection: Connection) -> Result<(), ()> {
     }
 
     // Wait for initialize
-    while let Some(incoming_message) = incoming.recv().await {
-        match incoming_message {
+    loop {
+        match recv_or_return_err!() {
             ClientMessage::Notification(notification) => {
                 if notification.method == "exit" {
                     // Unclean exit
@@ -98,8 +111,8 @@ pub async fn run(connection: Connection) -> Result<(), ()> {
     let mut state = State::new(outgoing.clone());
 
     // Process normal messages until we receive a shutdown request
-    while let Some(incoming_message) = incoming.recv().await {
-        match incoming_message {
+    loop {
+        match recv_or_return_err!() {
             ClientMessage::Notification(notification) if notification.method == "initialized" => {
                 // Nothing do to
             }
@@ -127,8 +140,8 @@ pub async fn run(connection: Connection) -> Result<(), ()> {
     state.shutdown().await;
 
     // Wait for exit
-    while let Some(incoming_message) = incoming.recv().await {
-        match incoming_message {
+    loop {
+        match recv_or_return_err!() {
             ClientMessage::Notification(notification) => {
                 if notification.method == "exit" {
                     return Ok(());
@@ -143,9 +156,6 @@ pub async fn run(connection: Connection) -> Result<(), ()> {
             }
         }
     }
-
-    // Receiver channel unexpectedly closed
-    Err(())
 }
 
 #[cfg(test)]
