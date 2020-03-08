@@ -4,7 +4,6 @@ use lsp_types;
 
 #[derive(Debug)]
 pub struct Document {
-    #[allow(dead_code)]
     version: Option<i64>,
     text: String,
     line_offsets: Vec<usize>,
