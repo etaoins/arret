@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use lsp_types;
-use lsp_types::notification::Notification as _;
 use tokio::sync::{mpsc, watch};
 use tokio::task;
 
@@ -76,8 +75,7 @@ impl DocumentTask {
 
                 if outgoing
                     .send(
-                        Notification::new(
-                            lsp_types::notification::PublishDiagnostics::METHOD,
+                        Notification::new_lsp::<lsp_types::notification::PublishDiagnostics>(
                             lsp_types::PublishDiagnosticsParams {
                                 uri: url.clone(),
                                 version: document.version(),

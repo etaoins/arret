@@ -230,7 +230,7 @@ mod test {
         tokio::spawn(async move {
             // We should return an error for messages before initialization
             incoming
-                .send(Request::new(123.into(), "shutdown", ()).into())
+                .send(Request::new_lsp::<lsp_types::request::Shutdown>(123.into(), ()).into())
                 .await
                 .unwrap();
 
@@ -258,7 +258,13 @@ mod test {
             };
 
             incoming
-                .send(Request::new("123".to_owned().into(), "initialize", initialize_params).into())
+                .send(
+                    Request::new_lsp::<lsp_types::request::Initialize>(
+                        "123".to_owned().into(),
+                        initialize_params,
+                    )
+                    .into(),
+                )
                 .await
                 .unwrap();
 
@@ -270,13 +276,18 @@ mod test {
 
             // Send initialized notification
             incoming
-                .send(Notification::new("initialized", ()).into())
+                .send(
+                    Notification::new_lsp::<lsp_types::notification::Initialized>(
+                        lsp_types::InitializedParams {},
+                    )
+                    .into(),
+                )
                 .await
                 .unwrap();
 
             // Now shutdown for real
             incoming
-                .send(Request::new(456.into(), "shutdown", ()).into())
+                .send(Request::new_lsp::<lsp_types::request::Shutdown>(456.into(), ()).into())
                 .await
                 .unwrap();
 
@@ -286,7 +297,10 @@ mod test {
 
             // We should return an error on duplicate shutdown
             incoming
-                .send(Request::new("456".to_owned().into(), "shutdown", ()).into())
+                .send(
+                    Request::new_lsp::<lsp_types::request::Shutdown>("456".to_owned().into(), ())
+                        .into(),
+                )
                 .await
                 .unwrap();
 
@@ -303,7 +317,7 @@ mod test {
 
             // And send exit notification
             incoming
-                .send(Notification::new("exit", ()).into())
+                .send(Notification::new_lsp::<lsp_types::notification::Exit>(()).into())
                 .await
                 .unwrap();
         });

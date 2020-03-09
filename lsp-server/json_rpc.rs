@@ -55,11 +55,19 @@ pub struct Notification {
 }
 
 impl Notification {
-    pub fn new(method: impl Into<String>, params: impl Serialize) -> Notification {
+    pub fn new(method: impl Into<String>, params: impl Serialize) -> Self {
         Notification {
             method: method.into(),
             params: serde_json::to_value(params).expect("Could not serialise notification"),
         }
+    }
+
+    pub fn new_lsp<N>(params: N::Params) -> Self
+    where
+        N: lsp_types::notification::Notification,
+        N::Params: Serialize,
+    {
+        Self::new(N::METHOD, params)
     }
 }
 
@@ -95,12 +103,21 @@ pub struct Request {
 
 impl Request {
     #[cfg(test)]
-    pub fn new(id: RequestId, method: impl Into<String>, params: impl Serialize) -> Request {
+    pub fn new(id: RequestId, method: impl Into<String>, params: impl Serialize) -> Self {
         Request {
             id,
             method: method.into(),
             params: serde_json::to_value(params).expect("Could not serialise request"),
         }
+    }
+
+    #[cfg(test)]
+    pub fn new_lsp<N>(id: RequestId, params: N::Params) -> Self
+    where
+        N: lsp_types::request::Request,
+        N::Params: Serialize,
+    {
+        Self::new(id, N::METHOD, params)
     }
 }
 

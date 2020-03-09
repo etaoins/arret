@@ -143,10 +143,9 @@ mod test {
 
         let client_message = incoming.recv().await.unwrap();
         assert_eq!(
-            ClientMessage::Notification(Notification::new(
-                "initialized",
-                serde_json::Value::Object(serde_json::map::Map::new())
-            )),
+            ClientMessage::Notification(Notification::new_lsp::<
+                lsp_types::notification::Initialized,
+            >(lsp_types::InitializedParams {})),
             client_message,
         );
     }
