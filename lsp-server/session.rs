@@ -53,7 +53,7 @@ pub fn create_initialize_response() -> lsp_types::InitializeResult {
     lsp_types::InitializeResult {
         server_info: Some(lsp_types::ServerInfo {
             name: "arret-lsp-server".to_owned(),
-            version: None,
+            version: option_env!("CARGO_PKG_VERSION").map(str::to_owned),
         }),
         capabilities: server_capabilities(),
     }
