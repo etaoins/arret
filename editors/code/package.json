@@ -16,6 +16,9 @@
     "onLanguage:arret"
   ],
   "main": "./out/extension.js",
+  "keywords": [
+    "multi-root ready"
+  ],
   "contributes": {
     "languages": [
       {

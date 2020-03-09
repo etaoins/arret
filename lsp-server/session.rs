@@ -4,21 +4,42 @@ use std::sync::Arc;
 use lsp_types;
 use tokio::sync::mpsc;
 
+use crate::capabilities::server_capabilities;
 use crate::handler;
 use crate::json_rpc::{ClientMessage, ErrorCode, Response, ServerMessage};
-use crate::model::Document;
+use crate::model::{Document, Workspace};
 use crate::transport::Connection;
 use crate::watcher::SyntaxWatcher;
 
 pub struct State {
     pub documents: HashMap<String, Arc<Document>>,
+    pub workspaces: HashMap<String, Arc<Workspace>>,
     pub syntax_watcher: SyntaxWatcher,
 }
 
 impl State {
-    fn new(outgoing: mpsc::Sender<ServerMessage>) -> State {
+    fn new(
+        outgoing: mpsc::Sender<ServerMessage>,
+        initialize_params: lsp_types::InitializeParams,
+    ) -> State {
+        let initial_workspaces = initialize_params
+            .workspace_folders
+            .map(|workspace_folders| {
+                workspace_folders
+                    .into_iter()
+                    .map(|workspace_folder| {
+                        (
+                            workspace_folder.uri.to_string(),
+                            Arc::new(Workspace::new(workspace_folder.name)),
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_else(HashMap::new);
+
         State {
             documents: HashMap::new(),
+            workspaces: initial_workspaces,
             syntax_watcher: SyntaxWatcher::new(outgoing),
         }
     }
@@ -28,23 +49,13 @@ impl State {
     }
 }
 
-// This is special because we don't have `State` yet
-pub fn handle_initialize_request() -> lsp_types::InitializeResult {
+pub fn create_initialize_response() -> lsp_types::InitializeResult {
     lsp_types::InitializeResult {
         server_info: Some(lsp_types::ServerInfo {
             name: "arret-lsp-server".to_owned(),
             version: None,
         }),
-        capabilities: lsp_types::ServerCapabilities {
-            text_document_sync: Some(lsp_types::TextDocumentSyncCapability::Options(
-                lsp_types::TextDocumentSyncOptions {
-                    open_close: Some(true),
-                    change: Some(lsp_types::TextDocumentSyncKind::Incremental),
-                    ..Default::default()
-                },
-            )),
-            ..Default::default()
-        },
+        capabilities: server_capabilities(),
     }
 }
 
@@ -84,7 +95,7 @@ pub async fn run(connection: Connection) -> Result<(), ()> {
     }
 
     // Wait for initialize
-    loop {
+    let initialize_request = loop {
         match recv_or_return_err!() {
             ClientMessage::Notification(notification) => {
                 if notification.method == "exit" {
@@ -93,10 +104,7 @@ pub async fn run(connection: Connection) -> Result<(), ()> {
                 }
             }
             ClientMessage::Request(request) if request.method.as_str() == "initialize" => {
-                let response = handle_initialize_request();
-                send_or_return_err!(Response::new_ok(request.id, response));
-
-                break;
+                break request;
             }
             ClientMessage::Request(request) => {
                 send_or_return_err!(Response::new_err(
@@ -106,9 +114,18 @@ pub async fn run(connection: Connection) -> Result<(), ()> {
                 ));
             }
         }
-    }
+    };
 
-    let mut state = State::new(outgoing.clone());
+    let params: lsp_types::InitializeParams = serde_json::from_value(initialize_request.params)
+        .expect("Could not parse initialize request params");
+
+    let mut state = State::new(outgoing.clone(), params);
+
+    let initialize_response = create_initialize_response();
+    send_or_return_err!(Response::new_ok(
+        initialize_request.id.clone(),
+        initialize_response
+    ));
 
     // Process normal messages until we receive a shutdown request
     loop {

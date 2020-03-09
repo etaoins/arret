@@ -1,6 +1,9 @@
 mod text_synchronisation;
 use text_synchronisation::*;
 
+mod workspace;
+use workspace::*;
+
 use lsp_types::notification::Notification as LspNotification;
 
 use crate::json_rpc::{ErrorCode, Notification, Request, Response};
@@ -39,7 +42,8 @@ macro_rules! build_notification_dispatcher {
 build_notification_dispatcher!(handle_non_lifecycle_notification, {
     DidOpenTextDocumentHandler,
     DidChangeTextDocumentHandler,
-    DidCloseTextDocumentHandler
+    DidCloseTextDocumentHandler,
+    DidChangeWorkspaceFoldersHandler
 });
 
 pub fn handle_non_lifecycle_request(_state: &mut State, request: Request) -> Response {

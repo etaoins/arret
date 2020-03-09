@@ -1,3 +1,4 @@
+mod capabilities;
 mod handler;
 mod json_rpc;
 mod model;
