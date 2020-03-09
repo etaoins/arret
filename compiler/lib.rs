@@ -4,6 +4,7 @@
 #[macro_use]
 mod id_type;
 
+mod arret_root;
 mod codegen;
 mod context;
 mod hir;
@@ -20,6 +21,7 @@ use codespan_reporting::diagnostic::Diagnostic;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+pub use crate::arret_root::{find_arret_root, FindArretRootError};
 pub use crate::codegen::initialise_llvm;
 pub use crate::codegen::program::{gen_program, Options as GenProgramOptions, OutputType};
 pub use crate::context::CompileCtx;

@@ -6,54 +6,9 @@ mod subcommand;
 use std::sync::Arc;
 use std::{env, path, process};
 
-use arret_compiler::CompileCtx;
+use arret_compiler::{find_arret_root, CompileCtx, FindArretRootError};
 
 const ARRET_FILE_EXTENSION: &str = ".arret";
-
-fn is_arret_root(path: &path::Path) -> bool {
-    path.join("./.arret-root").is_file()
-}
-
-fn find_path_to_arret_root(arret_root_option: Option<&str>) -> path::PathBuf {
-    if let Some(arg_root) = arret_root_option {
-        let arg_path = path::PathBuf::from(arg_root);
-        if !is_arret_root(&arg_path) {
-            eprintln!(
-                "`{}` specified by the `--arret-root` option is not an Arret root directory",
-                arg_path.to_string_lossy(),
-            );
-            process::exit(1);
-        }
-
-        return arg_path;
-    }
-
-    if let Some(env_root) = env::var_os("ARRET_ROOT") {
-        let env_path = path::PathBuf::from(env_root);
-        if !is_arret_root(&env_path) {
-            eprintln!(
-                "`{}` specified by the `ARRET_ROOT` environment variable is not an Arret root directory",
-                env_path.to_string_lossy(),
-            );
-            process::exit(1);
-        }
-
-        return env_path;
-    }
-
-    let current_dir = env::current_dir().expect("Cannot determine current directory");
-    for candidate in path::Path::new(&current_dir).ancestors() {
-        if is_arret_root(candidate) {
-            return candidate.to_owned();
-        }
-    }
-
-    eprintln!("Unable to find the Arret root directory");
-    eprintln!(
-        "Either specify the `--arret-root` option or set the `ARRET_ROOT` environment variable"
-    );
-    process::exit(1);
-}
 
 fn input_arg_to_source_file(
     source_loader: &arret_compiler::SourceLoader,
@@ -155,7 +110,30 @@ fn main() {
         )
         .get_matches();
 
-    let arret_target_dir = find_path_to_arret_root(matches.value_of("ARRET_ROOT"));
+    let arret_target_dir = match find_arret_root(matches.value_of("ARRET_ROOT")) {
+        Ok(arret_root) => arret_root,
+        Err(FindArretRootError::InvalidOption(invalid_option)) => {
+            eprintln!(
+                "`{}` specified by the `--arret-root` option is not an Arret root directory",
+                invalid_option.invalid_path().to_string_lossy(),
+            );
+            process::exit(1);
+        }
+        Err(FindArretRootError::InvalidEnvVar(invalid_env_var)) => {
+            eprintln!(
+                "`{}` specified by the `{}` environment variable is not an Arret root directory",
+                invalid_env_var.invalid_path().to_string_lossy(),
+                invalid_env_var.env_var_name(),
+            );
+            process::exit(1);
+        }
+        Err(FindArretRootError::NotFound) => {
+            eprintln!("Unable to find the Arret root directory");
+            eprintln!("Either specify the `--arret-root` option or set the `ARRET_ROOT` environment variable");
+            process::exit(1);
+        }
+    };
+
     let enable_optimisations = !matches.is_present("NOOPT");
 
     if let Some(compile_matches) = matches.subcommand_matches("compile") {
