@@ -134,7 +134,7 @@ pub async fn run(connection: Connection) -> Result<(), ()> {
                 // Nothing do to
             }
             ClientMessage::Notification(notification) if notification.method == "exit" => {
-                // Tear down our state or we'll likely to panic if there are concurrent operationss
+                // Tear down our state or we'll likely to panic if there are concurrent operations
                 state.shutdown().await;
 
                 // Unclean exit
