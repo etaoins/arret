@@ -110,7 +110,7 @@ fn main() {
         )
         .get_matches();
 
-    let arret_target_dir = match find_arret_root(matches.value_of("ARRET_ROOT")) {
+    let arret_root_dir = match find_arret_root(matches.value_of("ARRET_ROOT")) {
         Ok(arret_root) => arret_root,
         Err(FindArretRootError::InvalidOption(invalid_option)) => {
             eprintln!(
@@ -138,7 +138,7 @@ fn main() {
 
     if let Some(compile_matches) = matches.subcommand_matches("compile") {
         let package_paths = arret_compiler::PackagePaths::with_stdlib(
-            &arret_target_dir,
+            &arret_root_dir,
             compile_matches.value_of("TARGET"),
         );
 
@@ -175,7 +175,7 @@ fn main() {
             process::exit(2);
         }
     } else if let Some(repl_matches) = matches.subcommand_matches("repl") {
-        let package_paths = arret_compiler::PackagePaths::with_stdlib(&arret_target_dir, None);
+        let package_paths = arret_compiler::PackagePaths::with_stdlib(&arret_root_dir, None);
         let ccx = Arc::new(CompileCtx::new(package_paths, enable_optimisations));
 
         initialise_llvm(false);
@@ -186,7 +186,7 @@ fn main() {
 
         subcommand::repl::interactive_loop(ccx, include_path);
     } else if let Some(eval_matches) = matches.subcommand_matches("eval") {
-        let package_paths = arret_compiler::PackagePaths::with_stdlib(&arret_target_dir, None);
+        let package_paths = arret_compiler::PackagePaths::with_stdlib(&arret_root_dir, None);
         let ccx = CompileCtx::new(package_paths, enable_optimisations);
 
         let input_param = eval_matches.value_of("INPUT").unwrap();
