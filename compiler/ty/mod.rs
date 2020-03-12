@@ -302,9 +302,9 @@ impl<M: PM> List<M> {
 
     pub fn size_range(&self) -> Range<usize> {
         if self.rest.is_never() {
-            (self.fixed.len()..self.fixed.len())
+            self.fixed.len()..self.fixed.len()
         } else {
-            (self.fixed.len()..usize::max_value())
+            self.fixed.len()..usize::max_value()
         }
     }
 

@@ -1,8 +1,6 @@
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
 
-extern crate proc_macro;
-
 #[macro_use]
 extern crate quote;
 
