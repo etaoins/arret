@@ -33,10 +33,9 @@ impl Macro {
 }
 
 fn starts_with_zero_or_more(data: &[NsDatum]) -> bool {
-    if let Some(NsDatum::Ident(_, ident)) = data.get(1) {
-        ident.is_ellipsis()
-    } else {
-        false
+    match data {
+        [_, NsDatum::Ident(_, ident), ..] => ident.is_ellipsis(),
+        _ => false,
     }
 }
 
