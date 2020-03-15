@@ -14,14 +14,13 @@ pub use parse::{parse_import_set, ParsedFilter, ParsedImportSet};
 
 pub fn try_extract_import_set(datum: &Datum) -> Option<&[Datum]> {
     if let Datum::List(_, vs) = datum {
-        if let Some(Datum::Sym(_, name)) = vs.get(0) {
-            if name.as_ref() == "import" {
-                return Some(&vs[1..]);
-            }
+        match vs.as_ref() {
+            [Datum::Sym(_, name), import_set @ ..] if name.as_ref() == "import" => Some(import_set),
+            _ => None,
         }
+    } else {
+        None
     }
-
-    None
 }
 
 /// Returns all unique imported module names for the passed module data
