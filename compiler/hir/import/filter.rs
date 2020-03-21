@@ -7,15 +7,16 @@ use crate::hir::import::parse::{ParsedFilter, ParsedImportSet};
 
 type Result<T> = result::Result<T, Vec<Error>>;
 
-fn apply_filter<'a>(filter: &ParsedFilter, exports: Cow<'a, Exports>) -> Result<Exports> {
+fn apply_filter(filter: ParsedFilter, exports: Cow<'_, Exports>) -> Result<Exports> {
     match filter {
         ParsedFilter::Only(only_spanned_names) => Ok(only_spanned_names
-            .iter()
+            .into_vec()
+            .into_iter()
             .map(|(span, name)| {
-                if let Some(binding) = exports.get(name) {
-                    Ok((name.clone(), binding.clone()))
+                if let Some(binding) = exports.get(&name) {
+                    Ok((name, binding.clone()))
                 } else {
-                    Err(Error::new(*span, ErrorKind::UnboundIdent(name.clone())))
+                    Err(Error::new(span, ErrorKind::UnboundIdent(name)))
                 }
             })
             .collect::<result::Result<Exports, Error>>()?),
@@ -24,9 +25,9 @@ fn apply_filter<'a>(filter: &ParsedFilter, exports: Cow<'a, Exports>) -> Result<
             let mut exports = exports.into_owned();
             let mut errors = vec![];
 
-            for (span, name) in exclude_spanned_names.iter() {
-                if exports.remove(name).is_none() {
-                    errors.push(Error::new(*span, ErrorKind::UnboundIdent(name.clone())));
+            for (span, name) in exclude_spanned_names.into_vec().into_iter() {
+                if exports.remove(&name).is_none() {
+                    errors.push(Error::new(span, ErrorKind::UnboundIdent(name)));
                 }
             }
 
@@ -41,16 +42,13 @@ fn apply_filter<'a>(filter: &ParsedFilter, exports: Cow<'a, Exports>) -> Result<
             let mut exports = exports.into_owned();
             let mut errors = vec![];
 
-            for ((from_span, from_name), to_name) in rename_spanned_names.iter() {
-                match exports.remove(from_name) {
+            for ((from_span, from_name), to_name) in rename_spanned_names.into_vec().into_iter() {
+                match exports.remove(&from_name) {
                     Some(binding) => {
-                        exports.insert(to_name.clone(), binding);
+                        exports.insert(to_name, binding);
                     }
                     None => {
-                        errors.push(Error::new(
-                            *from_span,
-                            ErrorKind::UnboundIdent(from_name.clone()),
-                        ));
+                        errors.push(Error::new(from_span, ErrorKind::UnboundIdent(from_name)));
                     }
                 }
             }
@@ -73,13 +71,13 @@ fn apply_filter<'a>(filter: &ParsedFilter, exports: Cow<'a, Exports>) -> Result<
 ///
 /// If there are no filters to apply then `exports` will be directly returned.
 pub fn filter_imported_exports<'a>(
-    parsed_import_set: &ParsedImportSet,
+    parsed_import_set: ParsedImportSet,
     exports: Cow<'a, Exports>,
 ) -> Result<Cow<'a, Exports>> {
     match parsed_import_set {
         ParsedImportSet::Module(_, _) => Ok(exports),
         ParsedImportSet::Filter(filter, inner_parsed_import) => {
-            let inner_exports = filter_imported_exports(inner_parsed_import, exports)?;
+            let inner_exports = filter_imported_exports(*inner_parsed_import, exports)?;
             Ok(Cow::Owned(apply_filter(filter, inner_exports)?))
         }
     }

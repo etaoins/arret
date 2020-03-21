@@ -764,7 +764,7 @@ pub fn insert_import_bindings(
         let unfiltered_exports = &imported_exports[parsed_import.module_name()];
 
         let exports =
-            import::filter_imported_exports(&parsed_import, Cow::Borrowed(unfiltered_exports))?;
+            import::filter_imported_exports(parsed_import, Cow::Borrowed(unfiltered_exports))?;
 
         match exports {
             Cow::Owned(exports) => {

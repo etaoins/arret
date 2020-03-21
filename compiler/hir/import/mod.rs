@@ -85,7 +85,7 @@ mod test {
             exports.insert("quote".into(), Binding::Prim(Prim::Quote));
             exports.insert("if".into(), Binding::Prim(Prim::If));
 
-            Ok(filter::filter_imported_exports(&parsed_import, Cow::Owned(exports))?.into_owned())
+            Ok(filter::filter_imported_exports(parsed_import, Cow::Owned(exports))?.into_owned())
         } else {
             Err(vec![Error::new(span, ErrorKind::PackageNotFound)])
         }
