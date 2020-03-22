@@ -952,19 +952,17 @@ pub(crate) fn lower_repl_datum(
             ])
         }
         Ok(None) => Ok(LoweredReplDatum::NonEvaluableDef),
-        Err(errs) => {
-            let non_def_errs = errs
-                .into_iter()
-                .filter(|err| err.kind() != &ErrorKind::NonDefInsideModule)
-                .collect::<Vec<Error>>();
+        Err(mut errs) => {
+            // `NonDefInsideModule` doesn't apply because we allow non-defs in the REPL
+            errs.retain(|err| err.kind() != &ErrorKind::NonDefInsideModule);
 
-            if non_def_errs.is_empty() {
+            if errs.is_empty() {
                 // Re-interpret as an expression
                 let expr = lower_expr(&via, scope, ns_datum).map_err(|err| vec![err.into()])?;
 
                 Ok(LoweredReplDatum::Expr(via.module_id(), expr))
             } else {
-                Err(errors_to_diagnostics(non_def_errs))
+                Err(errors_to_diagnostics(errs))
             }
         }
     }
