@@ -25,7 +25,7 @@ const assertUnchangedTokens = (
 
   return commands
     .executeCommand('_workbench.captureSyntaxTokens', Uri.file(testFixurePath))
-    .then(data => {
+    .then((data) => {
       try {
         const resultsFolderPath = join(
           dirname(dirname(testFixurePath)),
@@ -82,9 +82,9 @@ suite('colorization', () => {
   );
   if (fs.existsSync(extensionColorizeFixturePath)) {
     const fixturesFiles = fs.readdirSync(extensionColorizeFixturePath);
-    fixturesFiles.forEach(fixturesFile => {
+    fixturesFiles.forEach((fixturesFile) => {
       // define a test for each fixture
-      test(fixturesFile, function(done) {
+      test(fixturesFile, function (done) {
         assertUnchangedTokens(
           join(extensionColorizeFixturePath, fixturesFile),
           done,
