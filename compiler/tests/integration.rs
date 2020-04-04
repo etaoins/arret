@@ -12,7 +12,7 @@ use tempfile::NamedTempFile;
 
 use arret_syntax::span::Span;
 
-use arret_compiler::{emit_diagnostics_to_stderr, CompileCtx, OutputType, SourceLoader};
+use arret_compiler::{emit_diagnostics_to_stderr, CompileCtx, SourceLoader};
 
 #[derive(Clone, PartialEq)]
 struct RunOutput {
@@ -255,8 +255,6 @@ fn result_for_single_test(
     source_file: &arret_compiler::SourceFile,
     test_type: TestType,
 ) -> Result<(), Vec<Diagnostic>> {
-    let skip_run_executable = env::var_os("ARRET_TEST_SKIP_RUN_EXECUTABLE").is_some();
-
     let arret_compiler::EvaluableProgram {
         mut ehx,
         main_var_id,
@@ -288,14 +286,6 @@ fn result_for_single_test(
     let gen_program_opts = arret_compiler::GenProgramOptions::new()
         .with_target_triple(target_triple.as_ref().map(|x| &**x));
 
-    let gen_program_opts = if skip_run_executable {
-        gen_program_opts
-            .with_output_type(OutputType::None)
-            .with_llvm_opt(false)
-    } else {
-        gen_program_opts
-    };
-
     arret_compiler::gen_program(
         gen_program_opts,
         &rfi_libraries,
@@ -303,10 +293,6 @@ fn result_for_single_test(
         &output_path,
         None,
     );
-
-    if skip_run_executable {
-        return Ok(());
-    }
 
     let mut process = process::Command::new(output_path.as_os_str());
 
@@ -536,8 +522,6 @@ where
 #[test]
 fn integration() {
     let target_triple = parse_env_var::<String>("ARRET_TEST_TARGET_TRIPLE");
-    let num_workers = parse_env_var::<usize>("ARRET_TEST_NUM_WORKERS");
-    let worker_id = parse_env_var::<usize>("ARRET_TEST_WORKER_ID");
 
     let package_paths =
         arret_compiler::PackagePaths::test_paths(target_triple.as_ref().map(|t| &**t));
@@ -566,16 +550,8 @@ fn integration() {
         .chain(optimise_entries)
         .chain(run_pass_entries)
         .chain(run_error_entries)
-        .enumerate()
         .par_bridge()
-        .filter_map(|(idx, (input_path, test_type))| {
-            if let (Some(num_workers), Some(worker_id)) = (num_workers, worker_id) {
-                // Do simple work splitting across worker processes
-                if idx % num_workers != worker_id {
-                    return None;
-                }
-            }
-
+        .filter_map(|(input_path, test_type)| {
             if !run_single_test(
                 target_triple.as_ref().map(|t| &**t),
                 &ccx,

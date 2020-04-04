@@ -7,7 +7,7 @@ cached-ecr-build-env: &cached-ecr-build-env
     - docker#v3.5.0
 
 steps:
-  - label: ":muscle: Test ARM64"
+  - label: ':muscle: Test ARM64'
     branches: '!master'
     command: ./.buildkite/build-and-test.sh
     plugins:
@@ -16,20 +16,7 @@ steps:
     agents:
       queue: arm64
 
-  - label: ":fedora: LLVM Assert & Valgrind"
-    branches: '!master'
-    command:
-      - "echo '--- :prettier: Checking rustfmt'"
-      - cargo fmt -- --check
-
-      - ./.buildkite/build-and-test.sh
-      - ./.buildkite/valgrind-integration-tests.sh
-    plugins:
-      - seek-oss/docker-ecr-cache#v1.5.0:
-          dockerfile: ./.buildkite/llvm-assert.Dockerfile
-      - docker#v3.5.0
-
-  - label: ":ubuntu: Test x86-64"
+  - label: ':ubuntu: Test x86-64'
     command:
       - ./.buildkite/build-and-test.sh
 
@@ -37,7 +24,19 @@ steps:
       - RUSTFLAGS="-Copt-level=0" cargo check --release
     <<: *cached-ecr-build-env
 
-  - label: ":typescript: Test VS Code extension"
+  - label: ':fedora: Test LLVM Assert'
+    branches: '!master'
+    command:
+      - "echo '--- :prettier: Checking rustfmt'"
+      - cargo fmt -- --check
+
+      - ./.buildkite/build-and-test.sh
+    plugins:
+      - seek-oss/docker-ecr-cache#v1.5.0:
+          dockerfile: ./.buildkite/llvm-assert.Dockerfile
+      - docker#v3.5.0
+
+  - label: ':typescript: Test VS Code extension'
     command:
       - ./.buildkite/vscode-extension-tests.sh
     plugins:
@@ -54,8 +53,8 @@ steps:
 
   - wait
 
-  - label: ":rust: Check (Rust Beta)"
-    branches: "master"
+  - label: ':rust: Check (Rust Beta)'
+    branches: 'master'
     command:
       - "echo '--- :rust: Installing Rust beta'"
       - rustup default beta
@@ -67,8 +66,8 @@ steps:
       - RUSTFLAGS="-Copt-level=0" cargo check --release
     <<: *cached-ecr-build-env
 
-  - label: ":rocket: Push REPL Image"
-    branches: "master"
+  - label: ':rocket: Push REPL Image'
+    branches: 'master'
     plugins:
       - docker-login#v2.0.1:
           username: etaoins
@@ -86,8 +85,8 @@ steps:
     concurrency_group: 'push-repl-image'
     concurrency: 1
 
-  - label: ":books: Update Rustdoc"
-    branches: "master"
+  - label: ':books: Update Rustdoc'
+    branches: 'master'
     command:
       # We need Nightly for intra-Rustdoc links. This is what crates.io uses as well.
       - "echo '--- :rust: Installing Rust nightly'"
