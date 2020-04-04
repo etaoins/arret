@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash;
 use std::sync::Arc;
 
+use codespan::FileId;
 use codespan_reporting::diagnostic::Diagnostic;
 
 use arret_syntax::datum::Datum;
@@ -66,8 +67,8 @@ impl hash::Hash for Module {
     }
 }
 
-pub(crate) type CachedModule = Result<Arc<Module>, Vec<Diagnostic>>;
-pub(crate) type UncachedModule = Result<Module, Vec<Diagnostic>>;
+pub(crate) type CachedModule = Result<Arc<Module>, Vec<Diagnostic<FileId>>>;
+pub(crate) type UncachedModule = Result<Module, Vec<Diagnostic<FileId>>>;
 
 /// Finds all transitive dependencies for a set of imports
 ///
@@ -232,7 +233,7 @@ impl CompileCtx {
     pub(crate) fn imports_for_data<'a>(
         &self,
         data: impl Iterator<Item = &'a Datum>,
-    ) -> Result<ModuleImports, Vec<Diagnostic>> {
+    ) -> Result<ModuleImports, Vec<Diagnostic<FileId>>> {
         let imported_module_names =
             import::collect_imported_module_names(data).map_err(errors_to_diagnostics)?;
         let import_count = imported_module_names.len();
@@ -245,7 +246,7 @@ impl CompileCtx {
             })
             .collect();
 
-        let mut diagnostics: Vec<Diagnostic> = vec![];
+        let mut diagnostics = Vec::<Diagnostic<FileId>>::new();
 
         let mut imports = HashSet::<Arc<Module>>::with_capacity(import_count);
         let mut imported_exports = HashMap::<ModuleName, Arc<Exports>>::with_capacity(import_count);

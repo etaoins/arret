@@ -1,3 +1,4 @@
+use codespan::FileId;
 use codespan_reporting::diagnostic::Diagnostic;
 
 use arret_compiler::{emit_diagnostics_to_stderr, CompileCtx};
@@ -5,7 +6,7 @@ use arret_compiler::{emit_diagnostics_to_stderr, CompileCtx};
 fn try_eval_input_file(
     ccx: &CompileCtx,
     input_file: &arret_compiler::SourceFile,
-) -> Result<(), Vec<Diagnostic>> {
+) -> Result<(), Vec<Diagnostic<FileId>>> {
     let arret_compiler::EvaluableProgram {
         mut ehx,
         main_var_id,

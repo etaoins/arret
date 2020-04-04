@@ -9,4 +9,4 @@ path = "lib.rs"
 crate-type = ["lib"]
 
 [dependencies]
-codespan = "0.8"
+codespan = "0.9"

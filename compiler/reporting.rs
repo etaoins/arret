@@ -1,5 +1,6 @@
 use std::iter;
 
+use codespan::FileId;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 
 use arret_syntax::span::Span;
@@ -36,13 +37,20 @@ impl LocTrace {
         self.macro_invocation
     }
 
-    pub fn label_macro_invocation(&self, diagnostic: Diagnostic) -> Diagnostic {
+    pub fn label_macro_invocation(&self, diagnostic: Diagnostic<FileId>) -> Diagnostic<FileId> {
         match self.macro_invocation {
             Some(macro_invocation_span) if !macro_invocation_span.contains(self.origin) => {
-                diagnostic.with_secondary_labels(iter::once(new_label(
-                    macro_invocation_span,
-                    "in this macro invocation",
-                )))
+                let secondary_label =
+                    new_secondary_label(macro_invocation_span, "in this macro invocation");
+
+                let new_labels = diagnostic
+                    .labels
+                    .iter()
+                    .cloned()
+                    .chain(iter::once(secondary_label))
+                    .collect();
+
+                diagnostic.with_labels(new_labels)
             }
             _ => diagnostic,
         }
@@ -58,7 +66,9 @@ impl From<Span> for LocTrace {
 /// Helper for converting a series of errors in to diagnostics
 ///
 /// This is intended for use with `map_err`
-pub fn errors_to_diagnostics<E: Into<Diagnostic>>(errors: Vec<E>) -> Vec<Diagnostic> {
+pub fn errors_to_diagnostics<E: Into<Diagnostic<FileId>>>(
+    errors: Vec<E>,
+) -> Vec<Diagnostic<FileId>> {
     errors.into_iter().map(Into::into).collect()
 }
 
@@ -66,7 +76,7 @@ pub fn errors_to_diagnostics<E: Into<Diagnostic>>(errors: Vec<E>) -> Vec<Diagnos
 ///
 /// This is required because `arret-syntax` doesn't depend on `codespan-reporting`. It requires
 /// its consumers to handle reporting themselves.
-pub fn diagnostic_for_syntax_error(error: &arret_syntax::error::Error) -> Diagnostic {
+pub fn diagnostic_for_syntax_error(error: &arret_syntax::error::Error) -> Diagnostic<FileId> {
     let origin = error.span();
     let within = error.kind().within_context();
 
@@ -75,25 +85,32 @@ pub fn diagnostic_for_syntax_error(error: &arret_syntax::error::Error) -> Diagno
         .map(|en| en.description())
         .unwrap_or_else(|| "syntax error".to_owned());
 
-    let mut diagnostic = Diagnostic::new_error(
-        error.kind().message(),
-        new_label(origin, primary_label_message),
-    );
+    let primary_label = new_primary_label(origin, primary_label_message);
+
+    let diagnostic = Diagnostic::error()
+        .with_message(error.kind().message())
+        .with_labels(vec![]);
 
     if let Some(within) = within {
         if let Some(open_char_span) = within.open_char_span() {
-            diagnostic = diagnostic.with_secondary_labels(iter::once(new_label(
+            let secondary_label = new_secondary_label(
                 open_char_span,
                 format!("{} starts here", within.description()),
-            )));
+            );
+
+            return diagnostic.with_labels(vec![primary_label, secondary_label]);
         }
     }
 
-    diagnostic
+    diagnostic.with_labels(vec![primary_label])
 }
 
-pub fn new_label(span: Span, message: impl Into<String>) -> Label {
-    Label::new(span.file_id().unwrap(), span.codespan_span(), message)
+pub fn new_primary_label(span: Span, message: impl Into<String>) -> Label<FileId> {
+    Label::primary(span.file_id().unwrap(), span.codespan_span()).with_message(message)
+}
+
+pub fn new_secondary_label(span: Span, message: impl Into<String>) -> Label<FileId> {
+    Label::secondary(span.file_id().unwrap(), span.codespan_span()).with_message(message)
 }
 
 /// Emits a series of diagnostics to standard error
@@ -102,7 +119,7 @@ pub fn new_label(span: Span, message: impl Into<String>) -> Label {
 /// are emitting concurrently.
 pub fn emit_diagnostics_to_stderr(
     source_loader: &SourceLoader,
-    diagnostics: impl IntoIterator<Item = Diagnostic>,
+    diagnostics: impl IntoIterator<Item = Diagnostic<FileId>>,
 ) {
     use codespan_reporting::term;
     use termcolor::{ColorChoice, StandardStream};

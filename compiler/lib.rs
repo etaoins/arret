@@ -17,9 +17,11 @@ mod source;
 mod ty;
 mod typeck;
 
-use codespan_reporting::diagnostic::Diagnostic;
 use std::collections::HashSet;
 use std::sync::Arc;
+
+use codespan::FileId;
+use codespan_reporting::diagnostic::Diagnostic;
 
 pub use crate::arret_root::{find_arret_root, FindArretRootError};
 pub use crate::codegen::initialise_llvm;
@@ -44,7 +46,7 @@ fn include_imports(
     visited_modules: &mut HashSet<context::ModuleId>,
     rfi_libraries: &mut Vec<Arc<rfi::Library>>,
     root_module: &context::Module,
-) -> Result<(), Vec<Diagnostic>> {
+) -> Result<(), Vec<Diagnostic<FileId>>> {
     if visited_modules.contains(&root_module.module_id) {
         return Ok(());
     }
@@ -70,7 +72,7 @@ fn include_imports(
 pub fn program_to_evaluable(
     ccx: &CompileCtx,
     source_file: &SourceFile,
-) -> Result<EvaluableProgram, Vec<Diagnostic>> {
+) -> Result<EvaluableProgram, Vec<Diagnostic<FileId>>> {
     use arret_syntax::span::Span;
 
     use crate::typeck::infer;
@@ -82,14 +84,13 @@ pub fn program_to_evaluable(
     } else {
         use codespan_reporting::diagnostic::Label;
 
-        return Err(vec![Diagnostic::new_error(
-            "no main! function defined in entry module",
-            Label::new(
+        return Err(vec![Diagnostic::error()
+            .with_message("no main! function defined in entry module")
+            .with_labels(vec![Label::primary(
                 source_file.file_id(),
                 codespan::Span::initial(),
-                "main! function expected in this file",
-            ),
-        )]);
+            )
+            .with_message("main! function expected in this file")])]);
     };
 
     let inferred_main_type = &entry_module.inferred_locals[&main_var_id.local_id()];

@@ -3,14 +3,15 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
 
-use arret_syntax::datum::DataStr;
-
+use codespan::FileId;
 use codespan_reporting::diagnostic::Diagnostic;
+
+use arret_syntax::datum::DataStr;
 
 use crate::context;
 use crate::hir;
 use crate::hir::scope::Scope;
-use crate::reporting::{diagnostic_for_syntax_error, errors_to_diagnostics, new_label};
+use crate::reporting::{diagnostic_for_syntax_error, errors_to_diagnostics, new_primary_label};
 use crate::ty;
 use crate::CompileCtx;
 
@@ -108,7 +109,7 @@ impl<'ccx> ReplEngine<'ccx> {
     fn visit_module_tree(
         &mut self,
         root_module: &Arc<context::Module>,
-    ) -> Result<(), Vec<Diagnostic>> {
+    ) -> Result<(), Vec<Diagnostic<FileId>>> {
         if self.seen_modules.contains(&root_module.module_id) {
             return Ok(());
         }
@@ -130,7 +131,11 @@ impl<'ccx> ReplEngine<'ccx> {
         Ok(())
     }
 
-    fn eval_line(&mut self, input: String, kind: EvalKind) -> Result<EvaledLine, Vec<Diagnostic>> {
+    fn eval_line(
+        &mut self,
+        input: String,
+        kind: EvalKind,
+    ) -> Result<EvaledLine, Vec<Diagnostic<FileId>>> {
         use std::io::Write;
 
         use crate::hir::lowering::LoweredReplDatum;
@@ -149,10 +154,12 @@ impl<'ccx> ReplEngine<'ccx> {
             _ => {
                 let extra_span = input_data[1].span();
 
-                return Err(vec![Diagnostic::new_error(
-                    "unexpected trailing datum",
-                    new_label(extra_span, "trailing datum"),
-                )]);
+                return Err(vec![Diagnostic::error()
+                    .with_message("unexpected trailing datum")
+                    .with_labels(vec![new_primary_label(
+                        extra_span,
+                        "trailing datum",
+                    )])]);
             }
         };
 
@@ -242,7 +249,7 @@ impl<'ccx> ReplEngine<'ccx> {
 
 pub struct ReplCtx {
     send_line: mpsc::Sender<(String, EvalKind)>,
-    receive_result: mpsc::Receiver<Result<EvaledLine, Vec<Diagnostic>>>,
+    receive_result: mpsc::Receiver<Result<EvaledLine, Vec<Diagnostic<FileId>>>>,
 }
 
 impl ReplCtx {
@@ -284,7 +291,7 @@ impl ReplCtx {
     /// Receives the next result from the REPL engine
     ///
     /// These will be returned in the order they were submitted with `send_line`.
-    pub fn receive_result(&self) -> Result<EvaledLine, Vec<Diagnostic>> {
+    pub fn receive_result(&self) -> Result<EvaledLine, Vec<Diagnostic<FileId>>> {
         self.receive_result.recv().unwrap()
     }
 }
@@ -297,7 +304,7 @@ mod test {
         rcx: &mut ReplCtx,
         input: String,
         kind: EvalKind,
-    ) -> Result<EvaledLine, Vec<Diagnostic>> {
+    ) -> Result<EvaledLine, Vec<Diagnostic<FileId>>> {
         rcx.send_line(input, kind).unwrap();
         rcx.receive_result()
     }

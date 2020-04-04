@@ -1,5 +1,6 @@
 use std::{fs, path};
 
+use codespan::FileId;
 use codespan_reporting::diagnostic::Diagnostic;
 
 use arret_compiler::{emit_diagnostics_to_stderr, print_program_mir, CompileCtx};
@@ -13,7 +14,7 @@ fn try_compile_input_file(
     input_file: &arret_compiler::SourceFile,
     output_path: &path::Path,
     debug_info: bool,
-) -> Result<(), Vec<Diagnostic>> {
+) -> Result<(), Vec<Diagnostic<FileId>>> {
     let arret_compiler::EvaluableProgram {
         ehx,
         main_var_id,

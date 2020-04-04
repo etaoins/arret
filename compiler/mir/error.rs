@@ -1,11 +1,12 @@
 use std::{error, fmt, result};
 
+use codespan::FileId;
 use codespan_reporting::diagnostic::Diagnostic;
 
 use arret_syntax::span::Span;
 
 use crate::mir::inliner::ApplyCookie;
-use crate::reporting::{new_label, LocTrace};
+use crate::reporting::{new_primary_label, LocTrace};
 
 #[derive(Debug, PartialEq)]
 pub struct Panic {
@@ -45,13 +46,15 @@ impl Error {
     }
 }
 
-impl From<Error> for Diagnostic {
-    fn from(error: Error) -> Diagnostic {
+impl From<Error> for Diagnostic<FileId> {
+    fn from(error: Error) -> Self {
         if let Error::Panic(panic) = error {
-            let diagnostic = Diagnostic::new_error(
-                panic.message,
-                new_label(panic.loc_trace.origin(), "panicked here"),
-            );
+            let diagnostic = Diagnostic::error()
+                .with_message(panic.message)
+                .with_labels(vec![new_primary_label(
+                    panic.loc_trace.origin(),
+                    "panicked here",
+                )]);
 
             return panic.loc_trace.label_macro_invocation(diagnostic);
         }
@@ -63,8 +66,8 @@ impl From<Error> for Diagnostic {
     }
 }
 
-impl From<Error> for Vec<Diagnostic> {
-    fn from(error: Error) -> Vec<Diagnostic> {
+impl From<Error> for Vec<Diagnostic<FileId>> {
+    fn from(error: Error) -> Self {
         vec![error.into()]
     }
 }

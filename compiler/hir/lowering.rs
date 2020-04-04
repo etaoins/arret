@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use codespan::FileId;
 use codespan_reporting::diagnostic::Diagnostic;
 
 use rayon::prelude::*;
@@ -919,7 +920,7 @@ pub(crate) fn lower_repl_datum(
     ccx: &CompileCtx,
     scope: &mut Scope<'_>,
     datum: &Datum,
-) -> Result<LoweredReplDatum, Vec<Diagnostic>> {
+) -> Result<LoweredReplDatum, Vec<Diagnostic<FileId>>> {
     use crate::reporting::errors_to_diagnostics;
 
     // For the purposes of type inference every datum is a new module

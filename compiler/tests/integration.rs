@@ -6,6 +6,7 @@ use std::io::Write;
 use std::ops::Range;
 use std::{env, fs, io, path, process};
 
+use codespan::FileId;
 use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
 use rayon::prelude::*;
 use tempfile::NamedTempFile;
@@ -44,20 +45,22 @@ enum TestType {
 
 #[derive(Debug)]
 enum ExpectedSpan {
-    Exact(Span),
-    StartRange(codespan::FileId, Range<codespan::ByteIndex>),
+    Exact(FileId, Range<usize>),
+    StartRange(FileId, Range<usize>),
 }
 
 impl ExpectedSpan {
-    fn matches(&self, actual_span: Span) -> bool {
+    fn matches(&self, actual_file_id: FileId, actual_range: Range<usize>) -> bool {
         match self {
-            ExpectedSpan::Exact(span) => *span == actual_span,
-            ExpectedSpan::StartRange(expected_file_id, span_range) => {
-                let actual_span_start = actual_span.start();
+            ExpectedSpan::Exact(expected_file_id, expected_range) => {
+                actual_file_id == *expected_file_id && actual_range == *expected_range
+            }
+            ExpectedSpan::StartRange(expected_file_id, expected_start_range) => {
+                let actual_range_start: usize = actual_range.start;
 
-                actual_span.file_id() == Some(*expected_file_id)
-                    && actual_span_start >= span_range.start
-                    && actual_span_start < span_range.end
+                actual_file_id == *expected_file_id
+                    && actual_range_start >= expected_start_range.start
+                    && actual_range_start < expected_start_range.end
             }
         }
     }
@@ -71,7 +74,7 @@ struct ExpectedDiagnostic {
 }
 
 impl ExpectedDiagnostic {
-    fn matches(&self, actual: &Diagnostic) -> bool {
+    fn matches(&self, actual: &Diagnostic<FileId>) -> bool {
         if self.expected_severity != actual.severity {
             return false;
         }
@@ -80,32 +83,37 @@ impl ExpectedDiagnostic {
             return false;
         }
 
-        std::iter::once(&actual.primary_label)
-            .chain(actual.secondary_labels.iter())
-            .any(|candidate_label| {
-                let candidate_span = Span::new(Some(candidate_label.file_id), candidate_label.span);
-                self.span.matches(candidate_span)
-            })
+        actual.labels.iter().any(|candidate_label| {
+            self.span
+                .matches(candidate_label.file_id, candidate_label.range.clone())
+        })
     }
 
     /// Returns a diagnostic for reporting missing expectation
-    fn to_error_diagnostic(&self) -> Diagnostic {
-        let span = match self.span {
-            ExpectedSpan::Exact(span) => span,
-            ExpectedSpan::StartRange(file_id, ref span_range) => Span::new(
-                Some(file_id),
-                codespan::Span::new(span_range.start, span_range.end),
-            ),
+    fn to_error_diagnostic(&self) -> Diagnostic<FileId> {
+        let (file_id, span_range) = match self.span {
+            ExpectedSpan::Exact(ref file_id, ref span_range) => (file_id, span_range),
+            ExpectedSpan::StartRange(ref file_id, ref span_range) => (file_id, span_range),
         };
 
-        Diagnostic::new_error(
-            format!("expected {}", severity_name(self.expected_severity)),
-            Label::new(
+        let span = Span::new(
+            Some(*file_id),
+            codespan::Span::new(
+                codespan::ByteIndex::from(span_range.start as u32),
+                codespan::ByteIndex::from(span_range.end as u32),
+            ),
+        );
+
+        Diagnostic::error()
+            .with_message(format!(
+                "expected {}",
+                severity_name(self.expected_severity)
+            ))
+            .with_labels(vec![Label::primary(
                 span.file_id().unwrap(),
                 span.codespan_span(),
-                format!("{} ...", self.message_prefix),
-            ),
-        )
+            )
+            .with_message(format!("{} ...", self.message_prefix))])
     }
 }
 
@@ -159,11 +167,7 @@ fn extract_expected_diagnostics(
             ExpectedDiagnostic {
                 expected_severity: severity,
                 message_prefix: marker_string.into(),
-                span: ExpectedSpan::StartRange(
-                    source_file.file_id(),
-                    codespan::ByteIndex(*start_of_line_index as u32)
-                        ..codespan::ByteIndex(index as u32),
-                ),
+                span: ExpectedSpan::StartRange(source_file.file_id(), *start_of_line_index..index),
             }
         })
         .chain(source.match_indices(";^").map(|(index, _)| {
@@ -195,13 +199,7 @@ fn extract_expected_diagnostics(
             ExpectedDiagnostic {
                 expected_severity: severity,
                 message_prefix: marker_string.into(),
-                span: ExpectedSpan::Exact(Span::new(
-                    Some(source_file.file_id()),
-                    codespan::Span::new(
-                        codespan::ByteIndex(span_start as u32),
-                        codespan::ByteIndex(span_end as u32),
-                    ),
-                )),
+                span: ExpectedSpan::Exact(source_file.file_id(), span_start..span_end),
             }
         }))
         .collect()
@@ -254,7 +252,7 @@ fn result_for_single_test(
     ccx: &CompileCtx,
     source_file: &arret_compiler::SourceFile,
     test_type: TestType,
-) -> Result<(), Vec<Diagnostic>> {
+) -> Result<(), Vec<Diagnostic<FileId>>> {
     let arret_compiler::EvaluableProgram {
         mut ehx,
         main_var_id,
@@ -309,33 +307,31 @@ fn result_for_single_test(
                 // Dump any panic message from the test
                 let _ = io::stderr().write_all(&output.stderr);
 
-                return Err(vec![Diagnostic::new_error(
-                    format!(
+                return Err(vec![Diagnostic::error()
+                    .with_message(format!(
                         "unexpected status {} returned from integration test",
                         output.status,
-                    ),
-                    Label::new(
+                    ))
+                    .with_labels(vec![Label::primary(
                         source_file.file_id(),
                         codespan::Span::initial(),
-                        "integration test file",
-                    ),
-                )]);
+                    )
+                    .with_message("integration test file")])]);
             }
         }
         RunType::Error(_) => {
             // Code 1 is used by panic. This makes sure we didn't e.g. SIGSEGV.
             if output.status.code() != Some(1) {
-                return Err(vec![Diagnostic::new_error(
-                    format!(
+                return Err(vec![Diagnostic::error()
+                    .with_message(format!(
                         "unexpected status {} returned from integration test",
                         output.status,
-                    ),
-                    Label::new(
+                    ))
+                    .with_labels(vec![Label::primary(
                         source_file.file_id(),
                         codespan::Span::initial(),
-                        "integration test file",
-                    ),
-                )]);
+                    )
+                    .with_message("integration test file")])]);
             }
         }
     }
@@ -422,14 +418,29 @@ fn run_single_compile_fail_test(
     let all_diags = unexpected_diags
         .into_iter()
         .map(|unexpected_diag| {
-            Diagnostic::new_error(
-                format!("unexpected {}", severity_name(unexpected_diag.severity)),
-                Label::new(
-                    unexpected_diag.primary_label.file_id,
-                    unexpected_diag.primary_label.span,
-                    unexpected_diag.message,
-                ),
-            )
+            let unexpected_primary_label = unexpected_diag
+                .labels
+                .iter()
+                .find(|label| label.style == codespan_reporting::diagnostic::LabelStyle::Primary)
+                .cloned();
+
+            Diagnostic::error()
+                .with_message(format!(
+                    "unexpected {}",
+                    severity_name(unexpected_diag.severity)
+                ))
+                .with_labels(
+                    unexpected_primary_label
+                        .into_iter()
+                        .map(|unexpected_primary_label| {
+                            Label::primary(
+                                unexpected_primary_label.file_id,
+                                unexpected_primary_label.range,
+                            )
+                            .with_message(unexpected_diag.message.clone())
+                        })
+                        .collect(),
+                )
         })
         .chain(
             expected_diags
