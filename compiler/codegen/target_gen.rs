@@ -31,16 +31,17 @@ fn llvm_md_kind_id_for_name(llx: LLVMContextRef, md_name: &[u8]) -> u32 {
     unsafe { LLVMGetMDKindIDInContext(llx, md_name.as_ptr() as *const _, md_name.len() as u32) }
 }
 
-fn llvm_i64_md_node(llx: LLVMContextRef, values: &[u64]) -> LLVMValueRef {
+fn llvm_i64_md_node(llx: LLVMContextRef, values: &[u64]) -> LLVMMetadataRef {
     unsafe {
         let llvm_i64 = LLVMInt64TypeInContext(llx);
 
-        let mut node_values: Vec<LLVMValueRef> = values
+        let mut node_values: Vec<LLVMMetadataRef> = values
             .iter()
             .map(|value| LLVMConstInt(llvm_i64, *value as u64, 0))
+            .map(|value| LLVMValueAsMetadata(value))
             .collect();
 
-        LLVMMDNodeInContext(llx, node_values.as_mut_ptr(), node_values.len() as u32)
+        LLVMMDNodeInContext2(llx, node_values.as_mut_ptr(), node_values.len())
     }
 }
 
@@ -87,9 +88,9 @@ pub struct TargetCtx {
     dereferenceable_md_kind_id: u32,
     align_md_kind_id: u32,
 
-    empty_md_node: LLVMValueRef,
-    boxed_dereferenceable_md_node: LLVMValueRef,
-    boxed_align_md_node: LLVMValueRef,
+    empty_md_node: LLVMMetadataRef,
+    boxed_dereferenceable_md_node: LLVMMetadataRef,
+    boxed_align_md_node: LLVMMetadataRef,
 
     target_record_structs: HashMap<ops::RecordStructId, record_struct::TargetRecordStruct>,
     record_struct_box_types: HashMap<ops::RecordStructId, LLVMTypeRef>,
@@ -569,7 +570,7 @@ impl TargetCtx {
             LLVMSetMetadata(
                 loaded_value,
                 self.invariant_load_md_kind_id,
-                self.empty_md_node,
+                LLVMMetadataAsValue(self.llx, self.empty_md_node),
             );
         }
     }
@@ -579,19 +580,24 @@ impl TargetCtx {
         unsafe {
             // Valid Unicode codepoints are effectively 21bit values with a hole in the middle
             let llvm_char_type = LLVMInt32TypeInContext(self.llx);
-            let mut llvm_range_values: Vec<LLVMValueRef> = [0x0000, 0xD800, 0xE000, 0x11_0000]
+            let mut llvm_range_values: Vec<LLVMMetadataRef> = [0x0000, 0xD800, 0xE000, 0x11_0000]
                 .iter()
                 .map(|value| LLVMConstInt(llvm_char_type, *value as u64, 0))
+                .map(|value| LLVMValueAsMetadata(value))
                 .collect();
 
-            let codepoint_range_metadata = LLVMMDNodeInContext(
+            let codepoint_range_md = LLVMMDNodeInContext2(
                 self.llx,
                 llvm_range_values.as_mut_ptr(),
-                llvm_range_values.len() as u32,
+                llvm_range_values.len(),
             );
             let range_md_kind_id = self.llvm_md_kind_id_for_name(b"range");
 
-            LLVMSetMetadata(llvm_value, range_md_kind_id, codepoint_range_metadata);
+            LLVMSetMetadata(
+                llvm_value,
+                range_md_kind_id,
+                LLVMMetadataAsValue(self.llx, codepoint_range_md),
+            );
         }
     }
 
@@ -639,7 +645,11 @@ impl TargetCtx {
                 ),
                 (self.align_md_kind_id, self.boxed_align_md_node),
             ] {
-                LLVMSetMetadata(loaded_value, kind_id, md_node);
+                LLVMSetMetadata(
+                    loaded_value,
+                    kind_id,
+                    LLVMMetadataAsValue(self.llx, md_node),
+                );
             }
         }
     }

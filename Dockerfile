@@ -4,7 +4,7 @@ RUN \
   apt-get update && \
   apt-get -y install --no-install-recommends ca-certificates curl gcc zlib1g-dev libstdc++-9-dev llvm-9 llvm-9-dev && \
   apt-get clean
-ENV LLVM_SYS_80_PREFIX /usr/lib/llvm-9
+ENV LLVM_SYS_90_PREFIX /usr/lib/llvm-9
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.42.0 --profile=minimal
 ENV PATH "/root/.cargo/bin:${PATH}"

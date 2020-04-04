@@ -285,7 +285,7 @@ fn gen_op(
                 );
 
                 let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
-                let possible_type_tag_metadata = int_range_md_node(
+                let possible_type_tag_md = int_range_md_node(
                     tcx.llx,
                     llvm_i8,
                     possible_type_tags
@@ -294,7 +294,11 @@ fn gen_op(
                 );
 
                 let range_md_kind_id = tcx.llvm_md_kind_id_for_name(b"range");
-                LLVMSetMetadata(llvm_type_tag, range_md_kind_id, possible_type_tag_metadata);
+                LLVMSetMetadata(
+                    llvm_type_tag,
+                    range_md_kind_id,
+                    LLVMMetadataAsValue(tcx.llx, possible_type_tag_md),
+                );
 
                 tcx.add_invariant_load_metadata(llvm_type_tag);
                 fcx.regs.insert(*reg, llvm_type_tag);
@@ -325,17 +329,21 @@ fn gen_op(
                 let max_length = std::u64::MAX / std::mem::size_of::<boxed::Pair>() as u64;
 
                 let mut llvm_range_values = [
-                    LLVMConstInt(llvm_i64, *min_length as u64, 0),
-                    LLVMConstInt(llvm_i64, max_length + 1, 0),
+                    LLVMValueAsMetadata(LLVMConstInt(llvm_i64, *min_length as u64, 0)),
+                    LLVMValueAsMetadata(LLVMConstInt(llvm_i64, max_length + 1, 0)),
                 ];
 
                 let range_md_kind_id = tcx.llvm_md_kind_id_for_name(b"length_range");
-                let list_length_range_md = LLVMMDNodeInContext(
+                let list_length_range_md = LLVMMDNodeInContext2(
                     tcx.llx,
                     llvm_range_values.as_mut_ptr(),
-                    llvm_range_values.len() as u32,
+                    llvm_range_values.len(),
                 );
-                LLVMSetMetadata(llvm_length, range_md_kind_id, list_length_range_md);
+                LLVMSetMetadata(
+                    llvm_length,
+                    range_md_kind_id,
+                    LLVMMetadataAsValue(tcx.llx, list_length_range_md),
+                );
 
                 fcx.regs.insert(*reg, llvm_length);
             }

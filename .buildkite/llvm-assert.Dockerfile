@@ -1,5 +1,5 @@
-ARG LLVM_VERSION=8.0.1
-ARG LLVM_ROOT=/opt/llvm-8
+ARG LLVM_VERSION=10.0.0
+ARG LLVM_ROOT=/opt/llvm-10
 
 ##
 
@@ -19,9 +19,7 @@ RUN dnf install -y file cmake ninja-build xz && \
 
 WORKDIR /usr/src
 
-# TODO: For some reason LLVM 8.0.1 isn't in the usual location
-#RUN curl http://releases.llvm.org/${LLVM_VERSION}/llvm-${LLVM_VERSION}.src.tar.xz -sS | \
-RUN curl https://github.com/llvm/llvm-project/releases/download/llvmorg-8.0.1/llvm-8.0.1.src.tar.xz -sSL | \
+RUN curl https://github.com/llvm/llvm-project/releases/download/llvmorg-10.0.0/llvm-10.0.0.src.tar.xz -sSL | \
   tar -Jx --no-same-owner
 
 WORKDIR /usr/src/llvm-build
@@ -54,4 +52,4 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.42.0 --pr
 ENV PATH "/root/.cargo/bin:${PATH}"
 RUN rustup component add rustfmt
 
-ENV LLVM_SYS_80_PREFIX "${LLVM_ROOT}"
+ENV LLVM_SYS_90_PREFIX "${LLVM_ROOT}"

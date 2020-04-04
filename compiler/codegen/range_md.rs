@@ -50,18 +50,15 @@ pub fn int_range_md_node(
     llx: LLVMContextRef,
     llvm_int_type: LLVMTypeRef,
     input: impl Iterator<Item = Int>,
-) -> LLVMValueRef {
+) -> LLVMMetadataRef {
     unsafe {
-        let mut llvm_range_values: Vec<LLVMValueRef> = find_int_ranges(input)
+        let mut llvm_range_values: Vec<LLVMMetadataRef> = find_int_ranges(input)
             .flat_map(|range| iter::once(range.start).chain(iter::once(range.end)))
             .map(|value| LLVMConstInt(llvm_int_type, value as u64, 0))
+            .map(|value| LLVMValueAsMetadata(value))
             .collect();
 
-        LLVMMDNodeInContext(
-            llx,
-            llvm_range_values.as_mut_ptr(),
-            llvm_range_values.len() as u32,
-        )
+        LLVMMDNodeInContext2(llx, llvm_range_values.as_mut_ptr(), llvm_range_values.len())
     }
 }
 

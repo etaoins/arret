@@ -219,26 +219,26 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
             }
 
             let mut llvm_range_values = [
-                LLVMConstInt(tcx.record_class_id_llvm_type(), 0 as u64, 0),
-                LLVMConstInt(
+                LLVMValueAsMetadata(LLVMConstInt(tcx.record_class_id_llvm_type(), 0 as u64, 0)),
+                LLVMValueAsMetadata(LLVMConstInt(
                     tcx.record_class_id_llvm_type(),
                     self.record_structs.len() as u64,
                     0,
-                ),
+                )),
             ];
 
             let range_md_kind_id = tcx.llvm_md_kind_id_for_name(b"range");
-            let record_class_id_range_metadata = LLVMMDNodeInContext(
+            let record_class_id_range_md = LLVMMDNodeInContext2(
                 tcx.llx,
                 llvm_range_values.as_mut_ptr(),
-                llvm_range_values.len() as u32,
+                llvm_range_values.len(),
             );
 
             for llvm_value in self.record_class_id_llvm_values.iter() {
                 LLVMSetMetadata(
                     *llvm_value,
                     range_md_kind_id,
-                    record_class_id_range_metadata,
+                    LLVMMetadataAsValue(tcx.llx, record_class_id_range_md),
                 );
             }
         }
