@@ -205,6 +205,32 @@ fn extract_expected_diagnostics(
         .collect()
 }
 
+fn unexpected_diag_to_error_diagnostic(unexpected_diag: Diagnostic<FileId>) -> Diagnostic<FileId> {
+    let unexpected_primary_label = unexpected_diag
+        .labels
+        .iter()
+        .find(|label| label.style == codespan_reporting::diagnostic::LabelStyle::Primary)
+        .cloned();
+
+    Diagnostic::error()
+        .with_message(format!(
+            "unexpected {}",
+            severity_name(unexpected_diag.severity)
+        ))
+        .with_labels(
+            unexpected_primary_label
+                .into_iter()
+                .map(|unexpected_primary_label| {
+                    Label::primary(
+                        unexpected_primary_label.file_id,
+                        unexpected_primary_label.range,
+                    )
+                    .with_message(unexpected_diag.message.clone())
+                })
+                .collect(),
+        )
+}
+
 fn exit_with_run_output_difference(
     source_filename: &OsStr,
     stream_name: &str,
@@ -417,31 +443,7 @@ fn run_single_compile_fail_test(
 
     let all_diags = unexpected_diags
         .into_iter()
-        .map(|unexpected_diag| {
-            let unexpected_primary_label = unexpected_diag
-                .labels
-                .iter()
-                .find(|label| label.style == codespan_reporting::diagnostic::LabelStyle::Primary)
-                .cloned();
-
-            Diagnostic::error()
-                .with_message(format!(
-                    "unexpected {}",
-                    severity_name(unexpected_diag.severity)
-                ))
-                .with_labels(
-                    unexpected_primary_label
-                        .into_iter()
-                        .map(|unexpected_primary_label| {
-                            Label::primary(
-                                unexpected_primary_label.file_id,
-                                unexpected_primary_label.range,
-                            )
-                            .with_message(unexpected_diag.message.clone())
-                        })
-                        .collect(),
-                )
-        })
+        .map(unexpected_diag_to_error_diagnostic)
         .chain(
             expected_diags
                 .into_iter()
