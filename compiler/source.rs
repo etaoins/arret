@@ -79,6 +79,38 @@ struct ReportableFile {
     line_offsets: Vec<usize>,
 }
 
+impl ReportableFile {
+    fn name(&self) -> String {
+        self.filename.to_string_lossy().into()
+    }
+
+    fn source(&self) -> &str {
+        self.source.as_ref()
+    }
+
+    fn line_index(&self, offset: usize) -> usize {
+        match self
+            .line_offsets
+            .binary_search_by(|line_start| line_start.cmp(&offset))
+        {
+            Ok(line) => line,
+            Err(line) => line - 1,
+        }
+    }
+
+    fn line_range(&self, line_index: usize) -> Option<Range<usize>> {
+        let start = self.line_offsets.get(line_index)?;
+
+        let end = self
+            .line_offsets
+            .get(line_index + 1)
+            .cloned()
+            .unwrap_or_else(|| self.source.as_ref().len());
+
+        Some(*start..end)
+    }
+}
+
 #[derive(Default)]
 pub struct SourceLoader {
     files: RwLock<Vec<ReportableFile>>,
@@ -170,36 +202,19 @@ impl<'a> codespan_reporting::files::Files<'a> for ReportableFiles<'a> {
     type Name = String;
 
     fn name(&self, file_id: FileId) -> Option<String> {
-        self.get_file(file_id)
-            .map(|f| f.filename.to_string_lossy().into())
+        self.get_file(file_id).map(|f| f.name())
     }
 
     fn source(&self, file_id: FileId) -> Option<&str> {
-        self.get_file(file_id).map(|f| f.source.as_ref())
+        self.get_file(file_id).map(|f| f.source())
     }
 
     fn line_index(&self, file_id: FileId, offset: usize) -> Option<usize> {
-        self.get_file(file_id).map(|f| {
-            match f
-                .line_offsets
-                .binary_search_by(|line_start| line_start.cmp(&offset))
-            {
-                Ok(line) => line,
-                Err(line) => line - 1,
-            }
-        })
+        self.get_file(file_id).map(|f| f.line_index(offset))
     }
 
     fn line_range(&self, file_id: FileId, line_index: usize) -> Option<Range<usize>> {
-        self.get_file(file_id).and_then(|f| {
-            let start = f.line_offsets.get(line_index)?;
-            let end = f
-                .line_offsets
-                .get(line_index + 1)
-                .cloned()
-                .unwrap_or_else(|| f.source.as_ref().len());
-
-            Some(*start..end)
-        })
+        self.get_file(file_id)
+            .and_then(|f| f.line_range(line_index))
     }
 }
