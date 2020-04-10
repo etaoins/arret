@@ -73,12 +73,6 @@ impl fmt::Debug for SourceFile {
     }
 }
 
-fn line_offsets_for_str(source: &str) -> Vec<usize> {
-    std::iter::once(0)
-        .chain(source.match_indices('\n').map(|(i, _)| i + 1))
-        .collect()
-}
-
 struct ReportableFile {
     filename: OsString,
     source: SourceText,
@@ -110,7 +104,7 @@ impl SourceLoader {
         let source = source.into();
         let reportable_file = ReportableFile {
             filename,
-            line_offsets: line_offsets_for_str(source.as_ref()),
+            line_offsets: codespan_reporting::files::line_starts(source.as_ref()).collect(),
             source: source.clone(),
         };
 
