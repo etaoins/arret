@@ -8,7 +8,7 @@ use crate::hir;
 use crate::hir::var_id::VarIdAlloc;
 use crate::mir::env_values::EnvValues;
 use crate::mir::value;
-use crate::source::SourceLoader;
+use crate::source::EMPTY_SPAN;
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
@@ -229,7 +229,6 @@ fn new_field_accessor_arret_fun(
 }
 
 pub struct SyntheticFuns {
-    synthetic_span: Span,
     eq_pred_arret_fun: Option<value::ArretFun>,
     ty_pred_arret_fun: HashMap<ty::pred::TestTy, value::ArretFun>,
     record_cons_arret_fun: HashMap<record::ConsId, value::ArretFun>,
@@ -237,10 +236,8 @@ pub struct SyntheticFuns {
 }
 
 impl SyntheticFuns {
-    pub fn new(sl: &SourceLoader) -> Self {
+    pub fn new() -> Self {
         Self {
-            synthetic_span: sl.span_for_rust_source_file(file!()),
-
             eq_pred_arret_fun: None,
             ty_pred_arret_fun: HashMap::new(),
             record_cons_arret_fun: HashMap::new(),
@@ -249,26 +246,20 @@ impl SyntheticFuns {
     }
 
     pub fn eq_pred_arret_fun(&mut self) -> &value::ArretFun {
-        let span = self.synthetic_span;
-
         self.eq_pred_arret_fun
-            .get_or_insert_with(|| new_eq_pred_arret_fun(span))
+            .get_or_insert_with(|| new_eq_pred_arret_fun(EMPTY_SPAN))
     }
 
     pub fn ty_pred_arret_fun(&mut self, test_ty: ty::pred::TestTy) -> &value::ArretFun {
-        let span = self.synthetic_span;
-
         self.ty_pred_arret_fun
             .entry(test_ty.clone())
-            .or_insert_with(|| new_ty_pred_arret_fun(span, test_ty))
+            .or_insert_with(|| new_ty_pred_arret_fun(EMPTY_SPAN, test_ty))
     }
 
     pub fn record_cons_arret_fun(&mut self, cons: &record::ConsId) -> &value::ArretFun {
-        let span = self.synthetic_span;
-
         self.record_cons_arret_fun
             .entry(cons.clone())
-            .or_insert_with(|| new_record_cons_arret_fun(span, cons))
+            .or_insert_with(|| new_record_cons_arret_fun(EMPTY_SPAN, cons))
     }
 
     pub fn field_accessor_arret_fun(
@@ -276,11 +267,10 @@ impl SyntheticFuns {
         cons: &record::ConsId,
         field_index: usize,
     ) -> &value::ArretFun {
-        let span = self.synthetic_span;
         let lookup_key = (cons.clone(), field_index);
 
         self.field_accessor_arret_fun
             .entry(lookup_key)
-            .or_insert_with(|| new_field_accessor_arret_fun(span, cons, field_index))
+            .or_insert_with(|| new_field_accessor_arret_fun(EMPTY_SPAN, cons, field_index))
     }
 }

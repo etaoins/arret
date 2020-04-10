@@ -25,7 +25,7 @@ use crate::mir::value::synthetic_fun::SyntheticFuns;
 use crate::mir::value::types::TypeHint;
 use crate::mir::{Expr, Value};
 use crate::rfi;
-use crate::source::SourceLoader;
+use crate::source::EMPTY_SPAN;
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::purity::Purity;
@@ -53,8 +53,6 @@ pub struct EvaledRecordClass {
 }
 
 pub struct EvalHirCtx {
-    synthetic_span: Span,
-
     runtime_task: arret_runtime::task::Task,
     global_values: HashMap<hir::VarId, Value>,
 
@@ -195,12 +193,10 @@ impl<'sv> Default for FunCtx<'sv> {
 }
 
 impl EvalHirCtx {
-    pub fn new(sl: &SourceLoader, optimising: bool) -> EvalHirCtx {
+    pub fn new(optimising: bool) -> EvalHirCtx {
         let thunk_jit = codegen::jit::JITCtx::new(optimising);
 
         EvalHirCtx {
-            synthetic_span: sl.span_for_rust_source_file(file!()),
-
             runtime_task: arret_runtime::task::Task::new(),
             global_values: HashMap::new(),
 
@@ -208,7 +204,7 @@ impl EvalHirCtx {
             private_funs: HashMap::new(),
             rust_funs: HashMap::new(),
             arret_funs: HashMap::new(),
-            synthetic_funs: SyntheticFuns::new(sl),
+            synthetic_funs: SyntheticFuns::new(),
 
             rust_fun_thunks: HashMap::new(),
             arret_fun_thunks: HashMap::new(),
@@ -1543,7 +1539,7 @@ impl EvalHirCtx {
         use crate::mir::optimise::optimise_fun;
         use crate::mir::ret_value::build_value_ret;
 
-        let span = self.synthetic_span;
+        let span = EMPTY_SPAN;
         let wanted_abi = entry_point_abi.into();
 
         let mut b = Builder::new();
@@ -1765,7 +1761,7 @@ impl EvalHirCtx {
         self.eval_value_app(
             &mut fcx,
             &mut None,
-            self.synthetic_span,
+            EMPTY_SPAN,
             &Ty::unit().into(),
             &main_value,
             ApplyArgs {

@@ -8,7 +8,6 @@ use codespan_reporting;
 use arret_syntax::datum::Datum;
 use arret_syntax::span::{FileId, Span};
 
-#[cfg(test)]
 pub const EMPTY_SPAN: Span = Span::new(None, 0, 0);
 
 #[derive(Clone)]
@@ -153,30 +152,6 @@ impl SourceLoader {
             parsed: data_from_str(Some(file_id), source.as_ref()),
             source,
         }
-    }
-
-    /// Creates an artificial span for a Rust source file
-    ///
-    /// This points to a zero length span with the specified filename. It's intended for IR and code
-    /// generated from the compiler that can't be directly attributed to input Arret code. For
-    /// example, the compiler will generate synthetic functions on demand that can be shared between
-    /// multiple call sites.
-    pub fn span_for_rust_source_file(&self, filename: &'static str) -> Span {
-        let reportable_file = ReportableFile {
-            filename: filename.into(),
-            source: SourceText::Static(""),
-            line_offsets: vec![],
-        };
-
-        let file_index = {
-            let mut files_write = self.files.write().unwrap();
-
-            files_write.push(reportable_file);
-            files_write.len()
-        };
-
-        let file_id = FileId::new(file_index as u32).unwrap();
-        Span::new(Some(file_id), 0, 0)
     }
 
     pub fn files(&self) -> ReportableFiles<'_> {

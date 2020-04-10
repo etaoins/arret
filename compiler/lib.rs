@@ -101,7 +101,7 @@ pub fn program_to_evaluable(
     )
     .map_err(|err| vec![err.into()])?;
 
-    let mut ehx = EvalHirCtx::new(ccx.source_loader(), ccx.enable_optimisations());
+    let mut ehx = EvalHirCtx::new(ccx.enable_optimisations());
     let mut rfi_libraries = vec![];
 
     for import in &entry_module.imports {

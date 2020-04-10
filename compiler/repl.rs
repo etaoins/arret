@@ -87,7 +87,7 @@ impl<'ccx> ReplEngine<'ccx> {
             seen_modules: HashSet::new(),
             inferred_module_vars: HashMap::new(),
 
-            ehx: EvalHirCtx::new(ccx.source_loader(), ccx.enable_optimisations()),
+            ehx: EvalHirCtx::new(ccx.enable_optimisations()),
         }
     }
 
