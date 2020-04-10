@@ -270,14 +270,27 @@ impl Loader {
         let native_path = build_rfi_lib_path(native_base_path, package_name, LibType::Dynamic);
         let target_path = build_rfi_lib_path(target_base_path, package_name, LibType::Static);
 
-        let map_io_err = |err| Error::from_module_io(span, &native_path, &err);
-        let loaded = libloading::Library::new(&native_path).map_err(map_io_err)?;
+        let map_loader_err = |err: libloading::Error| match err {
+            libloading::Error::DlOpen { .. }
+            | libloading::Error::DlOpenUnknown
+            | libloading::Error::LoadLibraryW { .. }
+            | libloading::Error::LoadLibraryWUnknown => Error::new(
+                span,
+                ErrorKind::ModuleNotFound(native_path.clone().into_boxed_path()),
+            ),
+            _ => Error::new(
+                span,
+                ErrorKind::ReadError(native_path.clone().into_boxed_path()),
+            ),
+        };
+
+        let loaded = libloading::Library::new(&native_path).map_err(map_loader_err)?;
 
         let exports_symbol_name = format!("ARRET_{}_RUST_EXPORTS", package_name.to_uppercase());
         let exports: binding::RustExports = unsafe {
             let exports_symbol = loaded
                 .get::<*const binding::RustExports>(exports_symbol_name.as_bytes())
-                .map_err(map_io_err)?;
+                .map_err(map_loader_err)?;
 
             &(**exports_symbol)
         };
@@ -290,7 +303,7 @@ impl Loader {
                 let entry_point_address = unsafe {
                     *loaded
                         .get::<usize>(rust_fun.symbol.as_bytes())
-                        .map_err(map_io_err)?
+                        .map_err(map_loader_err)?
                 };
 
                 // Parse the declared Arret type string as a datum
