@@ -6,11 +6,10 @@ use std::collections::{HashMap, HashSet};
 use std::hash;
 use std::sync::Arc;
 
-use codespan::FileId;
 use codespan_reporting::diagnostic::Diagnostic;
 
 use arret_syntax::datum::Datum;
-use arret_syntax::span::Span;
+use arret_syntax::span::{FileId, Span};
 
 use crate::hir;
 use crate::hir::exports::Exports;

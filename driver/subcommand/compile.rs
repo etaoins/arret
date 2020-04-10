@@ -1,7 +1,8 @@
 use std::{fs, path};
 
-use codespan::FileId;
 use codespan_reporting::diagnostic::Diagnostic;
+
+use arret_syntax::span::FileId;
 
 use arret_compiler::{emit_diagnostics_to_stderr, print_program_mir, CompileCtx};
 

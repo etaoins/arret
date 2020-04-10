@@ -7,6 +7,3 @@ authors = ["Ryan Cumming <etaoins@gmail.com>"]
 [lib]
 path = "lib.rs"
 crate-type = ["lib"]
-
-[dependencies]
-codespan = "0.9"

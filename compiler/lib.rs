@@ -20,8 +20,9 @@ mod typeck;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use codespan::FileId;
 use codespan_reporting::diagnostic::Diagnostic;
+
+use arret_syntax::span::FileId;
 
 pub use crate::arret_root::{find_arret_root, FindArretRootError};
 pub use crate::codegen::initialise_llvm;
@@ -86,17 +87,14 @@ pub fn program_to_evaluable(
 
         return Err(vec![Diagnostic::error()
             .with_message("no main! function defined in entry module")
-            .with_labels(vec![Label::primary(
-                source_file.file_id(),
-                codespan::Span::initial(),
-            )
-            .with_message("main! function expected in this file")])]);
+            .with_labels(vec![Label::primary(source_file.file_id(), 0..0)
+                .with_message("main! function expected in this file")])]);
     };
 
     let inferred_main_type = &entry_module.inferred_locals[&main_var_id.local_id()];
 
     infer::ensure_main_type(
-        Span::new(Some(source_file.file_id()), codespan::Span::initial()),
+        Span::new(Some(source_file.file_id()), 0, 0),
         &entry_module.defs,
         main_var_id,
         inferred_main_type,

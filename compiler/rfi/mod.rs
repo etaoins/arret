@@ -306,9 +306,9 @@ impl Loader {
                     [arret_type_datum] => arret_type_datum,
                     _ => {
                         return Err(Error::new(
-                            Span::new(
+                            Span::from_str(
                                 Some(arret_type_source_file.file_id()),
-                                codespan::Span::from_str(rust_fun.arret_type),
+                                rust_fun.arret_type,
                             ),
                             ErrorKind::RustFunError("expected exactly one Arret type datum".into()),
                         ));

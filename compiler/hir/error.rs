@@ -1,11 +1,10 @@
 use std::{error, fmt, io, iter, path, result};
 
-use codespan::FileId;
 use codespan_reporting::diagnostic::Diagnostic;
 
 use arret_syntax::datum::DataStr;
 use arret_syntax::error::Error as SyntaxError;
-use arret_syntax::span::Span;
+use arret_syntax::span::{FileId, Span};
 
 use crate::hir::types::{str_for_purity, str_for_ty_ref};
 use crate::reporting::{

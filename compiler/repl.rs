@@ -3,10 +3,10 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
 
-use codespan::FileId;
 use codespan_reporting::diagnostic::Diagnostic;
 
 use arret_syntax::datum::DataStr;
+use arret_syntax::span::FileId;
 
 use crate::context;
 use crate::hir;

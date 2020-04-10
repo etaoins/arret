@@ -1,9 +1,8 @@
 use std::iter;
 
-use codespan::FileId;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 
-use arret_syntax::span::Span;
+use arret_syntax::span::{FileId, Span};
 
 use crate::source::SourceLoader;
 
@@ -106,11 +105,11 @@ pub fn diagnostic_for_syntax_error(error: &arret_syntax::error::Error) -> Diagno
 }
 
 pub fn new_primary_label(span: Span, message: impl Into<String>) -> Label<FileId> {
-    Label::primary(span.file_id().unwrap(), span.codespan_span()).with_message(message)
+    Label::primary(span.file_id().unwrap(), span.byte_range()).with_message(message)
 }
 
 pub fn new_secondary_label(span: Span, message: impl Into<String>) -> Label<FileId> {
-    Label::secondary(span.file_id().unwrap(), span.codespan_span()).with_message(message)
+    Label::secondary(span.file_id().unwrap(), span.byte_range()).with_message(message)
 }
 
 /// Emits a series of diagnostics to standard error
@@ -133,7 +132,7 @@ pub fn emit_diagnostics_to_stderr(
         let _ = codespan_reporting::term::emit(
             &mut stderr_lock,
             &config,
-            &*source_loader.files(),
+            &source_loader.files(),
             &diagnostic,
         );
     }

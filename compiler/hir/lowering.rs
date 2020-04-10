@@ -1,13 +1,12 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use codespan::FileId;
 use codespan_reporting::diagnostic::Diagnostic;
 
 use rayon::prelude::*;
 
 use arret_syntax::datum::Datum;
-use arret_syntax::span::Span;
+use arret_syntax::span::{FileId, Span};
 
 use crate::context;
 use crate::rfi;

@@ -85,8 +85,8 @@ impl Document {
     /// Returns an LSP `Range` for the given `arret-syntax` S`pan`
     pub fn span_to_range(&self, span: Span) -> lsp_types::Range {
         lsp_types::Range {
-            start: self.offset_to_position(span.start().to_usize()),
-            end: self.offset_to_position(span.end().to_usize()),
+            start: self.offset_to_position(span.start() as usize),
+            end: self.offset_to_position(span.end() as usize),
         }
     }
 

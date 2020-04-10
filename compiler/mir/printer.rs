@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::io::{Result, Write};
 use std::iter;
 
+use codespan_reporting::files::Files as _;
+
 use arret_syntax::span::Span;
 
 use crate::codegen::GenABI;
@@ -15,13 +17,13 @@ fn span_to_human_location(source_loader: Option<&SourceLoader>, span: Span) -> O
     let file_id = span.file_id()?;
 
     let files = source_loader.files();
-    let location = files.location(file_id, span.codespan_span().start()).ok()?;
+    let location = files.location(file_id, span.start() as usize)?;
 
     Some(format!(
         "{}:{}:{}",
-        files.name(file_id).to_string_lossy(),
-        location.line.number(),
-        location.column.number()
+        files.name(file_id)?,
+        location.line_number,
+        location.column_number
     ))
 }
 

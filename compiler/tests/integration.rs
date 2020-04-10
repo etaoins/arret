@@ -1,7 +1,6 @@
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
 
-use std::ffi::OsStr;
 use std::io::Write;
 use std::ops::Range;
 use std::sync::Arc;
@@ -9,12 +8,13 @@ use std::{fs, io, path};
 
 use tokio::process;
 
-use codespan::FileId;
 use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
+use codespan_reporting::files::Files as _;
+
 use futures::future;
 use tempfile::NamedTempFile;
 
-use arret_syntax::span::Span;
+use arret_syntax::span::{FileId, Span};
 
 use arret_compiler::{emit_diagnostics_to_stderr, CompileCtx, SourceLoader};
 
@@ -101,10 +101,8 @@ impl ExpectedDiagnostic {
 
         let span = Span::new(
             Some(*file_id),
-            codespan::Span::new(
-                codespan::ByteIndex::from(span_range.start as u32),
-                codespan::ByteIndex::from(span_range.end as u32),
-            ),
+            span_range.start as u32,
+            span_range.end as u32,
         );
 
         Diagnostic::error()
@@ -114,7 +112,7 @@ impl ExpectedDiagnostic {
             ))
             .with_labels(vec![Label::primary(
                 span.file_id().unwrap(),
-                span.codespan_span(),
+                span.byte_range(),
             )
             .with_message(format!("{} ...", self.message_prefix))])
     }
@@ -151,7 +149,7 @@ fn extract_expected_diagnostics(
     source_file: &arret_compiler::SourceFile,
 ) -> Vec<ExpectedDiagnostic> {
     let files = source_loader.files();
-    let source = files.source(source_file.file_id()).as_ref();
+    let source = files.source(source_file.file_id()).unwrap();
 
     source
         .match_indices(";~")
@@ -235,7 +233,7 @@ fn unexpected_diag_to_error_diagnostic(unexpected_diag: Diagnostic<FileId>) -> D
 }
 
 fn exit_with_run_output_difference(
-    source_filename: &OsStr,
+    source_filename: String,
     stream_name: &str,
     expected: &[u8],
     actual: &[u8],
@@ -254,8 +252,7 @@ fn exit_with_run_output_difference(
     writeln!(
         stderr_lock,
         "unexpected {} output from integration test {}\n",
-        stream_name,
-        source_filename.to_string_lossy()
+        stream_name, source_filename
     )
     .unwrap();
 
@@ -345,11 +342,8 @@ async fn result_for_single_test(
                         "unexpected status {} returned from integration test",
                         output.status,
                     ))
-                    .with_labels(vec![Label::primary(
-                        source_file.file_id(),
-                        codespan::Span::initial(),
-                    )
-                    .with_message("integration test file")])]);
+                    .with_labels(vec![Label::primary(source_file.file_id(), 0..0)
+                        .with_message("integration test file")])]);
             }
         }
         RunType::Error(_) => {
@@ -360,18 +354,18 @@ async fn result_for_single_test(
                         "unexpected status {} returned from integration test",
                         output.status,
                     ))
-                    .with_labels(vec![Label::primary(
-                        source_file.file_id(),
-                        codespan::Span::initial(),
-                    )
-                    .with_message("integration test file")])]);
+                    .with_labels(vec![Label::primary(source_file.file_id(), 0..0)
+                        .with_message("integration test file")])]);
             }
         }
     }
 
     if expected_output.stderr != output.stderr {
         exit_with_run_output_difference(
-            ccx.source_loader().files().name(source_file.file_id()),
+            ccx.source_loader()
+                .files()
+                .name(source_file.file_id())
+                .unwrap(),
             "stderr",
             &expected_output.stderr,
             &output.stderr,
@@ -380,7 +374,10 @@ async fn result_for_single_test(
 
     if expected_output.stdout != output.stdout {
         exit_with_run_output_difference(
-            ccx.source_loader().files().name(source_file.file_id()),
+            ccx.source_loader()
+                .files()
+                .name(source_file.file_id())
+                .unwrap(),
             "stdout",
             &expected_output.stdout,
             &output.stdout,
@@ -420,7 +417,7 @@ async fn run_single_compile_fail_test(
             ccx.source_loader()
                 .files()
                 .name(source_file.file_id())
-                .to_string_lossy()
+                .unwrap()
         );
         return false;
     };

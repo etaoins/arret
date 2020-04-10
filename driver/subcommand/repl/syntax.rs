@@ -1,4 +1,4 @@
-use codespan::ByteIndex;
+use arret_syntax::span::ByteIndex;
 
 use super::command::TYPE_ONLY_PREFIX;
 
@@ -30,7 +30,7 @@ pub fn error_for_line(mut line: &str) -> Option<arret_syntax::error::Error> {
         return None;
     }
 
-    datum_from_str_with_span_offset(None, line, ByteIndex(span_offset as u32)).err()
+    datum_from_str_with_span_offset(None, line, span_offset as ByteIndex).err()
 }
 
 pub fn error_context_for_eol(line: &str) -> Option<arret_syntax::error::WithinContext> {

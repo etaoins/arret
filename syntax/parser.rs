@@ -1,29 +1,29 @@
 use crate::datum::Datum;
 use crate::error::{Error, ErrorKind, Result, WithinContext};
-use crate::span::Span;
+use crate::span::{ByteIndex, FileId, Span};
 
 pub fn data_from_str_with_span_offset(
-    file_id: Option<codespan::FileId>,
+    file_id: Option<FileId>,
     s: &str,
-    span_offset: codespan::ByteIndex,
+    span_offset: ByteIndex,
 ) -> Result<Vec<Datum>> {
     Parser::from_str(file_id, s, span_offset).parse_data()
 }
 
-pub fn data_from_str(file_id: Option<codespan::FileId>, s: &str) -> Result<Vec<Datum>> {
-    data_from_str_with_span_offset(file_id, s, codespan::ByteIndex(0))
+pub fn data_from_str(file_id: Option<FileId>, s: &str) -> Result<Vec<Datum>> {
+    data_from_str_with_span_offset(file_id, s, 0)
 }
 
 pub fn datum_from_str_with_span_offset(
-    file_id: Option<codespan::FileId>,
+    file_id: Option<FileId>,
     s: &str,
-    span_offset: codespan::ByteIndex,
+    span_offset: ByteIndex,
 ) -> Result<Datum> {
     Parser::from_str(file_id, s, span_offset).parse_datum()
 }
 
-pub fn datum_from_str(file_id: Option<codespan::FileId>, s: &str) -> Result<Datum> {
-    datum_from_str_with_span_offset(file_id, s, codespan::ByteIndex(0))
+pub fn datum_from_str(file_id: Option<FileId>, s: &str) -> Result<Datum> {
+    datum_from_str_with_span_offset(file_id, s, 0)
 }
 
 fn is_whitespace(c: char) -> bool {
@@ -47,30 +47,25 @@ pub fn is_identifier_char(c: char) -> bool {
 }
 
 pub struct Parser<'input> {
-    file_id: Option<codespan::FileId>,
+    file_id: Option<FileId>,
     input: &'input str,
-    consumed_bytes: u32,
+    consumed_bytes: ByteIndex,
 }
 
 impl<'input> Parser<'input> {
-    fn from_str(
-        file_id: Option<codespan::FileId>,
-        input: &'input str,
-        span_offset: codespan::ByteIndex,
-    ) -> Self {
+    fn from_str(file_id: Option<FileId>, input: &'input str, span_offset: ByteIndex) -> Self {
         Parser {
             file_id,
             input,
-            consumed_bytes: span_offset.to_usize() as u32,
+            consumed_bytes: span_offset,
         }
     }
 
     fn eof_err(&self, within: WithinContext) -> Error {
-        let eof_pos = self.consumed_bytes + (self.input.len() as u32);
-        let codespan_span = codespan::Span::new(eof_pos, eof_pos);
+        let eof_pos = self.consumed_bytes + (self.input.len() as ByteIndex);
 
         Error::new(
-            Span::new(self.file_id, codespan_span),
+            Span::new(self.file_id, eof_pos, eof_pos),
             ErrorKind::Eof(within),
         )
     }
@@ -91,7 +86,7 @@ impl<'input> Parser<'input> {
 
     fn eat_bytes(&mut self, count: usize) {
         self.input = &self.input[count..];
-        self.consumed_bytes += count as u32;
+        self.consumed_bytes += count as ByteIndex;
     }
 
     fn consume_char(&mut self, within: WithinContext) -> Result<char> {
@@ -143,7 +138,7 @@ impl<'input> Parser<'input> {
     where
         T: FnMut(char) -> bool,
     {
-        let start = self.consumed_bytes as u32;
+        let start = self.consumed_bytes;
         let last_index = self
             .input
             .find(predicate)
@@ -151,10 +146,12 @@ impl<'input> Parser<'input> {
         let (consumed, remaining_input) = self.input.split_at(last_index);
 
         self.input = remaining_input;
-        self.consumed_bytes += last_index as u32;
+        self.consumed_bytes += last_index as ByteIndex;
 
-        let codespan_span = codespan::Span::new(start, self.consumed_bytes as u32);
-        (Span::new(self.file_id, codespan_span), consumed)
+        (
+            Span::new(self.file_id, start, self.consumed_bytes),
+            consumed,
+        )
     }
 
     fn consume_while<T>(&mut self, mut predicate: T) -> (Span, &str)
@@ -172,8 +169,7 @@ impl<'input> Parser<'input> {
         let result = block(self);
         let end = self.consumed_bytes;
 
-        let codespan_span = codespan::Span::new(start, end);
-        (Span::new(self.file_id, codespan_span), result)
+        (Span::new(self.file_id, start, end), result)
     }
 
     fn parse_num(&mut self) -> Result<Datum> {
@@ -233,11 +229,9 @@ impl<'input> Parser<'input> {
             }
         };
 
-        // Cover the initial #
-        let adj_codespan_span = codespan::Span::new(span.start().to_usize() as u32 - 1, span.end());
-
         Ok(Datum::Float(
-            Span::new(self.file_id, adj_codespan_span),
+            // Cover the initial #
+            Span::new(self.file_id, span.start() - 1, span.end()),
             float_value,
         ))
     }
@@ -305,11 +299,8 @@ impl<'input> Parser<'input> {
             _ => {
                 let (span, _) = self.capture_span(|s| s.consume_char(WithinContext::Dispatch));
 
-                let adj_codespan_span =
-                    codespan::Span::new(span.start().to_usize() as u32 - 1, span.end());
-
                 Err(Error::new(
-                    Span::new(self.file_id, adj_codespan_span),
+                    Span::new(self.file_id, span.start() - 1, span.end()),
                     ErrorKind::UnsupportedDispatch,
                 ))
             }
@@ -375,12 +366,13 @@ impl<'input> Parser<'input> {
     fn parse_set(&mut self) -> Result<Datum> {
         let (outer_span, contents) = self.capture_span(|s| s.parse_seq('}', WithinContext::Set));
 
-        // Cover the # in our span
-        let adj_codespan_span =
-            codespan::Span::new(outer_span.start().to_usize() as u32 - 1, outer_span.end());
-
-        contents
-            .map(|contents| Datum::Set(Span::new(self.file_id, adj_codespan_span), contents.into()))
+        contents.map(|contents| {
+            Datum::Set(
+                // Cover the # in our span
+                Span::new(self.file_id, outer_span.start() - 1, outer_span.end()),
+                contents.into(),
+            )
+        })
     }
 
     fn parse_anon_fun(&mut self) -> Result<Datum> {
@@ -389,20 +381,17 @@ impl<'input> Parser<'input> {
         let (outer_span, body_contents) =
             self.capture_span(|s| s.parse_seq(')', WithinContext::List));
 
-        // Cover the # in our span
-        let adj_codespan_span =
-            codespan::Span::new(outer_span.start().to_usize() as u32 - 1, outer_span.end());
-
         let body_contents = body_contents?;
 
         convert_anon_fun(
-            Span::new(self.file_id, adj_codespan_span),
+            // Cover the # in our span
+            Span::new(self.file_id, outer_span.start() - 1, outer_span.end()),
             body_contents.into_iter(),
         )
     }
 
     fn parse_quote_escape(&mut self) -> Result<char> {
-        let escape_start = self.consumed_bytes as u32;
+        let escape_start = self.consumed_bytes as ByteIndex;
 
         match self.consume_char(WithinContext::QuoteEscape)? {
             't' => Ok('\t'),
@@ -424,14 +413,10 @@ impl<'input> Parser<'input> {
                 std::char::from_u32(code_point)
                     .ok_or_else(|| Error::new(span, ErrorKind::InvalidCodePoint))
             }
-            _ => {
-                let codespan_span = codespan::Span::new(escape_start, self.consumed_bytes as u32);
-
-                Err(Error::new(
-                    Span::new(self.file_id, codespan_span),
-                    ErrorKind::UnsupportedStringEscape,
-                ))
-            }
+            _ => Err(Error::new(
+                Span::new(self.file_id, escape_start, self.consumed_bytes),
+                ErrorKind::UnsupportedStringEscape,
+            )),
         }
     }
 
@@ -545,7 +530,7 @@ mod test {
     use crate::span::t2s;
 
     fn whole_str_span(v: &str) -> Span {
-        Span::new(None, codespan::Span::new(0, v.len() as u32))
+        Span::new(None, 0 as ByteIndex, v.len() as ByteIndex)
     }
 
     #[test]

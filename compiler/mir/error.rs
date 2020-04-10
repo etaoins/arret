@@ -1,9 +1,8 @@
 use std::{error, fmt, result};
 
-use codespan::FileId;
 use codespan_reporting::diagnostic::Diagnostic;
 
-use arret_syntax::span::Span;
+use arret_syntax::span::{FileId, Span};
 
 use crate::mir::inliner::ApplyCookie;
 use crate::reporting::{new_primary_label, LocTrace};

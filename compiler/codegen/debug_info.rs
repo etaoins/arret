@@ -2,12 +2,14 @@ use std::collections::HashMap;
 use std::os::unix::ffi::OsStrExt;
 use std::{env, ffi, ptr};
 
+use codespan_reporting::files::Files as _;
+
 use llvm_sys::core::*;
 use llvm_sys::debuginfo::*;
 use llvm_sys::prelude::*;
 
 use arret_syntax::datum::DataStr;
-use arret_syntax::span::Span;
+use arret_syntax::span::{FileId, Span};
 
 use crate::source::SourceLoader;
 
@@ -16,7 +18,7 @@ pub struct DebugInfoBuilder<'sl> {
 
     source_loader: &'sl SourceLoader,
     current_dir: ffi::CString,
-    file_metadata: HashMap<codespan::FileId, Option<LLVMMetadataRef>>,
+    file_metadata: HashMap<FileId, Option<LLVMMetadataRef>>,
 }
 
 impl<'sl> DebugInfoBuilder<'sl> {
@@ -83,13 +85,13 @@ impl<'sl> DebugInfoBuilder<'sl> {
         }
     }
 
-    pub fn file_metadata(&mut self, file_id: codespan::FileId) -> Option<LLVMMetadataRef> {
+    pub fn file_metadata(&mut self, file_id: FileId) -> Option<LLVMMetadataRef> {
         if let Some(metadata) = self.file_metadata.get(&file_id) {
             return *metadata;
         }
 
         let files = self.source_loader.files();
-        let filename = files.name(file_id);
+        let filename = files.name(file_id).unwrap();
 
         let metadata = ffi::CString::new(filename.as_bytes())
             .ok()
@@ -136,17 +138,17 @@ impl<'sl> DebugInfoBuilder<'sl> {
             return;
         };
 
-        let location = if let Ok(location) = self
+        let location = if let Some(location) = self
             .source_loader
             .files()
-            .location(file_id, span.codespan_span().start())
+            .location(file_id, span.start() as usize)
         {
             location
         } else {
             return;
         };
 
-        let line_index = location.line.to_usize();
+        let line_index = location.line_number - 1;
 
         let file_metadata = if let Some(file_metadata) = self.file_metadata(file_id) {
             file_metadata

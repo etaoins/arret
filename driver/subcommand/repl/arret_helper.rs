@@ -159,8 +159,8 @@ impl rustyline::highlight::Highlighter for ArretHelper {
             return line.into();
         };
 
-        let error_start = error_span.start().to_usize();
-        let error_end = error_span.end().to_usize();
+        let error_start = error_span.start() as usize;
+        let error_end = error_span.end() as usize;
 
         let prefix = &line[0..error_start];
         let error = &line[error_start..error_end];

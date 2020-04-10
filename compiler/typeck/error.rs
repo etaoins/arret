@@ -1,10 +1,9 @@
 use std::fmt::Display;
 use std::{error, fmt};
 
-use codespan::FileId;
 use codespan_reporting::diagnostic::Diagnostic;
 
-use arret_syntax::span::Span;
+use arret_syntax::span::{FileId, Span};
 
 use crate::hir;
 use crate::reporting::{new_primary_label, new_secondary_label, LocTrace};
