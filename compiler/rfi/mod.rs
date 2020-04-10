@@ -282,6 +282,8 @@ impl Loader {
             &(**exports_symbol)
         };
 
+        source_loader.reserve(exports.len());
+
         let exported_funs = exports
             .par_iter()
             .map(|(fun_name, rust_fun)| {

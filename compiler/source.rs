@@ -120,6 +120,7 @@ impl SourceLoader {
         Self::default()
     }
 
+    /// Synchronously read path into a `SourceFile`
     pub fn load_path(&self, path: &path::Path) -> Result<SourceFile, io::Error> {
         let source = fs::read_to_string(path)?;
 
@@ -129,6 +130,7 @@ impl SourceLoader {
         ))
     }
 
+    /// Loads a caller-provided string into a `SourceFile`
     pub fn load_string(&self, filename: OsString, source: impl Into<SourceText>) -> SourceFile {
         use arret_syntax::parser::data_from_str;
 
@@ -154,6 +156,16 @@ impl SourceLoader {
         }
     }
 
+    /// Reserves space for `additional` more files
+    ///
+    /// This can be used to avoid allocating memory under our instance's write lock.
+    pub fn reserve(&self, additional: usize) {
+        self.files.write().unwrap().reserve(additional)
+    }
+
+    /// Returns a `ReportableFiles` instance usable with `codespan-reporting`
+    ///
+    /// This will take our instance's read lock.
     pub fn files(&self) -> ReportableFiles<'_> {
         ReportableFiles {
             files: self.files.read().unwrap(),
