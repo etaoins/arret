@@ -33,6 +33,7 @@ features = [
   "rt-core",
   "rt-threaded",
   "blocking",
+  "fs",
   "macros",
   "process"
 ]

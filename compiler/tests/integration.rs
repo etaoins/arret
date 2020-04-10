@@ -16,7 +16,7 @@ use tempfile::NamedTempFile;
 
 use arret_syntax::span::{FileId, Span};
 
-use arret_compiler::{emit_diagnostics_to_stderr, CompileCtx};
+use arret_compiler::{emit_diagnostics_to_stderr, CompileCtx, SourceText};
 
 #[derive(Clone, PartialEq)]
 struct RunOutput {
@@ -455,7 +455,12 @@ async fn run_single_compile_fail_test(
 }
 
 async fn run_single_test(ccx: &CompileCtx, input_path: &path::Path, test_type: TestType) -> bool {
-    let source_file = ccx.source_loader().load_path(input_path).unwrap();
+    let source = tokio::fs::read_to_string(input_path).await.unwrap();
+
+    let source_file = ccx.source_loader().load_string(
+        input_path.as_os_str().to_owned(),
+        SourceText::Shared(source.into()),
+    );
 
     if test_type == TestType::CompileError {
         run_single_compile_fail_test(ccx, &source_file).await
