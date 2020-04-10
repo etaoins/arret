@@ -90,8 +90,7 @@ impl<'sl> DebugInfoBuilder<'sl> {
             return *metadata;
         }
 
-        let files = self.source_loader.files();
-        let filename = files.name(file_id).unwrap();
+        let filename = self.source_loader.files().name(file_id).unwrap();
 
         let metadata = ffi::CString::new(filename.as_bytes())
             .ok()
