@@ -46,12 +46,17 @@ impl From<&'static str> for SourceText {
 
 pub struct SourceFile {
     file_id: FileId,
+    source: SourceText,
     parsed: Result<Vec<Datum>, arret_syntax::error::Error>,
 }
 
 impl SourceFile {
     pub fn file_id(&self) -> FileId {
         self.file_id
+    }
+
+    pub fn source(&self) -> &'_ str {
+        self.source.as_ref()
     }
 
     pub fn parsed(&self) -> Result<&[Datum], arret_syntax::error::Error> {
@@ -120,6 +125,7 @@ impl SourceLoader {
         SourceFile {
             file_id,
             parsed: data_from_str(Some(file_id), source.as_ref()),
+            source,
         }
     }
 

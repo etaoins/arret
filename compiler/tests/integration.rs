@@ -16,7 +16,7 @@ use tempfile::NamedTempFile;
 
 use arret_syntax::span::{FileId, Span};
 
-use arret_compiler::{emit_diagnostics_to_stderr, CompileCtx, SourceLoader};
+use arret_compiler::{emit_diagnostics_to_stderr, CompileCtx};
 
 #[derive(Clone, PartialEq)]
 struct RunOutput {
@@ -145,11 +145,9 @@ fn severity_name(severity: Severity) -> &'static str {
 }
 
 fn extract_expected_diagnostics(
-    source_loader: &SourceLoader,
     source_file: &arret_compiler::SourceFile,
 ) -> Vec<ExpectedDiagnostic> {
-    let files = source_loader.files();
-    let source = files.source(source_file.file_id()).unwrap();
+    let source = source_file.source();
 
     source
         .match_indices(";~")
@@ -408,7 +406,7 @@ async fn run_single_compile_fail_test(
 ) -> bool {
     let result = result_for_single_test(ccx, source_file, TestType::CompileError).await;
 
-    let mut expected_diags = extract_expected_diagnostics(ccx.source_loader(), source_file);
+    let mut expected_diags = extract_expected_diagnostics(source_file);
     let actual_diags = if let Err(diags) = result {
         diags
     } else {

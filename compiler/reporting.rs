@@ -114,7 +114,7 @@ pub fn new_secondary_label(span: Span, message: impl Into<String>) -> Label<File
 
 /// Emits a series of diagnostics to standard error
 ///
-/// This ensures the diagnostics are emitted as a contiguious group even when multiple threads
+/// This ensures the diagnostics are emitted as a contiguous group even when multiple threads
 /// are emitting concurrently.
 pub fn emit_diagnostics_to_stderr(
     source_loader: &SourceLoader,
