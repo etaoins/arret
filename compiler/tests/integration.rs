@@ -4,7 +4,7 @@
 use std::ffi::OsStr;
 use std::io::Write;
 use std::ops::Range;
-use std::{env, fs, io, path, process};
+use std::{fs, io, path, process};
 
 use codespan::FileId;
 use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
@@ -274,7 +274,6 @@ fn exit_with_run_output_difference(
 }
 
 fn result_for_single_test(
-    target_triple: Option<&str>,
     ccx: &CompileCtx,
     source_file: &arret_compiler::SourceFile,
     test_type: TestType,
@@ -307,8 +306,7 @@ fn result_for_single_test(
 
     let output_path = NamedTempFile::new().unwrap().into_temp_path();
 
-    let gen_program_opts = arret_compiler::GenProgramOptions::new()
-        .with_target_triple(target_triple.as_ref().map(|x| &**x));
+    let gen_program_opts = arret_compiler::GenProgramOptions::new();
 
     arret_compiler::gen_program(
         gen_program_opts,
@@ -384,12 +382,11 @@ fn result_for_single_test(
 }
 
 fn run_single_pass_test(
-    target_triple: Option<&str>,
     ccx: &CompileCtx,
     source_file: &arret_compiler::SourceFile,
     test_type: TestType,
 ) -> bool {
-    let result = result_for_single_test(target_triple, ccx, &source_file, test_type);
+    let result = result_for_single_test(ccx, &source_file, test_type);
 
     if let Err(diagnostics) = result {
         emit_diagnostics_to_stderr(ccx.source_loader(), diagnostics);
@@ -400,11 +397,10 @@ fn run_single_pass_test(
 }
 
 fn run_single_compile_fail_test(
-    target_triple: Option<&str>,
     ccx: &CompileCtx,
     source_file: &arret_compiler::SourceFile,
 ) -> bool {
-    let result = result_for_single_test(target_triple, ccx, source_file, TestType::CompileError);
+    let result = result_for_single_test(ccx, source_file, TestType::CompileError);
 
     let mut expected_diags = extract_expected_diagnostics(ccx.source_loader(), source_file);
     let actual_diags = if let Err(diags) = result {
@@ -454,28 +450,14 @@ fn run_single_compile_fail_test(
     false
 }
 
-fn run_single_test(
-    target_triple: Option<&str>,
-    ccx: &CompileCtx,
-    input_path: &path::Path,
-    test_type: TestType,
-) -> bool {
+fn run_single_test(ccx: &CompileCtx, input_path: &path::Path, test_type: TestType) -> bool {
     let source_file = ccx.source_loader().load_path(input_path).unwrap();
 
     if test_type == TestType::CompileError {
-        run_single_compile_fail_test(target_triple, ccx, &source_file)
+        run_single_compile_fail_test(ccx, &source_file)
     } else {
-        run_single_pass_test(target_triple, ccx, &source_file, test_type)
+        run_single_pass_test(ccx, &source_file, test_type)
     }
-}
-
-fn parse_env_var<F>(name: &str) -> Option<F>
-where
-    F: std::str::FromStr,
-{
-    env::var_os(name)
-        .and_then(|os_str| os_str.into_string().ok())
-        .and_then(|s| s.parse::<F>().ok())
 }
 
 fn entry_is_arret_source(entry: &fs::DirEntry) -> bool {
@@ -534,14 +516,11 @@ where
 
 #[test]
 fn integration() {
-    let target_triple = parse_env_var::<String>("ARRET_TEST_TARGET_TRIPLE");
-
-    let package_paths =
-        arret_compiler::PackagePaths::test_paths(target_triple.as_ref().map(|t| &**t));
+    let package_paths = arret_compiler::PackagePaths::test_paths(None);
     let ccx = arret_compiler::CompileCtx::new(package_paths, true);
 
     use arret_compiler::initialise_llvm;
-    initialise_llvm(target_triple.is_some());
+    initialise_llvm(false);
 
     let compile_error_entries = fs::read_dir("./tests/compile-error")
         .unwrap()
@@ -565,12 +544,7 @@ fn integration() {
         .chain(run_error_entries)
         .par_bridge()
         .filter_map(|(input_path, test_type)| {
-            if !run_single_test(
-                target_triple.as_ref().map(|t| &**t),
-                &ccx,
-                input_path.as_path(),
-                test_type,
-            ) {
+            if !run_single_test(&ccx, input_path.as_path(), test_type) {
                 Some(input_path.to_string_lossy().to_string())
             } else {
                 None
