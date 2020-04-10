@@ -12,8 +12,6 @@ use codespan_reporting::diagnostic::Diagnostic;
 use arret_syntax::datum::Datum;
 use arret_syntax::span::Span;
 
-use rayon::prelude::*;
-
 use crate::hir;
 use crate::hir::exports::Exports;
 use crate::hir::import;
@@ -239,7 +237,7 @@ impl CompileCtx {
         let import_count = imported_module_names.len();
 
         let loaded_module_results: Vec<(ModuleName, CachedModule)> = imported_module_names
-            .into_par_iter()
+            .into_iter()
             .map(|(module_name, span)| {
                 let module = self.get_module_by_name(span, module_name.clone());
                 (module_name, module)

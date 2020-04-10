@@ -4,11 +4,14 @@
 use std::ffi::OsStr;
 use std::io::Write;
 use std::ops::Range;
-use std::{fs, io, path, process};
+use std::sync::Arc;
+use std::{fs, io, path};
+
+use tokio::process;
 
 use codespan::FileId;
 use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
-use rayon::prelude::*;
+use futures::future;
 use tempfile::NamedTempFile;
 
 use arret_syntax::span::Span;
@@ -270,59 +273,65 @@ fn exit_with_run_output_difference(
     let _ = stderr_lock.reset();
     writeln!(stderr_lock, "\"").unwrap();
 
-    process::exit(1);
+    std::process::exit(1);
 }
 
-fn result_for_single_test(
+async fn result_for_single_test(
     ccx: &CompileCtx,
     source_file: &arret_compiler::SourceFile,
     test_type: TestType,
 ) -> Result<(), Vec<Diagnostic<FileId>>> {
-    let arret_compiler::EvaluableProgram {
-        mut ehx,
-        main_var_id,
-        rfi_libraries,
-    } = arret_compiler::program_to_evaluable(ccx, &source_file)?;
+    let (output_path, run_type) = {
+        let arret_compiler::EvaluableProgram {
+            mut ehx,
+            main_var_id,
+            rfi_libraries,
+        } = arret_compiler::program_to_evaluable(ccx, &source_file)?;
 
-    // Try evaluating if we're not supposed to panic
-    if let TestType::Run(RunType::Error(_)) = test_type {
-    } else {
-        ehx.eval_main_fun(main_var_id)?;
-    }
+        // Try evaluating if we're not supposed to panic
+        if let TestType::Run(RunType::Error(_)) = test_type {
+        } else {
+            ehx.eval_main_fun(main_var_id)?;
+        }
 
-    let run_type = if let TestType::Run(run_type) = test_type {
-        run_type
-    } else {
-        return Ok(());
+        let run_type = if let TestType::Run(run_type) = test_type {
+            run_type
+        } else {
+            return Ok(());
+        };
+
+        // And now compiling and running
+        let mir_program = ehx.into_built_program(main_var_id)?;
+
+        if mir_program.is_empty() {
+            // Don't bother building
+            return Ok(());
+        }
+
+        let gen_program_opts = arret_compiler::GenProgramOptions::new();
+        let output_path = NamedTempFile::new().unwrap().into_temp_path();
+
+        tokio::task::block_in_place(|| {
+            arret_compiler::gen_program(
+                gen_program_opts,
+                &rfi_libraries,
+                &mir_program,
+                &output_path,
+                None,
+            );
+        });
+
+        (output_path, run_type)
     };
-
-    // And now compiling and running
-    let mir_program = ehx.into_built_program(main_var_id)?;
-
-    if mir_program.is_empty() {
-        // Don't bother building
-        return Ok(());
-    }
-
-    let output_path = NamedTempFile::new().unwrap().into_temp_path();
-
-    let gen_program_opts = arret_compiler::GenProgramOptions::new();
-
-    arret_compiler::gen_program(
-        gen_program_opts,
-        &rfi_libraries,
-        &mir_program,
-        &output_path,
-        None,
-    );
 
     let mut process = process::Command::new(output_path.as_os_str());
 
     let expected_output = run_type.expected_output();
     let output = process
-        .stdout(process::Stdio::piped())
-        .stderr(process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
         .output()
+        .await
         .unwrap();
 
     match run_type {
@@ -381,12 +390,12 @@ fn result_for_single_test(
     Ok(())
 }
 
-fn run_single_pass_test(
+async fn run_single_pass_test(
     ccx: &CompileCtx,
     source_file: &arret_compiler::SourceFile,
     test_type: TestType,
 ) -> bool {
-    let result = result_for_single_test(ccx, &source_file, test_type);
+    let result = result_for_single_test(ccx, &source_file, test_type).await;
 
     if let Err(diagnostics) = result {
         emit_diagnostics_to_stderr(ccx.source_loader(), diagnostics);
@@ -396,11 +405,11 @@ fn run_single_pass_test(
     }
 }
 
-fn run_single_compile_fail_test(
+async fn run_single_compile_fail_test(
     ccx: &CompileCtx,
     source_file: &arret_compiler::SourceFile,
 ) -> bool {
-    let result = result_for_single_test(ccx, source_file, TestType::CompileError);
+    let result = result_for_single_test(ccx, source_file, TestType::CompileError).await;
 
     let mut expected_diags = extract_expected_diagnostics(ccx.source_loader(), source_file);
     let actual_diags = if let Err(diags) = result {
@@ -450,13 +459,13 @@ fn run_single_compile_fail_test(
     false
 }
 
-fn run_single_test(ccx: &CompileCtx, input_path: &path::Path, test_type: TestType) -> bool {
+async fn run_single_test(ccx: &CompileCtx, input_path: &path::Path, test_type: TestType) -> bool {
     let source_file = ccx.source_loader().load_path(input_path).unwrap();
 
     if test_type == TestType::CompileError {
-        run_single_compile_fail_test(ccx, &source_file)
+        run_single_compile_fail_test(ccx, &source_file).await
     } else {
-        run_single_pass_test(ccx, &source_file, test_type)
+        run_single_pass_test(ccx, &source_file, test_type).await
     }
 }
 
@@ -514,10 +523,10 @@ where
     Some((entry.path(), TestType::Run(run_type(expected_output))))
 }
 
-#[test]
-fn integration() {
+#[tokio::test(threaded_scheduler)]
+async fn integration() {
     let package_paths = arret_compiler::PackagePaths::test_paths(None);
-    let ccx = arret_compiler::CompileCtx::new(package_paths, true);
+    let ccx = Arc::new(arret_compiler::CompileCtx::new(package_paths, true));
 
     use arret_compiler::initialise_llvm;
     initialise_llvm(false);
@@ -538,16 +547,32 @@ fn integration() {
         .unwrap()
         .filter_map(|entry| entry_to_run_test_tuple(entry, RunType::Error));
 
-    let failed_tests = compile_error_entries
+    let test_tasks = compile_error_entries
         .chain(optimise_entries)
         .chain(run_pass_entries)
         .chain(run_error_entries)
-        .par_bridge()
-        .filter_map(|(input_path, test_type)| {
-            if !run_single_test(&ccx, input_path.as_path(), test_type) {
-                Some(input_path.to_string_lossy().to_string())
-            } else {
-                None
+        .map(|(input_path, test_type)| {
+            let ccx = Arc::clone(&ccx);
+
+            tokio::spawn(async move {
+                let test_successful = run_single_test(&ccx, input_path.as_path(), test_type).await;
+
+                if !test_successful {
+                    Some(input_path.to_string_lossy().to_string())
+                } else {
+                    None
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let failed_tests = future::join_all(test_tasks)
+        .await
+        .into_iter()
+        .filter_map(|task_result| match task_result {
+            Ok(output) => output,
+            Err(err) => {
+                panic!(err.into_panic());
             }
         })
         .collect::<Vec<String>>();
@@ -559,6 +584,6 @@ fn integration() {
             failed_tests.join(", ")
         );
 
-        process::exit(1);
+        std::process::exit(1);
     }
 }

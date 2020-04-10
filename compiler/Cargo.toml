@@ -22,3 +22,18 @@ rayon = "1"
 
 [dev-dependencies]
 tempfile = "3"
+
+[dev-dependencies.futures]
+version = "0.3"
+default-features = false
+features = ["std"]
+
+[dev-dependencies.tokio]
+version = "0.2"
+features = [
+  "rt-core",
+  "rt-threaded",
+  "blocking",
+  "macros",
+  "process"
+]
