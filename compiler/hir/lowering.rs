@@ -9,10 +9,8 @@ use arret_syntax::datum::Datum;
 use arret_syntax::span::{FileId, Span};
 
 use crate::context;
-use crate::rfi;
 use crate::ty;
 use crate::ty::purity;
-use crate::ty::Ty;
 use crate::CompileCtx;
 
 use crate::context::ModuleId;
@@ -44,16 +42,6 @@ pub struct LoweredModule {
 
     pub exports: Exports,
     pub main_var_id: Option<VarId>,
-}
-
-impl LoweredModule {
-    pub fn from_primitives(exports: Exports) -> Self {
-        Self {
-            defs: vec![],
-            exports,
-            main_var_id: None,
-        }
-    }
 }
 
 struct DeferredDef {
@@ -708,48 +696,6 @@ fn lower_module_def(
     Err(vec![Error::new(span, ErrorKind::NonDefInsideModule)])
 }
 
-pub fn lower_rfi_library(
-    module_id: ModuleId,
-    span: Span,
-    rfi_library: &rfi::Library,
-) -> LoweredModule {
-    use arret_syntax::datum::DataStr;
-
-    let exported_funs = rfi_library.exported_funs();
-
-    let via = VarIdAlloc::new(module_id);
-    let mut exports = HashMap::with_capacity(exported_funs.len());
-    let mut defs = Vec::with_capacity(exported_funs.len());
-
-    for (fun_name, rust_fun) in exported_funs.iter() {
-        let var_id = via.alloc();
-        let fun_name_data_str: DataStr = (*fun_name).into();
-
-        let def = Def {
-            span,
-            macro_invocation_span: None,
-            destruc: destruc::Destruc::Scalar(
-                span,
-                destruc::Scalar::new(
-                    Some(var_id),
-                    fun_name_data_str.clone(),
-                    Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into(),
-                ),
-            ),
-            value_expr: ExprKind::RustFun(rust_fun.clone()).into(),
-        };
-
-        defs.push(def);
-        exports.insert(fun_name_data_str, Binding::Var(var_id));
-    }
-
-    LoweredModule {
-        defs,
-        exports,
-        main_var_id: None,
-    }
-}
-
 pub fn insert_import_bindings(
     imported_exports: &HashMap<ModuleName, Arc<Exports>>,
     scope: &mut Scope<'_>,
@@ -1051,8 +997,11 @@ pub fn expr_for_str(data_str: &str) -> Expr<Lowered> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ty::purity::Purity;
+
     use arret_syntax::span::t2s;
+
+    use crate::ty::purity::Purity;
+    use crate::ty::Ty;
 
     #[test]
     fn self_quoting_bool() {

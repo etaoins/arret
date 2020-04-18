@@ -80,50 +80,75 @@ fn transitive_deps(imports: &HashSet<Arc<Module>>) -> HashSet<Arc<Module>> {
     all_deps
 }
 
-/// Runs type inference on a HIR lowered module
-fn infer_lowered_module(
-    module_id: ModuleId,
-    lowered_module: LoweredModule,
-    imports: HashSet<Arc<Module>>,
-    rfi_library: Option<rfi::Library>,
-) -> UncachedModule {
-    let LoweredModule {
-        defs: lowered_defs,
-        exports,
-        main_var_id,
-    } = lowered_module;
-
-    let imported_inferred_vars = transitive_deps(&imports)
-        .into_iter()
-        .map(|module| (module.module_id, module.inferred_locals.clone()))
-        .collect();
-
-    let inferred_module = infer::infer_module(&imported_inferred_vars, module_id, lowered_defs)
-        .map_err(errors_to_diagnostics)?;
-
-    let infer::InferredModule {
-        defs: inferred_defs,
-        inferred_locals,
-    } = inferred_module;
-
+fn prims_to_module(exports: Exports) -> UncachedModule {
     Ok(Module {
-        module_id,
-        defs: inferred_defs,
-        inferred_locals: Arc::new(inferred_locals),
+        module_id: ModuleId::alloc(),
+
+        imports: HashSet::new(),
+        defs: vec![],
+        inferred_locals: Arc::new(HashMap::new()),
         exports: Arc::new(exports),
-        imports,
-        main_var_id,
-        rfi_library: rfi_library.map(Arc::new),
+        main_var_id: None,
+
+        rfi_library: None,
     })
 }
 
 fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> UncachedModule {
-    use crate::hir::lowering::lower_rfi_library;
+    use crate::hir::var_id::VarIdAlloc;
+    use crate::ty::Ty;
+
+    use arret_syntax::datum::DataStr;
+
+    let exported_funs = rfi_library.exported_funs();
 
     let module_id = ModuleId::alloc();
-    let lowered_module = lower_rfi_library(module_id, span, &rfi_library);
+    let via = VarIdAlloc::new(module_id);
 
-    infer_lowered_module(module_id, lowered_module, HashSet::new(), Some(rfi_library))
+    let mut exports = HashMap::with_capacity(exported_funs.len());
+    let mut defs = Vec::with_capacity(exported_funs.len());
+    let mut inferred_locals = HashMap::with_capacity(exported_funs.len());
+
+    for (fun_name, rust_fun) in exported_funs.iter() {
+        let var_id = via.alloc();
+        let arret_type: ty::Ref<ty::Poly> =
+            Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into();
+
+        let fun_name_data_str: DataStr = (*fun_name).into();
+
+        let def = hir::Def::<hir::Inferred> {
+            span,
+            macro_invocation_span: None,
+            destruc: hir::destruc::Destruc::Scalar(
+                span,
+                hir::destruc::Scalar::new(
+                    Some(var_id),
+                    fun_name_data_str.clone(),
+                    Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into(),
+                ),
+            ),
+            value_expr: hir::Expr {
+                result_ty: arret_type.clone(),
+                kind: hir::ExprKind::RustFun(rust_fun.clone()),
+            },
+        };
+
+        defs.push(def);
+        inferred_locals.insert(var_id.local_id(), arret_type);
+        exports.insert(fun_name_data_str, hir::scope::Binding::Var(var_id));
+    }
+
+    Ok(Module {
+        module_id,
+
+        imports: HashSet::new(),
+        defs,
+        inferred_locals: Arc::new(inferred_locals),
+        exports: Arc::new(exports),
+
+        main_var_id: None,
+        rfi_library: Some(Arc::new(rfi_library)),
+    })
 }
 
 /// Shared context for compilation
@@ -151,12 +176,7 @@ impl CompileCtx {
             .chain(iter::once(("types", exports::tys_exports())))
         {
             // These modules are always loaded
-            let prims_module = infer_lowered_module(
-                ModuleId::alloc(),
-                LoweredModule::from_primitives(exports),
-                HashSet::new(),
-                None,
-            );
+            let prims_module = prims_to_module(exports);
 
             modules_by_name.insert(
                 ModuleName::new(
@@ -277,10 +297,38 @@ impl CompileCtx {
 
         let module_id = ModuleId::alloc();
 
-        hir::lowering::lower_data(module_id, &imported_exports, data)
-            .map_err(errors_to_diagnostics)
-            .and_then(|lowered_module| {
-                infer_lowered_module(module_id, lowered_module, imports, None)
-            })
+        let lowered_module = hir::lowering::lower_data(module_id, &imported_exports, data)
+            .map_err(errors_to_diagnostics)?;
+
+        let LoweredModule {
+            defs: lowered_defs,
+            exports,
+            main_var_id,
+        } = lowered_module;
+
+        let imported_inferred_vars = transitive_deps(&imports)
+            .into_iter()
+            .map(|module| (module.module_id, module.inferred_locals.clone()))
+            .collect();
+
+        let inferred_module = infer::infer_module(&imported_inferred_vars, module_id, lowered_defs)
+            .map_err(errors_to_diagnostics)?;
+
+        let infer::InferredModule {
+            defs: inferred_defs,
+            inferred_locals,
+        } = inferred_module;
+
+        Ok(Module {
+            module_id,
+
+            imports,
+            defs: inferred_defs,
+            inferred_locals: Arc::new(inferred_locals),
+            exports: Arc::new(exports),
+            main_var_id,
+
+            rfi_library: None,
+        })
     }
 }
