@@ -103,14 +103,14 @@ fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> UncachedModul
     let exported_funs = rfi_library.exported_funs();
 
     let module_id = ModuleId::alloc();
-    let via = VarIdAlloc::new(module_id);
+    let mut via = VarIdAlloc::new(module_id);
 
     let mut exports = HashMap::with_capacity(exported_funs.len());
     let mut defs = Vec::with_capacity(exported_funs.len());
     let mut inferred_locals = HashMap::with_capacity(exported_funs.len());
 
     for (fun_name, rust_fun) in exported_funs.iter() {
-        let var_id = via.alloc();
+        let var_id = via.alloc_mut();
         let arret_type: ty::Ref<ty::Poly> =
             Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into();
 

@@ -29,14 +29,14 @@ fn wrap_poly_expr_in_arret_fun(
     ret_ty: ty::Ref<ty::Poly>,
     wrapped_expr: hir::Expr<hir::Inferred>,
 ) -> value::ArretFun {
-    let via = VarIdAlloc::new(ModuleId::alloc());
+    let mut via = VarIdAlloc::new(ModuleId::alloc());
 
     let pvars: purity::PVars = ty_args.pvar_purities().keys().cloned().collect();
     let tvars: ty::TVars = ty_args.tvar_types().keys().cloned().collect();
 
     let expr_params_with_var_id: Vec<(&ExprParam, hir::VarId)> = expr_params
         .iter()
-        .map(|expr_param| (expr_param, via.alloc()))
+        .map(|expr_param| (expr_param, via.alloc_mut()))
         .collect();
 
     let params = hir::destruc::List::new(
