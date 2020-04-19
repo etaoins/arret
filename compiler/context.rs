@@ -124,7 +124,7 @@ fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> UncachedModul
                 hir::destruc::Scalar::new(
                     Some(var_id),
                     fun_name_data_str.clone(),
-                    Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into(),
+                    arret_type.clone(),
                 ),
             ),
             value_expr: hir::Expr {
