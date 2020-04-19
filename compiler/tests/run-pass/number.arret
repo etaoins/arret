@@ -58,7 +58,6 @@
   (assert-eq! 0 (int 0))
   (assert-eq! -1 (int -1))
 
-  ; TODO: Test error cases
   (assert-eq! 1 (int 1.0))
   (assert-eq! 0 (int (black-box! 0.0)))
   (assert-eq! -1 (int -1.0)))

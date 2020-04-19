@@ -1,0 +1,6 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn main! () ->! ()
+  (black-box! (int (black-box! ##-Inf)))
+  ())
