@@ -117,3 +117,12 @@ pub fn stdlib_take(
     let usize_count = if count < 0 { 0 } else { count as usize };
     boxed::List::new(task, input.iter().take(usize_count))
 }
+
+#[arret_rfi_derive::rust_fun("(All #{T} (List & T) -> (List & T))")]
+pub fn stdlib_reverse(
+    task: &mut Task,
+    input: Gc<boxed::List<boxed::Any>>,
+) -> Gc<boxed::List<boxed::Any>> {
+    let output_vec: Vec<Gc<boxed::Any>> = input.iter().collect();
+    boxed::List::new(task, output_vec.into_iter().rev())
+}

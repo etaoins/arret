@@ -106,6 +106,10 @@
   (assert-eq! '() (drop-last 3 '(1 2 3)))
   (assert-eq! '() (drop-last 4 '(1 2 3))))
 
+(defn test-reverse! () ->! ()
+  (assert-eq! '() (reverse '()))
+  (assert-eq! '(3 2 1) (reverse '(1 2 3))))
+
 (defn main! () ->! ()
   (test-length!)
   (test-first-second-rest!)
@@ -119,4 +123,5 @@
   (test-threading!)
   (test-take!)
   (test-drop!)
-  (test-drop-last!))
+  (test-drop-last!)
+  (test-reverse!))

@@ -8,8 +8,8 @@
 
 (import [stdlib rust])
 (export length panic panic! print! println! print-str write! writeln! write-str read-str exit! cons
-        map filter some? every? fold concat take int float < <= == > >= + * - / rem quot sqrt vector
-        vector-length vector->list vector-ref)
+        map filter some? every? fold concat take reverse int float < <= == > >= + * - / rem quot
+        sqrt vector vector-length vector->list vector-ref)
 
 (export defn)
 (defmacro defn (macro-rules

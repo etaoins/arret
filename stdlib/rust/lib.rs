@@ -84,6 +84,7 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "cons" => stdlib_cons,
     "concat" => stdlib_concat,
     "take" => stdlib_take,
+    "reverse" => stdlib_reverse,
 
     "float" => stdlib_float,
     "int" => stdlib_int,
