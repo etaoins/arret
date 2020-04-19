@@ -284,17 +284,22 @@ fn keep_exprs_for_side_effects(
     side_effect_exprs: impl IntoIterator<Item = hir::Expr<hir::Inferred>>,
     value_expr: hir::Expr<hir::Inferred>,
 ) -> hir::Expr<hir::Inferred> {
-    use std::iter;
+    let mut needed_exprs: Vec<_> = side_effect_exprs
+        .into_iter()
+        .filter(expr_can_side_effect)
+        .collect();
+
+    if needed_exprs.is_empty() {
+        // We don't need any of the `side_effect_exprs`
+        return value_expr;
+    }
+
+    let result_ty = value_expr.result_ty.clone();
+    needed_exprs.push(value_expr);
 
     hir::Expr {
-        result_ty: value_expr.result_ty.clone(),
-        kind: hir::ExprKind::Do(
-            side_effect_exprs
-                .into_iter()
-                .filter(expr_can_side_effect)
-                .chain(iter::once(value_expr))
-                .collect(),
-        ),
+        result_ty,
+        kind: hir::ExprKind::Do(needed_exprs),
     }
 }
 
