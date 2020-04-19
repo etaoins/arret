@@ -269,3 +269,36 @@ pub(crate) fn gen_checked_int_div(
         )
     }
 }
+
+pub(crate) fn gen_float_sqrt(
+    tcx: &mut TargetCtx,
+    mcx: &mut ModCtx<'_, '_, '_>,
+    fcx: &mut FunCtx,
+    llvm_radicand: LLVMValueRef,
+) -> LLVMValueRef {
+    unsafe {
+        let llvm_double = LLVMDoubleTypeInContext(tcx.llx);
+
+        let llvm_param_types = &mut [llvm_double];
+
+        let double_sqrt_llvm_type = LLVMFunctionType(
+            llvm_double,
+            llvm_param_types.as_mut_ptr(),
+            llvm_param_types.len() as u32,
+            0,
+        );
+
+        let double_sqrt_fun =
+            mcx.get_function_or_insert(double_sqrt_llvm_type, b"llvm.sqrt.f64\0", |_| {});
+
+        let llvm_sqrt_args = &mut [llvm_radicand];
+
+        LLVMBuildCall(
+            fcx.builder,
+            double_sqrt_fun,
+            llvm_sqrt_args.as_mut_ptr(),
+            llvm_sqrt_args.len() as u32,
+            b"sqrt\0".as_ptr() as *const _,
+        )
+    }
+}

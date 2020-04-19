@@ -67,10 +67,30 @@
   (assert-eq! -3 (quot (black-box! -10) (black-box! 3)))
   (assert-eq! -1 (rem -10 3)))
 
+(defn test-sqrt! () ->! ()
+  (assert-eq! 0.0 (sqrt 0.0))
+  (assert-eq! 0.0 (sqrt (black-box! 0.0)))
+
+  (assert-eq! 1.0 (sqrt 1.0))
+  (assert-eq! 1.0 (sqrt (black-box! 1.0)))
+
+  (assert-eq! 2.0 (sqrt 4.0))
+  (assert-eq! 4.0 (black-box! (sqrt 16.0)))
+
+  (assert-eq! true (nan? (sqrt ##-Inf)))
+  (assert-eq! true (nan? (sqrt (black-box! ##-Inf))))
+
+  (assert-eq! true (nan? (sqrt -1.0)))
+  (assert-eq! true (nan? (sqrt (black-box! -100.0))))
+
+  (assert-eq! ##Inf (sqrt ##Inf))
+  (assert-eq! ##Inf (sqrt (black-box! ##Inf))))
+
 (defn main! () ->! ()
   (test-add!)
   (test-mul!)
   (test-sub!)
   (test-div!)
   (test-inc-dec!)
-  (test-rem-mod!))
+  (test-rem-mod!)
+  (test-sqrt!))

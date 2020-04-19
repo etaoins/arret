@@ -270,6 +270,7 @@ pub enum OpKind {
     Int64CheckedDiv(RegId, BinaryOp),
     Int64Rem(RegId, BinaryOp),
     Int64CheckedRem(RegId, BinaryOp),
+    FloatSqrt(RegId, RegId),
 
     ConstBoxedRecord(RegId, BoxRecordOp),
     AllocBoxedRecord(RegId, BoxRecordOp),
@@ -356,6 +357,7 @@ impl OpKind {
             | Int64CheckedDiv(reg_id, _)
             | Int64Rem(reg_id, _)
             | Int64CheckedRem(reg_id, _)
+            | FloatSqrt(reg_id, _)
             | IntCompare(reg_id, _)
             | BoolEqual(reg_id, _)
             | CharEqual(reg_id, _)
@@ -463,6 +465,7 @@ impl OpKind {
                 },
             )
             | Int64ToFloat(_, reg_id)
+            | FloatSqrt(_, reg_id)
             | MakeCallback(
                 _,
                 MakeCallbackOp {
@@ -607,6 +610,7 @@ impl OpKind {
             | Int64CheckedDiv(_, _)
             | Int64Rem(_, _)
             | Int64CheckedRem(_, _)
+            | FloatSqrt(_, _)
             | IntCompare(_, _)
             | BoolEqual(_, _)
             | CharEqual(_, _)

@@ -633,6 +633,9 @@ fn print_branch(
                     rhs_reg.get(),
                 )?;
             }
+            ops::OpKind::FloatSqrt(reg, radicand_reg) => {
+                writeln!(w, "%{} = sqrt(%{}: f64);", reg.get(), radicand_reg.get(),)?;
+            }
             ops::OpKind::TypeTagEqual(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
                 writeln!(
                     w,

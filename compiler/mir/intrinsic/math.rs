@@ -376,3 +376,26 @@ pub fn rem(
         OpKind::Int64Rem,
     )
 }
+
+pub fn sqrt(
+    ehx: &mut EvalHirCtx,
+    b: &mut Builder,
+    span: Span,
+    arg_list_value: &Value,
+) -> Result<Option<Value>> {
+    let radicand_value = arg_list_value.unsized_list_iter().next_unchecked(b, span);
+
+    let radicand_reg = value_to_reg(
+        ehx,
+        b,
+        span,
+        &radicand_value,
+        &abitype::ABIType::Float.into(),
+    );
+
+    let result_reg = b.push_reg(span, OpKind::FloatSqrt, radicand_reg.into());
+
+    Ok(Some(
+        value::RegValue::new(result_reg, abitype::ABIType::Float).into(),
+    ))
+}

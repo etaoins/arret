@@ -64,4 +64,7 @@
   (assert-fn-doesnt-contain-op! :call (fn ([left Int] [right Int])
     (rem left right)))
 
+  (assert-fn-doesnt-contain-op! :call (fn ([radicand Float])
+    (sqrt radicand)))
+
   ())

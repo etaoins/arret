@@ -99,6 +99,7 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "/" => stdlib_div,
     "quot" => stdlib_quot,
     "rem" => stdlib_rem,
+    "sqrt" => stdlib_sqrt,
 
     "black-box" => stdlib_black_box,
     "black-box!" => stdlib_black_box_impure,

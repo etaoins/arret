@@ -927,6 +927,12 @@ fn gen_op(
 
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::FloatSqrt(reg, radicand) => {
+                let llvm_radicand = fcx.regs[radicand];
+
+                let llvm_value = math_gen::gen_float_sqrt(tcx, mcx, fcx, llvm_radicand);
+                fcx.regs.insert(*reg, llvm_value);
+            }
             OpKind::MakeCallback(
                 reg,
                 MakeCallbackOp {

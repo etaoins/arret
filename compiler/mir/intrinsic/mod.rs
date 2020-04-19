@@ -68,6 +68,7 @@ define_build_intrinsics! {
     "/" => math::div,
     "quot" => math::quot,
     "rem" => math::rem,
+    "sqrt" => math::sqrt,
 
     "int" => number::int,
     "float" => number::float,

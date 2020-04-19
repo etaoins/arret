@@ -173,3 +173,8 @@ pub fn stdlib_rem(task: &mut Task, numerator: i64, denominator: i64) -> i64 {
         }
     }
 }
+
+#[arret_rfi_derive::rust_fun("(Float -> Float)")]
+pub fn stdlib_sqrt(radicand: f64) -> f64 {
+    radicand.sqrt()
+}
