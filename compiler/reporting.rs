@@ -1,5 +1,3 @@
-use std::iter;
-
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 
 use arret_syntax::span::{FileId, Span};
@@ -36,20 +34,14 @@ impl LocTrace {
         self.macro_invocation
     }
 
-    pub fn label_macro_invocation(&self, diagnostic: Diagnostic<FileId>) -> Diagnostic<FileId> {
+    pub fn label_macro_invocation(&self, mut diagnostic: Diagnostic<FileId>) -> Diagnostic<FileId> {
         match self.macro_invocation {
             Some(macro_invocation_span) if !macro_invocation_span.contains(self.origin) => {
                 let secondary_label =
                     new_secondary_label(macro_invocation_span, "in this macro invocation");
 
-                let new_labels = diagnostic
-                    .labels
-                    .iter()
-                    .cloned()
-                    .chain(iter::once(secondary_label))
-                    .collect();
-
-                diagnostic.with_labels(new_labels)
+                diagnostic.labels.push(secondary_label);
+                diagnostic
             }
             _ => diagnostic,
         }
