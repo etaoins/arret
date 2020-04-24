@@ -1,4 +1,4 @@
-FROM ubuntu:19.10 AS build-env
+FROM ubuntu:20.04 AS build-env
 
 RUN \
   apt-get update && \
@@ -33,7 +33,7 @@ RUN cargo build --release
 
 ###
 
-FROM ubuntu:19.10 AS repl
+FROM ubuntu:20.04 AS repl
 
 ARG vcs_ref
 
