@@ -1,0 +1,48 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn assert-eq-hash! ([left Any] [right Any]) ->! ()
+  (assert-eq! (hash left) (hash right))
+  (assert-eq! (hash (black-box! left)) (hash right))
+  (assert-eq! (hash (black-box! left)) (hash (black-box! right))))
+
+(defn main! () ->! ()
+  ; This would be catastrophic for performance
+  (assert-ne! (hash true) (hash false))
+  (assert-ne! (hash false) (hash ()))
+
+  (assert-eq-hash! true true)
+  (assert-eq-hash! false false)
+
+  (assert-eq-hash! -1 -1)
+  (assert-eq-hash! 0 0)
+  (assert-eq-hash! 8 8)
+
+  (assert-eq-hash! 12.0 12.0)
+  (assert-eq-hash! ##Inf ##Inf)
+  (assert-eq-hash! ##-Inf ##-Inf)
+
+  ; Zero and negative zero are `=`
+  (assert-eq-hash! 0.0 -0.0)
+
+  (assert-eq-hash! 'small 'small)
+  (assert-eq-hash! 'very-long-out-of-line-symbol 'very-long-out-of-line-symbol)
+
+  (assert-eq-hash! "Small" "Small")
+  (assert-eq-hash! "Very long out-of-line string" "Very long out-of-line string")
+
+  (assert-eq-hash! () ())
+  (assert-eq-hash! '(1 2 3) '(1 2 3))
+
+  (assert-eq-hash! [] [])
+  (assert-eq-hash! [one two three] [one two three])
+
+  (assert-eq-hash! \newline \newline)
+  (assert-eq-hash! \tab \tab)
+
+  (letrecord [Record (record [field Int])]
+    (let [twelve-record (record 12)]
+      (assert-eq-hash! twelve-record twelve-record)))
+
+  ; Functions & NaN don't have a defined hash equality - don't test them
+)

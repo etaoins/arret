@@ -26,6 +26,9 @@ use crate::write::*;
 pub mod read;
 use crate::read::*;
 
+pub mod hash;
+use crate::hash::*;
+
 use arret_runtime_syntax::writer::pretty_print_boxed;
 
 use arret_runtime::binding::*;
@@ -110,5 +113,7 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "vector" => stdlib_vector,
     "vector-length" => stdlib_vector_length,
     "vector->list" => stdlib_vector_to_list,
-    "vector-ref" => stdlib_vector_ref
+    "vector-ref" => stdlib_vector_ref,
+
+    "hash" => stdlib_hash
 });
