@@ -288,9 +288,9 @@ impl<T: Boxed> ExternalSet<T> {
         };
 
         // Search forwards through hash collisions, including the arbitrary index
-        let mut forewards_index = arbitrary_index;
+        let mut forwards_index = arbitrary_index;
         loop {
-            let (hackstack_hash, haystack_value) = self.sorted_hashed_values[forewards_index];
+            let (hackstack_hash, haystack_value) = self.sorted_hashed_values[forwards_index];
 
             if hackstack_hash != needle_hash {
                 break;
@@ -299,8 +299,8 @@ impl<T: Boxed> ExternalSet<T> {
                 return true;
             }
 
-            forewards_index += 1;
-            if forewards_index >= self.sorted_hashed_values.len() {
+            forwards_index += 1;
+            if forwards_index >= self.sorted_hashed_values.len() {
                 break;
             }
         }
