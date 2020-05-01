@@ -14,13 +14,19 @@
 (defn test-set-contains! () ->! ()
   (assert-eq! false (set-contains? #{1 2 3} 0))
   (assert-eq! true ((black-box! set-contains?) #{1 2 3} 1))
-  (assert-eq! true (set-contains? (black-box! #{1 2 3}) 2)))
+  (assert-eq! true (set-contains? (black-box! #{1 2 3}) 2))
+
+  ; ##NaN never compares equal
+  (assert-eq! false (set-contains? (set ##NaN ##NaN ##NaN) ##NaN)))
 
 (defn test-set-length! () ->! ()
   (assert-eq! 0 (set-length #{}))
   (assert-eq! 1 ((black-box! set-length) #{1}))
   (assert-eq! 2 (set-length (black-box! #{1 2})))
-  (assert-eq! 3 ((black-box! set-length) (black-box! #{1 2 3}))))
+  (assert-eq! 3 ((black-box! set-length) (black-box! #{1 2 3})))
+
+  ; Functions never compare equal
+  (assert-eq! 3 (set-length (set zero? zero? zero?))))
 
 (defn test-set->list! () ->! ()
   (assert-eq! '() (set->list #{}))
