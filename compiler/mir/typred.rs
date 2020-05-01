@@ -36,11 +36,9 @@ fn type_tags_for_test_ty(test_ty: &ty::pred::TestTy) -> TypeTagSet {
             .collect(),
         TestTy::List => [boxed::TypeTag::Pair, boxed::TypeTag::Nil].iter().collect(),
         TestTy::Vector => boxed::TypeTag::Vector.into(),
+        TestTy::Set => boxed::TypeTag::Set.into(),
         TestTy::Map => {
             todo!("maps");
-        }
-        TestTy::Set => {
-            todo!("sets");
         }
         TestTy::TopRecord => boxed::TypeTag::Record.into(),
         TestTy::RecordClass(_) => {
