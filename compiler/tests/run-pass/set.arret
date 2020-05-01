@@ -1,0 +1,35 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn test-set! () ->! ()
+  (assert-eq! #{} (set))
+  (assert-eq! #{1} (set 1))
+
+  (assert-eq! #{1 2} ((black-box! set) 1 2))
+  (assert-eq! #{1 2} ((black-box! set) 1 1 2 2))
+
+  (assert-eq! #{1 2 3} (set 1 2 (black-box! 3)))
+  (assert-eq! #{1 2 3} (set (black-box! 3) 2 1)))
+
+(defn test-set-contains! () ->! ()
+  (assert-eq! false (set-contains? #{1 2 3} 0))
+  (assert-eq! true ((black-box! set-contains?) #{1 2 3} 1))
+  (assert-eq! true (set-contains? (black-box! #{1 2 3}) 2)))
+
+(defn test-set-length! () ->! ()
+  (assert-eq! 0 (set-length #{}))
+  (assert-eq! 1 ((black-box! set-length) #{1}))
+  (assert-eq! 2 (set-length (black-box! #{1 2})))
+  (assert-eq! 3 ((black-box! set-length) (black-box! #{1 2 3}))))
+
+(defn test-set->list! () ->! ()
+  (assert-eq! '() (set->list #{}))
+  (assert-eq! '(1) (set->list #{1}))
+  (assert-eq! #{1 2} (set & ((black-box! set->list) #{1 2})))
+  (assert-eq! #{1 2 3} ((black-box! set) & (set->list #{1 2 3}))))
+
+(defn main! () ->! ()
+  (test-set!)
+  (test-set-contains!)
+  (test-set-length!)
+  (test-set->list!))
