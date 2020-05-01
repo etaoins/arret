@@ -126,6 +126,7 @@ impl<'a> From<&'a abitype::BoxedABIType> for TypeTagSet {
             BoxedABIType::List(_) => [TypeTag::Pair, TypeTag::Nil].iter().collect(),
             BoxedABIType::Pair(_) => TypeTag::Pair.into(),
             BoxedABIType::Vector(_) => TypeTag::Vector.into(),
+            BoxedABIType::Set(_) => TypeTag::Set.into(),
             BoxedABIType::Union(_, type_tags) => type_tags.iter().collect(),
         }
     }

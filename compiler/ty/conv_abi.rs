@@ -21,6 +21,7 @@ fn type_tag_to_ty<M: ty::PM>(type_tag: boxed::TypeTag) -> Ty<M> {
         TypeTag::Pair => ty::List::new(Box::new([Ty::Any.into()]), Ty::Any.into()).into(),
         TypeTag::FunThunk => ty::TopFun::new(Purity::Impure.into(), Ty::Any.into()).into(),
         TypeTag::Record => Ty::TopRecord,
+        TypeTag::Set => Ty::Set(Box::new(Ty::Any.into())),
     }
 }
 
@@ -66,6 +67,7 @@ impl ConvertableABIType for abitype::BoxedABIType {
         match self {
             BoxedABIType::Any => Ty::Any.into(),
             BoxedABIType::Vector(member) => Ty::Vectorof(Box::new(member.to_ty_ref())).into(),
+            BoxedABIType::Set(member) => Ty::Set(Box::new(member.to_ty_ref())).into(),
             BoxedABIType::List(member) => ty::List::new_uniform(member.to_ty_ref()).into(),
             BoxedABIType::Pair(member) => {
                 let member_ty_ref: ty::Ref<M> = member.to_ty_ref();
@@ -88,6 +90,7 @@ impl ConvertableABIType for abitype::BoxedABIType {
             BoxedABIType::Vector(member) => format!("boxed::Vector<{}>", member.to_rust_str()),
             BoxedABIType::List(member) => format!("boxed::List<{}>", member.to_rust_str()),
             BoxedABIType::Pair(member) => format!("boxed::Pair<{}>", member.to_rust_str()),
+            BoxedABIType::Set(member) => format!("boxed::Set<{}>", member.to_rust_str()),
             BoxedABIType::UniqueTagged(type_tag) => format!("boxed::{}", type_tag.to_str()),
             BoxedABIType::Union(name, _) => format!("boxed::{}", name),
         }

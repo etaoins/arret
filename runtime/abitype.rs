@@ -16,6 +16,7 @@ pub enum BoxedABIType {
     Vector(&'static BoxedABIType),
     List(&'static BoxedABIType),
     Pair(&'static BoxedABIType),
+    Set(&'static BoxedABIType),
 }
 
 pub const TOP_LIST_BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::List(&BoxedABIType::Any);

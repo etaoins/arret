@@ -41,6 +41,7 @@ impl BoxLayout {
             BoxLayout::ConstTagged(TypeTag::Int) => b"boxed_int\0",
             BoxLayout::ConstTagged(TypeTag::Float) => b"boxed_float\0",
             BoxLayout::ConstTagged(TypeTag::Char) => b"boxed_char\0",
+            BoxLayout::ConstTagged(TypeTag::Set) => b"boxed_set\0",
             BoxLayout::ConstTagged(TypeTag::Str) => b"boxed_str\0",
             BoxLayout::ConstTagged(TypeTag::Sym) => b"boxed_sym\0",
             BoxLayout::ConstTagged(TypeTag::FunThunk) => b"boxed_fun_thunk\0",
@@ -100,7 +101,7 @@ impl BoxLayout {
                 BoxLayout::List => {
                     members.push(LLVMInt64TypeInContext(tcx.llx));
                 }
-                BoxLayout::ConstTagged(TypeTag::Vector) => {
+                BoxLayout::ConstTagged(TypeTag::Vector) | BoxLayout::ConstTagged(TypeTag::Set) => {
                     let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
                     let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
 
@@ -134,6 +135,7 @@ impl From<&BoxedABIType> for BoxLayout {
 
             BoxedABIType::UniqueTagged(type_tag) => BoxLayout::ConstTagged(*type_tag),
             BoxedABIType::Pair(_) => BoxLayout::ConstTagged(TypeTag::Pair),
+            BoxedABIType::Set(_) => BoxLayout::ConstTagged(TypeTag::Set),
             BoxedABIType::Vector(_) => BoxLayout::ConstTagged(TypeTag::Vector),
         }
     }
