@@ -188,6 +188,30 @@ fn const_to_reg(
                 to_abi_type.clone(),
             )
         }
+        (boxed::AnySubtype::Set(set_ref), abitype::ABIType::Boxed(to_abi_type)) => {
+            let element_regs = set_ref
+                .iter()
+                .map(|element_ref| {
+                    const_to_reg(
+                        ehx,
+                        b,
+                        span,
+                        *element_ref,
+                        &abitype::BoxedABIType::Any.into(),
+                    )
+                    .into()
+                })
+                .collect();
+
+            let from_reg = b.push_reg(span, OpKind::ConstBoxedSet, element_regs);
+
+            b.cast_boxed_cond(
+                span,
+                &boxed::TypeTag::Set.into(),
+                from_reg,
+                to_abi_type.clone(),
+            )
+        }
         (subtype, abi_type) => unimplemented!(
             "Unimplemented const {:?} to reg {:?} conversion",
             subtype,
