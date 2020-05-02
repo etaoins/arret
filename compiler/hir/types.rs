@@ -612,7 +612,13 @@ fn str_for_ty<M: ty::PM>(ty: &Ty<M>) -> String {
         Ty::Num => "Num".to_owned(),
         Ty::LitBool(false) => "false".to_owned(),
         Ty::LitBool(true) => "true".to_owned(),
-        Ty::LitSym(name) => format!("'{}", name),
+        Ty::LitSym(name) => {
+            if name.starts_with(':') {
+                name.to_string()
+            } else {
+                format!("'{}", name)
+            }
+        }
         Ty::Map(map) => format!(
             "(Map {} {})",
             str_for_ty_ref(map.key()),
@@ -805,6 +811,9 @@ mod test {
 
         let expected = Ty::LitSym(":foo".into());
         assert_ty_for_str(expected, j);
+
+        // Make sure we don't quote this needlessly
+        assert_exact_str_repr(j);
     }
 
     #[test]
