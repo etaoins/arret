@@ -32,3 +32,12 @@ pub fn stdlib_set_to_list(
 ) -> Gc<boxed::List<boxed::Any>> {
     boxed::List::new(task, set.iter().cloned())
 }
+
+#[arret_rfi_derive::rust_fun("(All #{T} (Setof T) (Setof T) -> Bool)")]
+pub fn stdlib_subset_p(
+    task: &mut Task,
+    subset: Gc<boxed::Set<boxed::Any>>,
+    superset: Gc<boxed::Set<boxed::Any>>,
+) -> bool {
+    subset.is_subset(task.heap(), &superset)
+}

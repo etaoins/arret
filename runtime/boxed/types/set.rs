@@ -148,6 +148,29 @@ impl<T: Boxed> Set<T> {
             Repr::External(external) => Box::new(external.iter()),
         }
     }
+
+    /// Returns if this set is a subset of the passed set
+    pub fn is_subset(&self, heap: &Heap, other: &Set<T>) -> bool {
+        match (self.as_repr(), other.as_repr()) {
+            (Repr::External(external_self), Repr::External(external_other)) => {
+                // Use optimised external/external logic
+                external_self.is_subset(heap, external_other)
+            }
+            _ => {
+                if self.len() > other.len() {
+                    return false;
+                }
+
+                for self_value in self.iter() {
+                    if !other.contains(heap, self_value) {
+                        return false;
+                    }
+                }
+
+                true
+            }
+        }
+    }
 }
 
 impl<T: Boxed> PartialEqInHeap for Set<T> {
@@ -322,6 +345,35 @@ impl<T: Boxed> ExternalSet<T> {
         false
     }
 
+    /// Returns if this set is a subset of the passed set
+    fn is_subset(&self, heap: &Heap, other: &ExternalSet<T>) -> bool {
+        let mut other_index = 0;
+
+        for (self_hash, self_value) in self.sorted_hashed_values.iter() {
+            loop {
+                let (other_hash, other_value) =
+                    if let Some(entry) = other.sorted_hashed_values.get(other_index) {
+                        entry
+                    } else {
+                        // Ran past the end of the other set
+                        return false;
+                    };
+
+                if other_hash == self_hash && other_value.eq_in_heap(heap, self_value) {
+                    // Found corresponding element
+                    break;
+                } else if other_hash > self_hash {
+                    // We've gone past where the corresponding element should be
+                    return false;
+                }
+
+                other_index += 1;
+            }
+        }
+
+        true
+    }
+
     fn eq_in_heap(&self, heap: &Heap, other: &ExternalSet<T>) -> bool {
         if self.len() != other.len() {
             return false;
@@ -488,5 +540,52 @@ mod test {
         assert_eq!(false, empty_set.contains(&heap, &boxed3));
         assert_eq!(true, odd_set.contains(&heap, &boxed3));
         assert_eq!(false, even_set.contains(&heap, &boxed3));
+    }
+
+    #[test]
+    fn subset() {
+        use crate::boxed::Int;
+
+        let mut heap = Heap::empty();
+
+        let boxed1 = Int::new(&mut heap, 1);
+        let boxed2 = Int::new(&mut heap, 2);
+        let boxed3 = Int::new(&mut heap, 3);
+        let boxed4 = Int::new(&mut heap, 4);
+        let boxed5 = Int::new(&mut heap, 5);
+        let boxed6 = Int::new(&mut heap, 6);
+        let boxed7 = Int::new(&mut heap, 7);
+        let boxed8 = Int::new(&mut heap, 8);
+
+        let empty_set = Set::<Int>::new(&mut heap, vec![].into_iter());
+        let odd_set = Set::new(&mut heap, vec![boxed1, boxed3, boxed5, boxed7].into_iter());
+        let even_set = Set::new(&mut heap, vec![boxed2, boxed4, boxed6, boxed8].into_iter());
+        let full_set = Set::new(
+            &mut heap,
+            vec![
+                boxed1, boxed2, boxed3, boxed4, boxed5, boxed6, boxed7, boxed8,
+            ]
+            .into_iter(),
+        );
+
+        assert_eq!(true, empty_set.is_subset(&heap, &empty_set));
+        assert_eq!(true, empty_set.is_subset(&heap, &odd_set));
+        assert_eq!(true, empty_set.is_subset(&heap, &even_set));
+        assert_eq!(true, empty_set.is_subset(&heap, &full_set));
+
+        assert_eq!(false, odd_set.is_subset(&heap, &empty_set));
+        assert_eq!(true, odd_set.is_subset(&heap, &odd_set));
+        assert_eq!(false, odd_set.is_subset(&heap, &even_set));
+        assert_eq!(true, odd_set.is_subset(&heap, &full_set));
+
+        assert_eq!(false, even_set.is_subset(&heap, &empty_set));
+        assert_eq!(false, even_set.is_subset(&heap, &odd_set));
+        assert_eq!(true, even_set.is_subset(&heap, &even_set));
+        assert_eq!(true, even_set.is_subset(&heap, &full_set));
+
+        assert_eq!(false, full_set.is_subset(&heap, &empty_set));
+        assert_eq!(false, full_set.is_subset(&heap, &odd_set));
+        assert_eq!(false, full_set.is_subset(&heap, &even_set));
+        assert_eq!(true, full_set.is_subset(&heap, &full_set));
     }
 }

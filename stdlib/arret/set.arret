@@ -1,0 +1,8 @@
+(import [stdlib base])
+(import (:only [stdlib rust] subset?))
+
+(export subset?)
+
+(export superset?)
+(defn superset? #{T} ([superset (Setof T)] [subset (Setof T)]) -> Bool
+  (subset? subset superset))

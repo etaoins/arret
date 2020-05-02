@@ -123,5 +123,6 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "set" => stdlib_set,
     "set-length" => stdlib_set_length,
     "set->list" => stdlib_set_to_list,
-    "set-contains?" => stdlib_set_contains_p
+    "set-contains?" => stdlib_set_contains_p,
+    "subset?" => stdlib_subset_p
 });
