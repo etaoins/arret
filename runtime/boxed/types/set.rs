@@ -347,31 +347,38 @@ impl<T: Boxed> ExternalSet<T> {
 
     /// Returns if this set is a subset of the passed set
     fn is_subset(&self, heap: &Heap, other: &ExternalSet<T>) -> bool {
-        let mut other_index = 0;
+        let mut self_iter = self.sorted_hashed_values.iter();
+        let mut other_iter = other.sorted_hashed_values.iter();
 
-        for (self_hash, self_value) in self.sorted_hashed_values.iter() {
+        loop {
+            let (self_hash, self_value) = if let Some(entry) = self_iter.next() {
+                entry
+            } else {
+                // No more elements left to check
+                return true;
+            };
+
+            // Try to find the element in the other set
             loop {
-                let (other_hash, other_value) =
-                    if let Some(entry) = other.sorted_hashed_values.get(other_index) {
-                        entry
-                    } else {
-                        // Ran past the end of the other set
-                        return false;
-                    };
+                let (other_hash, other_value) = if let Some(entry) = other_iter.next() {
+                    entry
+                } else {
+                    // Ran past the end of the other set
+                    return false;
+                };
 
-                if other_hash == self_hash && other_value.eq_in_heap(heap, self_value) {
+                if self_iter.len() > other_iter.len() {
+                    // Not enough items remaining in the other set
+                    return false;
+                } else if other_hash == self_hash && other_value.eq_in_heap(heap, self_value) {
                     // Found corresponding element
                     break;
                 } else if other_hash > self_hash {
                     // We've gone past where the corresponding element should be
                     return false;
                 }
-
-                other_index += 1;
             }
         }
-
-        true
     }
 
     fn eq_in_heap(&self, heap: &Heap, other: &ExternalSet<T>) -> bool {
@@ -558,6 +565,7 @@ mod test {
         let boxed8 = Int::new(&mut heap, 8);
 
         let empty_set = Set::<Int>::new(&mut heap, vec![].into_iter());
+        let one_set = Set::new(&mut heap, vec![boxed1].into_iter());
         let odd_set = Set::new(&mut heap, vec![boxed1, boxed3, boxed5, boxed7].into_iter());
         let even_set = Set::new(&mut heap, vec![boxed2, boxed4, boxed6, boxed8].into_iter());
         let full_set = Set::new(
@@ -569,21 +577,31 @@ mod test {
         );
 
         assert_eq!(true, empty_set.is_subset(&heap, &empty_set));
+        assert_eq!(true, empty_set.is_subset(&heap, &one_set));
         assert_eq!(true, empty_set.is_subset(&heap, &odd_set));
         assert_eq!(true, empty_set.is_subset(&heap, &even_set));
         assert_eq!(true, empty_set.is_subset(&heap, &full_set));
 
+        assert_eq!(false, one_set.is_subset(&heap, &empty_set));
+        assert_eq!(true, one_set.is_subset(&heap, &one_set));
+        assert_eq!(true, one_set.is_subset(&heap, &odd_set));
+        assert_eq!(false, one_set.is_subset(&heap, &even_set));
+        assert_eq!(true, one_set.is_subset(&heap, &full_set));
+
         assert_eq!(false, odd_set.is_subset(&heap, &empty_set));
+        assert_eq!(false, odd_set.is_subset(&heap, &one_set));
         assert_eq!(true, odd_set.is_subset(&heap, &odd_set));
         assert_eq!(false, odd_set.is_subset(&heap, &even_set));
         assert_eq!(true, odd_set.is_subset(&heap, &full_set));
 
         assert_eq!(false, even_set.is_subset(&heap, &empty_set));
+        assert_eq!(false, even_set.is_subset(&heap, &one_set));
         assert_eq!(false, even_set.is_subset(&heap, &odd_set));
         assert_eq!(true, even_set.is_subset(&heap, &even_set));
         assert_eq!(true, even_set.is_subset(&heap, &full_set));
 
         assert_eq!(false, full_set.is_subset(&heap, &empty_set));
+        assert_eq!(false, full_set.is_subset(&heap, &one_set));
         assert_eq!(false, full_set.is_subset(&heap, &odd_set));
         assert_eq!(false, full_set.is_subset(&heap, &even_set));
         assert_eq!(true, full_set.is_subset(&heap, &full_set));
