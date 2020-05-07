@@ -3,7 +3,7 @@ ARG LLVM_ROOT=/opt/llvm-10
 
 ##
 
-FROM fedora:31 AS fedora-common
+FROM fedora:32 AS fedora-common
 
 RUN dnf install -y gcc-c++
 # `dnf clean all` happens in later stages
