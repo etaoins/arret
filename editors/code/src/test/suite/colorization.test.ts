@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+
 import * as assert from 'assert';
 import * as fs from 'fs';
 import { join, basename, dirname } from 'path';
@@ -85,7 +88,7 @@ suite('colorization', () => {
     fixturesFiles.forEach((fixturesFile) => {
       // define a test for each fixture
       test(fixturesFile, function (done) {
-        assertUnchangedTokens(
+        void assertUnchangedTokens(
           join(extensionColorizeFixturePath, fixturesFile),
           done,
         );
