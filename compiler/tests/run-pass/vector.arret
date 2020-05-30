@@ -23,8 +23,20 @@
   (assert-eq! '(1 2) ((black-box! vector->list) [1 2]))
   (assert-eq! '(1 2 3) (vector->list (black-box! [1 2 3]))))
 
+(defn test-vector-assoc! () ->! ()
+  ; Inline vector
+  (assert-eq! [one two three]
+    (vector-assoc 
+      (vector-assoc [two two two] 0 'one)
+      2 'three))
+
+  ; External vector
+  (assert-eq! [false false false false false]
+    (vector-assoc [false false true false false] 2 false)))
+
 (defn main! () ->! ()
   (test-vector!)
   (test-vector-ref!)
   (test-vector-length!)
-  (test-vector->list!))
+  (test-vector->list!)
+  (test-vector-assoc!))

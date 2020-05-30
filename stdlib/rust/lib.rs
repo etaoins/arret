@@ -117,6 +117,7 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "vector-length" => stdlib_vector_length,
     "vector->list" => stdlib_vector_to_list,
     "vector-ref" => stdlib_vector_ref,
+    "vector-assoc" => stdlib_vector_assoc,
 
     "hash" => stdlib_hash,
 

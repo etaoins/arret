@@ -143,6 +143,29 @@ impl<T: Boxed> Vector<T> {
         }
     }
 
+    /// Returns a new vector with the element at the given index replaced
+    pub fn assoc(&self, heap: &mut impl AsHeap, index: usize, value: Gc<T>) -> Gc<Vector<T>> {
+        match self.as_repr() {
+            Repr::Inline(inline) => {
+                let mut values = inline.values;
+
+                values[index] = value;
+                Vector::new(heap, values[0..self.len()].iter().copied())
+            }
+            Repr::External(external) => {
+                let boxed = unsafe {
+                    mem::transmute(ExternalVector {
+                        header: external.header,
+                        inline_length: external.inline_length,
+                        values: external.values.assoc(index, value),
+                    })
+                };
+
+                heap.as_heap_mut().place_box(boxed)
+            }
+        }
+    }
+
     pub(crate) fn visit_mut_elements<F>(&mut self, visitor: &mut F)
     where
         F: FnMut(&mut Gc<T>),

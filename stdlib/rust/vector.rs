@@ -49,3 +49,29 @@ pub fn stdlib_vector_to_list(
 ) -> Gc<boxed::List<boxed::Any>> {
     boxed::List::new(task, vector.iter())
 }
+
+#[arret_rfi_derive::rust_fun("(All #{T} (Vectorof T) Int T -> (Vectorof T))")]
+pub fn stdlib_vector_assoc(
+    task: &mut Task,
+    vector: Gc<boxed::Vector<boxed::Any>>,
+    index: i64,
+    value: Gc<boxed::Any>,
+) -> Gc<boxed::Vector<boxed::Any>> {
+    let usize_index = if index < 0 {
+        task.panic(format!("index {} is negative", index));
+        unreachable!("returned from panic")
+    } else {
+        index as usize
+    };
+
+    if usize_index > vector.len() {
+        task.panic(format!(
+            "index {} out of bounds for vector of length {}",
+            usize_index,
+            vector.len()
+        ));
+        unreachable!("returned from panic")
+    }
+
+    vector.assoc(task, usize_index, value)
+}

@@ -1,0 +1,6 @@
+(import [stdlib base])
+
+(def _ (vector-assoc [1 2 3] -5 0))
+      ;^^^^^^^^^^^^^^^^^^^^^^^^^^^ ERROR index -5 is negative
+
+(defn main! () ->! ())
