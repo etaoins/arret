@@ -75,3 +75,12 @@ pub fn stdlib_vector_assoc(
 
     vector.assoc(task, usize_index, value)
 }
+
+#[arret_rfi_derive::rust_fun("(All #{T} (Vectorof T) T -> (Vectorof T))")]
+pub fn stdlib_vector_push(
+    task: &mut Task,
+    vector: Gc<boxed::Vector<boxed::Any>>,
+    value: Gc<boxed::Any>,
+) -> Gc<boxed::Vector<boxed::Any>> {
+    vector.push(task, value)
+}

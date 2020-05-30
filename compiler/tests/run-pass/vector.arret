@@ -23,6 +23,9 @@
   (assert-eq! '(1 2) ((black-box! vector->list) [1 2]))
   (assert-eq! '(1 2 3) (vector->list (black-box! [1 2 3]))))
 
+(defn test-vector-push! () ->! ()
+  (assert-eq! [1 2 3 4 5] (vector-push (vector-push [1 2 3] 4) 5))) 
+
 (defn test-vector-assoc! () ->! ()
   ; Inline vector
   (assert-eq! [one two three]
@@ -39,4 +42,5 @@
   (test-vector-ref!)
   (test-vector-length!)
   (test-vector->list!)
-  (test-vector-assoc!))
+  (test-vector-assoc!)
+  (test-vector-push!))

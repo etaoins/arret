@@ -138,7 +138,7 @@ impl<T: Boxed> Vector<T> {
     /// Returns an iterator over the vector
     pub fn iter<'a>(&'a self) -> Box<(dyn ExactSizeIterator<Item = Gc<T>> + 'a)> {
         match self.as_repr() {
-            Repr::Inline(inline) => Box::new(inline.values[0..self.len()].iter().copied()),
+            Repr::Inline(inline) => Box::new(inline.iter()),
             Repr::External(external) => Box::new(external.values.iter()),
         }
     }
@@ -166,13 +166,41 @@ impl<T: Boxed> Vector<T> {
         }
     }
 
+    /// Returns a new vector with the element appended
+    pub fn push(&self, heap: &mut impl AsHeap, value: Gc<T>) -> Gc<Vector<T>> {
+        match self.as_repr() {
+            Repr::Inline(inline) => {
+                const MAX_INLINE_LENGTH_PLUS_ONE: usize = Vector::<Any>::MAX_INLINE_LENGTH + 1;
+
+                let mut values: [Gc<T>; MAX_INLINE_LENGTH_PLUS_ONE] =
+                    [unsafe { Gc::new(ptr::null()) }; MAX_INLINE_LENGTH_PLUS_ONE];
+
+                (&mut values[0..self.len()]).copy_from_slice(&inline.values[0..self.len()]);
+                values[self.len()] = value;
+
+                Vector::new(heap, values[0..self.len() + 1].iter().copied())
+            }
+            Repr::External(external) => {
+                let boxed = unsafe {
+                    mem::transmute(ExternalVector {
+                        header: external.header,
+                        inline_length: external.inline_length,
+                        values: external.values.push(value),
+                    })
+                };
+
+                heap.as_heap_mut().place_box(boxed)
+            }
+        }
+    }
+
     pub(crate) fn visit_mut_elements<F>(&mut self, visitor: &mut F)
     where
         F: FnMut(&mut Gc<T>),
     {
         match self.as_repr_mut() {
             ReprMut::Inline(inline) => {
-                for element in inline.values[0..inline.inline_length as usize].iter_mut() {
+                for element in inline.iter_mut() {
                     visitor(element);
                 }
             }
@@ -245,7 +273,15 @@ impl<T: Boxed> InlineVector<T> {
         }
     }
 
-    pub fn get(&self, index: usize) -> Option<&Gc<T>> {
+    fn iter<'a>(&'a self) -> impl ExactSizeIterator<Item = Gc<T>> + 'a {
+        self.values[0..self.inline_length as usize].iter().copied()
+    }
+
+    fn iter_mut<'a>(&'a mut self) -> impl ExactSizeIterator<Item = &mut Gc<T>> + 'a {
+        self.values[0..self.inline_length as usize].iter_mut()
+    }
+
+    fn get(&self, index: usize) -> Option<&Gc<T>> {
         if index > self.inline_length as usize {
             None
         } else {
