@@ -260,6 +260,28 @@ where
         vec_acc
     }
 
+    /// Visits each mutable element of the array
+    ///
+    /// This skips global constants
+    pub(crate) fn visit_mut_elements<F>(&mut self, visitor: &mut F)
+    where
+        F: FnMut(&mut T),
+    {
+        unsafe {
+            if let Some(tail_ref) = (self.tail as *mut Node<T>).as_mut() {
+                tail_ref.visit_mut_elements(0, &mut self.tail_size(), visitor);
+            }
+        }
+
+        unsafe {
+            if let Some(root_ref) = (self.root as *mut Node<T>).as_mut() {
+                let mut trie_size = self.trie_size();
+
+                root_ref.visit_mut_elements(Self::trie_depth(trie_size), &mut trie_size, visitor);
+            }
+        }
+    }
+
     /// Size of the trie portion of the `Vector`
     ///
     /// This is always a multiple of `NODE_SIZE`
@@ -524,6 +546,47 @@ where
             );
         }
     }
+
+    fn visit_mut_elements<F>(
+        &mut self,
+        remaining_depth: u32,
+        remaining_elements: &mut usize,
+        visitor: &mut F,
+    ) where
+        F: FnMut(&mut T),
+    {
+        if self.is_global_constant() {
+            // We're a global constant; skip us
+            *remaining_elements = remaining_elements.saturating_sub(NODE_SIZE);
+            return;
+        }
+
+        if remaining_depth == 0 {
+            let leaf_size = std::cmp::min(*remaining_elements, NODE_SIZE);
+
+            for i in 0..leaf_size {
+                unsafe {
+                    visitor(&mut self.elements.leaf[i]);
+                }
+            }
+            *remaining_elements -= leaf_size;
+            return;
+        }
+
+        for i in 0..NODE_SIZE {
+            unsafe {
+                (&mut *(self.elements.branch[i] as *mut Node<T>)).visit_mut_elements(
+                    remaining_depth - 1,
+                    remaining_elements,
+                    visitor,
+                );
+            }
+
+            if *remaining_elements == 0 {
+                return;
+            }
+        }
+    }
 }
 
 struct Iter<'a, T>
@@ -730,12 +793,17 @@ mod test {
             assert_eq!(Some(TEST_LENGTH - i - 1), test_vec.get(i));
         }
 
+        // Reverse the vector back by mutable ref
+        test_vec.visit_mut_elements(&mut |element| {
+            *element = TEST_LENGTH - *element - 1;
+        });
+
         // Pop everything off
         for i in (0..TEST_LENGTH).rev() {
             let (new_test_vec, element) = test_vec.pop().unwrap();
 
             assert_eq!(i, new_test_vec.len());
-            assert_eq!(TEST_LENGTH - i - 1, element);
+            assert_eq!(i, element);
 
             test_vec = new_test_vec;
         }
