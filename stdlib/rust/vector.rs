@@ -25,7 +25,7 @@ pub fn stdlib_vector_ref(
     };
 
     match vector.get(usize_index) {
-        Some(value) => *value,
+        Some(value) => value,
         None => {
             task.panic(format!(
                 "index {} out of bounds for vector of length {}",
@@ -47,5 +47,5 @@ pub fn stdlib_vector_to_list(
     task: &mut Task,
     vector: Gc<boxed::Vector<boxed::Any>>,
 ) -> Gc<boxed::List<boxed::Any>> {
-    boxed::List::new(task, vector.iter().cloned())
+    boxed::List::new(task, vector.iter())
 }

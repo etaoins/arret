@@ -152,9 +152,9 @@ impl StrongPass {
                     let vec_ref =
                         unsafe { &mut *(box_ref.as_mut_ptr() as *mut boxed::Vector<boxed::Any>) };
 
-                    for elem_ref in vec_ref.iter_mut() {
+                    vec_ref.visit_mut_elements(&mut |elem_ref| {
                         Self::visit_any_box(old_heap, new_heap, elem_ref);
-                    }
+                    });
                 }
                 TypeTag::FunThunk => {
                     let fun_thunk_ref =

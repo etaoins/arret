@@ -1,1 +1,3 @@
-mod vector;
+pub mod vector;
+
+pub use vector::Vector;

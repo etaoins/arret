@@ -4,6 +4,7 @@ use std::{fmt, marker, mem};
 use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
 use crate::boxed::refs::Gc;
 use crate::boxed::*;
+use crate::persistent::Vector as PersistentVector;
 
 const MAX_16BYTE_INLINE_LENGTH: usize = (16 - 8) / mem::size_of::<Gc<Any>>();
 const MAX_32BYTE_INLINE_LENGTH: usize = (32 - 8) / mem::size_of::<Gc<Any>>();
@@ -105,6 +106,14 @@ impl<T: Boxed> Vector<T> {
         }
     }
 
+    fn as_repr_mut(&mut self) -> ReprMut<'_, T> {
+        if self.is_inline() {
+            ReprMut::Inline(unsafe { &mut *(self as *mut Vector<T> as *mut InlineVector<T>) })
+        } else {
+            ReprMut::External(unsafe { &mut *(self as *mut Vector<T> as *mut ExternalVector<T>) })
+        }
+    }
+
     /// Returns the length of the vector
     pub fn len(&self) -> usize {
         match self.as_repr() {
@@ -119,31 +128,32 @@ impl<T: Boxed> Vector<T> {
     }
 
     /// Return an element as the provided index
-    pub fn get(&self, index: usize) -> Option<&Gc<T>> {
+    pub fn get(&self, index: usize) -> Option<Gc<T>> {
         match self.as_repr() {
-            Repr::Inline(inline) => inline.get(index),
+            Repr::Inline(inline) => inline.get(index).copied(),
             Repr::External(external) => external.values.get(index),
         }
     }
 
     /// Returns an iterator over the vector
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = &Gc<T>> {
+    pub fn iter<'a>(&'a self) -> Box<(dyn ExactSizeIterator<Item = Gc<T>> + 'a)> {
         match self.as_repr() {
-            Repr::Inline(inline) => inline.values[0..self.len()].iter(),
-            Repr::External(external) => external.values.iter(),
+            Repr::Inline(inline) => Box::new(inline.values[0..self.len()].iter().copied()),
+            Repr::External(external) => Box::new(external.values.iter()),
         }
     }
 
-    /// Returns a mutable iterator over the vector
-    pub(crate) fn iter_mut<'a>(&'a mut self) -> impl ExactSizeIterator<Item = &'a mut Gc<T>> {
-        unsafe {
-            if self.is_inline() {
-                (*(self as *mut Vector<T> as *mut InlineVector<T>)).values[0..self.len()].iter_mut()
-            } else {
-                (*(self as *mut Vector<T> as *mut ExternalVector<T>))
-                    .values
-                    .iter_mut()
+    pub(crate) fn visit_mut_elements<F>(&mut self, visitor: &mut F)
+    where
+        F: FnMut(&mut Gc<T>),
+    {
+        match self.as_repr_mut() {
+            ReprMut::Inline(inline) => {
+                for element in inline.values[0..inline.inline_length as usize].iter_mut() {
+                    visitor(element);
+                }
             }
+            ReprMut::External(external) => external.values.visit_mut_elements(visitor),
         }
     }
 }
@@ -156,7 +166,7 @@ impl<T: Boxed> PartialEqInHeap for Vector<T> {
 
         self.iter()
             .zip(other.iter())
-            .all(|(self_value, other_value)| self_value.eq_in_heap(heap, other_value))
+            .all(|(self_value, other_value)| self_value.eq_in_heap(heap, &other_value))
     }
 }
 
@@ -225,7 +235,7 @@ impl<T: Boxed> InlineVector<T> {
 pub struct ExternalVector<T: Boxed> {
     header: Header,
     inline_length: u32,
-    values: Vec<Gc<T>>,
+    values: PersistentVector<Gc<T>>,
 }
 
 impl<T: Boxed> ExternalVector<T> {
@@ -233,7 +243,7 @@ impl<T: Boxed> ExternalVector<T> {
         ExternalVector {
             header,
             inline_length: (Vector::<T>::MAX_INLINE_LENGTH + 1) as u32,
-            values: values.collect(),
+            values: PersistentVector::new(values),
         }
     }
 }
@@ -241,6 +251,11 @@ impl<T: Boxed> ExternalVector<T> {
 enum Repr<'a, T: Boxed> {
     Inline(&'a InlineVector<T>),
     External(&'a ExternalVector<T>),
+}
+
+enum ReprMut<'a, T: Boxed> {
+    Inline(&'a mut InlineVector<T>),
+    External(&'a mut ExternalVector<T>),
 }
 
 impl<T: Boxed> Drop for Vector<T> {

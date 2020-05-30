@@ -153,7 +153,7 @@ pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any
         }
         AnySubtype::Vector(vec) => {
             write!(w, "[")?;
-            write_boxed_seq(w, heap, vec.iter().cloned())?;
+            write_boxed_seq(w, heap, vec.iter())?;
             write!(w, "]")
         }
         AnySubtype::Set(set) => {
