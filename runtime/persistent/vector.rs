@@ -5,6 +5,9 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::{alloc, ptr, sync};
 
+use crate::boxed::refs::Gc;
+use crate::boxed::Boxed;
+
 /// Reference count used for global constants created by codegen
 const GLOBAL_CONSTANT_REFCOUNT: u64 = std::u64::MAX;
 
@@ -12,10 +15,33 @@ const TRIE_RADIX: u32 = 5;
 const NODE_SIZE: usize = 1 << TRIE_RADIX;
 const LEVEL_MASK: usize = (1 << TRIE_RADIX) - 1;
 
+pub trait Element: Copy {
+    /// A value that's cheap to create without causing undefined behaviour
+    fn padding_value() -> Self;
+}
+
+impl<T> Element for T
+where
+    T: Default + Copy,
+{
+    fn padding_value() -> Self {
+        Self::default()
+    }
+}
+
+impl<T> Element for Gc<T>
+where
+    T: Boxed,
+{
+    fn padding_value() -> Self {
+        unsafe { Gc::new(ptr::null()) }
+    }
+}
+
 #[repr(C)]
 pub struct Vector<T>
 where
-    T: Copy + Default,
+    T: Element,
 {
     size: u64,
     root: *const Node<T>,
@@ -24,7 +50,7 @@ where
 
 impl<T> Vector<T>
 where
-    T: Copy + Default,
+    T: Element,
 {
     pub fn new(values: impl ExactSizeIterator<Item = T>) -> Self {
         let empty_vec = Vector {
@@ -46,7 +72,7 @@ where
 
     pub fn push(&self, value: T) -> Vector<T> {
         let old_tail_size = self.tail_size();
-        let mut new_elements: [T; NODE_SIZE] = Default::default();
+        let mut new_elements: [T; NODE_SIZE] = [T::padding_value(); NODE_SIZE];
 
         // Copy the previous leaf elements
         new_elements[..old_tail_size]
@@ -184,7 +210,7 @@ where
         }
 
         if index >= self.tail_offset() {
-            let mut new_elements: [T; NODE_SIZE] = Default::default();
+            let mut new_elements: [T; NODE_SIZE] = [T::padding_value(); NODE_SIZE];
 
             // Copy the previous leaf elements
             new_elements[..self.tail_size()]
@@ -238,7 +264,7 @@ where
         }
 
         while values.len() >= NODE_SIZE {
-            let mut trie_elements: [T; NODE_SIZE] = Default::default();
+            let mut trie_elements: [T; NODE_SIZE] = [T::padding_value(); NODE_SIZE];
             for i in 0..NODE_SIZE {
                 trie_elements[i] = values.next().unwrap();
             }
@@ -248,7 +274,7 @@ where
 
         let tail_size = values.len();
         if tail_size > 0 {
-            let mut tail_elements: [T; NODE_SIZE] = Default::default();
+            let mut tail_elements: [T; NODE_SIZE] = [T::padding_value(); NODE_SIZE];
             for i in 0..tail_size {
                 tail_elements[i] = values.next().unwrap();
             }
@@ -314,7 +340,7 @@ where
 
 impl<T> Drop for Vector<T>
 where
-    T: Copy + Default,
+    T: Element,
 {
     fn drop(&mut self) {
         unsafe {
@@ -326,7 +352,7 @@ where
 
 struct AssocedLeaf<T>
 where
-    T: Copy + Default,
+    T: Element,
 {
     new_subtree: *const Node<T>,
     previous_leaf: *const Node<T>,
@@ -334,7 +360,7 @@ where
 
 union NodeElements<T>
 where
-    T: Copy + Default,
+    T: Element,
 {
     leaf: [T; NODE_SIZE],
     branch: [*const Node<T>; NODE_SIZE],
@@ -343,7 +369,7 @@ where
 #[repr(C)]
 struct Node<T>
 where
-    T: Copy + Default,
+    T: Element,
 {
     ref_count: AtomicU64,
     elements: NodeElements<T>,
@@ -351,7 +377,7 @@ where
 
 impl<T> Node<T>
 where
-    T: Copy + Default,
+    T: Element,
 {
     fn new_leaf(elements: [T; NODE_SIZE]) -> *const Node<T> {
         let layout = alloc::Layout::new::<Self>();
@@ -591,7 +617,7 @@ where
 
 struct Iter<'a, T>
 where
-    T: Copy + Default,
+    T: Element,
 {
     vec: &'a Vector<T>,
     index: usize,
@@ -600,7 +626,7 @@ where
 
 impl<'a, T> Iterator for Iter<'a, T>
 where
-    T: Copy + Default,
+    T: Element,
 {
     type Item = T;
 
@@ -627,11 +653,11 @@ where
     }
 }
 
-impl<'a, T> ExactSizeIterator for Iter<'a, T> where T: Copy + Default {}
+impl<'a, T> ExactSizeIterator for Iter<'a, T> where T: Element {}
 
 impl<T> Clone for Vector<T>
 where
-    T: Copy + Default,
+    T: Element,
 {
     fn clone(&self) -> Self {
         Vector {
