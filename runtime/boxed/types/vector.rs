@@ -118,6 +118,14 @@ impl<T: Boxed> Vector<T> {
         self.inline_length == 0
     }
 
+    /// Return an element as the provided index
+    pub fn get(&self, index: usize) -> Option<&Gc<T>> {
+        match self.as_repr() {
+            Repr::Inline(inline) => inline.get(index),
+            Repr::External(external) => external.values.get(index),
+        }
+    }
+
     /// Returns an iterator over the vector
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &Gc<T>> {
         match self.as_repr() {
@@ -126,23 +134,15 @@ impl<T: Boxed> Vector<T> {
         }
     }
 
-    /// Returns a slice of values contained in the vector
-    pub fn values(&self) -> &[Gc<T>] {
+    /// Returns a mutable iterator over the vector
+    pub(crate) fn iter_mut<'a>(&'a mut self) -> impl ExactSizeIterator<Item = &'a mut Gc<T>> {
         unsafe {
             if self.is_inline() {
-                &(*(self as *const Vector<T> as *const InlineVector<T>)).values[0..self.len()]
+                (*(self as *mut Vector<T> as *mut InlineVector<T>)).values[0..self.len()].iter_mut()
             } else {
-                &(*(self as *const Vector<T> as *const ExternalVector<T>)).values
-            }
-        }
-    }
-
-    pub(crate) fn values_mut(&mut self) -> &mut [Gc<T>] {
-        unsafe {
-            if self.is_inline() {
-                &mut (*(self as *mut Vector<T> as *mut InlineVector<T>)).values[0..self.len()]
-            } else {
-                &mut (*(self as *mut Vector<T> as *mut ExternalVector<T>)).values
+                (*(self as *mut Vector<T> as *mut ExternalVector<T>))
+                    .values
+                    .iter_mut()
             }
         }
     }
@@ -209,6 +209,14 @@ impl<T: Boxed> InlineVector<T> {
                 inline_length: inline_length as u32,
                 values: inline_values,
             }
+        }
+    }
+
+    pub fn get(&self, index: usize) -> Option<&Gc<T>> {
+        if index > self.inline_length as usize {
+            None
+        } else {
+            Some(&self.values[index])
         }
     }
 }

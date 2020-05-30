@@ -152,7 +152,7 @@ impl StrongPass {
                     let vec_ref =
                         unsafe { &mut *(box_ref.as_mut_ptr() as *mut boxed::Vector<boxed::Any>) };
 
-                    for elem_ref in vec_ref.values_mut() {
+                    for elem_ref in vec_ref.iter_mut() {
                         Self::visit_any_box(old_heap, new_heap, elem_ref);
                     }
                 }
