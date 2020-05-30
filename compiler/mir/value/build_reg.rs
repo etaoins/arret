@@ -165,7 +165,6 @@ fn const_to_reg(
         }
         (boxed::AnySubtype::Vector(vector_ref), abitype::ABIType::Boxed(to_abi_type)) => {
             let element_regs = vector_ref
-                .values()
                 .iter()
                 .map(|element_ref| {
                     const_to_reg(
