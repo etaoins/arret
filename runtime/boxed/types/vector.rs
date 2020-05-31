@@ -1,4 +1,5 @@
 use std::hash::{Hash, Hasher};
+use std::mem::MaybeUninit;
 use std::{fmt, marker, mem};
 
 use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
@@ -132,7 +133,7 @@ impl<T: Boxed> Vector<T> {
     /// Return an element as the provided index
     pub fn get(&self, index: usize) -> Option<Gc<T>> {
         match self.as_repr() {
-            Repr::Inline(inline) => inline.get(index).copied(),
+            Repr::Inline(inline) => inline.get(index),
             Repr::External(external) => external.values.get(index),
         }
     }
@@ -151,8 +152,13 @@ impl<T: Boxed> Vector<T> {
             Repr::Inline(inline) => {
                 let mut values = inline.values;
 
-                values[index] = value;
-                Vector::new(heap, values[0..self.len()].iter().copied())
+                values[index] = MaybeUninit::new(value);
+                Vector::new(
+                    heap,
+                    values[0..self.len()]
+                        .iter()
+                        .map(|value| unsafe { value.assume_init() }),
+                )
             }
             Repr::External(external) => {
                 let boxed = unsafe {
@@ -174,13 +180,18 @@ impl<T: Boxed> Vector<T> {
             Repr::Inline(inline) => {
                 const MAX_INLINE_LENGTH_PLUS_ONE: usize = Vector::<Any>::MAX_INLINE_LENGTH + 1;
 
-                let mut values: [Gc<T>; MAX_INLINE_LENGTH_PLUS_ONE] =
-                    [unsafe { Gc::new(ptr::null()) }; MAX_INLINE_LENGTH_PLUS_ONE];
+                let mut values: [MaybeUninit<Gc<T>>; MAX_INLINE_LENGTH_PLUS_ONE] =
+                    [MaybeUninit::uninit(); MAX_INLINE_LENGTH_PLUS_ONE];
 
                 (&mut values[0..self.len()]).copy_from_slice(&inline.values[0..self.len()]);
-                values[self.len()] = value;
+                values[self.len()] = MaybeUninit::new(value);
 
-                Vector::new(heap, values[0..self.len() + 1].iter().copied())
+                Vector::new(
+                    heap,
+                    values[0..self.len() + 1]
+                        .iter()
+                        .map(|value| unsafe { value.assume_init() }),
+                )
             }
             Repr::External(external) => {
                 let boxed = unsafe {
@@ -206,14 +217,22 @@ impl<T: Boxed> Vector<T> {
             Repr::Inline(inline) => {
                 const MAX_INLINE_LENGTH_MINUS_ONE: usize = Vector::<Any>::MAX_INLINE_LENGTH + 1;
 
-                let mut values: [Gc<T>; MAX_INLINE_LENGTH_MINUS_ONE] =
-                    [unsafe { Gc::new(ptr::null()) }; MAX_INLINE_LENGTH_MINUS_ONE];
+                let mut values: [MaybeUninit<Gc<T>>; MAX_INLINE_LENGTH_MINUS_ONE] =
+                    [MaybeUninit::uninit(); MAX_INLINE_LENGTH_MINUS_ONE];
 
                 let new_len = self.len() - 1;
                 (&mut values[0..new_len]).copy_from_slice(&inline.values[0..new_len]);
 
-                let new_vector = Vector::new(heap, values[0..new_len].iter().copied());
-                Some((new_vector, inline.values[self.len() - 1]))
+                let new_vector = Vector::new(
+                    heap,
+                    values[0..new_len]
+                        .iter()
+                        .map(|value| unsafe { value.assume_init() }),
+                );
+
+                Some((new_vector, unsafe {
+                    inline.values[self.len() - 1].assume_init()
+                }))
             }
             Repr::External(external) => {
                 let (values, element) = external.values.pop().unwrap();
@@ -316,42 +335,44 @@ where
 pub struct InlineVector<T: Boxed> {
     header: Header,
     inline_length: u32,
-    values: [Gc<T>; MAX_32BYTE_INLINE_LENGTH],
+    values: [MaybeUninit<Gc<T>>; MAX_32BYTE_INLINE_LENGTH],
 }
 
 impl<T: Boxed> InlineVector<T> {
     fn new(header: Header, values: impl ExactSizeIterator<Item = Gc<T>>) -> InlineVector<T> {
-        unsafe {
-            let inline_length = values.len();
+        let inline_length = values.len();
 
-            let mut inline_values =
-                mem::MaybeUninit::<[Gc<T>; MAX_32BYTE_INLINE_LENGTH]>::uninit().assume_init();
+        let mut inline_values: [MaybeUninit<Gc<T>>; MAX_32BYTE_INLINE_LENGTH] =
+            [MaybeUninit::uninit(); MAX_32BYTE_INLINE_LENGTH];
 
-            for (inline_value, value) in inline_values.iter_mut().zip(values) {
-                *inline_value = value;
-            }
+        for (inline_value, value) in inline_values.iter_mut().zip(values) {
+            *inline_value = MaybeUninit::new(value);
+        }
 
-            InlineVector {
-                header,
-                inline_length: inline_length as u32,
-                values: inline_values,
-            }
+        InlineVector {
+            header,
+            inline_length: inline_length as u32,
+            values: inline_values,
         }
     }
 
     fn iter<'a>(&'a self) -> impl ExactSizeIterator<Item = Gc<T>> + 'a {
-        self.values[0..self.inline_length as usize].iter().copied()
+        self.values[0..self.inline_length as usize]
+            .iter()
+            .map(|value| unsafe { value.assume_init() })
     }
 
     fn iter_mut<'a>(&'a mut self) -> impl ExactSizeIterator<Item = &mut Gc<T>> + 'a {
-        self.values[0..self.inline_length as usize].iter_mut()
+        self.values[0..self.inline_length as usize]
+            .iter_mut()
+            .map(|value| unsafe { &mut *value.as_mut_ptr() })
     }
 
-    fn get(&self, index: usize) -> Option<&Gc<T>> {
+    fn get(&self, index: usize) -> Option<Gc<T>> {
         if index > self.inline_length as usize {
             None
         } else {
-            Some(&self.values[index])
+            Some(unsafe { self.values[index].assume_init() })
         }
     }
 }
