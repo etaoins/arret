@@ -1,5 +1,6 @@
 use arret_runtime::binding::*;
 use arret_runtime::boxed;
+use arret_runtime::boxed::prelude::*;
 use arret_runtime::boxed::refs::Gc;
 use arret_runtime::task::Task;
 
@@ -83,4 +84,19 @@ pub fn stdlib_vector_push(
     value: Gc<boxed::Any>,
 ) -> Gc<boxed::Vector<boxed::Any>> {
     vector.push(task, value)
+}
+
+#[arret_rfi_derive::rust_fun("(All #{T} (Vectorof T) -> (List (Vectorof T) T))")]
+pub fn stdlib_vector_pop(
+    task: &mut Task,
+    vector: Gc<boxed::Vector<boxed::Any>>,
+) -> Gc<boxed::List<boxed::Any>> {
+    if let Some((new_vector, element)) = vector.pop(task) {
+        let tuple_boxes: [Gc<boxed::Any>; 2] = [new_vector.as_any_ref(), element];
+
+        boxed::List::new(task, tuple_boxes.iter().cloned())
+    } else {
+        task.panic("attempted to pop from an empty vector".to_owned());
+        unreachable!("returned from panic")
+    }
 }

@@ -194,6 +194,41 @@ impl<T: Boxed> Vector<T> {
         }
     }
 
+    /// Returns a new vector without its final element
+    pub fn pop(&self, heap: &mut impl AsHeap) -> Option<(Gc<Vector<T>>, Gc<T>)> {
+        if self.is_empty() {
+            return None;
+        }
+
+        match self.as_repr() {
+            Repr::Inline(inline) => {
+                const MAX_INLINE_LENGTH_MINUS_ONE: usize = Vector::<Any>::MAX_INLINE_LENGTH + 1;
+
+                let mut values: [Gc<T>; MAX_INLINE_LENGTH_MINUS_ONE] =
+                    [unsafe { Gc::new(ptr::null()) }; MAX_INLINE_LENGTH_MINUS_ONE];
+
+                let new_len = self.len() - 1;
+                (&mut values[0..new_len]).copy_from_slice(&inline.values[0..new_len]);
+
+                let new_vector = Vector::new(heap, values[0..new_len].iter().copied());
+                Some((new_vector, inline.values[self.len() - 1]))
+            }
+            Repr::External(external) => {
+                let (values, element) = external.values.pop().unwrap();
+
+                let boxed = unsafe {
+                    mem::transmute(ExternalVector {
+                        header: external.header,
+                        inline_length: external.inline_length,
+                        values,
+                    })
+                };
+
+                Some((heap.as_heap_mut().place_box(boxed), element))
+            }
+        }
+    }
+
     pub(crate) fn visit_mut_elements<F>(&mut self, visitor: &mut F)
     where
         F: FnMut(&mut Gc<T>),

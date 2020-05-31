@@ -37,10 +37,19 @@
   (assert-eq! [false false false false false]
     (vector-assoc [false false true false false] 2 false)))
 
+(defn test-vector-pop! () ->! ()
+  ; One element
+  (assert-eq! '([] 1) (vector-pop [1]))
+  ; Inline
+  (assert-eq! '([1 2] 3) (vector-pop [1 2 3]))
+  ; External
+  (assert-eq! '([1 2 3 4 5 6 7 8] 9) (vector-pop [1 2 3 4 5 6 7 8 9])))
+
 (defn main! () ->! ()
   (test-vector!)
   (test-vector-ref!)
   (test-vector-length!)
   (test-vector->list!)
   (test-vector-assoc!)
-  (test-vector-push!))
+  (test-vector-push!)
+  (test-vector-pop!))
