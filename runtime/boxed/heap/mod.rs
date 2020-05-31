@@ -46,12 +46,14 @@ impl Segment {
     /// If the segment is full this will return [`None`]
     fn alloc_cells(&mut self, count: usize) -> Option<*mut Any> {
         let current_next = self.next;
-        let new_next = unsafe { self.next.add(count) };
 
-        if (new_next as *const Any) > self.end {
+        // Convert to an integer to avoid the UB of creating a pointer out of bounds.
+        let new_next = (self.next as usize) + (count * mem::size_of::<Any>());
+
+        if new_next > self.end as usize {
             None
         } else {
-            self.next = new_next;
+            self.next = new_next as *mut Any;
             Some(current_next)
         }
     }
@@ -228,7 +230,7 @@ mod test {
     fn basic_alloc() {
         use crate::boxed::Str;
 
-        let mut heap = Heap::new(TypeInfo::empty(), 1);
+        let mut heap = Heap::new(TypeInfo::empty(), 2);
 
         let string1 = Str::new(&mut heap, "HELLO");
         let string2 = Str::new(&mut heap, "WORLD");
