@@ -245,24 +245,42 @@ where
         }
     }
 
-    pub fn extend(self, mut values: impl ExactSizeIterator<Item = T>) -> Vector<T> {
+    pub fn extend(&self, mut values: impl ExactSizeIterator<Item = T>) -> Vector<T> {
         // This is a three step process:
         //
-        // 1. Push individual values until we have no tail
+        // 1. Fill the existing tail with values
         // 2. Push whole NODE_SIZE leaves while enough values remain
-        // 3. Place the rest of the values in the tail in a single operation
+        // 3. Place the rest of the values in the tail
         //
         // We can run out of values at any phase and return the finished vector
 
-        let mut vec_acc = self;
-
-        while (vec_acc.size & LEVEL_MASK as u64) != 0 {
-            if let Some(value) = values.next() {
-                vec_acc = vec_acc.push(value);
-            } else {
-                return vec_acc;
-            }
+        if values.len() == 0 {
+            return self.clone();
         }
+
+        let mut vec_acc = if let Some(tail_ref) = unsafe { self.tail.as_ref() } {
+            let old_tail_size = self.tail_size();
+            let mut tail_elements: [T; NODE_SIZE] = [T::padding_value(); NODE_SIZE];
+
+            unsafe {
+                tail_elements[..old_tail_size]
+                    .copy_from_slice(&tail_ref.elements.leaf[..old_tail_size]);
+            }
+
+            let fill_size = std::cmp::min(NODE_SIZE - old_tail_size, values.len());
+
+            for i in old_tail_size..(old_tail_size + fill_size) {
+                tail_elements[i] = values.next().unwrap();
+            }
+
+            Self {
+                size: self.size + (fill_size as u64),
+                root: Node::take_ptr_ref(self.root),
+                tail: Node::new_leaf(tail_elements),
+            }
+        } else {
+            self.clone()
+        };
 
         while values.len() >= NODE_SIZE {
             let mut trie_elements: [T; NODE_SIZE] = [T::padding_value(); NODE_SIZE];

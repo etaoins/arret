@@ -241,10 +241,7 @@ impl<T: Boxed> Vector<T> {
 
         match (self.as_repr(), other.as_repr()) {
             (Repr::External(self_external), Repr::External(other_external)) => {
-                let new_values = self_external
-                    .values
-                    .clone()
-                    .extend(other_external.values.iter());
+                let new_values = self_external.values.extend(other_external.values.iter());
 
                 let boxed = unsafe {
                     mem::transmute(ExternalVector {
