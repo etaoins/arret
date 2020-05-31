@@ -72,8 +72,12 @@ where
         let mut new_elements: [T; NODE_SIZE] = [T::padding_value(); NODE_SIZE];
 
         // Copy the previous leaf elements
-        new_elements[..old_tail_size]
-            .copy_from_slice(unsafe { &(&*self.tail).elements.leaf[..old_tail_size] });
+        unsafe {
+            if let Some(tail_ref) = self.tail.as_ref() {
+                new_elements[..old_tail_size]
+                    .copy_from_slice(&tail_ref.elements.leaf[..old_tail_size]);
+            }
+        }
 
         // Append the new element
         new_elements[old_tail_size] = value;
