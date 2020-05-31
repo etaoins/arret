@@ -65,7 +65,7 @@ pub fn stdlib_vector_assoc(
         index as usize
     };
 
-    if usize_index > vector.len() {
+    if usize_index >= vector.len() {
         task.panic(format!(
             "index {} out of bounds for vector of length {}",
             usize_index,

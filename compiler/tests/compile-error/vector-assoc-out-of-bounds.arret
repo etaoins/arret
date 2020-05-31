@@ -1,6 +1,6 @@
 (import [stdlib base])
 
-(def _ (vector-assoc [1 2 3] 5 0))
-      ;^^^^^^^^^^^^^^^^^^^^^^^^^^ ERROR index 5 out of bounds for vector of length 3
+(def _ (vector-assoc [1 2 3] 3 0))
+      ;^^^^^^^^^^^^^^^^^^^^^^^^^^ ERROR index 3 out of bounds for vector of length 3
 
 (defn main! () ->! ())
