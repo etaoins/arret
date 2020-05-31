@@ -450,9 +450,18 @@ pub fn gen_boxed_record(
         );
 
         let llvm_box_value = if let boxed::RecordStorage::Inline(_) = record_storage {
+            let llvm_inline_byte_len = LLVMConstInt(
+                llvm_i8,
+                match data_layout {
+                    Some(data_layout) => data_layout.size() as u64,
+                    None => 0,
+                },
+                1,
+            );
+
             let inline_box_members = &mut [
                 llvm_box_header,
-                LLVMConstInt(llvm_i8, data_layout.size() as u64, 1),
+                llvm_inline_byte_len,
                 llvm_has_gc_refs,
                 llvm_record_class_id,
                 llvm_data_struct,

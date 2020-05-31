@@ -39,7 +39,7 @@ pub struct JITCtx {
 
 pub struct RegisteredRecordStruct {
     /// Allocation layout of the record's data
-    pub data_layout: alloc::Layout,
+    pub data_layout: Option<alloc::Layout>,
     /// Record class ID that was dynamically registered in the class map
     pub record_class_id: boxed::RecordClassId,
 }

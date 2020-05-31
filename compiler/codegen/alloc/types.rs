@@ -296,7 +296,12 @@ pub fn gen_alloc_boxed_record(
                     "inline_record_data\0".as_ptr() as *const _,
                 );
 
-                (llvm_inline_record_data_ptr, data_layout.size())
+                let inline_byte_len = match data_layout {
+                    Some(data_layout) => data_layout.size(),
+                    None => 0,
+                };
+
+                (llvm_inline_record_data_ptr, inline_byte_len)
             }
             (boxed::RecordStorage::External, BoxSource::Stack) => {
                 // Allocate the record data
@@ -327,6 +332,8 @@ pub fn gen_alloc_boxed_record(
                 )
             }
             (boxed::RecordStorage::External, BoxSource::Heap(_)) => {
+                let data_layout = data_layout.unwrap();
+
                 let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
                 let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
                 let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
@@ -408,7 +415,7 @@ pub fn gen_alloc_boxed_record(
                     builder,
                     LLVMConstInt(
                         llvm_i64,
-                        boxed::RecordData::alloc_layout_to_compact(data_layout),
+                        boxed::RecordData::alloc_layout_to_compact(Some(data_layout)),
                         0,
                     ),
                     llvm_record_compact_layout_ptr,

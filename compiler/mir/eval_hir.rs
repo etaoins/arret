@@ -48,7 +48,7 @@ struct ArretFunKey {
 #[derive(PartialEq, Eq)]
 pub struct EvaledRecordClass {
     pub jit_record_class_id: boxed::RecordClassId,
-    pub jit_data_layout: alloc::Layout,
+    pub jit_data_layout: Option<alloc::Layout>,
     pub record_struct: ops::RecordStructId,
 }
 

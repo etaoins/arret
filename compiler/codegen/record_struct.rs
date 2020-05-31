@@ -34,7 +34,7 @@ pub fn append_common_internal_members(tcx: &mut TargetCtx, members: &mut Vec<LLV
 
 #[derive(Clone)]
 pub struct TargetRecordStruct {
-    pub data_layout: alloc::Layout,
+    pub data_layout: Option<alloc::Layout>,
     pub record_storage: boxed::RecordStorage,
     pub llvm_data_type: LLVMTypeRef,
     pub classmap_class: class_map::BoxedClass,
@@ -67,11 +67,16 @@ impl TargetRecordStruct {
                 0,
             );
 
-            // Convert our LLVM layout information to Rust's `std::alloc::Layout`
-            let align = LLVMABIAlignmentOfType(tcx.target_data(), llvm_data_type) as usize;
-            let size = LLVMABISizeOfType(tcx.target_data(), llvm_data_type) as usize;
+            let data_layout = if members.is_empty() {
+                None
+            } else {
+                // Convert our LLVM layout information to Rust's `std::alloc::Layout`
+                let align = LLVMABIAlignmentOfType(tcx.target_data(), llvm_data_type) as usize;
+                let size = LLVMABISizeOfType(tcx.target_data(), llvm_data_type) as usize;
 
-            let data_layout = alloc::Layout::from_size_align_unchecked(size, align);
+                Some(alloc::Layout::from_size_align_unchecked(size, align))
+            };
+
             let record_storage = boxed::Record::storage_for_data_layout(data_layout);
 
             let classmap_class = class_map::BoxedClass::from_fields(

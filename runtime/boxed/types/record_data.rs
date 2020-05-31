@@ -10,14 +10,17 @@ pub struct RecordData {
 impl RecordData {
     /// Constructs an empty record data
     pub fn empty() -> Self {
-        Self::alloc(alloc::Layout::new::<[u8; 0]>())
+        Self::alloc(None)
     }
 
     /// Allocates record data for the given layout
-    pub fn alloc(data_layout: alloc::Layout) -> Self {
+    pub fn alloc(data_layout: Option<alloc::Layout>) -> Self {
         unsafe {
             Self {
-                data_ptr: alloc::alloc(data_layout),
+                data_ptr: match data_layout {
+                    Some(data_layout) => alloc::alloc(data_layout),
+                    None => std::ptr::null_mut(),
+                },
                 compact_layout: Self::alloc_layout_to_compact(data_layout),
             }
         }
@@ -33,33 +36,42 @@ impl RecordData {
         self.data_ptr
     }
 
-    /// Returns the layout for the record data
-    pub fn layout(&self) -> alloc::Layout {
+    /// Returns the layout for the record data, or `None` if the data is empty
+    pub fn layout(&self) -> Option<alloc::Layout> {
         Self::compact_to_alloc_layout(self.compact_layout)
     }
 
     /// Converts an [`alloc::Layout`] to a compact representation
     ///
     /// This is intended for use by the compiler.
-    pub fn alloc_layout_to_compact(alloc_layout: alloc::Layout) -> u64 {
-        // This allows for alignments up to 2^16 and sizes up to 2^48
-        ((alloc_layout.align() as u64) & 0xFFFF) | ((alloc_layout.size() as u64) << 16)
+    pub fn alloc_layout_to_compact(alloc_layout: Option<alloc::Layout>) -> u64 {
+        match alloc_layout {
+            None => 0,
+            Some(alloc_layout) => {
+                // This allows for alignments up to 2^16 and sizes up to 2^48
+                ((alloc_layout.align() as u64) & 0xFFFF) | ((alloc_layout.size() as u64) << 16)
+            }
+        }
     }
 
-    fn compact_to_alloc_layout(input: u64) -> alloc::Layout {
-        let align = (input & 0xFFFF) as usize;
-        let size = (input >> 16) as usize;
+    fn compact_to_alloc_layout(input: u64) -> Option<alloc::Layout> {
+        if input == 0 {
+            None
+        } else {
+            let align = (input & 0xFFFF) as usize;
+            let size = (input >> 16) as usize;
 
-        unsafe { alloc::Layout::from_size_align_unchecked(size, align) }
+            unsafe { Some(alloc::Layout::from_size_align_unchecked(size, align)) }
+        }
     }
 }
 
 impl Drop for RecordData {
     fn drop(&mut self) {
-        let data_layout = Self::compact_to_alloc_layout(self.compact_layout);
-
-        unsafe {
-            alloc::dealloc(self.data_ptr as *mut u8, data_layout);
+        if let Some(data_layout) = Self::compact_to_alloc_layout(self.compact_layout) {
+            unsafe {
+                alloc::dealloc(self.data_ptr as *mut u8, data_layout);
+            }
         }
     }
 }
@@ -84,9 +96,16 @@ mod test {
             large_array_layout,
         ] {
             assert_eq!(
-                *layout,
-                RecordData::compact_to_alloc_layout(RecordData::alloc_layout_to_compact(*layout)),
+                Some(*layout),
+                RecordData::compact_to_alloc_layout(RecordData::alloc_layout_to_compact(Some(
+                    *layout
+                ))),
             )
         }
+
+        assert_eq!(
+            None,
+            RecordData::compact_to_alloc_layout(RecordData::alloc_layout_to_compact(None)),
+        )
     }
 }

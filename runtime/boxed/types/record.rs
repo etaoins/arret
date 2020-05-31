@@ -75,16 +75,21 @@ impl Record {
     }
 
     /// Returns the storage for given data layout
-    pub fn storage_for_data_layout(data_layout: alloc::Layout) -> RecordStorage {
-        if data_layout.align() > Self::INLINE_DATA_ALIGNMENT {
-            // Requires more alignment than our inline data provides
-            return RecordStorage::External;
-        }
+    pub fn storage_for_data_layout(data_layout: Option<alloc::Layout>) -> RecordStorage {
+        match data_layout {
+            None => RecordStorage::Inline(BoxSize::Size16),
+            Some(data_layout) => {
+                if data_layout.align() > Self::INLINE_DATA_ALIGNMENT {
+                    // Requires more alignment than our inline data provides
+                    return RecordStorage::External;
+                }
 
-        match data_layout.size() {
-            0..=8 => RecordStorage::Inline(BoxSize::Size16),
-            9..=Record::MAX_INLINE_BYTES => RecordStorage::Inline(BoxSize::Size32),
-            _ => RecordStorage::External,
+                match data_layout.size() {
+                    0..=8 => RecordStorage::Inline(BoxSize::Size16),
+                    9..=Record::MAX_INLINE_BYTES => RecordStorage::Inline(BoxSize::Size32),
+                    _ => RecordStorage::External,
+                }
+            }
         }
     }
 
@@ -201,18 +206,24 @@ impl InlineRecord {
 
         unsafe {
             let mut inline_data = mem::MaybeUninit::<[u8; Record::MAX_INLINE_BYTES]>::uninit();
-            ptr::copy(
-                data.as_ptr(),
-                inline_data.as_mut_ptr() as *mut _,
-                data.layout().size(),
-            );
+
+            if let Some(data_layout) = data.layout() {
+                ptr::copy(
+                    data.as_ptr(),
+                    inline_data.as_mut_ptr() as *mut _,
+                    data_layout.size(),
+                );
+            }
 
             InlineRecord {
                 record_header: RecordHeader {
                     header,
-                    inline_byte_len: data.layout().size() as u8,
+                    inline_byte_len: match data.layout() {
+                        Some(layout) => layout.size() as u8,
+                        None => 0,
+                    },
                     // This is conservative - we don't know if there are GC refs or not
-                    may_contain_gc_refs: (data.layout().size() > 0) as bool,
+                    may_contain_gc_refs: data.layout().is_some(),
                     class_id,
                 },
                 inline_data,
