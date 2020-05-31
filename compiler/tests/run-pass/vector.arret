@@ -45,6 +45,12 @@
   ; External
   (assert-eq! '([1 2 3 4 5 6 7 8] 9) (vector-pop [1 2 3 4 5 6 7 8 9])))
 
+(defn test-vector-append! () ->! ()
+  (assert-eq! [1 2 3] (vector-append [] [1 2 3]))
+  (assert-eq! [1 2 3] (vector-append [1] [2 3]))
+  (assert-eq! [1 2 3] (vector-append [1 2] [3]))
+  (assert-eq! [1 2 3 4 5 6] (vector-append [1 2 3] [4 5 6])))
+
 (defn main! () ->! ()
   (test-vector!)
   (test-vector-ref!)

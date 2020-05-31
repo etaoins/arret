@@ -100,3 +100,12 @@ pub fn stdlib_vector_pop(
         unreachable!("returned from panic")
     }
 }
+
+#[arret_rfi_derive::rust_fun("(All #{T} (Vectorof T) (Vectorof T) -> (Vectorof T))")]
+pub fn stdlib_vector_append(
+    task: &mut Task,
+    vector1: Gc<boxed::Vector<boxed::Any>>,
+    vector2: Gc<boxed::Vector<boxed::Any>>,
+) -> Gc<boxed::Vector<boxed::Any>> {
+    vector1.append(task, vector2)
+}

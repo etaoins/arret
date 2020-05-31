@@ -9,6 +9,8 @@ use crate::persistent::Vector as PersistentVector;
 const MAX_16BYTE_INLINE_LENGTH: usize = (16 - 8) / mem::size_of::<Gc<Any>>();
 const MAX_32BYTE_INLINE_LENGTH: usize = (32 - 8) / mem::size_of::<Gc<Any>>();
 
+const EXTERNAL_INLINE_LENGTH: u32 = (MAX_32BYTE_INLINE_LENGTH + 1) as u32;
+
 /// Describes the storage of a vector's data
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum VectorStorage {
@@ -156,7 +158,7 @@ impl<T: Boxed> Vector<T> {
                 let boxed = unsafe {
                     mem::transmute(ExternalVector {
                         header: external.header,
-                        inline_length: external.inline_length,
+                        inline_length: EXTERNAL_INLINE_LENGTH,
                         values: external.values.assoc(index, value),
                     })
                 };
@@ -184,7 +186,7 @@ impl<T: Boxed> Vector<T> {
                 let boxed = unsafe {
                     mem::transmute(ExternalVector {
                         header: external.header,
-                        inline_length: external.inline_length,
+                        inline_length: EXTERNAL_INLINE_LENGTH,
                         values: external.values.push(value),
                     })
                 };
@@ -219,12 +221,44 @@ impl<T: Boxed> Vector<T> {
                 let boxed = unsafe {
                     mem::transmute(ExternalVector {
                         header: external.header,
-                        inline_length: external.inline_length,
+                        inline_length: EXTERNAL_INLINE_LENGTH,
                         values,
                     })
                 };
 
                 Some((heap.as_heap_mut().place_box(boxed), element))
+            }
+        }
+    }
+
+    /// Appends the elements in the passed vector and returns a new vector
+    pub fn append(&self, heap: &mut impl AsHeap, other: Gc<Vector<T>>) -> Gc<Vector<T>> {
+        if self.is_empty() {
+            return other;
+        } else if other.is_empty() {
+            return unsafe { Gc::new(self) };
+        }
+
+        match (self.as_repr(), other.as_repr()) {
+            (Repr::External(self_external), Repr::External(other_external)) => {
+                let new_values = self_external
+                    .values
+                    .clone()
+                    .extend(other_external.values.iter());
+
+                let boxed = unsafe {
+                    mem::transmute(ExternalVector {
+                        header: self_external.header,
+                        inline_length: EXTERNAL_INLINE_LENGTH,
+                        values: new_values,
+                    })
+                };
+
+                heap.as_heap_mut().place_box(boxed)
+            }
+            _ => {
+                let values: Vec<_> = self.iter().chain(other.iter()).collect();
+                Self::new(heap, values.into_iter())
             }
         }
     }
