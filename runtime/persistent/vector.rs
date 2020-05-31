@@ -839,4 +839,16 @@ mod test {
         let collected_values: Vec<usize> = test_vec.iter().collect();
         assert_eq!(vec![100, 200, 300], collected_values);
     }
+
+    #[test]
+    fn vector_extend() {
+        let start_vec = Vector::<usize>::new(1..4);
+        let extended_vec = start_vec.extend(4..7);
+
+        let all_values: Vec<usize> = extended_vec.iter().collect();
+        assert_eq!(vec![1, 2, 3, 4, 5, 6], all_values);
+
+        let zero_extended_vec = extended_vec.extend(iter::empty());
+        assert_eq!(6, zero_extended_vec.len());
+    }
 }
