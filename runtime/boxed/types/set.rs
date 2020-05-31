@@ -231,8 +231,7 @@ impl<T: Boxed> InlineSet<T> {
     fn new(header: Header, hashed_values: Vec<(u64, Gc<T>)>) -> InlineSet<T> {
         let inline_length = hashed_values.len();
 
-        let mut inline_values: [MaybeUninit<Gc<T>>; MAX_32BYTE_INLINE_LENGTH] =
-            [MaybeUninit::uninit(); MAX_32BYTE_INLINE_LENGTH];
+        let mut inline_values = [MaybeUninit::uninit(); MAX_32BYTE_INLINE_LENGTH];
 
         for (inline_value, (_, value)) in inline_values.iter_mut().zip(hashed_values) {
             *inline_value = MaybeUninit::new(value);

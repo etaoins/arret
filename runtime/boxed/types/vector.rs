@@ -180,8 +180,7 @@ impl<T: Boxed> Vector<T> {
             Repr::Inline(inline) => {
                 const MAX_INLINE_LENGTH_PLUS_ONE: usize = Vector::<Any>::MAX_INLINE_LENGTH + 1;
 
-                let mut values: [MaybeUninit<Gc<T>>; MAX_INLINE_LENGTH_PLUS_ONE] =
-                    [MaybeUninit::uninit(); MAX_INLINE_LENGTH_PLUS_ONE];
+                let mut values = [MaybeUninit::uninit(); MAX_INLINE_LENGTH_PLUS_ONE];
 
                 (&mut values[0..self.len()]).copy_from_slice(&inline.values[0..self.len()]);
                 values[self.len()] = MaybeUninit::new(value);
@@ -217,8 +216,7 @@ impl<T: Boxed> Vector<T> {
             Repr::Inline(inline) => {
                 const MAX_INLINE_LENGTH_MINUS_ONE: usize = Vector::<Any>::MAX_INLINE_LENGTH + 1;
 
-                let mut values: [MaybeUninit<Gc<T>>; MAX_INLINE_LENGTH_MINUS_ONE] =
-                    [MaybeUninit::uninit(); MAX_INLINE_LENGTH_MINUS_ONE];
+                let mut values = [MaybeUninit::uninit(); MAX_INLINE_LENGTH_MINUS_ONE];
 
                 let new_len = self.len() - 1;
                 (&mut values[0..new_len]).copy_from_slice(&inline.values[0..new_len]);
@@ -342,8 +340,7 @@ impl<T: Boxed> InlineVector<T> {
     fn new(header: Header, values: impl ExactSizeIterator<Item = Gc<T>>) -> InlineVector<T> {
         let inline_length = values.len();
 
-        let mut inline_values: [MaybeUninit<Gc<T>>; MAX_32BYTE_INLINE_LENGTH] =
-            [MaybeUninit::uninit(); MAX_32BYTE_INLINE_LENGTH];
+        let mut inline_values = [MaybeUninit::uninit(); MAX_32BYTE_INLINE_LENGTH];
 
         for (inline_value, value) in inline_values.iter_mut().zip(values) {
             *inline_value = MaybeUninit::new(value);
