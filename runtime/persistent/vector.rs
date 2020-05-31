@@ -450,7 +450,7 @@ where
                 new_elements[i] = if i == branch_index {
                     new_subtree
                 } else {
-                    Node::take_ptr_ref(&*self.elements.branch[i])
+                    Node::take_ptr_ref(self.elements.branch[i])
                 };
             }
         }
@@ -503,7 +503,7 @@ where
                 let new_element = if i == branch_index {
                     new_subtree
                 } else {
-                    Node::take_ptr_ref(&*self.elements.branch[i])
+                    Node::take_ptr_ref(self.elements.branch[i])
                 };
 
                 new_elements[i] = new_element;
