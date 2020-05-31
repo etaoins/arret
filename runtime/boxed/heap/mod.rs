@@ -31,7 +31,14 @@ pub struct Heap {
 impl Segment {
     /// Creates a new segment with capacity for `count` cells
     fn with_capacity(count: usize) -> Segment {
-        let mut backing_vec = Vec::with_capacity(count);
+        // Allow for an extra cell of red zone capacity.
+        //
+        // This is because variable sized boxes will have a Rust size of 32 bytes, but we might
+        // allocate them only 16 bytes in the segment. If this happens at the end of the segment we
+        // could create a pointer to a Rust object extending past the allocation. This is UB and
+        // could generate code that e.g. does a vector load into unallocated memory.
+        let mut backing_vec = Vec::with_capacity(count + 1);
+
         let next: *mut Any = backing_vec.as_mut_ptr();
 
         Segment {
