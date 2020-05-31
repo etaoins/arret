@@ -331,7 +331,7 @@ impl<T: Boxed> InlineVector<T> {
                 mem::MaybeUninit::<[Gc<T>; MAX_32BYTE_INLINE_LENGTH]>::uninit().assume_init();
 
             for (inline_value, value) in inline_values.iter_mut().zip(values) {
-                ptr::write(inline_value, value);
+                *inline_value = value;
             }
 
             InlineVector {
