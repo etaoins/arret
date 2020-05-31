@@ -1,9 +1,7 @@
+use std::mem::MaybeUninit;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::{alloc, ptr, sync};
-
-use crate::boxed::refs::Gc;
-use crate::boxed::Boxed;
 
 /// Reference count used for global constants created by codegen
 const GLOBAL_CONSTANT_REFCOUNT: u64 = std::u64::MAX;
@@ -12,33 +10,10 @@ const TRIE_RADIX: u32 = 5;
 const NODE_SIZE: usize = 1 << TRIE_RADIX;
 const LEVEL_MASK: usize = (1 << TRIE_RADIX) - 1;
 
-pub trait Element: Copy {
-    /// A value that's cheap to create without causing undefined behaviour
-    fn padding_value() -> Self;
-}
-
-impl<T> Element for T
-where
-    T: Default + Copy,
-{
-    fn padding_value() -> Self {
-        Self::default()
-    }
-}
-
-impl<T> Element for Gc<T>
-where
-    T: Boxed,
-{
-    fn padding_value() -> Self {
-        unsafe { Gc::new(ptr::null()) }
-    }
-}
-
 #[repr(C)]
 pub struct Vector<T>
 where
-    T: Element,
+    T: Copy,
 {
     size: u64,
     root: *const Node<T>,
@@ -47,7 +22,7 @@ where
 
 impl<T> Vector<T>
 where
-    T: Element,
+    T: Copy,
 {
     pub fn new(values: impl ExactSizeIterator<Item = T>) -> Self {
         let empty_vec = Vector {
@@ -69,7 +44,7 @@ where
 
     pub fn push(&self, value: T) -> Vector<T> {
         let old_tail_size = self.tail_size();
-        let mut new_elements: [T; NODE_SIZE] = [T::padding_value(); NODE_SIZE];
+        let mut new_elements = [MaybeUninit::uninit(); NODE_SIZE];
 
         // Copy the previous leaf elements
         unsafe {
@@ -80,7 +55,7 @@ where
         }
 
         // Append the new element
-        new_elements[old_tail_size] = value;
+        new_elements[old_tail_size] = MaybeUninit::new(value);
         let new_leaf = Node::new_leaf(new_elements);
 
         if old_tail_size < (NODE_SIZE - 1) {
@@ -141,7 +116,7 @@ where
 
         let old_tail_size = self.tail_size();
         if old_tail_size > 0 {
-            let element = unsafe { (&*self.tail).elements.leaf[old_tail_size - 1] };
+            let element = unsafe { (&*self.tail).elements.leaf[old_tail_size - 1].assume_init() };
 
             // No change to structure; we just need to change our size
             return Some((
@@ -174,7 +149,7 @@ where
                 (new_subtree, previous_leaf)
             };
 
-            let element = (&*previous_leaf).elements.leaf[NODE_SIZE - 1];
+            let element = (&*previous_leaf).elements.leaf[NODE_SIZE - 1].assume_init();
 
             Some((
                 Self {
@@ -193,7 +168,7 @@ where
         }
 
         let leaf_node = self.get_leaf(index);
-        unsafe { Some((&*leaf_node).elements.leaf[index & LEVEL_MASK]) }
+        unsafe { Some((&*leaf_node).elements.leaf[index & LEVEL_MASK].assume_init()) }
     }
 
     fn get_leaf(&self, index: usize) -> *const Node<T> {
@@ -211,14 +186,14 @@ where
         }
 
         if index >= self.tail_offset() {
-            let mut new_elements: [T; NODE_SIZE] = [T::padding_value(); NODE_SIZE];
+            let mut new_elements = [MaybeUninit::uninit(); NODE_SIZE];
 
             // Copy the previous leaf elements
             new_elements[..self.tail_size()]
                 .copy_from_slice(unsafe { &(&*self.tail).elements.leaf[..self.tail_size()] });
 
             // Overwrite the element
-            new_elements[index - self.tail_offset()] = value;
+            new_elements[index - self.tail_offset()] = MaybeUninit::new(value);
 
             return Self {
                 size: self.size,
@@ -260,7 +235,7 @@ where
 
         let mut vec_acc = if let Some(tail_ref) = unsafe { self.tail.as_ref() } {
             let old_tail_size = self.tail_size();
-            let mut tail_elements: [T; NODE_SIZE] = [T::padding_value(); NODE_SIZE];
+            let mut tail_elements = [MaybeUninit::uninit(); NODE_SIZE];
 
             unsafe {
                 tail_elements[..old_tail_size]
@@ -270,7 +245,7 @@ where
             let fill_size = std::cmp::min(NODE_SIZE - old_tail_size, values.len());
 
             for i in old_tail_size..(old_tail_size + fill_size) {
-                tail_elements[i] = values.next().unwrap();
+                tail_elements[i] = MaybeUninit::new(values.next().unwrap());
             }
 
             Self {
@@ -283,9 +258,9 @@ where
         };
 
         while values.len() >= NODE_SIZE {
-            let mut trie_elements: [T; NODE_SIZE] = [T::padding_value(); NODE_SIZE];
+            let mut trie_elements = [MaybeUninit::uninit(); NODE_SIZE];
             for i in 0..NODE_SIZE {
-                trie_elements[i] = values.next().unwrap();
+                trie_elements[i] = MaybeUninit::new(values.next().unwrap());
             }
 
             vec_acc = vec_acc.push_leaf(Node::new_leaf(trie_elements), NODE_SIZE as u64)
@@ -293,9 +268,9 @@ where
 
         let tail_size = values.len();
         if tail_size > 0 {
-            let mut tail_elements: [T; NODE_SIZE] = [T::padding_value(); NODE_SIZE];
+            let mut tail_elements = [MaybeUninit::uninit(); NODE_SIZE];
             for i in 0..tail_size {
-                tail_elements[i] = values.next().unwrap();
+                tail_elements[i] = MaybeUninit::new(values.next().unwrap());
             }
 
             vec_acc.size += tail_size as u64;
@@ -359,7 +334,7 @@ where
 
 impl<T> Drop for Vector<T>
 where
-    T: Element,
+    T: Copy,
 {
     fn drop(&mut self) {
         unsafe {
@@ -371,7 +346,7 @@ where
 
 struct AssocedLeaf<T>
 where
-    T: Element,
+    T: Copy,
 {
     new_subtree: *const Node<T>,
     previous_leaf: *const Node<T>,
@@ -379,16 +354,16 @@ where
 
 union NodeElements<T>
 where
-    T: Element,
+    T: Copy,
 {
-    leaf: [T; NODE_SIZE],
+    leaf: [MaybeUninit<T>; NODE_SIZE],
     branch: [*const Node<T>; NODE_SIZE],
 }
 
 #[repr(C)]
 struct Node<T>
 where
-    T: Element,
+    T: Copy,
 {
     ref_count: AtomicU64,
     elements: NodeElements<T>,
@@ -396,9 +371,9 @@ where
 
 impl<T> Node<T>
 where
-    T: Element,
+    T: Copy,
 {
-    fn new_leaf(elements: [T; NODE_SIZE]) -> *const Node<T> {
+    fn new_leaf(elements: [MaybeUninit<T>; NODE_SIZE]) -> *const Node<T> {
         let layout = alloc::Layout::new::<Self>();
 
         unsafe {
@@ -455,7 +430,7 @@ where
         if remaining_depth == 0 {
             // Replace the leaf value
             let mut new_elements = unsafe { self.elements.leaf };
-            new_elements[index & LEVEL_MASK] = value;
+            new_elements[index & LEVEL_MASK] = MaybeUninit::new(value);
 
             return Self::new_leaf(new_elements);
         }
@@ -606,7 +581,7 @@ where
 
             for i in 0..leaf_size {
                 unsafe {
-                    visitor(&mut self.elements.leaf[i]);
+                    visitor(&mut *self.elements.leaf[i].as_mut_ptr());
                 }
             }
             *remaining_elements -= leaf_size;
@@ -631,7 +606,7 @@ where
 
 struct Iter<'a, T>
 where
-    T: Element,
+    T: Copy,
 {
     vec: &'a Vector<T>,
     index: usize,
@@ -640,7 +615,7 @@ where
 
 impl<'a, T> Iterator for Iter<'a, T>
 where
-    T: Element,
+    T: Copy,
 {
     type Item = T;
 
@@ -649,7 +624,8 @@ where
             return None;
         }
 
-        let item = unsafe { (&*self.current_leaf).elements.leaf[self.index & LEVEL_MASK] };
+        let item =
+            unsafe { (&*self.current_leaf).elements.leaf[self.index & LEVEL_MASK].assume_init() };
 
         self.index = self.index + 1;
         if self.index & LEVEL_MASK == 0 {
@@ -667,11 +643,11 @@ where
     }
 }
 
-impl<'a, T> ExactSizeIterator for Iter<'a, T> where T: Element {}
+impl<'a, T> ExactSizeIterator for Iter<'a, T> where T: Copy {}
 
 impl<T> Clone for Vector<T>
 where
-    T: Element,
+    T: Copy,
 {
     fn clone(&self) -> Self {
         Vector {
