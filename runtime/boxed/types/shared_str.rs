@@ -51,9 +51,10 @@ impl SharedStrData {
     }
 
     fn layout_for_byte_len(len: usize) -> alloc::Layout {
+        // TODO: This really wants the extra layout functions coming in Rust 1.44
         unsafe {
             alloc::Layout::from_size_align_unchecked(
-                mem::size_of::<DataHeader>() + len,
+                std::cmp::max(mem::size_of::<Self>(), mem::size_of::<DataHeader>() + len),
                 mem::align_of::<SharedStrData>(),
             )
         }
