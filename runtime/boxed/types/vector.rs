@@ -388,14 +388,14 @@ enum ReprMut<'a, T: Boxed> {
 
 impl<T: Boxed> Drop for Vector<T> {
     fn drop(&mut self) {
-        match self.as_repr() {
-            Repr::Inline(_) => {
+        match self.as_repr_mut() {
+            ReprMut::Inline(_) => {
                 // Do nothing here; we might've been allocated as a 16 byte box so we can't read
                 // the whole thing.
             }
-            Repr::External(external) => unsafe {
+            ReprMut::External(external) => unsafe {
                 // Call `ExternalVector`'s drop implementation
-                ptr::read(external);
+                ptr::drop_in_place(external);
             },
         }
     }

@@ -77,6 +77,14 @@ impl Str {
         }
     }
 
+    fn as_repr_mut(&mut self) -> ReprMut<'_> {
+        if self.is_inline() {
+            ReprMut::Inline(unsafe { &mut *(self as *mut Str as *mut InlineStr) })
+        } else {
+            ReprMut::External(unsafe { &mut *(self as *mut Str as *mut ExternalStr) })
+        }
+    }
+
     /// Returns the string's content as a slice
     pub fn as_str(&self) -> &str {
         match self.as_repr() {
@@ -107,14 +115,13 @@ impl fmt::Debug for Str {
 
 impl Drop for Str {
     fn drop(&mut self) {
-        match self.as_repr() {
-            Repr::Inline(_) => {
+        match self.as_repr_mut() {
+            ReprMut::Inline(_) => {
                 // Do nothing here; we might've been allocated as a 16 byte box so we can't read
                 // the whole thing.
             }
-            Repr::External(external) => unsafe {
-                // ptr::read will properly drop our Rust fields
-                ptr::read(external);
+            ReprMut::External(external) => unsafe {
+                ptr::drop_in_place(external);
             },
         }
     }
@@ -185,6 +192,11 @@ impl ExternalStr {
 enum Repr<'a> {
     Inline(&'a InlineStr),
     External(&'a ExternalStr),
+}
+
+enum ReprMut<'a> {
+    Inline(&'a mut InlineStr),
+    External(&'a mut ExternalStr),
 }
 
 #[cfg(test)]

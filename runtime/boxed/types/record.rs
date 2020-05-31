@@ -143,6 +143,14 @@ impl Record {
             Repr::External(unsafe { &*(self as *const Record as *const ExternalRecord) })
         }
     }
+
+    fn as_repr_mut(&mut self) -> ReprMut<'_> {
+        if self.is_inline() {
+            ReprMut::Inline(unsafe { &mut *(self as *mut Record as *mut InlineRecord) })
+        } else {
+            ReprMut::External(unsafe { &mut *(self as *const Record as *mut ExternalRecord) })
+        }
+    }
 }
 
 impl PartialEqInHeap for Record {
@@ -241,17 +249,19 @@ enum Repr<'a> {
     External(&'a ExternalRecord),
 }
 
+enum ReprMut<'a> {
+    Inline(&'a mut InlineRecord),
+    External(&'a mut ExternalRecord),
+}
+
 impl Drop for Record {
     fn drop(&mut self) {
-        match self.as_repr() {
-            Repr::Inline(_) => {
+        match self.as_repr_mut() {
+            ReprMut::Inline(_) => {
                 // Do nothing here; we might've been allocated as a 16 byte box so we can't read
                 // the whole thing.
             }
-            Repr::External(external) => unsafe {
-                // Call `ExternalRecord`'s drop implementation
-                ptr::read(external);
-            },
+            ReprMut::External(external) => unsafe { ptr::drop_in_place(external) },
         }
     }
 }

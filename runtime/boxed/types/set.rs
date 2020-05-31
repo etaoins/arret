@@ -119,6 +119,14 @@ impl<T: Boxed> Set<T> {
         }
     }
 
+    fn as_repr_mut(&mut self) -> ReprMut<'_, T> {
+        if self.is_inline() {
+            ReprMut::Inline(unsafe { &mut *(self as *mut Set<T> as *mut InlineSet<T>) })
+        } else {
+            ReprMut::External(unsafe { &mut *(self as *mut Set<T> as *mut ExternalSet<T>) })
+        }
+    }
+
     /// Returns the length of the set
     pub fn len(&self) -> usize {
         match self.as_repr() {
@@ -410,16 +418,21 @@ enum Repr<'a, T: Boxed> {
     External(&'a ExternalSet<T>),
 }
 
+enum ReprMut<'a, T: Boxed> {
+    Inline(&'a mut InlineSet<T>),
+    External(&'a mut ExternalSet<T>),
+}
+
 impl<T: Boxed> Drop for Set<T> {
     fn drop(&mut self) {
-        match self.as_repr() {
-            Repr::Inline(_) => {
+        match self.as_repr_mut() {
+            ReprMut::Inline(_) => {
                 // Do nothing here; we might've been allocated as a 16 byte box so we can't read
                 // the whole thing.
             }
-            Repr::External(external) => unsafe {
+            ReprMut::External(external) => unsafe {
                 // Call `ExternalSet`'s drop implementation
-                ptr::read(external);
+                ptr::drop_in_place(external);
             },
         }
     }
