@@ -1,6 +1,3 @@
-// This module unused at the moment
-#![allow(dead_code)]
-
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::{alloc, ptr, sync};
@@ -419,11 +416,6 @@ where
         intermediate_elements[0] = rest_tail;
 
         Self::new_branch(intermediate_elements)
-    }
-
-    fn get_value(&self, remaining_depth: u32, index: usize) -> T {
-        let leaf_node = self.get_leaf(remaining_depth, index);
-        return unsafe { (&*leaf_node).elements.leaf[index & LEVEL_MASK] };
     }
 
     fn get_leaf(&self, remaining_depth: u32, index: usize) -> *const Node<T> {
