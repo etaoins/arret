@@ -1,5 +1,6 @@
 use std::alloc;
 use std::hash::{Hash, Hasher};
+use std::mem::MaybeUninit;
 use std::{fmt, mem};
 
 use crate::boxed::refs::Gc;
@@ -123,7 +124,7 @@ impl Record {
 
     fn data_ptr(&self) -> *const u8 {
         match self.as_repr() {
-            Repr::Inline(inline) => &inline.inline_data[0] as *const u8,
+            Repr::Inline(inline) => inline.inline_data.as_ptr() as *const u8,
             Repr::External(external) => external.external_data.as_ptr(),
         }
     }
@@ -191,7 +192,7 @@ impl fmt::Debug for Record {
 #[repr(C, align(16))]
 struct InlineRecord {
     record_header: RecordHeader,
-    inline_data: [u8; Record::MAX_INLINE_BYTES],
+    inline_data: MaybeUninit<[u8; Record::MAX_INLINE_BYTES]>,
 }
 
 impl InlineRecord {
@@ -214,7 +215,7 @@ impl InlineRecord {
                     may_contain_gc_refs: (data.layout().size() > 0) as bool,
                     class_id,
                 },
-                inline_data: inline_data.assume_init(),
+                inline_data,
             }
         }
     }
