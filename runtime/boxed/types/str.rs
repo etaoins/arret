@@ -1,4 +1,5 @@
 use std::hash::{Hash, Hasher};
+use std::mem::MaybeUninit;
 use std::{fmt, mem, ptr};
 
 use crate::boxed::types::shared_str::SharedStr;
@@ -131,7 +132,7 @@ impl Drop for Str {
 struct InlineStr {
     header: Header,
     inline_byte_length: u8,
-    inline_bytes: [u8; Str::MAX_INLINE_BYTES],
+    inline_bytes: MaybeUninit<[u8; Str::MAX_INLINE_BYTES]>,
 }
 
 impl InlineStr {
@@ -148,7 +149,7 @@ impl InlineStr {
             InlineStr {
                 header,
                 inline_byte_length: value.len() as u8,
-                inline_bytes: inline_bytes.assume_init(),
+                inline_bytes,
             }
         }
     }
@@ -157,7 +158,7 @@ impl InlineStr {
         use std::slice;
         unsafe {
             slice::from_raw_parts(
-                &self.inline_bytes[0] as *const u8,
+                self.inline_bytes.as_ptr() as *const u8,
                 self.inline_byte_length as usize,
             )
         }
