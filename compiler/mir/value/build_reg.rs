@@ -195,7 +195,7 @@ fn const_to_reg(
                         ehx,
                         b,
                         span,
-                        *element_ref,
+                        element_ref,
                         &abitype::BoxedABIType::Any.into(),
                     )
                     .into()

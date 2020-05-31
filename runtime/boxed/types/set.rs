@@ -1,5 +1,6 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::mem::MaybeUninit;
 use std::{fmt, marker, mem};
 
 use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
@@ -149,11 +150,11 @@ impl<T: Boxed> Set<T> {
     }
 
     /// Returns an iterator over the set
-    pub fn iter<'a>(&'a self) -> Box<dyn ExactSizeIterator<Item = &'a Gc<T>> + 'a> {
+    pub fn iter<'a>(&'a self) -> Box<dyn ExactSizeIterator<Item = Gc<T>> + 'a> {
         // TODO: It would be nice not to box here
         match self.as_repr() {
             Repr::Inline(inline) => Box::new(inline.iter()),
-            Repr::External(external) => Box::new(external.iter()),
+            Repr::External(external) => Box::new(external.iter().copied()),
         }
     }
 
@@ -170,7 +171,7 @@ impl<T: Boxed> Set<T> {
                 }
 
                 for self_value in self.iter() {
-                    if !other.contains(heap, self_value) {
+                    if !other.contains(heap, &self_value) {
                         return false;
                     }
                 }
@@ -223,26 +224,24 @@ where
 pub struct InlineSet<T: Boxed> {
     header: Header,
     inline_length: u32,
-    values: [Gc<T>; MAX_32BYTE_INLINE_LENGTH],
+    values: [MaybeUninit<Gc<T>>; MAX_32BYTE_INLINE_LENGTH],
 }
 
 impl<T: Boxed> InlineSet<T> {
     fn new(header: Header, hashed_values: Vec<(u64, Gc<T>)>) -> InlineSet<T> {
-        unsafe {
-            let inline_length = hashed_values.len();
+        let inline_length = hashed_values.len();
 
-            let mut inline_values =
-                mem::MaybeUninit::<[Gc<T>; MAX_32BYTE_INLINE_LENGTH]>::uninit().assume_init();
+        let mut inline_values: [MaybeUninit<Gc<T>>; MAX_32BYTE_INLINE_LENGTH] =
+            [MaybeUninit::uninit(); MAX_32BYTE_INLINE_LENGTH];
 
-            for (inline_value, (_, value)) in inline_values.iter_mut().zip(hashed_values) {
-                ptr::write(inline_value, value);
-            }
+        for (inline_value, (_, value)) in inline_values.iter_mut().zip(hashed_values) {
+            *inline_value = MaybeUninit::new(value);
+        }
 
-            InlineSet {
-                header,
-                inline_length: inline_length as u32,
-                values: inline_values,
-            }
+        InlineSet {
+            header,
+            inline_length: inline_length as u32,
+            values: inline_values,
         }
     }
 
@@ -250,8 +249,10 @@ impl<T: Boxed> InlineSet<T> {
         self.inline_length as usize
     }
 
-    fn iter(&self) -> impl ExactSizeIterator<Item = &Gc<T>> {
-        self.values[0..self.inline_length as usize].iter()
+    fn iter<'a>(&'a self) -> impl ExactSizeIterator<Item = Gc<T>> + 'a {
+        self.values[0..self.inline_length as usize]
+            .iter()
+            .map(|value| unsafe { value.assume_init() })
     }
 
     fn contains(&self, heap: &Heap, value: &Gc<T>) -> bool {
@@ -265,7 +266,7 @@ impl<T: Boxed> InlineSet<T> {
 
         self.iter()
             .zip(other.iter())
-            .all(|(self_value, other_value)| self_value.eq_in_heap(heap, other_value))
+            .all(|(self_value, other_value)| self_value.eq_in_heap(heap, &other_value))
     }
 
     fn hash_in_heap<H: Hasher>(&self, heap: &Heap, state: &mut H) {

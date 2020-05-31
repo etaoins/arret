@@ -30,7 +30,7 @@ pub fn stdlib_set_to_list(
     task: &mut Task,
     set: Gc<boxed::Set<boxed::Any>>,
 ) -> Gc<boxed::List<boxed::Any>> {
-    boxed::List::new(task, set.iter().cloned())
+    boxed::List::new(task, set.iter())
 }
 
 #[arret_rfi_derive::rust_fun("(All #{T} (Setof T) (Setof T) -> Bool)")]
