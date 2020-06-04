@@ -385,14 +385,7 @@ pub fn sqrt(
 ) -> Result<Option<Value>> {
     let radicand_value = arg_list_value.unsized_list_iter().next_unchecked(b, span);
 
-    let radicand_reg = value_to_reg(
-        ehx,
-        b,
-        span,
-        &radicand_value,
-        &abitype::ABIType::Float.into(),
-    );
-
+    let radicand_reg = value_to_reg(ehx, b, span, &radicand_value, &abitype::ABIType::Float);
     let result_reg = b.push_reg(span, OpKind::FloatSqrt, radicand_reg.into());
 
     Ok(Some(

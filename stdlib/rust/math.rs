@@ -4,8 +4,6 @@ use arret_runtime::boxed;
 use arret_runtime::boxed::refs::Gc;
 use arret_runtime::task::Task;
 
-use arret_rfi_derive;
-
 fn fold_float_op<FR>(
     task: &mut Task,
     operands_iter: impl Iterator<Item = Gc<boxed::Num>>,

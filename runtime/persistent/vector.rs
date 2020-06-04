@@ -116,7 +116,7 @@ where
 
         let old_tail_size = self.tail_size();
         if old_tail_size > 0 {
-            let element = unsafe { (&*self.tail).elements.leaf[old_tail_size - 1].assume_init() };
+            let element = unsafe { (*self.tail).elements.leaf[old_tail_size - 1].assume_init() };
 
             // No change to structure; we just need to change our size
             return Some((
@@ -143,13 +143,13 @@ where
 
                 (new_subtree, previous_leaf)
             } else {
-                let new_subtree = Node::take_ptr_ref((&*self.root).elements.branch[0]);
-                let previous_leaf = (&*self.root).get_leaf(old_depth, self.size as usize - 1);
+                let new_subtree = Node::take_ptr_ref((*self.root).elements.branch[0]);
+                let previous_leaf = (*self.root).get_leaf(old_depth, self.size as usize - 1);
 
                 (new_subtree, previous_leaf)
             };
 
-            let element = (&*previous_leaf).elements.leaf[NODE_SIZE - 1].assume_init();
+            let element = (*previous_leaf).elements.leaf[NODE_SIZE - 1].assume_init();
 
             Some((
                 Self {
@@ -168,7 +168,7 @@ where
         }
 
         let leaf_node = self.get_leaf(index);
-        unsafe { Some((&*leaf_node).elements.leaf[index & LEVEL_MASK].assume_init()) }
+        unsafe { Some((*leaf_node).elements.leaf[index & LEVEL_MASK].assume_init()) }
     }
 
     fn get_leaf(&self, index: usize) -> *const Node<T> {
@@ -190,7 +190,7 @@ where
 
             // Copy the previous leaf elements
             new_elements[..self.tail_size()]
-                .copy_from_slice(unsafe { &(&*self.tail).elements.leaf[..self.tail_size()] });
+                .copy_from_slice(unsafe { &(*self.tail).elements.leaf[..self.tail_size()] });
 
             // Overwrite the element
             new_elements[index - self.tail_offset()] = MaybeUninit::new(value);
@@ -244,8 +244,8 @@ where
 
             let fill_size = std::cmp::min(NODE_SIZE - old_tail_size, values.len());
 
-            for i in old_tail_size..(old_tail_size + fill_size) {
-                tail_elements[i] = MaybeUninit::new(values.next().unwrap());
+            for tail_element in tail_elements.iter_mut().skip(old_tail_size).take(fill_size) {
+                *tail_element = MaybeUninit::new(values.next().unwrap());
             }
 
             Self {
@@ -259,8 +259,8 @@ where
 
         while values.len() >= NODE_SIZE {
             let mut trie_elements = [MaybeUninit::uninit(); NODE_SIZE];
-            for i in 0..NODE_SIZE {
-                trie_elements[i] = MaybeUninit::new(values.next().unwrap());
+            for trie_element in &mut trie_elements {
+                *trie_element = MaybeUninit::new(values.next().unwrap());
             }
 
             vec_acc = vec_acc.push_leaf(Node::new_leaf(trie_elements), NODE_SIZE as u64)
@@ -269,8 +269,8 @@ where
         let tail_size = values.len();
         if tail_size > 0 {
             let mut tail_elements = [MaybeUninit::uninit(); NODE_SIZE];
-            for i in 0..tail_size {
-                tail_elements[i] = MaybeUninit::new(values.next().unwrap());
+            for tail_element in tail_elements.iter_mut().take(tail_size) {
+                *tail_element = MaybeUninit::new(values.next().unwrap());
             }
 
             vec_acc.size += tail_size as u64;
@@ -445,9 +445,9 @@ where
 
         let mut new_elements: [*const Node<T>; NODE_SIZE] = [ptr::null(); NODE_SIZE];
 
-        for i in 0..NODE_SIZE {
+        for (i, new_element) in new_elements.iter_mut().enumerate() {
             unsafe {
-                new_elements[i] = if i == branch_index {
+                *new_element = if i == branch_index {
                     new_subtree
                 } else {
                     Node::take_ptr_ref(self.elements.branch[i])
@@ -455,7 +455,7 @@ where
             }
         }
 
-        return Self::new_branch(new_elements);
+        Self::new_branch(new_elements)
     }
 
     fn assoc_leaf(
@@ -498,15 +498,13 @@ where
 
         let mut new_elements: [*const Node<T>; NODE_SIZE] = [ptr::null(); NODE_SIZE];
 
-        for i in 0..NODE_SIZE {
+        for (i, new_element) in new_elements.iter_mut().enumerate() {
             unsafe {
-                let new_element = if i == branch_index {
+                *new_element = if i == branch_index {
                     new_subtree
                 } else {
                     Node::take_ptr_ref(self.elements.branch[i])
                 };
-
-                new_elements[i] = new_element;
             }
         }
 
@@ -625,9 +623,9 @@ where
         }
 
         let item =
-            unsafe { (&*self.current_leaf).elements.leaf[self.index & LEVEL_MASK].assume_init() };
+            unsafe { (*self.current_leaf).elements.leaf[self.index & LEVEL_MASK].assume_init() };
 
-        self.index = self.index + 1;
+        self.index += 1;
         if self.index & LEVEL_MASK == 0 {
             // Lookup the next node
             self.current_leaf = self.vec.get_leaf(self.index);

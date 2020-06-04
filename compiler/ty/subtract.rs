@@ -162,12 +162,12 @@ mod test {
 
         // PType1 - 'foo = PType1
         assert_eq!(
-            ptype1_unbounded.clone(),
+            ptype1_unbounded,
             subtract_ty_refs(&ptype1_unbounded, &foo_sym)
         );
 
         // [PType2 Sym] - 'foo = PType1
-        assert_eq!(ptype2_sym.clone(), subtract_ty_refs(&ptype2_sym, &foo_sym));
+        assert_eq!(ptype2_sym, subtract_ty_refs(&ptype2_sym, &foo_sym));
 
         // [PType3 Num] - Float = (∩ PType3 Int)
         let ptype3_int_intersect: ty::Ref<ty::Poly> =

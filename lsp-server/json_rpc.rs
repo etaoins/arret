@@ -1,4 +1,3 @@
-use serde;
 use serde::{Deserialize, Serialize};
 
 // This was originally stolen from rust-analyzer/lsp-server

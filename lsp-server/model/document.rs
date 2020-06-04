@@ -1,7 +1,5 @@
 use arret_syntax::span::Span;
 
-use lsp_types;
-
 #[derive(Debug)]
 pub struct Document {
     version: Option<i64>,

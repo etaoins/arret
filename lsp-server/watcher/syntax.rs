@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use lsp_types;
 use tokio::sync::{mpsc, watch};
 use tokio::task;
 

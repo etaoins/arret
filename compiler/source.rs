@@ -3,8 +3,6 @@ use std::ops::Range;
 use std::sync::{Arc, RwLock, RwLockReadGuard};
 use std::{fmt, fs, io, path};
 
-use codespan_reporting;
-
 use arret_syntax::datum::Datum;
 use arret_syntax::span::{FileId, Span};
 

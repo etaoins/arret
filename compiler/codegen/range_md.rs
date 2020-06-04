@@ -20,11 +20,7 @@ where
     type Item = Range<Int>;
 
     fn next(&mut self) -> Option<Range<Int>> {
-        let range_start = if let Some(range_start) = self.inner_iter.next() {
-            range_start
-        } else {
-            return None;
-        };
+        let range_start = self.inner_iter.next()?;
 
         let mut range_length: Int = 1;
         while self.inner_iter.peek() == Some(&(range_start + range_length)) {

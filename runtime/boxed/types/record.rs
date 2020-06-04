@@ -154,7 +154,7 @@ impl Record {
         if self.is_inline() {
             ReprMut::Inline(unsafe { &mut *(self as *mut Record as *mut InlineRecord) })
         } else {
-            ReprMut::External(unsafe { &mut *(self as *const Record as *mut ExternalRecord) })
+            ReprMut::External(unsafe { &mut *(self as *mut Record as *mut ExternalRecord) })
         }
     }
 }

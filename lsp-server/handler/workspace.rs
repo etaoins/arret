@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use lsp_types;
-
 use crate::handler::SyncNotificationHandler;
 use crate::model::Workspace;
 use crate::session::State;

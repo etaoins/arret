@@ -3,7 +3,6 @@
 
 #[macro_use]
 extern crate arret_runtime;
-use arret_rfi_derive;
 
 pub mod list;
 use crate::list::*;

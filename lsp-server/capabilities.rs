@@ -1,5 +1,3 @@
-use lsp_types;
-
 pub fn server_capabilities() -> lsp_types::ServerCapabilities {
     lsp_types::ServerCapabilities {
         text_document_sync: Some(lsp_types::TextDocumentSyncCapability::Options(
