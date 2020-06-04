@@ -44,7 +44,7 @@ ARG LLVM_ROOT
 
 COPY --from=llvm-build ${LLVM_ROOT} ${LLVM_ROOT}
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.43.1 --profile=minimal
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.44.0 --profile=minimal
 
 ENV PATH "/root/.cargo/bin:${PATH}"
 RUN rustup component add rustfmt
