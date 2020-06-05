@@ -256,9 +256,9 @@ impl<T: Boxed> Vector<T> {
             return unsafe { Gc::new(self) };
         }
 
-        match (self.as_repr(), other.as_repr()) {
-            (Repr::External(self_external), Repr::External(other_external)) => {
-                let new_values = self_external.values.extend(other_external.values.iter());
+        match self.as_repr() {
+            Repr::External(self_external) => {
+                let new_values = self_external.values.extend(other.iter());
 
                 let boxed = unsafe {
                     mem::transmute(ExternalVector {
