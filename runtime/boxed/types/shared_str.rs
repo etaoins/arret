@@ -1,5 +1,5 @@
 use std::sync::atomic::{fence, AtomicU64, Ordering};
-use std::{alloc, mem, ptr};
+use std::{alloc, ptr};
 
 /// Reference count used for global constants created by codegen
 const GLOBAL_CONSTANT_REFCOUNT: u64 = std::u64::MAX;
@@ -51,13 +51,12 @@ impl SharedStrData {
     }
 
     fn layout_for_byte_len(len: usize) -> alloc::Layout {
-        // TODO: This really wants the extra layout functions coming in Rust 1.44
-        unsafe {
-            alloc::Layout::from_size_align_unchecked(
-                std::cmp::max(mem::size_of::<Self>(), mem::size_of::<DataHeader>() + len),
-                mem::align_of::<SharedStrData>(),
-            )
-        }
+        alloc::Layout::new::<DataHeader>()
+            // We have a static length of 1 so we need to allocate at least that
+            .extend(alloc::Layout::array::<u8>(std::cmp::max(1, len)).unwrap())
+            .unwrap()
+            .0
+            .pad_to_align()
     }
 
     fn is_global_constant(&self) -> bool {
