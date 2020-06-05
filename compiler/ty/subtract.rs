@@ -211,7 +211,7 @@ mod test {
 
         // Record class minus an instance is the record class
         assert_eq!(
-            record_class_ref.clone(),
+            record_class_ref,
             subtract_ty_refs(&record_class_ref, &int_instance_ref)
         );
 
