@@ -53,7 +53,7 @@
     "lint": "eslint 'src/**/*.ts'"
   },
   "devDependencies": {
-    "@types/glob": "7.1.1",
+    "@types/glob": "7.1.2",
     "@types/mocha": "7.0.2",
     "@types/node": "12.12.44",
     "@types/vscode": "1.45.1",
