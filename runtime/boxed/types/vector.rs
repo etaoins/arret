@@ -277,6 +277,31 @@ impl<T: Boxed> Vector<T> {
         }
     }
 
+    /// Takes the first `count` items from the vector
+    pub fn take(&self, heap: &mut impl AsHeap, count: usize) -> Gc<Vector<T>> {
+        let new_len = std::cmp::min(self.len(), count);
+
+        if new_len <= Self::MAX_INLINE_LENGTH {
+            return Self::new(heap, self.iter().take(count));
+        }
+
+        match self.as_repr() {
+            Repr::External(self_external) => {
+                let boxed = unsafe {
+                    mem::transmute(ExternalVector {
+                        header: self_external.header,
+                        inline_length: EXTERNAL_INLINE_LENGTH,
+                        values: self_external.values.take(count),
+                    })
+                };
+
+                heap.as_heap_mut().place_box(boxed)
+            }
+            // Shouldn't be reachable but is easy to handle
+            _ => Self::new(heap, self.iter().take(count)),
+        }
+    }
+
     pub(crate) fn visit_mut_elements<F>(&mut self, visitor: &mut F)
     where
         F: FnMut(&mut Gc<T>),

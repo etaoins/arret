@@ -120,6 +120,7 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "vector-push" => stdlib_vector_push,
     "vector-pop" => stdlib_vector_pop,
     "vector-append" => stdlib_vector_append,
+    "vector-take" => stdlib_vector_take,
 
     "hash" => stdlib_hash,
 

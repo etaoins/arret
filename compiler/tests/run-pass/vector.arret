@@ -55,6 +55,14 @@
   
   (assert-eq! [1 2 3] (vector-append [1] [2] [3])))
 
+(defn test-vector-take! () ->! ()
+  (assert-eq! [] (vector-take -1 [1 2 3 4 5 6]))
+  (assert-eq! [] (vector-take 0 [1 2 3 4 5 6]))
+  (assert-eq! [1 2 3] (vector-take 3 [1 2 3 4 5 6]))
+  (assert-eq! [1 2 3 4 5] (vector-take 5 [1 2 3 4 5 6]))
+  (assert-eq! [1 2 3 4 5 6] (vector-take 6 [1 2 3 4 5 6]))
+  (assert-eq! [1 2 3 4 5 6] (vector-take 100 [1 2 3 4 5 6])))
+
 (defn main! () ->! ()
   (test-vector!)
   (test-vector-ref!)
@@ -63,4 +71,5 @@
   (test-vector-assoc!)
   (test-vector-push!)
   (test-vector-pop!)
-  (test-vector-append!))
+  (test-vector-append!)
+  (test-vector-take!))

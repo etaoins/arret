@@ -116,3 +116,13 @@ pub fn stdlib_vector_append(
 
     vectors_iter.fold(first_vector, |v1, v2| v1.append(task, v2))
 }
+
+#[arret_rfi_derive::rust_fun("(All #{T} Int (Vectorof T) -> (Vectorof T))")]
+pub fn stdlib_vector_take(
+    task: &mut Task,
+    count: i64,
+    input: Gc<boxed::Vector<boxed::Any>>,
+) -> Gc<boxed::Vector<boxed::Any>> {
+    let usize_count = if count < 0 { 0 } else { count as usize };
+    input.take(task, usize_count)
+}

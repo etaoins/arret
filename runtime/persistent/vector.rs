@@ -171,6 +171,45 @@ where
         unsafe { Some((*leaf_node).elements.leaf[index & LEVEL_MASK].assume_init()) }
     }
 
+    pub fn take(&self, count: usize) -> Vector<T> {
+        let new_len = std::cmp::min(count, self.len());
+        if new_len == self.len() {
+            return self.clone();
+        }
+
+        let new_tail_size = Self::tail_size_for_len(new_len);
+
+        let old_trie_size = self.trie_size();
+        let new_trie_size = Self::trie_size_for_len(new_len);
+
+        let new_tail = if new_tail_size > 0 {
+            Node::take_ptr_ref(self.get_leaf(new_trie_size))
+        } else {
+            ptr::null()
+        };
+
+        let new_root = if new_trie_size > 0 {
+            let old_depth = Self::trie_depth(old_trie_size);
+            let new_depth = Self::trie_depth(new_trie_size);
+
+            // Drill down until we find our new root
+            let mut new_root = self.root;
+            for _ in new_depth..old_depth {
+                new_root = unsafe { (*new_root).elements.branch[0] };
+            }
+
+            Node::take_ptr_ref(new_root)
+        } else {
+            ptr::null()
+        };
+
+        Self {
+            size: new_len as u64,
+            root: new_root,
+            tail: new_tail,
+        }
+    }
+
     fn get_leaf(&self, index: usize) -> *const Node<T> {
         if index >= self.tail_offset() {
             self.tail
@@ -306,14 +345,22 @@ where
     ///
     /// This is always a multiple of `NODE_SIZE`
     fn trie_size(&self) -> usize {
-        self.len() - self.tail_size()
+        Self::trie_size_for_len(self.len())
+    }
+
+    fn trie_size_for_len(len: usize) -> usize {
+        len - Self::tail_size_for_len(len)
     }
 
     /// Size of the tail portion of the `Vector`
     ///
     /// This is always less than `NODE_SIZE`
     fn tail_size(&self) -> usize {
-        self.size as usize % NODE_SIZE
+        Self::tail_size_for_len(self.len())
+    }
+
+    fn tail_size_for_len(len: usize) -> usize {
+        len % NODE_SIZE
     }
 
     /// Index of the first element in the tail portion
@@ -763,6 +810,17 @@ mod test {
             }
         }
 
+        // Check the contents using take
+        for i in 0..TEST_LENGTH {
+            let head_vec = test_vec.take(i);
+            assert_eq!(i, head_vec.len());
+
+            if i > 0 {
+                assert_eq!(Some(0), head_vec.get(0));
+                assert_eq!(Some(i - 1), head_vec.get(i - 1));
+            }
+        }
+
         for i in (0..TEST_LENGTH).rev() {
             let (new_test_vec, element) = test_vec.pop().unwrap();
 
@@ -777,7 +835,7 @@ mod test {
 
     #[test]
     fn initialised_three_level_vector() {
-        const TEST_LENGTH: usize = 2080;
+        const TEST_LENGTH: usize = 2087;
 
         let mut test_vec = Vector::<usize>::new(0..TEST_LENGTH);
         assert_eq!(TEST_LENGTH, test_vec.len());
@@ -793,6 +851,16 @@ mod test {
             assert_eq!(TEST_LENGTH, test_iter.len());
 
             for (actual, expected) in test_vec.iter().enumerate() {
+                assert_eq!(expected, actual);
+            }
+        }
+
+        // Check the contents using take
+        for i in 0..TEST_LENGTH {
+            let head_vec = test_vec.take(i);
+            assert_eq!(i, head_vec.len());
+
+            for (actual, expected) in head_vec.iter().enumerate() {
                 assert_eq!(expected, actual);
             }
         }
