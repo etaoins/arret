@@ -101,11 +101,18 @@ pub fn stdlib_vector_pop(
     }
 }
 
-#[arret_rfi_derive::rust_fun("(All #{T} (Vectorof T) (Vectorof T) -> (Vectorof T))")]
+#[arret_rfi_derive::rust_fun("(All #{T} & (Vectorof T) -> (Vectorof T))")]
 pub fn stdlib_vector_append(
     task: &mut Task,
-    vector1: Gc<boxed::Vector<boxed::Any>>,
-    vector2: Gc<boxed::Vector<boxed::Any>>,
+    vectors: Gc<boxed::List<boxed::Vector<boxed::Any>>>,
 ) -> Gc<boxed::Vector<boxed::Any>> {
-    vector1.append(task, vector2)
+    let mut vectors_iter = vectors.iter();
+
+    let first_vector = if let Some(first_vector) = vectors_iter.next() {
+        first_vector
+    } else {
+        return boxed::Vector::new(task, std::iter::empty());
+    };
+
+    vectors_iter.fold(first_vector, |v1, v2| v1.append(task, v2))
 }
