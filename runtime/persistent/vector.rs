@@ -71,9 +71,7 @@ where
                 let new_depth = Self::trie_depth(self.trie_size() + NODE_SIZE);
 
                 if old_depth == new_depth {
-                    old_root
-                        .push_leaf(old_depth, new_size as usize - 1, leaf)
-                        .new_subtree
+                    old_root.push_leaf(old_depth, new_size as usize - 1, leaf)
                 } else {
                     // Need to add a new level
                     let mut root_children: [*const Node<T>; NODE_SIZE] = [ptr::null(); NODE_SIZE];
@@ -329,14 +327,6 @@ where
     }
 }
 
-struct AssocedLeaf<T>
-where
-    T: Copy,
-{
-    new_subtree: *const Node<T>,
-    previous_leaf: *const Node<T>,
-}
-
 union NodeElements<T>
 where
     T: Copy,
@@ -453,28 +443,19 @@ where
         remaining_depth: u32,
         last_index: usize,
         leaf: *const Node<T>,
-    ) -> AssocedLeaf<T> {
+    ) -> *const Node<T> {
         if remaining_depth == 0 {
-            return AssocedLeaf {
-                new_subtree: leaf,
-                previous_leaf: self as *const _,
-            };
+            return leaf;
         }
 
         let level_radix = TRIE_RADIX * remaining_depth;
         let branch_index = (last_index >> level_radix) & LEVEL_MASK;
 
         // Replace the branch value
-        let AssocedLeaf {
-            new_subtree,
-            previous_leaf,
-        } = unsafe {
+        let new_subtree = unsafe {
             match self.elements.branch[branch_index].as_ref() {
                 Some(branch) => branch.push_leaf(remaining_depth - 1, last_index, leaf),
-                None => AssocedLeaf {
-                    new_subtree: Self::new_chain(leaf, remaining_depth - 1),
-                    previous_leaf: ptr::null(),
-                },
+                None => Self::new_chain(leaf, remaining_depth - 1),
             }
         };
 
@@ -489,11 +470,7 @@ where
         }
 
         new_elements[branch_index] = new_subtree;
-
-        AssocedLeaf {
-            new_subtree: Self::new_branch(new_elements),
-            previous_leaf,
-        }
+        Self::new_branch(new_elements)
     }
 
     fn is_global_constant(&self) -> bool {
