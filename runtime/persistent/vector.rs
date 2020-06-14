@@ -10,6 +10,19 @@ const TRIE_RADIX: u32 = 5;
 const NODE_SIZE: usize = 1 << TRIE_RADIX;
 const LEVEL_MASK: usize = (1 << TRIE_RADIX) - 1;
 
+#[cfg(test)]
+use std::cell::RefCell;
+
+#[cfg(test)]
+thread_local! {
+    static ALLOCATED_BRANCHES: RefCell<isize> = RefCell::new(0);
+}
+
+#[cfg(test)]
+thread_local! {
+    static ALLOCATED_LEAVES: RefCell<isize> = RefCell::new(0);
+}
+
 #[repr(C)]
 pub struct Vector<T>
 where
@@ -213,7 +226,7 @@ where
                 return Self {
                     size: self.size + (fill_size as u64),
                     root: Node::take_ptr_ref(self.root),
-                    tail: Node::new_leaf(tail_elements),
+                    tail: new_leaf,
                 };
             }
 
@@ -347,6 +360,9 @@ where
     T: Copy,
 {
     fn new_leaf(elements: [MaybeUninit<T>; NODE_SIZE]) -> *const Node<T> {
+        #[cfg(test)]
+        ALLOCATED_LEAVES.with(|counter| *counter.borrow_mut() += 1);
+
         let layout = alloc::Layout::new::<Self>();
 
         unsafe {
@@ -360,8 +376,10 @@ where
     }
 
     fn new_branch(elements: [*const Node<T>; NODE_SIZE]) -> *const Node<T> {
-        let layout = alloc::Layout::new::<Self>();
+        #[cfg(test)]
+        ALLOCATED_BRANCHES.with(|counter| *counter.borrow_mut() += 1);
 
+        let layout = alloc::Layout::new::<Self>();
         debug_assert!(!elements[0].is_null());
 
         unsafe {
@@ -524,6 +542,12 @@ where
                 for i in 0..NODE_SIZE {
                     Self::release_ptr_ref(self_ref.elements.branch[i], depth - 1);
                 }
+
+                #[cfg(test)]
+                ALLOCATED_BRANCHES.with(|counter| *counter.borrow_mut() -= 1);
+            } else {
+                #[cfg(test)]
+                ALLOCATED_LEAVES.with(|counter| *counter.borrow_mut() -= 1);
             }
 
             alloc::dealloc(
@@ -635,155 +659,196 @@ mod test {
 
     use std::iter;
 
+    fn assert_nodes_deallocated<T>(block: T)
+    where
+        T: FnOnce() -> (),
+    {
+        assert_eq!(
+            0,
+            ALLOCATED_BRANCHES.with(|counter| *counter.borrow()),
+            "branches allocated before beginning of test"
+        );
+
+        assert_eq!(
+            0,
+            ALLOCATED_LEAVES.with(|counter| *counter.borrow()),
+            "leaves allocated before beginning of test"
+        );
+
+        block();
+
+        assert_eq!(
+            0,
+            ALLOCATED_BRANCHES.with(|counter| *counter.borrow()),
+            "branches still allocated after end of test"
+        );
+
+        assert_eq!(
+            0,
+            ALLOCATED_LEAVES.with(|counter| *counter.borrow()),
+            "leaves still allocated after end of test"
+        );
+    }
+
     #[test]
     fn tail_only_vector() {
-        let empty_vec = Vector::<i32>::new(iter::empty());
+        assert_nodes_deallocated(|| {
+            let empty_vec = Vector::<i32>::new(iter::empty());
 
-        assert_eq!(0, empty_vec.len());
-        assert_eq!(true, empty_vec.is_empty());
+            assert_eq!(0, empty_vec.len());
+            assert_eq!(true, empty_vec.is_empty());
 
-        let one_vec = empty_vec.extend(iter::once(0));
+            let one_vec = empty_vec.extend(iter::once(0));
 
-        // Make sure `empty_vec` is still intact
-        assert_eq!(0, empty_vec.len());
-        assert_eq!(true, empty_vec.is_empty());
-        assert_eq!(None, empty_vec.get(0));
+            // Make sure `empty_vec` is still intact
+            assert_eq!(0, empty_vec.len());
+            assert_eq!(true, empty_vec.is_empty());
+            assert_eq!(None, empty_vec.get(0));
 
-        assert_eq!(1, one_vec.len());
-        assert_eq!(false, one_vec.is_empty());
-        assert_eq!(Some(0), one_vec.get(0));
+            assert_eq!(1, one_vec.len());
+            assert_eq!(false, one_vec.is_empty());
+            assert_eq!(Some(0), one_vec.get(0));
 
-        // Try modifying the original one item vec
-        let mutated_vec = one_vec.assoc(0, 31337);
+            // Try modifying the original one item vec
+            let mutated_vec = one_vec.assoc(0, 31337);
 
-        assert_eq!(1, mutated_vec.len());
-        assert_eq!(false, mutated_vec.is_empty());
-        assert_eq!(Some(31337), mutated_vec.get(0));
-        assert_eq!(Some(0), one_vec.get(0));
+            assert_eq!(1, mutated_vec.len());
+            assert_eq!(false, mutated_vec.is_empty());
+            assert_eq!(Some(31337), mutated_vec.get(0));
+            assert_eq!(Some(0), one_vec.get(0));
+        });
     }
 
     #[test]
     fn extended_one_level_vector() {
-        const TEST_LENGTH: usize = 48;
+        assert_nodes_deallocated(|| {
+            const TEST_LENGTH: usize = 48;
 
-        let mut test_vec = Vector::<usize>::new(iter::empty());
+            let mut test_vec = Vector::<usize>::new(iter::empty());
 
-        for i in 0..TEST_LENGTH {
-            assert_eq!(i, test_vec.len());
-            test_vec = test_vec.extend(iter::once(i));
-        }
-
-        // Check the contents manually
-        for i in 0..TEST_LENGTH {
-            assert_eq!(Some(i), test_vec.get(i));
-        }
-
-        // Check the contents with an iterator
-        {
-            let test_iter = test_vec.iter();
-            assert_eq!(TEST_LENGTH, test_iter.len());
-
-            for (actual, expected) in test_vec.iter().enumerate() {
-                assert_eq!(expected, actual);
+            for i in 0..TEST_LENGTH {
+                assert_eq!(i, test_vec.len());
+                test_vec = test_vec.extend(iter::once(i));
             }
-        }
+
+            // Check the contents manually
+            for i in 0..TEST_LENGTH {
+                assert_eq!(Some(i), test_vec.get(i));
+            }
+
+            // Check the contents with an iterator
+            {
+                let test_iter = test_vec.iter();
+                assert_eq!(TEST_LENGTH, test_iter.len());
+
+                for (actual, expected) in test_vec.iter().enumerate() {
+                    assert_eq!(expected, actual);
+                }
+            }
+        })
     }
 
     #[test]
     fn extended_two_level_vector() {
-        const TEST_LENGTH: usize = 128;
+        assert_nodes_deallocated(|| {
+            const TEST_LENGTH: usize = 128;
 
-        let mut test_vec = Vector::<usize>::new(iter::empty());
+            let mut test_vec = Vector::<usize>::new(iter::empty());
 
-        for i in 0..TEST_LENGTH {
-            assert_eq!(i, test_vec.len());
-            test_vec = test_vec.extend(iter::once(i));
-        }
-
-        // Check the contents manually
-        for i in 0..TEST_LENGTH {
-            assert_eq!(Some(i), test_vec.get(i));
-        }
-
-        // Check the contents with an iterator
-        {
-            let test_iter = test_vec.iter();
-            assert_eq!(TEST_LENGTH, test_iter.len());
-
-            for (actual, expected) in test_vec.iter().enumerate() {
-                assert_eq!(expected, actual);
+            for i in 0..TEST_LENGTH {
+                assert_eq!(i, test_vec.len());
+                test_vec = test_vec.extend(iter::once(i));
             }
-        }
 
-        // Check the contents using take
-        for i in (0..TEST_LENGTH).step_by(3) {
-            let head_vec = test_vec.take(i);
-            assert_eq!(i, head_vec.len());
-
-            if i > 0 {
-                assert_eq!(Some(0), head_vec.get(0));
-                assert_eq!(Some(i - 1), head_vec.get(i - 1));
+            // Check the contents manually
+            for i in 0..TEST_LENGTH {
+                assert_eq!(Some(i), test_vec.get(i));
             }
-        }
+
+            // Check the contents with an iterator
+            {
+                let test_iter = test_vec.iter();
+                assert_eq!(TEST_LENGTH, test_iter.len());
+
+                for (actual, expected) in test_vec.iter().enumerate() {
+                    assert_eq!(expected, actual);
+                }
+            }
+
+            // Check the contents using take
+            for i in (0..TEST_LENGTH).step_by(3) {
+                let head_vec = test_vec.take(i);
+                assert_eq!(i, head_vec.len());
+
+                if i > 0 {
+                    assert_eq!(Some(0), head_vec.get(0));
+                    assert_eq!(Some(i - 1), head_vec.get(i - 1));
+                }
+            }
+        })
     }
 
     #[test]
     fn initialised_three_level_vector() {
-        const TEST_LENGTH: usize = 2087;
+        assert_nodes_deallocated(|| {
+            const TEST_LENGTH: usize = 2087;
 
-        let mut test_vec = Vector::<usize>::new(0..TEST_LENGTH);
-        assert_eq!(TEST_LENGTH, test_vec.len());
+            let mut test_vec = Vector::<usize>::new(0..TEST_LENGTH);
+            assert_eq!(TEST_LENGTH, test_vec.len());
 
-        // Check the contents manually
-        for i in 0..TEST_LENGTH {
-            assert_eq!(Some(i), test_vec.get(i));
-        }
-
-        // Check the contents with an iterator
-        {
-            let test_iter = test_vec.iter();
-            assert_eq!(TEST_LENGTH, test_iter.len());
-
-            for (actual, expected) in test_vec.iter().enumerate() {
-                assert_eq!(expected, actual);
+            // Check the contents manually
+            for i in 0..TEST_LENGTH {
+                assert_eq!(Some(i), test_vec.get(i));
             }
-        }
 
-        // Manually reverse the vector
-        for i in (0..TEST_LENGTH).rev() {
-            test_vec = test_vec.assoc(i, TEST_LENGTH - i - 1);
-        }
+            // Check the contents with an iterator
+            {
+                let test_iter = test_vec.iter();
+                assert_eq!(TEST_LENGTH, test_iter.len());
 
-        // Make sure it's reversed
-        for i in 0..TEST_LENGTH {
-            assert_eq!(Some(TEST_LENGTH - i - 1), test_vec.get(i));
-        }
-
-        // Reverse the vector back by mutable ref
-        test_vec.visit_mut_elements(&mut |element| {
-            *element = TEST_LENGTH - *element - 1;
-        });
-
-        // Check the contents using take
-        for i in (0..TEST_LENGTH).step_by(7) {
-            let head_vec = test_vec.take(i);
-            assert_eq!(i, head_vec.len());
-
-            for (actual, expected) in head_vec.iter().enumerate() {
-                assert_eq!(expected, actual);
+                for (actual, expected) in test_vec.iter().enumerate() {
+                    assert_eq!(expected, actual);
+                }
             }
-        }
+
+            // Manually reverse the vector
+            for i in (0..TEST_LENGTH).rev() {
+                test_vec = test_vec.assoc(i, TEST_LENGTH - i - 1);
+            }
+
+            // Make sure it's reversed
+            for i in 0..TEST_LENGTH {
+                assert_eq!(Some(TEST_LENGTH - i - 1), test_vec.get(i));
+            }
+
+            // Reverse the vector back by mutable ref
+            test_vec.visit_mut_elements(&mut |element| {
+                *element = TEST_LENGTH - *element - 1;
+            });
+
+            // Check the contents using take
+            for i in (0..TEST_LENGTH).step_by(7) {
+                let head_vec = test_vec.take(i);
+                assert_eq!(i, head_vec.len());
+
+                for (actual, expected) in head_vec.iter().enumerate() {
+                    assert_eq!(expected, actual);
+                }
+            }
+        })
     }
 
     #[test]
     fn vector_extend() {
-        let start_vec = Vector::<usize>::new(1..4);
-        let extended_vec = start_vec.extend(4..7);
+        assert_nodes_deallocated(|| {
+            let start_vec = Vector::<usize>::new(1..4);
+            let extended_vec = start_vec.extend(4..7);
 
-        let all_values: Vec<usize> = extended_vec.iter().collect();
-        assert_eq!(vec![1, 2, 3, 4, 5, 6], all_values);
+            let all_values: Vec<usize> = extended_vec.iter().collect();
+            assert_eq!(vec![1, 2, 3, 4, 5, 6], all_values);
 
-        let zero_extended_vec = extended_vec.extend(iter::empty());
-        assert_eq!(6, zero_extended_vec.len());
+            let zero_extended_vec = extended_vec.extend(iter::empty());
+            assert_eq!(6, zero_extended_vec.len());
+        })
     }
 }
