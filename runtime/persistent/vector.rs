@@ -75,7 +75,7 @@ where
 
         let new_root = if old_depth == new_depth {
             unsafe { &*self.root }
-                .assoc_leaf(old_depth, new_size as usize - 1, leaf)
+                .push_leaf(old_depth, new_size as usize - 1, leaf)
                 .new_subtree
         } else {
             // Need to add a new level
@@ -449,10 +449,10 @@ where
         Self::new_branch(new_elements)
     }
 
-    fn assoc_leaf(
+    fn push_leaf(
         &self,
         remaining_depth: u32,
-        index: usize,
+        last_index: usize,
         leaf: *const Node<T>,
     ) -> AssocedLeaf<T> {
         if remaining_depth == 0 {
@@ -463,7 +463,7 @@ where
         }
 
         let level_radix = TRIE_RADIX * remaining_depth;
-        let branch_index = (index >> level_radix) & LEVEL_MASK;
+        let branch_index = (last_index >> level_radix) & LEVEL_MASK;
 
         // Replace the branch value
         let AssocedLeaf {
@@ -471,7 +471,7 @@ where
             previous_leaf,
         } = unsafe {
             match self.elements.branch[branch_index].as_ref() {
-                Some(branch) => branch.assoc_leaf(remaining_depth - 1, index, leaf),
+                Some(branch) => branch.push_leaf(remaining_depth - 1, last_index, leaf),
                 None => AssocedLeaf {
                     new_subtree: Self::new_chain(leaf, remaining_depth - 1),
                     previous_leaf: ptr::null(),
@@ -480,15 +480,16 @@ where
         };
 
         let mut new_elements: [*const Node<T>; NODE_SIZE] = [ptr::null(); NODE_SIZE];
-        for (i, new_element) in new_elements.iter_mut().enumerate() {
-            unsafe {
-                *new_element = if i == branch_index {
-                    new_subtree
-                } else {
-                    Node::take_ptr_ref(self.elements.branch[i])
-                };
-            }
+
+        for (new_element, old_element) in new_elements
+            .iter_mut()
+            .zip(unsafe { self.elements.branch }.iter())
+            .take(branch_index)
+        {
+            *new_element = Node::take_ptr_ref(*old_element)
         }
+
+        new_elements[branch_index] = new_subtree;
 
         AssocedLeaf {
             new_subtree: Self::new_branch(new_elements),
