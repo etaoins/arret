@@ -479,16 +479,7 @@ where
             }
         };
 
-        // Are we empty now?
-        if new_subtree.is_null() && branch_index == 0 {
-            return AssocedLeaf {
-                new_subtree: ptr::null(),
-                previous_leaf,
-            };
-        }
-
         let mut new_elements: [*const Node<T>; NODE_SIZE] = [ptr::null(); NODE_SIZE];
-
         for (i, new_element) in new_elements.iter_mut().enumerate() {
             unsafe {
                 *new_element = if i == branch_index {
