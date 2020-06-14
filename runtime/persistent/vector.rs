@@ -61,29 +61,28 @@ where
         let new_size = self.size + added_elements;
         debug_assert!(new_size & (LEVEL_MASK as u64) == 0);
 
-        if self.root.is_null() {
-            // We're the first root node
-            return Self {
-                size: new_size,
-                root: leaf,
-                tail: ptr::null(),
-            };
-        }
+        let new_root = match unsafe { self.root.as_ref() } {
+            None => {
+                // We're the first root node
+                leaf
+            }
+            Some(old_root) => {
+                let old_depth = Self::trie_depth(self.trie_size());
+                let new_depth = Self::trie_depth(self.trie_size() + NODE_SIZE);
 
-        let old_depth = Self::trie_depth(self.trie_size());
-        let new_depth = Self::trie_depth(self.trie_size() + NODE_SIZE);
+                if old_depth == new_depth {
+                    old_root
+                        .push_leaf(old_depth, new_size as usize - 1, leaf)
+                        .new_subtree
+                } else {
+                    // Need to add a new level
+                    let mut root_children: [*const Node<T>; NODE_SIZE] = [ptr::null(); NODE_SIZE];
+                    root_children[0] = Node::take_ptr_ref(self.root);
+                    root_children[1] = Node::new_chain(leaf, old_depth);
 
-        let new_root = if old_depth == new_depth {
-            unsafe { &*self.root }
-                .push_leaf(old_depth, new_size as usize - 1, leaf)
-                .new_subtree
-        } else {
-            // Need to add a new level
-            let mut root_children: [*const Node<T>; NODE_SIZE] = [ptr::null(); NODE_SIZE];
-            root_children[0] = Node::take_ptr_ref(self.root);
-            root_children[1] = Node::new_chain(leaf, old_depth);
-
-            Node::new_branch(root_children)
+                    Node::new_branch(root_children)
+                }
+            }
         };
 
         Self {
