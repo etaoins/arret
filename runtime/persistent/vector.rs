@@ -244,8 +244,8 @@ where
         let tail_size = values.len();
         if tail_size > 0 {
             let mut tail_elements = [MaybeUninit::uninit(); NODE_SIZE];
-            for tail_element in tail_elements.iter_mut().take(tail_size) {
-                *tail_element = MaybeUninit::new(values.next().unwrap());
+            for (tail_element, value) in tail_elements.iter_mut().zip(values) {
+                *tail_element = MaybeUninit::new(value);
             }
 
             vec_acc.size += tail_size as u64;
