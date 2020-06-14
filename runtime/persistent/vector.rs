@@ -105,28 +105,23 @@ where
             return self.clone();
         }
 
-        let new_tail_size = Self::tail_size_for_len(new_len);
-
-        let old_trie_size = self.trie_size();
         let new_trie_size = Self::trie_size_for_len(new_len);
+        let new_root = if new_trie_size > 0 {
+            let old_depth = Self::trie_depth(self.trie_size());
+            let new_depth = Self::trie_depth(new_trie_size);
 
-        let new_tail = if new_tail_size > 0 {
-            Node::take_ptr_ref(self.get_leaf(new_trie_size))
+            // Drill down until we find our new root
+            let new_root = (new_depth..old_depth)
+                .fold(self.root, |root, _| unsafe { (*root).elements.branch[0] });
+
+            Node::take_ptr_ref(new_root)
         } else {
             ptr::null()
         };
 
-        let new_root = if new_trie_size > 0 {
-            let old_depth = Self::trie_depth(old_trie_size);
-            let new_depth = Self::trie_depth(new_trie_size);
-
-            // Drill down until we find our new root
-            let mut new_root = self.root;
-            for _ in new_depth..old_depth {
-                new_root = unsafe { (*new_root).elements.branch[0] };
-            }
-
-            Node::take_ptr_ref(new_root)
+        let new_tail_size = Self::tail_size_for_len(new_len);
+        let new_tail = if new_tail_size > 0 {
+            Node::take_ptr_ref(self.get_leaf(new_trie_size))
         } else {
             ptr::null()
         };
