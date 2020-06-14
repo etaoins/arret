@@ -282,16 +282,24 @@ where
             }
 
             let fill_size = std::cmp::min(NODE_SIZE - old_tail_size, values.len());
+            let new_tail_size = old_tail_size + fill_size;
 
             for tail_element in tail_elements.iter_mut().skip(old_tail_size).take(fill_size) {
                 *tail_element = MaybeUninit::new(values.next().unwrap());
             }
 
-            Self {
-                size: self.size + (fill_size as u64),
-                root: Node::take_ptr_ref(self.root),
-                tail: Node::new_leaf(tail_elements),
+            let new_leaf = Node::new_leaf(tail_elements);
+
+            if new_tail_size != NODE_SIZE {
+                // We only affected the tail
+                return Self {
+                    size: self.size + (fill_size as u64),
+                    root: Node::take_ptr_ref(self.root),
+                    tail: Node::new_leaf(tail_elements),
+                };
             }
+
+            self.push_leaf(new_leaf, fill_size as u64)
         } else {
             self.clone()
         };
@@ -747,14 +755,14 @@ mod test {
     }
 
     #[test]
-    fn pushed_one_level_vector() {
+    fn extended_one_level_vector() {
         const TEST_LENGTH: usize = 48;
 
         let mut test_vec = Vector::<usize>::new(iter::empty());
 
         for i in 0..TEST_LENGTH {
             assert_eq!(i, test_vec.len());
-            test_vec = test_vec.push(i);
+            test_vec = test_vec.extend(iter::once(i));
         }
 
         // Check the contents manually
