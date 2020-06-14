@@ -264,15 +264,14 @@ where
     {
         unsafe {
             if let Some(tail_ref) = (self.tail as *mut Node<T>).as_mut() {
-                tail_ref.visit_mut_elements(0, &mut self.tail_size(), visitor);
+                tail_ref.visit_mut_elements(0, self.tail_size(), visitor);
             }
         }
 
         unsafe {
             if let Some(root_ref) = (self.root as *mut Node<T>).as_mut() {
-                let mut trie_size = self.trie_size();
-
-                root_ref.visit_mut_elements(Self::trie_depth(trie_size), &mut trie_size, visitor);
+                let trie_size = self.trie_size();
+                root_ref.visit_mut_elements(Self::trie_depth(trie_size), trie_size, visitor);
             }
         }
     }
@@ -525,45 +524,48 @@ where
         }
     }
 
+    /// Visits up to `remaining_elements` mutable elements, returning the new remaining count
     fn visit_mut_elements<F>(
         &mut self,
         remaining_depth: u32,
-        remaining_elements: &mut usize,
+        mut remaining_elements: usize,
         visitor: &mut F,
-    ) where
+    ) -> usize
+    where
         F: FnMut(&mut T),
     {
         if self.is_global_constant() {
             // We're a global constant; skip us
-            *remaining_elements = remaining_elements.saturating_sub(NODE_SIZE);
-            return;
+            return remaining_elements.saturating_sub(NODE_SIZE << (remaining_depth * TRIE_RADIX));
         }
 
         if remaining_depth == 0 {
-            let leaf_size = std::cmp::min(*remaining_elements, NODE_SIZE);
+            let leaf_size = std::cmp::min(remaining_elements, NODE_SIZE);
 
-            for i in 0..leaf_size {
-                unsafe {
-                    visitor(&mut *self.elements.leaf[i].as_mut_ptr());
+            unsafe {
+                for element in self.elements.leaf.iter_mut().take(leaf_size) {
+                    visitor(&mut (*element.as_mut_ptr()));
                 }
             }
-            *remaining_elements -= leaf_size;
-            return;
+
+            return remaining_elements - leaf_size;
         }
 
-        for i in 0..NODE_SIZE {
+        for branch in unsafe { self.elements.branch.iter() } {
             unsafe {
-                (&mut *(self.elements.branch[i] as *mut Node<T>)).visit_mut_elements(
+                remaining_elements = (&mut *(*branch as *mut Node<T>)).visit_mut_elements(
                     remaining_depth - 1,
                     remaining_elements,
                     visitor,
                 );
             }
 
-            if *remaining_elements == 0 {
-                return;
+            if remaining_elements == 0 {
+                return 0;
             }
         }
+
+        remaining_elements
     }
 }
 
