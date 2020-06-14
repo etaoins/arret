@@ -38,38 +38,9 @@ where
         self.size as usize
     }
 
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
-    }
-
-    pub fn push(&self, value: T) -> Vector<T> {
-        let old_tail_size = self.tail_size();
-        let mut new_elements = [MaybeUninit::uninit(); NODE_SIZE];
-
-        // Copy the previous leaf elements
-        unsafe {
-            if let Some(tail_ref) = self.tail.as_ref() {
-                new_elements[..old_tail_size]
-                    .copy_from_slice(&tail_ref.elements.leaf[..old_tail_size]);
-            }
-        }
-
-        // Append the new element
-        new_elements[old_tail_size] = MaybeUninit::new(value);
-        let new_leaf = Node::new_leaf(new_elements);
-
-        if old_tail_size < (NODE_SIZE - 1) {
-            // This only modifies the tail
-            return {
-                Self {
-                    size: self.size + 1,
-                    root: Node::take_ptr_ref(self.root),
-                    tail: new_leaf,
-                }
-            };
-        }
-
-        self.push_leaf(new_leaf, 1)
     }
 
     /// Pushes a new leaf containing `added_elements` additional elements
@@ -106,59 +77,6 @@ where
             size: new_size,
             root: new_root,
             tail: ptr::null(),
-        }
-    }
-
-    pub fn pop(&self) -> Option<(Vector<T>, T)> {
-        if self.is_empty() {
-            return None;
-        }
-
-        let old_tail_size = self.tail_size();
-        if old_tail_size > 0 {
-            let element = unsafe { (*self.tail).elements.leaf[old_tail_size - 1].assume_init() };
-
-            // No change to structure; we just need to change our size
-            return Some((
-                Self {
-                    size: self.size - 1,
-                    root: Node::take_ptr_ref(self.root),
-                    tail: Node::take_ptr_ref(self.tail),
-                },
-                element,
-            ));
-        }
-
-        // We have no tail; we need to take `NODE_SIZE` elements from the trie
-        let old_depth = Self::trie_depth(self.trie_size());
-        let new_depth = Self::trie_depth(self.trie_size() - NODE_SIZE);
-
-        unsafe {
-            let (new_subtree, previous_leaf) = if old_depth == new_depth {
-                // Promote the final leaf to to a tail
-                let AssocedLeaf {
-                    new_subtree,
-                    previous_leaf,
-                } = (&*self.root).assoc_leaf(new_depth, self.size as usize - 1, ptr::null());
-
-                (new_subtree, previous_leaf)
-            } else {
-                let new_subtree = Node::take_ptr_ref((*self.root).elements.branch[0]);
-                let previous_leaf = (*self.root).get_leaf(old_depth, self.size as usize - 1);
-
-                (new_subtree, previous_leaf)
-            };
-
-            let element = (*previous_leaf).elements.leaf[NODE_SIZE - 1].assume_init();
-
-            Some((
-                Self {
-                    size: self.size - 1,
-                    root: new_subtree,
-                    tail: Node::take_ptr_ref(previous_leaf),
-                },
-                element,
-            ))
         }
     }
 
@@ -723,10 +641,8 @@ mod test {
 
         assert_eq!(0, empty_vec.len());
         assert_eq!(true, empty_vec.is_empty());
-        assert_eq!(None, empty_vec.get(0));
-        assert!(empty_vec.pop().is_none());
 
-        let one_vec = empty_vec.push(0);
+        let one_vec = empty_vec.extend(iter::once(0));
 
         // Make sure `empty_vec` is still intact
         assert_eq!(0, empty_vec.len());
@@ -737,21 +653,13 @@ mod test {
         assert_eq!(false, one_vec.is_empty());
         assert_eq!(Some(0), one_vec.get(0));
 
-        // Pop the element off
-        let (new_empty_vec, popped_zero) = one_vec.pop().unwrap();
-
-        assert_eq!(0, popped_zero);
-
-        assert_eq!(0, new_empty_vec.len());
-        assert_eq!(true, new_empty_vec.is_empty());
-        assert_eq!(None, new_empty_vec.get(0));
-
         // Try modifying the original one item vec
         let mutated_vec = one_vec.assoc(0, 31337);
 
         assert_eq!(1, mutated_vec.len());
         assert_eq!(false, mutated_vec.is_empty());
         assert_eq!(Some(31337), mutated_vec.get(0));
+        assert_eq!(Some(0), one_vec.get(0));
     }
 
     #[test]
@@ -779,28 +687,17 @@ mod test {
                 assert_eq!(expected, actual);
             }
         }
-
-        for i in (0..TEST_LENGTH).rev() {
-            let (new_test_vec, element) = test_vec.pop().unwrap();
-
-            assert_eq!(i, new_test_vec.len());
-            assert_eq!(i, element);
-
-            test_vec = new_test_vec;
-        }
-
-        assert!(test_vec.is_empty());
     }
 
     #[test]
-    fn pushed_two_level_vector() {
+    fn extended_two_level_vector() {
         const TEST_LENGTH: usize = 128;
 
         let mut test_vec = Vector::<usize>::new(iter::empty());
 
         for i in 0..TEST_LENGTH {
             assert_eq!(i, test_vec.len());
-            test_vec = test_vec.push(i);
+            test_vec = test_vec.extend(iter::once(i));
         }
 
         // Check the contents manually
@@ -819,7 +716,7 @@ mod test {
         }
 
         // Check the contents using take
-        for i in 0..TEST_LENGTH {
+        for i in (0..TEST_LENGTH).step_by(3) {
             let head_vec = test_vec.take(i);
             assert_eq!(i, head_vec.len());
 
@@ -828,17 +725,6 @@ mod test {
                 assert_eq!(Some(i - 1), head_vec.get(i - 1));
             }
         }
-
-        for i in (0..TEST_LENGTH).rev() {
-            let (new_test_vec, element) = test_vec.pop().unwrap();
-
-            assert_eq!(i, new_test_vec.len());
-            assert_eq!(i, element);
-
-            test_vec = new_test_vec;
-        }
-
-        assert!(test_vec.is_empty());
     }
 
     #[test]
@@ -863,16 +749,6 @@ mod test {
             }
         }
 
-        // Check the contents using take
-        for i in 0..TEST_LENGTH {
-            let head_vec = test_vec.take(i);
-            assert_eq!(i, head_vec.len());
-
-            for (actual, expected) in head_vec.iter().enumerate() {
-                assert_eq!(expected, actual);
-            }
-        }
-
         // Manually reverse the vector
         for i in (0..TEST_LENGTH).rev() {
             test_vec = test_vec.assoc(i, TEST_LENGTH - i - 1);
@@ -888,24 +764,15 @@ mod test {
             *element = TEST_LENGTH - *element - 1;
         });
 
-        // Pop everything off
-        for i in (0..TEST_LENGTH).rev() {
-            let (new_test_vec, element) = test_vec.pop().unwrap();
+        // Check the contents using take
+        for i in (0..TEST_LENGTH).step_by(7) {
+            let head_vec = test_vec.take(i);
+            assert_eq!(i, head_vec.len());
 
-            assert_eq!(i, new_test_vec.len());
-            assert_eq!(i, element);
-
-            test_vec = new_test_vec;
+            for (actual, expected) in head_vec.iter().enumerate() {
+                assert_eq!(expected, actual);
+            }
         }
-
-        assert!(test_vec.is_empty());
-
-        // Extend with three values
-        test_vec = test_vec.extend(vec![100, 200, 300].into_iter());
-        assert_eq!(3, test_vec.len());
-
-        let collected_values: Vec<usize> = test_vec.iter().collect();
-        assert_eq!(vec![100, 200, 300], collected_values);
     }
 
     #[test]

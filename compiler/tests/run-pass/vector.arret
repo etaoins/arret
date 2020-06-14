@@ -23,27 +23,21 @@
   (assert-eq! '(1 2) ((black-box! vector->list) [1 2]))
   (assert-eq! '(1 2 3) (vector->list (black-box! [1 2 3]))))
 
-(defn test-vector-push! () ->! ()
-  (assert-eq! [1 2 3 4 5] (vector-push (vector-push [1 2 3] 4) 5))) 
+(defn test-vector-extend! () ->! ()
+  (assert-eq! [1 2 3 4 5 6]
+    (vector-extend
+      (vector-extend [1 2 3] 4) 5 6)))
 
 (defn test-vector-assoc! () ->! ()
   ; Inline vector
   (assert-eq! [one two three]
-    (vector-assoc 
+    (vector-assoc
       (vector-assoc [two two two] 0 'one)
       2 'three))
 
   ; External vector
   (assert-eq! [false false false false false]
     (vector-assoc [false false true false false] 2 false)))
-
-(defn test-vector-pop! () ->! ()
-  ; One element
-  (assert-eq! '([] 1) (vector-pop [1]))
-  ; Inline
-  (assert-eq! '([1 2] 3) (vector-pop [1 2 3]))
-  ; External
-  (assert-eq! '([1 2 3 4 5 6 7 8] 9) (vector-pop [1 2 3 4 5 6 7 8 9])))
 
 (defn test-vector-append! () ->! ()
   (assert-eq! [] (vector-append))
@@ -52,7 +46,7 @@
   (assert-eq! [1 2 3] (vector-append [1] [2 3]))
   (assert-eq! [1 2 3] (vector-append [1 2] [3]))
   (assert-eq! [1 2 3 4 5 6] (vector-append [1 2 3] [4 5 6]))
-  
+
   (assert-eq! [1 2 3] (vector-append [1] [2] [3])))
 
 (defn test-vector-take! () ->! ()
@@ -69,7 +63,6 @@
   (test-vector-length!)
   (test-vector->list!)
   (test-vector-assoc!)
-  (test-vector-push!)
-  (test-vector-pop!)
+  (test-vector-extend!)
   (test-vector-append!)
   (test-vector-take!))

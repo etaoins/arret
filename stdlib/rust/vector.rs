@@ -1,6 +1,5 @@
 use arret_runtime::binding::*;
 use arret_runtime::boxed;
-use arret_runtime::boxed::prelude::*;
 use arret_runtime::boxed::refs::Gc;
 use arret_runtime::task::Task;
 
@@ -77,30 +76,6 @@ pub fn stdlib_vector_assoc(
     vector.assoc(task, usize_index, value)
 }
 
-#[arret_rfi_derive::rust_fun("(All #{T} (Vectorof T) T -> (Vectorof T))")]
-pub fn stdlib_vector_push(
-    task: &mut Task,
-    vector: Gc<boxed::Vector<boxed::Any>>,
-    value: Gc<boxed::Any>,
-) -> Gc<boxed::Vector<boxed::Any>> {
-    vector.push(task, value)
-}
-
-#[arret_rfi_derive::rust_fun("(All #{T} (Vectorof T) -> (List (Vectorof T) T))")]
-pub fn stdlib_vector_pop(
-    task: &mut Task,
-    vector: Gc<boxed::Vector<boxed::Any>>,
-) -> Gc<boxed::List<boxed::Any>> {
-    if let Some((new_vector, element)) = vector.pop(task) {
-        let tuple_boxes: [Gc<boxed::Any>; 2] = [new_vector.as_any_ref(), element];
-
-        boxed::List::new(task, tuple_boxes.iter().cloned())
-    } else {
-        task.panic("attempted to pop from an empty vector".to_owned());
-        unreachable!("returned from panic")
-    }
-}
-
 #[arret_rfi_derive::rust_fun("(All #{T} & (Vectorof T) -> (Vectorof T))")]
 pub fn stdlib_vector_append(
     task: &mut Task,
@@ -115,6 +90,15 @@ pub fn stdlib_vector_append(
     };
 
     vectors_iter.fold(first_vector, |v1, v2| v1.append(task, v2))
+}
+
+#[arret_rfi_derive::rust_fun("(All #{T} (Vectorof T) & T -> (Vectorof T))")]
+pub fn stdlib_vector_extend(
+    task: &mut Task,
+    vector: Gc<boxed::Vector<boxed::Any>>,
+    new_values: Gc<boxed::List<boxed::Any>>,
+) -> Gc<boxed::Vector<boxed::Any>> {
+    vector.extend(task, new_values.iter())
 }
 
 #[arret_rfi_derive::rust_fun("(All #{T} Int (Vectorof T) -> (Vectorof T))")]

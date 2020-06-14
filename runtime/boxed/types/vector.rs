@@ -174,91 +174,28 @@ impl<T: Boxed> Vector<T> {
         }
     }
 
-    /// Returns a new vector with the element appended
-    pub fn push(&self, heap: &mut impl AsHeap, value: Gc<T>) -> Gc<Vector<T>> {
-        match self.as_repr() {
-            Repr::Inline(inline) => {
-                const MAX_INLINE_LENGTH_PLUS_ONE: usize = Vector::<Any>::MAX_INLINE_LENGTH + 1;
-
-                let mut values = [MaybeUninit::uninit(); MAX_INLINE_LENGTH_PLUS_ONE];
-
-                (&mut values[0..self.len()]).copy_from_slice(&inline.values[0..self.len()]);
-                values[self.len()] = MaybeUninit::new(value);
-
-                Vector::new(
-                    heap,
-                    values[0..self.len() + 1]
-                        .iter()
-                        .map(|value| unsafe { value.assume_init() }),
-                )
-            }
-            Repr::External(external) => {
-                let boxed = unsafe {
-                    mem::transmute(ExternalVector {
-                        header: external.header,
-                        inline_length: EXTERNAL_INLINE_LENGTH,
-                        values: external.values.push(value),
-                    })
-                };
-
-                heap.as_heap_mut().place_box(boxed)
-            }
-        }
-    }
-
-    /// Returns a new vector without its final element
-    pub fn pop(&self, heap: &mut impl AsHeap) -> Option<(Gc<Vector<T>>, Gc<T>)> {
-        if self.is_empty() {
-            return None;
-        }
-
-        match self.as_repr() {
-            Repr::Inline(inline) => {
-                const MAX_INLINE_LENGTH_MINUS_ONE: usize = Vector::<Any>::MAX_INLINE_LENGTH + 1;
-
-                let mut values = [MaybeUninit::uninit(); MAX_INLINE_LENGTH_MINUS_ONE];
-
-                let new_len = self.len() - 1;
-                (&mut values[0..new_len]).copy_from_slice(&inline.values[0..new_len]);
-
-                let new_vector = Vector::new(
-                    heap,
-                    values[0..new_len]
-                        .iter()
-                        .map(|value| unsafe { value.assume_init() }),
-                );
-
-                Some((new_vector, unsafe {
-                    inline.values[self.len() - 1].assume_init()
-                }))
-            }
-            Repr::External(external) => {
-                let (values, element) = external.values.pop().unwrap();
-
-                let boxed = unsafe {
-                    mem::transmute(ExternalVector {
-                        header: external.header,
-                        inline_length: EXTERNAL_INLINE_LENGTH,
-                        values,
-                    })
-                };
-
-                Some((heap.as_heap_mut().place_box(boxed), element))
-            }
-        }
-    }
-
     /// Appends the elements in the passed vector and returns a new vector
     pub fn append(&self, heap: &mut impl AsHeap, other: Gc<Vector<T>>) -> Gc<Vector<T>> {
         if self.is_empty() {
-            return other;
-        } else if other.is_empty() {
+            other
+        } else {
+            self.extend(heap, other.iter())
+        }
+    }
+
+    /// Returns a new vector extended with the values in the passed iterator
+    pub fn extend(
+        &self,
+        heap: &mut impl AsHeap,
+        new_values: impl ExactSizeIterator<Item = Gc<T>>,
+    ) -> Gc<Vector<T>> {
+        if new_values.len() == 0 {
             return unsafe { Gc::new(self) };
         }
 
         match self.as_repr() {
             Repr::External(self_external) => {
-                let new_values = self_external.values.extend(other.iter());
+                let new_values = self_external.values.extend(new_values);
 
                 let boxed = unsafe {
                     mem::transmute(ExternalVector {
@@ -271,7 +208,7 @@ impl<T: Boxed> Vector<T> {
                 heap.as_heap_mut().place_box(boxed)
             }
             _ => {
-                let values: Vec<_> = self.iter().chain(other.iter()).collect();
+                let values: Vec<_> = self.iter().chain(new_values).collect();
                 Self::new(heap, values.into_iter())
             }
         }
