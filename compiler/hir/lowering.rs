@@ -994,6 +994,7 @@ pub fn expr_for_str(data_str: &str) -> Expr<Lowered> {
     module_expr_for_str(data_str).1
 }
 
+#[allow(clippy::many_single_char_names)]
 #[cfg(test)]
 mod test {
     use super::*;

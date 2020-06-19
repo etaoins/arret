@@ -524,6 +524,7 @@ impl<'input> Parser<'input> {
 
 /////////
 
+#[allow(clippy::many_single_char_names)]
 #[cfg(test)]
 mod test {
     use super::*;
