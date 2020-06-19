@@ -515,7 +515,7 @@ pub fn gen_boxed_record(
     }
 }
 
-pub fn gen_boxed_vector(
+pub fn gen_boxed_inline_vector(
     tcx: &mut TargetCtx,
     mcx: &mut ModCtx<'_, '_, '_>,
     llvm_elements: impl ExactSizeIterator<Item = LLVMValueRef>,
@@ -524,13 +524,9 @@ pub fn gen_boxed_vector(
 
     let elements_len = llvm_elements.len();
 
-    if elements_len > boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH {
-        todo!("generating constant vector of length {}", elements_len);
-    }
-
     unsafe {
         let type_tag = boxed::TypeTag::Vector;
-        let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
+        let llvm_type = tcx.boxed_inline_vector_llvm_type();
         let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
         let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
 
@@ -556,6 +552,20 @@ pub fn gen_boxed_vector(
         annotate_private_global(global);
         global
     }
+}
+
+pub fn gen_boxed_vector(
+    tcx: &mut TargetCtx,
+    mcx: &mut ModCtx<'_, '_, '_>,
+    llvm_elements: impl ExactSizeIterator<Item = LLVMValueRef>,
+) -> LLVMValueRef {
+    let elements_len = llvm_elements.len();
+
+    if elements_len > boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH {
+        todo!("generating constant vector of length {}", elements_len);
+    }
+
+    gen_boxed_inline_vector(tcx, mcx, llvm_elements)
 }
 
 pub fn gen_boxed_set(

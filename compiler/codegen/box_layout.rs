@@ -101,16 +101,15 @@ impl BoxLayout {
                 BoxLayout::List => {
                     members.push(LLVMInt64TypeInContext(tcx.llx));
                 }
-                BoxLayout::ConstTagged(TypeTag::Vector) | BoxLayout::ConstTagged(TypeTag::Set) => {
+                BoxLayout::ConstTagged(TypeTag::Set) => {
                     let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
                     let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
 
-                    members.extend_from_slice(&[
-                        llvm_i32,
-                        llvm_any_ptr,
-                        llvm_any_ptr,
-                        llvm_any_ptr,
-                    ]);
+                    members.extend_from_slice(&[llvm_i32, llvm_any_ptr, llvm_any_ptr, llvm_any_ptr])
+                }
+                BoxLayout::ConstTagged(TypeTag::Vector) => {
+                    // Inline length
+                    members.push(LLVMInt32TypeInContext(tcx.llx));
                 }
                 BoxLayout::ConstTagged(TypeTag::Nil)
                 | BoxLayout::ConstTagged(TypeTag::True)

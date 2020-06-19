@@ -544,10 +544,19 @@ fn gen_op(
                     todo!("loading members from external vectors")
                 }
 
-                let llvm_boxed_vector = fcx.regs[vector_reg];
+                let boxed_inline_vector_ptr_type =
+                    LLVMPointerType(tcx.boxed_inline_vector_llvm_type(), 0);
+
+                let llvm_boxed_inline_vector = LLVMBuildBitCast(
+                    fcx.builder,
+                    fcx.regs[vector_reg],
+                    boxed_inline_vector_ptr_type,
+                    b"boxed_inline_vector\0".as_ptr() as *const _,
+                );
+
                 let value_ptr = LLVMBuildStructGEP(
                     fcx.builder,
-                    llvm_boxed_vector,
+                    llvm_boxed_inline_vector,
                     // Skip the header and inline len
                     (2 + member_index) as u32,
                     b"vector_member_ptr\0".as_ptr() as *const _,
