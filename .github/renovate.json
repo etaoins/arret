@@ -5,5 +5,26 @@
   },
   "timezone": "Australia/Melbourne",
   "schedule": ["before 5am every weekend"],
-  "prCreation": "not-pending"
+  "prCreation": "not-pending",
+  "packageRules": [
+    {
+      "managers": ["npm"],
+      "depTypeList": ["devDependencies"],
+      "packagePatterns": ["^@typescript-eslint/", "^eslint-"],
+      "packageNames": ["eslint"],
+      "groupName": "eslint deps"
+    },
+    {
+      "managers": ["npm"],
+      "depTypeList": ["devDependencies"],
+      "packageNames": ["vsce", "vscode-test", "@types/vscode"],
+      "groupName": "VS Code deps"
+    },
+    {
+      "managers": ["npm"],
+      "depTypeList": ["devDependencies"],
+      "packagePatterns": ["^@types/"],
+      "groupName": "npm Definitely Typed deps"
+    }
+  ]
 }
