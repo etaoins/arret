@@ -163,7 +163,7 @@ impl<T: Boxed> Vector<T> {
             Repr::External(external) => {
                 let boxed = unsafe {
                     mem::transmute(ExternalVector {
-                        header: external.header,
+                        header: Vector::TYPE_TAG.to_heap_header(VectorStorage::External.box_size()),
                         inline_length: EXTERNAL_INLINE_LENGTH,
                         values: external.values.assoc(index, value),
                     })
@@ -199,7 +199,7 @@ impl<T: Boxed> Vector<T> {
 
                 let boxed = unsafe {
                     mem::transmute(ExternalVector {
-                        header: self_external.header,
+                        header: Vector::TYPE_TAG.to_heap_header(VectorStorage::External.box_size()),
                         inline_length: EXTERNAL_INLINE_LENGTH,
                         values: new_values,
                     })
@@ -226,7 +226,7 @@ impl<T: Boxed> Vector<T> {
             Repr::External(self_external) => {
                 let boxed = unsafe {
                     mem::transmute(ExternalVector {
-                        header: self_external.header,
+                        header: Vector::TYPE_TAG.to_heap_header(VectorStorage::External.box_size()),
                         inline_length: EXTERNAL_INLINE_LENGTH,
                         values: self_external.values.take(count),
                     })

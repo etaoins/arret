@@ -515,7 +515,107 @@ pub fn gen_boxed_record(
     }
 }
 
-pub fn gen_boxed_inline_vector(
+fn gen_persistent_vector_leaf(
+    tcx: &mut TargetCtx,
+    mcx: &mut ModCtx<'_, '_, '_>,
+    llvm_elements: &[LLVMValueRef],
+) -> LLVMValueRef {
+    use arret_runtime::abitype::BoxedABIType;
+    use arret_runtime::persistent::vector::GLOBAL_CONSTANT_REFCOUNT;
+    use arret_runtime::persistent::vector::NODE_SIZE;
+
+    unsafe {
+        let llvm_type = tcx.persistent_vector_leaf_llvm_type();
+        let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
+        let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
+
+        let mut padded_llvm_elements: Vec<LLVMValueRef> = llvm_elements
+            .iter()
+            .copied()
+            .chain(iter::repeat(LLVMGetUndef(llvm_any_ptr)).take(NODE_SIZE - llvm_elements.len()))
+            .collect();
+
+        let mut members = vec![
+            LLVMConstInt(llvm_i64, GLOBAL_CONSTANT_REFCOUNT as u64, 0),
+            LLVMConstArray(
+                llvm_any_ptr,
+                padded_llvm_elements.as_mut_ptr(),
+                padded_llvm_elements.len() as u32,
+            ),
+        ];
+
+        let global = LLVMAddGlobal(
+            mcx.module,
+            llvm_type,
+            "const_vector_leaf\0".as_ptr() as *const _,
+        );
+
+        let llvm_value =
+            LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
+
+        LLVMSetInitializer(global, llvm_value);
+        annotate_private_global(global);
+        global
+    }
+}
+
+fn gen_boxed_external_vector(
+    tcx: &mut TargetCtx,
+    mcx: &mut ModCtx<'_, '_, '_>,
+    llvm_elements_iter: impl ExactSizeIterator<Item = LLVMValueRef>,
+) -> LLVMValueRef {
+    use arret_runtime::persistent::vector::NODE_SIZE;
+
+    let llvm_elements: Vec<LLVMValueRef> = llvm_elements_iter.collect();
+
+    unsafe {
+        let type_tag = boxed::TypeTag::Vector;
+        let llvm_type = tcx.boxed_external_vector_llvm_type();
+
+        let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
+        let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
+        let llvm_persistent_vector_leaf_ptr =
+            LLVMPointerType(tcx.persistent_vector_leaf_llvm_type(), 0);
+
+        let (root_ptr, tail_ptr) = if llvm_elements.len() > NODE_SIZE {
+            // Need a root a tail
+            (
+                gen_persistent_vector_leaf(tcx, mcx, &llvm_elements[0..NODE_SIZE]),
+                gen_persistent_vector_leaf(tcx, mcx, &llvm_elements[NODE_SIZE..]),
+            )
+        } else {
+            // Need just the tail
+            (
+                LLVMConstPointerNull(llvm_persistent_vector_leaf_ptr),
+                gen_persistent_vector_leaf(tcx, mcx, &llvm_elements),
+            )
+        };
+
+        let mut members = [
+            tcx.llvm_box_header(type_tag.to_const_header()),
+            LLVMConstInt(
+                llvm_i32,
+                boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH as u64 + 1,
+                0,
+            ),
+            LLVMConstInt(llvm_i64, llvm_elements.len() as u64, 0),
+            root_ptr,
+            tail_ptr,
+        ];
+
+        let llvm_value =
+            LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
+
+        let global = LLVMAddGlobal(mcx.module, llvm_type, "const_vector\0".as_ptr() as *const _);
+        LLVMSetInitializer(global, llvm_value);
+        LLVMSetAlignment(global, mem::align_of::<boxed::Vector>() as u32);
+
+        annotate_private_global(global);
+        global
+    }
+}
+
+fn gen_boxed_inline_vector(
     tcx: &mut TargetCtx,
     mcx: &mut ModCtx<'_, '_, '_>,
     llvm_elements: impl ExactSizeIterator<Item = LLVMValueRef>,
@@ -559,13 +659,17 @@ pub fn gen_boxed_vector(
     mcx: &mut ModCtx<'_, '_, '_>,
     llvm_elements: impl ExactSizeIterator<Item = LLVMValueRef>,
 ) -> LLVMValueRef {
+    use arret_runtime::persistent::vector::NODE_SIZE;
+
     let elements_len = llvm_elements.len();
 
-    if elements_len > boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH {
+    if elements_len <= boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH {
+        gen_boxed_inline_vector(tcx, mcx, llvm_elements)
+    } else if elements_len <= NODE_SIZE {
+        gen_boxed_external_vector(tcx, mcx, llvm_elements)
+    } else {
         todo!("generating constant vector of length {}", elements_len);
     }
-
-    gen_boxed_inline_vector(tcx, mcx, llvm_elements)
 }
 
 pub fn gen_boxed_set(

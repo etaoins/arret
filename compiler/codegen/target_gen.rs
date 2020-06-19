@@ -73,7 +73,9 @@ pub struct TargetCtx {
     boxed_inline_str_type: Option<LLVMTypeRef>,
     boxed_external_str_type: Option<LLVMTypeRef>,
 
+    persistent_vector_leaf_type: Option<LLVMTypeRef>,
     boxed_inline_vector_type: Option<LLVMTypeRef>,
+    boxed_external_vector_type: Option<LLVMTypeRef>,
 
     boxed_types: HashMap<BoxLayout, LLVMTypeRef>,
     global_interned_name_type: Option<LLVMTypeRef>,
@@ -133,7 +135,9 @@ impl TargetCtx {
                 boxed_inline_str_type: None,
                 boxed_external_str_type: None,
 
+                persistent_vector_leaf_type: None,
                 boxed_inline_vector_type: None,
+                boxed_external_vector_type: None,
 
                 boxed_types: HashMap::new(),
                 global_interned_name_type: None,
@@ -315,6 +319,55 @@ impl TargetCtx {
 
             llvm_type
         })
+    }
+
+    pub fn persistent_vector_leaf_llvm_type(&mut self) -> LLVMTypeRef {
+        use arret_runtime::persistent::vector::NODE_SIZE;
+
+        let llx = self.llx;
+        let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
+
+        *self
+            .persistent_vector_leaf_type
+            .get_or_insert_with(|| unsafe {
+                let llvm_i64 = LLVMInt64TypeInContext(llx);
+
+                let mut members = [llvm_i64, LLVMArrayType(llvm_any_ptr, NODE_SIZE as u32)];
+
+                let llvm_type =
+                    LLVMStructCreateNamed(llx, b"persistent_vector_leaf\0".as_ptr() as *const _);
+                LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
+
+                llvm_type
+            })
+    }
+
+    pub fn boxed_external_vector_llvm_type(&mut self) -> LLVMTypeRef {
+        let llx = self.llx;
+        let llvm_header = self.box_header_llvm_type();
+        let persistent_vector_leaf_type = self.persistent_vector_leaf_llvm_type();
+
+        *self
+            .boxed_external_vector_type
+            .get_or_insert_with(|| unsafe {
+                let llvm_i32 = LLVMInt32TypeInContext(llx);
+                let llvm_i64 = LLVMInt64TypeInContext(llx);
+                let persistent_vector_leaf_ptr = LLVMPointerType(persistent_vector_leaf_type, 0);
+
+                let members = &mut [
+                    llvm_header,
+                    llvm_i32,
+                    llvm_i64,
+                    persistent_vector_leaf_ptr,
+                    persistent_vector_leaf_ptr,
+                ];
+
+                let llvm_type =
+                    LLVMStructCreateNamed(llx, b"boxed_external_vector\0".as_ptr() as *const _);
+                LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
+
+                llvm_type
+            })
     }
 
     pub fn boxed_inline_vector_llvm_type(&mut self) -> LLVMTypeRef {

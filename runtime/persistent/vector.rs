@@ -4,10 +4,10 @@ use std::sync::atomic::Ordering;
 use std::{alloc, ptr, sync};
 
 /// Reference count used for global constants created by codegen
-const GLOBAL_CONSTANT_REFCOUNT: u64 = std::u64::MAX;
+pub const GLOBAL_CONSTANT_REFCOUNT: u64 = std::u64::MAX;
 
 const TRIE_RADIX: u32 = 5;
-const NODE_SIZE: usize = 1 << TRIE_RADIX;
+pub const NODE_SIZE: usize = 1 << TRIE_RADIX;
 const LEVEL_MASK: usize = (1 << TRIE_RADIX) - 1;
 
 #[cfg(test)]
