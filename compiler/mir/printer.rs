@@ -453,6 +453,14 @@ fn print_branch(
                     min_list_len
                 )?;
             }
+            ops::OpKind::LoadBoxedVectorLen(reg, list_reg) => {
+                writeln!(
+                    w,
+                    "%{} = <%{} as boxed::Vector>.len;",
+                    reg.get(),
+                    list_reg.get(),
+                )?;
+            }
             ops::OpKind::LoadBoxedSymInterned(reg, sym_reg) => {
                 writeln!(
                     w,

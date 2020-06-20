@@ -531,6 +531,14 @@ fn gen_op(
 
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::LoadBoxedVectorLen(reg, vector_reg) => {
+                use crate::codegen::vector_gen::load_boxed_vector_len;
+
+                let llvm_boxed_vector = fcx.regs[vector_reg];
+                let llvm_vector_len = load_boxed_vector_len(tcx, fcx, llvm_boxed_vector);
+
+                fcx.regs.insert(*reg, llvm_vector_len);
+            }
             OpKind::LoadBoxedVectorMember(
                 reg,
                 LoadBoxedVectorMemberOp {

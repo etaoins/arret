@@ -242,6 +242,7 @@ pub enum OpKind {
     LoadBoxedSymInterned(RegId, RegId),
     LoadBoxedFunThunkCaptures(RegId, RegId),
     LoadBoxedRecordClassId(RegId, RegId),
+    LoadBoxedVectorLen(RegId, RegId),
     LoadBoxedVectorMember(RegId, LoadBoxedVectorMemberOp),
 
     Cond(CondOp),
@@ -346,6 +347,7 @@ impl OpKind {
             | LoadBoxedFunThunkCaptures(reg_id, _)
             | LoadBoxedRecordClassId(reg_id, _)
             | LoadBoxedRecordField(reg_id, _)
+            | LoadBoxedVectorLen(reg_id, _)
             | LoadBoxedVectorMember(reg_id, _)
             | FloatAdd(reg_id, _)
             | Int64Add(reg_id, _)
@@ -462,6 +464,7 @@ impl OpKind {
                     record_reg: reg_id, ..
                 },
             )
+            | LoadBoxedVectorLen(_, reg_id)
             | LoadBoxedVectorMember(
                 _,
                 LoadBoxedVectorMemberOp {
@@ -601,6 +604,7 @@ impl OpKind {
             | LoadBoxedFunThunkCaptures(_, _)
             | LoadBoxedRecordClassId(_, _)
             | LoadBoxedRecordField(_, _)
+            | LoadBoxedVectorLen(_, _)
             | LoadBoxedVectorMember(_, _) => OpCategory::MemLoad,
 
             FloatAdd(_, _)

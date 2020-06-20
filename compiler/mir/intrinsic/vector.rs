@@ -15,6 +15,11 @@ pub fn vector_length(
     span: Span,
     arg_list_value: &Value,
 ) -> Result<Option<Value>> {
+    use crate::mir::ops::*;
+    use crate::mir::value;
+    use crate::mir::value::build_reg::value_to_reg;
+    use arret_runtime::abitype;
+
     let mut iter = arg_list_value.unsized_list_iter();
     let vector_value = iter.next_unchecked(b, span);
 
@@ -22,7 +27,19 @@ pub fn vector_length(
         return Ok(Some(boxed::Int::new(ehx, known_len as i64).into()));
     }
 
-    Ok(None)
+    let vector_reg = value_to_reg(
+        ehx,
+        b,
+        span,
+        &vector_value,
+        &abitype::BoxedABIType::Vector(&abitype::BoxedABIType::Any).into(),
+    )
+    .into();
+
+    let vector_len_reg = b.push_reg(span, OpKind::LoadBoxedVectorLen, vector_reg);
+    Ok(Some(
+        value::RegValue::new(vector_len_reg, abitype::ABIType::Int).into(),
+    ))
 }
 
 pub fn vector_ref(

@@ -15,6 +15,7 @@ mod range_md;
 mod record_struct;
 pub(crate) mod target_gen;
 mod target_machine;
+mod vector_gen;
 
 use crate::mir::ops::OpsABI;
 use arret_runtime::abitype;
