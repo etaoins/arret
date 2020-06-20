@@ -16,7 +16,7 @@ use crate::mir::ops::RecordStructId;
 pub struct PairInput {
     pub llvm_head: LLVMValueRef,
     pub llvm_rest: LLVMValueRef,
-    pub llvm_length: LLVMValueRef,
+    pub llvm_list_len: LLVMValueRef,
 }
 
 pub struct FunThunkInput {
@@ -137,7 +137,7 @@ pub fn gen_alloc_boxed_pair(
     let PairInput {
         llvm_head,
         llvm_rest,
-        llvm_length,
+        llvm_list_len,
     } = input;
 
     unsafe {
@@ -149,13 +149,13 @@ pub fn gen_alloc_boxed_pair(
             b"alloced_pair\0",
         );
 
-        let length_ptr = LLVMBuildStructGEP(
+        let list_len_ptr = LLVMBuildStructGEP(
             builder,
             alloced_pair,
             1,
-            b"length_ptr\0".as_ptr() as *const _,
+            b"list_len_ptr\0".as_ptr() as *const _,
         );
-        LLVMBuildStore(builder, *llvm_length, length_ptr);
+        LLVMBuildStore(builder, *llvm_list_len, list_len_ptr);
 
         let head_ptr =
             LLVMBuildStructGEP(builder, alloced_pair, 2, b"head_ptr\0".as_ptr() as *const _);
@@ -328,7 +328,7 @@ pub fn gen_alloc_boxed_record(
 
                 (
                     llvm_stack_record_data_ptr,
-                    boxed::Record::MAX_INLINE_BYTES + 1,
+                    boxed::Record::EXTERNAL_INLINE_LEN as usize,
                 )
             }
             (boxed::RecordStorage::External, BoxSource::Heap(_)) => {
@@ -423,19 +423,19 @@ pub fn gen_alloc_boxed_record(
 
                 (
                     llvm_typed_record_data_ptr,
-                    boxed::Record::MAX_INLINE_BYTES + 1,
+                    boxed::Record::EXTERNAL_INLINE_LEN as usize,
                 )
             }
         };
 
-        let inline_byte_length_ptr = LLVMBuildStructGEP(
+        let inline_byte_len_ptr = LLVMBuildStructGEP(
             builder,
             alloced_boxed_record,
             record_struct::IS_INLINE_INDEX,
-            b"inline_byte_length_ptr\0".as_ptr() as *const _,
+            b"inline_byte_len_ptr\0".as_ptr() as *const _,
         );
-        let llvm_inline_byte_length = LLVMConstInt(llvm_i8, inline_byte_len as u64, 1);
-        LLVMBuildStore(builder, llvm_inline_byte_length, inline_byte_length_ptr);
+        let llvm_inline_byte_len = LLVMConstInt(llvm_i8, inline_byte_len as u64, 1);
+        LLVMBuildStore(builder, llvm_inline_byte_len, inline_byte_len_ptr);
 
         for (field_index, llvm_field) in llvm_fields.iter().enumerate() {
             let field_gep_indices = &mut [

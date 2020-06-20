@@ -35,7 +35,7 @@ pub struct RawGlobalNames {
 
 #[repr(C)]
 struct GlobalName {
-    name_byte_length: u64,
+    name_byte_len: u64,
     name_bytes: *const u8,
 }
 
@@ -43,7 +43,7 @@ impl GlobalName {
     fn as_str(&self) -> &str {
         unsafe {
             let byte_slice =
-                std::slice::from_raw_parts(self.name_bytes, self.name_byte_length as usize);
+                std::slice::from_raw_parts(self.name_bytes, self.name_byte_len as usize);
             std::str::from_utf8_unchecked(byte_slice)
         }
     }
@@ -66,13 +66,13 @@ struct InternedInline {
 impl InternedInline {
     fn as_str(&self) -> &str {
         // Find the first fill byte. If none is found assume our full inline size.
-        let length = self
+        let len = self
             .name_bytes
             .iter()
             .position(|byte| *byte == INLINE_FILL_BYTE)
             .unwrap_or(INLINE_SIZE);
 
-        unsafe { str::from_utf8_unchecked(&self.name_bytes[0..length]) }
+        unsafe { str::from_utf8_unchecked(&self.name_bytes[0..len]) }
     }
 }
 

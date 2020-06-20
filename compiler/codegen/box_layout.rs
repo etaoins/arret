@@ -108,7 +108,7 @@ impl BoxLayout {
                     members.extend_from_slice(&[llvm_i32, llvm_any_ptr, llvm_any_ptr, llvm_any_ptr])
                 }
                 BoxLayout::ConstTagged(TypeTag::Vector) => {
-                    // Inline length
+                    // inline_len
                     members.push(LLVMInt32TypeInContext(tcx.llx));
                 }
                 BoxLayout::ConstTagged(TypeTag::Nil)

@@ -393,7 +393,7 @@ mod test {
                     ops::BoxPairOp {
                         head_reg: param_reg,
                         rest_reg: param_reg,
-                        length_reg: param_reg,
+                        list_len_reg: param_reg,
                     },
                 )
                 .into(),

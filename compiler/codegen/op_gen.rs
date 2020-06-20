@@ -148,15 +148,15 @@ fn gen_op(
                 BoxPairOp {
                     head_reg,
                     rest_reg,
-                    length_reg,
+                    list_len_reg,
                 },
             ) => {
                 let llvm_head = fcx.regs[head_reg];
                 let llvm_rest = fcx.regs[rest_reg];
-                let llvm_length = fcx.regs[length_reg];
+                let llvm_list_len = fcx.regs[list_len_reg];
 
                 let llvm_value =
-                    const_gen::gen_boxed_pair(tcx, mcx, llvm_head, llvm_rest, llvm_length);
+                    const_gen::gen_boxed_pair(tcx, mcx, llvm_head, llvm_rest, llvm_list_len);
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::ConstBoxedStr(reg, value) => {
@@ -312,49 +312,49 @@ fn gen_op(
                 tcx.add_invariant_load_metadata(llvm_type_tag);
                 fcx.regs.insert(*reg, llvm_type_tag);
             }
-            OpKind::LoadBoxedListLength(
+            OpKind::LoadBoxedListLen(
                 reg,
-                LoadBoxedListLengthOp {
+                LoadBoxedListLenOp {
                     list_reg,
-                    min_length,
+                    min_list_len,
                 },
             ) => {
                 let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
 
                 let llvm_list = fcx.regs[list_reg];
-                let length_ptr = LLVMBuildStructGEP(
+                let list_len_ptr = LLVMBuildStructGEP(
                     fcx.builder,
                     llvm_list,
                     1,
-                    b"length_ptr\0".as_ptr() as *const _,
+                    b"list_len_ptr\0".as_ptr() as *const _,
                 );
 
-                let llvm_length =
-                    LLVMBuildLoad(fcx.builder, length_ptr, "length\0".as_ptr() as *const _);
-                tcx.add_invariant_load_metadata(llvm_length);
+                let llvm_list_len =
+                    LLVMBuildLoad(fcx.builder, list_len_ptr, "list_len\0".as_ptr() as *const _);
+                tcx.add_invariant_load_metadata(llvm_list_len);
 
                 // Every list element needs at least one pair. This means there's a maximum list
                 // length that can fit in our address space.
-                let max_length = std::u64::MAX / std::mem::size_of::<boxed::Pair>() as u64;
+                let max_list_len = std::u64::MAX / std::mem::size_of::<boxed::Pair>() as u64;
 
                 let mut llvm_range_values = [
-                    LLVMValueAsMetadata(LLVMConstInt(llvm_i64, *min_length as u64, 0)),
-                    LLVMValueAsMetadata(LLVMConstInt(llvm_i64, max_length + 1, 0)),
+                    LLVMValueAsMetadata(LLVMConstInt(llvm_i64, *min_list_len as u64, 0)),
+                    LLVMValueAsMetadata(LLVMConstInt(llvm_i64, max_list_len + 1, 0)),
                 ];
 
-                let range_md_kind_id = tcx.llvm_md_kind_id_for_name(b"length_range");
-                let list_length_range_md = LLVMMDNodeInContext2(
+                let range_md_kind_id = tcx.llvm_md_kind_id_for_name(b"list_len_range");
+                let list_len_range_md = LLVMMDNodeInContext2(
                     tcx.llx,
                     llvm_range_values.as_mut_ptr(),
                     llvm_range_values.len(),
                 );
                 LLVMSetMetadata(
-                    llvm_length,
+                    llvm_list_len,
                     range_md_kind_id,
-                    LLVMMetadataAsValue(tcx.llx, list_length_range_md),
+                    LLVMMetadataAsValue(tcx.llx, list_len_range_md),
                 );
 
-                fcx.regs.insert(*reg, llvm_length);
+                fcx.regs.insert(*reg, llvm_list_len);
             }
             OpKind::LoadBoxedPairHead(reg, pair_reg) => {
                 let llvm_pair = fcx.regs[pair_reg];
@@ -535,12 +535,12 @@ fn gen_op(
                 reg,
                 LoadBoxedVectorMemberOp {
                     vector_reg,
-                    known_vector_length,
+                    known_vector_len,
                     member_index,
                 },
             ) => {
-                if *known_vector_length > boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH {
-                    // TODO: This will need to be done after we implement persistent vectors
+                if *known_vector_len > boxed::Vector::<boxed::Any>::MAX_INLINE_LEN {
+                    // TODO: This will need to be done now that we implement persistent vectors
                     todo!("loading members from external vectors")
                 }
 
@@ -637,7 +637,7 @@ fn gen_op(
                 BoxPairOp {
                     head_reg,
                     rest_reg,
-                    length_reg,
+                    list_len_reg,
                 },
             ) => {
                 let box_source = active_alloc.next_box_source();
@@ -645,7 +645,7 @@ fn gen_op(
                 let input = alloc::types::PairInput {
                     llvm_head: fcx.regs[head_reg],
                     llvm_rest: fcx.regs[rest_reg],
-                    llvm_length: fcx.regs[length_reg],
+                    llvm_list_len: fcx.regs[list_len_reg],
                 };
 
                 let llvm_value = alloc::types::gen_alloc_boxed_pair(

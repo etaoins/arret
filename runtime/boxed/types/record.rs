@@ -52,6 +52,9 @@ impl Record {
     /// Maximum number of bytes that can be stored directly in a box
     pub const MAX_INLINE_BYTES: usize = 24;
 
+    /// Inline byte length used for external vectors
+    pub const EXTERNAL_INLINE_LEN: u8 = (Self::MAX_INLINE_BYTES as u8) + 1;
+
     /// Alignment of our inline record data in bytes
     const INLINE_DATA_ALIGNMENT: usize = 8;
 

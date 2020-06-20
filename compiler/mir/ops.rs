@@ -104,7 +104,7 @@ pub struct TailCallOp {
 pub struct BoxPairOp {
     pub head_reg: RegId,
     pub rest_reg: RegId,
-    pub length_reg: RegId,
+    pub list_len_reg: RegId,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -130,7 +130,7 @@ pub struct LoadBoxedRecordFieldOp {
 pub struct LoadBoxedVectorMemberOp {
     pub vector_reg: RegId,
     /// Exact known length of the vector we're loading from
-    pub known_vector_length: usize,
+    pub known_vector_len: usize,
     pub member_index: usize,
 }
 
@@ -175,9 +175,9 @@ pub struct LoadBoxedTypeTagOp {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct LoadBoxedListLengthOp {
+pub struct LoadBoxedListLenOp {
     pub list_reg: RegId,
-    pub min_length: usize,
+    pub min_list_len: usize,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -233,7 +233,7 @@ pub enum OpKind {
     TailCall(RegId, TailCallOp),
 
     LoadBoxedTypeTag(RegId, LoadBoxedTypeTagOp),
-    LoadBoxedListLength(RegId, LoadBoxedListLengthOp),
+    LoadBoxedListLen(RegId, LoadBoxedListLenOp),
     LoadBoxedPairHead(RegId, RegId),
     LoadBoxedPairRest(RegId, RegId),
     LoadBoxedIntValue(RegId, RegId),
@@ -336,7 +336,7 @@ impl OpKind {
             | Call(reg_id, _)
             | TailCall(reg_id, _)
             | LoadBoxedTypeTag(reg_id, _)
-            | LoadBoxedListLength(reg_id, _)
+            | LoadBoxedListLen(reg_id, _)
             | LoadBoxedPairHead(reg_id, _)
             | LoadBoxedPairRest(reg_id, _)
             | LoadBoxedIntValue(reg_id, _)
@@ -403,7 +403,7 @@ impl OpKind {
             ConstBoxedPair(_, box_pair_op) | AllocBoxedPair(_, box_pair_op) => {
                 coll.extend(
                     [
-                        box_pair_op.length_reg,
+                        box_pair_op.list_len_reg,
                         box_pair_op.head_reg,
                         box_pair_op.rest_reg,
                     ]
@@ -442,9 +442,9 @@ impl OpKind {
                     ..
                 },
             )
-            | LoadBoxedListLength(
+            | LoadBoxedListLen(
                 _,
-                LoadBoxedListLengthOp {
+                LoadBoxedListLenOp {
                     list_reg: reg_id, ..
                 },
             )
@@ -591,7 +591,7 @@ impl OpKind {
             | AllocBoxedRecord(_, _) => OpCategory::AllocBoxed,
 
             LoadBoxedTypeTag(_, _)
-            | LoadBoxedListLength(_, _)
+            | LoadBoxedListLen(_, _)
             | LoadBoxedPairHead(_, _)
             | LoadBoxedPairRest(_, _)
             | LoadBoxedIntValue(_, _)
@@ -759,11 +759,11 @@ mod test {
         );
         assert_eq!(
             false,
-            OpKind::LoadBoxedListLength(
+            OpKind::LoadBoxedListLen(
                 RegId::alloc(),
-                LoadBoxedListLengthOp {
+                LoadBoxedListLenOp {
                     list_reg: RegId::alloc(),
-                    min_length: 0
+                    min_list_len: 0
                 }
             )
             .const_output()

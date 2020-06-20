@@ -11,7 +11,7 @@ use crate::boxed::*;
 #[repr(C, align(16))]
 pub struct Pair<T: Boxed = Any> {
     header: Header,
-    list_length: i64,
+    list_len: i64,
     pub(crate) head: Gc<T>,
     pub(crate) rest: Gc<List<T>>,
 }
@@ -31,7 +31,7 @@ impl<T: Boxed> Pair<T> {
             header: Pair::TYPE_TAG.to_heap_header(Self::size()),
             head,
             rest,
-            list_length: (rest.len() + 1) as i64,
+            list_len: (rest.len() + 1) as i64,
         })
     }
 
@@ -44,7 +44,7 @@ impl<T: Boxed> Pair<T> {
     ///
     /// Note that this must be at least 1.
     pub fn len(&self) -> usize {
-        self.list_length as usize
+        self.list_len as usize
     }
 
     /// Returns false
@@ -96,7 +96,7 @@ impl<T: Boxed> fmt::Debug for Pair<T> {
 #[repr(C, align(16))]
 pub struct List<T: Boxed = Any> {
     header: Header,
-    list_length: i64,
+    list_len: i64,
     phantom: PhantomData<T>,
 }
 
@@ -164,7 +164,7 @@ impl<T: Boxed> List<T> {
                     header: Pair::TYPE_TAG.to_heap_header(Pair::<T>::size()),
                     head,
                     rest,
-                    list_length: (elems_remaining + tail_len) as i64,
+                    list_len: (elems_remaining + tail_len) as i64,
                 };
             }
 
@@ -207,7 +207,7 @@ impl<T: Boxed> List<T> {
 
     /// Returns the length of the list
     pub fn len(&self) -> usize {
-        self.list_length as usize
+        self.list_len as usize
     }
 
     /// Returns true if the list is empty
@@ -285,7 +285,7 @@ impl<T: Boxed> FusedIterator for ListIterator<T> {}
 #[derive(Debug)]
 pub struct Nil {
     header: Header,
-    list_length: usize,
+    list_len: usize,
 }
 
 /// Static constant instance of [`Nil`]
@@ -295,7 +295,7 @@ pub static NIL_INSTANCE: Nil = Nil {
         type_tag: TypeTag::Nil,
         alloc_type: AllocType::Const,
     },
-    list_length: 0,
+    list_len: 0,
 };
 
 impl Boxed for Nil {}

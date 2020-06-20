@@ -8,7 +8,7 @@ use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::value::Value;
 
 // TODO: MIR shouldn't know about this codegen restriction; this is a temporary hack.
-pub const MAX_DIRECT_ACCESS_LENGTH: usize = boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH;
+pub const MAX_DIRECT_ACCESS_LEN: usize = boxed::Vector::<boxed::Any>::MAX_INLINE_LEN;
 
 fn vector_member_type(vector_value: &Value) -> &abitype::BoxedABIType {
     if let Value::Reg(reg_value) = vector_value {
@@ -29,7 +29,7 @@ pub fn load_vector_member(
     ehx: &mut EvalHirCtx,
     b: &mut Builder,
     span: Span,
-    vector_length: usize,
+    vector_len: usize,
     vector_value: &Value,
     member_index: usize,
 ) -> Value {
@@ -54,7 +54,7 @@ pub fn load_vector_member(
         OpKind::LoadBoxedVectorMember,
         LoadBoxedVectorMemberOp {
             vector_reg: vector_reg.into(),
-            known_vector_length: vector_length as usize,
+            known_vector_len: vector_len as usize,
             member_index: member_index as usize,
         },
     );

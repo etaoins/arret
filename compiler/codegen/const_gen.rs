@@ -25,7 +25,7 @@ pub fn gen_boxed_pair(
     mcx: &mut ModCtx<'_, '_, '_>,
     llvm_head: LLVMValueRef,
     llvm_rest: LLVMValueRef,
-    llvm_length: LLVMValueRef,
+    llvm_list_len: LLVMValueRef,
 ) -> LLVMValueRef {
     unsafe {
         let type_tag = boxed::TypeTag::Pair;
@@ -33,7 +33,7 @@ pub fn gen_boxed_pair(
 
         let members = &mut [
             tcx.llvm_box_header(type_tag.to_const_header()),
-            llvm_length,
+            llvm_list_len,
             llvm_head,
             llvm_rest,
         ];
@@ -88,7 +88,7 @@ fn gen_boxed_external_str(
 
         let external_members = &mut [
             tcx.llvm_box_header(type_tag.to_const_header()),
-            LLVMConstInt(llvm_i8, (boxed::Str::MAX_INLINE_BYTES + 1) as u64, 0),
+            LLVMConstInt(llvm_i8, boxed::Str::EXTERNAL_INLINE_BYTE_LEN as u64, 0),
             LLVMConstBitCast(
                 shared_str_global,
                 LLVMPointerType(tcx.shared_str_llvm_type(), 0),
@@ -488,7 +488,7 @@ pub fn gen_boxed_record(
             let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
             let external_box_members = &mut [
                 llvm_box_header,
-                LLVMConstInt(llvm_i8, (boxed::Record::MAX_INLINE_BYTES + 1) as u64, 1),
+                LLVMConstInt(llvm_i8, boxed::Record::EXTERNAL_INLINE_LEN as u64, 1),
                 llvm_has_gc_refs,
                 llvm_record_class_id,
                 data_global,
@@ -595,7 +595,7 @@ fn gen_boxed_external_vector(
             tcx.llvm_box_header(type_tag.to_const_header()),
             LLVMConstInt(
                 llvm_i32,
-                boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH as u64 + 1,
+                boxed::Vector::<boxed::Any>::EXTERNAL_INLINE_LEN as u64,
                 0,
             ),
             LLVMConstInt(llvm_i64, llvm_elements.len() as u64, 0),
@@ -638,7 +638,7 @@ fn gen_boxed_inline_vector(
         members.extend(
             llvm_elements.chain(
                 iter::repeat(LLVMGetUndef(llvm_any_ptr))
-                    .take(boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH - elements_len),
+                    .take(boxed::Vector::<boxed::Any>::MAX_INLINE_LEN - elements_len),
             ),
         );
 
@@ -663,7 +663,7 @@ pub fn gen_boxed_vector(
 
     let elements_len = llvm_elements.len();
 
-    if elements_len <= boxed::Vector::<boxed::Any>::MAX_INLINE_LENGTH {
+    if elements_len <= boxed::Vector::<boxed::Any>::MAX_INLINE_LEN {
         gen_boxed_inline_vector(tcx, mcx, llvm_elements)
     } else if elements_len <= NODE_SIZE {
         gen_boxed_external_vector(tcx, mcx, llvm_elements)
@@ -681,7 +681,7 @@ pub fn gen_boxed_set(
 
     let elements_len = llvm_elements.len();
 
-    if elements_len > boxed::Set::<boxed::Any>::MAX_INLINE_LENGTH {
+    if elements_len > boxed::Set::<boxed::Any>::MAX_INLINE_LEN {
         todo!("generating constant set of length {}", elements_len);
     }
 
@@ -699,7 +699,7 @@ pub fn gen_boxed_set(
         members.extend(
             llvm_elements.chain(
                 iter::repeat(LLVMGetUndef(llvm_any_ptr))
-                    .take(boxed::Set::<boxed::Any>::MAX_INLINE_LENGTH - elements_len),
+                    .take(boxed::Set::<boxed::Any>::MAX_INLINE_LEN - elements_len),
             ),
         );
 

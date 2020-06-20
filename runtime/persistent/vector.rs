@@ -687,24 +687,24 @@ mod test {
     #[test]
     fn extended_one_level_vector() {
         assert_nodes_deallocated(|| {
-            const TEST_LENGTH: usize = 48;
+            const TEST_LEN: usize = 48;
 
             let mut test_vec = Vector::<usize>::new(iter::empty());
 
-            for i in 0..TEST_LENGTH {
+            for i in 0..TEST_LEN {
                 assert_eq!(i, test_vec.len());
                 test_vec = test_vec.extend(iter::once(i));
             }
 
             // Check the contents manually
-            for i in 0..TEST_LENGTH {
+            for i in 0..TEST_LEN {
                 assert_eq!(Some(i), test_vec.get(i));
             }
 
             // Check the contents with an iterator
             {
                 let test_iter = test_vec.iter();
-                assert_eq!(TEST_LENGTH, test_iter.len());
+                assert_eq!(TEST_LEN, test_iter.len());
 
                 for (actual, expected) in test_vec.iter().enumerate() {
                     assert_eq!(expected, actual);
@@ -716,24 +716,24 @@ mod test {
     #[test]
     fn extended_two_level_vector() {
         assert_nodes_deallocated(|| {
-            const TEST_LENGTH: usize = 128;
+            const TEST_LEN: usize = 128;
 
             let mut test_vec = Vector::<usize>::new(iter::empty());
 
-            for i in 0..TEST_LENGTH {
+            for i in 0..TEST_LEN {
                 assert_eq!(i, test_vec.len());
                 test_vec = test_vec.extend(iter::once(i));
             }
 
             // Check the contents manually
-            for i in 0..TEST_LENGTH {
+            for i in 0..TEST_LEN {
                 assert_eq!(Some(i), test_vec.get(i));
             }
 
             // Check the contents with an iterator
             {
                 let test_iter = test_vec.iter();
-                assert_eq!(TEST_LENGTH, test_iter.len());
+                assert_eq!(TEST_LEN, test_iter.len());
 
                 for (actual, expected) in test_vec.iter().enumerate() {
                     assert_eq!(expected, actual);
@@ -741,7 +741,7 @@ mod test {
             }
 
             // Check the contents using take
-            for i in (0..TEST_LENGTH).step_by(3) {
+            for i in (0..TEST_LEN).step_by(3) {
                 let head_vec = test_vec.take(i);
                 assert_eq!(i, head_vec.len());
 
@@ -756,20 +756,20 @@ mod test {
     #[test]
     fn initialised_three_level_vector() {
         assert_nodes_deallocated(|| {
-            const TEST_LENGTH: usize = 2087;
+            const TEST_LEN: usize = 2087;
 
-            let mut test_vec = Vector::<usize>::new(0..TEST_LENGTH);
-            assert_eq!(TEST_LENGTH, test_vec.len());
+            let mut test_vec = Vector::<usize>::new(0..TEST_LEN);
+            assert_eq!(TEST_LEN, test_vec.len());
 
             // Check the contents manually
-            for i in 0..TEST_LENGTH {
+            for i in 0..TEST_LEN {
                 assert_eq!(Some(i), test_vec.get(i));
             }
 
             // Check the contents with an iterator
             {
                 let test_iter = test_vec.iter();
-                assert_eq!(TEST_LENGTH, test_iter.len());
+                assert_eq!(TEST_LEN, test_iter.len());
 
                 for (actual, expected) in test_vec.iter().enumerate() {
                     assert_eq!(expected, actual);
@@ -777,22 +777,22 @@ mod test {
             }
 
             // Manually reverse the vector
-            for i in (0..TEST_LENGTH).rev() {
-                test_vec = test_vec.assoc(i, TEST_LENGTH - i - 1);
+            for i in (0..TEST_LEN).rev() {
+                test_vec = test_vec.assoc(i, TEST_LEN - i - 1);
             }
 
             // Make sure it's reversed
-            for i in 0..TEST_LENGTH {
-                assert_eq!(Some(TEST_LENGTH - i - 1), test_vec.get(i));
+            for i in 0..TEST_LEN {
+                assert_eq!(Some(TEST_LEN - i - 1), test_vec.get(i));
             }
 
             // Reverse the vector back by mutable ref
             test_vec.visit_mut_elements(&mut |element| {
-                *element = TEST_LENGTH - *element - 1;
+                *element = TEST_LEN - *element - 1;
             });
 
             // Check the contents using take
-            for i in (0..TEST_LENGTH).step_by(7) {
+            for i in (0..TEST_LEN).step_by(7) {
                 let head_vec = test_vec.take(i);
                 assert_eq!(i, head_vec.len());
 

@@ -67,14 +67,14 @@ fn box_pair_op_to_string(
     ops::BoxPairOp {
         head_reg,
         rest_reg,
-        length_reg,
+        list_len_reg,
     }: &ops::BoxPairOp,
 ) -> String {
     format!(
-        "boxed::Pair {{ head: %{}, rest: %{}, length: %{} }}",
+        "boxed::Pair {{ head: %{}, rest: %{}, list_len: %{} }}",
         head_reg.get(),
         rest_reg.get(),
-        length_reg.get()
+        list_len_reg.get()
     )
 }
 
@@ -425,32 +425,32 @@ fn print_branch(
                 reg,
                 ops::LoadBoxedVectorMemberOp {
                     vector_reg,
-                    known_vector_length,
+                    known_vector_len,
                     member_index,
                 },
             ) => {
                 writeln!(
                     w,
-                    "%{reg} = <%{vector_reg} as boxed::Vector>[{member_index}] where <${vector_reg} as boxed::Vector>.len == {known_vector_length};",
+                    "%{reg} = <%{vector_reg} as boxed::Vector>[{member_index}] where <${vector_reg} as boxed::Vector>.len == {known_vector_len};",
                     reg = reg.get(),
                     vector_reg = vector_reg.get(),
-                    known_vector_length = known_vector_length,
+                    known_vector_len = known_vector_len,
                     member_index = member_index
                 )?;
             }
-            ops::OpKind::LoadBoxedListLength(
+            ops::OpKind::LoadBoxedListLen(
                 reg,
-                ops::LoadBoxedListLengthOp {
+                ops::LoadBoxedListLenOp {
                     list_reg,
-                    min_length,
+                    min_list_len,
                 },
             ) => {
                 writeln!(
                     w,
-                    "%{} = <%{} as boxed::List>.list_length where > {};",
+                    "%{} = <%{} as boxed::List>.list_len where > {};",
                     reg.get(),
                     list_reg.get(),
-                    min_length
+                    min_list_len
                 )?;
             }
             ops::OpKind::LoadBoxedSymInterned(reg, sym_reg) => {

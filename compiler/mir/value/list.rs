@@ -8,69 +8,69 @@ use crate::mir::value::types::TypeHint;
 use crate::mir::value::Value;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ListValueLength {
+pub enum ListValueLen {
     Exact(usize),
     Min(usize),
 }
 
-impl ListValueLength {
+impl ListValueLen {
     pub fn lower_bound(&self) -> usize {
         match self {
-            ListValueLength::Exact(len) => *len,
-            ListValueLength::Min(len) => *len,
+            ListValueLen::Exact(len) => *len,
+            ListValueLen::Min(len) => *len,
         }
     }
 }
 
-impl std::ops::Add for ListValueLength {
-    type Output = ListValueLength;
+impl std::ops::Add for ListValueLen {
+    type Output = ListValueLen;
 
-    fn add(self, other: ListValueLength) -> ListValueLength {
+    fn add(self, other: ListValueLen) -> ListValueLen {
         match (self, other) {
-            (ListValueLength::Exact(self_len), ListValueLength::Exact(other_len)) => {
-                ListValueLength::Exact(self_len + other_len)
+            (ListValueLen::Exact(self_len), ListValueLen::Exact(other_len)) => {
+                ListValueLen::Exact(self_len + other_len)
             }
 
-            _ => ListValueLength::Min(self.lower_bound() + other.lower_bound()),
+            _ => ListValueLen::Min(self.lower_bound() + other.lower_bound()),
         }
     }
 }
 
-pub fn list_value_length(value: &Value) -> ListValueLength {
+pub fn list_value_len(value: &Value) -> ListValueLen {
     use arret_runtime::boxed;
 
     match value {
         Value::List(fixed, rest) => {
-            let fixed_len = ListValueLength::Exact(fixed.len());
+            let fixed_len = ListValueLen::Exact(fixed.len());
 
             match rest {
-                Some(rest) => fixed_len + list_value_length(rest),
+                Some(rest) => fixed_len + list_value_len(rest),
                 None => fixed_len,
             }
         }
 
         Value::Const(any_ref) => match any_ref.downcast_ref::<boxed::List<boxed::Any>>() {
-            Some(list_ref) => ListValueLength::Exact(list_ref.len()),
-            None => ListValueLength::Min(0),
+            Some(list_ref) => ListValueLen::Exact(list_ref.len()),
+            None => ListValueLen::Min(0),
         },
 
         Value::Reg(reg_value) => {
             if !reg_value.possible_type_tags.contains(boxed::TypeTag::Pair) {
                 // Must be empty
-                ListValueLength::Exact(0)
+                ListValueLen::Exact(0)
             } else if !reg_value.possible_type_tags.contains(boxed::TypeTag::Nil) {
-                if let TypeHint::KnownListLength(len) = reg_value.type_hint {
-                    ListValueLength::Exact(len)
+                if let TypeHint::KnownListLen(len) = reg_value.type_hint {
+                    ListValueLen::Exact(len)
                 } else {
                     // Cannot be empty
-                    ListValueLength::Min(1)
+                    ListValueLen::Min(1)
                 }
             } else {
-                ListValueLength::Min(0)
+                ListValueLen::Min(0)
             }
         }
 
-        _ => ListValueLength::Min(0),
+        _ => ListValueLen::Min(0),
     }
 }
 
@@ -173,8 +173,8 @@ pub struct SizedListIterator {
 
 impl SizedListIterator {
     pub fn try_new(value: &Value) -> Option<Self> {
-        match list_value_length(value) {
-            ListValueLength::Exact(size) => Some(Self {
+        match list_value_len(value) {
+            ListValueLen::Exact(size) => Some(Self {
                 size,
                 unsized_list_iterator: UnsizedListIterator::new(value.clone()),
             }),
@@ -212,7 +212,7 @@ mod test {
     use crate::source::EMPTY_SPAN;
 
     #[test]
-    fn list_length() {
+    fn list_len() {
         use crate::mir::builder::BuiltReg;
         use crate::mir::ops::RegId;
         use arret_runtime::abitype;
@@ -236,7 +236,7 @@ mod test {
         let list_value = Value::List(fixed_values.clone(), Some(Box::new(const_list_tail)));
 
         // The length should be 6
-        assert_eq!(ListValueLength::Exact(6), list_value_length(&list_value));
+        assert_eq!(ListValueLen::Exact(6), list_value_len(&list_value));
 
         // Try 3 fixed values with a completely unknown tail
         let list_with_unknown_tail = Value::List(
@@ -252,8 +252,8 @@ mod test {
 
         // Length should be at least 3
         assert_eq!(
-            ListValueLength::Min(3),
-            list_value_length(&list_with_unknown_tail)
+            ListValueLen::Min(3),
+            list_value_len(&list_with_unknown_tail)
         );
 
         // Try 3 fixed values with a pair tail
@@ -266,10 +266,7 @@ mod test {
         );
 
         // Length should be at least 4
-        assert_eq!(
-            ListValueLength::Min(4),
-            list_value_length(&list_with_pair_tail)
-        );
+        assert_eq!(ListValueLen::Min(4), list_value_len(&list_with_pair_tail));
 
         // Try 3 fixed values with a nil tail
         let list_with_nil_tail = Value::List(
@@ -281,10 +278,7 @@ mod test {
         );
 
         // Length should be at exactly 3
-        assert_eq!(
-            ListValueLength::Exact(3),
-            list_value_length(&list_with_nil_tail)
-        );
+        assert_eq!(ListValueLen::Exact(3), list_value_len(&list_with_nil_tail));
     }
 
     #[test]

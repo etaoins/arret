@@ -6,7 +6,7 @@ use crate::mir::builder::Builder;
 use crate::mir::error::Result;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::intrinsic::num_utils::try_value_to_i64;
-use crate::mir::value::types::known_vector_length_for_value;
+use crate::mir::value::types::known_vector_len_for_value;
 use crate::mir::Value;
 
 pub fn vector_length(
@@ -18,8 +18,8 @@ pub fn vector_length(
     let mut iter = arg_list_value.unsized_list_iter();
     let vector_value = iter.next_unchecked(b, span);
 
-    if let Some(known_length) = known_vector_length_for_value(&vector_value) {
-        return Ok(Some(boxed::Int::new(ehx, known_length as i64).into()));
+    if let Some(known_len) = known_vector_len_for_value(&vector_value) {
+        return Ok(Some(boxed::Int::new(ehx, known_len as i64).into()));
     }
 
     Ok(None)
@@ -37,8 +37,8 @@ pub fn vector_ref(
     let vector_value = iter.next_unchecked(b, span);
     let index_value = iter.next_unchecked(b, span);
 
-    let known_length = if let Some(known_length) = known_vector_length_for_value(&vector_value) {
-        known_length
+    let known_len = if let Some(known_len) = known_vector_len_for_value(&vector_value) {
+        known_len
     } else {
         return Ok(None);
     };
@@ -49,7 +49,7 @@ pub fn vector_ref(
         return Ok(None);
     };
 
-    if index > vector_member::MAX_DIRECT_ACCESS_LENGTH {
+    if index > vector_member::MAX_DIRECT_ACCESS_LEN {
         return Ok(None);
     }
 
@@ -57,7 +57,7 @@ pub fn vector_ref(
         ehx,
         b,
         span,
-        known_length,
+        known_len,
         &vector_value,
         index,
     )))

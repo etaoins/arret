@@ -7,8 +7,8 @@ use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
 use crate::boxed::refs::Gc;
 use crate::boxed::*;
 
-const MAX_16BYTE_INLINE_LENGTH: usize = (16 - 8) / mem::size_of::<Gc<Any>>();
-const MAX_32BYTE_INLINE_LENGTH: usize = (32 - 8) / mem::size_of::<Gc<Any>>();
+const MAX_16BYTE_INLINE_LEN: usize = (16 - 8) / mem::size_of::<Gc<Any>>();
+const MAX_32BYTE_INLINE_LEN: usize = (32 - 8) / mem::size_of::<Gc<Any>>();
 
 /// Describes the storage of a set's data
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -35,7 +35,7 @@ impl SetStorage {
 #[repr(C, align(16))]
 pub struct Set<T: Boxed = Any> {
     header: Header,
-    inline_length: u32,
+    inline_len: u32,
     padding: [u8; 24],
     phantom: marker::PhantomData<T>,
 }
@@ -44,7 +44,10 @@ impl<T: Boxed> Boxed for Set<T> {}
 
 impl<T: Boxed> Set<T> {
     /// Maximum element length of an inline set
-    pub const MAX_INLINE_LENGTH: usize = MAX_32BYTE_INLINE_LENGTH;
+    pub const MAX_INLINE_LEN: usize = MAX_32BYTE_INLINE_LEN;
+
+    /// Inline element length used for external sets
+    pub const EXTERNAL_INLINE_LEN: u32 = (Self::MAX_INLINE_LEN as u32) + 1;
 
     /// Constructs a new set with the passed boxed values
     pub fn new(heap: &mut impl AsHeap, values: impl ExactSizeIterator<Item = Gc<T>>) -> Gc<Set<T>> {
@@ -79,13 +82,11 @@ impl<T: Boxed> Set<T> {
 
     /// Returns the storage for given element length
     fn storage_for_element_len(len: usize) -> SetStorage {
-        const MIN_32BYTE_INLINE_LENGTH: usize = MAX_16BYTE_INLINE_LENGTH + 1;
+        const MIN_32BYTE_INLINE_LEN: usize = MAX_16BYTE_INLINE_LEN + 1;
 
         match len {
-            0..=MAX_16BYTE_INLINE_LENGTH => SetStorage::Inline(BoxSize::Size16),
-            MIN_32BYTE_INLINE_LENGTH..=MAX_32BYTE_INLINE_LENGTH => {
-                SetStorage::Inline(BoxSize::Size32)
-            }
+            0..=MAX_16BYTE_INLINE_LEN => SetStorage::Inline(BoxSize::Size16),
+            MIN_32BYTE_INLINE_LEN..=MAX_32BYTE_INLINE_LEN => SetStorage::Inline(BoxSize::Size32),
             _ => {
                 // Too big to fit inline; this needs to be external
                 SetStorage::External
@@ -109,7 +110,7 @@ impl<T: Boxed> Set<T> {
     }
 
     fn is_inline(&self) -> bool {
-        self.inline_length <= (Self::MAX_INLINE_LENGTH as u32)
+        self.inline_len <= (Self::MAX_INLINE_LEN as u32)
     }
 
     fn as_repr(&self) -> Repr<'_, T> {
@@ -138,7 +139,7 @@ impl<T: Boxed> Set<T> {
 
     /// Returns true if the set is empty
     pub fn is_empty(&self) -> bool {
-        self.inline_length == 0
+        self.inline_len == 0
     }
 
     /// Returns true if the passed value is included in the set
@@ -223,15 +224,15 @@ where
 #[repr(C, align(16))]
 pub struct InlineSet<T: Boxed> {
     header: Header,
-    inline_length: u32,
-    values: [MaybeUninit<Gc<T>>; MAX_32BYTE_INLINE_LENGTH],
+    inline_len: u32,
+    values: [MaybeUninit<Gc<T>>; MAX_32BYTE_INLINE_LEN],
 }
 
 impl<T: Boxed> InlineSet<T> {
     fn new(header: Header, hashed_values: Vec<(u64, Gc<T>)>) -> InlineSet<T> {
-        let inline_length = hashed_values.len();
+        let inline_len = hashed_values.len();
 
-        let mut inline_values = [MaybeUninit::uninit(); MAX_32BYTE_INLINE_LENGTH];
+        let mut inline_values = [MaybeUninit::uninit(); MAX_32BYTE_INLINE_LEN];
 
         for (inline_value, (_, value)) in inline_values.iter_mut().zip(hashed_values) {
             *inline_value = MaybeUninit::new(value);
@@ -239,17 +240,17 @@ impl<T: Boxed> InlineSet<T> {
 
         InlineSet {
             header,
-            inline_length: inline_length as u32,
+            inline_len: inline_len as u32,
             values: inline_values,
         }
     }
 
     fn len(&self) -> usize {
-        self.inline_length as usize
+        self.inline_len as usize
     }
 
     fn iter<'a>(&'a self) -> impl ExactSizeIterator<Item = Gc<T>> + 'a {
-        self.values[0..self.inline_length as usize]
+        self.values[0..self.inline_len as usize]
             .iter()
             .map(|value| unsafe { value.assume_init() })
     }
@@ -280,7 +281,7 @@ impl<T: Boxed> InlineSet<T> {
 #[repr(C, align(16))]
 pub struct ExternalSet<T: Boxed> {
     header: Header,
-    inline_length: u32,
+    inline_len: u32,
     sorted_hashed_values: Vec<(u64, Gc<T>)>,
 }
 
@@ -288,7 +289,7 @@ impl<T: Boxed> ExternalSet<T> {
     fn new(header: Header, sorted_hashed_values: Vec<(u64, Gc<T>)>) -> ExternalSet<T> {
         ExternalSet {
             header,
-            inline_length: (Set::<T>::MAX_INLINE_LENGTH + 1) as u32,
+            inline_len: Set::<T>::EXTERNAL_INLINE_LEN,
             sorted_hashed_values,
         }
     }

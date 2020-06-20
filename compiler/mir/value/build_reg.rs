@@ -12,7 +12,7 @@ use crate::mir::value::Value;
 use crate::rfi;
 use crate::ty::record;
 
-enum RestLength {
+enum RestLen {
     Known(usize),
     Loaded(BuiltReg),
 }
@@ -111,7 +111,7 @@ fn const_to_reg(
                 pair_ref.rest().as_any_ref(),
                 &abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
             );
-            let length_reg = b.push_reg(span, OpKind::ConstInt64, pair_ref.len() as i64);
+            let list_len_reg = b.push_reg(span, OpKind::ConstInt64, pair_ref.len() as i64);
 
             let from_reg = b.push_reg(
                 span,
@@ -119,7 +119,7 @@ fn const_to_reg(
                 BoxPairOp {
                     head_reg: head_reg.into(),
                     rest_reg: rest_reg.into(),
-                    length_reg: length_reg.into(),
+                    list_len_reg: list_len_reg.into(),
                 },
             );
 
@@ -228,7 +228,7 @@ fn list_to_reg(
     boxed_abi_type: &abitype::BoxedABIType,
 ) -> BuiltReg {
     use crate::mir::ops::*;
-    use crate::mir::value::list::{list_value_length, ListValueLength};
+    use crate::mir::value::list::{list_value_len, ListValueLen};
     use arret_runtime::abitype::TOP_LIST_BOXED_ABI_TYPE;
 
     let tail_reg = if let Some(rest) = rest {
@@ -247,22 +247,22 @@ fn list_to_reg(
     let list_reg = if fixed.is_empty() {
         tail_reg
     } else {
-        let rest_length = match rest {
-            Some(rest) => match list_value_length(rest) {
-                ListValueLength::Exact(known) => RestLength::Known(known),
-                ListValueLength::Min(min_length) => {
-                    let length_reg = b.push_reg(
+        let rest_len = match rest {
+            Some(rest) => match list_value_len(rest) {
+                ListValueLen::Exact(known) => RestLen::Known(known),
+                ListValueLen::Min(min_list_len) => {
+                    let len_reg = b.push_reg(
                         span,
-                        OpKind::LoadBoxedListLength,
-                        LoadBoxedListLengthOp {
+                        OpKind::LoadBoxedListLen,
+                        LoadBoxedListLenOp {
                             list_reg: tail_reg.into(),
-                            min_length,
+                            min_list_len,
                         },
                     );
-                    RestLength::Loaded(length_reg)
+                    RestLen::Loaded(len_reg)
                 }
             },
-            None => RestLength::Known(0),
+            None => RestLen::Known(0),
         };
 
         fixed
@@ -270,17 +270,17 @@ fn list_to_reg(
             .rev()
             .enumerate()
             .fold(tail_reg, |tail_reg, (i, fixed)| {
-                let length_reg = match rest_length {
-                    RestLength::Known(known) => {
+                let list_len_reg = match rest_len {
+                    RestLen::Known(known) => {
                         b.push_reg(span, OpKind::ConstInt64, (known + i + 1) as i64)
                     }
-                    RestLength::Loaded(rest_length_reg) => {
+                    RestLen::Loaded(rest_len_reg) => {
                         let index_reg = b.push_reg(span, OpKind::ConstInt64, (i + 1) as i64);
                         b.push_reg(
                             span,
                             OpKind::Int64Add,
                             BinaryOp {
-                                lhs_reg: rest_length_reg.into(),
+                                lhs_reg: rest_len_reg.into(),
                                 rhs_reg: index_reg.into(),
                             },
                         )
@@ -293,7 +293,7 @@ fn list_to_reg(
                 let box_pair_op = BoxPairOp {
                     head_reg: fixed_reg.into(),
                     rest_reg: tail_reg.into(),
-                    length_reg: length_reg.into(),
+                    list_len_reg: list_len_reg.into(),
                 };
 
                 let pair_head_reg = if fixed_reg.is_const() && tail_reg.is_const() {

@@ -28,7 +28,7 @@ impl StrStorage {
 #[repr(C, align(16))]
 pub struct Str {
     header: Header,
-    inline_byte_length: u8,
+    inline_byte_len: u8,
     padding: [u8; Str::MAX_INLINE_BYTES],
 }
 
@@ -38,6 +38,9 @@ impl UniqueTagged for Str {}
 impl Str {
     /// Maximum number of bytes that can be stored directly in the box
     pub const MAX_INLINE_BYTES: usize = 29;
+
+    /// Inline byte length used for external strings
+    pub const EXTERNAL_INLINE_BYTE_LEN: u8 = (Self::MAX_INLINE_BYTES as u8) + 1;
 
     /// Constructs a new string
     pub fn new(heap: &mut impl AsHeap, value: &str) -> Gc<Str> {
@@ -67,7 +70,7 @@ impl Str {
     }
 
     fn is_inline(&self) -> bool {
-        self.inline_byte_length <= Str::MAX_INLINE_BYTES as u8
+        self.inline_byte_len != Self::EXTERNAL_INLINE_BYTE_LEN as u8
     }
 
     fn as_repr(&self) -> Repr<'_> {
@@ -131,7 +134,7 @@ impl Drop for Str {
 #[repr(C, align(16))]
 struct InlineStr {
     header: Header,
-    inline_byte_length: u8,
+    inline_byte_len: u8,
     inline_bytes: MaybeUninit<[u8; Str::MAX_INLINE_BYTES]>,
 }
 
@@ -148,7 +151,7 @@ impl InlineStr {
 
             InlineStr {
                 header,
-                inline_byte_length: value.len() as u8,
+                inline_byte_len: value.len() as u8,
                 inline_bytes,
             }
         }
@@ -159,7 +162,7 @@ impl InlineStr {
         unsafe {
             slice::from_raw_parts(
                 self.inline_bytes.as_ptr() as *const u8,
-                self.inline_byte_length as usize,
+                self.inline_byte_len as usize,
             )
         }
     }
@@ -174,7 +177,7 @@ impl InlineStr {
 struct ExternalStr {
     header: Header,
     // Once we've determined we're not inline this has no useful value
-    inline_byte_length: u8,
+    inline_byte_len: u8,
     shared_str: SharedStr,
     padding: [u64; 2],
 }
@@ -183,7 +186,7 @@ impl ExternalStr {
     fn new(header: Header, value: &str) -> ExternalStr {
         ExternalStr {
             header,
-            inline_byte_length: (Str::MAX_INLINE_BYTES as u8) + 1,
+            inline_byte_len: Str::EXTERNAL_INLINE_BYTE_LEN,
             shared_str: value.into(),
             padding: [0, 0],
         }
