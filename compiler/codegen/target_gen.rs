@@ -45,6 +45,27 @@ fn llvm_i64_md_node(llx: LLVMContextRef, values: &[u64]) -> LLVMMetadataRef {
     }
 }
 
+#[derive(Default)]
+struct CachedTypes {
+    task: Option<LLVMTypeRef>,
+    box_header: Option<LLVMTypeRef>,
+
+    boxed: HashMap<BoxLayout, LLVMTypeRef>,
+
+    shared_str: Option<LLVMTypeRef>,
+    boxed_inline_str: Option<LLVMTypeRef>,
+    boxed_external_str: Option<LLVMTypeRef>,
+
+    persistent_vector_leaf: Option<LLVMTypeRef>,
+    boxed_inline_vector: Option<LLVMTypeRef>,
+    boxed_external_vector: Option<LLVMTypeRef>,
+
+    global_interned_name: Option<LLVMTypeRef>,
+
+    record_struct_box: HashMap<ops::RecordStructId, LLVMTypeRef>,
+    classmap_field: Option<LLVMTypeRef>,
+}
+
 /// Context for building against a given target machine
 ///
 /// During compilation there will typically be two instances of `TargetCtx`: one for the eval JIT
@@ -66,22 +87,6 @@ pub struct TargetCtx {
     optimising: bool,
     module_pass_manager: LLVMPassManagerRef,
 
-    task_type: Option<LLVMTypeRef>,
-    box_header_type: Option<LLVMTypeRef>,
-
-    shared_str_type: Option<LLVMTypeRef>,
-    boxed_inline_str_type: Option<LLVMTypeRef>,
-    boxed_external_str_type: Option<LLVMTypeRef>,
-
-    persistent_vector_leaf_type: Option<LLVMTypeRef>,
-    boxed_inline_vector_type: Option<LLVMTypeRef>,
-    boxed_external_vector_type: Option<LLVMTypeRef>,
-
-    boxed_types: HashMap<BoxLayout, LLVMTypeRef>,
-    global_interned_name_type: Option<LLVMTypeRef>,
-
-    classmap_field_type: Option<LLVMTypeRef>,
-
     boxed_dereferenceable_attr: LLVMAttributeRef,
     boxed_align_attr: LLVMAttributeRef,
     readonly_attr: LLVMAttributeRef,
@@ -96,8 +101,8 @@ pub struct TargetCtx {
     boxed_dereferenceable_md_node: LLVMMetadataRef,
     boxed_align_md_node: LLVMMetadataRef,
 
+    cached_types: CachedTypes,
     target_record_structs: HashMap<ops::RecordStructId, record_struct::TargetRecordStruct>,
-    record_struct_box_types: HashMap<ops::RecordStructId, LLVMTypeRef>,
 }
 
 impl TargetCtx {
@@ -128,22 +133,6 @@ impl TargetCtx {
                 optimising,
                 module_pass_manager,
 
-                task_type: None,
-                box_header_type: None,
-
-                shared_str_type: None,
-                boxed_inline_str_type: None,
-                boxed_external_str_type: None,
-
-                persistent_vector_leaf_type: None,
-                boxed_inline_vector_type: None,
-                boxed_external_vector_type: None,
-
-                boxed_types: HashMap::new(),
-                global_interned_name_type: None,
-
-                classmap_field_type: None,
-
                 boxed_dereferenceable_attr: llvm_enum_attr_for_name(
                     llx,
                     b"dereferenceable",
@@ -169,8 +158,8 @@ impl TargetCtx {
                 ),
                 boxed_align_md_node: llvm_i64_md_node(llx, &[mem::align_of::<boxed::Any>() as u64]),
 
+                cached_types: Default::default(),
                 target_record_structs: HashMap::new(),
-                record_struct_box_types: HashMap::new(),
             }
         }
     }
@@ -190,7 +179,7 @@ impl TargetCtx {
     pub fn task_llvm_ptr_type(&mut self) -> LLVMTypeRef {
         let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
         let llx = self.llx;
-        *self.task_type.get_or_insert_with(|| unsafe {
+        *self.cached_types.task.get_or_insert_with(|| unsafe {
             let members = &mut [llvm_any_ptr, llvm_any_ptr];
 
             let llvm_type = LLVMStructCreateNamed(llx, b"task\0".as_ptr() as *const _);
@@ -204,7 +193,8 @@ impl TargetCtx {
         let llx = self.llx;
 
         *self
-            .global_interned_name_type
+            .cached_types
+            .global_interned_name
             .get_or_insert_with(|| unsafe {
                 let llvm_i64 = LLVMInt64TypeInContext(llx);
                 let llvm_i8 = LLVMInt8TypeInContext(llx);
@@ -221,16 +211,20 @@ impl TargetCtx {
     pub fn classmap_field_llvm_type(&mut self) -> LLVMTypeRef {
         let llx = self.llx;
 
-        *self.classmap_field_type.get_or_insert_with(|| unsafe {
-            let llvm_i32 = LLVMInt32TypeInContext(llx);
-            let llvm_i8 = LLVMInt8TypeInContext(llx);
-            let members = &mut [llvm_i32, llvm_i8, llvm_i8];
+        *self
+            .cached_types
+            .classmap_field
+            .get_or_insert_with(|| unsafe {
+                let llvm_i32 = LLVMInt32TypeInContext(llx);
+                let llvm_i8 = LLVMInt8TypeInContext(llx);
+                let members = &mut [llvm_i32, llvm_i8, llvm_i8];
 
-            let llvm_type = LLVMStructCreateNamed(llx, b"classmap_field\0".as_ptr() as *const _);
-            LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
+                let llvm_type =
+                    LLVMStructCreateNamed(llx, b"classmap_field\0".as_ptr() as *const _);
+                LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
-            llvm_type
-        })
+                llvm_type
+            })
     }
 
     pub fn classmap_class_llvm_type(&mut self) -> LLVMTypeRef {
@@ -247,7 +241,7 @@ impl TargetCtx {
 
     fn box_header_llvm_type(&mut self) -> LLVMTypeRef {
         let llx = self.llx;
-        *self.box_header_type.get_or_insert_with(|| unsafe {
+        *self.cached_types.box_header.get_or_insert_with(|| unsafe {
             let llvm_i8 = LLVMInt8TypeInContext(llx);
             let members = &mut [llvm_i8, llvm_i8];
 
@@ -261,7 +255,7 @@ impl TargetCtx {
     pub fn shared_str_llvm_type(&mut self) -> LLVMTypeRef {
         let llx = self.llx;
 
-        *self.shared_str_type.get_or_insert_with(|| unsafe {
+        *self.cached_types.shared_str.get_or_insert_with(|| unsafe {
             let llvm_i8 = LLVMInt8TypeInContext(llx);
             let llvm_i64 = LLVMInt64TypeInContext(llx);
 
@@ -286,39 +280,46 @@ impl TargetCtx {
         let llvm_header = self.box_header_llvm_type();
         let shared_str_llvm_type = self.shared_str_llvm_type();
 
-        *self.boxed_external_str_type.get_or_insert_with(|| unsafe {
-            let llvm_i8 = LLVMInt8TypeInContext(llx);
-            let members = &mut [
-                llvm_header,
-                llvm_i8,
-                LLVMPointerType(shared_str_llvm_type, 0),
-            ];
+        *self
+            .cached_types
+            .boxed_external_str
+            .get_or_insert_with(|| unsafe {
+                let llvm_i8 = LLVMInt8TypeInContext(llx);
+                let members = &mut [
+                    llvm_header,
+                    llvm_i8,
+                    LLVMPointerType(shared_str_llvm_type, 0),
+                ];
 
-            let llvm_type =
-                LLVMStructCreateNamed(llx, b"boxed_external_str\0".as_ptr() as *const _);
-            LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
+                let llvm_type =
+                    LLVMStructCreateNamed(llx, b"boxed_external_str\0".as_ptr() as *const _);
+                LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
-            llvm_type
-        })
+                llvm_type
+            })
     }
 
     pub fn boxed_inline_str_llvm_type(&mut self) -> LLVMTypeRef {
         let llx = self.llx;
         let llvm_header = self.box_header_llvm_type();
 
-        *self.boxed_inline_str_type.get_or_insert_with(|| unsafe {
-            let llvm_i8 = LLVMInt8TypeInContext(llx);
-            let members = &mut [
-                llvm_header,
-                llvm_i8,
-                LLVMArrayType(llvm_i8, boxed::Str::MAX_INLINE_BYTES as u32),
-            ];
+        *self
+            .cached_types
+            .boxed_inline_str
+            .get_or_insert_with(|| unsafe {
+                let llvm_i8 = LLVMInt8TypeInContext(llx);
+                let members = &mut [
+                    llvm_header,
+                    llvm_i8,
+                    LLVMArrayType(llvm_i8, boxed::Str::MAX_INLINE_BYTES as u32),
+                ];
 
-            let llvm_type = LLVMStructCreateNamed(llx, b"boxed_inline_str\0".as_ptr() as *const _);
-            LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
+                let llvm_type =
+                    LLVMStructCreateNamed(llx, b"boxed_inline_str\0".as_ptr() as *const _);
+                LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
-            llvm_type
-        })
+                llvm_type
+            })
     }
 
     pub fn persistent_vector_leaf_llvm_type(&mut self) -> LLVMTypeRef {
@@ -328,7 +329,8 @@ impl TargetCtx {
         let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
 
         *self
-            .persistent_vector_leaf_type
+            .cached_types
+            .persistent_vector_leaf
             .get_or_insert_with(|| unsafe {
                 let llvm_i64 = LLVMInt64TypeInContext(llx);
 
@@ -348,7 +350,8 @@ impl TargetCtx {
         let persistent_vector_leaf_type = self.persistent_vector_leaf_llvm_type();
 
         *self
-            .boxed_external_vector_type
+            .cached_types
+            .boxed_external_vector
             .get_or_insert_with(|| unsafe {
                 let llvm_i32 = LLVMInt32TypeInContext(llx);
                 let llvm_i64 = LLVMInt64TypeInContext(llx);
@@ -375,29 +378,32 @@ impl TargetCtx {
         let llvm_header = self.box_header_llvm_type();
         let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
 
-        *self.boxed_inline_vector_type.get_or_insert_with(|| unsafe {
-            let llvm_i32 = LLVMInt32TypeInContext(llx);
+        *self
+            .cached_types
+            .boxed_inline_vector
+            .get_or_insert_with(|| unsafe {
+                let llvm_i32 = LLVMInt32TypeInContext(llx);
 
-            let members = &mut [
-                llvm_header,
-                llvm_i32,
-                llvm_any_ptr,
-                llvm_any_ptr,
-                llvm_any_ptr,
-            ];
+                let members = &mut [
+                    llvm_header,
+                    llvm_i32,
+                    llvm_any_ptr,
+                    llvm_any_ptr,
+                    llvm_any_ptr,
+                ];
 
-            let llvm_type =
-                LLVMStructCreateNamed(llx, b"boxed_inline_vector\0".as_ptr() as *const _);
-            LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
+                let llvm_type =
+                    LLVMStructCreateNamed(llx, b"boxed_inline_vector\0".as_ptr() as *const _);
+                LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
-            llvm_type
-        })
+                llvm_type
+            })
     }
 
     pub fn boxed_abi_to_llvm_struct_type(&mut self, boxed_abi_type: &BoxedABIType) -> LLVMTypeRef {
         let box_layout: BoxLayout = boxed_abi_type.into();
 
-        if let Some(llvm_struct) = self.boxed_types.get(&box_layout) {
+        if let Some(llvm_struct) = self.cached_types.boxed.get(&box_layout) {
             return *llvm_struct;
         }
 
@@ -411,7 +417,7 @@ impl TargetCtx {
                 LLVMStructCreateNamed(self.llx, box_layout.type_name().as_ptr() as *const _);
             LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
-            self.boxed_types.insert(box_layout, llvm_type);
+            self.cached_types.boxed.insert(box_layout, llvm_type);
             llvm_type
         }
     }
@@ -533,7 +539,8 @@ impl TargetCtx {
     ) -> LLVMTypeRef {
         use std::ffi;
 
-        if let Some(record_struct_box_type) = self.record_struct_box_types.get(record_struct) {
+        if let Some(record_struct_box_type) = self.cached_types.record_struct_box.get(record_struct)
+        {
             return *record_struct_box_type;
         }
 
@@ -576,8 +583,10 @@ impl TargetCtx {
             record_struct_box_type
         };
 
-        self.record_struct_box_types
+        self.cached_types
+            .record_struct_box
             .insert(record_struct.clone(), record_struct_box_type);
+
         record_struct_box_type
     }
 
