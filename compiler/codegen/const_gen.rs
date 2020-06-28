@@ -665,7 +665,7 @@ pub fn gen_boxed_vector(
 
     if elements_len <= boxed::Vector::<boxed::Any>::MAX_INLINE_LEN {
         gen_boxed_inline_vector(tcx, mcx, llvm_elements)
-    } else if elements_len <= NODE_SIZE {
+    } else if elements_len <= (NODE_SIZE * 2) {
         gen_boxed_external_vector(tcx, mcx, llvm_elements)
     } else {
         todo!("generating constant vector of length {}", elements_len);
