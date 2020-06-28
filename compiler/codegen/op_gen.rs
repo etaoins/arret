@@ -547,38 +547,19 @@ fn gen_op(
                     member_index,
                 },
             ) => {
-                if *known_vector_len > boxed::Vector::<boxed::Any>::MAX_INLINE_LEN {
-                    // TODO: This will need to be done now that we implement persistent vectors
-                    todo!("loading members from external vectors")
-                }
+                use crate::codegen::vector_gen::load_boxed_vector_member;
 
-                let boxed_inline_vector_ptr_type =
-                    LLVMPointerType(tcx.boxed_inline_vector_llvm_type(), 0);
+                let llvm_boxed_vector = fcx.regs[vector_reg];
 
-                let llvm_boxed_inline_vector = LLVMBuildBitCast(
-                    fcx.builder,
-                    fcx.regs[vector_reg],
-                    boxed_inline_vector_ptr_type,
-                    b"boxed_inline_vector\0".as_ptr() as *const _,
+                let llvm_vector_member = load_boxed_vector_member(
+                    tcx,
+                    fcx,
+                    llvm_boxed_vector,
+                    *known_vector_len,
+                    *member_index,
                 );
 
-                let value_ptr = LLVMBuildStructGEP(
-                    fcx.builder,
-                    llvm_boxed_inline_vector,
-                    // Skip the header and inline len
-                    (2 + member_index) as u32,
-                    b"vector_member_ptr\0".as_ptr() as *const _,
-                );
-
-                let llvm_value = LLVMBuildLoad(
-                    fcx.builder,
-                    value_ptr,
-                    "vector_member_ptr\0".as_ptr() as *const _,
-                );
-
-                tcx.add_invariant_load_metadata(llvm_value);
-
-                fcx.regs.insert(*reg, llvm_value);
+                fcx.regs.insert(*reg, llvm_vector_member);
             }
             OpKind::Cond(cond_op) => {
                 let cond_alloc_plan = active_alloc.next_cond_plan();

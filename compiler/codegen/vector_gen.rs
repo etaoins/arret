@@ -162,3 +162,44 @@ pub(crate) fn load_boxed_vector_len(
         phi_value
     }
 }
+
+pub(crate) fn load_boxed_vector_member(
+    tcx: &mut TargetCtx,
+    fcx: &mut FunCtx,
+    llvm_boxed_vector: LLVMValueRef,
+    known_vector_len: usize,
+    member_index: usize,
+) -> LLVMValueRef {
+    if known_vector_len > boxed::Vector::<boxed::Any>::MAX_INLINE_LEN {
+        // TODO: This will need to be done now that we implement persistent vectors
+        todo!("loading members from external vectors")
+    }
+
+    unsafe {
+        let boxed_inline_vector_ptr_type = LLVMPointerType(tcx.boxed_inline_vector_llvm_type(), 0);
+
+        let llvm_boxed_inline_vector = LLVMBuildBitCast(
+            fcx.builder,
+            llvm_boxed_vector,
+            boxed_inline_vector_ptr_type,
+            b"boxed_inline_vector\0".as_ptr() as *const _,
+        );
+
+        let value_ptr = LLVMBuildStructGEP(
+            fcx.builder,
+            llvm_boxed_inline_vector,
+            // Skip the header and inline len
+            (2 + member_index) as u32,
+            b"vector_member_ptr\0".as_ptr() as *const _,
+        );
+
+        let llvm_value = LLVMBuildLoad(
+            fcx.builder,
+            value_ptr,
+            "vector_member_ptr\0".as_ptr() as *const _,
+        );
+
+        tcx.add_invariant_load_metadata(llvm_value);
+        llvm_value
+    }
+}
