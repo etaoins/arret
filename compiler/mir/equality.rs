@@ -307,6 +307,7 @@ pub fn values_statically_equal(
                     boxed::TypeTag::Pair
                     | boxed::TypeTag::Record
                     | boxed::TypeTag::Set
+                    | boxed::TypeTag::Map
                     | boxed::TypeTag::Vector => true,
                     // The rest can be compared. Add them explicitly so we will be forced to
                     // classify new types

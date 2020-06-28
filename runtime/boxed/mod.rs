@@ -29,6 +29,7 @@ pub use crate::boxed::types::float::Float;
 pub use crate::boxed::types::fun::{Captures, FunThunk, ThunkEntry};
 pub use crate::boxed::types::int::Int;
 pub use crate::boxed::types::list::{List, ListSubtype, Nil, Pair, NIL_INSTANCE};
+pub use crate::boxed::types::map::Map;
 pub use crate::boxed::types::record::{Record, RecordClassId, RecordStorage};
 pub use crate::boxed::types::record_data::RecordData;
 pub use crate::boxed::types::set::Set;
@@ -499,7 +500,8 @@ define_const_tagged_boxes! {
     Vector,
     FunThunk,
     Record,
-    Set
+    Set,
+    Map
 }
 
 define_singleton_box!(

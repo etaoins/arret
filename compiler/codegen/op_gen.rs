@@ -185,6 +185,17 @@ fn gen_op(
 
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::ConstBoxedMap(reg, entries) => {
+                let llvm_value = const_gen::gen_boxed_map(
+                    tcx,
+                    mcx,
+                    entries
+                        .iter()
+                        .map(|(key, value)| (fcx.regs[key], fcx.regs[value])),
+                );
+
+                fcx.regs.insert(*reg, llvm_value);
+            }
             OpKind::ConstCastBoxed(reg, CastBoxedOp { from_reg, to_type }) => {
                 let from_llvm_value = fcx.regs[from_reg];
                 let to_llvm_type = tcx.boxed_abi_to_llvm_ptr_type(to_type);

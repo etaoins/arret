@@ -47,6 +47,12 @@
   (assert-eq! true ((black-box! str?) (black-box-untyped! "foo")))
   (assert-eq! false ((black-box! str?) (black-box-untyped! 123)))
 
+  (assert-eq! true (set? (black-box-untyped! #{})))
+  (assert-eq! false (set? (black-box-untyped! {})))
+
+  (assert-eq! true (map? (black-box-untyped! {})))
+  (assert-eq! false (map? (black-box-untyped! #{})))
+
   ; Make sure type predicates can be treated as first-class functions
   (assert-eq! '(true false true) (map int? '(1 2.0 3)))
   (assert-eq! '(true false true) (map (black-box! int?) '(1 2.0 3)))

@@ -17,6 +17,7 @@ pub enum BoxedABIType {
     List(&'static BoxedABIType),
     Pair(&'static BoxedABIType),
     Set(&'static BoxedABIType),
+    Map(&'static BoxedABIType, &'static BoxedABIType),
 }
 
 pub const TOP_LIST_BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::List(&BoxedABIType::Any);

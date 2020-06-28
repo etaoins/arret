@@ -59,6 +59,30 @@ fn write_boxed_seq(
     Ok(())
 }
 
+fn write_boxed_map(
+    w: &mut dyn Write,
+    heap: &impl AsHeap,
+    elems: impl Iterator<Item = (Gc<boxed::Any>, Gc<boxed::Any>)>,
+) -> Result<()> {
+    write!(w, "{{")?;
+
+    let mut has_prev = false;
+    for (key, value) in elems {
+        if has_prev {
+            write!(w, ", ")?;
+        } else {
+            has_prev = true;
+        }
+
+        write_boxed(w, heap, key)?;
+        write!(w, " ")?;
+        write_boxed(w, heap, value)?;
+    }
+
+    write!(w, "}}")?;
+    Ok(())
+}
+
 fn write_char(w: &mut dyn Write, c: char) -> Result<()> {
     match c {
         '\n' => write!(w, "\\newline"),
@@ -169,6 +193,7 @@ pub fn write_boxed(w: &mut dyn Write, heap: &impl AsHeap, any_ref: Gc<boxed::Any
         }
         AnySubtype::FunThunk(_) => write!(w, "#fn"),
         AnySubtype::Record(record) => write_record(w, heap, record),
+        AnySubtype::Map(map) => write_boxed_map(w, heap, map.iter()),
     }
 }
 

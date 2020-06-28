@@ -714,3 +714,30 @@ pub fn gen_boxed_set(
         global
     }
 }
+
+pub fn gen_boxed_map(
+    tcx: &mut TargetCtx,
+    mcx: &mut ModCtx<'_, '_, '_>,
+    llvm_elements: impl ExactSizeIterator<Item = (LLVMValueRef, LLVMValueRef)>,
+) -> LLVMValueRef {
+    if llvm_elements.len() > 0 {
+        todo!("generating non-empty map");
+    }
+
+    unsafe {
+        let type_tag = boxed::TypeTag::Map;
+        let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
+
+        let mut members: Vec<LLVMValueRef> = vec![tcx.llvm_box_header(type_tag.to_const_header())];
+
+        let llvm_value =
+            LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
+
+        let global = LLVMAddGlobal(mcx.module, llvm_type, "const_map\0".as_ptr() as *const _);
+        LLVMSetInitializer(global, llvm_value);
+        LLVMSetAlignment(global, mem::align_of::<boxed::Map>() as u32);
+
+        annotate_private_global(global);
+        global
+    }
+}

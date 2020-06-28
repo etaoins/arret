@@ -48,6 +48,7 @@ impl BoxLayout {
             BoxLayout::ConstTagged(TypeTag::Pair) => b"boxed_pair\0",
             BoxLayout::ConstTagged(TypeTag::Vector) => b"boxed_vector\0",
             BoxLayout::ConstTagged(TypeTag::Record) => b"boxed_record\0",
+            BoxLayout::ConstTagged(TypeTag::Map) => b"boxed_map\0",
         }
     }
 
@@ -114,6 +115,7 @@ impl BoxLayout {
                 BoxLayout::ConstTagged(TypeTag::Nil)
                 | BoxLayout::ConstTagged(TypeTag::True)
                 | BoxLayout::ConstTagged(TypeTag::False)
+                | BoxLayout::ConstTagged(TypeTag::Map)
                 | BoxLayout::Bool
                 | BoxLayout::Num
                 | BoxLayout::Union => {}
@@ -136,6 +138,7 @@ impl From<&BoxedABIType> for BoxLayout {
             BoxedABIType::Pair(_) => BoxLayout::ConstTagged(TypeTag::Pair),
             BoxedABIType::Set(_) => BoxLayout::ConstTagged(TypeTag::Set),
             BoxedABIType::Vector(_) => BoxLayout::ConstTagged(TypeTag::Vector),
+            BoxedABIType::Map(_, _) => BoxLayout::ConstTagged(TypeTag::Map),
         }
     }
 }

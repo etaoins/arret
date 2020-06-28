@@ -4,6 +4,7 @@ pub mod float;
 pub mod fun;
 pub mod int;
 pub mod list;
+pub mod map;
 pub mod record;
 pub mod record_data;
 pub mod set;

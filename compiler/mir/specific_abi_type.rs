@@ -29,6 +29,7 @@ fn specific_boxed_abi_type_for_type_tag(type_tag: TypeTag) -> &'static abitype::
         TypeTag::FunThunk => &boxed::FunThunk::BOXED_ABI_TYPE,
         TypeTag::Record => &TOP_RECORD_BOXED_ABI_TYPE,
         TypeTag::Set => &boxed::Set::<boxed::Any>::BOXED_ABI_TYPE,
+        TypeTag::Map => &boxed::Map::<boxed::Any, boxed::Any>::BOXED_ABI_TYPE,
     }
 }
 

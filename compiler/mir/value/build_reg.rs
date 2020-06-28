@@ -211,6 +211,31 @@ fn const_to_reg(
                 to_abi_type.clone(),
             )
         }
+        (boxed::AnySubtype::Map(map_ref), abitype::ABIType::Boxed(to_abi_type)) => {
+            let entry_regs = map_ref
+                .iter()
+                .map(|(key_ref, value_ref)| {
+                    let key_reg =
+                        const_to_reg(ehx, b, span, key_ref, &abitype::BoxedABIType::Any.into())
+                            .into();
+
+                    let value_reg =
+                        const_to_reg(ehx, b, span, value_ref, &abitype::BoxedABIType::Any.into())
+                            .into();
+
+                    (key_reg, value_reg)
+                })
+                .collect();
+
+            let from_reg = b.push_reg(span, OpKind::ConstBoxedMap, entry_regs);
+
+            b.cast_boxed_cond(
+                span,
+                &boxed::TypeTag::Map.into(),
+                from_reg,
+                to_abi_type.clone(),
+            )
+        }
         (subtype, abi_type) => unimplemented!(
             "Unimplemented const {:?} to reg {:?} conversion",
             subtype,

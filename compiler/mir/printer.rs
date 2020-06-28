@@ -205,6 +205,20 @@ fn print_branch(
                     .collect::<Vec<String>>()
                     .join(", ")
             )?,
+            ops::OpKind::ConstBoxedMap(reg, entry_regs) => writeln!(
+                w,
+                "%{} = const boxed::Map {{ elements: [{}] }};",
+                reg.get(),
+                entry_regs
+                    .iter()
+                    .map(|(key_reg, value_reg)| format!(
+                        "(%{}, %{})",
+                        key_reg.get(),
+                        value_reg.get()
+                    ))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )?,
             ops::OpKind::ConstRecordClassId(reg, record_class_id) => writeln!(
                 w,
                 "%{} = const record::{}::CLASS_ID;",
