@@ -1,6 +1,11 @@
 (import [stdlib base])
 (import [stdlib test])
 
+; This is our node size + 1
+; It's represented as a persistent vector with a tree node and 1 element tail node
+(def thirty-three-element-vector
+  [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33])
+
 (defn test-vector! () ->! ()
   ; Inline vectors
   (assert-eq! [] (vector))
@@ -14,13 +19,24 @@
 
   ; Tail & tree vectors
   ; This is testing constant vector generation as well as `(vector!)`
-  (assert-eq! [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33]
+  (assert-eq! thirty-three-element-vector
     ((black-box! vector) 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33)))
 
 (defn test-vector-ref! () ->! ()
+  ; Inline vectors
   (assert-eq! 1 (vector-ref [1 2 3] 0))
   (assert-eq! 2 ((black-box! vector-ref) [1 2 3] 1))
-  (assert-eq! 3 (vector-ref (black-box! [1 2 3]) 2)))
+  (assert-eq! 3 (vector-ref (black-box! [1 2 3]) 2))
+
+  ; Tail-only vectors
+  (assert-eq! 4 (vector-ref (black-box! [1 2 3 4]) 3))
+  (assert-eq! 5 ((black-box! vector-ref) [1 2 3 4 5] 4))
+  (assert-eq! 6 ((black-box! vector-ref) (black-box! [1 2 3 4 5 6]) 5))
+
+  ; Tail & tree vector
+  (assert-eq! 1 (vector-ref (black-box! thirty-three-element-vector) 0))
+  (assert-eq! 32 ((black-box! vector-ref) thirty-three-element-vector 31))
+  (assert-eq! 33 (vector-ref (black-box! thirty-three-element-vector) 32)))
 
 (defn test-vector-length! () ->! ()
   (assert-eq! 0 (vector-length []))

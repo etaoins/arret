@@ -1,14 +1,10 @@
 use arret_syntax::span::Span;
 
 use arret_runtime::abitype;
-use arret_runtime::boxed;
 
 use crate::mir::builder::Builder;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::value::Value;
-
-// TODO: MIR shouldn't know about this codegen restriction; this is a temporary hack.
-pub const MAX_DIRECT_ACCESS_LEN: usize = boxed::Vector::<boxed::Any>::MAX_INLINE_LEN;
 
 fn vector_member_type(vector_value: &Value) -> &abitype::BoxedABIType {
     if let Value::Reg(reg_value) = vector_value {

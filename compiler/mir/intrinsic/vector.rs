@@ -66,10 +66,6 @@ pub fn vector_ref(
         return Ok(None);
     };
 
-    if index > vector_member::MAX_DIRECT_ACCESS_LEN {
-        return Ok(None);
-    }
-
     Ok(Some(vector_member::load_vector_member(
         ehx,
         b,

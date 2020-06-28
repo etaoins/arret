@@ -163,18 +163,12 @@ pub(crate) fn load_boxed_vector_len(
     }
 }
 
-pub(crate) fn load_boxed_vector_member(
+fn load_boxed_inline_vector_member(
     tcx: &mut TargetCtx,
     fcx: &mut FunCtx,
     llvm_boxed_vector: LLVMValueRef,
-    known_vector_len: usize,
     member_index: usize,
 ) -> LLVMValueRef {
-    if known_vector_len > boxed::Vector::<boxed::Any>::MAX_INLINE_LEN {
-        // TODO: This will need to be done now that we implement persistent vectors
-        todo!("loading members from external vectors")
-    }
-
     unsafe {
         let boxed_inline_vector_ptr_type = LLVMPointerType(tcx.boxed_inline_vector_llvm_type(), 0);
 
@@ -196,10 +190,107 @@ pub(crate) fn load_boxed_vector_member(
         let llvm_value = LLVMBuildLoad(
             fcx.builder,
             value_ptr,
-            "vector_member_ptr\0".as_ptr() as *const _,
+            "vector_member\0".as_ptr() as *const _,
         );
 
         tcx.add_invariant_load_metadata(llvm_value);
         llvm_value
+    }
+}
+
+fn load_boxed_external_vector_member(
+    tcx: &mut TargetCtx,
+    fcx: &mut FunCtx,
+    llvm_boxed_vector: LLVMValueRef,
+    known_vector_len: usize,
+    member_index: usize,
+) -> LLVMValueRef {
+    use arret_runtime::persistent::vector::NODE_SIZE;
+
+    const TREE_PTR_INDEX: u32 = 3;
+    const TAIL_PTR_INDEX: u32 = 4;
+
+    let (node_gep_index, element_array_index) = if known_vector_len <= NODE_SIZE {
+        (TAIL_PTR_INDEX, member_index as u64)
+    } else if known_vector_len <= (NODE_SIZE * 2) {
+        if member_index < NODE_SIZE {
+            (TREE_PTR_INDEX, member_index as u64)
+        } else {
+            (TAIL_PTR_INDEX, (member_index - NODE_SIZE) as u64)
+        }
+    } else {
+        todo!("loading member of vector of length {}", known_vector_len);
+    };
+
+    unsafe {
+        let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
+
+        let boxed_external_vector_ptr_type =
+            LLVMPointerType(tcx.boxed_external_vector_llvm_type(), 0);
+
+        let llvm_boxed_external_vector = LLVMBuildBitCast(
+            fcx.builder,
+            llvm_boxed_vector,
+            boxed_external_vector_ptr_type,
+            b"boxed_external_vector\0".as_ptr() as *const _,
+        );
+
+        let vector_node_ptr_ptr = LLVMBuildStructGEP(
+            fcx.builder,
+            llvm_boxed_external_vector,
+            node_gep_index,
+            b"vector_node_ptr_ptr\0".as_ptr() as *const _,
+        );
+
+        let vector_node_ptr = LLVMBuildLoad(
+            fcx.builder,
+            vector_node_ptr_ptr,
+            "vector_node_ptr\0".as_ptr() as *const _,
+        );
+        tcx.add_invariant_load_metadata(vector_node_ptr);
+
+        let element_ptr_gep_indices = &mut [
+            LLVMConstInt(llvm_i32, 0 as u64, 0),
+            // Skip the refcount
+            LLVMConstInt(llvm_i32, 1 as u64, 0),
+            LLVMConstInt(llvm_i32, element_array_index, 0),
+        ];
+
+        let vector_node_element_ptr = LLVMBuildInBoundsGEP(
+            fcx.builder,
+            vector_node_ptr,
+            element_ptr_gep_indices.as_mut_ptr(),
+            element_ptr_gep_indices.len() as u32,
+            "vector_node_element_ptr\0".as_ptr() as *const _,
+        );
+
+        let llvm_value = LLVMBuildLoad(
+            fcx.builder,
+            vector_node_element_ptr,
+            "vector_member\0".as_ptr() as *const _,
+        );
+
+        tcx.add_invariant_load_metadata(llvm_value);
+        llvm_value
+    }
+}
+
+pub(crate) fn load_boxed_vector_member(
+    tcx: &mut TargetCtx,
+    fcx: &mut FunCtx,
+    llvm_boxed_vector: LLVMValueRef,
+    known_vector_len: usize,
+    member_index: usize,
+) -> LLVMValueRef {
+    if known_vector_len <= boxed::Vector::<boxed::Any>::MAX_INLINE_LEN {
+        load_boxed_inline_vector_member(tcx, fcx, llvm_boxed_vector, member_index)
+    } else {
+        load_boxed_external_vector_member(
+            tcx,
+            fcx,
+            llvm_boxed_vector,
+            known_vector_len,
+            member_index,
+        )
     }
 }
