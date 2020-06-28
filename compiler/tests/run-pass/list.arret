@@ -110,6 +110,11 @@
   (assert-eq! '() (reverse '()))
   (assert-eq! '(3 2 1) (reverse '(1 2 3))))
 
+(defn test-nth! () ->! ()
+  (assert-eq! 1 (nth '(1 2 3) 0))
+  (assert-eq! 2 (nth '(1 2 3) 1))
+  (assert-eq! 3 (nth '(1 2 3) 2)))
+
 (defn main! () ->! ()
   (test-length!)
   (test-first-second-rest!)
@@ -124,4 +129,5 @@
   (test-take!)
   (test-drop!)
   (test-drop-last!)
-  (test-reverse!))
+  (test-reverse!)
+  (test-nth!))

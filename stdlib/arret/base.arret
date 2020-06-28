@@ -92,6 +92,13 @@
 (defn second #{T} ((_ [v T] & _)) -> T
   v)
 
+(export nth)
+(defn nth #{T} ([l (List & T)] [i Int]) -> T
+  (cond
+    (nil? l) (panic "index past end of list")
+    (<= i 0) (first l)
+    :else (recur (rest l) (dec i))))
+
 (export rest)
 (defn rest #{T} ((_ & [tail T])) -> (List & T)
   tail)
