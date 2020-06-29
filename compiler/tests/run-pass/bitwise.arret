@@ -1,0 +1,42 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn test-bit-and! () ->! ()
+  (assert-eq! 8 (bit-and 12 9))
+  (assert-eq! 4 (bit-and (black-box! 12) 21))
+  (assert-eq! 0 ((black-box! bit-and) 9 12 21)))
+
+(defn test-bit-or! () ->! ()
+  (assert-eq! 13 (bit-or 12 9))
+  (assert-eq! 29 (bit-or 12 (black-box! 21)))
+  (assert-eq! 29 (bit-or (black-box! 9) 12 (black-box! 21))))
+
+(defn test-bit-xor! () ->! ()
+  (assert-eq! 5 (bit-xor 12 9))
+  (assert-eq! 25 (bit-xor (black-box! 12) 21))
+  (assert-eq! 16 (bit-xor (black-box! 9) (black-box! 12) (black-box! 21))))
+
+(defn test-bit-not! () ->! ()
+  (assert-eq! -13 (bit-not 12))
+  (assert-eq! 21 (bit-not (black-box! -22))))
+
+(defn test-bit-shift-left! () ->! ()
+  (assert-eq! 24 (bit-shift-left 12 1))
+  (assert-eq! 84 (bit-shift-left 21 (black-box! 2))))
+
+(defn test-bit-shift-right! () ->! ()
+  (assert-eq! 6 (bit-shift-right 12 1))
+  (assert-eq! -6 (bit-shift-right (black-box! -22) 2)))
+
+(defn test-unsigned-bit-shift-right! () ->! ()
+  (assert-eq! 6 (unsigned-bit-shift-right 12 1))
+  (assert-eq! 4611686018427387898 (unsigned-bit-shift-right (black-box! -22) 2)))
+
+(defn main! () ->! ()
+  (test-bit-and!)
+  (test-bit-or!)
+  (test-bit-xor!)
+  (test-bit-not!)
+  (test-bit-shift-left!)
+  (test-bit-shift-right!)
+  (test-unsigned-bit-shift-right!))

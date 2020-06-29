@@ -1,0 +1,24 @@
+(import [stdlib base])
+(import [stdlib test])
+
+(defn main! () ->! ()
+  (assert-fn-doesnt-contain-op! :call (fn ([lhs Int] [rhs Int])
+    (bit-and lhs rhs)))
+
+  (assert-fn-doesnt-contain-op! :call (fn ([lhs Int] [rhs Int])
+    (bit-or lhs rhs)))
+
+  (assert-fn-doesnt-contain-op! :call (fn ([lhs Int] [rhs Int])
+    (bit-xor lhs rhs)))
+
+  (assert-fn-doesnt-contain-op! :call (fn ([i Int])
+    (bit-not i)))
+
+  (assert-fn-doesnt-contain-op! :call (fn ([i Int])
+    (bit-shift-left i 16)))
+
+  (assert-fn-doesnt-contain-op! :call (fn ([i Int])
+    (bit-shift-right i 32)))
+
+  (assert-fn-doesnt-contain-op! :call (fn ([i Int])
+    (unsigned-bit-shift-right i 32))))

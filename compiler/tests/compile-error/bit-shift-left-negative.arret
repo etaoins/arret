@@ -1,0 +1,6 @@
+(import [stdlib base])
+
+(def _ (bit-shift-left 0 -1))
+      ;^^^^^^^^^^^^^^^^^^^^^ ERROR shift left by negative bit count -1
+
+(defn main! () ->! ())

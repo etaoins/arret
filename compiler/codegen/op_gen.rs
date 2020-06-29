@@ -951,6 +951,85 @@ fn gen_op(
                 let llvm_value = math_gen::gen_float_sqrt(tcx, mcx, fcx, llvm_radicand);
                 fcx.regs.insert(*reg, llvm_value);
             }
+            OpKind::Int64BitwiseAnd(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+
+                let llvm_value = LLVMBuildAnd(
+                    fcx.builder,
+                    llvm_lhs,
+                    llvm_rhs,
+                    "int_and\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::Int64BitwiseOr(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+
+                let llvm_value = LLVMBuildOr(
+                    fcx.builder,
+                    llvm_lhs,
+                    llvm_rhs,
+                    "int_or\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::Int64BitwiseXor(reg, BinaryOp { lhs_reg, rhs_reg }) => {
+                let llvm_lhs = fcx.regs[lhs_reg];
+                let llvm_rhs = fcx.regs[rhs_reg];
+
+                let llvm_value = LLVMBuildXor(
+                    fcx.builder,
+                    llvm_lhs,
+                    llvm_rhs,
+                    "int_xor\0".as_ptr() as *const _,
+                );
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::Int64BitwiseNot(reg, int_reg) => {
+                let llvm_int = fcx.regs[int_reg];
+
+                let llvm_value =
+                    LLVMBuildNot(fcx.builder, llvm_int, "int_not\0".as_ptr() as *const _);
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::Int64ShiftLeft(reg, ShiftOp { int_reg, bit_count }) => {
+                let llvm_int = fcx.regs[int_reg];
+
+                let llvm_value = LLVMBuildShl(
+                    fcx.builder,
+                    llvm_int,
+                    LLVMConstInt(LLVMInt64TypeInContext(tcx.llx), *bit_count as u64, 0),
+                    "int_shl\0".as_ptr() as *const _,
+                );
+
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::Int64ArithmeticShiftRight(reg, ShiftOp { int_reg, bit_count }) => {
+                let llvm_int = fcx.regs[int_reg];
+
+                let llvm_value = LLVMBuildAShr(
+                    fcx.builder,
+                    llvm_int,
+                    LLVMConstInt(LLVMInt64TypeInContext(tcx.llx), *bit_count as u64, 0),
+                    "int_ashr\0".as_ptr() as *const _,
+                );
+
+                fcx.regs.insert(*reg, llvm_value);
+            }
+            OpKind::Int64LogicalShiftRight(reg, ShiftOp { int_reg, bit_count }) => {
+                let llvm_int = fcx.regs[int_reg];
+
+                let llvm_value = LLVMBuildLShr(
+                    fcx.builder,
+                    llvm_int,
+                    LLVMConstInt(LLVMInt64TypeInContext(tcx.llx), *bit_count as u64, 0),
+                    "int_lshr\0".as_ptr() as *const _,
+                );
+
+                fcx.regs.insert(*reg, llvm_value);
+            }
             OpKind::MakeCallback(
                 reg,
                 MakeCallbackOp {

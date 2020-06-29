@@ -1,3 +1,4 @@
+mod bitwise;
 mod list;
 mod math;
 mod num_utils;
@@ -84,5 +85,13 @@ define_build_intrinsics! {
     "panic!" => panics::panics,
 
     "vector-length" => vector::vector_length,
-    "vector-ref" => vector::vector_ref
+    "vector-ref" => vector::vector_ref,
+
+    "bit-and" => bitwise::bit_and,
+    "bit-or" => bitwise::bit_or,
+    "bit-xor" => bitwise::bit_xor,
+    "bit-not" => bitwise::bit_not,
+    "bit-shift-left" => bitwise::bit_shift_left,
+    "bit-shift-right" => bitwise::bit_shift_right,
+    "unsigned-bit-shift-right" => bitwise::unsigned_bit_shift_right
 }

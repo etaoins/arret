@@ -186,6 +186,12 @@ pub struct MakeCallbackOp {
     pub callee: Callee,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct ShiftOp {
+    pub int_reg: RegId,
+    pub bit_count: u32,
+}
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Comparison {
     Lt,
@@ -274,6 +280,14 @@ pub enum OpKind {
     Int64Rem(RegId, BinaryOp),
     Int64CheckedRem(RegId, BinaryOp),
     FloatSqrt(RegId, RegId),
+
+    Int64BitwiseAnd(RegId, BinaryOp),
+    Int64BitwiseOr(RegId, BinaryOp),
+    Int64BitwiseXor(RegId, BinaryOp),
+    Int64BitwiseNot(RegId, RegId),
+    Int64ShiftLeft(RegId, ShiftOp),
+    Int64LogicalShiftRight(RegId, ShiftOp),
+    Int64ArithmeticShiftRight(RegId, ShiftOp),
 
     ConstBoxedRecord(RegId, BoxRecordOp),
     AllocBoxedRecord(RegId, BoxRecordOp),
@@ -364,6 +378,13 @@ impl OpKind {
             | Int64Rem(reg_id, _)
             | Int64CheckedRem(reg_id, _)
             | FloatSqrt(reg_id, _)
+            | Int64BitwiseAnd(reg_id, _)
+            | Int64BitwiseOr(reg_id, _)
+            | Int64BitwiseXor(reg_id, _)
+            | Int64BitwiseNot(reg_id, _)
+            | Int64ShiftLeft(reg_id, _)
+            | Int64ArithmeticShiftRight(reg_id, _)
+            | Int64LogicalShiftRight(reg_id, _)
             | IntCompare(reg_id, _)
             | BoolEqual(reg_id, _)
             | CharEqual(reg_id, _)
@@ -483,6 +504,25 @@ impl OpKind {
             )
             | Int64ToFloat(_, reg_id)
             | FloatSqrt(_, reg_id)
+            | Int64BitwiseNot(_, reg_id)
+            | Int64ShiftLeft(
+                _,
+                ShiftOp {
+                    int_reg: reg_id, ..
+                },
+            )
+            | Int64ArithmeticShiftRight(
+                _,
+                ShiftOp {
+                    int_reg: reg_id, ..
+                },
+            )
+            | Int64LogicalShiftRight(
+                _,
+                ShiftOp {
+                    int_reg: reg_id, ..
+                },
+            )
             | MakeCallback(
                 _,
                 MakeCallbackOp {
@@ -522,6 +562,9 @@ impl OpKind {
             | Int64CheckedDiv(_, binary_op)
             | Int64Rem(_, binary_op)
             | Int64CheckedRem(_, binary_op)
+            | Int64BitwiseAnd(_, binary_op)
+            | Int64BitwiseOr(_, binary_op)
+            | Int64BitwiseXor(_, binary_op)
             | BoolEqual(_, binary_op)
             | CharEqual(_, binary_op)
             | InternedSymEqual(_, binary_op)
@@ -639,7 +682,14 @@ impl OpKind {
             | RecordClassIdEqual(_, _)
             | FloatCompare(_, _)
             | BoxIdentical(_, _)
-            | Int64ToFloat(_, _) => OpCategory::RegOp,
+            | Int64ToFloat(_, _)
+            | Int64BitwiseAnd(_, _)
+            | Int64BitwiseOr(_, _)
+            | Int64BitwiseXor(_, _)
+            | Int64BitwiseNot(_, _)
+            | Int64ShiftLeft(_, _)
+            | Int64ArithmeticShiftRight(_, _)
+            | Int64LogicalShiftRight(_, _) => OpCategory::RegOp,
 
             Ret(_) | RetVoid => OpCategory::Ret,
 

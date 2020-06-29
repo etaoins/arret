@@ -31,6 +31,9 @@ use crate::hash::*;
 pub mod set;
 use crate::set::*;
 
+pub mod bitwise;
+use crate::bitwise::*;
+
 use arret_runtime_syntax::writer::pretty_print_boxed;
 
 use arret_runtime::binding::*;
@@ -127,5 +130,13 @@ define_rust_module!(ARRET_STDLIB_RUST_EXPORTS, {
     "set-length" => stdlib_set_length,
     "set->list" => stdlib_set_to_list,
     "set-contains?" => stdlib_set_contains_p,
-    "subset?" => stdlib_subset_p
+    "subset?" => stdlib_subset_p,
+
+    "bit-and" => stdlib_bit_and,
+    "bit-or" => stdlib_bit_or,
+    "bit-xor" => stdlib_bit_xor,
+    "bit-not" => stdlib_bit_not,
+    "bit-shift-left" => stdlib_bit_shift_left,
+    "bit-shift-right" => stdlib_bit_shift_right,
+    "unsigned-bit-shift-right" => stdlib_unsigned_bit_shift_right
 });

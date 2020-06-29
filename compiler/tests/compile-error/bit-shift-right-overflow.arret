@@ -1,0 +1,6 @@
+(import [stdlib base])
+
+(def _ (bit-shift-right 0 65))
+      ;^^^^^^^^^^^^^^^^^^^^^^ ERROR shift right by 65 bits exceeds 64 bits
+
+(defn main! () ->! ())

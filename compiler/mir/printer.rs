@@ -665,6 +665,63 @@ fn print_branch(
                     rhs_reg.get(),
                 )?;
             }
+            ops::OpKind::Int64BitwiseAnd(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: u64) & (%{}: u64);",
+                    reg.get(),
+                    lhs_reg.get(),
+                    rhs_reg.get(),
+                )?;
+            }
+            ops::OpKind::Int64BitwiseOr(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: u64) | (%{}: u64);",
+                    reg.get(),
+                    lhs_reg.get(),
+                    rhs_reg.get(),
+                )?;
+            }
+            ops::OpKind::Int64BitwiseXor(reg, ops::BinaryOp { lhs_reg, rhs_reg }) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: u64) ^ (%{}: u64);",
+                    reg.get(),
+                    lhs_reg.get(),
+                    rhs_reg.get(),
+                )?;
+            }
+            ops::OpKind::Int64BitwiseNot(reg, int_reg) => {
+                writeln!(w, "%{} = ~(%{}: u64);", reg.get(), int_reg.get())?;
+            }
+            ops::OpKind::Int64ShiftLeft(reg, ops::ShiftOp { int_reg, bit_count }) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: u64) << {};",
+                    reg.get(),
+                    int_reg.get(),
+                    bit_count
+                )?;
+            }
+            ops::OpKind::Int64ArithmeticShiftRight(reg, ops::ShiftOp { int_reg, bit_count }) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: i64) >> {};",
+                    reg.get(),
+                    int_reg.get(),
+                    bit_count
+                )?;
+            }
+            ops::OpKind::Int64LogicalShiftRight(reg, ops::ShiftOp { int_reg, bit_count }) => {
+                writeln!(
+                    w,
+                    "%{} = (%{}: u64) >> {};",
+                    reg.get(),
+                    int_reg.get(),
+                    bit_count
+                )?;
+            }
             ops::OpKind::FloatSqrt(reg, radicand_reg) => {
                 writeln!(w, "%{} = sqrt(%{}: f64);", reg.get(), radicand_reg.get(),)?;
             }
