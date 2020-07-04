@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::result;
 
 use crate::hir::error::{Error, ErrorKind};
@@ -7,7 +6,7 @@ use crate::hir::import::parse::{ParsedFilter, ParsedImportSet};
 
 type Result<T> = result::Result<T, Vec<Error>>;
 
-fn apply_filter(filter: ParsedFilter, exports: Cow<'_, Exports>) -> Result<Exports> {
+fn apply_filter(filter: ParsedFilter, exports: &Exports) -> Result<Exports> {
     match filter {
         ParsedFilter::Only(only_spanned_names) => Ok(only_spanned_names
             .into_vec()
@@ -22,7 +21,7 @@ fn apply_filter(filter: ParsedFilter, exports: Cow<'_, Exports>) -> Result<Expor
             .collect::<result::Result<Exports, Error>>()?),
 
         ParsedFilter::Exclude(exclude_spanned_names) => {
-            let mut exports = exports.into_owned();
+            let mut exports = exports.clone();
             let mut errors = vec![];
 
             for (span, name) in exclude_spanned_names.into_vec().into_iter() {
@@ -39,7 +38,7 @@ fn apply_filter(filter: ParsedFilter, exports: Cow<'_, Exports>) -> Result<Expor
         }
 
         ParsedFilter::Rename(rename_spanned_names) => {
-            let mut exports = exports.into_owned();
+            let mut exports = exports.clone();
             let mut errors = vec![];
 
             for ((from_span, from_name), to_name) in rename_spanned_names.into_vec().into_iter() {
@@ -70,15 +69,15 @@ fn apply_filter(filter: ParsedFilter, exports: Cow<'_, Exports>) -> Result<Expor
 /// Applies the parsed import to the passed exports
 ///
 /// If there are no filters to apply then `exports` will be directly returned.
-pub fn filter_imported_exports<'a>(
+pub fn filter_imported_exports(
     parsed_import_set: ParsedImportSet,
-    exports: Cow<'a, Exports>,
-) -> Result<Cow<'a, Exports>> {
+    exports: &Exports,
+) -> Result<Exports> {
     match parsed_import_set {
-        ParsedImportSet::Module(_, _) => Ok(exports),
+        ParsedImportSet::Module(_, _) => Ok(exports.clone()),
         ParsedImportSet::Filter(filter, inner_parsed_import) => {
             let inner_exports = filter_imported_exports(*inner_parsed_import, exports)?;
-            Ok(Cow::Owned(apply_filter(filter, inner_exports)?))
+            Ok(apply_filter(filter, &inner_exports)?)
         }
     }
 }

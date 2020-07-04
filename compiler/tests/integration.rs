@@ -279,14 +279,14 @@ async fn result_for_single_test(
     let (output_path, run_type) = {
         let arret_compiler::EvaluableProgram {
             mut ehx,
-            main_var_id,
+            main_export_id,
             linked_libraries,
         } = arret_compiler::program_to_evaluable(ccx, &source_file)?;
 
         // Try evaluating if we're not supposed to panic
         if let TestType::Run(RunType::Error(_)) = test_type {
         } else {
-            ehx.eval_main_fun(main_var_id)?;
+            ehx.eval_main_fun(main_export_id)?;
         }
 
         let run_type = if let TestType::Run(run_type) = test_type {
@@ -296,7 +296,7 @@ async fn result_for_single_test(
         };
 
         // And now compiling and running
-        let mir_program = ehx.into_built_program(main_var_id)?;
+        let mir_program = ehx.into_built_program(main_export_id)?;
 
         if mir_program.is_empty() {
             // Don't bother building

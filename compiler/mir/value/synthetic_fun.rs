@@ -3,9 +3,8 @@ use std::collections::HashMap;
 use arret_syntax::datum::DataStr;
 use arret_syntax::span::Span;
 
-use crate::context::ModuleId;
 use crate::hir;
-use crate::hir::var_id::VarIdAlloc;
+use crate::hir::var_id::LocalIdAlloc;
 use crate::mir::env_values::EnvValues;
 use crate::mir::value;
 use crate::source::EMPTY_SPAN;
@@ -29,24 +28,24 @@ fn wrap_poly_expr_in_arret_fun(
     ret_ty: ty::Ref<ty::Poly>,
     wrapped_expr: hir::Expr<hir::Inferred>,
 ) -> value::ArretFun {
-    let mut via = VarIdAlloc::new(ModuleId::alloc());
+    let mut lia = LocalIdAlloc::new();
 
     let pvars: purity::PVars = ty_args.pvar_purities().keys().cloned().collect();
     let tvars: ty::TVars = ty_args.tvar_types().keys().cloned().collect();
 
-    let expr_params_with_var_id: Vec<(&ExprParam, hir::VarId)> = expr_params
+    let expr_params_with_local_id: Vec<(&ExprParam, hir::LocalId)> = expr_params
         .iter()
-        .map(|expr_param| (expr_param, via.alloc_mut()))
+        .map(|expr_param| (expr_param, lia.alloc_mut()))
         .collect();
 
     let params = hir::destruc::List::new(
-        expr_params_with_var_id
+        expr_params_with_local_id
             .iter()
-            .map(|(expr_param, param_var_id)| {
+            .map(|(expr_param, param_local_id)| {
                 hir::destruc::Destruc::Scalar(
                     span,
                     hir::destruc::Scalar::new(
-                        Some(*param_var_id),
+                        Some(*param_local_id),
                         expr_param.source_name.clone(),
                         expr_param.poly_type.clone(),
                     ),
@@ -56,15 +55,16 @@ fn wrap_poly_expr_in_arret_fun(
         None,
     );
 
-    let fixed_arg_exprs = expr_params_with_var_id
+    let fixed_arg_exprs = expr_params_with_local_id
         .iter()
-        .map(|(expr_param, param_var_id)| hir::Expr {
+        .map(|(expr_param, param_local_id)| hir::Expr {
             result_ty: expr_param.poly_type.clone(),
-            kind: hir::ExprKind::Ref(span, *param_var_id),
+            kind: hir::ExprKind::LocalRef(span, *param_local_id),
         })
         .collect();
 
     value::ArretFun::new(
+        None,
         Some(source_name),
         // These are the environment type args, not our own
         TyArgs::empty(),

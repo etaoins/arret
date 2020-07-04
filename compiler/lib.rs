@@ -37,7 +37,7 @@ pub use crate::source::{SourceFile, SourceLoader, SourceText};
 
 pub struct EvaluableProgram {
     pub ehx: EvalHirCtx,
-    pub main_var_id: hir::VarId,
+    pub main_export_id: hir::ExportId,
     pub linked_libraries: Vec<Arc<LinkedLibrary>>,
 }
 
@@ -63,9 +63,7 @@ fn include_imports(
         include_imports(ehx, visited_modules, linked_libraries, import)?;
     }
 
-    for def in &root_module.defs {
-        ehx.visit_def(def)?;
-    }
+    ehx.visit_module_defs(root_module.module_id, &root_module.defs)?;
 
     Ok(())
 }
@@ -80,8 +78,8 @@ pub fn program_to_evaluable(
 
     let entry_module = ccx.source_file_to_module(source_file)?;
 
-    let main_var_id = if let Some(var_id) = entry_module.main_var_id {
-        var_id
+    let main_local_id = if let Some(local_id) = entry_module.main_local_id {
+        local_id
     } else {
         use codespan_reporting::diagnostic::Label;
 
@@ -91,12 +89,12 @@ pub fn program_to_evaluable(
                 .with_message("main! function expected in this file")])]);
     };
 
-    let inferred_main_type = &entry_module.inferred_locals[&main_var_id.local_id()];
+    let inferred_main_type = &entry_module.inferred_locals[&main_local_id];
 
     infer::ensure_main_type(
         Span::new(Some(source_file.file_id()), 0, 0),
         &entry_module.defs,
-        main_var_id,
+        main_local_id,
         inferred_main_type,
     )
     .map_err(|err| vec![err.into()])?;
@@ -114,10 +112,8 @@ pub fn program_to_evaluable(
         )?;
     }
 
-    for def in entry_module.defs {
-        // We can consume here because we own the entry module
-        ehx.consume_def(def)?;
-    }
+    // We can consume here because we own the entry module
+    ehx.consume_module_defs(entry_module.module_id, entry_module.defs)?;
 
     if ehx.should_collect() {
         ehx.collect_garbage();
@@ -125,7 +121,7 @@ pub fn program_to_evaluable(
 
     Ok(EvaluableProgram {
         ehx,
-        main_var_id,
+        main_export_id: hir::ExportId::new(entry_module.module_id, main_local_id),
         linked_libraries,
     })
 }

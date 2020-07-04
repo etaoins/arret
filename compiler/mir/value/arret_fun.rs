@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use arret_syntax::datum::DataStr;
 
+use crate::context::ModuleId;
 use crate::hir;
 use crate::mir::env_values::EnvValues;
 use crate::ty;
@@ -12,6 +13,7 @@ new_global_id_type!(ArretFunId);
 #[derive(Clone, Debug)]
 struct ArretFunConsts {
     id: ArretFunId,
+    module_id: Option<ModuleId>,
     source_name: Option<DataStr>,
     env_ty_args: TyArgs<ty::Mono>,
     fun_expr: hir::Fun<hir::Inferred>,
@@ -25,6 +27,7 @@ pub struct ArretFun {
 
 impl ArretFun {
     pub fn new(
+        module_id: Option<ModuleId>,
         source_name: Option<DataStr>,
         env_ty_args: TyArgs<ty::Mono>,
         env_values: EnvValues,
@@ -33,6 +36,7 @@ impl ArretFun {
         Self {
             consts: Rc::new(ArretFunConsts {
                 id: ArretFunId::alloc(),
+                module_id,
                 source_name,
                 env_ty_args,
                 fun_expr,
@@ -43,6 +47,13 @@ impl ArretFun {
 
     pub fn id(&self) -> ArretFunId {
         self.consts.id
+    }
+
+    /// Returns the optional module ID this function occurs in
+    ///
+    /// This is used to look up local variables from other definitions in the same module.
+    pub fn module_id(&self) -> Option<ModuleId> {
+        self.consts.module_id
     }
 
     pub fn source_name(&self) -> &Option<DataStr> {

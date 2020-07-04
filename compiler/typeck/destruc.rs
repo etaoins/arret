@@ -55,37 +55,37 @@ pub fn type_for_decl_destruc(
     }
 }
 
-fn visit_scalar_vars<F>(scalar: &destruc::Scalar<hir::Lowered>, visitor: &mut F)
+fn visit_scalar_locals<F>(scalar: &destruc::Scalar<hir::Lowered>, visitor: &mut F)
 where
-    F: FnMut(hir::VarId, &hir::DeclTy) -> (),
+    F: FnMut(hir::LocalId, &hir::DeclTy) -> (),
 {
-    if let Some(var_id) = scalar.var_id() {
-        visitor(*var_id, scalar.ty());
+    if let Some(local_id) = scalar.local_id() {
+        visitor(*local_id, scalar.ty());
     }
 }
 
-/// Visits the variables in the passed destruc with the given visitor function
+/// Visits the local variables in the passed destruc with the given visitor function
 ///
 /// If the root destruc is scalar its VarId will be returned, otherwise None
-pub fn visit_vars<F>(
+pub fn visit_locals<F>(
     destruc: &destruc::Destruc<hir::Lowered>,
     visitor: &mut F,
-) -> Option<hir::VarId>
+) -> Option<hir::LocalId>
 where
-    F: FnMut(hir::VarId, &hir::DeclTy) -> (),
+    F: FnMut(hir::LocalId, &hir::DeclTy) -> (),
 {
     match destruc {
         destruc::Destruc::Scalar(_, ref scalar) => {
-            visit_scalar_vars(scalar, visitor);
-            *scalar.var_id()
+            visit_scalar_locals(scalar, visitor);
+            *scalar.local_id()
         }
         destruc::Destruc::List(_, ref list) => {
             for fixed in list.fixed() {
-                visit_vars(fixed, visitor);
+                visit_locals(fixed, visitor);
             }
 
             if let Some(rest) = list.rest() {
-                visit_scalar_vars(rest, visitor);
+                visit_scalar_locals(rest, visitor);
             }
 
             None

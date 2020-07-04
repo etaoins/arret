@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use arret_syntax::span::Span;
 
+use crate::context::ModuleId;
 use crate::hir::error::{Error, ErrorKind, Result};
 use crate::hir::macros::expander::expand_rule;
 use crate::hir::macros::linker::{link_rule_vars, VarLinks};
@@ -109,6 +110,7 @@ pub fn lower_macro_rules(
 pub fn expand_macro<'s, 'p>(
     scope: &'s mut Scope<'p>,
     invocation_span: Span,
+    module_id: Option<ModuleId>,
     mac: &Arc<Macro>,
     arg_data: &[NsDatum],
 ) -> Result<NsDatum> {
@@ -118,6 +120,7 @@ pub fn expand_macro<'s, 'p>(
         if let Ok(match_data) = match_result {
             return Ok(expand_rule(
                 scope,
+                module_id,
                 mac,
                 &match_data,
                 &rule.var_links,

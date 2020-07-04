@@ -33,23 +33,23 @@ impl<P: hir::Phase> List<P> {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Scalar<P: hir::Phase> {
-    /// ID of the variable. If this is None it's treated as a wildcard.
-    var_id: Option<hir::VarId>,
+    /// ID of the local. If this is None it's treated as a wildcard.
+    local_id: Option<hir::LocalId>,
     source_name: DataStr,
     ty: P::DeclType,
 }
 
 impl<P: hir::Phase> Scalar<P> {
-    pub fn new(var_id: Option<hir::VarId>, source_name: DataStr, ty: P::DeclType) -> Scalar<P> {
+    pub fn new(local_id: Option<hir::LocalId>, source_name: DataStr, ty: P::DeclType) -> Scalar<P> {
         Scalar {
-            var_id,
+            local_id,
             source_name,
             ty,
         }
     }
 
-    pub fn var_id(&self) -> &Option<hir::VarId> {
-        &self.var_id
+    pub fn local_id(&self) -> &Option<hir::LocalId> {
+        &self.local_id
     }
 
     pub fn source_name(&self) -> &DataStr {
@@ -83,7 +83,7 @@ pub fn subst_scalar_destruc(
     scalar: Scalar<hir::Lowered>,
 ) -> Scalar<hir::Inferred> {
     let Scalar {
-        var_id,
+        local_id,
         ty,
         source_name,
     } = scalar;
@@ -93,7 +93,7 @@ pub fn subst_scalar_destruc(
         hir::DeclTy::Free => free_ty_polys.next().unwrap(),
     };
 
-    Scalar::new(var_id, source_name, poly_type)
+    Scalar::new(local_id, source_name, poly_type)
 }
 
 /// Substitutes free types with their inferred types

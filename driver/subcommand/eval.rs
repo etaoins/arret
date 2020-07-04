@@ -10,11 +10,11 @@ fn try_eval_input_file(
 ) -> Result<(), Vec<Diagnostic<FileId>>> {
     let arret_compiler::EvaluableProgram {
         mut ehx,
-        main_var_id,
+        main_export_id,
         ..
     } = arret_compiler::program_to_evaluable(ccx, input_file)?;
 
-    ehx.eval_main_fun(main_var_id)?;
+    ehx.eval_main_fun(main_export_id)?;
 
     Ok(())
 }

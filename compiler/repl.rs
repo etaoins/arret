@@ -9,6 +9,7 @@ use arret_syntax::datum::DataStr;
 use arret_syntax::span::FileId;
 
 use crate::context;
+use crate::context::ModuleId;
 use crate::hir;
 use crate::hir::scope::Scope;
 use crate::reporting::{diagnostic_for_syntax_error, errors_to_diagnostics, new_primary_label};
@@ -122,9 +123,8 @@ impl<'ccx> ReplEngine<'ccx> {
         self.inferred_module_vars
             .insert(root_module.module_id, root_module.inferred_locals.clone());
 
-        for def in &root_module.defs {
-            self.ehx.visit_def(def)?;
-        }
+        self.ehx
+            .visit_module_defs(root_module.module_id, &root_module.defs)?;
 
         Ok(())
     }
@@ -161,14 +161,17 @@ impl<'ccx> ReplEngine<'ccx> {
             }
         };
 
+        let module_id = ModuleId::alloc();
         let mut child_scope = Scope::child(&self.root_scope);
 
         let lowered_repl_datum =
             hir::lowering::lower_repl_datum(&self.ccx, &mut child_scope, input_datum)
                 .map_err(errors_to_diagnostics)?;
 
+        // Bring all the defs back in to root scope
         let exported_bindings = child_scope.into_exported_bindings();
-        self.root_scope.import_bindings(exported_bindings);
+        self.root_scope
+            .import_bindings(exported_bindings, module_id);
 
         match lowered_repl_datum {
             LoweredReplDatum::Import(modules) => {
@@ -178,17 +181,15 @@ impl<'ccx> ReplEngine<'ccx> {
 
                 Ok(EvaledLine::Defs(self.bound_names()))
             }
-            LoweredReplDatum::EvaluableDef(module_id, def) => {
-                let inferred_module =
-                    infer_module(&self.inferred_module_vars, module_id, vec![def])
-                        .map_err(errors_to_diagnostics)?;
+            LoweredReplDatum::EvaluableDef(def) => {
+                let inferred_module = infer_module(&self.inferred_module_vars, vec![def])
+                    .map_err(errors_to_diagnostics)?;
 
                 self.inferred_module_vars
                     .insert(module_id, Arc::new(inferred_module.inferred_locals));
 
-                for inferred_def in inferred_module.defs {
-                    self.ehx.consume_def(inferred_def)?;
-                }
+                self.ehx
+                    .consume_module_defs(module_id, inferred_module.defs)?;
 
                 Ok(EvaledLine::Defs(self.bound_names()))
             }
@@ -196,8 +197,8 @@ impl<'ccx> ReplEngine<'ccx> {
                 // This was handled entirely by HIR lowering
                 Ok(EvaledLine::Defs(self.bound_names()))
             }
-            LoweredReplDatum::Expr(module_id, decl_expr) => {
-                let node = infer_repl_expr(&self.inferred_module_vars, module_id, decl_expr)?;
+            LoweredReplDatum::Expr(decl_expr) => {
+                let node = infer_repl_expr(&self.inferred_module_vars, decl_expr)?;
                 let type_str = hir::str_for_ty_ref(node.result_ty());
 
                 match kind {
@@ -210,7 +211,7 @@ impl<'ccx> ReplEngine<'ccx> {
                         let type_is_literal = ty::props::is_literal(node.result_ty());
 
                         // Evaluate the expression
-                        let mut fcx = FunCtx::new();
+                        let mut fcx = FunCtx::new(None);
 
                         let value = self
                             .ehx

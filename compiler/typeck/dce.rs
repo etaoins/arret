@@ -9,7 +9,8 @@ use crate::ty::Ty;
 pub fn expr_can_side_effect(expr: &hir::Expr<hir::Inferred>) -> bool {
     use hir::ExprKind;
     match &expr.kind {
-        ExprKind::Ref(_, _)
+        ExprKind::LocalRef(_, _)
+        | ExprKind::ExportRef(_, _)
         | ExprKind::Lit(_)
         | ExprKind::EqPred(_)
         | ExprKind::TyPred(_, _)

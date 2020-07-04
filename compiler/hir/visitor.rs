@@ -46,7 +46,8 @@ where
         ExprKind::MacroExpand(_, expr) => {
             visit_exprs(expr, visitor);
         }
-        ExprKind::Ref(_, _)
+        ExprKind::ExportRef(_, _)
+        | ExprKind::LocalRef(_, _)
         | ExprKind::Lit(_)
         | ExprKind::RustFun(_)
         | ExprKind::TyPred(_, _)

@@ -3,20 +3,21 @@ use std::sync::Arc;
 
 use arret_syntax::span::Span;
 
+use crate::context::ModuleId;
 use crate::hir::error::{Error, ErrorKind};
 use crate::hir::macros::Macro;
 use crate::hir::ns::{Ident, NsDatum, NsId, NsIdCounter};
 use crate::hir::prim::Prim;
-use crate::hir::{types, VarId};
+use crate::hir::{types, LocalId};
 use crate::ty;
 use crate::ty::purity;
 use crate::ty::record;
 
 #[derive(Clone, Debug)]
 pub enum Binding {
-    Var(VarId),
+    Var(Option<ModuleId>, LocalId),
     Prim(Prim),
-    Macro(Arc<Macro>),
+    Macro(Option<ModuleId>, Arc<Macro>),
     Ty(ty::Ref<ty::Poly>),
     TyCons(types::TyCons),
     TyPred(ty::pred::TestTy),
@@ -30,15 +31,23 @@ pub enum Binding {
 impl Binding {
     pub fn description(&self) -> &'static str {
         match self {
-            Binding::Var(_) | Binding::TyPred(_) | Binding::EqPred => "value",
+            Binding::Var(_, _) | Binding::TyPred(_) | Binding::EqPred => "value",
             Binding::Prim(_) => "primitive",
-            Binding::Macro(_) => "macro",
+            Binding::Macro(_, _) => "macro",
             Binding::Ty(_) => "type",
             Binding::TyCons(_) => "type constructor",
             Binding::RecordValueCons(_) => "record value constructor",
             Binding::RecordTyCons(_) => "record type constructor",
             Binding::FieldAccessor(_, _) => "record field accessor",
             Binding::Purity(_) => "purity",
+        }
+    }
+
+    pub fn import_from(&self, module_id: ModuleId) -> Binding {
+        match self {
+            Binding::Var(None, local_id) => Binding::Var(Some(module_id), *local_id),
+            Binding::Macro(None, macro_id) => Binding::Macro(Some(module_id), macro_id.clone()),
+            other => other.clone(),
         }
     }
 }
@@ -191,8 +200,13 @@ impl<'parent> Scope<'parent> {
         );
     }
 
-    pub fn insert_var(&mut self, span: Span, ident: Ident, var_id: VarId) -> Result<(), Error> {
-        self.insert_binding(span, ident, Binding::Var(var_id))
+    pub fn insert_local(
+        &mut self,
+        span: Span,
+        ident: Ident,
+        local_id: LocalId,
+    ) -> Result<(), Error> {
+        self.insert_binding(span, ident, Binding::Var(None, local_id))
     }
 
     /// Returns all bound idents
@@ -214,7 +228,21 @@ impl<'parent> Scope<'parent> {
         self.entries
     }
 
-    pub fn import_bindings(&mut self, exported_bindings: HashMap<Ident, SpannedBinding>) {
-        self.entries.extend(exported_bindings.into_iter());
+    pub fn import_bindings(
+        &mut self,
+        exported_bindings: impl IntoIterator<Item = (Ident, SpannedBinding)>,
+        module_id: ModuleId,
+    ) {
+        self.entries.extend(exported_bindings.into_iter().map(
+            |(ident, SpannedBinding { span, binding })| {
+                (
+                    ident,
+                    SpannedBinding {
+                        span,
+                        binding: binding.import_from(module_id),
+                    },
+                )
+            },
+        ));
     }
 }

@@ -25,7 +25,7 @@ use crate::ty::purity;
 use crate::ty::record;
 use crate::ty::Ty;
 
-pub use crate::hir::var_id::{LocalId, VarId};
+pub use crate::hir::var_id::{ExportId, LocalId};
 
 /// DeclTy is a type declared by a user
 ///
@@ -172,7 +172,8 @@ pub enum ExprKind<P: Phase> {
     RustFun(Arc<rfi::Fun>),
     Let(Box<Let<P>>),
     Cond(Box<Cond<P>>),
-    Ref(Span, VarId),
+    ExportRef(Span, ExportId),
+    LocalRef(Span, LocalId),
 
     TyPred(Span, ty::pred::TestTy),
     EqPred(Span),

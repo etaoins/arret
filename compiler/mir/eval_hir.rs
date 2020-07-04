@@ -14,6 +14,7 @@ use arret_syntax::datum::{DataStr, Datum};
 use arret_syntax::span::Span;
 
 use crate::codegen;
+use crate::context::ModuleId;
 use crate::hir;
 use crate::mir::builder::{Builder, BuiltReg, TryToBuilder};
 use crate::mir::error::{Error, Result};
@@ -54,7 +55,7 @@ pub struct EvaledRecordClass {
 
 pub struct EvalHirCtx {
     runtime_task: arret_runtime::task::Task,
-    global_values: HashMap<hir::VarId, Value>,
+    global_values: HashMap<hir::ExportId, Value>,
 
     private_fun_id_counter: ops::PrivateFunIdCounter,
     private_funs: HashMap<ops::PrivateFunId, ops::Fun>,
@@ -87,16 +88,24 @@ struct RecurSelf<'af> {
 }
 
 pub struct FunCtx<'rs> {
+    /// Optional module to find local variables in
+    ///
+    /// If this isn't specified the function cannot refer to other top-level definitions in the
+    /// same module.
+    module_id: Option<ModuleId>,
+
     mono_ty_args: TyArgs<ty::Mono>,
-    local_values: HashMap<hir::VarId, Value>,
+    local_values: HashMap<hir::LocalId, Value>,
     recur_self: Option<Box<RecurSelf<'rs>>>,
 
     pub(super) inliner_stack: inliner::ApplyStack,
 }
 
 impl<'sv> FunCtx<'sv> {
-    pub fn new() -> FunCtx<'static> {
+    pub fn new(module_id: Option<ModuleId>) -> FunCtx<'static> {
         FunCtx {
+            module_id,
+
             mono_ty_args: TyArgs::empty(),
             local_values: HashMap::new(),
             recur_self: None,
@@ -186,12 +195,6 @@ fn merge_apply_ty_args_into_scope(
     TyArgs::new(pvar_purities, tvar_types)
 }
 
-impl<'sv> Default for FunCtx<'sv> {
-    fn default() -> FunCtx<'static> {
-        FunCtx::new()
-    }
-}
-
 impl EvalHirCtx {
     pub fn new(optimising: bool) -> EvalHirCtx {
         let thunk_jit = codegen::jit::JITCtx::new(optimising);
@@ -217,46 +220,52 @@ impl EvalHirCtx {
         }
     }
 
-    fn destruc_scalar(
-        var_values: &mut HashMap<hir::VarId, Value>,
+    fn destruc_scalar<F>(
         scalar: &hir::destruc::Scalar<hir::Inferred>,
         value: Value,
-    ) {
-        if let Some(var_id) = scalar.var_id() {
-            var_values.insert(*var_id, value);
+        insert_local: &mut F,
+    ) where
+        F: FnMut(hir::LocalId, Value) -> (),
+    {
+        if let Some(local_id) = scalar.local_id() {
+            insert_local(*local_id, value);
         }
     }
 
-    fn destruc_list(
+    fn destruc_list<F>(
         b: &mut Option<Builder>,
         span: Span,
-        var_values: &mut HashMap<hir::VarId, Value>,
         list: &hir::destruc::List<hir::Inferred>,
         value: Value,
-    ) {
+        insert_local: &mut F,
+    ) where
+        F: FnMut(hir::LocalId, Value) -> (),
+    {
         let mut iter = value.into_unsized_list_iter();
 
         for fixed_destruc in list.fixed() {
             let value = iter.next_unchecked(b, span);
-            Self::destruc_value(b, var_values, fixed_destruc, value);
+            Self::destruc_value(b, fixed_destruc, value, insert_local);
         }
 
         if let Some(rest_destruc) = list.rest() {
-            Self::destruc_scalar(var_values, rest_destruc, iter.into_rest())
+            Self::destruc_scalar(rest_destruc, iter.into_rest(), insert_local)
         }
     }
 
-    fn destruc_value(
+    fn destruc_value<F>(
         b: &mut Option<Builder>,
-        var_values: &mut HashMap<hir::VarId, Value>,
         destruc: &hir::destruc::Destruc<hir::Inferred>,
         value: Value,
-    ) {
+        insert_local: &mut F,
+    ) where
+        F: FnMut(hir::LocalId, Value) -> (),
+    {
         use crate::hir::destruc::Destruc;
 
         match destruc {
-            Destruc::Scalar(_, scalar) => Self::destruc_scalar(var_values, scalar, value),
-            Destruc::List(span, list) => Self::destruc_list(b, *span, var_values, list, value),
+            Destruc::Scalar(_, scalar) => Self::destruc_scalar(scalar, value, insert_local),
+            Destruc::List(span, list) => Self::destruc_list(b, *span, list, value, insert_local),
         }
     }
 
@@ -269,10 +278,20 @@ impl EvalHirCtx {
         }
     }
 
-    fn eval_ref(&self, fcx: &FunCtx<'_>, var_id: hir::VarId) -> Value {
+    fn eval_local_ref(&self, fcx: &FunCtx<'_>, local_id: hir::LocalId) -> Value {
+        // Try local values
+        if let Some(local_value) = fcx.local_values.get(&local_id) {
+            return local_value.clone();
+        }
+
+        let module_id = fcx
+            .module_id
+            .expect("could not fall back to global for missing local");
+
+        // If this is a top-level def from the same module it will be a global
         fcx.local_values
-            .get(&var_id)
-            .unwrap_or_else(|| &self.global_values[&var_id])
+            .get(&local_id)
+            .unwrap_or_else(|| &self.global_values[&hir::ExportId::new(module_id, local_id)])
             .clone()
     }
 
@@ -298,7 +317,9 @@ impl EvalHirCtx {
         let source_name = Self::destruc_source_name(&hir_let.destruc);
         let value = self.eval_expr_with_source_name(fcx, b, &hir_let.value_expr, source_name)?;
 
-        Self::destruc_value(b, &mut fcx.local_values, &hir_let.destruc, value);
+        Self::destruc_value(b, &hir_let.destruc, value, &mut |local_id, value| {
+            fcx.local_values.insert(local_id, value);
+        });
 
         self.eval_expr(fcx, b, &hir_let.body_expr)
     }
@@ -397,6 +418,7 @@ impl EvalHirCtx {
         let fun_expr = arret_fun.fun_expr();
 
         let mut inner_fcx = FunCtx {
+            module_id: arret_fun.module_id(),
             mono_ty_args: merge_apply_ty_args_into_scope(
                 arret_fun.env_ty_args(),
                 apply_args.ty_args,
@@ -414,9 +436,11 @@ impl EvalHirCtx {
         Self::destruc_list(
             b,
             span,
-            &mut inner_fcx.local_values,
             &fun_expr.params,
             apply_args.list_value,
+            &mut |local_id, value| {
+                inner_fcx.local_values.insert(local_id, value);
+            },
         );
 
         self.eval_expr(&mut inner_fcx, b, &fun_expr.body_expr)
@@ -1238,6 +1262,7 @@ impl EvalHirCtx {
             env_values::calculate_env_values(&fcx.local_values, &fun_expr.body_expr, source_name);
 
         Value::ArretFun(value::ArretFun::new(
+            fcx.module_id,
             source_name.cloned(),
             fcx.mono_ty_args.clone(),
             env_values,
@@ -1458,7 +1483,7 @@ impl EvalHirCtx {
         } = build_load_arg_list_value(self, &mut b, &wanted_abi, &param_list_poly);
 
         // Start by loading the captures
-        let mut local_values: HashMap<hir::VarId, Value> = HashMap::new();
+        let mut local_values: HashMap<hir::LocalId, Value> = HashMap::new();
         let mut recur_env_values = arret_fun.env_values().clone();
 
         env_values::load_from_env_param(
@@ -1492,6 +1517,7 @@ impl EvalHirCtx {
 
         // Now build a function context
         let mut fcx = FunCtx {
+            module_id: arret_fun.module_id(),
             mono_ty_args: merge_apply_ty_args_into_scope(
                 arret_fun.env_ty_args(),
                 &ty_args,
@@ -1510,9 +1536,11 @@ impl EvalHirCtx {
         Self::destruc_list(
             &mut some_b,
             span,
-            &mut fcx.local_values,
             &fun_expr.params,
             arg_list_value,
+            &mut |local_id, value| {
+                fcx.local_values.insert(local_id, value);
+            },
         );
 
         let app_result = self.eval_expr(&mut fcx, &mut some_b, &fun_expr.body_expr);
@@ -1605,39 +1633,59 @@ impl EvalHirCtx {
         )
     }
 
-    pub fn visit_def(&mut self, def: &hir::Def<hir::Inferred>) -> Result<()> {
-        let hir::Def {
-            destruc,
-            value_expr,
-            ..
-        } = def;
+    pub fn visit_module_defs<'a>(
+        &mut self,
+        module_id: ModuleId,
+        defs: impl IntoIterator<Item = &'a hir::Def<hir::Inferred>>,
+    ) -> Result<()> {
+        for def in defs {
+            let hir::Def {
+                destruc,
+                value_expr,
+                ..
+            } = def;
 
-        let mut fcx = FunCtx::new();
+            let mut fcx = FunCtx::new(Some(module_id));
 
-        // Don't pass a builder; we should never generate ops based on a def
-        let source_name = Self::destruc_source_name(&destruc);
-        let value =
-            self.eval_expr_with_source_name(&mut fcx, &mut None, value_expr, source_name)?;
+            // Don't pass a builder; we should never generate ops based on a def
+            let source_name = Self::destruc_source_name(&destruc);
+            let value =
+                self.eval_expr_with_source_name(&mut fcx, &mut None, value_expr, source_name)?;
 
-        Self::destruc_value(&mut None, &mut self.global_values, &destruc, value);
+            Self::destruc_value(&mut None, &destruc, value, &mut |local_id, value| {
+                self.global_values
+                    .insert(hir::ExportId::new(module_id, local_id), value);
+            });
+        }
+
         Ok(())
     }
 
-    pub fn consume_def(&mut self, def: hir::Def<hir::Inferred>) -> Result<()> {
-        let hir::Def {
-            destruc,
-            value_expr,
-            ..
-        } = def;
+    pub fn consume_module_defs(
+        &mut self,
+        module_id: ModuleId,
+        defs: impl IntoIterator<Item = hir::Def<hir::Inferred>>,
+    ) -> Result<()> {
+        for def in defs {
+            let hir::Def {
+                destruc,
+                value_expr,
+                ..
+            } = def;
 
-        let mut fcx = FunCtx::new();
+            let mut fcx = FunCtx::new(Some(module_id));
 
-        // Don't pass a builder; we should never generate ops based on a def
-        let source_name = Self::destruc_source_name(&destruc);
-        let value =
-            self.consume_expr_with_source_name(&mut fcx, &mut None, value_expr, source_name)?;
+            // Don't pass a builder; we should never generate ops based on a def
+            let source_name = Self::destruc_source_name(&destruc);
+            let value =
+                self.consume_expr_with_source_name(&mut fcx, &mut None, value_expr, source_name)?;
 
-        Self::destruc_value(&mut None, &mut self.global_values, &destruc, value);
+            Self::destruc_value(&mut None, &destruc, value, &mut |local_id, value| {
+                self.global_values
+                    .insert(hir::ExportId::new(module_id, local_id), value);
+            });
+        }
+
         Ok(())
     }
 
@@ -1703,7 +1751,8 @@ impl EvalHirCtx {
                 field_accessor.record_cons.clone(),
                 field_accessor.field_index,
             )),
-            ExprKind::Ref(_, var_id) => Ok(self.eval_ref(fcx, *var_id)),
+            ExprKind::LocalRef(_, local_id) => Ok(self.eval_local_ref(fcx, *local_id)),
+            ExprKind::ExportRef(_, export_id) => Ok(self.global_values[export_id].clone()),
             ExprKind::Let(hir_let) => self.eval_let(fcx, b, hir_let),
             ExprKind::App(app) => self.eval_app(fcx, b, &expr.result_ty, app),
             ExprKind::Recur(recur) => self.eval_recur(fcx, b, &expr.result_ty, recur),
@@ -1753,9 +1802,10 @@ impl EvalHirCtx {
     }
 
     /// Evaluates the main function of a program
-    pub fn eval_main_fun(&mut self, main_var_id: hir::VarId) -> Result<()> {
-        let mut fcx = FunCtx::new();
-        let main_value = self.eval_ref(&fcx, main_var_id);
+    pub fn eval_main_fun(&mut self, main_export_id: hir::ExportId) -> Result<()> {
+        let mut fcx = FunCtx::new(Some(main_export_id.module_id()));
+        let main_value = self.eval_local_ref(&fcx, main_export_id.local_id());
+
         let empty_list_value = Value::List(Box::new([]), None);
 
         self.eval_value_app(
@@ -1774,9 +1824,9 @@ impl EvalHirCtx {
     }
 
     /// Builds the main function of the program
-    pub fn into_built_program(mut self, main_var_id: hir::VarId) -> Result<BuiltProgram> {
-        let fcx = FunCtx::new();
-        let main_value = self.eval_ref(&fcx, main_var_id);
+    pub fn into_built_program(mut self, main_export_id: hir::ExportId) -> Result<BuiltProgram> {
+        let fcx = FunCtx::new(Some(main_export_id.module_id()));
+        let main_value = self.eval_local_ref(&fcx, main_export_id.local_id());
 
         let main_arret_fun = if let Value::ArretFun(main_arret_fun) = main_value {
             main_arret_fun

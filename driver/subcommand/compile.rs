@@ -18,11 +18,11 @@ fn try_compile_input_file(
 ) -> Result<(), Vec<Diagnostic<FileId>>> {
     let arret_compiler::EvaluableProgram {
         ehx,
-        main_var_id,
+        main_export_id,
         linked_libraries,
     } = arret_compiler::program_to_evaluable(ccx, input_file)?;
 
-    let mir_program = ehx.into_built_program(main_var_id)?;
+    let mir_program = ehx.into_built_program(main_export_id)?;
 
     if options.output_type() == MIR_OUTPUT_TYPE {
         let mut output_file = fs::File::create(output_path).unwrap();

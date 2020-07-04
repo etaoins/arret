@@ -53,7 +53,7 @@ pub(crate) struct Module {
     pub defs: Vec<hir::Def<hir::Inferred>>,
     pub inferred_locals: Arc<HashMap<hir::LocalId, ty::Ref<ty::Poly>>>,
     pub exports: Exports,
-    pub main_var_id: Option<hir::VarId>,
+    pub main_local_id: Option<hir::LocalId>,
 
     pub linked_library: Option<Arc<LinkedLibrary>>,
 }
@@ -96,14 +96,14 @@ pub(crate) fn prims_to_module(exports: Exports) -> UncachedModule {
         defs: vec![],
         inferred_locals: Arc::new(HashMap::new()),
         exports,
-        main_var_id: None,
+        main_local_id: None,
 
         linked_library: None,
     })
 }
 
 fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> UncachedModule {
-    use crate::hir::var_id::VarIdAlloc;
+    use crate::hir::var_id::LocalIdAlloc;
     use crate::ty::Ty;
 
     use arret_syntax::datum::DataStr;
@@ -114,15 +114,14 @@ fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> UncachedModul
         exported_funs,
     } = rfi_library;
 
-    let module_id = ModuleId::alloc();
-    let mut via = VarIdAlloc::new(module_id);
+    let mut lia = LocalIdAlloc::new();
 
     let mut exports = HashMap::with_capacity(exported_funs.len());
     let mut defs = Vec::with_capacity(exported_funs.len());
     let mut inferred_locals = HashMap::with_capacity(exported_funs.len());
 
     for (fun_name, rust_fun) in exported_funs.into_vec().into_iter() {
-        let var_id = via.alloc_mut();
+        let local_id = lia.alloc_mut();
         let arret_type: ty::Ref<ty::Poly> =
             Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into();
 
@@ -134,7 +133,7 @@ fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> UncachedModul
             destruc: hir::destruc::Destruc::Scalar(
                 span,
                 hir::destruc::Scalar::new(
-                    Some(var_id),
+                    Some(local_id),
                     fun_name_data_str.clone(),
                     arret_type.clone(),
                 ),
@@ -146,19 +145,19 @@ fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> UncachedModul
         };
 
         defs.push(def);
-        inferred_locals.insert(var_id.local_id(), arret_type);
-        exports.insert(fun_name_data_str, hir::scope::Binding::Var(var_id));
+        inferred_locals.insert(local_id, arret_type);
+        exports.insert(fun_name_data_str, hir::scope::Binding::Var(None, local_id));
     }
 
     Ok(Module {
-        module_id,
+        module_id: ModuleId::alloc(),
 
         imports: HashMap::new(),
         defs,
         inferred_locals: Arc::new(inferred_locals),
         exports,
 
-        main_var_id: None,
+        main_local_id: None,
         linked_library: Some(Arc::new(LinkedLibrary {
             _loaded: loaded,
             target_path,
@@ -299,15 +298,13 @@ impl CompileCtx {
     /// Returns an uncached module for syntax data
     fn data_to_module(&self, data: &[Datum]) -> UncachedModule {
         let imports = self.imports_for_data(data.iter())?;
-        let module_id = ModuleId::alloc();
-
         let lowered_module =
-            hir::lowering::lower_data(module_id, &imports, data).map_err(errors_to_diagnostics)?;
+            hir::lowering::lower_data(&imports, data).map_err(errors_to_diagnostics)?;
 
         let LoweredModule {
             defs: lowered_defs,
             exports,
-            main_var_id,
+            main_local_id,
         } = lowered_module;
 
         let imported_inferred_vars = transitive_deps(&imports)
@@ -315,7 +312,7 @@ impl CompileCtx {
             .map(|module| (module.module_id, module.inferred_locals.clone()))
             .collect();
 
-        let inferred_module = infer::infer_module(&imported_inferred_vars, module_id, lowered_defs)
+        let inferred_module = infer::infer_module(&imported_inferred_vars, lowered_defs)
             .map_err(errors_to_diagnostics)?;
 
         let infer::InferredModule {
@@ -324,13 +321,13 @@ impl CompileCtx {
         } = inferred_module;
 
         Ok(Module {
-            module_id,
+            module_id: ModuleId::alloc(),
 
             imports,
             defs: inferred_defs,
             inferred_locals: Arc::new(inferred_locals),
             exports,
-            main_var_id,
+            main_local_id,
 
             linked_library: None,
         })

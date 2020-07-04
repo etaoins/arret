@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use arret_syntax::span::Span;
 
+use crate::context::ModuleId;
 use crate::hir::macros::linker::{TemplateIdent, VarLinks};
 use crate::hir::macros::matcher::MatchData;
 use crate::hir::macros::{get_escaped_ident, starts_with_zero_or_more, Macro};
@@ -19,13 +20,15 @@ struct ExpandCursor<'data, 'links> {
 
 struct ExpandCtx<'scope, 'parent> {
     scope: &'scope mut Scope<'parent>,
+    module_id: Option<ModuleId>,
     ns_mapping: HashMap<NsId, NsId>,
 }
 
 impl<'scope, 'parent> ExpandCtx<'scope, 'parent> {
-    fn new(scope: &'scope mut Scope<'parent>) -> Self {
+    fn new(scope: &'scope mut Scope<'parent>, module_id: Option<ModuleId>) -> Self {
         ExpandCtx {
             scope,
+            module_id,
             ns_mapping: HashMap::new(),
         }
     }
@@ -45,8 +48,12 @@ impl<'scope, 'parent> ExpandCtx<'scope, 'parent> {
                 TemplateIdent::SubpatternVar(var_index) => {
                     return cursor.match_data.var(*var_index).clone();
                 }
-                TemplateIdent::SelfIdent => Some(Binding::Macro(self_mac.clone())),
-                TemplateIdent::Bound(binding) => Some(binding.clone()),
+                TemplateIdent::SelfIdent => Some(Binding::Macro(self.module_id, self_mac.clone())),
+                TemplateIdent::Bound(binding) => Some(if let Some(module_id) = self.module_id {
+                    binding.import_from(module_id)
+                } else {
+                    binding.clone()
+                }),
                 TemplateIdent::Unbound => None,
             }
         } else {
@@ -161,12 +168,13 @@ impl<'scope, 'parent> ExpandCtx<'scope, 'parent> {
 
 pub fn expand_rule<'scope, 'parent, 'data>(
     scope: &'scope mut Scope<'parent>,
+    module_id: Option<ModuleId>,
     self_mac: &Arc<Macro>,
     match_data: &'data MatchData<'data>,
     var_links: &VarLinks,
     template: &NsDatum,
 ) -> NsDatum {
-    let mut mcx = ExpandCtx::new(scope);
+    let mut mcx = ExpandCtx::new(scope, module_id);
 
     let mut cursor = ExpandCursor {
         match_data,

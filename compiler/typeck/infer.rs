@@ -157,8 +157,8 @@ enum InputDef {
     Complete,
 }
 
-type InferredLocals = HashMap<hir::LocalId, ty::Ref<ty::Poly>>;
-type InferredModuleVars = HashMap<ModuleId, Arc<InferredLocals>>;
+pub type InferredLocals = HashMap<hir::LocalId, ty::Ref<ty::Poly>>;
+pub type InferredModuleVars = HashMap<ModuleId, Arc<InferredLocals>>;
 
 pub struct InferredModule {
     pub inferred_locals: InferredLocals,
@@ -175,7 +175,6 @@ struct RecursiveDefsCtx<'types> {
     // and then pop them off afterwards.
     free_ty_polys: Vec<ty::Ref<ty::Poly>>,
 
-    self_module_id: ModuleId,
     self_locals: HashMap<hir::LocalId, VarType>,
     imported_vars: &'types InferredModuleVars,
 }
@@ -306,7 +305,6 @@ fn keep_exprs_for_side_effects(
 impl<'types> RecursiveDefsCtx<'types> {
     fn new(
         imported_vars: &'types InferredModuleVars,
-        self_module_id: ModuleId,
         defs: Vec<hir::Def<hir::Lowered>>,
     ) -> RecursiveDefsCtx<'types> {
         let mut self_locals = HashMap::new();
@@ -322,7 +320,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             .map(|(idx, hir_def)| {
                 let def_id = InputDefId::new(idx);
 
-                typeck::destruc::visit_vars(&hir_def.destruc, &mut |var_id, decl_type| {
+                typeck::destruc::visit_locals(&hir_def.destruc, &mut |local_id, decl_type| {
                     let var_type = match decl_type {
                         hir::DeclTy::Known(poly_type) => VarType::Known(poly_type.clone()),
                         hir::DeclTy::Free => {
@@ -331,8 +329,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                         }
                     };
 
-                    debug_assert!(var_id.module_id() == self_module_id);
-                    self_locals.insert(var_id.local_id(), var_type);
+                    self_locals.insert(local_id, var_type);
                 });
 
                 InputDef::Pending(hir_def)
@@ -344,38 +341,33 @@ impl<'types> RecursiveDefsCtx<'types> {
             input_defs,
             free_ty_polys: vec![],
 
-            self_module_id,
             self_locals,
             imported_vars,
         }
     }
 
-    fn new_ref_node(
+    fn new_local_ref_node(
         &self,
         span: Span,
-        var_id: hir::VarId,
+        local_id: hir::LocalId,
         poly_type: ty::Ref<ty::Poly>,
     ) -> InferredNode {
         // We can't override type conditions across modules
         let type_conds = if poly_type == Ty::Bool.into() {
-            if let Some(override_local_id) = var_id.to_module_local_id(self.self_module_id) {
-                // This seems useless but it allows occurrence typing to work if this type
-                // flows through another node such as `(do)` or `(let)`
-                vec![
-                    VarTypeCond {
-                        when: NodeBool::True,
-                        override_local_id,
-                        override_type: Ty::LitBool(true).into(),
-                    },
-                    VarTypeCond {
-                        when: NodeBool::False,
-                        override_local_id,
-                        override_type: Ty::LitBool(false).into(),
-                    },
-                ]
-            } else {
-                vec![]
-            }
+            // This seems useless but it allows occurrence typing to work if this type
+            // flows through another node such as `(do)` or `(let)`
+            vec![
+                VarTypeCond {
+                    when: NodeBool::True,
+                    override_local_id: local_id,
+                    override_type: Ty::LitBool(true).into(),
+                },
+                VarTypeCond {
+                    when: NodeBool::False,
+                    override_local_id: local_id,
+                    override_type: Ty::LitBool(false).into(),
+                },
+            ]
         } else {
             vec![]
         };
@@ -383,7 +375,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         InferredNode {
             expr: hir::Expr {
                 result_ty: poly_type,
-                kind: hir::ExprKind::Ref(span, var_id),
+                kind: hir::ExprKind::LocalRef(span, local_id),
             },
             type_conds,
         }
@@ -391,12 +383,6 @@ impl<'types> RecursiveDefsCtx<'types> {
 
     fn insert_free_ty(&mut self, initial_type: ty::Ref<ty::Poly>) -> FreeTyId {
         FreeTyId::new_entry_id(&mut self.free_ty_polys, initial_type)
-    }
-
-    fn insert_local(&mut self, var_id: hir::VarId, var_type: VarType) {
-        if let Some(local_id) = var_id.to_module_local_id(self.self_module_id) {
-            self.self_locals.insert(local_id, var_type);
-        }
     }
 
     fn visit_lit(&mut self, result_use: &ResultUse<'_>, datum: Datum) -> Result<InferredNode> {
@@ -661,30 +647,41 @@ impl<'types> RecursiveDefsCtx<'types> {
         })
     }
 
-    fn visit_ref(
+    fn visit_export_ref(
         &mut self,
         result_use: &ResultUse<'_>,
         span: Span,
-        var_id: hir::VarId,
+        export_id: hir::ExportId,
     ) -> Result<InferredNode> {
-        let module_id = var_id.module_id();
-        let local_id = var_id.local_id();
+        // This comes from an imported module
+        let module_id = export_id.module_id();
+        let local_id = export_id.local_id();
 
-        if module_id != self.self_module_id {
-            // This comes from an imported module
-            let known_type = &self.imported_vars[&module_id][&local_id];
-            ensure_is_a(span, known_type, result_use)?;
+        let known_type = &self.imported_vars[&module_id][&local_id];
+        ensure_is_a(span, known_type, result_use)?;
 
-            return Ok(self.new_ref_node(span, var_id, known_type.clone()));
-        }
+        Ok(InferredNode {
+            expr: hir::Expr {
+                result_ty: known_type.clone(),
+                kind: hir::ExprKind::ExportRef(span, export_id),
+            },
+            type_conds: vec![],
+        })
+    }
 
+    fn visit_local_ref(
+        &mut self,
+        result_use: &ResultUse<'_>,
+        span: Span,
+        local_id: hir::LocalId,
+    ) -> Result<InferredNode> {
         let pending_def_id = match self.self_locals[&local_id] {
             VarType::Pending(def_id) => def_id,
             VarType::Recursive => return Err(Error::new(span, ErrorKind::RecursiveType)),
             VarType::Error => return Err(Error::new(span, ErrorKind::DependsOnError)),
             VarType::Known(ref known_type) => {
                 ensure_is_a(span, known_type, result_use)?;
-                return Ok(self.new_ref_node(span, var_id, known_type.clone()));
+                return Ok(self.new_local_ref_node(span, local_id, known_type.clone()));
             }
             VarType::ParamScalar(free_ty_id) => {
                 let current_type = &self.free_ty_polys[free_ty_id.to_usize()];
@@ -692,7 +689,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                     self.type_for_free_ref(result_use.required_type(), span, current_type)?;
 
                 self.free_ty_polys[free_ty_id.to_usize()] = new_free_type.clone();
-                return Ok(self.new_ref_node(span, var_id, new_free_type));
+                return Ok(self.new_local_ref_node(span, local_id, new_free_type));
             }
             VarType::ParamRest(free_ty_id) => {
                 let current_member_type = &self.free_ty_polys[free_ty_id.to_usize()];
@@ -708,13 +705,13 @@ impl<'types> RecursiveDefsCtx<'types> {
                 // Make sure we didn't require a specific list type e.g. `(List Int Int Int)`
                 ensure_is_a(span, &rest_list_type, result_use)?;
 
-                return Ok(self.new_ref_node(span, var_id, rest_list_type));
+                return Ok(self.new_local_ref_node(span, local_id, rest_list_type));
             }
         };
 
         self.recurse_into_def_id(pending_def_id)?;
         // This assumes `recurse_into_def_id` has populated our variables now
-        self.visit_ref(result_use, span, var_id)
+        self.visit_local_ref(result_use, span, local_id)
     }
 
     fn visit_do(
@@ -786,7 +783,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         &mut self,
         result_use: &ResultUse<'_>,
         decl_fun: hir::Fun<hir::Lowered>,
-        self_var_id: Option<hir::VarId>,
+        self_local_id: Option<hir::LocalId>,
     ) -> Result<InferredNode> {
         let span = decl_fun.span;
 
@@ -859,8 +856,9 @@ impl<'types> RecursiveDefsCtx<'types> {
                     );
 
                     // We have a fully known type; allow recursive calls
-                    if let Some(self_var_id) = self_var_id {
-                        self.insert_local(self_var_id, VarType::Known(self_type.clone().into()));
+                    if let Some(self_local_id) = self_local_id {
+                        self.self_locals
+                            .insert(self_local_id, VarType::Known(self_type.clone().into()));
                     }
                     known_self_type = Some(self_type);
                 }
@@ -885,6 +883,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         let revealed_param_destruc = {
             let mut inferred_free_types = self.free_ty_polys.drain(free_ty_offset..);
+
             destruc::subst_list_destruc(&mut inferred_free_types, decl_fun.params)
         };
         let revealed_param_type = hir::destruc::poly_for_list_destruc(&revealed_param_destruc);
@@ -1218,8 +1217,8 @@ impl<'types> RecursiveDefsCtx<'types> {
     ) -> Result<InferredNode> {
         use std::iter;
 
-        let subject_var_id = if let hir::ExprKind::Ref(_, var_id) = &subject_expr.kind {
-            Some(*var_id)
+        let subject_local_id = if let hir::ExprKind::LocalRef(_, local_id) = &subject_expr.kind {
+            Some(*local_id)
         } else {
             None
         };
@@ -1256,9 +1255,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                     Ty::Bool.into()
                 };
 
-                let type_conds = if let Some(override_local_id) =
-                    subject_var_id.and_then(|vi| vi.to_module_local_id(self.self_module_id))
-                {
+                let type_conds = if let Some(override_local_id) = subject_local_id {
                     let test_poly = test_ty.to_ty().into();
                     let type_if_true = ty::intersect::intersect_ty_refs(subject_poly, &test_poly)
                         .unwrap_or_else(|_| subject_poly.clone());
@@ -1383,14 +1380,14 @@ impl<'types> RecursiveDefsCtx<'types> {
         use crate::ty::props::is_literal;
         use std::iter;
 
-        let left_var_id = if let hir::ExprKind::Ref(_, var_id) = &left_expr.kind {
-            Some(*var_id)
+        let left_local_id = if let hir::ExprKind::LocalRef(_, local_id) = &left_expr.kind {
+            Some(*local_id)
         } else {
             None
         };
 
-        let right_var_id = if let hir::ExprKind::Ref(_, var_id) = &right_expr.kind {
-            Some(*var_id)
+        let right_local_id = if let hir::ExprKind::LocalRef(_, local_id) = &right_expr.kind {
+            Some(*local_id)
         } else {
             None
         };
@@ -1449,9 +1446,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         let mut type_conds = vec![];
 
-        if let Some(override_local_id) =
-            left_var_id.and_then(|vi| vi.to_module_local_id(self.self_module_id))
-        {
+        if let Some(override_local_id) = left_local_id {
             type_conds.push(VarTypeCond {
                 when: NodeBool::True,
                 override_local_id,
@@ -1469,9 +1464,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             }
         }
 
-        if let Some(override_local_id) =
-            right_var_id.and_then(|vi| vi.to_module_local_id(self.self_module_id))
-        {
+        if let Some(override_local_id) = right_local_id {
             type_conds.push(VarTypeCond {
                 when: NodeBool::True,
                 override_local_id,
@@ -1614,20 +1607,20 @@ impl<'types> RecursiveDefsCtx<'types> {
         let required_destruc_type = typeck::destruc::type_for_decl_destruc(&destruc, None);
 
         // Pre-bind our variables to deal with recursive definitions
-        let self_var_id = typeck::destruc::visit_vars(&destruc, &mut |var_id, decl_type| {
+        let self_local_id = typeck::destruc::visit_locals(&destruc, &mut |local_id, decl_type| {
             let var_type = match decl_type {
                 hir::DeclTy::Known(poly_type) => VarType::Known(poly_type.clone()),
                 hir::DeclTy::Free => VarType::Recursive,
             };
 
-            self.insert_local(var_id, var_type);
+            self.self_locals.insert(local_id, var_type);
         });
 
-        let value_node = self.visit_expr_with_self_var_id(
+        let value_node = self.visit_expr_with_self_local_id(
             pv,
             &ResultUse::InnerExpr(&required_destruc_type),
             value_expr,
-            self_var_id,
+            self_local_id,
         )?;
 
         let free_ty_offset = self.destruc_value(&destruc, value_node.result_ty(), false);
@@ -1677,19 +1670,19 @@ impl<'types> RecursiveDefsCtx<'types> {
         })
     }
 
-    fn visit_expr_with_self_var_id(
+    fn visit_expr_with_self_local_id(
         &mut self,
         pv: &mut PurityVar,
         result_use: &ResultUse<'_>,
         expr: hir::Expr<hir::Lowered>,
-        self_var_id: Option<hir::VarId>,
+        self_local_id: Option<hir::LocalId>,
     ) -> Result<InferredNode> {
         use crate::hir::ExprKind;
         match expr.kind {
             ExprKind::Lit(datum) => self.visit_lit(result_use, datum),
             ExprKind::Cond(cond) => self.visit_cond(pv, result_use, *cond),
             ExprKind::Do(exprs) => self.visit_do(pv, result_use, exprs),
-            ExprKind::Fun(fun) => self.visit_fun(result_use, *fun, self_var_id),
+            ExprKind::Fun(fun) => self.visit_fun(result_use, *fun, self_local_id),
             ExprKind::RustFun(rust_fun) => self.visit_rust_fun(result_use, rust_fun),
             ExprKind::TyPred(span, test_type) => self.visit_ty_pred(result_use, span, test_type),
             ExprKind::EqPred(span) => self.visit_eq_pred(result_use, span),
@@ -1700,11 +1693,14 @@ impl<'types> RecursiveDefsCtx<'types> {
                 self.visit_field_accessor(result_use, field_accessor)
             }
             ExprKind::Let(hir_let) => self.visit_let(pv, result_use, *hir_let),
-            ExprKind::Ref(span, var_id) => self.visit_ref(result_use, span, var_id),
+            ExprKind::LocalRef(span, local_id) => self.visit_local_ref(result_use, span, local_id),
+            ExprKind::ExportRef(span, export_id) => {
+                self.visit_export_ref(result_use, span, export_id)
+            }
             ExprKind::App(app) => self.visit_app(pv, result_use, *app),
             ExprKind::Recur(recur) => self.visit_recur(pv, result_use, *recur),
             ExprKind::MacroExpand(span, inner_expr) => self
-                .visit_expr_with_self_var_id(pv, result_use, *inner_expr, self_var_id)
+                .visit_expr_with_self_local_id(pv, result_use, *inner_expr, self_local_id)
                 .map(|inferred| InferredNode {
                     expr: hir::Expr {
                         result_ty: inferred.expr.result_ty.clone(),
@@ -1722,7 +1718,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         result_use: &ResultUse<'_>,
         expr: hir::Expr<hir::Lowered>,
     ) -> Result<InferredNode> {
-        self.visit_expr_with_self_var_id(pv, result_use, expr, None)
+        self.visit_expr_with_self_local_id(pv, result_use, expr, None)
     }
 
     fn destruc_scalar_value(
@@ -1739,14 +1735,14 @@ impl<'types> RecursiveDefsCtx<'types> {
             None
         };
 
-        if let Some(var_id) = *scalar.var_id() {
+        if let Some(local_id) = *scalar.local_id() {
             let var_type = if let (Some(free_ty_id), true) = (free_ty_id, is_param) {
                 VarType::ParamScalar(free_ty_id)
             } else {
                 VarType::Known(value_type.clone())
             };
 
-            self.insert_local(var_id, var_type);
+            self.self_locals.insert(local_id, var_type);
         }
 
         start_offset
@@ -1768,7 +1764,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             None
         };
 
-        if let Some(var_id) = *rest.var_id() {
+        if let Some(local_id) = *rest.local_id() {
             let var_type = if let Some(param_free_ty_id) = param_free_ty_id {
                 VarType::ParamRest(param_free_ty_id)
             } else {
@@ -1778,7 +1774,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                 VarType::Known(value_type_iter.tail_type().into())
             };
 
-            self.insert_local(var_id, var_type);
+            self.self_locals.insert(local_id, var_type);
         }
     }
 
@@ -1835,24 +1831,24 @@ impl<'types> RecursiveDefsCtx<'types> {
         let mut pv = PurityVar::Known(Purity::Pure.into());
 
         // Mark all of our free typed variable as recursive
-        let self_var_id = typeck::destruc::visit_vars(&destruc, &mut |var_id, decl_type| {
+        let self_local_id = typeck::destruc::visit_locals(&destruc, &mut |local_id, decl_type| {
             if *decl_type == hir::DeclTy::Free {
-                self.insert_local(var_id, VarType::Recursive);
+                self.self_locals.insert(local_id, VarType::Recursive);
             }
         });
 
         let required_type = typeck::destruc::type_for_decl_destruc(&destruc, None);
-        let value_node = match self.visit_expr_with_self_var_id(
+        let value_node = match self.visit_expr_with_self_local_id(
             &mut pv,
             &ResultUse::InnerExpr(&required_type),
             value_expr,
-            self_var_id,
+            self_local_id,
         ) {
             Ok(value_node) => value_node,
             Err(error) => {
                 // Mark this def as an error so we can suppress cascade errors
-                typeck::destruc::visit_vars(&destruc, &mut |var_id, _| {
-                    self.insert_local(var_id, VarType::Error);
+                typeck::destruc::visit_locals(&destruc, &mut |local_id, _| {
+                    self.self_locals.insert(local_id, VarType::Error);
                 });
                 return Err(error);
             }
@@ -1926,7 +1922,7 @@ impl<'types> RecursiveDefsCtx<'types> {
 pub fn ensure_main_type(
     fallback_span: Span,
     complete_defs: &[hir::Def<hir::Inferred>],
-    main_var_id: hir::VarId,
+    main_local_id: hir::LocalId,
     inferred_main_type: &ty::Ref<ty::Poly>,
 ) -> Result<()> {
     let expected_main_type = ty::Fun::new_for_main().into();
@@ -1939,7 +1935,7 @@ pub fn ensure_main_type(
             .iter()
             .find_map(|def| {
                 if let destruc::Destruc::Scalar(_, ref scalar) = def.destruc {
-                    if scalar.var_id() == &Some(main_var_id) {
+                    if scalar.local_id() == &Some(main_local_id) {
                         return Some(LocTrace::new(def.span, def.macro_invocation_span));
                     }
                 }
@@ -1960,18 +1956,16 @@ pub fn ensure_main_type(
 
 pub fn infer_module(
     imported_inferred_vars: &InferredModuleVars,
-    module_id: ModuleId,
     defs: Vec<hir::Def<hir::Lowered>>,
 ) -> result::Result<InferredModule, Vec<Error>> {
-    RecursiveDefsCtx::new(imported_inferred_vars, module_id, defs).into_inferred_module()
+    RecursiveDefsCtx::new(imported_inferred_vars, defs).into_inferred_module()
 }
 
 pub fn infer_repl_expr(
     all_inferred_vars: &InferredModuleVars,
-    module_id: ModuleId,
     expr: hir::Expr<hir::Lowered>,
 ) -> Result<InferredNode> {
-    let mut rdcx = RecursiveDefsCtx::new(&all_inferred_vars, module_id, vec![]);
+    let mut rdcx = RecursiveDefsCtx::new(&all_inferred_vars, vec![]);
     let mut pv = PurityVar::Known(Purity::Impure.into());
 
     rdcx.visit_expr(&mut pv, &ResultUse::InnerExpr(&Ty::Any.into()), expr)
@@ -1980,16 +1974,15 @@ pub fn infer_repl_expr(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::hir::lowering::module_expr_for_str;
+    use crate::hir::lowering::expr_for_str;
     use arret_syntax::span::t2s;
 
     fn type_for_expr(
         required_type: &ty::Ref<ty::Poly>,
-        module_id: ModuleId,
         expr: hir::Expr<hir::Lowered>,
     ) -> Result<ty::Ref<ty::Poly>> {
         let imported_vars = HashMap::new();
-        let mut rdcx = RecursiveDefsCtx::new(&imported_vars, module_id, vec![]);
+        let mut rdcx = RecursiveDefsCtx::new(&imported_vars, vec![]);
 
         let mut pv = PurityVar::Known(Purity::Pure.into());
 
@@ -1998,33 +1991,23 @@ mod test {
     }
 
     fn assert_type_for_expr(ty_str: &str, expr_str: &str) {
-        let (module_id, expr) = module_expr_for_str(expr_str);
+        let expr = expr_for_str(expr_str);
         let poly = hir::poly_for_str(ty_str);
 
-        assert_eq!(
-            poly,
-            type_for_expr(&Ty::Any.into(), module_id, expr).unwrap()
-        );
+        assert_eq!(poly, type_for_expr(&Ty::Any.into(), expr).unwrap());
     }
 
     fn assert_constrained_type_for_expr(expected_ty_str: &str, expr_str: &str, guide_ty_str: &str) {
-        let (module_id, expr) = module_expr_for_str(expr_str);
+        let expr = expr_for_str(expr_str);
         let expected_poly = hir::poly_for_str(expected_ty_str);
         let guide_poly = hir::poly_for_str(guide_ty_str);
 
-        assert_eq!(
-            expected_poly,
-            type_for_expr(&guide_poly, module_id, expr).unwrap()
-        );
+        assert_eq!(expected_poly, type_for_expr(&guide_poly, expr).unwrap());
     }
 
     fn assert_type_error(err: &Error, expr_str: &str) {
-        let (module_id, expr) = module_expr_for_str(expr_str);
-
-        assert_eq!(
-            err,
-            &type_for_expr(&Ty::Any.into(), module_id, expr).unwrap_err()
-        )
+        let expr = expr_for_str(expr_str);
+        assert_eq!(err, &type_for_expr(&Ty::Any.into(), expr).unwrap_err())
     }
 
     #[test]

@@ -60,7 +60,6 @@ pub fn collect_imported_module_names<'a>(
 mod test {
     use super::*;
 
-    use std::borrow::Cow;
     use std::collections::HashMap;
     use std::result;
 
@@ -85,7 +84,7 @@ mod test {
             exports.insert("quote".into(), Binding::Prim(Prim::Quote));
             exports.insert("if".into(), Binding::Prim(Prim::If));
 
-            Ok(filter::filter_imported_exports(parsed_import, Cow::Owned(exports))?.into_owned())
+            Ok(filter::filter_imported_exports(parsed_import, &exports)?)
         } else {
             Err(vec![Error::new(span, ErrorKind::PackageNotFound)])
         }

@@ -10,7 +10,7 @@ use crate::mir::ops::{RecordStruct, RecordStructId};
 use crate::mir::specific_abi_type::specific_abi_type_for_value;
 use crate::mir::value::Value;
 
-type Values = Box<[(hir::VarId, Value)]>;
+type Values = Box<[(hir::LocalId, Value)]>;
 
 /// Indicates the layout of captured values
 #[derive(Clone, Debug)]
@@ -58,7 +58,7 @@ fn can_reference_local_regs(value: &Value) -> bool {
 
 /// Calculates the values captured from the environment by the passed expression
 pub fn calculate_env_values(
-    local_values: &HashMap<hir::VarId, Value>,
+    local_values: &HashMap<hir::LocalId, Value>,
     capturing_expr: &hir::Expr<hir::Inferred>,
     source_name: Option<&DataStr>,
 ) -> EnvValues {
@@ -69,12 +69,10 @@ pub fn calculate_env_values(
     if !local_values.is_empty() {
         // Look for references to variables inside the function
         hir::visitor::visit_exprs(&capturing_expr, &mut |expr| {
-            if let hir::ExprKind::Ref(_, var_id) = &expr.kind {
-                // Avoiding cloning the value if we've already captured
-                if !captured_values.contains_key(var_id) {
-                    if let Some(value) = local_values.get(var_id) {
-                        // Local value is referenced; capture
-                        captured_values.insert(*var_id, value.clone());
+            if let hir::ExprKind::LocalRef(_, local_id) = &expr.kind {
+                if !captured_values.contains_key(local_id) {
+                    if let Some(value) = local_values.get(local_id) {
+                        captured_values.insert(*local_id, value.clone());
                     }
                 }
             }
@@ -163,7 +161,7 @@ pub fn save_to_captures_reg(
 
 /// Loads env values assuming all captured variables are still inside the local function
 pub fn load_from_current_fun(
-    local_values: &mut HashMap<hir::VarId, Value>,
+    local_values: &mut HashMap<hir::LocalId, Value>,
     env_values: &EnvValues,
 ) {
     local_values.extend(
@@ -171,7 +169,7 @@ pub fn load_from_current_fun(
             .const_values
             .iter()
             .chain(env_values.free_values.iter())
-            .map(|(var_id, value)| (*var_id, value.clone())),
+            .map(|(local_id, value)| (*local_id, value.clone())),
     );
 }
 
@@ -179,7 +177,7 @@ pub fn load_from_current_fun(
 pub fn load_from_env_param(
     b: &mut Builder,
     span: Span,
-    local_values: &mut HashMap<hir::VarId, Value>,
+    local_values: &mut HashMap<hir::LocalId, Value>,
     env_values: &mut EnvValues,
     captures_reg: Option<BuiltReg>,
 ) {
@@ -191,7 +189,7 @@ pub fn load_from_env_param(
         env_values
             .const_values
             .iter()
-            .map(|(var_id, value)| (*var_id, value.clone())),
+            .map(|(local_id, value)| (*local_id, value.clone())),
     );
 
     match &env_values.captures_repr {
@@ -210,7 +208,8 @@ pub fn load_from_env_param(
 
             let record_reg: RegId = captures_reg.unwrap().into();
 
-            for (field_index, (var_id, free_value)) in env_values.free_values.iter_mut().enumerate()
+            for (field_index, (local_id, free_value)) in
+                env_values.free_values.iter_mut().enumerate()
             {
                 let field_reg = b.push_reg(
                     span,
@@ -226,7 +225,7 @@ pub fn load_from_env_param(
 
                 let new_value: Value = value::RegValue::new(field_reg, field_abi_type).into();
 
-                local_values.insert(*var_id, new_value.clone());
+                local_values.insert(*local_id, new_value.clone());
                 *free_value = new_value;
             }
         }
