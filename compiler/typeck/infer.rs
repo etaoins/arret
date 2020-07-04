@@ -393,9 +393,10 @@ impl<'types> RecursiveDefsCtx<'types> {
         FreeTyId::new_entry_id(&mut self.free_ty_polys, initial_type)
     }
 
-    fn insert_local(&mut self, var_id: hir::VarId, var_type: VarType) -> Option<VarType> {
-        debug_assert!(var_id.module_id() == self.self_module_id);
-        self.self_locals.insert(var_id.local_id(), var_type)
+    fn insert_local(&mut self, var_id: hir::VarId, var_type: VarType) {
+        if let Some(local_id) = var_id.to_module_local_id(self.self_module_id) {
+            self.self_locals.insert(local_id, var_type);
+        }
     }
 
     fn visit_lit(&mut self, result_use: &ResultUse<'_>, datum: Datum) -> Result<InferredNode> {
