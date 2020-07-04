@@ -8,10 +8,10 @@
 
 (import [stdlib rust])
 (export length panic panic! print! println! print-str write! writeln! write-str read-str exit! cons
-        map filter some? every? fold concat take reverse int float < <= == > >= + * - / rem quot
-        sqrt vector vector-length vector->list vector-ref vector-assoc vector-append vector-extend
-        vector-take hash set set-length set->list set-contains? bit-and bit-or bit-xor bit-not
-        bit-shift-left bit-shift-right unsigned-bit-shift-right)
+        map filter some? every? fold concat take reverse repeat int float < <= == > >= + * - / rem
+        quot sqrt vector vector-length vector->list vector-ref vector-assoc vector-append
+        vector-extend vector-take hash set set-length set->list set-contains? bit-and bit-or
+        bit-xor bit-not bit-shift-left bit-shift-right unsigned-bit-shift-right)
 
 (export defn)
 (defmacro defn (macro-rules

@@ -115,6 +115,11 @@
   (assert-eq! 2 (nth '(1 2 3) 1))
   (assert-eq! 3 (nth '(1 2 3) 2)))
 
+(defn test-repeat! () ->! ()
+  (assert-eq! '() (repeat -1 false))
+  (assert-eq! '() (repeat 0 true))
+  (assert-eq! '(one one one) (repeat 3 'one)))
+
 (defn main! () ->! ()
   (test-length!)
   (test-first-second-rest!)
@@ -130,4 +135,5 @@
   (test-drop!)
   (test-drop-last!)
   (test-reverse!)
-  (test-nth!))
+  (test-nth!)
+  (test-repeat!))

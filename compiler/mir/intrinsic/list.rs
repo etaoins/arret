@@ -67,3 +67,38 @@ pub fn cons(
 
     Ok(Some(Value::List(Box::new([head]), Some(Box::new(rest)))))
 }
+
+pub fn repeat(
+    _ehx: &mut EvalHirCtx,
+    b: &mut Option<Builder>,
+    span: Span,
+    arg_list_value: &Value,
+) -> Result<Option<Value>> {
+    // Avoid creating giant constants at compile time
+    const MAX_REPEAT_EVAL_LEN: i64 = 64;
+
+    use crate::mir::intrinsic::num_utils::try_value_to_i64;
+
+    let mut iter = arg_list_value.unsized_list_iter();
+
+    let count_value = iter.next_unchecked(b, span);
+    let count = if let Some(count) = try_value_to_i64(count_value) {
+        count
+    } else {
+        return Ok(None);
+    };
+
+    let value = iter.next_unchecked(b, span);
+
+    if count <= 0 {
+        return Ok(Some(Value::List(Box::new([]), None)));
+    } else if count > MAX_REPEAT_EVAL_LEN {
+        return Ok(None);
+    }
+
+    // This lets us build a list of a known length and MIR values
+    Ok(Some(Value::List(
+        std::iter::repeat(value).take(count as usize).collect(),
+        None,
+    )))
+}

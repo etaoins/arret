@@ -59,6 +59,7 @@ macro_rules! define_build_intrinsics {
 define_eval_intrinsics! {
     "length" => list::length,
     "cons" => list::cons,
+    "repeat" => list::repeat,
     "fn-op-categories" => testing::fn_op_categories
 }
 

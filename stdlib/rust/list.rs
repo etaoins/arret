@@ -126,3 +126,40 @@ pub fn stdlib_reverse(
     let output_vec: Vec<Gc<boxed::Any>> = input.iter().collect();
     boxed::List::new(task, output_vec.into_iter().rev())
 }
+
+#[arret_rfi_derive::rust_fun("(All #{T} Int T -> (List & T))")]
+pub fn stdlib_repeat(
+    task: &mut Task,
+    count: i64,
+    value: Gc<boxed::Any>,
+) -> Gc<boxed::List<boxed::Any>> {
+    struct RepeatIter<T: boxed::Boxed> {
+        count: i64,
+        value: Gc<T>,
+    }
+
+    impl<T: boxed::Boxed> Iterator for RepeatIter<T> {
+        type Item = Gc<T>;
+
+        fn next(&mut self) -> Option<Gc<T>> {
+            if self.count > 0 {
+                self.count -= 1;
+                Some(self.value)
+            } else {
+                None
+            }
+        }
+
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            if self.count < 0 {
+                (0, Some(0))
+            } else {
+                (self.count as usize, Some(self.count as usize))
+            }
+        }
+    }
+
+    impl<T: boxed::Boxed> ExactSizeIterator for RepeatIter<T> {}
+
+    boxed::List::new(task, RepeatIter { count, value })
+}
