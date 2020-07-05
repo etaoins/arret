@@ -117,7 +117,7 @@ impl<'ccx> ReplEngine<'ccx> {
         self.seen_modules.insert(root_module.module_id);
 
         // Make sure our imports are first
-        for import in &root_module.imports {
+        for import in root_module.imports.values() {
             self.visit_module_tree(import)?;
         }
 
@@ -167,7 +167,7 @@ impl<'ccx> ReplEngine<'ccx> {
             .map_err(errors_to_diagnostics)?
         {
             LoweredReplDatum::Import(modules) => {
-                for module in modules {
+                for module in modules.values() {
                     self.visit_module_tree(&module)?;
                 }
 

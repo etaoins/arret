@@ -1,5 +1,4 @@
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::collections::HashMap;
 
 use codespan_reporting::diagnostic::Diagnostic;
 
@@ -8,17 +7,15 @@ use rayon::prelude::*;
 use arret_syntax::datum::Datum;
 use arret_syntax::span::{FileId, Span};
 
-use crate::context;
 use crate::ty;
 use crate::ty::purity;
 use crate::CompileCtx;
 
-use crate::context::ModuleId;
+use crate::context::{ModuleId, ModuleImports};
 use crate::hir::destruc;
 use crate::hir::error::{Error, ErrorKind, ExpectedSym, Result};
 use crate::hir::exports::Exports;
 use crate::hir::import;
-use crate::hir::loader::ModuleName;
 use crate::hir::macros::{expand_macro, lower_macro_rules};
 use crate::hir::ns::{Ident, NsDataIter, NsDatum};
 use crate::hir::prim::Prim;
@@ -75,7 +72,7 @@ impl DeferredModulePrim {
 
 pub(crate) enum LoweredReplDatum {
     /// One or more modules were imported
-    Import(HashSet<Arc<context::Module>>),
+    Import(ModuleImports),
     /// An evaluable definition
     EvaluableDef(ModuleId, Def<Lowered>),
     /// A non-evalable definition handled by HIR lowering
@@ -697,7 +694,7 @@ fn lower_module_def(
 }
 
 fn insert_import_bindings(
-    imported_exports: &HashMap<ModuleName, Arc<Exports>>,
+    imports: &ModuleImports,
     scope: &mut Scope<'_>,
     arg_data: &[Datum],
 ) -> Result<(), Vec<Error>> {
@@ -707,10 +704,10 @@ fn insert_import_bindings(
         let span = arg_datum.span();
 
         let parsed_import = import::parse_import_set(arg_datum)?;
-        let unfiltered_exports = &imported_exports[parsed_import.module_name()];
+        let import_module = &imports[parsed_import.module_name()];
 
         let exports =
-            import::filter_imported_exports(parsed_import, Cow::Borrowed(unfiltered_exports))?;
+            import::filter_imported_exports(parsed_import, Cow::Borrowed(&import_module.exports))?;
 
         match exports {
             Cow::Owned(exports) => {
@@ -738,9 +735,9 @@ fn insert_import_bindings(
     Ok(())
 }
 
-pub fn lower_data(
+pub(crate) fn lower_data(
     module_id: ModuleId,
-    imported_exports: &HashMap<ModuleName, Arc<Exports>>,
+    imports: &ModuleImports,
     data: &[Datum],
 ) -> Result<LoweredModule, Vec<Error>> {
     let via = VarIdAlloc::new(module_id);
@@ -765,9 +762,7 @@ pub fn lower_data(
 
     for input_datum in data {
         if let Some(arg_data) = import::try_extract_import_set(input_datum) {
-            if let Err(mut new_errors) =
-                insert_import_bindings(imported_exports, &mut scope, arg_data)
-            {
+            if let Err(mut new_errors) = insert_import_bindings(imports, &mut scope, arg_data) {
                 errors.append(&mut new_errors);
             }
 
@@ -872,13 +867,9 @@ pub(crate) fn lower_repl_datum(
     let via = VarIdAlloc::new(ModuleId::alloc());
 
     if let Some(arg_data) = import::try_extract_import_set(datum) {
-        let context::ModuleImports {
-            imports,
-            imported_exports,
-        } = ccx.imports_for_data(std::iter::once(datum))?;
+        let imports = ccx.imports_for_data(std::iter::once(datum))?;
 
-        insert_import_bindings(&imported_exports, scope, arg_data)
-            .map_err(errors_to_diagnostics)?;
+        insert_import_bindings(&imports, scope, arg_data).map_err(errors_to_diagnostics)?;
 
         return Ok(LoweredReplDatum::Import(imports));
     }
@@ -935,12 +926,16 @@ fn import_statement_for_module(names: &[&'static str]) -> Datum {
 #[cfg(test)]
 fn module_for_str(data_str: &str) -> Result<LoweredModule> {
     use std::iter;
+    use std::sync::Arc;
 
-    use crate::hir::exports;
     use arret_syntax::parser::data_from_str;
 
+    use crate::context;
+    use crate::hir::exports;
+    use crate::hir::loader::ModuleName;
+
     let mut program_data = vec![];
-    let mut imported_exports = HashMap::<ModuleName, Arc<Exports>>::new();
+    let mut imports: ModuleImports = HashMap::new();
 
     for (terminal_name, exports) in iter::once(("primitives", exports::prims_exports()))
         .chain(iter::once(("types", exports::tys_exports())))
@@ -951,26 +946,25 @@ fn module_for_str(data_str: &str) -> Result<LoweredModule> {
             terminal_name,
         ]));
 
-        imported_exports.insert(
+        imports.insert(
             ModuleName::new(
                 "arret".into(),
                 vec!["internal".into()],
                 terminal_name.into(),
             ),
-            Arc::new(exports),
+            Arc::new(context::prims_to_module(exports).unwrap()),
         );
     }
 
     let mut test_data = data_from_str(None, data_str).unwrap();
     program_data.append(&mut test_data);
 
-    imported_exports.insert(
+    imports.insert(
         ModuleName::new("arret".into(), vec!["internal".into()], "types".into()),
-        Arc::new(exports::tys_exports()),
+        Arc::new(context::prims_to_module(exports::tys_exports()).unwrap()),
     );
 
-    lower_data(ModuleId::alloc(), &imported_exports, &program_data)
-        .map_err(|mut errors| errors.remove(0))
+    lower_data(ModuleId::alloc(), &imports, &program_data).map_err(|mut errors| errors.remove(0))
 }
 
 #[cfg(test)]

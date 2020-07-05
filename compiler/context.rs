@@ -30,10 +30,7 @@ new_global_id_type!(
     std::num::NonZeroU32
 );
 
-pub(crate) struct ModuleImports {
-    pub imports: HashSet<Arc<Module>>,
-    pub imported_exports: HashMap<ModuleName, Arc<Exports>>,
-}
+pub(crate) type ModuleImports = HashMap<ModuleName, Arc<Module>>;
 
 /// Module being compiled until type inference
 ///
@@ -41,10 +38,10 @@ pub(crate) struct ModuleImports {
 pub(crate) struct Module {
     pub module_id: ModuleId,
 
-    pub imports: HashSet<Arc<Module>>,
+    pub imports: ModuleImports,
     pub defs: Vec<hir::Def<hir::Inferred>>,
     pub inferred_locals: Arc<HashMap<hir::LocalId, ty::Ref<ty::Poly>>>,
-    pub exports: Arc<Exports>,
+    pub exports: Exports,
     pub main_var_id: Option<hir::VarId>,
 
     pub rfi_library: Option<Arc<rfi::Library>>,
@@ -64,30 +61,30 @@ impl hash::Hash for Module {
     }
 }
 
-pub(crate) type CachedModule = Result<Arc<Module>, Vec<Diagnostic<FileId>>>;
+type CachedModule = Result<Arc<Module>, Vec<Diagnostic<FileId>>>;
 type UncachedModule = Result<Module, Vec<Diagnostic<FileId>>>;
 
 /// Finds all transitive dependencies for a set of imports
 ///
 /// This is inclusive of the imports themselves.
-fn transitive_deps(imports: &HashSet<Arc<Module>>) -> HashSet<Arc<Module>> {
-    let mut all_deps = imports.clone();
+fn transitive_deps(imports: &ModuleImports) -> HashSet<Arc<Module>> {
+    let mut all_deps: HashSet<Arc<Module>> = imports.values().cloned().collect();
 
-    for import in imports.iter() {
+    for import in imports.values() {
         all_deps.extend(transitive_deps(&import.imports).into_iter());
     }
 
     all_deps
 }
 
-fn prims_to_module(exports: Exports) -> UncachedModule {
+pub(crate) fn prims_to_module(exports: Exports) -> UncachedModule {
     Ok(Module {
         module_id: ModuleId::alloc(),
 
-        imports: HashSet::new(),
+        imports: HashMap::new(),
         defs: vec![],
         inferred_locals: Arc::new(HashMap::new()),
-        exports: Arc::new(exports),
+        exports,
         main_var_id: None,
 
         rfi_library: None,
@@ -141,10 +138,10 @@ fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> UncachedModul
     Ok(Module {
         module_id,
 
-        imports: HashSet::new(),
+        imports: HashMap::new(),
         defs,
         inferred_locals: Arc::new(inferred_locals),
-        exports: Arc::new(exports),
+        exports,
 
         main_var_id: None,
         rfi_library: Some(Arc::new(rfi_library)),
@@ -265,14 +262,12 @@ impl CompileCtx {
 
         let mut diagnostics = Vec::<Diagnostic<FileId>>::new();
 
-        let mut imports = HashSet::<Arc<Module>>::with_capacity(import_count);
-        let mut imported_exports = HashMap::<ModuleName, Arc<Exports>>::with_capacity(import_count);
+        let mut imports = HashMap::<ModuleName, Arc<Module>>::with_capacity(import_count);
 
         for (module_name, loaded_module_result) in loaded_module_results {
             match loaded_module_result {
                 Ok(module) => {
-                    imported_exports.insert(module_name, module.exports.clone());
-                    imports.insert(module);
+                    imports.insert(module_name, module);
                 }
                 Err(mut new_diagnostics) => diagnostics.append(&mut new_diagnostics),
             }
@@ -282,23 +277,16 @@ impl CompileCtx {
             return Err(diagnostics);
         }
 
-        Ok(ModuleImports {
-            imports,
-            imported_exports,
-        })
+        Ok(imports)
     }
 
     /// Returns an uncached module for syntax data
     fn data_to_module(&self, data: &[Datum]) -> UncachedModule {
-        let ModuleImports {
-            imports,
-            imported_exports,
-        } = self.imports_for_data(data.iter())?;
-
+        let imports = self.imports_for_data(data.iter())?;
         let module_id = ModuleId::alloc();
 
-        let lowered_module = hir::lowering::lower_data(module_id, &imported_exports, data)
-            .map_err(errors_to_diagnostics)?;
+        let lowered_module =
+            hir::lowering::lower_data(module_id, &imports, data).map_err(errors_to_diagnostics)?;
 
         let LoweredModule {
             defs: lowered_defs,
@@ -325,7 +313,7 @@ impl CompileCtx {
             imports,
             defs: inferred_defs,
             inferred_locals: Arc::new(inferred_locals),
-            exports: Arc::new(exports),
+            exports,
             main_var_id,
 
             rfi_library: None,

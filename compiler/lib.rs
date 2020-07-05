@@ -59,7 +59,7 @@ fn include_imports(
     }
 
     // Make sure our imports are first
-    for import in &root_module.imports {
+    for import in root_module.imports.values() {
         include_imports(ehx, visited_modules, rfi_libraries, import)?;
     }
 
@@ -105,7 +105,7 @@ pub fn program_to_evaluable(
     let mut rfi_libraries = vec![];
     let mut visited_modules = HashSet::new();
 
-    for import in &entry_module.imports {
+    for import in entry_module.imports.values() {
         include_imports(&mut ehx, &mut visited_modules, &mut rfi_libraries, import)?;
     }
 
