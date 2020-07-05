@@ -67,7 +67,7 @@ pub enum EvaledLine {
 }
 
 struct ReplEngine<'ccx> {
-    scope: Scope<'static>,
+    root_scope: Scope<'static>,
     ccx: &'ccx CompileCtx,
 
     inferred_module_vars: HashMap<context::ModuleId, Arc<HashMap<hir::LocalId, ty::Ref<ty::Poly>>>>,
@@ -78,10 +78,8 @@ struct ReplEngine<'ccx> {
 
 impl<'ccx> ReplEngine<'ccx> {
     fn new(ccx: &'ccx CompileCtx) -> Self {
-        let scope = Scope::new_repl();
-
         Self {
-            scope,
+            root_scope: Scope::root(),
             ccx,
 
             seen_modules: HashSet::new(),
@@ -93,7 +91,7 @@ impl<'ccx> ReplEngine<'ccx> {
 
     /// Returns all names bound in the root scope and namespace
     fn bound_names(&self) -> Vec<DataStr> {
-        self.scope
+        self.root_scope
             .bound_idents()
             .filter_map(move |ident| {
                 if ident.ns_id() == Scope::root_ns_id() {
@@ -163,9 +161,16 @@ impl<'ccx> ReplEngine<'ccx> {
             }
         };
 
-        match hir::lowering::lower_repl_datum(&self.ccx, &mut self.scope, input_datum)
-            .map_err(errors_to_diagnostics)?
-        {
+        let mut child_scope = Scope::child(&self.root_scope);
+
+        let lowered_repl_datum =
+            hir::lowering::lower_repl_datum(&self.ccx, &mut child_scope, input_datum)
+                .map_err(errors_to_diagnostics)?;
+
+        let exported_bindings = child_scope.into_exported_bindings();
+        self.root_scope.import_bindings(exported_bindings);
+
+        match lowered_repl_datum {
             LoweredReplDatum::Import(modules) => {
                 for module in modules.values() {
                     self.visit_module_tree(&module)?;

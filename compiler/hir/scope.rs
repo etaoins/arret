@@ -43,7 +43,7 @@ impl Binding {
     }
 }
 
-struct SpannedBinding {
+pub struct SpannedBinding {
     span: Option<Span>,
     binding: Binding,
 }
@@ -53,11 +53,6 @@ pub struct Scope<'parent> {
 
     entries: HashMap<Ident, SpannedBinding>,
     parent: Option<&'parent Scope<'parent>>,
-
-    /// Allow redefinition of bindings
-    ///
-    /// This is only set for the root scope inside a REPL
-    allow_redef: bool,
 }
 
 impl<'parent> Scope<'parent> {
@@ -86,21 +81,14 @@ impl<'parent> Scope<'parent> {
             ns_id_counter: NsIdCounter::new(),
             entries,
             parent: None,
-            allow_redef: false,
         }
     }
 
-    /// Creates a new REPL scope containing `import`
-    ///
-    /// This scope is special as it allows redefinitions at the root level.
-    pub fn new_repl() -> Scope<'static> {
-        use std::iter;
-
-        let entries = iter::once(("import", Binding::Prim(Prim::ImportPlaceholder)));
-        let mut scope = Self::new_with_entries(entries);
-        scope.allow_redef = true;
-
-        scope
+    /// Creates a root scope containing `import`
+    pub fn root() -> Scope<'static> {
+        // The default root scope only consists of a placeholder for (import)
+        let entries = std::iter::once(("import", Binding::Prim(Prim::ImportPlaceholder)));
+        Self::new_with_entries(entries)
     }
 
     /// Creates a new root scope containing all primitives and types
@@ -121,7 +109,6 @@ impl<'parent> Scope<'parent> {
             ns_id_counter: self.ns_id_counter.clone(),
             entries: HashMap::new(),
             parent: Some(self),
-            allow_redef: false,
         }
     }
 
@@ -179,18 +166,11 @@ impl<'parent> Scope<'parent> {
             };
 
             match self.entries.entry(ident) {
-                Entry::Occupied(mut occupied) => {
-                    if self.allow_redef {
-                        occupied.insert(entry);
-                    } else {
-                        return Err(Error::new(
-                            span,
-                            ErrorKind::DuplicateDef(
-                                occupied.get().span,
-                                occupied.key().name().clone(),
-                            ),
-                        ));
-                    }
+                Entry::Occupied(occupied) => {
+                    return Err(Error::new(
+                        span,
+                        ErrorKind::DuplicateDef(occupied.get().span, occupied.key().name().clone()),
+                    ));
                 }
                 Entry::Vacant(vacant) => {
                     vacant.insert(entry);
@@ -225,5 +205,16 @@ impl<'parent> Scope<'parent> {
     /// This is not globally unique; it will only be unique in the current scope chain
     pub fn alloc_ns_id(&mut self) -> NsId {
         self.ns_id_counter.alloc()
+    }
+
+    /// Exports our entire contents as bindings suitable to be imported in to another scope
+    ///
+    /// This is used to fold child REPL scopes back in to their parent
+    pub fn into_exported_bindings(self) -> HashMap<Ident, SpannedBinding> {
+        self.entries
+    }
+
+    pub fn import_bindings(&mut self, exported_bindings: HashMap<Ident, SpannedBinding>) {
+        self.entries.extend(exported_bindings.into_iter());
     }
 }

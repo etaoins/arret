@@ -741,12 +741,7 @@ pub(crate) fn lower_data(
     data: &[Datum],
 ) -> Result<LoweredModule, Vec<Error>> {
     let via = VarIdAlloc::new(module_id);
-
-    // The default scope only consists of a placeholder for (import)
-    let mut scope = Scope::new_with_entries(std::iter::once((
-        "import",
-        Binding::Prim(Prim::ImportPlaceholder),
-    )));
+    let mut scope = Scope::root();
 
     // Build up a list of errors to return at once
     let mut errors: Vec<Error> = vec![];
