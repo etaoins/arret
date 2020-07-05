@@ -65,7 +65,7 @@ impl hash::Hash for Module {
 }
 
 pub(crate) type CachedModule = Result<Arc<Module>, Vec<Diagnostic<FileId>>>;
-pub(crate) type UncachedModule = Result<Module, Vec<Diagnostic<FileId>>>;
+type UncachedModule = Result<Module, Vec<Diagnostic<FileId>>>;
 
 /// Finds all transitive dependencies for a set of imports
 ///
@@ -289,7 +289,7 @@ impl CompileCtx {
     }
 
     /// Returns an uncached module for syntax data
-    pub(crate) fn data_to_module(&self, data: &[Datum]) -> UncachedModule {
+    fn data_to_module(&self, data: &[Datum]) -> UncachedModule {
         let ModuleImports {
             imports,
             imported_exports,
