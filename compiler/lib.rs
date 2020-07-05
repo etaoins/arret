@@ -103,9 +103,10 @@ pub fn program_to_evaluable(
 
     let mut ehx = EvalHirCtx::new(ccx.enable_optimisations());
     let mut rfi_libraries = vec![];
+    let mut visited_modules = HashSet::new();
 
     for import in &entry_module.imports {
-        include_imports(&mut ehx, &mut HashSet::new(), &mut rfi_libraries, import)?;
+        include_imports(&mut ehx, &mut visited_modules, &mut rfi_libraries, import)?;
     }
 
     for def in entry_module.defs {
