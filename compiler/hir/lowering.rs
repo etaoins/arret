@@ -696,7 +696,7 @@ fn lower_module_def(
     Err(vec![Error::new(span, ErrorKind::NonDefInsideModule)])
 }
 
-pub fn insert_import_bindings(
+fn insert_import_bindings(
     imported_exports: &HashMap<ModuleName, Arc<Exports>>,
     scope: &mut Scope<'_>,
     arg_data: &[Datum],
