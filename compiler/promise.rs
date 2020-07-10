@@ -133,7 +133,7 @@ where
     where
         F: FnOnce() -> V,
     {
-        // Opportunisticly try to fetch the promise with a read lock
+        // Opportunistically try to fetch the promise with a read lock
         let promises_read = self.promises.read().unwrap();
         if let Some(promise) = promises_read.get(&key) {
             let cloned_promise = promise.clone();
