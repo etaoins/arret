@@ -1,6 +1,6 @@
 cached-ecr-build-env: &cached-ecr-build-env
   plugins:
-    - seek-oss/docker-ecr-cache#v1.7.0:
+    - seek-oss/docker-ecr-cache#v1.9.0:
         target: build-env
         cache-on:
           - Cargo.lock
@@ -32,7 +32,7 @@ steps:
 
       - ./.buildkite/build-and-test.sh
     plugins:
-      - seek-oss/docker-ecr-cache#v1.7.0:
+      - seek-oss/docker-ecr-cache#v1.9.0:
           dockerfile: ./.buildkite/llvm-assert.Dockerfile
       - docker#v3.5.0
 
@@ -40,7 +40,7 @@ steps:
     command:
       - ./.buildkite/vscode-extension-tests.sh
     plugins:
-      - seek-oss/docker-ecr-cache#v1.7.0:
+      - seek-oss/docker-ecr-cache#v1.9.0:
           dockerfile: ./editors/code/Dockerfile
           ecr-name: build-cache/arret/vscode-extension
           cache-on:
