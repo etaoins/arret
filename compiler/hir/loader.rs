@@ -167,7 +167,7 @@ mod test {
         );
 
         if let LoadedModule::Rust(rfi_module) = loaded_module {
-            assert!(!rfi_module.exported_funs().is_empty());
+            assert!(!rfi_module.exported_funs.is_empty());
         } else {
             panic!("Did not get Rust module; got {:?}", loaded_module);
         }

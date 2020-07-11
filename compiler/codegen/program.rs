@@ -11,8 +11,8 @@ use llvm_sys::LLVMLinkage;
 use crate::codegen::analysis::AnalysedMod;
 use crate::codegen::mod_gen::{gen_mod, GeneratedMod};
 use crate::codegen::target_gen::TargetCtx;
+use crate::context::LinkedLibrary;
 use crate::mir;
-use crate::rfi;
 use crate::SourceLoader;
 
 #[derive(Copy, Clone, PartialEq)]
@@ -195,7 +195,7 @@ fn target_triple_to_cc_args(target_triple: &str) -> Vec<&str> {
 /// `codegen::initialise_llvm()` must be called before this.
 pub fn gen_program(
     options: Options<'_>,
-    rfi_libraries: &[Arc<rfi::Library>],
+    linked_libraries: &[Arc<LinkedLibrary>],
     program: &mir::BuiltProgram,
     output_file: &path::Path,
     debug_source_loader: Option<&SourceLoader>,
@@ -285,7 +285,7 @@ pub fn gen_program(
             .args(target_args)
             .arg("-o")
             .arg(output_file)
-            .args(rfi_libraries.iter().map(|l| l.target_path()))
+            .args(linked_libraries.iter().map(|l| l.target_path()))
             .arg("-pthread")
             .arg("-ldl")
             .arg("-lm")

@@ -3,8 +3,8 @@ use crate::rfi;
 use crate::source::SourceLoader;
 
 use std::collections::{HashMap, HashSet};
-use std::hash;
 use std::sync::Arc;
+use std::{hash, path};
 
 use codespan_reporting::diagnostic::Diagnostic;
 
@@ -32,6 +32,17 @@ new_global_id_type!(
 
 pub(crate) type ModuleImports = HashMap<ModuleName, Arc<Module>>;
 
+pub struct LinkedLibrary {
+    _loaded: libloading::Library,
+    target_path: Box<path::Path>,
+}
+
+impl LinkedLibrary {
+    pub fn target_path(&self) -> &path::Path {
+        &self.target_path
+    }
+}
+
 /// Module being compiled until type inference
 ///
 /// This represents both Arret and RFI libraries
@@ -44,7 +55,7 @@ pub(crate) struct Module {
     pub exports: Exports,
     pub main_var_id: Option<hir::VarId>,
 
-    pub rfi_library: Option<Arc<rfi::Library>>,
+    pub linked_library: Option<Arc<LinkedLibrary>>,
 }
 
 impl PartialEq for Module {
@@ -87,7 +98,7 @@ pub(crate) fn prims_to_module(exports: Exports) -> UncachedModule {
         exports,
         main_var_id: None,
 
-        rfi_library: None,
+        linked_library: None,
     })
 }
 
@@ -97,7 +108,11 @@ fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> UncachedModul
 
     use arret_syntax::datum::DataStr;
 
-    let exported_funs = rfi_library.exported_funs();
+    let rfi::Library {
+        loaded,
+        target_path,
+        exported_funs,
+    } = rfi_library;
 
     let module_id = ModuleId::alloc();
     let mut via = VarIdAlloc::new(module_id);
@@ -106,12 +121,12 @@ fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> UncachedModul
     let mut defs = Vec::with_capacity(exported_funs.len());
     let mut inferred_locals = HashMap::with_capacity(exported_funs.len());
 
-    for (fun_name, rust_fun) in exported_funs.iter() {
+    for (fun_name, rust_fun) in exported_funs.into_vec().into_iter() {
         let var_id = via.alloc_mut();
         let arret_type: ty::Ref<ty::Poly> =
             Ty::Fun(Box::new(rust_fun.arret_fun_type().clone())).into();
 
-        let fun_name_data_str: DataStr = (*fun_name).into();
+        let fun_name_data_str: DataStr = fun_name.into();
 
         let def = hir::Def::<hir::Inferred> {
             span,
@@ -126,7 +141,7 @@ fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> UncachedModul
             ),
             value_expr: hir::Expr {
                 result_ty: arret_type.clone(),
-                kind: hir::ExprKind::RustFun(rust_fun.clone()),
+                kind: hir::ExprKind::RustFun(rust_fun),
             },
         };
 
@@ -144,7 +159,10 @@ fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> UncachedModul
         exports,
 
         main_var_id: None,
-        rfi_library: Some(Arc::new(rfi_library)),
+        linked_library: Some(Arc::new(LinkedLibrary {
+            _loaded: loaded,
+            target_path,
+        })),
     })
 }
 
@@ -314,7 +332,7 @@ impl CompileCtx {
             exports,
             main_var_id,
 
-            rfi_library: None,
+            linked_library: None,
         })
     }
 }

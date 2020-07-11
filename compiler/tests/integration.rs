@@ -280,7 +280,7 @@ async fn result_for_single_test(
         let arret_compiler::EvaluableProgram {
             mut ehx,
             main_var_id,
-            rfi_libraries,
+            linked_libraries,
         } = arret_compiler::program_to_evaluable(ccx, &source_file)?;
 
         // Try evaluating if we're not supposed to panic
@@ -309,7 +309,7 @@ async fn result_for_single_test(
         tokio::task::block_in_place(|| {
             arret_compiler::gen_program(
                 gen_program_opts,
-                &rfi_libraries,
+                &linked_libraries,
                 &mir_program,
                 &output_path,
                 None,

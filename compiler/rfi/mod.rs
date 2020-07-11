@@ -16,19 +16,9 @@ use crate::ty::Ty;
 use arret_runtime::{abitype, binding};
 
 pub struct Library {
-    _loaded: libloading::Library,
-    target_path: Box<path::Path>,
-    exported_funs: Box<[(&'static str, Arc<Fun>)]>,
-}
-
-impl Library {
-    pub fn target_path(&self) -> &path::Path {
-        &self.target_path
-    }
-
-    pub fn exported_funs(&self) -> &[(&'static str, Arc<Fun>)] {
-        &self.exported_funs
-    }
+    pub loaded: libloading::Library,
+    pub target_path: Box<path::Path>,
+    pub exported_funs: Box<[(&'static str, Arc<Fun>)]>,
 }
 
 impl fmt::Debug for Library {
@@ -342,7 +332,7 @@ impl Loader {
             .collect::<Result<Box<[(&'static str, Arc<Fun>)]>, Error>>()?;
 
         Ok(Library {
-            _loaded: loaded,
+            loaded,
             target_path: target_path.into_boxed_path(),
             exported_funs,
         })

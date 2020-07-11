@@ -27,7 +27,7 @@ use arret_syntax::span::FileId;
 pub use crate::arret_root::{find_arret_root, FindArretRootError};
 pub use crate::codegen::initialise_llvm;
 pub use crate::codegen::program::{gen_program, Options as GenProgramOptions, OutputType};
-pub use crate::context::CompileCtx;
+pub use crate::context::{CompileCtx, LinkedLibrary};
 pub use crate::hir::PackagePaths;
 pub use crate::id_type::ArcId;
 pub use crate::mir::eval_hir::{BuiltProgram, EvalHirCtx};
@@ -38,14 +38,14 @@ pub use crate::source::{SourceFile, SourceLoader, SourceText};
 pub struct EvaluableProgram {
     pub ehx: EvalHirCtx,
     pub main_var_id: hir::VarId,
-    pub rfi_libraries: Vec<Arc<rfi::Library>>,
+    pub linked_libraries: Vec<Arc<LinkedLibrary>>,
 }
 
 /// Visits a subtree of modules, evaluates their definitions and collects their RFI libraries
 fn include_imports(
     ehx: &mut EvalHirCtx,
     visited_modules: &mut HashSet<context::ModuleId>,
-    rfi_libraries: &mut Vec<Arc<rfi::Library>>,
+    linked_libraries: &mut Vec<Arc<LinkedLibrary>>,
     root_module: &context::Module,
 ) -> Result<(), Vec<Diagnostic<FileId>>> {
     if visited_modules.contains(&root_module.module_id) {
@@ -54,13 +54,13 @@ fn include_imports(
 
     visited_modules.insert(root_module.module_id);
 
-    if let Some(ref rfi_library) = root_module.rfi_library {
-        rfi_libraries.push(rfi_library.clone());
+    if let Some(ref linked_library) = root_module.linked_library {
+        linked_libraries.push(linked_library.clone());
     }
 
     // Make sure our imports are first
     for import in root_module.imports.values() {
-        include_imports(ehx, visited_modules, rfi_libraries, import)?;
+        include_imports(ehx, visited_modules, linked_libraries, import)?;
     }
 
     for def in &root_module.defs {
@@ -102,11 +102,16 @@ pub fn program_to_evaluable(
     .map_err(|err| vec![err.into()])?;
 
     let mut ehx = EvalHirCtx::new(ccx.enable_optimisations());
-    let mut rfi_libraries = vec![];
+    let mut linked_libraries = vec![];
     let mut visited_modules = HashSet::new();
 
     for import in entry_module.imports.values() {
-        include_imports(&mut ehx, &mut visited_modules, &mut rfi_libraries, import)?;
+        include_imports(
+            &mut ehx,
+            &mut visited_modules,
+            &mut linked_libraries,
+            import,
+        )?;
     }
 
     for def in entry_module.defs {
@@ -121,6 +126,6 @@ pub fn program_to_evaluable(
     Ok(EvaluableProgram {
         ehx,
         main_var_id,
-        rfi_libraries,
+        linked_libraries,
     })
 }
