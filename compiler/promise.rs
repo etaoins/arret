@@ -11,7 +11,7 @@ where
 }
 
 /// Handle to a complete an associated promise
-pub struct Completer<T>
+struct Completer<T>
 where
     T: Send + Clone,
 {
@@ -37,7 +37,7 @@ where
 /// The Promise is initially incomplete. Once its been completed it will return clones of the
 /// completed value until it's dropped.
 #[derive(Clone)]
-pub struct Promise<T>
+struct Promise<T>
 where
     T: Send + Clone,
 {
@@ -64,7 +64,7 @@ where
 }
 
 /// Creates new completer and promise
-pub fn promise<T>() -> (Completer<T>, Promise<T>)
+fn promise<T>() -> (Completer<T>, Promise<T>)
 where
     T: Send + Clone,
 {
@@ -82,7 +82,7 @@ where
 }
 
 /// Create an immediately completed promise
-pub fn completed<T>(value: T) -> Promise<T>
+fn completed<T>(value: T) -> Promise<T>
 where
     T: Send + Clone,
 {
@@ -110,19 +110,11 @@ where
     K: std::hash::Hash + Eq,
     V: Send + Clone,
 {
-    /// Creates a new empty `PromiseMap`
-    pub fn new() -> Self {
+    /// Creates a new `PromiseMap` with the passed values
+    pub fn new(values: impl IntoIterator<Item = (K, V)>) -> Self {
         PromiseMap {
-            promises: RwLock::new(HashMap::new()),
+            promises: RwLock::new(values.into_iter().map(|(k, v)| (k, completed(v))).collect()),
         }
-    }
-
-    /// Inserts a completed value directly in to a promise map
-    ///
-    /// This bypasses locking by using a mutable self.
-    pub fn insert(&mut self, key: K, value: V) {
-        let promises = self.promises.get_mut().unwrap();
-        promises.insert(key, completed(value));
     }
 
     /// Fetches the value from the promise map or inserts it if it does not exist
@@ -161,15 +153,5 @@ where
         let value = func();
         completer.set(value.clone());
         value
-    }
-}
-
-impl<K, V> Default for PromiseMap<K, V>
-where
-    K: std::hash::Hash + Eq,
-    V: Send + Clone,
-{
-    fn default() -> Self {
-        Self::new()
     }
 }

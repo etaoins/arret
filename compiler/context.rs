@@ -167,23 +167,21 @@ impl CompileCtx {
         use crate::hir::exports;
         use std::iter;
 
-        let mut modules_by_name = PromiseMap::<ModuleName, CachedModule>::new();
-
-        for (terminal_name, exports) in iter::once(("primitives", exports::prims_exports()))
+        // These modules are always loaded
+        let initial_modules = iter::once(("primitives", exports::prims_exports()))
             .chain(iter::once(("types", exports::tys_exports())))
-        {
-            // These modules are always loaded
-            let prims_module = prims_to_module(exports);
+            .map(|(terminal_name, exports)| {
+                let prims_module = prims_to_module(exports);
 
-            modules_by_name.insert(
-                ModuleName::new(
-                    "arret".into(),
-                    vec!["internal".into()],
-                    (*terminal_name).into(),
-                ),
-                prims_module.map(Arc::new),
-            );
-        }
+                (
+                    ModuleName::new(
+                        "arret".into(),
+                        vec!["internal".into()],
+                        (*terminal_name).into(),
+                    ),
+                    prims_module.map(Arc::new),
+                )
+            });
 
         Self {
             package_paths,
@@ -191,7 +189,7 @@ impl CompileCtx {
 
             source_loader: SourceLoader::new(),
             rfi_loader: rfi::Loader::new(),
-            modules_by_name,
+            modules_by_name: PromiseMap::new(initial_modules),
         }
     }
 
