@@ -3,8 +3,6 @@ use std::ffi::OsString;
 use std::sync::Arc;
 use std::{fmt, path};
 
-use rayon::prelude::*;
-
 use arret_syntax::datum::Datum;
 use arret_syntax::span::Span;
 
@@ -298,7 +296,7 @@ impl Loader {
         source_loader.reserve(exports.len());
 
         let exported_funs = exports
-            .par_iter()
+            .iter()
             .map(|(fun_name, rust_fun)| {
                 let entry_point_address = unsafe {
                     *loaded

@@ -2,8 +2,6 @@ use std::collections::HashMap;
 
 use codespan_reporting::diagnostic::Diagnostic;
 
-use rayon::prelude::*;
-
 use arret_syntax::datum::Datum;
 use arret_syntax::span::{FileId, Span};
 
@@ -795,13 +793,9 @@ pub(crate) fn lower_data(
 
     // And now process any deferred defs
     let mut defs = Vec::with_capacity(deferred_defs.len());
-    let deferred_results: Vec<Result<_, _>> = deferred_defs
-        .into_par_iter()
-        .map(|deferred_def| resolve_deferred_def(&via, &scope, deferred_def))
-        .collect();
 
-    for deferred_result in deferred_results {
-        match deferred_result {
+    for deferred_def in deferred_defs {
+        match resolve_deferred_def(&via, &scope, deferred_def) {
             Ok(def) => {
                 defs.push(def);
             }
