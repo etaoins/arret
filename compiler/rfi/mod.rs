@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::ffi::OsString;
 use std::sync::Arc;
 use std::{fmt, path};
@@ -19,7 +18,7 @@ use arret_runtime::{abitype, binding};
 pub struct Library {
     _loaded: libloading::Library,
     target_path: Box<path::Path>,
-    exported_funs: HashMap<&'static str, Arc<Fun>>,
+    exported_funs: Box<[(&'static str, Arc<Fun>)]>,
 }
 
 impl Library {
@@ -27,7 +26,7 @@ impl Library {
         &self.target_path
     }
 
-    pub fn exported_funs(&self) -> &HashMap<&'static str, Arc<Fun>> {
+    pub fn exported_funs(&self) -> &[(&'static str, Arc<Fun>)] {
         &self.exported_funs
     }
 }
@@ -340,7 +339,7 @@ impl Loader {
 
                 Ok((*fun_name, Arc::new(fun)))
             })
-            .collect::<Result<HashMap<&'static str, Arc<Fun>>, Error>>()?;
+            .collect::<Result<Box<[(&'static str, Arc<Fun>)]>, Error>>()?;
 
         Ok(Library {
             _loaded: loaded,
