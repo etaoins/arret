@@ -340,7 +340,7 @@ async fn result_for_single_test(
                         "unexpected status {} returned from integration test",
                         output.status,
                     ))
-                    .with_labels(vec![Label::primary(source_file.file_id(), 0..0)
+                    .with_labels(vec![Label::primary(source_file.file_id(), 0..1)
                         .with_message("integration test file")])]);
             }
         }
@@ -352,7 +352,7 @@ async fn result_for_single_test(
                         "unexpected status {} returned from integration test",
                         output.status,
                     ))
-                    .with_labels(vec![Label::primary(source_file.file_id(), 0..0)
+                    .with_labels(vec![Label::primary(source_file.file_id(), 0..1)
                         .with_message("integration test file")])]);
             }
         }

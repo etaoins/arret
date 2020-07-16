@@ -626,7 +626,7 @@ mod test {
 
     fn assert_nodes_deallocated<T>(block: T)
     where
-        T: FnOnce() -> (),
+        T: FnOnce(),
     {
         assert_eq!(
             0,

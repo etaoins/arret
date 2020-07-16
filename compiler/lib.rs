@@ -85,7 +85,7 @@ pub fn program_to_evaluable(
 
         return Err(vec![Diagnostic::error()
             .with_message("no main! function defined in entry module")
-            .with_labels(vec![Label::primary(source_file.file_id(), 0..0)
+            .with_labels(vec![Label::primary(source_file.file_id(), 0..1)
                 .with_message("main! function expected in this file")])]);
     };
 

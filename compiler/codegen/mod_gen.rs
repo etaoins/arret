@@ -188,7 +188,7 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
         initialise: F,
     ) -> LLVMValueRef
     where
-        F: FnOnce(LLVMValueRef) -> (),
+        F: FnOnce(LLVMValueRef),
     {
         unsafe {
             let function = LLVMGetNamedFunction(self.module, name.as_ptr() as *const _);

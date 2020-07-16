@@ -57,7 +57,7 @@ pub fn type_for_decl_destruc(
 
 fn visit_scalar_locals<F>(scalar: &destruc::Scalar<hir::Lowered>, visitor: &mut F)
 where
-    F: FnMut(hir::LocalId, &hir::DeclTy) -> (),
+    F: FnMut(hir::LocalId, &hir::DeclTy),
 {
     if let Some(local_id) = scalar.local_id() {
         visitor(*local_id, scalar.ty());
@@ -72,7 +72,7 @@ pub fn visit_locals<F>(
     visitor: &mut F,
 ) -> Option<hir::LocalId>
 where
-    F: FnMut(hir::LocalId, &hir::DeclTy) -> (),
+    F: FnMut(hir::LocalId, &hir::DeclTy),
 {
     match destruc {
         destruc::Destruc::Scalar(_, ref scalar) => {

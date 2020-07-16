@@ -225,7 +225,7 @@ impl EvalHirCtx {
         value: Value,
         insert_local: &mut F,
     ) where
-        F: FnMut(hir::LocalId, Value) -> (),
+        F: FnMut(hir::LocalId, Value),
     {
         if let Some(local_id) = scalar.local_id() {
             insert_local(*local_id, value);
@@ -239,7 +239,7 @@ impl EvalHirCtx {
         value: Value,
         insert_local: &mut F,
     ) where
-        F: FnMut(hir::LocalId, Value) -> (),
+        F: FnMut(hir::LocalId, Value),
     {
         let mut iter = value.into_unsized_list_iter();
 
@@ -259,7 +259,7 @@ impl EvalHirCtx {
         value: Value,
         insert_local: &mut F,
     ) where
-        F: FnMut(hir::LocalId, Value) -> (),
+        F: FnMut(hir::LocalId, Value),
     {
         use crate::hir::destruc::Destruc;
 
