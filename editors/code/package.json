@@ -65,7 +65,7 @@
     "glob": "7.1.6",
     "mocha": "8.0.1",
     "prettier": "2.0.5",
-    "typescript": "3.9.6",
+    "typescript": "3.9.7",
     "vsce": "1.77.0",
     "vscode-test": "1.4.0"
   },
