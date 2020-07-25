@@ -120,7 +120,7 @@ impl<'sl> DebugInfoBuilder<'sl> {
                 file_metadata,
                 ptr::null_mut(),
                 0,
-                LLVMDIFlags::LLVMDIFlagZero,
+                LLVMDIFlagZero,
             )
         }
     }
@@ -181,7 +181,7 @@ impl<'sl> DebugInfoBuilder<'sl> {
                 source_name.is_none() as i32, // `IsLocalToUnit`
                 1,                            // `IsDefinition`
                 line_index as u32,            // `ScopeLine`
-                LLVMDIFlags::LLVMDIFlagZero,
+                LLVMDIFlagZero,
                 1, // `IsOptimized`
             );
 

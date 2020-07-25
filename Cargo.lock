@@ -453,9 +453,9 @@ dependencies = [
 
 [[package]]
 name = "llvm-sys"
-version = "90.0.0"
+version = "90.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "191f83195c348af813546379e057429b13f5f2009896d45c52a1235ede6d2b84"
+checksum = "d4a37c65d26686a37e9a32ef9a41a74333e6dee8b780cc9d29eb33cacdbb12f5"
 dependencies = [
  "cc",
  "lazy_static",
