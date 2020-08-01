@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
 
@@ -254,8 +253,8 @@ impl<'ccx> ReplEngine<'ccx> {
 }
 
 pub struct ReplCtx {
-    send_line: mpsc::Sender<(String, EvalKind)>,
-    receive_result: mpsc::Receiver<Result<EvaledLine, Vec<Diagnostic<FileId>>>>,
+    send_line: crossbeam_channel::Sender<(String, EvalKind)>,
+    receive_result: crossbeam_channel::Receiver<Result<EvaledLine, Vec<Diagnostic<FileId>>>>,
 }
 
 impl ReplCtx {
@@ -263,8 +262,8 @@ impl ReplCtx {
     ///
     /// This will launch a REPL engine thread which can asynchronously evaluate lines.
     pub fn new(ccx: Arc<CompileCtx>) -> Self {
-        let (send_line, receive_line) = mpsc::channel();
-        let (send_result, receive_result) = mpsc::channel();
+        let (send_line, receive_line) = crossbeam_channel::unbounded();
+        let (send_result, receive_result) = crossbeam_channel::unbounded();
 
         thread::spawn(move || {
             let mut engine = ReplEngine::new(&ccx);

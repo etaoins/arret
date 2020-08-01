@@ -16,23 +16,9 @@ arret-syntax = { path = "../syntax" }
 arret-runtime = { path = "../runtime" }
 arret-runtime-syntax = { path = "../runtime-syntax" }
 codespan-reporting = "0.9"
+crossbeam-channel = "0.4"
 termcolor = "1"
 
 [dev-dependencies]
 tempfile = "3"
-
-[dev-dependencies.futures]
-version = "0.3"
-default-features = false
-features = ["std"]
-
-[dev-dependencies.tokio]
-version = "0.2"
-features = [
-  "rt-core",
-  "rt-threaded",
-  "blocking",
-  "fs",
-  "macros",
-  "process"
-]
+num_cpus = "1.0"
