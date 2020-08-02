@@ -8,7 +8,7 @@ cached-ecr-build-env: &cached-ecr-build-env
 
 steps:
   - label: ':muscle: Test ARM64'
-    branches: '!master'
+    branches: '!master !renovate/npm-definitely-typed-deps !renovate/eslint-deps !renovate/vs-code-deps'
     command: ./.buildkite/build-and-test.sh
     plugins:
       - docker-compose#v3.5.0:
