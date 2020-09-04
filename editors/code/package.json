@@ -66,7 +66,7 @@
     "mocha": "8.1.3",
     "prettier": "2.1.1",
     "typescript": "4.0.2",
-    "vsce": "1.79.4",
+    "vsce": "1.79.5",
     "vscode-test": "1.4.0"
   },
   "dependencies": {
