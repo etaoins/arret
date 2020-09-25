@@ -11,7 +11,7 @@ steps:
     branches: '!master !renovate/npm-definitely-typed-deps !renovate/eslint-deps !renovate/vs-code-deps'
     command: ./.buildkite/build-and-test.sh
     plugins:
-      - docker-compose#v3.5.0:
+      - docker-compose#v3.6.0:
           run: build-env
     agents:
       queue: arm64
@@ -76,7 +76,7 @@ steps:
           server: docker.pkg.github.com
           username: etaoins
           password-env: GITHUB_TOKEN
-      - docker-compose#v3.5.0:
+      - docker-compose#v3.6.0:
           push:
             - repl:etaoins/arret:repl
             - repl:docker.pkg.github.com/etaoins/arret/repl
