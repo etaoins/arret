@@ -27,23 +27,19 @@ pub fn datum_from_str(file_id: Option<FileId>, s: &str) -> Result<Datum> {
 }
 
 fn is_whitespace(c: char) -> bool {
-    match c {
-        ',' | ' ' | '\n' | '\t' | '\r' => true,
-        _ => false,
-    }
+    matches!(c, ',' | ' ' | '\n' | '\t' | '\r')
 }
 
 pub fn is_identifier_char(c: char) -> bool {
-    match c {
+    matches!(c,
         'A'..='Z' | 'a'..='z' | '0'..='9' |
         // Punctuation allowed at beginning of an identifier
         '.' | '*' | '+' | '!' | '-' | '_' | '?' | '$' | '%' | '&' | '=' | '<' | '>' | ':' |
         // Punctuation allowed anywhere
         '#' |
         // We don't support namespacing so we treat this as a normal char
-        '/' => true,
-        _ => false,
-    }
+        '/'
+    )
 }
 
 pub struct Parser<'input> {
@@ -197,10 +193,7 @@ impl<'input> Parser<'input> {
                 '0'..='9' => true,
                 _ => false,
             },
-            State::Fractional => match c {
-                '0'..='9' => true,
-                _ => false,
-            },
+            State::Fractional => matches!(c, '0'..='9'),
         });
 
         match state {

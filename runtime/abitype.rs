@@ -201,10 +201,7 @@ impl ABIType {
     }
 
     pub fn may_contain_gc_refs(&self) -> bool {
-        match self {
-            ABIType::Boxed(_) | ABIType::InternedSym | ABIType::Callback(_) => true,
-            _ => false,
-        }
+        matches!(self, ABIType::Boxed(_) | ABIType::InternedSym | ABIType::Callback(_))
     }
 }
 

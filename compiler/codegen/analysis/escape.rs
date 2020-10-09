@@ -74,10 +74,7 @@ pub fn infer_param_capture_kind(
     ret_abi_type: &RetABIType,
     param_abi_type: &ParamABIType,
 ) -> CaptureKind {
-    let returns_box = match ret_abi_type {
-        RetABIType::Inhabited(ABIType::Boxed(_)) => true,
-        _ => false,
-    };
+    let returns_box = matches!(ret_abi_type, RetABIType::Inhabited(ABIType::Boxed(_)));
 
     match param_abi_type.capture {
         ParamCapture::Auto => {

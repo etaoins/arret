@@ -136,10 +136,7 @@ impl<'a> ResultUse<'a> {
 
     /// Returns `true` if the expression's result value is used
     fn is_used(&self) -> bool {
-        match self {
-            ResultUse::Unused(_) => false,
-            _ => true,
-        }
+        !matches!(self, ResultUse::Unused(_))
     }
 }
 

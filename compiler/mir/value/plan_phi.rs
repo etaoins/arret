@@ -40,11 +40,7 @@ pub fn plan_phi_abi_type(lhs: &Value, rhs: &Value) -> abitype::ABIType {
                         }
                     }
                     Value::Reg(reg_value) => {
-                        if let abitype::ABIType::Boxed(_) = reg_value.abi_type {
-                            true
-                        } else {
-                            false
-                        }
+                        matches!(reg_value.abi_type, abitype::ABIType::Boxed(_))
                     }
                     _ => true,
                 }
