@@ -33,6 +33,26 @@ impl<K: Boxed, V: Boxed> Map<K, V> {
         })
     }
 
+    /// Constructs a map by constructing an iterator of values
+    pub fn from_values<T, F>(
+        heap: &mut impl AsHeap,
+        values: impl ExactSizeIterator<Item = T>,
+        _cons: F,
+    ) -> Gc<Map<K, V>>
+    where
+        F: Fn(&mut Heap, T) -> (Gc<K>, Gc<V>),
+    {
+        if values.len() != 0 {
+            todo!("non-empty maps");
+        }
+
+        heap.as_heap_mut().place_box(Map {
+            header: Map::TYPE_TAG.to_heap_header(Self::size()),
+            _key: PhantomData,
+            _value: PhantomData,
+        })
+    }
+
     /// Returns the box size for maps
     pub fn size() -> BoxSize {
         BoxSize::Size16

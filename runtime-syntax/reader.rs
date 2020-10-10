@@ -14,37 +14,18 @@ pub fn box_syntax_datum(heap: &mut impl boxed::AsHeap, datum: &Datum) -> Gc<boxe
         Datum::Str(_, val) => boxed::Str::new(heap, val.as_ref()).as_any_ref(),
         Datum::Sym(_, val) => boxed::Sym::new(heap, val.as_ref()).as_any_ref(),
         Datum::List(_, vs) => {
-            let boxed_elems = vs
-                .iter()
-                .map(|elem| box_syntax_datum(heap, elem))
-                .collect::<Vec<Gc<boxed::Any>>>();
-
-            boxed::List::new(heap, boxed_elems.into_iter()).as_any_ref()
+            boxed::List::from_values(heap, vs.iter(), box_syntax_datum).as_any_ref()
         }
         Datum::Vector(_, vs) => {
-            let boxed_elems = vs
-                .iter()
-                .map(|elem| box_syntax_datum(heap, elem))
-                .collect::<Vec<Gc<boxed::Any>>>();
-
-            boxed::Vector::new(heap, boxed_elems.into_iter()).as_any_ref()
+            boxed::Vector::from_values(heap, vs.iter(), box_syntax_datum).as_any_ref()
         }
         Datum::Set(_, vs) => {
-            let boxed_elems = vs
-                .iter()
-                .map(|elem| box_syntax_datum(heap, elem))
-                .collect::<Vec<Gc<boxed::Any>>>();
-
-            boxed::Set::new(heap, boxed_elems.into_iter()).as_any_ref()
+            boxed::Set::from_values(heap, vs.iter(), box_syntax_datum).as_any_ref()
         }
-        Datum::Map(_, vs) => {
-            let boxed_elems = vs
-                .iter()
-                .map(|(key, value)| (box_syntax_datum(heap, key), box_syntax_datum(heap, value)))
-                .collect::<Vec<(Gc<boxed::Any>, Gc<boxed::Any>)>>();
-
-            boxed::Map::new(heap, boxed_elems.into_iter()).as_any_ref()
-        }
+        Datum::Map(_, vs) => boxed::Map::from_values(heap, vs.iter(), |heap, (key, value)| {
+            (box_syntax_datum(heap, key), box_syntax_datum(heap, value))
+        })
+        .as_any_ref(),
     }
 }
 
