@@ -57,7 +57,7 @@ impl<'sl> DebugInfoBuilder<'sl> {
 
         let main_file_metadata = self.file_metadata(main_file_id);
 
-        let producer = ffi::CString::new("arret").unwrap();
+        let producer = b"arret\0";
 
         unsafe {
             // This is implicitly added to the LLVM module
@@ -65,8 +65,8 @@ impl<'sl> DebugInfoBuilder<'sl> {
                 self.llvm_dib,
                 LLVMDWARFSourceLanguage::LLVMDWARFSourceLanguageC,
                 main_file_metadata,
-                producer.as_ptr(),
-                producer.as_bytes().len(),
+                producer.as_ptr() as *const _,
+                producer.len(),
                 optimised as i32,                                 // `isOptimized`
                 ptr::null(),                                      // `Flags`
                 0,                                                // `FlagsLen`
