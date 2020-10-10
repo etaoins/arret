@@ -125,7 +125,6 @@ pub enum ListSubtype<'a, T: Boxed> {
 
 impl<T: Boxed> List<T> {
     /// Constructs a new fixed sized list containing the passed `elems`
-    #[allow(clippy::new_ret_no_self)]
     pub fn new(heap: &mut impl AsHeap, elems: impl ExactSizeIterator<Item = Gc<T>>) -> Gc<List<T>> {
         Self::new_with_tail(heap, elems, Self::empty())
     }
