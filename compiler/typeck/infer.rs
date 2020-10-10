@@ -398,6 +398,7 @@ impl<'types> RecursiveDefsCtx<'types> {
     /// Calls the passed function with var types overridden by the specified type conds
     ///
     /// The var types will be restored after the function returns.
+    #[allow(clippy::needless_collect)]
     fn with_type_conds_applied<F, R>(
         &mut self,
         type_conds: &[VarTypeCond],

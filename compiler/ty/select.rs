@@ -324,6 +324,7 @@ mod test {
     }
 
     impl TestScope {
+        #[allow(clippy::needless_collect)]
         fn new(polymorphic_str: &str) -> TestScope {
             use crate::hir::lower_polymorphic_var_set;
 
