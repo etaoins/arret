@@ -18,7 +18,7 @@ pub struct DebugInfoBuilder<'sl> {
 
     source_loader: &'sl SourceLoader,
     current_dir: ffi::CString,
-    file_metadata: HashMap<FileId, Option<LLVMMetadataRef>>,
+    file_metadata: HashMap<FileId, LLVMMetadataRef>,
 }
 
 impl<'sl> DebugInfoBuilder<'sl> {
@@ -55,11 +55,7 @@ impl<'sl> DebugInfoBuilder<'sl> {
             return;
         };
 
-        let main_file_metadata = if let Some(metadata) = self.file_metadata(main_file_id) {
-            metadata
-        } else {
-            return;
-        };
+        let main_file_metadata = self.file_metadata(main_file_id);
 
         let producer = ffi::CString::new("arret").unwrap();
 
@@ -85,24 +81,22 @@ impl<'sl> DebugInfoBuilder<'sl> {
         }
     }
 
-    pub fn file_metadata(&mut self, file_id: FileId) -> Option<LLVMMetadataRef> {
+    pub fn file_metadata(&mut self, file_id: FileId) -> LLVMMetadataRef {
         if let Some(metadata) = self.file_metadata.get(&file_id) {
             return *metadata;
         }
 
         let filename = self.source_loader.files().name(file_id).unwrap();
 
-        let metadata = ffi::CString::new(filename.as_bytes())
-            .ok()
-            .map(|c_filename| unsafe {
-                LLVMDIBuilderCreateFile(
-                    self.llvm_dib,
-                    c_filename.as_ptr() as *const _,
-                    c_filename.as_bytes().len(),
-                    self.current_dir.as_ptr() as *const _,
-                    self.current_dir.as_bytes().len(),
-                )
-            });
+        let metadata = unsafe {
+            LLVMDIBuilderCreateFile(
+                self.llvm_dib,
+                filename.as_ptr() as *const _,
+                filename.len(),
+                self.current_dir.as_ptr() as *const _,
+                self.current_dir.as_bytes().len(),
+            )
+        };
 
         self.file_metadata.insert(file_id, metadata);
         metadata
@@ -149,29 +143,21 @@ impl<'sl> DebugInfoBuilder<'sl> {
 
         let line_index = location.line_number - 1;
 
-        let file_metadata = if let Some(file_metadata) = self.file_metadata(file_id) {
-            file_metadata
-        } else {
-            return;
-        };
+        let file_metadata = self.file_metadata(file_id);
 
         unsafe {
-            let c_source_name =
-                source_name.map(|source_name| ffi::CString::new(source_name.as_bytes()).unwrap());
-
             let mut linkage_name_len: usize = 0;
             let linkage_name_ptr = LLVMGetValueName2(llvm_function, &mut linkage_name_len);
 
             let function_metadata = LLVMDIBuilderCreateFunction(
                 self.llvm_dib,
                 file_metadata, // `Scope`
-                c_source_name
-                    .as_ref()
-                    .map(|c_source_name| c_source_name.as_ptr())
+                source_name
+                    .map(|source_name| source_name.as_ptr() as *const _)
                     .unwrap_or(linkage_name_ptr),
-                c_source_name
+                source_name
                     .as_ref()
-                    .map(|c_source_name| c_source_name.as_bytes().len())
+                    .map(|source_name| source_name.len())
                     .unwrap_or(linkage_name_len),
                 linkage_name_ptr,
                 linkage_name_len,
