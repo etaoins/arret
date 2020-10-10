@@ -1,4 +1,4 @@
-ARG LLVM_VERSION=10.0.0
+ARG LLVM_VERSION=10.0.1
 ARG LLVM_ROOT=/opt/llvm-10
 
 ##
@@ -19,7 +19,7 @@ RUN dnf install -y file cmake ninja-build xz && \
 
 WORKDIR /usr/src
 
-RUN curl https://github.com/llvm/llvm-project/releases/download/llvmorg-10.0.0/llvm-10.0.0.src.tar.xz -sSL | \
+RUN curl https://github.com/llvm/llvm-project/releases/download/llvmorg-10.0.1/llvm-10.0.1.src.tar.xz -sSL | \
   tar -Jx --no-same-owner
 
 WORKDIR /usr/src/llvm-build
@@ -44,7 +44,7 @@ ARG LLVM_ROOT
 
 COPY --from=llvm-build ${LLVM_ROOT} ${LLVM_ROOT}
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.46.0 --profile=minimal --component rustfmt
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.47.0 --profile=minimal --component rustfmt
 
 ENV PATH "/root/.cargo/bin:${PATH}"
 ENV LLVM_SYS_90_PREFIX "${LLVM_ROOT}"
