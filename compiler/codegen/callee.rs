@@ -46,7 +46,7 @@ pub fn gen_static_symbol_entry_point(
                 }
 
                 if !impure {
-                    let speculatable_attr = tcx.llvm_enum_attr_for_name(b"speculatable", 0);
+                    let speculatable_attr = tcx.llvm_enum_attr_for_name("speculatable", 0);
                     LLVMAddAttributeAtIndex(
                         function,
                         LLVMAttributeFunctionIndex,
@@ -59,7 +59,7 @@ pub fn gen_static_symbol_entry_point(
                         tcx.add_boxed_return_attrs(function);
                     }
                     RetABIType::Never => {
-                        let noreturn_attr = tcx.llvm_enum_attr_for_name(b"noreturn", 0);
+                        let noreturn_attr = tcx.llvm_enum_attr_for_name("noreturn", 0);
                         LLVMAddAttributeAtIndex(
                             function,
                             LLVMAttributeFunctionIndex,

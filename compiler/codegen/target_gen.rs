@@ -17,7 +17,7 @@ use crate::mir::ops;
 
 fn llvm_enum_attr_for_name(
     llx: LLVMContextRef,
-    attr_name: &[u8],
+    attr_name: &str,
     attr_value: u64,
 ) -> LLVMAttributeRef {
     unsafe {
@@ -27,7 +27,7 @@ fn llvm_enum_attr_for_name(
     }
 }
 
-fn llvm_md_kind_id_for_name(llx: LLVMContextRef, md_name: &[u8]) -> u32 {
+fn llvm_md_kind_id_for_name(llx: LLVMContextRef, md_name: &str) -> u32 {
     unsafe { LLVMGetMDKindIDInContext(llx, md_name.as_ptr() as *const _, md_name.len() as u32) }
 }
 
@@ -135,21 +135,21 @@ impl TargetCtx {
 
                 boxed_dereferenceable_attr: llvm_enum_attr_for_name(
                     llx,
-                    b"dereferenceable",
+                    "dereferenceable",
                     mem::size_of::<boxed::Any>() as u64,
                 ),
                 boxed_align_attr: llvm_enum_attr_for_name(
                     llx,
-                    b"align",
+                    "align",
                     mem::align_of::<boxed::Any>() as u64,
                 ),
-                readonly_attr: llvm_enum_attr_for_name(llx, b"readonly", 0),
-                noalias_attr: llvm_enum_attr_for_name(llx, b"noalias", 0),
-                nocapture_attr: llvm_enum_attr_for_name(llx, b"nocapture", 0),
+                readonly_attr: llvm_enum_attr_for_name(llx, "readonly", 0),
+                noalias_attr: llvm_enum_attr_for_name(llx, "noalias", 0),
+                nocapture_attr: llvm_enum_attr_for_name(llx, "nocapture", 0),
 
-                invariant_load_md_kind_id: llvm_md_kind_id_for_name(llx, b"invariant.load"),
-                dereferenceable_md_kind_id: llvm_md_kind_id_for_name(llx, b"dereferenceable"),
-                align_md_kind_id: llvm_md_kind_id_for_name(llx, b"align"),
+                invariant_load_md_kind_id: llvm_md_kind_id_for_name(llx, "invariant.load"),
+                dereferenceable_md_kind_id: llvm_md_kind_id_for_name(llx, "dereferenceable"),
+                align_md_kind_id: llvm_md_kind_id_for_name(llx, "align"),
 
                 empty_md_node: llvm_i64_md_node(llx, &[]),
                 boxed_dereferenceable_md_node: llvm_i64_md_node(
@@ -637,13 +637,13 @@ impl TargetCtx {
 
     pub fn llvm_enum_attr_for_name(
         &mut self,
-        attr_name: &[u8],
+        attr_name: &str,
         attr_value: u64,
     ) -> LLVMAttributeRef {
         llvm_enum_attr_for_name(self.llx, attr_name, attr_value)
     }
 
-    pub fn llvm_md_kind_id_for_name(&mut self, md_name: &[u8]) -> u32 {
+    pub fn llvm_md_kind_id_for_name(&mut self, md_name: &str) -> u32 {
         llvm_md_kind_id_for_name(self.llx, md_name)
     }
 
@@ -681,7 +681,7 @@ impl TargetCtx {
                 llvm_range_values.as_mut_ptr(),
                 llvm_range_values.len(),
             );
-            let range_md_kind_id = self.llvm_md_kind_id_for_name(b"range");
+            let range_md_kind_id = self.llvm_md_kind_id_for_name("range");
 
             LLVMSetMetadata(
                 llvm_value,

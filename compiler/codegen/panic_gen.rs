@@ -38,13 +38,13 @@ pub(crate) fn gen_panic(
                 LLVMAddAttributeAtIndex(
                     panic_with_string_fun,
                     LLVMAttributeFunctionIndex,
-                    tcx.llvm_enum_attr_for_name(b"cold", 0),
+                    tcx.llvm_enum_attr_for_name("cold", 0),
                 );
 
                 LLVMAddAttributeAtIndex(
                     panic_with_string_fun,
                     LLVMAttributeFunctionIndex,
-                    tcx.llvm_enum_attr_for_name(b"noreturn", 0),
+                    tcx.llvm_enum_attr_for_name("noreturn", 0),
                 );
             },
         );

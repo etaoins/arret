@@ -313,7 +313,7 @@ fn gen_op(
                         .map(|type_tag| type_tag as i64),
                 );
 
-                let range_md_kind_id = tcx.llvm_md_kind_id_for_name(b"range");
+                let range_md_kind_id = tcx.llvm_md_kind_id_for_name("range");
                 LLVMSetMetadata(
                     llvm_type_tag,
                     range_md_kind_id,
@@ -353,7 +353,7 @@ fn gen_op(
                     LLVMValueAsMetadata(LLVMConstInt(llvm_i64, max_list_len + 1, 0)),
                 ];
 
-                let range_md_kind_id = tcx.llvm_md_kind_id_for_name(b"list_len_range");
+                let range_md_kind_id = tcx.llvm_md_kind_id_for_name("list_len_range");
                 let list_len_range_md = LLVMMDNodeInContext2(
                     tcx.llx,
                     llvm_range_values.as_mut_ptr(),

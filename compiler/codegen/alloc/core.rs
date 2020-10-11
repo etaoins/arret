@@ -172,7 +172,7 @@ fn gen_runtime_heap_alloc(
                 LLVMAddAttributeAtIndex(
                     alloc_cells_fun,
                     LLVMAttributeFunctionIndex,
-                    tcx.llvm_enum_attr_for_name(b"cold", 0),
+                    tcx.llvm_enum_attr_for_name("cold", 0),
                 );
                 LLVMAddAttributeAtIndex(
                     alloc_cells_fun,
@@ -199,7 +199,7 @@ fn gen_runtime_heap_alloc(
 
         // We can dereference the entire allocation immediately
         let dereferenceable_attr = tcx.llvm_enum_attr_for_name(
-            b"dereferenceable",
+            "dereferenceable",
             (mem::size_of::<boxed::Any>() * required_cells) as u64,
         );
         LLVMAddCallSiteAttribute(

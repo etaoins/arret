@@ -75,7 +75,7 @@ pub(crate) fn load_boxed_vector_len(
             )),
         ];
 
-        let range_md_kind_id = tcx.llvm_md_kind_id_for_name(b"vector_inline_len_range");
+        let range_md_kind_id = tcx.llvm_md_kind_id_for_name("vector_inline_len_range");
         let vector_inline_len_range_md = LLVMMDNodeInContext2(
             tcx.llx,
             llvm_range_values.as_mut_ptr(),

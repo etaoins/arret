@@ -227,7 +227,7 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
                 )),
             ];
 
-            let range_md_kind_id = tcx.llvm_md_kind_id_for_name(b"range");
+            let range_md_kind_id = tcx.llvm_md_kind_id_for_name("range");
             let record_class_id_range_md = LLVMMDNodeInContext2(
                 tcx.llx,
                 llvm_range_values.as_mut_ptr(),
