@@ -17,7 +17,7 @@ pub struct DebugInfoBuilder<'sl> {
     pub llvm_dib: LLVMDIBuilderRef,
 
     source_loader: &'sl SourceLoader,
-    current_dir: ffi::CString,
+    current_dir: ffi::OsString,
     file_metadata: HashMap<FileId, LLVMMetadataRef>,
 }
 
@@ -31,8 +31,8 @@ impl<'sl> DebugInfoBuilder<'sl> {
         // This is needed for all of our file metadata so the debugger can resolve relative paths
         let current_dir = env::current_dir()
             .ok()
-            .map(|current_dir| ffi::CString::new(current_dir.as_os_str().as_bytes()).unwrap())
-            .unwrap_or_else(|| ffi::CString::new("").unwrap());
+            .map(|current_dir| current_dir.as_os_str().to_owned())
+            .unwrap_or_else(ffi::OsString::new);
 
         let llvm_dib = unsafe { LLVMCreateDIBuilderDisallowUnresolved(module) };
 
@@ -93,7 +93,7 @@ impl<'sl> DebugInfoBuilder<'sl> {
                 self.llvm_dib,
                 filename.as_ptr() as *const _,
                 filename.len(),
-                self.current_dir.as_ptr() as *const _,
+                self.current_dir.as_bytes().as_ptr() as *const _,
                 self.current_dir.as_bytes().len(),
             )
         };
