@@ -2,9 +2,9 @@ FROM ubuntu:20.04 AS build-env
 
 RUN \
   apt-get update && \
-  apt-get -y install --no-install-recommends ca-certificates curl gcc zlib1g-dev libstdc++-9-dev llvm-9 llvm-9-dev && \
+  apt-get -y install --no-install-recommends ca-certificates curl gcc zlib1g-dev libstdc++-9-dev llvm-10 llvm-10-dev && \
   apt-get clean
-ENV LLVM_SYS_90_PREFIX /usr/lib/llvm-9
+ENV LLVM_SYS_10_PREFIX /usr/lib/llvm-10
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.47.0 --profile=minimal
 ENV PATH "/root/.cargo/bin:${PATH}"
