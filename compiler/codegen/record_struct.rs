@@ -1,5 +1,4 @@
 use std::alloc;
-use std::ffi;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
@@ -51,14 +50,11 @@ impl TargetRecordStruct {
             .map(|abi_type| tcx.abi_to_llvm_type(abi_type))
             .collect();
 
-        let record_data_name =
-            ffi::CString::new(format!("{}_data", record_struct.source_name)).unwrap();
+        let record_data_name = format!("{}_data\0", record_struct.source_name);
 
         unsafe {
-            let llvm_data_type = LLVMStructCreateNamed(
-                tcx.llx,
-                record_data_name.as_bytes_with_nul().as_ptr() as *const _,
-            );
+            let llvm_data_type =
+                LLVMStructCreateNamed(tcx.llx, record_data_name.as_ptr() as *const _);
 
             LLVMStructSetBody(
                 llvm_data_type,
@@ -160,12 +156,12 @@ pub fn gen_classmap_classes<'a>(
                 );
 
                 let classmap_class_global_name =
-                    ffi::CString::new(format!("{}_classmap", record_struct.source_name)).unwrap();
+                    format!("{}_classmap\0", record_struct.source_name);
 
                 let llvm_classmap_class_global = LLVMAddGlobal(
                     llvm_module,
                     LLVMTypeOf(llvm_classmap_class),
-                    classmap_class_global_name.as_bytes_with_nul().as_ptr() as *const _,
+                    classmap_class_global_name.as_ptr() as *const _,
                 );
 
                 LLVMSetInitializer(llvm_classmap_class_global, llvm_classmap_class);

@@ -500,7 +500,6 @@ fn gen_op(
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::LoadBoxedRecordField(reg, load_boxed_record_field_op) => {
-                use std::ffi;
                 let LoadBoxedRecordFieldOp {
                     record_reg,
                     record_struct,
@@ -510,9 +509,7 @@ fn gen_op(
                 let record_struct::TargetRecordStruct { record_storage, .. } =
                     *tcx.target_record_struct(record_struct);
 
-                let boxed_record_name =
-                    ffi::CString::new(format!("boxed_{}_record", record_struct.source_name))
-                        .unwrap();
+                let boxed_record_name = format!("boxed_{}_record\0", record_struct.source_name);
 
                 let boxed_record_ptr_type =
                     LLVMPointerType(tcx.record_struct_llvm_box_type(record_struct), 0);
@@ -521,7 +518,7 @@ fn gen_op(
                     fcx.builder,
                     fcx.regs[record_reg],
                     boxed_record_ptr_type,
-                    boxed_record_name.to_bytes_with_nul().as_ptr() as *const _,
+                    boxed_record_name.as_ptr() as *const _,
                 );
 
                 let field_ptr = record_struct::gen_record_field_ptr(

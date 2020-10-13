@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use std::{ffi, iter, mem};
+use std::{iter, mem};
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
@@ -230,8 +230,7 @@ pub fn gen_global_interned_names<'a>(
                     1,
                 );
 
-                let name_global_name =
-                    ffi::CString::new(format!("global_interned_name_{}", name)).unwrap();
+                let name_global_name = format!("global_interned_name_{}\0", name);
 
                 let llvm_name_global = LLVMAddGlobal(
                     llvm_module,
@@ -303,9 +302,9 @@ pub fn gen_boxed_int(
         let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
         let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
 
-        let box_name = ffi::CString::new(format!("const_int_{}", value)).unwrap();
+        let box_name = format!("const_int_{}\0", value);
 
-        let global = mcx.get_global_or_insert(llvm_type, box_name.as_bytes_with_nul(), || {
+        let global = mcx.get_global_or_insert(llvm_type, box_name.as_bytes(), || {
             let members = &mut [
                 tcx.llvm_box_header(type_tag.to_const_header()),
                 LLVMConstInt(llvm_i64, value as u64, 1),
@@ -357,9 +356,9 @@ pub fn gen_boxed_char(
         let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
         let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
 
-        let box_name = ffi::CString::new(format!("const_char_{}", value)).unwrap();
+        let box_name = format!("const_char_{}\0", value);
 
-        let global = mcx.get_global_or_insert(llvm_type, box_name.as_bytes_with_nul(), || {
+        let global = mcx.get_global_or_insert(llvm_type, box_name.as_bytes(), || {
             let members = &mut [
                 tcx.llvm_box_header(type_tag.to_const_header()),
                 LLVMConstInt(llvm_i32, value as u64, 1),
@@ -429,7 +428,7 @@ pub fn gen_boxed_record(
     let llvm_box_type = tcx.record_struct_llvm_box_type(record_struct);
 
     unsafe {
-        let box_name = ffi::CString::new(format!("const_{}", record_struct.source_name)).unwrap();
+        let box_name = format!("const_{}\0", record_struct.source_name);
 
         let llvm_data_struct = LLVMConstNamedStruct(
             llvm_data_type,
@@ -474,13 +473,12 @@ pub fn gen_boxed_record(
             )
         } else {
             // Create a global containing our data and return a pointer to it
-            let data_global_name =
-                ffi::CString::new(format!("const_{}_data", record_struct.source_name)).unwrap();
+            let data_global_name = format!("const_{}_data\0", record_struct.source_name);
 
             let data_global = LLVMAddGlobal(
                 mcx.module,
                 llvm_data_type,
-                data_global_name.as_bytes_with_nul().as_ptr() as *const _,
+                data_global_name.as_ptr() as *const _,
             );
             LLVMSetInitializer(data_global, llvm_data_struct);
             annotate_private_global(data_global);
@@ -502,11 +500,7 @@ pub fn gen_boxed_record(
             )
         };
 
-        let global = LLVMAddGlobal(
-            mcx.module,
-            llvm_box_type,
-            box_name.as_bytes_with_nul().as_ptr() as *const _,
-        );
+        let global = LLVMAddGlobal(mcx.module, llvm_box_type, box_name.as_ptr() as *const _);
         LLVMSetInitializer(global, llvm_box_value);
         LLVMSetAlignment(global, mem::align_of::<boxed::Record>() as u32);
         annotate_private_global(global);

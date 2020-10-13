@@ -1,5 +1,3 @@
-use std::ffi;
-
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::LLVMAttributeReturnIndex;
@@ -244,8 +242,7 @@ pub fn gen_alloc_boxed_record(
                 field_abi_type.may_contain_gc_refs() && LLVMIsConstant(*llvm_field) == 0
             });
 
-        let boxed_record_name =
-            ffi::CString::new(format!("alloced_{}_record", record_struct.source_name)).unwrap();
+        let boxed_record_name = format!("alloced_{}_record\0", record_struct.source_name);
 
         let llvm_box_type = tcx.record_struct_llvm_box_type(record_struct);
         let alloced_boxed_record = gen_alloced_box_with_llvm_type::<boxed::Record>(
@@ -254,7 +251,7 @@ pub fn gen_alloc_boxed_record(
             active_alloc,
             box_source,
             llvm_box_type,
-            boxed_record_name.as_bytes_with_nul(),
+            boxed_record_name.as_bytes(),
         );
 
         let may_contain_gc_refs_ptr = LLVMBuildStructGEP(
@@ -454,14 +451,13 @@ pub fn gen_alloc_boxed_record(
             LLVMBuildStore(builder, *llvm_field, llvm_field_ptr);
         }
 
-        let boxed_record_name =
-            ffi::CString::new(format!("alloced_{}_record", record_struct.source_name)).unwrap();
+        let boxed_record_name = format!("alloced_{}_record\0", record_struct.source_name);
 
         LLVMBuildBitCast(
             builder,
             alloced_boxed_record,
             tcx.boxed_abi_to_llvm_ptr_type(&boxed::TypeTag::Record.into()),
-            boxed_record_name.to_bytes_with_nul().as_ptr() as *const _,
+            boxed_record_name.as_ptr() as *const _,
         )
     }
 }

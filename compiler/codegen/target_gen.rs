@@ -537,8 +537,6 @@ impl TargetCtx {
         &mut self,
         record_struct: &ops::RecordStructId,
     ) -> LLVMTypeRef {
-        use std::ffi;
-
         if let Some(record_struct_box_type) = self.cached_types.record_struct_box.get(record_struct)
         {
             return *record_struct_box_type;
@@ -567,11 +565,11 @@ impl TargetCtx {
             },
         }
 
-        let box_name = ffi::CString::new(format!("boxed_{}", record_struct.source_name)).unwrap();
+        let box_name = format!("boxed_{}\0", record_struct.source_name);
 
         let record_struct_box_type = unsafe {
             let record_struct_box_type =
-                LLVMStructCreateNamed(self.llx, box_name.as_bytes_with_nul().as_ptr() as *const _);
+                LLVMStructCreateNamed(self.llx, box_name.as_ptr() as *const _);
 
             LLVMStructSetBody(
                 record_struct_box_type,
