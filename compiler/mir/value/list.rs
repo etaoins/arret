@@ -193,6 +193,11 @@ impl SizedListIterator {
         Some(self.unsized_list_iterator.next_unchecked(b, span))
     }
 
+    #[must_use]
+    pub fn into_rest(self) -> Value {
+        self.unsized_list_iterator.into_rest()
+    }
+
     pub fn len(&self) -> usize {
         self.size
     }

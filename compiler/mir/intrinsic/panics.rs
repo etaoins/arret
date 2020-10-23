@@ -3,6 +3,7 @@ use arret_syntax::span::Span;
 use crate::mir::builder::Builder;
 use crate::mir::error::{Error, Result};
 use crate::mir::eval_hir::EvalHirCtx;
+use crate::mir::intrinsic::BuildOutcome;
 use crate::mir::value::to_const::value_to_const;
 use crate::mir::value::Value;
 
@@ -28,13 +29,13 @@ pub fn panics(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     use crate::mir::ops::*;
 
     if let Some(message) = try_pretty_print_list_value(ehx, b, span, arg_list_value) {
         b.push(span, OpKind::Panic(message));
         Err(Error::Diverged)
     } else {
-        Ok(None)
+        Ok(BuildOutcome::None)
     }
 }

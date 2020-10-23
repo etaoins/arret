@@ -752,13 +752,19 @@ impl EvalHirCtx {
         }
 
         if let Some(b) = b {
-            if let Some(intrinsic_name) = rust_fun.intrinsic_name() {
-                if let Some(value) =
-                    intrinsic::try_build(self, b, span, intrinsic_name, &arg_list_value)?
-                {
-                    return Ok(value);
+            let arg_list_value = if let Some(intrinsic_name) = rust_fun.intrinsic_name() {
+                match intrinsic::try_build(self, b, span, intrinsic_name, &arg_list_value)? {
+                    intrinsic::BuildOutcome::None => arg_list_value,
+                    intrinsic::BuildOutcome::SimplifiedArgs(simplified_arg_list_value) => {
+                        simplified_arg_list_value
+                    }
+                    intrinsic::BuildOutcome::ReturnValue(return_value) => {
+                        return Ok(return_value);
+                    }
                 }
-            }
+            } else {
+                arg_list_value
+            };
 
             build_rust_fun_app(self, b, span, ret_ty, rust_fun, call_purity, arg_list_value)
         } else {

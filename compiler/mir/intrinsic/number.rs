@@ -8,6 +8,7 @@ use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::error::Result;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::intrinsic::num_utils::{num_value_to_float_reg, NumOperand};
+use crate::mir::intrinsic::BuildOutcome;
 use crate::mir::ops::Comparison;
 
 use crate::mir::value;
@@ -131,15 +132,24 @@ fn compare_operand_list(
     span: Span,
     arg_list_value: &Value,
     comparison: Comparison,
-) -> Option<Value> {
-    let mut list_iter = arg_list_value.try_sized_list_iter()?;
+) -> BuildOutcome {
+    let mut list_iter = if let Some(list_iter) = arg_list_value.try_sized_list_iter() {
+        list_iter
+    } else {
+        return BuildOutcome::None;
+    };
+
     if list_iter.len() == 1 {
-        return Some(boxed::TRUE_INSTANCE.as_any_ref().into());
+        return BuildOutcome::ReturnValue(boxed::TRUE_INSTANCE.as_any_ref().into());
     }
 
     let left_value = list_iter.next(b, span).unwrap();
-    build_operand_iter_compare(ehx, b, span, &left_value, &mut list_iter, comparison)
-        .map(|result_reg| value::RegValue::new(result_reg, abitype::ABIType::Bool).into())
+    match build_operand_iter_compare(ehx, b, span, &left_value, &mut list_iter, comparison) {
+        Some(result_reg) => BuildOutcome::ReturnValue(
+            value::RegValue::new(result_reg, abitype::ABIType::Bool).into(),
+        ),
+        None => BuildOutcome::None,
+    }
 }
 
 pub fn int(
@@ -147,14 +157,14 @@ pub fn int(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     let value = arg_list_value.unsized_list_iter().next_unchecked(b, span);
 
     Ok(
         if possible_type_tags_for_value(&value) == boxed::TypeTag::Int.into() {
-            Some(value)
+            BuildOutcome::ReturnValue(value)
         } else {
-            None
+            BuildOutcome::None
         },
     )
 }
@@ -164,10 +174,10 @@ pub fn float(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     let value = arg_list_value.unsized_list_iter().next_unchecked(b, span);
 
-    Ok(Some(
+    Ok(BuildOutcome::ReturnValue(
         value::RegValue::new(
             num_value_to_float_reg(ehx, b, span, &value),
             abitype::ABIType::Float,
@@ -181,7 +191,7 @@ pub fn num_lt(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     Ok(compare_operand_list(
         ehx,
         b,
@@ -196,7 +206,7 @@ pub fn num_le(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     Ok(compare_operand_list(
         ehx,
         b,
@@ -211,7 +221,7 @@ pub fn num_eq(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     Ok(compare_operand_list(
         ehx,
         b,
@@ -226,7 +236,7 @@ pub fn num_gt(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     Ok(compare_operand_list(
         ehx,
         b,
@@ -241,7 +251,7 @@ pub fn num_ge(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     Ok(compare_operand_list(
         ehx,
         b,

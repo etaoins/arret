@@ -6,6 +6,7 @@ use crate::mir::builder::Builder;
 use crate::mir::error::Result;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::intrinsic::num_utils::try_value_to_i64;
+use crate::mir::intrinsic::BuildOutcome;
 use crate::mir::value::types::known_vector_len_for_value;
 use crate::mir::Value;
 
@@ -14,7 +15,7 @@ pub fn vector_length(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     use crate::mir::ops::*;
     use crate::mir::value;
     use crate::mir::value::build_reg::value_to_reg;
@@ -24,7 +25,9 @@ pub fn vector_length(
     let vector_value = iter.next_unchecked(b, span);
 
     if let Some(known_len) = known_vector_len_for_value(&vector_value) {
-        return Ok(Some(boxed::Int::new(ehx, known_len as i64).into()));
+        return Ok(BuildOutcome::ReturnValue(
+            boxed::Int::new(ehx, known_len as i64).into(),
+        ));
     }
 
     let vector_reg = value_to_reg(
@@ -37,7 +40,7 @@ pub fn vector_length(
     .into();
 
     let vector_len_reg = b.push_reg(span, OpKind::LoadBoxedVectorLen, vector_reg);
-    Ok(Some(
+    Ok(BuildOutcome::ReturnValue(
         value::RegValue::new(vector_len_reg, abitype::ABIType::Int).into(),
     ))
 }
@@ -47,7 +50,7 @@ pub fn vector_ref(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     use crate::mir::vector_member;
 
     let mut iter = arg_list_value.unsized_list_iter();
@@ -57,21 +60,16 @@ pub fn vector_ref(
     let known_len = if let Some(known_len) = known_vector_len_for_value(&vector_value) {
         known_len
     } else {
-        return Ok(None);
+        return Ok(BuildOutcome::None);
     };
 
     let index = if let Some(index) = try_value_to_i64(index_value) {
         index as usize
     } else {
-        return Ok(None);
+        return Ok(BuildOutcome::None);
     };
 
-    Ok(Some(vector_member::load_vector_member(
-        ehx,
-        b,
-        span,
-        known_len,
-        &vector_value,
-        index,
-    )))
+    Ok(BuildOutcome::ReturnValue(
+        vector_member::load_vector_member(ehx, b, span, known_len, &vector_value, index),
+    ))
 }

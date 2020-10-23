@@ -35,6 +35,12 @@ macro_rules! define_eval_intrinsics {
     };
 }
 
+pub enum BuildOutcome {
+    None,
+    ReturnValue(Value),
+    SimplifiedArgs(Value),
+}
+
 macro_rules! define_build_intrinsics {
     ( $($name:expr => $handler:path),* ) => {
         pub fn try_build(
@@ -43,14 +49,14 @@ macro_rules! define_build_intrinsics {
             span: Span,
             intrinsic_name: &'static str,
             arg_list_value: &Value,
-        ) -> Result<Option<Value>> {
+        ) -> Result<BuildOutcome> {
             match intrinsic_name {
                 $(
                     $name => {
                         $handler(ehx, b, span, arg_list_value)
                     }
                 ),*
-                _ => Ok(None),
+                _ => Ok(BuildOutcome::None),
             }
         }
     };

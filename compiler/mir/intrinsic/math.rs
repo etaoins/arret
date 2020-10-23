@@ -26,6 +26,7 @@ use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::error::Result;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::intrinsic::num_utils::{num_value_to_float_reg, try_value_to_i64, NumOperand};
+use crate::mir::intrinsic::BuildOutcome;
 use crate::mir::ops::{BinaryOp, OpKind, RegId};
 
 use crate::mir::value;
@@ -74,13 +75,25 @@ fn fold_num_operands<I, F>(
     mut list_iter: SizedListIterator,
     int64_op: I,
     float_op: F,
-) -> Option<Value>
+) -> BuildOutcome
 where
     I: Fn(RegId, BinaryOp) -> OpKind + Copy,
     F: Fn(RegId, BinaryOp) -> OpKind + Copy,
 {
     while let Some(value) = list_iter.next(b, span) {
-        let operand = NumOperand::try_from_value(ehx, b, span, &value)?;
+        let operand = if let Some(operand) = NumOperand::try_from_value(ehx, b, span, &value) {
+            operand
+        } else {
+            // Can't continue. Use the work we've done so far to simplify the
+            // stdlib call.
+            return BuildOutcome::SimplifiedArgs(Value::List(
+                Box::new([
+                    value::RegValue::new(acc_int_reg, abitype::ABIType::Int).into(),
+                    value,
+                ]),
+                Some(Box::new(list_iter.into_rest())),
+            ));
+        };
 
         acc_int_reg = match operand {
             NumOperand::Int(operand_int_reg) => b.push_reg(
@@ -103,14 +116,14 @@ where
                     },
                 );
 
-                return Some(fold_float_operands(
+                return BuildOutcome::ReturnValue(fold_float_operands(
                     ehx, b, span, result_reg, list_iter, float_op,
                 ));
             }
         }
     }
 
-    Some(value::RegValue::new(acc_int_reg, abitype::ABIType::Int).into())
+    BuildOutcome::ReturnValue(value::RegValue::new(acc_int_reg, abitype::ABIType::Int).into())
 }
 
 /// Reduces a series of numerical operands with the given reducer ops for `Int` and `Float`s
@@ -123,19 +136,24 @@ fn reduce_operands<I, F>(
     mut list_iter: SizedListIterator,
     int64_op: I,
     float_op: F,
-) -> Option<Value>
+) -> BuildOutcome
 where
     I: Fn(RegId, BinaryOp) -> OpKind + Copy,
     F: Fn(RegId, BinaryOp) -> OpKind + Copy,
 {
     let initial_value = list_iter.next(b, span).unwrap();
-    let initial_operand = NumOperand::try_from_value(ehx, b, span, &initial_value)?;
+    let initial_operand =
+        if let Some(initial_operand) = NumOperand::try_from_value(ehx, b, span, &initial_value) {
+            initial_operand
+        } else {
+            return BuildOutcome::None;
+        };
 
     match initial_operand {
         NumOperand::Int(int_reg) => {
             fold_num_operands(ehx, b, span, int_reg, list_iter, int64_op, float_op)
         }
-        NumOperand::Float(float_reg) => Some(fold_float_operands(
+        NumOperand::Float(float_reg) => BuildOutcome::ReturnValue(fold_float_operands(
             ehx, b, span, float_reg, list_iter, float_op,
         )),
     }
@@ -151,17 +169,23 @@ fn reduce_assoc_operands<I, F>(
     arg_list_value: &Value,
     int64_op: I,
     float_op: F,
-) -> Option<Value>
+) -> BuildOutcome
 where
     I: Fn(RegId, BinaryOp) -> OpKind + Copy,
     F: Fn(RegId, BinaryOp) -> OpKind + Copy,
 {
-    let mut list_iter = arg_list_value.try_sized_list_iter()?;
+    let mut list_iter = if let Some(list_iter) = arg_list_value.try_sized_list_iter() {
+        list_iter
+    } else {
+        return BuildOutcome::None;
+    };
 
     if list_iter.len() == 1 {
         // The associative math functions (`+` and `*`) act as the identity function with 1 arg.
         // We check here so even if the value doesn't have a definite type it's still returned.
-        list_iter.next(b, span)
+        list_iter
+            .next(b, span)
+            .map_or(BuildOutcome::None, BuildOutcome::ReturnValue)
     } else {
         reduce_operands(ehx, b, span, list_iter, int64_op, float_op)
     }
@@ -172,7 +196,7 @@ pub fn add(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     use crate::mir::ops::*;
 
     Ok(reduce_assoc_operands(
@@ -190,7 +214,7 @@ pub fn mul(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     use crate::mir::ops::*;
 
     Ok(reduce_assoc_operands(
@@ -208,13 +232,13 @@ pub fn sub(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     use crate::mir::ops::*;
 
     let list_iter = if let Some(list_iter) = arg_list_value.try_sized_list_iter() {
         list_iter
     } else {
-        return Ok(None);
+        return Ok(BuildOutcome::None);
     };
 
     if list_iter.len() == 1 {
@@ -247,13 +271,13 @@ pub fn div(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     use crate::mir::ops::*;
 
     let mut list_iter = if let Some(list_iter) = arg_list_value.try_sized_list_iter() {
         list_iter
     } else {
-        return Ok(None);
+        return Ok(BuildOutcome::None);
     };
 
     let initial_value = list_iter.next(b, span).unwrap();
@@ -289,7 +313,7 @@ pub fn div(
         acc
     };
 
-    Ok(Some(
+    Ok(BuildOutcome::ReturnValue(
         value::RegValue::new(result_reg, abitype::ABIType::Float).into(),
     ))
 }
@@ -301,7 +325,7 @@ fn int_division_op<CI, UI>(
     arg_list_value: &Value,
     checked_op_kind: CI,
     unchecked_op_kind: UI,
-) -> Result<Option<Value>>
+) -> Result<BuildOutcome>
 where
     CI: FnOnce(RegId, BinaryOp) -> OpKind,
     UI: FnOnce(RegId, BinaryOp) -> OpKind,
@@ -340,7 +364,7 @@ where
         b.push_reg(span, unchecked_op_kind, div_binary_op)
     };
 
-    Ok(Some(
+    Ok(BuildOutcome::ReturnValue(
         value::RegValue::new(result_reg, abitype::ABIType::Int).into(),
     ))
 }
@@ -350,7 +374,7 @@ pub fn quot(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     int_division_op(
         ehx,
         b,
@@ -366,7 +390,7 @@ pub fn rem(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     int_division_op(
         ehx,
         b,
@@ -382,13 +406,13 @@ pub fn sqrt(
     b: &mut Builder,
     span: Span,
     arg_list_value: &Value,
-) -> Result<Option<Value>> {
+) -> Result<BuildOutcome> {
     let radicand_value = arg_list_value.unsized_list_iter().next_unchecked(b, span);
 
     let radicand_reg = value_to_reg(ehx, b, span, &radicand_value, &abitype::ABIType::Float);
     let result_reg = b.push_reg(span, OpKind::FloatSqrt, radicand_reg.into());
 
-    Ok(Some(
+    Ok(BuildOutcome::ReturnValue(
         value::RegValue::new(result_reg, abitype::ABIType::Float).into(),
     ))
 }
