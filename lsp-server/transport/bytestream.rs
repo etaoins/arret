@@ -45,7 +45,7 @@ pub fn create_connection(
     // Allow some concurrency with the session but 4 message is a bit excessive
     // This allows for backpressure on `stdin`/`stdout`
     let (send_outgoing, mut recv_outgoing) = mpsc::channel::<ServerMessage>(4);
-    let (mut send_incoming, recv_incoming) = mpsc::channel::<ClientMessage>(4);
+    let (send_incoming, recv_incoming) = mpsc::channel::<ClientMessage>(4);
 
     // Write all our responses out sequentially
     tokio::spawn(async move {

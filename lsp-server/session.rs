@@ -65,7 +65,7 @@ pub fn create_initialize_response() -> lsp_types::InitializeResult {
 pub async fn run(connection: Connection) -> Result<(), ()> {
     let Connection {
         mut incoming,
-        mut outgoing,
+        outgoing,
     } = connection;
 
     /// Receives an incoming message or returns `Err` if the receive channel is closed
@@ -222,7 +222,7 @@ mod test {
     async fn test_clean_lifecycle() {
         let TestSession {
             mut outgoing,
-            mut incoming,
+            incoming,
             exit_future,
         } = run_test_session();
 

@@ -62,14 +62,15 @@ struct DocumentTask {
 
 impl DocumentTask {
     pub fn new(
-        mut outgoing: mpsc::Sender<ServerMessage>,
+        outgoing: mpsc::Sender<ServerMessage>,
         url: lsp_types::Url,
-        document: Arc<Document>,
+        initial_document: Arc<Document>,
     ) -> DocumentTask {
-        let (send_change, mut receive_change) = watch::channel(document);
+        let (send_change, mut receive_change) = watch::channel(initial_document);
 
         let join_handle = tokio::spawn(async move {
-            while let Some(document) = receive_change.recv().await {
+            loop {
+                let document = receive_change.borrow().clone();
                 let diagnostics = syntax_diagnostics_for_document(&url, &document);
 
                 if outgoing
@@ -88,6 +89,10 @@ impl DocumentTask {
                 {
                     break;
                 }
+
+                if receive_change.changed().await.is_err() {
+                    break;
+                }
             }
         });
 
@@ -99,7 +104,7 @@ impl DocumentTask {
 
     fn did_change(&self, document: Arc<Document>) {
         self.send_change
-            .broadcast(document)
+            .send(document)
             .expect("Could not send change to document syntax task");
     }
 

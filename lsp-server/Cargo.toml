@@ -18,10 +18,8 @@ serde_json = "1.0"
 [dependencies.tokio]
 version = "0.3"
 features = [
-  "rt-core",
-  "rt-threaded",
-  "rt-util",
-  "io-driver",
+  "rt",
+  "rt-multi-thread",
   "io-util",
   "io-std",
   "macros",
