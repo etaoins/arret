@@ -1,4 +1,5 @@
 (import [stdlib base])
+(import [stdlib test])
 
 (defn main! () ->! ()
-  (panic "This should purely panic"))
+  (panic "Pure " \p \a (black-box \n) (black-box \i) \c (black-box \!)))
