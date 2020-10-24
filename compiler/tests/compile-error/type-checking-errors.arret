@@ -113,4 +113,8 @@
 (def [_ (U RecordOne RecordTwo)] (record3))
                                  ;^^^^^^^ ERROR mismatched types
 
+; `(not)` should only take a `Bool`
+(def _ (not 5))
+           ;^ ERROR mismatched types
+
 (defn main! ())
