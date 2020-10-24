@@ -835,7 +835,7 @@ fn print_branch(
                     cond_op.reg_phi.as_ref().map(|rp| rp.true_result_reg),
                 )?;
 
-                if !cond_op.false_ops.is_empty() {
+                if !(cond_op.false_ops.is_empty() && cond_op.reg_phi.is_none()) {
                     for _ in 0..ident_level {
                         write!(w, "  ")?;
                     }
