@@ -20,15 +20,18 @@
 (defn test-write-to-str! () ->! ()
   (assert-eq! "" (print-str))
   (assert-eq! "" (write-str))
-  
+
   (assert-eq! "hello" (print-str 'hello))
   (assert-eq! "hello" (write-str 'hello))
 
   (assert-eq! "Hello, world!" (print-str "Hello, world!"))
   (assert-eq! "\"Hello, world!\"" (write-str "Hello, world!"))
-  
+
   (assert-eq! " " (print-str \space))
-  (assert-eq! "\\space" (write-str \space)))
+  (assert-eq! "\\space" (write-str \space))
+
+  (assert-eq! "123456" (print-str 1 2 (black-box! 3) (black-box! 4) 5 (black-box! 6)))
+  (assert-eq! "1 2 3 4 5 6" (write-str 1 2 (black-box! 3) (black-box! 4) 5 (black-box! 6))))
 
 (defn main! () ->! ()
   (test-write-to-stdout!)
