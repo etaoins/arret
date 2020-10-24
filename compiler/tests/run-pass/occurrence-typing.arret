@@ -30,6 +30,22 @@
     (ann input true)
     (ann input false)))
 
+(defn bool-equality-with-true ([input Num])
+  (if (= true (int? input))
+    (ann input Int)
+    (ann input Float))
+  (if (= (int? input) true)
+    (ann input Int)
+    (ann input Float)))
+
+(defn bool-equality-with-false ([input Num])
+  (if (= false (int? input))
+    (ann input Float)
+    (ann input Int))
+  (if (= (int? input) false)
+    (ann input Float)
+    (ann input Int)))
+
 (defn same-var-and-typing ([lst (U (List & Any) false)]) -> (U Any false)
   (if (and (list? lst) (not (nil? lst)))
     (first lst)

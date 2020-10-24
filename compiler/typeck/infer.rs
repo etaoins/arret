@@ -60,6 +60,17 @@ impl VarTypeCond {
     fn with_when(self, when: NodeBool) -> VarTypeCond {
         VarTypeCond { when, ..self }
     }
+
+    fn into_inverted(self) -> VarTypeCond {
+        VarTypeCond {
+            when: if self.when == NodeBool::True {
+                NodeBool::False
+            } else {
+                NodeBool::True
+            },
+            ..self
+        }
+    }
 }
 
 new_indexing_id_type!(FreeTyId, u32);
@@ -1392,12 +1403,26 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         let left_node = self.visit_expr(pv, &ResultUse::InnerExpr(&Ty::Any.into()), left_expr)?;
         let left_ty = left_node.result_ty();
-        let left_is_literal = is_literal(left_ty);
 
         let right_node = self.visit_expr(pv, &ResultUse::InnerExpr(&Ty::Any.into()), right_expr)?;
         let right_ty = right_node.result_ty();
-        let right_is_literal = is_literal(right_ty);
 
+        // Optimise away comparisons between booleans and literal true
+        // This allows their type conditions to flow through
+        if try_to_bool(&left_ty) == Some(true)
+            && ty::is_a::ty_ref_is_a(&right_ty, &ty::Ty::Bool.into())
+        {
+            return Ok(right_node);
+        }
+
+        if try_to_bool(&right_ty) == Some(true)
+            && ty::is_a::ty_ref_is_a(&left_ty, &ty::Ty::Bool.into())
+        {
+            return Ok(left_node);
+        }
+
+        let left_is_literal = is_literal(left_ty);
+        let right_is_literal = is_literal(right_ty);
         let is_divergent = left_node.is_divergent() || right_node.is_divergent();
 
         if left_is_literal && right_is_literal && left_ty == right_ty {
@@ -1478,6 +1503,27 @@ impl<'types> RecursiveDefsCtx<'types> {
                     override_type: subtracted_type,
                 });
             }
+        }
+
+        // Invert type conditions for comparisons between a boolean and non-true value
+        if ty::is_a::ty_ref_is_a(&right_ty, &ty::Ty::Bool.into())
+            && ty::intersect::intersect_ty_refs(&left_ty, &ty::Ty::LitBool(true).into()).is_err()
+        {
+            type_conds.extend(
+                right_node
+                    .type_conds
+                    .into_iter()
+                    .map(VarTypeCond::into_inverted),
+            );
+        } else if ty::is_a::ty_ref_is_a(&left_ty, &ty::Ty::Bool.into())
+            && ty::intersect::intersect_ty_refs(&right_ty, &ty::Ty::LitBool(true).into()).is_err()
+        {
+            type_conds.extend(
+                left_node
+                    .type_conds
+                    .into_iter()
+                    .map(VarTypeCond::into_inverted),
+            );
         }
 
         let result_ty = if is_divergent {
