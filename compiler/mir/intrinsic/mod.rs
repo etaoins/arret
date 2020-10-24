@@ -4,6 +4,8 @@ mod math;
 mod num_utils;
 mod number;
 mod panics;
+mod partial_print;
+mod print;
 mod testing;
 mod vector;
 
@@ -90,6 +92,10 @@ define_build_intrinsics! {
     // optimised away.
     "panic" => panics::panics,
     "panic!" => panics::panics,
+
+    "print!" => print::print,
+    "println!" => print::print,
+    "print-str" => print::print,
 
     "vector-length" => vector::vector_length,
     "vector-ref" => vector::vector_ref,
