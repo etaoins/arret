@@ -1161,6 +1161,7 @@ impl EvalHirCtx {
         use arret_runtime::boxed::TypeTag;
 
         use crate::mir::equality::values_statically_equal;
+        use crate::mir::ops::{BinaryOp, OpKind};
         use crate::mir::value::build_reg::value_to_reg;
         use crate::mir::value::plan_phi::*;
         use crate::mir::value::types::{possible_type_tags_for_value, type_hint_for_value};
@@ -1188,6 +1189,23 @@ impl EvalHirCtx {
                     // Our output value is our test
                     // Use the unboxed value because LLVM has trouble reasoning about our boxed bools
                     let reg_value = value::RegValue::new(test_reg, abitype::ABIType::Bool);
+                    output_value = reg_value.into();
+                    reg_phi = None;
+                } else if possible_true_type_tags == TypeTag::False.into()
+                    && possible_false_type_tags == TypeTag::True.into()
+                {
+                    // Our output value is the negation of our test
+                    let const_false_reg = b.push_reg(span, OpKind::ConstBool, false);
+                    let negated_test_reg = b.push_reg(
+                        span,
+                        OpKind::BoolEqual,
+                        BinaryOp {
+                            lhs_reg: test_reg.into(),
+                            rhs_reg: const_false_reg.into(),
+                        },
+                    );
+
+                    let reg_value = value::RegValue::new(negated_test_reg, abitype::ABIType::Bool);
                     output_value = reg_value.into();
                     reg_phi = None;
                 } else {
@@ -1243,15 +1261,21 @@ impl EvalHirCtx {
             }
         };
 
-        b.push(
-            span,
-            ops::OpKind::Cond(ops::CondOp {
-                reg_phi,
-                test_reg: test_reg.into(),
-                true_ops: built_true.b.into_ops(),
-                false_ops: built_false.b.into_ops(),
-            }),
-        );
+        let true_ops = built_true.b.into_ops();
+        let false_ops = built_false.b.into_ops();
+
+        // Avoid adding an empty `Cond` we'd have to optimise away later
+        if reg_phi.is_some() || !true_ops.is_empty() || !false_ops.is_empty() {
+            b.push(
+                span,
+                ops::OpKind::Cond(ops::CondOp {
+                    reg_phi,
+                    test_reg: test_reg.into(),
+                    true_ops,
+                    false_ops,
+                }),
+            );
+        }
 
         Ok(output_value)
     }
