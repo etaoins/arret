@@ -1663,6 +1663,10 @@ impl EvalHirCtx {
         )
     }
 
+    pub fn jit_boxed_to_fun_value(&self, boxed_thunk: Gc<boxed::FunThunk>) -> Option<&Value> {
+        self.thunk_fun_values.get(&boxed_thunk.as_ptr())
+    }
+
     pub fn visit_module_defs<'a>(
         &mut self,
         module_id: ModuleId,

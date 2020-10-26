@@ -18,7 +18,7 @@ enum RestLen {
 }
 
 fn const_to_reg(
-    ehx: &EvalHirCtx,
+    ehx: &mut EvalHirCtx,
     b: &mut Builder,
     span: Span,
     any_ref: Gc<boxed::Any>,
@@ -142,8 +142,10 @@ fn const_to_reg(
                 .record_struct
                 .clone();
 
-            let field_regs = record_ref
-                .field_values(ehx.as_heap())
+            let field_values: Vec<_> = record_ref.field_values(ehx.as_heap()).collect();
+
+            let field_regs = field_values
+                .into_iter()
                 .zip(record_struct.field_abi_types.iter())
                 .map(|(field_value, abi_type)| {
                     let built_reg =
@@ -235,6 +237,14 @@ fn const_to_reg(
                 from_reg,
                 to_abi_type.clone(),
             )
+        }
+        (boxed::AnySubtype::FunThunk(fun_thunk_ref), abi_type) => {
+            let fun_value = ehx
+                .jit_boxed_to_fun_value(unsafe { Gc::new(fun_thunk_ref as *const _) })
+                .expect("attempt to convert unknown fun thunk to reg")
+                .clone();
+
+            value_to_reg(ehx, b, span, &fun_value, abi_type)
         }
         (subtype, abi_type) => unimplemented!(
             "Unimplemented const {:?} to reg {:?} conversion",
@@ -381,7 +391,7 @@ fn record_to_reg(
 }
 
 fn record_field_value_to_const_reg(
-    ehx: &EvalHirCtx,
+    ehx: &mut EvalHirCtx,
     b: &mut Builder,
     span: Span,
     field_value: &boxed::FieldValue,

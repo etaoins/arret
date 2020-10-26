@@ -31,7 +31,10 @@
   (assert-eq! "\\space" (write-str \space))
 
   (assert-eq! "123456" (print-str 1 2 (black-box! 3) (black-box! 4) 5 (black-box! 6)))
-  (assert-eq! "1 2 3 4 5 6" (write-str 1 2 (black-box! 3) (black-box! 4) 5 (black-box! 6))))
+  (assert-eq! "1 2 3 4 5 6" (write-str 1 2 (black-box! 3) (black-box! 4) 5 (black-box! 6)))
+
+  (assert-eq! "#fn#fn#fn" (print-str + (black-box +) (black-box! +)))
+  (assert-eq! "#fn #fn #fn" (write-str + (black-box +) (black-box! +))))
 
 (defn main! () ->! ()
   (test-write-to-stdout!)
