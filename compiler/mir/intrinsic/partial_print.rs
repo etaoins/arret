@@ -5,6 +5,7 @@ use arret_runtime::boxed;
 use crate::mir::builder::Builder;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::value::to_const::value_to_const;
+use crate::mir::value::types::possible_type_tags_for_value;
 use crate::mir::value::Value;
 
 pub enum PartialPrint {
@@ -47,6 +48,14 @@ pub fn partial_pretty_print(
     let mut simplified_args: Vec<Value> = vec![];
 
     while let Some(value) = list_iter.next(b, span) {
+        // Check early for function values
+        // This is to avoid doing a full JIT just to print `#fn` and to allow
+        // printing non-constant function values.
+        if possible_type_tags_for_value(&value) == boxed::TypeTag::FunThunk.into() {
+            literal_acc.push_str("#fn");
+            continue;
+        }
+
         match value_to_const(ehx, &value) {
             Some(boxed) => {
                 let mut output: Vec<u8> = vec![];
