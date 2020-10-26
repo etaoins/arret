@@ -95,7 +95,7 @@ define_build_intrinsics! {
 
     "print!" => print::print,
     "println!" => print::print,
-    "print-str" => print::print,
+    "print-str" => print::print_str,
 
     "vector-length" => vector::vector_length,
     "vector-ref" => vector::vector_ref,
