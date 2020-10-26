@@ -281,8 +281,7 @@ fn result_for_single_test(
         } = arret_compiler::program_to_evaluable(ccx, &source_file)?;
 
         // Try evaluating if we're not supposed to panic
-        if let TestType::Run(RunType::Error(_)) = test_type {
-        } else {
+        if !matches!(test_type, TestType::Run(RunType::Error(_))) {
             ehx.eval_main_fun(main_export_id)?;
         }
 
