@@ -194,6 +194,7 @@ fn load_boxed_inline_vector_member(
         );
 
         tcx.add_invariant_load_metadata(llvm_value);
+        tcx.add_boxed_load_metadata(llvm_value);
         llvm_value
     }
 }
@@ -271,6 +272,7 @@ fn load_boxed_external_vector_member(
         );
 
         tcx.add_invariant_load_metadata(llvm_value);
+        tcx.add_boxed_load_metadata(llvm_value);
         llvm_value
     }
 }
