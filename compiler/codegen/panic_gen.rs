@@ -1,5 +1,3 @@
-use std::ffi;
-
 use llvm_sys::core::*;
 use llvm_sys::LLVMAttributeFunctionIndex;
 
@@ -52,12 +50,10 @@ pub(crate) fn gen_panic(
         let llvm_message_string =
             LLVMConstStringInContext(tcx.llx, message.as_ptr() as *mut _, message.len() as u32, 1);
 
-        let message_global_name = ffi::CString::new("panic_message").unwrap();
-
         let llvm_message_global = LLVMAddGlobal(
             mcx.module,
             LLVMTypeOf(llvm_message_string),
-            message_global_name.as_ptr() as *const _,
+            b"panic_message\0".as_ptr() as *const _,
         );
         LLVMSetInitializer(llvm_message_global, llvm_message_string);
         annotate_private_global(llvm_message_global);

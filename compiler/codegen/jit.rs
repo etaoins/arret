@@ -109,10 +109,8 @@ impl JITCtx {
         let module_name = fun
             .source_name
             .as_ref()
-            .map(|source_name| format!("JIT Module #{} for `{}`", module_counter, source_name))
-            .unwrap_or_else(|| format!("Anonymous JIT Module #{}", module_counter));
-
-        let module_name_cstring = ffi::CString::new(module_name.as_bytes()).unwrap();
+            .map(|source_name| format!("JIT Module #{} for `{}`\0", module_counter, source_name))
+            .unwrap_or_else(|| format!("Anonymous JIT Module #{}\0", module_counter));
 
         // Create the module
         let analysed_mod = AnalysedMod::new(private_funs, fun);
@@ -125,7 +123,7 @@ impl JITCtx {
                 ..
             } = gen_mod(
                 tcx,
-                module_name_cstring.as_ref(),
+                module_name.as_bytes(),
                 &analysed_mod,
                 Some(interner),
                 self.record_struct_class_ids.clone(),

@@ -115,7 +115,7 @@ fn program_to_module(
             llvm_classmap_classes,
         } = gen_mod(
             tcx,
-            CString::new("program").unwrap().as_ref(),
+            b"program\0",
             &analysed_mod,
             None,
             HashMap::new(),

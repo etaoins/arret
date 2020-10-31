@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::ffi;
 
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
@@ -50,7 +49,7 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
     /// possible.
     fn new(
         tcx: &mut TargetCtx,
-        name: &ffi::CStr,
+        name: &[u8],
         analysed_mod: &'am AnalysedMod<'am>,
         jit_interner: Option<&'interner mut intern::Interner>,
         jit_record_struct_class_ids: HashMap<ops::RecordStructId, RecordClassId>,
@@ -322,7 +321,7 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
 
 pub fn gen_mod<'am, 'sl, 'interner>(
     tcx: &mut TargetCtx,
-    name: &ffi::CStr,
+    name: &[u8],
     analysed_mod: &'am AnalysedMod<'am>,
     jit_interner: Option<&'interner mut intern::Interner>,
     jit_record_struct_class_ids: HashMap<ops::RecordStructId, RecordClassId>,
