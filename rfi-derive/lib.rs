@@ -25,9 +25,9 @@ fn arg_is_task(arg: &syn::PatType) -> bool {
 /// to express concepts in Arret that don't exist in Rust. These include rest arguments and function
 /// purity.
 ///
-/// The annotated Rust function must take a `arret_runtime::task::Task` as its first parameter. An
-/// attempt will be made to encode the types of the remaining parameters but only certain primitive
-/// types and `arret_runtime::boxed` values are allowed.
+/// The annotated Rust function can optionally take a `arret_runtime::task::Task` as its first
+/// parameter. An attempt will be made to encode the types of the remaining parameters but only
+/// certain primitive types and `arret_runtime::boxed` values are allowed.
 #[proc_macro_attribute]
 pub fn rust_fun(
     attrs: proc_macro::TokenStream,
