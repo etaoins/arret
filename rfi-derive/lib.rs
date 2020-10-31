@@ -48,9 +48,9 @@ pub fn rust_fun(
     let vis = input_fn.vis.clone();
 
     // Rename the function so the descriptor can take its original name
-    let descriptor_ident = input_sig.ident.clone();
     let entry_point_name = format!("arret_{}_entry_point", input_sig.ident);
-    input_sig.ident = proc_macro2::Ident::new(&entry_point_name, input_sig.ident.span());
+    let entry_point_ident = proc_macro2::Ident::new(&entry_point_name, input_sig.ident.span());
+    let descriptor_ident = std::mem::replace(&mut input_sig.ident, entry_point_ident);
 
     // RFI assumes a C ABI
     input_sig.abi = Some(syn::Abi {
