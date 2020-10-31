@@ -1,4 +1,4 @@
-use std::{iter, ops};
+use std::{fmt, iter, ops};
 
 use crate::ty;
 use crate::ty::Ty;
@@ -8,7 +8,7 @@ use arret_runtime::boxed::{TypeTag, ALL_TYPE_TAGS};
 const INNER_BITS: u8 = 32;
 type Inner = u32;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub struct TypeTagSet(Inner);
 
 /// Efficient representation of a set of TypeTag
@@ -64,6 +64,14 @@ impl TypeTagSet {
             .iter()
             .cloned()
             .filter(move |type_tag| self.contains(*type_tag))
+    }
+}
+
+impl fmt::Debug for TypeTagSet {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        formatter.write_str("TypeTagSet(")?;
+        formatter.debug_list().entries(self.into_iter()).finish()?;
+        formatter.write_str(")")
     }
 }
 
