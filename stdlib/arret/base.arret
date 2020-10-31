@@ -82,7 +82,7 @@
 
 (export ann)
 (defmacro ann (macro-rules
- [(val Type) (let [[_ Type] val] val)]
+ [(val Type) (let [[typed-val Type] val] typed-val)]
 ))
 
 (export first)
