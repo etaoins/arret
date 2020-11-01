@@ -1581,10 +1581,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         let revealed_fun_type = fun_node.result_ty().clone();
 
         match revealed_fun_type.resolve_to_ty() {
-            Ty::TopFun(_) => Err(Error::new(
-                span,
-                ErrorKind::TopFunApply(revealed_fun_type.clone()),
-            )),
+            Ty::TopFun(_) => Err(Error::new(span, ErrorKind::TopFunApply(revealed_fun_type))),
             Ty::TyPred(test_ty) => {
                 let wanted_arity = WantedArity::new(1, false);
 
@@ -1629,7 +1626,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                     rest_arg_expr,
                 };
 
-                self.visit_fun_app(pv, result_use, span, &fun_type.clone(), fun_app)
+                self.visit_fun_app(pv, result_use, span, fun_type, fun_app)
             }
             _ => panic!("Unexpected type"),
         }
