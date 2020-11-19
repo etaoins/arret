@@ -123,8 +123,8 @@ fn take_severity(marker_string: &str) -> (Severity, &str) {
         (" HELP ", Severity::Help),
         (" NOTE ", Severity::Note),
     ] {
-        if marker_string.starts_with(prefix) {
-            return (*severity, &marker_string[prefix.len()..]);
+        if let Some(message_prefix) = marker_string.strip_prefix(prefix) {
+            return (*severity, message_prefix);
         }
     }
 
@@ -190,11 +190,11 @@ fn extract_expected_diagnostics(
 
             // Take from after the ;^^ to the end of the line
             let marker_string = &source[index + span_length + 1..*end_of_line_index];
-            let (severity, marker_string) = take_severity(marker_string);
+            let (severity, message_prefix) = take_severity(marker_string);
 
             ExpectedDiagnostic {
                 expected_severity: severity,
-                message_prefix: marker_string.into(),
+                message_prefix: message_prefix.into(),
                 span: ExpectedSpan::Exact(source_file.file_id(), span_start..span_end),
             }
         }))

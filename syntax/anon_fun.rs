@@ -11,8 +11,8 @@ struct FoundArity {
 fn visit_arg_literals(found_arity: &mut FoundArity, datum: Datum) -> Result<Datum> {
     match datum {
         Datum::Sym(span, name) => {
-            if name.starts_with('%') {
-                match &name[1..] {
+            if let Some(arg_literal) = name.strip_prefix('%') {
+                match arg_literal {
                     "" => {
                         // We need to rewrite this to %1 in case it's also referred to by that name
                         found_arity.fixed_args = std::cmp::max(found_arity.fixed_args, 1);
