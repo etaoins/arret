@@ -104,6 +104,8 @@ impl rustyline::completion::Completer for ArretHelper {
 }
 
 impl rustyline::hint::Hinter for ArretHelper {
+    type Hint = String;
+
     fn hint(&self, line: &str, pos: usize, _: &rustyline::Context<'_>) -> Option<String> {
         use arret_syntax::error::WithinContext;
         use arret_syntax::parser::is_identifier_char;
