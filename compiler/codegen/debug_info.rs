@@ -131,7 +131,7 @@ impl<'sl> DebugInfoBuilder<'sl> {
             return;
         };
 
-        let location = if let Some(location) = self
+        let location = if let Ok(location) = self
             .source_loader
             .files()
             .location(file_id, span.start() as usize)

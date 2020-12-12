@@ -3,6 +3,8 @@ use std::ops::Range;
 use std::sync::{Arc, RwLock, RwLockReadGuard};
 use std::{fmt, fs, io, path};
 
+use codespan_reporting::files::Error as CodespanError;
+
 use arret_syntax::datum::Datum;
 use arret_syntax::span::{FileId, Span};
 
@@ -181,25 +183,39 @@ impl<'a> ReportableFiles<'a> {
     }
 }
 
+type CodespanResult<T> = Result<T, CodespanError>;
+
 impl<'a> codespan_reporting::files::Files<'a> for ReportableFiles<'a> {
     type FileId = FileId;
     type Source = &'a str;
     type Name = String;
 
-    fn name(&self, file_id: FileId) -> Option<String> {
-        self.get_file(file_id).map(|f| f.name())
-    }
-
-    fn source(&self, file_id: FileId) -> Option<&str> {
-        self.get_file(file_id).map(|f| f.source())
-    }
-
-    fn line_index(&self, file_id: FileId, offset: usize) -> Option<usize> {
-        self.get_file(file_id).map(|f| f.line_index(offset))
-    }
-
-    fn line_range(&self, file_id: FileId, line_index: usize) -> Option<Range<usize>> {
+    fn name(&self, file_id: FileId) -> CodespanResult<String> {
         self.get_file(file_id)
-            .and_then(|f| f.line_range(line_index))
+            .ok_or(CodespanError::FileMissing)
+            .map(|f| f.name())
+    }
+
+    fn source(&self, file_id: FileId) -> CodespanResult<&str> {
+        self.get_file(file_id)
+            .ok_or(CodespanError::FileMissing)
+            .map(|f| f.source())
+    }
+
+    fn line_index(&self, file_id: FileId, offset: usize) -> CodespanResult<usize> {
+        self.get_file(file_id)
+            .ok_or(CodespanError::FileMissing)
+            .map(|f| f.line_index(offset))
+    }
+
+    fn line_range(&self, file_id: FileId, line_index: usize) -> CodespanResult<Range<usize>> {
+        self.get_file(file_id)
+            .ok_or(CodespanError::FileMissing)
+            .and_then(|f| {
+                f.line_range(line_index).ok_or(CodespanError::LineTooLarge {
+                    given: line_index,
+                    max: f.line_offsets.len(),
+                })
+            })
     }
 }
