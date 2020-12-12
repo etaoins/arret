@@ -78,7 +78,7 @@ impl DocumentTask {
                         Notification::new_lsp::<lsp_types::notification::PublishDiagnostics>(
                             lsp_types::PublishDiagnosticsParams {
                                 uri: url.clone(),
-                                version: document.version(),
+                                version: Some(document.version()),
                                 diagnostics,
                             },
                         )
@@ -168,7 +168,7 @@ mod test {
     #[test]
     fn correct_document_diagnostics() {
         let url = lsp_types::Url::parse("file:///foo/bar").unwrap();
-        let doc = Document::new(None, "('hello-world)".to_owned());
+        let doc = Document::new(1, "('hello-world)".to_owned());
 
         let diags = syntax_diagnostics_for_document(&url, &doc);
 
@@ -178,7 +178,7 @@ mod test {
     #[test]
     fn missing_delimiter_diagnostics() {
         let url = lsp_types::Url::parse("file:///foo/bar").unwrap();
-        let doc = Document::new(None, "('hello-world".to_owned());
+        let doc = Document::new(1, "('hello-world".to_owned());
 
         let diags = syntax_diagnostics_for_document(&url, &doc);
 
@@ -240,7 +240,7 @@ mod test {
     #[test]
     fn unsupported_character_diagnostics() {
         let url = lsp_types::Url::parse("file:///foo/bar").unwrap();
-        let doc = Document::new(None, "\\newline \\madeup".to_owned());
+        let doc = Document::new(1, "\\newline \\madeup".to_owned());
 
         let diags = syntax_diagnostics_for_document(&url, &doc);
 

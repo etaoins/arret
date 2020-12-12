@@ -13,10 +13,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
     fn handle(state: &mut State, params: lsp_types::DidOpenTextDocumentParams) {
         let text_document = params.text_document;
 
-        let document = Arc::new(Document::new(
-            Some(text_document.version),
-            text_document.text,
-        ));
+        let document = Arc::new(Document::new(text_document.version, text_document.text));
 
         state.syntax_watcher.did_open(&text_document.uri, &document);
 

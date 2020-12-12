@@ -2,7 +2,7 @@ use arret_syntax::span::Span;
 
 #[derive(Debug)]
 pub struct Document {
-    version: Option<i64>,
+    version: i32,
     text: String,
     line_offsets: Vec<usize>,
 }
@@ -14,7 +14,7 @@ fn line_offsets_for_str(source: &str) -> Vec<usize> {
 }
 
 impl Document {
-    pub fn new(version: Option<i64>, text: String) -> Document {
+    pub fn new(version: i32, text: String) -> Document {
         Document {
             version,
             line_offsets: line_offsets_for_str(&text),
@@ -25,7 +25,7 @@ impl Document {
     /// Returns a new instance of the document with specified range replaced
     pub fn with_range_edit(
         &self,
-        new_version: Option<i64>,
+        new_version: i32,
         range: lsp_types::Range,
         new_range_text: &str,
     ) -> Result<Document, ()> {
@@ -71,7 +71,7 @@ impl Document {
     }
 
     /// Returns the document version
-    pub fn version(&self) -> Option<i64> {
+    pub fn version(&self) -> i32 {
         self.version
     }
 
@@ -105,8 +105,8 @@ impl Document {
             .sum();
 
         lsp_types::Position {
-            line: line as u64,
-            character: character as u64,
+            line: line as u32,
+            character: character as u32,
         }
     }
 
@@ -144,7 +144,7 @@ mod test {
 
     #[test]
     fn test_positions() {
-        let doc = Document::new(None, "Hello 💣\nNext line\n".into());
+        let doc = Document::new(1, "Hello 💣\nNext line\n".into());
 
         assert_eq!(
             lsp_types::Position {
@@ -189,9 +189,9 @@ mod test {
 
     #[test]
     fn test_append_to_empty() {
-        let doc = Document::new(None, "".into())
+        let doc = Document::new(1, "".into())
             .with_range_edit(
-                None,
+                2,
                 lsp_types::Range {
                     start: lsp_types::Position {
                         line: 0,
@@ -212,9 +212,9 @@ mod test {
 
     #[test]
     fn test_append_to_line() {
-        let doc = Document::new(None, "Hello".into())
+        let doc = Document::new(1, "Hello".into())
             .with_range_edit(
-                None,
+                2,
                 lsp_types::Range {
                     start: lsp_types::Position {
                         line: 0,
@@ -235,9 +235,9 @@ mod test {
 
     #[test]
     fn test_erase_all() {
-        let doc = Document::new(None, "abc-123".into())
+        let doc = Document::new(1, "abc-123".into())
             .with_range_edit(
-                None,
+                2,
                 lsp_types::Range {
                     start: lsp_types::Position {
                         line: 0,
@@ -258,9 +258,9 @@ mod test {
 
     #[test]
     fn test_replace_line() {
-        let doc = Document::new(None, "hello\nnebraska\n".into())
+        let doc = Document::new(1, "hello\nnebraska\n".into())
             .with_range_edit(
-                None,
+                2,
                 lsp_types::Range {
                     start: lsp_types::Position {
                         line: 1,
@@ -281,9 +281,9 @@ mod test {
 
     #[test]
     fn test_insert_line() {
-        let doc = Document::new(None, "hello\nworld\n".into())
+        let doc = Document::new(1, "hello\nworld\n".into())
             .with_range_edit(
-                None,
+                2,
                 lsp_types::Range {
                     start: lsp_types::Position {
                         line: 1,
@@ -304,9 +304,9 @@ mod test {
 
     #[test]
     fn test_delete_line() {
-        let doc = Document::new(None, "hello\nentire\nworld\n".into())
+        let doc = Document::new(1, "hello\nentire\nworld\n".into())
             .with_range_edit(
-                None,
+                2,
                 lsp_types::Range {
                     start: lsp_types::Position {
                         line: 1,
@@ -327,9 +327,9 @@ mod test {
 
     #[test]
     fn test_delete_utf16() {
-        let doc = Document::new(None, "Defuse 💣 me".into())
+        let doc = Document::new(1, "Defuse 💣 me".into())
             .with_range_edit(
-                None,
+                2,
                 lsp_types::Range {
                     start: lsp_types::Position {
                         line: 0,
