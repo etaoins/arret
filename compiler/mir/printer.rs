@@ -17,11 +17,11 @@ fn span_to_human_location(source_loader: Option<&SourceLoader>, span: Span) -> O
     let file_id = span.file_id()?;
 
     let files = source_loader.files();
-    let location = files.location(file_id, span.start() as usize)?;
+    let location = files.location(file_id, span.start() as usize).ok()?;
 
     Some(format!(
         "{}:{}:{}",
-        files.name(file_id)?,
+        files.name(file_id).ok()?,
         location.line_number,
         location.column_number
     ))

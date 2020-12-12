@@ -15,7 +15,7 @@ libloading = "0.6"
 arret-syntax = { path = "../syntax" }
 arret-runtime = { path = "../runtime" }
 arret-runtime-syntax = { path = "../runtime-syntax" }
-codespan-reporting = "0.9"
+codespan-reporting = "0.11"
 crossbeam-channel = "0.5"
 termcolor = "1"
 

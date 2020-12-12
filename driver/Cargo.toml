@@ -14,6 +14,6 @@ clap = "2"
 rustyline = "7"
 directories = "3"
 ansi_term = "0.12"
-codespan-reporting = "0.9"
+codespan-reporting = "0.11"
 arret-syntax = { path = "../syntax" }
 arret-compiler = { path = "../compiler" }
