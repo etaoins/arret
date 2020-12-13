@@ -1,9 +1,9 @@
-# Visual Studio Code currently uses Node 12.4
+# Visual Studio Code currently uses Node 12.14
 FROM node:12-buster
 
 RUN \
   apt-get update && \
-  apt-get -y install --no-install-recommends xvfb libnss3 libgtk-3-0 libxtst6 libxss1 libasound2 libsecret-1-0 && \
+  apt-get -y install --no-install-recommends xvfb libnss3 libgtk-3-0 libxtst6 libxss1 libasound2 libsecret-1-0 libgbm1 && \
   apt-get clean
 
 WORKDIR /workdir/editors/code
