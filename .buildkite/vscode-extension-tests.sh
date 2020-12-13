@@ -7,3 +7,4 @@ export DISPLAY=':99.0'
 cd editors/code
 yarn test
 yarn lint
+yarn vscode:package
