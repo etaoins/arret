@@ -1,7 +1,7 @@
 //! Interned symbols
 //!
 //! This uses a fixed 8 byte representation for interned symbol. They are associated with a
-//! particular `Interner` instance which can return the original [`str`] name of the symbol.
+//! particular `Interner` instance which can return the original [`prim@str`] name of the symbol.
 //! Interned symbols from the same `Interner` can be compared directly without a reference to
 //! the `Interner` instance.
 //!
