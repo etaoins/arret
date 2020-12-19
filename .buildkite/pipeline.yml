@@ -13,20 +13,6 @@ docker-ghcr-login: &docker-ghcr-login
     password-env: CR_PAT
 
 steps:
-  - label: ':muscle: Test ARM64'
-    agents: { queue: arm64 }
-    command: ./.buildkite/build-and-test.sh
-    <<: *cached-ecr-build-env
-
-  - label: ':ubuntu: Test AMD64'
-    agents: { queue: amd64 }
-    command:
-      - ./.buildkite/build-and-test.sh
-
-      - "echo '--- :sleuth_or_spy: Checking release'"
-      - RUSTFLAGS="-Copt-level=0" cargo check --release
-    <<: *cached-ecr-build-env
-
   - label: ':fedora: Test LLVM Assert'
     branches: '!master'
     agents: { queue: amd64 }
@@ -39,6 +25,21 @@ steps:
       - seek-oss/docker-ecr-cache#v1.9.0:
           dockerfile: ./.buildkite/llvm-assert.Dockerfile
       - docker#v3.7.0
+
+  - label: ':muscle: Test ARM64'
+    agents: { queue: arm64 }
+    command:
+      - ./.buildkite/build-and-test.sh
+
+      - "echo '--- :sleuth_or_spy: Checking release'"
+      - RUSTFLAGS="-Copt-level=0" cargo check --release
+    <<: *cached-ecr-build-env
+
+  - label: ':ubuntu: Test AMD64'
+    agents: { queue: amd64 }
+    command:
+      - ./.buildkite/build-and-test.sh
+    <<: *cached-ecr-build-env
 
   - label: ':typescript: Test VS Code extension'
     agents: { queue: amd64 }
@@ -95,7 +96,7 @@ steps:
 
   - label: ':rust: Check (Rust Beta)'
     branches: 'master'
-    agents: { queue: amd64 }
+    agents: { queue: arm64 }
     command:
       - "echo '--- :rust: Installing Rust beta'"
       - rustup default beta
@@ -109,7 +110,7 @@ steps:
 
   - label: ':books: Update Rustdoc'
     branches: 'master'
-    agents: { queue: amd64 }
+    agents: { queue: arm64 }
     command:
       - "echo '--- :book: Building rustdoc'"
       - cargo doc --no-deps
