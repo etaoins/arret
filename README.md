@@ -41,7 +41,7 @@ Hello, world!
 1. A Unix-like host running on ARM64, x86-64 or x86-32.
    These are the platforms supporting lazy compilation with LLVM's ORC JIT.
 1. [LLVM](http://releases.llvm.org) 10 or 11
-1. [Rust](https://www.rust-lang.org/en-US/)
+1. [Rust](https://www.rust-lang.org)
 
 ### Building with rustup and Cargo
 
