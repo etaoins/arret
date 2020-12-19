@@ -15,7 +15,7 @@ docker-ghcr-login: &docker-ghcr-login
 steps:
   - label: ':fedora: Test LLVM Assert'
     branches: '!master'
-    agents: { queue: amd64 }
+    agents: { queue: arm64 }
     command:
       - "echo '--- :prettier: Checking rustfmt'"
       - cargo fmt -- --check

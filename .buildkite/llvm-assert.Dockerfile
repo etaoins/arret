@@ -3,7 +3,7 @@ ARG LLVM_ROOT=/opt/llvm-11
 
 ##
 
-FROM fedora:32 AS fedora-common
+FROM fedora:33 AS fedora-common
 
 RUN dnf install -y gcc-c++
 # `dnf clean all` happens in later stages
@@ -30,8 +30,11 @@ RUN cmake \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=${LLVM_ROOT} \
   -DLLVM_ENABLE_ASSERTIONS=ON \
-  -DLLVM_TARGETS_TO_BUILD=X86 \
+  -DLLVM_TARGETS_TO_BUILD=AArch64 \
   -DLLVM_ENABLE_WARNINGS=OFF \
+  # Disable a spammy ABI change warning on GCC 7 that `ENABLE_WARNINGS=OFF`
+  # doesn't suppress.
+  -DCMAKE_CXX_FLAGS=-Wno-psabi \
   -DLLVM_USE_LINKER=gold \
   ../llvm-${LLVM_VERSION}.src
 
