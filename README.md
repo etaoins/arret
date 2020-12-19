@@ -17,11 +17,11 @@ Documentation for the [`arret_runtime` crate](https://rustdoc.arret-lang.org/arr
 
 ### Docker REPL Image
 
-There is a public Docker image at [etaoins/arret:repl](https://cloud.docker.com/u/etaoins/repository/docker/etaoins/arret) that runs the Arret REPL.
+There is a public Docker image at `ghcr.io/etaoins/arret-repl` that runs the Arret REPL.
 Whenever `cargo run repl` appears in the documentation this command can be used instead:
 
 ```shell
-> docker run -ti etaoins/arret:repl
+> docker run -ti ghcr.io/etaoins/arret-repl
 ```
 
 It can also evaluate single file programs:
@@ -32,7 +32,7 @@ It can also evaluate single file programs:
 (defn main! ()
   (println! "Hello, world!"))
 
-> docker run -i etaoins/arret:repl eval - < hello-world.arret
+> docker run -i ghcr.io/etaoins/arret-repl eval - < hello-world.arret
 Hello, world!
 ```
 

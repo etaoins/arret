@@ -6,16 +6,11 @@ cached-ecr-build-env: &cached-ecr-build-env
           - Cargo.lock
     - docker#v3.7.0
 
-docker-hub-login: &docker-hub-login
+docker-ghcr-login: &docker-ghcr-login
   docker-login#v2.0.1:
+    server: ghcr.io
     username: etaoins
-    password-env: DOCKER_HUB_PASSWORD
-
-docker-github-login: &docker-github-login
-  docker-login#v2.0.1:
-    server: docker.pkg.github.com
-    username: etaoins
-    password-env: GITHUB_TOKEN
+    password-env: CR_PAT
 
 steps:
   - label: ':muscle: Test ARM64'
@@ -77,14 +72,11 @@ steps:
   - label: ':rocket: Push AMD64 REPL Image'
     branches: 'master'
     plugins:
-      - *docker-hub-login
-      - *docker-github-login
+      - *docker-ghcr-login
       - docker-compose#v3.7.0:
           push:
-            - repl:etaoins/arret:repl
-            - repl:etaoins/arret:repl-amd64
-            - repl:docker.pkg.github.com/etaoins/arret/repl
-            - repl:docker.pkg.github.com/etaoins/arret/repl-amd64
+            - repl:ghcr.io/etaoins/arret-repl
+            - repl:ghcr.io/etaoins/arret-repl-amd64
           env:
             - BUILDKITE_COMMIT
     concurrency_group: 'push-amd64-repl-image'
@@ -95,12 +87,10 @@ steps:
     agents:
       queue: graviton
     plugins:
-      - *docker-hub-login
-      - *docker-github-login
+      - *docker-ghcr-login
       - docker-compose#v3.7.0:
           push:
-            - repl:etaoins/arret:repl-arm64
-            - repl:docker.pkg.github.com/etaoins/arret/repl-arm64
+            - repl:ghcr.io/etaoins/arret-repl-arm64
           env:
             - BUILDKITE_COMMIT
     concurrency_group: 'push-arm64-repl-image'
