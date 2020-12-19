@@ -56,6 +56,42 @@ steps:
 
   - wait
 
+  - label: ':rocket: Push AMD64 REPL image'
+    key: 'push-amd64-repl-image'
+    branches: 'master'
+    plugins:
+      - *docker-ghcr-login
+      - docker-compose#v3.7.0:
+          push:
+            - repl:ghcr.io/etaoins/arret-repl-amd64
+          env:
+            - BUILDKITE_COMMIT
+
+  - label: ':mechanical_arm: Push ARM64 REPL image'
+    key: 'push-arm64-repl-image'
+    branches: 'master'
+    agents:
+      queue: graviton
+    plugins:
+      - *docker-ghcr-login
+      - docker-compose#v3.7.0:
+          push:
+            - repl:ghcr.io/etaoins/arret-repl-arm64
+          env:
+            - BUILDKITE_COMMIT
+
+  - label: ':docker: Update multiarch manifest'
+    branches: 'master'
+    agents:
+      queue: graviton
+    depends_on:
+      - 'push-amd64-repl-image'
+      - 'push-arm64-repl-image'
+    command:
+      - ./.buildkite/update-multiarch-manifest.sh
+    plugins:
+      - *docker-ghcr-login
+
   - label: ':rust: Check (Rust Beta)'
     branches: 'master'
     command:
@@ -68,33 +104,6 @@ steps:
       - "echo '--- :female-detective: Checking release'"
       - RUSTFLAGS="-Copt-level=0" cargo check --release
     <<: *cached-ecr-build-env
-
-  - label: ':rocket: Push AMD64 REPL Image'
-    branches: 'master'
-    plugins:
-      - *docker-ghcr-login
-      - docker-compose#v3.7.0:
-          push:
-            - repl:ghcr.io/etaoins/arret-repl
-            - repl:ghcr.io/etaoins/arret-repl-amd64
-          env:
-            - BUILDKITE_COMMIT
-    concurrency_group: 'push-amd64-repl-image'
-    concurrency: 1
-
-  - label: ':rocket: Push ARM64 REPL Image'
-    branches: 'master'
-    agents:
-      queue: graviton
-    plugins:
-      - *docker-ghcr-login
-      - docker-compose#v3.7.0:
-          push:
-            - repl:ghcr.io/etaoins/arret-repl-arm64
-          env:
-            - BUILDKITE_COMMIT
-    concurrency_group: 'push-arm64-repl-image'
-    concurrency: 1
 
   - label: ':books: Update Rustdoc'
     branches: 'master'
