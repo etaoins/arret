@@ -7,7 +7,7 @@ cached-ecr-build-env: &cached-ecr-build-env
     - docker#v3.7.0
 
 steps:
-  - label: ':muscle: Test ARM64'
+  - label: ':muscle: Test ARM64 Cortex'
     branches: '!master !renovate/npm-definitely-typed-deps !renovate/eslint-deps !renovate/vs-code-deps'
     command: ./.buildkite/build-and-test.sh
     plugins:
@@ -15,6 +15,13 @@ steps:
           run: build-env
     agents:
       queue: arm64
+
+  - label: ':muscle: Test ARM64 Graviton'
+    branches: '!renovate/npm-definitely-typed-deps !renovate/eslint-deps !renovate/vs-code-deps'
+    command: ./.buildkite/build-and-test.sh
+    agents:
+      queue: graviton
+    <<: *cached-ecr-build-env
 
   - label: ':ubuntu: Test x86-64'
     command:
