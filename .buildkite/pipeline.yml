@@ -14,12 +14,12 @@ docker-ghcr-login: &docker-ghcr-login
 
 steps:
   - label: ':muscle: Test ARM64'
+    agents: { queue: arm64 }
     command: ./.buildkite/build-and-test.sh
-    agents:
-      queue: graviton
     <<: *cached-ecr-build-env
 
   - label: ':ubuntu: Test AMD64'
+    agents: { queue: amd64 }
     command:
       - ./.buildkite/build-and-test.sh
 
@@ -29,6 +29,7 @@ steps:
 
   - label: ':fedora: Test LLVM Assert'
     branches: '!master'
+    agents: { queue: amd64 }
     command:
       - "echo '--- :prettier: Checking rustfmt'"
       - cargo fmt -- --check
@@ -40,6 +41,7 @@ steps:
       - docker#v3.7.0
 
   - label: ':typescript: Test VS Code extension'
+    agents: { queue: amd64 }
     command:
       - ./.buildkite/vscode-extension-tests.sh
     plugins:
@@ -59,6 +61,7 @@ steps:
   - label: ':rocket: Push AMD64 REPL image'
     key: 'push-amd64-repl-image'
     branches: 'master'
+    agents: { queue: amd64 }
     plugins:
       - *docker-ghcr-login
       - docker-compose#v3.7.0:
@@ -70,8 +73,7 @@ steps:
   - label: ':mechanical_arm: Push ARM64 REPL image'
     key: 'push-arm64-repl-image'
     branches: 'master'
-    agents:
-      queue: graviton
+    agents: { queue: arm64 }
     plugins:
       - *docker-ghcr-login
       - docker-compose#v3.7.0:
@@ -82,8 +84,7 @@ steps:
 
   - label: ':docker: Update multiarch manifest'
     branches: 'master'
-    agents:
-      queue: graviton
+    agents: { queue: arm64 }
     depends_on:
       - 'push-amd64-repl-image'
       - 'push-arm64-repl-image'
@@ -94,6 +95,7 @@ steps:
 
   - label: ':rust: Check (Rust Beta)'
     branches: 'master'
+    agents: { queue: amd64 }
     command:
       - "echo '--- :rust: Installing Rust beta'"
       - rustup default beta
@@ -107,6 +109,7 @@ steps:
 
   - label: ':books: Update Rustdoc'
     branches: 'master'
+    agents: { queue: amd64 }
     command:
       - "echo '--- :book: Building rustdoc'"
       - cargo doc --no-deps
