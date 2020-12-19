@@ -13,19 +13,6 @@ docker-ghcr-login: &docker-ghcr-login
     password-env: CR_PAT
 
 steps:
-  - label: ':fedora: Test LLVM Assert'
-    branches: '!master'
-    agents: { queue: arm64 }
-    command:
-      - "echo '--- :prettier: Checking rustfmt'"
-      - cargo fmt -- --check
-
-      - ./.buildkite/build-and-test.sh
-    plugins:
-      - seek-oss/docker-ecr-cache#v1.9.0:
-          dockerfile: ./.buildkite/llvm-assert.Dockerfile
-      - docker#v3.7.0
-
   - label: ':muscle: Test ARM64'
     agents: { queue: arm64 }
     command:
@@ -40,6 +27,19 @@ steps:
     command:
       - ./.buildkite/build-and-test.sh
     <<: *cached-ecr-build-env
+
+  - label: ':fedora: Test LLVM assert'
+    branches: '!master'
+    agents: { queue: arm64 }
+    command:
+      - "echo '--- :prettier: Checking rustfmt'"
+      - cargo fmt -- --check
+
+      - ./.buildkite/build-and-test.sh
+    plugins:
+      - seek-oss/docker-ecr-cache#v1.9.0:
+          dockerfile: ./.buildkite/llvm-assert.Dockerfile
+      - docker#v3.7.0
 
   - label: ':typescript: Test VS Code extension'
     agents: { queue: amd64 }
@@ -59,18 +59,6 @@ steps:
 
   - wait
 
-  - label: ':rocket: Push AMD64 REPL image'
-    key: 'push-amd64-repl-image'
-    branches: 'master'
-    agents: { queue: amd64 }
-    plugins:
-      - *docker-ghcr-login
-      - docker-compose#v3.7.0:
-          push:
-            - repl:ghcr.io/etaoins/arret-repl-amd64
-          env:
-            - BUILDKITE_COMMIT
-
   - label: ':mechanical_arm: Push ARM64 REPL image'
     key: 'push-arm64-repl-image'
     branches: 'master'
@@ -80,6 +68,18 @@ steps:
       - docker-compose#v3.7.0:
           push:
             - repl:ghcr.io/etaoins/arret-repl-arm64
+          env:
+            - BUILDKITE_COMMIT
+
+  - label: ':rocket: Push AMD64 REPL image'
+    key: 'push-amd64-repl-image'
+    branches: 'master'
+    agents: { queue: amd64 }
+    plugins:
+      - *docker-ghcr-login
+      - docker-compose#v3.7.0:
+          push:
+            - repl:ghcr.io/etaoins/arret-repl-amd64
           env:
             - BUILDKITE_COMMIT
 
