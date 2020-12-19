@@ -102,6 +102,7 @@ where
             Ty::Fun(_) | Ty::TopFun(_) | Ty::TyPred(_) | Ty::EqPred => TypeTag::FunThunk.into(),
             Ty::Vector(_) | Ty::Vectorof(_) => TypeTag::Vector.into(),
             Ty::Set(_) => TypeTag::Set.into(),
+            Ty::Map(_) => TypeTag::Map.into(),
             Ty::TopRecord | Ty::RecordClass(_) | Ty::Record(_) => TypeTag::Record.into(),
             Ty::List(list) => {
                 if list.is_empty() {
@@ -120,7 +121,6 @@ where
                 .iter()
                 .map(TypeTagSet::from)
                 .fold(TypeTagSet::all(), |a, b| a & b),
-            Ty::Map(_) => todo!("no corresponding type tag"),
         }
     }
 }
