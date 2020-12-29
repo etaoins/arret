@@ -1,5 +1,5 @@
 use tokio::io;
-use tokio::prelude::*;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 
 use crate::json_rpc::{ClientMessage, ServerMessage};
