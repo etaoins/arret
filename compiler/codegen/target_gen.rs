@@ -612,7 +612,7 @@ impl TargetCtx {
 
             LLVMSetInitializer(global, llvm_value);
             LLVMSetAlignment(global, mem::align_of::<boxed::Any>() as u32);
-            LLVMSetGlobalConstant(global, 1 as i32);
+            LLVMSetGlobalConstant(global, 1);
             LLVMSetLinkage(global, LLVMLinkage::LLVMAvailableExternallyLinkage);
 
             global

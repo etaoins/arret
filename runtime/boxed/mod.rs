@@ -611,7 +611,10 @@ mod test {
         assert_eq!(true, box_two_as_any.eq_in_heap(&heap, &box_two_as_any));
         assert_eq!(false, box_two_as_any.eq_in_heap(&heap, &box_three_as_any));
 
-        assert_eq!(TRUE_INSTANCE, TRUE_INSTANCE);
+        #[allow(clippy::eq_op)]
+        {
+            assert_eq!(TRUE_INSTANCE, TRUE_INSTANCE);
+        }
     }
 
     #[test]

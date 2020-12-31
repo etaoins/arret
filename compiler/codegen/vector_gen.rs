@@ -251,9 +251,9 @@ fn load_boxed_external_vector_member(
         tcx.add_invariant_load_metadata(vector_node_ptr);
 
         let element_ptr_gep_indices = &mut [
-            LLVMConstInt(llvm_i32, 0 as u64, 0),
+            LLVMConstInt(llvm_i32, 0, 0),
             // Skip the refcount
-            LLVMConstInt(llvm_i32, 1 as u64, 0),
+            LLVMConstInt(llvm_i32, 1, 0),
             LLVMConstInt(llvm_i32, element_array_index, 0),
         ];
 

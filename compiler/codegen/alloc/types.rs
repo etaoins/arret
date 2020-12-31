@@ -279,7 +279,7 @@ pub fn gen_alloc_boxed_record(
 
         // This is used by both inline and external records
         let record_data_gep_indices = &mut [
-            LLVMConstInt(llvm_i32, 0 as u64, 0),
+            LLVMConstInt(llvm_i32, 0, 0),
             LLVMConstInt(llvm_i32, u64::from(record_struct::DATA_INDEX), 0),
         ];
 
@@ -393,7 +393,7 @@ pub fn gen_alloc_boxed_record(
 
                 // Save the compact layout
                 let record_compact_layout_gep_indices = &mut [
-                    LLVMConstInt(llvm_i32, 0 as u64, 0),
+                    LLVMConstInt(llvm_i32, 0, 0),
                     LLVMConstInt(
                         llvm_i32,
                         u64::from(record_struct::EXTERNAL_COMPACT_LAYOUT_INDEX),
@@ -436,7 +436,7 @@ pub fn gen_alloc_boxed_record(
 
         for (field_index, llvm_field) in llvm_fields.iter().enumerate() {
             let field_gep_indices = &mut [
-                LLVMConstInt(llvm_i32, 0 as u64, 0),
+                LLVMConstInt(llvm_i32, 0, 0),
                 LLVMConstInt(llvm_i32, field_index as u64, 0),
             ];
 

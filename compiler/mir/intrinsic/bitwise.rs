@@ -71,7 +71,7 @@ where
         return BuildOutcome::None;
     };
 
-    if bit_count < 0 || bit_count > 64 {
+    if !(0..=64).contains(&bit_count) {
         return BuildOutcome::None;
     }
 

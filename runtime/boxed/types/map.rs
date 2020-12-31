@@ -69,7 +69,7 @@ impl<K: Boxed, V: Boxed> Map<K, V> {
     }
 
     /// Returns an iterator over the entries in map
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Gc<K>, Gc<V>)> + 'a {
+    pub fn iter(&self) -> impl Iterator<Item = (Gc<K>, Gc<V>)> + '_ {
         std::iter::empty()
     }
 }

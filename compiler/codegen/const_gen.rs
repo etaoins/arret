@@ -15,7 +15,7 @@ use crate::mir::ops;
 pub fn annotate_private_global(llvm_global: LLVMValueRef) {
     unsafe {
         LLVMSetUnnamedAddress(llvm_global, LLVMUnnamedAddr::LLVMGlobalUnnamedAddr);
-        LLVMSetGlobalConstant(llvm_global, 1 as i32);
+        LLVMSetGlobalConstant(llvm_global, 1);
         LLVMSetLinkage(llvm_global, LLVMLinkage::LLVMPrivateLinkage)
     }
 }

@@ -174,7 +174,7 @@ where
         }
     }
 
-    pub fn iter<'a>(&'a self) -> impl ExactSizeIterator<Item = T> + 'a {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = T> + '_ {
         Iter {
             vec: self,
             index: 0,

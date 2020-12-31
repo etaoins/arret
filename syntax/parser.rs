@@ -524,7 +524,7 @@ mod test {
     use crate::span::t2s;
 
     fn whole_str_span(v: &str) -> Span {
-        Span::new(None, 0 as ByteIndex, v.len() as ByteIndex)
+        Span::new(None, 0, v.len() as ByteIndex)
     }
 
     #[test]

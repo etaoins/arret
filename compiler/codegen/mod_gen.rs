@@ -218,7 +218,7 @@ impl<'am, 'sl, 'interner> ModCtx<'am, 'sl, 'interner> {
             }
 
             let mut llvm_range_values = [
-                LLVMValueAsMetadata(LLVMConstInt(tcx.record_class_id_llvm_type(), 0 as u64, 0)),
+                LLVMValueAsMetadata(LLVMConstInt(tcx.record_class_id_llvm_type(), 0, 0)),
                 LLVMValueAsMetadata(LLVMConstInt(
                     tcx.record_class_id_llvm_type(),
                     self.record_structs.len() as u64,

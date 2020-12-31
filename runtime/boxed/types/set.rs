@@ -249,7 +249,7 @@ impl<T: Boxed> InlineSet<T> {
         self.inline_len as usize
     }
 
-    fn iter<'a>(&'a self) -> impl ExactSizeIterator<Item = Gc<T>> + 'a {
+    fn iter(&self) -> impl ExactSizeIterator<Item = Gc<T>> + '_ {
         self.values[0..self.inline_len as usize]
             .iter()
             .map(|value| unsafe { value.assume_init() })

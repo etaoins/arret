@@ -143,7 +143,7 @@ mod test {
     use super::*;
 
     /// Plans allocations assuming the native data layout
-    fn plan_native_allocs<'op>(ops: &'op [ops::Op]) -> Vec<AllocAtom<'op>> {
+    fn plan_native_allocs(ops: &[ops::Op]) -> Vec<AllocAtom<'_>> {
         use llvm_sys::target_machine::*;
 
         use crate::codegen::target_machine::create_target_machine;

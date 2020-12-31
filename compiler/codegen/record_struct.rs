@@ -100,8 +100,8 @@ impl TargetRecordStruct {
     }
 }
 
-pub fn gen_classmap_classes<'a>(
-    tcx: &'a mut TargetCtx,
+pub fn gen_classmap_classes(
+    tcx: &mut TargetCtx,
     llvm_module: LLVMModuleRef,
     record_structs: &[ops::RecordStructId],
 ) -> LLVMValueRef {
@@ -214,7 +214,7 @@ pub fn gen_record_field_ptr(
         match record_storage {
             boxed::RecordStorage::Inline(_) => {
                 let field_gep_indices = &mut [
-                    LLVMConstInt(llvm_i32, 0 as u64, 0),
+                    LLVMConstInt(llvm_i32, 0, 0),
                     LLVMConstInt(llvm_i32, u64::from(DATA_INDEX), 0),
                     LLVMConstInt(llvm_i32, field_index as u64, 0),
                 ];
@@ -229,7 +229,7 @@ pub fn gen_record_field_ptr(
             }
             boxed::RecordStorage::External => {
                 let data_ptr_gep_indices = &mut [
-                    LLVMConstInt(llvm_i32, 0 as u64, 0),
+                    LLVMConstInt(llvm_i32, 0, 0),
                     LLVMConstInt(llvm_i32, u64::from(DATA_INDEX), 0),
                 ];
 
@@ -249,7 +249,7 @@ pub fn gen_record_field_ptr(
                 tcx.add_invariant_load_metadata(llvm_record_data_ptr);
 
                 let field_gep_indices = &mut [
-                    LLVMConstInt(llvm_i32, 0 as u64, 0),
+                    LLVMConstInt(llvm_i32, 0, 0),
                     LLVMConstInt(llvm_i32, field_index as u64, 0),
                 ];
 

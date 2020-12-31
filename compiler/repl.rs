@@ -257,6 +257,9 @@ pub struct ReplCtx {
     receive_result: crossbeam_channel::Receiver<Result<EvaledLine, Vec<Diagnostic<FileId>>>>,
 }
 
+#[derive(Debug)]
+pub struct EngineDisconnected;
+
 impl ReplCtx {
     /// Creates a new `ReplCtx`
     ///
@@ -289,8 +292,10 @@ impl ReplCtx {
     /// This is asynchronous and an unlimited number of lines can be sent before reading their
     /// results. This allows the calling thread to remain responsive to user input while evaluation,
     /// garbage collection, etc occurs.
-    pub fn send_line(&self, input: String, kind: EvalKind) -> Result<(), ()> {
-        self.send_line.send((input, kind)).map_err(|_| ())
+    pub fn send_line(&self, input: String, kind: EvalKind) -> Result<(), EngineDisconnected> {
+        self.send_line
+            .send((input, kind))
+            .map_err(|_| EngineDisconnected)
     }
 
     /// Receives the next result from the REPL engine
