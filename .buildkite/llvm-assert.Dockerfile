@@ -47,7 +47,7 @@ ARG LLVM_ROOT
 
 COPY --from=llvm-build ${LLVM_ROOT} ${LLVM_ROOT}
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.48.0 --profile=minimal --component rustfmt
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.49.0 --profile=minimal --component rustfmt
 
 ENV PATH "/root/.cargo/bin:${PATH}"
 ENV LLVM_SYS_100_PREFIX "${LLVM_ROOT}"
