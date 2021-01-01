@@ -734,7 +734,6 @@ impl EvalHirCtx {
             if let Some(boxed_arg_list) = boxed_arg_list {
                 let thunk = self.jit_thunk_for_rust_fun(rust_fun);
 
-                // By convention convert string panics in to our `ErrorKind::Panic`
                 let runtime_task = &mut self.runtime_task;
 
                 let native_result = Self::call_native_fun(span, || {
