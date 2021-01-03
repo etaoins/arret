@@ -13,6 +13,7 @@ use arret_runtime::callback::EntryPointABIType as CallbackEntryPointABIType;
 use crate::codegen::box_layout::BoxLayout;
 use crate::codegen::record_struct;
 use crate::codegen::GenABI;
+use crate::libcstr;
 use crate::mir::ops;
 
 fn llvm_enum_attr_for_name(
@@ -182,7 +183,7 @@ impl TargetCtx {
         *self.cached_types.task.get_or_insert_with(|| unsafe {
             let members = &mut [llvm_any_ptr, llvm_any_ptr];
 
-            let llvm_type = LLVMStructCreateNamed(llx, b"task\0".as_ptr() as *const _);
+            let llvm_type = LLVMStructCreateNamed(llx, libcstr!("task"));
             LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
             LLVMPointerType(llvm_type, 0)
@@ -200,8 +201,7 @@ impl TargetCtx {
                 let llvm_i8 = LLVMInt8TypeInContext(llx);
                 let members = &mut [llvm_i64, LLVMPointerType(llvm_i8, 0)];
 
-                let llvm_type =
-                    LLVMStructCreateNamed(llx, b"global_interned_name\0".as_ptr() as *const _);
+                let llvm_type = LLVMStructCreateNamed(llx, libcstr!("global_interned_name"));
                 LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
                 llvm_type
@@ -219,8 +219,7 @@ impl TargetCtx {
                 let llvm_i8 = LLVMInt8TypeInContext(llx);
                 let members = &mut [llvm_i32, llvm_i8, llvm_i8];
 
-                let llvm_type =
-                    LLVMStructCreateNamed(llx, b"classmap_field\0".as_ptr() as *const _);
+                let llvm_type = LLVMStructCreateNamed(llx, libcstr!("classmap_field"));
                 LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
                 llvm_type
@@ -245,7 +244,7 @@ impl TargetCtx {
             let llvm_i8 = LLVMInt8TypeInContext(llx);
             let members = &mut [llvm_i8, llvm_i8];
 
-            let llvm_type = LLVMStructCreateNamed(llx, b"box_header\0".as_ptr() as *const _);
+            let llvm_type = LLVMStructCreateNamed(llx, libcstr!("box_header"));
             LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
             llvm_type
@@ -268,7 +267,7 @@ impl TargetCtx {
                 LLVMArrayType(llvm_i8, 0),
             ];
 
-            let llvm_type = LLVMStructCreateNamed(llx, b"shared_str\0".as_ptr() as *const _);
+            let llvm_type = LLVMStructCreateNamed(llx, libcstr!("shared_str"));
             LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
             llvm_type
@@ -291,8 +290,7 @@ impl TargetCtx {
                     LLVMPointerType(shared_str_llvm_type, 0),
                 ];
 
-                let llvm_type =
-                    LLVMStructCreateNamed(llx, b"boxed_external_str\0".as_ptr() as *const _);
+                let llvm_type = LLVMStructCreateNamed(llx, libcstr!("boxed_external_str"));
                 LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
                 llvm_type
@@ -314,8 +312,7 @@ impl TargetCtx {
                     LLVMArrayType(llvm_i8, boxed::Str::MAX_INLINE_BYTES as u32),
                 ];
 
-                let llvm_type =
-                    LLVMStructCreateNamed(llx, b"boxed_inline_str\0".as_ptr() as *const _);
+                let llvm_type = LLVMStructCreateNamed(llx, libcstr!("boxed_inline_str"));
                 LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
                 llvm_type
@@ -336,8 +333,7 @@ impl TargetCtx {
 
                 let mut members = [llvm_i64, LLVMArrayType(llvm_any_ptr, NODE_SIZE as u32)];
 
-                let llvm_type =
-                    LLVMStructCreateNamed(llx, b"persistent_vector_leaf\0".as_ptr() as *const _);
+                let llvm_type = LLVMStructCreateNamed(llx, libcstr!("persistent_vector_leaf"));
                 LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
                 llvm_type
@@ -365,8 +361,7 @@ impl TargetCtx {
                     persistent_vector_leaf_ptr,
                 ];
 
-                let llvm_type =
-                    LLVMStructCreateNamed(llx, b"boxed_external_vector\0".as_ptr() as *const _);
+                let llvm_type = LLVMStructCreateNamed(llx, libcstr!("boxed_external_vector"));
                 LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
                 llvm_type
@@ -392,8 +387,7 @@ impl TargetCtx {
                     llvm_any_ptr,
                 ];
 
-                let llvm_type =
-                    LLVMStructCreateNamed(llx, b"boxed_inline_vector\0".as_ptr() as *const _);
+                let llvm_type = LLVMStructCreateNamed(llx, libcstr!("boxed_inline_vector"));
                 LLVMStructSetBody(llvm_type, members.as_mut_ptr(), members.len() as u32, 0);
 
                 llvm_type

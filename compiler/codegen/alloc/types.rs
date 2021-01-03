@@ -9,6 +9,7 @@ use crate::codegen::alloc::{ActiveAlloc, BoxSource};
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::record_struct;
 use crate::codegen::target_gen::TargetCtx;
+use crate::libcstr;
 use crate::mir::ops::RecordStructId;
 
 pub struct PairInput {
@@ -38,8 +39,7 @@ pub fn gen_alloc_int(
         let alloced_int =
             gen_alloced_box::<boxed::Int>(tcx, builder, active_alloc, box_source, b"alloced_int\0");
 
-        let value_ptr =
-            LLVMBuildStructGEP(builder, alloced_int, 1, b"value_ptr\0".as_ptr() as *const _);
+        let value_ptr = LLVMBuildStructGEP(builder, alloced_int, 1, libcstr!("value_ptr"));
         LLVMBuildStore(builder, llvm_int_value, value_ptr);
 
         alloced_int
@@ -62,12 +62,7 @@ pub fn gen_alloc_char(
             b"alloced_char\0",
         );
 
-        let value_ptr = LLVMBuildStructGEP(
-            builder,
-            alloced_char,
-            1,
-            b"value_ptr\0".as_ptr() as *const _,
-        );
+        let value_ptr = LLVMBuildStructGEP(builder, alloced_char, 1, libcstr!("value_ptr"));
         LLVMBuildStore(builder, llvm_char_value, value_ptr);
 
         alloced_char
@@ -85,12 +80,8 @@ pub fn gen_alloc_sym(
         let alloced_sym =
             gen_alloced_box::<boxed::Sym>(tcx, builder, active_alloc, box_source, b"alloced_sym\0");
 
-        let interned_sym_ptr = LLVMBuildStructGEP(
-            builder,
-            alloced_sym,
-            1,
-            b"interned_sym_ptr\0".as_ptr() as *const _,
-        );
+        let interned_sym_ptr =
+            LLVMBuildStructGEP(builder, alloced_sym, 1, libcstr!("interned_sym_ptr"));
         LLVMBuildStore(builder, llvm_interned_sym, interned_sym_ptr);
 
         alloced_sym
@@ -113,12 +104,7 @@ pub fn gen_alloc_float(
             b"alloced_float\0",
         );
 
-        let value_ptr = LLVMBuildStructGEP(
-            builder,
-            alloced_float,
-            1,
-            b"value_ptr\0".as_ptr() as *const _,
-        );
+        let value_ptr = LLVMBuildStructGEP(builder, alloced_float, 1, libcstr!("value_ptr"));
         LLVMBuildStore(builder, llvm_float_value, value_ptr);
 
         alloced_float
@@ -147,20 +133,13 @@ pub fn gen_alloc_boxed_pair(
             b"alloced_pair\0",
         );
 
-        let list_len_ptr = LLVMBuildStructGEP(
-            builder,
-            alloced_pair,
-            1,
-            b"list_len_ptr\0".as_ptr() as *const _,
-        );
+        let list_len_ptr = LLVMBuildStructGEP(builder, alloced_pair, 1, libcstr!("list_len_ptr"));
         LLVMBuildStore(builder, *llvm_list_len, list_len_ptr);
 
-        let head_ptr =
-            LLVMBuildStructGEP(builder, alloced_pair, 2, b"head_ptr\0".as_ptr() as *const _);
+        let head_ptr = LLVMBuildStructGEP(builder, alloced_pair, 2, libcstr!("head_ptr"));
         LLVMBuildStore(builder, *llvm_head, head_ptr);
 
-        let rest_ptr =
-            LLVMBuildStructGEP(builder, alloced_pair, 3, b"rest_ptr\0".as_ptr() as *const _);
+        let rest_ptr = LLVMBuildStructGEP(builder, alloced_pair, 3, libcstr!("rest_ptr"));
         LLVMBuildStore(builder, *llvm_rest, rest_ptr);
 
         alloced_pair
@@ -188,20 +167,12 @@ pub fn gen_alloc_boxed_fun_thunk(
             b"alloced_fun_thunk\0",
         );
 
-        let captures_ptr = LLVMBuildStructGEP(
-            builder,
-            alloced_fun_thunk,
-            1,
-            b"captures_ptr\0".as_ptr() as *const _,
-        );
+        let captures_ptr =
+            LLVMBuildStructGEP(builder, alloced_fun_thunk, 1, libcstr!("captures_ptr"));
         LLVMBuildStore(builder, *llvm_captures, captures_ptr);
 
-        let entry_point_ptr = LLVMBuildStructGEP(
-            builder,
-            alloced_fun_thunk,
-            2,
-            b"entry_point_ptr\0".as_ptr() as *const _,
-        );
+        let entry_point_ptr =
+            LLVMBuildStructGEP(builder, alloced_fun_thunk, 2, libcstr!("entry_point_ptr"));
         LLVMBuildStore(builder, *llvm_entry_point, entry_point_ptr);
 
         alloced_fun_thunk
@@ -258,7 +229,7 @@ pub fn gen_alloc_boxed_record(
             builder,
             alloced_boxed_record,
             record_struct::CONTAINS_GC_REFS_INDEX,
-            b"may_contain_gc_refs_ptr\0".as_ptr() as *const _,
+            libcstr!("may_contain_gc_refs_ptr"),
         );
         let llvm_may_contain_gc_refs = LLVMConstInt(llvm_i8, may_contain_gc_refs as u64, 1);
         LLVMBuildStore(builder, llvm_may_contain_gc_refs, may_contain_gc_refs_ptr);
@@ -267,7 +238,7 @@ pub fn gen_alloc_boxed_record(
             builder,
             alloced_boxed_record,
             record_struct::RECORD_CLASS_ID_INDEX,
-            b"record_class_id_ptr\0".as_ptr() as *const _,
+            libcstr!("record_class_id_ptr"),
         );
 
         let llvm_record_class_id = LLVMConstInt(
@@ -290,7 +261,7 @@ pub fn gen_alloc_boxed_record(
                     alloced_boxed_record,
                     record_data_gep_indices.as_mut_ptr(),
                     record_data_gep_indices.len() as u32,
-                    "inline_record_data\0".as_ptr() as *const _,
+                    libcstr!("inline_record_data"),
                 );
 
                 let inline_byte_len = match data_layout {
@@ -302,11 +273,8 @@ pub fn gen_alloc_boxed_record(
             }
             (boxed::RecordStorage::External, BoxSource::Stack) => {
                 // Allocate the record data
-                let llvm_stack_record_data_ptr = LLVMBuildAlloca(
-                    builder,
-                    llvm_data_type,
-                    "stack_record_data\0".as_ptr() as *const _,
-                );
+                let llvm_stack_record_data_ptr =
+                    LLVMBuildAlloca(builder, llvm_data_type, libcstr!("stack_record_data"));
 
                 // Update our record data pointer
                 let llvm_record_data_ptr_ptr = LLVMBuildInBoundsGEP(
@@ -314,7 +282,7 @@ pub fn gen_alloc_boxed_record(
                     alloced_boxed_record,
                     record_data_gep_indices.as_mut_ptr(),
                     record_data_gep_indices.len() as u32,
-                    "record_data_ptr_ptr\0".as_ptr() as *const _,
+                    libcstr!("record_data_ptr_ptr"),
                 );
 
                 LLVMBuildStore(
@@ -366,7 +334,7 @@ pub fn gen_alloc_boxed_record(
                     alloc_record_data_fun,
                     alloc_record_data_args.as_mut_ptr(),
                     alloc_record_data_args.len() as u32,
-                    b"external_record_data\0".as_ptr() as *const _,
+                    libcstr!("external_record_data"),
                 );
 
                 // Convert the record data pointer to the correct type
@@ -374,7 +342,7 @@ pub fn gen_alloc_boxed_record(
                     builder,
                     llvm_untyped_record_data_ptr,
                     LLVMPointerType(llvm_data_type, 0),
-                    b"typed_record_data_ptr\0".as_ptr() as *const _,
+                    libcstr!("typed_record_data_ptr"),
                 );
 
                 // Save the record data pointer
@@ -383,7 +351,7 @@ pub fn gen_alloc_boxed_record(
                     alloced_boxed_record,
                     record_data_gep_indices.as_mut_ptr(),
                     record_data_gep_indices.len() as u32,
-                    "record_data_ptr_ptr\0".as_ptr() as *const _,
+                    libcstr!("record_data_ptr_ptr"),
                 );
                 LLVMBuildStore(
                     builder,
@@ -406,7 +374,7 @@ pub fn gen_alloc_boxed_record(
                     alloced_boxed_record,
                     record_compact_layout_gep_indices.as_mut_ptr(),
                     record_compact_layout_gep_indices.len() as u32,
-                    "record_compact_layout_ptr\0".as_ptr() as *const _,
+                    libcstr!("record_compact_layout_ptr"),
                 );
                 LLVMBuildStore(
                     builder,
@@ -429,7 +397,7 @@ pub fn gen_alloc_boxed_record(
             builder,
             alloced_boxed_record,
             record_struct::IS_INLINE_INDEX,
-            b"inline_byte_len_ptr\0".as_ptr() as *const _,
+            libcstr!("inline_byte_len_ptr"),
         );
         let llvm_inline_byte_len = LLVMConstInt(llvm_i8, inline_byte_len as u64, 1);
         LLVMBuildStore(builder, llvm_inline_byte_len, inline_byte_len_ptr);
@@ -445,7 +413,7 @@ pub fn gen_alloc_boxed_record(
                 llvm_record_data_ptr,
                 field_gep_indices.as_mut_ptr(),
                 field_gep_indices.len() as u32,
-                b"init_record_field_ptr\0".as_ptr() as *const _,
+                libcstr!("init_record_field_ptr"),
             );
 
             LLVMBuildStore(builder, *llvm_field, llvm_field_ptr);

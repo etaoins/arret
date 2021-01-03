@@ -10,6 +10,7 @@ use arret_runtime::boxed;
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::record_struct;
 use crate::codegen::target_gen::TargetCtx;
+use crate::libcstr;
 use crate::mir::ops;
 
 pub fn annotate_private_global(llvm_global: LLVMValueRef) {
@@ -41,7 +42,7 @@ pub fn gen_boxed_pair(
         let llvm_value =
             LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
 
-        let global = LLVMAddGlobal(mcx.module, llvm_type, "const_pair\0".as_ptr() as *const _);
+        let global = LLVMAddGlobal(mcx.module, llvm_type, libcstr!("const_pair"));
         LLVMSetInitializer(global, llvm_value);
         LLVMSetAlignment(global, mem::align_of::<boxed::Pair>() as u32);
 
@@ -77,7 +78,7 @@ fn gen_boxed_external_str(
         let shared_str_global = LLVMAddGlobal(
             mcx.module,
             LLVMTypeOf(shared_str_llvm_value),
-            "shared_str\0".as_ptr() as *const _,
+            libcstr!("shared_str"),
         );
         LLVMSetInitializer(shared_str_global, shared_str_llvm_value);
         annotate_private_global(shared_str_global);
@@ -101,11 +102,7 @@ fn gen_boxed_external_str(
             external_members.len() as u32,
         );
 
-        let global = LLVMAddGlobal(
-            mcx.module,
-            external_llvm_type,
-            "const_str\0".as_ptr() as *const _,
-        );
+        let global = LLVMAddGlobal(mcx.module, external_llvm_type, libcstr!("const_str"));
         LLVMSetInitializer(global, external_llvm_value);
         LLVMSetAlignment(global, mem::align_of::<boxed::Str>() as u32);
         annotate_private_global(global);
@@ -143,11 +140,7 @@ fn gen_boxed_inline_str(
         let inline_llvm_value =
             LLVMConstNamedStruct(inline_llvm_type, members.as_mut_ptr(), members.len() as u32);
 
-        let global = LLVMAddGlobal(
-            mcx.module,
-            inline_llvm_type,
-            "const_str\0".as_ptr() as *const _,
-        );
+        let global = LLVMAddGlobal(mcx.module, inline_llvm_type, libcstr!("const_str"));
         LLVMSetInitializer(global, inline_llvm_value);
         LLVMSetAlignment(global, mem::align_of::<boxed::Str>() as u32);
         annotate_private_global(global);
@@ -186,11 +179,7 @@ pub fn gen_boxed_sym(
         let boxed_llvm_value =
             LLVMConstNamedStruct(boxed_llvm_type, members.as_mut_ptr(), members.len() as u32);
 
-        let global = LLVMAddGlobal(
-            mcx.module,
-            boxed_llvm_type,
-            "const_sym\0".as_ptr() as *const _,
-        );
+        let global = LLVMAddGlobal(mcx.module, boxed_llvm_type, libcstr!("const_sym"));
         LLVMSetInitializer(global, boxed_llvm_value);
         LLVMSetAlignment(global, mem::align_of::<boxed::Sym>() as u32);
         annotate_private_global(global);
@@ -282,7 +271,7 @@ pub fn gen_global_interned_names<'a>(
         let global = LLVMAddGlobal(
             llvm_module,
             LLVMTypeOf(llvm_global_names),
-            "global_interned_names\0".as_ptr() as *const _,
+            libcstr!("global_interned_names"),
         );
 
         LLVMSetInitializer(global, llvm_global_names);
@@ -337,7 +326,7 @@ pub fn gen_boxed_float(
         let llvm_value =
             LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
 
-        let global = LLVMAddGlobal(mcx.module, llvm_type, "const_float\0".as_ptr() as *const _);
+        let global = LLVMAddGlobal(mcx.module, llvm_type, libcstr!("const_float"));
         LLVMSetInitializer(global, llvm_value);
         LLVMSetAlignment(global, mem::align_of::<boxed::Float>() as u32);
 
@@ -396,11 +385,7 @@ pub fn gen_boxed_fun_thunk(
         let llvm_value =
             LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
 
-        let global = LLVMAddGlobal(
-            mcx.module,
-            llvm_type,
-            "const_fun_thunk\0".as_ptr() as *const _,
-        );
+        let global = LLVMAddGlobal(mcx.module, llvm_type, libcstr!("const_fun_thunk"));
         LLVMSetInitializer(global, llvm_value);
         LLVMSetAlignment(global, mem::align_of::<boxed::FunThunk>() as u32);
 
@@ -538,11 +523,7 @@ fn gen_persistent_vector_leaf(
             ),
         ];
 
-        let global = LLVMAddGlobal(
-            mcx.module,
-            llvm_type,
-            "const_vector_leaf\0".as_ptr() as *const _,
-        );
+        let global = LLVMAddGlobal(mcx.module, llvm_type, libcstr!("const_vector_leaf"));
 
         let llvm_value =
             LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
@@ -600,7 +581,7 @@ fn gen_boxed_external_vector(
         let llvm_value =
             LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
 
-        let global = LLVMAddGlobal(mcx.module, llvm_type, "const_vector\0".as_ptr() as *const _);
+        let global = LLVMAddGlobal(mcx.module, llvm_type, libcstr!("const_vector"));
         LLVMSetInitializer(global, llvm_value);
         LLVMSetAlignment(global, mem::align_of::<boxed::Vector>() as u32);
 
@@ -639,7 +620,7 @@ fn gen_boxed_inline_vector(
         let llvm_value =
             LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
 
-        let global = LLVMAddGlobal(mcx.module, llvm_type, "const_vector\0".as_ptr() as *const _);
+        let global = LLVMAddGlobal(mcx.module, llvm_type, libcstr!("const_vector"));
         LLVMSetInitializer(global, llvm_value);
         LLVMSetAlignment(global, mem::align_of::<boxed::Vector>() as u32);
 
@@ -700,7 +681,7 @@ pub fn gen_boxed_set(
         let llvm_value =
             LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
 
-        let global = LLVMAddGlobal(mcx.module, llvm_type, "const_set\0".as_ptr() as *const _);
+        let global = LLVMAddGlobal(mcx.module, llvm_type, libcstr!("const_set"));
         LLVMSetInitializer(global, llvm_value);
         LLVMSetAlignment(global, mem::align_of::<boxed::Set>() as u32);
 
@@ -727,7 +708,7 @@ pub fn gen_boxed_map(
         let llvm_value =
             LLVMConstNamedStruct(llvm_type, members.as_mut_ptr(), members.len() as u32);
 
-        let global = LLVMAddGlobal(mcx.module, llvm_type, "const_map\0".as_ptr() as *const _);
+        let global = LLVMAddGlobal(mcx.module, llvm_type, libcstr!("const_map"));
         LLVMSetInitializer(global, llvm_value);
         LLVMSetAlignment(global, mem::align_of::<boxed::Map>() as u32);
 

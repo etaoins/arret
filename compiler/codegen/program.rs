@@ -12,6 +12,7 @@ use crate::codegen::analysis::AnalysedMod;
 use crate::codegen::mod_gen::{gen_mod, GeneratedMod};
 use crate::codegen::target_gen::TargetCtx;
 use crate::context::LinkedLibrary;
+use crate::libcstr;
 use crate::mir;
 use crate::SourceLoader;
 
@@ -126,13 +127,9 @@ fn program_to_module(
 
         // Declare our C main
         let builder = LLVMCreateBuilderInContext(tcx.llx);
-        let c_main = LLVMAddFunction(
-            llvm_module,
-            b"main\0".as_ptr() as *const _,
-            c_main_llvm_type(tcx),
-        );
+        let c_main = LLVMAddFunction(llvm_module, libcstr!("main"), c_main_llvm_type(tcx));
 
-        let bb = LLVMAppendBasicBlockInContext(tcx.llx, c_main, b"entry\0".as_ptr() as *const _);
+        let bb = LLVMAppendBasicBlockInContext(tcx.llx, c_main, libcstr!("entry"));
         LLVMPositionBuilderAtEnd(builder, bb);
 
         let classmap_class_ptr_type = LLVMPointerType(tcx.classmap_class_llvm_type(), 0);
@@ -154,7 +151,7 @@ fn program_to_module(
         // And launch the task from C main
         let launch_task_llvm_fun = LLVMAddFunction(
             llvm_module,
-            "arret_runtime_launch_task\0".as_ptr() as *const _,
+            libcstr!("arret_runtime_launch_task"),
             launch_task_llvm_type,
         );
 
@@ -169,7 +166,7 @@ fn program_to_module(
             launch_task_llvm_fun,
             launch_task_llvm_args.as_mut_ptr(),
             launch_task_llvm_args.len() as u32,
-            b"\0".as_ptr() as *const _,
+            libcstr!(""),
         );
 
         LLVMBuildRet(builder, LLVMConstInt(LLVMInt32TypeInContext(tcx.llx), 0, 0));

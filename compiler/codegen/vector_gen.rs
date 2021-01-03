@@ -6,6 +6,7 @@ use arret_runtime::boxed;
 
 use crate::codegen::fun_gen::FunCtx;
 use crate::codegen::target_gen::TargetCtx;
+use crate::libcstr;
 
 fn load_boxed_external_vector_len(
     tcx: &mut TargetCtx,
@@ -20,20 +21,20 @@ fn load_boxed_external_vector_len(
             fcx.builder,
             llvm_boxed_vector,
             boxed_external_vector_ptr_type,
-            b"boxed_external_vector\0".as_ptr() as *const _,
+            libcstr!("boxed_external_vector"),
         );
 
         let vector_external_len_ptr = LLVMBuildStructGEP(
             fcx.builder,
             llvm_boxed_external_vector,
             2,
-            b"vector_external_len_ptr\0".as_ptr() as *const _,
+            libcstr!("vector_external_len_ptr"),
         );
 
         let llvm_vector_external_len = LLVMBuildLoad(
             fcx.builder,
             vector_external_len_ptr,
-            "vector_external_len\0".as_ptr() as *const _,
+            libcstr!("vector_external_len"),
         );
         tcx.add_invariant_load_metadata(llvm_vector_external_len);
 
@@ -56,13 +57,13 @@ pub(crate) fn load_boxed_vector_len(
             fcx.builder,
             llvm_boxed_vector,
             1,
-            b"vector_inline_len_ptr\0".as_ptr() as *const _,
+            libcstr!("vector_inline_len_ptr"),
         );
 
         let llvm_vector_inline_len = LLVMBuildLoad(
             fcx.builder,
             vector_inline_len_ptr,
-            "vector_inline_len\0".as_ptr() as *const _,
+            libcstr!("vector_inline_len"),
         );
         tcx.add_invariant_load_metadata(llvm_vector_inline_len);
 
@@ -96,24 +97,17 @@ pub(crate) fn load_boxed_vector_len(
                 Vector::<boxed::Any>::EXTERNAL_INLINE_LEN as u64,
                 0,
             ),
-            "vector_is_external\0".as_ptr() as *const _,
+            libcstr!("vector_is_external"),
         );
 
-        let mut external_block = LLVMAppendBasicBlockInContext(
-            tcx.llx,
-            fcx.function,
-            b"external_vector\0".as_ptr() as *const _,
-        );
-        let mut inline_block = LLVMAppendBasicBlockInContext(
-            tcx.llx,
-            fcx.function,
-            b"inline_vector\0".as_ptr() as *const _,
-        );
-        let cont_block = LLVMAppendBasicBlockInContext(
-            tcx.llx,
-            fcx.function,
-            b"vector_len_cont\0".as_ptr() as *const _,
-        );
+        let mut external_block =
+            LLVMAppendBasicBlockInContext(tcx.llx, fcx.function, libcstr!("external_vector"));
+
+        let mut inline_block =
+            LLVMAppendBasicBlockInContext(tcx.llx, fcx.function, libcstr!("inline_vector"));
+
+        let cont_block =
+            LLVMAppendBasicBlockInContext(tcx.llx, fcx.function, libcstr!("vector_len_cont"));
 
         LLVMBuildCondBr(
             fcx.builder,
@@ -136,7 +130,7 @@ pub(crate) fn load_boxed_vector_len(
                 fcx.builder,
                 llvm_vector_inline_len,
                 llvm_i64,
-                b"vector_inline_len_ext\0".as_ptr() as *const _,
+                libcstr!("vector_inline_len_ext"),
             );
 
             LLVMBuildBr(fcx.builder, cont_block);
@@ -144,7 +138,7 @@ pub(crate) fn load_boxed_vector_len(
         };
 
         LLVMPositionBuilderAtEnd(fcx.builder, cont_block);
-        let phi_value = LLVMBuildPhi(fcx.builder, llvm_i64, b"vector_len\0".as_ptr() as *const _);
+        let phi_value = LLVMBuildPhi(fcx.builder, llvm_i64, libcstr!("vector_len"));
 
         LLVMAddIncoming(
             phi_value,
@@ -176,7 +170,7 @@ fn load_boxed_inline_vector_member(
             fcx.builder,
             llvm_boxed_vector,
             boxed_inline_vector_ptr_type,
-            b"boxed_inline_vector\0".as_ptr() as *const _,
+            libcstr!("boxed_inline_vector"),
         );
 
         let value_ptr = LLVMBuildStructGEP(
@@ -184,14 +178,10 @@ fn load_boxed_inline_vector_member(
             llvm_boxed_inline_vector,
             // Skip the header and inline len
             (2 + member_index) as u32,
-            b"vector_member_ptr\0".as_ptr() as *const _,
+            libcstr!("vector_member_ptr"),
         );
 
-        let llvm_value = LLVMBuildLoad(
-            fcx.builder,
-            value_ptr,
-            "vector_member\0".as_ptr() as *const _,
-        );
+        let llvm_value = LLVMBuildLoad(fcx.builder, value_ptr, libcstr!("vector_member"));
 
         tcx.add_invariant_load_metadata(llvm_value);
         tcx.add_boxed_load_metadata(llvm_value);
@@ -233,20 +223,20 @@ fn load_boxed_external_vector_member(
             fcx.builder,
             llvm_boxed_vector,
             boxed_external_vector_ptr_type,
-            b"boxed_external_vector\0".as_ptr() as *const _,
+            libcstr!("boxed_external_vector"),
         );
 
         let vector_node_ptr_ptr = LLVMBuildStructGEP(
             fcx.builder,
             llvm_boxed_external_vector,
             node_gep_index,
-            b"vector_node_ptr_ptr\0".as_ptr() as *const _,
+            libcstr!("vector_node_ptr_ptr"),
         );
 
         let vector_node_ptr = LLVMBuildLoad(
             fcx.builder,
             vector_node_ptr_ptr,
-            "vector_node_ptr\0".as_ptr() as *const _,
+            libcstr!("vector_node_ptr"),
         );
         tcx.add_invariant_load_metadata(vector_node_ptr);
 
@@ -262,13 +252,13 @@ fn load_boxed_external_vector_member(
             vector_node_ptr,
             element_ptr_gep_indices.as_mut_ptr(),
             element_ptr_gep_indices.len() as u32,
-            "vector_node_element_ptr\0".as_ptr() as *const _,
+            libcstr!("vector_node_element_ptr"),
         );
 
         let llvm_value = LLVMBuildLoad(
             fcx.builder,
             vector_node_element_ptr,
-            "vector_member\0".as_ptr() as *const _,
+            libcstr!("vector_member"),
         );
 
         tcx.add_invariant_load_metadata(llvm_value);

@@ -6,6 +6,7 @@ mod const_gen;
 mod debug_info;
 mod fun_gen;
 pub(crate) mod jit;
+mod libcstr;
 mod math_gen;
 mod mod_gen;
 mod op_gen;

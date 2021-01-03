@@ -13,6 +13,7 @@ use crate::codegen::panic_gen::gen_panic;
 use crate::codegen::record_struct;
 use crate::codegen::target_gen::TargetCtx;
 use crate::codegen::{alloc, const_gen};
+use crate::libcstr;
 
 fn comparison_to_llvm_int_pred(comparison: Comparison) -> LLVMIntPredicate {
     match comparison {
@@ -211,7 +212,7 @@ fn gen_op(
                     fcx.builder,
                     from_llvm_value,
                     to_llvm_type,
-                    "box_bitcast\0".as_ptr() as *const _,
+                    libcstr!("box_bitcast"),
                 );
                 fcx.regs.insert(*reg, to_llvm_value);
             }
@@ -235,7 +236,7 @@ fn gen_op(
                     llvm_fun,
                     llvm_args.as_mut_ptr(),
                     llvm_args.len() as u32,
-                    b"\0".as_ptr() as *const _,
+                    libcstr!(""),
                 );
 
                 let call_conv = callee::callee_call_conv(mcx, callee);
@@ -253,7 +254,7 @@ fn gen_op(
                     fcx.function,
                     llvm_args.as_mut_ptr(),
                     llvm_args.len() as u32,
-                    b"\0".as_ptr() as *const _,
+                    libcstr!(""),
                 );
 
                 LLVMSetTailCall(llvm_ret, 1);
@@ -295,14 +296,11 @@ fn gen_op(
                     llvm_any,
                     gep_indices.as_mut_ptr(),
                     gep_indices.len() as u32,
-                    b"type_tag_ptr\0".as_ptr() as *const _,
+                    libcstr!("type_tag_ptr"),
                 );
 
-                let llvm_type_tag = LLVMBuildLoad(
-                    fcx.builder,
-                    llvm_type_tag_ptr,
-                    "type_tag\0".as_ptr() as *const _,
-                );
+                let llvm_type_tag =
+                    LLVMBuildLoad(fcx.builder, llvm_type_tag_ptr, libcstr!("type_tag"));
 
                 let llvm_i8 = LLVMInt8TypeInContext(tcx.llx);
                 let possible_type_tag_md = int_range_md_node(
@@ -333,15 +331,10 @@ fn gen_op(
                 let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
 
                 let llvm_list = fcx.regs[list_reg];
-                let list_len_ptr = LLVMBuildStructGEP(
-                    fcx.builder,
-                    llvm_list,
-                    1,
-                    b"list_len_ptr\0".as_ptr() as *const _,
-                );
+                let list_len_ptr =
+                    LLVMBuildStructGEP(fcx.builder, llvm_list, 1, libcstr!("list_len_ptr"));
 
-                let llvm_list_len =
-                    LLVMBuildLoad(fcx.builder, list_len_ptr, "list_len\0".as_ptr() as *const _);
+                let llvm_list_len = LLVMBuildLoad(fcx.builder, list_len_ptr, libcstr!("list_len"));
                 tcx.add_invariant_load_metadata(llvm_list_len);
 
                 // Every list element needs at least one pair. This means there's a maximum list
@@ -369,14 +362,9 @@ fn gen_op(
             }
             OpKind::LoadBoxedPairHead(reg, pair_reg) => {
                 let llvm_pair = fcx.regs[pair_reg];
-                let head_ptr = LLVMBuildStructGEP(
-                    fcx.builder,
-                    llvm_pair,
-                    2,
-                    b"head_ptr\0".as_ptr() as *const _,
-                );
+                let head_ptr = LLVMBuildStructGEP(fcx.builder, llvm_pair, 2, libcstr!("head_ptr"));
 
-                let llvm_head = LLVMBuildLoad(fcx.builder, head_ptr, "head\0".as_ptr() as *const _);
+                let llvm_head = LLVMBuildLoad(fcx.builder, head_ptr, libcstr!("head"));
                 tcx.add_invariant_load_metadata(llvm_head);
                 tcx.add_boxed_load_metadata(llvm_head);
 
@@ -384,14 +372,9 @@ fn gen_op(
             }
             OpKind::LoadBoxedPairRest(reg, pair_reg) => {
                 let llvm_pair = fcx.regs[pair_reg];
-                let head_ptr = LLVMBuildStructGEP(
-                    fcx.builder,
-                    llvm_pair,
-                    3,
-                    b"rest_ptr\0".as_ptr() as *const _,
-                );
+                let head_ptr = LLVMBuildStructGEP(fcx.builder, llvm_pair, 3, libcstr!("rest_ptr"));
 
-                let llvm_rest = LLVMBuildLoad(fcx.builder, head_ptr, "rest\0".as_ptr() as *const _);
+                let llvm_rest = LLVMBuildLoad(fcx.builder, head_ptr, libcstr!("rest"));
                 tcx.add_invariant_load_metadata(llvm_rest);
                 tcx.add_boxed_load_metadata(llvm_rest);
 
@@ -399,15 +382,10 @@ fn gen_op(
             }
             OpKind::LoadBoxedIntValue(reg, boxed_int_reg) => {
                 let llvm_boxed_int = fcx.regs[boxed_int_reg];
-                let value_ptr = LLVMBuildStructGEP(
-                    fcx.builder,
-                    llvm_boxed_int,
-                    1,
-                    b"int_value_ptr\0".as_ptr() as *const _,
-                );
+                let value_ptr =
+                    LLVMBuildStructGEP(fcx.builder, llvm_boxed_int, 1, libcstr!("int_value_ptr"));
 
-                let llvm_value =
-                    LLVMBuildLoad(fcx.builder, value_ptr, "int_value\0".as_ptr() as *const _);
+                let llvm_value = LLVMBuildLoad(fcx.builder, value_ptr, libcstr!("int_value"));
                 tcx.add_invariant_load_metadata(llvm_value);
 
                 fcx.regs.insert(*reg, llvm_value);
@@ -418,14 +396,10 @@ fn gen_op(
                     fcx.builder,
                     llvm_boxed_sym,
                     1,
-                    b"interned_sym_ptr\0".as_ptr() as *const _,
+                    libcstr!("interned_sym_ptr"),
                 );
 
-                let llvm_value = LLVMBuildLoad(
-                    fcx.builder,
-                    value_ptr,
-                    "interned_sym\0".as_ptr() as *const _,
-                );
+                let llvm_value = LLVMBuildLoad(fcx.builder, value_ptr, libcstr!("interned_sym"));
                 tcx.add_invariant_load_metadata(llvm_value);
 
                 fcx.regs.insert(*reg, llvm_value);
@@ -436,26 +410,20 @@ fn gen_op(
                     fcx.builder,
                     llvm_boxed_float,
                     1,
-                    b"float_value_ptr\0".as_ptr() as *const _,
+                    libcstr!("float_value_ptr"),
                 );
 
-                let llvm_value =
-                    LLVMBuildLoad(fcx.builder, value_ptr, "float_value\0".as_ptr() as *const _);
+                let llvm_value = LLVMBuildLoad(fcx.builder, value_ptr, libcstr!("float_value"));
                 tcx.add_invariant_load_metadata(llvm_value);
 
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::LoadBoxedCharValue(reg, boxed_char_reg) => {
                 let llvm_boxed_char = fcx.regs[boxed_char_reg];
-                let value_ptr = LLVMBuildStructGEP(
-                    fcx.builder,
-                    llvm_boxed_char,
-                    1,
-                    b"char_value_ptr\0".as_ptr() as *const _,
-                );
+                let value_ptr =
+                    LLVMBuildStructGEP(fcx.builder, llvm_boxed_char, 1, libcstr!("char_value_ptr"));
 
-                let llvm_value =
-                    LLVMBuildLoad(fcx.builder, value_ptr, "char_value\0".as_ptr() as *const _);
+                let llvm_value = LLVMBuildLoad(fcx.builder, value_ptr, libcstr!("char_value"));
 
                 tcx.add_invariant_load_metadata(llvm_value);
                 tcx.add_char_codepoint_range_metadata(llvm_value);
@@ -469,12 +437,12 @@ fn gen_op(
                     fcx.builder,
                     llvm_boxed_fun_thunk,
                     1,
-                    b"boxed_fun_thunk_captures_ptr\0".as_ptr() as *const _,
+                    libcstr!("boxed_fun_thunk_captures_ptr"),
                 );
                 let llvm_value = LLVMBuildLoad(
                     fcx.builder,
                     captures_ptr,
-                    "boxed_fun_thunk_captures\0".as_ptr() as *const _,
+                    libcstr!("boxed_fun_thunk_captures"),
                 );
 
                 fcx.regs.insert(*reg, llvm_value);
@@ -485,14 +453,10 @@ fn gen_op(
                     fcx.builder,
                     llvm_boxed_record,
                     record_struct::RECORD_CLASS_ID_INDEX,
-                    b"record_class_id_ptr\0".as_ptr() as *const _,
+                    libcstr!("record_class_id_ptr"),
                 );
 
-                let llvm_value = LLVMBuildLoad(
-                    fcx.builder,
-                    value_ptr,
-                    "record_class_id\0".as_ptr() as *const _,
-                );
+                let llvm_value = LLVMBuildLoad(fcx.builder, value_ptr, libcstr!("record_class_id"));
 
                 mcx.add_record_class_id_range_metadata(llvm_value);
                 tcx.add_invariant_load_metadata(llvm_value);
@@ -530,11 +494,8 @@ fn gen_op(
                     b"record_field_ptr\0",
                 );
 
-                let llvm_value = LLVMBuildLoad(
-                    fcx.builder,
-                    field_ptr,
-                    "record_field_value\0".as_ptr() as *const _,
-                );
+                let llvm_value =
+                    LLVMBuildLoad(fcx.builder, field_ptr, libcstr!("record_field_value"));
                 tcx.add_invariant_load_metadata(llvm_value);
 
                 fcx.regs.insert(*reg, llvm_value);
@@ -764,25 +725,18 @@ fn gen_op(
                 let llvm_rhs = fcx.regs[rhs_reg];
                 let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
 
-                let i64_lhs = LLVMBuildPtrToInt(
-                    fcx.builder,
-                    llvm_lhs,
-                    llvm_i64,
-                    "lhs_as_int\0".as_ptr() as *const _,
-                );
-                let i64_rhs = LLVMBuildPtrToInt(
-                    fcx.builder,
-                    llvm_rhs,
-                    llvm_i64,
-                    "rhs_as_int\0".as_ptr() as *const _,
-                );
+                let i64_lhs =
+                    LLVMBuildPtrToInt(fcx.builder, llvm_lhs, llvm_i64, libcstr!("lhs_as_int"));
+
+                let i64_rhs =
+                    LLVMBuildPtrToInt(fcx.builder, llvm_rhs, llvm_i64, libcstr!("rhs_as_int"));
 
                 let llvm_value = LLVMBuildICmp(
                     fcx.builder,
                     LLVMIntPredicate::LLVMIntEQ,
                     i64_lhs,
                     i64_rhs,
-                    "box_identical\0".as_ptr() as *const _,
+                    libcstr!("box_identical"),
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }
@@ -793,7 +747,7 @@ fn gen_op(
                     fcx.builder,
                     llvm_i64,
                     LLVMDoubleTypeInContext(tcx.llx),
-                    "i64_as_double\0".as_ptr() as *const _,
+                    libcstr!("i64_as_double"),
                 );
 
                 fcx.regs.insert(*reg, llvm_double);
@@ -802,24 +756,15 @@ fn gen_op(
                 let llvm_lhs = fcx.regs[lhs_reg];
                 let llvm_rhs = fcx.regs[rhs_reg];
 
-                let llvm_value = LLVMBuildFAdd(
-                    fcx.builder,
-                    llvm_lhs,
-                    llvm_rhs,
-                    "float_sum\0".as_ptr() as *const _,
-                );
+                let llvm_value =
+                    LLVMBuildFAdd(fcx.builder, llvm_lhs, llvm_rhs, libcstr!("float_sum"));
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Int64Add(reg, BinaryOp { lhs_reg, rhs_reg }) => {
                 let llvm_lhs = fcx.regs[lhs_reg];
                 let llvm_rhs = fcx.regs[rhs_reg];
 
-                let llvm_value = LLVMBuildNUWAdd(
-                    fcx.builder,
-                    llvm_lhs,
-                    llvm_rhs,
-                    "sum\0".as_ptr() as *const _,
-                );
+                let llvm_value = LLVMBuildNUWAdd(fcx.builder, llvm_lhs, llvm_rhs, libcstr!("sum"));
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Int64CheckedAdd(reg, BinaryOp { lhs_reg, rhs_reg }) => {
@@ -840,12 +785,8 @@ fn gen_op(
                 let llvm_lhs = fcx.regs[lhs_reg];
                 let llvm_rhs = fcx.regs[rhs_reg];
 
-                let llvm_value = LLVMBuildFMul(
-                    fcx.builder,
-                    llvm_lhs,
-                    llvm_rhs,
-                    "float_product\0".as_ptr() as *const _,
-                );
+                let llvm_value =
+                    LLVMBuildFMul(fcx.builder, llvm_lhs, llvm_rhs, libcstr!("float_product"));
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Int64CheckedMul(reg, BinaryOp { lhs_reg, rhs_reg }) => {
@@ -870,7 +811,7 @@ fn gen_op(
                     fcx.builder,
                     llvm_lhs,
                     llvm_rhs,
-                    "float_difference\0".as_ptr() as *const _,
+                    libcstr!("float_difference"),
                 );
                 fcx.regs.insert(*reg, llvm_value);
             }
@@ -892,24 +833,16 @@ fn gen_op(
                 let llvm_lhs = fcx.regs[lhs_reg];
                 let llvm_rhs = fcx.regs[rhs_reg];
 
-                let llvm_value = LLVMBuildFDiv(
-                    fcx.builder,
-                    llvm_lhs,
-                    llvm_rhs,
-                    "float_quotient\0".as_ptr() as *const _,
-                );
+                let llvm_value =
+                    LLVMBuildFDiv(fcx.builder, llvm_lhs, llvm_rhs, libcstr!("float_quotient"));
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Int64Div(reg, BinaryOp { lhs_reg, rhs_reg }) => {
                 let llvm_numer = fcx.regs[lhs_reg];
                 let llvm_denom = fcx.regs[rhs_reg];
 
-                let llvm_value = LLVMBuildSDiv(
-                    fcx.builder,
-                    llvm_numer,
-                    llvm_denom,
-                    "quot\0".as_ptr() as *const _,
-                );
+                let llvm_value =
+                    LLVMBuildSDiv(fcx.builder, llvm_numer, llvm_denom, libcstr!("quot"));
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Int64CheckedDiv(reg, BinaryOp { lhs_reg, rhs_reg }) => {
@@ -925,12 +858,8 @@ fn gen_op(
                 let llvm_numer = fcx.regs[lhs_reg];
                 let llvm_denom = fcx.regs[rhs_reg];
 
-                let llvm_value = LLVMBuildSRem(
-                    fcx.builder,
-                    llvm_numer,
-                    llvm_denom,
-                    "rem\0".as_ptr() as *const _,
-                );
+                let llvm_value =
+                    LLVMBuildSRem(fcx.builder, llvm_numer, llvm_denom, libcstr!("rem"));
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Int64CheckedRem(reg, BinaryOp { lhs_reg, rhs_reg }) => {
@@ -952,43 +881,27 @@ fn gen_op(
                 let llvm_lhs = fcx.regs[lhs_reg];
                 let llvm_rhs = fcx.regs[rhs_reg];
 
-                let llvm_value = LLVMBuildAnd(
-                    fcx.builder,
-                    llvm_lhs,
-                    llvm_rhs,
-                    "int_and\0".as_ptr() as *const _,
-                );
+                let llvm_value = LLVMBuildAnd(fcx.builder, llvm_lhs, llvm_rhs, libcstr!("int_and"));
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Int64BitwiseOr(reg, BinaryOp { lhs_reg, rhs_reg }) => {
                 let llvm_lhs = fcx.regs[lhs_reg];
                 let llvm_rhs = fcx.regs[rhs_reg];
 
-                let llvm_value = LLVMBuildOr(
-                    fcx.builder,
-                    llvm_lhs,
-                    llvm_rhs,
-                    "int_or\0".as_ptr() as *const _,
-                );
+                let llvm_value = LLVMBuildOr(fcx.builder, llvm_lhs, llvm_rhs, libcstr!("int_or"));
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Int64BitwiseXor(reg, BinaryOp { lhs_reg, rhs_reg }) => {
                 let llvm_lhs = fcx.regs[lhs_reg];
                 let llvm_rhs = fcx.regs[rhs_reg];
 
-                let llvm_value = LLVMBuildXor(
-                    fcx.builder,
-                    llvm_lhs,
-                    llvm_rhs,
-                    "int_xor\0".as_ptr() as *const _,
-                );
+                let llvm_value = LLVMBuildXor(fcx.builder, llvm_lhs, llvm_rhs, libcstr!("int_xor"));
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Int64BitwiseNot(reg, int_reg) => {
                 let llvm_int = fcx.regs[int_reg];
 
-                let llvm_value =
-                    LLVMBuildNot(fcx.builder, llvm_int, "int_not\0".as_ptr() as *const _);
+                let llvm_value = LLVMBuildNot(fcx.builder, llvm_int, libcstr!("int_not"));
                 fcx.regs.insert(*reg, llvm_value);
             }
             OpKind::Int64ShiftLeft(reg, ShiftOp { int_reg, bit_count }) => {
@@ -998,7 +911,7 @@ fn gen_op(
                     fcx.builder,
                     llvm_int,
                     LLVMConstInt(LLVMInt64TypeInContext(tcx.llx), *bit_count as u64, 0),
-                    "int_shl\0".as_ptr() as *const _,
+                    libcstr!("int_shl"),
                 );
 
                 fcx.regs.insert(*reg, llvm_value);
@@ -1010,7 +923,7 @@ fn gen_op(
                     fcx.builder,
                     llvm_int,
                     LLVMConstInt(LLVMInt64TypeInContext(tcx.llx), *bit_count as u64, 0),
-                    "int_ashr\0".as_ptr() as *const _,
+                    libcstr!("int_ashr"),
                 );
 
                 fcx.regs.insert(*reg, llvm_value);
@@ -1022,7 +935,7 @@ fn gen_op(
                     fcx.builder,
                     llvm_int,
                     LLVMConstInt(LLVMInt64TypeInContext(tcx.llx), *bit_count as u64, 0),
-                    "int_lshr\0".as_ptr() as *const _,
+                    libcstr!("int_lshr"),
                 );
 
                 fcx.regs.insert(*reg, llvm_value);
@@ -1046,14 +959,14 @@ fn gen_op(
                     llvm_undef,
                     llvm_captures,
                     0,
-                    b"captures\0".as_ptr() as *const _,
+                    libcstr!("captures"),
                 );
                 let llvm_callback = LLVMBuildInsertValue(
                     fcx.builder,
                     llvm_with_captures,
                     llvm_entry_point,
                     1,
-                    b"callback\0".as_ptr() as *const _,
+                    libcstr!("callback"),
                 );
 
                 fcx.regs.insert(*reg, llvm_callback);
@@ -1151,21 +1064,14 @@ fn gen_cond(
     } = cond_alloc_plan;
 
     unsafe {
-        let true_block = LLVMAppendBasicBlockInContext(
-            tcx.llx,
-            fcx.function,
-            b"cond_true\0".as_ptr() as *const _,
-        );
-        let false_block = LLVMAppendBasicBlockInContext(
-            tcx.llx,
-            fcx.function,
-            b"cond_false\0".as_ptr() as *const _,
-        );
-        let cont_block = LLVMAppendBasicBlockInContext(
-            tcx.llx,
-            fcx.function,
-            b"cond_cont\0".as_ptr() as *const _,
-        );
+        let true_block =
+            LLVMAppendBasicBlockInContext(tcx.llx, fcx.function, libcstr!("cond_true"));
+
+        let false_block =
+            LLVMAppendBasicBlockInContext(tcx.llx, fcx.function, libcstr!("cond_false"));
+
+        let cont_block =
+            LLVMAppendBasicBlockInContext(tcx.llx, fcx.function, libcstr!("cond_cont"));
 
         let test_llvm = fcx.regs[test_reg];
         LLVMBuildCondBr(fcx.builder, test_llvm, true_block, false_block);
@@ -1190,7 +1096,7 @@ fn gen_cond(
             let phi_value = LLVMBuildPhi(
                 fcx.builder,
                 LLVMTypeOf(true_result_llvm),
-                b"cond_phi\0".as_ptr() as *const _,
+                libcstr!("cond_phi"),
             );
 
             LLVMAddIncoming(

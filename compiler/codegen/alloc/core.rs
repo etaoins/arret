@@ -9,6 +9,7 @@ use arret_runtime::boxed;
 use crate::codegen::alloc::{ActiveAlloc, AllocAtom, BoxSource};
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
+use crate::libcstr;
 
 fn init_alloced_box_header(
     tcx: &mut TargetCtx,
@@ -17,12 +18,7 @@ fn init_alloced_box_header(
     header: boxed::Header,
 ) {
     unsafe {
-        let header_ptr = LLVMBuildStructGEP(
-            builder,
-            alloced_box,
-            0,
-            b"header_ptr\0".as_ptr() as *const _,
-        );
+        let header_ptr = LLVMBuildStructGEP(builder, alloced_box, 0, libcstr!("header_ptr"));
         LLVMBuildStore(builder, tcx.llvm_box_header(header), header_ptr);
     }
 }
@@ -81,7 +77,7 @@ fn gen_heap_alloced_box<T: boxed::ConstTagged>(
                 active_alloc.box_slots,
                 gep_indices.as_mut_ptr(),
                 gep_indices.len() as u32,
-                b"slot\0".as_ptr() as *const _,
+                libcstr!("slot"),
             )
         };
 
@@ -194,7 +190,7 @@ fn gen_runtime_heap_alloc(
             alloc_cells_fun,
             alloc_cells_args.as_mut_ptr(),
             alloc_cells_args.len() as u32,
-            b"runtime_box_slots\0".as_ptr() as *const _,
+            libcstr!("runtime_box_slots"),
         );
 
         // We can dereference the entire allocation immediately
@@ -249,25 +245,15 @@ pub fn atom_into_active_alloc<'op>(
         let function = LLVMGetBasicBlockParent(LLVMGetInsertBlock(builder));
 
         let mut bump_alloc_block =
-            LLVMAppendBasicBlockInContext(tcx.llx, function, b"bump_alloc\0".as_ptr() as *const _);
+            LLVMAppendBasicBlockInContext(tcx.llx, function, libcstr!("bump_alloc"));
 
-        let mut runtime_alloc_block = LLVMAppendBasicBlockInContext(
-            tcx.llx,
-            function,
-            b"runtime_alloc\0".as_ptr() as *const _,
-        );
+        let mut runtime_alloc_block =
+            LLVMAppendBasicBlockInContext(tcx.llx, function, libcstr!("runtime_alloc"));
 
-        let cont_block =
-            LLVMAppendBasicBlockInContext(tcx.llx, function, b"alloc_cont\0".as_ptr() as *const _);
+        let cont_block = LLVMAppendBasicBlockInContext(tcx.llx, function, libcstr!("alloc_cont"));
 
-        let seg_next_ptr = LLVMBuildStructGEP(
-            builder,
-            llvm_task,
-            0,
-            b"seg_next_ptr\0".as_ptr() as *const _,
-        );
-        let mut seg_old_next =
-            LLVMBuildLoad(builder, seg_next_ptr, "seg_old_next\0".as_ptr() as *const _);
+        let seg_next_ptr = LLVMBuildStructGEP(builder, llvm_task, 0, libcstr!("seg_next_ptr"));
+        let mut seg_old_next = LLVMBuildLoad(builder, seg_next_ptr, libcstr!("seg_old_next"));
 
         let gep_indices = &mut [LLVMConstInt(
             LLVMInt32TypeInContext(tcx.llx),
@@ -279,33 +265,27 @@ pub fn atom_into_active_alloc<'op>(
             seg_old_next,
             gep_indices.as_mut_ptr(),
             gep_indices.len() as u32,
-            b"seg_new_next\0".as_ptr() as *const _,
+            libcstr!("seg_new_next"),
         );
 
-        let seg_end_ptr =
-            LLVMBuildStructGEP(builder, llvm_task, 1, b"seg_end_ptr\0".as_ptr() as *const _);
-        let seg_end = LLVMBuildLoad(builder, seg_end_ptr, "seg_end\0".as_ptr() as *const _);
+        let seg_end_ptr = LLVMBuildStructGEP(builder, llvm_task, 1, libcstr!("seg_end_ptr"));
+        let seg_end = LLVMBuildLoad(builder, seg_end_ptr, libcstr!("seg_end"));
 
         let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
         let seg_new_next_int = LLVMBuildPtrToInt(
             builder,
             seg_new_next,
             llvm_i64,
-            "seg_new_next_int\0".as_ptr() as *const _,
+            libcstr!("seg_new_next_int"),
         );
-        let seg_end_int = LLVMBuildPtrToInt(
-            builder,
-            seg_end,
-            llvm_i64,
-            "seg_end_int\0".as_ptr() as *const _,
-        );
+        let seg_end_int = LLVMBuildPtrToInt(builder, seg_end, llvm_i64, libcstr!("seg_end_int"));
 
         let seg_has_space = LLVMBuildICmp(
             builder,
             LLVMIntPredicate::LLVMIntULE,
             seg_new_next_int,
             seg_end_int,
-            "seg_has_space\0".as_ptr() as *const _,
+            libcstr!("seg_has_space"),
         );
 
         LLVMBuildCondBr(
@@ -330,7 +310,7 @@ pub fn atom_into_active_alloc<'op>(
         let box_slots = LLVMBuildPhi(
             builder,
             tcx.boxed_abi_to_llvm_ptr_type(&abitype::BoxedABIType::Any),
-            b"box_slots\0".as_ptr() as *const _,
+            libcstr!("box_slots"),
         );
 
         LLVMAddIncoming(

@@ -9,6 +9,7 @@ use arret_runtime::class_map;
 
 use crate::codegen::const_gen::annotate_private_global;
 use crate::codegen::target_gen::TargetCtx;
+use crate::libcstr;
 use crate::mir::ops;
 
 pub const IS_INLINE_INDEX: u32 = 1;
@@ -186,7 +187,7 @@ pub fn gen_classmap_classes(
         let llvm_classmap_global = LLVMAddGlobal(
             llvm_module,
             LLVMTypeOf(llvm_classmap),
-            "classmap_classes\0".as_ptr() as *const _,
+            libcstr!("classmap_classes"),
         );
 
         LLVMSetInitializer(llvm_classmap_global, llvm_classmap);
@@ -238,13 +239,13 @@ pub fn gen_record_field_ptr(
                     llvm_boxed_record,
                     data_ptr_gep_indices.as_mut_ptr(),
                     data_ptr_gep_indices.len() as u32,
-                    "record_data_ptr_ptr\0".as_ptr() as *const _,
+                    libcstr!("record_data_ptr_ptr"),
                 );
 
                 let llvm_record_data_ptr = LLVMBuildLoad(
                     builder,
                     llvm_record_data_ptr_ptr,
-                    "record_data_ptr\0".as_ptr() as *const _,
+                    libcstr!("record_data_ptr"),
                 );
                 tcx.add_invariant_load_metadata(llvm_record_data_ptr);
 

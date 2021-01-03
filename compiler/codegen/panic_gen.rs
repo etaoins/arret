@@ -5,6 +5,7 @@ use crate::codegen::const_gen::annotate_private_global;
 use crate::codegen::fun_gen::FunCtx;
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
+use crate::libcstr;
 
 pub(crate) fn gen_panic(
     tcx: &mut TargetCtx,
@@ -53,7 +54,7 @@ pub(crate) fn gen_panic(
         let llvm_message_global = LLVMAddGlobal(
             mcx.module,
             LLVMTypeOf(llvm_message_string),
-            b"panic_message\0".as_ptr() as *const _,
+            libcstr!("panic_message"),
         );
         LLVMSetInitializer(llvm_message_global, llvm_message_string);
         annotate_private_global(llvm_message_global);
@@ -78,7 +79,7 @@ pub(crate) fn gen_panic(
             panic_with_string_fun,
             panic_with_string_args.as_mut_ptr(),
             panic_with_string_args.len() as u32,
-            b"\0".as_ptr() as *const _,
+            libcstr!(""),
         );
 
         LLVMBuildUnreachable(fcx.builder);

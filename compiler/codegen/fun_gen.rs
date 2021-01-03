@@ -11,6 +11,7 @@ use crate::codegen::analysis::escape::{CaptureKind, Captures};
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
 use crate::codegen::GenABI;
+use crate::libcstr;
 
 pub(crate) struct FunCtx {
     pub regs: HashMap<ops::RegId, LLVMValueRef>,
@@ -86,7 +87,7 @@ pub(crate) fn define_fun(
 
     unsafe {
         let builder = LLVMCreateBuilderInContext(tcx.llx);
-        let bb = LLVMAppendBasicBlockInContext(tcx.llx, llvm_fun, b"entry\0".as_ptr() as *const _);
+        let bb = LLVMAppendBasicBlockInContext(tcx.llx, llvm_fun, libcstr!("entry"));
         LLVMPositionBuilderAtEnd(builder, bb);
 
         let mut fcx = FunCtx::new(llvm_fun, builder, LLVMGetParam(llvm_fun, 0));

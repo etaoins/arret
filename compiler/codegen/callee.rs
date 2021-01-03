@@ -6,6 +6,7 @@ use llvm_sys::{LLVMAttributeFunctionIndex, LLVMCallConv};
 
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
+use crate::libcstr;
 use crate::mir::ops;
 
 pub fn gen_static_symbol_entry_point(
@@ -78,14 +79,10 @@ pub fn gen_boxed_fun_thunk_entry_point(
     llvm_fun_thunk: LLVMValueRef,
 ) -> LLVMValueRef {
     unsafe {
-        let entry_ptr = LLVMBuildStructGEP(
-            builder,
-            llvm_fun_thunk,
-            2,
-            b"fun_thunk_entry_ptr\0".as_ptr() as *const _,
-        );
+        let entry_ptr =
+            LLVMBuildStructGEP(builder, llvm_fun_thunk, 2, libcstr!("fun_thunk_entry_ptr"));
 
-        LLVMBuildLoad(builder, entry_ptr, "fun_thunk_entry\0".as_ptr() as *const _)
+        LLVMBuildLoad(builder, entry_ptr, libcstr!("fun_thunk_entry"))
     }
 }
 
