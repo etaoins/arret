@@ -325,7 +325,7 @@ fn int_division_op<CI, UI>(
     arg_list_value: &Value,
     checked_op_kind: CI,
     unchecked_op_kind: UI,
-) -> Result<BuildOutcome>
+) -> BuildOutcome
 where
     CI: FnOnce(RegId, BinaryOp) -> OpKind,
     UI: FnOnce(RegId, BinaryOp) -> OpKind,
@@ -364,9 +364,7 @@ where
         b.push_reg(span, unchecked_op_kind, div_binary_op)
     };
 
-    Ok(BuildOutcome::ReturnValue(
-        value::RegValue::new(result_reg, abitype::ABIType::Int).into(),
-    ))
+    BuildOutcome::ReturnValue(value::RegValue::new(result_reg, abitype::ABIType::Int).into())
 }
 
 pub fn quot(
@@ -375,14 +373,14 @@ pub fn quot(
     span: Span,
     arg_list_value: &Value,
 ) -> Result<BuildOutcome> {
-    int_division_op(
+    Ok(int_division_op(
         ehx,
         b,
         span,
         arg_list_value,
         OpKind::Int64CheckedDiv,
         OpKind::Int64Div,
-    )
+    ))
 }
 
 pub fn rem(
@@ -391,14 +389,14 @@ pub fn rem(
     span: Span,
     arg_list_value: &Value,
 ) -> Result<BuildOutcome> {
-    int_division_op(
+    Ok(int_division_op(
         ehx,
         b,
         span,
         arg_list_value,
         OpKind::Int64CheckedRem,
         OpKind::Int64Rem,
-    )
+    ))
 }
 
 pub fn sqrt(

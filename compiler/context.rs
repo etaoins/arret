@@ -88,8 +88,8 @@ fn transitive_deps(imports: &ModuleImports) -> HashSet<Arc<Module>> {
     all_deps
 }
 
-pub(crate) fn prims_to_module(exports: Exports) -> UncachedModule {
-    Ok(Module {
+pub(crate) fn prims_to_module(exports: Exports) -> Module {
+    Module {
         module_id: ModuleId::alloc(),
 
         imports: HashMap::new(),
@@ -99,10 +99,10 @@ pub(crate) fn prims_to_module(exports: Exports) -> UncachedModule {
         main_local_id: None,
 
         linked_library: None,
-    })
+    }
 }
 
-fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> UncachedModule {
+fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> Module {
     use crate::hir::var_id::LocalIdAlloc;
     use crate::ty::Ty;
 
@@ -149,7 +149,7 @@ fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> UncachedModul
         exports.insert(fun_name_data_str, hir::scope::Binding::Var(None, local_id));
     }
 
-    Ok(Module {
+    Module {
         module_id: ModuleId::alloc(),
 
         imports: HashMap::new(),
@@ -162,7 +162,7 @@ fn rfi_library_to_module(span: Span, rfi_library: rfi::Library) -> UncachedModul
             _loaded: loaded,
             target_path,
         })),
-    })
+    }
 }
 
 /// Shared context for compilation
@@ -196,7 +196,7 @@ impl CompileCtx {
                         vec!["internal".into()],
                         (*terminal_name).into(),
                     ),
-                    prims_module.map(Arc::new),
+                    Ok(Arc::new(prims_module)),
                 )
             });
 
@@ -240,7 +240,7 @@ impl CompileCtx {
                         self.source_file_to_module(&source_file).map(Arc::new)
                     }
                     Ok(LoadedModule::Rust(rfi_library)) => {
-                        rfi_library_to_module(span, rfi_library).map(Arc::new)
+                        Ok(Arc::new(rfi_library_to_module(span, rfi_library)))
                     }
                     Err(err) => Err(vec![err.into()]),
                 },

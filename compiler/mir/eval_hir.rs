@@ -1140,14 +1140,14 @@ impl EvalHirCtx {
         &mut self,
         fcx: &mut FunCtx<'_>,
         branch_expr: &hir::Expr<hir::Inferred>,
-    ) -> Result<BuiltCondBranch> {
+    ) -> BuiltCondBranch {
         let b = Builder::new();
 
         let mut some_b = Some(b);
         let result = self.eval_expr(fcx, &mut some_b, branch_expr);
         let b = some_b.unwrap();
 
-        Ok(BuiltCondBranch { b, result })
+        BuiltCondBranch { b, result }
     }
 
     fn build_cond(
@@ -1168,8 +1168,8 @@ impl EvalHirCtx {
         let span = cond.span;
         let test_reg = value_to_reg(self, b, span, test_value, &abitype::ABIType::Bool);
 
-        let mut built_true = self.build_cond_branch(fcx, &cond.true_expr)?;
-        let mut built_false = self.build_cond_branch(fcx, &cond.false_expr)?;
+        let mut built_true = self.build_cond_branch(fcx, &cond.true_expr);
+        let mut built_false = self.build_cond_branch(fcx, &cond.false_expr);
 
         let output_value;
         let reg_phi;
@@ -1329,9 +1329,7 @@ impl EvalHirCtx {
             use std::mem;
 
             let wanted_abi = PolymorphABI::thunk_abi();
-            let ops_fun = self
-                .ops_for_arret_fun(&arret_fun, wanted_abi)
-                .expect("error during arret fun boxing");
+            let ops_fun = self.ops_for_arret_fun(&arret_fun, wanted_abi);
 
             let address = self.thunk_jit.compile_fun(
                 &self.private_funs,
@@ -1368,9 +1366,7 @@ impl EvalHirCtx {
         let private_fun_id = self.private_fun_id_counter.alloc();
         self.arret_funs.insert(arret_fun_key, private_fun_id);
 
-        let ops_fun = self
-            .ops_for_arret_fun(arret_fun, wanted_abi)
-            .expect("error during arret fun boxing");
+        let ops_fun = self.ops_for_arret_fun(arret_fun, wanted_abi);
         self.private_funs.insert(private_fun_id, ops_fun);
 
         private_fun_id
@@ -1493,7 +1489,7 @@ impl EvalHirCtx {
         &mut self,
         arret_fun: &value::ArretFun,
         wanted_abi: PolymorphABI,
-    ) -> Result<ops::Fun> {
+    ) -> ops::Fun {
         use crate::hir::destruc::poly_for_list_destruc;
         use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
         use crate::mir::env_values;
@@ -1577,14 +1573,14 @@ impl EvalHirCtx {
         let mut b = some_b.unwrap();
         build_value_ret(self, &mut b, span, app_result, &wanted_abi.ret);
 
-        Ok(optimise_fun(ops::Fun {
+        optimise_fun(ops::Fun {
             span: arret_fun.fun_expr().span,
             source_name: arret_fun.source_name().clone(),
 
             abi: wanted_abi.into(),
             param_regs,
             ops: b.into_ops(),
-        }))
+        })
     }
 
     /// Builds a function with a callback ABI that calls a thunk passed as its captures
@@ -1878,7 +1874,7 @@ impl EvalHirCtx {
             ret: abitype::RetABIType::Void,
         };
 
-        let main = self.ops_for_arret_fun(&main_arret_fun, main_abi)?;
+        let main = self.ops_for_arret_fun(&main_arret_fun, main_abi);
 
         Ok(BuiltProgram {
             main,

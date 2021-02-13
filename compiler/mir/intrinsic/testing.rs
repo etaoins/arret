@@ -76,7 +76,7 @@ pub fn fn_op_categories(
     };
 
     let ideal_polymorph_abi = ideal_polymorph_abi_for_arret_fun(&arret_fun);
-    let ops_fun = ehx.ops_for_arret_fun(&arret_fun, ideal_polymorph_abi)?;
+    let ops_fun = ehx.ops_for_arret_fun(&arret_fun, ideal_polymorph_abi);
 
     let mut categories = BTreeSet::<ops::OpCategory>::new();
     add_ops_categories(&mut categories, ops_fun.ops.iter());

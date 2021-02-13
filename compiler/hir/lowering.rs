@@ -940,7 +940,7 @@ fn module_for_str(data_str: &str) -> Result<LoweredModule> {
                 vec!["internal".into()],
                 terminal_name.into(),
             ),
-            Arc::new(context::prims_to_module(exports).unwrap()),
+            Arc::new(context::prims_to_module(exports)),
         );
     }
 
@@ -949,7 +949,7 @@ fn module_for_str(data_str: &str) -> Result<LoweredModule> {
 
     imports.insert(
         ModuleName::new("arret".into(), vec!["internal".into()], "types".into()),
-        Arc::new(context::prims_to_module(exports::tys_exports()).unwrap()),
+        Arc::new(context::prims_to_module(exports::tys_exports())),
     );
 
     lower_data(&imports, &program_data).map_err(|mut errors| errors.remove(0))
