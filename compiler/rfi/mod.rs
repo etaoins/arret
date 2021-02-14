@@ -258,10 +258,7 @@ impl Loader {
         let target_path = build_rfi_lib_path(target_base_path, package_name, LibType::Static);
 
         let map_loader_err = |err: libloading::Error| match err {
-            libloading::Error::DlOpen { .. }
-            | libloading::Error::DlOpenUnknown
-            | libloading::Error::LoadLibraryW { .. }
-            | libloading::Error::LoadLibraryWUnknown => Error::new(
+            libloading::Error::DlOpen { .. } | libloading::Error::DlOpenUnknown => Error::new(
                 span,
                 ErrorKind::ModuleNotFound(native_path.clone().into_boxed_path()),
             ),
@@ -271,7 +268,7 @@ impl Loader {
             ),
         };
 
-        let loaded = libloading::Library::new(&native_path).map_err(map_loader_err)?;
+        let loaded = unsafe { libloading::Library::new(&native_path).map_err(map_loader_err)? };
 
         let exports_symbol_name = format!("ARRET_{}_RUST_EXPORTS", package_name.to_uppercase());
         let exports: binding::RustExports = unsafe {
