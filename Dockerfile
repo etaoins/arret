@@ -6,7 +6,7 @@ RUN \
   apt-get clean
 ENV LLVM_SYS_10_PREFIX /usr/lib/llvm-10
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.50.0 --profile=minimal
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.51.0 --profile=minimal
 ENV PATH "/root/.cargo/bin:${PATH}"
 
 # These are the minimum required files for `cargo fetch`
