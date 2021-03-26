@@ -16,20 +16,20 @@ pub fn build_value_ret(
     b: &mut Builder,
     span: Span,
     result: Result<Value>,
-    ret_abi: &abitype::RetABIType,
+    ret_abi: &abitype::RetAbiType,
 ) {
     use crate::mir::value::build_reg::value_to_reg;
 
     match result {
         Ok(result_value) => match ret_abi {
-            abitype::RetABIType::Inhabited(abi_type) => {
+            abitype::RetAbiType::Inhabited(abi_type) => {
                 let ret_reg = value_to_reg(ehx, b, span, &result_value, abi_type);
                 b.push(span, ops::OpKind::Ret(ret_reg.into()));
             }
-            abitype::RetABIType::Never => {
+            abitype::RetAbiType::Never => {
                 b.push(span, ops::OpKind::Unreachable);
             }
-            abitype::RetABIType::Void => {
+            abitype::RetAbiType::Void => {
                 b.push(span, ops::OpKind::RetVoid);
             }
         },
@@ -40,12 +40,12 @@ pub fn build_value_ret(
     }
 }
 
-pub fn ret_reg_to_value(ret_reg: BuiltReg, ret_abi: abitype::RetABIType) -> Result<Value> {
+pub fn ret_reg_to_value(ret_reg: BuiltReg, ret_abi: abitype::RetAbiType) -> Result<Value> {
     match ret_abi {
-        abitype::RetABIType::Inhabited(abi_type) => {
+        abitype::RetAbiType::Inhabited(abi_type) => {
             Ok(value::RegValue::new(ret_reg, abi_type).into())
         }
-        abitype::RetABIType::Never => Err(Error::Diverged),
-        abitype::RetABIType::Void => Ok(Value::List(Box::new([]), None)),
+        abitype::RetAbiType::Never => Err(Error::Diverged),
+        abitype::RetAbiType::Void => Ok(Value::List(Box::new([]), None)),
     }
 }

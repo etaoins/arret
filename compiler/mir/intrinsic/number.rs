@@ -146,7 +146,7 @@ fn compare_operand_list(
     let left_value = list_iter.next(b, span).unwrap();
     match build_operand_iter_compare(ehx, b, span, &left_value, &mut list_iter, comparison) {
         Some(result_reg) => BuildOutcome::ReturnValue(
-            value::RegValue::new(result_reg, abitype::ABIType::Bool).into(),
+            value::RegValue::new(result_reg, abitype::AbiType::Bool).into(),
         ),
         None => BuildOutcome::None,
     }
@@ -180,7 +180,7 @@ pub fn float(
     Ok(BuildOutcome::ReturnValue(
         value::RegValue::new(
             num_value_to_float_reg(ehx, b, span, &value),
-            abitype::ABIType::Float,
+            abitype::AbiType::Float,
         )
         .into(),
     ))

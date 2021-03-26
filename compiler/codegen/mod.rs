@@ -18,32 +18,32 @@ pub(crate) mod target_gen;
 mod target_machine;
 mod vector_gen;
 
-use crate::mir::ops::OpsABI;
+use crate::mir::ops::OpsAbi;
 use arret_runtime::abitype;
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct GenABI {
+pub struct GenAbi {
     pub takes_task: bool,
-    pub params: Box<[abitype::ParamABIType]>,
-    pub ret: abitype::RetABIType,
+    pub params: Box<[abitype::ParamAbiType]>,
+    pub ret: abitype::RetAbiType,
 }
 
-impl GenABI {
-    pub fn thunk_abi() -> GenABI {
-        GenABI {
+impl GenAbi {
+    pub fn thunk_abi() -> GenAbi {
+        GenAbi {
             takes_task: true,
             params: Box::new([
-                abitype::BoxedABIType::Any.into(),
+                abitype::BoxedAbiType::Any.into(),
                 abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
             ]),
-            ret: abitype::BoxedABIType::Any.into(),
+            ret: abitype::BoxedAbiType::Any.into(),
         }
     }
 }
 
-impl<'a> From<&'a OpsABI> for GenABI {
-    fn from(ops_abi: &'a OpsABI) -> GenABI {
-        GenABI {
+impl<'a> From<&'a OpsAbi> for GenAbi {
+    fn from(ops_abi: &'a OpsAbi) -> GenAbi {
+        GenAbi {
             takes_task: true,
             params: ops_abi
                 .params

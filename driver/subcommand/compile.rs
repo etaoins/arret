@@ -58,7 +58,7 @@ pub fn compile_input_file(
 
     let output_type = match output_path.extension().and_then(ffi::OsStr::to_str) {
         Some("mir") => MIR_OUTPUT_TYPE,
-        Some("ll") => arret_compiler::OutputType::LLVMIR,
+        Some("ll") => arret_compiler::OutputType::LlvmIr,
         Some("s") => arret_compiler::OutputType::Assembly,
         Some("o") => arret_compiler::OutputType::Object,
         _ => arret_compiler::OutputType::Executable,

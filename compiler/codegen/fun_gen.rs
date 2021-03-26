@@ -10,7 +10,7 @@ use crate::mir::ops;
 use crate::codegen::analysis::escape::{CaptureKind, Captures};
 use crate::codegen::mod_gen::ModCtx;
 use crate::codegen::target_gen::TargetCtx;
-use crate::codegen::GenABI;
+use crate::codegen::GenAbi;
 use crate::libcstr;
 
 pub(crate) struct FunCtx {
@@ -50,7 +50,7 @@ pub(crate) fn declare_fun(
     llvm_module: LLVMModuleRef,
     fun: &ops::Fun,
 ) -> LLVMValueRef {
-    let gen_abi: GenABI = (&fun.abi).into();
+    let gen_abi: GenAbi = (&fun.abi).into();
     let function_type = tcx.fun_abi_to_llvm_type(&gen_abi);
 
     let fun_symbol = fun
@@ -63,8 +63,8 @@ pub(crate) fn declare_fun(
         let llvm_fun = LLVMAddFunction(llvm_module, fun_symbol.as_ptr() as *const _, function_type);
 
         let llvm_call_conv = match fun.abi.call_conv {
-            ops::CallConv::CCC => LLVMCallConv::LLVMCCallConv,
-            ops::CallConv::FastCC => LLVMCallConv::LLVMFastCallConv,
+            ops::CallConv::Ccc => LLVMCallConv::LLVMCCallConv,
+            ops::CallConv::FastCc => LLVMCallConv::LLVMFastCallConv,
         };
         LLVMSetFunctionCallConv(llvm_fun, llvm_call_conv as u32);
 
@@ -81,7 +81,7 @@ pub(crate) fn define_fun(
 ) {
     use crate::codegen::alloc::plan::plan_allocs;
     use crate::codegen::op_gen;
-    use arret_runtime::abitype::{ABIType, RetABIType};
+    use arret_runtime::abitype::{AbiType, RetAbiType};
 
     let alloc_plan = plan_allocs(tcx, &captures, &fun.ops);
 
@@ -100,13 +100,13 @@ pub(crate) fn define_fun(
             let llvm_offset = (1 + param_index) as u32;
             fcx.regs.insert(*reg, LLVMGetParam(llvm_fun, llvm_offset));
 
-            if let ABIType::Boxed(_) = param_abi_type {
+            if let AbiType::Boxed(_) = param_abi_type {
                 let no_capture = captures.get(*reg) == CaptureKind::Never;
                 tcx.add_boxed_param_attrs(llvm_fun, llvm_offset, no_capture);
             }
         }
 
-        if let RetABIType::Inhabited(ABIType::Boxed(_)) = fun.abi.ret {
+        if let RetAbiType::Inhabited(AbiType::Boxed(_)) = fun.abi.ret {
             tcx.add_boxed_return_attrs(llvm_fun);
         }
 

@@ -557,7 +557,7 @@ pub const TY_EXPORTS: &[(&str, Binding)] = &[
 /// Pushes the arguments for a list constructor on to the passed `Vec`
 ///
 /// This is used to share code between list and function types
-fn push_list_parts<M: ty::PM>(list_parts: &mut Vec<String>, list_ref: &ty::List<M>) {
+fn push_list_parts<M: ty::Pm>(list_parts: &mut Vec<String>, list_ref: &ty::List<M>) {
     for fixed in list_ref.fixed() {
         list_parts.push(str_for_ty_ref(fixed));
     }
@@ -586,7 +586,7 @@ fn str_for_bounds(bound_pvars: &[purity::PVarId], bound_tvars: &[ty::TVarId]) ->
     format!("#{{{}}}", all_parts.join(" "))
 }
 
-fn str_for_record_poly_arg<M: ty::PM>(
+fn str_for_record_poly_arg<M: ty::Pm>(
     instance: &record::Instance<M>,
     poly_param: &record::PolyParam,
 ) -> String {
@@ -600,7 +600,7 @@ fn str_for_record_poly_arg<M: ty::PM>(
     }
 }
 
-fn str_for_ty<M: ty::PM>(ty: &Ty<M>) -> String {
+fn str_for_ty<M: ty::Pm>(ty: &Ty<M>) -> String {
     match ty {
         Ty::Any => "Any".to_owned(),
         Ty::Bool => "Bool".to_owned(),
@@ -713,7 +713,7 @@ fn str_for_ty<M: ty::PM>(ty: &Ty<M>) -> String {
     }
 }
 
-pub fn str_for_ty_ref<M: ty::PM>(ty_ref: &ty::Ref<M>) -> String {
+pub fn str_for_ty_ref<M: ty::Pm>(ty_ref: &ty::Ref<M>) -> String {
     match ty_ref {
         ty::Ref::Var(tvar, _) => tvar.source_name().to_owned(),
         ty::Ref::Fixed(ty) => str_for_ty(ty),

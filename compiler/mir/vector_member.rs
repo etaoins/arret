@@ -6,16 +6,16 @@ use crate::mir::builder::Builder;
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::value::Value;
 
-fn vector_member_type(vector_value: &Value) -> &abitype::BoxedABIType {
+fn vector_member_type(vector_value: &Value) -> &abitype::BoxedAbiType {
     if let Value::Reg(reg_value) = vector_value {
-        if let abitype::ABIType::Boxed(abitype::BoxedABIType::Vector(member_boxed_abi_type)) =
+        if let abitype::AbiType::Boxed(abitype::BoxedAbiType::Vector(member_boxed_abi_type)) =
             &reg_value.abi_type
         {
             return *member_boxed_abi_type;
         }
     }
 
-    &abitype::BoxedABIType::Any
+    &abitype::BoxedAbiType::Any
 }
 
 /// Loads a vector member from a vector of known length
@@ -42,7 +42,7 @@ pub fn load_vector_member(
         b,
         span,
         &vector_value,
-        &abitype::BoxedABIType::Vector(&abitype::BoxedABIType::Any).into(),
+        &abitype::BoxedAbiType::Vector(&abitype::BoxedAbiType::Any).into(),
     );
 
     let member_reg = b.push_reg(
@@ -58,7 +58,7 @@ pub fn load_vector_member(
     (RegValue {
         reg: member_reg,
         possible_type_tags: member_possible_type_tags,
-        abi_type: abitype::BoxedABIType::Any.into(),
+        abi_type: abitype::BoxedAbiType::Any.into(),
         type_hint: TypeHint::None,
     })
     .into()

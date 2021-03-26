@@ -4,14 +4,14 @@ use crate::ty::Ty;
 fn subtract_ref_iters<'a, I, M>(minuend_iter: I, subtrahend_ref: &ty::Ref<M>) -> ty::Ref<M>
 where
     I: Iterator<Item = &'a ty::Ref<M>>,
-    M: ty::PM + 'a,
+    M: ty::Pm + 'a,
 {
     ty::unify::unify_ty_ref_iter(
         minuend_iter.map(|minuend_ref| subtract_ty_refs(minuend_ref, subtrahend_ref)),
     )
 }
 
-fn subtract_tys<M: ty::PM>(
+fn subtract_tys<M: ty::Pm>(
     minuend_ty: &Ty<M>,
     subtrahend_ref: &ty::Ref<M>,
     subtrahend_ty: &Ty<M>,
@@ -67,7 +67,7 @@ fn subtract_tys<M: ty::PM>(
     }
 }
 
-pub fn subtract_ty_refs<M: ty::PM>(
+pub fn subtract_ty_refs<M: ty::Pm>(
     minuend_ref: &ty::Ref<M>,
     subtrahend_ref: &ty::Ref<M>,
 ) -> ty::Ref<M> {

@@ -132,7 +132,7 @@ pub fn save_to_captures_reg(
                 b,
                 span,
                 value,
-                &abitype::BoxedABIType::Any.into(),
+                &abitype::BoxedAbiType::Any.into(),
             ))
         }
         CapturesRepr::RecordStruct(record_struct) => {
@@ -154,7 +154,7 @@ pub fn save_to_captures_reg(
                 },
             );
 
-            Some(b.cast_boxed(span, record_reg, abitype::BoxedABIType::Any))
+            Some(b.cast_boxed(span, record_reg, abitype::BoxedAbiType::Any))
         }
     }
 }
@@ -198,7 +198,7 @@ pub fn load_from_env_param(
             let var_id = &env_values.free_values[0].0;
             let captures_reg = captures_reg.unwrap();
             let new_value: Value =
-                value::RegValue::new(captures_reg, abitype::BoxedABIType::Any.into()).into();
+                value::RegValue::new(captures_reg, abitype::BoxedAbiType::Any.into()).into();
 
             local_values.insert(*var_id, new_value.clone());
             env_values.free_values[0].1 = new_value;

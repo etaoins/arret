@@ -35,13 +35,13 @@ pub fn vector_length(
         b,
         span,
         &vector_value,
-        &abitype::BoxedABIType::Vector(&abitype::BoxedABIType::Any).into(),
+        &abitype::BoxedAbiType::Vector(&abitype::BoxedAbiType::Any).into(),
     )
     .into();
 
     let vector_len_reg = b.push_reg(span, OpKind::LoadBoxedVectorLen, vector_reg);
     Ok(BuildOutcome::ReturnValue(
-        value::RegValue::new(vector_len_reg, abitype::ABIType::Int).into(),
+        value::RegValue::new(vector_len_reg, abitype::AbiType::Int).into(),
     ))
 }
 

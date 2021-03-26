@@ -6,13 +6,13 @@ use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 use llvm_sys::{LLVMAttributeReturnIndex, LLVMLinkage};
 
-use arret_runtime::abitype::{ABIType, BoxedABIType, RetABIType};
+use arret_runtime::abitype::{AbiType, BoxedAbiType, RetAbiType};
 use arret_runtime::boxed;
-use arret_runtime::callback::EntryPointABIType as CallbackEntryPointABIType;
+use arret_runtime::callback::EntryPointAbiType as CallbackEntryPointAbiType;
 
 use crate::codegen::box_layout::BoxLayout;
 use crate::codegen::record_struct;
-use crate::codegen::GenABI;
+use crate::codegen::GenAbi;
 use crate::libcstr;
 use crate::mir::ops;
 
@@ -178,7 +178,7 @@ impl TargetCtx {
     }
 
     pub fn task_llvm_ptr_type(&mut self) -> LLVMTypeRef {
-        let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
+        let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedAbiType::Any);
         let llx = self.llx;
         *self.cached_types.task.get_or_insert_with(|| unsafe {
             let members = &mut [llvm_any_ptr, llvm_any_ptr];
@@ -231,7 +231,7 @@ impl TargetCtx {
     }
 
     pub fn captures_llvm_type(&mut self) -> LLVMTypeRef {
-        self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any)
+        self.boxed_abi_to_llvm_ptr_type(&BoxedAbiType::Any)
     }
 
     pub fn record_class_id_llvm_type(&self) -> LLVMTypeRef {
@@ -323,7 +323,7 @@ impl TargetCtx {
         use arret_runtime::persistent::vector::NODE_SIZE;
 
         let llx = self.llx;
-        let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
+        let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedAbiType::Any);
 
         *self
             .cached_types
@@ -371,7 +371,7 @@ impl TargetCtx {
     pub fn boxed_inline_vector_llvm_type(&mut self) -> LLVMTypeRef {
         let llx = self.llx;
         let llvm_header = self.box_header_llvm_type();
-        let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
+        let llvm_any_ptr = self.boxed_abi_to_llvm_ptr_type(&BoxedAbiType::Any);
 
         *self
             .cached_types
@@ -394,7 +394,7 @@ impl TargetCtx {
             })
     }
 
-    pub fn boxed_abi_to_llvm_struct_type(&mut self, boxed_abi_type: &BoxedABIType) -> LLVMTypeRef {
+    pub fn boxed_abi_to_llvm_struct_type(&mut self, boxed_abi_type: &BoxedAbiType) -> LLVMTypeRef {
         let box_layout: BoxLayout = boxed_abi_type.into();
 
         if let Some(llvm_struct) = self.cached_types.boxed.get(&box_layout) {
@@ -418,12 +418,12 @@ impl TargetCtx {
 
     fn callback_entry_point_llvm_type(
         &mut self,
-        entry_point_abi_type: &CallbackEntryPointABIType,
+        entry_point_abi_type: &CallbackEntryPointAbiType,
     ) -> LLVMTypeRef {
         let mut llvm_param_types = vec![];
 
         llvm_param_types.push(self.task_llvm_ptr_type());
-        llvm_param_types.push(self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any));
+        llvm_param_types.push(self.boxed_abi_to_llvm_ptr_type(&BoxedAbiType::Any));
 
         llvm_param_types.extend(
             entry_point_abi_type
@@ -449,27 +449,27 @@ impl TargetCtx {
 
     pub fn callback_llvm_type(&mut self, entry_point_llvm_type: LLVMTypeRef) -> LLVMTypeRef {
         let mut members = [
-            self.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any),
+            self.boxed_abi_to_llvm_ptr_type(&BoxedAbiType::Any),
             entry_point_llvm_type,
         ];
 
         unsafe { LLVMStructTypeInContext(self.llx, members.as_mut_ptr(), members.len() as u32, 0) }
     }
 
-    pub fn boxed_abi_to_llvm_ptr_type(&mut self, boxed_abi_type: &BoxedABIType) -> LLVMTypeRef {
+    pub fn boxed_abi_to_llvm_ptr_type(&mut self, boxed_abi_type: &BoxedAbiType) -> LLVMTypeRef {
         unsafe { LLVMPointerType(self.boxed_abi_to_llvm_struct_type(boxed_abi_type), 0) }
     }
 
-    pub fn abi_to_llvm_type(&mut self, abi_type: &ABIType) -> LLVMTypeRef {
+    pub fn abi_to_llvm_type(&mut self, abi_type: &AbiType) -> LLVMTypeRef {
         unsafe {
             match abi_type {
-                ABIType::Bool => LLVMInt1TypeInContext(self.llx),
-                ABIType::Int => LLVMInt64TypeInContext(self.llx),
-                ABIType::Char => LLVMInt32TypeInContext(self.llx),
-                ABIType::Float => LLVMDoubleTypeInContext(self.llx),
-                ABIType::InternedSym => LLVMInt64TypeInContext(self.llx),
-                ABIType::Boxed(boxed) => self.boxed_abi_to_llvm_ptr_type(boxed),
-                ABIType::Callback(entry_point_abi_type) => {
+                AbiType::Bool => LLVMInt1TypeInContext(self.llx),
+                AbiType::Int => LLVMInt64TypeInContext(self.llx),
+                AbiType::Char => LLVMInt32TypeInContext(self.llx),
+                AbiType::Float => LLVMDoubleTypeInContext(self.llx),
+                AbiType::InternedSym => LLVMInt64TypeInContext(self.llx),
+                AbiType::Boxed(boxed) => self.boxed_abi_to_llvm_ptr_type(boxed),
+                AbiType::Callback(entry_point_abi_type) => {
                     let entry_point_llvm_type =
                         self.callback_entry_point_llvm_type(entry_point_abi_type);
                     self.callback_llvm_type(entry_point_llvm_type)
@@ -478,14 +478,14 @@ impl TargetCtx {
         }
     }
 
-    fn ret_abi_to_llvm_type(&mut self, ret_abi_type: &RetABIType) -> LLVMTypeRef {
+    fn ret_abi_to_llvm_type(&mut self, ret_abi_type: &RetAbiType) -> LLVMTypeRef {
         match ret_abi_type {
-            RetABIType::Inhabited(abi_type) => self.abi_to_llvm_type(abi_type),
-            RetABIType::Void | RetABIType::Never => unsafe { LLVMVoidTypeInContext(self.llx) },
+            RetAbiType::Inhabited(abi_type) => self.abi_to_llvm_type(abi_type),
+            RetAbiType::Void | RetAbiType::Never => unsafe { LLVMVoidTypeInContext(self.llx) },
         }
     }
 
-    pub fn fun_abi_to_llvm_type(&mut self, fun_abi: &GenABI) -> LLVMTypeRef {
+    pub fn fun_abi_to_llvm_type(&mut self, fun_abi: &GenAbi) -> LLVMTypeRef {
         let mut llvm_param_types = vec![];
 
         if fun_abi.takes_task {

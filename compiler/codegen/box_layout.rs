@@ -1,13 +1,13 @@
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 
-use arret_runtime::abitype::{BoxedABIType, EncodeBoxedABIType, TOP_LIST_BOXED_ABI_TYPE};
+use arret_runtime::abitype::{BoxedAbiType, EncodeBoxedAbiType, TOP_LIST_BOXED_ABI_TYPE};
 use arret_runtime::boxed;
 use arret_runtime::boxed::TypeTag;
 
 use crate::codegen::record_struct;
 use crate::codegen::target_gen::TargetCtx;
-use crate::codegen::GenABI;
+use crate::codegen::GenAbi;
 
 /// Represents the runtime layout of a boxed data structure
 ///
@@ -85,12 +85,12 @@ impl BoxLayout {
                 BoxLayout::ConstTagged(TypeTag::FunThunk) => {
                     members.extend_from_slice(&[
                         tcx.captures_llvm_type(),
-                        LLVMPointerType(tcx.fun_abi_to_llvm_type(&GenABI::thunk_abi()), 0),
+                        LLVMPointerType(tcx.fun_abi_to_llvm_type(&GenAbi::thunk_abi()), 0),
                     ]);
                 }
                 BoxLayout::ConstTagged(TypeTag::Pair) => {
                     let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
-                    let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
+                    let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedAbiType::Any);
                     let llvm_any_list_ptr =
                         tcx.boxed_abi_to_llvm_ptr_type(&TOP_LIST_BOXED_ABI_TYPE);
 
@@ -104,7 +104,7 @@ impl BoxLayout {
                 }
                 BoxLayout::ConstTagged(TypeTag::Set) => {
                     let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
-                    let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
+                    let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedAbiType::Any);
 
                     members.extend_from_slice(&[llvm_i32, llvm_any_ptr, llvm_any_ptr, llvm_any_ptr])
                 }
@@ -124,21 +124,21 @@ impl BoxLayout {
     }
 }
 
-impl From<&BoxedABIType> for BoxLayout {
-    fn from(boxed_abi_type: &BoxedABIType) -> BoxLayout {
+impl From<&BoxedAbiType> for BoxLayout {
+    fn from(boxed_abi_type: &BoxedAbiType) -> BoxLayout {
         match boxed_abi_type {
-            BoxedABIType::Any => BoxLayout::Any,
+            BoxedAbiType::Any => BoxLayout::Any,
 
-            BoxedABIType::List(_) => BoxLayout::List,
+            BoxedAbiType::List(_) => BoxLayout::List,
             &boxed::Num::BOXED_ABI_TYPE => BoxLayout::Num,
             &boxed::Bool::BOXED_ABI_TYPE => BoxLayout::Bool,
-            BoxedABIType::Union(_, _) => BoxLayout::Union,
+            BoxedAbiType::Union(_, _) => BoxLayout::Union,
 
-            BoxedABIType::UniqueTagged(type_tag) => BoxLayout::ConstTagged(*type_tag),
-            BoxedABIType::Pair(_) => BoxLayout::ConstTagged(TypeTag::Pair),
-            BoxedABIType::Set(_) => BoxLayout::ConstTagged(TypeTag::Set),
-            BoxedABIType::Vector(_) => BoxLayout::ConstTagged(TypeTag::Vector),
-            BoxedABIType::Map(_, _) => BoxLayout::ConstTagged(TypeTag::Map),
+            BoxedAbiType::UniqueTagged(type_tag) => BoxLayout::ConstTagged(*type_tag),
+            BoxedAbiType::Pair(_) => BoxLayout::ConstTagged(TypeTag::Pair),
+            BoxedAbiType::Set(_) => BoxLayout::ConstTagged(TypeTag::Set),
+            BoxedAbiType::Vector(_) => BoxLayout::ConstTagged(TypeTag::Vector),
+            BoxedAbiType::Map(_, _) => BoxLayout::ConstTagged(TypeTag::Map),
         }
     }
 }

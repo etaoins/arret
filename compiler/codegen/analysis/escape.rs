@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use arret_runtime::abitype::{ABIType, ParamABIType, ParamCapture, RetABIType};
+use arret_runtime::abitype::{AbiType, ParamAbiType, ParamCapture, RetAbiType};
 
-use crate::codegen::GenABI;
+use crate::codegen::GenAbi;
 use crate::mir::ops;
 
 /// Describes the capture behaviour of a function parameter
@@ -71,10 +71,10 @@ impl Captures {
 /// very conservative algorithm where any function returning a box is assumed to capture all of its
 /// arguments.
 pub fn infer_param_capture_kind(
-    ret_abi_type: &RetABIType,
-    param_abi_type: &ParamABIType,
+    ret_abi_type: &RetAbiType,
+    param_abi_type: &ParamAbiType,
 ) -> CaptureKind {
-    let returns_box = matches!(ret_abi_type, RetABIType::Inhabited(ABIType::Boxed(_)));
+    let returns_box = matches!(ret_abi_type, RetAbiType::Inhabited(AbiType::Boxed(_)));
 
     match param_abi_type.capture {
         ParamCapture::Auto => {
@@ -92,7 +92,7 @@ pub fn infer_param_capture_kind(
 fn add_static_symbol_call_captures(
     captures: &mut Captures,
     return_capture: CaptureKind,
-    static_symbol_abi: &GenABI,
+    static_symbol_abi: &GenAbi,
     args: &[ops::RegId],
 ) {
     let arg_iter = args.iter();
@@ -117,12 +117,12 @@ struct ProgramCaptureCtx<'of> {
 }
 
 impl<'of> ProgramCaptureCtx<'of> {
-    fn add_op_captures(&mut self, captures: &mut Captures, ret_type: &RetABIType, op: &ops::Op) {
+    fn add_op_captures(&mut self, captures: &mut Captures, ret_type: &RetAbiType, op: &ops::Op) {
         use crate::mir::ops::OpKind;
 
         match op.kind() {
             OpKind::Ret(ret_reg) => {
-                if let RetABIType::Inhabited(ABIType::Boxed(_)) = ret_type {
+                if let RetAbiType::Inhabited(AbiType::Boxed(_)) = ret_type {
                     // `Ret` captures boxes unconditionally
                     captures.add(*ret_reg, CaptureKind::ViaRet);
                 }
@@ -323,7 +323,7 @@ mod test {
         // Unboxed return type cannot capture boxed parameter
         assert_eq!(
             CaptureKind::Never,
-            infer_param_capture_kind(&ABIType::Bool.into(), &boxed::TypeTag::Int.into())
+            infer_param_capture_kind(&AbiType::Bool.into(), &boxed::TypeTag::Int.into())
         );
     }
 
@@ -335,10 +335,10 @@ mod test {
             span: EMPTY_SPAN,
             source_name: None,
 
-            abi: ops::OpsABI {
-                call_conv: ops::CallConv::FastCC,
+            abi: ops::OpsAbi {
+                call_conv: ops::CallConv::FastCc,
                 params: Box::new([boxed::TypeTag::Int.into()]),
-                ret: RetABIType::Void,
+                ret: RetAbiType::Void,
             },
             param_regs: Box::new([param_reg]),
             ops: Box::new([]),
@@ -356,8 +356,8 @@ mod test {
             span: EMPTY_SPAN,
             source_name: None,
 
-            abi: ops::OpsABI {
-                call_conv: ops::CallConv::FastCC,
+            abi: ops::OpsAbi {
+                call_conv: ops::CallConv::FastCc,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::Int.into(),
             },
@@ -378,8 +378,8 @@ mod test {
             span: EMPTY_SPAN,
             source_name: None,
 
-            abi: ops::OpsABI {
-                call_conv: ops::CallConv::FastCC,
+            abi: ops::OpsAbi {
+                call_conv: ops::CallConv::FastCc,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::Pair.into(),
             },
@@ -412,8 +412,8 @@ mod test {
             span: EMPTY_SPAN,
             source_name: None,
 
-            abi: ops::OpsABI {
-                call_conv: ops::CallConv::FastCC,
+            abi: ops::OpsAbi {
+                call_conv: ops::CallConv::FastCc,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::Pair.into(),
             },
@@ -452,18 +452,18 @@ mod test {
         let unused_reg = ops::RegId::alloc();
         let ret_reg = ops::RegId::alloc();
 
-        let static_symbol_abi = GenABI {
+        let static_symbol_abi = GenAbi {
             takes_task: false,
             params: Box::new([
-                ParamABIType {
+                ParamAbiType {
                     abi_type: boxed::TypeTag::Int.into(),
                     capture: ParamCapture::Never,
                 },
-                ParamABIType {
+                ParamAbiType {
                     abi_type: boxed::TypeTag::Int.into(),
                     capture: ParamCapture::Auto,
                 },
-                ParamABIType {
+                ParamAbiType {
                     abi_type: boxed::TypeTag::Int.into(),
                     capture: ParamCapture::Always,
                 },
@@ -481,8 +481,8 @@ mod test {
             span: EMPTY_SPAN,
             source_name: None,
 
-            abi: ops::OpsABI {
-                call_conv: ops::CallConv::FastCC,
+            abi: ops::OpsAbi {
+                call_conv: ops::CallConv::FastCc,
                 params: Box::new([
                     boxed::TypeTag::Int.into(),
                     boxed::TypeTag::Int.into(),
@@ -540,8 +540,8 @@ mod test {
             span: EMPTY_SPAN,
             source_name: None,
 
-            abi: ops::OpsABI {
-                call_conv: ops::CallConv::FastCC,
+            abi: ops::OpsAbi {
+                call_conv: ops::CallConv::FastCc,
                 params: Box::new([boxed::TypeTag::Int.into()]),
                 ret: boxed::TypeTag::Pair.into(),
             },

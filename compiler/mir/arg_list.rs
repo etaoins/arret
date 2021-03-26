@@ -5,7 +5,7 @@ use arret_runtime::abitype;
 use crate::mir::builder::{Builder, BuiltReg};
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops;
-use crate::mir::polymorph::PolymorphABI;
+use crate::mir::polymorph::PolymorphAbi;
 use crate::mir::value::Value;
 use crate::ty;
 
@@ -26,7 +26,7 @@ pub struct LoadedArgList {
 pub fn build_load_arg_list_value(
     ehx: &mut EvalHirCtx,
     b: &mut Builder,
-    polymorph_abi: &PolymorphABI,
+    polymorph_abi: &PolymorphAbi,
     param_list_poly: &ty::List<ty::Poly>,
 ) -> LoadedArgList {
     use crate::mir::value::from_reg::reg_to_value;
@@ -89,8 +89,8 @@ pub fn build_save_arg_list_to_regs<'a>(
     b: &mut Builder,
     span: Span,
     arg_list_value: Value,
-    fixed_abi_types: impl ExactSizeIterator<Item = &'a abitype::ABIType>,
-    rest_abi_type: Option<&'a abitype::ABIType>,
+    fixed_abi_types: impl ExactSizeIterator<Item = &'a abitype::AbiType>,
+    rest_abi_type: Option<&'a abitype::AbiType>,
 ) -> Vec<ops::RegId> {
     use crate::mir::value::build_reg::value_to_reg;
 

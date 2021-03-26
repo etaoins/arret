@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 use std::mem::MaybeUninit;
 use std::{fmt, marker, mem};
 
-use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
+use crate::abitype::{BoxedAbiType, EncodeBoxedAbiType};
 use crate::boxed::refs::Gc;
 use crate::boxed::*;
 use crate::persistent::Vector as PersistentVector;
@@ -285,11 +285,11 @@ impl<T: Boxed> fmt::Debug for Vector<T> {
     }
 }
 
-impl<T: Boxed> EncodeBoxedABIType for Vector<T>
+impl<T: Boxed> EncodeBoxedAbiType for Vector<T>
 where
-    T: EncodeBoxedABIType,
+    T: EncodeBoxedAbiType,
 {
-    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Vector(&T::BOXED_ABI_TYPE);
+    const BOXED_ABI_TYPE: BoxedAbiType = BoxedAbiType::Vector(&T::BOXED_ABI_TYPE);
 }
 
 #[repr(C, align(16))]

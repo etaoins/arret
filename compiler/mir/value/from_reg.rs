@@ -13,13 +13,13 @@ use crate::ty::Ty;
 fn reg_to_value_with_constraints<M>(
     heap: &mut impl boxed::AsHeap,
     reg: BuiltReg,
-    abi_type: &abitype::ABIType,
+    abi_type: &abitype::AbiType,
     arret_ty: &ty::Ref<M>,
     constrain_possible_type_tags: TypeTagSet,
     fallback_type_hint: &TypeHint,
 ) -> Value
 where
-    M: ty::PM,
+    M: ty::Pm,
 {
     use crate::mir::value::types::type_hint_for_ty_ref;
 
@@ -57,11 +57,11 @@ where
 pub fn reg_to_value<M>(
     heap: &mut impl boxed::AsHeap,
     reg: BuiltReg,
-    abi_type: &abitype::ABIType,
+    abi_type: &abitype::AbiType,
     arret_ty: &ty::Ref<M>,
 ) -> Value
 where
-    M: ty::PM,
+    M: ty::Pm,
 {
     reg_to_value_with_constraints(
         heap,
@@ -79,7 +79,7 @@ pub fn refine_reg_value_with_arret_ty<M>(
     arret_ty: &ty::Ref<M>,
 ) -> Value
 where
-    M: ty::PM,
+    M: ty::Pm,
 {
     reg_to_value_with_constraints(
         heap,

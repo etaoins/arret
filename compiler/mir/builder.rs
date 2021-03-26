@@ -123,7 +123,7 @@ impl Builder {
         &mut self,
         span: Span,
         from_reg: BuiltReg,
-        to_type: abitype::BoxedABIType,
+        to_type: abitype::BoxedAbiType,
     ) -> BuiltReg {
         let kind_cons = if from_reg.is_const() {
             OpKind::ConstCastBoxed
@@ -142,9 +142,9 @@ impl Builder {
     pub fn cast_boxed_cond(
         &mut self,
         span: Span,
-        from_type: &abitype::BoxedABIType,
+        from_type: &abitype::BoxedAbiType,
         from_reg: BuiltReg,
-        to_type: abitype::BoxedABIType,
+        to_type: abitype::BoxedAbiType,
     ) -> BuiltReg {
         if from_type == &to_type {
             from_reg

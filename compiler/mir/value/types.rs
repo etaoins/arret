@@ -42,7 +42,7 @@ enum FoundRecordConses<'a> {
 /// Looks for the possible record conses of a type reference
 fn find_record_conses_for_ty_ref<M>(ty_ref: &ty::Ref<M>) -> FoundRecordConses<'_>
 where
-    M: ty::PM,
+    M: ty::Pm,
 {
     match ty_ref.try_to_fixed() {
         Some(Ty::Union(members)) => members
@@ -78,7 +78,7 @@ where
 
 pub fn type_hint_for_ty_ref<M>(ty_ref: &ty::Ref<M>) -> TypeHint
 where
-    M: ty::PM,
+    M: ty::Pm,
 {
     if let FoundRecordConses::Single(known_record_cons) = find_record_conses_for_ty_ref(ty_ref) {
         return TypeHint::KnownRecordCons(known_record_cons.clone());

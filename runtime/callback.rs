@@ -35,31 +35,31 @@ where
 ///
 /// This is used internally by the compiler as a mechanism for reflecting the Rust function type.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct EntryPointABIType {
+pub struct EntryPointAbiType {
     /// Types of the entry point's parameters
     ///
-    /// This is not an [`abitype::ParamABIType`] as captures should be determined by the callback
+    /// This is not an [`abitype::ParamAbiType`] as captures should be determined by the callback
     /// implementation, not the callback's type.
-    pub params: &'static [abitype::ABIType],
+    pub params: &'static [abitype::AbiType],
 
     /// Type of the entry point's return value
-    pub ret: abitype::RetABIType,
+    pub ret: abitype::RetAbiType,
 }
 
-/// Trait used to encode a Rust function type as an [`EntryPointABIType`]
-pub trait EncodeEntryPointABIType: Copy {
-    /// Corresponding [`EntryPointABIType`] for this Rust function type
-    const ENTRY_POINT_ABI_TYPE: EntryPointABIType;
+/// Trait used to encode a Rust function type as an [`EntryPointAbiType`]
+pub trait EncodeEntryPointAbiType: Copy {
+    /// Corresponding [`EntryPointAbiType`] for this Rust function type
+    const ENTRY_POINT_ABI_TYPE: EntryPointAbiType;
 }
 
 macro_rules! define_generic_entry_point {
     ( $( $generic_param:ident ),* ) => {
-        impl<R, $( $generic_param ),*> EncodeEntryPointABIType for for<'s> extern "C" fn(&'s mut Task, captures: boxed::Captures, $( $generic_param ),* ) -> R
+        impl<R, $( $generic_param ),*> EncodeEntryPointAbiType for for<'s> extern "C" fn(&'s mut Task, captures: boxed::Captures, $( $generic_param ),* ) -> R
         where
-            R: abitype::EncodeRetABIType,
-            $( $generic_param: abitype::EncodeABIType ),*
+            R: abitype::EncodeRetAbiType,
+            $( $generic_param: abitype::EncodeAbiType ),*
         {
-            const ENTRY_POINT_ABI_TYPE: EntryPointABIType = EntryPointABIType {
+            const ENTRY_POINT_ABI_TYPE: EntryPointAbiType = EntryPointAbiType {
                 params: &[$( $generic_param::ABI_TYPE ),*],
                 ret: R::RET_ABI_TYPE,
             };
@@ -67,8 +67,8 @@ macro_rules! define_generic_entry_point {
 
         impl<R, $( $generic_param ),*> Callback<for<'s> extern "C" fn(&'s mut Task, captures: boxed::Captures, $( $generic_param ),* ) -> R>
         where
-            R: abitype::EncodeRetABIType,
-            $( $generic_param: abitype::EncodeABIType ),*
+            R: abitype::EncodeRetAbiType,
+            $( $generic_param: abitype::EncodeAbiType ),*
         {
             /// Applies this callback inside the given [`Task`] and returns its value
             ///
@@ -101,8 +101,8 @@ mod test {
 
     #[test]
     fn encode_entry_point_abi_type() {
-        let empty_abi_type = <extern "C" fn(&mut Task, boxed::Captures) as EncodeEntryPointABIType>::ENTRY_POINT_ABI_TYPE;
-        assert_eq!(abitype::RetABIType::Void, empty_abi_type.ret);
+        let empty_abi_type = <extern "C" fn(&mut Task, boxed::Captures) as EncodeEntryPointAbiType>::ENTRY_POINT_ABI_TYPE;
+        assert_eq!(abitype::RetAbiType::Void, empty_abi_type.ret);
         assert!(empty_abi_type.params.is_empty());
 
         let two_param_abi_type = <extern "C" fn(
@@ -110,13 +110,13 @@ mod test {
             boxed::Captures,
             i64,
             Gc<boxed::Int>,
-        ) -> bool as EncodeEntryPointABIType>::ENTRY_POINT_ABI_TYPE;
+        ) -> bool as EncodeEntryPointAbiType>::ENTRY_POINT_ABI_TYPE;
         assert_eq!(
-            abitype::ABIType::Bool.into_ret_abi_type(),
+            abitype::AbiType::Bool.into_ret_abi_type(),
             two_param_abi_type.ret
         );
         assert_eq!(
-            &[abitype::ABIType::Int, boxed::TypeTag::Int.into()],
+            &[abitype::AbiType::Int, boxed::TypeTag::Int.into()],
             two_param_abi_type.params
         );
     }

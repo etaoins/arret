@@ -5,45 +5,45 @@ use crate::mir::ops;
 use crate::ty;
 use crate::ty::Ty;
 
-/// PolymorphABI annotates OpsABI with information about if a function expects a captures or rest
+/// PolymorphAbi annotates OpsAbi with information about if a function expects a captures or rest
 ///
 /// This is information that's useful while generating MIR but can be discarded when building Ops.
 #[derive(PartialEq, Eq, Hash, Clone)]
-pub struct PolymorphABI {
+pub struct PolymorphAbi {
     pub call_conv: ops::CallConv,
 
     pub has_captures: bool,
-    pub fixed_params: Box<[abitype::ABIType]>,
-    pub rest_param: Option<abitype::ABIType>,
+    pub fixed_params: Box<[abitype::AbiType]>,
+    pub rest_param: Option<abitype::AbiType>,
 
-    pub ret: abitype::RetABIType,
+    pub ret: abitype::RetAbiType,
 }
 
-impl PolymorphABI {
-    pub fn thunk_abi() -> PolymorphABI {
-        PolymorphABI {
-            call_conv: ops::CallConv::CCC,
+impl PolymorphAbi {
+    pub fn thunk_abi() -> PolymorphAbi {
+        PolymorphAbi {
+            call_conv: ops::CallConv::Ccc,
 
             has_captures: true,
             fixed_params: Box::new([]),
             rest_param: Some(abitype::TOP_LIST_BOXED_ABI_TYPE.into()),
 
-            ret: abitype::BoxedABIType::Any.into(),
+            ret: abitype::BoxedAbiType::Any.into(),
         }
     }
 
     /// Returns the Arret type for our parameter list
-    pub fn param_ty_ref<M: ty::PM>(&self) -> ty::List<M> {
-        use crate::ty::conv_abi::ConvertableABIType;
+    pub fn param_ty_ref<M: ty::Pm>(&self) -> ty::List<M> {
+        use crate::ty::conv_abi::ConvertableAbiType;
 
         let fixed_refs = self
             .fixed_params
             .iter()
-            .map(ConvertableABIType::to_ty_ref)
+            .map(ConvertableAbiType::to_ty_ref)
             .collect();
 
         let rest_ref = match &self.rest_param {
-            Some(abitype::ABIType::Boxed(abitype::BoxedABIType::List(member_abi_type))) => {
+            Some(abitype::AbiType::Boxed(abitype::BoxedAbiType::List(member_abi_type))) => {
                 member_abi_type.to_ty_ref()
             }
             Some(other) => {
@@ -57,10 +57,10 @@ impl PolymorphABI {
     }
 }
 
-impl From<callback::EntryPointABIType> for PolymorphABI {
-    fn from(abi_type: callback::EntryPointABIType) -> Self {
-        PolymorphABI {
-            call_conv: ops::CallConv::CCC,
+impl From<callback::EntryPointAbiType> for PolymorphAbi {
+    fn from(abi_type: callback::EntryPointAbiType) -> Self {
+        PolymorphAbi {
+            call_conv: ops::CallConv::Ccc,
 
             has_captures: true,
             fixed_params: abi_type.params.iter().cloned().collect(),
@@ -71,10 +71,10 @@ impl From<callback::EntryPointABIType> for PolymorphABI {
     }
 }
 
-impl From<PolymorphABI> for ops::OpsABI {
-    fn from(polymorph_abi: PolymorphABI) -> Self {
-        ops::OpsABI {
-            params: Some(abitype::BoxedABIType::Any.into())
+impl From<PolymorphAbi> for ops::OpsAbi {
+    fn from(polymorph_abi: PolymorphAbi) -> Self {
+        ops::OpsAbi {
+            params: Some(abitype::BoxedAbiType::Any.into())
                 .filter(|_| polymorph_abi.has_captures)
                 .into_iter()
                 .chain(polymorph_abi.fixed_params.iter().cloned())
@@ -88,15 +88,15 @@ impl From<PolymorphABI> for ops::OpsABI {
 }
 
 /// Recommends a polymorph ABI for a given list and ret type
-pub fn polymorph_abi_for_list_ty<M: ty::PM>(
+pub fn polymorph_abi_for_list_ty<M: ty::Pm>(
     has_captures: bool,
     list_ty: &ty::List<M>,
     ret_ty: &ty::Ref<M>,
-) -> PolymorphABI {
+) -> PolymorphAbi {
     use crate::mir::specific_abi_type::*;
 
-    PolymorphABI {
-        call_conv: ops::CallConv::FastCC,
+    PolymorphAbi {
+        call_conv: ops::CallConv::FastCc,
 
         has_captures,
 
@@ -107,7 +107,7 @@ pub fn polymorph_abi_for_list_ty<M: ty::PM>(
             .collect(),
 
         rest_param: Some(
-            abitype::BoxedABIType::List(specific_boxed_abi_type_for_ty_ref(list_ty.rest())).into(),
+            abitype::BoxedAbiType::List(specific_boxed_abi_type_for_ty_ref(list_ty.rest())).into(),
         )
         .filter(|_| list_ty.has_rest()),
 
@@ -122,19 +122,19 @@ mod test {
 
     #[test]
     fn polymorph_abi_param_ty_ref() {
-        use arret_runtime::abitype::EncodeBoxedABIType;
+        use arret_runtime::abitype::EncodeBoxedAbiType;
         use arret_runtime::boxed;
 
-        let thunk_param_poly = PolymorphABI::thunk_abi().param_ty_ref();
+        let thunk_param_poly = PolymorphAbi::thunk_abi().param_ty_ref();
         let expected_poly = hir::poly_for_str("(List & Any)");
         assert_eq!(expected_poly, thunk_param_poly.into());
 
-        let mul_param_poly = PolymorphABI {
-            call_conv: ops::CallConv::FastCC,
+        let mul_param_poly = PolymorphAbi {
+            call_conv: ops::CallConv::FastCc,
 
             has_captures: false,
             fixed_params: Box::new([boxed::Num::BOXED_ABI_TYPE.into()]),
-            rest_param: Some(abitype::BoxedABIType::List(&boxed::Num::BOXED_ABI_TYPE).into()),
+            rest_param: Some(abitype::BoxedAbiType::List(&boxed::Num::BOXED_ABI_TYPE).into()),
 
             ret: boxed::Num::BOXED_ABI_TYPE.into(),
         }

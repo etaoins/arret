@@ -85,7 +85,7 @@ impl From<TypeTag> for TypeTagSet {
 
 impl<'a, M> From<&'a ty::Ref<M>> for TypeTagSet
 where
-    M: ty::PM,
+    M: ty::Pm,
 {
     fn from(ty_ref: &'a ty::Ref<M>) -> TypeTagSet {
         match ty_ref.resolve_to_ty() {
@@ -125,41 +125,41 @@ where
     }
 }
 
-impl<'a> From<&'a abitype::BoxedABIType> for TypeTagSet {
-    fn from(boxed_abi_type: &'a abitype::BoxedABIType) -> TypeTagSet {
-        use arret_runtime::abitype::BoxedABIType;
+impl<'a> From<&'a abitype::BoxedAbiType> for TypeTagSet {
+    fn from(boxed_abi_type: &'a abitype::BoxedAbiType) -> TypeTagSet {
+        use arret_runtime::abitype::BoxedAbiType;
 
         match boxed_abi_type {
-            BoxedABIType::Any => TypeTagSet::all(),
-            BoxedABIType::UniqueTagged(type_tag) => (*type_tag).into(),
-            BoxedABIType::List(_) => [TypeTag::Pair, TypeTag::Nil].iter().collect(),
-            BoxedABIType::Pair(_) => TypeTag::Pair.into(),
-            BoxedABIType::Vector(_) => TypeTag::Vector.into(),
-            BoxedABIType::Set(_) => TypeTag::Set.into(),
-            BoxedABIType::Map(_, _) => TypeTag::Map.into(),
-            BoxedABIType::Union(_, type_tags) => type_tags.iter().collect(),
+            BoxedAbiType::Any => TypeTagSet::all(),
+            BoxedAbiType::UniqueTagged(type_tag) => (*type_tag).into(),
+            BoxedAbiType::List(_) => [TypeTag::Pair, TypeTag::Nil].iter().collect(),
+            BoxedAbiType::Pair(_) => TypeTag::Pair.into(),
+            BoxedAbiType::Vector(_) => TypeTag::Vector.into(),
+            BoxedAbiType::Set(_) => TypeTag::Set.into(),
+            BoxedAbiType::Map(_, _) => TypeTag::Map.into(),
+            BoxedAbiType::Union(_, type_tags) => type_tags.iter().collect(),
         }
     }
 }
 
-impl<'a> From<&'a abitype::ABIType> for TypeTagSet {
-    fn from(abi_type: &'a abitype::ABIType) -> TypeTagSet {
-        use arret_runtime::abitype::ABIType;
+impl<'a> From<&'a abitype::AbiType> for TypeTagSet {
+    fn from(abi_type: &'a abitype::AbiType) -> TypeTagSet {
+        use arret_runtime::abitype::AbiType;
 
         match abi_type {
-            ABIType::Int => TypeTag::Int.into(),
-            ABIType::Float => TypeTag::Float.into(),
-            ABIType::Char => TypeTag::Char.into(),
-            ABIType::Bool => [TypeTag::True, TypeTag::False].iter().collect(),
-            ABIType::InternedSym => TypeTag::Sym.into(),
-            ABIType::Boxed(boxed_abi_type) => boxed_abi_type.into(),
-            ABIType::Callback(_) => TypeTag::FunThunk.into(),
+            AbiType::Int => TypeTag::Int.into(),
+            AbiType::Float => TypeTag::Float.into(),
+            AbiType::Char => TypeTag::Char.into(),
+            AbiType::Bool => [TypeTag::True, TypeTag::False].iter().collect(),
+            AbiType::InternedSym => TypeTag::Sym.into(),
+            AbiType::Boxed(boxed_abi_type) => boxed_abi_type.into(),
+            AbiType::Callback(_) => TypeTag::FunThunk.into(),
         }
     }
 }
 
-impl From<abitype::ABIType> for TypeTagSet {
-    fn from(abi_type: abitype::ABIType) -> TypeTagSet {
+impl From<abitype::AbiType> for TypeTagSet {
+    fn from(abi_type: abitype::AbiType) -> TypeTagSet {
         (&abi_type).into()
     }
 }

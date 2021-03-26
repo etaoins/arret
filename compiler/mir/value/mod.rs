@@ -25,13 +25,13 @@ pub use arret_fun::{ArretFun, ArretFunId};
 #[derive(Clone, Debug)]
 pub struct RegValue {
     pub reg: BuiltReg,
-    pub abi_type: abitype::ABIType,
+    pub abi_type: abitype::AbiType,
     pub possible_type_tags: TypeTagSet,
     pub type_hint: types::TypeHint,
 }
 
 impl RegValue {
-    pub fn new(reg: BuiltReg, abi_type: abitype::ABIType) -> RegValue {
+    pub fn new(reg: BuiltReg, abi_type: abitype::AbiType) -> RegValue {
         RegValue {
             reg,
             possible_type_tags: (&abi_type).into(),

@@ -1,17 +1,17 @@
 //! Macros and types for defining Rust RFI modules
 
-use crate::abitype::{ParamABIType, RetABIType};
+use crate::abitype::{ParamAbiType, RetAbiType};
 
 #[allow(clippy::useless_attribute)]
 #[allow(unused)]
-use crate::abitype::{EncodeABIType, EncodeRetABIType};
+use crate::abitype::{EncodeAbiType, EncodeRetAbiType};
 
 #[derive(Debug)]
 pub struct RustFun {
     pub arret_type: &'static str,
     pub takes_task: bool,
-    pub params: &'static [ParamABIType],
-    pub ret: RetABIType,
+    pub params: &'static [ParamAbiType],
+    pub ret: RetAbiType,
     pub symbol: &'static str,
 }
 

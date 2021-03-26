@@ -29,10 +29,10 @@ impl NumOperand {
         let possible_type_tags = possible_type_tags_for_value(value);
 
         if !possible_type_tags.contains(boxed::TypeTag::Float) {
-            let int64_reg = value_to_reg(ehx, b, span, value, &abitype::ABIType::Int);
+            let int64_reg = value_to_reg(ehx, b, span, value, &abitype::AbiType::Int);
             Some(NumOperand::Int(int64_reg))
         } else if !possible_type_tags.contains(boxed::TypeTag::Int) {
-            let float_reg = value_to_reg(ehx, b, span, value, &abitype::ABIType::Float);
+            let float_reg = value_to_reg(ehx, b, span, value, &abitype::AbiType::Float);
             Some(NumOperand::Float(float_reg))
         } else {
             None
@@ -56,9 +56,9 @@ pub fn num_value_to_float_reg(
     let possible_type_tags = possible_type_tags_for_value(value) & num_type_tags;
 
     if possible_type_tags == boxed::TypeTag::Float.into() {
-        value_to_reg(ehx, outer_b, span, &value, &abitype::ABIType::Float)
+        value_to_reg(ehx, outer_b, span, &value, &abitype::AbiType::Float)
     } else if possible_type_tags == boxed::TypeTag::Int.into() {
-        let int64_reg = value_to_reg(ehx, outer_b, span, value, &abitype::ABIType::Int);
+        let int64_reg = value_to_reg(ehx, outer_b, span, value, &abitype::AbiType::Int);
         outer_b.push_reg(span, OpKind::Int64ToFloat, int64_reg.into())
     } else {
         let boxed_any_reg = value_to_reg(
@@ -66,7 +66,7 @@ pub fn num_value_to_float_reg(
             outer_b,
             span,
             value,
-            &abitype::BoxedABIType::Any.into(),
+            &abitype::BoxedAbiType::Any.into(),
         )
         .into();
 
@@ -92,10 +92,10 @@ pub fn num_value_to_float_reg(
 
         let mut is_float_b = Builder::new();
         let is_float_result_reg =
-            value_to_reg(ehx, &mut is_float_b, span, &value, &abitype::ABIType::Float);
+            value_to_reg(ehx, &mut is_float_b, span, &value, &abitype::AbiType::Float);
 
         let mut is_int_b = Builder::new();
-        let int64_reg = value_to_reg(ehx, &mut is_int_b, span, value, &abitype::ABIType::Int);
+        let int64_reg = value_to_reg(ehx, &mut is_int_b, span, value, &abitype::AbiType::Int);
         let is_int_result_reg = is_int_b.push_reg(span, OpKind::Int64ToFloat, int64_reg.into());
 
         let output_reg = RegId::alloc();

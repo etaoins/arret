@@ -55,14 +55,14 @@ impl TVar {
 }
 
 /// Marker that determines if type variables are allowed within a type
-pub trait PM: PartialEq + Clone + Copy + Sized + fmt::Debug {
+pub trait Pm: PartialEq + Clone + Copy + Sized + fmt::Debug {
     /// Resolves a possibly variable type to its bound
     fn resolve_ref_to_ty(ty_ref: &Ref<Self>) -> &Ty<Self>;
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Mono {}
-impl PM for Mono {
+impl Pm for Mono {
     fn resolve_ref_to_ty(ty_ref: &Ref<Mono>) -> &Ty<Mono> {
         match ty_ref {
             Ref::Fixed(ty) => ty,
@@ -73,7 +73,7 @@ impl PM for Mono {
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Poly {}
-impl PM for Poly {
+impl Pm for Poly {
     fn resolve_ref_to_ty(ty_ref: &Ref<Poly>) -> &Ty<Poly> {
         match ty_ref {
             Ref::Fixed(ty) => ty,
@@ -83,12 +83,12 @@ impl PM for Poly {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum Ref<M: PM> {
+pub enum Ref<M: Pm> {
     Var(TVarId, M),
     Fixed(Ty<M>),
 }
 
-impl<M: PM> Ref<M> {
+impl<M: Pm> Ref<M> {
     /// Tries to convert the TyRef to a fixed Ty
     pub fn try_to_fixed(&self) -> Option<&Ty<M>> {
         match self {
@@ -156,7 +156,7 @@ impl Ref<Mono> {
     }
 }
 
-impl<M: PM> From<Ty<M>> for Ref<M> {
+impl<M: Pm> From<Ty<M>> for Ref<M> {
     fn from(ty: Ty<M>) -> Self {
         Ref::Fixed(ty)
     }
@@ -169,7 +169,7 @@ impl From<TVarId> for Ref<Poly> {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum Ty<M: PM> {
+pub enum Ty<M: Pm> {
     Any,
     Bool,
     Char,
@@ -204,7 +204,7 @@ pub enum Ty<M: PM> {
     Record(Box<record::Instance<M>>),
 }
 
-impl<M: PM> Ty<M> {
+impl<M: Pm> Ty<M> {
     /// Returns the canonical unit type
     pub fn unit() -> Ty<M> {
         List::empty().into()
@@ -222,12 +222,12 @@ impl<M: PM> Ty<M> {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct Map<M: PM> {
+pub struct Map<M: Pm> {
     key: Ref<M>,
     value: Ref<M>,
 }
 
-impl<M: PM> Map<M> {
+impl<M: Pm> Map<M> {
     pub fn new(key: Ref<M>, value: Ref<M>) -> Map<M> {
         Map { key, value }
     }
@@ -241,25 +241,25 @@ impl<M: PM> Map<M> {
     }
 }
 
-impl<M: PM> From<Map<M>> for Ty<M> {
+impl<M: Pm> From<Map<M>> for Ty<M> {
     fn from(map: Map<M>) -> Self {
         Ty::Map(Box::new(map))
     }
 }
 
-impl<M: PM> From<Map<M>> for Ref<M> {
+impl<M: Pm> From<Map<M>> for Ref<M> {
     fn from(map: Map<M>) -> Self {
         Ref::Fixed(Ty::Map(Box::new(map)))
     }
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct List<M: PM> {
+pub struct List<M: Pm> {
     fixed: Box<[Ref<M>]>,
     rest: Box<Ref<M>>,
 }
 
-impl<M: PM> List<M> {
+impl<M: Pm> List<M> {
     /// Creates a list with the given fixed member types and a uniform tail member type
     pub fn new(fixed: Box<[Ref<M>]>, rest: Ref<M>) -> List<M> {
         List {
@@ -326,13 +326,13 @@ impl<M: PM> List<M> {
     }
 }
 
-impl<M: PM> From<List<M>> for Ty<M> {
+impl<M: Pm> From<List<M>> for Ty<M> {
     fn from(list: List<M>) -> Self {
         Ty::List(list)
     }
 }
 
-impl<M: PM> From<List<M>> for Ref<M> {
+impl<M: Pm> From<List<M>> for Ref<M> {
     fn from(list: List<M>) -> Self {
         Ref::Fixed(Ty::List(list))
     }
@@ -364,13 +364,13 @@ impl TopFun {
     }
 }
 
-impl<M: PM> From<TopFun> for Ty<M> {
+impl<M: Pm> From<TopFun> for Ty<M> {
     fn from(top_fun: TopFun) -> Self {
         Ty::TopFun(Box::new(top_fun))
     }
 }
 
-impl<M: PM> From<TopFun> for Ref<M> {
+impl<M: Pm> From<TopFun> for Ref<M> {
     fn from(top_fun: TopFun) -> Self {
         Ref::Fixed(Ty::TopFun(Box::new(top_fun)))
     }
@@ -476,13 +476,13 @@ impl Fun {
     }
 }
 
-impl<M: PM> From<Fun> for Ty<M> {
+impl<M: Pm> From<Fun> for Ty<M> {
     fn from(fun: Fun) -> Self {
         Ty::Fun(Box::new(fun))
     }
 }
 
-impl<M: PM> From<Fun> for Ref<M> {
+impl<M: Pm> From<Fun> for Ref<M> {
     fn from(fun: Fun) -> Self {
         Ref::Fixed(Ty::Fun(Box::new(fun)))
     }

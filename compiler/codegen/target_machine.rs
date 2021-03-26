@@ -5,21 +5,21 @@ use llvm_sys::target_machine::*;
 
 enum TripleString {
     Cross(ffi::CString),
-    LLVMDefault(*mut libc::c_char),
+    LlvmDefault(*mut libc::c_char),
 }
 
 impl TripleString {
     fn as_ptr(&self) -> *const libc::c_char {
         match self {
             TripleString::Cross(cross_triple) => cross_triple.as_ptr() as *const _,
-            TripleString::LLVMDefault(llvm_default) => *llvm_default,
+            TripleString::LlvmDefault(llvm_default) => *llvm_default,
         }
     }
 }
 
 impl Drop for TripleString {
     fn drop(&mut self) {
-        if let TripleString::LLVMDefault(llvm_default) = self {
+        if let TripleString::LlvmDefault(llvm_default) = self {
             unsafe {
                 LLVMDisposeMessage(*llvm_default);
             }
@@ -39,7 +39,7 @@ pub fn create_target_machine(
 
         let triple_string = cross_triple
             .map(|cross_triple| TripleString::Cross(ffi::CString::new(cross_triple).unwrap()))
-            .unwrap_or_else(|| TripleString::LLVMDefault(LLVMGetDefaultTargetTriple()));
+            .unwrap_or_else(|| TripleString::LlvmDefault(LLVMGetDefaultTargetTriple()));
 
         let mut error: *mut libc::c_char = ptr::null_mut();
         if LLVMGetTargetFromTriple(triple_string.as_ptr(), &mut target, &mut error as *mut _) != 0 {

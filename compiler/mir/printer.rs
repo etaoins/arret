@@ -6,11 +6,11 @@ use codespan_reporting::files::Files as _;
 
 use arret_syntax::span::Span;
 
-use crate::codegen::GenABI;
+use crate::codegen::GenAbi;
 use crate::mir::ops;
 use crate::mir::BuiltProgram;
 use crate::source::SourceLoader;
-use crate::ty::conv_abi::ConvertableABIType;
+use crate::ty::conv_abi::ConvertableAbiType;
 
 fn span_to_human_location(source_loader: Option<&SourceLoader>, span: Span) -> Option<String> {
     let source_loader = source_loader?;
@@ -55,11 +55,11 @@ fn callee_to_string(
 fn callee_to_gen_abi(
     private_funs: &HashMap<ops::PrivateFunId, ops::Fun>,
     callee: &ops::Callee,
-) -> GenABI {
+) -> GenAbi {
     match callee {
         ops::Callee::StaticSymbol(static_symbol) => static_symbol.abi.clone(),
         ops::Callee::PrivateFun(private_fun_id) => (&private_funs[&private_fun_id].abi).into(),
-        ops::Callee::BoxedFunThunk(_) => GenABI::thunk_abi(),
+        ops::Callee::BoxedFunThunk(_) => GenAbi::thunk_abi(),
     }
 }
 
@@ -892,8 +892,8 @@ pub fn print_fun(
         .unwrap_or_else(|| "[anonymous]".into());
 
     let call_conv_name = match ops_fun.abi.call_conv {
-        ops::CallConv::CCC => "extern \"C\" ",
-        ops::CallConv::FastCC => "",
+        ops::CallConv::Ccc => "extern \"C\" ",
+        ops::CallConv::FastCc => "",
     };
 
     let params = ops_fun

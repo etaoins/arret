@@ -11,7 +11,7 @@ fn top_fun_is_a(sub_top_fun: &ty::TopFun, par_top_fun: &ty::TopFun) -> bool {
         && ty_ref_is_a(sub_top_fun.ret(), par_top_fun.ret())
 }
 
-fn list_is_a<M: ty::PM>(sub_list: &ty::List<M>, par_list: &ty::List<M>) -> bool {
+fn list_is_a<M: ty::Pm>(sub_list: &ty::List<M>, par_list: &ty::List<M>) -> bool {
     if (sub_list.fixed().len() > par_list.fixed().len()) && !par_list.has_rest() {
         // sub is longer than par
         return false;
@@ -45,7 +45,7 @@ where
     }
 }
 
-fn record_instance_is_a<M: ty::PM>(
+fn record_instance_is_a<M: ty::Pm>(
     sub_instance: &record::Instance<M>,
     par_instance: &record::Instance<M>,
 ) -> bool {
@@ -87,7 +87,7 @@ fn fun_is_a(sub_fun: &ty::Fun, par_fun: &ty::Fun) -> bool {
     }
 }
 
-fn ty_is_a<M: ty::PM>(
+fn ty_is_a<M: ty::Pm>(
     sub_ref: &ty::Ref<M>,
     sub_ty: &Ty<M>,
     parent_ref: &ty::Ref<M>,
@@ -226,7 +226,7 @@ fn inst_polymorphic_fun(sub_fun: &ty::Fun, par_top_fun: &ty::TopFun) -> ty::Fun 
     ty::subst::subst_poly_fun(&pta, sub_fun)
 }
 
-pub fn ty_ref_is_a<M: ty::PM>(sub: &ty::Ref<M>, parent: &ty::Ref<M>) -> bool {
+pub fn ty_ref_is_a<M: ty::Pm>(sub: &ty::Ref<M>, parent: &ty::Ref<M>) -> bool {
     if let ty::Ref::Var(parent_tvar, _) = parent {
         // Typically `parent_is_bound` makes the best result for a polymorphic parent `May`.
         // These are overrides for cases where they can be `Yes`.
@@ -272,7 +272,7 @@ pub fn ty_ref_is_a<M: ty::PM>(sub: &ty::Ref<M>, parent: &ty::Ref<M>) -> bool {
 /// possible instance, etc. This makes normal `PartialEq` unreliable for determining if the type
 /// system would treat two types identically. This function is more expensive but can reliably
 /// detect equivalent types with different representations.
-pub fn ty_refs_equivalent<M: ty::PM>(ty_ref1: &ty::Ref<M>, ty_ref2: &ty::Ref<M>) -> bool {
+pub fn ty_refs_equivalent<M: ty::Pm>(ty_ref1: &ty::Ref<M>, ty_ref2: &ty::Ref<M>) -> bool {
     ty_ref_is_a(ty_ref1, ty_ref2) && ty_ref_is_a(ty_ref2, ty_ref1)
 }
 

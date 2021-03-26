@@ -155,7 +155,7 @@ fn gen_runtime_heap_alloc(
         let llvm_param_types = &mut [tcx.task_llvm_ptr_type(), llvm_i32];
 
         let alloc_cells_llvm_type = LLVMFunctionType(
-            tcx.boxed_abi_to_llvm_ptr_type(&abitype::BoxedABIType::Any),
+            tcx.boxed_abi_to_llvm_ptr_type(&abitype::BoxedAbiType::Any),
             llvm_param_types.as_mut_ptr(),
             llvm_param_types.len() as u32,
             0,
@@ -309,7 +309,7 @@ pub fn atom_into_active_alloc<'op>(
         LLVMPositionBuilderAtEnd(builder, cont_block);
         let box_slots = LLVMBuildPhi(
             builder,
-            tcx.boxed_abi_to_llvm_ptr_type(&abitype::BoxedABIType::Any),
+            tcx.boxed_abi_to_llvm_ptr_type(&abitype::BoxedAbiType::Any),
             libcstr!("box_slots"),
         );
 

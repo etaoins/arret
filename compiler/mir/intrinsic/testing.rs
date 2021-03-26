@@ -9,11 +9,11 @@ use crate::mir::error;
 use crate::mir::error::{Error, Result};
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops;
-use crate::mir::polymorph::PolymorphABI;
+use crate::mir::polymorph::PolymorphAbi;
 use crate::mir::value;
 use crate::mir::value::Value;
 
-fn ideal_polymorph_abi_for_arret_fun(arret_fun: &value::ArretFun) -> PolymorphABI {
+fn ideal_polymorph_abi_for_arret_fun(arret_fun: &value::ArretFun) -> PolymorphAbi {
     use crate::hir::destruc::poly_for_list_destruc;
     use crate::mir::polymorph::polymorph_abi_for_list_ty;
 

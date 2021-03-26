@@ -6,12 +6,12 @@ use crate::ty::purity::Purity;
 
 /// Type arguments to a polymorphic function or substitution
 #[derive(PartialEq, Clone, Debug)]
-pub struct TyArgs<M: ty::PM> {
+pub struct TyArgs<M: ty::Pm> {
     pvar_purities: HashMap<purity::PVarId, purity::Ref>,
     tvar_types: HashMap<ty::TVarId, ty::Ref<M>>,
 }
 
-impl<M: ty::PM> TyArgs<M> {
+impl<M: ty::Pm> TyArgs<M> {
     pub fn new(
         pvar_purities: HashMap<purity::PVarId, purity::Ref>,
         tvar_types: HashMap<ty::TVarId, ty::Ref<M>>,

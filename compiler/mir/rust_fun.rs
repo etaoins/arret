@@ -1,11 +1,11 @@
 use arret_syntax::span::Span;
 
-use crate::codegen::GenABI;
+use crate::codegen::GenAbi;
 use crate::mir::builder::Builder;
 use crate::mir::error::{Error, Result};
 use crate::mir::eval_hir::EvalHirCtx;
 use crate::mir::ops;
-use crate::mir::polymorph::PolymorphABI;
+use crate::mir::polymorph::PolymorphAbi;
 use crate::mir::value::Value;
 use crate::rfi;
 use crate::ty;
@@ -37,7 +37,7 @@ pub fn build_rust_fun_app(
     use crate::mir::arg_list::build_save_arg_list_to_regs;
     use crate::mir::ops::*;
     use crate::mir::value::from_reg::reg_to_value;
-    use arret_runtime::abitype::RetABIType;
+    use arret_runtime::abitype::RetAbiType;
 
     let mut arg_abi_types = rust_fun
         .params()
@@ -55,7 +55,7 @@ pub fn build_rust_fun_app(
 
     let purity_upper_bound = rust_fun_purity_upper_bound(rust_fun);
 
-    let abi = GenABI {
+    let abi = GenAbi {
         takes_task: rust_fun.takes_task(),
         params: rust_fun.params().to_owned().into(),
         ret: rust_fun.ret().clone(),
@@ -79,19 +79,19 @@ pub fn build_rust_fun_app(
     );
 
     match rust_fun.ret() {
-        RetABIType::Void => Ok(Value::List(Box::new([]), None)),
-        RetABIType::Never => {
+        RetAbiType::Void => Ok(Value::List(Box::new([]), None)),
+        RetAbiType::Never => {
             b.push(span, OpKind::Unreachable);
             Err(Error::Diverged)
         }
-        RetABIType::Inhabited(abi_type) => Ok(reg_to_value(ehx, ret_reg, abi_type, ret_ty)),
+        RetAbiType::Inhabited(abi_type) => Ok(reg_to_value(ehx, ret_reg, abi_type, ret_ty)),
     }
 }
 
 pub fn ops_for_rust_fun(
     ehx: &mut EvalHirCtx,
     rust_fun: &rfi::Fun,
-    wanted_abi: PolymorphABI,
+    wanted_abi: PolymorphAbi,
 ) -> ops::Fun {
     use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
     use crate::mir::optimise::optimise_fun;

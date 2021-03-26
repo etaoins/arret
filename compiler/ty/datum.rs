@@ -3,7 +3,7 @@ use arret_syntax::datum::Datum;
 use crate::ty;
 use crate::ty::Ty;
 
-pub fn ty_ref_for_datum<M: ty::PM>(datum: &Datum) -> ty::Ref<M> {
+pub fn ty_ref_for_datum<M: ty::Pm>(datum: &Datum) -> ty::Ref<M> {
     (match datum {
         Datum::Bool(_, val) => Ty::LitBool(*val),
         Datum::Sym(_, val) => Ty::LitSym(val.clone()),

@@ -9,22 +9,22 @@ use crate::boxed::refs;
 use crate::callback;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub enum BoxedABIType {
+pub enum BoxedAbiType {
     Any,
     UniqueTagged(boxed::TypeTag),
     Union(&'static str, &'static [boxed::TypeTag]),
-    Vector(&'static BoxedABIType),
-    List(&'static BoxedABIType),
-    Pair(&'static BoxedABIType),
-    Set(&'static BoxedABIType),
-    Map(&'static BoxedABIType, &'static BoxedABIType),
+    Vector(&'static BoxedAbiType),
+    List(&'static BoxedAbiType),
+    Pair(&'static BoxedAbiType),
+    Set(&'static BoxedAbiType),
+    Map(&'static BoxedAbiType, &'static BoxedAbiType),
 }
 
-pub const TOP_LIST_BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::List(&BoxedABIType::Any);
+pub const TOP_LIST_BOXED_ABI_TYPE: BoxedAbiType = BoxedAbiType::List(&BoxedAbiType::Any);
 
 /// Encoded type for any boxed or unboxed value
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub enum ABIType {
+pub enum AbiType {
     /// Unboxed boolean value
     ///
     /// This is identical to [`bool`] in Rust and C++
@@ -52,10 +52,10 @@ pub enum ABIType {
     InternedSym,
 
     /// [Boxed value](crate::boxed)
-    Boxed(BoxedABIType),
+    Boxed(BoxedAbiType),
 
     /// [Callback function](crate::callback)
-    Callback(&'static callback::EntryPointABIType),
+    Callback(&'static callback::EntryPointAbiType),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -69,132 +69,132 @@ pub enum ParamCapture {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct ParamABIType {
-    pub abi_type: ABIType,
+pub struct ParamAbiType {
+    pub abi_type: AbiType,
     pub capture: ParamCapture,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub enum RetABIType {
+pub enum RetAbiType {
     Void,
     Never,
-    Inhabited(ABIType),
+    Inhabited(AbiType),
 }
 
-pub trait EncodeABIType {
-    const ABI_TYPE: ABIType;
+pub trait EncodeAbiType {
+    const ABI_TYPE: AbiType;
     /// Controls the capture type when this is used as a parameter
     const PARAM_CAPTURE: ParamCapture = ParamCapture::Never;
 
-    const PARAM_ABI_TYPE: ParamABIType = ParamABIType {
+    const PARAM_ABI_TYPE: ParamAbiType = ParamAbiType {
         abi_type: Self::ABI_TYPE,
         capture: Self::PARAM_CAPTURE,
     };
 }
 
-impl EncodeABIType for f64 {
-    const ABI_TYPE: ABIType = ABIType::Float;
+impl EncodeAbiType for f64 {
+    const ABI_TYPE: AbiType = AbiType::Float;
 }
 
-impl EncodeABIType for i64 {
-    const ABI_TYPE: ABIType = ABIType::Int;
+impl EncodeAbiType for i64 {
+    const ABI_TYPE: AbiType = AbiType::Int;
 }
 
-impl EncodeABIType for char {
-    const ABI_TYPE: ABIType = ABIType::Char;
+impl EncodeAbiType for char {
+    const ABI_TYPE: AbiType = AbiType::Char;
 }
 
-impl EncodeABIType for bool {
-    const ABI_TYPE: ABIType = ABIType::Bool;
+impl EncodeAbiType for bool {
+    const ABI_TYPE: AbiType = AbiType::Bool;
 }
 
-impl<T: boxed::Boxed> EncodeABIType for refs::Gc<T>
+impl<T: boxed::Boxed> EncodeAbiType for refs::Gc<T>
 where
-    T: EncodeBoxedABIType,
+    T: EncodeBoxedAbiType,
 {
-    const ABI_TYPE: ABIType = ABIType::Boxed(T::BOXED_ABI_TYPE);
+    const ABI_TYPE: AbiType = AbiType::Boxed(T::BOXED_ABI_TYPE);
     const PARAM_CAPTURE: ParamCapture = ParamCapture::Auto;
 }
 
-impl<T: boxed::Boxed> EncodeABIType for refs::NoCapture<T>
+impl<T: boxed::Boxed> EncodeAbiType for refs::NoCapture<T>
 where
-    T: EncodeBoxedABIType,
+    T: EncodeBoxedAbiType,
 {
-    const ABI_TYPE: ABIType = ABIType::Boxed(T::BOXED_ABI_TYPE);
+    const ABI_TYPE: AbiType = AbiType::Boxed(T::BOXED_ABI_TYPE);
     const PARAM_CAPTURE: ParamCapture = ParamCapture::Never;
 }
 
-impl<T: boxed::Boxed> EncodeABIType for refs::Capture<T>
+impl<T: boxed::Boxed> EncodeAbiType for refs::Capture<T>
 where
-    T: EncodeBoxedABIType,
+    T: EncodeBoxedAbiType,
 {
-    const ABI_TYPE: ABIType = ABIType::Boxed(T::BOXED_ABI_TYPE);
+    const ABI_TYPE: AbiType = AbiType::Boxed(T::BOXED_ABI_TYPE);
     const PARAM_CAPTURE: ParamCapture = ParamCapture::Always;
 }
 
-impl<F> EncodeABIType for callback::Callback<F>
+impl<F> EncodeAbiType for callback::Callback<F>
 where
-    F: callback::EncodeEntryPointABIType,
+    F: callback::EncodeEntryPointAbiType,
 {
-    const ABI_TYPE: ABIType = ABIType::Callback(&F::ENTRY_POINT_ABI_TYPE);
+    const ABI_TYPE: AbiType = AbiType::Callback(&F::ENTRY_POINT_ABI_TYPE);
 }
 
-pub trait EncodeBoxedABIType {
-    const BOXED_ABI_TYPE: BoxedABIType;
+pub trait EncodeBoxedAbiType {
+    const BOXED_ABI_TYPE: BoxedAbiType;
 }
 
-pub trait EncodeRetABIType {
-    const RET_ABI_TYPE: RetABIType;
+pub trait EncodeRetAbiType {
+    const RET_ABI_TYPE: RetAbiType;
 }
 
-impl<T: EncodeABIType> EncodeRetABIType for T {
-    const RET_ABI_TYPE: RetABIType = RetABIType::Inhabited(Self::ABI_TYPE);
+impl<T: EncodeAbiType> EncodeRetAbiType for T {
+    const RET_ABI_TYPE: RetAbiType = RetAbiType::Inhabited(Self::ABI_TYPE);
 }
 
-impl EncodeRetABIType for () {
-    const RET_ABI_TYPE: RetABIType = RetABIType::Void;
+impl EncodeRetAbiType for () {
+    const RET_ABI_TYPE: RetAbiType = RetAbiType::Void;
 }
 
-impl EncodeRetABIType for Never {
-    const RET_ABI_TYPE: RetABIType = RetABIType::Never;
+impl EncodeRetAbiType for Never {
+    const RET_ABI_TYPE: RetAbiType = RetAbiType::Never;
 }
 
-impl From<boxed::TypeTag> for BoxedABIType {
-    fn from(type_tag: boxed::TypeTag) -> BoxedABIType {
+impl From<boxed::TypeTag> for BoxedAbiType {
+    fn from(type_tag: boxed::TypeTag) -> BoxedAbiType {
         type_tag.to_boxed_abi_type()
     }
 }
 
-impl BoxedABIType {
-    pub fn into_abi_type(self) -> ABIType {
-        ABIType::Boxed(self)
+impl BoxedAbiType {
+    pub fn into_abi_type(self) -> AbiType {
+        AbiType::Boxed(self)
     }
 }
 
-impl From<boxed::TypeTag> for ABIType {
-    fn from(type_tag: boxed::TypeTag) -> ABIType {
+impl From<boxed::TypeTag> for AbiType {
+    fn from(type_tag: boxed::TypeTag) -> AbiType {
         type_tag.to_boxed_abi_type().into_abi_type()
     }
 }
 
-impl From<BoxedABIType> for ABIType {
-    fn from(boxed_abi_type: BoxedABIType) -> ABIType {
+impl From<BoxedAbiType> for AbiType {
+    fn from(boxed_abi_type: BoxedAbiType) -> AbiType {
         boxed_abi_type.into_abi_type()
     }
 }
 
-impl ABIType {
-    pub fn into_ret_abi_type(self) -> RetABIType {
-        RetABIType::Inhabited(self)
+impl AbiType {
+    pub fn into_ret_abi_type(self) -> RetAbiType {
+        RetAbiType::Inhabited(self)
     }
 
-    pub fn into_param_abi_type(self) -> ParamABIType {
+    pub fn into_param_abi_type(self) -> ParamAbiType {
         let capture = match self {
-            ABIType::Boxed(_) => ParamCapture::Auto,
+            AbiType::Boxed(_) => ParamCapture::Auto,
             _ => ParamCapture::Never,
         };
 
-        ParamABIType {
+        ParamAbiType {
             abi_type: self,
             capture,
         }
@@ -203,13 +203,13 @@ impl ABIType {
     pub fn may_contain_gc_refs(&self) -> bool {
         matches!(
             self,
-            ABIType::Boxed(_) | ABIType::InternedSym | ABIType::Callback(_)
+            AbiType::Boxed(_) | AbiType::InternedSym | AbiType::Callback(_)
         )
     }
 }
 
-impl From<boxed::TypeTag> for ParamABIType {
-    fn from(type_tag: boxed::TypeTag) -> ParamABIType {
+impl From<boxed::TypeTag> for ParamAbiType {
+    fn from(type_tag: boxed::TypeTag) -> ParamAbiType {
         type_tag
             .to_boxed_abi_type()
             .into_abi_type()
@@ -217,34 +217,34 @@ impl From<boxed::TypeTag> for ParamABIType {
     }
 }
 
-impl From<BoxedABIType> for ParamABIType {
-    fn from(boxed_abi_type: BoxedABIType) -> ParamABIType {
+impl From<BoxedAbiType> for ParamAbiType {
+    fn from(boxed_abi_type: BoxedAbiType) -> ParamAbiType {
         boxed_abi_type.into_abi_type().into_param_abi_type()
     }
 }
 
-impl From<ABIType> for ParamABIType {
-    fn from(abi_type: ABIType) -> ParamABIType {
+impl From<AbiType> for ParamAbiType {
+    fn from(abi_type: AbiType) -> ParamAbiType {
         abi_type.into_param_abi_type()
     }
 }
 
-impl From<boxed::TypeTag> for RetABIType {
-    fn from(type_tag: boxed::TypeTag) -> RetABIType {
+impl From<boxed::TypeTag> for RetAbiType {
+    fn from(type_tag: boxed::TypeTag) -> RetAbiType {
         type_tag
             .to_boxed_abi_type()
             .into_abi_type()
             .into_ret_abi_type()
     }
 }
-impl From<BoxedABIType> for RetABIType {
-    fn from(boxed_abi_type: BoxedABIType) -> RetABIType {
+impl From<BoxedAbiType> for RetAbiType {
+    fn from(boxed_abi_type: BoxedAbiType) -> RetAbiType {
         boxed_abi_type.into_abi_type().into_ret_abi_type()
     }
 }
 
-impl From<ABIType> for RetABIType {
-    fn from(abi_type: ABIType) -> RetABIType {
+impl From<AbiType> for RetAbiType {
+    fn from(abi_type: AbiType) -> RetAbiType {
         abi_type.into_ret_abi_type()
     }
 }

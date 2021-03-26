@@ -20,15 +20,15 @@ pub enum FieldType {
 }
 
 impl FieldType {
-    pub fn from_abi_type(abi_type: &abitype::ABIType) -> Self {
+    pub fn from_abi_type(abi_type: &abitype::AbiType) -> Self {
         match abi_type {
-            abitype::ABIType::Bool => FieldType::Bool,
-            abitype::ABIType::Char => FieldType::Char,
-            abitype::ABIType::Float => FieldType::Float,
-            abitype::ABIType::Int => FieldType::Int,
-            abitype::ABIType::InternedSym => FieldType::InternedSym,
-            abitype::ABIType::Boxed(_) => FieldType::Boxed,
-            abitype::ABIType::Callback(_) => {
+            abitype::AbiType::Bool => FieldType::Bool,
+            abitype::AbiType::Char => FieldType::Char,
+            abitype::AbiType::Float => FieldType::Float,
+            abitype::AbiType::Int => FieldType::Int,
+            abitype::AbiType::InternedSym => FieldType::InternedSym,
+            abitype::AbiType::Boxed(_) => FieldType::Boxed,
+            abitype::AbiType::Callback(_) => {
                 unimplemented!("callback record fields");
             }
         }

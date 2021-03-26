@@ -52,7 +52,7 @@ fn build_load_type_tag(
     value: &Value,
     possible_type_tags: TypeTagSet,
 ) -> BuiltReg {
-    let subject_reg = value_to_reg(ehx, b, span, value, &abitype::BoxedABIType::Any.into()).into();
+    let subject_reg = value_to_reg(ehx, b, span, value, &abitype::BoxedAbiType::Any.into()).into();
 
     b.push_reg(
         span,
@@ -142,7 +142,7 @@ fn eval_tagged_ty_pred(
     reg_to_value(
         ehx,
         result_reg,
-        &abitype::ABIType::Bool,
+        &abitype::AbiType::Bool,
         &Ty::<ty::Mono>::Bool.into(),
     )
 }
@@ -214,7 +214,7 @@ fn eval_record_ty_pred(
             &mut is_record_class_b,
             span,
             subject_value,
-            &abitype::BoxedABIType::UniqueTagged(boxed::TypeTag::Record).into(),
+            &abitype::BoxedAbiType::UniqueTagged(boxed::TypeTag::Record).into(),
         )
         .into();
 
@@ -277,7 +277,7 @@ fn eval_record_ty_pred(
     reg_to_value(
         ehx,
         result_reg,
-        &abitype::ABIType::Bool,
+        &abitype::AbiType::Bool,
         &Ty::<ty::Mono>::Bool.into(),
     )
 }

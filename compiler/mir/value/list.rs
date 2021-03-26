@@ -153,7 +153,7 @@ impl UnsizedListIterator {
         use crate::mir::value::build_reg::reg_to_boxed_reg;
         use arret_runtime::abitype;
 
-        let needed_pair_type = abitype::BoxedABIType::Pair(&abitype::BoxedABIType::Any);
+        let needed_pair_type = abitype::BoxedAbiType::Pair(&abitype::BoxedAbiType::Any);
         let current_rest_reg = reg_to_boxed_reg(b, span, &current_rest_value, &needed_pair_type);
 
         let head_reg = b.push_reg(span, OpKind::LoadBoxedPairHead, current_rest_reg.into());
@@ -162,7 +162,7 @@ impl UnsizedListIterator {
         self.rest =
             Some(value::RegValue::new(rest_reg, abitype::TOP_LIST_BOXED_ABI_TYPE.into()).into());
 
-        value::RegValue::new(head_reg, abitype::BoxedABIType::Any.into()).into()
+        value::RegValue::new(head_reg, abitype::BoxedAbiType::Any.into()).into()
     }
 }
 
@@ -249,7 +249,7 @@ mod test {
             Some(Box::new(
                 value::RegValue::new(
                     BuiltReg::Local(RegId::alloc()),
-                    abitype::BoxedABIType::Any.into(),
+                    abitype::BoxedAbiType::Any.into(),
                 )
                 .into(),
             )),

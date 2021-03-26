@@ -5,7 +5,7 @@ use std::{alloc, ffi, panic};
 use arret_runtime::boxed;
 use arret_runtime::boxed::prelude::*;
 use arret_runtime::boxed::refs::Gc;
-use arret_runtime::callback::EntryPointABIType as CallbackEntryPointABIType;
+use arret_runtime::callback::EntryPointAbiType as CallbackEntryPointAbiType;
 use arret_runtime::intern::{AsInterner, Interner};
 
 use arret_runtime::abitype;
@@ -20,7 +20,7 @@ use crate::mir::builder::{Builder, BuiltReg, TryToBuilder};
 use crate::mir::error::{Error, Result};
 use crate::mir::inliner;
 use crate::mir::ops;
-use crate::mir::polymorph::PolymorphABI;
+use crate::mir::polymorph::PolymorphAbi;
 use crate::mir::value;
 use crate::mir::value::synthetic_fun::SyntheticFuns;
 use crate::mir::value::types::TypeHint;
@@ -37,13 +37,13 @@ use crate::ty::Ty;
 #[derive(PartialEq, Eq, Hash)]
 struct RustFunKey {
     symbol: &'static str,
-    polymorph_abi: PolymorphABI,
+    polymorph_abi: PolymorphAbi,
 }
 
 #[derive(PartialEq, Eq, Hash)]
 struct ArretFunKey {
     arret_fun_id: value::ArretFunId,
-    polymorph_abi: PolymorphABI,
+    polymorph_abi: PolymorphAbi,
 }
 
 #[derive(PartialEq, Eq)]
@@ -68,7 +68,7 @@ pub struct EvalHirCtx {
 
     // This uses pointers because `FunThunk` is always inequal to itself
     thunk_fun_values: HashMap<*const boxed::FunThunk, Value>,
-    thunk_jit: codegen::jit::JITCtx,
+    thunk_jit: codegen::jit::JitCtx,
 
     pub(super) record_class_for_cons: HashMap<record::ConsId, EvaledRecordClass>,
     cons_for_jit_record_class_id: HashMap<boxed::RecordClassId, record::ConsId>,
@@ -76,7 +76,7 @@ pub struct EvalHirCtx {
 
 /// Context for performing a tail call in `(recur)`
 struct TailCallCtx {
-    self_abi: PolymorphABI,
+    self_abi: PolymorphAbi,
     captures_reg: Option<BuiltReg>,
 }
 
@@ -197,7 +197,7 @@ fn merge_apply_ty_args_into_scope(
 
 impl EvalHirCtx {
     pub fn new(optimising: bool) -> EvalHirCtx {
-        let thunk_jit = codegen::jit::JITCtx::new(optimising);
+        let thunk_jit = codegen::jit::JitCtx::new(optimising);
 
         EvalHirCtx {
             runtime_task: arret_runtime::task::Task::new(),
@@ -558,7 +558,7 @@ impl EvalHirCtx {
             use crate::mir::rust_fun::ops_for_rust_fun;
             use std::mem;
 
-            let wanted_abi = PolymorphABI::thunk_abi();
+            let wanted_abi = PolymorphAbi::thunk_abi();
             let ops_fun = ops_for_rust_fun(self, rust_fun, wanted_abi);
             let address = self.thunk_jit.compile_fun(
                 &self.private_funs,
@@ -593,7 +593,7 @@ impl EvalHirCtx {
     fn id_for_rust_fun(
         &mut self,
         rust_fun: &rfi::Fun,
-        wanted_abi: PolymorphABI,
+        wanted_abi: PolymorphAbi,
     ) -> ops::PrivateFunId {
         use crate::mir::rust_fun::ops_for_rust_fun;
 
@@ -623,11 +623,11 @@ impl EvalHirCtx {
     ) -> BuiltReg {
         use crate::mir::ops::*;
 
-        let wanted_abi = PolymorphABI::thunk_abi();
+        let wanted_abi = PolymorphAbi::thunk_abi();
         let private_fun_id = self.id_for_rust_fun(rust_fun, wanted_abi);
 
         let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
-        let captures_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
+        let captures_reg = b.cast_boxed(span, nil_reg, abitype::BoxedAbiType::Any);
 
         b.push_reg(
             span,
@@ -644,7 +644,7 @@ impl EvalHirCtx {
         b: &mut Builder,
         span: Span,
         rust_fun: &rfi::Fun,
-        entry_point_abi: &CallbackEntryPointABIType,
+        entry_point_abi: &CallbackEntryPointAbiType,
     ) -> BuiltReg {
         use crate::mir::ops::*;
 
@@ -652,7 +652,7 @@ impl EvalHirCtx {
         let private_fun_id = self.id_for_rust_fun(rust_fun, wanted_abi);
 
         let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
-        let captures_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
+        let captures_reg = b.cast_boxed(span, nil_reg, abitype::BoxedAbiType::Any);
 
         b.push_reg(
             span,
@@ -810,7 +810,7 @@ impl EvalHirCtx {
         use crate::mir::value::build_reg::value_to_reg;
 
         let fun_boxed_abi_type =
-            if let abitype::ABIType::Boxed(ref fun_boxed_abi_type) = fun_reg_value.abi_type {
+            if let abitype::AbiType::Boxed(ref fun_boxed_abi_type) = fun_reg_value.abi_type {
                 fun_boxed_abi_type
             } else {
                 panic!(
@@ -849,7 +849,7 @@ impl EvalHirCtx {
             },
         );
 
-        value::RegValue::new(ret_reg, abitype::BoxedABIType::Any.into()).into()
+        value::RegValue::new(ret_reg, abitype::BoxedAbiType::Any.into()).into()
     }
 
     fn eval_value_app(
@@ -1062,13 +1062,13 @@ impl EvalHirCtx {
             );
 
             match &self_abi.ret {
-                abitype::RetABIType::Inhabited(_) => {
+                abitype::RetAbiType::Inhabited(_) => {
                     some_b.push(span, OpKind::Ret(ret_reg.into()));
                 }
-                abitype::RetABIType::Never => {
+                abitype::RetAbiType::Never => {
                     some_b.push(span, OpKind::Unreachable);
                 }
-                abitype::RetABIType::Void => {
+                abitype::RetAbiType::Void => {
                     some_b.push(span, OpKind::RetVoid);
                 }
             }
@@ -1166,7 +1166,7 @@ impl EvalHirCtx {
         use crate::mir::value::types::{possible_type_tags_for_value, type_hint_for_value};
 
         let span = cond.span;
-        let test_reg = value_to_reg(self, b, span, test_value, &abitype::ABIType::Bool);
+        let test_reg = value_to_reg(self, b, span, test_value, &abitype::AbiType::Bool);
 
         let mut built_true = self.build_cond_branch(fcx, &cond.true_expr);
         let mut built_false = self.build_cond_branch(fcx, &cond.false_expr);
@@ -1187,7 +1187,7 @@ impl EvalHirCtx {
                 {
                     // Our output value is our test
                     // Use the unboxed value because LLVM has trouble reasoning about our boxed bools
-                    let reg_value = value::RegValue::new(test_reg, abitype::ABIType::Bool);
+                    let reg_value = value::RegValue::new(test_reg, abitype::AbiType::Bool);
                     output_value = reg_value.into();
                     reg_phi = None;
                 } else if possible_true_type_tags == TypeTag::False.into()
@@ -1204,7 +1204,7 @@ impl EvalHirCtx {
                         },
                     );
 
-                    let reg_value = value::RegValue::new(negated_test_reg, abitype::ABIType::Bool);
+                    let reg_value = value::RegValue::new(negated_test_reg, abitype::AbiType::Bool);
                     output_value = reg_value.into();
                     reg_phi = None;
                 } else {
@@ -1328,7 +1328,7 @@ impl EvalHirCtx {
         let thunk = unsafe {
             use std::mem;
 
-            let wanted_abi = PolymorphABI::thunk_abi();
+            let wanted_abi = PolymorphAbi::thunk_abi();
             let ops_fun = self.ops_for_arret_fun(&arret_fun, wanted_abi);
 
             let address = self.thunk_jit.compile_fun(
@@ -1350,7 +1350,7 @@ impl EvalHirCtx {
     fn id_for_arret_fun(
         &mut self,
         arret_fun: &value::ArretFun,
-        wanted_abi: PolymorphABI,
+        wanted_abi: PolymorphAbi,
     ) -> ops::PrivateFunId {
         let arret_fun_key = ArretFunKey {
             arret_fun_id: arret_fun.id(),
@@ -1427,7 +1427,7 @@ impl EvalHirCtx {
         use crate::mir::env_values;
         use crate::mir::ops::*;
 
-        let wanted_abi = PolymorphABI::thunk_abi();
+        let wanted_abi = PolymorphAbi::thunk_abi();
         let private_fun_id = self.id_for_arret_fun(arret_fun, wanted_abi);
 
         let captures_reg = env_values::save_to_captures_reg(self, b, span, arret_fun.env_values());
@@ -1443,7 +1443,7 @@ impl EvalHirCtx {
             )
         } else {
             let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
-            let outer_captures_reg = b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any);
+            let outer_captures_reg = b.cast_boxed(span, nil_reg, abitype::BoxedAbiType::Any);
 
             b.push_reg(
                 span,
@@ -1461,7 +1461,7 @@ impl EvalHirCtx {
         b: &mut Builder,
         span: Span,
         arret_fun: &value::ArretFun,
-        entry_point_abi: &CallbackEntryPointABIType,
+        entry_point_abi: &CallbackEntryPointAbiType,
     ) -> BuiltReg {
         use crate::mir::env_values;
         use crate::mir::ops::*;
@@ -1472,7 +1472,7 @@ impl EvalHirCtx {
         let captures_reg = env_values::save_to_captures_reg(self, b, span, arret_fun.env_values())
             .unwrap_or_else(|| {
                 let nil_reg = b.push_reg(span, OpKind::ConstBoxedNil, ());
-                b.cast_boxed(span, nil_reg, abitype::BoxedABIType::Any)
+                b.cast_boxed(span, nil_reg, abitype::BoxedAbiType::Any)
             });
 
         b.push_reg(
@@ -1488,7 +1488,7 @@ impl EvalHirCtx {
     pub(super) fn ops_for_arret_fun(
         &mut self,
         arret_fun: &value::ArretFun,
-        wanted_abi: PolymorphABI,
+        wanted_abi: PolymorphAbi,
     ) -> ops::Fun {
         use crate::hir::destruc::poly_for_list_destruc;
         use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
@@ -1531,7 +1531,7 @@ impl EvalHirCtx {
 
         let ty_args = stx.into_poly_ty_args();
 
-        let tail_call_ctx = if wanted_abi.call_conv == ops::CallConv::FastCC {
+        let tail_call_ctx = if wanted_abi.call_conv == ops::CallConv::FastCc {
             Some(TailCallCtx {
                 self_abi: wanted_abi.clone(),
                 captures_reg,
@@ -1586,7 +1586,7 @@ impl EvalHirCtx {
     /// Builds a function with a callback ABI that calls a thunk passed as its captures
     fn ops_for_callback_to_thunk_adapter(
         &mut self,
-        entry_point_abi: CallbackEntryPointABIType,
+        entry_point_abi: CallbackEntryPointAbiType,
     ) -> ops::Fun {
         use crate::mir::arg_list::{build_load_arg_list_value, LoadedArgList};
         use crate::mir::optimise::optimise_fun;
@@ -1609,7 +1609,7 @@ impl EvalHirCtx {
         );
 
         let fun_reg_value =
-            value::RegValue::new(captures_reg.unwrap(), abitype::BoxedABIType::Any.into());
+            value::RegValue::new(captures_reg.unwrap(), abitype::BoxedAbiType::Any.into());
 
         let result_value =
             self.build_reg_fun_thunk_app(&mut b, span, &fun_reg_value, &arg_list_value);
@@ -1630,9 +1630,9 @@ impl EvalHirCtx {
         &mut self,
         b: &mut Builder,
         span: Span,
-        thunk_reg_abi_type: &arret_runtime::abitype::BoxedABIType,
+        thunk_reg_abi_type: &arret_runtime::abitype::BoxedAbiType,
         thunk_reg: BuiltReg,
-        entry_point_abi: &CallbackEntryPointABIType,
+        entry_point_abi: &CallbackEntryPointAbiType,
     ) -> BuiltReg {
         use crate::mir::ops::*;
 
@@ -1641,7 +1641,7 @@ impl EvalHirCtx {
             span,
             thunk_reg_abi_type,
             thunk_reg,
-            abitype::BoxedABIType::Any,
+            abitype::BoxedAbiType::Any,
         );
 
         let private_fun_id = self.private_fun_id_counter.alloc();
@@ -1863,15 +1863,15 @@ impl EvalHirCtx {
             unimplemented!("Non-Arret main!");
         };
 
-        let main_abi = PolymorphABI {
-            call_conv: ops::CallConv::CCC,
+        let main_abi = PolymorphAbi {
+            call_conv: ops::CallConv::Ccc,
 
             // Main is a top-level function; it can't capture
             has_captures: false,
             fixed_params: Box::new([]),
             rest_param: None,
 
-            ret: abitype::RetABIType::Void,
+            ret: abitype::RetAbiType::Void,
         };
 
         let main = self.ops_for_arret_fun(&main_arret_fun, main_abi);

@@ -499,13 +499,13 @@ fn gen_persistent_vector_leaf(
     mcx: &mut ModCtx<'_, '_, '_>,
     llvm_elements: &[LLVMValueRef],
 ) -> LLVMValueRef {
-    use arret_runtime::abitype::BoxedABIType;
+    use arret_runtime::abitype::BoxedAbiType;
     use arret_runtime::persistent::vector::GLOBAL_CONSTANT_REFCOUNT;
     use arret_runtime::persistent::vector::NODE_SIZE;
 
     unsafe {
         let llvm_type = tcx.persistent_vector_leaf_llvm_type();
-        let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
+        let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedAbiType::Any);
         let llvm_i64 = LLVMInt64TypeInContext(tcx.llx);
 
         let mut padded_llvm_elements: Vec<LLVMValueRef> = llvm_elements
@@ -595,7 +595,7 @@ fn gen_boxed_inline_vector(
     mcx: &mut ModCtx<'_, '_, '_>,
     llvm_elements: impl ExactSizeIterator<Item = LLVMValueRef>,
 ) -> LLVMValueRef {
-    use arret_runtime::abitype::BoxedABIType;
+    use arret_runtime::abitype::BoxedAbiType;
 
     let elements_len = llvm_elements.len();
 
@@ -603,7 +603,7 @@ fn gen_boxed_inline_vector(
         let type_tag = boxed::TypeTag::Vector;
         let llvm_type = tcx.boxed_inline_vector_llvm_type();
         let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
-        let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
+        let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedAbiType::Any);
 
         let mut members: Vec<LLVMValueRef> = vec![
             tcx.llvm_box_header(type_tag.to_const_header()),
@@ -652,7 +652,7 @@ pub fn gen_boxed_set(
     mcx: &mut ModCtx<'_, '_, '_>,
     llvm_elements: impl ExactSizeIterator<Item = LLVMValueRef>,
 ) -> LLVMValueRef {
-    use arret_runtime::abitype::BoxedABIType;
+    use arret_runtime::abitype::BoxedAbiType;
 
     let elements_len = llvm_elements.len();
 
@@ -664,7 +664,7 @@ pub fn gen_boxed_set(
         let type_tag = boxed::TypeTag::Set;
         let llvm_type = tcx.boxed_abi_to_llvm_struct_type(&type_tag.into());
         let llvm_i32 = LLVMInt32TypeInContext(tcx.llx);
-        let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedABIType::Any);
+        let llvm_any_ptr = tcx.boxed_abi_to_llvm_ptr_type(&BoxedAbiType::Any);
 
         let mut members: Vec<LLVMValueRef> = vec![
             tcx.llvm_box_header(type_tag.to_const_header()),

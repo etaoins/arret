@@ -3,7 +3,7 @@ use arret_runtime::boxed;
 
 use crate::mir::value::Value;
 
-pub fn plan_phi_abi_type(lhs: &Value, rhs: &Value) -> abitype::ABIType {
+pub fn plan_phi_abi_type(lhs: &Value, rhs: &Value) -> abitype::AbiType {
     use crate::mir::specific_abi_type::*;
 
     match (lhs, rhs) {
@@ -40,7 +40,7 @@ pub fn plan_phi_abi_type(lhs: &Value, rhs: &Value) -> abitype::ABIType {
                         }
                     }
                     Value::Reg(reg_value) => {
-                        matches!(reg_value.abi_type, abitype::ABIType::Boxed(_))
+                        matches!(reg_value.abi_type, abitype::AbiType::Boxed(_))
                     }
                     _ => true,
                 }

@@ -3,7 +3,7 @@ use std::hash::{Hash, Hasher};
 use std::mem::MaybeUninit;
 use std::{fmt, marker, mem};
 
-use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
+use crate::abitype::{BoxedAbiType, EncodeBoxedAbiType};
 use crate::boxed::refs::Gc;
 use crate::boxed::*;
 
@@ -214,11 +214,11 @@ impl<T: Boxed> fmt::Debug for Set<T> {
     }
 }
 
-impl<T: Boxed> EncodeBoxedABIType for Set<T>
+impl<T: Boxed> EncodeBoxedAbiType for Set<T>
 where
-    T: EncodeBoxedABIType,
+    T: EncodeBoxedAbiType,
 {
-    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Set(&T::BOXED_ABI_TYPE);
+    const BOXED_ABI_TYPE: BoxedAbiType = BoxedAbiType::Set(&T::BOXED_ABI_TYPE);
 }
 
 #[repr(C, align(16))]

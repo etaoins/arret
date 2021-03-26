@@ -3,12 +3,12 @@ use crate::ty::Ty;
 
 /// Iterates through the member types of a list
 #[derive(Clone)]
-pub struct ListIterator<'list, M: ty::PM> {
+pub struct ListIterator<'list, M: ty::Pm> {
     fixed: &'list [ty::Ref<M>],
     rest: &'list ty::Ref<M>,
 }
 
-impl<'list, M: ty::PM> ListIterator<'list, M> {
+impl<'list, M: ty::Pm> ListIterator<'list, M> {
     pub fn new(list: &'list ty::List<M>) -> ListIterator<'list, M> {
         ListIterator {
             fixed: list.fixed(),
@@ -46,7 +46,7 @@ impl<'list, M: ty::PM> ListIterator<'list, M> {
     }
 }
 
-impl<'list, M: ty::PM> Iterator for ListIterator<'list, M> {
+impl<'list, M: ty::Pm> Iterator for ListIterator<'list, M> {
     type Item = &'list ty::Ref<M>;
 
     fn next(&mut self) -> Option<&'list ty::Ref<M>> {

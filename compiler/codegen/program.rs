@@ -19,7 +19,7 @@ use crate::SourceLoader;
 #[derive(Copy, Clone, PartialEq)]
 pub enum OutputType {
     None,
-    LLVMIR,
+    LlvmIr,
     Assembly,
     Object,
     Executable,
@@ -237,7 +237,7 @@ pub fn gen_program(
                 LLVMDisposeTargetMachine(target_machine);
                 return;
             }
-            OutputType::LLVMIR => {
+            OutputType::LlvmIr => {
                 if LLVMPrintModuleToFile(
                     module,
                     llvm_output_path_cstring.as_ptr() as *mut _,

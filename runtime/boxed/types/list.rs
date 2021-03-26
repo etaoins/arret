@@ -3,7 +3,7 @@ use std::hash::{Hash, Hasher};
 use std::iter::FusedIterator;
 use std::marker::PhantomData;
 
-use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
+use crate::abitype::{BoxedAbiType, EncodeBoxedAbiType};
 use crate::boxed::refs::Gc;
 use crate::boxed::*;
 
@@ -17,11 +17,11 @@ pub struct Pair<T: Boxed = Any> {
 }
 
 impl<T: Boxed> Boxed for Pair<T> {}
-impl<T: Boxed> EncodeBoxedABIType for Pair<T>
+impl<T: Boxed> EncodeBoxedAbiType for Pair<T>
 where
-    T: EncodeBoxedABIType,
+    T: EncodeBoxedAbiType,
 {
-    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Pair(&T::BOXED_ABI_TYPE);
+    const BOXED_ABI_TYPE: BoxedAbiType = BoxedAbiType::Pair(&T::BOXED_ABI_TYPE);
 }
 
 impl<T: Boxed> Pair<T> {
@@ -108,11 +108,11 @@ impl DistinctTagged for List<Any> {
     }
 }
 
-impl<T: Boxed> EncodeBoxedABIType for List<T>
+impl<T: Boxed> EncodeBoxedAbiType for List<T>
 where
-    T: EncodeBoxedABIType,
+    T: EncodeBoxedAbiType,
 {
-    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::List(&T::BOXED_ABI_TYPE);
+    const BOXED_ABI_TYPE: BoxedAbiType = BoxedAbiType::List(&T::BOXED_ABI_TYPE);
 }
 
 /// Possible subtypes of [`List`]

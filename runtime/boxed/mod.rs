@@ -18,7 +18,7 @@ mod types;
 use std::hash::{Hash, Hasher};
 use std::{fmt, ptr};
 
-use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
+use crate::abitype::{BoxedAbiType, EncodeBoxedAbiType};
 use crate::boxed::refs::Gc;
 
 pub use crate::boxed::heap::{collect, type_info};
@@ -189,8 +189,8 @@ pub trait Boxed: Sized + PartialEqInHeap + HashInHeap + fmt::Debug {
     }
 }
 
-impl EncodeBoxedABIType for Any {
-    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Any;
+impl EncodeBoxedAbiType for Any {
+    const BOXED_ABI_TYPE: BoxedAbiType = BoxedAbiType::Any;
 }
 
 /// Marks that this boxed struct has a specific constant type tag
@@ -224,8 +224,8 @@ pub trait DistinctTagged: Boxed {
 /// In mathematical terms this can be thought of as the struct being bijective with the type tag.
 pub trait UniqueTagged: ConstTagged + DistinctTagged {}
 
-impl<T: UniqueTagged> EncodeBoxedABIType for T {
-    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::UniqueTagged(T::TYPE_TAG);
+impl<T: UniqueTagged> EncodeBoxedAbiType for T {
+    const BOXED_ABI_TYPE: BoxedAbiType = BoxedAbiType::UniqueTagged(T::TYPE_TAG);
 }
 
 macro_rules! define_const_tagged_boxes {
@@ -281,8 +281,8 @@ macro_rules! define_const_tagged_boxes {
 
 impl TypeTag {
     /// Returns the boxed ABI type corresponding to this type tag
-    pub fn to_boxed_abi_type(self) -> BoxedABIType {
-        BoxedABIType::UniqueTagged(self)
+    pub fn to_boxed_abi_type(self) -> BoxedAbiType {
+        BoxedAbiType::UniqueTagged(self)
     }
 
     /// Returns a header for a constant boxed values of this type
@@ -479,8 +479,8 @@ macro_rules! define_tagged_union {
             impl $subtype_trait for $member {}
         )*
 
-        impl EncodeBoxedABIType for $name {
-            const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Union(stringify!($name), &[
+        impl EncodeBoxedAbiType for $name {
+            const BOXED_ABI_TYPE: BoxedAbiType = BoxedAbiType::Union(stringify!($name), &[
                 $( $member::TYPE_TAG ),*
             ]);
         }

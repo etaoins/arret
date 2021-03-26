@@ -5,7 +5,7 @@ use crate::ty;
 use crate::ty::purity::Purity;
 use crate::ty::Ty;
 
-fn type_tag_to_ty<M: ty::PM>(type_tag: boxed::TypeTag) -> Ty<M> {
+fn type_tag_to_ty<M: ty::Pm>(type_tag: boxed::TypeTag) -> Ty<M> {
     use arret_runtime::boxed::TypeTag;
 
     match type_tag {
@@ -29,61 +29,61 @@ fn type_tag_to_ty<M: ty::PM>(type_tag: boxed::TypeTag) -> Ty<M> {
     }
 }
 
-pub trait ConvertableABIType {
-    fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M>;
+pub trait ConvertableAbiType {
+    fn to_ty_ref<M: ty::Pm>(&self) -> ty::Ref<M>;
     fn to_rust_str(&self) -> String;
 }
 
-impl ConvertableABIType for abitype::ABIType {
-    fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M> {
-        use arret_runtime::abitype::ABIType;
+impl ConvertableAbiType for abitype::AbiType {
+    fn to_ty_ref<M: ty::Pm>(&self) -> ty::Ref<M> {
+        use arret_runtime::abitype::AbiType;
 
         match self {
-            ABIType::Bool => Ty::Bool.into(),
-            ABIType::Char => Ty::Char.into(),
-            ABIType::Float => Ty::Float.into(),
-            ABIType::Int => Ty::Int.into(),
-            ABIType::InternedSym => Ty::Sym.into(),
-            ABIType::Boxed(boxed) => boxed.to_ty_ref(),
-            ABIType::Callback(entry_point_abi) => entry_point_abi.to_ty_ref(),
+            AbiType::Bool => Ty::Bool.into(),
+            AbiType::Char => Ty::Char.into(),
+            AbiType::Float => Ty::Float.into(),
+            AbiType::Int => Ty::Int.into(),
+            AbiType::InternedSym => Ty::Sym.into(),
+            AbiType::Boxed(boxed) => boxed.to_ty_ref(),
+            AbiType::Callback(entry_point_abi) => entry_point_abi.to_ty_ref(),
         }
     }
 
     fn to_rust_str(&self) -> String {
-        use arret_runtime::abitype::ABIType;
+        use arret_runtime::abitype::AbiType;
 
         match self {
-            ABIType::Bool => "bool".to_owned(),
-            ABIType::Char => "char".to_owned(),
-            ABIType::Float => "f64".to_owned(),
-            ABIType::Int => "i64".to_owned(),
-            ABIType::InternedSym => "InternedSym".to_owned(),
-            ABIType::Boxed(boxed) => format!("Gc<{}>", boxed.to_rust_str()),
-            ABIType::Callback(entry_point_abi) => entry_point_abi.to_rust_str(),
+            AbiType::Bool => "bool".to_owned(),
+            AbiType::Char => "char".to_owned(),
+            AbiType::Float => "f64".to_owned(),
+            AbiType::Int => "i64".to_owned(),
+            AbiType::InternedSym => "InternedSym".to_owned(),
+            AbiType::Boxed(boxed) => format!("Gc<{}>", boxed.to_rust_str()),
+            AbiType::Callback(entry_point_abi) => entry_point_abi.to_rust_str(),
         }
     }
 }
 
-impl ConvertableABIType for abitype::BoxedABIType {
-    fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M> {
-        use arret_runtime::abitype::BoxedABIType;
+impl ConvertableAbiType for abitype::BoxedAbiType {
+    fn to_ty_ref<M: ty::Pm>(&self) -> ty::Ref<M> {
+        use arret_runtime::abitype::BoxedAbiType;
 
         match self {
-            BoxedABIType::Any => Ty::Any.into(),
-            BoxedABIType::Vector(member) => Ty::Vectorof(Box::new(member.to_ty_ref())).into(),
-            BoxedABIType::Set(member) => Ty::Set(Box::new(member.to_ty_ref())).into(),
-            BoxedABIType::Map(key, value) => Ty::Map(Box::new(ty::Map {
+            BoxedAbiType::Any => Ty::Any.into(),
+            BoxedAbiType::Vector(member) => Ty::Vectorof(Box::new(member.to_ty_ref())).into(),
+            BoxedAbiType::Set(member) => Ty::Set(Box::new(member.to_ty_ref())).into(),
+            BoxedAbiType::Map(key, value) => Ty::Map(Box::new(ty::Map {
                 key: key.to_ty_ref(),
                 value: value.to_ty_ref(),
             }))
             .into(),
-            BoxedABIType::List(member) => ty::List::new_uniform(member.to_ty_ref()).into(),
-            BoxedABIType::Pair(member) => {
+            BoxedAbiType::List(member) => ty::List::new_uniform(member.to_ty_ref()).into(),
+            BoxedAbiType::Pair(member) => {
                 let member_ty_ref: ty::Ref<M> = member.to_ty_ref();
                 ty::List::new(Box::new([member_ty_ref.clone()]), member_ty_ref).into()
             }
-            BoxedABIType::UniqueTagged(type_tag) => type_tag_to_ty(*type_tag).into(),
-            BoxedABIType::Union(_, tags) => {
+            BoxedAbiType::UniqueTagged(type_tag) => type_tag_to_ty(*type_tag).into(),
+            BoxedAbiType::Union(_, tags) => {
                 let members = tags.iter().map(|type_tag| type_tag_to_ty(*type_tag).into());
 
                 ty::unify::unify_ty_ref_iter(members)
@@ -92,56 +92,56 @@ impl ConvertableABIType for abitype::BoxedABIType {
     }
 
     fn to_rust_str(&self) -> String {
-        use arret_runtime::abitype::BoxedABIType;
+        use arret_runtime::abitype::BoxedAbiType;
 
         match self {
-            BoxedABIType::Any => "boxed::Any".to_owned(),
-            BoxedABIType::Vector(member) => format!("boxed::Vector<{}>", member.to_rust_str()),
-            BoxedABIType::List(member) => format!("boxed::List<{}>", member.to_rust_str()),
-            BoxedABIType::Pair(member) => format!("boxed::Pair<{}>", member.to_rust_str()),
-            BoxedABIType::Set(member) => format!("boxed::Set<{}>", member.to_rust_str()),
-            BoxedABIType::UniqueTagged(type_tag) => format!("boxed::{}", type_tag.to_str()),
-            BoxedABIType::Union(name, _) => format!("boxed::{}", name),
-            BoxedABIType::Map(key, value) => {
+            BoxedAbiType::Any => "boxed::Any".to_owned(),
+            BoxedAbiType::Vector(member) => format!("boxed::Vector<{}>", member.to_rust_str()),
+            BoxedAbiType::List(member) => format!("boxed::List<{}>", member.to_rust_str()),
+            BoxedAbiType::Pair(member) => format!("boxed::Pair<{}>", member.to_rust_str()),
+            BoxedAbiType::Set(member) => format!("boxed::Set<{}>", member.to_rust_str()),
+            BoxedAbiType::UniqueTagged(type_tag) => format!("boxed::{}", type_tag.to_str()),
+            BoxedAbiType::Union(name, _) => format!("boxed::{}", name),
+            BoxedAbiType::Map(key, value) => {
                 format!("boxed::Map<{}, {}>", key.to_rust_str(), value.to_rust_str())
             }
         }
     }
 }
 
-impl ConvertableABIType for abitype::RetABIType {
-    fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M> {
-        use arret_runtime::abitype::RetABIType;
+impl ConvertableAbiType for abitype::RetAbiType {
+    fn to_ty_ref<M: ty::Pm>(&self) -> ty::Ref<M> {
+        use arret_runtime::abitype::RetAbiType;
 
         match self {
-            RetABIType::Void => Ty::unit().into(),
-            RetABIType::Never => Ty::never().into(),
-            RetABIType::Inhabited(abi_type) => abi_type.to_ty_ref(),
+            RetAbiType::Void => Ty::unit().into(),
+            RetAbiType::Never => Ty::never().into(),
+            RetAbiType::Inhabited(abi_type) => abi_type.to_ty_ref(),
         }
     }
 
     fn to_rust_str(&self) -> String {
-        use arret_runtime::abitype::RetABIType;
+        use arret_runtime::abitype::RetAbiType;
 
         match self {
-            RetABIType::Void => "()".to_owned(),
-            RetABIType::Never => "Never".to_owned(),
-            RetABIType::Inhabited(abi_type) => abi_type.to_rust_str(),
+            RetAbiType::Void => "()".to_owned(),
+            RetAbiType::Never => "Never".to_owned(),
+            RetAbiType::Inhabited(abi_type) => abi_type.to_rust_str(),
         }
     }
 }
 
-impl ConvertableABIType for abitype::ParamABIType {
-    fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M> {
+impl ConvertableAbiType for abitype::ParamAbiType {
+    fn to_ty_ref<M: ty::Pm>(&self) -> ty::Ref<M> {
         self.abi_type.to_ty_ref()
     }
 
     fn to_rust_str(&self) -> String {
-        use arret_runtime::abitype::ABIType;
+        use arret_runtime::abitype::AbiType;
         use arret_runtime::abitype::ParamCapture;
 
         match &self.abi_type {
-            ABIType::Boxed(boxed) => match self.capture {
+            AbiType::Boxed(boxed) => match self.capture {
                 ParamCapture::Auto => format!("Gc<{}>", boxed.to_rust_str()),
                 ParamCapture::Never => format!("NoCapture<{}>", boxed.to_rust_str()),
                 ParamCapture::Always => format!("Capture<{}>", boxed.to_rust_str()),
@@ -151,13 +151,13 @@ impl ConvertableABIType for abitype::ParamABIType {
     }
 }
 
-impl ConvertableABIType for callback::EntryPointABIType {
-    fn to_ty_ref<M: ty::PM>(&self) -> ty::Ref<M> {
+impl ConvertableAbiType for callback::EntryPointAbiType {
+    fn to_ty_ref<M: ty::Pm>(&self) -> ty::Ref<M> {
         // TODO: How do we deal with rest params?
         let fixed_param_ty_refs = self
             .params
             .iter()
-            .map(ConvertableABIType::to_ty_ref)
+            .map(ConvertableAbiType::to_ty_ref)
             .collect();
 
         ty::Fun::new_mono(
@@ -193,10 +193,10 @@ mod test {
 
     #[test]
     fn pair_abi_type() {
-        use arret_runtime::abitype::EncodeBoxedABIType;
+        use arret_runtime::abitype::EncodeBoxedAbiType;
         use arret_runtime::boxed;
 
-        let boxed_abi_type = <boxed::Pair<boxed::Int> as EncodeBoxedABIType>::BOXED_ABI_TYPE;
+        let boxed_abi_type = <boxed::Pair<boxed::Int> as EncodeBoxedAbiType>::BOXED_ABI_TYPE;
 
         assert_eq!("boxed::Pair<boxed::Int>", boxed_abi_type.to_rust_str());
 
@@ -208,10 +208,10 @@ mod test {
 
     #[test]
     fn bool_abi_type() {
-        use arret_runtime::abitype::EncodeBoxedABIType;
+        use arret_runtime::abitype::EncodeBoxedAbiType;
         use arret_runtime::boxed;
 
-        let boxed_abi_type = <boxed::Bool as EncodeBoxedABIType>::BOXED_ABI_TYPE;
+        let boxed_abi_type = <boxed::Bool as EncodeBoxedAbiType>::BOXED_ABI_TYPE;
 
         assert_eq!("boxed::Bool", boxed_abi_type.to_rust_str());
 
@@ -221,10 +221,10 @@ mod test {
 
     #[test]
     fn nil_abi_type() {
-        use arret_runtime::abitype::EncodeBoxedABIType;
+        use arret_runtime::abitype::EncodeBoxedAbiType;
         use arret_runtime::boxed;
 
-        let boxed_abi_type = <boxed::Nil as EncodeBoxedABIType>::BOXED_ABI_TYPE;
+        let boxed_abi_type = <boxed::Nil as EncodeBoxedAbiType>::BOXED_ABI_TYPE;
 
         assert_eq!("boxed::Nil", boxed_abi_type.to_rust_str());
 
@@ -236,7 +236,7 @@ mod test {
     fn callback_abi_type() {
         use arret_runtime::task;
 
-        let entry_point_abi_type = <extern "C" fn(&mut task::Task, boxed::Captures, i64) -> char as callback::EncodeEntryPointABIType>::ENTRY_POINT_ABI_TYPE;
+        let entry_point_abi_type = <extern "C" fn(&mut task::Task, boxed::Captures, i64) -> char as callback::EncodeEntryPointAbiType>::ENTRY_POINT_ABI_TYPE;
 
         assert_eq!(
             "extern \"C\" fn(&mut Task, boxed::Captures, i64) -> char",
@@ -255,11 +255,11 @@ mod test {
 
     #[test]
     fn captured_int_abi_type() {
-        use arret_runtime::abitype::{EncodeBoxedABIType, ParamABIType};
+        use arret_runtime::abitype::{EncodeBoxedAbiType, ParamAbiType};
         use arret_runtime::boxed;
 
-        let param_abi_type = ParamABIType {
-            abi_type: <boxed::Int as EncodeBoxedABIType>::BOXED_ABI_TYPE.into(),
+        let param_abi_type = ParamAbiType {
+            abi_type: <boxed::Int as EncodeBoxedAbiType>::BOXED_ABI_TYPE.into(),
             capture: abitype::ParamCapture::Always,
         };
 

@@ -21,7 +21,7 @@ type Result<S> = result::Result<S, Error>;
 /// Flattens an intersection between two type references
 ///
 /// This has no type logic; it only flattens the structure of the refs.
-fn flatten_ref_intersect<M: ty::PM>(ref1: &ty::Ref<M>, ref2: &ty::Ref<M>) -> ty::Ref<M> {
+fn flatten_ref_intersect<M: ty::Pm>(ref1: &ty::Ref<M>, ref2: &ty::Ref<M>) -> ty::Ref<M> {
     let mut members: Vec<ty::Ref<M>> = vec![];
 
     if let Some(Ty::Intersect(members1)) = ref1.try_to_fixed() {
@@ -59,7 +59,7 @@ fn unify_list(
 /// once so it can be an arbitrary iterator.
 fn intersect_union_iter<'a, M, I>(lefts: &[ty::Ref<M>], rights: I) -> Result<ty::Ref<M>>
 where
-    M: ty::PM + 'a,
+    M: ty::Pm + 'a,
     I: Iterator<Item = &'a ty::Ref<M>>,
 {
     let mut intersected_types: Vec<ty::Ref<M>> = vec![];
@@ -84,7 +84,7 @@ where
 
 fn intersect_ty_ref_iter<'a, M, I>(mut ty_refs: I) -> Result<ty::Ref<M>>
 where
-    M: ty::PM + 'a,
+    M: ty::Pm + 'a,
     I: Iterator<Item = &'a ty::Ref<M>>,
 {
     let mut acc = if let Some(acc) = ty_refs.next() {
@@ -99,7 +99,7 @@ where
     Ok(acc)
 }
 
-fn intersect_record_field_purities<M: ty::PM>(
+fn intersect_record_field_purities<M: ty::Pm>(
     variance: Variance,
     pvar: &purity::PVarId,
     ty_args1: &TyArgs<M>,
@@ -124,7 +124,7 @@ fn intersect_record_field_purities<M: ty::PM>(
     }
 }
 
-fn intersect_record_field_ty_refs<M: ty::PM>(
+fn intersect_record_field_ty_refs<M: ty::Pm>(
     variance: Variance,
     tvar: &ty::TVarId,
     ty_args1: &TyArgs<M>,
@@ -149,7 +149,7 @@ fn intersect_record_field_ty_refs<M: ty::PM>(
     }
 }
 
-fn intersect_record_instance<M: ty::PM>(
+fn intersect_record_instance<M: ty::Pm>(
     instance1: &record::Instance<M>,
     instance2: &record::Instance<M>,
 ) -> Result<record::Instance<M>> {
@@ -198,7 +198,7 @@ fn intersect_record_instance<M: ty::PM>(
 }
 
 /// Intersects two types under the assumption that they are not subtypes
-fn non_subty_intersect<M: ty::PM>(
+fn non_subty_intersect<M: ty::Pm>(
     ref1: &ty::Ref<M>,
     ty1: &Ty<M>,
     ref2: &ty::Ref<M>,
@@ -316,7 +316,7 @@ fn non_subty_intersect<M: ty::PM>(
     }
 }
 
-pub fn intersect_list<M: ty::PM>(list1: &ty::List<M>, list2: &ty::List<M>) -> Result<ty::List<M>> {
+pub fn intersect_list<M: ty::Pm>(list1: &ty::List<M>, list2: &ty::List<M>) -> Result<ty::List<M>> {
     if list1.has_disjoint_arity(&list2) {
         return Err(ty::intersect::Error::Disjoint);
     }
@@ -339,7 +339,7 @@ pub fn intersect_list<M: ty::PM>(list1: &ty::List<M>, list2: &ty::List<M>) -> Re
     Ok(ty::List::new(merged_fixed.into_boxed_slice(), merged_rest))
 }
 
-pub fn intersect_ty_refs<M: ty::PM>(
+pub fn intersect_ty_refs<M: ty::Pm>(
     ty_ref1: &ty::Ref<M>,
     ty_ref2: &ty::Ref<M>,
 ) -> Result<ty::Ref<M>> {

@@ -198,25 +198,25 @@ impl Cons {
 
 pub type ConsId = ArcId<Cons>;
 
-impl<M: ty::PM> From<ConsId> for Ty<M> {
+impl<M: ty::Pm> From<ConsId> for Ty<M> {
     fn from(cons_id: ConsId) -> Self {
         Ty::RecordClass(cons_id)
     }
 }
 
-impl<M: ty::PM> From<ConsId> for ty::Ref<M> {
+impl<M: ty::Pm> From<ConsId> for ty::Ref<M> {
     fn from(cons_id: ConsId) -> Self {
         ty::Ref::Fixed(Ty::RecordClass(cons_id))
     }
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct Instance<M: ty::PM> {
+pub struct Instance<M: ty::Pm> {
     cons: ConsId,
     ty_args: TyArgs<M>,
 }
 
-impl<M: ty::PM> Instance<M> {
+impl<M: ty::Pm> Instance<M> {
     pub fn new(cons: ConsId, ty_args: TyArgs<M>) -> Self {
         Self { cons, ty_args }
     }
@@ -234,13 +234,13 @@ impl<M: ty::PM> Instance<M> {
     }
 }
 
-impl<M: ty::PM> From<Instance<M>> for Ty<M> {
+impl<M: ty::Pm> From<Instance<M>> for Ty<M> {
     fn from(instance: Instance<M>) -> Self {
         Ty::Record(Box::new(instance))
     }
 }
 
-impl<M: ty::PM> From<Instance<M>> for ty::Ref<M> {
+impl<M: ty::Pm> From<Instance<M>> for ty::Ref<M> {
     fn from(instance: Instance<M>) -> Self {
         ty::Ref::Fixed(Ty::Record(Box::new(instance)))
     }

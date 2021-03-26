@@ -30,10 +30,10 @@ where
     };
 
     let initial_value = list_iter.next(b, span).unwrap();
-    let mut acc_reg = value_to_reg(ehx, b, span, &initial_value, &abitype::ABIType::Int);
+    let mut acc_reg = value_to_reg(ehx, b, span, &initial_value, &abitype::AbiType::Int);
 
     while let Some(next_value) = list_iter.next(b, span) {
-        let next_reg = value_to_reg(ehx, b, span, &next_value, &abitype::ABIType::Int);
+        let next_reg = value_to_reg(ehx, b, span, &next_value, &abitype::AbiType::Int);
 
         acc_reg = b.push_reg(
             span,
@@ -45,7 +45,7 @@ where
         );
     }
 
-    BuildOutcome::ReturnValue(value::RegValue::new(acc_reg, abitype::ABIType::Int).into())
+    BuildOutcome::ReturnValue(value::RegValue::new(acc_reg, abitype::AbiType::Int).into())
 }
 
 fn bit_shift_op<O>(
@@ -61,7 +61,7 @@ where
     let mut iter = arg_list_value.unsized_list_iter();
 
     let int_value = iter.next_unchecked(b, span);
-    let int_reg = value_to_reg(ehx, b, span, &int_value, &abitype::ABIType::Int);
+    let int_reg = value_to_reg(ehx, b, span, &int_value, &abitype::AbiType::Int);
 
     let bit_count_value = iter.next_unchecked(b, span);
 
@@ -84,7 +84,7 @@ where
         },
     );
 
-    BuildOutcome::ReturnValue(value::RegValue::new(result_reg, abitype::ABIType::Int).into())
+    BuildOutcome::ReturnValue(value::RegValue::new(result_reg, abitype::AbiType::Int).into())
 }
 
 pub fn bit_and(
@@ -149,12 +149,12 @@ pub fn bit_not(
     let mut iter = arg_list_value.unsized_list_iter();
 
     let int_value = iter.next_unchecked(b, span);
-    let int_reg = value_to_reg(ehx, b, span, &int_value, &abitype::ABIType::Int);
+    let int_reg = value_to_reg(ehx, b, span, &int_value, &abitype::AbiType::Int);
 
     let result_reg = b.push_reg(span, OpKind::Int64BitwiseNot, int_reg.into());
 
     Ok(BuildOutcome::ReturnValue(
-        value::RegValue::new(result_reg, abitype::ABIType::Int).into(),
+        value::RegValue::new(result_reg, abitype::AbiType::Int).into(),
     ))
 }
 

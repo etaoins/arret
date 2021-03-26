@@ -4,7 +4,7 @@ use arret_runtime::abitype;
 use arret_runtime::boxed;
 use arret_runtime::boxed::prelude::*;
 
-use crate::codegen::GenABI;
+use crate::codegen::GenAbi;
 use crate::mir::builder::{Builder, BuiltReg, TryToBuilder};
 use crate::mir::costing::{cost_for_op_category, cost_for_ops};
 use crate::mir::eval_hir::EvalHirCtx;
@@ -23,7 +23,7 @@ pub enum EqualityResult {
 
 impl EqualityResult {
     fn from_bool_reg(reg: BuiltReg) -> EqualityResult {
-        EqualityResult::Dynamic(value::RegValue::new(reg, abitype::ABIType::Bool).into())
+        EqualityResult::Dynamic(value::RegValue::new(reg, abitype::AbiType::Bool).into())
     }
 }
 
@@ -44,23 +44,23 @@ fn runtime_compare(
     left_value: &Value,
     right_value: &Value,
 ) -> BuiltReg {
-    let left_reg = value_to_reg(ehx, b, span, left_value, &abitype::BoxedABIType::Any.into());
+    let left_reg = value_to_reg(ehx, b, span, left_value, &abitype::BoxedAbiType::Any.into());
 
     let right_reg = value_to_reg(
         ehx,
         b,
         span,
         right_value,
-        &abitype::BoxedABIType::Any.into(),
+        &abitype::BoxedAbiType::Any.into(),
     );
 
-    let abi = GenABI {
+    let abi = GenAbi {
         takes_task: true,
         params: Box::new([
-            abitype::BoxedABIType::Any.into(),
-            abitype::BoxedABIType::Any.into(),
+            abitype::BoxedAbiType::Any.into(),
+            abitype::BoxedAbiType::Any.into(),
         ]),
-        ret: abitype::ABIType::Bool.into(),
+        ret: abitype::AbiType::Bool.into(),
     };
 
     let callee = Callee::StaticSymbol(StaticSymbol {
@@ -86,7 +86,7 @@ fn build_native_compare<F>(
     span: Span,
     left_value: &Value,
     right_value: &Value,
-    abi_type: &abitype::ABIType,
+    abi_type: &abitype::AbiType,
     op_kind: F,
 ) -> BuiltReg
 where
@@ -149,7 +149,7 @@ fn build_record_equality(
             }
             EqualityResult::Dynamic(value) => {
                 let fieldwise_reg =
-                    value_to_reg(ehx, &mut fieldwise_b, span, &value, &abitype::ABIType::Bool);
+                    value_to_reg(ehx, &mut fieldwise_b, span, &value, &abitype::AbiType::Bool);
                 fieldwise_regs.push(fieldwise_reg);
             }
         }
@@ -226,7 +226,7 @@ fn build_bool_equality(
                 ValueClass::ConstTrue
             }
             Value::Reg(reg_value) => {
-                if let abitype::ABIType::Boxed(_) = &reg_value.abi_type {
+                if let abitype::AbiType::Boxed(_) = &reg_value.abi_type {
                     ValueClass::Boxed
                 } else {
                     ValueClass::Other
@@ -255,7 +255,7 @@ fn build_bool_equality(
                 span,
                 left_value,
                 right_value,
-                &abitype::BoxedABIType::Any.into(),
+                &abitype::BoxedAbiType::Any.into(),
                 OpKind::BoxIdentical,
             )
         }
@@ -267,7 +267,7 @@ fn build_bool_equality(
                 span,
                 left_value,
                 right_value,
-                &abitype::ABIType::Bool,
+                &abitype::AbiType::Bool,
                 OpKind::BoolEqual,
             )
         }
@@ -388,7 +388,7 @@ pub fn eval_equality(
         return EqualityResult::Static(false);
     }
 
-    if all_type_tags == abitype::ABIType::Bool.into() {
+    if all_type_tags == abitype::AbiType::Bool.into() {
         // Build a specialised comparison for `Bool`
         return build_bool_equality(ehx, b, span, left_value, right_value);
     }
@@ -409,7 +409,7 @@ pub fn eval_equality(
             span,
             left_value,
             right_value,
-            &abitype::BoxedABIType::Any.into(),
+            &abitype::BoxedAbiType::Any.into(),
             OpKind::BoxIdentical,
         )
     } else if all_type_tags == boxed::TypeTag::Int.into() {
@@ -419,7 +419,7 @@ pub fn eval_equality(
             span,
             left_value,
             right_value,
-            &abitype::ABIType::Int,
+            &abitype::AbiType::Int,
             |reg_id, BinaryOp { lhs_reg, rhs_reg }| {
                 OpKind::IntCompare(
                     reg_id,
@@ -438,7 +438,7 @@ pub fn eval_equality(
             span,
             left_value,
             right_value,
-            &abitype::ABIType::Char,
+            &abitype::AbiType::Char,
             OpKind::CharEqual,
         )
     } else if all_type_tags == boxed::TypeTag::Sym.into() {
@@ -448,7 +448,7 @@ pub fn eval_equality(
             span,
             left_value,
             right_value,
-            &abitype::ABIType::InternedSym,
+            &abitype::AbiType::InternedSym,
             OpKind::InternedSymEqual,
         )
     } else if all_type_tags == boxed::TypeTag::Float.into() {
@@ -458,7 +458,7 @@ pub fn eval_equality(
             span,
             left_value,
             right_value,
-            &abitype::ABIType::Float,
+            &abitype::AbiType::Float,
             |reg_id, BinaryOp { lhs_reg, rhs_reg }| {
                 OpKind::FloatCompare(
                     reg_id,

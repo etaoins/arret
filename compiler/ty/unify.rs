@@ -20,7 +20,7 @@ use crate::ty::var_usage::Variance;
 use crate::ty::Ty;
 
 #[derive(Debug, PartialEq)]
-enum UnifiedTy<M: ty::PM> {
+enum UnifiedTy<M: ty::Pm> {
     /// The types are distinct and have no clean simplification
     ///
     /// An example would be Str and Sym.
@@ -34,12 +34,12 @@ enum UnifiedTy<M: ty::PM> {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum UnifiedList<M: ty::PM> {
+pub enum UnifiedList<M: ty::Pm> {
     Discerned,
     Merged(ty::List<M>),
 }
 
-fn unify_ty_refs<M: ty::PM>(ref1: &ty::Ref<M>, ref2: &ty::Ref<M>) -> UnifiedTy<M> {
+fn unify_ty_refs<M: ty::Pm>(ref1: &ty::Ref<M>, ref2: &ty::Ref<M>) -> UnifiedTy<M> {
     if let (ty::Ref::Fixed(ty1), ty::Ref::Fixed(ty2)) = (&ref1, &ref2) {
         // We can invoke full simplification logic if we have fixed types
         unify_ty(ref1, ty1, ref2, ty2)
@@ -53,7 +53,7 @@ fn unify_ty_refs<M: ty::PM>(ref1: &ty::Ref<M>, ref2: &ty::Ref<M>) -> UnifiedTy<M
     }
 }
 
-fn try_list_to_exact_pair<M: ty::PM>(list: &ty::List<M>) -> Option<&ty::Ref<M>> {
+fn try_list_to_exact_pair<M: ty::Pm>(list: &ty::List<M>) -> Option<&ty::Ref<M>> {
     if list.fixed.len() == 1 && &list.fixed[0] == list.rest.as_ref() {
         Some(list.rest.as_ref())
     } else {
@@ -64,7 +64,7 @@ fn try_list_to_exact_pair<M: ty::PM>(list: &ty::List<M>) -> Option<&ty::Ref<M>> 
 /// Unifies a member in to an existing vector of members
 ///
 /// It is assumed `output_members` refers to members of an already unified union.
-fn union_push<M: ty::PM>(output_members: &mut Vec<ty::Ref<M>>, new_member: ty::Ref<M>) {
+fn union_push<M: ty::Pm>(output_members: &mut Vec<ty::Ref<M>>, new_member: ty::Ref<M>) {
     for i in 0..output_members.len() {
         match unify_ty_refs(&output_members[i], &new_member) {
             UnifiedTy::Merged(merged_member) => {
@@ -87,7 +87,7 @@ fn union_push<M: ty::PM>(output_members: &mut Vec<ty::Ref<M>>, new_member: ty::R
 /// members.
 fn union_extend<M, I>(existing_members: Vec<ty::Ref<M>>, new_members: I) -> ty::Ref<M>
 where
-    M: ty::PM,
+    M: ty::Pm,
     I: Iterator<Item = ty::Ref<M>>,
 {
     let mut output_members = existing_members;
@@ -99,14 +99,14 @@ where
     ty::Ref::from_vec(output_members)
 }
 
-fn unify_top_fun<M: ty::PM>(top_fun1: &ty::TopFun, top_fun2: &ty::TopFun) -> UnifiedTy<M> {
+fn unify_top_fun<M: ty::Pm>(top_fun1: &ty::TopFun, top_fun2: &ty::TopFun) -> UnifiedTy<M> {
     let unified_purity = unify_purity_refs(top_fun1.purity(), top_fun2.purity());
     let unified_ret = unify_to_ty_ref(top_fun1.ret(), top_fun2.ret());
 
     UnifiedTy::Merged(ty::TopFun::new(unified_purity, unified_ret).into())
 }
 
-fn unify_fun<M: ty::PM>(fun1: &ty::Fun, fun2: &ty::Fun) -> UnifiedTy<M> {
+fn unify_fun<M: ty::Pm>(fun1: &ty::Fun, fun2: &ty::Fun) -> UnifiedTy<M> {
     let unified_purity = unify_purity_refs(fun1.purity(), fun2.purity());
 
     if fun1.has_polymorphic_vars() || fun2.has_polymorphic_vars() {
@@ -127,7 +127,7 @@ fn unify_fun<M: ty::PM>(fun1: &ty::Fun, fun2: &ty::Fun) -> UnifiedTy<M> {
     }
 }
 
-fn unify_record_field_purities<M: ty::PM>(
+fn unify_record_field_purities<M: ty::Pm>(
     variance: Variance,
     pvar: &purity::PVarId,
     ty_args1: &TyArgs<M>,
@@ -152,7 +152,7 @@ fn unify_record_field_purities<M: ty::PM>(
     }
 }
 
-fn unify_record_field_ty_refs<M: ty::PM>(
+fn unify_record_field_ty_refs<M: ty::Pm>(
     variance: Variance,
     tvar: &ty::TVarId,
     ty_args1: &TyArgs<M>,
@@ -180,7 +180,7 @@ fn unify_record_field_ty_refs<M: ty::PM>(
     }
 }
 
-fn unify_record_instance<M: ty::PM>(
+fn unify_record_instance<M: ty::Pm>(
     instance1: &record::Instance<M>,
     instance2: &record::Instance<M>,
 ) -> UnifiedTy<M> {
@@ -235,7 +235,7 @@ fn unify_record_instance<M: ty::PM>(
     )
 }
 
-fn unify_ty<M: ty::PM>(
+fn unify_ty<M: ty::Pm>(
     ref1: &ty::Ref<M>,
     ty1: &Ty<M>,
     ref2: &ty::Ref<M>,
@@ -374,7 +374,7 @@ pub fn unify_purity_refs(purity1: &purity::Ref, purity2: &purity::Ref) -> purity
     }
 }
 
-pub fn unify_to_ty_ref<M: ty::PM>(ty_ref1: &ty::Ref<M>, ty_ref2: &ty::Ref<M>) -> ty::Ref<M> {
+pub fn unify_to_ty_ref<M: ty::Pm>(ty_ref1: &ty::Ref<M>, ty_ref2: &ty::Ref<M>) -> ty::Ref<M> {
     match unify_ty_refs(ty_ref1, ty_ref2) {
         UnifiedTy::Merged(ty_ref) => ty_ref,
         UnifiedTy::Discerned => Ty::Union(Box::new([ty_ref1.clone(), ty_ref2.clone()])).into(),
@@ -384,13 +384,13 @@ pub fn unify_to_ty_ref<M: ty::PM>(ty_ref1: &ty::Ref<M>, ty_ref2: &ty::Ref<M>) ->
 /// Unifies an iterator of types in to a new type
 pub fn unify_ty_ref_iter<M, I>(new_members: I) -> ty::Ref<M>
 where
-    M: ty::PM,
+    M: ty::Pm,
     I: Iterator<Item = ty::Ref<M>>,
 {
     union_extend(vec![], new_members)
 }
 
-pub fn unify_list<M: ty::PM>(list1: &ty::List<M>, list2: &ty::List<M>) -> UnifiedList<M> {
+pub fn unify_list<M: ty::Pm>(list1: &ty::List<M>, list2: &ty::List<M>) -> UnifiedList<M> {
     if list1.is_empty() {
         if let Some(member) = try_list_to_exact_pair(list2) {
             return UnifiedList::Merged(ty::List::new_uniform(member.clone()));

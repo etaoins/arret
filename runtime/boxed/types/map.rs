@@ -2,7 +2,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 
-use crate::abitype::{BoxedABIType, EncodeBoxedABIType};
+use crate::abitype::{BoxedAbiType, EncodeBoxedAbiType};
 use crate::boxed::refs::Gc;
 use crate::boxed::*;
 
@@ -95,12 +95,12 @@ impl<K: Boxed, V: Boxed> fmt::Debug for Map<K, V> {
     }
 }
 
-impl<K: Boxed, V: Boxed> EncodeBoxedABIType for Map<K, V>
+impl<K: Boxed, V: Boxed> EncodeBoxedAbiType for Map<K, V>
 where
-    K: EncodeBoxedABIType,
-    V: EncodeBoxedABIType,
+    K: EncodeBoxedAbiType,
+    V: EncodeBoxedAbiType,
 {
-    const BOXED_ABI_TYPE: BoxedABIType = BoxedABIType::Map(&K::BOXED_ABI_TYPE, &V::BOXED_ABI_TYPE);
+    const BOXED_ABI_TYPE: BoxedAbiType = BoxedAbiType::Map(&K::BOXED_ABI_TYPE, &V::BOXED_ABI_TYPE);
 }
 
 #[cfg(test)]

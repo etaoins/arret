@@ -6,7 +6,7 @@ use arret_runtime::boxed;
 use arret_syntax::datum::DataStr;
 use arret_syntax::span::Span;
 
-use crate::codegen::GenABI;
+use crate::codegen::GenAbi;
 
 use crate::id_type::ArcId;
 use crate::mir::tagset::TypeTagSet;
@@ -19,32 +19,32 @@ pub enum CallConv {
     /// C calling convention
     ///
     /// This is required for thunks and callbacks because they can be called from Rust.
-    CCC,
+    Ccc,
 
     /// Fast calling convention
     ///
     /// This supports tail recursion.
-    FastCC,
+    FastCc,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct OpsABI {
+pub struct OpsAbi {
     pub call_conv: CallConv,
-    pub params: Box<[abitype::ABIType]>,
-    pub ret: abitype::RetABIType,
+    pub params: Box<[abitype::AbiType]>,
+    pub ret: abitype::RetAbiType,
 }
 
-impl OpsABI {
-    pub fn thunk_abi() -> OpsABI {
-        OpsABI {
-            call_conv: CallConv::CCC,
+impl OpsAbi {
+    pub fn thunk_abi() -> OpsAbi {
+        OpsAbi {
+            call_conv: CallConv::Ccc,
             params: Box::new([
                 // Captures
-                abitype::BoxedABIType::Any.into(),
+                abitype::BoxedAbiType::Any.into(),
                 // Rest argument
                 abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
             ]),
-            ret: abitype::BoxedABIType::Any.into(),
+            ret: abitype::BoxedAbiType::Any.into(),
         }
     }
 }
@@ -53,7 +53,7 @@ impl OpsABI {
 pub struct StaticSymbol {
     pub symbol: &'static str,
     pub impure: bool,
-    pub abi: GenABI,
+    pub abi: GenAbi,
 }
 
 /// Represents a callable function
@@ -73,13 +73,13 @@ pub enum Callee {
 #[derive(Debug, PartialEq, Clone)]
 pub struct RecordStruct {
     pub source_name: DataStr,
-    pub field_abi_types: Box<[abitype::ABIType]>,
+    pub field_abi_types: Box<[abitype::AbiType]>,
 }
 
 pub type RecordStructId = ArcId<RecordStruct>;
 
 impl RecordStruct {
-    pub fn new(source_name: DataStr, field_abi_types: Box<[abitype::ABIType]>) -> RecordStructId {
+    pub fn new(source_name: DataStr, field_abi_types: Box<[abitype::AbiType]>) -> RecordStructId {
         ArcId::new(RecordStruct {
             source_name,
             field_abi_types,
@@ -137,7 +137,7 @@ pub struct LoadBoxedVectorMemberOp {
 #[derive(Debug, PartialEq, Clone)]
 pub struct CastBoxedOp {
     pub from_reg: RegId,
-    pub to_type: abitype::BoxedABIType,
+    pub to_type: abitype::BoxedAbiType,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -729,7 +729,7 @@ pub struct Fun {
     pub span: Span,
     pub source_name: Option<DataStr>,
 
-    pub abi: OpsABI,
+    pub abi: OpsAbi,
     pub param_regs: Box<[RegId]>,
     pub ops: Box<[Op]>,
 }
@@ -812,7 +812,7 @@ mod test {
                 RegId::alloc(),
                 CastBoxedOp {
                     from_reg: RegId::alloc(),
-                    to_type: abitype::BoxedABIType::Any
+                    to_type: abitype::BoxedAbiType::Any
                 }
             )
             .const_output()

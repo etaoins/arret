@@ -18,7 +18,7 @@ use crate::mir::printer::print_fun;
 
 extern "C" fn orc_sym_resolve(name_ptr: *const libc::c_char, jcx_void: *mut libc::c_void) -> u64 {
     unsafe {
-        let jcx: &JITCtx = &*(jcx_void as *mut _);
+        let jcx: &JitCtx = &*(jcx_void as *mut _);
         let name = ffi::CStr::from_ptr(name_ptr);
         jcx.symbols
             .get(name)
@@ -27,7 +27,7 @@ extern "C" fn orc_sym_resolve(name_ptr: *const libc::c_char, jcx_void: *mut libc
     }
 }
 
-pub struct JITCtx {
+pub struct JitCtx {
     tcx: TargetCtx,
     orc: LLVMOrcJITStackRef,
     target_machine: LLVMTargetMachineRef,
@@ -44,8 +44,8 @@ pub struct RegisteredRecordStruct {
     pub record_class_id: boxed::RecordClassId,
 }
 
-impl JITCtx {
-    pub fn new(optimising: bool) -> JITCtx {
+impl JitCtx {
+    pub fn new(optimising: bool) -> JitCtx {
         #[allow(clippy::fn_to_numeric_cast)]
         unsafe {
             use crate::codegen::target_machine::create_target_machine;
@@ -60,7 +60,7 @@ impl JITCtx {
             );
             let orc = LLVMOrcCreateInstance(target_machine);
 
-            let mut jcx = JITCtx {
+            let mut jcx = JitCtx {
                 tcx: TargetCtx::new(target_machine, optimising),
                 orc,
                 target_machine,
@@ -143,7 +143,7 @@ impl JITCtx {
                 &mut orc_module,
                 llvm_module,
                 Some(orc_sym_resolve),
-                self as *mut JITCtx as *mut _,
+                self as *mut JitCtx as *mut _,
             )
             .is_null()
             {
@@ -201,7 +201,7 @@ impl JITCtx {
     }
 }
 
-impl Drop for JITCtx {
+impl Drop for JitCtx {
     fn drop(&mut self) {
         unsafe {
             LLVMDisposeTargetMachine(self.target_machine);

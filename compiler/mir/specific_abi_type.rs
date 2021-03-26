@@ -6,13 +6,13 @@ use crate::mir::value::Value;
 use crate::ty;
 use crate::ty::Ty;
 
-const ANY_BOXED_ABI_TYPE: abitype::BoxedABIType = abitype::BoxedABIType::Any;
+const ANY_BOXED_ABI_TYPE: abitype::BoxedAbiType = abitype::BoxedAbiType::Any;
 
-const TOP_RECORD_BOXED_ABI_TYPE: abitype::BoxedABIType =
-    abitype::BoxedABIType::UniqueTagged(TypeTag::Record);
+const TOP_RECORD_BOXED_ABI_TYPE: abitype::BoxedAbiType =
+    abitype::BoxedAbiType::UniqueTagged(TypeTag::Record);
 
-fn specific_boxed_abi_type_for_type_tag(type_tag: TypeTag) -> &'static abitype::BoxedABIType {
-    use arret_runtime::abitype::EncodeBoxedABIType;
+fn specific_boxed_abi_type_for_type_tag(type_tag: TypeTag) -> &'static abitype::BoxedAbiType {
+    use arret_runtime::abitype::EncodeBoxedAbiType;
     use arret_runtime::boxed;
 
     match type_tag {
@@ -33,12 +33,12 @@ fn specific_boxed_abi_type_for_type_tag(type_tag: TypeTag) -> &'static abitype::
     }
 }
 
-fn specific_abi_type_for_type_tag(type_tag: TypeTag) -> abitype::ABIType {
+fn specific_abi_type_for_type_tag(type_tag: TypeTag) -> abitype::AbiType {
     match type_tag {
-        TypeTag::Int => abitype::ABIType::Int,
-        TypeTag::Float => abitype::ABIType::Float,
-        TypeTag::Char => abitype::ABIType::Char,
-        TypeTag::Sym => abitype::ABIType::InternedSym,
+        TypeTag::Int => abitype::AbiType::Int,
+        TypeTag::Float => abitype::AbiType::Float,
+        TypeTag::Char => abitype::AbiType::Char,
+        TypeTag::Sym => abitype::AbiType::InternedSym,
         other_tag => specific_boxed_abi_type_for_type_tag(other_tag)
             .clone()
             .into(),
@@ -47,8 +47,8 @@ fn specific_abi_type_for_type_tag(type_tag: TypeTag) -> abitype::ABIType {
 
 fn specific_boxed_abi_type_for_type_tags(
     possible_type_tags: TypeTagSet,
-) -> &'static abitype::BoxedABIType {
-    use arret_runtime::abitype::EncodeBoxedABIType;
+) -> &'static abitype::BoxedAbiType {
+    use arret_runtime::abitype::EncodeBoxedAbiType;
     use arret_runtime::boxed;
 
     if possible_type_tags.len() == 1 {
@@ -65,15 +65,15 @@ fn specific_boxed_abi_type_for_type_tags(
     }
 }
 
-pub fn specific_boxed_abi_type_for_ty_ref<M: ty::PM>(
+pub fn specific_boxed_abi_type_for_ty_ref<M: ty::Pm>(
     ty_ref: &ty::Ref<M>,
-) -> &'static abitype::BoxedABIType {
+) -> &'static abitype::BoxedAbiType {
     specific_boxed_abi_type_for_type_tags(ty_ref.into())
 }
 
-fn specific_abi_type_for_type_tags(possible_type_tags: TypeTagSet) -> abitype::ABIType {
+fn specific_abi_type_for_type_tags(possible_type_tags: TypeTagSet) -> abitype::AbiType {
     if possible_type_tags.is_subset([TypeTag::True, TypeTag::False].iter().collect()) {
-        abitype::ABIType::Bool
+        abitype::AbiType::Bool
     } else if possible_type_tags.len() == 1 {
         let single_type_tag = possible_type_tags.into_iter().next().unwrap();
         specific_abi_type_for_type_tag(single_type_tag)
@@ -85,7 +85,7 @@ fn specific_abi_type_for_type_tags(possible_type_tags: TypeTagSet) -> abitype::A
 }
 
 /// Returns a specific ABI type to encode the given ty_ref
-pub fn specific_abi_type_for_ty_ref<M: ty::PM>(ty_ref: &ty::Ref<M>) -> abitype::ABIType {
+pub fn specific_abi_type_for_ty_ref<M: ty::Pm>(ty_ref: &ty::Ref<M>) -> abitype::AbiType {
     use crate::ty::list_iter::ListIterator;
 
     match ty_ref.resolve_to_ty() {
@@ -94,28 +94,28 @@ pub fn specific_abi_type_for_ty_ref<M: ty::PM>(ty_ref: &ty::Ref<M>) -> abitype::
             let member_boxed_abi_type = specific_boxed_abi_type_for_ty_ref(&member_ty_ref);
 
             if list_ty.fixed().is_empty() {
-                abitype::BoxedABIType::List(member_boxed_abi_type).into()
+                abitype::BoxedAbiType::List(member_boxed_abi_type).into()
             } else {
-                abitype::BoxedABIType::Pair(member_boxed_abi_type).into()
+                abitype::BoxedAbiType::Pair(member_boxed_abi_type).into()
             }
         }
         Ty::Vectorof(member_ty) => {
             let member_boxed_abi_type = specific_boxed_abi_type_for_ty_ref(member_ty.as_ref());
-            abitype::BoxedABIType::Vector(member_boxed_abi_type).into()
+            abitype::BoxedAbiType::Vector(member_boxed_abi_type).into()
         }
         Ty::Vector(member_tys) => {
             let member_ty_ref = ty::unify::unify_ty_ref_iter(member_tys.iter().cloned());
             let member_boxed_abi_type = specific_boxed_abi_type_for_ty_ref(&member_ty_ref);
 
-            abitype::BoxedABIType::Vector(member_boxed_abi_type).into()
+            abitype::BoxedAbiType::Vector(member_boxed_abi_type).into()
         }
         _ => specific_abi_type_for_type_tags(ty_ref.into()),
     }
 }
 
-pub fn specific_ret_abi_type_for_ty_ref<M: ty::PM>(ty_ref: &ty::Ref<M>) -> abitype::RetABIType {
+pub fn specific_ret_abi_type_for_ty_ref<M: ty::Pm>(ty_ref: &ty::Ref<M>) -> abitype::RetAbiType {
     if ty_ref == &ty::List::empty().into() {
-        abitype::RetABIType::Void
+        abitype::RetAbiType::Void
     } else {
         specific_abi_type_for_type_tags(ty_ref.into()).into()
     }
@@ -140,19 +140,19 @@ where
 /// Returns a specific boxed ABI type to encode the given set of possible values
 pub fn specific_boxed_abi_type_for_values<'v>(
     possible_values: impl Iterator<Item = &'v Value>,
-) -> abitype::BoxedABIType {
+) -> abitype::BoxedAbiType {
     specific_type_for_values(possible_values, specific_boxed_abi_type_for_type_tags).clone()
 }
 
 /// Returns a specific ABI type to compactly encode the given set of possible values
 pub fn specific_abi_type_for_values<'v>(
     possible_values: impl Iterator<Item = &'v Value>,
-) -> abitype::ABIType {
+) -> abitype::AbiType {
     specific_type_for_values(possible_values, specific_abi_type_for_type_tags)
 }
 
 /// Return a specific ABI type to compactly encode the given value
-pub fn specific_abi_type_for_value(value: &Value) -> abitype::ABIType {
+pub fn specific_abi_type_for_value(value: &Value) -> abitype::AbiType {
     specific_abi_type_for_values(std::iter::once(value))
 }
 
@@ -160,46 +160,46 @@ pub fn specific_abi_type_for_value(value: &Value) -> abitype::ABIType {
 mod test {
     use super::*;
     use crate::hir::poly_for_str;
-    use arret_runtime::abitype::EncodeBoxedABIType;
+    use arret_runtime::abitype::EncodeBoxedAbiType;
     use arret_runtime::boxed;
 
-    fn assert_abi_type_for_str(abi_type: abitype::ABIType, ty_str: &'static str) {
+    fn assert_abi_type_for_str(abi_type: abitype::AbiType, ty_str: &'static str) {
         let poly = poly_for_str(ty_str);
         assert_eq!(abi_type, specific_abi_type_for_ty_ref(&poly));
     }
 
     #[test]
     fn test_specific_abi_type_for_ty_ref() {
-        assert_abi_type_for_str(abitype::ABIType::Bool, "true");
-        assert_abi_type_for_str(abitype::ABIType::Bool, "false");
-        assert_abi_type_for_str(abitype::ABIType::Bool, "Bool");
+        assert_abi_type_for_str(abitype::AbiType::Bool, "true");
+        assert_abi_type_for_str(abitype::AbiType::Bool, "false");
+        assert_abi_type_for_str(abitype::AbiType::Bool, "Bool");
 
-        assert_abi_type_for_str(abitype::ABIType::Float, "Float");
-        assert_abi_type_for_str(abitype::ABIType::Int, "Int");
+        assert_abi_type_for_str(abitype::AbiType::Float, "Float");
+        assert_abi_type_for_str(abitype::AbiType::Int, "Int");
         assert_abi_type_for_str(boxed::Num::BOXED_ABI_TYPE.into(), "Num");
-        assert_abi_type_for_str(abitype::ABIType::Char, "Char");
-        assert_abi_type_for_str(abitype::ABIType::InternedSym, "Sym");
-        assert_abi_type_for_str(abitype::BoxedABIType::Any.into(), "(RawU Num Bool)");
+        assert_abi_type_for_str(abitype::AbiType::Char, "Char");
+        assert_abi_type_for_str(abitype::AbiType::InternedSym, "Sym");
+        assert_abi_type_for_str(abitype::BoxedAbiType::Any.into(), "(RawU Num Bool)");
 
         assert_abi_type_for_str(boxed::Nil::BOXED_ABI_TYPE.into(), "(List)");
 
         assert_abi_type_for_str(
-            abitype::BoxedABIType::List(&boxed::Bool::BOXED_ABI_TYPE).into(),
+            abitype::BoxedAbiType::List(&boxed::Bool::BOXED_ABI_TYPE).into(),
             "(List & Bool)",
         );
 
         assert_abi_type_for_str(
-            abitype::BoxedABIType::Pair(&boxed::Num::BOXED_ABI_TYPE).into(),
+            abitype::BoxedAbiType::Pair(&boxed::Num::BOXED_ABI_TYPE).into(),
             "(List Float & Int)",
         );
 
         assert_abi_type_for_str(
-            abitype::BoxedABIType::Vector(&boxed::Str::BOXED_ABI_TYPE).into(),
+            abitype::BoxedAbiType::Vector(&boxed::Str::BOXED_ABI_TYPE).into(),
             "(Vectorof Str)",
         );
 
         assert_abi_type_for_str(
-            abitype::BoxedABIType::Vector(&boxed::Sym::BOXED_ABI_TYPE).into(),
+            abitype::BoxedAbiType::Vector(&boxed::Sym::BOXED_ABI_TYPE).into(),
             "(Vector 'foo 'bar)",
         );
     }

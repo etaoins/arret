@@ -60,7 +60,7 @@ pub fn calc_program_global_interned_names(
 mod test {
     use super::*;
 
-    use arret_runtime::abitype::RetABIType;
+    use arret_runtime::abitype::RetAbiType;
     use arret_runtime::boxed;
 
     use crate::source::EMPTY_SPAN;
@@ -78,10 +78,10 @@ mod test {
             span: EMPTY_SPAN,
             source_name: None,
 
-            abi: ops::OpsABI {
-                call_conv: ops::CallConv::FastCC,
+            abi: ops::OpsAbi {
+                call_conv: ops::CallConv::FastCc,
                 params: Box::new([boxed::TypeTag::Int.into()]),
-                ret: RetABIType::Void,
+                ret: RetAbiType::Void,
             },
             param_regs: Box::new([]),
             ops: Box::new([

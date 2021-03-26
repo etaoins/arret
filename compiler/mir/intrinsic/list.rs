@@ -47,7 +47,7 @@ pub fn length(
         );
 
         return Ok(Some(
-            value::RegValue::new(list_len_reg, abitype::ABIType::Int).into(),
+            value::RegValue::new(list_len_reg, abitype::AbiType::Int).into(),
         ));
     }
 

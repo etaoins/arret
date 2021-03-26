@@ -89,9 +89,9 @@ pub fn rust_fun(
             arret_type: #arret_type,
             takes_task: #takes_task,
             params: &[#(
-                <#param_types as ::arret_runtime::abitype::EncodeABIType>::PARAM_ABI_TYPE
+                <#param_types as ::arret_runtime::abitype::EncodeAbiType>::PARAM_ABI_TYPE
             ),*],
-            ret: <#ret_type as ::arret_runtime::abitype::EncodeRetABIType>::RET_ABI_TYPE,
+            ret: <#ret_type as ::arret_runtime::abitype::EncodeRetAbiType>::RET_ABI_TYPE,
             symbol: #entry_point_name,
         };
 

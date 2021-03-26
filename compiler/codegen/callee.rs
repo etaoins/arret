@@ -15,7 +15,7 @@ pub fn gen_static_symbol_entry_point(
     static_symbol: &ops::StaticSymbol,
 ) -> LLVMValueRef {
     use crate::codegen::analysis::escape::{infer_param_capture_kind, CaptureKind};
-    use arret_runtime::abitype::{ABIType, RetABIType};
+    use arret_runtime::abitype::{AbiType, RetAbiType};
 
     let ops::StaticSymbol {
         abi,
@@ -34,7 +34,7 @@ pub fn gen_static_symbol_entry_point(
                 let param_attr_offset = abi.takes_task as usize;
 
                 for (index, param_abi_type) in abi.params.iter().enumerate() {
-                    if let ABIType::Boxed(_) = param_abi_type.abi_type {
+                    if let AbiType::Boxed(_) = param_abi_type.abi_type {
                         let no_capture = infer_param_capture_kind(&abi.ret, &param_abi_type)
                             == CaptureKind::Never;
 
@@ -56,10 +56,10 @@ pub fn gen_static_symbol_entry_point(
                 }
 
                 match abi.ret {
-                    RetABIType::Inhabited(ABIType::Boxed(_)) => {
+                    RetAbiType::Inhabited(AbiType::Boxed(_)) => {
                         tcx.add_boxed_return_attrs(function);
                     }
-                    RetABIType::Never => {
+                    RetAbiType::Never => {
                         let noreturn_attr = tcx.llvm_enum_attr_for_name("noreturn", 0);
                         LLVMAddAttributeAtIndex(
                             function,

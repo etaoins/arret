@@ -111,8 +111,8 @@ where
 }
 
 trait Substitution {
-    type InputPM: ty::PM;
-    type OutputPM: ty::PM;
+    type InputPM: ty::Pm;
+    type OutputPM: ty::Pm;
     type AsPolySubst: Substitution<InputPM = ty::Poly, OutputPM = ty::Poly>;
 
     fn subst_purity_ref(&self, poly: &purity::Ref) -> purity::Ref;

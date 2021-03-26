@@ -3,7 +3,7 @@ use crate::ty::purity::Purity;
 use crate::ty::var_usage::Variance;
 use crate::ty::Ty;
 
-fn ty_has_subtypes<M: ty::PM>(ty: &Ty<M>) -> bool {
+fn ty_has_subtypes<M: ty::Pm>(ty: &Ty<M>) -> bool {
     match ty {
         Ty::Any
         | Ty::Bool
@@ -55,14 +55,14 @@ fn ty_has_subtypes<M: ty::PM>(ty: &Ty<M>) -> bool {
     }
 }
 
-pub fn has_subtypes<M: ty::PM>(ty_ref: &ty::Ref<M>) -> bool {
+pub fn has_subtypes<M: ty::Pm>(ty_ref: &ty::Ref<M>) -> bool {
     ty_ref
         .try_to_fixed()
         .map(|ty| ty_has_subtypes(ty))
         .unwrap_or(true)
 }
 
-fn ty_is_literal<M: ty::PM>(ty: &Ty<M>) -> bool {
+fn ty_is_literal<M: ty::Pm>(ty: &Ty<M>) -> bool {
     match ty {
         Ty::LitBool(_) | Ty::LitSym(_) => true,
         Ty::Vector(members) => members.iter().all(is_literal),
@@ -71,7 +71,7 @@ fn ty_is_literal<M: ty::PM>(ty: &Ty<M>) -> bool {
     }
 }
 
-pub fn is_literal<M: ty::PM>(ty_ref: &ty::Ref<M>) -> bool {
+pub fn is_literal<M: ty::Pm>(ty_ref: &ty::Ref<M>) -> bool {
     ty_ref
         .try_to_fixed()
         .map(|ty| ty_is_literal(ty))

@@ -61,7 +61,7 @@ where
         );
     }
 
-    value::RegValue::new(acc_float_reg, abitype::ABIType::Float).into()
+    value::RegValue::new(acc_float_reg, abitype::AbiType::Float).into()
 }
 
 /// Folds a series of numerical operands with the given reducers for `Int` and `Float`s
@@ -88,7 +88,7 @@ where
             // stdlib call.
             return BuildOutcome::SimplifiedArgs(Value::List(
                 Box::new([
-                    value::RegValue::new(acc_int_reg, abitype::ABIType::Int).into(),
+                    value::RegValue::new(acc_int_reg, abitype::AbiType::Int).into(),
                     value,
                 ]),
                 Some(Box::new(list_iter.into_rest())),
@@ -123,7 +123,7 @@ where
         }
     }
 
-    BuildOutcome::ReturnValue(value::RegValue::new(acc_int_reg, abitype::ABIType::Int).into())
+    BuildOutcome::ReturnValue(value::RegValue::new(acc_int_reg, abitype::AbiType::Int).into())
 }
 
 /// Reduces a series of numerical operands with the given reducer ops for `Int` and `Float`s
@@ -281,7 +281,7 @@ pub fn div(
     };
 
     let initial_value = list_iter.next(b, span).unwrap();
-    let initial_reg = value_to_reg(ehx, b, span, &initial_value, &abitype::ABIType::Float);
+    let initial_reg = value_to_reg(ehx, b, span, &initial_value, &abitype::AbiType::Float);
 
     let result_reg = if list_iter.is_empty() {
         // Rewrite `(/ x)` to `(/ 1.0 x)`
@@ -298,7 +298,7 @@ pub fn div(
     } else {
         let mut acc = initial_reg;
         while let Some(value) = list_iter.next(b, span) {
-            let value_reg = value_to_reg(ehx, b, span, &value, &abitype::ABIType::Float);
+            let value_reg = value_to_reg(ehx, b, span, &value, &abitype::AbiType::Float);
 
             acc = b.push_reg(
                 span,
@@ -314,7 +314,7 @@ pub fn div(
     };
 
     Ok(BuildOutcome::ReturnValue(
-        value::RegValue::new(result_reg, abitype::ABIType::Float).into(),
+        value::RegValue::new(result_reg, abitype::AbiType::Float).into(),
     ))
 }
 
@@ -333,10 +333,10 @@ where
     let mut iter = arg_list_value.unsized_list_iter();
 
     let numer_value = iter.next_unchecked(b, span);
-    let numer_reg = value_to_reg(ehx, b, span, &numer_value, &abitype::ABIType::Int);
+    let numer_reg = value_to_reg(ehx, b, span, &numer_value, &abitype::AbiType::Int);
 
     let denom_value = iter.next_unchecked(b, span);
-    let denom_reg = value_to_reg(ehx, b, span, &denom_value, &abitype::ABIType::Int);
+    let denom_reg = value_to_reg(ehx, b, span, &denom_value, &abitype::AbiType::Int);
 
     let needs_checked = match try_value_to_i64(denom_value) {
         None => {
@@ -364,7 +364,7 @@ where
         b.push_reg(span, unchecked_op_kind, div_binary_op)
     };
 
-    BuildOutcome::ReturnValue(value::RegValue::new(result_reg, abitype::ABIType::Int).into())
+    BuildOutcome::ReturnValue(value::RegValue::new(result_reg, abitype::AbiType::Int).into())
 }
 
 pub fn quot(
@@ -407,10 +407,10 @@ pub fn sqrt(
 ) -> Result<BuildOutcome> {
     let radicand_value = arg_list_value.unsized_list_iter().next_unchecked(b, span);
 
-    let radicand_reg = value_to_reg(ehx, b, span, &radicand_value, &abitype::ABIType::Float);
+    let radicand_reg = value_to_reg(ehx, b, span, &radicand_value, &abitype::AbiType::Float);
     let result_reg = b.push_reg(span, OpKind::FloatSqrt, radicand_reg.into());
 
     Ok(BuildOutcome::ReturnValue(
-        value::RegValue::new(result_reg, abitype::ABIType::Float).into(),
+        value::RegValue::new(result_reg, abitype::AbiType::Float).into(),
     ))
 }

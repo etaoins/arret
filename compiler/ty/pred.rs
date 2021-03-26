@@ -25,7 +25,7 @@ pub enum TestTy {
 }
 
 impl TestTy {
-    pub fn match_subject_ref<M: ty::PM>(&self, ty_ref: &ty::Ref<M>) -> Option<bool> {
+    pub fn match_subject_ref<M: ty::Pm>(&self, ty_ref: &ty::Ref<M>) -> Option<bool> {
         let resolved_ty = ty_ref.resolve_to_ty();
         match resolved_ty {
             Ty::Any => None,
