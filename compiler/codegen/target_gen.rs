@@ -420,10 +420,10 @@ impl TargetCtx {
         &mut self,
         entry_point_abi_type: &CallbackEntryPointAbiType,
     ) -> LLVMTypeRef {
-        let mut llvm_param_types = vec![];
-
-        llvm_param_types.push(self.task_llvm_ptr_type());
-        llvm_param_types.push(self.boxed_abi_to_llvm_ptr_type(&BoxedAbiType::Any));
+        let mut llvm_param_types = vec![
+            self.task_llvm_ptr_type(),
+            self.boxed_abi_to_llvm_ptr_type(&BoxedAbiType::Any),
+        ];
 
         llvm_param_types.extend(
             entry_point_abi_type

@@ -497,6 +497,8 @@ impl<'input> Parser<'input> {
         self.parse_datum_starting_with(start_char, ec)
     }
 
+    // TODO: This doesn't seem to understand the flow control below
+    #[allow(clippy::vec_init_then_push)]
     fn parse_data(&mut self) -> Result<Vec<Datum>> {
         let mut datum_vec = Vec::new();
 
