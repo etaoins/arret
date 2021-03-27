@@ -1,4 +1,4 @@
-ARG LLVM_VERSION=11.0.0
+ARG LLVM_VERSION=11.1.0
 ARG LLVM_ROOT=/opt/llvm-11
 
 ##
@@ -19,7 +19,7 @@ RUN dnf install -y file cmake ninja-build xz && \
 
 WORKDIR /usr/src
 
-RUN curl https://github.com/llvm/llvm-project/releases/download/llvmorg-11.0.0/llvm-11.0.0.src.tar.xz -sSL | \
+RUN curl https://github.com/llvm/llvm-project/releases/download/llvmorg-11.1.0/llvm-11.1.0.src.tar.xz -sSL | \
   tar -Jx --no-same-owner
 
 WORKDIR /usr/src/llvm-build
