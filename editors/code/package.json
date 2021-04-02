@@ -7,7 +7,7 @@
   "repository": "https://github.com/etaoins/arret",
   "license": "Apache-2.0",
   "engines": {
-    "vscode": "^1.54.0"
+    "vscode": "^1.55.0"
   },
   "categories": [
     "Programming Languages"
