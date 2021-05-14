@@ -511,7 +511,7 @@ where
     let stderr = read_or_empty_vec(&stderr_filename).unwrap();
     let stdout = read_or_empty_vec(&stdout_filename).unwrap();
 
-    let expected_output = RunOutput { stderr, stdout };
+    let expected_output = RunOutput { stdout, stderr };
 
     Some((entry.path(), TestType::Run(run_type(expected_output))))
 }

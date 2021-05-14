@@ -199,7 +199,8 @@ impl<'input> Parser<'input> {
         match state {
             State::Sign => Err(Error::new(span, ErrorKind::InvalidFloat)),
 
-            State::Whole => i64::from_str_radix(digits, 10)
+            State::Whole => digits
+                .parse::<i64>()
                 .map_err(|_| Error::new(span, ErrorKind::IntegerOverflow))
                 .map(|i| Datum::Int(span, i)),
 
