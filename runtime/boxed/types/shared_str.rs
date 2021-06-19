@@ -22,7 +22,6 @@ struct SharedStrData {
 }
 
 impl SharedStrData {
-    #[allow(clippy::cast_ptr_alignment)]
     fn new(value: &str) -> *mut SharedStrData {
         unsafe {
             let layout = Self::layout_for_byte_len(value.len());

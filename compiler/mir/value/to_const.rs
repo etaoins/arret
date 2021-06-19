@@ -9,7 +9,6 @@ use crate::mir::eval_hir::{EvalHirCtx, EvaledRecordClass};
 use crate::mir::value::Value;
 use crate::ty::record;
 
-#[allow(clippy::cast_ptr_alignment)]
 fn record_to_const(
     ehx: &mut EvalHirCtx,
     record_cons: &record::ConsId,

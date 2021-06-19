@@ -71,7 +71,6 @@ pub struct FieldValueIter<'cm> {
 impl<'cm> Iterator for FieldValueIter<'cm> {
     type Item = FieldValue;
 
-    #[allow(clippy::cast_ptr_alignment)]
     fn next(&mut self) -> Option<FieldValue> {
         use class_map::FieldType;
 
@@ -113,7 +112,6 @@ impl<'cm> FieldGcRefIter<'cm> {
 impl<'cm> Iterator for FieldGcRefIter<'cm> {
     type Item = FieldGcRef;
 
-    #[allow(clippy::cast_ptr_alignment)]
     fn next(&mut self) -> Option<FieldGcRef> {
         while let Some(classmap_field) = self.classmap_field_iter.next() {
             unsafe {

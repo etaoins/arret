@@ -2,7 +2,6 @@
 
 use crate::abitype::{ParamAbiType, RetAbiType};
 
-#[allow(clippy::useless_attribute)]
 #[allow(unused)]
 use crate::abitype::{EncodeAbiType, EncodeRetAbiType};
 

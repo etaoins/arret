@@ -51,7 +51,6 @@ where
         self.size as usize
     }
 
-    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
