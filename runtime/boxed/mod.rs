@@ -249,7 +249,7 @@ macro_rules! define_const_tagged_boxes {
 
         impl TypeTag {
             /// Returns a string representation for the type
-            pub fn to_str(&self) -> &'static str {
+            pub fn to_str(self) -> &'static str {
                 match self {
                     $(
                         TypeTag::$name => {

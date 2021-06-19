@@ -24,7 +24,7 @@ macro_rules! new_indexing_id_type {
             }
 
             #[allow(unused)]
-            pub fn to_usize(&self) -> usize {
+            pub fn to_usize(self) -> usize {
                 self.0 as usize
             }
         }
@@ -110,7 +110,7 @@ macro_rules! new_counting_id_type {
             }
 
             #[allow(unused)]
-            pub fn to_u32(&self) -> u32 {
+            pub fn to_u32(self) -> u32 {
                 self.0
             }
         }
