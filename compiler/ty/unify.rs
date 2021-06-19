@@ -311,10 +311,10 @@ fn unify_ty<M: ty::Pm>(
         (Ty::Fun(fun), Ty::TopFun(top_fun)) | (Ty::TopFun(top_fun), Ty::Fun(fun)) => {
             unify_top_fun(fun.top_fun(), top_fun)
         }
-        (Ty::TyPred(_), Ty::TopFun(top_fun))
-        | (Ty::TopFun(top_fun), Ty::TyPred(_))
-        | (Ty::EqPred, Ty::TopFun(top_fun))
-        | (Ty::TopFun(top_fun), Ty::EqPred) => unify_top_fun(&ty::TopFun::new_for_pred(), top_fun),
+        (Ty::TyPred(_) | Ty::EqPred, Ty::TopFun(top_fun))
+        | (Ty::TopFun(top_fun), Ty::TyPred(_) | Ty::EqPred) => {
+            unify_top_fun(&ty::TopFun::new_for_pred(), top_fun)
+        }
 
         (Ty::Fun(fun1), Ty::Fun(fun2)) => unify_fun(fun1, fun2),
         (Ty::TyPred(_), Ty::Fun(fun)) | (Ty::Fun(fun), Ty::TyPred(_)) => {

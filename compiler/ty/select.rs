@@ -175,14 +175,13 @@ impl<'vars> SelectCtx<'vars> {
             (Ty::TopFun(target_top_fun), Ty::Fun(evidence_fun)) => {
                 self.add_evidence_fun(target_top_fun, evidence_fun);
             }
-            (Ty::TopFun(target_top_fun), Ty::TyPred(_))
-            | (Ty::TopFun(target_top_fun), Ty::EqPred) => {
+            (Ty::TopFun(target_top_fun), Ty::TyPred(_) | Ty::EqPred) => {
                 self.add_evidence_top_fun(target_top_fun, &ty::TopFun::new_for_pred());
             }
             (Ty::Fun(target_fun), Ty::Fun(evidence_fun)) => {
                 self.add_evidence_fun(target_fun.top_fun(), evidence_fun);
             }
-            (Ty::Fun(target_fun), Ty::TyPred(_)) | (Ty::Fun(target_fun), Ty::EqPred) => {
+            (Ty::Fun(target_fun), Ty::TyPred(_) | Ty::EqPred) => {
                 self.add_evidence_top_fun(target_fun.top_fun(), &ty::TopFun::new_for_pred());
             }
             (Ty::Record(target_instance), Ty::Record(evidence_instance)) => {

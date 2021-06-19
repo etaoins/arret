@@ -331,14 +331,10 @@ pub fn values_statically_equal(
             Some(true)
         }
         // Functions never compare equal
-        (Value::ArretFun(_), _)
-        | (_, Value::ArretFun(_))
-        | (Value::RustFun(_), _)
-        | (_, Value::RustFun(_))
-        | (Value::TyPred(_), _)
-        | (_, Value::TyPred(_))
-        | (Value::EqPred, _)
-        | (_, Value::EqPred) => Some(false),
+        (Value::ArretFun(_) | Value::RustFun(_) | Value::TyPred(_) | Value::EqPred, _)
+        | (_, Value::ArretFun(_) | Value::RustFun(_) | Value::TyPred(_) | Value::EqPred) => {
+            Some(false)
+        }
         _ => {
             if let Some(const_left) = value_to_const(ehx, left_value) {
                 if let Some(const_right) = value_to_const(ehx, right_value) {
