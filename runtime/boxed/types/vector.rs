@@ -402,9 +402,13 @@ mod test {
         let boxed2 = Int::new(&mut heap, 2);
         let boxed3 = Int::new(&mut heap, 3);
 
-        let forward_vec1 = Vector::new(&mut heap, vec![boxed1, boxed2, boxed3].into_iter());
-        let forward_vec2 = Vector::new(&mut heap, vec![boxed1, boxed2, boxed3].into_iter());
-        let reverse_vec = Vector::new(&mut heap, vec![boxed3, boxed2, boxed1].into_iter());
+        let forward_vec1 =
+            Vector::new(&mut heap, IntoIterator::into_iter([boxed1, boxed2, boxed3]));
+
+        let forward_vec2 =
+            Vector::new(&mut heap, IntoIterator::into_iter([boxed1, boxed2, boxed3]));
+
+        let reverse_vec = Vector::new(&mut heap, IntoIterator::into_iter([boxed3, boxed2, boxed1]));
 
         assert!(!forward_vec1.eq_in_heap(&heap, &reverse_vec));
         assert!(forward_vec1.eq_in_heap(&heap, &forward_vec2));

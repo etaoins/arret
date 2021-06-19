@@ -462,11 +462,16 @@ mod test {
         let boxed2 = Int::new(&mut heap, 2);
         let boxed3 = Int::new(&mut heap, 3);
 
-        let forward_set1 = Set::new(&mut heap, vec![boxed1, boxed2, boxed3].into_iter());
-        let forward_set2 = Set::new(&mut heap, vec![boxed1, boxed2, boxed2, boxed3].into_iter());
-        let reverse_set = Set::new(&mut heap, vec![boxed3, boxed2, boxed1].into_iter());
+        let forward_set1 = Set::new(&mut heap, IntoIterator::into_iter([boxed1, boxed2, boxed3]));
 
-        let partial_set = Set::new(&mut heap, vec![boxed1, boxed3].into_iter());
+        let forward_set2 = Set::new(
+            &mut heap,
+            IntoIterator::into_iter([boxed1, boxed2, boxed2, boxed3]),
+        );
+
+        let reverse_set = Set::new(&mut heap, IntoIterator::into_iter([boxed3, boxed2, boxed1]));
+
+        let partial_set = Set::new(&mut heap, IntoIterator::into_iter([boxed1, boxed3]));
 
         assert!(forward_set1.eq_in_heap(&heap, &reverse_set));
         assert!(forward_set1.eq_in_heap(&heap, &forward_set2));
@@ -485,9 +490,9 @@ mod test {
         let boxed4 = Int::new(&mut heap, 4);
         let boxed5 = Int::new(&mut heap, 5);
 
-        let empty_set = Set::<Int>::new(&mut heap, vec![].into_iter());
-        let odd_set = Set::new(&mut heap, vec![boxed1, boxed3, boxed5].into_iter());
-        let even_set = Set::new(&mut heap, vec![boxed2, boxed4].into_iter());
+        let empty_set = Set::<Int>::new(&mut heap, std::iter::empty());
+        let odd_set = Set::new(&mut heap, IntoIterator::into_iter([boxed1, boxed3, boxed5]));
+        let even_set = Set::new(&mut heap, IntoIterator::into_iter([boxed2, boxed4]));
 
         assert!(!empty_set.contains(&heap, &boxed1));
         assert!(odd_set.contains(&heap, &boxed1));
@@ -516,16 +521,20 @@ mod test {
 
         let forward_set = Set::new(
             &mut heap,
-            vec![boxed1, boxed2, boxed3, boxed4, boxed5].into_iter(),
+            IntoIterator::into_iter([boxed1, boxed2, boxed3, boxed4, boxed5]),
         );
 
         let reverse_set = Set::new(
             &mut heap,
-            vec![boxed5, boxed4, boxed3, boxed2, boxed1].into_iter(),
+            IntoIterator::into_iter([boxed5, boxed4, boxed3, boxed2, boxed1]),
         );
 
-        let inline_set = Set::new(&mut heap, vec![boxed1, boxed2, boxed3, boxed4].into_iter());
-        let empty_set = Set::<Int>::new(&mut heap, vec![].into_iter());
+        let inline_set = Set::new(
+            &mut heap,
+            IntoIterator::into_iter([boxed1, boxed2, boxed3, boxed4]),
+        );
+
+        let empty_set = Set::<Int>::new(&mut heap, std::iter::empty());
 
         assert!(forward_set.eq_in_heap(&heap, &reverse_set));
         assert!(!forward_set.eq_in_heap(&heap, &inline_set));
@@ -546,9 +555,17 @@ mod test {
         let boxed7 = Int::new(&mut heap, 7);
         let boxed8 = Int::new(&mut heap, 8);
 
-        let empty_set = Set::<Int>::new(&mut heap, vec![].into_iter());
-        let odd_set = Set::new(&mut heap, vec![boxed1, boxed3, boxed5, boxed7].into_iter());
-        let even_set = Set::new(&mut heap, vec![boxed2, boxed4, boxed6, boxed8].into_iter());
+        let empty_set = Set::<Int>::new(&mut heap, std::iter::empty());
+
+        let odd_set = Set::new(
+            &mut heap,
+            IntoIterator::into_iter([boxed1, boxed3, boxed5, boxed7]),
+        );
+
+        let even_set = Set::new(
+            &mut heap,
+            IntoIterator::into_iter([boxed2, boxed4, boxed6, boxed8]),
+        );
 
         assert!(!empty_set.contains(&heap, &boxed1));
         assert!(odd_set.contains(&heap, &boxed1));
@@ -578,10 +595,16 @@ mod test {
         let boxed7 = Int::new(&mut heap, 7);
         let boxed8 = Int::new(&mut heap, 8);
 
-        let empty_set = Set::<Int>::new(&mut heap, vec![].into_iter());
-        let one_set = Set::new(&mut heap, vec![boxed1].into_iter());
-        let odd_set = Set::new(&mut heap, vec![boxed1, boxed3, boxed5, boxed7].into_iter());
-        let even_set = Set::new(&mut heap, vec![boxed2, boxed4, boxed6, boxed8].into_iter());
+        let empty_set = Set::<Int>::new(&mut heap, std::iter::empty());
+        let one_set = Set::new(&mut heap, IntoIterator::into_iter([boxed1]));
+        let odd_set = Set::new(
+            &mut heap,
+            IntoIterator::into_iter([boxed1, boxed3, boxed5, boxed7]),
+        );
+        let even_set = Set::new(
+            &mut heap,
+            IntoIterator::into_iter([boxed2, boxed4, boxed6, boxed8]),
+        );
         let full_set = Set::new(
             &mut heap,
             vec![
