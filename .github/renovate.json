@@ -4,7 +4,7 @@
     "enabled": true
   },
   "timezone": "Australia/Melbourne",
-  "schedule": ["before 5am every weekend"],
+  "schedule": ["before 5am every 2 weeks on Sunday"],
   "prCreation": "not-pending",
   "packageRules": [
     {
