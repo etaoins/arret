@@ -301,15 +301,8 @@ mod test {
         let record_class_one_instance2 = Record::new(&mut heap, 1, RecordData::empty());
         let record_class_two_instance1 = Record::new(&mut heap, 2, RecordData::empty());
 
-        assert_eq!(
-            true,
-            record_class_one_instance1.eq_in_heap(&heap, &record_class_one_instance2)
-        );
-
-        assert_eq!(
-            false,
-            record_class_one_instance1.eq_in_heap(&heap, &record_class_two_instance1)
-        );
+        assert!(record_class_one_instance1.eq_in_heap(&heap, &record_class_one_instance2));
+        assert!(!record_class_one_instance1.eq_in_heap(&heap, &record_class_two_instance1));
     }
 
     #[test]

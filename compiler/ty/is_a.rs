@@ -297,14 +297,14 @@ mod test {
         let any_sym = poly_for_str("Sym");
         let any_int = poly_for_str("Int");
 
-        assert_eq!(true, ty_ref_is_a(&foo_sym, &foo_sym));
-        assert_eq!(false, ty_ref_is_a(&foo_sym, &bar_sym));
+        assert!(ty_ref_is_a(&foo_sym, &foo_sym));
+        assert!(!ty_ref_is_a(&foo_sym, &bar_sym));
 
-        assert_eq!(true, ty_ref_is_a(&foo_sym, &any_sym));
-        assert_eq!(false, ty_ref_is_a(&any_sym, &foo_sym));
+        assert!(ty_ref_is_a(&foo_sym, &any_sym));
+        assert!(!ty_ref_is_a(&any_sym, &foo_sym));
 
-        assert_eq!(false, ty_ref_is_a(&any_sym, &any_int));
-        assert_eq!(false, ty_ref_is_a(&any_int, &any_sym));
+        assert!(!ty_ref_is_a(&any_sym, &any_int));
+        assert!(!ty_ref_is_a(&any_int, &any_sym));
     }
 
     #[test]
@@ -313,11 +313,11 @@ mod test {
         let bar_set = poly_for_str("(Setof 'bar)");
         let sym_set = poly_for_str("(Setof Sym)");
 
-        assert_eq!(true, ty_ref_is_a(&foo_set, &foo_set));
-        assert_eq!(false, ty_ref_is_a(&foo_set, &bar_set));
+        assert!(ty_ref_is_a(&foo_set, &foo_set));
+        assert!(!ty_ref_is_a(&foo_set, &bar_set));
 
-        assert_eq!(true, ty_ref_is_a(&foo_set, &sym_set));
-        assert_eq!(false, ty_ref_is_a(&sym_set, &foo_set));
+        assert!(ty_ref_is_a(&foo_set, &sym_set));
+        assert!(!ty_ref_is_a(&sym_set, &foo_set));
     }
 
     #[test]
@@ -332,9 +332,9 @@ mod test {
 
         let any_sym_to_any_sym = ty::Map::new(any_sym.clone(), any_sym).into();
 
-        assert_eq!(true, ty_ref_is_a(&int_to_foo_sym, &int_to_any_sym));
-        assert_eq!(false, ty_ref_is_a(&int_to_any_sym, &int_to_foo_sym));
-        assert_eq!(false, ty_ref_is_a(&int_to_any_sym, &any_sym_to_any_sym));
+        assert!(ty_ref_is_a(&int_to_foo_sym, &int_to_any_sym));
+        assert!(!ty_ref_is_a(&int_to_any_sym, &int_to_foo_sym));
+        assert!(!ty_ref_is_a(&int_to_any_sym, &any_sym_to_any_sym));
     }
 
     #[test]
@@ -347,19 +347,19 @@ mod test {
         let foo_bar_baz_union = poly_for_str("(RawU 'foo 'bar 'baz)");
         let never = poly_for_str("(RawU)");
 
-        assert_eq!(true, ty_ref_is_a(&foo_sym, &foo_bar_union));
-        assert_eq!(false, ty_ref_is_a(&baz_sym, &foo_bar_union));
-        assert_eq!(false, ty_ref_is_a(&baz_sym, &never));
+        assert!(ty_ref_is_a(&foo_sym, &foo_bar_union));
+        assert!(!ty_ref_is_a(&baz_sym, &foo_bar_union));
+        assert!(!ty_ref_is_a(&baz_sym, &never));
 
-        assert_eq!(false, ty_ref_is_a(&foo_bar_union, &foo_sym));
-        assert_eq!(false, ty_ref_is_a(&foo_bar_union, &baz_sym));
-        assert_eq!(true, ty_ref_is_a(&never, &foo_sym));
+        assert!(!ty_ref_is_a(&foo_bar_union, &foo_sym));
+        assert!(!ty_ref_is_a(&foo_bar_union, &baz_sym));
+        assert!(ty_ref_is_a(&never, &foo_sym));
 
-        assert_eq!(false, ty_ref_is_a(&foo_bar_union, &bar_baz_union));
-        assert_eq!(true, ty_ref_is_a(&foo_bar_union, &foo_bar_union));
-        assert_eq!(true, ty_ref_is_a(&never, &foo_bar_union));
+        assert!(!ty_ref_is_a(&foo_bar_union, &bar_baz_union));
+        assert!(ty_ref_is_a(&foo_bar_union, &foo_bar_union));
+        assert!(ty_ref_is_a(&never, &foo_bar_union));
 
-        assert_eq!(true, ty_ref_is_a(&foo_bar_union, &foo_bar_baz_union));
+        assert!(ty_ref_is_a(&foo_bar_union, &foo_bar_baz_union));
     }
 
     #[test]
@@ -378,32 +378,32 @@ mod test {
             Ty::Intersect(Box::new([ptype1.clone(), ptype2, any_sym.clone()])).into();
 
         // `Sym` might not be `Poly`
-        assert_eq!(false, ty_ref_is_a(&any_sym, &sym_poly1_intersection));
+        assert!(!ty_ref_is_a(&any_sym, &sym_poly1_intersection));
 
         // Our intersection must be both `Sym` and `Poly
-        assert_eq!(true, ty_ref_is_a(&sym_poly1_intersection, &any_sym));
-        assert_eq!(true, ty_ref_is_a(&sym_poly1_intersection, &ptype1));
+        assert!(ty_ref_is_a(&sym_poly1_intersection, &any_sym));
+        assert!(ty_ref_is_a(&sym_poly1_intersection, &ptype1));
 
         // However, it might not be a 'foo
-        assert_eq!(false, ty_ref_is_a(&sym_poly1_intersection, &foo_sym));
+        assert!(!ty_ref_is_a(&sym_poly1_intersection, &foo_sym));
 
         // A more specific intersection must satisfy a less specific one
-        assert_eq!(
-            true,
-            ty_ref_is_a(&sym_poly1_poly2_intersection, &sym_poly1_intersection)
-        );
+        assert!(ty_ref_is_a(
+            &sym_poly1_poly2_intersection,
+            &sym_poly1_intersection
+        ));
 
         // A less specific intersection may satisfy a more specific one
-        assert_eq!(
-            false,
-            ty_ref_is_a(&sym_poly1_intersection, &sym_poly1_poly2_intersection,)
-        );
+        assert!(!ty_ref_is_a(
+            &sym_poly1_intersection,
+            &sym_poly1_poly2_intersection,
+        ));
 
         // Partially disjoint intersections may satisfy each other
-        assert_eq!(
-            false,
-            ty_ref_is_a(&sym_poly1_intersection, &sym_poly2_intersection)
-        );
+        assert!(!ty_ref_is_a(
+            &sym_poly1_intersection,
+            &sym_poly2_intersection
+        ));
     }
 
     #[test]
@@ -412,11 +412,11 @@ mod test {
         let never = Ty::never().into();
         let foo_sym = poly_for_str("'foo");
 
-        assert_eq!(true, ty_ref_is_a(&foo_sym, &any));
-        assert_eq!(false, ty_ref_is_a(&any, &foo_sym));
-        assert_eq!(true, ty_ref_is_a(&never, &any));
-        assert_eq!(true, ty_ref_is_a(&never, &never));
-        assert_eq!(false, ty_ref_is_a(&any, &never));
+        assert!(ty_ref_is_a(&foo_sym, &any));
+        assert!(!ty_ref_is_a(&any, &foo_sym));
+        assert!(ty_ref_is_a(&never, &any));
+        assert!(ty_ref_is_a(&never, &never));
+        assert!(!ty_ref_is_a(&any, &never));
     }
 
     #[test]
@@ -428,21 +428,21 @@ mod test {
         let three_ints_list = poly_for_str("(List Int Int Int)");
         let at_least_one_int_list = poly_for_str("(List Int & Int)");
 
-        assert_eq!(true, ty_ref_is_a(&empty_list, &listof_any));
-        assert_eq!(false, ty_ref_is_a(&listof_any, &empty_list));
+        assert!(ty_ref_is_a(&empty_list, &listof_any));
+        assert!(!ty_ref_is_a(&listof_any, &empty_list));
 
-        assert_eq!(true, ty_ref_is_a(&listof_int, &listof_any));
-        assert_eq!(false, ty_ref_is_a(&listof_any, &listof_int));
+        assert!(ty_ref_is_a(&listof_int, &listof_any));
+        assert!(!ty_ref_is_a(&listof_any, &listof_int));
 
-        assert_eq!(true, ty_ref_is_a(&two_ints_list, &listof_int));
-        assert_eq!(false, ty_ref_is_a(&listof_int, &two_ints_list));
-        assert_eq!(true, ty_ref_is_a(&two_ints_list, &listof_any));
+        assert!(ty_ref_is_a(&two_ints_list, &listof_int));
+        assert!(!ty_ref_is_a(&listof_int, &two_ints_list));
+        assert!(ty_ref_is_a(&two_ints_list, &listof_any));
 
-        assert_eq!(false, ty_ref_is_a(&two_ints_list, &three_ints_list));
-        assert_eq!(false, ty_ref_is_a(&three_ints_list, &two_ints_list));
+        assert!(!ty_ref_is_a(&two_ints_list, &three_ints_list));
+        assert!(!ty_ref_is_a(&three_ints_list, &two_ints_list));
 
-        assert_eq!(true, ty_ref_is_a(&at_least_one_int_list, &listof_int));
-        assert_eq!(false, ty_ref_is_a(&listof_int, &at_least_one_int_list));
+        assert!(ty_ref_is_a(&at_least_one_int_list, &listof_int));
+        assert!(!ty_ref_is_a(&listof_int, &at_least_one_int_list));
     }
 
     #[test]
@@ -452,15 +452,15 @@ mod test {
         let two_ints_vec = poly_for_str("(Vector Int Int)");
         let three_ints_vec = poly_for_str("(Vector Int Int Int)");
 
-        assert_eq!(true, ty_ref_is_a(&vecof_int, &vecof_any));
-        assert_eq!(false, ty_ref_is_a(&vecof_any, &vecof_int));
+        assert!(ty_ref_is_a(&vecof_int, &vecof_any));
+        assert!(!ty_ref_is_a(&vecof_any, &vecof_int));
 
-        assert_eq!(true, ty_ref_is_a(&two_ints_vec, &vecof_int));
-        assert_eq!(false, ty_ref_is_a(&vecof_int, &two_ints_vec));
-        assert_eq!(true, ty_ref_is_a(&two_ints_vec, &vecof_any));
+        assert!(ty_ref_is_a(&two_ints_vec, &vecof_int));
+        assert!(!ty_ref_is_a(&vecof_int, &two_ints_vec));
+        assert!(ty_ref_is_a(&two_ints_vec, &vecof_any));
 
-        assert_eq!(false, ty_ref_is_a(&two_ints_vec, &three_ints_vec));
-        assert_eq!(false, ty_ref_is_a(&three_ints_vec, &two_ints_vec));
+        assert!(!ty_ref_is_a(&two_ints_vec, &three_ints_vec));
+        assert!(!ty_ref_is_a(&three_ints_vec, &two_ints_vec));
     }
 
     #[test]
@@ -469,12 +469,12 @@ mod test {
         let float = poly_for_str("Float");
         let num = poly_for_str("Num");
 
-        assert_eq!(true, ty_ref_is_a(&int, &num));
-        assert_eq!(true, ty_ref_is_a(&float, &num));
-        assert_eq!(true, ty_ref_is_a(&num, &num));
-        assert_eq!(false, ty_ref_is_a(&float, &int));
-        assert_eq!(false, ty_ref_is_a(&num, &int));
-        assert_eq!(false, ty_ref_is_a(&num, &float));
+        assert!(ty_ref_is_a(&int, &num));
+        assert!(ty_ref_is_a(&float, &num));
+        assert!(ty_ref_is_a(&num, &num));
+        assert!(!ty_ref_is_a(&float, &int));
+        assert!(!ty_ref_is_a(&num, &int));
+        assert!(!ty_ref_is_a(&num, &float));
     }
 
     #[test]
@@ -484,12 +484,12 @@ mod test {
         let impure_sym_to_sym = poly_for_str("(Sym ->! Sym)");
         let pure_sym_to_sym = poly_for_str("(Sym -> Sym)");
 
-        assert_eq!(true, ty_ref_is_a(&impure_sym_to_sym, &impure_sym_to_any));
-        assert_eq!(true, ty_ref_is_a(&impure_any_to_sym, &impure_sym_to_sym));
-        assert_eq!(false, ty_ref_is_a(&impure_sym_to_any, &impure_sym_to_sym));
+        assert!(ty_ref_is_a(&impure_sym_to_sym, &impure_sym_to_any));
+        assert!(ty_ref_is_a(&impure_any_to_sym, &impure_sym_to_sym));
+        assert!(!ty_ref_is_a(&impure_sym_to_any, &impure_sym_to_sym));
 
-        assert_eq!(true, ty_ref_is_a(&pure_sym_to_sym, &impure_sym_to_sym));
-        assert_eq!(false, ty_ref_is_a(&impure_sym_to_sym, &pure_sym_to_sym));
+        assert!(ty_ref_is_a(&pure_sym_to_sym, &impure_sym_to_sym));
+        assert!(!ty_ref_is_a(&impure_sym_to_sym, &pure_sym_to_sym));
     }
 
     #[test]
@@ -500,19 +500,19 @@ mod test {
         let pred_top_fun = poly_for_str("(... -> Bool)");
 
         // Type predicates always equal themselves
-        assert_eq!(true, ty_ref_is_a(&sym_ty_pred, &sym_ty_pred));
+        assert!(ty_ref_is_a(&sym_ty_pred, &sym_ty_pred));
 
         // Type predicates never equal other type predicates
-        assert_eq!(false, ty_ref_is_a(&sym_ty_pred, &str_ty_pred));
-        assert_eq!(false, ty_ref_is_a(&str_ty_pred, &sym_ty_pred));
+        assert!(!ty_ref_is_a(&sym_ty_pred, &str_ty_pred));
+        assert!(!ty_ref_is_a(&str_ty_pred, &sym_ty_pred));
 
         // Type predicates are a subtype of (Any -> Bool)
-        assert_eq!(true, ty_ref_is_a(&sym_ty_pred, &general_ty_pred));
-        assert_eq!(false, ty_ref_is_a(&general_ty_pred, &sym_ty_pred));
+        assert!(ty_ref_is_a(&sym_ty_pred, &general_ty_pred));
+        assert!(!ty_ref_is_a(&general_ty_pred, &sym_ty_pred));
 
         // Type predicates are a subtype of (... -> Bool)
-        assert_eq!(true, ty_ref_is_a(&sym_ty_pred, &pred_top_fun));
-        assert_eq!(false, ty_ref_is_a(&pred_top_fun, &sym_ty_pred));
+        assert!(ty_ref_is_a(&sym_ty_pred, &pred_top_fun));
+        assert!(!ty_ref_is_a(&pred_top_fun, &sym_ty_pred));
     }
 
     #[test]
@@ -522,15 +522,15 @@ mod test {
         let pred_top_fun = poly_for_str("(... -> Bool)");
 
         // Equality predicate equals itself
-        assert_eq!(true, ty_ref_is_a(&eq_pred, &eq_pred));
+        assert!(ty_ref_is_a(&eq_pred, &eq_pred));
 
         // Equality predicate is a subtype of (Any Any -> Bool)
-        assert_eq!(true, ty_ref_is_a(&eq_pred, &general_eq_pred));
-        assert_eq!(false, ty_ref_is_a(&general_eq_pred, &eq_pred));
+        assert!(ty_ref_is_a(&eq_pred, &general_eq_pred));
+        assert!(!ty_ref_is_a(&general_eq_pred, &eq_pred));
 
         // Equality predicate is a subtype of (... -> Bool)
-        assert_eq!(true, ty_ref_is_a(&eq_pred, &pred_top_fun));
-        assert_eq!(false, ty_ref_is_a(&pred_top_fun, &eq_pred));
+        assert!(ty_ref_is_a(&eq_pred, &pred_top_fun));
+        assert!(!ty_ref_is_a(&pred_top_fun, &eq_pred));
     }
 
     #[test]
@@ -539,9 +539,9 @@ mod test {
         let false_type = poly_for_str("false");
         let bool_type = poly_for_str("Bool");
 
-        assert_eq!(true, ty_ref_is_a(&true_type, &bool_type));
-        assert_eq!(false, ty_ref_is_a(&bool_type, &true_type));
-        assert_eq!(false, ty_ref_is_a(&false_type, &true_type));
+        assert!(ty_ref_is_a(&true_type, &bool_type));
+        assert!(!ty_ref_is_a(&bool_type, &true_type));
+        assert!(!ty_ref_is_a(&false_type, &true_type));
     }
 
     #[test]
@@ -550,9 +550,9 @@ mod test {
         let false_type = poly_for_str("false");
         let bool_type = poly_for_str("Bool");
 
-        assert_eq!(true, ty_ref_is_a(&true_type, &bool_type));
-        assert_eq!(false, ty_ref_is_a(&bool_type, &true_type));
-        assert_eq!(false, ty_ref_is_a(&false_type, &true_type));
+        assert!(ty_ref_is_a(&true_type, &bool_type));
+        assert!(!ty_ref_is_a(&bool_type, &true_type));
+        assert!(!ty_ref_is_a(&false_type, &true_type));
     }
 
     #[test]
@@ -562,9 +562,9 @@ mod test {
 
         let poly_bool = poly_for_str("Bool");
 
-        assert_eq!(true, ty_ref_is_a(&ptype1, &ptype1));
-        assert_eq!(false, ty_ref_is_a(&ptype1, &ptype2));
-        assert_eq!(false, ty_ref_is_a(&ptype1, &poly_bool));
+        assert!(ty_ref_is_a(&ptype1, &ptype1));
+        assert!(!ty_ref_is_a(&ptype1, &ptype2));
+        assert!(!ty_ref_is_a(&ptype1, &poly_bool));
     }
 
     #[test]
@@ -575,20 +575,20 @@ mod test {
         let poly_foo_sym = poly_for_str("'foo");
 
         // A type var always satisfies itself
-        assert_eq!(true, ty_ref_is_a(&ptype1_sym, &ptype1_sym));
+        assert!(ty_ref_is_a(&ptype1_sym, &ptype1_sym));
 
         // The bounds of these vars are disjoint
-        assert_eq!(false, ty_ref_is_a(&ptype1_sym, &ptype2_str));
+        assert!(!ty_ref_is_a(&ptype1_sym, &ptype2_str));
 
         // The type var may satisfy a more specific bound
-        assert_eq!(false, ty_ref_is_a(&ptype1_sym, &poly_foo_sym));
+        assert!(!ty_ref_is_a(&ptype1_sym, &poly_foo_sym));
 
         // A sub never satisfies a type var with a disjoint bound
-        assert_eq!(false, ty_ref_is_a(&poly_foo_sym, &ptype2_str));
+        assert!(!ty_ref_is_a(&poly_foo_sym, &ptype2_str));
 
         // The sub has a fixed type while the parent has a poly type. We can't ensure that 'foo
         // satisfies all possible Sym subtypes (such as 'bar)
-        assert_eq!(false, ty_ref_is_a(&poly_foo_sym, &ptype1_sym));
+        assert!(!ty_ref_is_a(&poly_foo_sym, &ptype1_sym));
     }
 
     #[test]
@@ -598,18 +598,15 @@ mod test {
         let ptype3_bounded_by_2 = tvar_bounded_by(ptype2_bounded_by_1.clone());
 
         // Direct bounding
-        assert_eq!(true, ty_ref_is_a(&ptype2_bounded_by_1, &ptype1_unbounded));
-        assert_eq!(
-            true,
-            ty_ref_is_a(&ptype3_bounded_by_2, &ptype2_bounded_by_1)
-        );
+        assert!(ty_ref_is_a(&ptype2_bounded_by_1, &ptype1_unbounded));
+        assert!(ty_ref_is_a(&ptype3_bounded_by_2, &ptype2_bounded_by_1));
 
         // Commutative bounding
-        assert_eq!(true, ty_ref_is_a(&ptype3_bounded_by_2, &ptype1_unbounded));
+        assert!(ty_ref_is_a(&ptype3_bounded_by_2, &ptype1_unbounded));
 
         // Inverse bounding relationship may not satisfy - the bounded type can have arbitrary
         // subtypes
-        assert_eq!(false, ty_ref_is_a(&ptype1_unbounded, &ptype2_bounded_by_1));
+        assert!(!ty_ref_is_a(&ptype1_unbounded, &ptype2_bounded_by_1));
     }
 
     #[test]
@@ -620,71 +617,65 @@ mod test {
 
         // All functions should have the top function type
         let top_fun = poly_for_str("(... ->! Any)");
-        assert_eq!(true, ty_ref_is_a(&pidentity_fun, &top_fun));
-        assert_eq!(true, ty_ref_is_a(&pidentity_sym_fun, &top_fun));
-        assert_eq!(true, ty_ref_is_a(&pidentity_impure_string_fun, &top_fun));
+        assert!(ty_ref_is_a(&pidentity_fun, &top_fun));
+        assert!(ty_ref_is_a(&pidentity_sym_fun, &top_fun));
+        assert!(ty_ref_is_a(&pidentity_impure_string_fun, &top_fun));
 
         // We should take in to account purity
         let top_pure_fun = poly_for_str("(... -> Any)");
-        assert_eq!(true, ty_ref_is_a(&pidentity_fun, &top_pure_fun));
-        assert_eq!(
-            false,
-            ty_ref_is_a(&pidentity_impure_string_fun, &top_pure_fun)
-        );
+        assert!(ty_ref_is_a(&pidentity_fun, &top_pure_fun));
+        assert!(!ty_ref_is_a(&pidentity_impure_string_fun, &top_pure_fun));
 
         // All functions should have the top one param function type except panys
         let top_one_param_fun = poly_for_str("((RawU) ->! Any)");
-        assert_eq!(true, ty_ref_is_a(&pidentity_fun, &top_one_param_fun));
-        assert_eq!(true, ty_ref_is_a(&pidentity_sym_fun, &top_one_param_fun));
-        assert_eq!(
-            true,
-            ty_ref_is_a(&pidentity_impure_string_fun, &top_one_param_fun)
-        );
+        assert!(ty_ref_is_a(&pidentity_fun, &top_one_param_fun));
+        assert!(ty_ref_is_a(&pidentity_sym_fun, &top_one_param_fun));
+        assert!(ty_ref_is_a(
+            &pidentity_impure_string_fun,
+            &top_one_param_fun
+        ));
 
         // The identity function is (Any -> Any)
         let any_to_any_fun = poly_for_str("(Any ->! Any)");
-        assert_eq!(true, ty_ref_is_a(&pidentity_fun, &any_to_any_fun));
+        assert!(ty_ref_is_a(&pidentity_fun, &any_to_any_fun));
         // However, (Any -> Any) is not the identity function because it can take mismatched types
         // (e.g. Int -> Float)
-        assert_eq!(false, ty_ref_is_a(&any_to_any_fun, &pidentity_fun));
+        assert!(!ty_ref_is_a(&any_to_any_fun, &pidentity_fun));
 
         // The identity function is (true -> true)
         let true_to_true_fun = poly_for_str("(true ->! true)");
-        assert_eq!(true, ty_ref_is_a(&pidentity_fun, &true_to_true_fun));
-        assert_eq!(false, ty_ref_is_a(&true_to_true_fun, &pidentity_fun));
+        assert!(ty_ref_is_a(&pidentity_fun, &true_to_true_fun));
+        assert!(!ty_ref_is_a(&true_to_true_fun, &pidentity_fun));
 
         // The identity function is not (true -> false)
         let true_to_true_fun = poly_for_str("(true ->! false)");
-        assert_eq!(false, ty_ref_is_a(&pidentity_fun, &true_to_true_fun));
-        assert_eq!(false, ty_ref_is_a(&true_to_true_fun, &pidentity_fun));
+        assert!(!ty_ref_is_a(&pidentity_fun, &true_to_true_fun));
+        assert!(!ty_ref_is_a(&true_to_true_fun, &pidentity_fun));
 
         // The symbol function satisfies ((U) -> Sym) as all of its returns must be bounded by
         // that
         let top_to_sym_fun = poly_for_str("(... ->! Sym)");
-        assert_eq!(true, ty_ref_is_a(&pidentity_fun, &top_to_sym_fun));
-        assert_eq!(true, ty_ref_is_a(&pidentity_sym_fun, &top_to_sym_fun));
+        assert!(ty_ref_is_a(&pidentity_fun, &top_to_sym_fun));
+        assert!(ty_ref_is_a(&pidentity_sym_fun, &top_to_sym_fun));
 
         // The identity string function satisfies (Str -> Str)
         let str_to_str_fun = poly_for_str("(Str ->! Str)");
-        assert_eq!(true, ty_ref_is_a(&pidentity_fun, &str_to_str_fun));
-        assert_eq!(false, ty_ref_is_a(&pidentity_sym_fun, &str_to_str_fun));
-        assert_eq!(
-            true,
-            ty_ref_is_a(&pidentity_impure_string_fun, &str_to_str_fun)
-        );
+        assert!(ty_ref_is_a(&pidentity_fun, &str_to_str_fun));
+        assert!(!ty_ref_is_a(&pidentity_sym_fun, &str_to_str_fun));
+        assert!(ty_ref_is_a(&pidentity_impure_string_fun, &str_to_str_fun));
 
         // The polymorphic identity string function satisfies (... ->! Str)
         let top_impure_str_fun = poly_for_str("(... ->! Str)");
-        assert_eq!(
-            true,
-            ty_ref_is_a(&pidentity_impure_string_fun, &top_impure_str_fun)
-        );
+        assert!(ty_ref_is_a(
+            &pidentity_impure_string_fun,
+            &top_impure_str_fun
+        ));
 
         // As does the unbounded identity function
-        assert_eq!(true, ty_ref_is_a(&pidentity_fun, &top_impure_str_fun));
+        assert!(ty_ref_is_a(&pidentity_fun, &top_impure_str_fun));
 
         // But not the polymorphic symbol function
-        assert_eq!(false, ty_ref_is_a(&pidentity_sym_fun, &top_impure_str_fun));
+        assert!(!ty_ref_is_a(&pidentity_sym_fun, &top_impure_str_fun));
     }
 
     #[test]
@@ -694,9 +685,9 @@ mod test {
         let mono_purity_fun = poly_for_str("((->! Str) -> Str)");
         let top_to_str_fun = poly_for_str("(... -> Str)");
 
-        assert_eq!(true, ty_ref_is_a(&poly_purity_fun, &top_to_str_fun));
-        assert_eq!(true, ty_ref_is_a(&mono_purity_fun, &poly_purity_fun));
-        assert_eq!(false, ty_ref_is_a(&top_to_str_fun, &poly_purity_fun));
+        assert!(ty_ref_is_a(&poly_purity_fun, &top_to_str_fun));
+        assert!(ty_ref_is_a(&mono_purity_fun, &poly_purity_fun));
+        assert!(!ty_ref_is_a(&top_to_str_fun, &poly_purity_fun));
     }
 
     #[test]
@@ -724,12 +715,12 @@ mod test {
             record::Instance::new(cons2, TyArgs::empty()).into();
 
         // Different record constructors
-        assert_eq!(false, ty_ref_is_a(&instance1_poly, &instance2_poly));
-        assert_eq!(false, ty_ref_is_a(&instance2_poly, &instance1_poly));
+        assert!(!ty_ref_is_a(&instance1_poly, &instance2_poly));
+        assert!(!ty_ref_is_a(&instance2_poly, &instance1_poly));
 
         // They're both top records
-        assert_eq!(true, ty_ref_is_a(&instance1_poly, &Ty::TopRecord.into()));
-        assert_eq!(true, ty_ref_is_a(&instance2_poly, &Ty::TopRecord.into()));
+        assert!(ty_ref_is_a(&instance1_poly, &Ty::TopRecord.into()));
+        assert!(ty_ref_is_a(&instance2_poly, &Ty::TopRecord.into()));
     }
 
     #[test]
@@ -781,22 +772,22 @@ mod test {
         )
         .into();
 
-        assert_eq!(
-            true,
-            ty_ref_is_a(&int_any_num_instance_poly, &num_num_num_instance_poly)
-        );
-        assert_eq!(
-            false,
-            ty_ref_is_a(&num_num_num_instance_poly, &int_any_num_instance_poly)
-        );
+        assert!(ty_ref_is_a(
+            &int_any_num_instance_poly,
+            &num_num_num_instance_poly
+        ));
+        assert!(!ty_ref_is_a(
+            &num_num_num_instance_poly,
+            &int_any_num_instance_poly
+        ));
 
-        assert_eq!(
-            true,
-            ty_ref_is_a(&num_num_num_instance_poly, &num_num_num_instance_poly)
-        );
-        assert_eq!(
-            true,
-            ty_ref_is_a(&int_any_num_instance_poly, &int_any_num_instance_poly)
-        );
+        assert!(ty_ref_is_a(
+            &num_num_num_instance_poly,
+            &num_num_num_instance_poly
+        ));
+        assert!(ty_ref_is_a(
+            &int_any_num_instance_poly,
+            &int_any_num_instance_poly
+        ));
     }
 }

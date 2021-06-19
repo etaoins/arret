@@ -267,8 +267,8 @@ mod test {
 
         // Start a weak pass
         let one_weak = one_strong.into_weak_pass();
-        assert_eq!(true, one_weak.new_heap_ref_for(hello_alias).is_some());
-        assert_eq!(true, one_weak.new_heap_ref_for(world_alias).is_none());
+        assert!(one_weak.new_heap_ref_for(hello_alias).is_some());
+        assert!(one_weak.new_heap_ref_for(world_alias).is_none());
 
         let one_heap = one_weak.into_new_heap();
         assert_eq!("HELLO", hello.as_str());

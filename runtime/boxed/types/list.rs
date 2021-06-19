@@ -337,8 +337,8 @@ mod test {
         let forward_list2 = List::from_values(&mut heap, [1, 2, 3].iter().cloned(), Int::new);
         let reverse_list = List::from_values(&mut heap, [3, 2, 1].iter().cloned(), Int::new);
 
-        assert_eq!(false, forward_list1.eq_in_heap(&heap, &reverse_list));
-        assert_eq!(true, forward_list1.eq_in_heap(&heap, &forward_list2));
+        assert!(!forward_list1.eq_in_heap(&heap, &reverse_list));
+        assert!(forward_list1.eq_in_heap(&heap, &forward_list2));
     }
 
     #[test]
@@ -370,6 +370,6 @@ mod test {
         }
 
         assert_eq!(0, boxed_list_iter.len());
-        assert_eq!(false, boxed_list_iter.next().is_some());
+        assert!(!boxed_list_iter.next().is_some());
     }
 }

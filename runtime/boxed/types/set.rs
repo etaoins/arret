@@ -468,9 +468,9 @@ mod test {
 
         let partial_set = Set::new(&mut heap, vec![boxed1, boxed3].into_iter());
 
-        assert_eq!(true, forward_set1.eq_in_heap(&heap, &reverse_set));
-        assert_eq!(true, forward_set1.eq_in_heap(&heap, &forward_set2));
-        assert_eq!(false, forward_set1.eq_in_heap(&heap, &partial_set));
+        assert!(forward_set1.eq_in_heap(&heap, &reverse_set));
+        assert!(forward_set1.eq_in_heap(&heap, &forward_set2));
+        assert!(!forward_set1.eq_in_heap(&heap, &partial_set));
     }
 
     #[test]
@@ -489,17 +489,17 @@ mod test {
         let odd_set = Set::new(&mut heap, vec![boxed1, boxed3, boxed5].into_iter());
         let even_set = Set::new(&mut heap, vec![boxed2, boxed4].into_iter());
 
-        assert_eq!(false, empty_set.contains(&heap, &boxed1));
-        assert_eq!(true, odd_set.contains(&heap, &boxed1));
-        assert_eq!(false, even_set.contains(&heap, &boxed1));
+        assert!(!empty_set.contains(&heap, &boxed1));
+        assert!(odd_set.contains(&heap, &boxed1));
+        assert!(!even_set.contains(&heap, &boxed1));
 
-        assert_eq!(false, empty_set.contains(&heap, &boxed2));
-        assert_eq!(false, odd_set.contains(&heap, &boxed2));
-        assert_eq!(true, even_set.contains(&heap, &boxed2));
+        assert!(!empty_set.contains(&heap, &boxed2));
+        assert!(!odd_set.contains(&heap, &boxed2));
+        assert!(even_set.contains(&heap, &boxed2));
 
-        assert_eq!(false, empty_set.contains(&heap, &boxed3));
-        assert_eq!(true, odd_set.contains(&heap, &boxed3));
-        assert_eq!(false, even_set.contains(&heap, &boxed3));
+        assert!(!empty_set.contains(&heap, &boxed3));
+        assert!(odd_set.contains(&heap, &boxed3));
+        assert!(!even_set.contains(&heap, &boxed3));
     }
 
     #[test]
@@ -527,9 +527,9 @@ mod test {
         let inline_set = Set::new(&mut heap, vec![boxed1, boxed2, boxed3, boxed4].into_iter());
         let empty_set = Set::<Int>::new(&mut heap, vec![].into_iter());
 
-        assert_eq!(true, forward_set.eq_in_heap(&heap, &reverse_set));
-        assert_eq!(false, forward_set.eq_in_heap(&heap, &inline_set));
-        assert_eq!(false, forward_set.eq_in_heap(&heap, &empty_set));
+        assert!(forward_set.eq_in_heap(&heap, &reverse_set));
+        assert!(!forward_set.eq_in_heap(&heap, &inline_set));
+        assert!(!forward_set.eq_in_heap(&heap, &empty_set));
     }
     #[test]
     fn external_contains() {
@@ -550,17 +550,17 @@ mod test {
         let odd_set = Set::new(&mut heap, vec![boxed1, boxed3, boxed5, boxed7].into_iter());
         let even_set = Set::new(&mut heap, vec![boxed2, boxed4, boxed6, boxed8].into_iter());
 
-        assert_eq!(false, empty_set.contains(&heap, &boxed1));
-        assert_eq!(true, odd_set.contains(&heap, &boxed1));
-        assert_eq!(false, even_set.contains(&heap, &boxed1));
+        assert!(!empty_set.contains(&heap, &boxed1));
+        assert!(odd_set.contains(&heap, &boxed1));
+        assert!(!even_set.contains(&heap, &boxed1));
 
-        assert_eq!(false, empty_set.contains(&heap, &boxed2));
-        assert_eq!(false, odd_set.contains(&heap, &boxed2));
-        assert_eq!(true, even_set.contains(&heap, &boxed2));
+        assert!(!empty_set.contains(&heap, &boxed2));
+        assert!(!odd_set.contains(&heap, &boxed2));
+        assert!(even_set.contains(&heap, &boxed2));
 
-        assert_eq!(false, empty_set.contains(&heap, &boxed3));
-        assert_eq!(true, odd_set.contains(&heap, &boxed3));
-        assert_eq!(false, even_set.contains(&heap, &boxed3));
+        assert!(!empty_set.contains(&heap, &boxed3));
+        assert!(odd_set.contains(&heap, &boxed3));
+        assert!(!even_set.contains(&heap, &boxed3));
     }
 
     #[test]
@@ -590,34 +590,34 @@ mod test {
             .into_iter(),
         );
 
-        assert_eq!(true, empty_set.is_subset(&heap, &empty_set));
-        assert_eq!(true, empty_set.is_subset(&heap, &one_set));
-        assert_eq!(true, empty_set.is_subset(&heap, &odd_set));
-        assert_eq!(true, empty_set.is_subset(&heap, &even_set));
-        assert_eq!(true, empty_set.is_subset(&heap, &full_set));
+        assert!(empty_set.is_subset(&heap, &empty_set));
+        assert!(empty_set.is_subset(&heap, &one_set));
+        assert!(empty_set.is_subset(&heap, &odd_set));
+        assert!(empty_set.is_subset(&heap, &even_set));
+        assert!(empty_set.is_subset(&heap, &full_set));
 
-        assert_eq!(false, one_set.is_subset(&heap, &empty_set));
-        assert_eq!(true, one_set.is_subset(&heap, &one_set));
-        assert_eq!(true, one_set.is_subset(&heap, &odd_set));
-        assert_eq!(false, one_set.is_subset(&heap, &even_set));
-        assert_eq!(true, one_set.is_subset(&heap, &full_set));
+        assert!(!one_set.is_subset(&heap, &empty_set));
+        assert!(one_set.is_subset(&heap, &one_set));
+        assert!(one_set.is_subset(&heap, &odd_set));
+        assert!(!one_set.is_subset(&heap, &even_set));
+        assert!(one_set.is_subset(&heap, &full_set));
 
-        assert_eq!(false, odd_set.is_subset(&heap, &empty_set));
-        assert_eq!(false, odd_set.is_subset(&heap, &one_set));
-        assert_eq!(true, odd_set.is_subset(&heap, &odd_set));
-        assert_eq!(false, odd_set.is_subset(&heap, &even_set));
-        assert_eq!(true, odd_set.is_subset(&heap, &full_set));
+        assert!(!odd_set.is_subset(&heap, &empty_set));
+        assert!(!odd_set.is_subset(&heap, &one_set));
+        assert!(odd_set.is_subset(&heap, &odd_set));
+        assert!(!odd_set.is_subset(&heap, &even_set));
+        assert!(odd_set.is_subset(&heap, &full_set));
 
-        assert_eq!(false, even_set.is_subset(&heap, &empty_set));
-        assert_eq!(false, even_set.is_subset(&heap, &one_set));
-        assert_eq!(false, even_set.is_subset(&heap, &odd_set));
-        assert_eq!(true, even_set.is_subset(&heap, &even_set));
-        assert_eq!(true, even_set.is_subset(&heap, &full_set));
+        assert!(!even_set.is_subset(&heap, &empty_set));
+        assert!(!even_set.is_subset(&heap, &one_set));
+        assert!(!even_set.is_subset(&heap, &odd_set));
+        assert!(even_set.is_subset(&heap, &even_set));
+        assert!(even_set.is_subset(&heap, &full_set));
 
-        assert_eq!(false, full_set.is_subset(&heap, &empty_set));
-        assert_eq!(false, full_set.is_subset(&heap, &one_set));
-        assert_eq!(false, full_set.is_subset(&heap, &odd_set));
-        assert_eq!(false, full_set.is_subset(&heap, &even_set));
-        assert_eq!(true, full_set.is_subset(&heap, &full_set));
+        assert!(!full_set.is_subset(&heap, &empty_set));
+        assert!(!full_set.is_subset(&heap, &one_set));
+        assert!(!full_set.is_subset(&heap, &odd_set));
+        assert!(!full_set.is_subset(&heap, &even_set));
+        assert!(full_set.is_subset(&heap, &full_set));
     }
 }

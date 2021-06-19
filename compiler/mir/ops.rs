@@ -759,8 +759,8 @@ mod test {
     fn has_side_effects() {
         let reg1 = RegId::alloc();
 
-        assert_eq!(true, OpKind::RetVoid.has_side_effects());
-        assert_eq!(false, OpKind::ConstInt64(reg1, 14).has_side_effects());
+        assert!(OpKind::RetVoid.has_side_effects());
+        assert!(!OpKind::ConstInt64(reg1, 14).has_side_effects());
 
         let cond_op_with_no_side_effects = CondOp {
             reg_phi: None,
@@ -769,10 +769,7 @@ mod test {
             false_ops: Box::new([]),
         };
 
-        assert_eq!(
-            false,
-            OpKind::Cond(cond_op_with_no_side_effects).has_side_effects()
-        );
+        assert!(!OpKind::Cond(cond_op_with_no_side_effects).has_side_effects());
 
         let cond_op_with_true_side_effects = CondOp {
             reg_phi: None,
@@ -781,10 +778,7 @@ mod test {
             false_ops: Box::new([]),
         };
 
-        assert_eq!(
-            true,
-            OpKind::Cond(cond_op_with_true_side_effects).has_side_effects()
-        );
+        assert!(OpKind::Cond(cond_op_with_true_side_effects).has_side_effects());
 
         let cond_op_with_false_side_effects = CondOp {
             reg_phi: None,
@@ -793,46 +787,31 @@ mod test {
             false_ops: Box::new([OpKind::RetVoid.into()]),
         };
 
-        assert_eq!(
-            true,
-            OpKind::Cond(cond_op_with_false_side_effects).has_side_effects()
-        );
+        assert!(OpKind::Cond(cond_op_with_false_side_effects).has_side_effects());
     }
 
     #[test]
     fn const_output() {
-        assert_eq!(true, OpKind::ConstBool(RegId::alloc(), true).const_output());
-        assert_eq!(
-            true,
-            OpKind::ConstBoxedFalse(RegId::alloc(), ()).const_output()
-        );
-        assert_eq!(
-            true,
-            OpKind::ConstCastBoxed(
-                RegId::alloc(),
-                CastBoxedOp {
-                    from_reg: RegId::alloc(),
-                    to_type: abitype::BoxedAbiType::Any
-                }
-            )
-            .const_output()
-        );
+        assert!(OpKind::ConstBool(RegId::alloc(), true).const_output());
+        assert!(OpKind::ConstBoxedFalse(RegId::alloc(), ()).const_output());
+        assert!(OpKind::ConstCastBoxed(
+            RegId::alloc(),
+            CastBoxedOp {
+                from_reg: RegId::alloc(),
+                to_type: abitype::BoxedAbiType::Any
+            }
+        )
+        .const_output());
 
-        assert_eq!(
-            false,
-            OpKind::AllocBoxedInt(RegId::alloc(), RegId::alloc()).const_output()
-        );
-        assert_eq!(
-            false,
-            OpKind::LoadBoxedListLen(
-                RegId::alloc(),
-                LoadBoxedListLenOp {
-                    list_reg: RegId::alloc(),
-                    min_list_len: 0
-                }
-            )
-            .const_output()
-        );
+        assert!(!OpKind::AllocBoxedInt(RegId::alloc(), RegId::alloc()).const_output());
+        assert!(!OpKind::LoadBoxedListLen(
+            RegId::alloc(),
+            LoadBoxedListLenOp {
+                list_reg: RegId::alloc(),
+                min_list_len: 0
+            }
+        )
+        .const_output());
     }
 
     #[test]

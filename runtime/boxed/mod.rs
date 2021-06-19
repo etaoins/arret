@@ -581,8 +581,8 @@ mod test {
         let box_float = Float::new(&mut heap, 2.0);
         let box_float_as_any = box_float.as_any_ref();
 
-        assert_eq!(false, box_float_as_any.downcast_ref::<Int>().is_some());
-        assert_eq!(true, box_float_as_any.downcast_ref::<Float>().is_some());
+        assert!(!box_float_as_any.downcast_ref::<Int>().is_some());
+        assert!(box_float_as_any.downcast_ref::<Float>().is_some());
     }
 
     #[test]
@@ -608,8 +608,8 @@ mod test {
         let box_three = Float::new(&mut heap, 3.0);
         let box_three_as_any = box_three.as_any_ref();
 
-        assert_eq!(true, box_two_as_any.eq_in_heap(&heap, &box_two_as_any));
-        assert_eq!(false, box_two_as_any.eq_in_heap(&heap, &box_three_as_any));
+        assert!(box_two_as_any.eq_in_heap(&heap, &box_two_as_any));
+        assert!(!box_two_as_any.eq_in_heap(&heap, &box_three_as_any));
 
         #[allow(clippy::eq_op)]
         {
@@ -639,8 +639,8 @@ mod test {
                 panic!("Couldn't get tagged Float from Num");
             }
 
-            assert_eq!(false, stack_num.downcast_ref::<Int>().is_some());
-            assert_eq!(true, stack_num.downcast_ref::<Float>().is_some());
+            assert!(!stack_num.downcast_ref::<Int>().is_some());
+            assert!(stack_num.downcast_ref::<Float>().is_some());
         } else {
             panic!("Float was not a Num");
         }
@@ -648,6 +648,6 @@ mod test {
         let box_str = Str::new(&mut heap, "Test!");
         let box_str_as_any = box_str.as_any_ref();
 
-        assert_eq!(false, box_str_as_any.downcast_ref::<Num>().is_some());
+        assert!(!box_str_as_any.downcast_ref::<Num>().is_some());
     }
 }

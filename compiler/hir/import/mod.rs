@@ -129,7 +129,7 @@ mod test {
         let exports = exports_for_import_set(j).unwrap();
 
         assert_exports_prim(&exports, "quote", Prim::Quote);
-        assert_eq!(false, exports.contains_key("if"));
+        assert!(!exports.contains_key("if"));
 
         let j = "(:only [lib test] quote ifz)";
         let t = "                        ^^^ ";
@@ -144,7 +144,7 @@ mod test {
         let exports = exports_for_import_set(j).unwrap();
 
         assert_exports_prim(&exports, "quote", Prim::Quote);
-        assert_eq!(false, exports.contains_key("if"));
+        assert!(!exports.contains_key("if"));
 
         let j = "(:exclude [lib test] ifz)";
         let t = "                     ^^^ ";

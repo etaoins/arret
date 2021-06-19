@@ -448,8 +448,8 @@ mod test {
 
         // This is the basic invariant we're testing - each of our input types satisfies the merged
         // type
-        assert_eq!(true, ty::is_a::ty_ref_is_a(&poly1, &expected));
-        assert_eq!(true, ty::is_a::ty_ref_is_a(&poly2, &expected));
+        assert!(ty::is_a::ty_ref_is_a(&poly1, &expected));
+        assert!(ty::is_a::ty_ref_is_a(&poly2, &expected));
 
         assert_eq!(UnifiedTy::Merged(expected), unify_ty_refs(&poly1, &poly2));
     }

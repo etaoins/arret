@@ -76,7 +76,7 @@ mod test {
             })),
         };
 
-        assert_eq!(false, expr_can_side_effect(&app_expr));
+        assert!(!expr_can_side_effect(&app_expr));
     }
 
     #[test]
@@ -100,6 +100,6 @@ mod test {
             })),
         };
 
-        assert_eq!(true, expr_can_side_effect(&app_expr));
+        assert!(expr_can_side_effect(&app_expr));
     }
 }

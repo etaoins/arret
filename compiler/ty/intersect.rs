@@ -396,13 +396,11 @@ mod test {
     ) {
         // This is the basic invariant we're testing - each of our merged type satisfies each of
         // our input types.
-        assert_eq!(
-            true,
+        assert!(
             ty::is_a::ty_ref_is_a(expected, poly1),
             "The expected type does not definitely satisfy the first input type; the test is incorrect"
         );
-        assert_eq!(
-            true,
+        assert!(
             ty::is_a::ty_ref_is_a(expected, poly2),
             "The expected type does not definitely satisfy the second input type; the test is incorrect"
         );

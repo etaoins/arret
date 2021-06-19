@@ -406,8 +406,8 @@ mod test {
         let forward_vec2 = Vector::new(&mut heap, vec![boxed1, boxed2, boxed3].into_iter());
         let reverse_vec = Vector::new(&mut heap, vec![boxed3, boxed2, boxed1].into_iter());
 
-        assert_eq!(false, forward_vec1.eq_in_heap(&heap, &reverse_vec));
-        assert_eq!(true, forward_vec1.eq_in_heap(&heap, &forward_vec2));
+        assert!(!forward_vec1.eq_in_heap(&heap, &reverse_vec));
+        assert!(forward_vec1.eq_in_heap(&heap, &forward_vec2));
     }
 
     #[test]

@@ -99,69 +99,69 @@ mod test {
 
     #[test]
     fn poly_subtypes() {
-        assert_eq!(true, str_has_subtypes("Any"));
-        assert_eq!(true, str_has_subtypes("Bool"));
-        assert_eq!(false, str_has_subtypes("true"));
-        assert_eq!(false, str_has_subtypes("Char"));
-        assert_eq!(false, str_has_subtypes("Float"));
-        assert_eq!(false, str_has_subtypes("Str"));
-        assert_eq!(true, str_has_subtypes("Sym"));
-        assert_eq!(true, str_has_subtypes("Num"));
+        assert!(str_has_subtypes("Any"));
+        assert!(str_has_subtypes("Bool"));
+        assert!(!str_has_subtypes("true"));
+        assert!(!str_has_subtypes("Char"));
+        assert!(!str_has_subtypes("Float"));
+        assert!(!str_has_subtypes("Str"));
+        assert!(str_has_subtypes("Sym"));
+        assert!(str_has_subtypes("Num"));
 
-        assert_eq!(false, str_has_subtypes("(& Any -> true)"));
-        assert_eq!(true, str_has_subtypes("(& Any ->! true)"));
-        assert_eq!(true, str_has_subtypes("(Any -> true)"));
-        assert_eq!(true, str_has_subtypes("(& Int -> true)"));
-        assert_eq!(true, str_has_subtypes("(& Any -> Any)"));
+        assert!(!str_has_subtypes("(& Any -> true)"));
+        assert!(str_has_subtypes("(& Any ->! true)"));
+        assert!(str_has_subtypes("(Any -> true)"));
+        assert!(str_has_subtypes("(& Int -> true)"));
+        assert!(str_has_subtypes("(& Any -> Any)"));
 
-        assert_eq!(true, str_has_subtypes("(Map Sym Int)"));
-        assert_eq!(false, str_has_subtypes("(Map Float Int)"));
+        assert!(str_has_subtypes("(Map Sym Int)"));
+        assert!(!str_has_subtypes("(Map Float Int)"));
 
-        assert_eq!(true, str_has_subtypes("(List Sym Int)"));
-        assert_eq!(true, str_has_subtypes("(List Str & Int)"));
-        assert_eq!(false, str_has_subtypes("(List Str Int)"));
+        assert!(str_has_subtypes("(List Sym Int)"));
+        assert!(str_has_subtypes("(List Str & Int)"));
+        assert!(!str_has_subtypes("(List Str Int)"));
 
-        assert_eq!(true, str_has_subtypes("(Setof Sym)"));
-        assert_eq!(false, str_has_subtypes("(Setof Float)"));
+        assert!(str_has_subtypes("(Setof Sym)"));
+        assert!(!str_has_subtypes("(Setof Float)"));
 
-        assert_eq!(true, str_has_subtypes("(Vectorof false)"));
-        assert_eq!(false, str_has_subtypes("(Vector false true)"));
+        assert!(str_has_subtypes("(Vectorof false)"));
+        assert!(!str_has_subtypes("(Vector false true)"));
 
-        assert_eq!(false, str_has_subtypes("(RawU)"));
+        assert!(!str_has_subtypes("(RawU)"));
 
         let tvar = ty::TVar::new(EMPTY_SPAN, "test".into(), Ty::Any.into());
-        assert_eq!(true, has_subtypes(&tvar.into()));
+        assert!(has_subtypes(&tvar.into()));
     }
 
     #[test]
     fn poly_literal() {
-        assert_eq!(false, str_is_literal("Any"));
-        assert_eq!(false, str_is_literal("Bool"));
-        assert_eq!(true, str_is_literal("true"));
-        assert_eq!(false, str_is_literal("Char"));
-        assert_eq!(false, str_is_literal("Float"));
-        assert_eq!(false, str_is_literal("Str"));
-        assert_eq!(false, str_is_literal("Sym"));
+        assert!(!str_is_literal("Any"));
+        assert!(!str_is_literal("Bool"));
+        assert!(str_is_literal("true"));
+        assert!(!str_is_literal("Char"));
+        assert!(!str_is_literal("Float"));
+        assert!(!str_is_literal("Str"));
+        assert!(!str_is_literal("Sym"));
 
-        assert_eq!(false, str_is_literal("(& Any -> true)"));
+        assert!(!str_is_literal("(& Any -> true)"));
 
-        assert_eq!(false, str_is_literal("(Map Sym Int)"));
-        assert_eq!(false, str_is_literal("(Map false true)"));
+        assert!(!str_is_literal("(Map Sym Int)"));
+        assert!(!str_is_literal("(Map false true)"));
 
-        assert_eq!(false, str_is_literal("(List Sym Int)"));
-        assert_eq!(false, str_is_literal("(List Str & Int)"));
-        assert_eq!(true, str_is_literal("(List true false)"));
-        assert_eq!(false, str_is_literal("(List true & false)"));
-        assert_eq!(true, str_is_literal("()"));
+        assert!(!str_is_literal("(List Sym Int)"));
+        assert!(!str_is_literal("(List Str & Int)"));
+        assert!(str_is_literal("(List true false)"));
+        assert!(!str_is_literal("(List true & false)"));
+        assert!(str_is_literal("()"));
 
-        assert_eq!(false, str_is_literal("(Setof ())"));
-        assert_eq!(false, str_is_literal("(Setof Float)"));
+        assert!(!str_is_literal("(Setof ())"));
+        assert!(!str_is_literal("(Setof Float)"));
 
-        assert_eq!(false, str_is_literal("(Vectorof false)"));
-        assert_eq!(true, str_is_literal("(Vector false true)"));
+        assert!(!str_is_literal("(Vectorof false)"));
+        assert!(str_is_literal("(Vector false true)"));
 
         let tvar = ty::TVar::new(EMPTY_SPAN, "test".into(), Ty::Any.into());
-        assert_eq!(false, is_literal(&tvar.into()));
+        assert!(!is_literal(&tvar.into()));
     }
 
     #[test]
@@ -177,8 +177,8 @@ mod test {
         let int_record_instance_ref: ty::Ref<ty::Poly> =
             record::Instance::new(mono_record_cons, TyArgs::empty()).into();
 
-        assert_eq!(false, has_subtypes(&int_record_instance_ref));
-        assert_eq!(false, is_literal(&int_record_instance_ref));
+        assert!(!has_subtypes(&int_record_instance_ref));
+        assert!(!is_literal(&int_record_instance_ref));
     }
 
     #[test]
@@ -199,7 +199,7 @@ mod test {
         let poly_record_instance_ref: ty::Ref<ty::Poly> =
             record::Instance::new(poly_record_cons, TyArgs::empty()).into();
 
-        assert_eq!(true, has_subtypes(&poly_record_instance_ref));
-        assert_eq!(false, is_literal(&poly_record_instance_ref));
+        assert!(has_subtypes(&poly_record_instance_ref));
+        assert!(!is_literal(&poly_record_instance_ref));
     }
 }

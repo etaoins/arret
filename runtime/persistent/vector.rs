@@ -661,24 +661,24 @@ mod test {
             let empty_vec = Vector::<i32>::new(iter::empty());
 
             assert_eq!(0, empty_vec.len());
-            assert_eq!(true, empty_vec.is_empty());
+            assert!(empty_vec.is_empty());
 
             let one_vec = empty_vec.extend(iter::once(0));
 
             // Make sure `empty_vec` is still intact
             assert_eq!(0, empty_vec.len());
-            assert_eq!(true, empty_vec.is_empty());
+            assert!(empty_vec.is_empty());
             assert_eq!(None, empty_vec.get(0));
 
             assert_eq!(1, one_vec.len());
-            assert_eq!(false, one_vec.is_empty());
+            assert!(!one_vec.is_empty());
             assert_eq!(Some(0), one_vec.get(0));
 
             // Try modifying the original one item vec
             let mutated_vec = one_vec.assoc(0, 31337);
 
             assert_eq!(1, mutated_vec.len());
-            assert_eq!(false, mutated_vec.is_empty());
+            assert!(!mutated_vec.is_empty());
             assert_eq!(Some(31337), mutated_vec.get(0));
             assert_eq!(Some(0), one_vec.get(0));
         });

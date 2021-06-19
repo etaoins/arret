@@ -166,8 +166,7 @@ mod test {
 
     fn assert_test_ty_will_match(test_ty: &TestTy, subject_ref: impl Into<ty::Ref<ty::Poly>>) {
         let subject_ref = subject_ref.into();
-        assert_eq!(
-            true,
+        assert!(
             ty::is_a::ty_ref_is_a(&subject_ref, &test_ty.to_ty().into()),
             "Subject type is not a definite subtype of the test type"
         );
@@ -176,9 +175,8 @@ mod test {
 
     fn assert_test_ty_may_match(test_ty: &TestTy, subject_ref: impl Into<ty::Ref<ty::Poly>>) {
         let subject_ref = subject_ref.into();
-        assert_eq!(
-            false,
-            ty::is_a::ty_ref_is_a(&subject_ref, &test_ty.to_ty().into()),
+        assert!(
+            !ty::is_a::ty_ref_is_a(&subject_ref, &test_ty.to_ty().into()),
             "Subject type is a definite subtype of the test type"
         );
         assert_eq!(None, test_ty.match_subject_ref(&subject_ref),);
@@ -186,9 +184,8 @@ mod test {
 
     fn assert_test_ty_wont_match(test_ty: &TestTy, subject_ref: impl Into<ty::Ref<ty::Poly>>) {
         let subject_ref = subject_ref.into();
-        assert_eq!(
-            false,
-            ty::is_a::ty_ref_is_a(&subject_ref, &test_ty.to_ty().into()),
+        assert!(
+            !ty::is_a::ty_ref_is_a(&subject_ref, &test_ty.to_ty().into()),
             "Subject type is a definite subtype of the test type"
         );
         assert_eq!(Some(false), test_ty.match_subject_ref(&subject_ref),);
