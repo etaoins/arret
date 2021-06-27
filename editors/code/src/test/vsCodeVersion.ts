@@ -1,1 +1,1 @@
-export const VSCODE_VERSION = '1.56.0';
+export const VSCODE_VERSION = '1.57.1';
