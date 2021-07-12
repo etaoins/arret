@@ -1,5 +1,5 @@
-# Visual Studio Code currently uses Node 12.14
-FROM node:12-buster
+# Visual Studio Code currently uses Node 14.16
+FROM node:14-buster
 
 RUN \
   apt-get update && \
