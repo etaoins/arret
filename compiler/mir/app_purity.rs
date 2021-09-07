@@ -12,7 +12,7 @@ fn resolve_ref_to_purity(
         purity::Ref::Fixed(purity) => *purity,
         purity::Ref::Var(pvar) => {
             let inner_ref = pvar_purities
-                .get(&pvar)
+                .get(pvar)
                 .expect("Unable to find PVar determining fun apply purity");
 
             resolve_ref_to_purity(pvar_purities, inner_ref)

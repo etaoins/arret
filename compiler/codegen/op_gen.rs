@@ -228,7 +228,7 @@ fn gen_op(
 
                 let task_reg_iter = Some(fcx.current_task).filter(|_| takes_task).into_iter();
                 let mut llvm_args = task_reg_iter
-                    .chain(args.iter().map(|param_reg| fcx.regs[&param_reg]))
+                    .chain(args.iter().map(|param_reg| fcx.regs[param_reg]))
                     .collect::<Vec<LLVMValueRef>>();
 
                 let llvm_ret = LLVMBuildCall(
@@ -246,7 +246,7 @@ fn gen_op(
             }
             OpKind::TailCall(reg, TailCallOp { args, .. }) => {
                 let mut llvm_args = std::iter::once(fcx.current_task)
-                    .chain(args.iter().map(|param_reg| fcx.regs[&param_reg]))
+                    .chain(args.iter().map(|param_reg| fcx.regs[param_reg]))
                     .collect::<Vec<LLVMValueRef>>();
 
                 let llvm_ret = LLVMBuildCall(
@@ -1148,7 +1148,7 @@ pub(crate) fn gen_alloc_atom(
         alloc::core::atom_into_active_alloc(tcx, mcx, fcx.builder, fcx.current_task, alloc_atom);
 
     for op in ops {
-        gen_op(tcx, mcx, fcx, &mut active_alloc, &op);
+        gen_op(tcx, mcx, fcx, &mut active_alloc, op);
     }
 
     assert!(

@@ -56,7 +56,7 @@ pub fn num_value_to_float_reg(
     let possible_type_tags = possible_type_tags_for_value(value) & num_type_tags;
 
     if possible_type_tags == boxed::TypeTag::Float.into() {
-        value_to_reg(ehx, outer_b, span, &value, &abitype::AbiType::Float)
+        value_to_reg(ehx, outer_b, span, value, &abitype::AbiType::Float)
     } else if possible_type_tags == boxed::TypeTag::Int.into() {
         let int64_reg = value_to_reg(ehx, outer_b, span, value, &abitype::AbiType::Int);
         outer_b.push_reg(span, OpKind::Int64ToFloat, int64_reg.into())
@@ -92,7 +92,7 @@ pub fn num_value_to_float_reg(
 
         let mut is_float_b = Builder::new();
         let is_float_result_reg =
-            value_to_reg(ehx, &mut is_float_b, span, &value, &abitype::AbiType::Float);
+            value_to_reg(ehx, &mut is_float_b, span, value, &abitype::AbiType::Float);
 
         let mut is_int_b = Builder::new();
         let int64_reg = value_to_reg(ehx, &mut is_int_b, span, value, &abitype::AbiType::Int);

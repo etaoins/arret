@@ -83,7 +83,7 @@ pub(crate) fn define_fun(
     use crate::codegen::op_gen;
     use arret_runtime::abitype::{AbiType, RetAbiType};
 
-    let alloc_plan = plan_allocs(tcx, &captures, &fun.ops);
+    let alloc_plan = plan_allocs(tcx, captures, &fun.ops);
 
     unsafe {
         let builder = LLVMCreateBuilderInContext(tcx.llx);

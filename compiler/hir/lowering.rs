@@ -339,7 +339,7 @@ fn lower_body(
     let mut flattened_exprs = vec![];
 
     for body_datum in body_data {
-        match lower_expr(lia, &scope, body_datum)? {
+        match lower_expr(lia, scope, body_datum)? {
             Expr {
                 kind: ExprKind::Do(mut exprs),
                 ..
@@ -687,7 +687,7 @@ fn lower_module_def(
                     let mac = &mac.clone();
 
                     let expanded_datum =
-                        expand_macro(scope, span, module_id, &mac, data_iter.as_slice())?;
+                        expand_macro(scope, span, module_id, mac, data_iter.as_slice())?;
 
                     return lower_module_def(lia, scope, expanded_datum)
                         .map(|def| def.map(|def| def.with_macro_invocation_span(span)))
@@ -835,7 +835,7 @@ fn resolve_deferred_def(
         value_datum,
     } = deferred_def;
 
-    lower_expr(lia, &scope, value_datum).map(|value_expr| Def {
+    lower_expr(lia, scope, value_datum).map(|value_expr| Def {
         span,
         macro_invocation_span,
         destruc,

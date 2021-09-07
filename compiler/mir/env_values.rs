@@ -68,7 +68,7 @@ pub fn calculate_env_values(
     // when capturing isn't possible
     if !local_values.is_empty() {
         // Look for references to variables inside the function
-        hir::visitor::visit_exprs(&capturing_expr, &mut |expr| {
+        hir::visitor::visit_exprs(capturing_expr, &mut |expr| {
             if let hir::ExprKind::LocalRef(_, local_id) = &expr.kind {
                 if !captured_values.contains_key(local_id) {
                     if let Some(value) = local_values.get(local_id) {

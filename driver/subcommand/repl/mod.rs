@@ -69,7 +69,7 @@ pub fn interactive_loop(ccx: Arc<CompileCtx>, include_path: Option<path::PathBuf
 
     loop {
         let mut history_dirty = false;
-        let readline = rl.readline(&PROMPT);
+        let readline = rl.readline(PROMPT);
 
         match readline {
             Ok(line) => {

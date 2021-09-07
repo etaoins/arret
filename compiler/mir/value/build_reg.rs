@@ -137,7 +137,7 @@ fn const_to_reg(
 
             let record_struct = ehx
                 .record_class_for_cons
-                .get(&record_cons)
+                .get(record_cons)
                 .expect("unable to lookup record class for cons")
                 .record_struct
                 .clone();

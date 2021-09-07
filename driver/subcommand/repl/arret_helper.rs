@@ -228,7 +228,7 @@ mod test {
         needle: &'static str,
     ) {
         let expected_vec = expected.to_owned();
-        let actual_vec: Vec<&str> = sorted_strings_prefixed_by(&haystack, needle)
+        let actual_vec: Vec<&str> = sorted_strings_prefixed_by(haystack, needle)
             .cloned()
             .collect();
 

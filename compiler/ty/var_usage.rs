@@ -121,7 +121,7 @@ fn visit_ty(var_usages: &mut VarUsages, polarity: Variance, poly_ty: &Ty<ty::Pol
         }
 
         Ty::TopFun(top_fun) => {
-            visit_top_fun(var_usages, polarity, &top_fun);
+            visit_top_fun(var_usages, polarity, top_fun);
         }
 
         Ty::Record(record_instance) => {

@@ -278,7 +278,7 @@ fn lower_record_ty_cons_apply(
             }
             record::PolyParam::TFixed(span, fixed_poly) => {
                 let arg_type = lower_poly(scope, arg_datum)?;
-                if !ty_refs_equivalent(&arg_type, &fixed_poly) {
+                if !ty_refs_equivalent(&arg_type, fixed_poly) {
                     let details = Box::new(PolyArgIsNotTy {
                         arg_type,
                         param_bound: fixed_poly.clone(),

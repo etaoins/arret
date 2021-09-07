@@ -135,7 +135,7 @@ impl<'parent> Scope<'parent> {
     /// Returns the binding for a given ident if it exists
     pub fn get<'a>(&'a self, ident: &Ident) -> Option<&'a Binding> {
         self.entries.get(ident).map(|e| &e.binding).or_else(|| {
-            if let Some(ref parent) = self.parent {
+            if let Some(parent) = self.parent {
                 parent.get(ident)
             } else {
                 None

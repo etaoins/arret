@@ -217,7 +217,7 @@ impl<'of> ProgramCaptureCtx<'of> {
                 // We don't actually care about these captures; we just pull them in for dependencies
                 if let ops::Callee::PrivateFun(private_fun_id) = callee {
                     // If we're already recursing we'll only loop if we re-enter
-                    if !self.recursing_private_funs.contains(&private_fun_id) {
+                    if !self.recursing_private_funs.contains(private_fun_id) {
                         self.captures_for_private_fun_id(*private_fun_id);
                     }
                 }

@@ -99,12 +99,12 @@ pub fn build_save_arg_list_to_regs<'a>(
     let mut arg_regs = vec![];
     for abi_type in fixed_abi_types {
         let fixed_value = list_iter.next_unchecked(b, span);
-        let reg_id = value_to_reg(ehx, b, span, &fixed_value, &abi_type);
+        let reg_id = value_to_reg(ehx, b, span, &fixed_value, abi_type);
         arg_regs.push(reg_id.into());
     }
 
     if let Some(rest_abi_type) = rest_abi_type {
-        let reg_id = value_to_reg(ehx, b, span, &list_iter.into_rest(), &rest_abi_type);
+        let reg_id = value_to_reg(ehx, b, span, &list_iter.into_rest(), rest_abi_type);
         arg_regs.push(reg_id.into());
     };
 

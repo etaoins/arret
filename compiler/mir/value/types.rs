@@ -108,7 +108,7 @@ pub fn known_record_cons_for_value<'a>(
             ehx.cons_for_jit_record_class_id(record_ref.class_id())
                 .expect("unable to lookup record cons for JIT record class ID")
         }),
-        Value::Record(cons, _) => Some(&cons),
+        Value::Record(cons, _) => Some(cons),
         Value::Reg(reg_value) => {
             if let TypeHint::KnownRecordCons(ref cons) = reg_value.type_hint {
                 Some(cons)

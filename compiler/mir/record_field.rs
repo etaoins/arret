@@ -57,7 +57,7 @@ pub fn load_record_field(
             };
 
             let record_reg =
-                value_to_reg(ehx, b, span, &other_value, &boxed::TypeTag::Record.into());
+                value_to_reg(ehx, b, span, other_value, &boxed::TypeTag::Record.into());
 
             let field_reg = b.push_reg(
                 span,

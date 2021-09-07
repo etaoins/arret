@@ -164,7 +164,7 @@ impl<'ccx> ReplEngine<'ccx> {
         let mut child_scope = Scope::child(&self.root_scope);
 
         let lowered_repl_datum =
-            hir::lowering::lower_repl_datum(&self.ccx, &mut child_scope, input_datum)
+            hir::lowering::lower_repl_datum(self.ccx, &mut child_scope, input_datum)
                 .map_err(errors_to_diagnostics)?;
 
         // Bring all the defs back in to root scope
@@ -175,7 +175,7 @@ impl<'ccx> ReplEngine<'ccx> {
         match lowered_repl_datum {
             LoweredReplDatum::Import(modules) => {
                 for module in modules.values() {
-                    self.visit_module_tree(&module)?;
+                    self.visit_module_tree(module)?;
                 }
 
                 Ok(EvaledLine::Defs(self.bound_names()))

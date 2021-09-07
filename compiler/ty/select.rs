@@ -245,7 +245,7 @@ impl<'vars> SelectCtx<'vars> {
             return;
         };
 
-        if !self.selecting_pvars.contains(&pvar) {
+        if !self.selecting_pvars.contains(pvar) {
             return;
         }
 
@@ -376,7 +376,7 @@ mod test {
             panic!("Can't find tvar ID")
         };
 
-        assert_eq!(None, ctx.tvar_types.get(&tvar));
+        assert_eq!(None, ctx.tvar_types.get(tvar));
     }
 
     fn assert_selected_type(
@@ -390,7 +390,7 @@ mod test {
             panic!("Can't find tvar ID")
         };
 
-        assert_eq!(Some(selected_poly), ctx.tvar_types.get(&tvar));
+        assert_eq!(Some(selected_poly), ctx.tvar_types.get(tvar));
     }
 
     fn assert_unselected_purity(ctx: &SelectCtx<'_>, poly_var: &purity::Ref) {
@@ -400,7 +400,7 @@ mod test {
             panic!("Can't find pvar ID")
         };
 
-        assert_eq!(None, ctx.pvar_purities.get(&pvar));
+        assert_eq!(None, ctx.pvar_purities.get(pvar));
     }
 
     fn assert_selected_purity(
@@ -416,7 +416,7 @@ mod test {
 
         assert_eq!(
             Some(&purity::Ref::Fixed(selected_purity)),
-            ctx.pvar_purities.get(&pvar)
+            ctx.pvar_purities.get(pvar)
         );
     }
 

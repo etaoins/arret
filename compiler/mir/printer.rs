@@ -58,7 +58,7 @@ fn callee_to_gen_abi(
 ) -> GenAbi {
     match callee {
         ops::Callee::StaticSymbol(static_symbol) => static_symbol.abi.clone(),
-        ops::Callee::PrivateFun(private_fun_id) => (&private_funs[&private_fun_id].abi).into(),
+        ops::Callee::PrivateFun(private_fun_id) => (&private_funs[private_fun_id].abi).into(),
         ops::Callee::BoxedFunThunk(_) => GenAbi::thunk_abi(),
     }
 }

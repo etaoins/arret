@@ -278,7 +278,7 @@ fn result_for_single_test(
             mut ehx,
             main_export_id,
             linked_libraries,
-        } = arret_compiler::program_to_evaluable(ccx, &source_file)?;
+        } = arret_compiler::program_to_evaluable(ccx, source_file)?;
 
         // Try evaluating if we're not supposed to panic
         if !matches!(test_type, TestType::Run(RunType::Error(_))) {
@@ -383,7 +383,7 @@ fn run_single_pass_test(
     source_file: &arret_compiler::SourceFile,
     test_type: TestType,
 ) -> bool {
-    let result = result_for_single_test(ccx, &source_file, test_type);
+    let result = result_for_single_test(ccx, source_file, test_type);
 
     if let Err(diagnostics) = result {
         emit_diagnostics_to_stderr(ccx.source_loader(), diagnostics);

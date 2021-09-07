@@ -154,7 +154,7 @@ impl UnsizedListIterator {
         use arret_runtime::abitype;
 
         let needed_pair_type = abitype::BoxedAbiType::Pair(&abitype::BoxedAbiType::Any);
-        let current_rest_reg = reg_to_boxed_reg(b, span, &current_rest_value, &needed_pair_type);
+        let current_rest_reg = reg_to_boxed_reg(b, span, current_rest_value, &needed_pair_type);
 
         let head_reg = b.push_reg(span, OpKind::LoadBoxedPairHead, current_rest_reg.into());
         let rest_reg = b.push_reg(span, OpKind::LoadBoxedPairRest, current_rest_reg.into());

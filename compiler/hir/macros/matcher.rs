@@ -19,7 +19,7 @@ impl<'data> MatchData<'data> {
     }
 
     pub fn var(&self, i: usize) -> &'data NsDatum {
-        &self.vars[i]
+        self.vars[i]
     }
 
     pub fn subpattern(&self, i: usize) -> &[MatchData<'data>] {

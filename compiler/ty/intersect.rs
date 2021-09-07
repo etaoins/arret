@@ -94,7 +94,7 @@ where
     };
 
     for ty_ref in ty_refs {
-        acc = intersect_ty_refs(&acc, &ty_ref)?;
+        acc = intersect_ty_refs(&acc, ty_ref)?;
     }
     Ok(acc)
 }
@@ -317,7 +317,7 @@ fn non_subty_intersect<M: ty::Pm>(
 }
 
 pub fn intersect_list<M: ty::Pm>(list1: &ty::List<M>, list2: &ty::List<M>) -> Result<ty::List<M>> {
-    if list1.has_disjoint_arity(&list2) {
+    if list1.has_disjoint_arity(list2) {
         return Err(ty::intersect::Error::Disjoint);
     }
 

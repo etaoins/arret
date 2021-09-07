@@ -226,7 +226,7 @@ pub fn gen_program(
     );
 
     let mut tcx = TargetCtx::new(target_machine, llvm_opt);
-    let module = program_to_module(&mut tcx, &program, debug_source_loader);
+    let module = program_to_module(&mut tcx, program, debug_source_loader);
     tcx.finish_module(module);
 
     unsafe {

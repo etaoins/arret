@@ -40,7 +40,7 @@ where
         }
         ExprKind::Do(exprs) => {
             for expr in exprs {
-                visit_exprs(&expr, visitor);
+                visit_exprs(expr, visitor);
             }
         }
         ExprKind::MacroExpand(_, expr) => {

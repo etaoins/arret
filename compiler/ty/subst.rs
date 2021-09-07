@@ -99,7 +99,7 @@ where
         }
         Ty::LitBool(val) => Ty::LitBool(*val),
         Ty::LitSym(val) => Ty::LitSym(val.clone()),
-        Ty::Set(member) => Ty::Set(Box::new(stx.subst_ty_ref(&member))),
+        Ty::Set(member) => Ty::Set(Box::new(stx.subst_ty_ref(member))),
         Ty::Union(members) => Ty::Union(subst_ty_ref_slice(stx, members)),
         Ty::Intersect(members) => Ty::Intersect(subst_ty_ref_slice(stx, members)),
         Ty::Vector(members) => Ty::Vector(subst_ty_ref_slice(stx, members)),

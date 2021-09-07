@@ -23,7 +23,7 @@ pub fn gen_static_symbol_entry_point(
         symbol,
     } = static_symbol;
 
-    let function_type = tcx.fun_abi_to_llvm_type(&abi);
+    let function_type = tcx.fun_abi_to_llvm_type(abi);
     let function_name = ffi::CString::new(*symbol).unwrap();
 
     unsafe {
@@ -35,7 +35,7 @@ pub fn gen_static_symbol_entry_point(
 
                 for (index, param_abi_type) in abi.params.iter().enumerate() {
                     if let AbiType::Boxed(_) = param_abi_type.abi_type {
-                        let no_capture = infer_param_capture_kind(&abi.ret, &param_abi_type)
+                        let no_capture = infer_param_capture_kind(&abi.ret, param_abi_type)
                             == CaptureKind::Never;
 
                         tcx.add_boxed_param_attrs(

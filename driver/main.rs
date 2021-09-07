@@ -169,7 +169,7 @@ fn main() {
             &ccx,
             &input_file,
             target_triple,
-            &output_path,
+            output_path,
             debug_info,
         ) {
             process::exit(2);

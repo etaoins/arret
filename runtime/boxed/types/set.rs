@@ -256,7 +256,7 @@ impl<T: Boxed> InlineSet<T> {
     }
 
     fn contains(&self, heap: &Heap, value: &Gc<T>) -> bool {
-        self.iter().any(|v| v.eq_in_heap(heap, &value))
+        self.iter().any(|v| v.eq_in_heap(heap, value))
     }
 
     fn eq_in_heap(&self, heap: &Heap, other: &InlineSet<T>) -> bool {
@@ -327,7 +327,7 @@ impl<T: Boxed> ExternalSet<T> {
             if hackstack_hash != needle_hash {
                 break;
             }
-            if haystack_value.eq_in_heap(heap, &needle_value) {
+            if haystack_value.eq_in_heap(heap, needle_value) {
                 return true;
             }
 
@@ -346,7 +346,7 @@ impl<T: Boxed> ExternalSet<T> {
             if hackstack_hash != needle_hash {
                 break;
             }
-            if haystack_value.eq_in_heap(heap, &needle_value) {
+            if haystack_value.eq_in_heap(heap, needle_value) {
                 return true;
             }
         }

@@ -41,7 +41,7 @@ pub fn load_vector_member(
         ehx,
         b,
         span,
-        &vector_value,
+        vector_value,
         &abitype::BoxedAbiType::Vector(&abitype::BoxedAbiType::Any).into(),
     );
 

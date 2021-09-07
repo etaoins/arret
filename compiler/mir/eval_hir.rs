@@ -361,7 +361,7 @@ impl EvalHirCtx {
             &fcx.mono_ty_args,
         );
 
-        let captures_reg = env_values::save_to_captures_reg(self, b, span, &arret_fun.env_values());
+        let captures_reg = env_values::save_to_captures_reg(self, b, span, arret_fun.env_values());
 
         let param_list_poly = poly_for_list_destruc(&arret_fun.fun_expr().params);
         let param_list_mono = subst::monomorphise_list(&mono_ty_args, &param_list_poly);
@@ -835,7 +835,7 @@ impl EvalHirCtx {
             self,
             b,
             span,
-            &arg_list_value,
+            arg_list_value,
             &abitype::TOP_LIST_BOXED_ABI_TYPE.into(),
         );
 
@@ -866,10 +866,10 @@ impl EvalHirCtx {
                 use crate::mir::env_values;
 
                 env_values::load_from_current_fun(&mut fcx.local_values, arret_fun.env_values());
-                self.eval_arret_fun_app(fcx, b, span, ret_ty, &arret_fun, apply_args)
+                self.eval_arret_fun_app(fcx, b, span, ret_ty, arret_fun, apply_args)
             }
             Value::RustFun(rust_fun) => {
-                self.eval_rust_fun_app(fcx, b, span, ret_ty, &rust_fun, apply_args)
+                self.eval_rust_fun_app(fcx, b, span, ret_ty, rust_fun, apply_args)
             }
             Value::TyPred(test_ty) => {
                 Ok(self.eval_ty_pred_app(b, span, &apply_args.list_value, test_ty))
@@ -1329,7 +1329,7 @@ impl EvalHirCtx {
             use std::mem;
 
             let wanted_abi = PolymorphAbi::thunk_abi();
-            let ops_fun = self.ops_for_arret_fun(&arret_fun, wanted_abi);
+            let ops_fun = self.ops_for_arret_fun(arret_fun, wanted_abi);
 
             let address = self.thunk_jit.compile_fun(
                 &self.private_funs,
@@ -1677,11 +1677,11 @@ impl EvalHirCtx {
             let mut fcx = FunCtx::new(Some(module_id));
 
             // Don't pass a builder; we should never generate ops based on a def
-            let source_name = Self::destruc_source_name(&destruc);
+            let source_name = Self::destruc_source_name(destruc);
             let value =
                 self.eval_expr_with_source_name(&mut fcx, &mut None, value_expr, source_name)?;
 
-            Self::destruc_value(&mut None, &destruc, value, &mut |local_id, value| {
+            Self::destruc_value(&mut None, destruc, value, &mut |local_id, value| {
                 self.global_values
                     .insert(hir::ExportId::new(module_id, local_id), value);
             });
@@ -1768,7 +1768,7 @@ impl EvalHirCtx {
         use crate::hir::ExprKind;
         let value = match &expr.kind {
             ExprKind::Lit(literal) => Ok(self.eval_lit(literal)),
-            ExprKind::Do(exprs) => self.eval_do(fcx, b, &exprs),
+            ExprKind::Do(exprs) => self.eval_do(fcx, b, exprs),
             ExprKind::Fun(fun_expr) => {
                 Ok(self.eval_arret_fun(fcx, fun_expr.as_ref().clone(), source_name))
             }

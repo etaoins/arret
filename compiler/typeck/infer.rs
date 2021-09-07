@@ -197,7 +197,7 @@ fn try_to_bool(poly: &ty::Ref<ty::Poly>) -> Option<bool> {
 
 fn unify_app_purity(pv: &mut PurityVar, app_purity: &purity::Ref) {
     if let PurityVar::Free(ref mut free_purity) = pv {
-        *free_purity = ty::unify::unify_purity_refs(free_purity, &app_purity)
+        *free_purity = ty::unify::unify_purity_refs(free_purity, app_purity)
     };
 }
 
@@ -627,7 +627,7 @@ impl<'types> RecursiveDefsCtx<'types> {
         let record_cons = &field_accessor.record_cons;
         let record_field = &record_cons.fields()[field_accessor.field_index];
 
-        let field_accessor_fun_type = record_field.accessor_fun_type(&record_cons).into();
+        let field_accessor_fun_type = record_field.accessor_fun_type(record_cons).into();
         ensure_is_a(field_accessor.span, &field_accessor_fun_type, result_use)?;
 
         Ok(InferredNode {
@@ -842,7 +842,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             hir::DeclTy::Free => {
                 decl_tys_are_known = false;
 
-                if let Some(ref required_top_fun_type) = required_top_fun_type {
+                if let Some(required_top_fun_type) = required_top_fun_type {
                     // Fall back to the backwards type
                     required_top_fun_type.ret().clone()
                 } else {
@@ -1168,7 +1168,7 @@ impl<'types> RecursiveDefsCtx<'types> {
                 })?;
 
                 let fixed_arg_node =
-                    self.visit_expr(pv, &ResultUse::InnerExpr(&param_type), fixed_arg_expr)?;
+                    self.visit_expr(pv, &ResultUse::InnerExpr(param_type), fixed_arg_expr)?;
 
                 is_divergent = is_divergent || fixed_arg_node.is_divergent();
                 Ok(fixed_arg_node.expr)
@@ -1236,7 +1236,7 @@ impl<'types> RecursiveDefsCtx<'types> {
             self.visit_expr(pv, &ResultUse::InnerExpr(&Ty::Any.into()), subject_expr)?;
 
         let subject_poly = subject_node.result_ty();
-        match test_ty.match_subject_ref(&subject_poly) {
+        match test_ty.match_subject_ref(subject_poly) {
             Some(known_result) => {
                 let result_ty = if subject_node.is_divergent() {
                     Ty::never().into()
@@ -1409,14 +1409,14 @@ impl<'types> RecursiveDefsCtx<'types> {
 
         // Optimise away comparisons between booleans and literal true
         // This allows their type conditions to flow through
-        if try_to_bool(&left_ty) == Some(true)
-            && ty::is_a::ty_ref_is_a(&right_ty, &ty::Ty::Bool.into())
+        if try_to_bool(left_ty) == Some(true)
+            && ty::is_a::ty_ref_is_a(right_ty, &ty::Ty::Bool.into())
         {
             return Ok(right_node);
         }
 
-        if try_to_bool(&right_ty) == Some(true)
-            && ty::is_a::ty_ref_is_a(&left_ty, &ty::Ty::Bool.into())
+        if try_to_bool(right_ty) == Some(true)
+            && ty::is_a::ty_ref_is_a(left_ty, &ty::Ty::Bool.into())
         {
             return Ok(left_node);
         }
@@ -1506,8 +1506,8 @@ impl<'types> RecursiveDefsCtx<'types> {
         }
 
         // Invert type conditions for comparisons between a boolean and non-true value
-        if ty::is_a::ty_ref_is_a(&right_ty, &ty::Ty::Bool.into())
-            && ty::intersect::intersect_ty_refs(&left_ty, &ty::Ty::LitBool(true).into()).is_err()
+        if ty::is_a::ty_ref_is_a(right_ty, &ty::Ty::Bool.into())
+            && ty::intersect::intersect_ty_refs(left_ty, &ty::Ty::LitBool(true).into()).is_err()
         {
             type_conds.extend(
                 right_node
@@ -1515,8 +1515,8 @@ impl<'types> RecursiveDefsCtx<'types> {
                     .into_iter()
                     .map(VarTypeCond::into_inverted),
             );
-        } else if ty::is_a::ty_ref_is_a(&left_ty, &ty::Ty::Bool.into())
-            && ty::intersect::intersect_ty_refs(&right_ty, &ty::Ty::LitBool(true).into()).is_err()
+        } else if ty::is_a::ty_ref_is_a(left_ty, &ty::Ty::Bool.into())
+            && ty::intersect::intersect_ty_refs(right_ty, &ty::Ty::LitBool(true).into()).is_err()
         {
             type_conds.extend(
                 left_node
@@ -2006,7 +2006,7 @@ pub fn infer_repl_expr(
     all_inferred_vars: &InferredModuleVars,
     expr: hir::Expr<hir::Lowered>,
 ) -> Result<InferredNode> {
-    let mut rdcx = RecursiveDefsCtx::new(&all_inferred_vars, vec![]);
+    let mut rdcx = RecursiveDefsCtx::new(all_inferred_vars, vec![]);
     let mut pv = PurityVar::Known(Purity::Impure.into());
 
     rdcx.visit_expr(&mut pv, &ResultUse::InnerExpr(&Ty::Any.into()), expr)

@@ -276,7 +276,7 @@ impl Loader {
                 .get::<*const binding::RustExports>(exports_symbol_name.as_bytes())
                 .map_err(map_loader_err)?;
 
-            &(**exports_symbol)
+            **exports_symbol
         };
 
         source_loader.reserve(exports.len());

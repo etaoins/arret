@@ -80,7 +80,7 @@ fn monomorphic_fun_is_a(sub_fun: &ty::Fun, par_fun: &ty::Fun) -> bool {
 
 fn fun_is_a(sub_fun: &ty::Fun, par_fun: &ty::Fun) -> bool {
     if sub_fun.has_polymorphic_vars() {
-        let sub_mono = inst_polymorphic_fun(sub_fun, &par_fun.top_fun());
+        let sub_mono = inst_polymorphic_fun(sub_fun, par_fun.top_fun());
         monomorphic_fun_is_a(&sub_mono, par_fun)
     } else {
         monomorphic_fun_is_a(sub_fun, par_fun)
@@ -159,7 +159,7 @@ fn ty_is_a<M: ty::Pm>(
         }
         (Ty::Fun(sub_fun), Ty::TopFun(par_top_fun)) => {
             if sub_fun.has_polymorphic_vars() {
-                let sub_mono = inst_polymorphic_fun(sub_fun, &par_top_fun);
+                let sub_mono = inst_polymorphic_fun(sub_fun, par_top_fun);
                 top_fun_is_a(sub_mono.top_fun(), par_top_fun)
             } else {
                 top_fun_is_a(sub_fun.top_fun(), par_top_fun)
@@ -219,8 +219,8 @@ fn purity_ref_is_a(sub: &purity::Ref, parent: &purity::Ref) -> bool {
 fn inst_polymorphic_fun(sub_fun: &ty::Fun, par_top_fun: &ty::TopFun) -> ty::Fun {
     let mut stx = ty::select::SelectCtx::new(sub_fun.pvars(), sub_fun.tvars());
 
-    stx.add_evidence(sub_fun.ret(), &par_top_fun.ret());
-    stx.add_evidence_purity(sub_fun.purity(), &par_top_fun.purity());
+    stx.add_evidence(sub_fun.ret(), par_top_fun.ret());
+    stx.add_evidence_purity(sub_fun.purity(), par_top_fun.purity());
     let pta = stx.into_poly_ty_args();
 
     ty::subst::subst_poly_fun(&pta, sub_fun)
