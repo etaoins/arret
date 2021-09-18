@@ -11,7 +11,7 @@ path = "main.rs"
 
 [dependencies]
 clap = "2"
-rustyline = "8"
+rustyline = "9"
 directories-next = "2"
 ansi_term = "0.12"
 codespan-reporting = "0.11"
