@@ -4,7 +4,7 @@ cached-ecr-build-env: &cached-ecr-build-env
         target: build-env
         cache-on:
           - Cargo.lock
-    - docker#v3.8.0
+    - docker#v3.9.0
 
 docker-ghcr-login: &docker-ghcr-login
   docker-login#v2.0.1:
@@ -39,7 +39,7 @@ steps:
     plugins:
       - seek-oss/docker-ecr-cache#v1.11.0:
           dockerfile: ./.buildkite/llvm-assert.Dockerfile
-      - docker#v3.8.0
+      - docker#v3.9.0
 
   - label: ':typescript: Test VS Code extension'
     agents: { queue: amd64 }
@@ -52,7 +52,7 @@ steps:
           cache-on:
             - ./editors/code/yarn.lock
             - ./editors/code/src/test/vsCodeVersion.ts
-      - docker#v3.8.0:
+      - docker#v3.9.0:
           volumes:
             - '/workdir/editors/code/node_modules'
             - '/workdir/editors/code/.vscode-test'
